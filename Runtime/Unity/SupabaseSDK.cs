@@ -939,6 +939,7 @@ namespace Truesoft.Supabase.Unity
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
+                PlayerPrefs.DeleteKey(RefreshTokenKey);
                 if (saveSessionToStorage)
                     SaveSessionToStorage();
 
