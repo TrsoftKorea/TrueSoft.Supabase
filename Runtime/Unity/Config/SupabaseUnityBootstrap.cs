@@ -72,7 +72,6 @@ namespace Truesoft.Supabase.Unity.Config
                 options.ProjectURL,
                 options.PublishableKey,
                 http,
-                json,
                 options.RemoteConfigTable);
 
             PublicProfileService = new SupabasePublicProfileService(

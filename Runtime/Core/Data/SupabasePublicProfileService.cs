@@ -277,8 +277,6 @@ namespace Truesoft.Supabase.Core.Data
                 return SupabaseResult<bool>.Fail("account_id_empty");
 
             var stable = string.IsNullOrWhiteSpace(playerUserId) ? accountId.Trim() : playerUserId.Trim();
-            if (string.IsNullOrWhiteSpace(stable))
-                stable = accountId.Trim();
 
             var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_ensure_my_profile";
             var bodyJson = _jsonSerializer.ToJson(new EnsureMyProfileRpcBody { p_user_id = stable });
@@ -307,52 +305,6 @@ namespace Truesoft.Supabase.Core.Data
         /// <c>game_servers</c> 공개 SELECT(RLS)로 <see cref="_defaultServerCode"/>에 해당하는 <c>id</c>를 한 번 조회해 캐시합니다.
         /// (레거시/기타 REST 경로용. <see cref="EnsureMyProfileRowAsync"/> 는 <c>ts_ensure_my_profile</c> RPC를 사용합니다.)
         /// </summary>
-        private async Task<string> TryResolveDefaultGameServerIdAsync(string accessToken)
-        {
-            if (!string.IsNullOrEmpty(_cachedDefaultGameServerId))
-                return _cachedDefaultGameServerId;
-
-            try
-            {
-                var gsUrl = $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, "game_servers")}?server_code=eq.{Uri.EscapeDataString(_defaultServerCode)}&select=id";
-                var gsRes = await _httpClient.SendAsync(
-                    method: "GET",
-                    url: gsUrl,
-                    jsonBody: null,
-                    headers: CreateUserHeaders(accessToken, null));
-                if (gsRes != null && gsRes.IsSuccess && string.IsNullOrWhiteSpace(gsRes.Body) == false)
-                {
-                    var rows = JsonConvert.DeserializeObject<List<GameServerIdRow>>(gsRes.Body);
-                    var id = rows != null && rows.Count > 0 ? rows[0]?.id : null;
-                    if (string.IsNullOrWhiteSpace(id) == false)
-                    {
-                        _cachedDefaultGameServerId = id.Trim();
-                        return _cachedDefaultGameServerId;
-                    }
-                }
-
-                // game_servers REST 가 막혀 있거나 행이 없을 때: SECURITY DEFINER RPC (DB 에 grant 필요)
-                var rpcUrl = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_default_server_id";
-                var rpcRes = await _httpClient.SendAsync(
-                    method: "POST",
-                    url: rpcUrl,
-                    jsonBody: "{}",
-                    headers: CreateUserHeaders(accessToken, null));
-                if (rpcRes == null || !rpcRes.IsSuccess || string.IsNullOrWhiteSpace(rpcRes.Body))
-                    return null;
-
-                var uuid = ExtractFirstUuidFromJson(rpcRes.Body);
-                if (string.IsNullOrWhiteSpace(uuid))
-                    return null;
-
-                _cachedDefaultGameServerId = uuid;
-                return _cachedDefaultGameServerId;
-            }
-            catch
-            {
-                return null;
-            }
-        }
 
         private static string ExtractFirstUuidFromJson(string body)
         {

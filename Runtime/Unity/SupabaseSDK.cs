@@ -2239,10 +2239,12 @@ namespace Truesoft.Supabase.Unity
             SignInMethodKind method,
             bool saveSessionToStorage)
         {
-            if (method == SignInMethodKind.Google)
-                return await SignInWithGoogleAsync(saveSessionToStorage);
-
-            return await SignInAnonymouslyAsync(saveSessionToStorage);
+            return method switch
+            {
+                SignInMethodKind.Google => await SignInWithGoogleAsync(saveSessionToStorage),
+                SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(saveSessionToStorage),
+                _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method", "Unknown sign-in method kind")
+            };
         }
 
         private static async Task<bool> ShouldDeleteCurrentAccountByWithdrawalGuardAsync()

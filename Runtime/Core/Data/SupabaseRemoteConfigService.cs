@@ -28,15 +28,11 @@ namespace Truesoft.Supabase.Core.Data
             string supabaseUrl,
             string publishableKey,
             ISupabaseHttpClient httpClient,
-            ISupabaseJsonSerializer jsonSerializer,
             string remoteConfigTable = "remote_config")
         {
             _supabaseUrl = supabaseUrl?.TrimEnd('/') ?? throw new ArgumentNullException(nameof(supabaseUrl));
             _publishableKey = publishableKey ?? throw new ArgumentNullException(nameof(publishableKey));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            if (jsonSerializer == null)
-                throw new ArgumentNullException(nameof(jsonSerializer));
-
             _remoteConfigTable = SupabaseRestTableRef.Normalize(remoteConfigTable, nameof(remoteConfigTable));
         }
 
