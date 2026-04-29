@@ -2357,11 +2357,12 @@ namespace Truesoft.Supabase.Unity
             try
             {
                 var serverCode = GetCurrentServerCode();
-                Debug.Log($"[Supabase.AnonymousRecovery] Upserting token for fingerprint={fingerprintHash}, serverCode={serverCode}");
+                var accountId = session.User?.Id;
+                Debug.Log($"[Supabase.AnonymousRecovery] Upserting token for fingerprint={fingerprintHash}, serverCode={serverCode}, accountId={accountId}");
                 _ = await svc.UpsertRefreshTokenByFingerprintAsync(
                     fingerprintHash,
                     session.RefreshToken,
-                    session.User.Id,
+                    accountId,
                     serverCode);
                 Debug.Log("[Supabase.AnonymousRecovery] Upsert succeeded");
             }
