@@ -142,17 +142,17 @@ namespace Truesoft.Supabase.Unity
             string selectColumnsCsv) where T : class, new() =>
             SupabaseSDK.LoadUserDataColumnsAsync<T>(tableName, selectColumnsCsv);
 
-        /// <summary><see cref="SupabaseSDK.LoadUserSaveAttributedAsync{T}(bool)"/> (내부 Result API).</summary>
-        internal static Task<SupabaseResult<T>> LoadUserSaveAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new() =>
-            SupabaseSDK.LoadUserSaveAttributedAsync<T>(includeUpdatedAt);
+        /// <summary><see cref="SupabaseSDK.LoadUserDataAttributedAsync{T}(bool)"/> (내부 Result API).</summary>
+        internal static Task<SupabaseResult<T>> LoadUserDataAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new() =>
+            SupabaseSDK.LoadUserDataAttributedAsync<T>(includeUpdatedAt);
 
-        /// <summary><see cref="SupabaseSDK.PatchUserSaveDiffAsync{T}(T, T, bool, bool)"/> (내부 Result API).</summary>
-        internal static Task<SupabaseResult<bool>> PatchUserSaveDiffAsync<T>(
+        /// <summary><see cref="SupabaseSDK.PatchUserDataDiffAsync{T}(T, T, bool, bool)"/> (내부 Result API).</summary>
+        internal static Task<SupabaseResult<bool>> PatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRowFirst = true,
             bool setUpdatedAtIsoUtc = true) =>
-            SupabaseSDK.PatchUserSaveDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            SupabaseSDK.PatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
 
         /// <inheritdoc cref="SupabaseSDK.PatchUserDataAsync"/>
         public static async Task<bool> TryPatchUserDataAsync(
@@ -175,23 +175,23 @@ namespace Truesoft.Supabase.Unity
             return r != null && r.IsSuccess ? r.Data : defaultValue;
         }
 
-        /// <inheritdoc cref="SupabaseSDK.TryLoadUserSaveAttributedAsync{T}(T, bool)"/>
-        public static Task<T> TryLoadUserSaveAttributedAsync<T>(T defaultValue = default, bool includeUpdatedAt = true) where T : class, new() =>
-            SupabaseSDK.TryLoadUserSaveAttributedAsync(defaultValue, includeUpdatedAt);
+        /// <inheritdoc cref="SupabaseSDK.TryLoadUserDataAttributedAsync{T}(T, bool)"/>
+        public static Task<T> TryLoadUserDataAttributedAsync<T>(T defaultValue = default, bool includeUpdatedAt = true) where T : class, new() =>
+            SupabaseSDK.TryLoadUserDataAttributedAsync(defaultValue, includeUpdatedAt);
 
-        /// <inheritdoc cref="SupabaseSDK.LoadUserSaveAttributedWithRowStateAsync{T}(bool)"/>
-        public static Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadUserSaveAttributedWithRowStateAsync<T>(
+        /// <inheritdoc cref="SupabaseSDK.LoadUserDataAttributedWithRowStateAsync{T}(bool)"/>
+        public static Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataAttributedWithRowStateAsync<T>(
             bool includeUpdatedAt = true) where T : class, new() =>
-            SupabaseSDK.LoadUserSaveAttributedWithRowStateAsync<T>(includeUpdatedAt);
+            SupabaseSDK.LoadUserDataAttributedWithRowStateAsync<T>(includeUpdatedAt);
 
-        /// <inheritdoc cref="SupabaseSDK.TryLoadUserSaveAttributedWithRowStateAsync{T}(T, bool)"/>
-        public static Task<(bool success, bool hasRow, T row)> TryLoadUserSaveAttributedWithRowStateAsync<T>(
+        /// <inheritdoc cref="SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync{T}(T, bool)"/>
+        public static Task<(bool success, bool hasRow, T row)> TryLoadUserDataAttributedWithRowStateAsync<T>(
             T defaultWhenFailed = default,
             bool includeUpdatedAt = true) where T : class, new() =>
-            SupabaseSDK.TryLoadUserSaveAttributedWithRowStateAsync(defaultWhenFailed, includeUpdatedAt);
+            SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync(defaultWhenFailed, includeUpdatedAt);
 
         /// <inheritdoc cref="SupabaseSDK.LoadUserDataColumnsWithRowStateAsync{T}(string, string)"/>
-        public static Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadUserDataColumnsWithRowStateAsync<T>(
+        public static Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataColumnsWithRowStateAsync<T>(
             string tableName,
             string selectColumnsCsv) where T : class, new() =>
             SupabaseSDK.LoadUserDataColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
@@ -203,13 +203,13 @@ namespace Truesoft.Supabase.Unity
             T defaultWhenFailed = default) where T : class, new() =>
             SupabaseSDK.TryLoadUserDataColumnsWithRowStateAsync(tableName, selectColumnsCsv, defaultWhenFailed);
 
-        /// <inheritdoc cref="SupabaseSDK.TryPatchUserSaveDiffAsync{T}(T, T, bool, bool)"/>
-        public static Task<bool> TryPatchUserSaveDiffAsync<T>(
+        /// <inheritdoc cref="SupabaseSDK.TryPatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
+        public static Task<bool> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRowFirst = true,
             bool setUpdatedAtIsoUtc = true) =>
-            SupabaseSDK.TryPatchUserSaveDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            SupabaseSDK.TryPatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
 
         /// <summary>정적 세이브 자동 동기화 쿨타임(초)을 설정합니다.</summary>
         public static void ConfigureUserSaveAutoSyncCooldown(float seconds) =>
@@ -399,78 +399,6 @@ namespace Truesoft.Supabase.Unity
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
             SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);
-
-        /// <summary>채팅 메시지 전송 (내부 API).</summary>
-        internal static Task<bool> SendChatMessageAsync(string channelId, string content, string displayName = null) =>
-            SupabaseSDK.SendChatMessageAsync(channelId, content, displayName);
-
-        /// <inheritdoc cref="SupabaseSDK.TrySendChatMessageAsync(string, string, string)"/>
-        public static Task<bool> TrySendChatMessageAsync(
-            string channelId,
-            string content,
-            string displayName = null) =>
-            SupabaseSDK.TrySendChatMessageAsync(channelId, content, displayName);
-
-        /// <summary>채널이 현재 SDK 캐시에 열려 있는지 확인.</summary>
-        public static bool IsChatChannelOpen(string channelId) => SupabaseSDK.IsChatChannelOpen(channelId);
-
-        /// <summary>
-        /// 채널 join + 이벤트 구독 + 폴링 시작을 한 번에 수행합니다.
-        /// 예: Supabase.JoinChatChannel(\"room-1\", this, OnChatMessage);
-        /// </summary>
-        public static ChatChannelFacade JoinChatChannel(
-            string channelId,
-            UnityEngine.MonoBehaviour pollHost,
-            Action<Core.Data.SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50) =>
-            SupabaseSDK.JoinChatChannel(channelId, pollHost, onMessageReceived, pollIntervalSeconds, loadHistory, historyCount);
-
-        /// <summary>
-        /// 채널 join + 이벤트 구독 + 폴링 시작.
-        /// 예: await Supabase.JoinChatChannelAsync("room-1", this, OnChatMessage);
-        /// </summary>
-        public static Task<ChatChannelFacade> JoinChatChannelAsync(
-            string channelId,
-            UnityEngine.MonoBehaviour pollHost,
-            Action<Core.Data.SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50) =>
-            SupabaseSDK.JoinChatChannelAsync(
-                channelId,
-                pollHost,
-                onMessageReceived,
-                pollIntervalSeconds,
-                loadHistory,
-                historyCount);
-
-        /// <inheritdoc cref="SupabaseSDK.TryJoinChatChannelAsync"/>
-        public static Task<ChatChannelFacade> TryJoinChatChannelAsync(
-            string channelId,
-            UnityEngine.MonoBehaviour pollHost,
-            Action<Core.Data.SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50) =>
-            SupabaseSDK.TryJoinChatChannelAsync(
-                channelId,
-                pollHost,
-                onMessageReceived,
-                pollIntervalSeconds,
-                loadHistory,
-                historyCount);
-
-        /// <summary>
-        /// JoinChatChannel로 구독한 채널에서 빠져나옵니다.
-        /// 예: Supabase.LeaveChatChannel(\"room-1\", OnChatMessage);
-        /// </summary>
-        public static void LeaveChatChannel(
-            string channelId,
-            Action<Core.Data.SupabaseChatService.ChatMessageRow> onMessageReceived = null,
-            bool stopPollingIfNoListeners = true) =>
-            SupabaseSDK.LeaveChatChannel(channelId, onMessageReceived, stopPollingIfNoListeners);
 
         /// <summary>서버 함수 호출 (내부 Result API, 로그인 세션 필요).</summary>
         internal static Task<SupabaseResult<TResponse>> InvokeFunctionAsync<TResponse>(

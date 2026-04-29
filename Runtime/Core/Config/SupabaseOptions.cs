@@ -9,9 +9,6 @@ namespace Truesoft.Supabase
         /// <summary>Remote Config REST 테이블 (기본 <c>remote_config</c>).</summary>
         public string RemoteConfigTable = "remote_config";
 
-        /// <summary>채팅 메시지 REST 테이블 (기본 <c>chat_messages</c>).</summary>
-        public string ChatMessagesTable = "chat_messages";
-
         /// <summary>우편함 REST 테이블 (기본 <c>mails</c>).</summary>
         public string MailsTable = "mails";
 

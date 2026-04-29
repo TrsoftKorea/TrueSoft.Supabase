@@ -6,9 +6,9 @@ using System.Reflection;
 namespace Truesoft.Supabase.Core.Data
 {
     /// <summary>
-    /// <see cref="UserSaveColumnAttribute"/>가 붙은 멤버로부터 <c>select</c> 목록·PATCH 딕셔너리를 만듭니다.
+    /// <see cref="DataColumnAttribute"/>가 붙은 멤버로부터 <c>select</c> 목록·PATCH 딕셔너리를 만듭니다.
     /// </summary>
-    public static class UserSaveSchema
+    public static class DataSchema
     {
         private const string UpdatedAtColumn = "updated_at";
 
@@ -20,7 +20,7 @@ namespace Truesoft.Supabase.Core.Data
         {
             var names = GetColumnNames(typeof(T), includeUpdatedAt);
             if (names.Count == 0)
-                throw new InvalidOperationException($"No {nameof(UserSaveColumnAttribute)} on public fields/properties of {typeof(T).Name}.");
+                throw new InvalidOperationException($"No {nameof(DataColumnAttribute)} on public fields/properties of {typeof(T).Name}.");
 
             return string.Join(",", names);
         }
@@ -92,7 +92,7 @@ namespace Truesoft.Supabase.Core.Data
             {
                 if (p.GetIndexParameters().Length > 0)
                     continue;
-                if (p.GetCustomAttribute<UserSaveColumnAttribute>() == null)
+                if (p.GetCustomAttribute<DataColumnAttribute>() == null)
                     continue;
                 if (p.CanRead == false)
                     continue;
@@ -101,7 +101,7 @@ namespace Truesoft.Supabase.Core.Data
 
             foreach (var f in t.GetFields(flags))
             {
-                if (f.GetCustomAttribute<UserSaveColumnAttribute>() == null)
+                if (f.GetCustomAttribute<DataColumnAttribute>() == null)
                     continue;
                 yield return f;
             }
@@ -109,7 +109,7 @@ namespace Truesoft.Supabase.Core.Data
 
         private static string ResolveColumnName(MemberInfo m)
         {
-            var attr = m.GetCustomAttribute<UserSaveColumnAttribute>();
+            var attr = m.GetCustomAttribute<DataColumnAttribute>();
             if (attr == null)
                 return null;
             if (string.IsNullOrWhiteSpace(attr.ColumnName) == false)
@@ -118,21 +118,21 @@ namespace Truesoft.Supabase.Core.Data
         }
 
         /// <summary>
-        /// <typeparamref name="T"/>에 <see cref="UserSaveTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
+        /// <typeparamref name="T"/>에 <see cref="DataTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
         /// 없으면 <see cref="InvalidOperationException"/>을 던집니다.
         /// </summary>
         public static string ResolveTableName<T>() => ResolveTableName(typeof(T));
 
         /// <summary>
-        /// <paramref name="t"/>에 <see cref="UserSaveTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
+        /// <paramref name="t"/>에 <see cref="DataTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
         /// 없으면 <see cref="InvalidOperationException"/>을 던집니다.
         /// </summary>
         public static string ResolveTableName(Type t)
         {
-            var attr = t.GetCustomAttribute<UserSaveTableAttribute>();
+            var attr = t.GetCustomAttribute<DataTableAttribute>();
             if (attr == null)
                 throw new InvalidOperationException(
-                    $"[UserSaveTable] attribute is missing on {t.Name}. missing_UserSaveTable_attribute");
+                    $"[DataTable] attribute is missing on {t.Name}. missing_DataTable_attribute");
             return attr.TableName;
         }
 

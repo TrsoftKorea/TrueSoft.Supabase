@@ -35,9 +35,6 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("RemoteConfig 테이블.")]
         public string remoteConfigTable = "remote_config";
 
-        [Tooltip("채팅 메시지 테이블.")]
-        public string chatMessagesTable = "chat_messages";
-
         [Tooltip("우편함 테이블 (mails).")]
         public string mailsTable = "mails";
 
@@ -88,7 +85,6 @@ namespace Truesoft.Supabase.Unity
                 PublishableKey = publishableKey,
                 TimeoutSeconds = timeoutSeconds,
                 RemoteConfigTable = string.IsNullOrWhiteSpace(remoteConfigTable) ? "remote_config" : remoteConfigTable.Trim(),
-                ChatMessagesTable = string.IsNullOrWhiteSpace(chatMessagesTable) ? "chat_messages" : chatMessagesTable.Trim(),
                 MailsTable = string.IsNullOrWhiteSpace(mailsTable) ? "mails" : mailsTable.Trim(),
                 DefaultMailExpirationDays = defaultMailExpirationDays < 1 ? 1 : defaultMailExpirationDays,
                 MailPollingIntervalSeconds = mailPollingIntervalSeconds < 0 ? 0 : mailPollingIntervalSeconds,

@@ -8,7 +8,7 @@ using UnityEngine.Networking;
 
 namespace Truesoft.Supabase.Editor
 {
-    /// <summary>PostgREST OpenAPI(JSON)에서 세이브 테이블 컬럼을 읽고 UserSaveColumn이 붙은 C# 클래스 소스를 만듭니다.</summary>
+    /// <summary>PostgREST OpenAPI(JSON)에서 세이브 테이블 컬럼을 읽고 DataColumn이 붙은 C# 클래스 소스를 만듭니다.</summary>
     internal static class PostgrestOpenApiUserSaveClass
     {
         /// <summary>붙여넣기 오류로 섞인 공백·줄바꿈을 정리합니다.</summary>
@@ -371,7 +371,7 @@ namespace Truesoft.Supabase.Editor
             foreach (var c in columns)
             {
                 var fieldName = LegalFieldName(c.Name);
-                sb.AppendLine(indent + "        [UserSaveColumn(\"" + EscapeCSharpString(c.Name) + "\")] public " + c.ClrType + " " + fieldName + ";");
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\")] public " + c.ClrType + " " + fieldName + ";");
             }
 
             sb.AppendLine(indent + "    }");

@@ -107,7 +107,6 @@ namespace Truesoft.Supabase.Core.Data
                 payload["updated_at"] = DateTime.UtcNow.ToString("o");
             }
 
-            // Dictionary<string,object> 등은 Unity JsonUtility로 직렬화되지 않음 → Newtonsoft 사용.
             var bodyJson = JsonConvert.SerializeObject(payload);
 
             var response = await _httpClient.SendAsync(
@@ -141,25 +140,25 @@ namespace Truesoft.Supabase.Core.Data
         }
 
         /// <summary>
-        /// 본인 행 존재 여부(<see cref="UserSaveColumnsLoadResult{T}.HasRow"/>)와 함께 로드합니다.
+        /// 본인 행 존재 여부(<see cref="DataColumnsLoadResult{T}.HasRow"/>)와 함께 로드합니다.
         /// </summary>
-        public async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
+        public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
             string accessToken,
             string accountId,
             string tableName,
             string selectColumnsCsv) where T : class, new()
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("access_token_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("access_token_empty");
 
             if (string.IsNullOrWhiteSpace(accountId))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("account_id_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("account_id_empty");
 
             if (string.IsNullOrWhiteSpace(tableName))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("table_name_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("table_name_empty");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("select_columns_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("select_columns_empty");
 
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, tableName)}" +
@@ -174,32 +173,32 @@ namespace Truesoft.Supabase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("http_response_null");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail(response.ErrorMessage ?? response.Body ?? "load_failed");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(response.ErrorMessage ?? response.Body ?? "load_failed");
 
             try
             {
                 var rows = _jsonSerializer.FromJsonArray<T>(response.Body);
                 if (rows == null || rows.Length == 0 || rows[0] == null)
                 {
-                    return SupabaseResult<UserSaveColumnsLoadResult<T>>.Success(
-                        new UserSaveColumnsLoadResult<T>(hasRow: false, row: new T()));
+                    return SupabaseResult<DataColumnsLoadResult<T>>.Success(
+                        new DataColumnsLoadResult<T>(hasRow: false, row: new T()));
                 }
 
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Success(
-                    new UserSaveColumnsLoadResult<T>(hasRow: true, row: rows[0]));
+                return SupabaseResult<DataColumnsLoadResult<T>>.Success(
+                    new DataColumnsLoadResult<T>(hasRow: true, row: rows[0]));
             }
             catch (Exception e)
             {
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("load_parse_exception:" + e.Message);
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("load_parse_exception:" + e.Message);
             }
         }
 
         /// <summary>
-        /// <see cref="UserSaveColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다.
-        /// 대상 타입에 <see cref="UserSaveTableAttribute"/>가 필요합니다.
+        /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다.
+        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public async Task<SupabaseResult<T>> LoadAttributedAsync<T>(
             string accessToken,
@@ -210,19 +209,19 @@ namespace Truesoft.Supabase.Core.Data
             string csv;
             try
             {
-                tableName = UserSaveSchema.ResolveTableName<T>();
-                csv = UserSaveSchema.GetSelectColumnsCsv<T>(includeUpdatedAt);
+                tableName = DataSchema.ResolveTableName<T>();
+                csv = DataSchema.GetSelectColumnsCsv<T>(includeUpdatedAt);
             }
             catch (Exception e)
             {
-                return SupabaseResult<T>.Fail("user_save_schema_invalid:" + e.Message);
+                return SupabaseResult<T>.Fail("data_schema_invalid:" + e.Message);
             }
 
             return await LoadColumnsAsync<T>(accessToken, accountId, tableName, csv);
         }
 
         /// <inheritdoc cref="LoadColumnsWithRowStateAsync{T}(string, string, string, string)"/>
-        public async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
+        public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
             string accessToken,
             string accountId,
             bool includeUpdatedAt = true) where T : class, new()
@@ -231,20 +230,20 @@ namespace Truesoft.Supabase.Core.Data
             string csv;
             try
             {
-                tableName = UserSaveSchema.ResolveTableName<T>();
-                csv = UserSaveSchema.GetSelectColumnsCsv<T>(includeUpdatedAt);
+                tableName = DataSchema.ResolveTableName<T>();
+                csv = DataSchema.GetSelectColumnsCsv<T>(includeUpdatedAt);
             }
             catch (Exception e)
             {
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("user_save_schema_invalid:" + e.Message);
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("data_schema_invalid:" + e.Message);
             }
 
             return await LoadColumnsWithRowStateAsync<T>(accessToken, accountId, tableName, csv);
         }
 
         /// <summary>
-        /// <see cref="UserSaveSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
-        /// 대상 타입에 <see cref="UserSaveTableAttribute"/>가 필요합니다.
+        /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
+        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,
@@ -259,12 +258,12 @@ namespace Truesoft.Supabase.Core.Data
             Dictionary<string, object> patch;
             try
             {
-                tableName = UserSaveSchema.ResolveTableName<T>();
-                patch = UserSaveSchema.BuildPatch(previous, current);
+                tableName = DataSchema.ResolveTableName<T>();
+                patch = DataSchema.BuildPatch(previous, current);
             }
             catch (Exception e)
             {
-                return SupabaseResult<bool>.Fail("user_save_patch_build_failed:" + e.Message);
+                return SupabaseResult<bool>.Fail("data_patch_build_failed:" + e.Message);
             }
 
             if (patch == null || patch.Count == 0)

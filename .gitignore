@@ -144,8 +144,9 @@ GameAnalytics.meta
 # Claude Code worktrees
 .claude/worktrees/
 
-# Supabase CLI (로컬 개발 도구, 패키지 배포에 포함하지 않음)
+# Supabase CLI (로컬 개발 ?�구, ?�키지 배포???�함?��? ?�음)
 supabase/
+supabase.meta
 
 Assets/GoogleMobileAds/link.xml.meta
 Assets/StreamingAssets/google-services-desktop.json.meta

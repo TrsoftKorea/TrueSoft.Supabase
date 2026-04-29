@@ -19,7 +19,7 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="UserSaveTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
+        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="DataTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
         /// DB RPC: <c>ts_ensure_my_row(table, user_id)</c>.
         /// </summary>
         public Task<SupabaseResult<bool>> EnsureMyRowAsync<T>()
@@ -38,7 +38,7 @@ namespace Truesoft.Supabase.Unity
                 return SupabaseResult<bool>.Fail("auth_not_signed_in");
 
             string tableName;
-            try { tableName = UserSaveSchema.ResolveTableName<T>(); }
+            try { tableName = DataSchema.ResolveTableName<T>(); }
             catch (Exception e) { return SupabaseResult<bool>.Fail("user_save_schema_invalid:" + e.Message); }
 
             return await _userDataService.EnsureMyRowAsync(accessToken, tableName, session.User?.PlayerUserId);
@@ -114,7 +114,7 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <inheritdoc cref="SupabaseUserDataService.LoadColumnsWithRowStateAsync{T}(string, string, string, string)"/>
-        public Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
+        public Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
             string tableName,
             string selectColumnsCsv) where T : class, new()
         {
@@ -122,19 +122,19 @@ namespace Truesoft.Supabase.Unity
             return LoadColumnsWithRowStateAsync<T>(session, tableName, selectColumnsCsv);
         }
 
-        public async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
+        public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
             SupabaseSession session,
             string tableName,
             string selectColumnsCsv) where T : class, new()
         {
             if (session == null)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("session_null");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("session_null");
 
             var accessToken = session.AccessToken;
             var userId = session.User?.Id;
 
             if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(userId))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("auth_not_signed_in");
 
             return await _userDataService.LoadColumnsWithRowStateAsync<T>(
                 accessToken: accessToken,
@@ -144,8 +144,8 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// <see cref="UserSaveColumnAttribute"/>로 표시한 컬럼만 모아 로드합니다.
-        /// 대상 타입에 <see cref="UserSaveTableAttribute"/>가 필요합니다.
+        /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 로드합니다.
+        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public Task<SupabaseResult<T>> LoadAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new()
         {
@@ -171,25 +171,25 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <inheritdoc cref="SupabaseUserDataService.LoadAttributedWithRowStateAsync{T}(string, string, bool)"/>
-        public Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
+        public Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
             bool includeUpdatedAt = true) where T : class, new()
         {
             var session = _sessionGetter?.Invoke();
             return LoadAttributedWithRowStateAsync<T>(session, includeUpdatedAt);
         }
 
-        public async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
+        public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
             SupabaseSession session,
             bool includeUpdatedAt = true) where T : class, new()
         {
             if (session == null)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("session_null");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("session_null");
 
             var accessToken = session.AccessToken;
             var userId = session.User?.Id;
 
             if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(userId))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("auth_not_signed_in");
 
             return await _userDataService.LoadAttributedWithRowStateAsync<T>(
                 accessToken: accessToken,
@@ -198,8 +198,8 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// <see cref="UserSaveSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
-        /// 대상 타입에 <see cref="UserSaveTableAttribute"/>가 필요합니다.
+        /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
+        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             T previous,

@@ -57,7 +57,7 @@ namespace Truesoft.SupabaseUnity.Samples
         public static async Task<bool> TryLoadFromServerAsync(int initialLevel, int initialCoins, bool includeUpdatedAt = true)
         {
             EnsureRegistered();
-            var (success, hasRow, row) = await SupabaseSdk.TryLoadUserSaveAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
+            var (success, hasRow, row) = await SupabaseSdk.TryLoadUserDataAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
                 defaultWhenFailed: null,
                 includeUpdatedAt: includeUpdatedAt);
             if (!success)
@@ -82,7 +82,7 @@ namespace Truesoft.SupabaseUnity.Samples
         public static async Task<bool> TryLoadAsync(bool includeUpdatedAt = true)
         {
             EnsureRegistered();
-            var (success, _, row) = await SupabaseSdk.TryLoadUserSaveAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
+            var (success, _, row) = await SupabaseSdk.TryLoadUserDataAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
                 defaultWhenFailed: null,
                 includeUpdatedAt: includeUpdatedAt);
             if (!success)
@@ -105,7 +105,7 @@ namespace Truesoft.SupabaseUnity.Samples
             Dictionary<string, object> patch;
             try
             {
-                patch = UserSaveSchema.BuildPatch(LastSynced, Current);
+                patch = DataSchema.BuildPatch(LastSynced, Current);
             }
             catch (Exception e)
             {
@@ -125,14 +125,14 @@ namespace Truesoft.SupabaseUnity.Samples
                 return true;
             }
 
-            var ok = await SupabaseSdk.TryPatchUserSaveDiffAsync(
+            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
                 LastSynced,
                 Current,
                 ensureRowFirst: true,
                 setUpdatedAtIsoUtc: true);
             if (!ok)
             {
-                Debug.LogWarning("[SampleStaticUserSave] PATCH 전송 실패(TryPatchUserSaveDiffAsync false).");
+                Debug.LogWarning("[SampleStaticUserSave] PATCH 전송 실패(TryPatchUserDataDiffAsync false).");
                 return false;
             }
 
@@ -192,7 +192,7 @@ namespace Truesoft.SupabaseUnity.Samples
             if (!IsDirty)
                 return true;
 
-            var ok = await SupabaseSdk.TryPatchUserSaveDiffAsync(
+            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
                 LastSynced,
                 Current,
                 ensureRowFirst: true,
@@ -236,9 +236,9 @@ namespace Truesoft.SupabaseUnity.Samples
         [Serializable]
         private sealed class SampleStaticUserSaveRow
         {
-            [UserSaveColumn("level")] public int level;
-            [UserSaveColumn("coins")] public int coins;
-            [UserSaveColumn("updated_at")] public string updated_at;
+            [DataColumn("level")] public int level;
+            [DataColumn("coins")] public int coins;
+            [DataColumn("updated_at")] public string updated_at;
         }
     }
 }

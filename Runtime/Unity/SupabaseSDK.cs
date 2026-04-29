@@ -44,7 +44,6 @@ namespace Truesoft.Supabase.Unity
         private static MailboxFacade _mailbox;
         private static RemoteConfigFacade _remoteConfig;
         private static ServerFunctionsFacade _functions;
-        private static readonly Dictionary<string, ChatChannelFacade> _chatChannels = new(StringComparer.Ordinal);
         private static string _initializedProjectUrl;
         private static bool _enableApiResultLogs = true;
 
@@ -136,8 +135,6 @@ namespace Truesoft.Supabase.Unity
             public const string RemoteConfigRefresh = "Supabase.RemoteConfig.Refresh";
             public const string RemoteConfigPoll = "Supabase.RemoteConfig.Poll";
             public const string RemoteConfigGet = "Supabase.RemoteConfig.Get";
-            public const string ChatSend = "Supabase.Chat.Send";
-            public const string ChatJoin = "Supabase.Chat.Join";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
             public const string ProfilePublicDisplayNameGet = "Supabase.Profile.DisplayName.Get";
             public const string ProfileMyDisplayNameSet = "Supabase.Profile.DisplayName.Set";
@@ -544,35 +541,35 @@ namespace Truesoft.Supabase.Unity
             return LogAndReturn(ApiLogTags.AuthRefreshSession, r);
         }
 
-        /// <inheritdoc cref="LoadUserSaveAttributedAsync{T}(bool)"/>
-        public static async Task<T> TryLoadUserSaveAttributedAsync<T>(T defaultValue = default, bool includeUpdatedAt = true) where T : class, new()
+        /// <inheritdoc cref="LoadUserDataAttributedAsync{T}(bool)"/>
+        public static async Task<T> TryLoadUserDataAttributedAsync<T>(T defaultValue = default, bool includeUpdatedAt = true) where T : class, new()
         {
-            var r = await LoadUserSaveAttributedAsync<T>(includeUpdatedAt);
+            var r = await LoadUserDataAttributedAsync<T>(includeUpdatedAt);
             return LogAndReturnData(ApiLogTags.UserDataLoadAttributed, r, defaultValue);
         }
 
         /// <summary>
-        /// <see cref="UserSaveColumnAttribute"/> 기반 로드 결과에 <b>본인 행 존재 여부</b>(HTTP 200·빈 배열이면 <c>HasRow == false</c>)를 포함합니다.
+        /// <see cref="DataColumnAttribute"/> 기반 로드 결과에 <b>본인 행 존재 여부</b>(HTTP 200·빈 배열이면 <c>HasRow == false</c>)를 포함합니다.
         /// 인증/HTTP/파싱 실패는 <see cref="SupabaseResult{T}.IsSuccess"/>가 <c>false</c>입니다.
         /// </summary>
-        public static async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadUserSaveAttributedWithRowStateAsync<T>(
+        public static async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataAttributedWithRowStateAsync<T>(
             bool includeUpdatedAt = true) where T : class, new()
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             return await UserSaves.LoadAttributedWithRowStateAsync<T>(includeUpdatedAt);
         }
 
         /// <summary>
-        /// <see cref="LoadUserSaveAttributedWithRowStateAsync{T}(bool)"/>의 Try 형태. 실패 시 <c>success == false</c>, <c>hasRow</c>는 의미 없음.
+        /// <see cref="LoadUserDataAttributedWithRowStateAsync{T}(bool)"/>의 Try 형태. 실패 시 <c>success == false</c>, <c>hasRow</c>는 의미 없음.
         /// </summary>
-        public static async Task<(bool success, bool hasRow, T row)> TryLoadUserSaveAttributedWithRowStateAsync<T>(
+        public static async Task<(bool success, bool hasRow, T row)> TryLoadUserDataAttributedWithRowStateAsync<T>(
             T defaultWhenFailed = default,
             bool includeUpdatedAt = true) where T : class, new()
         {
-            var r = await LoadUserSaveAttributedWithRowStateAsync<T>(includeUpdatedAt);
+            var r = await LoadUserDataAttributedWithRowStateAsync<T>(includeUpdatedAt);
             var ok = r != null && r.IsSuccess;
             LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorMessage);
             if (!ok)
@@ -587,16 +584,16 @@ namespace Truesoft.Supabase.Unity
         /// <summary>
         /// 명시 <c>select</c> 컬럼 로드에 행 존재 여부를 포함합니다.
         /// </summary>
-        public static async Task<SupabaseResult<UserSaveColumnsLoadResult<T>>> LoadUserDataColumnsWithRowStateAsync<T>(
+        public static async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataColumnsWithRowStateAsync<T>(
             string tableName,
             string selectColumnsCsv) where T : class, new()
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<UserSaveColumnsLoadResult<T>>.Fail("select_columns_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("select_columns_empty");
 
             return await UserSaves.LoadColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
         }
@@ -619,14 +616,14 @@ namespace Truesoft.Supabase.Unity
             return (true, r.Data.HasRow, r.Data.Row);
         }
 
-        /// <inheritdoc cref="PatchUserSaveDiffAsync{T}(T, T, bool, bool)"/>
-        public static async Task<bool> TryPatchUserSaveDiffAsync<T>(
+        /// <inheritdoc cref="PatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
+        public static async Task<bool> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRowFirst = true,
             bool setUpdatedAtIsoUtc = true)
         {
-            var r = await PatchUserSaveDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            var r = await PatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
             return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
         }
 
@@ -750,30 +747,6 @@ namespace Truesoft.Supabase.Unity
             return (ok, ok ? r.Data : null);
         }
 
-        /// <summary><see cref="SendChatMessageAsync(string, string, string)"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<bool> TrySendChatMessageAsync(
-            string channelId,
-            string content,
-            string displayName = null)
-        {
-            var ok = await SendChatMessageAsync(channelId, content, displayName);
-            LogApiResult(ApiLogTags.ChatSend, ok, ok ? null : "chat_send_failed");
-            return ok;
-        }
-
-        /// <summary><see cref="JoinChatChannelAsync"/>를 호출하고 채널 join 성공 여부를 로그로 남깁니다.</summary>
-        public static async Task<ChatChannelFacade> TryJoinChatChannelAsync(
-            string channelId,
-            MonoBehaviour pollHost,
-            Action<SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50)
-        {
-            var channel = await JoinChatChannelAsync(channelId, pollHost, onMessageReceived, pollIntervalSeconds, loadHistory, historyCount);
-            LogApiResult(ApiLogTags.ChatJoin, channel != null, channel != null ? null : "chat_join_failed");
-            return channel;
-        }
 
         /// <summary><see cref="RestoreSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TryRestoreSessionAsync()
@@ -1243,7 +1216,7 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="UserSaveTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
+        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="DataTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
         /// DB RPC: <c>ts_ensure_my_row(table, user_id)</c>.
         /// </summary>
         public static async Task<SupabaseResult<bool>> EnsureMyRowAsync<T>()
@@ -1289,9 +1262,9 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// <see cref="UserSaveColumnAttribute"/>가 붙은 멤버로 <c>select</c> 목록을 만들고 로드합니다.
+        /// <see cref="DataColumnAttribute"/>가 붙은 멤버로 <c>select</c> 목록을 만들고 로드합니다.
         /// </summary>
-        public static async Task<SupabaseResult<T>> LoadUserSaveAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new()
+        public static async Task<SupabaseResult<T>> LoadUserDataAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new()
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
@@ -1303,7 +1276,7 @@ namespace Truesoft.Supabase.Unity
         /// <summary>
         /// 이전 스냅샷과 비교해 변경된 컬럼만 PATCH합니다.
         /// </summary>
-        public static async Task<SupabaseResult<bool>> PatchUserSaveDiffAsync<T>(
+        public static async Task<SupabaseResult<bool>> PatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRowFirst = true,
@@ -1819,168 +1792,10 @@ namespace Truesoft.Supabase.Unity
             }
         }
 
-        /// <summary>채널 ID당 하나의 <see cref="ChatChannelFacade"/>를 만들거나 캐시에서 꺼냅니다.</summary>
-        /// <remarks>
-        /// 로그인 세션이 있어야 전송·히스토리 등이 동작합니다. 미로그인 자동 처리는 <see cref="JoinChatChannelAsync"/> 등을 사용합니다.
-        /// </remarks>
-        public static ChatChannelFacade OpenChatChannel(string channelId, string displayName = null)
-        {
-            EnsureInitializedOrBootstrapSync();
-            if (_bootstrap == null)
-                throw new InvalidOperationException("SupabaseSDK is not initialized.");
-
-            if (string.IsNullOrWhiteSpace(channelId))
-                throw new ArgumentException("channelId is empty", nameof(channelId));
-
-            channelId = channelId.Trim();
-
-            if (_chatChannels.TryGetValue(channelId, out var existing))
-                return existing;
-
-            var facade = new ChatChannelFacade(
-                _bootstrap.ChatService,
-                () => _currentSession,
-                channelId,
-                displayName);
-
-            _chatChannels[channelId] = facade;
-            return facade;
-        }
-
-        /// <summary>
-        /// 채팅 메시지 한 건 전송 (인스턴스를 직접 들고 있지 않아도 됨).
-        /// UI에서 채널 접속/폴링 여부는 여전히 OpenChatChannel/StartPolling으로 직접 관리하세요.
-        /// </summary>
-        public static async Task<bool> SendChatMessageAsync(string channelId, string content, string displayName = null)
-        {
-            // 채팅 전송도 동일하게 세션이 준비되어 있어야 합니다.
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return false;
-
-            var channel = OpenChatChannel(channelId, displayName);
-            return await channel.SendAsync(content);
-        }
-
-        /// <summary>채널이 현재 SDK 캐시에 열려 있는지 확인.</summary>
-        public static bool IsChatChannelOpen(string channelId)
-        {
-            return GetChatChannel(channelId) != null;
-        }
-
         /// <summary>서버 함수 호출(로그인 세션 필요).</summary>
         public static async Task<SupabaseResult<TResponse>> InvokeFunctionAsync<TResponse>(string functionName, object requestBody = null)
         {
             return await Functions.InvokeAsync<TResponse>(functionName, requestBody, requireAuth: true);
-        }
-
-        /// <summary>
-        /// 채팅 채널에 입장 + 수신 핸들러 연결 + 코루틴 폴링까지 한 번에 수행합니다(동기 진입, 세션은 미리 있어야 할 수 있음).
-        /// </summary>
-        /// <remarks>
-        /// 로그인 보장이 필요하면 <see cref="JoinChatChannelAsync"/>를 사용합니다.
-        /// </remarks>
-        public static ChatChannelFacade JoinChatChannel(
-            string channelId,
-            MonoBehaviour pollHost,
-            Action<SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50)
-        {
-            if (pollHost == null)
-                throw new ArgumentNullException(nameof(pollHost));
-
-            var channel = OpenChatChannel(channelId);
-
-            if (onMessageReceived != null)
-                channel.OnMessageReceived += onMessageReceived;
-
-            if (loadHistory)
-                pollHost.StartCoroutine(LoadHistoryRoutine(channel, historyCount));
-
-            channel.StartPolling(pollHost, pollIntervalSeconds);
-            return channel;
-        }
-
-        /// <summary>
-        /// 채팅 채널 join + 이벤트 구독 + 폴링 시작.
-        /// 한 줄 사용을 위한 비동기 진입점입니다.
-        /// </summary>
-        public static async Task<ChatChannelFacade> JoinChatChannelAsync(
-            string channelId,
-            MonoBehaviour pollHost,
-            Action<SupabaseChatService.ChatMessageRow> onMessageReceived,
-            float pollIntervalSeconds = 1.5f,
-            bool loadHistory = true,
-            int historyCount = 50)
-        {
-            // Join + Polling 시작까지 한 번에 쓰되, 로그인 상태를 먼저 확인합니다.
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return null;
-
-            return JoinChatChannel(
-                channelId,
-                pollHost,
-                onMessageReceived,
-                pollIntervalSeconds,
-                loadHistory,
-                historyCount);
-        }
-
-        /// <summary>
-        /// JoinChatChannel로 구독한 채널에서 빠져나옵니다.
-        /// onMessageReceived를 넘기면 해당 핸들러만 제거하고, stopPollingIfNoListeners가 true면 더 이상 리스너가 없을 때 폴링을 멈춥니다.
-        /// </summary>
-        public static void LeaveChatChannel(
-            string channelId,
-            Action<SupabaseChatService.ChatMessageRow> onMessageReceived = null,
-            bool stopPollingIfNoListeners = true)
-        {
-            var channel = GetChatChannel(channelId);
-            if (channel == null)
-                return;
-
-            if (onMessageReceived != null)
-                channel.OnMessageReceived -= onMessageReceived;
-
-            if (stopPollingIfNoListeners)
-            {
-                // event에 남은 구독자가 있는지 확인할 수 없으므로, 호출 측에서 명시적으로 CloseChatChannel을 부르지 않는 한
-                // 여기서는 단순히 StopPolling만 맡깁니다.
-                channel.StopPolling();
-            }
-        }
-
-        private static System.Collections.IEnumerator LoadHistoryRoutine(ChatChannelFacade channel, int count)
-        {
-            var task = channel.LoadHistoryAsync(count);
-            yield return new UnityEngine.WaitUntil(() => task.IsCompleted);
-        }
-
-        /// <summary>현재 캐시에 열린 채팅 채널이 있으면 반환합니다. 없으면 null.</summary>
-        public static ChatChannelFacade GetChatChannel(string channelId)
-        {
-            if (string.IsNullOrWhiteSpace(channelId))
-                return null;
-
-            _chatChannels.TryGetValue(channelId.Trim(), out var facade);
-            return facade;
-        }
-
-        /// <summary>채팅 채널 캐시에서 제거합니다. (예: 세션 변경, 완전 종료 시)</summary>
-        public static void CloseChatChannel(string channelId)
-        {
-            if (string.IsNullOrWhiteSpace(channelId))
-                return;
-
-            channelId = channelId.Trim();
-            if (_chatChannels.TryGetValue(channelId, out var facade))
-            {
-                facade.StopPolling();
-                _chatChannels.Remove(channelId);
-            }
         }
 
         /// <summary>로그인 성공 시 세션을 SDK에 설정하세요. 이후 PatchAsync/LoadColumnsAsync/Events는 세션 없이 호출 가능.</summary>
@@ -2053,13 +1868,6 @@ namespace Truesoft.Supabase.Unity
             var accountId = _currentSession?.User?.Id;
 
             SupabaseDuplicateSessionCoordinator.StopPolling();
-
-            // 채널 상태는 세션이 끊기면 더 이상 의미가 없으므로 정리
-            foreach (var pair in _chatChannels)
-            {
-                pair.Value?.StopPolling();
-            }
-            _chatChannels.Clear();
 
             UserSaveStaticSyncRegistry.ResetAll();
 
@@ -2188,7 +1996,6 @@ namespace Truesoft.Supabase.Unity
             _mailbox = null;
             _remoteConfig = null;
             _functions = null;
-            _chatChannels.Clear();
 
             if (!preserveSession)
                 UserSaveStaticSyncRegistry.ResetAll();

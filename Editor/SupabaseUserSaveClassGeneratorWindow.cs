@@ -10,7 +10,7 @@ using UnityEngine.Serialization;
 namespace Truesoft.Supabase.Editor
 {
     /// <summary>
-    /// PostgREST OpenAPI로 세이브 테이블 스키마를 가져와 <c>[Serializable]</c> + <c>[UserSaveColumn]</c> C# 클래스 소스를 생성합니다.
+    /// PostgREST OpenAPI로 세이브 테이블 스키마를 가져와 <c>[Serializable]</c> + <c>[DataColumn]</c> C# 클래스 소스를 생성합니다.
     /// </summary>
     public sealed class SupabaseUserSaveClassGeneratorWindow : EditorWindow
     {
@@ -180,7 +180,7 @@ namespace Truesoft.Supabase.Editor
         private void PullFromSettings()
         {
             projectUrl = settings.projectUrl ?? "";
-            tableName = string.IsNullOrWhiteSpace(settings.userSavesTable) ? "user_saves" : settings.userSavesTable.Trim();
+            // tableName은 에디터에서 직접 입력. 멀티 테이블 구조로 단일 userSavesTable 필드가 없음.
         }
 
         private static HashSet<string> ParseSkipCsv(string csv)
