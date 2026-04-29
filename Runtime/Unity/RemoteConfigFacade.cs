@@ -507,7 +507,7 @@ namespace Truesoft.Supabase.Unity
                 LastUpdatedAtIso = updatedAtIso;
         }
 
-        private void RemoveCacheKey(string key, List<string> changedKeys)
+        private void RemoveCacheKey(string key, ICollection<string> changedKeys)
         {
             if (_cache.Remove(key))
             {
