@@ -871,7 +871,9 @@ namespace Truesoft.Supabase.Unity
             // 로컬 토큰이 사라진(재설치/로그아웃/탈퇴 예약 후 ClearSession) 경우를 위해 서버의 best-effort 복구 토큰을 1회 시도합니다.
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
             {
+                Debug.Log("[Supabase.SignIn] Attempting anonymous recovery...");
                 var recovery = await TryRestoreSessionFromAnonymousRecoveryAsync();
+                Debug.Log($"[Supabase.SignIn] Recovery result: Kind={recovery.Kind}, IsLoggedIn={IsLoggedIn}");
                 if (recovery.Kind == AnonymousRecoveryKind.GateBlocked)
                     return SupabaseResult<SupabaseSession>.Fail("withdrawal_scheduled_gate_blocked");
                 if (recovery.Kind == AnonymousRecoveryKind.GuardFailed)
@@ -881,9 +883,11 @@ namespace Truesoft.Supabase.Unity
                     return SupabaseResult<SupabaseSession>.Fail("user_banned");
                 if (recovery.Kind == AnonymousRecoveryKind.Restored && IsLoggedIn)
                 {
+                    Debug.Log($"[Supabase.SignIn] Recovery successful. IsAnonymous={IsAnonymousSession(_currentSession)}");
                     if (!IsAnonymousSession(_currentSession))
                     {
                         // 연동 등으로 더 이상 익명이 아닌 계정의 refresh가 복구 테이블에 남은 경우 — 게스트 버튼은 새 익명을 의미함.
+                        Debug.Log("[Supabase.SignIn] Recovered account is not anonymous, clearing and creating new one");
                         await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
                         await SignOutAsync(clearStorage: true, deleteUserSessionRow: true);
                         RememberLastSignInMethod(SignInMethodKind.Google);
@@ -891,11 +895,16 @@ namespace Truesoft.Supabase.Unity
                     }
                     else
                     {
+                        Debug.Log("[Supabase.SignIn] Using recovered anonymous session");
                         RememberLastSignInMethod(SignInMethodKind.Anonymous);
                         if (saveSessionToStorage)
                             SaveSessionToStorage();
                         return SupabaseResult<SupabaseSession>.Success(_currentSession);
                     }
+                }
+                else
+                {
+                    Debug.Log($"[Supabase.SignIn] Recovery not applied: Kind={recovery.Kind}, IsLoggedIn={IsLoggedIn}");
                 }
             }
 
@@ -2327,6 +2336,7 @@ namespace Truesoft.Supabase.Unity
             if (reserved != null)
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.GateBlocked);
 
+            Debug.Log($"[Supabase.AnonymousRecovery] Recovery complete. IsLoggedIn={IsLoggedIn}, SessionId={_currentSession?.User?.Id}");
             return new AnonymousRecoveryResult(AnonymousRecoveryKind.Restored);
         }
 
