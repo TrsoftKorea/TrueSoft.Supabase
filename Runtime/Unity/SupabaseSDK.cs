@@ -2286,11 +2286,20 @@ namespace Truesoft.Supabase.Unity
 
             var fingerprintHash = DeviceFingerprintProvider.TryCreateHashedFingerprint(_initializedProjectUrl);
             if (string.IsNullOrWhiteSpace(fingerprintHash))
+            {
+                Debug.Log("[Supabase.AnonymousRecovery] No fingerprint hash");
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
+            }
 
-            var tokenResult = await svc.TryGetRefreshTokenByFingerprintAsync(fingerprintHash, GetCurrentServerCode());
+            var serverCode = GetCurrentServerCode();
+            Debug.Log($"[Supabase.AnonymousRecovery] Attempting recovery with fingerprint={fingerprintHash}, serverCode={serverCode}");
+            var tokenResult = await svc.TryGetRefreshTokenByFingerprintAsync(fingerprintHash, serverCode);
             if (tokenResult == null || tokenResult.IsSuccess == false || string.IsNullOrWhiteSpace(tokenResult.Data))
+            {
+                Debug.Log($"[Supabase.AnonymousRecovery] Token not found. Success={tokenResult?.IsSuccess}, HasData={!string.IsNullOrWhiteSpace(tokenResult?.Data)}");
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
+            }
+            Debug.Log("[Supabase.AnonymousRecovery] Token found, refreshing session");
 
             var refreshResult = await RefreshSessionAsync(tokenResult.Data, saveSessionToStorage: true);
             if (refreshResult == null || refreshResult.IsSuccess == false || refreshResult.Data == null)
@@ -2336,15 +2345,18 @@ namespace Truesoft.Supabase.Unity
 
             try
             {
+                var serverCode = GetCurrentServerCode();
+                Debug.Log($"[Supabase.AnonymousRecovery] Upserting token for fingerprint={fingerprintHash}, serverCode={serverCode}");
                 _ = await svc.UpsertRefreshTokenByFingerprintAsync(
                     fingerprintHash,
                     session.RefreshToken,
                     session.User.Id,
-                    GetCurrentServerCode());
+                    serverCode);
+                Debug.Log("[Supabase.AnonymousRecovery] Upsert succeeded");
             }
-            catch
+            catch (Exception e)
             {
-                // best-effort 복구 경로이므로 본 로그인 결과를 깨지 않습니다.
+                Debug.LogWarning($"[Supabase.AnonymousRecovery] Upsert failed: {e.Message}");
             }
         }
 
