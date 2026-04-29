@@ -227,7 +227,7 @@ begin
   on conflict (account_id) do update set
     user_id = excluded.user_id,
     withdrawn_at = excluded.withdrawn_at,
-    server_id = coalesce(profiles.server_id, excluded.server_id);
+    server_id = coalesce(user_profiles.server_id, excluded.server_id);
 end;
 $$;
 

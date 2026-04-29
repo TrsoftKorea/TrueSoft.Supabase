@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   }
 
   const myProfile = await client
-    .from("profiles")
+    .from("user_profiles")
     .select("server_id")
     .eq("account_id", accountId)
     .limit(1)

@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   }
 
   const profileRes = await adminClient
-    .from("profiles")
+    .from("user_profiles")
     .select("account_id, withdrawn_at")
     .eq("account_id", user.id)
     .maybeSingle();

@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
   const playerUserId = (body?.user_id ?? "").trim() || user.id;
 
   const myProfile = await userClient
-    .from("profiles")
+    .from("user_profiles")
     .select("server_id")
     .limit(1)
     .maybeSingle();

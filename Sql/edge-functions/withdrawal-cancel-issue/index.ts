@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
   // ✅ 변경: userClient로 profiles 직접 조회 (RLS 적용)
   const profileRes = await userClient
-    .from("profiles")
+    .from("user_profiles")
     .select("withdrawn_at")
     .maybeSingle();
 
