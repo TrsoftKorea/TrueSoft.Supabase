@@ -120,3 +120,34 @@ with check (
 create unique index if not exists display_names_display_name_unique
 on public.display_names (server_id, lower(trim(display_name)))
 where trim(display_name) <> '';
+
+-- INSERT/UPDATE 시 server_id가 NULL이면 현재 유저의 server_id로 자동 보완 (profiles 패턴과 동일).
+create or replace function public.ts_display_names_coalesce_server_id()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if new.server_id is null then
+    new.server_id := public.auth_user_server_id();
+  end if;
+  if new.server_id is null then
+    new.server_id := public.ts_default_server_id();
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.ts_display_names_coalesce_server_id() is
+  'display_names INSERT/UPDATE 전 server_id NULL 보완. RLS WITH CHECK(server_id is not null) 와 호환.';
+
+drop trigger if exists trg_display_names_coalesce_server_id on public.display_names;
+create trigger trg_display_names_coalesce_server_id
+before insert or update on public.display_names
+for each row
+execute function public.ts_display_names_coalesce_server_id();
+
+grant select, insert, update on public.display_names to authenticated;
+
+notify pgrst, 'reload schema';
