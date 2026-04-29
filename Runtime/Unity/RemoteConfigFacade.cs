@@ -388,31 +388,19 @@ namespace Truesoft.Supabase.Unity
 
                 if (row.enabled == false)
                 {
-                    if (_cache.Remove(row.key))
-                    {
-                        _keyMeta.Remove(row.key);
-                        changedKeys.Add(row.key);
-                    }
+                    RemoveCacheKey(row.key, changedKeys);
                     continue;
                 }
 
                 if (row.requires_auth && string.IsNullOrWhiteSpace(_accessTokenGetter?.Invoke()))
                 {
-                    if (_cache.Remove(row.key))
-                    {
-                        _keyMeta.Remove(row.key);
-                        changedKeys.Add(row.key);
-                    }
+                    RemoveCacheKey(row.key, changedKeys);
                     continue;
                 }
 
                 if (PassesClientVersion(row) == false)
                 {
-                    if (_cache.Remove(row.key))
-                    {
-                        _keyMeta.Remove(row.key);
-                        changedKeys.Add(row.key);
-                    }
+                    RemoveCacheKey(row.key, changedKeys);
                     continue;
                 }
 
@@ -517,6 +505,15 @@ namespace Truesoft.Supabase.Unity
 
             if (string.IsNullOrWhiteSpace(LastUpdatedAtIso) || string.CompareOrdinal(updatedAtIso, LastUpdatedAtIso) > 0)
                 LastUpdatedAtIso = updatedAtIso;
+        }
+
+        private void RemoveCacheKey(string key, List<string> changedKeys)
+        {
+            if (_cache.Remove(key))
+            {
+                _keyMeta.Remove(key);
+                changedKeys.Add(key);
+            }
         }
 
         private bool PassesClientVersion(SupabaseRemoteConfigService.RemoteConfigRow row)

@@ -260,6 +260,7 @@ namespace Truesoft.Supabase.Unity
             SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
 
         /// <summary>displayName 수정. <see cref="TrySetMyDisplayNameAsync"/>와 동일.</summary>
+        [Obsolete("Use TrySetMyDisplayNameAsync instead", false)]
         public static Task<bool> TryUpdateMyDisplayNameAsync(string displayName) =>
             SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
 

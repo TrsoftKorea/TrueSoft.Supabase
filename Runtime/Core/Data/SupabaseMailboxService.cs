@@ -269,7 +269,9 @@ namespace Truesoft.Supabase.Core.Data
                 if (rows == null)
                     return SupabaseResult<IReadOnlyList<Mail>>.Success(Array.Empty<Mail>());
 
-                var mapped = rows.Select(MapRow).Where(m => m != null).ToList();
+                var mapped = rows.Where(r => r != null && !string.IsNullOrWhiteSpace(r.Id))
+                    .Select(MapRow)
+                    .ToList();
                 return SupabaseResult<IReadOnlyList<Mail>>.Success(mapped);
             }
             catch (Exception e)
