@@ -2243,7 +2243,7 @@ namespace Truesoft.Supabase.Unity
             {
                 SignInMethodKind.Google => await SignInWithGoogleAsync(saveSessionToStorage),
                 SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(saveSessionToStorage),
-                _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method", "Unknown sign-in method kind")
+                _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method")
             };
         }
 
