@@ -940,6 +940,7 @@ namespace Truesoft.Supabase.Unity
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
+                await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
                 if (saveSessionToStorage)
                     SaveSessionToStorage();
 
