@@ -133,6 +133,11 @@ alter table public.anonymous_recovery_tokens enable row level security;
 
 -- 정책은 두지 않고 RPC(SECURITY DEFINER)로만 접근합니다.
 
+-- p_server_code 추가 이전 구버전 오버로드 제거 (PostgREST 404 방지)
+drop function if exists public.ts_anon_recovery_get_refresh_token(text);
+drop function if exists public.ts_anon_recovery_upsert_refresh_token(text, text, uuid);
+drop function if exists public.ts_anon_recovery_delete_by_fingerprint(text);
+
 create or replace function public.ts_anon_recovery_get_refresh_token(
   p_fingerprint_hash text,
   p_server_code text default null
