@@ -2303,9 +2303,10 @@ namespace Truesoft.Supabase.Unity
             var serverCode = GetCurrentServerCode();
             Debug.Log($"[Supabase.AnonymousRecovery] Attempting recovery with fingerprint={fingerprintHash}, serverCode={serverCode}");
             var tokenResult = await svc.TryGetRefreshTokenByFingerprintAsync(fingerprintHash, serverCode);
+            Debug.Log($"[Supabase.AnonymousRecovery] Token query result: Success={tokenResult?.IsSuccess}, HasData={!string.IsNullOrWhiteSpace(tokenResult?.Data)}, Error={tokenResult?.ErrorMessage}");
             if (tokenResult == null || tokenResult.IsSuccess == false || string.IsNullOrWhiteSpace(tokenResult.Data))
             {
-                Debug.Log($"[Supabase.AnonymousRecovery] Token not found. Success={tokenResult?.IsSuccess}, HasData={!string.IsNullOrWhiteSpace(tokenResult?.Data)}");
+                Debug.LogWarning($"[Supabase.AnonymousRecovery] Token not found. Searched with fingerprint={fingerprintHash}, serverCode={serverCode}");
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
             Debug.Log("[Supabase.AnonymousRecovery] Token found, refreshing session");
