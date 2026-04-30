@@ -859,6 +859,12 @@ namespace Truesoft.SupabaseUnity.Samples
                 _sample._iapInitialized = false;
             }
 
+            public void OnInitializationFailed(InitializationFailureReason error, string message)
+            {
+                Debug.LogError($"[Sample] IAP initialization failed: {error} — {message}");
+                _sample._iapInitialized = false;
+            }
+
             public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs purchaseEvent)
             {
                 Debug.Log($"[Sample] Purchase successful: {purchaseEvent.purchasedProduct.definition.id}");
