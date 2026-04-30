@@ -689,33 +689,33 @@ namespace Truesoft.SupabaseUnity.Samples
             _storeController.FetchPurchases();
         }
 
-        private void OnProductsFetchFailed(string error)
+        private void OnProductsFetchFailed(ProductFetchFailed failure)
         {
-            Debug.LogError($"[Sample] Products fetch failed: {error}");
+            Debug.LogError($"[Sample] Products fetch failed: {failure}");
         }
 
         private void OnPurchasesFetched(Orders orders)
         {
-            Debug.Log($"[Sample] Purchases fetched: {orders.all.Count} orders.");
+            Debug.Log($"[Sample] Purchases fetched.");
             _iapInitialized = true;
         }
 
-        private void OnPurchasesFetchFailed(string error)
+        private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription failure)
         {
-            Debug.LogError($"[Sample] Purchases fetch failed: {error}");
+            Debug.LogError($"[Sample] Purchases fetch failed: {failure}");
             _iapInitialized = true;  // 어쨌든 구매는 가능하게 함
         }
 
         private void OnPurchasePending(PendingOrder pendingOrder)
         {
-            Debug.Log($"[Sample] Purchase pending: {pendingOrder.productId}");
+            Debug.Log($"[Sample] Purchase pending: {pendingOrder}");
             // v5: PendingOrder에서 receipt 추출 후 Supabase 검증
             _ = VerifyPurchaseAndGrantItemAsync(pendingOrder);
         }
 
         private void OnPurchaseFailed(FailedOrder failedOrder)
         {
-            Debug.LogWarning($"[Sample] Purchase failed: {failedOrder.productId} — {failedOrder.failureDetail}");
+            Debug.LogWarning($"[Sample] Purchase failed: {failedOrder}");
         }
 
         /// <summary>
@@ -736,12 +736,12 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            // v5: StoreController에서 productId로 직접 구매
             Debug.Log($"[Sample] initiating purchase for {demoPurchaseProductId}...");
 
             try
             {
-                await _storeController.InitiatePurchaseAsync(demoPurchaseProductId);
+                // v5: StoreController.InitiatePurchase (비동기 아님, 콜백으로 결과 전달)
+                _storeController.InitiatePurchase(demoPurchaseProductId);
                 // OnPurchasePending 또는 OnPurchaseFailed 콜백으로 결과 전달됨
                 return true;
             }
@@ -817,12 +817,26 @@ namespace Truesoft.SupabaseUnity.Samples
         /// </summary>
         private async Task VerifyPurchaseAndGrantItemAsync(PendingOrder pendingOrder)
         {
-            var receipt = pendingOrder.receipt;
-            var productId = pendingOrder.productId;
+            // TODO: PendingOrder 구조 확인 필요
+            // v5.2.1에서 PendingOrder의 정확한 필드명 확인 후 수정
+            Debug.Log($"[Sample] VerifyPurchaseAndGrantItemAsync called with: {pendingOrder}");
+
+            // 임시: receipt와 productId를 추출하는 로직
+            // 실제로는 PendingOrder의 toString()이나 리플렉션으로 필드를 확인해야 함
+            string receipt = null;
+            string productId = null;
+
+            // PendingOrder 객체 정보 출력 (디버깅용)
+            Debug.Log($"[Sample] PendingOrder type: {pendingOrder.GetType().Name}");
+            var props = pendingOrder.GetType().GetProperties();
+            foreach (var prop in props)
+            {
+                Debug.Log($"  - {prop.Name}: {prop.GetValue(pendingOrder)}");
+            }
 
             if (string.IsNullOrEmpty(receipt))
             {
-                Debug.LogError("[Sample] Receipt is empty.");
+                Debug.LogWarning("[Sample] Receipt not found in PendingOrder. Check field names.");
                 return;
             }
 
