@@ -29,9 +29,6 @@ namespace Truesoft.Supabase.Core.Data
         private readonly ISupabaseHttpClient _httpClient;
         private readonly ISupabaseJsonSerializer _jsonSerializer;
 
-        /// <summary>EnsureMyProfileRowAsync 가 <c>game_servers</c>에서 한 번 조회한 기본 월드 id (캐시).</summary>
-        private string _cachedDefaultGameServerId;
-
         public SupabasePublicProfileService(
             string supabaseUrl,
             string publishableKey,
@@ -88,7 +85,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<string>.Fail("display_name_get_parse_exception:" + e.Message);
+                return SupabaseResult<string>.Fail("display_name_get_parse_failed:" + e.Message);
             }
         }
 
@@ -143,7 +140,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<bool>.Fail("display_name_check_parse_exception:" + e.Message);
+                return SupabaseResult<bool>.Fail("display_name_check_parse_failed:" + e.Message);
             }
         }
 
@@ -233,31 +230,38 @@ namespace Truesoft.Supabase.Core.Data
             try
             {
                 var rows = _jsonSerializer.FromJsonArray<ProfileRowFull>(response.Body);
+                string rowId;
+                string userIdForDisplayName;
+                string withdrawnAt;
+
                 if (rows == null || rows.Length == 0 || rows[0] == null)
                 {
-                    var displayNameWhenNoProfile = await GetDisplayNameAsync(accessToken, id);
-                    var resolvedName = (displayNameWhenNoProfile != null && displayNameWhenNoProfile.IsSuccess)
-                        ? (displayNameWhenNoProfile.Data ?? string.Empty)
-                        : string.Empty;
-                    return SupabaseResult<PublicProfileSnapshot>.Success(new PublicProfileSnapshot(string.Empty, id, resolvedName, null));
+                    // 프로필 행 없음: id만 사용
+                    rowId = string.Empty;
+                    userIdForDisplayName = id;
+                    withdrawnAt = null;
+                }
+                else
+                {
+                    // 프로필 행 존재
+                    var row = rows[0];
+                    rowId = string.IsNullOrWhiteSpace(row.id) ? string.Empty : row.id.Trim();
+                    userIdForDisplayName = string.IsNullOrWhiteSpace(row.user_id) ? id : row.user_id.Trim();
+                    withdrawnAt = string.IsNullOrWhiteSpace(row.withdrawn_at) ? null : row.withdrawn_at;
                 }
 
-                var row = rows[0];
-                var w = row.withdrawn_at;
-                if (string.IsNullOrWhiteSpace(w))
-                    w = null;
-
-                var rowId = string.IsNullOrWhiteSpace(row.id) ? string.Empty : row.id.Trim();
-                var stable = string.IsNullOrWhiteSpace(row.user_id) ? id : row.user_id.Trim();
-                var displayNameWhenProfile = await GetDisplayNameAsync(accessToken, stable);
-                var displayName = (displayNameWhenProfile != null && displayNameWhenProfile.IsSuccess)
-                    ? (displayNameWhenProfile.Data ?? string.Empty)
+                // displayName을 한 번만 조회
+                var displayNameResult = await GetDisplayNameAsync(accessToken, userIdForDisplayName);
+                var displayName = (displayNameResult != null && displayNameResult.IsSuccess)
+                    ? (displayNameResult.Data ?? string.Empty)
                     : string.Empty;
-                return SupabaseResult<PublicProfileSnapshot>.Success(new PublicProfileSnapshot(rowId, stable, displayName, w));
+
+                return SupabaseResult<PublicProfileSnapshot>.Success(
+                    new PublicProfileSnapshot(rowId, userIdForDisplayName, displayName, withdrawnAt));
             }
             catch (Exception e)
             {
-                return SupabaseResult<PublicProfileSnapshot>.Fail("public_profile_parse_exception:" + e.Message);
+                return SupabaseResult<PublicProfileSnapshot>.Fail("public_profile_parse_failed:" + e.Message);
             }
         }
 
@@ -348,7 +352,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<MyServerInfo>.Fail("my_server_parse_exception:" + e.Message);
+                return SupabaseResult<MyServerInfo>.Fail("my_server_parse_failed:" + e.Message);
             }
         }
 
@@ -389,7 +393,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<bool>.Fail("server_transfer_parse_exception:" + e.Message);
+                return SupabaseResult<bool>.Fail("server_transfer_parse_failed:" + e.Message);
             }
         }
 
@@ -508,7 +512,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<string>.Fail("withdrawal_request_parse_exception:" + e.Message);
+                return SupabaseResult<string>.Fail("withdrawal_request_parse_failed:" + e.Message);
             }
         }
 
@@ -553,7 +557,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<MyWithdrawalStatus>.Fail("withdrawal_status_parse_exception:" + e.Message);
+                return SupabaseResult<MyWithdrawalStatus>.Fail("withdrawal_status_parse_failed:" + e.Message);
             }
         }
 

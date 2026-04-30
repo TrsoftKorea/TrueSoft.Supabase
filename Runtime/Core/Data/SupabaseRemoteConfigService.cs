@@ -61,6 +61,9 @@ namespace Truesoft.Supabase.Core.Data
         }
 
         /// <summary>특정 키 목록만 조회(Cold Start 시 첫 조회용).</summary>
+        /// <param name="keys">조회할 Remote Config 키 목록.</param>
+        /// <param name="accessToken">액세스 토큰(선택사항). null이면 기본 공개 액세스.</param>
+        /// <returns>요청한 키에 해당하는 Remote Config 행 배열. 미존재 키는 제외됨.</returns>
         public async Task<SupabaseResult<RemoteConfigRow[]>> GetByKeysAsync(
             IReadOnlyList<string> keys,
             string accessToken = null)
@@ -119,7 +122,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<RemoteConfigRow[]>.Fail("remote_config_parse_exception:" + e.Message);
+                return SupabaseResult<RemoteConfigRow[]>.Fail("remote_config_parse_failed:" + e.Message);
             }
         }
 

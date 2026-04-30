@@ -323,53 +323,50 @@ Retool 예시:
 
 **SDK 범위**: 영수증 유효성 검증만 수행합니다. 보상 지급은 게임 서버/클라이언트에서 별도로 처리하세요.
 
-### 게임 프로젝트별 필수 설정
+### 공통 설정 (모든 게임 프로젝트가 공유)
 
-각 게임 프로젝트마다 **Google Cloud**, **Google Play Console**, **Supabase** 세 곳에서 설정이 필요합니다.
+#### 1. Google Cloud 서비스 계정 정보 조회
 
-#### 1. Google Cloud 서비스 계정 생성 및 JSON 키 다운로드
+**⚠️ Google Cloud 서비스 계정과 JSON 키는 이미 생성되어 있습니다.**
 
-1. **[Google Cloud Console](https://console.cloud.google.com/)** 접속
-2. 상단 프로젝트 드롭다운 → **새 프로젝트** 클릭
-   - 프로젝트 이름: `[게임명] Play Store Validation` (예시)
-   - **만들기** 클릭
-3. **API 및 서비스** → **라이브러리** 클릭
-4. 검색: `Google Play Developer API` → 클릭 → **활성화**
-5. **API 및 서비스** → **사용자 인증 정보** 클릭
-6. **사용자 인증 정보 만들기** → **서비스 계정** 선택
-   - **서비스 계정 이름**: `PlayStoreValidator` (또는 원하는 이름)
-   - **만들고 계속** → **완료** 클릭
-7. 생성된 서비스 계정 클릭 (이메일: `xxxxxx@xxxxxx.iam.gserviceaccount.com`)
-8. **키** 탭 → **키 추가** → **새 키 만들기** → **JSON** 선택
-   - **만들기** 클릭 → JSON 파일 자동 다운로드 ⚠️ **안전한 곳에 보관**
+DevOps/보안팀 관리 저장소에서 다음 정보를 확인하세요:
 
-#### 2. Google Play Console에서 서비스 계정 권한 부여
+- **Google Cloud 서비스 계정 이메일**: (회사 내부 저장소에서 조회)
+  - 형식: `xxxxxx@xxxxxx.iam.gserviceaccount.com`
+- **서비스 계정 JSON 키**: (회사 내부 저장소에서 조회)
+  - 절대 Git/버전관리에 커밋하지 마세요
+  - 필요할 때마다 보안팀에 요청하세요
 
-1. **[Google Play Console](https://play.google.com/console)** 접속 (앱을 배포한 계정)
+**저장소 위치**:  
+회사 보안 문서/위키의 "Google Play Developer API 서비스 계정" 섹션 참고
+
+---
+
+### 게임 프로젝트별 설정
+
+각 게임마다 **Google Play Console**과 **Supabase**에서 다음 두 가지만 설정하면 됩니다:
+
+#### 2. Google Play Console에서 서비스 계정 권한 부여 (게임마다 1회)
+
+1. **[Google Play Console](https://play.google.com/console)** 접속 (게임을 배포한 계정)
 2. 설정 → **사용자 및 권한** 클릭
 3. **사용자 초대** 클릭
-4. 위에서 복사한 서비스 계정 이메일 입력
+4. 위 1단계에서 조회한 **서비스 계정 이메일** 입력
 5. **역할** → **재무 담당자** (또는 **관리자**) 선택
 6. **앱 권한** (선택): 모든 앱 또는 특정 앱만
 7. **초대** 클릭
 
-#### 3. Supabase Edge Function Secrets 등록
+#### 3. 각 게임의 Supabase Edge Function Secrets 등록 (게임마다 1회)
 
-1. **[Supabase 대시보드](https://supabase.com/dashboard)** 접속 → 프로젝트 선택
+1. **[Supabase 대시보드](https://supabase.com/dashboard)** 접속 → 해당 게임 프로젝트 선택
 2. **Edge Functions** → **purchase-verify-google** 클릭
 3. **Secrets** 탭
 4. **+ Add secret** 클릭
 5. **Key**: `GOOGLE_SERVICE_ACCOUNT_JSON`
-6. **Value**: 1단계에서 다운로드한 JSON 파일의 **전체 내용** 복사해 붙여넣기
+6. **Value**: 위 1단계에서 조회한 **JSON 키의 전체 내용** 복사해 붙여넣기
+   - ✅ 모든 게임이 **같은 JSON**을 사용합니다
+   - ⚠️ JSON은 절대 버전관리에 커밋하지 마세요
 7. **Save** 클릭
-
-#### 4. SupabaseSettings에서 기본 패키지명 설정
-
-1. Unity 프로젝트에서 `Assets/Resources/SupabaseSettings.asset` 열기
-2. 인스펙터 하단 **인앱 결제** 섹션 확인
-3. **Default Package Name**: 앱의 패키지명 입력 (예: `com.studio.mygame`)
-   - 비워두면 `TryVerifyGooglePlayPurchaseAsync` 호출 시 매번 `packageName` 인자를 전달해야 함
-4. **(선택) Purchase Verify Google Function Name**: 기본값 `purchase-verify-google` 유지
 
 ### 사용 예시
 
@@ -377,8 +374,8 @@ Retool 예시:
 // 게임에서 구글 플레이 구매 후
 var (success, response) = await Supabase.TryVerifyGooglePlayPurchaseAsync(
     purchaseToken: googlePlayPurchaseToken,  // Google Play에서 받은 토큰
-    productId: "gem_pack_1",                 // 상품 ID
-    packageName: "com.studio.mygame"         // 생략 시 SupabaseSettings의 기본값 사용
+    productId: "gem_pack_1"                  // 상품 ID
+    // packageName 생략 → Application.identifier 자동 사용
 );
 
 if (success && response.ok)

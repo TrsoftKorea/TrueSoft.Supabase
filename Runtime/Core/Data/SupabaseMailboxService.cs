@@ -34,6 +34,10 @@ namespace Truesoft.Supabase.Core.Data
             _mailsTable = SupabaseRestTableRef.Normalize(mailsTable, nameof(mailsTable));
         }
 
+        /// <summary>로그인한 사용자의 우편함 메일 목록을 조회합니다.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰.</param>
+        /// <param name="limit">반환할 메일 개수. 범위: 1~200 (기본값: 50).</param>
+        /// <param name="offset">건너뛸 메일 개수. 0 이상. (기본값: 0).</param>
         public async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(
             string accessToken,
             int limit = 50,

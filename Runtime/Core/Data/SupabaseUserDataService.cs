@@ -68,6 +68,13 @@ namespace Truesoft.Supabase.Core.Data
         /// <summary>
         /// 명시 컬럼 기반으로 부분 저장(PATCH)합니다. <paramref name="patch"/>에는 변경된 필드만 넣는 것을 전제로 합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰.</param>
+        /// <param name="accountId">현재 계정 ID(auth.users.id).</param>
+        /// <param name="playerUserId">플레이어 사용자 ID. RLS 필터링에 사용.</param>
+        /// <param name="tableName">대상 테이블명.</param>
+        /// <param name="patch">변경할 컬럼과 값의 딕셔너리. 변경된 필드만 포함.</param>
+        /// <param name="ensureRowFirst">true일 때, PATCH 전에 해당 행이 존재하는지 확인하고 없으면 생성(기본값: true).</param>
+        /// <param name="setUpdatedAtIsoUtc">true일 때, patch에 updated_at을 현재 UTC 시각으로 자동 추가(기본값: true).</param>
         public async Task<SupabaseResult<bool>> PatchAsync(
             string accessToken,
             string accountId,
@@ -192,7 +199,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("load_parse_exception:" + e.Message);
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("load_parse_failed:" + e.Message);
             }
         }
 

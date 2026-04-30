@@ -81,9 +81,6 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("구글 플레이 영수증 검증 Edge 함수 이름.")]
         public string purchaseVerifyGoogleFunctionName = "purchase-verify-google";
 
-        [Tooltip("안드로이드 패키지명 (예: com.studio.mygame). 비워두면 호출 시 직접 넘겨야 합니다.")]
-        public string defaultPackageName = "";
-
         public SupabaseOptions ToOptions()
         {
             return new SupabaseOptions
@@ -112,7 +109,6 @@ namespace Truesoft.Supabase.Unity
                 PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(purchaseVerifyGoogleFunctionName)
                     ? "purchase-verify-google"
                     : purchaseVerifyGoogleFunctionName.Trim(),
-                DefaultPackageName = defaultPackageName?.Trim() ?? "",
             };
         }
     }

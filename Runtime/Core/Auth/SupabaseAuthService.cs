@@ -40,6 +40,12 @@ namespace Truesoft.Supabase.Core.Auth
             };
         }
 
+        /// <summary>Google OAuth ID Token을 사용하여 로그인합니다.</summary>
+        /// <param name="idToken">Google에서 발급한 ID Token. iOS/웹 클라이언트에서 사용.</param>
+        /// <remarks>
+        /// Android에서는 GoogleLoginBridge의 TrySignInWithGoogleAsync()를 사용하세요.
+        /// ID Token은 반드시 현재 애플리케이션의 OAuth 2.0 클라이언트 ID로 발급되어야 합니다.
+        /// </remarks>
         public async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken)
         {
             return await SignInWithIdTokenAsync("google", idToken);

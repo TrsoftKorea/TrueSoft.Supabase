@@ -71,7 +71,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<DateTime>.Fail("server_time_parse_exception:" + e.Message);
+                return SupabaseResult<DateTime>.Fail("server_time_parse_failed:" + e.Message);
             }
         }
 

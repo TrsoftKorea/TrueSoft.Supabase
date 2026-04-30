@@ -165,11 +165,17 @@ Deno.serve(async (req) => {
   }
 
   // user_id 조회 (RLS 적용 userClient 사용)
-  const { data: profile } = await userClient
+  let userId: string | null = null;
+  const { data: profile, error: profileError } = await userClient
     .from("user_profiles")
     .select("user_id")
     .maybeSingle();
-  const userId: string | null = profile?.user_id ?? null;
+  if (!profileError) {
+    userId = profile?.user_id ?? null;
+  } else {
+    // RLS 실패 등의 조회 오류는 로그만 남기고 계속 진행 (user_id = null 허용)
+    console.error(`[purchase-verify-google] profile_query_error: ${profileError.message}`);
+  }
 
   // 구매 기록 INSERT (purchase_token UNIQUE — 충돌 시 중복 요청으로 처리)
   const { error: insertError } = await userClient

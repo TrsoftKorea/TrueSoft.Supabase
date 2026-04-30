@@ -59,7 +59,6 @@ namespace Truesoft.Supabase.Unity
         private static string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
         private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
-        private static string _defaultPackageName = "";
 
         private enum SignInMethodKind
         {
@@ -1304,7 +1303,7 @@ namespace Truesoft.Supabase.Unity
             if (!ready.IsSuccess)
                 return SupabaseResult<string>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await _bootstrap.PublicProfileService.GetDisplayNameAsync(_currentSession.AccessToken, userId);
+            return await _bootstrap.PublicProfileService.GetDisplayNameAsync(_currentSession?.AccessToken ?? "", userId);
         }
 
         /// <summary>현재 로그인 사용자의 displayName을 설정합니다(유니크 강제 + auth metadata 동기화).</summary>
@@ -1326,7 +1325,7 @@ namespace Truesoft.Supabase.Unity
 
             var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<DisplayNameSetResponse>(
                 "displayname-set",
-                _currentSession.AccessToken,
+                _currentSession?.AccessToken ?? "",
                 request);
 
             if (result == null || !result.IsSuccess || result.Data == null)
@@ -1360,7 +1359,7 @@ namespace Truesoft.Supabase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             var selfAccountId = _currentSession?.User?.Id;
-            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(_currentSession.AccessToken, displayName, selfAccountId);
+            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(_currentSession?.AccessToken ?? "", displayName, selfAccountId);
         }
 
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>
@@ -1806,17 +1805,18 @@ namespace Truesoft.Supabase.Unity
         /// <summary>구글 플레이 인앱 상품 영수증을 서버에서 검증합니다.</summary>
         /// <param name="purchaseToken">Google Play 구매 토큰.</param>
         /// <param name="productId">상품 ID.</param>
-        /// <param name="packageName">앱 패키지명. <c>null</c>이면 <see cref="SupabaseSettings.defaultPackageName"/>을 사용합니다.</param>
+        /// <param name="packageName">앱 패키지명. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
         public static async Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
             string packageName = null)
         {
+            var finalPackageName = packageName ?? UnityEngine.Application.identifier;
             var req = new GooglePlayPurchaseRequest
             {
                 purchase_token = purchaseToken,
                 product_id = productId,
-                package_name = packageName ?? _defaultPackageName,
+                package_name = finalPackageName,
             };
             return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
                 _purchaseVerifyGoogleFunctionName, req, requireAuth: true);
@@ -2032,7 +2032,6 @@ namespace Truesoft.Supabase.Unity
             _purchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(bootstrap.PurchaseVerifyGoogleFunctionName)
                 ? "purchase-verify-google"
                 : bootstrap.PurchaseVerifyGoogleFunctionName.Trim();
-            _defaultPackageName = bootstrap.DefaultPackageName ?? "";
 
             if (!preserveSession)
                 _currentSession = null;

@@ -67,7 +67,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<string>.Fail("user_session_parse_exception:" + e.Message);
+                return SupabaseResult<string>.Fail("user_session_parse_failed:" + e.Message);
             }
         }
 

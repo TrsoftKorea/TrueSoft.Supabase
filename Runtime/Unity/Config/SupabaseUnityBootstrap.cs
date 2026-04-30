@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Core.Http;
@@ -47,15 +48,24 @@ namespace Truesoft.Supabase.Unity.Config
         /// <summary><see cref="SupabaseSettings.purchaseVerifyGoogleFunctionName"/>.</summary>
         public string PurchaseVerifyGoogleFunctionName { get; private set; } = "purchase-verify-google";
 
-        /// <summary><see cref="SupabaseSettings.defaultPackageName"/>.</summary>
-        public string DefaultPackageName { get; private set; } = "";
-
         public void Initialize(SupabaseSettings settings)
         {
             if (settings == null)
                 throw new ArgumentNullException(nameof(settings));
 
             var options = settings.ToOptions();
+
+            // 설정 유효성 검사
+            if (string.IsNullOrWhiteSpace(options.ProjectURL) ||
+                !Uri.TryCreate(options.ProjectURL, UriKind.Absolute, out _))
+                throw new ArgumentException($"[Supabase] 유효하지 않은 projectUrl: '{options.ProjectURL}'");
+
+            if (string.IsNullOrWhiteSpace(options.PublishableKey))
+                throw new ArgumentException("[Supabase] publishableKey가 비어 있습니다.");
+
+            if (options.TimeoutSeconds < 1 || options.TimeoutSeconds > 300)
+                Debug.LogWarning($"[Supabase] TimeoutSeconds({options.TimeoutSeconds})가 권장 범위(1-300)를 벗어납니다.");
+
             ProjectUrl = options.ProjectURL ?? string.Empty;
             EnableApiResultLogs = settings.enableApiResultLogs;
 
@@ -133,7 +143,6 @@ namespace Truesoft.Supabase.Unity.Config
             PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(options.PurchaseVerifyGoogleFunctionName)
                 ? "purchase-verify-google"
                 : options.PurchaseVerifyGoogleFunctionName.Trim();
-            DefaultPackageName = options.DefaultPackageName?.Trim() ?? "";
             SupabaseSDK.Initialize(this);
         }
     }

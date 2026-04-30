@@ -96,7 +96,7 @@ namespace Truesoft.Supabase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<TResponse>.Fail("function_parse_exception:" + e.Message);
+                return SupabaseResult<TResponse>.Fail("function_parse_failed:" + e.Message);
             }
         }
 
