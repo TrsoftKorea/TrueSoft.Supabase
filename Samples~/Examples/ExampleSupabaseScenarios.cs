@@ -98,6 +98,16 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("서버 샤드 조회 및 이주")]
         [SerializeField] private KeyCode keyServerShard = KeyCode.N;
 
+        [Header("인앱 결제")]
+        [Tooltip("Google Play 영수증 검증 — Unity IAP billing result.purchaseToken")]
+        [SerializeField] private string demoPurchaseToken = "YOUR_PURCHASE_TOKEN_HERE";
+
+        [Tooltip("인앱 상품 ID (Google Play Console에서 등록한 product ID)")]
+        [SerializeField] private string demoProductId = "com.yourcompany.yourgame.item_id";
+
+        [Tooltip("Google Play 영수증 서버 검증")]
+        [SerializeField] private KeyCode keyVerifyPurchase = KeyCode.B;
+
         private bool _keyboardBusy;
 
         private void OnEnable()
@@ -164,6 +174,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 _ = RunAsyncGuarded(RunWithdrawalCancelRedeemExampleAsync);
             else if (Input.GetKeyDown(keyServerShard))
                 _ = RunAsyncGuarded(RunServerShardExampleAsync);
+            else if (Input.GetKeyDown(keyVerifyPurchase))
+                _ = RunAsyncGuarded(RunVerifyGooglePlayPurchaseExampleAsync);
         }
 
         private async Task RunAsyncGuarded(Func<Task<bool>> body)
@@ -591,6 +603,64 @@ namespace Truesoft.SupabaseUnity.Samples
                 ? "[Sample] function example success."
                 : "[Sample] function example failed.");
             return ok;
+        }
+
+        /// <summary>
+        /// Google Play 인앱 구매 영수증 서버 검증 예시.
+        /// Inspector의 <c>Demo Purchase Token</c>에 Unity IAP <c>PurchaseEventArgs.purchasedProduct.receipt</c>
+        /// 안의 <c>Payload → json → purchaseToken</c> 값을 입력하고 <c>B</c>를 누릅니다.
+        /// </summary>
+        private async Task<bool> RunVerifyGooglePlayPurchaseExampleAsync()
+        {
+            if (!SupabaseClient.IsLoggedIn)
+            {
+                Debug.LogWarning("[Sample] purchase verify skipped: sign in first.");
+                return false;
+            }
+
+            var token = demoPurchaseToken?.Trim();
+            var productId = demoProductId?.Trim();
+
+            if (string.IsNullOrEmpty(token) || token == "YOUR_PURCHASE_TOKEN_HERE")
+            {
+                Debug.LogWarning("[Sample] purchase verify skipped: Inspector의 Demo Purchase Token에 실제 purchase_token을 입력하세요.");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(productId))
+            {
+                Debug.LogWarning("[Sample] purchase verify skipped: Inspector의 Demo Product Id를 입력하세요.");
+                return false;
+            }
+
+            // packageName 생략 시 Application.identifier로 자동 채워짐
+            var (success, response) = await SupabaseClient.TryVerifyGooglePlayPurchaseAsync(
+                purchaseToken: token,
+                productId: productId);
+
+            if (!success)
+            {
+                Debug.LogWarning("[Sample] purchase verify failed (Edge Function 배포·env 변수·구글 서비스 계정·purchases 테이블 확인).");
+                return false;
+            }
+
+            if (!response.ok)
+            {
+                Debug.LogWarning(
+                    $"[Sample] purchase verify: Google이 거부함. state={response.purchase_state}, reason={response.reason}");
+                return false;
+            }
+
+            Debug.Log(
+                $"[Sample] purchase verify success! " +
+                $"order_id={response.order_id}, " +
+                $"purchase_state={response.purchase_state}, " +
+                $"already_verified={response.already_verified}");
+
+            if (response.already_verified)
+                Debug.LogWarning("[Sample] 이미 검증된 영수증입니다. 중복 지급 방지 로직을 확인하세요.");
+
+            return true;
         }
 
         private async Task RunAllExamplesAsync()

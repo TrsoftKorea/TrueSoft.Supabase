@@ -23,7 +23,8 @@ type GoogleProductPurchase = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
 const GOOGLE_SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")!;
 
 if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
@@ -110,7 +111,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "missing_jwt" } satisfies VerifyResponse, 401);
   }
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 

@@ -15,8 +15,8 @@ type CancelTokenPayload = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-// ❌ 제거: SUPABASE_SERVICE_ROLE_KEY 불필요
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
 const CANCEL_TOKEN_SECRET = Deno.env.get("CANCEL_TOKEN_SECRET")!;
 const CANCEL_TOKEN_TTL_SECONDS = Number(Deno.env.get("CANCEL_TOKEN_TTL_SECONDS") ?? "900");
 
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
   // ❌ 제거: adminClient 불필요 (service_role 제거)

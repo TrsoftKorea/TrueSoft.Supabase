@@ -6,10 +6,10 @@ type GuardResponse = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-// ⚠️ 주의: auth.admin.deleteUser()는 관리자 API이므로 Secret Key 필요
-// Dashboard → Project Settings → API → Secret Keys에서 발급 (이름: SECRET_KEY)
-const SECRET_KEY = Deno.env.get("SECRET_KEY")!;
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY = secretKeys.defence_r;
 
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -24,12 +24,12 @@ Deno.serve(async (req) => {
     );
   }
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
   // ✅ 변경: service_role → 새 Secret Key (SECRET_KEY)
-  const adminClient = createClient(SUPABASE_URL, SECRET_KEY, {
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 

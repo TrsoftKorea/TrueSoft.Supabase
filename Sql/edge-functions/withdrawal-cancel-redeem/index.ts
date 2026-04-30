@@ -17,7 +17,8 @@ type CancelTokenPayload = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
 const CANCEL_TOKEN_SECRET = Deno.env.get("CANCEL_TOKEN_SECRET")!;
 
 if (!CANCEL_TOKEN_SECRET) {
@@ -108,7 +109,7 @@ Deno.serve(async (req) => {
 
   // ✅ 변경: service_role 제거, 사용자 JWT로 새 RPC 호출
   const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
 
