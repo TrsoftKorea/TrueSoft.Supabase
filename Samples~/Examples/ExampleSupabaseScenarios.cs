@@ -115,8 +115,7 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("구매 후 직접 검증")]
         [SerializeField] private KeyCode keyVerifyPurchase = KeyCode.B;
 
-        private IStoreController _storeController;
-        private IExtensionProvider _extensionProvider;
+        private StoreController _storeController;
         private bool _iapInitialized;
 
         private bool _keyboardBusy;
@@ -621,8 +620,8 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// Unity IAP(In-App Purchasing) 초기화.
-        /// Google Play Billing 카탈로그 로드. M 키로 실행 후 , 키로 구매 테스트.
+        /// Unity IAP v5 초기화 (비동기).
+        /// 스토어 연결 → 상품 조회 → 구매 이력 조회. M 키로 실행.
         /// </summary>
         private async Task<bool> RunInitializeIAPExampleAsync()
         {
@@ -632,38 +631,100 @@ namespace Truesoft.SupabaseUnity.Samples
                 return true;
             }
 
-            Debug.Log("[Sample] IAP initializing...");
+            Debug.Log("[Sample] IAP v5 initializing...");
 
-            var builder = ConfigurationBuilder.Instance(StandardPricingStrategy.Instance());
-            builder.AddProduct(demoPurchaseProductId, ProductType.Consumable);
-
-            UnityPurchasing.Initialize(new SampleIAPListener(this), builder);
-
-            // 초기화 대기 (최대 10초)
-            var elapsed = 0f;
-            while (!_iapInitialized && elapsed < 10f)
+            try
             {
-                await Task.Delay(100);
-                elapsed += 0.1f;
+                // StoreController 접근
+                _storeController = UnityIAPServices.StoreController();
+
+                // 이벤트 핸들러 등록
+                _storeController.OnProductsFetched += OnProductsFetched;
+                _storeController.OnProductsFetchFailed += OnProductsFetchFailed;
+                _storeController.OnPurchasesFetched += OnPurchasesFetched;
+                _storeController.OnPurchasesFetchFailed += OnPurchasesFetchFailed;
+                _storeController.OnPurchasePending += OnPurchasePending;
+                _storeController.OnPurchaseFailed += OnPurchaseFailed;
+
+                // 1단계: 스토어 연결
+                Debug.Log("[Sample] Connecting to store...");
+                await _storeController.Connect();
+
+                // 2단계: 상품 조회
+                Debug.Log("[Sample] Fetching products...");
+                var products = new List<ProductDefinition>
+                {
+                    new(demoPurchaseProductId, ProductType.Consumable)
+                };
+                _storeController.FetchProducts(products);
+
+                // 상품 로드 대기 (최대 10초)
+                var elapsed = 0f;
+                while (!_iapInitialized && elapsed < 10f)
+                {
+                    await Task.Delay(100);
+                    elapsed += 0.1f;
+                }
+
+                if (!_iapInitialized)
+                {
+                    Debug.LogWarning("[Sample] IAP initialization timeout.");
+                    return false;
+                }
+
+                Debug.Log("[Sample] IAP initialized. Press , to purchase.");
+                return true;
             }
-
-            if (!_iapInitialized)
+            catch (System.Exception e)
             {
-                Debug.LogWarning("[Sample] IAP initialization timeout (com.unity.purchasing 설치·Google Play 설정 확인).");
+                Debug.LogError($"[Sample] IAP initialization failed: {e.Message}");
                 return false;
             }
+        }
 
-            Debug.Log("[Sample] IAP initialized. Press , to purchase.");
-            return true;
+        private void OnProductsFetched(List<Product> products)
+        {
+            Debug.Log($"[Sample] {products.Count} products fetched.");
+            // 3단계: 구매 이력 조회
+            _storeController.FetchPurchases();
+        }
+
+        private void OnProductsFetchFailed(string error)
+        {
+            Debug.LogError($"[Sample] Products fetch failed: {error}");
+        }
+
+        private void OnPurchasesFetched(Orders orders)
+        {
+            Debug.Log($"[Sample] Purchases fetched: {orders.all.Count} orders.");
+            _iapInitialized = true;
+        }
+
+        private void OnPurchasesFetchFailed(string error)
+        {
+            Debug.LogError($"[Sample] Purchases fetch failed: {error}");
+            _iapInitialized = true;  // 어쨌든 구매는 가능하게 함
+        }
+
+        private void OnPurchasePending(PendingOrder pendingOrder)
+        {
+            Debug.Log($"[Sample] Purchase pending: {pendingOrder.productId}");
+            // v5: PendingOrder에서 receipt 추출 후 Supabase 검증
+            _ = VerifyPurchaseAndGrantItemAsync(pendingOrder);
+        }
+
+        private void OnPurchaseFailed(FailedOrder failedOrder)
+        {
+            Debug.LogWarning($"[Sample] Purchase failed: {failedOrder.productId} — {failedOrder.failureDetail}");
         }
 
         /// <summary>
-        /// 상품 구매 시작. M으로 IAP 초기화 후 , 키로 실행.
-        /// 실제 결제 프로세스 시작 → Google Play 결제 화면 → 콜백에서 자동 Supabase 검증.
+        /// 상품 구매 시작 (v5). M으로 IAP 초기화 후 , 키로 실행.
+        /// Google Play 결제 화면 표시 → 사용자 승인 → OnPurchasePending 콜백.
         /// </summary>
         private async Task<bool> RunPurchaseDemoExampleAsync()
         {
-            if (!_iapInitialized)
+            if (!_iapInitialized || _storeController == null)
             {
                 Debug.LogWarning("[Sample] purchase skipped: IAP not initialized (press M first).");
                 return false;
@@ -675,19 +736,20 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            var product = _storeController?.products?.WithID(demoPurchaseProductId);
-            if (product == null || !product.availableToPurchase)
+            // v5: StoreController에서 productId로 직접 구매
+            Debug.Log($"[Sample] initiating purchase for {demoPurchaseProductId}...");
+
+            try
             {
-                Debug.LogWarning($"[Sample] product not available: {demoPurchaseProductId}");
+                await _storeController.InitiatePurchaseAsync(demoPurchaseProductId);
+                // OnPurchasePending 또는 OnPurchaseFailed 콜백으로 결과 전달됨
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[Sample] purchase failed: {e.Message}");
                 return false;
             }
-
-            Debug.Log($"[Sample] initiating purchase for {demoPurchaseProductId}...");
-            _storeController.InitiatePurchase(product);
-
-            // 구매 콜백 대기 (IAPListener.OnPurchaseComplete에서 처리)
-            // 사용자가 결제 화면에서 "구매" 또는 "취소" 선택
-            return true;
         }
 
         /// <summary>
@@ -750,13 +812,19 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// 구매 토큰에서 purchaseToken 추출 및 Supabase 검증.
-        /// 이 메서드는 IAP 구매 콜백(SampleIAPListener.OnPurchaseComplete)에서 호출됩니다.
+        /// 구매 토큰에서 purchaseToken 추출 및 Supabase 검증 (v5).
+        /// IAP 구매 콜백(OnPurchasePending)에서 호출됩니다.
         /// </summary>
-        private async Task VerifyPurchaseAndGrantItemAsync(Product purchasedProduct)
+        private async Task VerifyPurchaseAndGrantItemAsync(PendingOrder pendingOrder)
         {
-            var receipt = purchasedProduct.receipt;
-            var productId = purchasedProduct.definition.id;
+            var receipt = pendingOrder.receipt;
+            var productId = pendingOrder.productId;
+
+            if (string.IsNullOrEmpty(receipt))
+            {
+                Debug.LogError("[Sample] Receipt is empty.");
+                return;
+            }
 
             var purchaseToken = ExtractPurchaseToken(receipt);
             if (string.IsNullOrEmpty(purchaseToken))
@@ -833,65 +901,6 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.Log("[Sample] all examples finished.");
         }
 
-        /// <summary>
-        /// IAP 구매 이벤트 처리 (최신 Unity Purchasing v4+).
-        /// IDetailedStoreListener 사용.
-        /// </summary>
-        private sealed class SampleIAPListener : IDetailedStoreListener
-        {
-            private readonly ExampleSupabaseScenarios _sample;
-
-            public SampleIAPListener(ExampleSupabaseScenarios sample)
-            {
-                _sample = sample;
-            }
-
-            public void OnInitialized(IStoreController controller, IExtensionProvider extensions)
-            {
-                Debug.Log("[Sample] IAP initialization succeeded.");
-                _sample._storeController = controller;
-                _sample._extensionProvider = extensions;
-                _sample._iapInitialized = true;
-            }
-
-            public void OnInitializationFailed(InitializationFailureReason error)
-            {
-                Debug.LogError($"[Sample] IAP initialization failed: {error}");
-                _sample._iapInitialized = false;
-            }
-
-            public void OnInitializationFailed(InitializationFailureReason error, string message)
-            {
-                Debug.LogError($"[Sample] IAP initialization failed: {error} — {message}");
-                _sample._iapInitialized = false;
-            }
-
-            public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs purchaseEvent)
-            {
-                Debug.Log($"[Sample] Purchase successful: {purchaseEvent.purchasedProduct.definition.id}");
-
-                // 비동기 검증 시작 (아이템 지급)
-                _ = _sample.VerifyPurchaseAndGrantItemAsync(purchaseEvent.purchasedProduct);
-
-                // Google Play가 이미 영수증을 확인했으므로 Complete 반환
-                return PurchaseProcessingResult.Complete;
-            }
-
-            public void OnPurchaseFailed(Product product, PurchaseFailureReason failureReason)
-            {
-                Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureReason}");
-            }
-
-            public void OnPurchaseFailedEvent(Product product, PurchaseFailureDescription failureDescription)
-            {
-                Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureDescription.reason}");
-            }
-
-            public void OnDeferred(Product product)
-            {
-                Debug.Log($"[Sample] Purchase deferred: {product.definition.id}");
-            }
-        }
     }
 
     /// <summary>Google Play receipt 구조.</summary>
