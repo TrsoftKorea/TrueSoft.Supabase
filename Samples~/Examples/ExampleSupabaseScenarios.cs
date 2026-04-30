@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Purchasing;
 using Truesoft.Supabase.Unity;
 using Truesoft.Supabase.Unity.RemoteConfig;
 
@@ -99,14 +100,24 @@ namespace Truesoft.SupabaseUnity.Samples
         [SerializeField] private KeyCode keyServerShard = KeyCode.N;
 
         [Header("인앱 결제")]
-        [Tooltip("Google Play 영수증 검증 — Unity IAP billing result.purchaseToken")]
+        [Tooltip("구매할 상품 ID (Google Play Console에 등록된 Product ID)")]
+        [SerializeField] private string demoPurchaseProductId = "com.yourcompany.yourgame.item_id";
+
+        [Tooltip("IAP 초기화")]
+        [SerializeField] private KeyCode keyInitializeIAP = KeyCode.M;
+
+        [Tooltip("상품 구매 테스트 (M으로 IAP 초기화 후 사용)")]
+        [SerializeField] private KeyCode keyPurchaseDemo = KeyCode.Comma;
+
+        [Tooltip("Google Play 영수증 서버 검증 (직접 토큰 입력 테스트용)")]
         [SerializeField] private string demoPurchaseToken = "YOUR_PURCHASE_TOKEN_HERE";
 
-        [Tooltip("인앱 상품 ID (Google Play Console에서 등록한 product ID)")]
-        [SerializeField] private string demoProductId = "com.yourcompany.yourgame.item_id";
-
-        [Tooltip("Google Play 영수증 서버 검증")]
+        [Tooltip("구매 후 직접 검증")]
         [SerializeField] private KeyCode keyVerifyPurchase = KeyCode.B;
+
+        private IStoreController _storeController;
+        private IExtensionProvider _extensionProvider;
+        private bool _iapInitialized;
 
         private bool _keyboardBusy;
 
@@ -174,6 +185,10 @@ namespace Truesoft.SupabaseUnity.Samples
                 _ = RunAsyncGuarded(RunWithdrawalCancelRedeemExampleAsync);
             else if (Input.GetKeyDown(keyServerShard))
                 _ = RunAsyncGuarded(RunServerShardExampleAsync);
+            else if (Input.GetKeyDown(keyInitializeIAP))
+                _ = RunAsyncGuarded(RunInitializeIAPExampleAsync);
+            else if (Input.GetKeyDown(keyPurchaseDemo))
+                _ = RunAsyncGuarded(RunPurchaseDemoExampleAsync);
             else if (Input.GetKeyDown(keyVerifyPurchase))
                 _ = RunAsyncGuarded(RunVerifyGooglePlayPurchaseExampleAsync);
         }
@@ -606,9 +621,80 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
+        /// Unity IAP(In-App Purchasing) 초기화.
+        /// Google Play Billing 카탈로그 로드. M 키로 실행 후 , 키로 구매 테스트.
+        /// </summary>
+        private async Task<bool> RunInitializeIAPExampleAsync()
+        {
+            if (_iapInitialized)
+            {
+                Debug.Log("[Sample] IAP already initialized.");
+                return true;
+            }
+
+            Debug.Log("[Sample] IAP initializing...");
+
+            var builder = ConfigurationBuilder.Instance(StandardPricingStrategy.Instance());
+            builder.AddProduct(demoPurchaseProductId, ProductType.Consumable);
+
+            UnityPurchasing.Initialize(new SampleIAPListener(this), builder);
+
+            // 초기화 대기 (최대 10초)
+            var elapsed = 0f;
+            while (!_iapInitialized && elapsed < 10f)
+            {
+                await Task.Delay(100);
+                elapsed += 0.1f;
+            }
+
+            if (!_iapInitialized)
+            {
+                Debug.LogWarning("[Sample] IAP initialization timeout (com.unity.purchasing 설치·Google Play 설정 확인).");
+                return false;
+            }
+
+            Debug.Log("[Sample] IAP initialized. Press , to purchase.");
+            return true;
+        }
+
+        /// <summary>
+        /// 상품 구매 시작. M으로 IAP 초기화 후 , 키로 실행.
+        /// 실제 결제 프로세스 시작 → Google Play 결제 화면 → 콜백에서 자동 Supabase 검증.
+        /// </summary>
+        private async Task<bool> RunPurchaseDemoExampleAsync()
+        {
+            if (!_iapInitialized)
+            {
+                Debug.LogWarning("[Sample] purchase skipped: IAP not initialized (press M first).");
+                return false;
+            }
+
+            if (!SupabaseClient.IsLoggedIn)
+            {
+                Debug.LogWarning("[Sample] purchase skipped: sign in first.");
+                return false;
+            }
+
+            var product = _storeController?.products?.WithID(demoPurchaseProductId);
+            if (product == null || !product.availableToPurchase)
+            {
+                Debug.LogWarning($"[Sample] product not available: {demoPurchaseProductId}");
+                return false;
+            }
+
+            Debug.Log($"[Sample] initiating purchase for {demoPurchaseProductId}...");
+            _storeController.InitiatePurchase(product);
+
+            // 구매 콜백 대기 (IAPListener.OnPurchaseComplete에서 처리)
+            // 사용자가 결제 화면에서 "구매" 또는 "취소" 선택
+            return true;
+        }
+
+        /// <summary>
         /// Google Play 인앱 구매 영수증 서버 검증 예시.
-        /// Inspector의 <c>Demo Purchase Token</c>에 Unity IAP <c>PurchaseEventArgs.purchasedProduct.receipt</c>
-        /// 안의 <c>Payload → json → purchaseToken</c> 값을 입력하고 <c>B</c>를 누릅니다.
+        /// 두 가지 방법:
+        /// 1) Inspector 입력: Demo Purchase Token에 토큰 붙여넣기 → B 키
+        /// 2) 실제 결제: M (IAP 초기화) → , (구매) → 자동 검증
         /// </summary>
         private async Task<bool> RunVerifyGooglePlayPurchaseExampleAsync()
         {
@@ -619,7 +705,7 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             var token = demoPurchaseToken?.Trim();
-            var productId = demoProductId?.Trim();
+            var productId = demoPurchaseProductId?.Trim();
 
             if (string.IsNullOrEmpty(token) || token == "YOUR_PURCHASE_TOKEN_HERE")
             {
@@ -663,6 +749,73 @@ namespace Truesoft.SupabaseUnity.Samples
             return true;
         }
 
+        /// <summary>
+        /// 구매 토큰에서 purchaseToken 추출 및 Supabase 검증.
+        /// 이 메서드는 IAP 구매 콜백(SampleIAPListener.OnPurchaseComplete)에서 호출됩니다.
+        /// </summary>
+        private async Task VerifyPurchaseAndGrantItemAsync(Product purchasedProduct)
+        {
+            var receipt = purchasedProduct.receipt;
+            var productId = purchasedProduct.definition.id;
+
+            var purchaseToken = ExtractPurchaseToken(receipt);
+            if (string.IsNullOrEmpty(purchaseToken))
+            {
+                Debug.LogError("[Sample] Failed to extract purchaseToken from receipt.");
+                return;
+            }
+
+            Debug.Log($"[Sample] purchaseToken extracted: {purchaseToken}");
+
+            // Supabase 서버 검증
+            var (success, response) = await SupabaseClient.TryVerifyGooglePlayPurchaseAsync(
+                purchaseToken: purchaseToken,
+                productId: productId);
+
+            if (!success)
+            {
+                Debug.LogError("[Sample] Supabase verification failed (Edge Function·env·service account).");
+                return;
+            }
+
+            if (!response.ok)
+            {
+                Debug.LogError($"[Sample] Google rejected purchase: {response.reason} (state={response.purchase_state}).");
+                return;
+            }
+
+            // ✓ 검증 성공 → 아이템 지급
+            Debug.Log($"[Sample] ✓ Purchase verified! order_id={response.order_id}. Granting item...");
+
+            if (response.already_verified)
+                Debug.LogWarning("[Sample] Already verified receipt (duplicate prevention check).");
+
+            // TODO: 여기서 게임 아이템 지급 (코인, 패스, 콘텐츠 언락 등)
+            // await GrantItemAsync(productId);
+        }
+
+        /// <summary>
+        /// Google Play receipt에서 purchaseToken 추출.
+        /// receipt 구조: {"Store":"GooglePlay","TransactionID":"...","Payload":"..."}
+        /// Payload: {"json":"...google play purchase data...","signature":"..."}
+        /// json: {"orderId":"...","purchaseToken":"...","purchaseState":0,...}
+        /// </summary>
+        private string ExtractPurchaseToken(string receipt)
+        {
+            try
+            {
+                var wrapper = JsonUtility.FromJson<GooglePlayReceiptWrapper>(receipt);
+                var payload = JsonUtility.FromJson<GooglePlayPayload>(wrapper.Payload);
+                var purchaseData = JsonUtility.FromJson<GooglePlayPurchaseData>(payload.json);
+                return purchaseData.purchaseToken;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[Sample] Failed to extract purchaseToken: {e.Message}");
+                return null;
+            }
+        }
+
         private async Task RunAllExamplesAsync()
         {
             _ = await SupabaseClient.TryStartAsync(restoreSessionFirst: true, refreshRemoteConfigOnStart: false);
@@ -679,5 +832,80 @@ namespace Truesoft.SupabaseUnity.Samples
 
             Debug.Log("[Sample] all examples finished.");
         }
+
+        /// <summary>
+        /// IAP 구매 이벤트 처리. Unity Purchasing 콜백.
+        /// </summary>
+        private sealed class SampleIAPListener : IStoreListener
+        {
+            private readonly ExampleSupabaseScenarios _sample;
+
+            public SampleIAPListener(ExampleSupabaseScenarios sample)
+            {
+                _sample = sample;
+            }
+
+            public void OnInitialized(IStoreController controller, IExtensionProvider extensions)
+            {
+                Debug.Log("[Sample] IAP initialization succeeded.");
+                _sample._storeController = controller;
+                _sample._extensionProvider = extensions;
+                _sample._iapInitialized = true;
+            }
+
+            public void OnInitializationFailed(InitializationFailureReason error)
+            {
+                Debug.LogError($"[Sample] IAP initialization failed: {error}");
+                _sample._iapInitialized = false;
+            }
+
+            public PurchaseProcessingResult ProcessPurchase(PurchaseEventArgs purchaseEvent)
+            {
+                Debug.Log($"[Sample] Purchase successful: {purchaseEvent.purchasedProduct.definition.id}");
+
+                // 비동기 검증 시작 (아이템 지급)
+                _ = _sample.VerifyPurchaseAndGrantItemAsync(purchaseEvent.purchasedProduct);
+
+                // Google Play가 이미 영수증을 확인했으므로 Complete 반환
+                return PurchaseProcessingResult.Complete;
+            }
+
+            public void OnPurchaseFailed(Product product, PurchaseFailureReason failureReason)
+            {
+                Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureReason}");
+                // 사용자가 취소하거나 결제 오류 발생
+            }
+        }
+    }
+
+    /// <summary>Google Play receipt 구조.</summary>
+    [System.Serializable]
+    public sealed class GooglePlayReceiptWrapper
+    {
+        public string Store;
+        public string TransactionID;
+        public string Payload;
+    }
+
+    /// <summary>Google Play Payload (receipt 안의 Payload 필드).</summary>
+    [System.Serializable]
+    public sealed class GooglePlayPayload
+    {
+        public string json;
+        public string signature;
+    }
+
+    /// <summary>Google Play 구매 데이터 (Payload.json 파싱).</summary>
+    [System.Serializable]
+    public sealed class GooglePlayPurchaseData
+    {
+        public string orderId;
+        public string packageName;
+        public string productId;
+        public long purchaseTime;
+        public int purchaseState;  // 0=purchased, 1=cancelled, 2=pending
+        public string purchaseToken;
+        public string developerPayload;
+        public bool acknowledged;
     }
 }
