@@ -834,9 +834,10 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// IAP 구매 이벤트 처리. Unity Purchasing 콜백.
+        /// IAP 구매 이벤트 처리 (최신 Unity Purchasing v4+).
+        /// IDetailedStoreListener 사용.
         /// </summary>
-        private sealed class SampleIAPListener : IStoreListener
+        private sealed class SampleIAPListener : IDetailedStoreListener
         {
             private readonly ExampleSupabaseScenarios _sample;
 
@@ -879,12 +880,16 @@ namespace Truesoft.SupabaseUnity.Samples
             public void OnPurchaseFailed(Product product, PurchaseFailureReason failureReason)
             {
                 Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureReason}");
-                // 사용자가 취소하거나 결제 오류 발생
+            }
+
+            public void OnPurchaseFailedEvent(Product product, PurchaseFailureDescription failureDescription)
+            {
+                Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureDescription.reason}");
             }
 
             public void OnDeferred(Product product)
             {
-                Debug.Log($"[Sample] Purchase deferred: {product.definition.id} (결제 대기 중)");
+                Debug.Log($"[Sample] Purchase deferred: {product.definition.id}");
             }
         }
     }
