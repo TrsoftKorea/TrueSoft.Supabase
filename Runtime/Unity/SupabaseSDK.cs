@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
+using Truesoft.Supabase.Core.Models;
 using Truesoft.Supabase.Unity.Auth.Anonymous;
 using Truesoft.Supabase.Unity.Auth;
 using Truesoft.Supabase.Unity.Auth.Google;
@@ -57,6 +58,8 @@ namespace Truesoft.Supabase.Unity
         private static bool _enableWithdrawalGuardOnLogin = true;
         private static string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
+        private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
+        private static string _defaultPackageName = "";
 
         private enum SignInMethodKind
         {
@@ -1800,6 +1803,42 @@ namespace Truesoft.Supabase.Unity
             return await Functions.InvokeAsync<TResponse>(functionName, requestBody, requireAuth: true);
         }
 
+        /// <summary>구글 플레이 인앱 상품 영수증을 서버에서 검증합니다.</summary>
+        /// <param name="purchaseToken">Google Play 구매 토큰.</param>
+        /// <param name="productId">상품 ID.</param>
+        /// <param name="packageName">앱 패키지명. <c>null</c>이면 <see cref="SupabaseSettings.defaultPackageName"/>을 사용합니다.</param>
+        public static async Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
+            string purchaseToken,
+            string productId,
+            string packageName = null)
+        {
+            var req = new GooglePlayPurchaseRequest
+            {
+                purchase_token = purchaseToken,
+                product_id = productId,
+                package_name = packageName ?? _defaultPackageName,
+            };
+            return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
+                _purchaseVerifyGoogleFunctionName, req, requireAuth: true);
+        }
+
+        /// <summary><see cref="VerifyGooglePlayPurchaseAsync"/>를 호출하고 성공 시 응답을 반환, 실패 시 <c>default</c>를 반환합니다.</summary>
+        public static async Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
+            string purchaseToken,
+            string productId,
+            string packageName = null)
+        {
+            const string tag = "[Supabase.Purchase.VerifyGoogle]";
+            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
+            if (!result.IsSuccess)
+            {
+                if (_enableApiResultLogs)
+                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                return (false, default);
+            }
+            return (true, result.Data);
+        }
+
         /// <summary>로그인 성공 시 세션을 SDK에 설정하세요. 이후 PatchAsync/LoadColumnsAsync/Events는 세션 없이 호출 가능.</summary>
         public static void SetSession(SupabaseSession session)
         {
@@ -1990,6 +2029,10 @@ namespace Truesoft.Supabase.Unity
             _withdrawalGuardFunctionName = string.IsNullOrWhiteSpace(bootstrap.WithdrawalGuardFunctionName)
                 ? "withdrawal-guard"
                 : bootstrap.WithdrawalGuardFunctionName.Trim();
+            _purchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(bootstrap.PurchaseVerifyGoogleFunctionName)
+                ? "purchase-verify-google"
+                : bootstrap.PurchaseVerifyGoogleFunctionName.Trim();
+            _defaultPackageName = bootstrap.DefaultPackageName ?? "";
 
             if (!preserveSession)
                 _currentSession = null;

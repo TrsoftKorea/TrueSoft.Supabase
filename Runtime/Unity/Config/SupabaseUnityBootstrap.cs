@@ -44,6 +44,12 @@ namespace Truesoft.Supabase.Unity.Config
         public bool ApplyAnonymousDisplayNameOnNewGoogleSignUp { get; private set; } = true;
         public string DefaultServerCode { get; private set; } = "GLOBAL";
 
+        /// <summary><see cref="SupabaseSettings.purchaseVerifyGoogleFunctionName"/>.</summary>
+        public string PurchaseVerifyGoogleFunctionName { get; private set; } = "purchase-verify-google";
+
+        /// <summary><see cref="SupabaseSettings.defaultPackageName"/>.</summary>
+        public string DefaultPackageName { get; private set; } = "";
+
         public void Initialize(SupabaseSettings settings)
         {
             if (settings == null)
@@ -124,6 +130,10 @@ namespace Truesoft.Supabase.Unity.Config
                 : options.WithdrawalGuardFunctionName.Trim();
             ApplyAnonymousDisplayNameOnNewGoogleSignUp = options.ApplyAnonymousDisplayNameOnNewGoogleSignUp;
             DefaultServerCode = string.IsNullOrWhiteSpace(options.DefaultServerCode) ? "GLOBAL" : options.DefaultServerCode.Trim();
+            PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(options.PurchaseVerifyGoogleFunctionName)
+                ? "purchase-verify-google"
+                : options.PurchaseVerifyGoogleFunctionName.Trim();
+            DefaultPackageName = options.DefaultPackageName?.Trim() ?? "";
             SupabaseSDK.Initialize(this);
         }
     }

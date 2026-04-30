@@ -243,6 +243,7 @@ Supabase **Auth로 계정을 삭제**하면 `auth.users` 행이 제거되고, SQ
 - **원격 설정(Cold Start + 키별 폴링)**: 앱 시작 시 RemoteConfig를 **자동으로 가져오지 않습니다**. 첫 `GetRemoteConfigAsync` 등으로 키를 읽을 때 해당 키만 서버에서 조회합니다. **캐시 유효 시간**은 DB `max_stale_seconds`(0 이하면 SDK에서 300초로 처리)를 사용합니다. DB `poll_interval_seconds`가 0보다 큰 키는 `SupabaseRuntime`이 `Update`에서 **키별**로 만기 시 폴링합니다. fetch 실패·키 없음·역직렬화 실패 시 `SupabaseResult<T>.Fail` 또는 `Try*`의 `success == false`입니다. 전체 즉시 동기화는 `Supabase.RefreshRemoteConfigOnDemandAsync()` 후 `GetRemoteConfig`로 읽고, 다음 폴링 시각은 `remoteConfigOnDemandPushbackSeconds`만큼 미뤄집니다.
 - **Edge Functions**: `TryInvokeFunctionAsync`
 - **채팅**: `TryJoinChatChannelAsync`, `TrySendChatMessageAsync`, 채널 이탈
+- **Google Play 영수증 검증**: `TryVerifyGooglePlayPurchaseAsync` (위 「Google Play 인앱 상품 영수증 검증」 섹션 참고)
 
 ## 샘플 가져오기
 
@@ -315,6 +316,119 @@ Retool 예시:
 | **Examples** | 로그인, 데이터 저장/불러오기, RemoteConfig, Edge Function을 기능별 함수로 분리한 데모 |
 
 샘플 소스는 패키지 안의 `Samples~`에만 있고, **Import 전에는 프로젝트에 컴파일되지 않습니다.** Import 후에는 `Assets/Samples/<패키지 표시 이름>/<버전>/` 아래에 복사됩니다.
+
+## Google Play 인앱 상품 영수증 검증
+
+클라이언트가 구글 플레이에서 인앱 상품(inapp)을 구매한 후, 서버에서 영수증을 검증해 중복 결제를 방지합니다.
+
+**SDK 범위**: 영수증 유효성 검증만 수행합니다. 보상 지급은 게임 서버/클라이언트에서 별도로 처리하세요.
+
+### 게임 프로젝트별 필수 설정
+
+각 게임 프로젝트마다 **Google Cloud**, **Google Play Console**, **Supabase** 세 곳에서 설정이 필요합니다.
+
+#### 1. Google Cloud 서비스 계정 생성 및 JSON 키 다운로드
+
+1. **[Google Cloud Console](https://console.cloud.google.com/)** 접속
+2. 상단 프로젝트 드롭다운 → **새 프로젝트** 클릭
+   - 프로젝트 이름: `[게임명] Play Store Validation` (예시)
+   - **만들기** 클릭
+3. **API 및 서비스** → **라이브러리** 클릭
+4. 검색: `Google Play Developer API` → 클릭 → **활성화**
+5. **API 및 서비스** → **사용자 인증 정보** 클릭
+6. **사용자 인증 정보 만들기** → **서비스 계정** 선택
+   - **서비스 계정 이름**: `PlayStoreValidator` (또는 원하는 이름)
+   - **만들고 계속** → **완료** 클릭
+7. 생성된 서비스 계정 클릭 (이메일: `xxxxxx@xxxxxx.iam.gserviceaccount.com`)
+8. **키** 탭 → **키 추가** → **새 키 만들기** → **JSON** 선택
+   - **만들기** 클릭 → JSON 파일 자동 다운로드 ⚠️ **안전한 곳에 보관**
+
+#### 2. Google Play Console에서 서비스 계정 권한 부여
+
+1. **[Google Play Console](https://play.google.com/console)** 접속 (앱을 배포한 계정)
+2. 설정 → **사용자 및 권한** 클릭
+3. **사용자 초대** 클릭
+4. 위에서 복사한 서비스 계정 이메일 입력
+5. **역할** → **재무 담당자** (또는 **관리자**) 선택
+6. **앱 권한** (선택): 모든 앱 또는 특정 앱만
+7. **초대** 클릭
+
+#### 3. Supabase Edge Function Secrets 등록
+
+1. **[Supabase 대시보드](https://supabase.com/dashboard)** 접속 → 프로젝트 선택
+2. **Edge Functions** → **purchase-verify-google** 클릭
+3. **Secrets** 탭
+4. **+ Add secret** 클릭
+5. **Key**: `GOOGLE_SERVICE_ACCOUNT_JSON`
+6. **Value**: 1단계에서 다운로드한 JSON 파일의 **전체 내용** 복사해 붙여넣기
+7. **Save** 클릭
+
+#### 4. SupabaseSettings에서 기본 패키지명 설정
+
+1. Unity 프로젝트에서 `Assets/Resources/SupabaseSettings.asset` 열기
+2. 인스펙터 하단 **인앱 결제** 섹션 확인
+3. **Default Package Name**: 앱의 패키지명 입력 (예: `com.studio.mygame`)
+   - 비워두면 `TryVerifyGooglePlayPurchaseAsync` 호출 시 매번 `packageName` 인자를 전달해야 함
+4. **(선택) Purchase Verify Google Function Name**: 기본값 `purchase-verify-google` 유지
+
+### 사용 예시
+
+```csharp
+// 게임에서 구글 플레이 구매 후
+var (success, response) = await Supabase.TryVerifyGooglePlayPurchaseAsync(
+    purchaseToken: googlePlayPurchaseToken,  // Google Play에서 받은 토큰
+    productId: "gem_pack_1",                 // 상품 ID
+    packageName: "com.studio.mygame"         // 생략 시 SupabaseSettings의 기본값 사용
+);
+
+if (success && response.ok)
+{
+    if (response.already_verified)
+    {
+        Debug.Log("이미 검증된 영수증입니다.");
+        return;
+    }
+    
+    Debug.Log($"영수증 검증 성공. Order ID: {response.order_id}");
+    // 여기서 보상 지급 로직 호출 (게임 서버 또는 클라이언트)
+    await GrantRewardToPlayer(productId);
+}
+else
+{
+    Debug.LogError($"영수증 검증 실패: {response.reason}");
+}
+```
+
+### API 참고
+
+**`Supabase.TryVerifyGooglePlayPurchaseAsync`**
+
+```csharp
+public static Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
+    string purchaseToken,
+    string productId,
+    string packageName = null)
+```
+
+- **반환값**: `(bool success, GooglePlayPurchaseResponse value)`
+  - `success`: 영수증 검증 성공 여부 (네트워크·인증 오류도 false)
+  - `value.ok`: 구글 플레이 API 응답 성공 여부
+  - `value.already_verified`: 동일 `purchase_token`으로 이미 검증된 경우 true
+  - `value.order_id`: Google Play Order ID
+  - `value.purchase_state`: 0=구매완료, 1=취소, 2=대기
+  - `value.reason`: 실패 사유 (예: `not_purchased`, `user_not_found` 등)
+
+**로그 태그**: `[Supabase.Purchase.VerifyGoogle]`
+
+### 트러블슈팅
+
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| `google_api_error_401` | GOOGLE_SERVICE_ACCOUNT_JSON이 잘못됨 | Supabase Secrets에 정확한 JSON 전체를 다시 입력 |
+| `google_api_error_403` | Google Play Console에서 서비스 계정 권한 없음 | Play Console에서 서비스 계정 이메일을 **재무 담당자** 역할로 초대 |
+| `not_purchased` | 구매 상태가 0(완료)이 아님 | 테스트: `purchase_state == 0`인 토큰만 검증됨. 테스트 구매 토큰 사용 |
+| `already_verified: true` 반복 | 동일 토큰을 여러 번 검증 시도 | 정상 동작. 중복 방지 처리됨 |
+| `user_not_found` | 로그인하지 않은 상태에서 호출 | `TrySignInAnonymouslyAsync` 등으로 먼저 로그인 |
 
 ### 샘플 사용 방법
 

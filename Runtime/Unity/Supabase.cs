@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
+using Truesoft.Supabase.Core.Models;
 
 namespace Truesoft.Supabase.Unity
 {
@@ -413,6 +414,20 @@ namespace Truesoft.Supabase.Unity
             object requestBody = null,
             TResponse defaultValue = default) =>
             SupabaseSDK.TryInvokeFunctionAsync(functionName, requestBody, defaultValue);
+
+        /// <inheritdoc cref="SupabaseSDK.VerifyGooglePlayPurchaseAsync"/>
+        internal static Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
+            string purchaseToken,
+            string productId,
+            string packageName = null) =>
+            SupabaseSDK.VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
+
+        /// <inheritdoc cref="SupabaseSDK.TryVerifyGooglePlayPurchaseAsync"/>
+        public static Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
+            string purchaseToken,
+            string productId,
+            string packageName = null) =>
+            SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
 
         /// <summary>로그인 성공 시 세션을 SDK에 설정. 이후 Patch/LoadColumns API는 세션 인자 없이 사용 가능.</summary>
         public static void SetSession(SupabaseSession session) => SupabaseSDK.SetSession(session);
