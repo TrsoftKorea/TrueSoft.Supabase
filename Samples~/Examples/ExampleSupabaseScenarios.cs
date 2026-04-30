@@ -875,6 +875,11 @@ namespace Truesoft.SupabaseUnity.Samples
                 Debug.LogWarning($"[Sample] Purchase failed: {product.definition.id} — {failureReason}");
                 // 사용자가 취소하거나 결제 오류 발생
             }
+
+            public void OnDeferred(Product product)
+            {
+                Debug.Log($"[Sample] Purchase deferred: {product.definition.id} (결제 대기 중)");
+            }
         }
     }
 
