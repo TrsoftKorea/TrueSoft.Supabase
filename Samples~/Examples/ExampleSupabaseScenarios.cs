@@ -691,7 +691,8 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnProductsFetchFailed(ProductFetchFailed failure)
         {
-            Debug.LogError($"[Sample] Products fetch failed: {failure}");
+            Debug.LogError($"[Sample] Products fetch failed: {failure.FailureReason}");
+            // failure.FailedFetchProducts: 실패한 상품 목록
         }
 
         private void OnPurchasesFetched(Orders orders)
@@ -702,7 +703,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnPurchasesFetchFailed(PurchasesFetchFailureDescription failure)
         {
-            Debug.LogError($"[Sample] Purchases fetch failed: {failure}");
+            Debug.LogError($"[Sample] Purchases fetch failed: {failure.FailureReason} — {failure.Message}");
             _iapInitialized = true;  // 어쨌든 구매는 가능하게 함
         }
 
@@ -740,9 +741,9 @@ namespace Truesoft.SupabaseUnity.Samples
 
             try
             {
-                // v5: StoreController.InitiatePurchase (비동기 아님, 콜백으로 결과 전달)
-                _storeController.InitiatePurchase(demoPurchaseProductId);
+                // v5: PurchaseProduct() 호출 (비동기 아님, 콜백으로 결과 전달)
                 // OnPurchasePending 또는 OnPurchaseFailed 콜백으로 결과 전달됨
+                _storeController.PurchaseProduct(demoPurchaseProductId);
                 return true;
             }
             catch (System.Exception e)
@@ -812,34 +813,38 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// 구매 토큰에서 purchaseToken 추출 및 Supabase 검증 (v5).
+        /// 구매 토큰에서 purchaseToken 추출 및 Supabase 검증 (v5.2.1).
         /// IAP 구매 콜백(OnPurchasePending)에서 호출됩니다.
+        /// PendingOrder → Info.Receipt + CartOrdered.Items()로 정보 추출.
         /// </summary>
         private async Task VerifyPurchaseAndGrantItemAsync(PendingOrder pendingOrder)
         {
-            // TODO: PendingOrder 구조 확인 필요
-            // v5.2.1에서 PendingOrder의 정확한 필드명 확인 후 수정
-            Debug.Log($"[Sample] VerifyPurchaseAndGrantItemAsync called with: {pendingOrder}");
-
-            // 임시: receipt와 productId를 추출하는 로직
-            // 실제로는 PendingOrder의 toString()이나 리플렉션으로 필드를 확인해야 함
-            string receipt = null;
-            string productId = null;
-
-            // PendingOrder 객체 정보 출력 (디버깅용)
-            Debug.Log($"[Sample] PendingOrder type: {pendingOrder.GetType().Name}");
-            var props = pendingOrder.GetType().GetProperties();
-            foreach (var prop in props)
+            if (pendingOrder == null)
             {
-                Debug.Log($"  - {prop.Name}: {prop.GetValue(pendingOrder)}");
-            }
-
-            if (string.IsNullOrEmpty(receipt))
-            {
-                Debug.LogWarning("[Sample] Receipt not found in PendingOrder. Check field names.");
+                Debug.LogError("[Sample] PendingOrder is null.");
                 return;
             }
 
+            // 1️⃣ Receipt 추출 (IOrderInfo)
+            var receipt = pendingOrder.Info?.Receipt;
+            if (string.IsNullOrEmpty(receipt))
+            {
+                Debug.LogError("[Sample] Receipt is empty.");
+                return;
+            }
+
+            // 2️⃣ ProductId 추출 (ICart → CartItem → Product.definition.id)
+            var cartItems = pendingOrder.CartOrdered?.Items();
+            if (cartItems == null || cartItems.Count == 0)
+            {
+                Debug.LogError("[Sample] No items in cart.");
+                return;
+            }
+
+            var productId = cartItems[0].Product.definition.id;
+            Debug.Log($"[Sample] productId extracted: {productId}");
+
+            // 3️⃣ Receipt에서 purchaseToken 추출
             var purchaseToken = ExtractPurchaseToken(receipt);
             if (string.IsNullOrEmpty(purchaseToken))
             {
@@ -849,7 +854,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
             Debug.Log($"[Sample] purchaseToken extracted: {purchaseToken}");
 
-            // Supabase 서버 검증
+            // 4️⃣ Supabase 서버 검증
             var (success, response) = await SupabaseClient.TryVerifyGooglePlayPurchaseAsync(
                 purchaseToken: purchaseToken,
                 productId: productId);
@@ -873,7 +878,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 Debug.LogWarning("[Sample] Already verified receipt (duplicate prevention check).");
 
             // TODO: 여기서 게임 아이템 지급 (코인, 패스, 콘텐츠 언락 등)
-            // await GrantItemAsync(productId);
+            // Example: await GrantItemAsync(productId);
         }
 
         /// <summary>
