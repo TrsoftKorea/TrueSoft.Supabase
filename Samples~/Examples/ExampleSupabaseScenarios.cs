@@ -116,6 +116,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private StoreController _storeController;
         private bool _iapInitialized;
+        private bool _isResumingPurchases;
 
         private bool _keyboardBusy;
 
@@ -704,7 +705,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 Debug.Log($"[Sample] [OK] 상품 찾음: {demoPurchaseProductId}");
             }
 
-            // 3단계: 구매 이력 조회
+            // 3단계: 구매 이력 조회 (미처리 구매 자동 OnPurchasePending 트리거)
+            _isResumingPurchases = true;
             _storeController.FetchPurchases();
         }
 
@@ -721,6 +723,7 @@ namespace Truesoft.SupabaseUnity.Samples
             var pendingCount = orders.PendingOrders?.Count ?? 0;
             Debug.Log($"[Sample] Purchases fetched. Pending: {pendingCount}");
 
+            _isResumingPurchases = false;
             _iapInitialized = true;
         }
 
@@ -863,7 +866,8 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             // [OK] 검증 성공 → 소비 처리 (소모품은 Confirm해야 다시 구매 가능)
-            if (skipConfirmForTest)
+            // skipConfirmForTest는 새 구매에서만 적용 (초기화 중 미처리 재처리는 항상 confirm)
+            if (skipConfirmForTest && !_isResumingPurchases)
             {
                 Debug.LogWarning($"[Sample] [TEST] skipConfirmForTest=true → Confirm 생략. 미처리 상태로 남김.");
                 Debug.LogWarning($"[Sample] [TEST] M 키로 IAP 재초기화하면 미처리 구매가 자동 재처리됩니다.");
