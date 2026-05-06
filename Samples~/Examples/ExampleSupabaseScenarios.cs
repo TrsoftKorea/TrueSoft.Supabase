@@ -886,7 +886,7 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.Log($"[Sample] [OK] Purchase verified and confirmed! order_id={response.order_id}. Granting item...");
 
             if (response.already_verified)
-                Debug.LogWarning("[Sample] Already verified receipt (duplicate prevention check).");
+                Debug.Log("[Sample] already_verified=true: 이전에 이미 검증된 영수증입니다. 중복 지급 없음 (정상).");
 
             // TODO: 여기서 게임 아이템 지급 (코인, 패스, 콘텐츠 언락 등)
             // Example: await GrantItemAsync(productId);
