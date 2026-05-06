@@ -116,7 +116,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private StoreController _storeController;
         private bool _iapInitialized;
-        private bool _isResumingPurchases;
+        private int _resumingPurchaseCount;
 
         private bool _keyboardBusy;
 
@@ -706,7 +706,6 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             // 3단계: 구매 이력 조회 (미처리 구매 자동 OnPurchasePending 트리거)
-            _isResumingPurchases = true;
             _storeController.FetchPurchases();
         }
 
@@ -720,10 +719,9 @@ namespace Truesoft.SupabaseUnity.Samples
         {
             // v5: FetchPurchases가 미처리 구매를 자동으로 OnPurchasePending으로 트리거함
             // 수동 처리 불필요 — OnPurchasePending 콜백에서 처리됨
-            var pendingCount = orders.PendingOrders?.Count ?? 0;
-            Debug.Log($"[Sample] Purchases fetched. Pending: {pendingCount}");
+            _resumingPurchaseCount = orders.PendingOrders?.Count ?? 0;
+            Debug.Log($"[Sample] Purchases fetched. Pending: {_resumingPurchaseCount}");
 
-            _isResumingPurchases = false;
             _iapInitialized = true;
         }
 
@@ -735,9 +733,12 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnPurchasePending(PendingOrder pendingOrder)
         {
-            Debug.Log($"[Sample] Purchase pending: {pendingOrder}");
-            // v5: PendingOrder에서 receipt 추출 후 Supabase 검증
-            _ = VerifyPurchaseAndGrantItemAsync(pendingOrder);
+            // FetchPurchases로 재처리 중인지 여부를 캡처 후 카운터 감소
+            var isResuming = _resumingPurchaseCount > 0;
+            if (isResuming) _resumingPurchaseCount--;
+
+            Debug.Log($"[Sample] Purchase pending (isResuming={isResuming}): {pendingOrder}");
+            _ = VerifyPurchaseAndGrantItemAsync(pendingOrder, isResuming);
         }
 
         private void OnPurchaseConfirmed(Order confirmedOrder)
@@ -811,7 +812,7 @@ namespace Truesoft.SupabaseUnity.Samples
         /// IAP 구매 콜백(OnPurchasePending)에서 호출됩니다.
         /// PendingOrder → Info.Receipt + CartOrdered.Items()로 정보 추출.
         /// </summary>
-        private async Task VerifyPurchaseAndGrantItemAsync(PendingOrder pendingOrder)
+        private async Task VerifyPurchaseAndGrantItemAsync(PendingOrder pendingOrder, bool isResuming)
         {
             if (pendingOrder == null)
             {
@@ -867,7 +868,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
             // [OK] 검증 성공 → 소비 처리 (소모품은 Confirm해야 다시 구매 가능)
             // skipConfirmForTest는 새 구매에서만 적용 (초기화 중 미처리 재처리는 항상 confirm)
-            if (skipConfirmForTest && !_isResumingPurchases)
+            if (skipConfirmForTest && !isResuming)
             {
                 Debug.LogWarning($"[Sample] [TEST] skipConfirmForTest=true → Confirm 생략. 미처리 상태로 남김.");
                 Debug.LogWarning($"[Sample] [TEST] M 키로 IAP 재초기화하면 미처리 구매가 자동 재처리됩니다.");
