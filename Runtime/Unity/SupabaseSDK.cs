@@ -8,6 +8,9 @@ using Truesoft.Supabase.Core.Models;
 using Truesoft.Supabase.Unity.Auth.Anonymous;
 using Truesoft.Supabase.Unity.Auth;
 using Truesoft.Supabase.Unity.Auth.Google;
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+using Truesoft.Supabase.Unity.Auth.Apple;
+#endif
 using Truesoft.Supabase.Unity.Config;
 using UnityEngine;
 
@@ -59,12 +62,14 @@ namespace Truesoft.Supabase.Unity
         private static string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
         private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
+        private static string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
 
         private enum SignInMethodKind
         {
             Unknown = 0,
             Anonymous = 1,
-            Google = 2
+            Google = 2,
+            Apple = 3
         }
 
         /// <summary>익명 복구 RPC 경로 결과. GateBlocked/GuardFailed/Banned 시 새 익명 가입을 하면 안 된다.</summary>
@@ -122,6 +127,8 @@ namespace Truesoft.Supabase.Unity
         {
             public const string AuthGoogleSettings = "Supabase.Auth.Google.Settings";
             public const string AuthGoogleIdToken = "Supabase.Auth.Google.IdToken";
+            public const string AuthApple = "Supabase.Auth.Apple";
+            public const string AuthAppleIdToken = "Supabase.Auth.Apple.IdToken";
             public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             public const string AuthSignOut = "Supabase.Auth.SignOut";
             public const string AuthGoogleSignOut = "Supabase.Auth.Google.SignOut";
@@ -519,6 +526,205 @@ namespace Truesoft.Supabase.Unity
             return LogAndReturn(ApiLogTags.AuthAnonymous, r);
         }
 
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+        private static AppleLoginBridge _appleLoginBridge;
+
+        /// <summary>iOS 네이티브 Apple 로그인 UI를 표시하고 Supabase 세션까지 한 번에 처리합니다.</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleAsync(bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (IsAnonymousSession(_currentSession))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+
+            EnsureAppleLoginBridge();
+            var provider = new iOSAppleLoginProvider(_appleLoginBridge);
+            var loginResult = await RequestAppleLoginResultAsync(provider);
+            if (loginResult == null)
+                return SupabaseResult<SupabaseSession>.Fail("apple_login_cancelled_or_failed");
+
+            return await SignInWithAppleIdTokenAsync(loginResult.IdToken, loginResult.RawNonce, saveSessionToStorage);
+        }
+
+        /// <summary>Apple ID 토큰을 직접 전달해 Supabase 세션을 맞춥니다.</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (IsAnonymousSession(_currentSession))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+
+            var result = await Auth.SignInWithIdTokenAsync("apple", idToken, rawNonce);
+            if (result.IsSuccess && result.Data != null)
+            {
+                SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
+                if (saveSessionToStorage)
+                    SaveSessionToStorage();
+
+                RememberLastSignInMethod(SignInMethodKind.Apple);
+                if (!_isRecreatingAfterWithdrawalDelete)
+                {
+                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
+                        SignInMethodKind.Apple,
+                        saveSessionToStorage,
+                        allowRecreateOnDeletion: true);
+                    if (guarded != null)
+                        return guarded;
+
+                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                    if (reserved != null)
+                        return reserved;
+
+                    await TryEnsureProfileRowAfterSignInAsync();
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>현재 익명 세션에 Apple identity를 연동합니다(iOS 네이티브 Apple 로그인 사용).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToCurrentAnonymousAsync(bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            EnsureAppleLoginBridge();
+            var provider = new iOSAppleLoginProvider(_appleLoginBridge);
+            var loginResult = await RequestAppleLoginResultAsync(provider);
+            if (loginResult == null)
+                return SupabaseResult<SupabaseSession>.Fail("apple_login_cancelled_or_failed");
+
+            return await LinkAppleToCurrentAnonymousWithIdTokenAsync(loginResult.IdToken, loginResult.RawNonce, saveSessionToStorage);
+        }
+
+        /// <summary>현재 익명 세션에 Apple identity를 연동합니다(ID 토큰 직접 전달).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            var s = _currentSession;
+            if (!IsAnonymousSession(s))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_required");
+
+            if (string.IsNullOrWhiteSpace(s?.AccessToken) || string.IsNullOrWhiteSpace(s?.RefreshToken))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_token_missing");
+
+            var linked = await Auth.LinkIdentityWithIdTokenAsync(s.AccessToken, "apple", idToken, rawNonce, null);
+            if (linked == null || !linked.IsSuccess || linked.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "apple_link_failed");
+
+            if (linked.Data.User == null || linked.Data.User.IsAnonymous)
+                return SupabaseResult<SupabaseSession>.Fail("apple_link_anonymous_not_cleared");
+
+            SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
+            if (saveSessionToStorage)
+                SaveSessionToStorage();
+
+            RememberLastSignInMethod(SignInMethodKind.Apple);
+            await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+            if (!_isRecreatingAfterWithdrawalDelete)
+            {
+                var guarded = await HandleWithdrawalGuardAfterSignInAsync(
+                    SignInMethodKind.Apple,
+                    saveSessionToStorage,
+                    allowRecreateOnDeletion: true);
+                if (guarded != null)
+                    return guarded;
+
+                var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                if (reserved != null)
+                    return reserved;
+            }
+
+            return linked;
+        }
+
+        /// <summary><see cref="SignInWithAppleAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TrySignInWithAppleAsync(bool saveSessionToStorage = true)
+        {
+            var r = await SignInWithAppleAsync(saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthApple, r);
+        }
+
+        /// <summary><see cref="SignInWithAppleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TrySignInWithAppleIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        /// <summary><see cref="LinkAppleToCurrentAnonymousAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TryLinkAppleToCurrentAnonymousAsync(bool saveSessionToStorage = true)
+        {
+            var r = await LinkAppleToCurrentAnonymousAsync(saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthApple, r);
+        }
+
+        /// <summary><see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        private static void EnsureAppleLoginBridge()
+        {
+            if (_appleLoginBridge != null)
+                return;
+
+            var existing = UnityEngine.Object.FindFirstObjectByType<AppleLoginBridge>();
+            if (existing != null)
+            {
+                _appleLoginBridge = existing;
+                return;
+            }
+
+            var go = new GameObject("TruesoftAppleLoginBridge");
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            _appleLoginBridge = go.AddComponent<AppleLoginBridge>();
+        }
+
+        private static Task<AppleLoginResult> RequestAppleLoginResultAsync(iOSAppleLoginProvider provider)
+        {
+            var tcs = new TaskCompletionSource<AppleLoginResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            provider.SignIn(
+                result => tcs.TrySetResult(result),
+                err =>
+                {
+                    UnityEngine.Debug.LogWarning("[Supabase.Auth.Apple] " + (string.IsNullOrWhiteSpace(err) ? "apple_signin_failed" : err));
+                    tcs.TrySetResult(null);
+                });
+            return tcs.Task;
+        }
+#endif // TRUESOFT_APPLE_AUTH_AVAILABLE
+
         /// <summary><see cref="SignOutFromGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TrySignOutFromGoogleAsync()
         {
@@ -857,9 +1063,10 @@ namespace Truesoft.Supabase.Unity
                 return SupabaseResult<SupabaseSession>.Fail("signed_in_non_anonymous_sign_out_first");
 
             var forceFreshAnonymous = false;
-            if (!IsLoggedIn && ReadLastSignInMethod() == SignInMethodKind.Google)
+            var lastMethod = ReadLastSignInMethod();
+            if (!IsLoggedIn && (lastMethod == SignInMethodKind.Google || lastMethod == SignInMethodKind.Apple))
             {
-                // 직전 연동 계정을 복원하지 않도록, 익명 시작을 명시적으로 새 가입으로 강제합니다.
+                // 직전 소셜 연동 계정을 복원하지 않도록, 익명 시작을 명시적으로 새 가입으로 강제합니다.
                 forceFreshAnonymous = true;
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
                 SetAutoLoginBlocked(true);
@@ -1839,6 +2046,39 @@ namespace Truesoft.Supabase.Unity
             return (true, result.Data);
         }
 
+        /// <summary>Apple App Store 영수증(base64 payload)을 서버에서 검증합니다.</summary>
+        public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
+            string receiptData,
+            string productId,
+            string bundleId = null)
+        {
+            var req = new AppleIAPPurchaseRequest
+            {
+                receipt_data = receiptData,
+                product_id   = productId,
+                bundle_id    = bundleId ?? UnityEngine.Application.identifier,
+            };
+            return await Functions.InvokeAsync<AppleIAPPurchaseResponse>(
+                _purchaseVerifyAppleFunctionName, req, requireAuth: true);
+        }
+
+        /// <summary><see cref="VerifyApplePurchaseAsync"/>를 호출하고 성공 시 응답을 반환, 실패 시 <c>default</c>를 반환합니다.</summary>
+        public static async Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
+            string receiptData,
+            string productId,
+            string bundleId = null)
+        {
+            const string tag = "[Supabase.Purchase.VerifyApple]";
+            var result = await VerifyApplePurchaseAsync(receiptData, productId, bundleId);
+            if (!result.IsSuccess)
+            {
+                if (_enableApiResultLogs)
+                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                return (false, default);
+            }
+            return (true, result.Data);
+        }
+
 #if TRUESOFT_IAP_AVAILABLE
         /// <summary>
         /// Google Play IAP 파사드를 생성합니다.
@@ -1847,6 +2087,55 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         public static GooglePlayIAPFacade CreateGooglePlayIAP()
             => new GooglePlayIAPFacade((token, productId) => TryVerifyGooglePlayPurchaseAsync(token, productId));
+
+        /// <summary>
+        /// Apple App Store IAP 파사드를 생성합니다.
+        /// 매 호출마다 새 인스턴스를 반환하므로 씬별로 하나씩 생성·관리하세요.
+        /// 씬 언로드 시 <see cref="AppleIAPFacade.Dispose"/>를 호출하세요.
+        /// </summary>
+        public static AppleIAPFacade CreateAppleIAP()
+            => new AppleIAPFacade((receiptData, productId) => TryVerifyApplePurchaseAsync(receiptData, productId));
+
+        /// <summary>
+        /// 통합 IAP 파사드를 생성합니다. Android(Google Play)와 iOS(Apple App Store)를 플랫폼 자동 감지로 처리합니다.
+        /// 게임 코드에서 #if UNITY_ANDROID / #elif UNITY_IOS 분기 없이 사용할 수 있습니다.
+        /// 매 호출마다 새 인스턴스를 반환하므로 씬별로 하나씩 생성·관리하세요.
+        /// 씬 언로드 시 <see cref="IAPFacade.Dispose"/>를 호출하세요.
+        /// </summary>
+        public static IAPFacade CreateIAP()
+            => new IAPFacade((token, productId) => VerifyForIAPFacadeAsync(token, productId));
+
+        private static async Task<(bool, IAPPurchaseResponse)> VerifyForIAPFacadeAsync(
+            string token, string productId)
+        {
+#if UNITY_ANDROID
+            var (ok, r) = await TryVerifyGooglePlayPurchaseAsync(token, productId);
+            if (!ok || r == null) return (false, default);
+            return (true, new IAPPurchaseResponse {
+                ok               = true,
+                already_verified = r.already_verified,
+                order_id         = r.order_id,
+                purchase_state   = r.purchase_state,
+                reason           = r.reason,
+                store            = "google_play"
+            });
+#elif UNITY_IOS
+            var (ok, r) = await TryVerifyApplePurchaseAsync(token, productId);
+            if (!ok || r == null) return (false, default);
+            return (true, new IAPPurchaseResponse {
+                ok               = true,
+                already_verified = r.already_verified,
+                order_id         = r.transaction_id,
+                product_id       = r.product_id,
+                purchase_state   = r.purchase_state,
+                reason           = r.reason,
+                store            = "apple_app_store"
+            });
+#else
+            await Task.CompletedTask;
+            return (false, default);
+#endif
+        }
 #endif
 
         /// <summary>로그인 성공 시 세션을 SDK에 설정하세요. 이후 PatchAsync/LoadColumnsAsync/Events는 세션 없이 호출 가능.</summary>
@@ -2109,6 +2398,8 @@ namespace Truesoft.Supabase.Unity
                 return SignInMethodKind.Google;
             if (raw == (int)SignInMethodKind.Anonymous)
                 return SignInMethodKind.Anonymous;
+            if (raw == (int)SignInMethodKind.Apple)
+                return SignInMethodKind.Apple;
             return SignInMethodKind.Unknown;
         }
 
@@ -2297,6 +2588,9 @@ namespace Truesoft.Supabase.Unity
             {
                 SignInMethodKind.Google => await SignInWithGoogleAsync(saveSessionToStorage),
                 SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(saveSessionToStorage),
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+                SignInMethodKind.Apple => await SignInWithAppleAsync(saveSessionToStorage),
+#endif
                 _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method")
             };
         }

@@ -429,7 +429,54 @@ namespace Truesoft.Supabase.Unity
             string packageName = null) =>
             SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
 
+        /// <inheritdoc cref="SupabaseSDK.VerifyApplePurchaseAsync"/>
+        internal static Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
+            string receiptData,
+            string productId,
+            string bundleId = null) =>
+            SupabaseSDK.VerifyApplePurchaseAsync(receiptData, productId, bundleId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseAsync"/>
+        public static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
+            string receiptData,
+            string productId,
+            string bundleId = null) =>
+            SupabaseSDK.TryVerifyApplePurchaseAsync(receiptData, productId, bundleId);
+
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleAsync"/>
+        public static Task<bool> TrySignInWithAppleAsync(bool saveSessionToStorage = true) =>
+            SupabaseSDK.TrySignInWithAppleAsync(saveSessionToStorage);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync"/>
+        public static Task<bool> TrySignInWithAppleIdTokenAsync(
+            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
+            SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousAsync"/>
+        public static Task<bool> TryLinkAppleToCurrentAnonymousAsync(bool saveSessionToStorage = true) =>
+            SupabaseSDK.TryLinkAppleToCurrentAnonymousAsync(saveSessionToStorage);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync"/>
+        public static Task<bool> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
+            SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+#endif
+
 #if TRUESOFT_IAP_AVAILABLE
+        /// <summary>
+        /// Apple App Store IAP 파사드를 생성합니다. 씬별로 독립 인스턴스를 사용하세요.
+        /// </summary>
+        public static AppleIAPFacade CreateAppleIAP() =>
+            SupabaseSDK.CreateAppleIAP();
+
+        /// <summary>
+        /// 통합 IAP 파사드를 생성합니다. Android(Google Play)와 iOS(Apple App Store)를 플랫폼 자동 감지로 처리합니다.
+        /// 게임 코드에서 #if UNITY_ANDROID / #elif UNITY_IOS 분기 없이 사용할 수 있습니다.
+        /// </summary>
+        public static IAPFacade CreateIAP() =>
+            SupabaseSDK.CreateIAP();
+
         /// <summary>
         /// Google Play IAP 파사드를 생성합니다. 씬별로 독립 인스턴스를 사용하세요.
         /// </summary>

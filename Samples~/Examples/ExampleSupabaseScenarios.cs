@@ -59,6 +59,13 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("구글 연동")]
         [SerializeField] private KeyCode keyLinkGoogle = KeyCode.P;
 
+        [Header("Apple 로그인 (iOS)")]
+        [Tooltip("Apple 로그인")]
+        [SerializeField] private KeyCode keyLoginApple = KeyCode.Alpha8;
+
+        [Tooltip("Apple 익명 연동")]
+        [SerializeField] private KeyCode keyLinkApple = KeyCode.Alpha9;
+
         [Tooltip("통합 로그아웃")]
         [SerializeField] private KeyCode keyLogout = KeyCode.W;
 
@@ -99,7 +106,7 @@ namespace Truesoft.SupabaseUnity.Samples
         [SerializeField] private KeyCode keyServerShard = KeyCode.N;
 
         [Header("인앱 결제")]
-        [Tooltip("구매할 상품 ID (Google Play Console에 등록된 Product ID)")]
+        [Tooltip("구매할 상품 ID (Google Play Console / App Store Connect에 등록된 Product ID)")]
         [SerializeField] private string demoPurchaseProductId = "com.yourcompany.yourgame.item_id";
 
         [Tooltip("IAP 초기화 (또는 재초기화 — 미처리 구매 자동 재처리)")]
@@ -112,7 +119,7 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("켜면 구매 후 Confirm(소비)을 건너뜀 → 미처리 상태로 남김. M 키로 재초기화하면 자동 재처리됨.")]
         [SerializeField] private bool skipConfirmForTest = false;
 
-        private GooglePlayIAPFacade _iapFacade;
+        private IAPFacade _iapFacade;
 
         private bool _keyboardBusy;
 
@@ -184,7 +191,13 @@ namespace Truesoft.SupabaseUnity.Samples
             else if (Input.GetKeyDown(keyInitializeIAP))
                 _ = RunAsyncGuarded(RunInitializeIAPExampleAsync);
             else if (Input.GetKeyDown(keyVerifyPurchase))
-                _ = RunAsyncGuarded(RunVerifyGooglePlayPurchaseExampleAsync);
+                _ = RunAsyncGuarded(RunVerifyPurchaseExampleAsync);
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+            else if (Input.GetKeyDown(keyLoginApple))
+                _ = RunAsyncGuarded(RunAppleLoginExampleAsync);
+            else if (Input.GetKeyDown(keyLinkApple))
+                _ = RunAsyncGuarded(RunAppleLinkExampleAsync);
+#endif
         }
 
         private async Task RunAsyncGuarded(Func<Task<bool>> body)
@@ -615,7 +628,7 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// Unity IAP v5 초기화. GooglePlayIAPFacade를 생성하고 OnGrantItemAsync 콜백을 설정합니다.
+        /// Unity IAP v5 초기화 (Android/iOS 통합). IAPFacade를 생성하고 OnGrantItemAsync 콜백을 설정합니다.
         /// M 키로 실행. 미처리 구매가 있으면 자동으로 재검증됩니다.
         /// </summary>
         private async Task<bool> RunInitializeIAPExampleAsync()
@@ -627,7 +640,7 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             _iapFacade?.Dispose();
-            _iapFacade = SupabaseClient.CreateGooglePlayIAP();
+            _iapFacade = SupabaseClient.CreateIAP();
 
             // 아이템 지급 콜백 — 실제 게임에서는 여기서 인벤토리에 아이템 추가
             _iapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
@@ -641,7 +654,7 @@ namespace Truesoft.SupabaseUnity.Samples
                     return false;   // false → SDK가 ConfirmPurchase 호출 안 함 → Pending 유지
                 }
 
-                Debug.Log($"[Sample] [OK] 아이템 지급: product={productId}, order_id={response.order_id}");
+                Debug.Log($"[Sample] [OK] 아이템 지급: product={productId}, order_id={response.order_id}, store={response.store}");
 
                 if (response.already_verified)
                     Debug.Log("[Sample] already_verified=true: 이전에 이미 검증된 영수증입니다. 중복 지급 없음 (정상).");
@@ -653,24 +666,19 @@ namespace Truesoft.SupabaseUnity.Samples
             _iapFacade.OnPurchaseFailed += order =>
             {
                 Debug.LogError($"[Sample] [FAIL] 구매 실패: {order}");
-                Debug.LogWarning("[Sample] 원인 확인:");
-                Debug.LogWarning("  1. Google Play Console에서 상품 ID 확인");
-                Debug.LogWarning("  2. 상품이 '활성' 또는 '게시됨' 상태인지 확인");
-                Debug.LogWarning("  3. 테스트 라이선스 계정이 설정되었는지 확인");
-                Debug.LogWarning("  4. APK가 Google Play Console에 업로드되었는지 확인");
             };
 
             var ok = await _iapFacade.InitializeAsync(new[] { demoPurchaseProductId });
-            if (ok) Debug.Log("[Sample] IAP initialized. Press , to purchase.");
+            if (ok) Debug.Log("[Sample] IAP initialized. Press B to purchase.");
             else    Debug.LogWarning("[Sample] IAP initialization failed.");
             return ok;
         }
 
         /// <summary>
         /// 결제 프로세스 시작 (B 키). M 키로 IAP 초기화 후 사용.
-        /// Google Play 결제 화면 → 사용자 승인 → OnGrantItemAsync 자동 호출.
+        /// 결제 화면 → 사용자 승인 → OnGrantItemAsync 자동 호출.
         /// </summary>
-        private Task<bool> RunVerifyGooglePlayPurchaseExampleAsync()
+        private Task<bool> RunVerifyPurchaseExampleAsync()
         {
             if (!SupabaseClient.IsLoggedIn)
             {
@@ -687,13 +695,29 @@ namespace Truesoft.SupabaseUnity.Samples
             var productId = demoPurchaseProductId?.Trim();
             if (string.IsNullOrEmpty(productId))
             {
-                Debug.LogWarning("[Sample] purchase skipped: Inspector의 Demo Product Id를 입력하세요.");
+                Debug.LogWarning("[Sample] purchase skipped: Inspector의 Demo Purchase Product Id를 입력하세요.");
                 return Task.FromResult(false);
             }
 
             _iapFacade.Purchase(productId);
             return Task.FromResult(true);
         }
+
+#if TRUESOFT_APPLE_AUTH_AVAILABLE
+        private async Task<bool> RunAppleLoginExampleAsync()
+        {
+            var ok = await SupabaseClient.TrySignInWithAppleAsync();
+            Debug.Log(ok ? "[Sample] Apple login success." : "[Sample] Apple login failed.");
+            return ok;
+        }
+
+        private async Task<bool> RunAppleLinkExampleAsync()
+        {
+            var ok = await SupabaseClient.TryLinkAppleToCurrentAnonymousAsync();
+            Debug.Log(ok ? "[Sample] Apple link success." : "[Sample] Apple link failed.");
+            return ok;
+        }
+#endif
 
         private async Task RunAllExamplesAsync()
         {

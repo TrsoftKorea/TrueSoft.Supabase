@@ -1,0 +1,74 @@
+# 데이터 스키마 (Data Schema)
+
+---
+
+## account_id vs user_id
+
+| 필드 | 의미 | 사용 주체 |
+|------|------|----------|
+| `account_id` | `auth.users.id`. 현재 로그인 세션 식별자. RLS 기준. | 게임 클라이언트 |
+| `user_id` | 플레이어(사람) 단위 불변 ID. 재가입 후에도 동일하게 유지 가능. | 운영·감사 |
+
+게임 코드는 항상 `account_id`(RLS의 `auth.uid()`)만 사용합니다.  
+같은 사람의 히스토리를 묶는 것은 운영 툴에서 `user_id`로 처리합니다.
+
+## 재가입 동작
+
+| 경우 | `user_id` | 게임 데이터 행 |
+|------|-----------|----------------|
+| 동일 Google 재가입 | 같게 유지 가능 | 새 `account_id`로 새 행 INSERT |
+| 다른 계정 | 다른 `user_id` | 새 행 INSERT |
+| 탈퇴 후 | 행에 남음 | `account_id` → NULL, 게임 접근 불가 |
+
+탈퇴 후 재가입해도 이전 세이브·프로필은 자동으로 복구되지 않습니다.
+
+## 플레이어 테이블 SQL 실행 순서
+
+`Sql/player/` 폴더에서 번호 순으로 실행합니다.
+
+| 파일 | 내용 |
+|------|------|
+| `01_game_servers.sql` | 서버 샤드/선택 |
+| `02_profiles.sql` | 공개 프로필 |
+| `03_display_names.sql` | 닉네임 유니크 인덱스 |
+| `04_user_saves.sql` | 게임 세이브 + RLS |
+| `05_user_sessions.sql` | 중복 로그인 감지 |
+| `06_anonymous_recovery_tokens.sql` | 익명 계정 복구 |
+| `07_sync_server_id_triggers.sql` ~ `09_account_closures.sql` | 서버 이주·탈퇴 처리 |
+| `10_remote_config.sql` | Remote Config |
+| `11_mails.sql`, `11_mails_client_hardening.sql` | 우편함 |
+| `12_withdrawal_cancel_rpc.sql` | 탈퇴 취소 RPC |
+| `13_cron_jobs_setup.sql` | 크론 잡 설정 |
+| `14_purchases.sql` | IAP 구매 검증 기록 |
+| `99_verify_player_schema.sql` | 스키마 검증 (선택) |
+
+전체 목록 참고: [`Sql/supabase_player_tables.sql`](../Sql/supabase_player_tables.sql)
+
+## 서버 이주 (server_id)
+
+**유저 자가 이주:**
+```csharp
+await Supabase.TryTransferMyServerAsync("KR1");
+```
+
+**운영/Retool (Secret 키 전용):**
+```
+POST {SUPABASE_URL}/rest/v1/rpc/ts_admin_transfer_user_server
+Header: apikey: <Secret 키>, Authorization: Bearer <Secret 키>
+Body: {"p_account_id":"<uuid>","p_target_server_code":"KR1","p_reason":"support_ticket_123"}
+```
+
+이주 대상 서버의 `allow_transfers`가 false이거나 닉네임 중복이면 실패합니다.
+
+## 법적 데이터 보관 설계
+
+탈퇴 시 삭제할 데이터와 법령·분쟁 대응으로 보관할 데이터를 스키마 단위로 분리하는 것을 권장합니다.
+
+| 구분 | 처리 |
+|------|------|
+| 운영 데이터 (`profiles`, `user_saves`, `chat_messages` 등) | 탈퇴 완료 시 삭제 또는 비식별화 |
+| 법정 보존 데이터 (결제 요약, 감사 로그) | 별도 스키마(`compliance`)에 최소 필드만 보관, 서비스 롤만 접근 |
+
+- 운영 테이블은 `auth.users`에 `ON DELETE CASCADE`로 묶어 계정 삭제 시 함께 제거합니다.
+- 보관 테이블은 `auth.users`에 FK를 두지 않고 `user_id`만 보유해 계정 삭제 후에도 유지합니다.
+- 보관 항목·기간·목적은 법무·회계와 확인 후 개인정보 처리방침에 기재하세요.

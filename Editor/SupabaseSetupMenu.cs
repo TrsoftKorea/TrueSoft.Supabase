@@ -23,7 +23,7 @@ namespace Truesoft.Supabase.Editor
         [MenuItem("TrueSoft/Supabase/씬에 런타임 오브젝트 만들기")]
         public static void CreateRuntimeObjectInScene()
         {
-            var existing = Object.FindObjectOfType<SupabaseRuntime>();
+            var existing = Object.FindFirstObjectByType<SupabaseRuntime>();
             if (existing != null)
             {
                 Selection.activeObject = existing.gameObject;
