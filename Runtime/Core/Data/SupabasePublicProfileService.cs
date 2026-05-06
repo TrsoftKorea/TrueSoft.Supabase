@@ -96,7 +96,8 @@ namespace Truesoft.Supabase.Core.Data
         public async Task<SupabaseResult<bool>> IsDisplayNameAvailableAsync(
             string accessToken,
             string displayName,
-            string ignoreAccountIdForSelf = null)
+            string ignoreAccountIdForSelf = null,
+            string serverId = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -110,8 +111,12 @@ namespace Truesoft.Supabase.Core.Data
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, _displayNamesTable)}" +
                 $"?select=account_id" +
-                $"&display_name=ilike.{Uri.EscapeDataString(norm)}" +
-                $"&limit=1";
+                $"&display_name=ilike.{Uri.EscapeDataString(norm)}";
+
+            if (!string.IsNullOrWhiteSpace(serverId))
+                url += $"&server_id=eq.{Uri.EscapeDataString(serverId.Trim())}";
+
+            url += "&limit=1";
 
             var response = await _httpClient.SendAsync(
                 method: "GET",

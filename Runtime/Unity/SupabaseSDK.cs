@@ -63,6 +63,7 @@ namespace Truesoft.Supabase.Unity
         private static bool _isRecreatingAfterWithdrawalDelete;
         private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
         private static string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
+        private static string _myServerId;
 
         private enum SignInMethodKind
         {
@@ -1566,7 +1567,17 @@ namespace Truesoft.Supabase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             var selfAccountId = _currentSession?.User?.Id;
-            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(_currentSession?.AccessToken ?? "", displayName, selfAccountId);
+            var accessToken = _currentSession?.AccessToken ?? "";
+
+            var serverId = _myServerId;
+            if (string.IsNullOrWhiteSpace(serverId))
+            {
+                var serverInfo = await _bootstrap.PublicProfileService.GetMyServerIdAsync(accessToken);
+                if (serverInfo?.IsSuccess == true && !string.IsNullOrWhiteSpace(serverInfo.Data.ServerId))
+                    serverId = _myServerId = serverInfo.Data.ServerId;
+            }
+
+            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId, serverId);
         }
 
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>
@@ -1649,7 +1660,10 @@ namespace Truesoft.Supabase.Unity
 
             var r = await svc.TransferMyServerAsync(_currentSession.AccessToken, targetServerCode, reason);
             if (r != null && r.IsSuccess && string.IsNullOrWhiteSpace(targetServerCode) == false)
+            {
                 SetCurrentServerCode(targetServerCode);
+                _myServerId = null;
+            }
             return r;
         }
 
@@ -2212,6 +2226,7 @@ namespace Truesoft.Supabase.Unity
             UserSaveStaticSyncRegistry.ResetAll();
 
             _currentSession = null;
+            _myServerId = null;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
@@ -2333,7 +2348,10 @@ namespace Truesoft.Supabase.Unity
                 : bootstrap.PurchaseVerifyGoogleFunctionName.Trim();
 
             if (!preserveSession)
+            {
                 _currentSession = null;
+                _myServerId = null;
+            }
 
             _userSaves = null;
             _mailbox = null;
@@ -2747,12 +2765,16 @@ namespace Truesoft.Supabase.Unity
                 if (mine == null || !mine.IsSuccess || mine.Data.ServerCode.Length == 0)
                     return;
 
+                _myServerId = mine.Data.ServerId;
+
                 if (string.Equals(mine.Data.ServerCode, selectedCode, StringComparison.OrdinalIgnoreCase))
                     return;
 
                 var moved = await svc.TransferMyServerAsync(s.AccessToken, selectedCode, "sdk_signin_server_sync");
                 if (moved == null || !moved.IsSuccess)
                     Debug.LogWarning("[Supabase] server transfer after sign-in failed: " + (moved?.ErrorMessage ?? "unknown"));
+                else
+                    _myServerId = null; // 이주 후 UUID가 변경되므로 다음 조회 시 재취득
             }
             catch (Exception e)
             {
