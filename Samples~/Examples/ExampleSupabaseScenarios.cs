@@ -117,6 +117,7 @@ namespace Truesoft.SupabaseUnity.Samples
         private StoreController _storeController;
         private bool _iapInitialized;
         private int _resumingPurchaseCount;
+        private bool _isFetchingPurchases;
 
         private bool _keyboardBusy;
 
@@ -706,6 +707,8 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             // 3단계: 구매 이력 조회 (미처리 구매 자동 OnPurchasePending 트리거)
+            // FetchPurchases 호출 전에 플래그 세팅 — OnPurchasePending이 OnPurchasesFetched보다 먼저 올 경우 대비
+            _isFetchingPurchases = true;
             _storeController.FetchPurchases();
         }
 
@@ -722,6 +725,8 @@ namespace Truesoft.SupabaseUnity.Samples
             _resumingPurchaseCount = orders.PendingOrders?.Count ?? 0;
             Debug.Log($"[Sample] Purchases fetched. Pending: {_resumingPurchaseCount}");
 
+            // OnPurchasePending이 OnPurchasesFetched 이후에 오는 경우를 위해 플래그 해제
+            _isFetchingPurchases = false;
             _iapInitialized = true;
         }
 
@@ -733,9 +738,11 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnPurchasePending(PendingOrder pendingOrder)
         {
-            // FetchPurchases로 재처리 중인지 여부를 캡처 후 카운터 감소
-            var isResuming = _resumingPurchaseCount > 0;
-            if (isResuming) _resumingPurchaseCount--;
+            // isResuming 판별:
+            // - _isFetchingPurchases: OnPurchasePending이 OnPurchasesFetched보다 먼저 온 경우 (타이밍 선행)
+            // - _resumingPurchaseCount > 0: OnPurchasePending이 OnPurchasesFetched 이후에 온 경우 (정상 순서)
+            var isResuming = _isFetchingPurchases || _resumingPurchaseCount > 0;
+            if (_resumingPurchaseCount > 0) _resumingPurchaseCount--;
 
             Debug.Log($"[Sample] Purchase pending (isResuming={isResuming}): {pendingOrder}");
             _ = VerifyPurchaseAndGrantItemAsync(pendingOrder, isResuming);
