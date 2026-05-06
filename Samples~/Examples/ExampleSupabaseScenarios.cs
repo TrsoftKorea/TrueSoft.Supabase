@@ -679,10 +679,10 @@ namespace Truesoft.SupabaseUnity.Samples
         {
             Debug.Log($"[Sample] {products.Count} products fetched.");
 
-            // 🔍 디버깅: 로드된 상품 목록 출력
+            // [Debug] 로드된 상품 목록 출력
             foreach (var product in products)
             {
-                Debug.Log($"  ✓ Product ID: {product.definition.id}");
+                Debug.Log($"  [OK] Product ID: {product.definition.id}");
                 Debug.Log($"    Title: {product.metadata.localizedTitle}");
                 Debug.Log($"    Price: {product.metadata.localizedPriceString}");
             }
@@ -691,12 +691,12 @@ namespace Truesoft.SupabaseUnity.Samples
             var targetProduct = products.FirstOrDefault(p => p.definition.id == demoPurchaseProductId);
             if (targetProduct == null)
             {
-                Debug.LogWarning($"[Sample] ❌ 상품을 찾을 수 없음: {demoPurchaseProductId}");
+                Debug.LogWarning($"[Sample] [FAIL] 상품을 찾을 수 없음: {demoPurchaseProductId}");
                 Debug.LogWarning("[Sample] Google Play Console에서 상품 ID가 정확한지 확인하세요.");
             }
             else
             {
-                Debug.Log($"[Sample] ✓ 상품 찾음: {demoPurchaseProductId}");
+                Debug.Log($"[Sample] [OK] 상품 찾음: {demoPurchaseProductId}");
             }
 
             // 3단계: 구매 이력 조회
@@ -730,13 +730,13 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnPurchaseFailed(FailedOrder failedOrder)
         {
-            Debug.LogError($"[Sample] ❌ Purchase failed!");
+            Debug.LogError($"[Sample] [FAIL] Purchase failed!");
             Debug.LogError($"  Product: {failedOrder}");
             Debug.LogWarning("[Sample] 원인 확인:");
-            Debug.LogWarning("  1️⃣ Google Play Console에서 상품 ID 확인");
-            Debug.LogWarning("  2️⃣ 상품이 '활성' 또는 '게시됨' 상태인지 확인");
-            Debug.LogWarning("  3️⃣ 테스트 라이선스 계정이 설정되었는지 확인");
-            Debug.LogWarning("  4️⃣ APK가 Google Play Console에 업로드되었는지 확인");
+            Debug.LogWarning("  1. Google Play Console에서 상품 ID 확인");
+            Debug.LogWarning("  2. 상품이 '활성' 또는 '게시됨' 상태인지 확인");
+            Debug.LogWarning("  3. 테스트 라이선스 계정이 설정되었는지 확인");
+            Debug.LogWarning("  4. APK가 Google Play Console에 업로드되었는지 확인");
         }
 
 /// <summary>
@@ -802,7 +802,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 return;
             }
 
-            // 1️⃣ Receipt 추출 (IOrderInfo)
+            // 1. Receipt 추출 (IOrderInfo)
             var receipt = pendingOrder.Info?.Receipt;
             if (string.IsNullOrEmpty(receipt))
             {
@@ -810,7 +810,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 return;
             }
 
-            // 2️⃣ ProductId 추출 (ICart → CartItem → Product.definition.id)
+            // 2. ProductId 추출 (ICart → CartItem → Product.definition.id)
             var cartItems = pendingOrder.CartOrdered?.Items();
             if (cartItems == null || cartItems.Count == 0)
             {
@@ -821,7 +821,7 @@ namespace Truesoft.SupabaseUnity.Samples
             var productId = cartItems[0].Product.definition.id;
             Debug.Log($"[Sample] productId extracted: {productId}");
 
-            // 3️⃣ Receipt에서 purchaseToken 추출
+            // 3. Receipt에서 purchaseToken 추출
             var purchaseToken = ExtractPurchaseToken(receipt);
             if (string.IsNullOrEmpty(purchaseToken))
             {
@@ -831,7 +831,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
             Debug.Log($"[Sample] purchaseToken extracted: {purchaseToken}");
 
-            // 4️⃣ Supabase 서버 검증
+            // 4. Supabase 서버 검증
             var (success, response) = await SupabaseClient.TryVerifyGooglePlayPurchaseAsync(
                 purchaseToken: purchaseToken,
                 productId: productId);
@@ -848,8 +848,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 return;
             }
 
-            // ✓ 검증 성공 → 아이템 지급
-            Debug.Log($"[Sample] ✓ Purchase verified! order_id={response.order_id}. Granting item...");
+            // [OK] 검증 성공 → 아이템 지급
+            Debug.Log($"[Sample] [OK] Purchase verified! order_id={response.order_id}. Granting item...");
 
             if (response.already_verified)
                 Debug.LogWarning("[Sample] Already verified receipt (duplicate prevention check).");
