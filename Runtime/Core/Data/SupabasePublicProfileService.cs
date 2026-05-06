@@ -110,7 +110,7 @@ namespace Truesoft.Supabase.Core.Data
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, _displayNamesTable)}" +
                 $"?select=account_id" +
-                $"&display_name=eq.{Uri.EscapeDataString(norm)}" +
+                $"&display_name=ilike.{Uri.EscapeDataString(norm)}" +
                 $"&limit=1";
 
             var response = await _httpClient.SendAsync(
