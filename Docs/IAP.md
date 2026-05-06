@@ -40,11 +40,8 @@ Android (Google Play)와 iOS (Apple App Store) 소모품 아이템을 지원합�
 ### 3. Apple App Store 설정
 | 항목 | 위치 |
 |------|------|
-| App-Specific Shared Secret 발급 | App Store Connect > 앱 선택 > 앱 내 구입 > 관리 > App-Specific Shared Secret |
+| 앱 공유 암호 발급 | App Store Connect > 앱 선택 > 앱 정보 > 앱 공유 암호 |
 | Supabase 시크릿 등록 | Supabase Dashboard > Edge Functions > Secrets > `APPLE_SHARED_SECRET` |
-| Bundle ID 등록 (선택) | Supabase Dashboard > Edge Functions > Secrets > `APPLE_BUNDLE_ID` |
-
-> `APPLE_BUNDLE_ID`를 설정하지 않으면 클라이언트가 `Application.identifier`를 자동으로 전달합니다.
 
 ### 4. Edge Function 배포
 ```bash

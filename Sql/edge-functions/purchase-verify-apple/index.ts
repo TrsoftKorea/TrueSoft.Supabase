@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 type VerifyRequest = {
   receipt_data?: string;   // Unity IAP receipt의 Payload (base64 앱 영수증)
   product_id?: string;
-  bundle_id?: string;      // 생략 시 APPLE_BUNDLE_ID env var 사용
+  bundle_id?: string;      // Application.identifier (클라이언트가 자동 전달)
 };
 
 type VerifyResponse = {
@@ -37,7 +37,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
 const APPLE_SHARED_SECRET = Deno.env.get("APPLE_SHARED_SECRET")!;
-const APPLE_BUNDLE_ID_ENV = Deno.env.get("APPLE_BUNDLE_ID") ?? "";
 
 if (!APPLE_SHARED_SECRET) {
   throw new Error("APPLE_SHARED_SECRET is required");
@@ -107,8 +106,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { receipt_data, product_id } = body;
-  const bundle_id = body.bundle_id || APPLE_BUNDLE_ID_ENV;
+  const { receipt_data, product_id, bundle_id } = body;
 
   if (!receipt_data || !product_id) {
     return json({ ok: false, reason: "missing_fields" } satisfies VerifyResponse, 400);
