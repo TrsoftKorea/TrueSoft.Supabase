@@ -14,14 +14,14 @@ namespace Truesoft.Supabase.Unity
     [CreateAssetMenu(fileName = "SupabaseSettings", menuName = "TrueSoft/Supabase/Supabase 설정")]
     public sealed class SupabaseSettings : ScriptableObject
     {
-        [Header("공통")]
-        [Tooltip("프로젝트 URL.")]
+        [Header("공통 (필수)")]
+        [Tooltip("Supabase 대시보드 → Project Settings → API → Project URL")]
         public string projectUrl;
 
-        [Tooltip("Publishable API 키.")]
+        [Tooltip("Supabase 대시보드 → Project Settings → API → anon (public) key")]
         public string publishableKey;
 
-        [Tooltip("Google OAuth Web Client ID. Android 네이티브 로그인.")]
+        [Tooltip("Google Cloud Console → OAuth 2.0 클라이언트 ID → 웹 애플리케이션 클라이언트 ID\nAndroid 네이티브 로그인 전용. Google 로그인 미사용 시 공란.")]
         public string googleWebClientId;
 
         [Header("기본 옵션")]
@@ -29,6 +29,7 @@ namespace Truesoft.Supabase.Unity
         public bool enableApiResultLogs = true;
 
         [Tooltip("HTTP 타임아웃(초).")]
+        [Min(1)]
         public int timeoutSeconds = 30;
 
         [Header("테이블")]
@@ -39,16 +40,18 @@ namespace Truesoft.Supabase.Unity
         public string mailsTable = "mails";
 
         [Tooltip("메일 만료 일수(클라이언트·발송 보조 참고).")]
+        [Min(1)]
         public int defaultMailExpirationDays = 30;
 
         [Tooltip("우편함 폴링 간격(초). 0이면 비활성.")]
+        [Min(0)]
         public int mailPollingIntervalSeconds = 0;
 
         [Tooltip("공개 프로필 테이블.")]
         public string publicProfilesTable = "user_profiles";
 
         [Header("서버 샤드")]
-        [Tooltip("기본 server_code. DB game_servers와 맞출 것.")]
+        [Tooltip("기본 server_code. DB game_servers 테이블의 server_code 값과 일치해야 합니다.")]
         public string defaultServerCode = "GLOBAL";
 
         [Header("중복 로그인")]
@@ -56,16 +59,19 @@ namespace Truesoft.Supabase.Unity
         public bool enableDuplicateSessionMonitor = true;
 
         [Tooltip("세션 폴링 주기(초). 0이면 1회만.")]
+        [Min(0f)]
         public float duplicateSessionPollSeconds = 0f;
 
         [Tooltip("중복 로그인 검사 쿨다운(초).")]
+        [Min(0f)]
         public float duplicateSessionActionCheckCooldownSeconds = 5f;
 
         [Tooltip("중복 로그인 감지 테이블.")]
         public string userSessionsTable = "user_sessions";
 
         [Header("탈퇴")]
-        [Tooltip("탈퇴 유예 일수.")]
+        [Tooltip("탈퇴 신청 후 실제 삭제까지 유예 일수.")]
+        [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
 
         [Tooltip("로그인 시 탈퇴 가드 Edge 호출.")]
@@ -111,5 +117,15 @@ namespace Truesoft.Supabase.Unity
                     : purchaseVerifyGoogleFunctionName.Trim(),
             };
         }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (string.IsNullOrWhiteSpace(projectUrl))
+                Debug.LogWarning("[SupabaseSettings] projectUrl이 비어 있습니다.", this);
+            if (string.IsNullOrWhiteSpace(publishableKey))
+                Debug.LogWarning("[SupabaseSettings] publishableKey가 비어 있습니다.", this);
+        }
+#endif
     }
 }
