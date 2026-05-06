@@ -104,11 +104,15 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("구매할 상품 ID (Google Play Console에 등록된 Product ID)")]
         [SerializeField] private string demoPurchaseProductId = "com.yourcompany.yourgame.item_id";
 
-        [Tooltip("IAP 초기화")]
+        [Tooltip("IAP 초기화 (또는 재초기화 — 미처리 구매 자동 재처리)")]
         [SerializeField] private KeyCode keyInitializeIAP = KeyCode.M;
 
         [Tooltip("실제 결제 프로세스 시작 및 자동 검증 (M으로 IAP 초기화 후 사용)")]
         [SerializeField] private KeyCode keyVerifyPurchase = KeyCode.B;
+
+        [Header("인앱 결제 - 미처리 테스트")]
+        [Tooltip("켜면 구매 후 Confirm(소비)을 건너뜀 → 미처리 상태로 남김. M 키로 재초기화하면 자동 재처리됨.")]
+        [SerializeField] private bool skipConfirmForTest = false;
 
         private StoreController _storeController;
         private bool _iapInitialized;
@@ -864,6 +868,13 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             // [OK] 검증 성공 → 소비 처리 (소모품은 Confirm해야 다시 구매 가능)
+            if (skipConfirmForTest)
+            {
+                Debug.LogWarning($"[Sample] [TEST] skipConfirmForTest=true → Confirm 생략. 미처리 상태로 남김.");
+                Debug.LogWarning($"[Sample] [TEST] M 키로 IAP 재초기화하면 미처리 구매가 자동 재처리됩니다.");
+                return;
+            }
+
             _storeController?.ConfirmPurchase(pendingOrder);
             Debug.Log($"[Sample] [OK] Purchase verified and confirmed! order_id={response.order_id}. Granting item...");
 
