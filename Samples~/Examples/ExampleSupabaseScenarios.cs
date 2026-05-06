@@ -729,7 +729,7 @@ namespace Truesoft.SupabaseUnity.Samples
             _ = VerifyPurchaseAndGrantItemAsync(pendingOrder);
         }
 
-        private void OnPurchaseConfirmed(ConfirmedOrder confirmedOrder)
+        private void OnPurchaseConfirmed(Order confirmedOrder)
         {
             Debug.Log($"[Sample] Purchase confirmed (consumed): {confirmedOrder}");
         }
