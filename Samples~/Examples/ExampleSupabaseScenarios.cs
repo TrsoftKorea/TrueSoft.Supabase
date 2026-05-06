@@ -637,6 +637,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 _storeController.OnPurchasesFetched += OnPurchasesFetched;
                 _storeController.OnPurchasesFetchFailed += OnPurchasesFetchFailed;
                 _storeController.OnPurchasePending += OnPurchasePending;
+                _storeController.OnPurchaseConfirmed += OnPurchaseConfirmed;
                 _storeController.OnPurchaseFailed += OnPurchaseFailed;
 
                 // 1단계: 스토어 연결
@@ -726,6 +727,11 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.Log($"[Sample] Purchase pending: {pendingOrder}");
             // v5: PendingOrder에서 receipt 추출 후 Supabase 검증
             _ = VerifyPurchaseAndGrantItemAsync(pendingOrder);
+        }
+
+        private void OnPurchaseConfirmed(ConfirmedOrder confirmedOrder)
+        {
+            Debug.Log($"[Sample] Purchase confirmed (consumed): {confirmedOrder}");
         }
 
         private void OnPurchaseFailed(FailedOrder failedOrder)
@@ -848,8 +854,9 @@ namespace Truesoft.SupabaseUnity.Samples
                 return;
             }
 
-            // [OK] 검증 성공 → 아이템 지급
-            Debug.Log($"[Sample] [OK] Purchase verified! order_id={response.order_id}. Granting item...");
+            // [OK] 검증 성공 → 소비 처리 (소모품은 Confirm해야 다시 구매 가능)
+            _storeController?.ConfirmPurchase(pendingOrder);
+            Debug.Log($"[Sample] [OK] Purchase verified and confirmed! order_id={response.order_id}. Granting item...");
 
             if (response.already_verified)
                 Debug.LogWarning("[Sample] Already verified receipt (duplicate prevention check).");

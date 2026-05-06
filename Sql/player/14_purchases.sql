@@ -19,3 +19,7 @@ alter table purchases enable row level security;
 create policy "users_read_own_purchases"
   on purchases for select
   using (account_id = auth.uid());
+
+create policy "users_insert_own_purchases"
+  on purchases for insert
+  with check (account_id = auth.uid());
