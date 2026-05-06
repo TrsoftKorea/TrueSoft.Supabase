@@ -5,7 +5,8 @@
     "Truesoft.Supabase.Core",
     "UnityEngine.UnityWebRequestModule",
     "UnityEngine.JSONSerializeModule",
-    "UnityEngine.Purchasing"
+    "Unity.Purchasing",
+    "Unity.Services.Core"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
