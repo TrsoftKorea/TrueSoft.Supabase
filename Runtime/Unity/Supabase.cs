@@ -429,6 +429,26 @@ namespace Truesoft.Supabase.Unity
             string packageName = null) =>
             SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
 
+#if TRUESOFT_IAP_AVAILABLE
+        /// <summary>
+        /// Google Play IAP 파사드를 생성합니다. 씬별로 독립 인스턴스를 사용하세요.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// var iap = Supabase.CreateGooglePlayIAP();
+        /// iap.OnGrantItemAsync = async (order, resp, isResuming) =>
+        /// {
+        ///     var productId = order.CartOrdered.Items()[0].Product.definition.id;
+        ///     await MyInventory.GiveItemAsync(productId);
+        ///     return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
+        /// };
+        /// await iap.InitializeAsync(new[] { "com.mygame.item" });
+        /// </code>
+        /// </example>
+        public static GooglePlayIAPFacade CreateGooglePlayIAP() =>
+            SupabaseSDK.CreateGooglePlayIAP();
+#endif
+
         /// <summary>로그인 성공 시 세션을 SDK에 설정. 이후 Patch/LoadColumns API는 세션 인자 없이 사용 가능.</summary>
         public static void SetSession(SupabaseSession session) => SupabaseSDK.SetSession(session);
 

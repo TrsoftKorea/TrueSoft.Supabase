@@ -4,7 +4,8 @@
   "references": [
     "Truesoft.Supabase.Core",
     "UnityEngine.UnityWebRequestModule",
-    "UnityEngine.JSONSerializeModule"
+    "UnityEngine.JSONSerializeModule",
+    "UnityEngine.Purchasing"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -13,6 +14,12 @@
   "precompiledReferences": [],
   "autoReferenced": true,
   "defineConstraints": [],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.purchasing",
+      "expression": "5.2.1",
+      "define": "TRUESOFT_IAP_AVAILABLE"
+    }
+  ],
   "noEngineReferences": false
 }

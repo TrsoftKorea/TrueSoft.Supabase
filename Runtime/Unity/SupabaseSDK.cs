@@ -1839,6 +1839,16 @@ namespace Truesoft.Supabase.Unity
             return (true, result.Data);
         }
 
+#if TRUESOFT_IAP_AVAILABLE
+        /// <summary>
+        /// Google Play IAP 파사드를 생성합니다.
+        /// 매 호출마다 새 인스턴스를 반환하므로 씬별로 하나씩 생성·관리하세요.
+        /// 씬 언로드 시 <see cref="GooglePlayIAPFacade.Dispose"/>를 호출하세요.
+        /// </summary>
+        public static GooglePlayIAPFacade CreateGooglePlayIAP()
+            => new GooglePlayIAPFacade(TryVerifyGooglePlayPurchaseAsync);
+#endif
+
         /// <summary>로그인 성공 시 세션을 SDK에 설정하세요. 이후 PatchAsync/LoadColumnsAsync/Events는 세션 없이 호출 가능.</summary>
         public static void SetSession(SupabaseSession session)
         {
