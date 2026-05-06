@@ -713,6 +713,15 @@ namespace Truesoft.SupabaseUnity.Samples
         private void OnPurchasesFetched(Orders orders)
         {
             Debug.Log($"[Sample] Purchases fetched.");
+
+            // 미처리 구매(앱 종료·검증 실패 등으로 소비되지 않은 항목) 자동 재처리
+            if (orders.PendingOrders != null && orders.PendingOrders.Count > 0)
+            {
+                Debug.Log($"[Sample] {orders.PendingOrders.Count} unfinished purchase(s) found. Resuming...");
+                foreach (var pending in orders.PendingOrders)
+                    _ = VerifyPurchaseAndGrantItemAsync(pending);
+            }
+
             _iapInitialized = true;
         }
 
