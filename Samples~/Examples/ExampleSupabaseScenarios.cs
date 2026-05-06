@@ -106,10 +106,7 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("IAP 초기화")]
         [SerializeField] private KeyCode keyInitializeIAP = KeyCode.M;
 
-        [Tooltip("상품 구매 테스트 (M으로 IAP 초기화 후 사용)")]
-        [SerializeField] private KeyCode keyPurchaseDemo = KeyCode.Comma;
-
-        [Tooltip("실제 결제 프로세스 시작 및 자동 검증")]
+        [Tooltip("실제 결제 프로세스 시작 및 자동 검증 (M으로 IAP 초기화 후 사용)")]
         [SerializeField] private KeyCode keyVerifyPurchase = KeyCode.B;
 
         private StoreController _storeController;
@@ -183,8 +180,6 @@ namespace Truesoft.SupabaseUnity.Samples
                 _ = RunAsyncGuarded(RunServerShardExampleAsync);
             else if (Input.GetKeyDown(keyInitializeIAP))
                 _ = RunAsyncGuarded(RunInitializeIAPExampleAsync);
-            else if (Input.GetKeyDown(keyPurchaseDemo))
-                _ = RunAsyncGuarded(RunPurchaseDemoExampleAsync);
             else if (Input.GetKeyDown(keyVerifyPurchase))
                 _ = RunAsyncGuarded(RunVerifyGooglePlayPurchaseExampleAsync);
         }
@@ -716,41 +711,7 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.LogWarning($"[Sample] Purchase failed: {failedOrder}");
         }
 
-        /// <summary>
-        /// 상품 구매 시작 (v5). M으로 IAP 초기화 후 , 키로 실행.
-        /// Google Play 결제 화면 표시 → 사용자 승인 → OnPurchasePending 콜백.
-        /// </summary>
-        private async Task<bool> RunPurchaseDemoExampleAsync()
-        {
-            if (!_iapInitialized || _storeController == null)
-            {
-                Debug.LogWarning("[Sample] purchase skipped: IAP not initialized (press M first).");
-                return false;
-            }
-
-            if (!SupabaseClient.IsLoggedIn)
-            {
-                Debug.LogWarning("[Sample] purchase skipped: sign in first.");
-                return false;
-            }
-
-            Debug.Log($"[Sample] initiating purchase for {demoPurchaseProductId}...");
-
-            try
-            {
-                // v5: PurchaseProduct() 호출 (비동기 아님, 콜백으로 결과 전달)
-                // OnPurchasePending 또는 OnPurchaseFailed 콜백으로 결과 전달됨
-                _storeController.PurchaseProduct(demoPurchaseProductId);
-                return true;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"[Sample] purchase failed: {e.Message}");
-                return false;
-            }
-        }
-
-        /// <summary>
+/// <summary>
         /// 실제 결제 프로세스 시작 및 자동 검증 (B 키).
         /// IAP 초기화(M) 필요 → 결제 프로세스 시작 → Google Play 결제 화면
         /// → 사용자 승인 → OnPurchasePending 콜백 → 자동 Supabase 검증.
