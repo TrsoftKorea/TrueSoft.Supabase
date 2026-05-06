@@ -9,7 +9,7 @@ Unity에서 Supabase Auth, REST, Edge Functions를 사용하기 위한 UPM 패�
 **Window > Package Manager > + > Add package from git URL**
 
 ```
-https://github.com/your-org/com.truesoft.supabase.git
+https://github.com/ljuh1521/TrueSoft.Supabase.git
 ```
 
 특정 버전 설치 시 `#버전` 을 추가합니다 (예: `...git#0.1.0`).  
@@ -113,4 +113,4 @@ Package Manager의 **Samples** 탭에서 **Import** 후 사용합니다.
 
 ## 문의 및 기여
 
-이슈, 기능 제안, 버그 리포트는 GitHub Issue 탭을 통해 공유해 주세요.
+이슈, 기능 제안, 버그 리포트는 [GitHub Issue](https://github.com/ljuh1521/TrueSoft.Supabase/issues) 탭을 통해 공유해 주세요.
