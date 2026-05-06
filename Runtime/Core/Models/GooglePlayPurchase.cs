@@ -22,33 +22,4 @@ namespace Truesoft.Supabase.Core.Models
         public string reason;
     }
 
-    // ── Unity IAP v5 영수증 3단계 파싱 모델 (GooglePlayIAPFacade 내부용) ──────────
-
-    /// <summary>Unity IAP가 발급하는 영수증 최상위 래퍼.</summary>
-    [Serializable]
-    internal sealed class GooglePlayReceiptWrapper
-    {
-        public string Payload;      // JSON string → GooglePlayPayload
-    }
-
-    /// <summary>Google Play Payload 구조.</summary>
-    [Serializable]
-    internal sealed class GooglePlayPayload
-    {
-        public string json;         // JSON string → GooglePlayPurchaseData
-        public string signature;
-    }
-
-    /// <summary>Google Play 구매 데이터 (Payload.json 파싱).</summary>
-    [Serializable]
-    internal sealed class GooglePlayPurchaseData
-    {
-        public string orderId;
-        public string packageName;
-        public string productId;
-        public long   purchaseTime;
-        public int    purchaseState;    // 0=purchased, 1=cancelled, 2=pending
-        public string purchaseToken;
-        public bool   acknowledged;
-    }
 }

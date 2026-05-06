@@ -328,19 +328,47 @@ namespace Truesoft.Supabase.Unity
                 return null;
             try
             {
-                var wrapper = JsonUtility.FromJson<GooglePlayReceiptWrapper>(unityReceipt);
+                var wrapper = JsonUtility.FromJson<ReceiptWrapper>(unityReceipt);
                 if (string.IsNullOrWhiteSpace(wrapper?.Payload)) return null;
 
-                var payload = JsonUtility.FromJson<GooglePlayPayload>(wrapper.Payload);
+                var payload = JsonUtility.FromJson<ReceiptPayload>(wrapper.Payload);
                 if (string.IsNullOrWhiteSpace(payload?.json)) return null;
 
-                var data = JsonUtility.FromJson<GooglePlayPurchaseData>(payload.json);
+                var data = JsonUtility.FromJson<PurchaseData>(payload.json);
                 return data?.purchaseToken;
             }
             catch
             {
                 return null;
             }
+        }
+
+        // ── Google Play 영수증 3단계 파싱용 private nested class ─────────────────
+        // 이 클래스들은 ExtractPurchaseToken 내부에서만 사용됩니다.
+
+        [Serializable]
+        private sealed class ReceiptWrapper
+        {
+            public string Payload;
+        }
+
+        [Serializable]
+        private sealed class ReceiptPayload
+        {
+            public string json;
+            public string signature;
+        }
+
+        [Serializable]
+        private sealed class PurchaseData
+        {
+            public string orderId;
+            public string packageName;
+            public string productId;
+            public long   purchaseTime;
+            public int    purchaseState;
+            public string purchaseToken;
+            public bool   acknowledged;
         }
     }
 }
