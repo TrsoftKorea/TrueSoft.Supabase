@@ -118,6 +118,8 @@ namespace Truesoft.Supabase.Core.Data
 
             url += "&limit=1";
 
+            UnityEngine.Debug.Log($"[DEBUG.DisplayName.Available] url={url}");
+
             var response = await _httpClient.SendAsync(
                 method: "GET",
                 url: url,
@@ -126,6 +128,8 @@ namespace Truesoft.Supabase.Core.Data
 
             if (response == null)
                 return SupabaseResult<bool>.Fail("http_response_null");
+
+            UnityEngine.Debug.Log($"[DEBUG.DisplayName.Available] status={response.IsSuccess} body={response.Body}");
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");

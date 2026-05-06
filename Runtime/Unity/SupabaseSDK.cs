@@ -1577,6 +1577,7 @@ namespace Truesoft.Supabase.Unity
                     serverId = _myServerId = serverInfo.Data.ServerId;
             }
 
+            Debug.Log($"[DEBUG.DisplayName.Available] selfAccountId={selfAccountId} serverId={serverId ?? "null"} displayName={displayName}");
             return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId, serverId);
         }
 
