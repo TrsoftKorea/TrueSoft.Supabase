@@ -677,6 +677,27 @@ namespace Truesoft.SupabaseUnity.Samples
         private void OnProductsFetched(List<Product> products)
         {
             Debug.Log($"[Sample] {products.Count} products fetched.");
+
+            // 🔍 디버깅: 로드된 상품 목록 출력
+            foreach (var product in products)
+            {
+                Debug.Log($"  ✓ Product ID: {product.definition.id}");
+                Debug.Log($"    Title: {product.metadata.localizedTitle}");
+                Debug.Log($"    Price: {product.metadata.localizedPriceString}");
+            }
+
+            // 찾는 상품이 있는지 확인
+            var targetProduct = products.FirstOrDefault(p => p.definition.id == demoPurchaseProductId);
+            if (targetProduct == null)
+            {
+                Debug.LogWarning($"[Sample] ❌ 상품을 찾을 수 없음: {demoPurchaseProductId}");
+                Debug.LogWarning("[Sample] Google Play Console에서 상품 ID가 정확한지 확인하세요.");
+            }
+            else
+            {
+                Debug.Log($"[Sample] ✓ 상품 찾음: {demoPurchaseProductId}");
+            }
+
             // 3단계: 구매 이력 조회
             _storeController.FetchPurchases();
         }
@@ -708,7 +729,13 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void OnPurchaseFailed(FailedOrder failedOrder)
         {
-            Debug.LogWarning($"[Sample] Purchase failed: {failedOrder}");
+            Debug.LogError($"[Sample] ❌ Purchase failed!");
+            Debug.LogError($"  Product: {failedOrder}");
+            Debug.LogWarning("[Sample] 원인 확인:");
+            Debug.LogWarning("  1️⃣ Google Play Console에서 상품 ID 확인");
+            Debug.LogWarning("  2️⃣ 상품이 '활성' 또는 '게시됨' 상태인지 확인");
+            Debug.LogWarning("  3️⃣ 테스트 라이선스 계정이 설정되었는지 확인");
+            Debug.LogWarning("  4️⃣ APK가 Google Play Console에 업로드되었는지 확인");
         }
 
 /// <summary>
@@ -737,7 +764,14 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            Debug.Log($"[Sample] Starting purchase flow for {productId}...");
+            Debug.Log($"[Sample] Starting purchase flow...");
+            Debug.Log($"  Product ID: {productId}");
+            Debug.Log($"  Package: {UnityEngine.Application.identifier}");
+            Debug.LogWarning("[Sample] 다음을 확인하세요:");
+            Debug.LogWarning($"  - Google Play Console의 상품 ID: {productId}");
+            Debug.LogWarning("  - 상품 상태: '활성' 또는 '게시됨'");
+            Debug.LogWarning("  - APK: Google Play Console에 업로드됨");
+            Debug.LogWarning("  - 테스트 계정: 설정되어 있음");
 
             try
             {
