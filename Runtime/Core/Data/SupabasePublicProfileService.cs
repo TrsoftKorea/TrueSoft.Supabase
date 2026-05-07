@@ -109,10 +109,9 @@ namespace Truesoft.Supabase.Core.Data
 
             // SECURITY DEFINER RPC 사용: RLS 우회, DB 내부에서 server_id 직접 조회
             // → REST + RLS 방식의 server_id 불일치 문제 원천 차단
+            // JsonUtility 직렬화(IL2CPP private 중첩 클래스 → {} 반환 가능)에 의존하지 않고 직접 JSON 구성
             var ignoreUuid = string.IsNullOrWhiteSpace(ignoreAccountIdForSelf) ? null : ignoreAccountIdForSelf.Trim();
-            var bodyJson = ignoreUuid != null
-                ? _jsonSerializer.ToJson(new IsDisplayNameAvailableRpcBody { p_display_name = norm, p_ignore_account_id = ignoreUuid })
-                : _jsonSerializer.ToJson(new IsDisplayNameAvailableRpcBodyNoIgnore { p_display_name = norm });
+            var bodyJson = BuildIsDisplayNameAvailableBody(norm, ignoreUuid);
 
             var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_is_display_name_available";
             var response = await _httpClient.SendAsync(
@@ -556,6 +555,30 @@ namespace Truesoft.Supabase.Core.Data
             }
         }
 
+        /// <summary>
+        /// <c>ts_is_display_name_available</c> RPC 호출용 JSON 바디를 직접 구성합니다.
+        /// IL2CPP 빌드에서 <c>JsonUtility</c>가 private 중첩 클래스를 <c>{}</c>로 직렬화하는 문제를 우회합니다.
+        /// </summary>
+        private static string BuildIsDisplayNameAvailableBody(string displayName, string ignoreAccountId)
+        {
+            var escapedName = EscapeJsonString(displayName);
+            if (ignoreAccountId == null)
+                return "{\"p_display_name\":\"" + escapedName + "\"}";
+
+            // UUID는 hex·하이픈만 포함하므로 이스케이프 불필요하지만 일관성 유지
+            var escapedId = EscapeJsonString(ignoreAccountId);
+            return "{\"p_display_name\":\"" + escapedName + "\",\"p_ignore_account_id\":\"" + escapedId + "\"}";
+        }
+
+        private static string EscapeJsonString(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                        .Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+        }
+
         private static string NormalizeDisplayName(string displayName)
         {
             return displayName == null ? string.Empty : displayName.Trim();
@@ -633,19 +656,6 @@ namespace Truesoft.Supabase.Core.Data
             public bool ok;
             public string display_name;
             public string reason;
-        }
-
-        [Serializable]
-        private sealed class IsDisplayNameAvailableRpcBody
-        {
-            public string p_display_name;
-            public string p_ignore_account_id; // null이면 JSON에서 생략되지 않으나 Postgres에서 uuid cast 시 빈 문자열은 오류 → 별도 처리
-        }
-
-        [Serializable]
-        private sealed class IsDisplayNameAvailableRpcBodyNoIgnore
-        {
-            public string p_display_name;
         }
 
         [Serializable]
