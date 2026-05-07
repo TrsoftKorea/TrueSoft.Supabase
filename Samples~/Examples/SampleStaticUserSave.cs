@@ -155,18 +155,6 @@ namespace Truesoft.SupabaseUnity.Samples
             }
         }
 
-        public static string UpdatedAt
-        {
-            get => Current.updated_at;
-            set
-            {
-                if (Equals(Current.updated_at, value))
-                    return;
-                Current.updated_at = value;
-                MarkDirty();
-            }
-        }
-
         private static void MarkDirty()
         {
             EnsureRegistered();
@@ -206,11 +194,11 @@ namespace Truesoft.SupabaseUnity.Samples
             if (src == null)
                 return new SampleStaticUserSaveRow();
 
-            var copy = new SampleStaticUserSaveRow();
-            copy.level = src.level;
-            copy.coins = src.coins;
-            copy.updated_at = src.updated_at;
-            return copy;
+            return new SampleStaticUserSaveRow
+            {
+                level = src.level,
+                coins = src.coins,
+            };
         }
 
         private static void CopyInto(SampleStaticUserSaveRow dst, SampleStaticUserSaveRow src)
@@ -219,7 +207,6 @@ namespace Truesoft.SupabaseUnity.Samples
                 return;
             dst.level = src.level;
             dst.coins = src.coins;
-            dst.updated_at = src.updated_at;
         }
 
         /// <summary>
@@ -232,7 +219,6 @@ namespace Truesoft.SupabaseUnity.Samples
         {
             [DataColumn("level")] public int level;
             [DataColumn("coins")] public int coins;
-            [DataColumn("updated_at")] public string updated_at;
         }
     }
 }

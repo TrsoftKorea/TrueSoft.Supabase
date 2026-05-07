@@ -286,8 +286,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            Debug.Log(
-                $"[Sample] load user save ok. level={SampleStaticUserSave.Level}, coins={SampleStaticUserSave.Coins}, updated_at={SampleStaticUserSave.UpdatedAt}");
+            Debug.Log($"[Sample] load user save ok. level={SampleStaticUserSave.Level}, coins={SampleStaticUserSave.Coins}");
             return true;
         }
 
