@@ -97,8 +97,7 @@ namespace Truesoft.Supabase.Core.Data
             string accessToken,
             string displayName,
             string ignoreAccountIdForSelf = null,
-            string serverId = null,
-            System.Action<string> debugLog = null)
+            string serverId = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -109,45 +108,31 @@ namespace Truesoft.Supabase.Core.Data
             if (norm.Length > DisplayNameMaxLength)
                 return SupabaseResult<bool>.Fail("display_name_too_long");
 
-            var url =
-                $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, _displayNamesTable)}" +
-                $"?select=account_id" +
-                $"&display_name=ilike.{Uri.EscapeDataString(norm)}";
+            // SECURITY DEFINER RPC 사용: RLS 우회, DB 내부에서 server_id 직접 조회
+            // → REST + RLS 방식의 server_id 불일치 문제 원천 차단
+            var ignoreUuid = string.IsNullOrWhiteSpace(ignoreAccountIdForSelf) ? null : ignoreAccountIdForSelf.Trim();
+            var bodyObj = ignoreUuid != null
+                ? new { p_display_name = norm, p_ignore_account_id = ignoreUuid }
+                : (object)new { p_display_name = norm };
 
-            if (!string.IsNullOrWhiteSpace(serverId))
-                url += $"&server_id=eq.{Uri.EscapeDataString(serverId.Trim())}";
-
-            url += "&limit=1";
-
-            debugLog?.Invoke($"[DEBUG.DisplayName.Available] url={url}");
-
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_is_display_name_available";
             var response = await _httpClient.SendAsync(
-                method: "GET",
+                method: "POST",
                 url: url,
-                jsonBody: null,
+                jsonBody: _jsonSerializer.ToJson(bodyObj),
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
                 return SupabaseResult<bool>.Fail("http_response_null");
-
-            debugLog?.Invoke($"[DEBUG.DisplayName.Available] status={response.IsSuccess} body={response.Body}");
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");
 
             try
             {
-                var rows = _jsonSerializer.FromJsonArray<AccountIdRow>(response.Body);
-                if (rows == null || rows.Length == 0 || string.IsNullOrWhiteSpace(rows[0]?.account_id))
-                    return SupabaseResult<bool>.Success(true);
-
-                var holder = rows[0].account_id?.Trim() ?? string.Empty;
-                var ignore = ignoreAccountIdForSelf?.Trim();
-                debugLog?.Invoke($"[DEBUG.DisplayName.Available] holder={holder} ignore={ignore}");
-                if (string.IsNullOrWhiteSpace(ignore) == false
-                    && string.Equals(holder, ignore, StringComparison.OrdinalIgnoreCase))
-                    return SupabaseResult<bool>.Success(true);
-                return SupabaseResult<bool>.Success(false);
+                // RPC가 boolean을 직접 반환 → "true" / "false"
+                var available = string.Equals(response.Body?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+                return SupabaseResult<bool>.Success(available);
             }
             catch (Exception e)
             {

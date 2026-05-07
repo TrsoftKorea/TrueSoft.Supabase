@@ -1569,16 +1569,7 @@ namespace Truesoft.Supabase.Unity
             var selfAccountId = _currentSession?.User?.Id;
             var accessToken = _currentSession?.AccessToken ?? "";
 
-            var serverId = _myServerId;
-            if (string.IsNullOrWhiteSpace(serverId))
-            {
-                var serverInfo = await _bootstrap.PublicProfileService.GetMyServerIdAsync(accessToken);
-                if (serverInfo?.IsSuccess == true && !string.IsNullOrWhiteSpace(serverInfo.Data.ServerId))
-                    serverId = _myServerId = serverInfo.Data.ServerId;
-            }
-
-            Debug.Log($"[DEBUG.DisplayName.Available] selfAccountId={selfAccountId} serverId={serverId ?? "null"} displayName={displayName}");
-            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId, serverId, Debug.Log);
+            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId);
         }
 
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>

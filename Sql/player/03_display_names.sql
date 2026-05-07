@@ -150,4 +150,51 @@ execute function public.ts_display_names_coalesce_server_id();
 
 grant select, insert, update on public.display_names to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- ts_is_display_name_available
+-- RLS를 우회(SECURITY DEFINER)하여 호출자의 서버 내에서 닉네임 사용 가능 여부를 확인합니다.
+-- display_names SELECT RLS 에 의존하지 않으므로 RLS 설정과 무관하게 정확한 결과를 반환합니다.
+-- p_display_name  : 확인할 닉네임
+-- p_ignore_account_id : 본인 이름 수정 시 자신의 account_id를 넘기면 중복에서 제외합니다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_is_display_name_available(
+  p_display_name      text,
+  p_ignore_account_id uuid default null
+)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_server_id uuid;
+begin
+  -- 호출자의 server_id를 직접 조회 (auth_user_server_id() 와 동일 로직, RLS 우회)
+  select p.server_id into v_server_id
+  from public.user_profiles p
+  where p.account_id = auth.uid()
+    and p.account_id is not null
+  limit 1;
+
+  if v_server_id is null then
+    return false; -- 프로필 없음 → 설정 불가 상태이므로 불가로 반환
+  end if;
+
+  return not exists (
+    select 1
+    from public.display_names
+    where server_id = v_server_id
+      and lower(trim(display_name)) = lower(trim(p_display_name))
+      and trim(display_name) <> ''
+      and (p_ignore_account_id is null or account_id <> p_ignore_account_id)
+  );
+end;
+$$;
+
+comment on function public.ts_is_display_name_available(text, uuid) is
+  '닉네임 사용 가능 여부 확인. SECURITY DEFINER로 RLS 우회, 호출자 서버 기준으로 대소문자 무시 비교.';
+
+grant execute on function public.ts_is_display_name_available(text, uuid) to authenticated;
+
 notify pgrst, 'reload schema';
