@@ -1031,6 +1031,21 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
+        /// Edge Function 오류 응답 문자열(<c>http_NNN:body=...{"reason":"..."}</c>)에서
+        /// <c>reason</c> 값만 추출합니다. 없으면 null.
+        /// </summary>
+        private static string ExtractEdgeFunctionReason(string errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(errorMessage)) return null;
+            const string key = "\"reason\":\"";
+            var idx = errorMessage.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return null;
+            var start = idx + key.Length;
+            var end = errorMessage.IndexOf('"', start);
+            return end > start ? errorMessage.Substring(start, end - start) : null;
+        }
+
+        /// <summary>
         /// Android 네이티브 Google 계정에서 로그아웃합니다. (Supabase 세션은 그대로이므로 필요하면 <see cref="ClearSession"/> 호출)
         /// </summary>
         public static async Task<SupabaseResult<bool>> SignOutFromGoogleAsync()
@@ -1536,7 +1551,8 @@ namespace Truesoft.Supabase.Unity
                 request);
 
             if (result == null || !result.IsSuccess || result.Data == null)
-                return SupabaseResult<bool>.Fail(result?.ErrorMessage ?? "display_name_set_failed");
+                return SupabaseResult<bool>.Fail(
+                    ExtractEdgeFunctionReason(result?.ErrorMessage) ?? result?.ErrorMessage ?? "display_name_set_failed");
 
             if (!result.Data.ok)
                 return SupabaseResult<bool>.Fail(string.IsNullOrWhiteSpace(result.Data.reason) ? "display_name_set_failed" : result.Data.reason);
@@ -1582,11 +1598,15 @@ namespace Truesoft.Supabase.Unity
             }
 
             if (!r.Data)
-                LogApiResult(ApiLogTags.ProfileDisplayNameAvailable, false, "display_name_taken");
-            else
-                LogApiResult(ApiLogTags.ProfileDisplayNameAvailable, true, null);
+            {
+                if (_enableApiResultLogs)
+                    Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] taken: \"{displayName}\"");
+                return false;
+            }
 
-            return r.Data;
+            if (_enableApiResultLogs)
+                Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] available: \"{displayName}\"");
+            return true;
         }
 
         /// <summary>로컬에 선택된 서버 코드를 저장합니다(예: GLOBAL, KR1). 다음 로그인/복구 흐름에서 사용됩니다.</summary>

@@ -321,13 +321,13 @@ namespace Truesoft.SupabaseUnity.Samples
             var playerUserId = SupabaseClient.Session.User.PlayerUserId;
             if (!await SupabaseClient.TryIsDisplayNameAvailableAsync(demoDisplayName))
             {
-                Debug.LogWarning("[Sample] displayName example: name already taken (or check failed).");
+                Debug.LogWarning($"[Sample] displayName \"{demoDisplayName}\": 이미 사용 중인 닉네임입니다.");
                 return false;
             }
 
             if (!await SupabaseClient.TrySetMyDisplayNameAsync(demoDisplayName))
             {
-                Debug.LogWarning("[Sample] displayName example failed at set (display_names 테이블·RLS·유니크 인덱스·Edge Functions 배포 확인).");
+                Debug.LogWarning($"[Sample] displayName \"{demoDisplayName}\": 설정 실패.");
                 return false;
             }
 
