@@ -125,8 +125,8 @@ namespace Truesoft.Supabase.Unity
             bool saveSessionToStorage = true) =>
             SupabaseSDK.RefreshSessionAsync(refreshToken, saveSessionToStorage);
 
-        /// <summary>로그인 직후 <typeparamref name="T"/>의 테이블 행 보장 (내부 Result API).</summary>
-        internal static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>
+        /// <summary>로그인 직후 <typeparamref name="T"/>의 테이블에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다.</summary>
+        public static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>
             SupabaseSDK.EnsureMyRowAsync<T>();
 
         /// <summary>변경된 컬럼만 부분 저장(PATCH) (내부 Result API).</summary>
