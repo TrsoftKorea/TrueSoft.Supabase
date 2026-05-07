@@ -1538,10 +1538,17 @@ namespace Truesoft.Supabase.Unity
             if (_bootstrap?.EdgeFunctionsService == null)
                 return SupabaseResult<bool>.Fail("sdk_not_initialized");
 
+            var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
+
+            // 현재 닉네임과 동일하면 네트워크 없이 바로 성공(no_change)
+            var current = _currentSession?.User?.DisplayName;
+            if (!string.IsNullOrEmpty(current) && string.Equals(current, norm, StringComparison.OrdinalIgnoreCase))
+                return SupabaseResult<bool>.Success(false); // false = no_change (변경 없음)
+
             var userId = _currentSession?.User?.PlayerUserId;
             var request = new DisplayNameSetRequest
             {
-                display_name = displayName,
+                display_name = norm,
                 user_id = string.IsNullOrWhiteSpace(userId) ? null : userId.Trim()
             };
 
@@ -1557,7 +1564,15 @@ namespace Truesoft.Supabase.Unity
             if (!result.Data.ok)
                 return SupabaseResult<bool>.Fail(string.IsNullOrWhiteSpace(result.Data.reason) ? "display_name_set_failed" : result.Data.reason);
 
-            return SupabaseResult<bool>.Success(true);
+            // 세션 캐시 갱신 — 다음 호출에서 동일 닉네임 재설정 시 네트워크 생략
+            if (_currentSession?.User != null)
+            {
+                if (_currentSession.User.user_metadata == null)
+                    _currentSession.User.user_metadata = new SupabaseUserMetadata();
+                _currentSession.User.user_metadata.displayName = norm;
+            }
+
+            return SupabaseResult<bool>.Success(true); // true = 실제 변경됨
         }
 
         /// <inheritdoc cref="GetPublicDisplayNameAsync"/>
@@ -1570,8 +1585,24 @@ namespace Truesoft.Supabase.Unity
         /// <inheritdoc cref="SetMyDisplayNameAsync"/>
         public static async Task<bool> TrySetMyDisplayNameAsync(string displayName)
         {
+            var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
             var r = await SetMyDisplayNameAsync(displayName);
-            return LogAndReturn(ApiLogTags.ProfileMyDisplayNameSet, r);
+            if (!r.IsSuccess)
+            {
+                if (_enableApiResultLogs)
+                    Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] failed: {r.ErrorMessage}");
+                return false;
+            }
+            if (_enableApiResultLogs)
+            {
+                // r.Data == false  → no_change (현재 닉네임과 동일, 네트워크 생략)
+                // r.Data == true   → 실제 변경 성공
+                if (r.Data)
+                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] success: \"{norm}\"");
+                else
+                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] no_change: \"{norm}\"");
+            }
+            return true;
         }
 
         /// <summary>displayName이 사용 가능한지 조회합니다(유니크 체크). 로그인 중이면 현재 계정이 이미 쓰는 이름은 사용 가능으로 처리합니다.</summary>

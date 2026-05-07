@@ -25,6 +25,18 @@ namespace Truesoft.Supabase.Core.Auth
         public SupabaseUser User => user;
     }
 
+    /// <summary>
+    /// Supabase Auth 응답의 <c>user_metadata</c> 필드.
+    /// 닉네임 설정 후 <c>displayName / full_name / name</c>이 동기화됩니다.
+    /// </summary>
+    [Serializable]
+    public sealed class SupabaseUserMetadata
+    {
+        public string displayName;
+        public string full_name;
+        public string name;
+    }
+
     [Serializable]
     public sealed class SupabaseUser
     {
@@ -40,6 +52,9 @@ namespace Truesoft.Supabase.Core.Auth
         /// </summary>
         public string player_user_id;
 
+        /// <summary><c>auth.user_metadata</c>. 닉네임 설정 시 <c>displayName</c>이 동기화됩니다.</summary>
+        public SupabaseUserMetadata user_metadata;
+
         public string Id => id;
         public string Email => email;
         public bool IsAnonymous => is_anonymous;
@@ -47,5 +62,9 @@ namespace Truesoft.Supabase.Core.Auth
         /// <summary><see cref="player_user_id"/>가 비어 있으면 <see cref="id"/>를 반환합니다.</summary>
         public string PlayerUserId =>
             string.IsNullOrWhiteSpace(player_user_id) ? id : player_user_id.Trim();
+
+        /// <summary>현재 세션에 캐시된 표시 이름. 닉네임 설정 성공 후 SDK가 자동 갱신합니다.</summary>
+        public string DisplayName =>
+            string.IsNullOrWhiteSpace(user_metadata?.displayName) ? string.Empty : user_metadata.displayName.Trim();
     }
 }
