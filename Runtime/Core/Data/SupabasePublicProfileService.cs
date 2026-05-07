@@ -96,8 +96,7 @@ namespace Truesoft.Supabase.Core.Data
         public async Task<SupabaseResult<bool>> IsDisplayNameAvailableAsync(
             string accessToken,
             string displayName,
-            string ignoreAccountIdForSelf = null,
-            string serverId = null)
+            string ignoreAccountIdForSelf = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
