@@ -1022,12 +1022,37 @@ namespace Truesoft.Supabase.Unity
             var prefix = $"[{logTag}]";
             if (isSuccess)
             {
-                Debug.Log($"{prefix} success");
+                Debug.Log($"{prefix} Success");
                 return;
             }
 
             var detail = string.IsNullOrWhiteSpace(message) ? "unknown_error" : message.Trim();
-            Debug.LogError($"{prefix} failed: {detail}");
+            Debug.LogError($"{prefix} Failed: {FormatLogDetail(detail)}");
+        }
+
+        /// <summary>
+        /// 단순 snake_case 식별자를 Title Case로 변환합니다.
+        /// 예: "display_name_taken" → "Display Name Taken", "not_found" → "Not Found"
+        /// 공백·특수문자가 포함된 문자열(HTTP 오류 등)은 그대로 반환합니다.
+        /// </summary>
+        private static string FormatLogDetail(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return raw ?? string.Empty;
+            // 단순 snake_case 식별자인지 확인 (영문자·숫자·밑줄만)
+            bool isSimple = true;
+            foreach (char c in raw)
+            {
+                if (!char.IsLetterOrDigit(c) && c != '_') { isSimple = false; break; }
+            }
+            if (!isSimple) return raw;
+            // 각 세그먼트를 대문자 시작으로 변환
+            var parts = raw.Split('_');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Length == 0) continue;
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i].Substring(1);
+            }
+            return string.Join(" ", parts);
         }
 
         /// <summary>
@@ -1590,7 +1615,7 @@ namespace Truesoft.Supabase.Unity
             if (!r.IsSuccess)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] failed: {r.ErrorMessage}");
+                    Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] Failed: {FormatLogDetail(r.ErrorMessage?.Trim() ?? "unknown_error")}");
                 return false;
             }
             if (_enableApiResultLogs)
@@ -1598,9 +1623,9 @@ namespace Truesoft.Supabase.Unity
                 // r.Data == false  → no_change (현재 닉네임과 동일, 네트워크 생략)
                 // r.Data == true   → 실제 변경 성공
                 if (r.Data)
-                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] success: \"{norm}\"");
+                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] Success: \"{norm}\"");
                 else
-                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] no_change: \"{norm}\"");
+                    Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] No Change: \"{norm}\"");
             }
             return true;
         }
@@ -1638,12 +1663,12 @@ namespace Truesoft.Supabase.Unity
             if (!r.Data)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] taken: \"{norm}\"");
+                    Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] Taken: \"{norm}\"");
                 return false;
             }
 
             if (_enableApiResultLogs)
-                Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] available: \"{norm}\"");
+                Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] Available: \"{norm}\"");
             return true;
         }
 
