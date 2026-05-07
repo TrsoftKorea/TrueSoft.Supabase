@@ -1578,7 +1578,7 @@ namespace Truesoft.Supabase.Unity
             }
 
             Debug.Log($"[DEBUG.DisplayName.Available] selfAccountId={selfAccountId} serverId={serverId ?? "null"} displayName={displayName}");
-            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId, serverId);
+            return await _bootstrap.PublicProfileService.IsDisplayNameAvailableAsync(accessToken, displayName, selfAccountId, serverId, Debug.Log);
         }
 
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>

@@ -97,7 +97,8 @@ namespace Truesoft.Supabase.Core.Data
             string accessToken,
             string displayName,
             string ignoreAccountIdForSelf = null,
-            string serverId = null)
+            string serverId = null,
+            System.Action<string> debugLog = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -118,7 +119,7 @@ namespace Truesoft.Supabase.Core.Data
 
             url += "&limit=1";
 
-            UnityEngine.Debug.Log($"[DEBUG.DisplayName.Available] url={url}");
+            debugLog?.Invoke($"[DEBUG.DisplayName.Available] url={url}");
 
             var response = await _httpClient.SendAsync(
                 method: "GET",
@@ -129,7 +130,7 @@ namespace Truesoft.Supabase.Core.Data
             if (response == null)
                 return SupabaseResult<bool>.Fail("http_response_null");
 
-            UnityEngine.Debug.Log($"[DEBUG.DisplayName.Available] status={response.IsSuccess} body={response.Body}");
+            debugLog?.Invoke($"[DEBUG.DisplayName.Available] status={response.IsSuccess} body={response.Body}");
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");
@@ -142,6 +143,7 @@ namespace Truesoft.Supabase.Core.Data
 
                 var holder = rows[0].account_id?.Trim() ?? string.Empty;
                 var ignore = ignoreAccountIdForSelf?.Trim();
+                debugLog?.Invoke($"[DEBUG.DisplayName.Available] holder={holder} ignore={ignore}");
                 if (string.IsNullOrWhiteSpace(ignore) == false
                     && string.Equals(holder, ignore, StringComparison.OrdinalIgnoreCase))
                     return SupabaseResult<bool>.Success(true);
