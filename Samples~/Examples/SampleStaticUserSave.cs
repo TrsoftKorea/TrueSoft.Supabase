@@ -9,8 +9,11 @@ using SupabaseSdk = global::Truesoft.Supabase.Unity.Supabase;
 namespace Truesoft.SupabaseUnity.Samples
 {
     /// <summary>
-    /// OpenAPI 유저 데이터 생성기가 출력하는 <c>public static class</c> + 내부 Row 패턴의 수동 예시입니다.
-    /// 컬럼 구성은 <see cref="ExampleSupabaseScenarios"/> 의 세이브 데모와 동일하게 맞춰 두었습니다.
+    /// <para><b>사용 방법</b></para>
+    /// <para>1. <see cref="SampleStaticUserSaveRow"/>의 <c>[DataTable("custom_saves")]</c>를 실제 테이블명으로 바꿉니다.</para>
+    /// <para>2. <see cref="SampleStaticUserSaveRow"/> 필드를 프로젝트 컬럼에 맞게 수정하고, <c>[DataColumn]</c>을 붙입니다.</para>
+    /// <para>3. <see cref="TryLoadAsync"/>로 불러오고, <see cref="TrySaveIfChangedAsync"/>로 변경분만 저장합니다.</para>
+    /// <para>행이 없는 신규 유저는 <see cref="TryLoadAsync"/> 반환값 <c>hasRow == false</c>로 확인 후 초기값을 직접 설정하세요.</para>
     /// </summary>
     public static class SampleStaticUserSave
     {
@@ -52,32 +55,18 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// 서버에서 로드합니다. 본인 행이 없으면(<c>HasRow == false</c>) <paramref name="initialLevel"/>·<paramref name="initialCoins"/>로 채웁니다.
+        /// 로그인 직후 한 번 호출합니다. 행이 없는 신규 유저의 경우 DB 기본값으로 행을 생성합니다.
         /// </summary>
-        public static async Task<bool> TryLoadFromServerAsync(int initialLevel, int initialCoins, bool includeUpdatedAt = true)
+        public static async Task<bool> TryEnsureRowAsync()
         {
             EnsureRegistered();
-            var (success, hasRow, row) = await SupabaseSdk.TryLoadUserDataAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
-                defaultWhenFailed: null,
-                includeUpdatedAt: includeUpdatedAt);
-            if (!success)
-                return false;
-
-            if (!hasRow)
-            {
-                row.level = initialLevel;
-                row.coins = initialCoins;
-                row.updated_at = null;
-            }
-
-            CopyInto(Current, row);
-            LastSynced = CloneRow(row);
-            IsDirty = false;
-            return true;
+            var r = await SupabaseSdk.EnsureMyRowAsync<SampleStaticUserSaveRow>();
+            return r != null && r.IsSuccess;
         }
 
         /// <summary>
-        /// 생성기 <c>TryLoadAsync</c>와 동일: 행이 없으면 타입 기본값 Row로 채웁니다. 게임 초기값은 이후 프로퍼티로 설정하세요.
+        /// 서버에서 로드합니다. 행이 없는 신규 유저는 C# 타입 기본값으로 채워지며,
+        /// 최초 저장 시 <c>ts_ensure_my_row</c>가 DB 기본값으로 행을 생성합니다.
         /// </summary>
         public static async Task<bool> TryLoadAsync(bool includeUpdatedAt = true)
         {
@@ -233,6 +222,11 @@ namespace Truesoft.SupabaseUnity.Samples
             dst.updated_at = src.updated_at;
         }
 
+        /// <summary>
+        /// [DataTable("테이블명")] 에 실제 테이블명을 입력하세요 (04_custom_save_table_template.sql 기준 기본값: "custom_saves").
+        /// [DataColumn] 은 DB 컬럼명과 C# 필드를 매핑합니다. 컬럼명이 같으면 인수 생략 가능.
+        /// </summary>
+        [DataTable("custom_saves")]
         [Serializable]
         private sealed class SampleStaticUserSaveRow
         {

@@ -222,19 +222,29 @@ namespace Truesoft.SupabaseUnity.Samples
         private async Task<bool> RunLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
-            Debug.Log(ok
-                ? "[Sample] login example success."
-                : "[Sample] login example failed.");
-            return ok;
+            if (!ok)
+            {
+                Debug.Log("[Sample] login example failed.");
+                return false;
+            }
+
+            await SampleStaticUserSave.TryEnsureRowAsync();
+            Debug.Log("[Sample] login example success.");
+            return true;
         }
 
         private async Task<bool> RunGoogleLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInWithGoogleAsync();
-            Debug.Log(ok
-                ? "[Sample] google login example success."
-                : "[Sample] google login example failed.");
-            return ok;
+            if (!ok)
+            {
+                Debug.Log("[Sample] google login example failed.");
+                return false;
+            }
+
+            await SampleStaticUserSave.TryEnsureRowAsync();
+            Debug.Log("[Sample] google login example success.");
+            return true;
         }
 
         private async Task<bool> RunGoogleLinkExampleAsync()
@@ -270,15 +280,14 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            if (!await SampleStaticUserSave.TryLoadFromServerAsync(level, coins))
+            if (!await SampleStaticUserSave.TryLoadAsync())
             {
                 Debug.LogWarning("[Sample] load user save failed (네트워크·인증 등).");
                 return false;
             }
 
             Debug.Log(
-                $"[Sample] load user save ok. level={SampleStaticUserSave.Level}, coins={SampleStaticUserSave.Coins}, updated_at={SampleStaticUserSave.UpdatedAt} "
-                + "(본인 행이 없었으면 인스펙터 level/coins가 초기값으로 채워졌습니다.)");
+                $"[Sample] load user save ok. level={SampleStaticUserSave.Level}, coins={SampleStaticUserSave.Coins}, updated_at={SampleStaticUserSave.UpdatedAt}");
             return true;
         }
 
@@ -290,7 +299,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            if (!await SampleStaticUserSave.TryLoadFromServerAsync(level, coins))
+            // 서버 스냅샷을 먼저 맞춘 뒤, 변경할 값을 프로퍼티에 설정합니다.
+            if (!await SampleStaticUserSave.TryLoadAsync())
             {
                 Debug.LogWarning("[Sample] save user save: load failed (스냅샷 맞추기 전 단계).");
                 return false;
@@ -707,8 +717,15 @@ namespace Truesoft.SupabaseUnity.Samples
         private async Task<bool> RunAppleLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInWithAppleAsync();
-            Debug.Log(ok ? "[Sample] Apple login success." : "[Sample] Apple login failed.");
-            return ok;
+            if (!ok)
+            {
+                Debug.Log("[Sample] Apple login failed.");
+                return false;
+            }
+
+            await SampleStaticUserSave.TryEnsureRowAsync();
+            Debug.Log("[Sample] Apple login success.");
+            return true;
         }
 
         private async Task<bool> RunAppleLinkExampleAsync()

@@ -5,7 +5,7 @@
 - 로그인 예시
 - 로그아웃 예시 (`TrySignOutFullyAsync` — Android면 Google 네이티브 로그아웃 시도 후 Supabase 로그아웃)
 - 중복 로그인 감지 예시 (`OnDuplicateLoginDetected` 구독 + 콘솔 안내)
-- 유저 세이브 로드/저장 예시 (`SampleStaticUserSave` — `TryLoadFromServerAsync`로 `HasRow` 기반 초기값, `TrySaveIfChangedAsync`로 diff만 PATCH)
+- 유저 세이브 로드/저장 예시 (`SampleStaticUserSave` — `TryLoadAsync`로 서버 데이터 로드, 신규 유저 초기값은 DB 기본값 기반, `TrySaveIfChangedAsync`로 diff만 PATCH)
 - 공개 displayName(`display_names` + Edge Functions) 예시 — SQL 적용 + Edge Functions 배포 후 **Run Public DisplayName Example** 또는 전체 실행 시 포함
 - RemoteConfig 조회 예시
 - Edge Function 호출 예시
@@ -36,7 +36,7 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 5. (선택) 게스트 로그인 흐름을 쓰면 Supabase 대시보드에서 **Anonymous sign-ins** 활성화
 6. (선택) 중복 로그인·`user_sessions`를 쓰려면 `Sql/player/05_user_sessions.sql`을 적용하고, `SupabaseSettings`에서 **Enable Duplicate Session Monitor**를 켭니다.
 7. (선택) 서버 이주 샘플은 `Sql/player/01_game_servers.sql`·`08_transfer_server.sql`(및 선행 파일)로 `game_servers`·RPC(`ts_my_server_id`, `ts_transfer_my_server`)가 적용된 뒤, **로그인한 상태**에서 **Run Server Shard Example** 또는 키 **N**으로 실행합니다. 다른 월드로 옮기려면 DB에 목표 `server_code` 행을 추가하고 인스펙터에서 **Server Shard Attempt Transfer**를 켭니다.
-8. (선택) `user_saves`에 `level int`, `coins int`, `updated_at timestamptz` 등이 있어야 합니다. **Run Load User Save Example** 또는 키 **R**: SDK `TryLoadUserSaveAttributedWithRowStateAsync`로 본인 행이 없으면(`hasRow == false`) 인스펙터 `level`/`coins`를 초기값으로 채웁니다. **Run Save User Save Example** 또는 키 **V**: 먼저 동일 로드로 스냅샷을 맞춘 뒤 인스펙터 값을 반영하고 `TrySaveIfChangedAsync`로 **서버와 다른 컬럼만** PATCH합니다(같으면 요청 없음). 쿨타임 자동 저장은 **Supabase 런타임**(`SupabaseRuntime`)과 프로퍼티 `MarkDirty` 경로를 쓰면 됩니다.
+8. (선택) `SampleStaticUserSaveRow`의 `[DataTable("custom_saves")]`를 실제 테이블명으로 변경하고, 테이블에 `level int`, `coins int`, `updated_at timestamptz` 컬럼이 있어야 합니다. 신규 유저 초기값은 DB 컬럼 `DEFAULT` 값이 자동 적용됩니다. **Run Load User Save Example** 또는 키 **R**: `TryLoadAsync`로 서버 데이터 로드. **Run Save User Save Example** 또는 키 **V**: 로드로 스냅샷을 맞춘 뒤 인스펙터 값을 반영하고 `TrySaveIfChangedAsync`로 **서버와 다른 컬럼만** PATCH합니다(같으면 요청 없음). 쿨타임 자동 저장은 **Supabase 런타임**(`SupabaseRuntime`)과 프로퍼티 `MarkDirty` 경로를 쓰면 됩니다.
 9. 실제 프로젝트에서는 OpenAPI **유저 데이터 클래스 생성** 메뉴로 동일 패턴(`TryLoadAsync` / `TrySaveIfChangedAsync`)을 생성할 수 있습니다.
 
 ## 씬에서 실행
