@@ -111,15 +111,15 @@ namespace Truesoft.Supabase.Core.Data
             // SECURITY DEFINER RPC 사용: RLS 우회, DB 내부에서 server_id 직접 조회
             // → REST + RLS 방식의 server_id 불일치 문제 원천 차단
             var ignoreUuid = string.IsNullOrWhiteSpace(ignoreAccountIdForSelf) ? null : ignoreAccountIdForSelf.Trim();
-            var bodyObj = ignoreUuid != null
-                ? new { p_display_name = norm, p_ignore_account_id = ignoreUuid }
-                : (object)new { p_display_name = norm };
+            var bodyJson = ignoreUuid != null
+                ? _jsonSerializer.ToJson(new IsDisplayNameAvailableRpcBody { p_display_name = norm, p_ignore_account_id = ignoreUuid })
+                : _jsonSerializer.ToJson(new IsDisplayNameAvailableRpcBodyNoIgnore { p_display_name = norm });
 
             var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_is_display_name_available";
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
-                jsonBody: _jsonSerializer.ToJson(bodyObj),
+                jsonBody: bodyJson,
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
@@ -634,6 +634,19 @@ namespace Truesoft.Supabase.Core.Data
             public bool ok;
             public string display_name;
             public string reason;
+        }
+
+        [Serializable]
+        private sealed class IsDisplayNameAvailableRpcBody
+        {
+            public string p_display_name;
+            public string p_ignore_account_id; // null이면 JSON에서 생략되지 않으나 Postgres에서 uuid cast 시 빈 문자열은 오류 → 별도 처리
+        }
+
+        [Serializable]
+        private sealed class IsDisplayNameAvailableRpcBodyNoIgnore
+        {
+            public string p_display_name;
         }
 
         [Serializable]
