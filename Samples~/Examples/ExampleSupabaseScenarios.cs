@@ -653,7 +653,8 @@ namespace Truesoft.SupabaseUnity.Samples
             _iapFacade = SupabaseClient.CreateIAP();
 
             // 아이템 지급 콜백 — 실제 게임에서는 여기서 인벤토리에 아이템 추가
-            _iapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
+            // 실제 프로젝트에서는 async 람다로 바꾸고 await MyInventory.GiveItemAsync(...)를 호출하세요.
+            _iapFacade.OnGrantItemAsync = (order, response, isResuming) =>
             {
                 var productId = order.CartOrdered?.Items()?[0].Product.definition.id ?? "unknown";
 
@@ -661,7 +662,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 {
                     Debug.LogWarning("[Sample] [TEST] skipConfirmForTest=true → Confirm 생략. 미처리 상태로 남김.");
                     Debug.LogWarning("[Sample] [TEST] M 키로 IAP 재초기화하면 미처리 구매가 자동 재처리됩니다.");
-                    return false;   // false → SDK가 ConfirmPurchase 호출 안 함 → Pending 유지
+                    return Task.FromResult(false);   // false → SDK가 ConfirmPurchase 호출 안 함 → Pending 유지
                 }
 
                 Debug.Log($"[Sample] [OK] 아이템 지급: product={productId}, order_id={response.order_id}, store={response.store}");
@@ -669,8 +670,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 if (response.already_verified)
                     Debug.Log("[Sample] already_verified=true: 이전에 이미 검증된 영수증입니다. 중복 지급 없음 (정상).");
 
-                // TODO: 실제 게임 아이템 지급 (예: await MyInventory.GiveItemAsync(productId))
-                return true;        // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
+                return Task.FromResult(true);        // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
             };
 
             _iapFacade.OnPurchaseFailed += order =>
