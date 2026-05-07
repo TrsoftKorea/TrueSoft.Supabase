@@ -1621,6 +1621,13 @@ namespace Truesoft.Supabase.Unity
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>
         public static async Task<bool> TryIsDisplayNameAvailableAsync(string displayName)
         {
+            var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
+
+            // 현재 닉네임과 동일하면 API 생략 — Set 단계에서 no_change 처리되므로 로그도 생략
+            var current = _currentSession?.User?.DisplayName;
+            if (!string.IsNullOrEmpty(current) && string.Equals(current, norm, StringComparison.OrdinalIgnoreCase))
+                return true;
+
             var r = await IsDisplayNameAvailableAsync(displayName);
             if (r == null || !r.IsSuccess)
             {
@@ -1631,12 +1638,12 @@ namespace Truesoft.Supabase.Unity
             if (!r.Data)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] taken: \"{displayName}\"");
+                    Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] taken: \"{norm}\"");
                 return false;
             }
 
             if (_enableApiResultLogs)
-                Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] available: \"{displayName}\"");
+                Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] available: \"{norm}\"");
             return true;
         }
 
