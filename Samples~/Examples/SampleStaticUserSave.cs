@@ -210,8 +210,8 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// [DataTable("테이블명")] 에 실제 테이블명을 입력하세요 (04_custom_save_table_template.sql 기준 기본값: "custom_saves").
-        /// [DataColumn] 은 DB 컬럼명과 C# 필드를 매핑합니다. 컬럼명이 같으면 인수 생략 가능.
+        /// [DataTable("테이블명")] 에 실제 테이블명을 "data_" 없이 입력하세요. 접두사는 자동으로 붙습니다.
+        /// 예: [DataTable("custom_saves")] → DB 테이블 "data_custom_saves"
         /// </summary>
         [DataTable("custom_saves")]
         [Serializable]

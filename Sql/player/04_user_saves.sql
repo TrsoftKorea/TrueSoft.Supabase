@@ -3,8 +3,6 @@
 -- 선행: 02_profiles.sql (auth_user_server_id, ts_default_server_id)
 --
 -- SDK는 단일 user_saves 테이블 대신 프로젝트별 커스텀 테이블을 직접 정의합니다.
--- 커스텀 테이블 생성 방법은 04_custom_save_table_template.sql 참고.
---
 -- 이 파일은 모든 커스텀 세이브 테이블에서 공유하는 범용 RPC만 포함합니다.
 -- =============================================================================
 
@@ -14,7 +12,7 @@
 -- 지정 테이블에 본인 행이 없으면 INSERT, 있으면 user_id·updated_at만 갱신합니다.
 -- p_table 식별자는 format('%I') 로 이스케이프되어 SQL 인젝션을 차단합니다.
 -- 대상 테이블은 반드시 (user_id, account_id, server_id, updated_at) 컬럼과
--- account_id unique 제약을 가져야 합니다 (04_custom_save_table_template.sql 참고).
+-- account_id unique 제약을 가져야 합니다.
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_ensure_my_row(
   p_table text,
