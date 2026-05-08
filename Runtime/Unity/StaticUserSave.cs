@@ -114,12 +114,28 @@ namespace Truesoft.Supabase.Unity
 
             if (!hasRow)
             {
-                var ensured = await Supabase.EnsureMyRowAsync<TRow>();
-                if (ensured == null || !ensured.IsSuccess) return false;
+                string tableName;
+                try   { tableName = DataSchema.ResolveTableName<TRow>(); }
+                catch (Exception e) { tableName = $"(오류: {e.Message})"; }
+                Debug.Log($"{LogTag} TryLoadAsync: 행 없음 — EnsureMyRowAsync 호출 (테이블: {tableName})");
 
-                (success, _, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+                var ensured = await Supabase.EnsureMyRowAsync<TRow>();
+                if (ensured == null || !ensured.IsSuccess)
+                {
+                    Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorMessage ?? "null"}");
+                    return false;
+                }
+
+                bool hasRow2;
+                (success, hasRow2, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                     defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
                 if (!success) return false;
+
+                if (!hasRow2)
+                {
+                    Debug.LogWarning($"{LogTag} TryLoadAsync: 행 생성 후 재로드에서도 행을 찾을 수 없음.");
+                    return false;
+                }
             }
 
             DataSchema.CopyInto(Current, row);
