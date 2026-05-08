@@ -38,7 +38,7 @@ namespace Truesoft.SupabaseUnity.Samples
     //
     // StaticUserSave<TRow> 베이스 클래스를 활용한 유저 세이브 예시입니다.
     // 실제 프로젝트에서는:
-    //   1. SampleUserSaveRow 의 [DataTable("custom_saves")] 를 실제 테이블명으로 바꿉니다.
+    //   1. SampleUserSaveRow 의 [DataTable("basic")] 를 실제 테이블명으로 바꿉니다.
     //   2. SampleUserSaveRow 필드를 프로젝트 컬럼에 맞게 수정하고, [DataColumn] 을 붙입니다.
     //   3. SampleUserSave 에 프로퍼티를 추가합니다 (Level/Coins 패턴 참고).
     // ──────────────────────────────────────────────────────────────────────────
@@ -49,8 +49,8 @@ namespace Truesoft.SupabaseUnity.Samples
         private SampleUserSave(string syncKey) : base(syncKey) { }
 
         // [DataTable("테이블명")] 에 실제 테이블명을 입력하세요. "data_" 접두사는 자동으로 붙습니다.
-        // 예: [DataTable("custom_saves")] → DB 테이블 "data_custom_saves"
-        [DataTable("custom_saves")]
+        // 예: [DataTable("basic")] → DB 테이블 "data_basic"
+        [DataTable("basic")]
         [Serializable]
         public sealed class Row
         {
