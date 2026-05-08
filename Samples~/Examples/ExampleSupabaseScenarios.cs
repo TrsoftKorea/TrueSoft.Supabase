@@ -264,7 +264,6 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
             if (!ok) { Debug.Log("[Sample] login example failed."); return false; }
 
-            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] login example success.");
             return true;
         }
@@ -274,7 +273,6 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInWithGoogleAsync();
             if (!ok) { Debug.Log("[Sample] google login example failed."); return false; }
 
-            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] google login example success.");
             return true;
         }
@@ -675,7 +673,6 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInWithAppleAsync();
             if (!ok) { Debug.Log("[Sample] Apple login failed."); return false; }
 
-            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] Apple login success.");
             return true;
         }

@@ -107,10 +107,20 @@ namespace Truesoft.Supabase.Unity
         public async Task<bool> TryLoadAsync(bool includeUpdatedAt = true)
         {
             EnsureRegistered();
-            var (success, _, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
             if (!success) return false;
+
+            if (!hasRow)
+            {
+                var ensured = await Supabase.EnsureMyRowAsync<TRow>();
+                if (ensured == null || !ensured.IsSuccess) return false;
+
+                (success, _, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+                    defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
+                if (!success) return false;
+            }
 
             DataSchema.CopyInto(Current, row);
             _lastSynced = DataSchema.CloneRow(row);
