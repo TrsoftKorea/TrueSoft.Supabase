@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Data;
 using UnityEngine;
@@ -121,11 +120,6 @@ namespace Truesoft.Supabase.Unity
 
             if (!hasRow)
             {
-                string tableName;
-                try   { tableName = DataSchema.ResolveTableName<TRow>(); }
-                catch (Exception e) { tableName = $"(오류: {e.Message})"; }
-                Debug.Log($"{LogTag} TryLoadAsync: 행 없음 — EnsureMyRowAsync 호출 (테이블: {tableName})");
-
                 var ensured = await Supabase.EnsureMyRowAsync<TRow>();
                 if (ensured == null || !ensured.IsSuccess)
                 {
@@ -163,17 +157,10 @@ namespace Truesoft.Supabase.Unity
                 return false;
             }
 
-            var hasDiff = patch != null && patch.Count > 0;
-            var keys    = hasDiff
-                ? string.Join(", ", patch.Keys.OrderBy(k => k, StringComparer.Ordinal))
-                : "(없음)";
-            Debug.Log($"{LogTag} 저장 시도 — hasDiff={hasDiff}, 컬럼={keys}");
-
-            if (!hasDiff)
+            if (patch == null || patch.Count == 0)
             {
                 _lastSynced = DataSchema.CloneRow(Current);
                 _isDirty    = false;
-                Debug.Log($"{LogTag} PATCH 전송 생략 (변경 없음).");
                 return true;
             }
 
@@ -189,7 +176,6 @@ namespace Truesoft.Supabase.Unity
 
             _lastSynced = DataSchema.CloneRow(Current);
             _isDirty    = false;
-            Debug.Log($"{LogTag} PATCH 전송 완료.");
             return true;
         }
 
