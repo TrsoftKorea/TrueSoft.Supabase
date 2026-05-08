@@ -58,16 +58,16 @@ namespace Truesoft.SupabaseUnity.Samples
             [DataColumn("coins")] public int coins;
         }
 
-        public int Level
+        public static int Level
         {
-            get => Current.level;
-            set { if (Current.level == value) return; Current.level = value; MarkDirty(); }
+            get => Instance.Current.level;
+            set { if (Instance.Current.level == value) return; Instance.Current.level = value; Instance.MarkDirty(); }
         }
 
-        public int Coins
+        public static int Coins
         {
-            get => Current.coins;
-            set { if (Current.coins == value) return; Current.coins = value; MarkDirty(); }
+            get => Instance.Current.coins;
+            set { if (Instance.Current.coins == value) return; Instance.Current.coins = value; Instance.MarkDirty(); }
         }
     }
 
@@ -315,7 +315,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            Debug.Log($"[Sample] load user save ok. level={SampleUserSave.Instance.Level}, coins={SampleUserSave.Instance.Coins}");
+            Debug.Log($"[Sample] load user save ok. level={SampleUserSave.Level}, coins={SampleUserSave.Coins}");
             return true;
         }
 
@@ -334,8 +334,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            SampleUserSave.Instance.Level = level;
-            SampleUserSave.Instance.Coins = coins;
+            SampleUserSave.Level = level;
+            SampleUserSave.Coins = coins;
 
             if (!await SampleUserSave.Instance.TrySaveIfChangedAsync())
             {

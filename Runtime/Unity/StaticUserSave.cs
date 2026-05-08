@@ -12,15 +12,22 @@ namespace Truesoft.Supabase.Unity
     /// <para>
     /// 사용법:
     /// <code>
-    /// public sealed class GameUserSave : StaticUserSave&lt;GameSaveRow&gt;
+    /// public sealed class GameSave : StaticUserSave&lt;GameSave.Row&gt;
     /// {
-    ///     public static readonly GameUserSave Instance = new("com.mygame.GameUserSave");
-    ///     private GameUserSave(string key) : base(key) { }
+    ///     public static readonly GameSave Instance = new("com.mygame.GameSave");
+    ///     private GameSave(string key) : base(key) { }
     ///
-    ///     public int Level
+    ///     [DataTable("basic")]
+    ///     public sealed class Row
     ///     {
-    ///         get => Current.level;
-    ///         set { if (Current.level == value) return; Current.level = value; MarkDirty(); }
+    ///         [DataColumn("level")] public int level;
+    ///     }
+    ///
+    ///     // static 프로퍼티로 선언하면 GameSave.Level = 5; 처럼 간결하게 사용 가능
+    ///     public static int Level
+    ///     {
+    ///         get => Instance.Current.level;
+    ///         set { if (Instance.Current.level == value) return; Instance.Current.level = value; Instance.MarkDirty(); }
     ///     }
     /// }
     /// </code>

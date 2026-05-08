@@ -1,5 +1,5 @@
 -- =============================================================================
--- 유저 세이브 공통 RPC — ts_ensure_my_row
+-- 유저 세이브 공통 RPC — ts_ensure_my_row, admin_create_user_table
 -- 선행: 02_profiles.sql (auth_user_server_id, ts_default_server_id)
 --
 -- SDK는 단일 user_saves 테이블 대신 프로젝트별 커스텀 테이블을 직접 정의합니다.
@@ -56,3 +56,120 @@ comment on function public.ts_ensure_my_row(text, text) is
   '커스텀 세이브 테이블에 본인 행 보장(upsert). p_table: 대상 테이블명, p_user_id: 플레이어 고유 id.';
 
 grant execute on function public.ts_ensure_my_row(text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- admin_create_user_table — 유저 세이브 테이블 생성 헬퍼 (어드민 전용)
+-- ---------------------------------------------------------------------------
+-- 커스텀 세이브 테이블을 표준 구조로 생성합니다.
+-- 생성된 테이블은 ts_ensure_my_row와 함께 동작하도록 account_id UNIQUE 제약을 포함합니다.
+--
+-- 파라미터:
+--   p_access      — 'public'(전체 조회) | 'private'(본인만 조회)
+--   p_table_name  — 테이블명 (^data_[a-z0-9_]+$ 패턴, 예: "data_basic")
+--   p_description — 테이블 설명 (코멘트 및 메타데이터에 저장)
+--   p_enabled     — 메타데이터 활성화 여부
+--   p_columns_sql — 추가 컬럼 정의 SQL (세미콜론 금지, 예: "level int not null default 1, coins int not null default 0")
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_create_user_table(
+  p_access text,
+  p_table_name text,
+  p_description text,
+  p_enabled boolean,
+  p_columns_sql text
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'public', 'auth'
+as $function$declare
+  v_table_ident text;
+  v_sql text;
+begin
+  if p_access not in ('public', 'private') then
+    raise exception 'Invalid access: % (expected public/private)', p_access;
+  end if;
+
+  if p_table_name !~ '^data_[a-z0-9_]+$' then
+    raise exception 'Invalid table_name: % (must match ^data_[a-z0-9_]+$)', p_table_name;
+  end if;
+
+  if p_table_name = 'user_table_metadata' then
+    raise exception 'Reserved table_name: %', p_table_name;
+  end if;
+
+  if position(';' in p_columns_sql) > 0 then
+    raise exception 'Invalid columns_sql: semicolon is not allowed';
+  end if;
+
+  if coalesce(trim(p_columns_sql), '') = '' then
+    raise exception 'columns_sql is required (additional columns)';
+  end if;
+
+  v_table_ident := quote_ident('public') || '.' || quote_ident(p_table_name);
+
+  -- account_id unique: ts_ensure_my_row의 ON CONFLICT (account_id) 에 필수
+  v_sql := format($f$
+    create table %s (
+      id uuid primary key default gen_random_uuid(),
+      user_id text not null,
+      account_id uuid not null unique references auth.users(id) on delete cascade,
+      server_id uuid not null references public.game_servers(id),
+      updated_at timestamptz not null default now(),
+      %s
+    );
+  $f$, v_table_ident, p_columns_sql);
+
+  execute v_sql;
+
+  execute format($f$
+    create trigger set_updated_at
+    before update on %s
+    for each row
+    execute function public.set_updated_at();
+  $f$, v_table_ident);
+
+  execute format('alter table %s enable row level security;', v_table_ident);
+
+  if p_access = 'public' then
+    execute format($f$
+      create policy select_all_authenticated on %s
+      for select to authenticated using (true);
+    $f$, v_table_ident);
+  else
+    execute format($f$
+      create policy select_own_authenticated on %s
+      for select to authenticated using (account_id = auth.uid());
+    $f$, v_table_ident);
+  end if;
+
+  execute format($f$
+    create policy insert_own_authenticated on %s
+    for insert to authenticated with check (account_id = auth.uid());
+  $f$, v_table_ident);
+
+  execute format($f$
+    create policy update_own_authenticated on %s
+    for update to authenticated
+    using (account_id = auth.uid()) with check (account_id = auth.uid());
+  $f$, v_table_ident);
+
+  execute format($f$
+    create policy delete_own_authenticated on %s
+    for delete to authenticated using (account_id = auth.uid());
+  $f$, v_table_ident);
+
+  insert into public.user_table_metadata (table_name, description, enabled, updated_at)
+  values (p_table_name, nullif(trim(p_description), ''), coalesce(p_enabled, true), now())
+  on conflict (table_name) do update
+  set description = excluded.description,
+      enabled = excluded.enabled,
+      updated_at = excluded.updated_at;
+
+  if coalesce(trim(p_description), '') <> '' then
+    execute format('comment on table %s is %L;', v_table_ident, p_description);
+  end if;
+
+end;$function$;
+
+comment on function public.admin_create_user_table(text, text, text, boolean, text) is
+  '커스텀 세이브 테이블 생성. account_id UNIQUE 포함, ts_ensure_my_row와 함께 동작.';
