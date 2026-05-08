@@ -78,7 +78,6 @@ Use `Try*` variants in game code. Use the non-Try variants when you need to insp
 - Per-key background polling via `poll_interval_seconds` (0 = no polling). `SupabaseRuntime` ticks polls in `Update`.
 - `GetRemoteConfig` (sync, no `Async`) reads the in-memory cache without network.
 - `RemoteConfigFacade` — manages polling lifecycle.
-- **Source Generator** (optional): `RoslynAnalyzers/Truesoft.Supabase.RemoteConfig.SourceGenerator.dll` is included in the package. Declare `static partial` methods with `[RemoteConfig]` and `[RemoteConfigKey("key")]` returning `RemoteConfigEntry<T>` — implementations are auto-generated.
 - Design: group related settings into one key as a JSON object (`{"stamina":{...},"battle":{...}}`), not one key per scalar.
 
 ### Authentication Flows

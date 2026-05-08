@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Purchasing;
@@ -8,7 +6,6 @@ using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Unity;
 
 using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
-using SupabaseSdk    = global::Truesoft.Supabase.Unity.Supabase;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Remote Config 키 상수 샘플 — 프로젝트에 맞게 수정하여 사용하세요.
@@ -37,202 +34,40 @@ namespace Truesoft.Supabase.Unity.RemoteConfig
 namespace Truesoft.SupabaseUnity.Samples
 {
     // ──────────────────────────────────────────────────────────────────────────
-    // SampleStaticUserSave
+    // SampleUserSave
     //
-    // 사용 방법
-    //   1. SampleStaticUserSaveRow 의 [DataTable("custom_saves")] 를 실제 테이블명으로 바꿉니다.
-    //   2. SampleStaticUserSaveRow 필드를 프로젝트 컬럼에 맞게 수정하고, [DataColumn] 을 붙입니다.
-    //   3. TryLoadAsync() 로 불러오고, TrySaveIfChangedAsync() 로 변경분만 저장합니다.
-    //   행이 없는 신규 유저는 TryLoadAsync() 반환값 hasRow == false 로 확인 후 초기값을 직접 설정하세요.
+    // StaticUserSave<TRow> 베이스 클래스를 활용한 유저 세이브 예시입니다.
+    // 실제 프로젝트에서는:
+    //   1. SampleUserSaveRow 의 [DataTable("custom_saves")] 를 실제 테이블명으로 바꿉니다.
+    //   2. SampleUserSaveRow 필드를 프로젝트 컬럼에 맞게 수정하고, [DataColumn] 을 붙입니다.
+    //   3. SampleUserSave 에 프로퍼티를 추가합니다 (Level/Coins 패턴 참고).
     // ──────────────────────────────────────────────────────────────────────────
-    public static class SampleStaticUserSave
+
+    public sealed class SampleUserSave : StaticUserSave<SampleUserSave.Row>
     {
-        private const string SyncKey = "Truesoft.SupabaseUnity.Samples.SampleStaticUserSave";
-        private static readonly SampleStaticUserSaveRow Current    = new SampleStaticUserSaveRow();
-        private static          SampleStaticUserSaveRow LastSynced = new SampleStaticUserSaveRow();
-        private static bool IsDirty;
-        private static bool IsRegistered;
-
-        static SampleStaticUserSave()
-        {
-            EnsureRegistered();
-        }
-
-        private static void EnsureRegistered()
-        {
-            if (IsRegistered)
-                return;
-
-            SupabaseSdk.RegisterUserSaveStaticSync(SyncKey, HasDirty, FlushDirtyAsync, ResetLocalState);
-            IsRegistered = true;
-        }
-
-        public static void ConfigureCooldown(float seconds)
-        {
-            SupabaseSdk.ConfigureUserSaveAutoSyncCooldown(seconds);
-        }
-
-        public static bool TryRequestImmediateSave()
-        {
-            EnsureRegistered();
-            return SupabaseSdk.RequestImmediateUserSaveStaticFlush(SyncKey);
-        }
-
-        public static Task<bool> TryFlushNowAsync(int timeoutMs = 5000)
-        {
-            EnsureRegistered();
-            return SupabaseSdk.TryFlushUserSaveImmediateAsync(SyncKey, timeoutMs);
-        }
-
-        /// <summary>로그인 직후 한 번 호출합니다. 행이 없는 신규 유저의 경우 DB 기본값으로 행을 생성합니다.</summary>
-        public static async Task<bool> TryEnsureRowAsync()
-        {
-            EnsureRegistered();
-            var r = await SupabaseSdk.EnsureMyRowAsync<SampleStaticUserSaveRow>();
-            return r != null && r.IsSuccess;
-        }
-
-        /// <summary>
-        /// 서버에서 로드합니다. 행이 없는 신규 유저는 C# 타입 기본값으로 채워지며,
-        /// 최초 저장 시 ts_ensure_my_row 가 DB 기본값으로 행을 생성합니다.
-        /// </summary>
-        public static async Task<bool> TryLoadAsync(bool includeUpdatedAt = true)
-        {
-            EnsureRegistered();
-            var (success, _, row) = await SupabaseSdk.TryLoadUserDataAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
-                defaultWhenFailed: null,
-                includeUpdatedAt: includeUpdatedAt);
-            if (!success)
-                return false;
-
-            CopyInto(Current, row);
-            LastSynced = CloneRow(row);
-            IsDirty = false;
-            return true;
-        }
-
-        /// <summary>
-        /// 마지막 서버 스냅샷 대비 변경된 컬럼만 PATCH합니다. 변경이 없으면 네트워크 요청을 보내지 않습니다.
-        /// </summary>
-        public static async Task<bool> TrySaveIfChangedAsync()
-        {
-            EnsureRegistered();
-
-            Dictionary<string, object> patch;
-            try
-            {
-                patch = DataSchema.BuildPatch(LastSynced, Current);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[SampleStaticUserSave] 저장: BuildPatch 실패 — " + e.Message);
-                return false;
-            }
-
-            var hasDiff = patch != null && patch.Count > 0;
-            var keys    = hasDiff ? string.Join(", ", patch.Keys.OrderBy(k => k, StringComparer.Ordinal)) : "(없음)";
-            Debug.Log($"[SampleStaticUserSave] 저장 시도 — 서버 스냅샷 대비 변경 있음: {hasDiff}, diff 컬럼: {keys}");
-
-            if (!hasDiff)
-            {
-                LastSynced = CloneRow(Current);
-                IsDirty    = false;
-                Debug.Log("[SampleStaticUserSave] PATCH 전송 생략 (변경된 유저 컬럼 없음).");
-                return true;
-            }
-
-            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
-                LastSynced,
-                Current,
-                ensureRowFirst: true,
-                setUpdatedAtIsoUtc: true);
-            if (!ok)
-            {
-                Debug.LogWarning("[SampleStaticUserSave] PATCH 전송 실패(TryPatchUserDataDiffAsync false).");
-                return false;
-            }
-
-            LastSynced = CloneRow(Current);
-            IsDirty    = false;
-            Debug.Log("[SampleStaticUserSave] PATCH 전송 완료(HTTP 성공).");
-            return true;
-        }
-
-        public static int Level
-        {
-            get => Current.level;
-            set
-            {
-                if (Equals(Current.level, value)) return;
-                Current.level = value;
-                MarkDirty();
-            }
-        }
-
-        public static int Coins
-        {
-            get => Current.coins;
-            set
-            {
-                if (Equals(Current.coins, value)) return;
-                Current.coins = value;
-                MarkDirty();
-            }
-        }
-
-        private static void MarkDirty()
-        {
-            EnsureRegistered();
-            IsDirty = true;
-            SupabaseSdk.MarkUserSaveStaticDirty(SyncKey);
-        }
-
-        private static bool HasDirty() => IsDirty;
-
-        private static async Task<bool> FlushDirtyAsync()
-        {
-            if (!IsDirty) return true;
-
-            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
-                LastSynced,
-                Current,
-                ensureRowFirst: true,
-                setUpdatedAtIsoUtc: true);
-            if (!ok) return false;
-
-            LastSynced = CloneRow(Current);
-            IsDirty    = false;
-            return true;
-        }
-
-        private static void ResetLocalState()
-        {
-            CopyInto(Current, new SampleStaticUserSaveRow());
-            LastSynced = new SampleStaticUserSaveRow();
-            IsDirty    = false;
-        }
-
-        private static SampleStaticUserSaveRow CloneRow(SampleStaticUserSaveRow src)
-        {
-            if (src == null) return new SampleStaticUserSaveRow();
-            return new SampleStaticUserSaveRow { level = src.level, coins = src.coins };
-        }
-
-        private static void CopyInto(SampleStaticUserSaveRow dst, SampleStaticUserSaveRow src)
-        {
-            if (dst == null || src == null) return;
-            dst.level = src.level;
-            dst.coins = src.coins;
-        }
+        public static readonly SampleUserSave Instance = new("Truesoft.SupabaseUnity.Samples.SampleUserSave");
+        private SampleUserSave(string syncKey) : base(syncKey) { }
 
         // [DataTable("테이블명")] 에 실제 테이블명을 입력하세요. "data_" 접두사는 자동으로 붙습니다.
         // 예: [DataTable("custom_saves")] → DB 테이블 "data_custom_saves"
         [DataTable("custom_saves")]
         [Serializable]
-        private sealed class SampleStaticUserSaveRow
+        public sealed class Row
         {
             [DataColumn("level")] public int level;
             [DataColumn("coins")] public int coins;
+        }
+
+        public int Level
+        {
+            get => Current.level;
+            set { if (Current.level == value) return; Current.level = value; MarkDirty(); }
+        }
+
+        public int Coins
+        {
+            get => Current.coins;
+            set { if (Current.coins == value) return; Current.coins = value; MarkDirty(); }
         }
     }
 
@@ -429,7 +264,7 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
             if (!ok) { Debug.Log("[Sample] login example failed."); return false; }
 
-            await SampleStaticUserSave.TryEnsureRowAsync();
+            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] login example success.");
             return true;
         }
@@ -439,7 +274,7 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInWithGoogleAsync();
             if (!ok) { Debug.Log("[Sample] google login example failed."); return false; }
 
-            await SampleStaticUserSave.TryEnsureRowAsync();
+            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] google login example success.");
             return true;
         }
@@ -476,13 +311,13 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            if (!await SampleStaticUserSave.TryLoadAsync())
+            if (!await SampleUserSave.Instance.TryLoadAsync())
             {
                 Debug.LogWarning("[Sample] load user save failed (네트워크·인증 등).");
                 return false;
             }
 
-            Debug.Log($"[Sample] load user save ok. level={SampleStaticUserSave.Level}, coins={SampleStaticUserSave.Coins}");
+            Debug.Log($"[Sample] load user save ok. level={SampleUserSave.Instance.Level}, coins={SampleUserSave.Instance.Coins}");
             return true;
         }
 
@@ -495,16 +330,16 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             // 서버 스냅샷을 먼저 맞춘 뒤, 변경할 값을 프로퍼티에 설정합니다.
-            if (!await SampleStaticUserSave.TryLoadAsync())
+            if (!await SampleUserSave.Instance.TryLoadAsync())
             {
                 Debug.LogWarning("[Sample] save user save: load failed (스냅샷 맞추기 전 단계).");
                 return false;
             }
 
-            SampleStaticUserSave.Level = level;
-            SampleStaticUserSave.Coins = coins;
+            SampleUserSave.Instance.Level = level;
+            SampleUserSave.Instance.Coins = coins;
 
-            if (!await SampleStaticUserSave.TrySaveIfChangedAsync())
+            if (!await SampleUserSave.Instance.TrySaveIfChangedAsync())
             {
                 Debug.LogWarning("[Sample] save user save: TrySaveIfChangedAsync failed (상세는 [SampleStaticUserSave] 로그).");
                 return false;
@@ -840,7 +675,7 @@ namespace Truesoft.SupabaseUnity.Samples
             var ok = await SupabaseClient.TrySignInWithAppleAsync();
             if (!ok) { Debug.Log("[Sample] Apple login failed."); return false; }
 
-            await SampleStaticUserSave.TryEnsureRowAsync();
+            await SampleUserSave.Instance.TryEnsureRowAsync();
             Debug.Log("[Sample] Apple login success.");
             return true;
         }

@@ -76,6 +76,40 @@ namespace Truesoft.Supabase.Core.Data
             return patch;
         }
 
+        /// <summary>
+        /// <see cref="DataColumnAttribute"/> 멤버를 reflection으로 복사한 새 인스턴스를 반환합니다.
+        /// <paramref name="src"/>가 null이면 <c>new T()</c>를 반환합니다.
+        /// </summary>
+        public static T CloneRow<T>(T src) where T : class, new()
+        {
+            var dst = new T();
+            if (src != null)
+                CopyColumnsInto(dst, src);
+            return dst;
+        }
+
+        /// <summary>
+        /// <see cref="DataColumnAttribute"/> 멤버를 <paramref name="src"/>에서 <paramref name="dst"/>로 복사합니다.
+        /// <paramref name="src"/>가 null이면 <c>new T()</c>의 기본값으로 채웁니다.
+        /// </summary>
+        public static void CopyInto<T>(T dst, T src) where T : class, new()
+        {
+            if (dst == null) return;
+            CopyColumnsInto(dst, src ?? new T());
+        }
+
+        private static void CopyColumnsInto<T>(T dst, T src)
+        {
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var value = GetValue(m, src);
+                if (m is FieldInfo f)
+                    f.SetValue(dst, value);
+                else if (m is PropertyInfo p && p.CanWrite)
+                    p.SetValue(dst, value);
+            }
+        }
+
         private static bool EqualsValues(object a, object b)
         {
             if (a == null && b == null)
