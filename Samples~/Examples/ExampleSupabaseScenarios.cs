@@ -1,18 +1,247 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Purchasing;
+using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Unity;
-using Truesoft.Supabase.Unity.RemoteConfig;
 
 using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
+using SupabaseSdk    = global::Truesoft.Supabase.Unity.Supabase;
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Remote Config 키 상수 샘플 — 프로젝트에 맞게 수정하여 사용하세요.
+// ──────────────────────────────────────────────────────────────────────────────
+namespace Truesoft.Supabase.Unity.RemoteConfig
+{
+    public static class RemoteConfigKeys
+    {
+        // 게임 설정 예시
+        public const string MaxPlayers           = "game.max_players";
+        public const string MatchTimeoutSeconds  = "game.match_timeout_seconds";
+        public const string MaintenanceMode      = "game.maintenance_mode";
+
+        // 밸런스 조정 예시
+        public const string PlayerSpeedMultiplier = "balance.player_speed_multiplier";
+        public const string EnemyHealthMultiplier  = "balance.enemy_health_multiplier";
+
+        // A/B 테스트 예시
+        public const string ExperimentVariant = "experiment.new_ui_variant";
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// 샘플 코드
+// ──────────────────────────────────────────────────────────────────────────────
 namespace Truesoft.SupabaseUnity.Samples
 {
-    /// <summary>
-    /// 샘플: 서버 시각·로그인/데이터·서버 샤드(조회/이주)·RemoteConfig/Edge Function 예시를 각각 분리해 제공합니다.
-    /// 실행은 <c>Run All On Start</c> 또는 인스펙터에 표시된 키보드 단축키(옵션)로 합니다.
-    /// </summary>
+    // ──────────────────────────────────────────────────────────────────────────
+    // SampleStaticUserSave
+    //
+    // 사용 방법
+    //   1. SampleStaticUserSaveRow 의 [DataTable("custom_saves")] 를 실제 테이블명으로 바꿉니다.
+    //   2. SampleStaticUserSaveRow 필드를 프로젝트 컬럼에 맞게 수정하고, [DataColumn] 을 붙입니다.
+    //   3. TryLoadAsync() 로 불러오고, TrySaveIfChangedAsync() 로 변경분만 저장합니다.
+    //   행이 없는 신규 유저는 TryLoadAsync() 반환값 hasRow == false 로 확인 후 초기값을 직접 설정하세요.
+    // ──────────────────────────────────────────────────────────────────────────
+    public static class SampleStaticUserSave
+    {
+        private const string SyncKey = "Truesoft.SupabaseUnity.Samples.SampleStaticUserSave";
+        private static readonly SampleStaticUserSaveRow Current    = new SampleStaticUserSaveRow();
+        private static          SampleStaticUserSaveRow LastSynced = new SampleStaticUserSaveRow();
+        private static bool IsDirty;
+        private static bool IsRegistered;
+
+        static SampleStaticUserSave()
+        {
+            EnsureRegistered();
+        }
+
+        private static void EnsureRegistered()
+        {
+            if (IsRegistered)
+                return;
+
+            SupabaseSdk.RegisterUserSaveStaticSync(SyncKey, HasDirty, FlushDirtyAsync, ResetLocalState);
+            IsRegistered = true;
+        }
+
+        public static void ConfigureCooldown(float seconds)
+        {
+            SupabaseSdk.ConfigureUserSaveAutoSyncCooldown(seconds);
+        }
+
+        public static bool TryRequestImmediateSave()
+        {
+            EnsureRegistered();
+            return SupabaseSdk.RequestImmediateUserSaveStaticFlush(SyncKey);
+        }
+
+        public static Task<bool> TryFlushNowAsync(int timeoutMs = 5000)
+        {
+            EnsureRegistered();
+            return SupabaseSdk.TryFlushUserSaveImmediateAsync(SyncKey, timeoutMs);
+        }
+
+        /// <summary>로그인 직후 한 번 호출합니다. 행이 없는 신규 유저의 경우 DB 기본값으로 행을 생성합니다.</summary>
+        public static async Task<bool> TryEnsureRowAsync()
+        {
+            EnsureRegistered();
+            var r = await SupabaseSdk.EnsureMyRowAsync<SampleStaticUserSaveRow>();
+            return r != null && r.IsSuccess;
+        }
+
+        /// <summary>
+        /// 서버에서 로드합니다. 행이 없는 신규 유저는 C# 타입 기본값으로 채워지며,
+        /// 최초 저장 시 ts_ensure_my_row 가 DB 기본값으로 행을 생성합니다.
+        /// </summary>
+        public static async Task<bool> TryLoadAsync(bool includeUpdatedAt = true)
+        {
+            EnsureRegistered();
+            var (success, _, row) = await SupabaseSdk.TryLoadUserDataAttributedWithRowStateAsync<SampleStaticUserSaveRow>(
+                defaultWhenFailed: null,
+                includeUpdatedAt: includeUpdatedAt);
+            if (!success)
+                return false;
+
+            CopyInto(Current, row);
+            LastSynced = CloneRow(row);
+            IsDirty = false;
+            return true;
+        }
+
+        /// <summary>
+        /// 마지막 서버 스냅샷 대비 변경된 컬럼만 PATCH합니다. 변경이 없으면 네트워크 요청을 보내지 않습니다.
+        /// </summary>
+        public static async Task<bool> TrySaveIfChangedAsync()
+        {
+            EnsureRegistered();
+
+            Dictionary<string, object> patch;
+            try
+            {
+                patch = DataSchema.BuildPatch(LastSynced, Current);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[SampleStaticUserSave] 저장: BuildPatch 실패 — " + e.Message);
+                return false;
+            }
+
+            var hasDiff = patch != null && patch.Count > 0;
+            var keys    = hasDiff ? string.Join(", ", patch.Keys.OrderBy(k => k, StringComparer.Ordinal)) : "(없음)";
+            Debug.Log($"[SampleStaticUserSave] 저장 시도 — 서버 스냅샷 대비 변경 있음: {hasDiff}, diff 컬럼: {keys}");
+
+            if (!hasDiff)
+            {
+                LastSynced = CloneRow(Current);
+                IsDirty    = false;
+                Debug.Log("[SampleStaticUserSave] PATCH 전송 생략 (변경된 유저 컬럼 없음).");
+                return true;
+            }
+
+            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
+                LastSynced,
+                Current,
+                ensureRowFirst: true,
+                setUpdatedAtIsoUtc: true);
+            if (!ok)
+            {
+                Debug.LogWarning("[SampleStaticUserSave] PATCH 전송 실패(TryPatchUserDataDiffAsync false).");
+                return false;
+            }
+
+            LastSynced = CloneRow(Current);
+            IsDirty    = false;
+            Debug.Log("[SampleStaticUserSave] PATCH 전송 완료(HTTP 성공).");
+            return true;
+        }
+
+        public static int Level
+        {
+            get => Current.level;
+            set
+            {
+                if (Equals(Current.level, value)) return;
+                Current.level = value;
+                MarkDirty();
+            }
+        }
+
+        public static int Coins
+        {
+            get => Current.coins;
+            set
+            {
+                if (Equals(Current.coins, value)) return;
+                Current.coins = value;
+                MarkDirty();
+            }
+        }
+
+        private static void MarkDirty()
+        {
+            EnsureRegistered();
+            IsDirty = true;
+            SupabaseSdk.MarkUserSaveStaticDirty(SyncKey);
+        }
+
+        private static bool HasDirty() => IsDirty;
+
+        private static async Task<bool> FlushDirtyAsync()
+        {
+            if (!IsDirty) return true;
+
+            var ok = await SupabaseSdk.TryPatchUserDataDiffAsync(
+                LastSynced,
+                Current,
+                ensureRowFirst: true,
+                setUpdatedAtIsoUtc: true);
+            if (!ok) return false;
+
+            LastSynced = CloneRow(Current);
+            IsDirty    = false;
+            return true;
+        }
+
+        private static void ResetLocalState()
+        {
+            CopyInto(Current, new SampleStaticUserSaveRow());
+            LastSynced = new SampleStaticUserSaveRow();
+            IsDirty    = false;
+        }
+
+        private static SampleStaticUserSaveRow CloneRow(SampleStaticUserSaveRow src)
+        {
+            if (src == null) return new SampleStaticUserSaveRow();
+            return new SampleStaticUserSaveRow { level = src.level, coins = src.coins };
+        }
+
+        private static void CopyInto(SampleStaticUserSaveRow dst, SampleStaticUserSaveRow src)
+        {
+            if (dst == null || src == null) return;
+            dst.level = src.level;
+            dst.coins = src.coins;
+        }
+
+        // [DataTable("테이블명")] 에 실제 테이블명을 입력하세요. "data_" 접두사는 자동으로 붙습니다.
+        // 예: [DataTable("custom_saves")] → DB 테이블 "data_custom_saves"
+        [DataTable("custom_saves")]
+        [Serializable]
+        private sealed class SampleStaticUserSaveRow
+        {
+            [DataColumn("level")] public int level;
+            [DataColumn("coins")] public int coins;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // ExampleSupabaseScenarios
+    //
+    // 샘플: 로그인·데이터·RemoteConfig·Edge Function·서버 샤드 등 전 기능 예시.
+    // Run All On Start 또는 인스펙터 키보드 단축키로 실행합니다.
+    // ──────────────────────────────────────────────────────────────────────────
     public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         [Header("실행")]
@@ -120,7 +349,6 @@ namespace Truesoft.SupabaseUnity.Samples
         [SerializeField] private bool skipConfirmForTest = false;
 
         private IAPFacade _iapFacade;
-
         private bool _keyboardBusy;
 
         private void OnEnable()
@@ -150,53 +378,30 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private void Update()
         {
-            if (!enableKeyboardTest)
+            if (!enableKeyboardTest || _keyboardBusy)
                 return;
 
-            if (_keyboardBusy)
-                return;
-
-            if (Input.GetKeyDown(keyLoginAnonymous))
-                _ = RunAsyncGuarded(RunLoginExampleAsync);
-            else if (Input.GetKeyDown(keyLoginGoogle))
-                _ = RunAsyncGuarded(RunGoogleLoginExampleAsync);
-            else if (Input.GetKeyDown(keyLinkGoogle))
-                _ = RunAsyncGuarded(RunGoogleLinkExampleAsync);
-            else if (Input.GetKeyDown(keyLogout))
-                _ = RunAsyncGuarded(RunLogoutExampleAsync);
-            else if (Input.GetKeyDown(keySetDisplayName))
-                _ = RunAsyncGuarded(RunPublicNicknameExampleAsync);
-            else if (Input.GetKeyDown(keyLoadUserSave))
-                _ = RunAsyncGuarded(RunLoadUserSaveExampleAsync);
-            else if (Input.GetKeyDown(keySaveUserSave))
-                _ = RunAsyncGuarded(RunSaveUserSaveExampleAsync);
-            else if (Input.GetKeyDown(keyRemoteConfig))
-                _ = RunAsyncGuarded(RunRemoteConfigExampleAsync);
-            else if (Input.GetKeyDown(keyRemoteConfigOnDemand))
-                _ = RunAsyncGuarded(RunRemoteConfigOnDemandExampleAsync);
-            else if (Input.GetKeyDown(keyInvokeFunction))
-                _ = RunAsyncGuarded(RunFunctionExampleAsync);
-            else if (Input.GetKeyDown(keyDuplicateLoginInfo))
-                LogDuplicateLoginHowToTest();
-            else if (Input.GetKeyDown(keyServerTime))
-                _ = RunAsyncGuarded(RunServerTimeExampleAsync);
-            else if (Input.GetKeyDown(keyRequestWithdrawal))
-                _ = RunAsyncGuarded(RunWithdrawalRequestExampleAsync);
-            else if (Input.GetKeyDown(keyWithdrawalStatus))
-                _ = RunAsyncGuarded(RunWithdrawalStatusExampleAsync);
-            else if (Input.GetKeyDown(keyWithdrawalCancel))
-                _ = RunAsyncGuarded(RunWithdrawalCancelRedeemExampleAsync);
-            else if (Input.GetKeyDown(keyServerShard))
-                _ = RunAsyncGuarded(RunServerShardExampleAsync);
-            else if (Input.GetKeyDown(keyInitializeIAP))
-                _ = RunAsyncGuarded(RunInitializeIAPExampleAsync);
-            else if (Input.GetKeyDown(keyVerifyPurchase))
-                _ = RunAsyncGuarded(RunVerifyPurchaseExampleAsync);
+            if      (Input.GetKeyDown(keyLoginAnonymous))       _ = RunAsyncGuarded(RunLoginExampleAsync);
+            else if (Input.GetKeyDown(keyLoginGoogle))          _ = RunAsyncGuarded(RunGoogleLoginExampleAsync);
+            else if (Input.GetKeyDown(keyLinkGoogle))           _ = RunAsyncGuarded(RunGoogleLinkExampleAsync);
+            else if (Input.GetKeyDown(keyLogout))               _ = RunAsyncGuarded(RunLogoutExampleAsync);
+            else if (Input.GetKeyDown(keySetDisplayName))       _ = RunAsyncGuarded(RunPublicNicknameExampleAsync);
+            else if (Input.GetKeyDown(keyLoadUserSave))         _ = RunAsyncGuarded(RunLoadUserSaveExampleAsync);
+            else if (Input.GetKeyDown(keySaveUserSave))         _ = RunAsyncGuarded(RunSaveUserSaveExampleAsync);
+            else if (Input.GetKeyDown(keyRemoteConfig))         _ = RunAsyncGuarded(RunRemoteConfigExampleAsync);
+            else if (Input.GetKeyDown(keyRemoteConfigOnDemand)) _ = RunAsyncGuarded(RunRemoteConfigOnDemandExampleAsync);
+            else if (Input.GetKeyDown(keyInvokeFunction))       _ = RunAsyncGuarded(RunFunctionExampleAsync);
+            else if (Input.GetKeyDown(keyDuplicateLoginInfo))   LogDuplicateLoginHowToTest();
+            else if (Input.GetKeyDown(keyServerTime))           _ = RunAsyncGuarded(RunServerTimeExampleAsync);
+            else if (Input.GetKeyDown(keyRequestWithdrawal))    _ = RunAsyncGuarded(RunWithdrawalRequestExampleAsync);
+            else if (Input.GetKeyDown(keyWithdrawalStatus))     _ = RunAsyncGuarded(RunWithdrawalStatusExampleAsync);
+            else if (Input.GetKeyDown(keyWithdrawalCancel))     _ = RunAsyncGuarded(RunWithdrawalCancelRedeemExampleAsync);
+            else if (Input.GetKeyDown(keyServerShard))          _ = RunAsyncGuarded(RunServerShardExampleAsync);
+            else if (Input.GetKeyDown(keyInitializeIAP))        _ = RunAsyncGuarded(RunInitializeIAPExampleAsync);
+            else if (Input.GetKeyDown(keyVerifyPurchase))       _ = RunAsyncGuarded(RunVerifyPurchaseExampleAsync);
 #if TRUESOFT_APPLE_AUTH_AVAILABLE
-            else if (Input.GetKeyDown(keyLoginApple))
-                _ = RunAsyncGuarded(RunAppleLoginExampleAsync);
-            else if (Input.GetKeyDown(keyLinkApple))
-                _ = RunAsyncGuarded(RunAppleLinkExampleAsync);
+            else if (Input.GetKeyDown(keyLoginApple))           _ = RunAsyncGuarded(RunAppleLoginExampleAsync);
+            else if (Input.GetKeyDown(keyLinkApple))            _ = RunAsyncGuarded(RunAppleLinkExampleAsync);
 #endif
         }
 
@@ -206,7 +411,7 @@ namespace Truesoft.SupabaseUnity.Samples
             {
                 _keyboardBusy = true;
                 var ok = await body();
-                if (ok == false)
+                if (!ok)
                     Debug.LogWarning("[Sample] Keyboard test failed (see previous logs).");
             }
             catch (Exception e)
@@ -222,11 +427,7 @@ namespace Truesoft.SupabaseUnity.Samples
         private async Task<bool> RunLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
-            if (!ok)
-            {
-                Debug.Log("[Sample] login example failed.");
-                return false;
-            }
+            if (!ok) { Debug.Log("[Sample] login example failed."); return false; }
 
             await SampleStaticUserSave.TryEnsureRowAsync();
             Debug.Log("[Sample] login example success.");
@@ -236,11 +437,7 @@ namespace Truesoft.SupabaseUnity.Samples
         private async Task<bool> RunGoogleLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInWithGoogleAsync();
-            if (!ok)
-            {
-                Debug.Log("[Sample] google login example failed.");
-                return false;
-            }
+            if (!ok) { Debug.Log("[Sample] google login example failed."); return false; }
 
             await SampleStaticUserSave.TryEnsureRowAsync();
             Debug.Log("[Sample] google login example success.");
@@ -263,11 +460,10 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            var after = SupabaseClient.Session.User;
-            var sameId = string.Equals(beforeId, after.Id, StringComparison.OrdinalIgnoreCase);
+            var after     = SupabaseClient.Session.User;
+            var sameId    = string.Equals(beforeId, after.Id, StringComparison.OrdinalIgnoreCase);
             var converted = !after.IsAnonymous;
-            Debug.Log(
-                "[Sample] google link example result. "
+            Debug.Log("[Sample] google link example result. "
                 + $"same_auth_user_id={sameId}, is_anonymous_after={after.IsAnonymous}");
             return sameId && converted;
         }
@@ -326,8 +522,8 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            var accountId = SupabaseClient.Session.User.Id;
             var playerUserId = SupabaseClient.Session.User.PlayerUserId;
+
             if (!await SupabaseClient.TryIsDisplayNameAvailableAsync(demoDisplayName))
             {
                 Debug.LogWarning($"[Sample] displayName \"{demoDisplayName}\": 이미 사용 중인 닉네임입니다.");
@@ -348,8 +544,8 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// 통합 로그아웃: Android에서는 <c>TrySignOutFullyAsync</c>가 Google 네이티브 로그아웃을 시도한 뒤 Supabase <c>SignOutAsync</c>와 동일하게 처리합니다.
-        /// 익명이면 로컬 refresh 삭제 전 복구용 upsert가 수행됩니다.
+        /// 통합 로그아웃: Android에서는 TrySignOutFullyAsync 가 Google 네이티브 로그아웃을 시도한 뒤
+        /// Supabase SignOutAsync 와 동일하게 처리합니다. 익명이면 복구용 upsert 가 수행됩니다.
         /// </summary>
         private async Task<bool> RunLogoutExampleAsync()
         {
@@ -369,14 +565,13 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.Log(
                 "[Sample] 중복 로그인 테스트: Sql/player/05_user_sessions.sql 적용 후, "
                 + "SupabaseSettings에서 enableDuplicateSessionMonitor를 켠 뒤 "
-                + "기기 A·B(또는 에뮬+실기)에서 같은 계정(익명 또는 구글)으로 순서대로 로그인하면, "
+                + "기기 A·B(또는 에뮬+실기)에서 같은 계정으로 순서대로 로그인하면, "
                 + "먼저 켜 둔 쪽에서 OnDuplicateLoginDetected가 호출됩니다.");
         }
 
         /// <summary>
-        /// 로컬 <see cref="SupabaseClient.GetCurrentServerCode"/>와 RPC <c>ts_my_server_id</c> 결과를 비교하고,
-        /// 인스펙터에서 허용한 경우 <c>ts_transfer_my_server</c>(<see cref="SupabaseClient.TryTransferMyServerAsync"/>)를 호출합니다.
-        /// Retool·Secret 키 이주는 README의 <c>ts_admin_transfer_user_server</c>를 참고하세요.
+        /// 로컬 GetCurrentServerCode 와 RPC ts_my_server_id 결과를 비교하고,
+        /// 인스펙터에서 허용한 경우 TryTransferMyServerAsync 를 호출합니다.
         /// </summary>
         private async Task<bool> RunServerShardExampleAsync()
         {
@@ -392,19 +587,19 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(serverShardOptionalSetLocalCode) == false)
+            if (!string.IsNullOrWhiteSpace(serverShardOptionalSetLocalCode))
             {
                 SupabaseClient.SetCurrentServerCode(serverShardOptionalSetLocalCode.Trim());
                 Debug.Log("[Sample] server shard: applied local server code from inspector: " + serverShardOptionalSetLocalCode.Trim());
             }
 
             var localCode = SupabaseClient.GetCurrentServerCode();
-            var db = await SupabaseClient.GetMyServerInfoAsync();
+            var db        = await SupabaseClient.GetMyServerInfoAsync();
             if (db == null || !db.IsSuccess)
             {
                 var hint = string.Equals(db?.ErrorMessage, "my_server_not_found", StringComparison.Ordinal)
-                    ? "profiles에 account_id=본인 행이 없을 때 흔함. TryStartAsync(restoreSessionFirst:true)로 복원하면 SDK가 프로필 upsert를 수행합니다. Q로 익명 로그인해도 됩니다. Console의 [Supabase] ensure profile row failed 유무·RLS를 확인하세요."
-                    : "Sql/player/08_transfer_server.sql 등 적용·ts_my_server_id·로그인·프로필 행 확인.";
+                    ? "profiles에 account_id=본인 행이 없을 때 흔함. Q로 익명 로그인해도 됩니다."
+                    : "Sql/player/08_transfer_server.sql 적용·ts_my_server_id·로그인·프로필 행 확인.";
                 Debug.LogWarning("[Sample] server shard: ts_my_server_id failed — " + (db?.ErrorMessage ?? "null") + ". " + hint);
                 return false;
             }
@@ -412,7 +607,7 @@ namespace Truesoft.SupabaseUnity.Samples
             Debug.Log(
                 "[Sample] server shard: local_selected_code=" + localCode
                 + ", db_server_code=" + db.Data.ServerCode
-                + ", db_server_id=" + db.Data.ServerId);
+                + ", db_server_id="   + db.Data.ServerId);
 
             if (!serverShardAttemptTransfer)
             {
@@ -429,14 +624,12 @@ namespace Truesoft.SupabaseUnity.Samples
 
             var moved = await SupabaseClient.TryTransferMyServerAsync(target, "sample_ExampleSupabaseScenarios");
             Debug.Log(moved
-                ? "[Sample] server shard: TryTransferMyServerAsync ok. local prefs updated to target on success."
-                : "[Sample] server shard: TryTransferMyServerAsync failed (target missing, allow_transfers=false, or display_name_taken_in_target_server 등).");
+                ? "[Sample] server shard: TryTransferMyServerAsync ok."
+                : "[Sample] server shard: TryTransferMyServerAsync failed (target missing, allow_transfers=false, 등).");
             return moved;
         }
 
-        /// <summary>
-        /// RPC <c>ts_server_now</c>로 DB 서버 시각을 가져옵니다. 로그인 세션 없이 호출 가능합니다.
-        /// </summary>
+        /// <summary>RPC ts_server_now 로 DB 서버 시각을 가져옵니다. 로그인 세션 없이 호출 가능합니다.</summary>
         private async Task<bool> RunServerTimeExampleAsync()
         {
             if (!await SupabaseClient.EnsureInitializedAsync())
@@ -458,8 +651,8 @@ namespace Truesoft.SupabaseUnity.Samples
         }
 
         /// <summary>
-        /// 설정된 유예 기간(<c>SupabaseSettings.withdrawalRequestDelayDays</c>)으로 탈퇴를 요청합니다.
-        /// 실제 withdrawn_at 계산은 서버 RPC(<c>ts_request_withdrawal</c>)가 처리합니다.
+        /// 설정된 유예 기간(SupabaseSettings.withdrawalRequestDelayDays)으로 탈퇴를 요청합니다.
+        /// 실제 withdrawn_at 계산은 서버 RPC(ts_request_withdrawal)가 처리합니다.
         /// </summary>
         private async Task<bool> RunWithdrawalRequestExampleAsync()
         {
@@ -471,7 +664,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
             var ok = await SupabaseClient.TryRequestMyWithdrawalAsync();
             Debug.Log(ok
-                ? "[Sample] withdrawal request success. 서버가 유예 기간 기준으로 withdrawn_at을 예약했고, 앱은 즉시 로그아웃 처리했습니다(이후 수동 로그인 UX)."
+                ? "[Sample] withdrawal request success. 서버가 유예 기간 기준으로 withdrawn_at을 예약했고, 앱은 즉시 로그아웃 처리했습니다."
                 : "[Sample] withdrawal request failed. Sql/supabase_withdrawal_request.sql 적용 및 profiles/RLS를 확인하세요.");
             return ok;
         }
@@ -499,14 +692,14 @@ namespace Truesoft.SupabaseUnity.Samples
             }
 
             Debug.Log(
-                $"[Sample] withdrawal status. displayName={status.DisplayName}, is_scheduled={status.IsScheduled}, withdrawn_at={status.WithdrawnAtIso}, remain_sec={status.SecondsRemaining}, server_now={status.ServerNowIso}");
+                $"[Sample] withdrawal status. displayName={status.DisplayName}, is_scheduled={status.IsScheduled}, "
+                + $"withdrawn_at={status.WithdrawnAtIso}, remain_sec={status.SecondsRemaining}, server_now={status.ServerNowIso}");
             return true;
         }
 
         private async Task<bool> RunWithdrawalCancelRedeemExampleAsync()
         {
-            // B 방식 샘플:
-            // • cancel_token은 탈퇴 예약 계정으로 로그인할 때 게이트에서 발급·저장됨(신청한 기기에만 묶이지 않음).
+            // cancel_token은 탈퇴 예약 계정으로 로그인할 때 게이트에서 발급·저장됨.
             // 1) 로그인 상태면 issue로 토큰 발급 후 세션 정리
             // 2) 저장된 토큰으로 redeem
             if (SupabaseClient.IsLoggedIn)
@@ -533,7 +726,7 @@ namespace Truesoft.SupabaseUnity.Samples
         {
             // Cold Start: 첫 조회에서 키 단위 fetch. 캐시 유효 시간은 DB max_stale_seconds.
             var result = await SupabaseClient.GetRemoteConfigAsync<object>(remoteConfigKey);
-            if (result.IsSuccess == false)
+            if (!result.IsSuccess)
             {
                 Debug.LogWarning("[Sample] remote config failed (key=" + remoteConfigKey + "): " + (result.ErrorMessage ?? string.Empty));
                 return false;
@@ -541,7 +734,7 @@ namespace Truesoft.SupabaseUnity.Samples
 
             SupabaseClient.TryGetRemoteConfigRaw(remoteConfigKey, out var raw);
             Debug.Log("[Sample] remote config OK (key=" + remoteConfigKey + "). raw: " + raw);
-            return string.IsNullOrEmpty(raw) == false;
+            return !string.IsNullOrEmpty(raw);
         }
 
         private async Task<bool> RunRemoteConfigOnDemandExampleAsync()
@@ -552,75 +745,13 @@ namespace Truesoft.SupabaseUnity.Samples
                 return false;
             }
 
-            // on-demand로 서버 값을 캐시에 반영한 뒤에는, raw를 바로 읽어오는 편이 네트워크 호출을 줄입니다.
+            // on-demand로 서버 값을 캐시에 반영한 뒤에는 raw를 바로 읽어오는 편이 네트워크 호출을 줄입니다.
             var has = SupabaseClient.TryGetRemoteConfigRaw(remoteConfigKey, out var raw);
             Debug.Log(has
                 ? "[Sample] remote config on-demand OK (key=" + remoteConfigKey + "). raw: " + raw
                 : "[Sample] remote config on-demand: raw 없음 (key=" + remoteConfigKey + ")");
             return has;
         }
-
-        // ========== Source Generator 예제 (선택) ==========
-        // 아래 [RemoteConfig] 선언은 Unity 컴파일 시 Truesoft.Supabase.RemoteConfig.SourceGenerator.dll이
-        // 자동 구현을 생성합니다.
-        // JSON 클러스터링: 관련 설정을 하나의 키에 묶어 value_json으로 관리합니다.
-        // DB 예시: key="gameplay_v1", value_json={"stamina":{"maxEnergy":100,"regenSeconds":300},"battle":{"dmgMultiplier":1.5}}
-
-        [Serializable]
-        public sealed class GameplayClusterDto
-        {
-            public StaminaSubConfig stamina;
-            public BattleSubConfig battle;
-        }
-
-        [Serializable]
-        public sealed class StaminaSubConfig
-        {
-            public int maxEnergy;
-            public int regenSeconds;
-        }
-
-        [Serializable]
-        public sealed class BattleSubConfig
-        {
-            public float dmgMultiplier;
-        }
-
-        // 선언만 해두면 컴파일 후 구현이 자동 생성됩니다.
-        // [RemoteConfig]
-        // public static partial class DemoRemoteConfig
-        // {
-        //     // JSON 클러스터링: 하나의 키에 stamina + battle 설정 묶음
-        //     [RemoteConfigKey("gameplay_v1")]
-        //     public static partial RemoteConfigEntry<GameplayClusterDto> Gameplay();
-        //
-        //     // 단독 설정: 이벤트 ON/OFF 등 개별 관리가 필요한 경우
-        //     [RemoteConfigKey("event_christmas_v1")]
-        //     public static partial RemoteConfigEntry<EventFlagDto> ChristmasEvent();
-        // }
-
-        // /// <summary>
-        // /// JSON 클러스터링을 사용한 RemoteConfig 예제입니다.
-        // /// 한 번의 fetch로 stamina와 battle 설정을 모두 가져옵니다.
-        // /// </summary>
-        // private async Task<bool> RunRemoteConfigSourceGeneratorExampleAsync()
-        // {
-        //     var result = await DemoRemoteConfig.Gameplay().FetchAsync();
-        //     if (result.IsSuccess == false)
-        //     {
-        //         Debug.LogWarning("[Sample] SG remote config failed: " + result.ErrorMessage);
-        //         return false;
-        //     }
-        //
-        //     // 클러스터링된 데이터 사용
-        //     Debug.Log($"[Sample] SG stamina: maxEnergy={result.Data.stamina.maxEnergy}, " +
-        //               $"regenSeconds={result.Data.stamina.regenSeconds}");
-        //     Debug.Log($"[Sample] SG battle: dmgMultiplier={result.Data.battle.dmgMultiplier}");
-        //     return true;
-        // }
-        //
-        // [Serializable]
-        // public sealed class EventFlagDto { public bool enabled; public string bannerUrl; }
 
         private async Task<bool> RunFunctionExampleAsync()
         {
@@ -630,9 +761,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 defaultValue: null);
 
             var ok = result != null;
-            Debug.Log(ok
-                ? "[Sample] function example success."
-                : "[Sample] function example failed.");
+            Debug.Log(ok ? "[Sample] function example success." : "[Sample] function example failed.");
             return ok;
         }
 
@@ -652,7 +781,6 @@ namespace Truesoft.SupabaseUnity.Samples
             _iapFacade = SupabaseClient.CreateIAP();
 
             // 아이템 지급 콜백 — 실제 게임에서는 여기서 인벤토리에 아이템 추가
-            // 실제 프로젝트에서는 async 람다로 바꾸고 await MyInventory.GiveItemAsync(...)를 호출하세요.
             _iapFacade.OnGrantItemAsync = (order, response, isResuming) =>
             {
                 var productId = order.CartOrdered?.Items()?[0].Product.definition.id ?? "unknown";
@@ -672,10 +800,7 @@ namespace Truesoft.SupabaseUnity.Samples
                 return Task.FromResult(true);        // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
             };
 
-            _iapFacade.OnPurchaseFailed += order =>
-            {
-                Debug.LogError($"[Sample] [FAIL] 구매 실패: {order}");
-            };
+            _iapFacade.OnPurchaseFailed += order => Debug.LogError($"[Sample] [FAIL] 구매 실패: {order}");
 
             var ok = await _iapFacade.InitializeAsync(new[] { demoPurchaseProductId });
             if (ok) Debug.Log("[Sample] IAP initialized. Press B to purchase.");
@@ -683,10 +808,7 @@ namespace Truesoft.SupabaseUnity.Samples
             return ok;
         }
 
-        /// <summary>
-        /// 결제 프로세스 시작 (B 키). M 키로 IAP 초기화 후 사용.
-        /// 결제 화면 → 사용자 승인 → OnGrantItemAsync 자동 호출.
-        /// </summary>
+        /// <summary>결제 프로세스 시작 (B 키). M 키로 IAP 초기화 후 사용.</summary>
         private Task<bool> RunVerifyPurchaseExampleAsync()
         {
             if (!SupabaseClient.IsLoggedIn)
@@ -716,11 +838,7 @@ namespace Truesoft.SupabaseUnity.Samples
         private async Task<bool> RunAppleLoginExampleAsync()
         {
             var ok = await SupabaseClient.TrySignInWithAppleAsync();
-            if (!ok)
-            {
-                Debug.Log("[Sample] Apple login failed.");
-                return false;
-            }
+            if (!ok) { Debug.Log("[Sample] Apple login failed."); return false; }
 
             await SampleStaticUserSave.TryEnsureRowAsync();
             Debug.Log("[Sample] Apple login success.");
@@ -751,6 +869,5 @@ namespace Truesoft.SupabaseUnity.Samples
 
             Debug.Log("[Sample] all examples finished.");
         }
-
     }
 }
