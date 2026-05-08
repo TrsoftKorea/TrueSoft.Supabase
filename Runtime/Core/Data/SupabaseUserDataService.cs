@@ -60,7 +60,7 @@ namespace Truesoft.Supabase.Core.Data
                 return SupabaseResult<bool>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "ensure_row_failed");
+                return SupabaseResult<bool>.Fail(response.Body ?? response.ErrorMessage ?? "ensure_row_failed");
 
             return SupabaseResult<bool>.Success(true);
         }
