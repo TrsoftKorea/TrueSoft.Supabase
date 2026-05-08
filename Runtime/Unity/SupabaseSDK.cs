@@ -2297,6 +2297,7 @@ namespace Truesoft.Supabase.Unity
             UserSaveStaticSyncRegistry.ResetAll();
 
             _currentSession = null;
+            _remoteConfig   = null;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);

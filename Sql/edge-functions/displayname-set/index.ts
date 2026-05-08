@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
 
   if (myProfile.error || !myProfile.data?.server_id) {
     return new Response(
-      JSON.stringify({ ok: false, reason: myProfile.error?.message ?? "server_id_not_found" } satisfies SetResponse),
+      JSON.stringify({ ok: false, reason: "server_id_not_found" } satisfies SetResponse),
       { status: 409, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -98,10 +98,10 @@ Deno.serve(async (req) => {
     );
 
   if (upsert.error) {
-    const msg = upsert.error.message ?? "display_name_upsert_failed";
+    const msg = upsert.error.message ?? "";
     const reason = msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")
       ? "display_name_taken"
-      : msg;
+      : "display_name_upsert_failed";
     return new Response(
       JSON.stringify({ ok: false, reason } satisfies SetResponse),
       { status: reason === "display_name_taken" ? 409 : 500, headers: { "Content-Type": "application/json" } },
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
   const existing = await adminClient.auth.admin.getUserById(user.id);
   if (existing.error || !existing.data?.user) {
     return new Response(
-      JSON.stringify({ ok: false, reason: existing.error?.message ?? "auth_admin_get_user_failed" } satisfies SetResponse),
+      JSON.stringify({ ok: false, reason: "auth_admin_get_user_failed" } satisfies SetResponse),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
   const upd = await adminClient.auth.admin.updateUserById(user.id, { user_metadata: merged });
   if (upd.error) {
     return new Response(
-      JSON.stringify({ ok: false, reason: upd.error.message } satisfies SetResponse),
+      JSON.stringify({ ok: false, reason: "display_name_update_failed" } satisfies SetResponse),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }

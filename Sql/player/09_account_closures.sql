@@ -44,5 +44,6 @@ create index if not exists profiles_withdrawn_at_idx
 
 alter table public.account_closures enable row level security;
 
--- 정책 없음 → anon/authenticated JWT로는 행 접근 불가. service_role은 RLS 우회.
--- 서버에서 일반 사용자에게 열어줄 경우에만 별도 policy 추가.
+-- [의도적] 정책 없음 — RLS가 활성화된 상태에서 policy가 없으면 anon/authenticated 역할의
+-- 모든 접근(SELECT/INSERT/UPDATE/DELETE)이 기본 차단됨. service_role만 RLS를 우회하여 접근 가능.
+-- 일반 사용자에게 접근을 열어줄 경우에만 별도 policy 추가할 것.

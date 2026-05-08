@@ -90,6 +90,11 @@ namespace Truesoft.Supabase.Core.Http
 
         private static bool ShouldRetry(SupabaseHttpResponse response, int attempt) =>
             attempt < MaxRetries &&
-            (response.StatusCode == 503 || response.StatusCode == 0);
+            (response.StatusCode == 0   ||
+             response.StatusCode == 429 ||
+             response.StatusCode == 500 ||
+             response.StatusCode == 502 ||
+             response.StatusCode == 503 ||
+             response.StatusCode == 504);
     }
 }

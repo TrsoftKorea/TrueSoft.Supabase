@@ -88,10 +88,6 @@ begin
   set server_id = v_target_server_id
   where account_id = p_account_id;
 
-  update public.user_saves
-  set server_id = v_target_server_id
-  where account_id = p_account_id;
-
   update public.user_sessions
   set server_id = v_target_server_id
   where account_id = p_account_id;
@@ -105,7 +101,7 @@ end;
 $$;
 
 comment on function public._ts_transfer_user_server_core(uuid, text) is
-  '내부용: profiles·display_names·user_saves·user_sessions·anonymous_recovery_tokens 의 server_id 일괄 이주.';
+  '내부용: profiles·display_names·user_sessions·anonymous_recovery_tokens 의 server_id 일괄 이주.';
 
 revoke all on function public._ts_transfer_user_server_core(uuid, text) from public;
 revoke all on function public._ts_transfer_user_server_core(uuid, text) from anon, authenticated;

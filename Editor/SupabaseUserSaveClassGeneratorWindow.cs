@@ -91,6 +91,8 @@ namespace Truesoft.Supabase.Editor
             EditorPrefs.SetBool(PrefsKeyFormInitialized, true);
             EditorPrefs.SetString(PrefsKeyProjectUrl, projectUrl ?? "");
             EditorPrefs.SetString(PrefsKeySecret, secretKeyInput ?? "");
+            if (string.IsNullOrWhiteSpace(secretKeyInput) == false)
+                UnityEngine.Debug.LogWarning("[Supabase] service_role key가 EditorPrefs(로컬 레지스트리)에 저장됩니다. 공유 PC 환경에서는 주의하세요.");
             EditorPrefs.SetString(
                 PrefsKeyTableName,
                 string.IsNullOrWhiteSpace(tableName) ? "user_saves" : tableName);
