@@ -73,8 +73,18 @@ namespace Truesoft.Supabase.Unity.Config
         /// </summary>
         /// <remarks>
         /// 반드시 <c>Awake()</c>에서 구독하세요. Start()나 OnEnable()에서 구독하면 이미 이벤트가 발행된 후일 수 있습니다.
+        /// 이미 완료 여부가 필요하면 <see cref="IsSessionRestoreCompleted"/>와 <see cref="SessionRestoreResult"/>를 확인하세요.
         /// </remarks>
         public static event Action<bool> OnSessionRestored;
+
+        /// <summary>세션 복원 시도가 완료되었는지 여부.</summary>
+        public static bool IsSessionRestoreCompleted { get; private set; }
+
+        /// <summary>
+        /// 세션 복원 결과. true면 복원 성공, false면 실패 또는 저장된 세션 없음.
+        /// <see cref="IsSessionRestoreCompleted"/>가 true일 때만 유효합니다.
+        /// </summary>
+        public static bool SessionRestoreResult { get; private set; }
 
         private Coroutine _lifecycleRoutine;
         private bool _remoteConfigPollSettingsApplied;
@@ -182,7 +192,7 @@ namespace Truesoft.Supabase.Unity.Config
             var autoLoginTask = Supabase.TryAutoLoginOnStartAsync();
             yield return new WaitUntil(() => autoLoginTask.IsCompleted);
 
-            OnSessionRestored?.Invoke(autoLoginTask.Result);
+            SetSessionRestoreCompleted(autoLoginTask.Result);
 
             // RemoteConfig: Cold Start — 시작 시 fetch 없음. 폴링은 Update에서 TickRemoteConfigKeyPolls.
         }
@@ -194,7 +204,14 @@ namespace Truesoft.Supabase.Unity.Config
         public static async Task TriggerSessionRestoreAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
-            OnSessionRestored?.Invoke(ok);
+            SetSessionRestoreCompleted(ok);
+        }
+
+        private static void SetSessionRestoreCompleted(bool result)
+        {
+            IsSessionRestoreCompleted = true;
+            SessionRestoreResult = result;
+            OnSessionRestored?.Invoke(result);
         }
 
         private void EnsureGoogleLoginBridge()
