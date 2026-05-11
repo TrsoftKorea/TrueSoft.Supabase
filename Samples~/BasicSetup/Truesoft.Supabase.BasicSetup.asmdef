@@ -1,0 +1,16 @@
+{
+  "name": "Truesoft.Supabase.BasicSetup",
+  "rootNamespace": "Truesoft.Supabase.Samples.BasicSetup",
+  "references": [
+    "Truesoft.Supabase.Unity"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
