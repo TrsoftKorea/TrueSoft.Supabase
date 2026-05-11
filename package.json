@@ -12,6 +12,11 @@
   },
   "samples": [
     {
+      "displayName": "BasicSetup",
+      "description": "SDK 전용 Canvas UI 시스템. 자동 로그인 실패 시 로그인 UI를 자동 표시합니다 (SupabaseCanvas + SupabaseLoginUI).",
+      "path": "Samples~/BasicSetup"
+    },
+    {
       "displayName": "Examples",
       "description": "Practical examples: login, save/load, remote config, edge functions, server shard (ExampleSupabaseScenarios + keyboard shortcuts).",
       "path": "Samples~/Examples"
