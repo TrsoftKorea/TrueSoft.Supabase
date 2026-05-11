@@ -71,6 +71,9 @@ namespace Truesoft.Supabase.Unity.Config
         /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 여부.
         /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
+        /// <remarks>
+        /// 반드시 <c>Awake()</c>에서 구독하세요. Start()나 OnEnable()에서 구독하면 이미 이벤트가 발행된 후일 수 있습니다.
+        /// </remarks>
         public static event Action<bool> OnSessionRestored;
 
         private Coroutine _lifecycleRoutine;
