@@ -58,6 +58,45 @@ comment on function public.ts_ensure_my_row(text, text) is
 grant execute on function public.ts_ensure_my_row(text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- ts_update_last_activity_at — data_ 테이블 UPDATE 시 profiles.last_activity_at 갱신
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_update_last_activity_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  update public.user_profiles
+  set last_activity_at = now()
+  where account_id = auth.uid();
+  return new;
+end;
+$$;
+
+comment on function public.ts_update_last_activity_at() is
+  'data_ 테이블 UPDATE 시 user_profiles.last_activity_at을 갱신합니다. admin_create_user_table이 자동 등록.';
+
+-- 기존에 생성된 data_ 테이블에 트리거 일괄 적용
+do $$
+declare
+  t text;
+begin
+  for t in
+    select table_name from information_schema.tables
+    where table_schema = 'public' and table_name like 'data_%'
+  loop
+    execute format($f$
+      drop trigger if exists update_last_activity_at on public.%I;
+      create trigger update_last_activity_at
+      after update on public.%I
+      for each row execute function public.ts_update_last_activity_at();
+    $f$, t, t);
+  end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- admin_create_user_table — 유저 세이브 테이블 생성 헬퍼 (어드민 전용)
 -- ---------------------------------------------------------------------------
 -- 커스텀 세이브 테이블을 표준 구조로 생성합니다.
@@ -126,6 +165,13 @@ begin
     before update on %s
     for each row
     execute function public.set_updated_at();
+  $f$, v_table_ident);
+
+  execute format($f$
+    create trigger update_last_activity_at
+    after update on %s
+    for each row
+    execute function public.ts_update_last_activity_at();
   $f$, v_table_ident);
 
   execute format('alter table %s enable row level security;', v_table_ident);
