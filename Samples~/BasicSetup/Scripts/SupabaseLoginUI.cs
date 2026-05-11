@@ -1,6 +1,6 @@
-using Truesoft.Supabase.Unity;
 using UnityEngine;
 using UnityEngine.UI;
+using SupabaseSDK = Truesoft.Supabase.Unity.Supabase;
 
 namespace Truesoft.Supabase.Samples.BasicSetup
 {
@@ -23,7 +23,7 @@ namespace Truesoft.Supabase.Samples.BasicSetup
         public async void OnGoogleLoginButtonClicked()
         {
             SetInteractable(false);
-            var ok = await Supabase.TrySignInWithGoogleAsync();
+            var ok = await SupabaseSDK.TrySignInWithGoogleAsync();
             if (ok)
                 supabaseCanvas.OnLoginSuccess();
             else
@@ -33,7 +33,7 @@ namespace Truesoft.Supabase.Samples.BasicSetup
         public async void OnAnonymousLoginButtonClicked()
         {
             SetInteractable(false);
-            var ok = await Supabase.TrySignInAnonymouslyAsync();
+            var ok = await SupabaseSDK.TrySignInAnonymouslyAsync();
             if (ok)
                 supabaseCanvas.OnLoginSuccess();
             else
