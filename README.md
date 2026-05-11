@@ -24,11 +24,6 @@ https://github.com/ljuh1521/TrueSoft.Supabase.git
 3. **`Assets/Resources/SupabaseSettings.asset`** 으로 저장합니다.
 4. (선택) `SupabaseRuntime`을 씬에 배치해 세션 자동 복원·RemoteConfig 폴링을 활성화합니다.
 
-```csharp
-// 앱 시작 시 초기화 + 세션 복원
-await Supabase.TryStartAsync();
-```
-
 ---
 
 ## 기능

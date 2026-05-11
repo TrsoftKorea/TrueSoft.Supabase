@@ -51,9 +51,6 @@ await Supabase.TryLinkAppleToCurrentAnonymousAsync();
 ```csharp
 // 앱 재시작 시 저장된 refresh_token으로 세션 복원
 await Supabase.TryRestoreSessionAsync();
-
-// 또는 TryStartAsync에서 한 번에 처리
-await Supabase.TryStartAsync(restoreSessionFirst: true);
 ```
 
 ## 익명 계정 복구

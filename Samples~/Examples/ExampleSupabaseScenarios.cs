@@ -687,7 +687,8 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private async Task RunAllExamplesAsync()
         {
-            _ = await SupabaseClient.TryStartAsync(restoreSessionFirst: true, refreshRemoteConfigOnStart: false);
+            // 주의: SupabaseRuntime이 자동으로 게임 시작 절차(초기화 + 세션 복원)를 수행하므로,
+            // 여기서는 TryStartAsync()를 호출할 필요가 없습니다. API를 바로 사용 가능합니다.
 
             await RunServerTimeExampleAsync();
             await RunLoginExampleAsync();

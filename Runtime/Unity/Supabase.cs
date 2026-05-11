@@ -13,8 +13,7 @@ namespace Truesoft.Supabase.Unity
     /// </summary>
     /// <remarks>
     /// • 구글: <see cref="TrySignInWithGoogleAsync(bool)"/>는 Android 네이티브 전체 플로우(설정의 Web Client ID), <see cref="TrySignInWithGoogleIdTokenAsync"/>는 ID 토큰 문자열만 넘길 때.<br/>
-    /// • <see cref="TryStartAsync"/>는 초기화·(선택)세션 복원·(선택)RC를 한 번에 수행합니다.<br/>
-        /// • 공개 프로필: <see cref="TryGetPublicProfileAsync"/>, displayName <see cref="TryIsDisplayNameAvailableAsync"/> → <see cref="TrySetMyDisplayNameAsync"/>, 탈퇴 표시 <see cref="TryMarkMyWithdrawnAsync"/> 등 (DB <c>profiles</c>, README).<br/>
+    /// • 공개 프로필: <see cref="TryGetPublicProfileAsync"/>, displayName <see cref="TryIsDisplayNameAvailableAsync"/> → <see cref="TrySetMyDisplayNameAsync"/>, 탈퇴 표시 <see cref="TryMarkMyWithdrawnAsync"/> 등 (DB <c>profiles</c>, README).<br/>
     /// • 우편함: <see cref="TryGetMyMailsAsync"/>, <see cref="TryClaimMailItemsAsync"/>, <see cref="TryClaimAllMailItemsAsync"/>, <see cref="TryDeleteReadMailsAsync"/>, <see cref="Mailbox"/> (SQL <c>Sql/player/11_mails.sql</c>).<br/>
     /// • Try API들은 <c>SupabaseSettings.enableApiResultLogs</c>에 따라 API별 고정 태그로 성공/실패 로그를 자동 출력합니다.
     /// </remarks>
@@ -91,12 +90,6 @@ namespace Truesoft.Supabase.Unity
         /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync(bool)"/>
         public static Task<bool> TrySignInAnonymouslyAsync(bool saveSessionToStorage = true) =>
             SupabaseSDK.TrySignInAnonymouslyAsync(saveSessionToStorage);
-
-        /// <inheritdoc cref="SupabaseSDK.TryStartAsync(bool, bool)"/>
-        public static Task<bool> TryStartAsync(
-            bool restoreSessionFirst = true,
-            bool refreshRemoteConfigOnStart = false) =>
-            SupabaseSDK.TryStartAsync(restoreSessionFirst, refreshRemoteConfigOnStart);
 
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFromGoogleAsync"/>
         public static Task<bool> TrySignOutFromGoogleAsync() =>

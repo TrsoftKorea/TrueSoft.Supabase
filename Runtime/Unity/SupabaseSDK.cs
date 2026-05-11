@@ -732,16 +732,6 @@ namespace Truesoft.Supabase.Unity
             return LogAndReturn(ApiLogTags.AuthGoogleSignOut, r);
         }
 
-        /// <summary><see cref="StartAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<bool> TryStartAsync(
-            bool restoreSessionFirst = true,
-            bool refreshRemoteConfigOnStart = false)
-        {
-            var ok = await StartAsync(restoreSessionFirst, refreshRemoteConfigOnStart);
-            LogApiResult(ApiLogTags.BootStart, ok, ok ? null : "start_failed");
-            return ok;
-        }
-
         /// <summary><see cref="RefreshSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TryRefreshSessionAsync(string refreshToken, bool saveSessionToStorage = true)
         {
