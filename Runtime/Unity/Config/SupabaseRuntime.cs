@@ -72,8 +72,20 @@ namespace Truesoft.Supabase.Unity.Config
         /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
-        /// 반드시 <c>Awake()</c>에서 구독하세요. Start()나 OnEnable()에서 구독하면 이미 이벤트가 발행된 후일 수 있습니다.
-        /// 이미 완료 여부가 필요하면 <see cref="IsSessionRestoreCompleted"/>와 <see cref="SessionRestoreResult"/>를 확인하세요.
+        /// <c>OnEnable()</c>에서 구독하고 <c>OnDisable()</c>에서 해제하세요.
+        /// 구독 시점에 이미 완료된 경우를 대비해 <see cref="IsSessionRestoreCompleted"/>를 함께 확인하세요.
+        /// <code>
+        /// void OnEnable()
+        /// {
+        ///     SupabaseRuntime.OnSessionRestored += OnSessionRestored;
+        ///     if (SupabaseRuntime.IsSessionRestoreCompleted)
+        ///         OnSessionRestored(SupabaseRuntime.SessionRestoreResult);
+        /// }
+        /// void OnDisable()
+        /// {
+        ///     SupabaseRuntime.OnSessionRestored -= OnSessionRestored;
+        /// }
+        /// </code>
         /// </remarks>
         public static event Action<bool> OnSessionRestored;
 
