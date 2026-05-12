@@ -62,24 +62,12 @@ namespace Truesoft.Supabase.Unity.Config
         [SerializeField] private float userSaveAutoSyncCooldownSeconds = 1f;
 
         /// <summary>
-        /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 여부.
+        /// 세션 복원 시도가 완료되면 발행됩니다. bool: <see cref="Supabase.IsLoggedIn"/>과 항상 일치합니다.
         /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
-        /// <c>OnEnable()</c>에서 구독하고 <c>OnDisable()</c>에서 해제하세요.
-        /// 구독 시점에 이미 완료된 경우를 대비해 <see cref="IsSessionRestoreCompleted"/>를 함께 확인하세요.
-        /// <code>
-        /// void OnEnable()
-        /// {
-        ///     SupabaseRuntime.OnSessionRestored += OnSessionRestored;
-        ///     if (SupabaseRuntime.IsSessionRestoreCompleted)
-        ///         OnSessionRestored(SupabaseRuntime.SessionRestoreResult);
-        /// }
-        /// void OnDisable()
-        /// {
-        ///     SupabaseRuntime.OnSessionRestored -= OnSessionRestored;
-        /// }
-        /// </code>
+        /// 구독 시점에 이미 완료된 경우를 자동으로 처리하는 <see cref="SubscribeSessionRestored"/>를 사용하면
+        /// 보일러플레이트 없이 한 줄로 구독할 수 있습니다.
         /// </remarks>
         public static event Action<bool> OnSessionRestored;
 
@@ -87,7 +75,7 @@ namespace Truesoft.Supabase.Unity.Config
         public static bool IsSessionRestoreCompleted { get; private set; }
 
         /// <summary>
-        /// 세션 복원 결과. true면 복원 성공, false면 실패 또는 저장된 세션 없음.
+        /// 세션 복원 결과. <see cref="Supabase.IsLoggedIn"/>과 항상 일치합니다.
         /// <see cref="IsSessionRestoreCompleted"/>가 true일 때만 유효합니다.
         /// </summary>
         public static bool SessionRestoreResult { get; private set; }
@@ -211,11 +199,37 @@ namespace Truesoft.Supabase.Unity.Config
             SetSessionRestoreCompleted(ok);
         }
 
+        /// <summary>
+        /// 세션 복원 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
+        /// <c>OnEnable()</c>에서 호출하고 <c>OnDisable()</c>에서 <see cref="UnsubscribeSessionRestored"/>로 해제하세요.
+        /// </summary>
+        /// <example><code>
+        /// void OnEnable() => SupabaseRuntime.SubscribeSessionRestored(HandleSessionRestored);
+        /// void OnDisable() => SupabaseRuntime.UnsubscribeSessionRestored(HandleSessionRestored);
+        /// </code></example>
+        public static void SubscribeSessionRestored(Action<bool> callback)
+        {
+            if (IsSessionRestoreCompleted)
+            {
+                callback?.Invoke(SessionRestoreResult);
+                return;
+            }
+            OnSessionRestored += callback;
+        }
+
+        /// <summary>
+        /// <see cref="SubscribeSessionRestored"/>로 등록한 콜백을 해제합니다.
+        /// </summary>
+        public static void UnsubscribeSessionRestored(Action<bool> callback)
+        {
+            OnSessionRestored -= callback;
+        }
+
         private static void SetSessionRestoreCompleted(bool result)
         {
             IsSessionRestoreCompleted = true;
-            SessionRestoreResult = result;
-            OnSessionRestored?.Invoke(result);
+            SessionRestoreResult = result || Supabase.IsLoggedIn;
+            OnSessionRestored?.Invoke(SessionRestoreResult);
         }
 
         private void EnsureGoogleLoginBridge()
