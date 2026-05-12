@@ -51,31 +51,22 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>미읽음 수. <paramref name="userId"/>는 계약 호환용(무시).</summary>
         public Task<SupabaseResult<int>> GetUnreadCountAsync(string userId = null) =>
-            GetUnreadCountAsync(_sessionGetter?.Invoke(), userId);
+            GetInboxCountValueAsync(_sessionGetter?.Invoke(), c => c.Unread);
 
-        public async Task<SupabaseResult<int>> GetUnreadCountAsync(SupabaseSession session, string userId = null)
-        {
-            _ = userId;
-            var token = RequireToken(session);
-            if (token == null)
-                return SupabaseResult<int>.Fail("auth_not_signed_in");
-
-            var r = await _mailbox.GetInboxCountsAsync(token);
-            if (!r.IsSuccess)
-                return SupabaseResult<int>.Fail(r.ErrorMessage ?? "inbox_counts_failed");
-
-            return SupabaseResult<int>.Success(r.Data.Unread);
-        }
+        public Task<SupabaseResult<int>> GetUnreadCountAsync(SupabaseSession session, string userId = null) =>
+            GetInboxCountValueAsync(session, c => c.Unread);
 
         /// <summary>미수령 보상이 있는 메일 개수. <paramref name="userId"/>는 계약 호환용(무시).</summary>
         public Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null) =>
-            GetUnclaimedItemMailCountAsync(_sessionGetter?.Invoke(), userId);
+            GetInboxCountValueAsync(_sessionGetter?.Invoke(), c => c.UnclaimedMails);
 
-        public async Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(
+        public Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(SupabaseSession session, string userId = null) =>
+            GetInboxCountValueAsync(session, c => c.UnclaimedMails);
+
+        private async Task<SupabaseResult<int>> GetInboxCountValueAsync(
             SupabaseSession session,
-            string userId = null)
+            Func<MailInboxCounts, int> selector)
         {
-            _ = userId;
             var token = RequireToken(session);
             if (token == null)
                 return SupabaseResult<int>.Fail("auth_not_signed_in");
@@ -84,7 +75,7 @@ namespace Truesoft.Supabase.Unity
             if (!r.IsSuccess)
                 return SupabaseResult<int>.Fail(r.ErrorMessage ?? "inbox_counts_failed");
 
-            return SupabaseResult<int>.Success(r.Data.UnclaimedMails);
+            return SupabaseResult<int>.Success(selector(r.Data));
         }
 
         public Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimMailItemsAsync(string mailId) =>

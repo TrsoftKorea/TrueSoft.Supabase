@@ -561,22 +561,13 @@ namespace Truesoft.Supabase.Core.Data
         /// </summary>
         private static string BuildIsDisplayNameAvailableBody(string displayName, string ignoreAccountId)
         {
-            var escapedName = EscapeJsonString(displayName);
+            var escapedName = SupabaseCoreHelper.EscapeJson(displayName);
             if (ignoreAccountId == null)
                 return "{\"p_display_name\":\"" + escapedName + "\"}";
 
             // UUID는 hex·하이픈만 포함하므로 이스케이프 불필요하지만 일관성 유지
-            var escapedId = EscapeJsonString(ignoreAccountId);
+            var escapedId = SupabaseCoreHelper.EscapeJson(ignoreAccountId);
             return "{\"p_display_name\":\"" + escapedName + "\",\"p_ignore_account_id\":\"" + escapedId + "\"}";
-        }
-
-        private static string EscapeJsonString(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            return value.Replace("\\", "\\\\").Replace("\"", "\\\"")
-                        .Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
         }
 
         private static string NormalizeDisplayName(string displayName)

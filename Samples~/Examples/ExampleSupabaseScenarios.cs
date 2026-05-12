@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Purchasing;
 using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Unity;
+using Truesoft.Supabase.Unity.RemoteConfig;
 
 using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
 
@@ -25,6 +26,16 @@ namespace Truesoft.Supabase.Unity.RemoteConfig
 
         // A/B 테스트 예시
         public const string ExperimentVariant = "experiment.new_ui_variant";
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────────
+    // RemoteConfig 데이터 모델 샘플 — DB value_json 구조에 맞게 수정하세요.
+    // ──────────────────────────────────────────────────────────────────────────────
+    [Serializable]
+    public class SampleRemoteConfigData
+    {
+        public float value;
+        public string message;
     }
 }
 
@@ -145,7 +156,7 @@ namespace Truesoft.SupabaseUnity.Samples
         [Tooltip("원격 설정 새로고침 및 조회")]
         [SerializeField] private KeyCode keyRemoteConfig = KeyCode.T;
 
-        [Tooltip("원격 설정 즉시 동기화")]
+        [Tooltip("RemoteConfigBinding 현재 값 로그")]
         [SerializeField] private KeyCode keyRemoteConfigOnDemand = KeyCode.U;
 
         [Tooltip("엣지 함수 호출")]
@@ -186,16 +197,31 @@ namespace Truesoft.SupabaseUnity.Samples
         private IAPFacade _iapFacade;
         private bool _keyboardBusy;
 
+        // RemoteConfig 폴링 패턴 샘플 — OnEnable에서 생성, OnDisable에서 해제
+        private RemoteConfigBinding<SampleRemoteConfigData> _remoteConfigBinding;
+        private IDisposable _remoteConfigListener;
+
         private void OnEnable()
         {
             if (subscribeDuplicateLoginOnEnable)
                 SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
+
+            // RemoteConfigBinding — 30초마다 폴링, Value로 읽기
+            _remoteConfigBinding = SupabaseClient.CreateRemoteConfigBinding<SampleRemoteConfigData>(
+                remoteConfigKey, pollIntervalSeconds: 30f);
+
+            // RemoteConfigListener — 값 변경 시 콜백 자동 호출
+            _remoteConfigListener = SupabaseClient.CreateRemoteConfigListener<SampleRemoteConfigData>(
+                remoteConfigKey, pollIntervalSeconds: 30f,
+                cfg => Debug.Log("[Sample] RemoteConfigListener: value=" + cfg?.value + " message=" + cfg?.message));
         }
 
         private void OnDisable()
         {
             SupabaseClient.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
             _iapFacade?.Dispose();
+            _remoteConfigBinding?.Dispose();
+            _remoteConfigListener?.Dispose();
         }
 
         private void HandleDuplicateLoginDetected()
@@ -224,7 +250,7 @@ namespace Truesoft.SupabaseUnity.Samples
             else if (Input.GetKeyDown(keyLoadUserSave))         _ = RunAsyncGuarded(RunLoadUserSaveExampleAsync);
             else if (Input.GetKeyDown(keySaveUserSave))         _ = RunAsyncGuarded(RunSaveUserSaveExampleAsync);
             else if (Input.GetKeyDown(keyRemoteConfig))         _ = RunAsyncGuarded(RunRemoteConfigExampleAsync);
-            else if (Input.GetKeyDown(keyRemoteConfigOnDemand)) _ = RunAsyncGuarded(RunRemoteConfigOnDemandExampleAsync);
+            else if (Input.GetKeyDown(keyRemoteConfigOnDemand)) _ = RunAsyncGuarded(RunRemoteConfigBindingExampleAsync);
             else if (Input.GetKeyDown(keyInvokeFunction))       _ = RunAsyncGuarded(RunFunctionExampleAsync);
             else if (Input.GetKeyDown(keyDuplicateLoginInfo))   LogDuplicateLoginHowToTest();
             else if (Input.GetKeyDown(keyServerTime))           _ = RunAsyncGuarded(RunServerTimeExampleAsync);
@@ -557,33 +583,39 @@ namespace Truesoft.SupabaseUnity.Samples
 
         private async Task<bool> RunRemoteConfigExampleAsync()
         {
-            // Cold Start: 첫 조회에서 키 단위 fetch. 캐시 유효 시간은 DB max_stale_seconds.
-            var result = await SupabaseClient.GetRemoteConfigAsync<object>(remoteConfigKey);
-            if (!result.IsSuccess)
-            {
-                Debug.LogWarning("[Sample] remote config failed (key=" + remoteConfigKey + "): " + (result.ErrorMessage ?? string.Empty));
-                return false;
-            }
+            // CreateRemoteConfigReader: 캐시가 신선하면 즉시, 만료됐으면 서버 응답 대기 후 반환.
+            // 실제 프로젝트에서는 필드로 선언해두고 재사용합니다:
+            //   private readonly Func<Task<SampleRemoteConfigData>> _getConfig =
+            //       Supabase.CreateRemoteConfigReader<SampleRemoteConfigData>("my_key");
+            var reader = SupabaseClient.CreateRemoteConfigReader<SampleRemoteConfigData>(remoteConfigKey);
+            var cfg = await reader();
 
             SupabaseClient.TryGetRemoteConfigRaw(remoteConfigKey, out var raw);
-            Debug.Log("[Sample] remote config OK (key=" + remoteConfigKey + "). raw: " + raw);
-            return !string.IsNullOrEmpty(raw);
-        }
 
-        private async Task<bool> RunRemoteConfigOnDemandExampleAsync()
-        {
-            if (!await SupabaseClient.RefreshRemoteConfigOnDemandAsync())
+            if (cfg == null)
             {
-                Debug.LogWarning("[Sample] remote config on-demand failed (key=" + remoteConfigKey + ").");
+                Debug.LogWarning("[Sample] remote config reader returned null (key=" + remoteConfigKey + "). raw: " + raw);
                 return false;
             }
 
-            // on-demand로 서버 값을 캐시에 반영한 뒤에는 raw를 바로 읽어오는 편이 네트워크 호출을 줄입니다.
-            var has = SupabaseClient.TryGetRemoteConfigRaw(remoteConfigKey, out var raw);
-            Debug.Log(has
-                ? "[Sample] remote config on-demand OK (key=" + remoteConfigKey + "). raw: " + raw
-                : "[Sample] remote config on-demand: raw 없음 (key=" + remoteConfigKey + ")");
-            return has;
+            Debug.Log("[Sample] remote config reader OK. value=" + cfg.value + " message=" + cfg.message + " raw: " + raw);
+            return true;
+        }
+
+        private Task<bool> RunRemoteConfigBindingExampleAsync()
+        {
+            // RemoteConfigBinding: OnEnable에서 이미 생성됨. Value로 현재 캐시 값을 읽습니다.
+            var cfg = _remoteConfigBinding?.Value;
+            SupabaseClient.TryGetRemoteConfigRaw(remoteConfigKey, out var raw);
+
+            if (cfg == null)
+            {
+                Debug.Log("[Sample] RemoteConfigBinding.Value = null (아직 첫 fetch 완료 전). raw: " + raw);
+                return Task.FromResult(false);
+            }
+
+            Debug.Log("[Sample] RemoteConfigBinding.Value OK. value=" + cfg.value + " message=" + cfg.message);
+            return Task.FromResult(true);
         }
 
         private async Task<bool> RunFunctionExampleAsync()

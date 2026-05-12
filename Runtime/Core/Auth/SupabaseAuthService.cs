@@ -124,22 +124,15 @@ namespace Truesoft.Supabase.Core.Auth
             string oauthAccessToken)
         {
             var sb = new StringBuilder(256);
-            sb.Append("{\"provider\":\"").Append(JsonEscapeForBody(provider))
-                .Append("\",\"id_token\":\"").Append(JsonEscapeForBody(idToken))
+            sb.Append("{\"provider\":\"").Append(SupabaseCoreHelper.EscapeJson(provider))
+                .Append("\",\"id_token\":\"").Append(SupabaseCoreHelper.EscapeJson(idToken))
                 .Append("\",\"link_identity\":true");
             if (string.IsNullOrWhiteSpace(nonce) == false)
-                sb.Append(",\"nonce\":\"").Append(JsonEscapeForBody(nonce.Trim())).Append('"');
+                sb.Append(",\"nonce\":\"").Append(SupabaseCoreHelper.EscapeJson(nonce.Trim())).Append('"');
             if (string.IsNullOrWhiteSpace(oauthAccessToken) == false)
-                sb.Append(",\"access_token\":\"").Append(JsonEscapeForBody(oauthAccessToken)).Append('"');
+                sb.Append(",\"access_token\":\"").Append(SupabaseCoreHelper.EscapeJson(oauthAccessToken)).Append('"');
             sb.Append('}');
             return sb.ToString();
-        }
-
-        private static string JsonEscapeForBody(string s)
-        {
-            if (string.IsNullOrEmpty(s))
-                return "";
-            return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
         }
 
         public async Task<SupabaseResult<SupabaseSession>> SignInWithIdTokenAsync(

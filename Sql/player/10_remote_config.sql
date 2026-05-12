@@ -2,14 +2,18 @@
 -- 플레이어 스키마 — remote_config (Retool / 클라이언트 원격 설정)
 -- 선행: 없음 (독립 테이블)
 -- =============================================================================
--- 
--- 설계: 1키 = 1설정묶음(JSON 클러스터링) = 1폴링주기
+--
+-- 설계: 1키 = 1설정묶음(JSON 클러스터링)
 -- 관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다.
 -- 예: key="gameplay_v1", value_json={"stamina":{...},"battle":{...}}
--- poll_interval_seconds는 키 단위로 설정됩니다.
+-- 폴링 주기는 DB에 저장하지 않으며, 클라이언트(Unity)에서 키 조회 시 지정합니다.
 
--- 기존 테이블/컬럼 마이그레이션용 (category 제거)
+-- 기존 테이블/컬럼 마이그레이션용 (category, poll_interval_seconds, client_version_min/max, max_stale_seconds 제거)
 alter table if exists public.remote_config drop column if exists category;
+alter table if exists public.remote_config drop column if exists poll_interval_seconds;
+alter table if exists public.remote_config drop column if exists client_version_min;
+alter table if exists public.remote_config drop column if exists client_version_max;
+alter table if exists public.remote_config drop column if exists max_stale_seconds;
 
 create table if not exists public.remote_config (
   key text primary key,
@@ -18,24 +22,17 @@ create table if not exists public.remote_config (
   version int not null default 1,
   enabled boolean not null default true,
   description text,
-  poll_interval_seconds int not null default 300,  -- 키 단위 폴링 주기 (초, 0=폴링 안함)
-  requires_auth boolean not null default false,
-  client_version_min text,
-  client_version_max text,
-  max_stale_seconds int not null default 300  -- 캐시 유효 시간 (초)
+  requires_auth boolean not null default false
+  -- 폴링 주기·캐시 유효 시간은 클라이언트(Unity)에서 키 조회 시 지정합니다.
 );
 
 alter table public.remote_config add column if not exists value_json text;
 alter table public.remote_config add column if not exists updated_at timestamptz not null default now();
 alter table public.remote_config add column if not exists version int not null default 1;
 alter table public.remote_config add column if not exists enabled boolean not null default true;
--- category 컬럼 제거됨
+-- category, poll_interval_seconds, client_version_min/max, max_stale_seconds 컬럼 제거됨
 alter table public.remote_config add column if not exists description text;
-alter table public.remote_config add column if not exists poll_interval_seconds int not null default 300;
 alter table public.remote_config add column if not exists requires_auth boolean not null default false;
-alter table public.remote_config add column if not exists client_version_min text;
-alter table public.remote_config add column if not exists client_version_max text;
-alter table public.remote_config add column if not exists max_stale_seconds int not null default 300;
 
 -- updated_at 자동 갱신 (Retool UPDATE 시에도 일관되게 갱신)
 create or replace function public.ts_remote_config_set_updated_at()

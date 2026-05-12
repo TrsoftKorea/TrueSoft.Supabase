@@ -45,12 +45,6 @@ namespace Truesoft.Supabase.Unity.Config
         [FormerlySerializedAs("enableRemoteConfig")]
         [SerializeField] private bool enableRemoteConfig = true;
 
-        [Label("온디맨드 폴링 지연 (초)")]
-        [FormerlySerializedAs("pollIntervalSeconds")]
-        [FormerlySerializedAs("remoteConfigOnDemandPushbackSeconds")]
-        [Tooltip("TryRefreshRemoteConfigAsync / RefreshRemoteConfigOnDemandAsync 호출 후 카테고리 폴링 시각을 이 시간(초)만큼 뒤로 미룹니다. 0 이하면 SDK에서 60초로 처리합니다.")]
-        [SerializeField] private float remoteConfigOnDemandPushbackSeconds = 60f;
-
         [Label("키별 폴링 주기 오버라이드")]
         [FormerlySerializedAs("remoteConfigKeyPollOverrides")]
         [Tooltip("키별 폴링 주기 오버라이드. 비우면 DB remote_config.poll_interval_seconds만 사용.")]
@@ -175,8 +169,6 @@ namespace Truesoft.Supabase.Unity.Config
                 return;
 
             _remoteConfigPollSettingsApplied = true;
-            var pushback = remoteConfigOnDemandPushbackSeconds <= 0f ? 60f : remoteConfigOnDemandPushbackSeconds;
-            SupabaseSDK.UpdateRemoteConfigPollIntervalSeconds(pushback);
             SupabaseSDK.ApplyRemoteConfigKeyPollOverrides(remoteConfigKeyPollOverrides);
         }
 

@@ -136,19 +136,8 @@ namespace Truesoft.Supabase.Core.Auth
             return SupabaseResult<bool>.Success(true);
         }
 
-        private Dictionary<string, string> CreateHeaders(string prefer)
-        {
-            var headers = new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Content-Type", "application/json" }
-            };
-
-            if (string.IsNullOrWhiteSpace(prefer) == false)
-                headers["Prefer"] = prefer;
-
-            return headers;
-        }
+        private Dictionary<string, string> CreateHeaders(string prefer) =>
+            SupabaseCoreHelper.BuildApiHeaders(_publishableKey, prefer: prefer);
 
         [Serializable]
         private sealed class GetRequest

@@ -100,19 +100,8 @@ namespace Truesoft.Supabase.Core.Data
             }
         }
 
-        private Dictionary<string, string> CreateHeaders(string accessToken)
-        {
-            var headers = new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Content-Type", "application/json" }
-            };
-
-            if (string.IsNullOrWhiteSpace(accessToken) == false)
-                headers["Authorization"] = "Bearer " + accessToken;
-
-            return headers;
-        }
+        private Dictionary<string, string> CreateHeaders(string accessToken) =>
+            SupabaseCoreHelper.BuildApiHeaders(_publishableKey, accessToken);
 
         private static string FormatHttpError(SupabaseHttpResponse response, string fallback)
         {

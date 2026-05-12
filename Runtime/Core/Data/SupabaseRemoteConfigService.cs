@@ -17,7 +17,7 @@ namespace Truesoft.Supabase.Core.Data
     public sealed class SupabaseRemoteConfigService
     {
         private const string SelectColumns =
-            "key,value_json,updated_at,version,enabled,description,poll_interval_seconds,requires_auth,client_version_min,client_version_max,max_stale_seconds";
+            "key,value_json,updated_at,version,enabled,description,requires_auth";
 
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
@@ -34,30 +34,6 @@ namespace Truesoft.Supabase.Core.Data
             _publishableKey = publishableKey ?? throw new ArgumentNullException(nameof(publishableKey));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _remoteConfigTable = SupabaseRestTableRef.Normalize(remoteConfigTable, nameof(remoteConfigTable));
-        }
-
-        /// <summary>전체 행 조회.</summary>
-        public async Task<SupabaseResult<RemoteConfigRow[]>> GetAllAsync(string accessToken = null)
-        {
-            var url = BuildBaseUrl();
-            var response = await _httpClient.SendAsync("GET", url, null, CreateHeaders(accessToken));
-            return ParseRows(response);
-        }
-
-        /// <summary>
-        /// 마지막 동기 이후 변경분. <paramref name="updatedAfterIso"/>가 비어 있으면 <see cref="GetAllAsync"/>와 동일하게 전체 조회합니다.
-        /// </summary>
-        public async Task<SupabaseResult<RemoteConfigRow[]>> GetChangedSinceAsync(string updatedAfterIso, string accessToken = null)
-        {
-            if (string.IsNullOrWhiteSpace(updatedAfterIso))
-                return await GetAllAsync(accessToken);
-
-            var url =
-                $"{BuildBaseUrl()}" +
-                $"&updated_at=gt.{Uri.EscapeDataString(updatedAfterIso)}";
-
-            var response = await _httpClient.SendAsync("GET", url, null, CreateHeaders(accessToken));
-            return ParseRows(response);
         }
 
         /// <summary>특정 키 목록만 조회(Cold Start 시 첫 조회용).</summary>
@@ -152,11 +128,7 @@ namespace Truesoft.Supabase.Core.Data
                     version = o["version"]?.Value<int?>() ?? 0,
                     enabled = o["enabled"]?.Value<bool?>() ?? true,
                     description = o["description"]?.Value<string>(),
-                    poll_interval_seconds = o["poll_interval_seconds"]?.Value<int?>() ?? 300,
                     requires_auth = o["requires_auth"]?.Value<bool?>() ?? false,
-                    client_version_min = o["client_version_min"]?.Value<string>(),
-                    client_version_max = o["client_version_max"]?.Value<string>(),
-                    max_stale_seconds = o["max_stale_seconds"]?.Value<int?>() ?? 300,
                 };
                 list.Add(row);
             }
@@ -175,19 +147,8 @@ namespace Truesoft.Supabase.Core.Data
             return vj.ToString(Formatting.None);
         }
 
-        private Dictionary<string, string> CreateHeaders(string accessToken)
-        {
-            var headers = new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Content-Type", "application/json" },
-            };
-
-            if (string.IsNullOrWhiteSpace(accessToken) == false)
-                headers["Authorization"] = "Bearer " + accessToken;
-
-            return headers;
-        }
+        private Dictionary<string, string> CreateHeaders(string accessToken) =>
+            SupabaseCoreHelper.BuildApiHeaders(_publishableKey, accessToken);
 
         [Serializable]
         public sealed class RemoteConfigRow
@@ -199,11 +160,7 @@ namespace Truesoft.Supabase.Core.Data
             public int version;
             public bool enabled;
             public string description;
-            public int poll_interval_seconds;
             public bool requires_auth;
-            public string client_version_min;
-            public string client_version_max;
-            public int max_stale_seconds;
         }
     }
 }

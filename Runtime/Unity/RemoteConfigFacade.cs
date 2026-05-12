@@ -15,37 +15,32 @@ namespace Truesoft.Supabase.Unity
     {
         private readonly SupabaseRemoteConfigService _service;
         private readonly Func<string> _accessTokenGetter;
-        private readonly Func<string> _applicationVersionProvider;
         private readonly Dictionary<string, string> _cache = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, CachedKeyMeta> _keyMeta = new Dictionary<string, CachedKeyMeta>(StringComparer.Ordinal);
         private readonly Dictionary<string, KeyPollState> _keyPollStates = new Dictionary<string, KeyPollState>(StringComparer.Ordinal);
         private readonly Dictionary<string, List<Action<string>>> _keySubscribers = new Dictionary<string, List<Action<string>>>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pollIntervalOverrideByKey = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _maxStaleSecondsByKey = new Dictionary<string, int>(StringComparer.Ordinal);
 
         /// <summary>Remote config가 변경되어 캐시가 갱신되면 호출됩니다. 인자는 변경된 key 목록.</summary>
         public event Action<IReadOnlyList<string>> OnChanged;
 
-        /// <summary>마지막 동기 시각(ISO). 키 단위 polling용.</summary>
-        public string LastUpdatedAtIso { get; private set; }
-
         /// <summary>
-        /// 최근 <c>RefreshAllAsync</c>/<c>PollAsync</c>/<c>TickKeyPollsAsync</c>에서 캐시에 실제 변경이 있었는지 여부입니다.
+        /// 최근 <c>TickKeyPollsAsync</c>에서 캐시에 실제 변경이 있었는지 여부입니다.
         /// </summary>
         public bool LastApplyHadChanges { get; private set; }
 
         public RemoteConfigFacade(
             SupabaseRemoteConfigService service,
-            Func<string> accessTokenGetter = null,
-            Func<string> applicationVersionProvider = null)
+            Func<string> accessTokenGetter = null)
         {
             _service = service ?? throw new ArgumentNullException(nameof(service));
             _accessTokenGetter = accessTokenGetter;
-            _applicationVersionProvider = applicationVersionProvider ?? (() => Application.version);
         }
 
         /// <summary>
-        /// 키별 폴링 주기(초)를 인스펙터에서 덮어씁니다.
-        /// <paramref name="overrideSeconds"/>: &lt; 0이면 DB의 <c>poll_interval_seconds</c> 사용, 0이면 해당 키 백그라운드 폴링 비활성, &gt; 0이면 해당 초 간격.
+        /// 키별 폴링 주기(초)를 설정합니다.
+        /// <paramref name="overrideSeconds"/>: 0 이하이면 해당 키 백그라운드 폴링 비활성, 0 초과이면 해당 초 간격.
         /// </summary>
         public void SetKeyPollIntervalOverride(string key, float overrideSeconds)
         {
@@ -53,13 +48,22 @@ namespace Truesoft.Supabase.Unity
                 return;
 
             var k = key.Trim();
-            if (overrideSeconds < 0f)
-                _pollIntervalOverrideByKey.Remove(k);
-            else
-                _pollIntervalOverrideByKey[k] = overrideSeconds;
+            _pollIntervalOverrideByKey[k] = overrideSeconds <= 0f ? 0f : overrideSeconds;
         }
 
         public void ClearKeyPollIntervalOverrides() => _pollIntervalOverrideByKey.Clear();
+
+        /// <summary>
+        /// 키별 캐시 유효 시간(초)을 설정합니다.
+        /// <paramref name="seconds"/>가 0 이하이면 기본값(300초)이 사용됩니다.
+        /// </summary>
+        public void SetKeyMaxStaleSeconds(string key, int seconds)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+
+            _maxStaleSecondsByKey[key.Trim()] = seconds > 0 ? seconds : 0;
+        }
 
         /// <summary>특정 key가 서버에서 갱신될 때마다 콜백을 호출합니다.</summary>
         public void Subscribe(string key, Action<string> onValueChanged, bool invokeIfCached = true)
@@ -67,16 +71,17 @@ namespace Truesoft.Supabase.Unity
             if (string.IsNullOrWhiteSpace(key) || onValueChanged == null)
                 return;
 
-            if (!_keySubscribers.TryGetValue(key, out var list))
+            var k = key.Trim();
+            if (!_keySubscribers.TryGetValue(k, out var list))
             {
                 list = new List<Action<string>>();
-                _keySubscribers[key] = list;
+                _keySubscribers[k] = list;
             }
 
             if (list.Contains(onValueChanged) == false)
                 list.Add(onValueChanged);
 
-            if (invokeIfCached && TryGetRaw(key, out var json) && IsObjectRootJson(json))
+            if (invokeIfCached && TryGetRaw(k, out var json) && IsObjectRootJson(json))
                 onValueChanged.Invoke(json);
         }
 
@@ -85,12 +90,13 @@ namespace Truesoft.Supabase.Unity
             if (string.IsNullOrWhiteSpace(key) || onValueChanged == null)
                 return;
 
-            if (_keySubscribers.TryGetValue(key, out var list) == false)
+            var k = key.Trim();
+            if (_keySubscribers.TryGetValue(k, out var list) == false)
                 return;
 
             list.Remove(onValueChanged);
             if (list.Count == 0)
-                _keySubscribers.Remove(key);
+                _keySubscribers.Remove(k);
         }
 
         public bool TryGetRaw(string key, out string valueJson)
@@ -101,12 +107,14 @@ namespace Truesoft.Supabase.Unity
                 return false;
             }
 
-            return _cache.TryGetValue(key, out valueJson);
+            return _cache.TryGetValue(key.Trim(), out valueJson);
         }
 
         public T Get<T>(string key, T defaultValue = default)
         {
-            if (_cache.TryGetValue(key, out var json) == false || string.IsNullOrWhiteSpace(json))
+            if (string.IsNullOrWhiteSpace(key) ||
+                _cache.TryGetValue(key.Trim(), out var json) == false ||
+                string.IsNullOrWhiteSpace(json))
                 return defaultValue;
 
             try
@@ -123,21 +131,25 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// Cold Start + Stale-While-Revalidate: 캐시에 없으면 키 단위로 fetch합니다.
-        /// 캐시 유효 시간은 DB <c>max_stale_seconds</c>를 사용합니다(0 이하이면 300초).
+        /// Cold Start 패턴: 캐시에 없으면 키 단위로 fetch합니다.
+        /// 폴링이 활성화된 키는 읽기 시 stale 체크를 건너뜁니다(폴링이 갱신 담당).
+        /// 폴링이 없는 키는 Stale-While-Revalidate: <paramref name="maxStaleSeconds"/> 초과 시 백그라운드 갱신을 트리거합니다(기본 300초).
+        /// 폴링 설정은 <see cref="SetKeyPollIntervalOverride"/>를 사용합니다.
         /// fetch 실패·키 없음·역직렬화 실패 시 <see cref="SupabaseResult{T}.Fail"/>를 반환합니다.
         /// 실패 시 <see cref="SupabaseResult{T}.ErrorMessage"/> 예:
         /// <c>remote_config_key_not_in_database</c>(테이블/RLS에 행 없음),
         /// <c>remote_config_key_disabled</c>, <c>remote_config_key_requires_auth</c>,
-        /// <c>remote_config_key_client_version_mismatch</c>,
         /// <c>remote_config_value_must_be_object_json</c>(뒤에 <c>:</c>로 이유·접두 미리보기가 붙을 수 있음).
         /// </summary>
-        public async Task<SupabaseResult<T>> GetTypedAsync<T>(string key) where T : class, new()
+        public async Task<SupabaseResult<T>> GetTypedAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
         {
             if (string.IsNullOrWhiteSpace(key))
                 return SupabaseResult<T>.Fail("remote_config_key_empty");
 
             var trimmedKey = key.Trim();
+
+            if (maxStaleSeconds > 0)
+                SetKeyMaxStaleSeconds(trimmedKey, maxStaleSeconds);
 
             if (_cache.TryGetValue(trimmedKey, out _) == false)
             {
@@ -145,15 +157,53 @@ namespace Truesoft.Supabase.Unity
                 if (fetchOutcome.Success == false)
                     return SupabaseResult<T>.Fail(fetchOutcome.Error ?? "remote_config_fetch_failed");
             }
-            else if (_keyMeta.TryGetValue(trimmedKey, out var metaStale))
+            else if (!IsPollingActive(trimmedKey) && _keyMeta.TryGetValue(trimmedKey, out var metaStale))
             {
-                var maxStale = TimeSpan.FromSeconds(NormalizeMaxStaleSeconds(metaStale.MaxStaleSeconds));
-                if (DateTime.UtcNow - metaStale.FetchedAtUtc > maxStale)
-                {
+                // 폴링 없는 경우에만 stale-while-revalidate 체크
+                if (DateTime.UtcNow - metaStale.FetchedAtUtc > TimeSpan.FromSeconds(GetEffectiveMaxStaleSeconds(trimmedKey)))
                     _ = RefreshKeyInBackgroundAsync(trimmedKey);
-                }
             }
 
+            return ReadCachedKey<T>(trimmedKey);
+        }
+
+        /// <summary>
+        /// Remote Config를 가져옵니다. 캐시가 없거나 만료된 경우 서버 응답을 기다린 후 신선한 값을 반환합니다.
+        /// <see cref="GetTypedAsync{T}"/>와 달리, 만료 시 현재 호출이 서버 응답을 기다립니다.
+        /// </summary>
+        public async Task<SupabaseResult<T>> GetTypedFreshAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return SupabaseResult<T>.Fail("remote_config_key_empty");
+
+            var trimmedKey = key.Trim();
+
+            if (maxStaleSeconds > 0)
+                SetKeyMaxStaleSeconds(trimmedKey, maxStaleSeconds);
+
+            // 캐시 없음 또는 만료 시 서버에서 직접 fetch (await)
+            bool needsFetch = !_cache.ContainsKey(trimmedKey);
+            if (!needsFetch)
+            {
+                if (_keyMeta.TryGetValue(trimmedKey, out var meta))
+                    needsFetch = DateTime.UtcNow - meta.FetchedAtUtc > TimeSpan.FromSeconds(GetEffectiveMaxStaleSeconds(trimmedKey));
+                else
+                    needsFetch = true;
+            }
+
+            if (needsFetch)
+            {
+                var fetchOutcome = await EnsureKeysFetchedWithOutcomeAsync(new[] { trimmedKey }).ConfigureAwait(true);
+                if (fetchOutcome.Success == false)
+                    return SupabaseResult<T>.Fail(fetchOutcome.Error ?? "remote_config_fetch_failed");
+            }
+
+            return ReadCachedKey<T>(trimmedKey);
+        }
+
+        /// <summary>캐시에서 읽어 역직렬화합니다. fetch 후 공통 처리에 사용합니다.</summary>
+        private SupabaseResult<T> ReadCachedKey<T>(string trimmedKey) where T : class, new()
+        {
             if (TryGetRaw(trimmedKey, out var json) == false || string.IsNullOrWhiteSpace(json))
                 return SupabaseResult<T>.Fail("remote_config_key_not_found_or_filtered");
 
@@ -174,35 +224,8 @@ namespace Truesoft.Supabase.Unity
             }
         }
 
-        /// <summary>전체 설정을 다시 받아 캐시를 교체합니다.</summary>
-        public async Task<bool> RefreshAllAsync()
-        {
-            LastApplyHadChanges = false;
-            var accessToken = _accessTokenGetter?.Invoke();
-            var result = await _service.GetAllAsync(accessToken).ConfigureAwait(true);
-            if (result.IsSuccess == false || result.Data == null)
-                return false;
-
-            return ApplyRows(result.Data, replace: true);
-        }
-
         /// <summary>
-        /// 마지막 동기 이후 변경분만 머지합니다.
-        /// </summary>
-        public async Task<bool> PollAsync()
-        {
-            LastApplyHadChanges = false;
-            var accessToken = _accessTokenGetter?.Invoke();
-
-            var result = await _service.GetChangedSinceAsync(LastUpdatedAtIso, accessToken).ConfigureAwait(true);
-            if (result.IsSuccess == false || result.Data == null)
-                return false;
-
-            return ApplyRows(result.Data, replace: false);
-        }
-
-        /// <summary>
-        /// DB에 설정된 주기(및 인스펙터 오버라이드)에 따라, 만기된 키만 폴링합니다. <see cref="SupabaseRuntime"/> 또는 <c>Update</c>에서 호출하세요.
+        /// 설정된 주기에 따라, 만기된 키만 폴링합니다. <see cref="SupabaseRuntime"/> 또는 <c>Update</c>에서 호출하세요.
         /// </summary>
         public async Task TickKeyPollsAsync(float realtimeSinceStartup)
         {
@@ -214,7 +237,7 @@ namespace Truesoft.Supabase.Unity
                 if (_keyPollStates.TryGetValue(key, out var state) == false)
                     continue;
 
-                var interval = GetEffectivePollIntervalSeconds(key, state.DbPollIntervalSeconds);
+                var interval = GetEffectivePollIntervalSeconds(key);
                 if (interval <= 0)
                     continue;
 
@@ -226,19 +249,6 @@ namespace Truesoft.Supabase.Unity
             }
         }
 
-        /// <summary>온디맨드 전체 갱신 후 모든 키의 다음 폴링 시각을 뒤로 미룹니다.</summary>
-        public void PushBackAllKeyPolls(float realtimeSinceStartup, float delaySeconds)
-        {
-            if (delaySeconds <= 0f)
-                return;
-
-            var target = realtimeSinceStartup + delaySeconds;
-            foreach (var state in _keyPollStates.Values)
-            {
-                if (state.NextPollAtRealtime < target)
-                    state.NextPollAtRealtime = target;
-            }
-        }
 
         private async Task<bool> PollKeyAsync(string key, string accessToken)
         {
@@ -246,7 +256,7 @@ namespace Truesoft.Supabase.Unity
             if (result.IsSuccess == false || result.Data == null)
                 return false;
 
-            return ApplyRows(result.Data, replace: false);
+            return ApplyRows(result.Data);
         }
 
         private async Task RefreshKeyInBackgroundAsync(string key)
@@ -285,7 +295,7 @@ namespace Truesoft.Supabase.Unity
                 return new FetchOutcome(false, result.ErrorMessage ?? "remote_config_fetch_failed");
 
             if (result.Data != null)
-                ApplyRows(result.Data, replace: false);
+                ApplyRows(result.Data);
 
             foreach (var rawKey in keys)
             {
@@ -331,9 +341,6 @@ namespace Truesoft.Supabase.Unity
             if (match.requires_auth && string.IsNullOrWhiteSpace(accessToken))
                 return "remote_config_key_requires_auth";
 
-            if (PassesClientVersion(match) == false)
-                return "remote_config_key_client_version_mismatch";
-
             var v = match.value_json ?? string.Empty;
             if (string.IsNullOrWhiteSpace(v) || IsObjectRootJson(v) == false)
                 return "remote_config_value_must_be_object_json:" + BuildValueJsonShapeHint(v);
@@ -341,37 +348,31 @@ namespace Truesoft.Supabase.Unity
             return "remote_config_key_not_found_or_filtered";
         }
 
-        private static int NormalizeMaxStaleSeconds(int secondsFromDb) => secondsFromDb > 0 ? secondsFromDb : 300;
+        private bool IsPollingActive(string key) =>
+            _pollIntervalOverrideByKey.TryGetValue(key, out var v) && v > 0f;
 
-        private int GetEffectivePollIntervalSeconds(string key, int fromDb)
+        private const int DefaultMaxStaleSeconds = 300;
+
+        private int GetEffectiveMaxStaleSeconds(string key)
         {
-            if (_pollIntervalOverrideByKey.TryGetValue(key, out var o))
-            {
-                if (o <= 0f)
-                    return 0;
+            if (_maxStaleSecondsByKey.TryGetValue(key, out var s) && s > 0)
+                return s;
 
-                return Mathf.RoundToInt(o);
-            }
-
-            return fromDb > 0 ? fromDb : 0;
+            return DefaultMaxStaleSeconds;
         }
 
-        private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows, bool replace)
+        private int GetEffectivePollIntervalSeconds(string key)
+        {
+            if (_pollIntervalOverrideByKey.TryGetValue(key, out var o) && o > 0f)
+                return Mathf.RoundToInt(o);
+
+            return 0;
+        }
+
+        private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows)
         {
             if (rows == null)
                 rows = Array.Empty<SupabaseRemoteConfigService.RemoteConfigRow>();
-
-            Dictionary<string, string> previousValues = null;
-            HashSet<string> acceptedKeys = null;
-
-            if (replace)
-            {
-                previousValues = new Dictionary<string, string>(_cache, StringComparer.Ordinal);
-                _cache.Clear();
-                _keyMeta.Clear();
-                _keyPollStates.Clear();
-                acceptedKeys = new HashSet<string>(StringComparer.Ordinal);
-            }
 
             var changedKeys = new HashSet<string>(StringComparer.Ordinal);
             var now = DateTime.UtcNow;
@@ -381,8 +382,6 @@ namespace Truesoft.Supabase.Unity
             {
                 if (row == null || string.IsNullOrWhiteSpace(row.key))
                     continue;
-
-                TouchGlobalLastUpdated(row.updated_at);
 
                 var newValue = row.value_json ?? string.Empty;
 
@@ -398,12 +397,6 @@ namespace Truesoft.Supabase.Unity
                     continue;
                 }
 
-                if (PassesClientVersion(row) == false)
-                {
-                    RemoveCacheKey(row.key, changedKeys);
-                    continue;
-                }
-
                 if (IsObjectRootJson(newValue) == false)
                 {
                     Debug.LogError($"[Supabase] RemoteConfig value_json은 객체 루트(JSON이 '{{'로 시작)여야 합니다. key={row.key}, value={TruncateForLog(newValue, 200)}");
@@ -411,52 +404,21 @@ namespace Truesoft.Supabase.Unity
                     continue;
                 }
 
-                if (replace)
-                    acceptedKeys.Add(row.key);
-
-                if (replace)
+                if (_cache.TryGetValue(row.key, out var oldValue))
                 {
-                    previousValues.TryGetValue(row.key, out var oldValue);
-                    if (string.Equals(oldValue, newValue, StringComparison.Ordinal) == false)
-                        changedKeys.Add(row.key);
-
-                    _cache[row.key] = newValue;
-                    _keyMeta[row.key] = new CachedKeyMeta(now, NormalizeMaxStaleSeconds(row.max_stale_seconds));
-                }
-                else
-                {
-                    if (_cache.TryGetValue(row.key, out var oldValue))
+                    if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
                     {
-                        if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
-                        {
-                            UpdateKeyTimestampFromRow(row.key, row.updated_at);
-                            continue;
-                        }
+                        UpdateKeyTimestampFromRow(row.key, row.updated_at);
+                        continue;
                     }
-
-                    _cache[row.key] = newValue;
-                    _keyMeta[row.key] = new CachedKeyMeta(now, NormalizeMaxStaleSeconds(row.max_stale_seconds));
-                    changedKeys.Add(row.key);
                 }
+
+                _cache[row.key] = newValue;
+                _keyMeta[row.key] = new CachedKeyMeta(now);
+                changedKeys.Add(row.key);
 
                 UpdateKeyTimestampFromRow(row.key, row.updated_at);
-                RecomputeKeyPollState(row.key, row.poll_interval_seconds, realtime);
-            }
-
-            if (replace && previousValues != null && previousValues.Count > 0)
-            {
-                foreach (var pair in previousValues)
-                {
-                    var k = pair.Key;
-                    if (string.IsNullOrWhiteSpace(k))
-                        continue;
-
-                    if (acceptedKeys.Contains(k) == false)
-                    {
-                        changedKeys.Add(k);
-                        _keyMeta.Remove(k);
-                    }
-                }
+                RecomputeKeyPollState(row.key, realtime);
             }
 
             if (changedKeys.Count == 0)
@@ -471,13 +433,12 @@ namespace Truesoft.Supabase.Unity
             return true;
         }
 
-        private void RecomputeKeyPollState(string key, int pollIntervalFromDb, float realtimeSinceStartup)
+        private void RecomputeKeyPollState(string key, float realtimeSinceStartup)
         {
             if (_keyPollStates.TryGetValue(key, out var state) == false)
                 state = new KeyPollState();
 
-            state.DbPollIntervalSeconds = pollIntervalFromDb;
-            var effective = GetEffectivePollIntervalSeconds(key, pollIntervalFromDb);
+            var effective = GetEffectivePollIntervalSeconds(key);
             if (effective > 0 && state.NextPollAtRealtime <= 0f)
                 state.NextPollAtRealtime = realtimeSinceStartup + effective;
 
@@ -498,15 +459,6 @@ namespace Truesoft.Supabase.Unity
             _keyPollStates[key] = state;
         }
 
-        private void TouchGlobalLastUpdated(string updatedAtIso)
-        {
-            if (string.IsNullOrWhiteSpace(updatedAtIso))
-                return;
-
-            if (string.IsNullOrWhiteSpace(LastUpdatedAtIso) || string.CompareOrdinal(updatedAtIso, LastUpdatedAtIso) > 0)
-                LastUpdatedAtIso = updatedAtIso;
-        }
-
         private void RemoveCacheKey(string key, ICollection<string> changedKeys)
         {
             if (_cache.Remove(key))
@@ -516,22 +468,6 @@ namespace Truesoft.Supabase.Unity
             }
         }
 
-        private bool PassesClientVersion(SupabaseRemoteConfigService.RemoteConfigRow row)
-        {
-            var ver = _applicationVersionProvider?.Invoke() ?? Application.version;
-            if (string.IsNullOrWhiteSpace(ver))
-                ver = "0";
-
-            if (string.IsNullOrWhiteSpace(row.client_version_min) == false
-                && string.CompareOrdinal(ver, row.client_version_min.Trim()) < 0)
-                return false;
-
-            if (string.IsNullOrWhiteSpace(row.client_version_max) == false
-                && string.CompareOrdinal(ver, row.client_version_max.Trim()) > 0)
-                return false;
-
-            return true;
-        }
 
         private void NotifyKeySubscribers(string key)
         {
@@ -564,7 +500,7 @@ namespace Truesoft.Supabase.Unity
             return trimmed.StartsWith("{", StringComparison.Ordinal);
         }
 
-        /// <summary>DB <c>value_json</c>이 객체 루트가 아닐 때 <see cref="SupabaseResult{T}.ErrorMessage"/> 접미사로만 사용합니다.</summary>
+        /// <summary><c>value_json</c>이 객체 루트가 아닐 때 <see cref="SupabaseResult{T}.ErrorMessage"/> 접미사로만 사용합니다.</summary>
         private static string BuildValueJsonShapeHint(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -606,19 +542,16 @@ namespace Truesoft.Supabase.Unity
         private readonly struct CachedKeyMeta
         {
             public readonly DateTime FetchedAtUtc;
-            public readonly int MaxStaleSeconds;
 
-            public CachedKeyMeta(DateTime fetchedAtUtc, int maxStaleSeconds)
+            public CachedKeyMeta(DateTime fetchedAtUtc)
             {
                 FetchedAtUtc = fetchedAtUtc;
-                MaxStaleSeconds = maxStaleSeconds;
             }
         }
 
         private sealed class KeyPollState
         {
             public string LastUpdatedAtIso;
-            public int DbPollIntervalSeconds;
             public float NextPollAtRealtime;
         }
     }

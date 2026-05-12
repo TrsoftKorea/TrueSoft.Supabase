@@ -12,6 +12,7 @@ using Truesoft.Supabase.Unity.Auth.Google;
 using Truesoft.Supabase.Unity.Auth.Apple;
 #endif
 using Truesoft.Supabase.Unity.Config;
+using Truesoft.Supabase.Unity.RemoteConfig;
 using UnityEngine;
 
 namespace Truesoft.Supabase.Unity
@@ -51,7 +52,6 @@ namespace Truesoft.Supabase.Unity
         private static string _initializedProjectUrl;
         private static bool _enableApiResultLogs = true;
 
-        private static float _remoteConfigPollIntervalSeconds = 0f;
         private static Task _remoteConfigKeyPollTickTask;
 
         private static bool _duplicateSessionMonitorEnabled = true;
@@ -141,8 +141,6 @@ namespace Truesoft.Supabase.Unity
             public const string UserDataLoadColumnsRowState = "Supabase.UserData.LoadColumns.RowState";
             public const string UserDataPatchDiff = "Supabase.UserData.PatchDiff";
             public const string EdgeFunctionInvoke = "Supabase.EdgeFunction.Invoke";
-            public const string RemoteConfigRefresh = "Supabase.RemoteConfig.Refresh";
-            public const string RemoteConfigPoll = "Supabase.RemoteConfig.Poll";
             public const string RemoteConfigGet = "Supabase.RemoteConfig.Get";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
             public const string ProfilePublicDisplayNameGet = "Supabase.Profile.DisplayName.Get";
@@ -167,20 +165,6 @@ namespace Truesoft.Supabase.Unity
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
         }
 
-        internal static void UpdateRemoteConfigPollIntervalSeconds(float intervalSeconds)
-        {
-            _remoteConfigPollIntervalSeconds = intervalSeconds <= 0f ? 0f : intervalSeconds;
-        }
-
-        private static void RequestRemoteConfigPollingReset()
-        {
-            if (!IsInitialized)
-                return;
-
-            var delay = _remoteConfigPollIntervalSeconds <= 0f ? 60f : _remoteConfigPollIntervalSeconds;
-            RemoteConfig.PushBackAllKeyPolls(Time.realtimeSinceStartup, delay);
-        }
-
         /// <summary>
         /// 키별 RemoteConfig 폴링 주기를 인스펙터에서 덮어씁니다. <see cref="SupabaseRuntime"/>에서 한 번 호출하면 됩니다.
         /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
@@ -201,7 +185,7 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// DB의 <c>poll_interval_seconds</c>에 따라 만기된 키만 폴링합니다. <see cref="SupabaseRuntime.Update"/> 등에서 호출하세요.
+        /// 설정된 폴링 주기에 따라 만기된 키만 폴링합니다. <see cref="SupabaseRuntime.Update"/> 등에서 호출하세요.
         /// </summary>
         public static void TickRemoteConfigKeyPolls(float realtimeSinceStartup)
         {
@@ -887,59 +871,13 @@ namespace Truesoft.Supabase.Unity
             return LogAndReturnData(ApiLogTags.EdgeFunctionInvoke, r, defaultValue);
         }
 
-        /// <summary><see cref="RefreshRemoteConfigAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<bool> TryRefreshRemoteConfigAsync()
-        {
-            var ok = await RefreshRemoteConfigAsync();
-            if (ok == false)
-            {
-                LogApiResult(ApiLogTags.RemoteConfigRefresh, ok, "remote_config_refresh_failed");
-                return false;
-            }
-
-            // 변경이 없으면 로그를 찍지 않습니다(폴링 성공 로그 스팸 방지).
-            if (_remoteConfig != null && _remoteConfig.LastApplyHadChanges)
-                LogApiResult(ApiLogTags.RemoteConfigRefresh, true, null);
-
-            return ok;
-        }
-
-        /// <summary><see cref="PollRemoteConfigAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<bool> TryPollRemoteConfigAsync()
-        {
-            var ok = await PollRemoteConfigAsync();
-            if (ok == false)
-            {
-                LogApiResult(ApiLogTags.RemoteConfigPoll, ok, "remote_config_poll_failed");
-                return false;
-            }
-
-            // 실제 변경이 있을 때만 success 로그를 찍습니다.
-            if (_remoteConfig != null && _remoteConfig.LastApplyHadChanges)
-                LogApiResult(ApiLogTags.RemoteConfigPoll, true, null);
-
-            return ok;
-        }
-
         /// <summary>
-        /// 온디맨드 RemoteConfig 동기화: 서버에서 즉시 최신 값을 받아 캐시를 갱신합니다.
-        /// 호출 직후에는 주기 폴링 타이머를 초기화(의도치 않게 더 자주 호출되지 않도록 다음 폴링을 뒤로 미룸)합니다.
-        /// </summary>
-        public static async Task<bool> RefreshRemoteConfigOnDemandAsync()
-        {
-            var ok = await TryRefreshRemoteConfigAsync();
-            if (ok)
-                RequestRemoteConfigPollingReset();
-            return ok;
-        }
-
-        /// <summary>
-        /// <see cref="GetRemoteConfigAsync{T}(string)"/>를 호출하고 성공 여부를 로그로 남깁니다.
+        /// <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출하고 성공 여부를 로그로 남깁니다.
         /// 실패 시 <c>value</c>는 null입니다.
         /// </summary>
-        public static async Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key) where T : class, new()
+        public static async Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
         {
-            var r = await GetRemoteConfigAsync<T>(key);
+            var r = await GetRemoteConfigAsync<T>(key, maxStaleSeconds);
             var ok = r.IsSuccess;
             LogApiResult(ApiLogTags.RemoteConfigGet, ok, ok ? null : r.ErrorMessage ?? "remote_config_get_failed");
             return (ok, ok ? r.Data : null);
@@ -1245,20 +1183,15 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 → (선택) 저장 세션 복원 → (선택) RemoteConfig 새로고침.
-        /// </remarks>
-        public static async Task<bool> StartAsync(
-            bool restoreSessionFirst = true,
-            bool refreshRemoteConfigOnStart = false)
+        /// 초기화 → (선택) 저장 세션 복원.
+        /// </summary>
+        public static async Task<bool> StartAsync(bool restoreSessionFirst = true)
         {
             if (!await EnsureInitializedAsync())
                 return false;
 
             if (restoreSessionFirst && !IsLoggedIn)
                 _ = await TryAutoLoginOnStartAsync();
-
-            if (refreshRemoteConfigOnStart)
-                _ = await RefreshRemoteConfigAsync();
 
             return true;
         }
@@ -2006,29 +1939,9 @@ namespace Truesoft.Supabase.Unity
             }
         }
 
-        /// <summary>Remote Config 전체를 서버에서 다시 받아 캐시를 갱신합니다.</summary>
-        public static async Task<bool> RefreshRemoteConfigAsync()
-        {
-            if (!await EnsureInitializedAsync())
-                return false;
-
-            return await RemoteConfig.RefreshAllAsync();
-        }
-
-        /// <summary>
-        /// 마지막 동기 시각 이후 변경분만 가져와 캐시에 머지합니다.
-        /// </summary>
-        public static async Task<bool> PollRemoteConfigAsync()
-        {
-            if (!await EnsureInitializedAsync())
-                return false;
-
-            return await RemoteConfig.PollAsync();
-        }
-
         /// <summary>로컬 캐시에서 key에 해당하는 값을 읽습니다(네트워크 호출 없음).</summary>
         /// <remarks>
-        /// 최신 값이 필요하면 먼저 <see cref="RefreshRemoteConfigAsync"/> 또는 <see cref="GetRemoteConfigAsync{T}(string)"/>를 호출합니다.
+        /// 최신 값이 필요하면 <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출합니다.
         /// </remarks>
         public static T GetRemoteConfig<T>(string key, T defaultValue = default)
         {
@@ -2036,14 +1949,76 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// Remote Config를 서버와 맞춘 뒤 역직렬화합니다. 캐시 유효 시간은 DB <c>max_stale_seconds</c>를 사용합니다.
+        /// Remote Config를 서버와 맞춘 뒤 역직렬화합니다.
+        /// 폴링이 활성화된 키는 폴링이 갱신을 담당하며, 그 외 키는 <paramref name="maxStaleSeconds"/> 초과 시 읽기 시점에 백그라운드 갱신이 트리거됩니다(기본 300초).
+        /// 폴링 설정은 <see cref="SetRemoteConfigKeyPolling"/>을 사용합니다.
         /// </summary>
-        public static async Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key) where T : class, new()
+        public static async Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<T>.Fail("supabase_not_initialized");
 
-            return await RemoteConfig.GetTypedAsync<T>(key);
+            return await RemoteConfig.GetTypedAsync<T>(key, maxStaleSeconds);
+        }
+
+        /// <summary>
+        /// Remote Config를 가져옵니다. 캐시가 없거나 만료된 경우 서버에서 직접 기다린 후 신선한 값을 반환합니다.
+        /// </summary>
+        internal static async Task<SupabaseResult<T>> GetRemoteConfigFreshAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<T>.Fail("supabase_not_initialized");
+
+            return await RemoteConfig.GetTypedFreshAsync<T>(key, maxStaleSeconds);
+        }
+
+        /// <summary>
+        /// RemoteConfig 읽기 함수를 생성합니다. 반환된 함수를 호출하면 캐시가 신선하면 즉시, 만료됐으면 서버 조회 후 값을 반환합니다.
+        /// </summary>
+        /// <param name="key">remote_config 테이블의 key 값.</param>
+        /// <param name="maxStaleSeconds">캐시 유효 시간(초). 0이면 기본값(300초).</param>
+        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        {
+            _ = GetRemoteConfigAsync<T>(key, maxStaleSeconds); // 캐시 워밍
+            return async () =>
+            {
+                var result = await GetRemoteConfigFreshAsync<T>(key, maxStaleSeconds);
+                return result.IsSuccess ? result.Data : null;
+            };
+        }
+
+        /// <summary>
+        /// 폴링 기반 RemoteConfigBinding을 생성합니다. 지정한 주기마다 서버에서 값을 갱신하며 Value로 읽습니다.
+        /// </summary>
+        /// <param name="key">remote_config 테이블의 key 값.</param>
+        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
+        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds) where T : class, new()
+        {
+            return new RemoteConfigBinding<T>(key, pollIntervalSeconds);
+        }
+
+        /// <summary>
+        /// 폴링 기반 반응형 RemoteConfig 구독을 생성합니다. 값이 갱신될 때마다 onChange가 호출됩니다.
+        /// </summary>
+        /// <param name="key">remote_config 테이블의 key 값.</param>
+        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
+        /// <param name="onChange">값이 갱신될 때 호출되는 콜백.</param>
+        /// <param name="invokeIfCached">생성 시 캐시에 값이 있으면 즉시 콜백 호출 여부.</param>
+        public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
+            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            where T : class, new()
+        {
+            return new RemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
+        }
+
+        /// <summary>
+        /// 키별 백그라운드 폴링 주기를 설정합니다. 0 이하이면 폴링 비활성.
+        /// 앱 초기화 시 1회 호출하면 이후 <see cref="GetRemoteConfigAsync{T}"/>에서 별도 지정 없이 동작합니다.
+        /// </summary>
+        public static void SetRemoteConfigKeyPolling(string key, float intervalSeconds)
+        {
+            if (IsInitialized)
+                RemoteConfig.SetKeyPollIntervalOverride(key, intervalSeconds);
         }
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson)

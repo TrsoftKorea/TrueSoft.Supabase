@@ -49,7 +49,18 @@ await Supabase.TryPatchUserSaveDiffAsync(prev, current);
 ### Remote Config → [Docs/RemoteConfig.md](Docs/RemoteConfig.md)
 
 ```csharp
-var (ok, cfg) = await Supabase.TryGetRemoteConfigAsync<GameConfig>("gameplay_v1");
+// 읽기 함수 — 만료 시 서버 대기 후 반환
+private readonly Func<Task<GameConfig>> _getConfig =
+    Supabase.CreateRemoteConfigReader<GameConfig>("gameplay_v1");
+var cfg = await _getConfig();
+
+// 폴링 — 값 접근
+private readonly RemoteConfigBinding<GameConfig> _config =
+    Supabase.CreateRemoteConfigBinding<GameConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+float dmg = _config.Value?.playerDmg ?? 1f;
+
+// 폴링 — 반응형
+Supabase.CreateRemoteConfigListener<GameConfig>("gameplay_v1", 30f, cfg => ApplyConfig(cfg));
 ```
 
 ### 공개 프로필 / 닉네임 → [Docs/PublicProfile.md](Docs/PublicProfile.md)

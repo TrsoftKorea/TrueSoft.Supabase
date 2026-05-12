@@ -5,6 +5,7 @@ using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Core.Models;
+using Truesoft.Supabase.Unity.RemoteConfig;
 
 namespace Truesoft.Supabase.Unity
 {
@@ -105,12 +106,10 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 -> (선택) 저장 세션 복원 -> (선택) RemoteConfig 새로고침.
+        /// 초기화 → (선택) 저장 세션 복원.
         /// </summary>
-        public static Task<bool> StartAsync(
-            bool restoreSessionFirst = true,
-            bool refreshRemoteConfigOnStart = false) =>
-            SupabaseSDK.StartAsync(restoreSessionFirst, refreshRemoteConfigOnStart);
+        public static Task<bool> StartAsync(bool restoreSessionFirst = true) =>
+            SupabaseSDK.StartAsync(restoreSessionFirst);
 
         /// <summary>refresh_token으로 세션 갱신 후 SDK 세션 자동 설정.</summary>
         internal static Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(
@@ -253,11 +252,6 @@ namespace Truesoft.Supabase.Unity
         public static Task<bool> TrySetMyDisplayNameAsync(string displayName) =>
             SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
 
-        /// <summary>displayName 수정. <see cref="TrySetMyDisplayNameAsync"/>와 동일.</summary>
-        [Obsolete("Use TrySetMyDisplayNameAsync instead", false)]
-        public static Task<bool> TryUpdateMyDisplayNameAsync(string displayName) =>
-            SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
-
         /// <inheritdoc cref="SupabaseSDK.TryIsDisplayNameAvailableAsync"/>
         public static Task<bool> TryIsDisplayNameAvailableAsync(string displayName) =>
             SupabaseSDK.TryIsDisplayNameAvailableAsync(displayName);
@@ -360,37 +354,34 @@ namespace Truesoft.Supabase.Unity
         public static void UnsubscribeRemoteConfig(string key, Action<string> onValueChanged) =>
             SupabaseSDK.UnsubscribeRemoteConfig(key, onValueChanged);
 
-        /// <summary>RemoteConfig 전체 새로고침 (내부 API).</summary>
-        internal static Task<bool> RefreshRemoteConfigAsync() => SupabaseSDK.RefreshRemoteConfigAsync();
-
-        /// <summary>RemoteConfig 변경분 폴링 (내부 API).</summary>
-        internal static Task<bool> PollRemoteConfigAsync() => SupabaseSDK.PollRemoteConfigAsync();
-
         public static T GetRemoteConfig<T>(string key, T defaultValue = default) =>
             SupabaseSDK.GetRemoteConfig(key, defaultValue);
 
-        /// <inheritdoc cref="SupabaseSDK.GetRemoteConfigAsync{T}(string)"/>
-        public static Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key) where T : class, new() =>
-            SupabaseSDK.GetRemoteConfigAsync<T>(key);
+        /// <inheritdoc cref="SupabaseSDK.GetRemoteConfigAsync{T}(string, int)"/>
+        public static Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
+            SupabaseSDK.GetRemoteConfigAsync<T>(key, maxStaleSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.TryRefreshRemoteConfigAsync"/>
-        public static Task<bool> TryRefreshRemoteConfigAsync() =>
-            SupabaseSDK.TryRefreshRemoteConfigAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryGetRemoteConfigAsync{T}(string, int)"/>
+        public static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
+            SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStaleSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.TryPollRemoteConfigAsync"/>
-        public static Task<bool> TryPollRemoteConfigAsync() =>
-            SupabaseSDK.TryPollRemoteConfigAsync();
+        /// <inheritdoc cref="SupabaseSDK.SetRemoteConfigKeyPolling"/>
+        public static void SetRemoteConfigKeyPolling(string key, float intervalSeconds) =>
+            SupabaseSDK.SetRemoteConfigKeyPolling(key, intervalSeconds);
 
-        /// <summary>
-        /// RemoteConfig를 온디맨드 방식으로 즉시 동기화합니다(서버에서 다시 가져와 캐시 갱신).
-        /// 호출 직후에는 다음 주기 폴링을 뒤로 미뤄 의도치 않은 잦은 호출을 방지합니다.
-        /// </summary>
-        public static Task<bool> RefreshRemoteConfigOnDemandAsync() =>
-            SupabaseSDK.RefreshRemoteConfigOnDemandAsync();
+        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigReader{T}(string, int)"/>
+        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
+            SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStaleSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetRemoteConfigAsync{T}(string)"/>
-        public static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key) where T : class, new() =>
-            SupabaseSDK.TryGetRemoteConfigAsync<T>(key);
+        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigBinding{T}(string, float)"/>
+        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds) where T : class, new() =>
+            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollIntervalSeconds);
+
+        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigListener{T}(string, float, Action{T}, bool)"/>
+        public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
+            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            where T : class, new() =>
+            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
             SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);
