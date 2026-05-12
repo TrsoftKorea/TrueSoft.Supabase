@@ -197,20 +197,21 @@ namespace Truesoft.SupabaseUnity.Samples
         private IAPFacade _iapFacade;
         private bool _keyboardBusy;
 
-        // RemoteConfig 폴링 패턴 샘플 — this. 확장 메서드로 자동 해제
+        // RemoteConfig 폴링 패턴 샘플
         private RemoteConfigBinding<SampleRemoteConfigData> _remoteConfigBinding;
+        private IDisposable _remoteConfigListener;
 
         private void OnEnable()
         {
             if (subscribeDuplicateLoginOnEnable)
                 SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
 
-            // RemoteConfigBinding — 30초마다 폴링, Value로 읽기. 파괴 시 자동 해제.
-            _remoteConfigBinding = this.CreateRemoteConfigBinding<SampleRemoteConfigData>(
+            // RemoteConfigBinding — 30초마다 폴링, Value로 읽기.
+            _remoteConfigBinding = Supabase.CreateRemoteConfigBinding<SampleRemoteConfigData>(
                 remoteConfigKey, pollIntervalSeconds: 30f);
 
-            // RemoteConfigListener — 값 변경 시 콜백 자동 호출. 파괴 시 자동 해제.
-            this.CreateRemoteConfigListener<SampleRemoteConfigData>(
+            // RemoteConfigListener — 값 변경 시 콜백 자동 호출.
+            _remoteConfigListener = Supabase.CreateRemoteConfigListener<SampleRemoteConfigData>(
                 remoteConfigKey, pollIntervalSeconds: 30f,
                 cfg => Debug.Log("[Sample] RemoteConfigListener: value=" + cfg?.value + " message=" + cfg?.message));
         }
@@ -218,6 +219,8 @@ namespace Truesoft.SupabaseUnity.Samples
         private void OnDisable()
         {
             SupabaseClient.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
+            _remoteConfigBinding?.Dispose();
+            _remoteConfigListener?.Dispose();
             _iapFacade?.Dispose();
         }
 
