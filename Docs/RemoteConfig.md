@@ -193,8 +193,7 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 
 ## 로우레벨 폴링 설정
 
-`SupabaseRuntime` Inspector의 **키별 폴링 주기 오버라이드** 목록에서 코드 없이 설정할 수 있습니다.  
-코드로 설정할 경우 (초기화 시 1회):
+초기화 시 1회 호출합니다. 이후 해당 키의 Binding·Listener 생성 시 별도 지정이 없어도 이 주기가 사용됩니다.
 
 ```csharp
 Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);

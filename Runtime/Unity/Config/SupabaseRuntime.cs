@@ -1,11 +1,9 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Truesoft.Supabase.Unity;
 using Truesoft.Supabase.Unity.Auth.Google;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Truesoft.Supabase.Unity.Config
 {
@@ -30,39 +28,24 @@ namespace Truesoft.Supabase.Unity.Config
         [Header("씬")]
         [Label("씬 유지 (DontDestroyOnLoad)")]
         [Tooltip("DontDestroyOnLoad로 유지.")]
-        [FormerlySerializedAs("dontDestroyOnLoad")]
         [SerializeField] private bool dontDestroyOnLoad = true;
 
         [Header("세션")]
         [Label("세션 자동 복원")]
         [Tooltip("OnEnable 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
-        [FormerlySerializedAs("autoRestoreSessionOnEnable")]
         [SerializeField] private bool autoRestoreSessionOnEnable = true;
-
-        [Header("원격 설정 (RemoteConfig)")]
-        [Label("원격 설정 사용")]
-        [Tooltip("런타임 동기화 사용. Cold Start: 시작 시 RemoteConfig를 가져오지 않습니다.")]
-        [FormerlySerializedAs("enableRemoteConfig")]
-        [SerializeField] private bool enableRemoteConfig = true;
-
-        [Label("키별 폴링 주기 오버라이드")]
-        [FormerlySerializedAs("remoteConfigKeyPollOverrides")]
-        [Tooltip("키별 폴링 주기 오버라이드. 비우면 DB remote_config.poll_interval_seconds만 사용.")]
-        [SerializeField] private List<RemoteConfigKeyPollOverrideEntry> remoteConfigKeyPollOverrides = new List<RemoteConfigKeyPollOverrideEntry>();
 
         [Header("유저 세이브 자동 저장")]
         [Label("자동 동기화 사용")]
         [Tooltip("정적 세이브 자동 동기화 사용.")]
-        [FormerlySerializedAs("enableUserSaveAutoSync")]
         [SerializeField] private bool enableUserSaveAutoSync = true;
 
         [Label("자동 저장 쿨타임 (초)")]
-        [FormerlySerializedAs("userSaveAutoSyncCooldownSeconds")]
         [Tooltip("자동 저장 쿨타임(초).")]
         [SerializeField] private float userSaveAutoSyncCooldownSeconds = 1f;
 
         /// <summary>
-        /// 세션 복원 시도가 완료되면 발행됩니다. bool: <see cref="Supabase.IsLoggedIn"/>과 항상 일치합니다.
+        /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
@@ -75,13 +58,12 @@ namespace Truesoft.Supabase.Unity.Config
         public static bool IsSessionRestoreCompleted { get; private set; }
 
         /// <summary>
-        /// 세션 복원 결과. <see cref="Supabase.IsLoggedIn"/>과 항상 일치합니다.
+        /// 세션 복원 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// <see cref="IsSessionRestoreCompleted"/>가 true일 때만 유효합니다.
         /// </summary>
         public static bool SessionRestoreResult { get; private set; }
 
         private Coroutine _lifecycleRoutine;
-        private bool _remoteConfigPollSettingsApplied;
 
         private void Awake()
         {
@@ -141,23 +123,13 @@ namespace Truesoft.Supabase.Unity.Config
 
         private void Update()
         {
-            if (enableUserSaveAutoSync && Supabase.IsInitialized)
+            if (!Supabase.IsInitialized)
+                return;
+
+            if (enableUserSaveAutoSync)
                 SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
 
-            if (!enableRemoteConfig || !Supabase.IsInitialized)
-                return;
-
-            EnsureRemoteConfigPollSettingsApplied();
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
-        }
-
-        private void EnsureRemoteConfigPollSettingsApplied()
-        {
-            if (_remoteConfigPollSettingsApplied)
-                return;
-
-            _remoteConfigPollSettingsApplied = true;
-            SupabaseSDK.ApplyRemoteConfigKeyPollOverrides(remoteConfigKeyPollOverrides);
         }
 
         private void OnApplicationPause(bool pause)
@@ -227,6 +199,7 @@ namespace Truesoft.Supabase.Unity.Config
 
         private static void SetSessionRestoreCompleted(bool result)
         {
+            if (IsSessionRestoreCompleted) return;
             IsSessionRestoreCompleted = true;
             SessionRestoreResult = result || Supabase.IsLoggedIn;
             OnSessionRestored?.Invoke(SessionRestoreResult);

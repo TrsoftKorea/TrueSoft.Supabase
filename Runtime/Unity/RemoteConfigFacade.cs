@@ -52,8 +52,6 @@ namespace Truesoft.Supabase.Unity
             _pollIntervalOverrideByKey[k] = overrideSeconds <= 0f ? 0f : overrideSeconds;
         }
 
-        public void ClearKeyPollIntervalOverrides() => _pollIntervalOverrideByKey.Clear();
-
         /// <summary>
         /// 키별 캐시 유효 시간(초)을 설정합니다.
         /// <paramref name="seconds"/>가 0 이하이면 기본값(300초)이 사용됩니다.

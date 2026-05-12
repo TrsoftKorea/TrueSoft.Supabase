@@ -166,25 +166,6 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// 키별 RemoteConfig 폴링 주기를 인스펙터에서 덮어씁니다. <see cref="SupabaseRuntime"/>에서 한 번 호출하면 됩니다.
-        /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
-        /// </summary>
-        public static void ApplyRemoteConfigKeyPollOverrides(IReadOnlyList<RemoteConfigKeyPollOverrideEntry> entries)
-        {
-            RemoteConfig.ClearKeyPollIntervalOverrides();
-            if (entries == null)
-                return;
-
-            foreach (var e in entries)
-            {
-                if (e == null || string.IsNullOrWhiteSpace(e.key))
-                    continue;
-
-                RemoteConfig.SetKeyPollIntervalOverride(e.key.Trim(), e.overrideIntervalSeconds);
-            }
-        }
-
-        /// <summary>
         /// 설정된 폴링 주기에 따라 만기된 키만 폴링합니다. <see cref="SupabaseRuntime.Update"/> 등에서 호출하세요.
         /// </summary>
         public static void TickRemoteConfigKeyPolls(float realtimeSinceStartup)
