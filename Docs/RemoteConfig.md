@@ -36,12 +36,25 @@ private readonly Func<Task<GameplayConfig>> _getConfig =
 
 폴링으로 값을 최신 상태로 유지합니다. `Value`로 언제든 동기 읽기.
 
+MonoBehaviour 안에서는 `this.CreateRemoteConfigBinding`을 사용하면 파괴 시 자동으로 해제됩니다.
+
 ```csharp
-private readonly RemoteConfigBinding<GameplayConfig> _gameplay =
-    Supabase.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+// MonoBehaviour — this. 하나로 자동 해제, OnDestroy 불필요
+private RemoteConfigBinding<GameplayConfig> _gameplay;
+
+void Start()
+{
+    _gameplay = this.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+}
 
 // 필요할 때 읽기 — async 없음
 float dmg = _gameplay.Value?.battle.playerDmg ?? 1f;
+```
+
+```csharp
+// MonoBehaviour 외부 또는 수동 관리가 필요한 경우
+private readonly RemoteConfigBinding<GameplayConfig> _gameplay =
+    Supabase.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
 
 void OnDestroy() => _gameplay.Dispose();
 ```
@@ -51,6 +64,16 @@ void OnDestroy() => _gameplay.Dispose();
 폴링으로 값이 바뀔 때마다 콜백을 호출합니다.
 
 ```csharp
+// MonoBehaviour — this. 하나로 자동 해제, OnDestroy 불필요
+void Start()
+{
+    this.CreateRemoteConfigListener<MaintenanceConfig>(
+        "maintenance", pollIntervalSeconds: 30f, ApplyMaintenanceConfig);
+}
+```
+
+```csharp
+// MonoBehaviour 외부 또는 수동 관리가 필요한 경우
 private IDisposable _maintenanceSub;
 
 void Start()

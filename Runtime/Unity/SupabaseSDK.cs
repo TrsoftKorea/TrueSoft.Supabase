@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
@@ -1992,9 +1993,11 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         /// <param name="key">remote_config 테이블의 key 값.</param>
         /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
-        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds) where T : class, new()
+        /// <param name="cancellationToken">취소 시 자동 Dispose. <c>destroyCancellationToken</c> 전달 권장.</param>
+        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds,
+            CancellationToken cancellationToken = default) where T : class, new()
         {
-            return new RemoteConfigBinding<T>(key, pollIntervalSeconds);
+            return new RemoteConfigBinding<T>(key, pollIntervalSeconds, cancellationToken);
         }
 
         /// <summary>
@@ -2004,11 +2007,13 @@ namespace Truesoft.Supabase.Unity
         /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
         /// <param name="onChange">값이 갱신될 때 호출되는 콜백.</param>
         /// <param name="invokeIfCached">생성 시 캐시에 값이 있으면 즉시 콜백 호출 여부.</param>
+        /// <param name="cancellationToken">취소 시 자동 Dispose. <c>destroyCancellationToken</c> 전달 권장.</param>
         public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
-            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            string key, float pollIntervalSeconds, Action<T> onChange,
+            bool invokeIfCached = true, CancellationToken cancellationToken = default)
             where T : class, new()
         {
-            return new RemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
+            return new RemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached, cancellationToken);
         }
 
         /// <summary>

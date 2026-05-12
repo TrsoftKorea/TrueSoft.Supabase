@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
@@ -373,15 +374,17 @@ namespace Truesoft.Supabase.Unity
         public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStaleSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigBinding{T}(string, float)"/>
-        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds) where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollIntervalSeconds);
+        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigBinding{T}(string, float, CancellationToken)"/>
+        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds,
+            CancellationToken cancellationToken = default) where T : class, new() =>
+            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollIntervalSeconds, cancellationToken);
 
-        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigListener{T}(string, float, Action{T}, bool)"/>
+        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigListener{T}(string, float, Action{T}, bool, CancellationToken)"/>
         public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
-            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            string key, float pollIntervalSeconds, Action<T> onChange,
+            bool invokeIfCached = true, CancellationToken cancellationToken = default)
             where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
+            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached, cancellationToken);
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
             SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);
