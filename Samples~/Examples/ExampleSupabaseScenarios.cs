@@ -207,11 +207,11 @@ namespace Truesoft.SupabaseUnity.Samples
                 SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
 
             // RemoteConfigBinding — 30초마다 폴링, Value로 읽기.
-            _remoteConfigBinding = Supabase.CreateRemoteConfigBinding<SampleRemoteConfigData>(
+            _remoteConfigBinding = SupabaseClient.CreateRemoteConfigBinding<SampleRemoteConfigData>(
                 remoteConfigKey, pollIntervalSeconds: 30f);
 
             // RemoteConfigListener — 값 변경 시 콜백 자동 호출.
-            _remoteConfigListener = Supabase.CreateRemoteConfigListener<SampleRemoteConfigData>(
+            _remoteConfigListener = SupabaseClient.CreateRemoteConfigListener<SampleRemoteConfigData>(
                 remoteConfigKey, pollIntervalSeconds: 30f,
                 cfg => Debug.Log("[Sample] RemoteConfigListener: value=" + cfg?.value + " message=" + cfg?.message));
         }
