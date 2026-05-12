@@ -89,6 +89,84 @@ void OnDestroy() => _maintenanceSub?.Dispose();
 
 ---
 
+## 설정 클래스 작성 규칙
+
+### 지원 타입
+
+```csharp
+public class GameplayConfig
+{
+    // 기본 타입
+    public int count;
+    public float damage;
+    public bool enabled;
+    public string message;
+
+    // 컬렉션
+    public int[] values;
+    public List<string> items;
+    public Dictionary<string, int> rates;
+
+    // nullable
+    public int? optionalCount;
+
+    // 열거형 — 문자열("Normal") 또는 숫자(1) 모두 가능
+    public Difficulty difficulty;
+
+    // 중첩 클래스
+    public BattleConfig battle;
+    public List<RewardConfig> rewards;
+}
+```
+
+### 규칙
+
+**매개변수 없는 생성자 필요** — 중첩 클래스 포함, 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+
+```csharp
+// ❌ 기본 생성자가 사라진 경우
+public class BattleConfig
+{
+    public float playerDmg;
+    public BattleConfig(float dmg) { playerDmg = dmg; }
+}
+
+// ✅ 기본 생성자 명시
+public class BattleConfig
+{
+    public float playerDmg;
+    public BattleConfig() { }
+    public BattleConfig(float dmg) { playerDmg = dmg; }
+}
+```
+
+**필드명과 JSON 키가 다를 때** — `[JsonProperty]`로 매핑합니다.
+
+```csharp
+using Newtonsoft.Json;
+
+public class BattleConfig
+{
+    [JsonProperty("player_dmg")]
+    public float PlayerDmg;
+}
+```
+
+**필수 필드 선언** — 키가 없으면 fetch 자체를 실패시킵니다.
+
+```csharp
+[JsonProperty("player_dmg", Required = Required.Always)]
+public float PlayerDmg;
+```
+
+**중첩 객체는 항상 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
+
+```csharp
+float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
+```
+
+---
+
 ## Cold Start 패턴
 
 앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  

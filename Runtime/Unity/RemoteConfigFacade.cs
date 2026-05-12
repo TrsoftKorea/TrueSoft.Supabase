@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
 using UnityEngine;
@@ -122,7 +123,7 @@ namespace Truesoft.Supabase.Unity
                 if (IsObjectRootJson(json) == false)
                     return defaultValue;
 
-                return JsonUtility.FromJson<T>(json);
+                return JsonConvert.DeserializeObject<T>(json);
             }
             catch
             {
@@ -212,7 +213,7 @@ namespace Truesoft.Supabase.Unity
 
             try
             {
-                var obj = JsonUtility.FromJson<T>(json);
+                var obj = JsonConvert.DeserializeObject<T>(json);
                 if (obj == null)
                     return SupabaseResult<T>.Fail("remote_config_deserialize_null");
 

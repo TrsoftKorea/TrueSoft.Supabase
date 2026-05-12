@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Truesoft.Supabase.Unity.RemoteConfig
 {
@@ -33,7 +33,7 @@ namespace Truesoft.Supabase.Unity.RemoteConfig
                 if (_disposed) return;
                 try
                 {
-                    var value = JsonUtility.FromJson<T>(json);
+                    var value = JsonConvert.DeserializeObject<T>(json);
                     onChange?.Invoke(value);
                 }
                 catch { }

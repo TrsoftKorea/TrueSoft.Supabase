@@ -1,6 +1,6 @@
 using System;
 using System.Threading;
-using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Truesoft.Supabase.Unity.RemoteConfig
 {
@@ -43,7 +43,7 @@ namespace Truesoft.Supabase.Unity.RemoteConfig
         private void OnRawValueChanged(string json)
         {
             if (_disposed) return;
-            try { _value = JsonUtility.FromJson<T>(json); }
+            try { _value = JsonConvert.DeserializeObject<T>(json); }
             catch { }
         }
 
