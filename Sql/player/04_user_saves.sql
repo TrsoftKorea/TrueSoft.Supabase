@@ -122,7 +122,8 @@ security definer
 set search_path to 'public', 'auth'
 as $function$declare
   v_table_ident text;
-  v_sql text;
+  v_sql         text;
+  v_pf_rec      record;
 begin
   if p_access not in ('public', 'private') then
     raise exception 'Invalid access: % (expected public/private)', p_access;
@@ -176,6 +177,9 @@ begin
 
   execute format('alter table %s enable row level security;', v_table_ident);
 
+  -- 재호출 안전: 기존 정책을 모두 drop 후 재생성
+  execute format('drop policy if exists select_all_authenticated on %s', v_table_ident);
+  execute format('drop policy if exists select_own_authenticated on %s', v_table_ident);
   if p_access = 'public' then
     execute format($f$
       create policy select_all_authenticated on %s
@@ -188,17 +192,31 @@ begin
     $f$, v_table_ident);
   end if;
 
+  execute format('drop policy if exists insert_own_authenticated on %s', v_table_ident);
   execute format($f$
     create policy insert_own_authenticated on %s
     for insert to authenticated with check (account_id = auth.uid());
   $f$, v_table_ident);
 
+  -- update: 기본 정책 생성 후 ts_protected_fields 보호 재적용
+  execute format('drop policy if exists update_own_authenticated on %s', v_table_ident);
   execute format($f$
     create policy update_own_authenticated on %s
     for update to authenticated
     using (account_id = auth.uid()) with check (account_id = auth.uid());
   $f$, v_table_ident);
 
+  if to_regclass('public.ts_protected_fields') is not null then
+    for v_pf_rec in
+      select column_name, min_value
+      from public.ts_protected_fields
+      where table_name = p_table_name
+    loop
+      perform public.ts_protect_field(p_table_name, v_pf_rec.column_name, v_pf_rec.min_value);
+    end loop;
+  end if;
+
+  execute format('drop policy if exists delete_own_authenticated on %s', v_table_ident);
   execute format($f$
     create policy delete_own_authenticated on %s
     for delete to authenticated using (account_id = auth.uid());

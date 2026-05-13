@@ -39,7 +39,7 @@ namespace Truesoft.Supabase.Unity
         private            TRow   _lastSynced;
         private            bool   _isDirty;
         private            bool   _isRegistered;
-        private  readonly  string _syncKey;
+        protected readonly string _syncKey;
         protected readonly string LogTag;
 
         /// <summary>syncKey를 <c>typeof(TRow).FullName</c>으로 자동 설정합니다.</summary>
