@@ -2216,11 +2216,15 @@ namespace Truesoft.Supabase.Unity
         /// <summary>
         /// Android에서 네이티브 Google 계정 로그아웃을 시도한 뒤 <see cref="SignOutAsync"/>로 Supabase 세션을 정리합니다.
         /// 에디터·비 Android에서는 Google 단계가 실패해도 Supabase 로그아웃은 진행합니다.
+        /// 로그아웃 전 미전송 세이브를 자동으로 flush합니다.
         /// </summary>
         public static async Task SignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
         {
             if (await EnsureInitializedAsync())
+            {
+                await TryFlushAllUserSaveImmediateAsync();
                 _ = await SignOutFromGoogleAsync();
+            }
 
             await SignOutAsync(clearStorage, deleteUserSessionRow);
         }

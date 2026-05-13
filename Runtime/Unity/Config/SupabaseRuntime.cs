@@ -35,6 +35,10 @@ namespace Truesoft.Supabase.Unity.Config
         [Tooltip("OnEnable 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
         [SerializeField] private bool autoRestoreSessionOnEnable = true;
 
+        [Label("복원 후 세이브 자동 로드")]
+        [Tooltip("세션 복원 성공 시 등록된 모든 StaticUserSave를 자동으로 로드합니다. OnSessionRestored 이벤트는 로드 완료 후 발행됩니다.")]
+        [SerializeField] private bool autoLoadUserSavesOnSessionRestore = false;
+
         [Header("유저 세이브 자동 저장")]
         [Label("자동 동기화 사용")]
         [Tooltip("정적 세이브 자동 동기화 사용.")]
@@ -64,6 +68,7 @@ namespace Truesoft.Supabase.Unity.Config
         public static bool SessionRestoreResult { get; private set; }
 
         private Coroutine _lifecycleRoutine;
+        private static bool _autoLoadUserSavesOnSessionRestore;
 
         private void Awake()
         {
@@ -93,6 +98,7 @@ namespace Truesoft.Supabase.Unity.Config
             bootstrap.Initialize(settings);
 
             Supabase.ConfigureUserSaveAutoSyncCooldown(userSaveAutoSyncCooldownSeconds);
+            _autoLoadUserSavesOnSessionRestore = autoLoadUserSavesOnSessionRestore;
 
             if (dontDestroyOnLoad)
                 DontDestroyOnLoad(gameObject);
@@ -153,10 +159,8 @@ namespace Truesoft.Supabase.Unity.Config
             while (!Supabase.IsInitialized)
                 yield return null;
 
-            var autoLoginTask = Supabase.TryAutoLoginOnStartAsync();
-            yield return new WaitUntil(() => autoLoginTask.IsCompleted);
-
-            SetSessionRestoreCompleted(autoLoginTask.Result);
+            var task = RestoreSessionAndMaybeLoadAsync();
+            yield return new WaitUntil(() => task.IsCompleted);
 
             // RemoteConfig: Cold Start — 시작 시 fetch 없음. 폴링은 Update에서 TickRemoteConfigKeyPolls.
         }
@@ -165,9 +169,15 @@ namespace Truesoft.Supabase.Unity.Config
         /// 세션 복원을 수동으로 시작합니다. 완료 시 <see cref="OnSessionRestored"/> 이벤트를 발행합니다.
         /// autoRestoreSessionOnEnable이 false일 때 원하는 타이밍에 호출합니다.
         /// </summary>
-        public static async Task TriggerSessionRestoreAsync()
+        public static Task TriggerSessionRestoreAsync() => RestoreSessionAndMaybeLoadAsync();
+
+        private static async Task RestoreSessionAndMaybeLoadAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
+
+            if (ok && _autoLoadUserSavesOnSessionRestore)
+                await Supabase.TryLoadAllUserSavesAsync();
+
             SetSessionRestoreCompleted(ok);
         }
 
