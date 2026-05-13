@@ -62,7 +62,7 @@ namespace Truesoft.Supabase.Unity
         private void EnsureRegistered()
         {
             if (_isRegistered) return;
-            Supabase.RegisterUserSaveStaticSync(_syncKey, HasDirty, FlushDirtyAsync, ResetLocalState, TryLoadAsync);
+            Supabase.RegisterUserSaveStaticSync(_syncKey, HasDirty, FlushDirtyAsync, ResetLocalState, () => TryLoadAsync());
             _isRegistered = true;
         }
 
