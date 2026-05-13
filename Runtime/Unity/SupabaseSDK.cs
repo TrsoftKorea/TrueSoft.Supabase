@@ -801,9 +801,10 @@ namespace Truesoft.Supabase.Unity
             string key,
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
-            Action resetLocalState = null)
+            Action resetLocalState = null,
+            Func<Task<bool>> loadAsync = null)
         {
-            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState);
+            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, loadAsync);
         }
 
         /// <summary>정적 세이브에 변경이 생겼음을 알립니다(쿨타임 스케줄).</summary>
@@ -823,6 +824,10 @@ namespace Truesoft.Supabase.Unity
         {
             return UserSaveStaticSyncRegistry.RequestImmediateFlushAsync(key, timeoutMs);
         }
+
+        /// <summary>등록된 모든 정적 세이브를 로드합니다. 하나라도 실패하면 false를 반환합니다.</summary>
+        public static Task<bool> TryLoadAllUserSavesAsync() =>
+            UserSaveStaticSyncRegistry.LoadAllAsync();
 
         /// <summary>등록된 모든 정적 세이브에 즉시 전송을 요청합니다.</summary>
         public static void RequestImmediateUserSaveStaticFlushAll()

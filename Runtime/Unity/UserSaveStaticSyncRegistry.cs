@@ -12,6 +12,7 @@ namespace Truesoft.Supabase.Unity
             public string Key;
             public Func<bool> HasDirty;
             public Func<Task<bool>> FlushAsync;
+            public Func<Task<bool>> LoadAsync;
             public Action ResetLocalState;
             public bool IsInFlight;
             public bool RequestImmediateAfterInFlight;
@@ -31,7 +32,8 @@ namespace Truesoft.Supabase.Unity
             string key,
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
-            Action resetLocalState = null)
+            Action resetLocalState = null,
+            Func<Task<bool>> loadAsync = null)
         {
             if (string.IsNullOrWhiteSpace(key) || hasDirty == null || flushAsync == null)
                 return;
@@ -42,6 +44,7 @@ namespace Truesoft.Supabase.Unity
                 existing.HasDirty = hasDirty;
                 existing.FlushAsync = flushAsync;
                 existing.ResetLocalState = resetLocalState;
+                existing.LoadAsync = loadAsync;
                 return;
             }
 
@@ -51,6 +54,7 @@ namespace Truesoft.Supabase.Unity
                 HasDirty = hasDirty,
                 FlushAsync = flushAsync,
                 ResetLocalState = resetLocalState,
+                LoadAsync = loadAsync,
                 NextAllowedAtRealtime = 0f
             };
         }
@@ -135,6 +139,33 @@ namespace Truesoft.Supabase.Unity
                     continue;
 
                 _ = StartFlushAsync(entry, immediate: false);
+            }
+        }
+
+        public static async Task<bool> LoadAllAsync()
+        {
+            var tasks = new List<Task<bool>>(Entries.Count);
+            foreach (var entry in Entries.Values)
+            {
+                if (entry.LoadAsync != null)
+                    tasks.Add(SafeLoadAsync(entry));
+            }
+
+            if (tasks.Count == 0) return true;
+
+            var results = await Task.WhenAll(tasks);
+            foreach (var r in results)
+                if (!r) return false;
+            return true;
+        }
+
+        private static async Task<bool> SafeLoadAsync(Entry entry)
+        {
+            try { return await entry.LoadAsync(); }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Supabase] user save load failed: " + e.Message);
+                return false;
             }
         }
 
