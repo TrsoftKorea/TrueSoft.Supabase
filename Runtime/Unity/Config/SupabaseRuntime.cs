@@ -35,9 +35,6 @@ namespace Truesoft.Supabase.Unity.Config
         [Tooltip("OnEnable 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
         [SerializeField] private bool autoRestoreSessionOnEnable = true;
 
-        [Label("복원 후 세이브 자동 로드")]
-        [Tooltip("세션 복원 성공 시 등록된 모든 StaticUserSave를 자동으로 로드합니다. OnSessionRestored 이벤트는 로드 완료 후 발행됩니다.")]
-        [SerializeField] private bool autoLoadUserSavesOnSessionRestore = false;
 
         [Header("유저 세이브 자동 저장")]
         [Label("자동 동기화 사용")]
@@ -50,6 +47,7 @@ namespace Truesoft.Supabase.Unity.Config
 
         /// <summary>
         /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
+        /// 로그인 성공 시 등록된 모든 <c>StaticUserSave</c> 로드가 완료된 뒤 발행됩니다.
         /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
@@ -68,7 +66,6 @@ namespace Truesoft.Supabase.Unity.Config
         public static bool SessionRestoreResult { get; private set; }
 
         private Coroutine _lifecycleRoutine;
-        private static bool _autoLoadUserSavesOnSessionRestore;
 
         private void Awake()
         {
@@ -98,7 +95,6 @@ namespace Truesoft.Supabase.Unity.Config
             bootstrap.Initialize(settings);
 
             Supabase.ConfigureUserSaveAutoSyncCooldown(userSaveAutoSyncCooldownSeconds);
-            _autoLoadUserSavesOnSessionRestore = autoLoadUserSavesOnSessionRestore;
 
             if (dontDestroyOnLoad)
                 DontDestroyOnLoad(gameObject);
@@ -175,7 +171,7 @@ namespace Truesoft.Supabase.Unity.Config
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
-            if (ok && _autoLoadUserSavesOnSessionRestore)
+            if (ok)
                 await Supabase.TryLoadAllUserSavesAsync();
 
             SetSessionRestoreCompleted(ok);
