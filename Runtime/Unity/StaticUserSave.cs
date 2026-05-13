@@ -13,8 +13,8 @@ namespace Truesoft.Supabase.Unity
     /// <code>
     /// public sealed class GameSave : StaticUserSave&lt;GameSave.Row&gt;
     /// {
-    ///     public static readonly GameSave Instance = new("com.mygame.GameSave");
-    ///     private GameSave(string key) : base(key) { }
+    ///     public static readonly GameSave Instance = new();
+    ///     private GameSave() : base() { }
     ///
     ///     [DataTable("basic")]
     ///     public sealed class Row
@@ -31,7 +31,7 @@ namespace Truesoft.Supabase.Unity
     /// }
     /// </code>
     /// </para>
-    /// <para><paramref name="syncKey"/>는 등록된 세이브 간 고유해야 합니다. 권장 형식: "Namespace.ClassName"</para>
+    /// <para>syncKey는 등록된 세이브 간 고유해야 합니다. 기본값은 <c>typeof(TRow).FullName</c>입니다.</para>
     /// </summary>
     public abstract class StaticUserSave<TRow> where TRow : class, new()
     {
@@ -42,6 +42,10 @@ namespace Truesoft.Supabase.Unity
         private  readonly  string _syncKey;
         protected readonly string LogTag;
 
+        /// <summary>syncKey를 <c>typeof(TRow).FullName</c>으로 자동 설정합니다.</summary>
+        protected StaticUserSave() : this(typeof(TRow).FullName) { }
+
+        /// <summary>syncKey를 직접 지정합니다. 여러 인스턴스가 같은 TRow를 공유하는 경우 사용합니다.</summary>
         protected StaticUserSave(string syncKey)
         {
             if (string.IsNullOrWhiteSpace(syncKey))
@@ -149,8 +153,13 @@ namespace Truesoft.Supabase.Unity
         {
             EnsureRegistered();
 
+            string tableName;
             Dictionary<string, object> patch;
-            try   { patch = DataSchema.BuildPatch(_lastSynced, Current); }
+            try
+            {
+                tableName = DataSchema.ResolveTableName<TRow>();
+                patch     = DataSchema.BuildPatch(_lastSynced, Current);
+            }
             catch (Exception e)
             {
                 Debug.LogWarning($"{LogTag} BuildPatch 실패 — {e.Message}");
@@ -164,13 +173,12 @@ namespace Truesoft.Supabase.Unity
                 return true;
             }
 
-            var ok = await Supabase.TryPatchUserDataDiffAsync(
-                _lastSynced, Current,
-                ensureRowFirst: true, setUpdatedAtIsoUtc: true);
+            var result = await SupabaseSDK.PatchUserDataAsync(
+                tableName, patch, ensureRowFirst: true, setUpdatedAtIsoUtc: true);
 
-            if (!ok)
+            if (!result.IsSuccess)
             {
-                Debug.LogWarning($"{LogTag} PATCH 전송 실패.");
+                Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorMessage}");
                 return false;
             }
 
