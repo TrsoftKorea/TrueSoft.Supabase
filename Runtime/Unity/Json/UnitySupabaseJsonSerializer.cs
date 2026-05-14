@@ -1,19 +1,13 @@
 using System;
-using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Truesoft.Supabase.Unity
 {
     public sealed class UnitySupabaseJsonSerializer : ISupabaseJsonSerializer
     {
-        [Serializable]
-        private sealed class ArrayWrapper<T>
-        {
-            public T[] items;
-        }
-
         public string ToJson<T>(T value)
         {
-            return JsonUtility.ToJson(value);
+            return JsonConvert.SerializeObject(value);
         }
 
         public T FromJson<T>(string json)
@@ -21,7 +15,7 @@ namespace Truesoft.Supabase.Unity
             if (string.IsNullOrWhiteSpace(json))
                 return default;
 
-            return JsonUtility.FromJson<T>(json);
+            return JsonConvert.DeserializeObject<T>(json);
         }
 
         public T[] FromJsonArray<T>(string json)
@@ -29,9 +23,7 @@ namespace Truesoft.Supabase.Unity
             if (string.IsNullOrWhiteSpace(json))
                 return Array.Empty<T>();
 
-            var wrapped = "{ \"items\": " + json + "}";
-            var result = JsonUtility.FromJson<ArrayWrapper<T>>(wrapped);
-            return result?.items ?? Array.Empty<T>();
+            return JsonConvert.DeserializeObject<T[]>(json) ?? Array.Empty<T>();
         }
     }
 }
