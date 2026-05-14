@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Truesoft.Supabase.Core.Http
@@ -79,6 +80,14 @@ namespace Truesoft.Supabase.Core.Http
 
             var body = request.downloadHandler?.text ?? "";
             var status = request.responseCode;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var shortUrl = url.Contains("/rest/v1/") ? url[url.IndexOf("/rest/v1/")..] : url;
+            Debug.Log(
+                $"[SupabaseHTTP] {method} {shortUrl}\n" +
+                $"Body: {(string.IsNullOrEmpty(jsonBody) ? "(none)" : jsonBody)}\n" +
+                $"Status: {status} | Response: {(string.IsNullOrEmpty(body) ? "(empty)" : body)}");
+#endif
 
             if (success)
             {
