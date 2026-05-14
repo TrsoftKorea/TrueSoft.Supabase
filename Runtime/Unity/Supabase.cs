@@ -6,6 +6,9 @@ using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Core.Models;
 using Truesoft.Supabase.Unity.RemoteConfig;
+#if TRUESOFT_IAP_AVAILABLE
+using UnityEngine.Purchasing;
+#endif
 
 namespace Truesoft.Supabase.Unity
 {
