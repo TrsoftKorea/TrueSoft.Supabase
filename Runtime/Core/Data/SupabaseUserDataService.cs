@@ -274,7 +274,7 @@ namespace Truesoft.Supabase.Core.Data
             }
 
             if (patch == null || patch.Count == 0)
-                return SupabaseResult<bool>.Success(true);
+                return SupabaseResult<bool>.Success(false); // false = 변경 없음, HTTP 요청 미발송
 
             return await PatchAsync(
                 accessToken,

@@ -116,6 +116,14 @@ namespace Truesoft.Supabase.Core.Data
                 return true;
             if (a == null || b == null)
                 return false;
+
+            // 클래스 타입(string 제외)이 같은 참조인 경우:
+            // CloneRow가 참조를 그대로 복사한 것이므로 내부 변경을 감지할 수 없습니다.
+            // 항상 변경된 것으로 처리해 패치에 포함합니다.
+            var t = a.GetType();
+            if (!t.IsValueType && t != typeof(string) && ReferenceEquals(a, b))
+                return false;
+
             return a.Equals(b);
         }
 

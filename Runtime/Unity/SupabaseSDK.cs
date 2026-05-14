@@ -787,6 +787,12 @@ namespace Truesoft.Supabase.Unity
             bool setUpdatedAtIsoUtc = true)
         {
             var r = await PatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            // Data=false 는 "변경 없음, HTTP 미발송" 신호 — Success와 구분해 로그
+            if (r is { IsSuccess: true, Data: false })
+            {
+                LogApiResult(ApiLogTags.UserDataPatchDiff, true, "NoChanges");
+                return true;
+            }
             return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
         }
 
@@ -936,7 +942,7 @@ namespace Truesoft.Supabase.Unity
             var prefix = $"[{logTag}]";
             if (isSuccess)
             {
-                Debug.Log($"{prefix} Success");
+                Debug.Log(string.IsNullOrEmpty(message) ? $"{prefix} Success" : $"{prefix} {message}");
                 return;
             }
 
