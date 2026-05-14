@@ -1,10 +1,11 @@
 # Supabase SDK — Examples 샘플
 
-인증·유저 데이터·RemoteConfig 핵심 기능을 키보드 단축키로 빠르게 테스트할 수 있는 예제입니다.
+인증·유저 데이터·RemoteConfig·IAP 핵심 기능을 키보드 단축키로 빠르게 테스트할 수 있는 예제입니다.
 
 **파일 구성:**
 - `SamplePlayerSave.cs` — `StaticUserSave<Row>` 상속 예시 (유저 세이브 클래스 정의 방법)
 - `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트
+- `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`TRUESOFT_IAP_AVAILABLE` 심볼 필요)
 
 ---
 
@@ -35,7 +36,8 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 1. 씬에 빈 GameObject 생성
 2. `SupabaseRuntime` 컴포넌트 추가 (세션 자동 복원·자동 저장 담당)
 3. 같은 GameObject에 `ExampleSupabaseScenarios` 컴포넌트 추가
-4. Play Mode 진입 후 아래 단축키로 기능 테스트
+4. (IAP 테스트 시) 같은 GameObject에 `SampleIAPScenarios` 컴포넌트 추가 후 Inspector에서 `productId` 입력
+5. Play Mode 진입 후 아래 단축키로 기능 테스트
 
 ---
 
@@ -53,6 +55,13 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 | **T** | RemoteConfig Reader |
 | **U** | RemoteConfig Binding (.Value 읽기) |
 | **E** | RemoteConfig Listener 시작/종료 토글 |
+
+**SampleIAPScenarios** (`com.unity.purchasing` 5.2.1 이상 필요):
+
+| 키 | 기능 |
+|----|------|
+| **O** | IAP 초기화 (로그인 후 호출) |
+| **B** | 아이템 구매 (결제창 표시) |
 
 선택 기능(Edge Function, 공개 프로필 등)은 `ExampleSupabaseScenarios.cs`의 주석을 해제하면 사용할 수 있습니다.
 
