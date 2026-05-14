@@ -9,8 +9,8 @@
 ```csharp
 public sealed class GameSave : StaticUserSave<GameSave.Row>
 {
-    public static readonly GameSave Instance = new("com.mygame.GameSave");
-    private GameSave(string key) : base(key) { }
+    public static readonly GameSave Instance = new();
+    private GameSave() : base() { }  // syncKey 기본값: typeof(Row).FullName
 
     // [DataTable("테이블명")] → "data_" 접두사 자동 추가 (예: "basic" → "data_basic")
     [DataTable("basic")]
@@ -78,13 +78,13 @@ GameSave.Instance.ConfigureCooldown(seconds: 5f);
 
 ### 다중 테이블
 
-테이블마다 별도 클래스를 정의합니다. `syncKey`는 고유한 문자열을 사용하세요.
+테이블마다 별도 클래스를 정의합니다. syncKey 기본값은 `typeof(Row).FullName`이므로 네임스페이스가 다르거나 클래스명이 겹치지 않으면 인자 없는 `base()`로 충분합니다.
 
 ```csharp
 public sealed class InventorySave : StaticUserSave<InventorySave.Row>
 {
-    public static readonly InventorySave Instance = new("com.mygame.InventorySave");
-    private InventorySave(string key) : base(key) { }
+    public static readonly InventorySave Instance = new();
+    private InventorySave() : base() { }
 
     [DataTable("inventory")]
     [Serializable]
@@ -162,8 +162,20 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 
 ---
 
-## JsonUtility 주의사항
+## JSON 직렬화 주의사항
 
-- PostgREST가 반환하는 JSON 키와 C# 필드 이름이 **정확히 일치**해야 값이 채워집니다.
-- `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. JSON 역직렬화 키는 바뀌지 않습니다.
-- DB 컬럼명과 C# 이름이 다르게 두고 싶다면 Newtonsoft 등 별도 역직렬화가 필요합니다.
+SDK는 Newtonsoft.Json을 사용합니다. PostgREST가 반환하는 JSON 키와 C# 필드 이름이 일치해야 값이 채워집니다.
+
+- `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화 키는 **필드 이름** 기준입니다.
+- DB 컬럼명과 C# 필드명이 달라야 한다면 `[JsonProperty("db_column_name")]`으로 매핑하세요.
+
+```csharp
+using Newtonsoft.Json;
+
+public sealed class Row
+{
+    [DataColumn("last_login_at")]
+    [JsonProperty("last_login_at")]  // DB 컬럼명과 필드명이 다를 때
+    public string lastLoginAt;
+}
+```

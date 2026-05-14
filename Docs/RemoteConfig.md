@@ -14,22 +14,23 @@
 
 ## 읽기 함수 (CreateRemoteConfigReader)
 
-필드에 선언해두고 간결하게 호출합니다. 캐시가 만료됐으면 서버 응답을 기다린 후 반환합니다.
+첫 호출 시 생성(`??=`)해두고 간결하게 호출합니다. 캐시가 만료됐으면 서버 응답을 기다린 후 반환합니다.
 
 ```csharp
-// 선언
-private readonly Func<Task<GameplayConfig>> _getConfig =
-    Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1");
+private Func<Task<GameplayConfig>> _getConfig;
 
-// 사용 — 만료 시 서버 대기, 신선 시 즉시
-var cfg = await _getConfig();
-float dmg = cfg?.battle.playerDmg ?? 1f;
+private async Task LoadConfigAsync()
+{
+    _getConfig ??= Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1");
+
+    var cfg = await _getConfig();
+    float dmg = cfg?.battle?.playerDmg ?? 1f;
+}
 ```
 
 ```csharp
 // 유효시간 직접 지정 (기본값 300초)
-private readonly Func<Task<GameplayConfig>> _getConfig =
-    Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1", maxStaleSeconds: 60);
+_getConfig ??= Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1", maxStaleSeconds: 60);
 ```
 
 ## 값 바인딩 (CreateRemoteConfigBinding)
@@ -37,17 +38,19 @@ private readonly Func<Task<GameplayConfig>> _getConfig =
 폴링으로 값을 최신 상태로 유지합니다. `Value`로 언제든 동기 읽기.
 
 ```csharp
-private readonly RemoteConfigBinding<GameplayConfig> _gameplay =
-    Supabase.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+private RemoteConfigBinding<GameplayConfig> _gameplay;
 
-// 필요할 때 읽기 — async 없음
-float dmg = _gameplay.Value?.battle.playerDmg ?? 1f;
-```
+private void Start()
+{
+    _gameplay = Supabase.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+}
 
-수동으로 해제해야 할 때는 `Dispose()`를 호출합니다.
+private void Update()
+{
+    float dmg = _gameplay.Value?.battle?.playerDmg ?? 1f;
+}
 
-```csharp
-void OnDestroy() => _gameplay.Dispose();
+private void OnDestroy() => _gameplay?.Dispose();
 ```
 
 ## 반응형 구독 (CreateRemoteConfigListener)
@@ -55,15 +58,15 @@ void OnDestroy() => _gameplay.Dispose();
 폴링으로 값이 바뀔 때마다 콜백을 호출합니다.
 
 ```csharp
-private IDisposable _maintenanceSub;
+private RemoteConfigListener<MaintenanceConfig> _maintenanceSub;
 
-void Start()
+private void Start()
 {
     _maintenanceSub = Supabase.CreateRemoteConfigListener<MaintenanceConfig>(
         "maintenance", pollIntervalSeconds: 30f, ApplyMaintenanceConfig);
 }
 
-void OnDestroy() => _maintenanceSub?.Dispose();
+private void OnDestroy() => _maintenanceSub?.Dispose();
 ```
 
 > `invokeIfCached: false`를 지정하면 생성 시 캐시 값으로 즉시 콜백하지 않습니다 (기본 `true`).
@@ -203,7 +206,7 @@ Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 
 ```csharp
 Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
-    var cfg = JsonUtility.FromJson<GameplayConfig>(json);
+    var cfg = Newtonsoft.Json.JsonConvert.DeserializeObject<GameplayConfig>(json);
     ApplyConfig(cfg);
 }, invokeIfCached: true);
 ```

@@ -41,9 +41,34 @@ await Supabase.TrySignOutFullyAsync();            // 로그아웃
 ### 유저 세이브 → [Docs/UserSaves.md](Docs/UserSaves.md)
 
 ```csharp
-// 컬럼 어노테이션으로 로드 / 변경분만 저장
-var save = await Supabase.TryLoadUserSaveAttributedAsync<MySave>();
-await Supabase.TryPatchUserSaveDiffAsync(prev, current);
+// 1. StaticUserSave<Row>를 상속해 세이브 클래스 정의
+public sealed class PlayerSave : StaticUserSave<PlayerSave.Row>
+{
+    public static readonly PlayerSave Instance = new();
+    private PlayerSave() : base() { }
+
+    [DataTable("basic")]   // → DB 테이블 "data_basic"
+    [Serializable]
+    public sealed class Row
+    {
+        [DataColumn("level")] public int level;
+    }
+
+    public static int Level
+    {
+        get => Instance.Current.level;
+        set { if (Instance.Current.level == value) return; Instance.Current.level = value; Instance.MarkDirty(); }
+    }
+}
+
+// 2. 로그인 직후 한 번 로드
+await Supabase.TryLoadAllUserSavesAsync();
+
+// 3. 값 변경 — MarkDirty 자동 호출, 쿨타임 후 자동 저장
+PlayerSave.Level = 10;
+
+// 4. 중요한 시점(씬 전환, 로그아웃 직전 등)에 즉시 저장
+await Supabase.TryFlushAllUserSaveImmediateAsync();
 ```
 
 ### Remote Config → [Docs/RemoteConfig.md](Docs/RemoteConfig.md)
