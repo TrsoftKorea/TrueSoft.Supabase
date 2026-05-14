@@ -2161,10 +2161,10 @@ namespace Truesoft.Supabase.Unity
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
         /// <returns>초기화 성공이면 <see cref="IAPFacade"/> 인스턴스, 실패이면 null.</returns>
         public static async Task<IAPFacade> CreateIAPAsync(
-            string[]                            productIds,
-            Func<string, bool, Task<bool>>      onGrant,
-            Action<FailedOrder>                 onFailed    = null,
-            int                                 timeoutMs   = 10_000)
+            string[]                                 productIds,
+            Func<string, bool, bool, Task<bool>>     onGrant,
+            Action<FailedOrder>                      onFailed  = null,
+            int                                      timeoutMs = 10_000)
         {
             var facade = CreateIAP();
             facade.OnGrantItemAsync = onGrant;
@@ -2178,15 +2178,15 @@ namespace Truesoft.Supabase.Unity
         /// Google Play IAP 파사드를 생성하고 초기화까지 수행합니다.
         /// </summary>
         /// <param name="productIds">등록할 소모품(Consumable) 상품 ID 목록.</param>
-        /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming) → true면 소모품 소비.</param>
+        /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming, alreadyVerified) → true면 소모품 소비.</param>
         /// <param name="onFailed">구매 실패 콜백 (선택).</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
         /// <returns>초기화 성공이면 <see cref="GooglePlayIAPFacade"/> 인스턴스, 실패이면 null.</returns>
         public static async Task<GooglePlayIAPFacade> CreateGooglePlayIAPAsync(
-            string[]                            productIds,
-            Func<string, bool, Task<bool>>      onGrant,
-            Action<FailedOrder>                 onFailed    = null,
-            int                                 timeoutMs   = 10_000)
+            string[]                                 productIds,
+            Func<string, bool, bool, Task<bool>>     onGrant,
+            Action<FailedOrder>                      onFailed  = null,
+            int                                      timeoutMs = 10_000)
         {
             var facade = CreateGooglePlayIAP();
             facade.OnGrantItemAsync = onGrant;
@@ -2200,15 +2200,15 @@ namespace Truesoft.Supabase.Unity
         /// Apple App Store IAP 파사드를 생성하고 초기화까지 수행합니다.
         /// </summary>
         /// <param name="productIds">등록할 소모품(Consumable) 상품 ID 목록.</param>
-        /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming) → true면 소모품 소비.</param>
+        /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming, alreadyVerified) → true면 소모품 소비.</param>
         /// <param name="onFailed">구매 실패 콜백 (선택).</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
         /// <returns>초기화 성공이면 <see cref="AppleIAPFacade"/> 인스턴스, 실패이면 null.</returns>
         public static async Task<AppleIAPFacade> CreateAppleIAPAsync(
-            string[]                            productIds,
-            Func<string, bool, Task<bool>>      onGrant,
-            Action<FailedOrder>                 onFailed    = null,
-            int                                 timeoutMs   = 10_000)
+            string[]                                 productIds,
+            Func<string, bool, bool, Task<bool>>     onGrant,
+            Action<FailedOrder>                      onFailed  = null,
+            int                                      timeoutMs = 10_000)
         {
             var facade = CreateAppleIAP();
             facade.OnGrantItemAsync = onGrant;

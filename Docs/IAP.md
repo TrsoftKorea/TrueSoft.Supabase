@@ -66,7 +66,7 @@ private async void Start()
 {
     _iapFacade = await Supabase.CreateIAPAsync(
         productIds: new[] { "com.mygame.item_1000" },
-        onGrant: async (productId, isResuming) =>
+        onGrant: async (productId, isResuming, alreadyVerified) =>
         {
             await MyInventory.GiveItemAsync(productId);
             return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
@@ -102,7 +102,7 @@ private async void Start()
 {
     _iapFacade = await Supabase.CreateGooglePlayIAPAsync(
         productIds: new[] { "com.mygame.item_1000" },
-        onGrant: async (productId, isResuming) =>
+        onGrant: async (productId, isResuming, alreadyVerified) =>
         {
             await MyInventory.GiveItemAsync(productId);
             return true;
@@ -131,7 +131,7 @@ private async void Start()
 {
     _iapFacade = await Supabase.CreateAppleIAPAsync(
         productIds: new[] { "com.mygame.item_1000" },
-        onGrant: async (productId, isResuming) =>
+        onGrant: async (productId, isResuming, alreadyVerified) =>
         {
             await MyInventory.GiveItemAsync(productId);
             return true;
@@ -158,17 +158,25 @@ private void OnDestroy()
 | `true` | Unity IAP가 `ConfirmPurchase` 호출 → 소모품 소비 완료 |
 | `false` | Pending 유지 → 다음 `InitializeAsync` 호출 시 자동 재처리 |
 
-### isResuming 플래그
+### alreadyVerified / isResuming 플래그
+
+| 플래그 | 의미 |
+|--------|------|
+| `isResuming` | 이전 앱 세션의 미처리 주문을 재처리 중 |
+| `alreadyVerified` | 서버 DB에 이미 검증 기록이 있음 — 지급 후 크래시된 케이스 |
+
+두 플래그의 조합으로 중복 지급을 안전하게 처리할 수 있습니다.
 
 ```csharp
-onGrant: async (productId, isResuming) =>
+onGrant: async (productId, isResuming, alreadyVerified) =>
 {
-    if (isResuming)
+    if (alreadyVerified)
     {
-        // 앱 재시작 후 처리되지 않은 이전 구매를 재처리 중
-        // DB에서 지급 여부를 먼저 확인해 중복 지급을 방지하세요
+        // 서버는 이 영수증을 이미 처리했음
+        // 원인: 아이템 지급 후 ConfirmPurchase 전에 앱이 크래시된 경우
+        // DB에서 지급 여부를 확인해 중복 지급을 방지하세요
         bool alreadyGranted = await MyInventory.HasItemAsync(productId);
-        if (alreadyGranted) return true; // 소비만 완료
+        if (alreadyGranted) return true; // 이미 지급됨 → 소비만 완료
     }
 
     await MyInventory.GiveItemAsync(productId);
@@ -181,7 +189,7 @@ onGrant: async (productId, isResuming) =>
 ```csharp
 _iapFacade = await Supabase.CreateIAPAsync(
     productIds: new[] { "com.mygame.item_1000" },
-    onGrant: async (productId, isResuming) =>
+    onGrant: async (productId, isResuming, alreadyVerified) =>
     {
         await MyInventory.GiveItemAsync(productId);
         return true;
@@ -197,7 +205,7 @@ _iapFacade = await Supabase.CreateIAPAsync(
 
 ```csharp
 var iapFacade = Supabase.CreateIAP();
-iapFacade.OnGrantItemAsync = async (productId, isResuming) =>
+iapFacade.OnGrantItemAsync = async (productId, isResuming, alreadyVerified) =>
 {
     await MyInventory.GiveItemAsync(productId);
     return true;

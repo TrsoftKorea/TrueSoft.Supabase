@@ -471,10 +471,10 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         /// <inheritdoc cref="SupabaseSDK.CreateIAPAsync"/>
         public static Task<IAPFacade> CreateIAPAsync(
-            string[]                        productIds,
-            Func<string, bool, Task<bool>>  onGrant,
-            Action<FailedOrder>             onFailed  = null,
-            int                             timeoutMs = 10_000) =>
+            string[]                             productIds,
+            Func<string, bool, bool, Task<bool>> onGrant,
+            Action<FailedOrder>                  onFailed  = null,
+            int                                  timeoutMs = 10_000) =>
             SupabaseSDK.CreateIAPAsync(productIds, onGrant, onFailed, timeoutMs);
 
         /// <summary>
@@ -482,10 +482,10 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         /// <inheritdoc cref="SupabaseSDK.CreateGooglePlayIAPAsync"/>
         public static Task<GooglePlayIAPFacade> CreateGooglePlayIAPAsync(
-            string[]                        productIds,
-            Func<string, bool, Task<bool>>  onGrant,
-            Action<FailedOrder>             onFailed  = null,
-            int                             timeoutMs = 10_000) =>
+            string[]                             productIds,
+            Func<string, bool, bool, Task<bool>> onGrant,
+            Action<FailedOrder>                  onFailed  = null,
+            int                                  timeoutMs = 10_000) =>
             SupabaseSDK.CreateGooglePlayIAPAsync(productIds, onGrant, onFailed, timeoutMs);
 
         /// <summary>
@@ -493,10 +493,10 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         /// <inheritdoc cref="SupabaseSDK.CreateAppleIAPAsync"/>
         public static Task<AppleIAPFacade> CreateAppleIAPAsync(
-            string[]                        productIds,
-            Func<string, bool, Task<bool>>  onGrant,
-            Action<FailedOrder>             onFailed  = null,
-            int                             timeoutMs = 10_000) =>
+            string[]                             productIds,
+            Func<string, bool, bool, Task<bool>> onGrant,
+            Action<FailedOrder>                  onFailed  = null,
+            int                                  timeoutMs = 10_000) =>
             SupabaseSDK.CreateAppleIAPAsync(productIds, onGrant, onFailed, timeoutMs);
 #endif
 

@@ -19,7 +19,7 @@ namespace Truesoft.Supabase.Unity
     /// <code>
     /// var iap = await Supabase.CreateGooglePlayIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, isResuming) =>
+    ///     onGrant: async (productId, isResuming, alreadyVerified) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
@@ -48,10 +48,11 @@ namespace Truesoft.Supabase.Unity
         /// <list type="bullet">
         ///   <item>인자 1: <c>string productId</c> — 구매된 상품 ID</item>
         ///   <item>인자 2: <c>bool isResuming</c> — 앱 재시작 후 미처리 주문 재처리 중이면 true</item>
+        ///   <item>인자 3: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
         ///   <item>반환: <c>true</c> → SDK가 ConfirmPurchase 호출 / <c>false</c> → Pending 유지</item>
         /// </list>
         /// </summary>
-        public Func<string, bool, Task<bool>> OnGrantItemAsync { get; set; }
+        public Func<string, bool, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
         public event Action<FailedOrder> OnPurchaseFailed;
@@ -301,7 +302,7 @@ namespace Truesoft.Supabase.Unity
             bool granted;
             try
             {
-                granted = await OnGrantItemAsync(productId, isResuming);
+                granted = await OnGrantItemAsync(productId, isResuming, response.already_verified);
             }
             catch (Exception e)
             {
