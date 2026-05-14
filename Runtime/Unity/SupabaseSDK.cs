@@ -14,6 +14,9 @@ using Truesoft.Supabase.Unity.Auth.Apple;
 using Truesoft.Supabase.Unity.Config;
 using Truesoft.Supabase.Unity.RemoteConfig;
 using UnityEngine;
+#if TRUESOFT_IAP_AVAILABLE
+using UnityEngine.Purchasing;
+#endif
 
 namespace Truesoft.Supabase.Unity
 {
