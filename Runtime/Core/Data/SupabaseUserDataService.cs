@@ -120,13 +120,18 @@ namespace Truesoft.Supabase.Core.Data
                 method: "PATCH",
                 url: url,
                 jsonBody: bodyJson,
-                headers: CreateAuthHeaders(accessToken, prefer: "return=minimal"));
+                headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
 
             if (response == null)
                 return SupabaseResult<bool>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "patch_failed");
+
+            // return=representation: 빈 배열([])이면 필터에 매칭된 행이 없었음
+            var trimmedBody = response.Body?.Trim();
+            if (string.IsNullOrEmpty(trimmedBody) || trimmedBody == "[]")
+                return SupabaseResult<bool>.Fail("patch_no_rows_affected");
 
             return SupabaseResult<bool>.Success(true);
         }
