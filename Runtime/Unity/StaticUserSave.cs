@@ -73,17 +73,6 @@ namespace Truesoft.Supabase.Unity
         {
             if (!_isDirty) return true;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            try
-            {
-                var dbgPatch = DataSchema.BuildPatch(_lastSynced, Current);
-                Debug.Log(dbgPatch.Count == 0
-                    ? $"{LogTag} FlushDirtyAsync — patch empty (변경 감지 없음)"
-                    : $"{LogTag} FlushDirtyAsync — patch columns: [{string.Join(", ", dbgPatch.Keys)}]");
-            }
-            catch (Exception dbgEx) { Debug.LogWarning($"{LogTag} FlushDirtyAsync debug failed: {dbgEx.Message}"); }
-#endif
-
             var ok = await Supabase.TryPatchUserDataDiffAsync(
                 _lastSynced, Current,
                 ensureRowFirst: true, setUpdatedAtIsoUtc: true);
