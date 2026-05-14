@@ -521,6 +521,9 @@ namespace Truesoft.Supabase.Unity
         public static void ClearSession(bool clearStorage, bool deleteUserSessionRow) =>
             SupabaseSDK.ClearSession(clearStorage, deleteUserSessionRow);
 
+        /// <inheritdoc cref="SupabaseSDK.ClearLocalStorage"/>
+        public static void ClearLocalStorage() => SupabaseSDK.ClearLocalStorage();
+
         /// <inheritdoc cref="SupabaseSDK.SignOutAsync"/>
         public static Task SignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
             SupabaseSDK.SignOutAsync(clearStorage, deleteUserSessionRow);

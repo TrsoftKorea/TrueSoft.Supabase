@@ -44,7 +44,7 @@ namespace Truesoft.Supabase.Unity
         private const string WithdrawalCancelRedeemFunctionName = "withdrawal-cancel-redeem";
 
         /// <summary>계정별 로컬 세션 토큰 저장 키 접두어. <c>PlayerPrefs</c> 키는 <c>{접두어}{account_id}</c> 입니다.</summary>
-        public const string SessionTokenPlayerPrefsKeyPrefix = "Truesoft.Supabase.SessionToken.";
+        internal const string SessionTokenPlayerPrefsKeyPrefix = "Truesoft.Supabase.SessionToken.";
 
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;
@@ -2347,6 +2347,36 @@ namespace Truesoft.Supabase.Unity
                 if (svc != null)
                     _ = svc.DeleteMySessionRowAsync(accessToken, accountId);
             }
+        }
+
+        /// <summary>
+        /// SDK가 소유한 모든 PlayerPrefs 키를 삭제합니다.
+        /// 테스트·QA 목적으로 기기 로컬 상태를 완전히 초기화할 때 사용하세요.
+        /// </summary>
+        /// <remarks>
+        /// 이 메서드는 세션 해제(<see cref="ClearSession"/>)를 포함해 SDK가 관리하는
+        /// 모든 로컬 스토리지를 지웁니다. 게임 자체의 PlayerPrefs는 건드리지 않습니다.
+        ///
+        /// SDK 내부 키 목록이 변경되더라도 이 메서드 하나만 유지하면 됩니다.
+        /// 게임 코드에서 SDK의 키 이름을 직접 참조하지 마세요.
+        /// </remarks>
+        public static void ClearLocalStorage()
+        {
+            // 세션 해제 (RefreshTokenKey + SessionTokenKey for current account)
+            ClearSession(clearStorage: true, deleteUserSessionRow: false);
+
+            // SDK가 관리하는 나머지 모든 키 삭제
+            PlayerPrefs.DeleteKey(LastSignInMethodKey);
+            PlayerPrefs.DeleteKey(CurrentServerCodeKey);
+            PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
+            PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
+            PlayerPrefs.DeleteKey(WithdrawalGateDisplayNameKey);
+            PlayerPrefs.DeleteKey(WithdrawalGateWithdrawnAtKey);
+            PlayerPrefs.DeleteKey(WithdrawalGateServerNowKey);
+            PlayerPrefs.DeleteKey(WithdrawalGateSecondsRemainingKey);
+            // AutoLoginBlockedKey는 ClearSession()이 SetAutoLoginBlocked(true)로 처리함
+
+            PlayerPrefs.Save();
         }
 
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>
