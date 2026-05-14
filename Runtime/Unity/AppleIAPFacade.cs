@@ -17,14 +17,14 @@ namespace Truesoft.Supabase.Unity
     /// <remarks>
     /// 사용 방법:
     /// <code>
-    /// var iap = Supabase.CreateAppleIAP();
-    /// iap.OnGrantItemAsync = async (order, resp, isResuming) =>
-    /// {
-    ///     // 아이템 지급 로직
-    ///     return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
-    ///                  // false → Pending 유지 → 다음 InitializeAsync에서 재처리
-    /// };
-    /// await iap.InitializeAsync(new[] { "com.mygame.item" });
+    /// var iap = await Supabase.CreateAppleIAPAsync(
+    ///     productIds: new[] { "com.mygame.item" },
+    ///     onGrant: async (productId, isResuming) =>
+    ///     {
+    ///         await MyInventory.GiveItemAsync(productId);
+    ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
+    ///                      // false → Pending 유지 → 다음 InitializeAsync에서 재처리
+    ///     });
     /// </code>
     ///
     /// 씬 언로드 시 반드시 <see cref="Dispose"/>를 호출하세요.
@@ -46,13 +46,12 @@ namespace Truesoft.Supabase.Unity
         /// <summary>
         /// 아이템 지급 콜백 (필수 설정).
         /// <list type="bullet">
-        ///   <item>인자 1: <see cref="PendingOrder"/> — Unity IAP 주문 (영수증·상품 ID 접근)</item>
-        ///   <item>인자 2: <see cref="AppleIAPPurchaseResponse"/> — Supabase 서버 검증 응답</item>
-        ///   <item>인자 3: <c>bool isResuming</c> — 앱 재시작 후 미처리 주문 재처리 중이면 true</item>
+        ///   <item>인자 1: <c>string productId</c> — 구매된 상품 ID</item>
+        ///   <item>인자 2: <c>bool isResuming</c> — 앱 재시작 후 미처리 주문 재처리 중이면 true</item>
         ///   <item>반환: <c>true</c> → SDK가 ConfirmPurchase 호출 / <c>false</c> → Pending 유지</item>
         /// </list>
         /// </summary>
-        public Func<PendingOrder, AppleIAPPurchaseResponse, bool, Task<bool>> OnGrantItemAsync { get; set; }
+        public Func<string, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
         public event Action<FailedOrder> OnPurchaseFailed;
@@ -286,7 +285,7 @@ namespace Truesoft.Supabase.Unity
             bool granted;
             try
             {
-                granted = await OnGrantItemAsync(pendingOrder, response, isResuming);
+                granted = await OnGrantItemAsync(productId, isResuming);
             }
             catch (Exception e)
             {

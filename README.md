@@ -101,14 +101,14 @@ Android(Google Play)와 iOS(Apple App Store)를 자동 감지합니다.
 `com.unity.purchasing` **5.2.1 이상** 필요.
 
 ```csharp
-var iap = Supabase.CreateIAP();
-iap.OnGrantItemAsync = async (order, response, isResuming) => {
-    var productId = order.CartOrdered.Items()[0].Product.definition.id;
-    await GiveItem(productId);
-    return true; // true → 소모품 소비 완료
-};
-await iap.InitializeAsync(new[] { "com.mygame.item_1000" });
-iap.Purchase("com.mygame.item_1000");
+var iap = await Supabase.CreateIAPAsync(
+    productIds: new[] { "com.mygame.item_1000" },
+    onGrant: async (productId, isResuming) =>
+    {
+        await GiveItem(productId);
+        return true; // true → 소모품 소비 완료
+    });
+iap?.Purchase("com.mygame.item_1000");
 ```
 
 ### Edge Functions → [Docs/EdgeFunctions.md](Docs/EdgeFunctions.md)

@@ -64,31 +64,25 @@ private IAPFacade _iapFacade;
 
 private async void Start()
 {
-    _iapFacade = Supabase.CreateIAP();  // 플랫폼 자동 감지
-
-    _iapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
-    {
-        var productId = order.CartOrdered.Items()[0].Product.definition.id;
-
-        Debug.Log($"order_id={response.order_id}, store={response.store}");
-
-        if (response.already_verified)
+    _iapFacade = await Supabase.CreateIAPAsync(
+        productIds: new[] { "com.mygame.item_1000" },
+        onGrant: async (productId, isResuming) =>
         {
-            // 이미 검증된 영수증 — 중복 지급 없이 통과
-        }
+            await MyInventory.GiveItemAsync(productId);
+            return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
+                         // false → Pending 유지 → 다음 InitializeAsync에서 재처리
+        });
 
-        await MyInventory.GiveItemAsync(productId);
-        return true;
-    };
-
-    _iapFacade.OnPurchaseFailed += order => Debug.LogWarning("구매 실패: " + order);
-
-    await _iapFacade.InitializeAsync(new[] { "com.mygame.item_1000" });
+    if (_iapFacade == null)
+    {
+        Debug.LogWarning("IAP 초기화 실패");
+        return;
+    }
 }
 
 private void OnBuyButtonClicked()
 {
-    _iapFacade.Purchase("com.mygame.item_1000");
+    _iapFacade?.Purchase("com.mygame.item_1000");
 }
 
 private void OnDestroy()
@@ -96,16 +90,6 @@ private void OnDestroy()
     _iapFacade?.Dispose();
 }
 ```
-
-`IAPPurchaseResponse` 공통 필드:
-
-| 필드 | 설명 |
-|------|------|
-| `order_id` | Google: `orderId` / Apple: `transaction_id` |
-| `store` | `"google_play"` 또는 `"apple_app_store"` |
-| `already_verified` | 중복 검증 여부 |
-| `purchase_state` | 0=구매완료 |
-| `product_id` | Apple only (Google은 `order.CartOrdered`에서 읽으세요) |
 
 ---
 
@@ -116,43 +100,23 @@ private GooglePlayIAPFacade _iapFacade;
 
 private async void Start()
 {
-    _iapFacade = Supabase.CreateGooglePlayIAP();
-
-    // 아이템 지급 콜백 (필수 설정)
-    _iapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
-    {
-        var productId = order.CartOrdered.Items()[0].Product.definition.id;
-
-        // 서버 검증 결과 확인
-        Debug.Log($"order_id: {response.order_id}");
-
-        if (response.already_verified)
+    _iapFacade = await Supabase.CreateGooglePlayIAPAsync(
+        productIds: new[] { "com.mygame.item_1000" },
+        onGrant: async (productId, isResuming) =>
         {
-            // 이미 검증된 영수증 — 중복 지급 없이 그냥 통과
-            // (앱 강제종료 후 재시작 시 정상 발생)
-        }
-
-        // 아이템 지급
-        await MyInventory.GiveItemAsync(productId);
-
-        return true; // true → Unity IAP가 ConfirmPurchase 호출 (소모품 소비)
-                     // false → Pending 유지 → 다음 InitializeAsync에서 재처리
-    };
-
-    _iapFacade.OnPurchaseFailed += order => Debug.LogWarning("구매 실패: " + order);
-
-    await _iapFacade.InitializeAsync(new[] { "com.mygame.item_1000" });
+            await MyInventory.GiveItemAsync(productId);
+            return true;
+        });
 }
 
-// 구매 버튼 클릭
 private void OnBuyButtonClicked()
 {
-    _iapFacade.Purchase("com.mygame.item_1000");
+    _iapFacade?.Purchase("com.mygame.item_1000");
 }
 
 private void OnDestroy()
 {
-    _iapFacade?.Dispose(); // 씬 언로드 시 반드시 호출
+    _iapFacade?.Dispose();
 }
 ```
 
@@ -161,40 +125,27 @@ private void OnDestroy()
 ## iOS 사용법 (Apple App Store)
 
 ```csharp
-private AppleIAPFacade _appleIapFacade;
+private AppleIAPFacade _iapFacade;
 
 private async void Start()
 {
-    _appleIapFacade = Supabase.CreateAppleIAP();
-
-    _appleIapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
-    {
-        var productId = order.CartOrdered.Items()[0].Product.definition.id;
-
-        Debug.Log($"transaction_id: {response.transaction_id}");
-
-        if (response.already_verified)
+    _iapFacade = await Supabase.CreateAppleIAPAsync(
+        productIds: new[] { "com.mygame.item_1000" },
+        onGrant: async (productId, isResuming) =>
         {
-            // 이미 검증된 영수증 — 정상 처리
-        }
-
-        await MyInventory.GiveItemAsync(productId);
-        return true;
-    };
-
-    _appleIapFacade.OnPurchaseFailed += order => Debug.LogWarning("구매 실패: " + order);
-
-    await _appleIapFacade.InitializeAsync(new[] { "com.mygame.item_1000" });
+            await MyInventory.GiveItemAsync(productId);
+            return true;
+        });
 }
 
 private void OnBuyButtonClicked()
 {
-    _appleIapFacade.Purchase("com.mygame.item_1000");
+    _iapFacade?.Purchase("com.mygame.item_1000");
 }
 
 private void OnDestroy()
 {
-    _appleIapFacade?.Dispose();
+    _iapFacade?.Dispose();
 }
 ```
 
@@ -210,30 +161,49 @@ private void OnDestroy()
 ### isResuming 플래그
 
 ```csharp
-_iapFacade.OnGrantItemAsync = async (order, response, isResuming) =>
+onGrant: async (productId, isResuming) =>
 {
     if (isResuming)
     {
         // 앱 재시작 후 처리되지 않은 이전 구매를 재처리 중
-        // DB에서 지급 여부를 확인한 뒤 중복 지급 방지 로직 추가 권장
+        // DB에서 지급 여부를 먼저 확인해 중복 지급을 방지하세요
+        bool alreadyGranted = await MyInventory.HasItemAsync(productId);
+        if (alreadyGranted) return true; // 소비만 완료
     }
-    else
-    {
-        // 방금 발생한 신규 구매
-    }
+
+    await MyInventory.GiveItemAsync(productId);
     return true;
-};
+}
 ```
 
-### already_verified 처리
+### 구매 실패 콜백
 
 ```csharp
-if (response.already_verified)
+_iapFacade = await Supabase.CreateIAPAsync(
+    productIds: new[] { "com.mygame.item_1000" },
+    onGrant: async (productId, isResuming) =>
+    {
+        await MyInventory.GiveItemAsync(productId);
+        return true;
+    },
+    onFailed: order => Debug.LogWarning("구매 실패: " + order));
+```
+
+---
+
+## 저수준 사용법 (직접 초기화)
+
+`CreateXxxAsync` 대신 수동으로 설정·초기화할 수도 있습니다.
+
+```csharp
+var iapFacade = Supabase.CreateIAP();
+iapFacade.OnGrantItemAsync = async (productId, isResuming) =>
 {
-    // 같은 영수증이 이미 서버에서 검증된 적 있음
-    // 원인: 앱 강제종료 → 재시작 → InitializeAsync에서 미처리 구매 재처리
-    // 중복 지급 없이 정상 처리 후 return true
-}
+    await MyInventory.GiveItemAsync(productId);
+    return true;
+};
+iapFacade.OnPurchaseFailed += order => Debug.LogWarning("구매 실패: " + order);
+await iapFacade.InitializeAsync(new[] { "com.mygame.item_1000" });
 ```
 
 ---
@@ -262,5 +232,6 @@ RLS로 각 사용자는 자신의 구매 내역만 조회·삽입 가능합니�
 
 - **소모품 전용**: 비소모품(Non-Consumable)과 구독(Subscription)은 검증 로직이 달라 현재 지원하지 않습니다.
 - **샌드박스 자동 전환**: Apple Edge Function은 프로덕션 → 샌드박스 순으로 자동 재시도합니다. 테스트 환경에서 별도 설정 불필요합니다.
+- **초기화 실패**: `CreateIAPAsync`가 `null`을 반환하면 초기화 실패입니다. 네트워크 상태나 Unity Services 초기화를 확인하세요.
 - **씬 언로드**: `Dispose()`를 반드시 호출하세요. 호출하지 않으면 이벤트 핸들러가 누수됩니다.
-- **InitializeAsync 재호출**: `Dispose()` 후 새 인스턴스를 생성하면 미처리 구매가 자동 재처리됩니다.
+- **재초기화**: `Dispose()` 후 새 인스턴스를 생성하면 미처리 구매가 자동 재처리됩니다.
