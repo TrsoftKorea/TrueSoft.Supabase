@@ -93,10 +93,17 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | 기능 | 설명 |
 |------|------|
 | SDK 초기화 | `SupabaseSettings`를 읽어 모든 서비스를 초기화합니다 |
-| 세션 자동 복원 | `OnEnable` 시 저장된 세션을 복원하고 `OnSessionRestored` 이벤트를 발행합니다 |
+| 세션 복원 | Inspector의 **세션 자동 복원**이 ON이면 `Awake` 시 자동 실행, OFF이면 `TriggerSessionRestoreAsync()`로 수동 호출 |
 | 유저 세이브 자동 동기화 | 변경된 세이브 데이터를 쿨타임 주기로 자동 업로드합니다 ([유저 세이브](./user-saves.md) 참고) |
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
+
+**세션 자동 복원 OFF 시** 원하는 타이밍에 직접 호출합니다.
+
+```csharp
+// 로그인 화면 → 로그인 완료 후, 또는 원하는 씬 진입 시점에 호출
+await SupabaseRuntime.TriggerSessionRestoreAsync();
+```
 
 세션 복원 완료를 기다려야 하는 코드는 `OnSessionRestored` 이벤트를 사용합니다.
 

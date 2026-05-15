@@ -27,6 +27,11 @@ namespace Truesoft.Supabase.Unity.Config
         [Tooltip("SupabaseSettings. 비우면 Resources에서 로드.")]
         [SerializeField] private SupabaseSettings settings;
 
+        [Header("세션")]
+        [Label("세션 자동 복원")]
+        [Tooltip("Awake 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
+        [SerializeField] private bool autoRestoreSessionOnAwake = true;
+
         /// <summary>
         /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// 로그인 성공 시 등록된 모든 <c>StaticUserSave</c> 로드가 완료된 뒤 발행됩니다.
@@ -80,7 +85,8 @@ namespace Truesoft.Supabase.Unity.Config
 
             EnsureGoogleLoginBridge();
 
-            StartCoroutine(RunLifecycle());
+            if (autoRestoreSessionOnAwake)
+                StartCoroutine(RunLifecycle());
         }
 
         private void OnDestroy()
