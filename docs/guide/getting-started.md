@@ -20,6 +20,20 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 2. Organization, 프로젝트 이름, DB 비밀번호, 리전을 입력하고 **Create new project**를 클릭합니다.
 3. 프로비저닝이 완료될 때까지 약 1~2분 대기합니다.
 
+> [!TIP]
+> 한국 중심 서비스라면 리전은 **Northeast Asia (Tokyo)** 를 추천합니다.  
+> 리전은 프로젝트 생성 후 변경할 수 없으므로 처음에 신중하게 선택하세요.
+
+### 2. 프로젝트 옵션 설정
+
+프로젝트 생성 화면의 고급 옵션에서 아래와 같이 설정합니다.
+
+| 옵션 | 설정 | 이유 |
+|------|------|------|
+| **Enable Data API** | ✅ ON | SDK가 REST API로 DB와 통신하므로 필수 |
+| **Automatically expose new tables** | ❌ OFF | 새 테이블이 의도치 않게 외부에 노출되는 것을 방지 |
+| **Enable automatic RLS** | ✅ ON | 새 테이블에 RLS가 자동 적용되어 데이터 보호 |
+
 ### 2. API 키 확인
 
 **Project Settings > API** 페이지에서 아래 두 값을 복사합니다.
