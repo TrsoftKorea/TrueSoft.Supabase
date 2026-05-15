@@ -43,9 +43,6 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 > [!NOTE]
 > Project URL에 포함된 `<project-id>`는 소셜 로그인 콜백 URL(`https://<project-id>.supabase.co/auth/v1/callback`) 설정 시 별도로 필요합니다.
 
-> [!WARNING]
-> **service_role** 키는 절대 클라이언트에 넣지 마세요. 서버(Edge Function)에서만 사용합니다.
-
 ### 3. Authentication 설정
 
 **Authentication > Settings** 에서 아래 항목을 설정합니다.
@@ -60,11 +57,17 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 #### Google
 
-1. [Google Cloud Console](https://console.cloud.google.com)에서 프로젝트를 생성하고 OAuth 동의 화면을 설정합니다.
-   - Scopes: `openid`, `email`, `profile` 추가
+1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 생성하고 OAuth 동의 화면을 설정합니다.
+   - 상단 프로젝트 선택기에서 **새 프로젝트**를 클릭해 프로젝트를 생성합니다.
+   - **API 및 서비스 > OAuth 동의 화면** 으로 이동합니다.
+   - 사용자 유형: **외부** 선택 후 **만들기**
+   - 앱 이름, 사용자 지원 이메일, 개발자 연락처 이메일을 입력하고 저장합니다.
+   - **범위** 단계에서 `openid`, `email` 추가
 2. **OAuth 클라이언트 ID 만들기 (웹 애플리케이션)**
-   - Authorized redirect URIs에 `https://<project-id>.supabase.co/auth/v1/callback` 추가
-   - 생성된 **Client ID**와 **Client Secret**을 복사
+   - **API 및 서비스 > 사용자 인증 정보 > 사용자 인증 정보 만들기 > OAuth 클라이언트 ID** 선택
+   - 애플리케이션 유형: **웹 애플리케이션** 선택
+   - 승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback` 추가
+   - **만들기** 후 표시되는 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사
 3. **(Android 네이티브 로그인 사용 시)** OAuth 클라이언트 ID를 Android 유형으로 추가 생성
    - 웹 애플리케이션 클라이언트의 Client ID를 `SupabaseSettings.googleWebClientId`에 입력
 4. Supabase 대시보드 **Authentication > Providers > Google** 에 Client ID / Secret 입력
