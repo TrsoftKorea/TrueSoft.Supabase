@@ -98,12 +98,6 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
 
-**Inspector 설정:**
-
-| 항목 | 설명 |
-|------|------|
-| 설정 에셋 | 비워두면 `Resources/SupabaseSettings`에서 자동 로드 |
-
 세션 복원 완료를 기다려야 하는 코드는 `OnSessionRestored` 이벤트를 사용합니다.
 
 ```csharp
@@ -124,9 +118,6 @@ void OnReady(bool success)
     }
 }
 ```
-
-> [!NOTE]
-> `success=false`는 오류가 아닌 정상 케이스입니다. 처음 앱을 실행하는 신규 유저나 로그아웃 후 재실행 시 발생합니다. 이 시점에 익명 로그인 또는 로그인 UI를 표시하세요.
 
 ---
 

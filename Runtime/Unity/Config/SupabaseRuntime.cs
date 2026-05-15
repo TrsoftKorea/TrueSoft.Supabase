@@ -47,8 +47,6 @@ namespace Truesoft.Supabase.Unity.Config
         /// </summary>
         public static bool SessionRestoreResult { get; private set; }
 
-        private Coroutine _lifecycleRoutine;
-
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -81,21 +79,8 @@ namespace Truesoft.Supabase.Unity.Config
             DontDestroyOnLoad(gameObject);
 
             EnsureGoogleLoginBridge();
-        }
 
-        private void OnEnable()
-        {
-            if (_lifecycleRoutine == null)
-                _lifecycleRoutine = StartCoroutine(RunLifecycle());
-        }
-
-        private void OnDisable()
-        {
-            if (_lifecycleRoutine != null)
-            {
-                StopCoroutine(_lifecycleRoutine);
-                _lifecycleRoutine = null;
-            }
+            StartCoroutine(RunLifecycle());
         }
 
         private void OnDestroy()
@@ -128,13 +113,8 @@ namespace Truesoft.Supabase.Unity.Config
 
         private IEnumerator RunLifecycle()
         {
-            while (!Supabase.IsInitialized)
-                yield return null;
-
             var task = RestoreSessionAndMaybeLoadAsync();
             yield return new WaitUntil(() => task.IsCompleted);
-
-            // RemoteConfig: Cold Start — 시작 시 fetch 없음. 폴링은 Update에서 TickRemoteConfigKeyPolls.
         }
 
         /// <summary>
