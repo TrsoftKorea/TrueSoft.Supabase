@@ -58,7 +58,6 @@ namespace Truesoft.Supabase.Unity
         private static float _duplicateSessionPollSeconds = 15f;
         private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
-        private static bool _enableWithdrawalGuardOnLogin = true;
         private static string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
         private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
@@ -110,9 +109,6 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary><see cref="Config.SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
         public static float WithdrawalRequestDelayDays => _withdrawalRequestDelayDays;
-
-        /// <summary><see cref="Config.SupabaseSettings.enableWithdrawalGuardOnLogin"/>.</summary>
-        public static bool EnableWithdrawalGuardOnLogin => _enableWithdrawalGuardOnLogin;
 
         /// <summary>중복 로그인 감지용 <c>user_sessions</c> REST 서비스. 미초기화 시 null.</summary>
         public static SupabaseUserSessionService UserSessionService => _bootstrap?.UserSessionService;
@@ -2267,7 +2263,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             _duplicateSessionPollSeconds = bootstrap.DuplicateSessionPollSeconds;
             _duplicateSessionActionCheckCooldownSeconds = bootstrap.DuplicateSessionActionCheckCooldownSeconds;
             _withdrawalRequestDelayDays = bootstrap.WithdrawalRequestDelayDays;
-            _enableWithdrawalGuardOnLogin = bootstrap.EnableWithdrawalGuardOnLogin;
             _withdrawalGuardFunctionName = string.IsNullOrWhiteSpace(bootstrap.WithdrawalGuardFunctionName)
                 ? "withdrawal-guard"
                 : bootstrap.WithdrawalGuardFunctionName.Trim();
@@ -2492,7 +2487,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             bool saveSessionToStorage,
             bool allowRecreateOnDeletion)
         {
-            if (!_enableWithdrawalGuardOnLogin || _isRecreatingAfterWithdrawalDelete)
+            if (_isRecreatingAfterWithdrawalDelete)
                 return null;
 
             var shouldDelete = await ShouldDeleteCurrentAccountByWithdrawalGuardAsync();

@@ -15,7 +15,7 @@ namespace Truesoft.Supabase.Unity
     public sealed class SupabaseSettings : ScriptableObject
     {
         [Header("프로젝트 (필수)")]
-        [Label("프로젝트 URL")]
+        [Label("Project URL")]
         [Tooltip("Supabase 대시보드 → Project Settings → API → Project URL")]
         public string projectUrl;
 
@@ -63,7 +63,7 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("공개 프로필 테이블.")]
         public string publicProfilesTable = "user_profiles";
 
-        [Header("서버 샤드")]
+        [Header("게임 서버")]
         [Label("기본 서버 코드")]
         [Tooltip("기본 server_code. DB game_servers 테이블의 server_code 값과 일치해야 합니다.")]
         public string defaultServerCode = "GLOBAL";
@@ -73,7 +73,7 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("다른 기기 로그인 시 이쪽 세션 해제 및 이벤트.")]
         public bool enableDuplicateSessionMonitor = true;
 
-        [Label("세션 폴링 주기 (초, 0=1회)")]
+        [Label("중복 감지 폴링 주기 (초, 0=1회)")]
         [Tooltip("세션 폴링 주기(초). 0이면 1회만.")]
         [Min(0f)]
         public float duplicateSessionPollSeconds = 0f;
@@ -92,10 +92,6 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("탈퇴 신청 후 실제 삭제까지 유예 일수.")]
         [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
-
-        [Label("로그인 시 탈퇴 가드 실행")]
-        [Tooltip("로그인 시 탈퇴 가드 Edge 호출.")]
-        public bool enableWithdrawalGuardOnLogin = true;
 
         [Label("탈퇴 가드 함수 이름")]
         [Tooltip("탈퇴 가드 Edge 함수 이름.")]
@@ -126,7 +122,6 @@ namespace Truesoft.Supabase.Unity
                 WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 0f
                     ? 0f
                     : withdrawalRequestDelayDays,
-                EnableWithdrawalGuardOnLogin = enableWithdrawalGuardOnLogin,
                 WithdrawalGuardFunctionName = string.IsNullOrWhiteSpace(withdrawalGuardFunctionName)
                     ? "withdrawal-guard"
                     : withdrawalGuardFunctionName.Trim(),
