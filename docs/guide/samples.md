@@ -68,7 +68,7 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 
 ## SampleIAPScenarios
 
-`#if TRUESOFT_IAP_AVAILABLE` 블록으로 감싸져 있으므로, 사용하려면 프로젝트 **Scripting Define Symbols**에 `TRUESOFT_IAP_AVAILABLE`을 추가해야 합니다.
+`#if TRUESOFT_IAP_AVAILABLE` 블록으로 감싸져 있습니다. `com.unity.purchasing` 5.2.1 이상을 설치하면 심볼이 자동으로 정의되어 이 파일이 활성화됩니다.
 
 **사전 준비:**
 1. `com.unity.purchasing` 5.2.1 이상 설치

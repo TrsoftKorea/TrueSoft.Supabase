@@ -101,7 +101,7 @@ public sealed class InventorySave : StaticUserSave<InventorySave.Row>
 
 ### 테이블 생성
 
-`admin_create_user_table` RPC로 필수 컬럼(`id`, `user_id`, `account_id unique`, `server_id`, `updated_at`)과 RLS 정책이 자동 생성됩니다.
+Supabase 대시보드 **SQL Editor**(`Ctrl+E`)에서 아래 SQL을 실행하면 필수 컬럼(`id`, `user_id`, `account_id unique`, `server_id`, `updated_at`)과 RLS 정책이 자동 생성됩니다. 게임 세이브 테이블을 추가할 때마다 한 번씩 실행합니다.
 
 ```sql
 select admin_create_user_table(
@@ -112,6 +112,9 @@ select admin_create_user_table(
   'level int not null default 1, coins int not null default 0'  -- 추가 컬럼
 );
 ```
+
+> [!NOTE]
+> `admin_create_user_table`은 `04_user_saves.sql` 실행 시 생성되는 RPC입니다. SQL 파일을 먼저 실행한 뒤 사용하세요.
 
 > [!IMPORTANT]
 > `account_id unique` 제약이 있어야 `ts_ensure_my_row`의 `ON CONFLICT (account_id)` 동작이 올바르게 수행됩니다.

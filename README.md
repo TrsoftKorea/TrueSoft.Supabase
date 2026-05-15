@@ -2,6 +2,8 @@
 
 Unity에서 Supabase Auth, REST, Edge Functions를 사용하기 위한 UPM 패키지입니다.
 
+📖 **[전체 문서 보기](https://trsoftkorea.github.io/TrueSoft.Supabase/)**
+
 ---
 
 ## 설치
@@ -12,133 +14,32 @@ Unity에서 Supabase Auth, REST, Edge Functions를 사용하기 위한 UPM 패�
 https://github.com/trsoftkorea/TrueSoft.Supabase.git
 ```
 
-특정 버전 설치 시 `#버전` 을 추가합니다 (예: `...git#0.1.0`).  
-사용 가능한 버전은 [CHANGELOG.md](CHANGELOG.md)를 확인하세요.
+특정 버전 설치 시 `#버전`을 추가합니다 (예: `...git#0.1.0`).
 
 ---
 
 ## 빠른 시작
 
 1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 로 `SupabaseSettings`를 생성합니다.
-2. `projectUrl`과 `publishableKey`를 입력합니다.
+2. `Project URL`과 `Publishable Key`를 입력합니다.
 3. **`Assets/Resources/SupabaseSettings.asset`** 으로 저장합니다.
-4. (선택) `SupabaseRuntime`을 씬에 배치해 세션 자동 복원·RemoteConfig 폴링을 활성화합니다.
+4. 메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 로 `SupabaseRuntime`을 배치합니다.
+
+자세한 설정 방법은 [빠른 시작 가이드](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/getting-started)를 참고하세요.
 
 ---
 
 ## 기능
 
-### 인증 → [가이드](docs/guide/auth.md)
-
-```csharp
-await Supabase.TrySignInAnonymouslyAsync();       // 익명 로그인
-await Supabase.TrySignInWithGoogleAsync();        // Google 로그인 (Android)
-await Supabase.TrySignInWithAppleAsync();         // Apple 로그인 (iOS)
-await Supabase.TryLinkGoogleToCurrentAnonymousAsync(); // 익명 → Google 연동
-await Supabase.TrySignOutFullyAsync();            // 로그아웃
-```
-
-### 유저 세이브 → [가이드](docs/guide/user-saves.md)
-
-```csharp
-// 1. StaticUserSave<Row>를 상속해 세이브 클래스 정의
-public sealed class PlayerSave : StaticUserSave<PlayerSave.Row>
-{
-    public static readonly PlayerSave Instance = new();
-    private PlayerSave() : base() { }
-
-    [DataTable("basic")]   // → DB 테이블 "data_basic"
-    [Serializable]
-    public sealed class Row
-    {
-        [DataColumn("level")] public int level;
-    }
-
-    public static int Level
-    {
-        get => Instance.Current.level;
-        set { if (Instance.Current.level == value) return; Instance.Current.level = value; Instance.MarkDirty(); }
-    }
-}
-
-// 2. 로그인 직후 한 번 로드
-await Supabase.TryLoadAllUserSavesAsync();
-
-// 3. 값 변경 — MarkDirty 자동 호출, 쿨타임 후 자동 저장
-PlayerSave.Level = 10;
-
-// 4. 중요한 시점(씬 전환, 로그아웃 직전 등)에 즉시 저장
-await Supabase.TryFlushAllUserSaveImmediateAsync();
-```
-
-### Remote Config → [가이드](docs/guide/remote-config.md)
-
-```csharp
-// 읽기 함수 — 만료 시 서버 대기 후 반환
-private readonly Func<Task<GameConfig>> _getConfig =
-    Supabase.CreateRemoteConfigReader<GameConfig>("gameplay_v1");
-var cfg = await _getConfig();
-
-// 폴링 — 값 접근
-private readonly RemoteConfigBinding<GameConfig> _config =
-    Supabase.CreateRemoteConfigBinding<GameConfig>("gameplay_v1", pollIntervalSeconds: 30f);
-float dmg = _config.Value?.playerDmg ?? 1f;
-
-// 폴링 — 반응형
-Supabase.CreateRemoteConfigListener<GameConfig>("gameplay_v1", 30f, cfg => ApplyConfig(cfg));
-```
-
-### 공개 프로필 / 닉네임 → [가이드](docs/guide/public-profile.md)
-
-```csharp
-await Supabase.TrySetMyDisplayNameAsync("Player123");
-var profile = await Supabase.TryGetPublicProfileAsync(userId);
-```
-
-### 인앱 결제 (IAP) → [가이드](docs/guide/iap.md)
-
-Android(Google Play)와 iOS(Apple App Store)를 자동 감지합니다.  
-`com.unity.purchasing` **5.2.1 이상** 필요.
-
-```csharp
-var iap = await Supabase.CreateIAPAsync(
-    productIds: new[] { "com.mygame.item_1000" },
-    onGrant: async (productId, isResuming, alreadyVerified) =>
-    {
-        await GiveItem(productId);
-        return true; // true → 소모품 소비 완료
-    });
-iap?.Purchase("com.mygame.item_1000");
-```
-
-### Edge Functions → [가이드](docs/guide/edge-functions.md)
-
-```csharp
-var result = await Supabase.TryInvokeFunctionAsync<GachaResponse>(
-    "gacha-draw", new { bannerId = "normal_banner", drawCount = 10 }
-);
-```
-
-### 채팅
-
-```csharp
-await Supabase.TryJoinChatChannelAsync(channelId);
-await Supabase.TrySendChatMessageAsync(channelId, "Hello");
-```
-
----
-
-## DB 스키마
-
-`Sql/player/` 폴더의 SQL 파일을 번호 순으로 Supabase SQL Editor에서 실행합니다.  
-테이블 구조·`account_id` vs `user_id` 설명·서버 이주·법적 데이터 보관 설계는 [데이터 스키마 가이드](docs/guide/data-schema.md)를 참고하세요.
-
----
-
-## 샘플
-
-Package Manager의 **Samples** 탭에서 **Import** 후 사용합니다.  
-`ExampleSupabaseScenarios.cs` — 키보드 단축키 기반 기능별 테스트 흐름.
+| 기능 | 가이드 |
+|------|--------|
+| 익명·Google 로그인, 세션 복원, 소셜 연동 | [인증](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/auth) |
+| diff-patch 자동 동기화, StaticUserSave 패턴 | [유저 세이브](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/user-saves) |
+| Reader·Binding·Listener 세 가지 패턴 | [Remote Config](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/remote-config) |
+| Google Play · Apple App Store 서버 검증 | [인앱 결제 (IAP)](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/iap) |
+| JWT 인증 포함 서버 함수 호출 | [Edge Functions](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/edge-functions) |
+| 닉네임, 프로필 조회 | [공개 프로필](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/public-profile) |
+| 테이블 구조, account_id vs user_id | [데이터 스키마](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/data-schema) |
 
 ---
 

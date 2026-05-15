@@ -192,10 +192,22 @@ public class GameplayConfig
 }
 ```
 
-DB 예시:
-```
-key:        "gameplay_v1"
-value_json: {"stamina":{"maxEnergy":100,"regenSeconds":300},"battle":{"playerDmg":1.5}}
+**Supabase 대시보드에서 값 입력:**
+
+Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테이블에서 행을 추가합니다.
+
+| 컬럼 | 값 예시 | 설명 |
+|------|---------|------|
+| `key` | `gameplay_v1` | C#에서 조회할 키 이름 |
+| `value_json` | `{"stamina":{...},"battle":{...}}` | JSON 형태의 설정값 |
+| `max_stale_seconds` | `300` | 캐시 유효 시간(초). 0이면 300초로 처리 |
+| `poll_interval_seconds` | `60` | 백그라운드 갱신 주기(초). 0이면 폴링 없음 |
+
+```json
+{
+  "stamina": { "maxEnergy": 100, "regenSeconds": 300 },
+  "battle":  { "playerDmg": 1.5 }
+}
 ```
 
 ---

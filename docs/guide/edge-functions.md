@@ -1,5 +1,33 @@
 # Edge Functions
 
+Edge Function은 Supabase가 제공하는 서버리스 함수입니다. 확률 계산, 재화 검증, 영수증 검증처럼 **클라이언트를 신뢰할 수 없는 로직**을 서버에서 안전하게 실행할 때 사용합니다.
+
+함수는 **Deno 런타임에서 실행되는 TypeScript 코드**로 작성합니다. Node.js와 문법이 비슷하지만 패키지 관리자 없이 URL로 모듈을 임포트하는 방식이 다릅니다.
+
+---
+
+## 함수 파일 구조 및 배포
+
+Edge Function은 Unity 프로젝트 **외부**의 별도 디렉터리에서 관리합니다.
+
+```
+my-supabase/                     ← 별도 작업 폴더
+└── supabase/
+    └── functions/
+        └── gacha-draw/
+            └── index.ts
+```
+
+[Supabase CLI](https://supabase.com/docs/guides/cli)를 설치한 뒤 아래 명령으로 초기화하고 배포합니다.
+
+```bash
+supabase init          # supabase/ 폴더 생성 (최초 1회)
+supabase login         # Supabase 계정 인증 (최초 1회)
+supabase functions deploy gacha-draw
+```
+
+---
+
 ## 기본 사용법
 
 > [!WARNING]
@@ -79,7 +107,8 @@ Deno.serve(async (req: Request) => {
 });
 ```
 
-배포:
+위 구조대로 파일을 만든 뒤 배포합니다.
+
 ```bash
 supabase functions deploy gacha-draw
 ```
@@ -130,5 +159,5 @@ Deno.serve(async (req: Request) => {
 
 - **확률·결과 계산은 서버에서만** 수행합니다. 클라이언트 값을 그대로 신뢰하지 마세요.
 - **재화 차감·검증 로직**은 Edge Function 내부에서 처리합니다.
-- **중복 요청 방지**를 위해 멱등 키(request ID) 사용을 고려합니다.
+- **중복 요청 방지**를 위해 멱등 키 사용을 고려합니다. 클라이언트가 요청마다 고유한 `requestId`를 함께 보내고, 서버는 DB에서 해당 ID가 이미 처리됐는지 확인한 뒤 재처리를 막습니다.
 - **뽑기 등 중요 이벤트**는 `gacha_draw_logs` 테이블에 `user_id`, `banner_id`, `rewards`, `created_at`을 기록하는 것을 권장합니다.

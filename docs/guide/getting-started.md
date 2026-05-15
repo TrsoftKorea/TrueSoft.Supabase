@@ -51,7 +51,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 |------|------|------|
 | **Allow anonymous sign-ins** | ON | 로그인 없이 바로 게임을 시작하는 익명 플레이어를 지원 |
 | **Confirm email** | OFF | 이메일 인증 없이 즉시 로그인. 게임에서 이메일 로그인을 사용하지 않으면 불필요 |
-| **Manual linking** | ON | 익명 계정에 Google 계정을 연동할 때 필요 |
+| **Manual linking** | ON | 비회원(익명)으로 플레이하다가 소셜 계정으로 전환할 때 필요. 이 옵션이 OFF면 연동 API가 오류를 반환합니다 |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.
 
@@ -69,7 +69,11 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
    - 승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback` 추가
    - **만들기** 후 표시되는 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사
 3. **(Android 네이티브 로그인 사용 시)** OAuth 클라이언트 ID를 Android 유형으로 추가 생성
-   - 웹 애플리케이션 클라이언트의 Client ID를 `SupabaseSettings.googleWebClientId`에 입력
+   - **사용자 인증 정보 만들기 > OAuth 클라이언트 ID** 에서 애플리케이션 유형을 **Android** 로 선택
+   - 패키지 이름과 앱의 **SHA-1 서명 인증서 지문**을 입력합니다
+     - SHA-1은 Android Studio 터미널에서 `./gradlew signingReport` 명령으로 확인할 수 있습니다
+   - Android 클라이언트를 만들면 Google이 내부적으로 앱을 신뢰하게 됩니다. 이 ID 자체는 `SupabaseSettings`에 입력하지 않습니다
+   - 웹 애플리케이션 클라이언트의 **클라이언트 ID**를 `SupabaseSettings.googleWebClientId`에 입력합니다
 4. Supabase 대시보드 **Authentication > Providers > Google** 에 **클라이언트 ID**와 **클라이언트 보안 비밀번호** 입력
 
 ---
@@ -121,16 +125,30 @@ void OnDisable() => SupabaseRuntime.UnsubscribeSessionRestored(OnReady);
 
 void OnReady(bool success)
 {
-    if (success) // 로그인 상태 + 유저 세이브 로드 완료
+    if (success)
+    {
+        // 기존 세션 복원 성공 → 유저 세이브 로드도 완료된 상태
         InitGame();
+    }
+    else
+    {
+        // 저장된 세션 없음 (첫 실행 또는 로그아웃 후) → 로그인 화면으로 이동
+        ShowLoginScreen();
+    }
 }
 ```
+
+> [!NOTE]
+> `success=false`는 오류가 아닌 정상 케이스입니다. 처음 앱을 실행하는 신규 유저나 로그아웃 후 재실행 시 발생합니다. 이 시점에 익명 로그인 또는 로그인 UI를 표시하세요.
 
 ---
 
 ## DB 스키마 실행
 
 `Sql/player/` 폴더의 SQL 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
+
+> [!TIP]
+> SQL Editor는 Supabase 대시보드 우측 상단의 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
 
 | 순서 | 파일 | 내용 |
 |------|------|------|
@@ -168,10 +186,3 @@ await Supabase.TryRestoreSessionAsync();
 > `SupabaseRuntime`을 씬에 배치하면 `Awake()`에서 자동으로 세션 복원을 시도합니다.  
 > 수동 로그인과 세션 복원을 모두 처리하려면 `Supabase.IsLoggedIn` 플래그를 폴링하거나 로그인 완료 콜백 안에서 초기화 코드를 호출하세요.
 
----
-
-## 샘플 임포트
-
-Package Manager의 **Samples** 탭 > **Import**를 눌러 예제 씬과 스크립트를 가져옵니다.
-
-각 샘플 파일의 사용법은 [샘플 가이드](./samples)를 참고하세요.
