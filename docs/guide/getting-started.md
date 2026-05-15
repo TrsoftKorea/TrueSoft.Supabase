@@ -57,24 +57,12 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 #### Google
 
-1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 생성하고 OAuth 동의 화면을 설정합니다.
-   - 상단 프로젝트 선택기에서 **새 프로젝트**를 클릭해 프로젝트를 생성합니다.
-   - **API 및 서비스 > OAuth 동의 화면** 으로 이동합니다.
-   - 앱 이름, 사용자 지원 이메일을 입력합니다.
-   - 사용자 유형: **외부** 선택 후 **만들기**
-   - 개발자 연락처 이메일을 입력합니다.
-2. **OAuth 클라이언트 ID 만들기 (웹 애플리케이션)**
-   - **API 및 서비스 > 사용자 인증 정보 > 사용자 인증 정보 만들기 > OAuth 클라이언트 ID** 선택
-   - 애플리케이션 유형: **웹 애플리케이션** 선택
-   - 승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback` 추가
-   - **만들기** 후 표시되는 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사
-3. **(Android 네이티브 로그인 사용 시)** OAuth 클라이언트 ID를 Android 유형으로 추가 생성
-   - **사용자 인증 정보 만들기 > OAuth 클라이언트 ID** 에서 애플리케이션 유형을 **Android** 로 선택
-   - 패키지 이름과 앱의 **SHA-1 서명 인증서 지문**을 입력합니다
-     - SHA-1은 Android Studio 터미널에서 `./gradlew signingReport` 명령으로 확인할 수 있습니다
-   - Android 클라이언트를 만들면 Google이 내부적으로 앱을 신뢰하게 됩니다. 이 ID 자체는 `SupabaseSettings`에 입력하지 않습니다
-   - 웹 애플리케이션 클라이언트의 **클라이언트 ID**를 `SupabaseSettings.googleWebClientId`에 입력합니다
-4. Supabase 대시보드 **Authentication > Providers > Google** 에 **클라이언트 ID**와 **클라이언트 보안 비밀번호** 입력
+1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 만들고 **OAuth 동의 화면**을 설정합니다 (앱 이름·이메일 입력, 사용자 유형: **외부**).
+2. **사용자 인증 정보 > OAuth 클라이언트 ID**에서 애플리케이션 유형 **웹 애플리케이션**으로 생성합니다.  
+   승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback`을 추가하고 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사합니다.
+3. Supabase 대시보드 **Authentication > Providers > Google**에 위 두 값을 입력합니다.
+4. **(Android 네이티브 로그인 사용 시)** 같은 메뉴에서 애플리케이션 유형 **Android**로 OAuth 클라이언트를 추가 생성합니다 (패키지명 + SHA-1 지문 입력, SHA-1은 `./gradlew signingReport`로 확인).  
+   이 Android 클라이언트 ID는 `SupabaseSettings`에 입력하지 않습니다. 웹 애플리케이션 클라이언트 ID를 `SupabaseSettings.googleWebClientId`에 입력합니다.
 
 ---
 
