@@ -64,8 +64,8 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
    생성 후 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사합니다.
 3. Supabase 대시보드 **Authentication > Providers > Google**에 위 두 값을 입력합니다.
 4. **(Android 네이티브 로그인 사용 시)** 같은 메뉴에서 유형을 **Android**로 OAuth 클라이언트를 추가 생성합니다.  
-   패키지명과 SHA-1 지문을 입력합니다 (SHA-1: `./gradlew signingReport`로 확인).  
-   웹 애플리케이션 클라이언트 ID를 `SupabaseSettings.googleWebClientId`에 입력합니다.
+   패키지명과 SHA-1 지문을 입력합니다.  
+   웹 애플리케이션 클라이언트 ID는 이후 초기 설정 단계에서 `googleWebClientId` 필드에 입력합니다.
 
 ---
 
@@ -98,15 +98,11 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
 
-**Inspector 주요 설정:**
+**Inspector 설정:**
 
-| 항목 | 기본값 | 설명 |
-|------|--------|------|
-| 설정 에셋 | (자동) | 비워두면 `Resources/SupabaseSettings`에서 자동 로드 |
-| 씬 유지 (DontDestroyOnLoad) | ON | 씬 전환 후에도 SDK 상태 유지 |
-| 세션 자동 복원 | ON | 앱 시작 시 저장된 세션 자동 복원 |
-| 자동 동기화 사용 | ON | `StaticUserSave` 자동 업로드 활성화 |
-| 자동 저장 쿨타임 (초) | 1 | 연속 변경 시 불필요한 요청을 줄이는 최소 간격 |
+| 항목 | 설명 |
+|------|------|
+| 설정 에셋 | 비워두면 `Resources/SupabaseSettings`에서 자동 로드 |
 
 세션 복원 완료를 기다려야 하는 코드는 `OnSessionRestored` 이벤트를 사용합니다.
 

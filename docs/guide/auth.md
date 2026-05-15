@@ -64,14 +64,16 @@ await Supabase.TryRestoreSessionAsync();
 
 앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.
 
-**동작 시점:** `TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 세션 자동 복원 시 내부적으로 수행됩니다. 별도로 호출할 필요가 없습니다.
+**동작 시점:** `TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 세션 자동 복원 시 내부적으로 수행됩니다.  
+별도로 호출할 필요가 없습니다.
 
 **복구 조건 및 한계:**
 - 같은 기기에서 재설치한 경우 복구됩니다.
 - 기기를 변경하거나 지문이 달라진 경우 복구되지 않고 새 익명 계정이 생성됩니다.
 - 소셜 계정으로 연동한 이후에는 소셜 로그인으로 복원되므로 이 기능이 필요하지 않습니다.
 
-**복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다. 별도 오류 이벤트는 발행되지 않습니다.
+**복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
+별도 오류 이벤트는 발행되지 않습니다.
 
 관련 SQL: `Sql/player/06_anonymous_recovery_tokens.sql`
 
@@ -80,4 +82,5 @@ await Supabase.TryRestoreSessionAsync();
 ## 주의사항
 
 > [!WARNING]
-> - Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다. 먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
+> Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
+> 먼저 `TrySignOutFullyAsync`로 로그아웃하세요.

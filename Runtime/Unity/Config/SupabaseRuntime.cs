@@ -18,32 +18,14 @@ namespace Truesoft.Supabase.Unity.Config
     [AddComponentMenu("TrueSoft/Supabase/Supabase 런타임")]
     public sealed class SupabaseRuntime : MonoBehaviour
     {
+        private const float UserSaveAutoSyncCooldownSeconds = 1f;
+
         private static SupabaseRuntime _instance;
 
         [Header("설정")]
         [Label("설정 에셋")]
         [Tooltip("SupabaseSettings. 비우면 Resources에서 로드.")]
         [SerializeField] private SupabaseSettings settings;
-
-        [Header("씬")]
-        [Label("씬 유지 (DontDestroyOnLoad)")]
-        [Tooltip("DontDestroyOnLoad로 유지.")]
-        [SerializeField] private bool dontDestroyOnLoad = true;
-
-        [Header("세션")]
-        [Label("세션 자동 복원")]
-        [Tooltip("OnEnable 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
-        [SerializeField] private bool autoRestoreSessionOnEnable = true;
-
-
-        [Header("유저 세이브 자동 저장")]
-        [Label("자동 동기화 사용")]
-        [Tooltip("정적 세이브 자동 동기화 사용.")]
-        [SerializeField] private bool enableUserSaveAutoSync = true;
-
-        [Label("자동 저장 쿨타임 (초)")]
-        [Tooltip("자동 저장 쿨타임(초).")]
-        [SerializeField] private float userSaveAutoSyncCooldownSeconds = 1f;
 
         /// <summary>
         /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
@@ -94,17 +76,16 @@ namespace Truesoft.Supabase.Unity.Config
             var bootstrap = new SupabaseUnityBootstrap();
             bootstrap.Initialize(settings);
 
-            Supabase.ConfigureUserSaveAutoSyncCooldown(userSaveAutoSyncCooldownSeconds);
+            Supabase.ConfigureUserSaveAutoSyncCooldown(UserSaveAutoSyncCooldownSeconds);
 
-            if (dontDestroyOnLoad)
-                DontDestroyOnLoad(gameObject);
+            DontDestroyOnLoad(gameObject);
 
             EnsureGoogleLoginBridge();
         }
 
         private void OnEnable()
         {
-            if (autoRestoreSessionOnEnable && _lifecycleRoutine == null)
+            if (_lifecycleRoutine == null)
                 _lifecycleRoutine = StartCoroutine(RunLifecycle());
         }
 
@@ -128,15 +109,13 @@ namespace Truesoft.Supabase.Unity.Config
             if (!Supabase.IsInitialized)
                 return;
 
-            if (enableUserSaveAutoSync)
-                SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
-
+            SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
         }
 
         private void OnApplicationPause(bool pause)
         {
-            if (!pause || !enableUserSaveAutoSync)
+            if (!pause)
                 return;
 
             Supabase.RequestImmediateUserSaveStaticFlushAll();
@@ -144,9 +123,6 @@ namespace Truesoft.Supabase.Unity.Config
 
         private void OnApplicationQuit()
         {
-            if (!enableUserSaveAutoSync)
-                return;
-
             Supabase.RequestImmediateUserSaveStaticFlushAll();
         }
 
@@ -218,8 +194,7 @@ namespace Truesoft.Supabase.Unity.Config
                 return;
 
             var go = new GameObject("TruesoftGoogleLoginBridge");
-            if (dontDestroyOnLoad)
-                DontDestroyOnLoad(go);
+            DontDestroyOnLoad(go);
 
             go.AddComponent<GoogleLoginBridge>();
         }
