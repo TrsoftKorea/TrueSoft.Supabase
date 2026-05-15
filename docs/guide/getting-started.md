@@ -47,11 +47,11 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 **Authentication > Settings** 에서 아래 항목을 설정합니다.
 
-| 항목 | 설정 | 위치 |
-|------|------|------|
-| **Allow anonymous sign-ins** | ON | User Signups |
-| **Confirm email** | OFF | Email Auth |
-| **Manual linking** | ON (소셜 연동 사용 시) | User Signups |
+| 항목 | 설정 |
+|------|------|
+| **Allow anonymous sign-ins** | ON |
+| **Confirm email** | OFF |
+| **Manual linking** | ON (익명 계정을 소셜 계정으로 연동 시) |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.
 
