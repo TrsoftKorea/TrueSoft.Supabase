@@ -38,16 +38,7 @@ namespace Truesoft.Supabase.Unity
         [Min(1)]
         public int timeoutSeconds = 30;
 
-        [Header("Remote Config")]
-        [Label("원격 설정 테이블")]
-        [Tooltip("RemoteConfig 테이블.")]
-        public string remoteConfigTable = "remote_config";
-
         [Header("우편함")]
-        [Label("우편함 테이블")]
-        [Tooltip("우편함 테이블 (mails).")]
-        public string mailsTable = "mails";
-
         [Label("메일 기본 만료 일수")]
         [Tooltip("메일 만료 일수(클라이언트·발송 보조 참고).")]
         [Min(1)]
@@ -57,11 +48,6 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("우편함 폴링 간격(초). 0이면 비활성.")]
         [Min(0)]
         public int mailPollingIntervalSeconds = 0;
-
-        [Header("공개 프로필")]
-        [Label("공개 프로필 테이블")]
-        [Tooltip("공개 프로필 테이블.")]
-        public string publicProfilesTable = "user_profiles";
 
         [Header("게임 서버")]
         [Label("기본 서버 코드")]
@@ -83,24 +69,11 @@ namespace Truesoft.Supabase.Unity
         [Min(0f)]
         public float duplicateSessionActionCheckCooldownSeconds = 5f;
 
-        [Label("중복 로그인 감지 테이블")]
-        [Tooltip("중복 로그인 감지 테이블.")]
-        public string userSessionsTable = "user_sessions";
-
         [Header("탈퇴")]
         [Label("탈퇴 유예 기간 (일)")]
         [Tooltip("탈퇴 신청 후 실제 삭제까지 유예 일수.")]
         [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
-
-        [Label("탈퇴 가드 함수 이름")]
-        [Tooltip("탈퇴 가드 Edge 함수 이름.")]
-        public string withdrawalGuardFunctionName = "withdrawal-guard";
-
-        [Header("인앱 결제")]
-        [Label("구글 플레이 영수증 검증 함수 이름")]
-        [Tooltip("구글 플레이 영수증 검증 Edge 함수 이름.")]
-        public string purchaseVerifyGoogleFunctionName = "purchase-verify-google";
 
         public SupabaseOptions ToOptions()
         {
@@ -109,12 +82,8 @@ namespace Truesoft.Supabase.Unity
                 ProjectURL = projectUrl,
                 PublishableKey = publishableKey,
                 TimeoutSeconds = timeoutSeconds,
-                RemoteConfigTable = string.IsNullOrWhiteSpace(remoteConfigTable) ? "remote_config" : remoteConfigTable.Trim(),
-                MailsTable = string.IsNullOrWhiteSpace(mailsTable) ? "mails" : mailsTable.Trim(),
                 DefaultMailExpirationDays = defaultMailExpirationDays < 1 ? 1 : defaultMailExpirationDays,
                 MailPollingIntervalSeconds = mailPollingIntervalSeconds < 0 ? 0 : mailPollingIntervalSeconds,
-                PublicProfilesTable = string.IsNullOrWhiteSpace(publicProfilesTable) ? "user_profiles" : publicProfilesTable.Trim(),
-                UserSessionsTable = string.IsNullOrWhiteSpace(userSessionsTable) ? "user_sessions" : userSessionsTable.Trim(),
                 DefaultServerCode = string.IsNullOrWhiteSpace(defaultServerCode) ? "GLOBAL" : defaultServerCode.Trim(),
                 DuplicateSessionActionCheckCooldownSeconds = duplicateSessionActionCheckCooldownSeconds < 0f
                     ? 0f
@@ -122,12 +91,6 @@ namespace Truesoft.Supabase.Unity
                 WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 0f
                     ? 0f
                     : withdrawalRequestDelayDays,
-                WithdrawalGuardFunctionName = string.IsNullOrWhiteSpace(withdrawalGuardFunctionName)
-                    ? "withdrawal-guard"
-                    : withdrawalGuardFunctionName.Trim(),
-                PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(purchaseVerifyGoogleFunctionName)
-                    ? "purchase-verify-google"
-                    : purchaseVerifyGoogleFunctionName.Trim(),
             };
         }
 

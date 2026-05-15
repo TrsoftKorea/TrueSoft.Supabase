@@ -58,10 +58,10 @@ namespace Truesoft.Supabase.Unity
         private static float _duplicateSessionPollSeconds = 15f;
         private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
-        private static string _withdrawalGuardFunctionName = "withdrawal-guard";
+        private const string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
-        private static string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
-        private static string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
+        private const string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
+        private const string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
 
         private enum SignInMethodKind
         {
@@ -2263,12 +2263,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             _duplicateSessionPollSeconds = bootstrap.DuplicateSessionPollSeconds;
             _duplicateSessionActionCheckCooldownSeconds = bootstrap.DuplicateSessionActionCheckCooldownSeconds;
             _withdrawalRequestDelayDays = bootstrap.WithdrawalRequestDelayDays;
-            _withdrawalGuardFunctionName = string.IsNullOrWhiteSpace(bootstrap.WithdrawalGuardFunctionName)
-                ? "withdrawal-guard"
-                : bootstrap.WithdrawalGuardFunctionName.Trim();
-            _purchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(bootstrap.PurchaseVerifyGoogleFunctionName)
-                ? "purchase-verify-google"
-                : bootstrap.PurchaseVerifyGoogleFunctionName.Trim();
 
             if (!preserveSession)
             {

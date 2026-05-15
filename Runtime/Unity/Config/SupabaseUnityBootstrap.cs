@@ -35,13 +35,7 @@ namespace Truesoft.Supabase.Unity.Config
         /// <summary><see cref="SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
         public float WithdrawalRequestDelayDays { get; private set; }
 
-        /// <summary><see cref="SupabaseSettings.withdrawalGuardFunctionName"/>.</summary>
-        public string WithdrawalGuardFunctionName { get; private set; } = "withdrawal-guard";
-
         public string DefaultServerCode { get; private set; } = "GLOBAL";
-
-        /// <summary><see cref="SupabaseSettings.purchaseVerifyGoogleFunctionName"/>.</summary>
-        public string PurchaseVerifyGoogleFunctionName { get; private set; } = "purchase-verify-google";
 
         public void Initialize(SupabaseSettings settings)
         {
@@ -83,14 +77,14 @@ namespace Truesoft.Supabase.Unity.Config
                 options.ProjectURL,
                 options.PublishableKey,
                 http,
-                options.RemoteConfigTable);
+                "remote_config");
 
             PublicProfileService = new SupabasePublicProfileService(
                 options.ProjectURL,
                 options.PublishableKey,
                 http,
                 json,
-                options.PublicProfilesTable,
+                "user_profiles",
                 displayNamesTable: "display_names",
                 defaultServerCode: options.DefaultServerCode);
 
@@ -105,7 +99,7 @@ namespace Truesoft.Supabase.Unity.Config
                 options.PublishableKey,
                 http,
                 json,
-                options.UserSessionsTable);
+                "user_sessions");
 
             AnonymousRecoveryService = new SupabaseAnonymousRecoveryService(
                 options.ProjectURL,
@@ -123,19 +117,13 @@ namespace Truesoft.Supabase.Unity.Config
                 options.ProjectURL,
                 options.PublishableKey,
                 http,
-                options.MailsTable);
+                "mails");
 
             EnableDuplicateSessionMonitor = settings.enableDuplicateSessionMonitor;
             DuplicateSessionPollSeconds = settings.duplicateSessionPollSeconds;
             DuplicateSessionActionCheckCooldownSeconds = options.DuplicateSessionActionCheckCooldownSeconds;
             WithdrawalRequestDelayDays = options.WithdrawalRequestDelayDays;
-            WithdrawalGuardFunctionName = string.IsNullOrWhiteSpace(options.WithdrawalGuardFunctionName)
-                ? "withdrawal-guard"
-                : options.WithdrawalGuardFunctionName.Trim();
             DefaultServerCode = string.IsNullOrWhiteSpace(options.DefaultServerCode) ? "GLOBAL" : options.DefaultServerCode.Trim();
-            PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(options.PurchaseVerifyGoogleFunctionName)
-                ? "purchase-verify-google"
-                : options.PurchaseVerifyGoogleFunctionName.Trim();
             SupabaseSDK.Initialize(this);
         }
     }
