@@ -55,10 +55,37 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.
 
-| 로그인 방식 | 추가 설정 |
-|------------|----------|
-| Google | Client ID / Secret 입력 |
-| Apple | Services ID / Key 입력 |
+#### Google
+
+1. [Google Cloud Console](https://console.cloud.google.com)에서 프로젝트를 생성하고 OAuth 동의 화면을 설정합니다.
+   - Scopes: `openid`, `email`, `profile` 추가
+2. **OAuth 클라이언트 ID 만들기 (웹 애플리케이션)**
+   - Authorized redirect URIs에 `https://<project-id>.supabase.co/auth/v1/callback` 추가
+   - 생성된 **Client ID**와 **Client Secret**을 복사
+3. **(Android 네이티브 로그인 사용 시)** OAuth 클라이언트 ID를 Android 유형으로 추가 생성
+   - 웹 애플리케이션 클라이언트의 Client ID를 `SupabaseSettings.googleWebClientId`에 입력
+4. Supabase 대시보드 **Authentication > Providers > Google** 에 Client ID / Secret 입력
+
+#### Apple
+
+> [!WARNING]
+> Apple 서명 키(Signing Key)는 **6개월마다 갱신**이 필요합니다. 캘린더에 미리 알림을 설정하세요.
+
+1. [Apple Developer Console](https://developer.apple.com)에서 **Team ID**를 확인합니다 (우상단 계정 메뉴).
+2. **Identifiers** 에서 App ID를 생성하고 **Sign in with Apple** Capability를 활성화합니다.
+3. **Identifiers** 에서 Services ID를 별도로 생성합니다 (예: `com.example.app.web`).
+   - Website URLs 설정
+     - Domains: `<project-id>.supabase.co`
+     - Return URLs: `https://<project-id>.supabase.co/auth/v1/callback`
+4. **Keys** 에서 Sign in with Apple용 키를 생성하고 `.p8` 파일을 저장합니다.
+5. Supabase 대시보드 **Authentication > Providers > Apple** 에 아래 항목을 입력합니다.
+
+| 항목 | 값 |
+|------|----|
+| Client ID | Services ID (예: `com.example.app.web`) |
+| Team ID | Apple Developer 계정 Team ID |
+| Key ID | 생성한 키의 ID |
+| Generated Secret | `.p8` 파일 내용으로 생성한 시크릿 |
 
 ---
 
