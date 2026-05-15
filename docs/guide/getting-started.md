@@ -37,8 +37,11 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 | 항목 | 설명 | 사용처 |
 |------|------|--------|
-| **Project URL** | `https://<ref>.supabase.co` 형태 | `SupabaseSettings.projectUrl` |
-| **Publishable key** | anon / public 키 (공개 가능) | `SupabaseSettings.publishableKey` |
+| **Project URL** | `https://<project-id>.supabase.co` | `SupabaseSettings.projectUrl` |
+| **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
+
+> [!NOTE]
+> Project URL에 포함된 `<project-id>`는 소셜 로그인 콜백 URL(`https://<project-id>.supabase.co/auth/v1/callback`) 설정 시 별도로 필요합니다.
 
 > [!WARNING]
 > **service_role** 키는 절대 클라이언트에 넣지 마세요. 서버(Edge Function)에서만 사용합니다.
@@ -47,11 +50,11 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 **Authentication > Settings** 에서 아래 항목을 설정합니다.
 
-| 항목 | 설정 |
-|------|------|
-| **Allow anonymous sign-ins** | ON |
-| **Confirm email** | OFF |
-| **Manual linking** | ON (익명 계정을 소셜 계정으로 연동 시) |
+| 항목 | 설정 | 이유 |
+|------|------|------|
+| **Allow anonymous sign-ins** | ON | 로그인 없이 바로 게임을 시작하는 익명 플레이어를 지원 |
+| **Confirm email** | OFF | 이메일 인증 없이 즉시 로그인. 게임에서 이메일 로그인을 사용하지 않으면 불필요 |
+| **Manual linking** | ON | 익명 계정에 Google·Apple 계정을 연동할 때 필요 |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.
 
