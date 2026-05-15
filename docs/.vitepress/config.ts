@@ -16,7 +16,8 @@ export default defineConfig({
       {
         text: '시작하기',
         items: [
-          { text: '빠른 시작', link: '/guide/getting-started' }
+          { text: '빠른 시작', link: '/guide/getting-started' },
+          { text: '샘플', link: '/guide/samples' }
         ]
       },
       {

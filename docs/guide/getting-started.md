@@ -172,5 +172,6 @@ await Supabase.TryRestoreSessionAsync();
 
 ## 샘플 임포트
 
-Package Manager의 **Samples** 탭 > **Import**를 눌러 예제 씬과 스크립트를 가져옵니다.  
-`ExampleSupabaseScenarios.cs` — 키보드 단축키 기반 기능별 테스트 흐름을 제공합니다.
+Package Manager의 **Samples** 탭 > **Import**를 눌러 예제 씬과 스크립트를 가져옵니다.
+
+각 샘플 파일의 사용법은 [샘플 가이드](./samples)를 참고하세요.
