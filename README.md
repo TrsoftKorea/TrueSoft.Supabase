@@ -28,7 +28,7 @@ https://github.com/ljuh1521/TrueSoft.Supabase.git
 
 ## 기능
 
-### 인증 → [Docs/Auth.md](Docs/Auth.md)
+### 인증 → [가이드](docs/guide/auth.md)
 
 ```csharp
 await Supabase.TrySignInAnonymouslyAsync();       // 익명 로그인
@@ -38,7 +38,7 @@ await Supabase.TryLinkGoogleToCurrentAnonymousAsync(); // 익명 → Google 연�
 await Supabase.TrySignOutFullyAsync();            // 로그아웃
 ```
 
-### 유저 세이브 → [Docs/UserSaves.md](Docs/UserSaves.md)
+### 유저 세이브 → [가이드](docs/guide/user-saves.md)
 
 ```csharp
 // 1. StaticUserSave<Row>를 상속해 세이브 클래스 정의
@@ -71,7 +71,7 @@ PlayerSave.Level = 10;
 await Supabase.TryFlushAllUserSaveImmediateAsync();
 ```
 
-### Remote Config → [Docs/RemoteConfig.md](Docs/RemoteConfig.md)
+### Remote Config → [가이드](docs/guide/remote-config.md)
 
 ```csharp
 // 읽기 함수 — 만료 시 서버 대기 후 반환
@@ -88,14 +88,14 @@ float dmg = _config.Value?.playerDmg ?? 1f;
 Supabase.CreateRemoteConfigListener<GameConfig>("gameplay_v1", 30f, cfg => ApplyConfig(cfg));
 ```
 
-### 공개 프로필 / 닉네임 → [Docs/PublicProfile.md](Docs/PublicProfile.md)
+### 공개 프로필 / 닉네임 → [가이드](docs/guide/public-profile.md)
 
 ```csharp
 await Supabase.TrySetMyDisplayNameAsync("Player123");
 var profile = await Supabase.TryGetPublicProfileAsync(userId);
 ```
 
-### 인앱 결제 (IAP) → [Docs/IAP.md](Docs/IAP.md)
+### 인앱 결제 (IAP) → [가이드](docs/guide/iap.md)
 
 Android(Google Play)와 iOS(Apple App Store)를 자동 감지합니다.  
 `com.unity.purchasing` **5.2.1 이상** 필요.
@@ -103,7 +103,7 @@ Android(Google Play)와 iOS(Apple App Store)를 자동 감지합니다.
 ```csharp
 var iap = await Supabase.CreateIAPAsync(
     productIds: new[] { "com.mygame.item_1000" },
-    onGrant: async (productId, isResuming) =>
+    onGrant: async (productId, isResuming, alreadyVerified) =>
     {
         await GiveItem(productId);
         return true; // true → 소모품 소비 완료
@@ -111,7 +111,7 @@ var iap = await Supabase.CreateIAPAsync(
 iap?.Purchase("com.mygame.item_1000");
 ```
 
-### Edge Functions → [Docs/EdgeFunctions.md](Docs/EdgeFunctions.md)
+### Edge Functions → [가이드](docs/guide/edge-functions.md)
 
 ```csharp
 var result = await Supabase.TryInvokeFunctionAsync<GachaResponse>(
@@ -131,7 +131,7 @@ await Supabase.TrySendChatMessageAsync(channelId, "Hello");
 ## DB 스키마
 
 `Sql/player/` 폴더의 SQL 파일을 번호 순으로 Supabase SQL Editor에서 실행합니다.  
-테이블 구조·`account_id` vs `user_id` 설명·서버 이주·법적 데이터 보관 설계는 [Docs/DataSchema.md](Docs/DataSchema.md)를 참고하세요.
+테이블 구조·`account_id` vs `user_id` 설명·서버 이주·법적 데이터 보관 설계는 [데이터 스키마 가이드](docs/guide/data-schema.md)를 참고하세요.
 
 ---
 

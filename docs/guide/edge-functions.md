@@ -1,8 +1,10 @@
 # Edge Functions
 
----
-
 ## 기본 사용법
+
+> [!WARNING]
+> Edge Function 호출에는 유효한 로그인 세션이 필요합니다.  
+> JWT가 없거나 만료된 경우 `http_401` 오류가 반환됩니다.
 
 ```csharp
 [Serializable]
@@ -23,7 +25,9 @@ if (result != null)
     ApplyRewards(result.rewards);
 ```
 
-로그인 세션이 필요합니다. 응답 루트는 JSON 객체(`{`로 시작)를 권장합니다.
+응답 루트는 JSON 객체(`{`로 시작)를 권장합니다.
+
+---
 
 ## Edge Function 예시: 뽑기 결과 서버 계산
 
@@ -80,6 +84,8 @@ Deno.serve(async (req: Request) => {
 supabase functions deploy gacha-draw
 ```
 
+---
+
 ## 401 Invalid JWT 디버깅
 
 Unity에서 `http_401:body={"code":401,"message":"Invalid JWT"}`가 발생할 때, 아래 디버그 함수를 임시 배포해 원인을 확인합니다.
@@ -112,11 +118,17 @@ Deno.serve(async (req: Request) => {
 });
 ```
 
-원인 해결 후 `debug` 필드를 제거하세요.
+> [!NOTE]
+> 원인 해결 후 `debug` 필드를 제거하세요.
+
+---
 
 ## 보안 체크리스트
 
-- 확률·결과 계산은 서버에서만 수행합니다.
-- 재화 차감·검증 로직은 Edge Function 내부에서 처리합니다.
-- 중복 요청 방지를 위해 멱등 키(request ID) 사용을 고려합니다.
-- 뽑기 등 중요 이벤트는 `gacha_draw_logs` 테이블에 `user_id`, `banner_id`, `rewards`, `created_at`을 기록하는 것을 권장합니다.
+> [!IMPORTANT]
+> 서버 함수는 클라이언트가 신뢰할 수 없다는 전제 하에 작성하세요.
+
+- **확률·결과 계산은 서버에서만** 수행합니다. 클라이언트 값을 그대로 신뢰하지 마세요.
+- **재화 차감·검증 로직**은 Edge Function 내부에서 처리합니다.
+- **중복 요청 방지**를 위해 멱등 키(request ID) 사용을 고려합니다.
+- **뽑기 등 중요 이벤트**는 `gacha_draw_logs` 테이블에 `user_id`, `banner_id`, `rewards`, `created_at`을 기록하는 것을 권장합니다.

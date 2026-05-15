@@ -1,7 +1,16 @@
-# 인앱 결제 (IAP) 서버 검증 가이드
+# 인앱 결제 (IAP)
 
 Unity IAP v5 + Supabase Edge Function을 이용한 서버 측 영수증 검증 가이드입니다.  
 Android (Google Play)와 iOS (Apple App Store) 소모품 아이템을 지원합니다.
+
+## 목차
+- [검증 흐름](#검증-흐름)
+- [사전 준비](#사전-준비)
+- [통합 사용법](#통합-사용법-권장)
+- [플랫폼별 사용법](#android-사용법-google-play)
+- [OnGrantItemAsync 콜백 상세](#ongrantitemasync-콜백-상세)
+- [저수준 사용법](#저수준-사용법-직접-초기화)
+- [DB 스키마](#db-스키마-purchases-테이블)
 
 ---
 
@@ -165,7 +174,10 @@ private void OnDestroy()
 | `isResuming` | 이전 앱 세션의 미처리 주문을 재처리 중 |
 | `alreadyVerified` | 서버 DB에 이미 검증 기록이 있음 — 지급 후 크래시된 케이스 |
 
-두 플래그의 조합으로 중복 지급을 안전하게 처리할 수 있습니다.
+> [!IMPORTANT]
+> `alreadyVerified`는 `isResuming`과 독립적인 신호입니다.  
+> `isResuming=true`이더라도 서버 DB 기록이 없으면 `alreadyVerified=false`입니다.  
+> 두 플래그의 조합으로 중복 지급을 안전하게 처리하세요.
 
 ```csharp
 onGrant: async (productId, isResuming, alreadyVerified) =>
@@ -237,6 +249,10 @@ RLS로 각 사용자는 자신의 구매 내역만 조회·삽입 가능합니�
 ---
 
 ## 주의사항
+
+> [!WARNING]
+> **초기화 타이밍**: `CreateIAPAsync`는 로그인 완료 이후에 호출해야 합니다.  
+> 세션 복원 경로(앱 재시작)에서도 IAP가 초기화되도록 `Supabase.IsLoggedIn`을 폴링하거나 로그인 완료 콜백 내에서 호출하세요.
 
 - **소모품 전용**: 비소모품(Non-Consumable)과 구독(Subscription)은 검증 로직이 달라 현재 지원하지 않습니다.
 - **샌드박스 자동 전환**: Apple Edge Function은 프로덕션 → 샌드박스 순으로 자동 재시도합니다. 테스트 환경에서 별도 설정 불필요합니다.

@@ -1,8 +1,21 @@
 # Remote Config
 
+## 목차
+- [패턴 선택](#패턴-선택)
+- [읽기 함수 (Reader)](#읽기-함수-createremoteconfigreader)
+- [값 바인딩 (Binding)](#값-바인딩-createremoteconfigbinding)
+- [반응형 구독 (Listener)](#반응형-구독-createremoteconfiglistener)
+- [설정 클래스 작성 규칙](#설정-클래스-작성-규칙)
+- [Cold Start 패턴](#cold-start-패턴)
+- [설정 키 구조 권장](#설정-키-구조-권장)
+
 ---
 
 ## 패턴 선택
+
+> [!TIP]
+> 대부분의 경우 **읽기 함수** 또는 **값 바인딩** 패턴으로 충분합니다.  
+> 값이 바뀔 때 UI를 즉시 갱신해야 하는 경우에만 반응형 구독을 사용하세요.
 
 | 패턴 | API | 특징 |
 |---|---|---|
@@ -33,6 +46,8 @@ private async Task LoadConfigAsync()
 _getConfig ??= Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1", maxStaleSeconds: 60);
 ```
 
+---
+
 ## 값 바인딩 (CreateRemoteConfigBinding)
 
 폴링으로 값을 최신 상태로 유지합니다. `Value`로 언제든 동기 읽기.
@@ -52,6 +67,8 @@ private void Update()
 
 private void OnDestroy() => _gameplay?.Dispose();
 ```
+
+---
 
 ## 반응형 구독 (CreateRemoteConfigListener)
 
@@ -105,7 +122,9 @@ public class GameplayConfig
 
 ### 규칙
 
-**매개변수 없는 생성자 필요** — 중첩 클래스 포함, 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+> [!WARNING]
+> 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
+> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
 
 ```csharp
 // ❌ 기본 생성자가 사라진 경우
@@ -153,13 +172,16 @@ float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
 
 ## Cold Start 패턴
 
-앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  
-위 API를 처음 호출하는 순간 해당 키만 서버에서 조회합니다.  
-이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 갱신합니다.
+> [!NOTE]
+> 앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  
+> 위 API를 처음 호출하는 순간 해당 키만 서버에서 조회합니다.  
+> 이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 백그라운드에서 갱신합니다 (stale-while-revalidate).
+
+---
 
 ## 설정 키 구조 권장
 
-관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다.
+관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다. 스칼라 값마다 키를 만들지 않아도 됩니다.
 
 ```csharp
 [Serializable]
@@ -176,7 +198,11 @@ key:        "gameplay_v1"
 value_json: {"stamina":{"maxEnergy":100,"regenSeconds":300},"battle":{"playerDmg":1.5}}
 ```
 
-## Source Generator (선택)
+---
+
+## 고급 설정
+
+### Source Generator (선택)
 
 `static partial` 메서드에 어노테이션을 붙이면 구현이 자동 생성됩니다.
 
@@ -194,7 +220,7 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 
 패키지 루트 `RoslynAnalyzers/Truesoft.Supabase.RemoteConfig.SourceGenerator.dll`이 자동으로 포함됩니다.
 
-## 로우레벨 폴링 설정
+### 로우레벨 폴링 설정
 
 초기화 시 1회 호출합니다. 이후 해당 키의 Binding·Listener 생성 시 별도 지정이 없어도 이 주기가 사용됩니다.
 
@@ -202,7 +228,7 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 ```
 
-## 로우레벨 구독
+### 로우레벨 구독
 
 ```csharp
 Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
@@ -211,7 +237,7 @@ Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
 }, invokeIfCached: true);
 ```
 
-## 테이블 이름 변경
+### 테이블 이름 변경
 
 기본값은 `remote_config`입니다. `SupabaseSettings.remoteConfigTable`에서 변경할 수 있습니다.  
-SQL: [`Sql/player/10_remote_config.sql`](../Sql/player/10_remote_config.sql)
+SQL: `Sql/player/10_remote_config.sql`

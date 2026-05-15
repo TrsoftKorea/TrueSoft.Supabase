@@ -1,10 +1,18 @@
 # 유저 세이브 (User Saves)
 
+## 목차
+- [StaticUserSave — 권장 패턴](#staticusersave-권장-패턴)
+- [저수준 API](#저수준-api-직접-사용)
+- [에디터 클래스 생성기](#에디터-openapi-클래스-생성기)
+- [JSON 직렬화 주의사항](#json-직렬화-주의사항)
+
 ---
 
-## StaticUserSave\<TRow\> — 권장 패턴
+## StaticUserSave — 권장 패턴
 
-`StaticUserSave<TRow>`를 상속하면 스냅샷 관리·더티 추적·자동 동기화 등록을 모두 베이스 클래스가 처리합니다.
+> [!TIP]
+> `StaticUserSave<TRow>`를 상속하면 스냅샷 관리·더티 추적·자동 동기화 등록을 모두 베이스 클래스가 처리합니다.  
+> 저수준 API는 특수한 경우에만 사용하세요.
 
 ```csharp
 public sealed class GameSave : StaticUserSave<GameSave.Row>
@@ -42,7 +50,6 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
 // 행이 없으면 자동 생성 후 DB 기본값을 로드해 반환
 bool ok = await GameSave.Instance.TryLoadAsync();
 
-// 로드 후 프로퍼티로 접근
 int lv = GameSave.Level;
 ```
 
@@ -78,7 +85,7 @@ GameSave.Instance.ConfigureCooldown(seconds: 5f);
 
 ### 다중 테이블
 
-테이블마다 별도 클래스를 정의합니다. syncKey 기본값은 `typeof(Row).FullName`이므로 네임스페이스가 다르거나 클래스명이 겹치지 않으면 인자 없는 `base()`로 충분합니다.
+테이블마다 별도 클래스를 정의합니다. `syncKey` 기본값은 `typeof(Row).FullName`이므로 네임스페이스가 다르거나 클래스명이 겹치지 않으면 인자 없는 `base()`로 충분합니다.
 
 ```csharp
 public sealed class InventorySave : StaticUserSave<InventorySave.Row>
@@ -106,7 +113,8 @@ select admin_create_user_table(
 );
 ```
 
-`account_id unique` 제약이 있어야 `ts_ensure_my_row`의 `ON CONFLICT (account_id)` 동작합니다.
+> [!IMPORTANT]
+> `account_id unique` 제약이 있어야 `ts_ensure_my_row`의 `ON CONFLICT (account_id)` 동작이 올바르게 수행됩니다.
 
 ---
 
@@ -158,7 +166,8 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 3. 테이블명·제외 컬럼·클래스 이름·네임스페이스를 조정한 뒤 미리보기를 확인합니다.
 4. **프로젝트에 .cs 저장…**으로 `Assets` 아래에 저장합니다.
 
-생성기가 타입을 추론하지 못한 컬럼(`string /* refine */`)은 직접 수정해야 합니다.
+> [!NOTE]
+> 생성기가 타입을 추론하지 못한 컬럼(`string /* refine */`)은 직접 수정해야 합니다.
 
 ---
 
@@ -166,8 +175,9 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 
 SDK는 Newtonsoft.Json을 사용합니다. PostgREST가 반환하는 JSON 키와 C# 필드 이름이 일치해야 값이 채워집니다.
 
-- `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화 키는 **필드 이름** 기준입니다.
-- DB 컬럼명과 C# 필드명이 달라야 한다면 `[JsonProperty("db_column_name")]`으로 매핑하세요.
+> [!WARNING]
+> `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화 키는 **필드 이름** 기준입니다.  
+> DB 컬럼명과 C# 필드명이 달라야 한다면 `[JsonProperty("db_column_name")]`으로 매핑하세요.
 
 ```csharp
 using Newtonsoft.Json;

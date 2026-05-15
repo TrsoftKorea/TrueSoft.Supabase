@@ -1,16 +1,19 @@
 # 데이터 스키마 (Data Schema)
 
----
-
 ## account_id vs user_id
+
+> [!IMPORTANT]
+> 게임 코드는 항상 `account_id`만 사용합니다. `user_id`는 운영·감사 툴 전용입니다.  
+> 두 값을 혼동하면 RLS 정책이 적용되지 않거나 조회가 실패할 수 있습니다.
 
 | 필드 | 의미 | 사용 주체 |
 |------|------|----------|
 | `account_id` | `auth.users.id`. 현재 로그인 세션 식별자. RLS 기준. | 게임 클라이언트 |
 | `user_id` | 플레이어(사람) 단위 불변 ID. 재가입 후에도 동일하게 유지 가능. | 운영·감사 |
 
-게임 코드는 항상 `account_id`(RLS의 `auth.uid()`)만 사용합니다.  
 같은 사람의 히스토리를 묶는 것은 운영 툴에서 `user_id`로 처리합니다.
+
+---
 
 ## 재가입 동작
 
@@ -20,7 +23,10 @@
 | 다른 계정 | 다른 `user_id` | 새 행 INSERT |
 | 탈퇴 후 | 행에 남음 | `account_id` → NULL, 게임 접근 불가 |
 
-탈퇴 후 재가입해도 이전 세이브·프로필은 자동으로 복구되지 않습니다.
+> [!NOTE]
+> 탈퇴 후 재가입해도 이전 세이브·프로필은 자동으로 복구되지 않습니다.
+
+---
 
 ## DataSchema 유틸리티
 
@@ -34,12 +40,12 @@
 | `CopyInto<T>(dst, src)` | `[DataColumn]` 멤버를 `src`에서 `dst`로 복사 (ref 유지) |
 | `ResolveTableName<T>()` | `[DataTable]` 어노테이션에서 테이블명 추출 |
 
-`CloneRow` / `CopyInto`는 `StaticUserSave<TRow>` 내부에서 스냅샷 관리에 사용됩니다. 저수준 API를 직접 사용할 때도 활용할 수 있습니다.
+`CloneRow` / `CopyInto`는 `StaticUserSave<TRow>` 내부에서 스냅샷 관리에 사용됩니다.
 
 ```csharp
-var snapshot = DataSchema.CloneRow(current);   // 스냅샷 복사
-DataSchema.CopyInto(current, newRow);          // 기존 ref 유지하며 값만 덮어쓰기
-var patch = DataSchema.BuildPatch(snapshot, current);  // 변경분만 추출
+var snapshot = DataSchema.CloneRow(current);          // 스냅샷 복사
+DataSchema.CopyInto(current, newRow);                 // 기존 ref 유지하며 값만 덮어쓰기
+var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
 ```
 
 ---
@@ -64,7 +70,9 @@ var patch = DataSchema.BuildPatch(snapshot, current);  // 변경분만 추출
 | `14_purchases.sql` | IAP 구매 검증 기록 |
 | `99_verify_player_schema.sql` | 스키마 검증 (선택) |
 
-전체 목록 참고: [`Sql/supabase_player_tables.sql`](../Sql/supabase_player_tables.sql)
+전체 목록 참고: `Sql/supabase_player_tables.sql`
+
+---
 
 ## 서버 이주 (server_id)
 
@@ -81,6 +89,8 @@ Body: {"p_account_id":"<uuid>","p_target_server_code":"KR1","p_reason":"support_
 ```
 
 이주 대상 서버의 `allow_transfers`가 false이거나 닉네임 중복이면 실패합니다.
+
+---
 
 ## 법적 데이터 보관 설계
 
