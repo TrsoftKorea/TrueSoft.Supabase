@@ -11,9 +11,6 @@ await Supabase.TrySignInWithGoogleAsync();
 
 // Google 로그인 (ID 토큰 직접 전달 — iOS / 커스텀 OAuth)
 await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
-
-// Apple 로그인 (iOS, com.unity.modules.appleauthenticationmanager 필요)
-await Supabase.TrySignInWithAppleAsync();
 ```
 
 ---
@@ -30,7 +27,7 @@ await Supabase.TrySignOutFullyAsync();
 
 ---
 
-## 익명 → Google / Apple 연동
+## 익명 → Google 연동
 
 > [!IMPORTANT]
 > 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
@@ -42,9 +39,6 @@ await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
 
 // Google 연동 (ID 토큰 직접 전달)
 await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
-
-// Apple 연동 (iOS)
-await Supabase.TryLinkAppleToCurrentAnonymousAsync();
 ```
 
 - 연동 성공 시 동일 `auth.users.id`를 유지하면서 `is_anonymous`가 false가 됩니다.
@@ -77,4 +71,3 @@ await Supabase.TryRestoreSessionAsync();
 
 > [!WARNING]
 > - Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다. 먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
-> - Apple 로그인은 Unity Package Manager > Built-in 탭에서 `Apple Authentication Manager` 모듈을 활성화해야 합니다.

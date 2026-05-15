@@ -14,7 +14,7 @@ hero:
 
 features:
   - title: 인증
-    details: 익명·Google·Apple 로그인, 익명→소셜 연동, 세션 자동 복원
+    details: 익명·Google 로그인, 익명→소셜 연동, 세션 자동 복원
     link: /guide/auth
   - title: 유저 세이브
     details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
