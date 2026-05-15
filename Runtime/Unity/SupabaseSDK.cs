@@ -54,7 +54,6 @@ namespace Truesoft.Supabase.Unity
 
         private static Task _remoteConfigKeyPollTickTask;
 
-        private static bool _duplicateSessionMonitorEnabled = true;
         private static float _duplicateSessionPollSeconds = 15f;
         private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
@@ -97,9 +96,6 @@ namespace Truesoft.Supabase.Unity
         /// UI에서 팝업을 띄우세요.
         /// </summary>
         public static event Action OnDuplicateLoginDetected;
-
-        /// <summary><see cref="Config.SupabaseSettings.enableDuplicateSessionMonitor"/>.</summary>
-        public static bool DuplicateSessionMonitorEnabled => _duplicateSessionMonitorEnabled;
 
         /// <summary><see cref="Config.SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public static float DuplicateSessionPollSeconds => _duplicateSessionPollSeconds;
@@ -2259,7 +2255,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;
             _enableApiResultLogs = bootstrap.EnableApiResultLogs;
-            _duplicateSessionMonitorEnabled = bootstrap.EnableDuplicateSessionMonitor;
             _duplicateSessionPollSeconds = bootstrap.DuplicateSessionPollSeconds;
             _duplicateSessionActionCheckCooldownSeconds = bootstrap.DuplicateSessionActionCheckCooldownSeconds;
             _withdrawalRequestDelayDays = bootstrap.WithdrawalRequestDelayDays;

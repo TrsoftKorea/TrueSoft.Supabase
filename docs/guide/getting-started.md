@@ -76,13 +76,55 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 ## 초기 설정
 
+### 1. SupabaseSettings 에셋 생성
+
 1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 로 `SupabaseSettings`를 생성합니다.
-2. Inspector에서 `projectUrl`과 `publishableKey`를 입력합니다.
+2. Inspector에서 **Project URL**과 **Publishable Key**를 입력합니다.
 3. 파일을 **`Assets/Resources/SupabaseSettings.asset`** 위치에 저장합니다.
-4. (선택) `SupabaseRuntime` 컴포넌트를 씬에 배치해 세션 자동 복원과 RemoteConfig 폴링을 활성화합니다.
 
 > [!IMPORTANT]
 > `SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 런타임에 로드됩니다.
+
+### 2. SupabaseRuntime 배치
+
+메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 를 클릭합니다.  
+앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
+
+> [!TIP]
+> 씬에 이미 런타임 오브젝트가 있으면 중복 생성 없이 기존 오브젝트를 선택합니다.
+
+`SupabaseRuntime`은 SDK의 핵심 진입점으로, 아래 기능을 담당합니다.
+
+| 기능 | 설명 |
+|------|------|
+| SDK 초기화 | `SupabaseSettings`를 읽어 모든 서비스를 초기화합니다 |
+| 세션 자동 복원 | `OnEnable` 시 저장된 세션을 복원하고 `OnSessionRestored` 이벤트를 발행합니다 |
+| 유저 세이브 자동 동기화 | 변경된 세이브 데이터를 쿨타임 주기로 자동 업로드합니다 |
+| RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
+| 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
+
+**Inspector 주요 설정:**
+
+| 항목 | 기본값 | 설명 |
+|------|--------|------|
+| 설정 에셋 | (자동) | 비워두면 `Resources/SupabaseSettings`에서 자동 로드 |
+| 씬 유지 (DontDestroyOnLoad) | ON | 씬 전환 후에도 SDK 상태 유지 |
+| 세션 자동 복원 | ON | 앱 시작 시 저장된 세션 자동 복원 |
+| 자동 동기화 사용 | ON | `StaticUserSave` 자동 업로드 활성화 |
+| 자동 저장 쿨타임 (초) | 1 | 연속 변경 시 불필요한 요청을 줄이는 최소 간격 |
+
+세션 복원 완료를 기다려야 하는 코드는 `OnSessionRestored` 이벤트를 사용합니다.
+
+```csharp
+void OnEnable()  => SupabaseRuntime.SubscribeSessionRestored(OnReady);
+void OnDisable() => SupabaseRuntime.UnsubscribeSessionRestored(OnReady);
+
+void OnReady(bool success)
+{
+    if (success) // 로그인 상태 + 유저 세이브 로드 완료
+        InitGame();
+}
+```
 
 ---
 

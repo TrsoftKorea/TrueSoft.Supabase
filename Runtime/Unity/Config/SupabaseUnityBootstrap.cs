@@ -23,9 +23,6 @@ namespace Truesoft.Supabase.Unity.Config
         public SupabaseServerTimeService ServerTimeService { get; private set; }
         public SupabaseMailboxService MailboxService { get; private set; }
 
-        /// <summary><see cref="SupabaseSettings.enableDuplicateSessionMonitor"/>.</summary>
-        public bool EnableDuplicateSessionMonitor { get; private set; }
-
         /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public float DuplicateSessionPollSeconds { get; private set; }
 
@@ -119,7 +116,6 @@ namespace Truesoft.Supabase.Unity.Config
                 http,
                 "mails");
 
-            EnableDuplicateSessionMonitor = settings.enableDuplicateSessionMonitor;
             DuplicateSessionPollSeconds = settings.duplicateSessionPollSeconds;
             DuplicateSessionActionCheckCooldownSeconds = options.DuplicateSessionActionCheckCooldownSeconds;
             WithdrawalRequestDelayDays = options.WithdrawalRequestDelayDays;

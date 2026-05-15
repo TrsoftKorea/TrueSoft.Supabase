@@ -55,10 +55,6 @@ namespace Truesoft.Supabase.Unity
         public string defaultServerCode = "GLOBAL";
 
         [Header("중복 로그인")]
-        [Label("중복 로그인 감지 사용")]
-        [Tooltip("다른 기기 로그인 시 이쪽 세션 해제 및 이벤트.")]
-        public bool enableDuplicateSessionMonitor = true;
-
         [Label("중복 감지 폴링 주기 (초, 0=1회)")]
         [Tooltip("세션 폴링 주기(초). 0이면 1회만.")]
         [Min(0f)]

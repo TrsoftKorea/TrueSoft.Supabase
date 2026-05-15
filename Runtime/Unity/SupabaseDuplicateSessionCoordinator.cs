@@ -42,9 +42,6 @@ namespace Truesoft.Supabase.Unity
 
         internal static async Task<bool> VerifyCurrentSessionForActionAsync()
         {
-            if (SupabaseSDK.DuplicateSessionMonitorEnabled == false)
-                return true;
-
             if (SupabaseSDK.IsLoggedIn == false || SupabaseSDK.Session?.User == null)
                 return false;
 
@@ -89,12 +86,6 @@ namespace Truesoft.Supabase.Unity
             while (Time.realtimeSinceStartup < dueAtRealtime)
                 yield return null;
 
-            if (SupabaseSDK.DuplicateSessionMonitorEnabled == false)
-            {
-                _deferredActionCheckRoutine = null;
-                yield break;
-            }
-
             if (SupabaseSDK.IsLoggedIn == false || SupabaseSDK.Session?.User == null)
             {
                 _deferredActionCheckRoutine = null;
@@ -130,9 +121,6 @@ namespace Truesoft.Supabase.Unity
         {
             try
             {
-                if (SupabaseSDK.DuplicateSessionMonitorEnabled == false)
-                    yield break;
-
                 var svc = SupabaseSDK.UserSessionService;
                 if (svc == null)
                     yield break;
@@ -236,9 +224,6 @@ namespace Truesoft.Supabase.Unity
             while (SupabaseSDK.IsLoggedIn && SupabaseSDK.Session != null)
             {
                 yield return new WaitForSeconds(intervalSeconds);
-
-                if (SupabaseSDK.DuplicateSessionMonitorEnabled == false)
-                    yield break;
 
                 var svc = SupabaseSDK.UserSessionService;
                 if (svc == null)
