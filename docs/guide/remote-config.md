@@ -127,14 +127,14 @@ public class GameplayConfig
 > 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
 
 ```csharp
-// ❌ 기본 생성자가 사라진 경우
+// 기본 생성자가 사라진 경우
 public class BattleConfig
 {
     public float playerDmg;
     public BattleConfig(float dmg) { playerDmg = dmg; }
 }
 
-// ✅ 기본 생성자 명시
+// 기본 생성자 명시
 public class BattleConfig
 {
     public float playerDmg;

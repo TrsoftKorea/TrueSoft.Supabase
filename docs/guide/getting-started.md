@@ -25,35 +25,40 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
    | 옵션 | 설정 | 이유 |
    |------|------|------|
-   | **Enable Data API** | ✅ ON | SDK가 REST API로 DB와 통신하므로 필수 |
-   | **Automatically expose new tables** | ❌ OFF | 새 테이블이 의도치 않게 외부에 노출되는 것을 방지 |
-   | **Enable automatic RLS** | ✅ ON | 새 테이블에 RLS가 자동 적용되어 데이터 보호 |
+   | **Enable Data API** | ON | SDK가 REST API로 DB와 통신하므로 필수 |
+   | **Automatically expose new tables** | OFF | 새 테이블이 의도치 않게 외부에 노출되는 것을 방지 |
+   | **Enable automatic RLS** | ON | 새 테이블에 RLS가 자동 적용되어 데이터 보호 |
 
 4. **Create new project**를 클릭하고 프로비저닝이 완료될 때까지 약 1~2분 대기합니다.
 
 ### 2. API 키 확인
 
-**Project Settings > API** 페이지에서 아래 두 값을 복사합니다.
+대시보드 상단의 **Connect** 버튼을 클릭하거나 **Project Settings > API** 페이지에서 아래 두 값을 복사합니다.
 
 | 항목 | 설명 | 사용처 |
 |------|------|--------|
 | **Project URL** | `https://<ref>.supabase.co` 형태 | `SupabaseSettings.projectUrl` |
-| **anon / public** 키 | `publishable` 키 (공개 가능) | `SupabaseSettings.publishableKey` |
+| **Publishable key** | anon / public 키 (공개 가능) | `SupabaseSettings.publishableKey` |
 
 > [!WARNING]
 > **service_role** 키는 절대 클라이언트에 넣지 마세요. 서버(Edge Function)에서만 사용합니다.
 
 ### 3. Authentication 설정
 
-**Authentication > Providers** 에서 사용할 로그인 방식을 활성화합니다.
+**Authentication > Settings** 에서 아래 항목을 설정합니다.
 
-| 로그인 방식 | 활성화 위치 | 추가 설정 |
-|------------|------------|----------|
-| 익명 로그인 | Providers > Anonymous | 없음 |
-| Google | Providers > Google | Client ID / Secret 입력 |
-| Apple | Providers > Apple | Services ID / Key 입력 |
+| 항목 | 설정 | 위치 |
+|------|------|------|
+| **Allow anonymous sign-ins** | ON | User Signups |
+| **Confirm email** | OFF | Email Auth |
+| **Manual linking** | ON (소셜 연동 사용 시) | User Signups |
 
-Google·Apple 소셜 연동을 사용하려면 **Authentication > Settings > Manual linking** 도 활성화하세요.
+소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.
+
+| 로그인 방식 | 추가 설정 |
+|------------|----------|
+| Google | Client ID / Secret 입력 |
+| Apple | Services ID / Key 입력 |
 
 ---
 
