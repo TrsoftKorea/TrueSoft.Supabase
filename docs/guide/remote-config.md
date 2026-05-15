@@ -175,7 +175,7 @@ float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
 > [!NOTE]
 > 앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  
 > 위 API를 처음 호출하는 순간 해당 키만 서버에서 조회합니다.  
-> 이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 백그라운드에서 갱신합니다 (stale-while-revalidate).
+> 이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 **만료된 캐시 값을 즉시 반환하면서 동시에 백그라운드에서 서버 갱신을 시작합니다** (stale-while-revalidate 패턴). 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
 
 ---
 
@@ -249,7 +249,7 @@ Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
 }, invokeIfCached: true);
 ```
 
-### 테이블 이름 변경
+### 테이블 이름
 
-기본값은 `remote_config`입니다. `SupabaseSettings.remoteConfigTable`에서 변경할 수 있습니다.  
+`remote_config`로 고정되어 있습니다.  
 SQL: `Sql/player/10_remote_config.sql`

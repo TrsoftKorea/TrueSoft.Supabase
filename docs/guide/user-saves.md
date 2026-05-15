@@ -75,9 +75,12 @@ bool ok = await GameSave.Instance.TrySaveIfChangedAsync();
 `SupabaseRuntime`이 씬에 있으면 앱 Pause/Quit 시 dirty가 있으면 즉시 전송을 시도합니다.
 
 ```csharp
-// 중요한 타이밍(결제 완료, 씬 전환 등)에 즉시 전송
+// 특정 세이브만 즉시 전송 (결제 완료, 씬 전환 등)
 GameSave.Instance.TryRequestImmediateSave();
 await GameSave.Instance.TryFlushNowAsync(timeoutMs: 5000);
+
+// 모든 StaticUserSave 인스턴스를 한 번에 즉시 전송 (앱 종료 직전 등)
+await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
 
 // 쿨타임 조정
 GameSave.Instance.ConfigureCooldown(seconds: 5f);

@@ -10,7 +10,11 @@ bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
 await Supabase.TrySetMyDisplayNameAsync("Player123");
 
 // 다른 사용자 닉네임 조회
+// userId = 조회 대상의 auth.users.id (리더보드·매칭 결과 등에서 얻은 값)
 string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
+
+// 내 ID 확인
+string myId = Supabase.Session?.User?.Id;
 ```
 
 닉네임은 클라이언트에서 최대 64자로 잘립니다.  
@@ -21,6 +25,7 @@ DB 유니크 인덱스는 `lower(trim(display_name))` 기준입니다.
 ## 프로필 조회
 
 ```csharp
+// userId = 조회 대상의 auth.users.id
 var profile = await Supabase.TryGetPublicProfileAsync(userId);
 // profile.display_name, profile.withdrawn_at 등
 ```
