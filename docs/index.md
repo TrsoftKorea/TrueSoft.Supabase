@@ -10,7 +10,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: GitHub
-      link: https://github.com/ljuh1521/TrueSoft.Supabase
+      link: https://github.com/trsoftkorea/TrueSoft.Supabase
 
 features:
   - title: 인증

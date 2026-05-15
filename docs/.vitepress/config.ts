@@ -9,7 +9,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: '가이드', link: '/guide/getting-started' },
-      { text: 'GitHub', link: 'https://github.com/ljuh1521/TrueSoft.Supabase' }
+      { text: 'GitHub', link: 'https://github.com/trsoftkorea/TrueSoft.Supabase' }
     ],
 
     sidebar: [
@@ -36,7 +36,7 @@ export default defineConfig({
     search: { provider: 'local' },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ljuh1521/TrueSoft.Supabase' }
+      { icon: 'github', link: 'https://github.com/trsoftkorea/TrueSoft.Supabase' }
     ]
   }
 })
