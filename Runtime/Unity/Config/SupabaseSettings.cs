@@ -14,7 +14,7 @@ namespace Truesoft.Supabase.Unity
     [CreateAssetMenu(fileName = "SupabaseSettings", menuName = "TrueSoft/Supabase/Supabase 설정")]
     public sealed class SupabaseSettings : ScriptableObject
     {
-        [Header("공통 (필수)")]
+        [Header("프로젝트 (필수)")]
         [Label("프로젝트 URL")]
         [Tooltip("Supabase 대시보드 → Project Settings → API → Project URL")]
         public string projectUrl;
@@ -23,6 +23,7 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("Supabase 대시보드 → Project Settings → API → Publishable Key")]
         public string publishableKey;
 
+        [Header("인증")]
         [Label("Google 웹 클라이언트 ID")]
         [Tooltip("Google Cloud Console → OAuth 2.0 클라이언트 ID → 웹 애플리케이션 클라이언트 ID\nAndroid 네이티브 로그인 전용. Google 로그인 미사용 시 공란.")]
         public string googleWebClientId;
@@ -37,11 +38,12 @@ namespace Truesoft.Supabase.Unity
         [Min(1)]
         public int timeoutSeconds = 30;
 
-        [Header("테이블")]
+        [Header("Remote Config")]
         [Label("원격 설정 테이블")]
         [Tooltip("RemoteConfig 테이블.")]
         public string remoteConfigTable = "remote_config";
 
+        [Header("우편함")]
         [Label("우편함 테이블")]
         [Tooltip("우편함 테이블 (mails).")]
         public string mailsTable = "mails";
@@ -56,6 +58,7 @@ namespace Truesoft.Supabase.Unity
         [Min(0)]
         public int mailPollingIntervalSeconds = 0;
 
+        [Header("공개 프로필")]
         [Label("공개 프로필 테이블")]
         [Tooltip("공개 프로필 테이블.")]
         public string publicProfilesTable = "user_profiles";
@@ -98,10 +101,6 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("탈퇴 가드 Edge 함수 이름.")]
         public string withdrawalGuardFunctionName = "withdrawal-guard";
 
-        [Label("구글 신규 가입 시 익명 닉네임 적용")]
-        [Tooltip("구글 신규 가입 시 익명형 displayName 적용.")]
-        public bool applyAnonymousDisplayNameOnNewGoogleSignUp = true;
-
         [Header("인앱 결제")]
         [Label("구글 플레이 영수증 검증 함수 이름")]
         [Tooltip("구글 플레이 영수증 검증 Edge 함수 이름.")]
@@ -131,7 +130,6 @@ namespace Truesoft.Supabase.Unity
                 WithdrawalGuardFunctionName = string.IsNullOrWhiteSpace(withdrawalGuardFunctionName)
                     ? "withdrawal-guard"
                     : withdrawalGuardFunctionName.Trim(),
-                ApplyAnonymousDisplayNameOnNewGoogleSignUp = applyAnonymousDisplayNameOnNewGoogleSignUp,
                 PurchaseVerifyGoogleFunctionName = string.IsNullOrWhiteSpace(purchaseVerifyGoogleFunctionName)
                     ? "purchase-verify-google"
                     : purchaseVerifyGoogleFunctionName.Trim(),

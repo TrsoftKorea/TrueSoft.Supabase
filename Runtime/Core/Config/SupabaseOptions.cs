@@ -47,11 +47,6 @@ namespace Truesoft.Supabase
         /// </summary>
         public string WithdrawalGuardFunctionName = "withdrawal-guard";
 
-        /// <summary>
-        /// Google로 <b>신규</b> 가입으로 판단될 때만 <c>user_metadata.displayName</c>을 익명 기본값(<c>Player_xxxxxxxx</c>)으로 덮어씁니다. 재로그인·게스트→구글 연동은 건드리지 않습니다.
-        /// </summary>
-        public bool ApplyAnonymousDisplayNameOnNewGoogleSignUp = true;
-
         /// <summary>구글 플레이 영수증 검증 Edge Function 이름 (기본 <c>purchase-verify-google</c>).</summary>
         public string PurchaseVerifyGoogleFunctionName = "purchase-verify-google";
     }

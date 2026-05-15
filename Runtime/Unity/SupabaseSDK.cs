@@ -2915,9 +2915,6 @@ namespace Truesoft.Supabase.Unity
         /// </summary>
         private static async Task TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync(bool saveSessionToStorage)
         {
-            if (_bootstrap != null && _bootstrap.ApplyAnonymousDisplayNameOnNewGoogleSignUp == false)
-                return;
-
             var s = _currentSession;
             if (s == null || s.User == null || s.likely_brand_new_google_signup == false)
                 return;
