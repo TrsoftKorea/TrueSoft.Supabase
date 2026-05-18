@@ -1,30 +1,34 @@
--- 14_purchases.sql
+-- =============================================================================
 -- 인앱 구매 영수증 검증 기록 테이블 (Google Play + Apple App Store)
+-- 선행: 없음 (auth.users 참조만 필요)
+--
 -- 동일 purchase_token 이중 처리를 DB UNIQUE 제약으로 차단합니다.
+-- INSERT는 purchase-verify-google / purchase-verify-apple Edge Function만 수행합니다.
+-- Edge Function은 service_role 키로 실행되므로 RLS를 우회합니다.
+-- 클라이언트에는 SELECT(본인 내역)만 허용합니다.
+-- =============================================================================
 
-create table if not exists purchases (
+create table if not exists public.purchases (
   id              bigint generated always as identity primary key,
   account_id      uuid references auth.users(id) on delete set null,
   user_id         text,
-  product_id      text not null,
-  purchase_token  text not null unique,   -- Google: purchaseToken / Apple: transaction_id
-  order_id        text,                   -- Google: orderId / Apple: transaction_id
-  package_name    text not null,          -- Google: packageName / Apple: bundleId
-  purchase_state  int,                    -- 0=purchased, 1=cancelled(Google), 2=pending(Google)
-  store           text not null default 'google_play',  -- 'google_play' | 'apple_app_store'
+  product_id      text        not null,
+  purchase_token  text        not null unique,  -- Google: purchaseToken / Apple: transaction_id
+  order_id        text,                         -- Google: orderId / Apple: transaction_id
+  package_name    text        not null,         -- Google: packageName / Apple: bundleId
+  purchase_state  int,                          -- 0=purchased, 1=cancelled(Google), 2=pending(Google)
+  store           text        not null default 'google_play',  -- 'google_play' | 'apple_app_store'
   verified_at     timestamptz not null default now()
 );
 
--- 이미 테이블이 존재하는 경우 store 컬럼만 추가
-alter table purchases
+-- 기존 테이블이 있는 경우 store 컬럼만 추가 (기존 데이터 영향 없음)
+alter table public.purchases
   add column if not exists store text not null default 'google_play';
 
-alter table purchases enable row level security;
+alter table public.purchases enable row level security;
 
+-- 본인 구매 내역 조회만 허용 (INSERT는 Edge Function이 service_role로 처리)
+drop policy if exists "users_read_own_purchases" on public.purchases;
 create policy "users_read_own_purchases"
-  on purchases for select
+  on public.purchases for select
   using (account_id = auth.uid());
-
-create policy "users_insert_own_purchases"
-  on purchases for insert
-  with check (account_id = auth.uid());

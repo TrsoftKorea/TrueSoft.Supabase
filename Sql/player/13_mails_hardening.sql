@@ -1,7 +1,7 @@
 -- =============================================================================
--- mails 테이블 — 클라이언트(authenticated) 직접 INSERT/UPDATE/DELETE 차단 초안
+-- 우편함 RLS 강화 — 클라이언트(authenticated) 직접 INSERT/UPDATE/DELETE 차단
 -- =============================================================================
--- 선행: Sql/player/11_mails.sql (RPC·RLS) 반영 완료
+-- 선행: Sql/player/12_mails.sql (RPC·RLS) 반영 완료
 --
 -- 목적
 --   PostgREST로 mails에 PATCH/DELETE/INSERT 하면 RLS만으로는 컬럼 단위 제한이 어렵습니다.

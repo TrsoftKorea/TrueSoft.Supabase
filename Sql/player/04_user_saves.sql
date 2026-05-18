@@ -97,6 +97,43 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- set_updated_at — updated_at 자동 갱신 트리거 함수
+-- ---------------------------------------------------------------------------
+-- admin_create_user_table이 생성하는 커스텀 세이브 테이블의 BEFORE UPDATE 트리거에 사용합니다.
+-- ---------------------------------------------------------------------------
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+comment on function public.set_updated_at() is
+  'BEFORE UPDATE 트리거: new.updated_at을 now()로 갱신합니다. admin_create_user_table이 자동 등록.';
+
+-- ---------------------------------------------------------------------------
+-- user_table_metadata — 커스텀 세이브 테이블 레지스트리
+-- ---------------------------------------------------------------------------
+-- admin_create_user_table 호출 시 테이블 정보를 기록합니다.
+-- 클라이언트 직접 접근 없음 — RLS 활성화 + policy 없음으로 service_role 전용.
+-- ---------------------------------------------------------------------------
+create table if not exists public.user_table_metadata (
+  table_name  text        primary key,
+  description text,
+  enabled     boolean     not null default true,
+  updated_at  timestamptz not null default now()
+);
+
+comment on table public.user_table_metadata is
+  '커스텀 세이브 테이블 레지스트리. admin_create_user_table이 자동 기록. service_role 전용.';
+
+alter table public.user_table_metadata enable row level security;
+-- [의도적] policy 없음 — service_role 전용. authenticated 접근 불필요.
+
+-- ---------------------------------------------------------------------------
 -- admin_create_user_table — 유저 세이브 테이블 생성 헬퍼 (어드민 전용)
 -- ---------------------------------------------------------------------------
 -- 커스텀 세이브 테이블을 표준 구조로 생성합니다.

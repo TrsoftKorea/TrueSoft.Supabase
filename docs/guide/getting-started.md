@@ -133,22 +133,24 @@ void OnReady(bool success)
 `Sql/player/` 폴더의 SQL 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
 > [!TIP]
-> SQL Editor는 Supabase 대시보드 우측 상단의 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
+> Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
 
-| 순서 | 파일 | 내용 |
-|------|------|------|
-| 1 | `01_game_servers.sql` | 서버 샤드/선택 |
-| 2 | `02_profiles.sql` | 공개 프로필 |
-| 3 | `03_display_names.sql` | 닉네임 유니크 인덱스 |
-| 4 | `04_user_saves.sql` | 게임 세이브 + RLS |
-| 5 | `05_user_sessions.sql` | 중복 로그인 감지 |
-| 6 | `06_anonymous_recovery_tokens.sql` | 익명 계정 복구 |
-| 7~9 | `07~09_*.sql` | 서버 이주·탈퇴 처리 |
-| 10 | `10_remote_config.sql` | Remote Config |
-| 11 | `11_mails.sql`, `11_mails_client_hardening.sql` | 우편함 |
-| 12 | `12_withdrawal_cancel_rpc.sql` | 탈퇴 취소 RPC |
-| 13 | `13_cron_jobs_setup.sql` | 크론 잡 설정 |
-| 14 | `14_purchases.sql` | IAP 구매 검증 (IAP 사용 시) |
+| 순서 | 파일 | 카테고리 | 내용 |
+|------|------|----------|------|
+| 1 | `01_game_servers.sql` | 기반 | 서버 샤드/선택 |
+| 2 | `02_profiles.sql` | 기반 | 공개 프로필 |
+| 3 | `03_display_names.sql` | 기반 | 닉네임 유니크 인덱스 |
+| 4 | `04_user_saves.sql` | 유저 데이터 | 세이브 테이블 공통 RPC |
+| 5 | `05_user_sessions.sql` | 유저 데이터 | 중복 로그인 감지 |
+| 6 | `06_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
+| 7 | `07_server_transfer.sql` | 서버 이주 | server_id 동기화 트리거 + 이주 RPC |
+| 9 | `09_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 |
+| 10 | `10_withdrawal_cancel.sql` | 탈퇴 | 탈퇴 취소 RPC |
+| 11 | `11_remote_config.sql` | 기능 | Remote Config |
+| 12 | `12_mails.sql` | 기능 | 우편함 |
+| 13 | `13_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |
+| 14 | `14_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
+| 15 | `15_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
 
 > [!TIP]
 > `99_verify_player_schema.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.

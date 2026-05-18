@@ -63,7 +63,7 @@ from (
       ('ts_default_server_id'),
       ('ts_profiles_coalesce_server_id'),
       ('ts_ensure_my_profile'),
-      ('ts_ensure_my_user_save_row'),
+      ('ts_ensure_my_row'),
       ('ts_my_server_id'),
       ('ts_transfer_my_server'),
       ('ts_admin_transfer_user_server'),
