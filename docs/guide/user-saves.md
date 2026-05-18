@@ -1,13 +1,5 @@
 # 유저 세이브 (User Saves)
 
-## 목차
-- [StaticUserSave — 권장 패턴](#staticusersave-권장-패턴)
-- [저수준 API](#저수준-api-직접-사용)
-- [에디터 클래스 생성기](#에디터-openapi-클래스-생성기)
-- [JSON 직렬화 주의사항](#json-직렬화-주의사항)
-
----
-
 ## StaticUserSave — 권장 패턴
 
 > [!TIP]

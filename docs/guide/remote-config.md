@@ -1,16 +1,5 @@
 # Remote Config
 
-## 목차
-- [패턴 선택](#패턴-선택)
-- [읽기 함수 (Reader)](#읽기-함수-createremoteconfigreader)
-- [값 바인딩 (Binding)](#값-바인딩-createremoteconfigbinding)
-- [반응형 구독 (Listener)](#반응형-구독-createremoteconfiglistener)
-- [설정 클래스 작성 규칙](#설정-클래스-작성-규칙)
-- [Cold Start 패턴](#cold-start-패턴)
-- [설정 키 구조 권장](#설정-키-구조-권장)
-
----
-
 ## 패턴 선택
 
 > [!TIP]

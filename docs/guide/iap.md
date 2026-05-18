@@ -3,16 +3,6 @@
 Unity IAP v5 + Supabase Edge Function을 이용한 서버 측 영수증 검증 가이드입니다.  
 Android (Google Play)와 iOS (Apple App Store) 소모품 아이템을 지원합니다.
 
-## 목차
-- [검증 흐름](#검증-흐름)
-- [사전 준비](#사전-준비)
-- [통합 사용법](#통합-사용법-권장)
-- [플랫폼별 사용법](#android-사용법-google-play)
-- [OnGrantItemAsync 콜백 상세](#ongrantitemasync-콜백-상세)
-- [저수준 사용법](#저수준-사용법-직접-초기화)
-- [DB 스키마](#db-스키마-purchases-테이블)
-
----
 
 ## 검증 흐름
 
