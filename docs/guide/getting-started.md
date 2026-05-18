@@ -108,7 +108,7 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 > [!WARNING]
 > `13_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  
 > 실행 전 Supabase 대시보드 **Database > Extensions** 에서 `pg_cron`을 활성화하세요.  
-> Free 플랜은 pg_cron을 지원하지 않습니다. 크론 잡 없이 운영하려면 이 파일을 건너뛰세요.
+> 크론 잡이 필요 없으면 이 파일을 건너뛰어도 됩니다.
 
 > [!TIP]
 > `99_verify_player_schema.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
