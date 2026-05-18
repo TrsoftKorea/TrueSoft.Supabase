@@ -2,17 +2,16 @@
 -- 플레이어·프로필·세이브 등 DDL은 Sql/player/ 아래로 분리되어 있습니다.
 -- Supabase SQL Editor에서는 아래 파일을 번호 순으로 실행하세요.
 --
---   Sql/player/01_game_servers.sql
+--   Sql/player/01_servers.sql
 --   Sql/player/02_profiles.sql
---   Sql/player/03_display_names.sql
---   Sql/player/04_user_saves.sql
---   Sql/player/05_user_sessions.sql
---   Sql/player/06_anonymous_recovery_tokens.sql
---   Sql/player/07_sync_server_id_triggers.sql
---   Sql/player/08_transfer_server.sql
---   Sql/player/09_account_closures.sql
---   Sql/player/10_remote_config.sql
---   Sql/player/99_verify_player_schema.sql   -- 선택: 반영 확인용 SELECT
+--   Sql/player/03_anonymous_recovery.sql
+--   Sql/player/04_user_data.sql
+--   Sql/player/05_account_management.sql
+--   Sql/player/06_mails.sql
+--   Sql/player/07_purchases.sql
+--   Sql/player/08_remote_config.sql
+--   Sql/player/09_cron_jobs.sql          -- pg_cron 필요
+--   Sql/player/99_verify.sql             -- 선택: 반영 확인용 SELECT
 --
 -- 한 번에 합쳐 실행하려면(로컬 PowerShell 예, 저장소 루트에서):
 --   $b=@(); Get-ChildItem Sql/player/*.sql | Sort-Object Name | ForEach-Object { $b += (Get-Content $_.FullName -Raw).TrimEnd() }; $b -join "`n`n" | Set-Content combined_player.sql -Encoding utf8

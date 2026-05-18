@@ -90,29 +90,23 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 | 순서 | 파일 | 카테고리 | 내용 |
 |------|------|----------|------|
-| 1 | `01_game_servers.sql` | 기반 | 서버 샤드/선택 |
-| 2 | `02_profiles.sql` | 기반 | 공개 프로필 |
-| 3 | `03_display_names.sql` | 기반 | 닉네임 유니크 인덱스 |
-| 4 | `04_user_saves.sql` | 유저 데이터 | 세이브 테이블 공통 RPC |
-| 5 | `05_user_sessions.sql` | 유저 데이터 | 중복 로그인 감지 |
-| 6 | `06_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
-| 7 | `07_server_transfer.sql` | 서버 이주 | server_id 동기화 트리거 + 이주 RPC |
-| 8 | `08_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약·상태 조회·취소 RPC |
-| 9 | `09_remote_config.sql` | 기능 | Remote Config |
-| 10 | `10_mails.sql` | 기능 | 우편함 |
-| 11 | `11_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |
-| 12 | `12_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
-| 13 | `13_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
-| 14 | `14_field_protection.sql` | 유저 데이터 | 세이브 필드 클라이언트 증가 차단 (선택) |
-| 15 | `15_user_data.sql` | 유저 데이터 | 표준 유저 세이브 테이블 (`user_data`) |
+| 1 | `01_servers.sql` | 기반 | 게임 서버 목록·ts_default_server_id·ts_server_now |
+| 2 | `02_profiles.sql` | 기반 | 플레이어 프로필·표시 이름(닉네임)·세션 |
+| 3 | `03_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
+| 4 | `04_user_data.sql` | 유저 데이터 | 세이브 공통 인프라·user_data 테이블·필드 보호 |
+| 5 | `05_account_management.sql` | 계정 관리 | 서버 이주·탈퇴 예약·취소·상태 조회 |
+| 6 | `06_mails.sql` | 기능 | 우편함 |
+| 7 | `07_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
+| 8 | `08_remote_config.sql` | 기능 | Remote Config |
+| 9 | `09_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
 
 > [!WARNING]
-> `13_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  
+> `09_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  
 > 실행 전 Supabase 대시보드 **Database > Extensions** 에서 `pg_cron`을 활성화하세요.  
 > 크론 잡이 필요 없으면 이 파일을 건너뛰어도 됩니다.
 
 > [!TIP]
-> `99_verify_player_schema.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
+> `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
 
 ---
 

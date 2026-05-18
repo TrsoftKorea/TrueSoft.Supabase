@@ -4,7 +4,7 @@
 --
 -- =============================================================================
 -- 크론 잡 — 만료 정리·탈퇴 배치 (pg_cron)
--- 선행: 10_mails.sql, 08_withdrawal.sql
+-- 선행: 06_mails.sql, 05_account_management.sql
 --
 -- [주의] pg_cron 확장이 필요합니다.
 --   비활성화 상태라면 Supabase 대시보드 Database > Extensions > pg_cron 을 먼저 ON으로 설정하세요.

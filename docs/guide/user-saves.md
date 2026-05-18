@@ -88,7 +88,7 @@ GameSave.Instance.ConfigureCooldown(seconds: 5f);
 
 ### 테이블 생성
 
-`Sql/player/15_user_data.sql`을 Supabase 대시보드 **SQL Editor**(`Ctrl+E`)에서 실행하면 `user_data` 테이블과 `admin_add_user_data_column` RPC가 생성됩니다.
+`Sql/player/04_user_data.sql`을 Supabase 대시보드 **SQL Editor**(`Ctrl+E`)에서 실행하면 `user_data` 테이블과 `admin_add_user_data_column` RPC가 생성됩니다.
 
 새 게임 데이터 컬럼은 `admin_add_user_data_column` RPC로 추가합니다:
 

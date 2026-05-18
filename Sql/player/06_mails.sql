@@ -1,12 +1,11 @@
 -- 서버에서 플레이어에게 아이템·메시지를 전달하는 우편함 기능을 제공합니다.
 -- 수령(ts_claim_mail_items), 삭제(ts_delete_mail_for_user),
 -- 만료 정리(ts_cleanup_expired_mails) RPC를 포함합니다.
+-- 클라이언트 직접 쓰기는 차단되며 모든 우편 조작은 RPC를 통해서만 가능합니다.
 --
 -- =============================================================================
--- 플레이어 스키마 — mails (우편함) + RLS + 수령·삭제·만료 정리 RPC
--- 선행: 02_profiles.sql (auth_user_server_id), 01_game_servers.sql
--- 서버 스코프: mails.server_id 컬럼 없음 — profiles.server_id + auth_user_server_id() 조인
--- 선택: PostgREST 직접 변조 축소 — Sql/player/11_mails_hardening.sql
+-- 우편함 (mails) — 테이블 + RLS + RPC
+-- 선행: 01_servers.sql, 02_profiles.sql
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -86,25 +85,6 @@ using (
       and p.server_id is not null
       and p.server_id = public.auth_user_server_id()
   )
-);
-
-create policy "mails_update_own"
-on public.mails for update
-using (
-  account_id is not null
-  and account_id = auth.uid()
-  and exists (
-    select 1
-    from public.user_profiles p
-    where p.account_id = auth.uid()
-      and p.user_id = mails.user_id
-      and p.server_id is not null
-      and p.server_id = public.auth_user_server_id()
-  )
-)
-with check (
-  account_id is not null
-  and account_id = auth.uid()
 );
 
 -- ---------------------------------------------------------------------------
@@ -559,3 +539,20 @@ comment on function public.ts_mail_inbox_counts() is
 
 revoke all on function public.ts_mail_inbox_counts() from public;
 grant execute on function public.ts_mail_inbox_counts() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 우편함 쓰기 권한 강화 — 클라이언트(authenticated) 직접 INSERT/UPDATE/DELETE 차단
+-- ---------------------------------------------------------------------------
+-- 우편 변경은 RPC(ts_view_mail_for_user, ts_claim_*, ts_delete_*)만 쓰도록 좁힙니다.
+-- [시스템 메일 발송은 service_role / SQL Editor / Edge Function만 사용해야 합니다]
+-- 롤백: grant insert, update, delete on table public.mails to authenticated;
+
+-- 직접 UPDATE 경로 제거 (읽음·수령·삭제는 전부 SECURITY DEFINER RPC)
+drop policy if exists "mails_update_own" on public.mails;
+
+revoke insert, update, delete on table public.mails from authenticated;
+
+-- anon 은 보통 mails 미사용. 목록 REST가 anon 이면 아래 한 줄 대신 grant select 만 조정.
+revoke all on table public.mails from anon;
+
+grant select on table public.mails to authenticated;

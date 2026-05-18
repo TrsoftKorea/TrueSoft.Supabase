@@ -57,24 +57,16 @@ var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
 
 | 파일 | 내용 |
 |------|------|
-| `01_game_servers.sql` | 서버 샤드/선택 |
-| `02_profiles.sql` | 공개 프로필 |
-| `03_display_names.sql` | 닉네임 유니크 인덱스 |
-| `04_user_saves.sql` | 세이브 테이블 공통 RPC |
-| `05_user_sessions.sql` | 중복 로그인 감지 |
-| `06_anonymous_recovery.sql` | 익명 계정 복구 |
-| `07_server_transfer.sql` | 서버 이주 |
-| `08_withdrawal.sql` | 탈퇴 이력 + 취소 RPC |
-| `09_remote_config.sql` | Remote Config |
-| `10_mails.sql` | 우편함 |
-| `11_mails_hardening.sql` | 우편함 RLS 강화 (선택) |
-| `12_purchases.sql` | IAP 구매 검증 기록 |
-| `13_cron_jobs.sql` | 크론 잡 |
-| `14_field_protection.sql` | 세이브 필드 보호 (선택) |
-| `15_user_data.sql` | 표준 유저 세이브 테이블 (`user_data`) |
-| `99_verify_player_schema.sql` | 스키마 검증 (선택) |
-
-전체 목록 참고: `Sql/supabase_player_tables.sql`
+| `01_servers.sql` | 게임 서버 목록·ts_default_server_id·ts_server_now |
+| `02_profiles.sql` | 플레이어 프로필·표시 이름(닉네임)·세션 |
+| `03_anonymous_recovery.sql` | 익명 계정 복구 |
+| `04_user_data.sql` | 세이브 공통 인프라·user_data 테이블·필드 보호 |
+| `05_account_management.sql` | 서버 이주·탈퇴 예약·취소·상태 조회 |
+| `06_mails.sql` | 우편함 |
+| `07_purchases.sql` | IAP 구매 검증 기록 |
+| `08_remote_config.sql` | Remote Config |
+| `09_cron_jobs.sql` | 크론 잡 |
+| `99_verify.sql` | 스키마 검증 (선택) |
 
 ---
 
