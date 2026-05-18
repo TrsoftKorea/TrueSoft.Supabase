@@ -59,15 +59,16 @@ var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
 | `01_game_servers.sql` | 서버 샤드/선택 |
 | `02_profiles.sql` | 공개 프로필 |
 | `03_display_names.sql` | 닉네임 유니크 인덱스 |
-| `04_user_saves.sql` | 게임 세이브 + RLS |
+| `04_user_saves.sql` | 세이브 테이블 공통 RPC |
 | `05_user_sessions.sql` | 중복 로그인 감지 |
-| `06_anonymous_recovery_tokens.sql` | 익명 계정 복구 |
-| `07_sync_server_id_triggers.sql` ~ `09_account_closures.sql` | 서버 이주·탈퇴 처리 |
-| `10_remote_config.sql` | Remote Config |
-| `11_mails.sql`, `11_mails_client_hardening.sql` | 우편함 |
-| `12_withdrawal_cancel_rpc.sql` | 탈퇴 취소 RPC |
-| `13_cron_jobs_setup.sql` | 크론 잡 설정 |
+| `06_anonymous_recovery.sql` | 익명 계정 복구 |
+| `07_server_transfer.sql` | 서버 이주 |
+| `09_withdrawal.sql` | 탈퇴 이력 + 취소 RPC |
+| `11_remote_config.sql` | Remote Config |
+| `12_mails.sql` | 우편함 |
+| `13_mails_hardening.sql` | 우편함 RLS 강화 (선택) |
 | `14_purchases.sql` | IAP 구매 검증 기록 |
+| `15_cron_jobs.sql` | 크론 잡 |
 | `99_verify_player_schema.sql` | 스키마 검증 (선택) |
 
 전체 목록 참고: `Sql/supabase_player_tables.sql`

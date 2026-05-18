@@ -30,9 +30,12 @@ from (
       ('display_names'),
       ('user_sessions'),
       ('anonymous_recovery_tokens'),
+      ('user_table_metadata'),
       ('account_closures'),
       ('remote_config'),
-      ('mails')
+      ('mails'),
+      ('purchases'),
+      ('withdrawal_delete_queue')
   ) as exp(name)
   left join lateral (
     select c.oid, c.relrowsecurity
@@ -55,6 +58,9 @@ from (
     end
   from (
     values
+      ('set_updated_at'),
+      ('ts_update_last_activity_at'),
+      ('admin_create_user_table'),
       ('ts_anon_recovery_get_refresh_token'),
       ('ts_anon_recovery_upsert_refresh_token'),
       ('ts_anon_recovery_delete_by_fingerprint'),
@@ -65,6 +71,7 @@ from (
       ('ts_ensure_my_profile'),
       ('ts_ensure_my_row'),
       ('ts_my_server_id'),
+      ('ts_sync_server_id_by_account'),
       ('ts_transfer_my_server'),
       ('ts_admin_transfer_user_server'),
       ('_ts_transfer_user_server_core'),

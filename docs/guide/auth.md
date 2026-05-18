@@ -75,7 +75,7 @@ await Supabase.TryRestoreSessionAsync();
 **복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
 별도 오류 이벤트는 발행되지 않습니다.
 
-관련 SQL: `Sql/player/06_anonymous_recovery_tokens.sql`
+관련 SQL: `Sql/player/06_anonymous_recovery.sql`
 
 ---
 

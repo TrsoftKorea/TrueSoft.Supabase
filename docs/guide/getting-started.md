@@ -144,8 +144,7 @@ void OnReady(bool success)
 | 5 | `05_user_sessions.sql` | 유저 데이터 | 중복 로그인 감지 |
 | 6 | `06_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
 | 7 | `07_server_transfer.sql` | 서버 이주 | server_id 동기화 트리거 + 이주 RPC |
-| 9 | `09_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 |
-| 10 | `10_withdrawal_cancel.sql` | 탈퇴 | 탈퇴 취소 RPC |
+| 9 | `09_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 + 취소 RPC |
 | 11 | `11_remote_config.sql` | 기능 | Remote Config |
 | 12 | `12_mails.sql` | 기능 | 우편함 |
 | 13 | `13_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |

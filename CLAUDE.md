@@ -99,11 +99,12 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 1. `01_game_servers.sql` — server sharding/selection
 2. `02_profiles.sql` — public profiles
 3. `03_display_names.sql` — unique display name index (`lower(trim(...))`, excludes empty)
-4. `04_user_saves.sql` — game save data + RLS
+4. `04_user_saves.sql` — save table infrastructure (user_table_metadata, set_updated_at, ts_ensure_my_row, admin_create_user_table)
 5. `05_user_sessions.sql` — duplicate login detection
-6. `06_anonymous_recovery_tokens.sql` — guest fingerprints
-7. `07_sync_server_id_triggers.sql`, `08_transfer_server.sql`, `09_account_closures.sql`
-8. `10_remote_config.sql`, `11_mails.sql`, `11_mails_client_hardening.sql`, `12_withdrawal_cancel_rpc.sql`, `13_cron_jobs_setup.sql`
+6. `06_anonymous_recovery.sql` — guest fingerprints
+7. `07_server_transfer.sql` — server_id sync triggers + server transfer RPCs
+8. `09_withdrawal.sql` — account_closures + profiles_withdrawn_at index + ts_withdrawal_cancel_redeem
+9. `11_remote_config.sql`, `12_mails.sql`, `13_mails_hardening.sql` (optional), `14_purchases.sql`, `15_cron_jobs.sql`
 
 `99_verify_player_schema.sql` — validation script. `Sql/supabase_player_tables.sql` — combined/ordered list for reference.
 
