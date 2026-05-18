@@ -2068,14 +2068,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             ClearSession(clearStorage, deleteUserSessionRow);
         }
 
-        /// <summary><see cref="SignOutAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<bool> TrySignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
-        {
-            await SignOutAsync(clearStorage, deleteUserSessionRow);
-            LogApiResult(ApiLogTags.AuthSignOut, true, null);
-            return true;
-        }
-
         /// <summary>
         /// Android에서 네이티브 Google 계정 로그아웃을 시도한 뒤 <see cref="SignOutAsync"/>로 Supabase 세션을 정리합니다.
         /// 에디터·비 Android에서는 Google 단계가 실패해도 Supabase 로그아웃은 진행합니다.

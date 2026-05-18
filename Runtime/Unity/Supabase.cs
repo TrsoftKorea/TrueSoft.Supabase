@@ -508,10 +508,6 @@ namespace Truesoft.Supabase.Unity
         public static Task SignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
             SupabaseSDK.SignOutAsync(clearStorage, deleteUserSessionRow);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignOutAsync"/>
-        public static Task<bool> TrySignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
-            SupabaseSDK.TrySignOutAsync(clearStorage, deleteUserSessionRow);
-
         /// <inheritdoc cref="SupabaseSDK.SignOutFullyAsync"/>
         public static Task SignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
             SupabaseSDK.SignOutFullyAsync(clearStorage, deleteUserSessionRow);

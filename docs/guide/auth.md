@@ -17,9 +17,7 @@ await Supabase.TrySignInAnonymouslyAsync();
 await Supabase.TrySignOutFullyAsync();
 ```
 
-> [!WARNING]
-> `TrySignOutAsync()`만 쓰면 Android에서 Google 계정 선택기 상태가 남아 다음 로그인 시 자동으로 이전 계정이 선택될 수 있습니다.  
-> 반드시 `TrySignOutFullyAsync()`를 사용하세요.
+Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
 
 ---
 
