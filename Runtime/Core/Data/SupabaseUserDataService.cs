@@ -210,7 +210,6 @@ namespace Truesoft.Supabase.Core.Data
 
         /// <summary>
         /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다.
-        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public async Task<SupabaseResult<T>> LoadAttributedAsync<T>(
             string accessToken,
@@ -255,7 +254,6 @@ namespace Truesoft.Supabase.Core.Data
 
         /// <summary>
         /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
-        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,

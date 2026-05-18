@@ -12,6 +12,9 @@ namespace Truesoft.Supabase.Core.Data
     {
         private const string UpdatedAtColumn = "updated_at";
 
+        /// <summary>유저 세이브 테이블명. 고정값 — 변경 불가.</summary>
+        public const string UserDataTableName = "user_data";
+
         /// <summary>
         /// <typeparamref name="T"/>에 붙은 컬럼들로 PostgREST <c>select</c>용 CSV를 만듭니다(정렬 안정).
         /// </summary>
@@ -159,24 +162,11 @@ namespace Truesoft.Supabase.Core.Data
             return m.Name;
         }
 
-        /// <summary>
-        /// <typeparamref name="T"/>에 <see cref="DataTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
-        /// 없으면 <see cref="InvalidOperationException"/>을 던집니다.
-        /// </summary>
-        public static string ResolveTableName<T>() => ResolveTableName(typeof(T));
+        /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
+        public static string ResolveTableName<T>() => UserDataTableName;
 
-        /// <summary>
-        /// <paramref name="t"/>에 <see cref="DataTableAttribute"/>가 있으면 해당 테이블명을 반환합니다.
-        /// 없으면 <see cref="InvalidOperationException"/>을 던집니다.
-        /// </summary>
-        public static string ResolveTableName(Type t)
-        {
-            var attr = t.GetCustomAttribute<DataTableAttribute>();
-            if (attr == null)
-                throw new InvalidOperationException(
-                    $"[DataTable] attribute is missing on {t.Name}. missing_DataTable_attribute");
-            return attr.TableName;
-        }
+        /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
+        public static string ResolveTableName(Type t) => UserDataTableName;
 
         private static object GetValue(MemberInfo m, object instance)
         {

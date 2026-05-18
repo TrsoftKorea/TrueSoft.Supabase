@@ -1172,7 +1172,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         }
 
         /// <summary>
-        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="DataTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
+        /// 로그인 직후 <c>user_data</c> 테이블에 본인 행이 존재하도록 보장합니다.
         /// DB RPC: <c>ts_ensure_my_row(table, user_id)</c>.
         /// </summary>
         public static async Task<SupabaseResult<bool>> EnsureMyRowAsync<T>()

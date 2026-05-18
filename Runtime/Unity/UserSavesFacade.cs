@@ -19,7 +19,7 @@ namespace Truesoft.Supabase.Unity
         }
 
         /// <summary>
-        /// 로그인 직후 <typeparamref name="T"/>의 <see cref="DataTableAttribute"/> 테이블에 본인 행이 존재하도록 보장합니다.
+        /// 로그인 직후 <c>user_data</c> 테이블에 본인 행이 존재하도록 보장합니다.
         /// DB RPC: <c>ts_ensure_my_row(table, user_id)</c>.
         /// </summary>
         public Task<SupabaseResult<bool>> EnsureMyRowAsync<T>()
@@ -145,7 +145,6 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 로드합니다.
-        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public Task<SupabaseResult<T>> LoadAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new()
         {
@@ -199,7 +198,6 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
-        /// 대상 타입에 <see cref="DataTableAttribute"/>가 필요합니다.
         /// </summary>
         public Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             T previous,

@@ -4,7 +4,7 @@ using Truesoft.Supabase.Unity;
 
 /// <summary>
 /// StaticUserSave 상속 최소 예시.
-/// DB 테이블 "data_basic"의 level·coins 컬럼을 읽고 씁니다.
+/// DB 테이블 "user_data"의 level·coins 컬럼을 읽고 씁니다.
 ///
 /// 사용 예:
 /// <code>
@@ -21,8 +21,7 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
 
-    // [DataTable("basic")] → DB 테이블 "data_basic" (data_ 접두사 자동 추가)
-    [DataTable("basic")]
+    // DB 테이블: user_data (고정)
     [Serializable]
     public sealed class Row
     {

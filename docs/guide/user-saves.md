@@ -20,8 +20,7 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
     public static readonly GameSave Instance = new();
     private GameSave() : base() { }  // syncKey 기본값: typeof(Row).FullName
 
-    // [DataTable("테이블명")] → "data_" 접두사 자동 추가 (예: "basic" → "data_basic")
-    [DataTable("basic")]
+    // DB 테이블: user_data (고정)
     [Serializable]
     public sealed class Row
     {
@@ -86,41 +85,24 @@ await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
 GameSave.Instance.ConfigureCooldown(seconds: 5f);
 ```
 
-### 다중 테이블
-
-테이블마다 별도 클래스를 정의합니다. `syncKey` 기본값은 `typeof(Row).FullName`이므로 네임스페이스가 다르거나 클래스명이 겹치지 않으면 인자 없는 `base()`로 충분합니다.
-
-```csharp
-public sealed class InventorySave : StaticUserSave<InventorySave.Row>
-{
-    public static readonly InventorySave Instance = new();
-    private InventorySave() : base() { }
-
-    [DataTable("inventory")]
-    [Serializable]
-    public sealed class Row { /* ... */ }
-}
-```
 
 ### 테이블 생성
 
-Supabase 대시보드 **SQL Editor**(`Ctrl+E`)에서 아래 SQL을 실행하면 필수 컬럼(`id`, `user_id`, `account_id unique`, `server_id`, `updated_at`)과 RLS 정책이 자동 생성됩니다. 게임 세이브 테이블을 추가할 때마다 한 번씩 실행합니다.
+`Sql/player/15_user_data.sql`을 Supabase 대시보드 **SQL Editor**(`Ctrl+E`)에서 실행하면 `user_data` 테이블과 `admin_add_user_data_column` RPC가 생성됩니다.
+
+새 게임 데이터 컬럼은 `admin_add_user_data_column` RPC로 추가합니다:
 
 ```sql
-select admin_create_user_table(
-  'private',          -- 'public' | 'private'
-  'data_basic',       -- 테이블명 (^data_[a-z0-9_]+$ 패턴)
-  '기본 세이브',      -- 설명
-  true,               -- 활성화 여부
-  'level int not null default 1, coins int not null default 0'  -- 추가 컬럼
-);
+-- 컬럼명, 타입·제약 순서로 입력
+SELECT admin_add_user_data_column('exp',           'int not null default 0');
+SELECT admin_add_user_data_column('last_login_at', 'timestamptz');
 ```
 
-> [!NOTE]
-> `admin_create_user_table`은 `04_user_saves.sql` 실행 시 생성되는 RPC입니다. SQL 파일을 먼저 실행한 뒤 사용하세요.
+이미 존재하는 컬럼이면 아무것도 하지 않습니다(멱등 실행 안전).
 
 > [!IMPORTANT]
-> `account_id unique` 제약이 있어야 `ts_ensure_my_row`의 `ON CONFLICT (account_id)` 동작이 올바르게 수행됩니다.
+> `StaticUserSave<TRow>`를 상속하는 클래스는 프로젝트 전체에서 **정확히 하나**여야 합니다.  
+> 여러 클래스를 만들면 모두 같은 `user_data` 테이블에 접근해 컬럼 충돌이 발생할 수 있습니다.
 
 ---
 
@@ -128,10 +110,10 @@ select admin_create_user_table(
 
 `StaticUserSave` 없이 직접 로드/저장이 필요한 경우 사용합니다.
 
-### [DataColumn] / [DataTable] 어노테이션
+### [DataColumn] 어노테이션
 
 ```csharp
-[DataTable("basic")]   // → DB 테이블 "data_basic"
+// DB 테이블: user_data (고정)
 [Serializable]
 public class MySave
 {

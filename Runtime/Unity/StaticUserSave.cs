@@ -16,7 +16,7 @@ namespace Truesoft.Supabase.Unity
     ///     public static readonly GameSave Instance = new();
     ///     private GameSave() : base() { }
     ///
-    ///     [DataTable("basic")]
+    ///     [Serializable]
     ///     public sealed class Row
     ///     {
     ///         [DataColumn("level")] public int level;
@@ -32,6 +32,10 @@ namespace Truesoft.Supabase.Unity
     /// </code>
     /// </para>
     /// <para>syncKey는 등록된 세이브 간 고유해야 합니다. 기본값은 <c>typeof(TRow).FullName</c>입니다.</para>
+    /// <para>
+    /// <b>단일 테이블 정책</b>: 이 클래스를 상속하는 클래스는 프로젝트 전체에서 정확히 하나여야 합니다.
+    /// 여러 인스턴스를 만들면 모두 동일한 <c>user_data</c> 테이블에서 읽고 쓰므로 컬럼이 겹치면 값이 덮어씌워질 수 있습니다.
+    /// </para>
     /// </summary>
     public abstract class StaticUserSave<TRow> where TRow : class, new()
     {

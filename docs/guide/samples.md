@@ -37,7 +37,7 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 `StaticUserSave`를 상속해 DB 컬럼을 C# 프로퍼티에 연결하는 최소 예시입니다.
 
 ```csharp
-[DataTable("basic")]          // DB 테이블: data_basic (data_ 접두사 자동)
+// DB 테이블: user_data (고정)
 [Serializable]
 public sealed class Row
 {

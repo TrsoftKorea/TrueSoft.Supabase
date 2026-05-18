@@ -30,7 +30,7 @@
 
 ## DataSchema 유틸리티
 
-`DataSchema` 정적 클래스는 `[DataColumn]` / `[DataTable]` 어노테이션 기반 reflection 헬퍼를 제공합니다.
+`DataSchema` 정적 클래스는 `[DataColumn]` 어노테이션 기반 reflection 헬퍼를 제공합니다.
 
 | 메서드 | 설명 |
 |--------|------|
@@ -38,7 +38,8 @@
 | `BuildPatch<T>(prev, curr)` | 두 스냅샷을 비교해 변경된 컬럼만 딕셔너리로 반환 |
 | `CloneRow<T>(src)` | `[DataColumn]` 멤버만 복사한 새 인스턴스 반환 |
 | `CopyInto<T>(dst, src)` | `[DataColumn]` 멤버를 `src`에서 `dst`로 복사 (ref 유지) |
-| `ResolveTableName<T>()` | `[DataTable]` 어노테이션에서 테이블명 추출 |
+| `ResolveTableName<T>()` | 유저 세이브 테이블명 `"user_data"` 반환 (고정값) |
+| `UserDataTableName` | 상수 `"user_data"` |
 
 `CloneRow` / `CopyInto`는 `StaticUserSave<TRow>` 내부에서 스냅샷 관리에 사용됩니다.
 
@@ -70,6 +71,7 @@ var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
 | `12_purchases.sql` | IAP 구매 검증 기록 |
 | `13_cron_jobs.sql` | 크론 잡 |
 | `14_field_protection.sql` | 세이브 필드 보호 (선택) |
+| `15_user_data.sql` | 표준 유저 세이브 테이블 (`user_data`) |
 | `99_verify_player_schema.sql` | 스키마 검증 (선택) |
 
 전체 목록 참고: `Sql/supabase_player_tables.sql`

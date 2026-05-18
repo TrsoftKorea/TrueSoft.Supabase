@@ -104,6 +104,7 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 | 12 | `12_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
 | 13 | `13_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
 | 14 | `14_field_protection.sql` | 유저 데이터 | 세이브 필드 클라이언트 증가 차단 (선택) |
+| 15 | `15_user_data.sql` | 유저 데이터 | 표준 유저 세이브 테이블 (`user_data`) |
 
 > [!WARNING]
 > `13_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  

@@ -29,12 +29,11 @@ from (
   from (
     values
       ('user_profiles'),
+      ('user_data'),
       ('game_servers'),
-      -- ('user_saves') -- 제거됨. 커스텀 세이브 테이블은 프로젝트별로 직접 추가.
       ('display_names'),
       ('user_sessions'),
       ('anonymous_recovery_tokens'),
-      ('user_table_metadata'),
       ('account_closures'),
       ('remote_config'),
       ('mails'),
@@ -64,7 +63,7 @@ from (
     values
       ('set_updated_at'),
       ('ts_update_last_activity_at'),
-      ('admin_create_user_table'),
+      ('admin_add_user_data_column'),
       ('ts_anon_recovery_get_refresh_token'),
       ('ts_anon_recovery_upsert_refresh_token'),
       ('ts_anon_recovery_delete_by_fingerprint'),

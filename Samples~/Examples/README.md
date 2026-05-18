@@ -26,8 +26,7 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 1. **TrueSoft > Supabase > 설정 에셋 만들기**로 `SupabaseSettings` 생성
 2. `projectUrl`, `publishableKey` 입력 후 `Assets/Resources/SupabaseSettings.asset`으로 저장
 3. (Google 로그인 사용 시) `googleWebClientId` 입력 + Supabase 대시보드 Google Provider 활성화
-4. `SamplePlayerSave.cs`의 `[DataTable("basic")]` 실제 테이블명으로 수정
-   - 테이블은 `admin_create_user_table` RPC로 생성하면 필수 구조가 자동 적용됩니다
+4. Supabase SQL Editor에서 `Sql/player/15_user_data.sql` 실행 (표준 `user_data` 테이블 생성)
 
 ---
 
