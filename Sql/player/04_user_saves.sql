@@ -1,3 +1,7 @@
+-- 프로젝트별 커스텀 세이브 테이블을 위한 공통 인프라를 제공합니다.
+-- admin_create_user_table RPC로 표준 구조(RLS·트리거 포함)의 세이브 테이블을 생성하고,
+-- ts_ensure_my_row RPC로 로그인 유저의 행 존재를 보장합니다.
+--
 -- =============================================================================
 -- 유저 세이브 공통 RPC — ts_ensure_my_row, admin_create_user_table
 -- 선행: 02_profiles.sql (auth_user_server_id, ts_default_server_id)

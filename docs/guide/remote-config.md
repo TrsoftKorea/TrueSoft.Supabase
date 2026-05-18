@@ -252,4 +252,4 @@ Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
 ### 테이블 이름
 
 `remote_config`로 고정되어 있습니다.  
-SQL: `Sql/player/11_remote_config.sql`
+SQL: `Sql/player/09_remote_config.sql`

@@ -1,8 +1,12 @@
+-- 서버에서 플레이어에게 아이템·메시지를 전달하는 우편함 기능을 제공합니다.
+-- 수령(ts_claim_mail_items), 삭제(ts_delete_mail_for_user),
+-- 만료 정리(ts_cleanup_expired_mails) RPC를 포함합니다.
+--
 -- =============================================================================
 -- 플레이어 스키마 — mails (우편함) + RLS + 수령·삭제·만료 정리 RPC
 -- 선행: 02_profiles.sql (auth_user_server_id), 01_game_servers.sql
 -- 서버 스코프: mails.server_id 컬럼 없음 — profiles.server_id + auth_user_server_id() 조인
--- 선택: PostgREST 직접 변조 축소 — Sql/player/13_mails_hardening.sql
+-- 선택: PostgREST 직접 변조 축소 — Sql/player/11_mails_hardening.sql
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

@@ -103,8 +103,8 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 5. `05_user_sessions.sql` — duplicate login detection
 6. `06_anonymous_recovery.sql` — guest fingerprints
 7. `07_server_transfer.sql` — server_id sync triggers + server transfer RPCs
-8. `09_withdrawal.sql` — account_closures + profiles_withdrawn_at index + ts_withdrawal_cancel_redeem
-9. `11_remote_config.sql`, `12_mails.sql`, `13_mails_hardening.sql` (optional), `14_purchases.sql`, `15_cron_jobs.sql`
+8. `08_withdrawal.sql` — account_closures + profiles_withdrawn_at index + ts_withdrawal_cancel_redeem
+9. `09_remote_config.sql`, `10_mails.sql`, `11_mails_hardening.sql` (optional), `12_purchases.sql`, `13_cron_jobs.sql`, `14_field_protection.sql` (optional)
 
 `99_verify_player_schema.sql` — validation script. `Sql/supabase_player_tables.sql` — combined/ordered list for reference.
 

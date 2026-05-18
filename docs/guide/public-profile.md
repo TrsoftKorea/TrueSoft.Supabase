@@ -68,4 +68,4 @@ await Supabase.TryTransferMyServerAsync("GLOBAL");
 
 - `Sql/player/02_profiles.sql` — profiles 테이블
 - `Sql/player/03_display_names.sql` — 닉네임 유니크 인덱스
-- `Sql/player/09_withdrawal.sql` — 탈퇴 이력 + 취소 RPC
+- `Sql/player/08_withdrawal.sql` — 탈퇴 이력 + 취소 RPC

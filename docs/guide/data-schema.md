@@ -63,12 +63,13 @@ var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
 | `05_user_sessions.sql` | 중복 로그인 감지 |
 | `06_anonymous_recovery.sql` | 익명 계정 복구 |
 | `07_server_transfer.sql` | 서버 이주 |
-| `09_withdrawal.sql` | 탈퇴 이력 + 취소 RPC |
-| `11_remote_config.sql` | Remote Config |
-| `12_mails.sql` | 우편함 |
-| `13_mails_hardening.sql` | 우편함 RLS 강화 (선택) |
-| `14_purchases.sql` | IAP 구매 검증 기록 |
-| `15_cron_jobs.sql` | 크론 잡 |
+| `08_withdrawal.sql` | 탈퇴 이력 + 취소 RPC |
+| `09_remote_config.sql` | Remote Config |
+| `10_mails.sql` | 우편함 |
+| `11_mails_hardening.sql` | 우편함 RLS 강화 (선택) |
+| `12_purchases.sql` | IAP 구매 검증 기록 |
+| `13_cron_jobs.sql` | 크론 잡 |
+| `14_field_protection.sql` | 세이브 필드 보호 (선택) |
 | `99_verify_player_schema.sql` | 스키마 검증 (선택) |
 
 전체 목록 참고: `Sql/supabase_player_tables.sql`

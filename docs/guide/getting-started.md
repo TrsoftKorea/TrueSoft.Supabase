@@ -144,12 +144,13 @@ void OnReady(bool success)
 | 5 | `05_user_sessions.sql` | 유저 데이터 | 중복 로그인 감지 |
 | 6 | `06_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
 | 7 | `07_server_transfer.sql` | 서버 이주 | server_id 동기화 트리거 + 이주 RPC |
-| 9 | `09_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 + 취소 RPC |
-| 11 | `11_remote_config.sql` | 기능 | Remote Config |
-| 12 | `12_mails.sql` | 기능 | 우편함 |
-| 13 | `13_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |
-| 14 | `14_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
-| 15 | `15_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
+| 8 | `08_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 + 취소 RPC |
+| 9 | `09_remote_config.sql` | 기능 | Remote Config |
+| 10 | `10_mails.sql` | 기능 | 우편함 |
+| 11 | `11_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |
+| 12 | `12_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
+| 13 | `13_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
+| 14 | `14_field_protection.sql` | 유저 데이터 | 세이브 필드 클라이언트 증가 차단 (선택) |
 
 > [!TIP]
 > `99_verify_player_schema.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.

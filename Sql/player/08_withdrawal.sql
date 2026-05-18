@@ -1,6 +1,10 @@
+-- 회원 탈퇴 예약·이력 관리와 탈퇴 취소 기능을 제공합니다.
+-- 탈퇴 예약은 user_profiles.withdrawn_at으로 관리되며,
+-- ts_withdrawal_cancel_redeem RPC(withdrawal-cancel-redeem Edge Function 경유)로 취소합니다.
+--
 -- =============================================================================
 -- 탈퇴 — account_closures + profiles_withdrawn_at 인덱스 + 탈퇴 취소 RPC
--- 선행: 02_profiles.sql
+-- 선행: 02_profiles.sql (user_profiles.withdrawn_at)
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------

@@ -73,8 +73,8 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 ```bash
 # SQL 파일 순서대로 실행
-1. 09_withdrawal.sql      -- ts_withdrawal_cancel_redeem
-2. 15_cron_jobs.sql      -- ts_withdrawal_cleanup_batch + cron 설정
+1. 08_withdrawal.sql      -- ts_withdrawal_cancel_redeem
+2. 13_cron_jobs.sql      -- ts_withdrawal_cleanup_batch + cron 설정
 ```
 
 또는 SQL Editor에서 각 파일 내용을 복사하여 실행합니다.
