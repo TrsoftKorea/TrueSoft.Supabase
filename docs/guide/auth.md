@@ -23,14 +23,8 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 
 ## 자동 로그인
 
-```csharp
-// 앱 재시작 시 저장된 refresh_token으로 세션 복원
-await Supabase.TryRestoreSessionAsync();
-```
-
-> [!NOTE]
-> `SupabaseRuntime` 컴포넌트를 씬에 배치하면 `Awake()`에서 자동으로 자동 로그인을 시도합니다.  
-> 별도로 호출할 필요가 없습니다.
+씬에 `SupabaseRuntime` 컴포넌트를 배치하면 자동 로그인이 활성화됩니다.  
+Inspector의 **즉시 자동 로그인** 필드가 실행 타이밍을 결정합니다.
 
 ### SupabaseRuntime
 
@@ -44,14 +38,23 @@ await Supabase.TryRestoreSessionAsync();
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
 
-**즉시 자동 로그인 OFF 시** 원하는 타이밍에 직접 호출합니다.
+### 즉시 자동 로그인 ON (기본값)
+
+`Awake` 시점에 저장된 세션으로 자동 로그인합니다. 별도 코드가 필요 없습니다.
+
+### 즉시 자동 로그인 OFF
+
+원하는 타이밍에 직접 호출합니다.
 
 ```csharp
 // 로그인 화면 진입 후, 또는 원하는 씬 진입 시점에 호출
 await SupabaseRuntime.TriggerAutoLoginAsync();
 ```
 
-자동 로그인 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.
+### 완료 이벤트
+
+자동 로그인 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.  
+**즉시 자동 로그인 ON·OFF 모두** 이 이벤트가 발행됩니다.
 
 ```csharp
 void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(OnReady);
