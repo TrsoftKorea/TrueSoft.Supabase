@@ -100,9 +100,8 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 | 8 | `08_remote_config.sql` | 기능 | Remote Config |
 | 9 | `09_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
 
-> [!WARNING]
-> `09_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  
-> 실행 전 Supabase 대시보드 **Database > Extensions** 에서 `pg_cron`을 활성화하세요.  
+> [!NOTE]
+> `09_cron_jobs.sql`은 파일 내 `CREATE EXTENSION IF NOT EXISTS pg_cron;`으로 확장을 자동 활성화합니다.  
 > 크론 잡이 필요 없으면 이 파일을 건너뛰어도 됩니다.
 
 > [!TIP]
