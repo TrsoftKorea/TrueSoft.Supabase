@@ -675,7 +675,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         }
 
         /// <summary>
-        /// 앱 시작 자동 로그인 정책을 적용해 세션 복원을 시도합니다.
+        /// 앱 시작 자동 로그인 정책을 적용해 자동 로그인을 시도합니다.
         /// 로그아웃으로 자동 로그인이 차단되었거나, 저장된 이전 계정 정보(refresh token)가 없으면 아무 동작도 하지 않습니다.
         /// </summary>
         public static async Task<bool> TryAutoLoginOnStartAsync()
@@ -965,7 +965,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
         /// <summary>
         /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 → (선택) 저장 세션 복원.
+        /// 초기화 → (선택) 자동 로그인.
         /// </summary>
         public static async Task<bool> StartAsync(bool restoreSessionFirst = true)
         {

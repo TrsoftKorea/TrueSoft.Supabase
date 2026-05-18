@@ -34,7 +34,7 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 ## 씬 설정
 
 1. 씬에 빈 GameObject 생성
-2. `SupabaseRuntime` 컴포넌트 추가 (세션 자동 복원·자동 저장 담당)
+2. `SupabaseRuntime` 컴포넌트 추가 (자동 로그인·자동 저장 담당)
 3. 같은 GameObject에 `ExampleSupabaseScenarios` 컴포넌트 추가
 4. (IAP 테스트 시) 같은 GameObject에 `SampleIAPScenarios` 컴포넌트 추가 후 Inspector에서 `productId` 입력
 5. Play Mode 진입 후 아래 단축키로 기능 테스트

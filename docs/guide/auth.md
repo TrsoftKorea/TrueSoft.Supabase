@@ -47,7 +47,7 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 
 ---
 
-## 세션 복원
+## 자동 로그인
 
 ```csharp
 // 앱 재시작 시 저장된 refresh_token으로 세션 복원
@@ -55,7 +55,7 @@ await Supabase.TryRestoreSessionAsync();
 ```
 
 > [!NOTE]
-> `SupabaseRuntime` 컴포넌트를 씬에 배치하면 `Awake()`에서 자동으로 세션 복원을 시도합니다.  
+> `SupabaseRuntime` 컴포넌트를 씬에 배치하면 `Awake()`에서 자동으로 자동 로그인을 시도합니다.  
 > 별도로 호출할 필요가 없습니다.
 
 ---
@@ -64,7 +64,7 @@ await Supabase.TryRestoreSessionAsync();
 
 앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.
 
-**동작 시점:** `TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 세션 자동 복원 시 내부적으로 수행됩니다.  
+**동작 시점:** `TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 자동 로그인 시 내부적으로 수행됩니다.  
 별도로 호출할 필요가 없습니다.
 
 **복구 조건 및 한계:**

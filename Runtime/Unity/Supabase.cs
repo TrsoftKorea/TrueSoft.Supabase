@@ -109,7 +109,7 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 → (선택) 저장 세션 복원.
+        /// 초기화 → (선택) 자동 로그인.
         /// </summary>
         public static Task<bool> StartAsync(bool restoreSessionFirst = true) =>
             SupabaseSDK.StartAsync(restoreSessionFirst);
@@ -526,7 +526,7 @@ namespace Truesoft.Supabase.Unity
         /// <summary>저장된 refresh_token으로 세션 복원 (내부 API).</summary>
         internal static Task<bool> RestoreSessionAsync() => SupabaseSDK.RestoreSessionAsync();
 
-        /// <summary>앱 시작 자동 로그인 정책(로그아웃/이전 계정 정보 여부)을 적용해 세션 복원을 시도합니다(내부 API).</summary>
+        /// <summary>앱 시작 자동 로그인 정책(로그아웃/이전 계정 정보 여부)을 적용해 자동 로그인을 시도합니다(내부 API).</summary>
         internal static Task<bool> TryAutoLoginOnStartAsync() => SupabaseSDK.TryAutoLoginOnStartAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryRestoreSessionAsync"/>

@@ -27,30 +27,30 @@ namespace Truesoft.Supabase.Unity.Config
         [Tooltip("SupabaseSettings. 비우면 Resources에서 로드.")]
         [SerializeField] private SupabaseSettings settings;
 
-        [Header("세션")]
-        [Label("세션 자동 복원")]
-        [Tooltip("Awake 시 저장된 세션을 자동으로 복원합니다. false이면 TriggerSessionRestoreAsync()를 직접 호출해야 합니다.")]
-        [SerializeField] private bool autoRestoreSessionOnAwake = true;
+        [Header("자동 로그인")]
+        [Label("즉시 자동 로그인")]
+        [Tooltip("Awake 시 저장된 세션으로 자동 로그인합니다. false이면 TriggerAutoLoginAsync()를 직접 호출해야 합니다.")]
+        [SerializeField] private bool autoLoginOnAwake = true;
 
         /// <summary>
-        /// 세션 복원 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
+        /// 자동 로그인 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// 로그인 성공 시 등록된 모든 <c>StaticUserSave</c> 로드가 완료된 뒤 발행됩니다.
-        /// autoRestoreSessionOnEnable(자동) 또는 <see cref="TriggerSessionRestoreAsync"/>(수동) 모두 이 이벤트를 발행합니다.
+        /// autoLoginOnAwake(자동) 또는 <see cref="TriggerAutoLoginAsync"/>(수동) 모두 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
-        /// 구독 시점에 이미 완료된 경우를 자동으로 처리하는 <see cref="SubscribeSessionRestored"/>를 사용하면
+        /// 구독 시점에 이미 완료된 경우를 자동으로 처리하는 <see cref="SubscribeAutoLoginCompleted"/>를 사용하면
         /// 보일러플레이트 없이 한 줄로 구독할 수 있습니다.
         /// </remarks>
-        public static event Action<bool> OnSessionRestored;
+        public static event Action<bool> OnAutoLoginCompleted;
 
-        /// <summary>세션 복원 시도가 완료되었는지 여부.</summary>
-        public static bool IsSessionRestoreCompleted { get; private set; }
+        /// <summary>자동 로그인 시도가 완료되었는지 여부.</summary>
+        public static bool IsAutoLoginCompleted { get; private set; }
 
         /// <summary>
-        /// 세션 복원 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
-        /// <see cref="IsSessionRestoreCompleted"/>가 true일 때만 유효합니다.
+        /// 자동 로그인 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
+        /// <see cref="IsAutoLoginCompleted"/>가 true일 때만 유효합니다.
         /// </summary>
-        public static bool SessionRestoreResult { get; private set; }
+        public static bool AutoLoginResult { get; private set; }
 
         private void Awake()
         {
@@ -85,7 +85,7 @@ namespace Truesoft.Supabase.Unity.Config
 
             EnsureGoogleLoginBridge();
 
-            if (autoRestoreSessionOnAwake)
+            if (autoLoginOnAwake)
                 StartCoroutine(RunLifecycle());
         }
 
@@ -119,58 +119,58 @@ namespace Truesoft.Supabase.Unity.Config
 
         private IEnumerator RunLifecycle()
         {
-            var task = RestoreSessionAndMaybeLoadAsync();
+            var task = AutoLoginAndMaybeLoadAsync();
             yield return new WaitUntil(() => task.IsCompleted);
         }
 
         /// <summary>
-        /// 세션 복원을 수동으로 시작합니다. 완료 시 <see cref="OnSessionRestored"/> 이벤트를 발행합니다.
-        /// autoRestoreSessionOnEnable이 false일 때 원하는 타이밍에 호출합니다.
+        /// 자동 로그인을 수동으로 시작합니다. 완료 시 <see cref="OnAutoLoginCompleted"/> 이벤트를 발행합니다.
+        /// autoLoginOnAwake가 false일 때 원하는 타이밍에 호출합니다.
         /// </summary>
-        public static Task TriggerSessionRestoreAsync() => RestoreSessionAndMaybeLoadAsync();
+        public static Task TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
 
-        private static async Task RestoreSessionAndMaybeLoadAsync()
+        private static async Task AutoLoginAndMaybeLoadAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
             if (ok)
                 await Supabase.TryLoadAllUserSavesAsync();
 
-            SetSessionRestoreCompleted(ok);
+            SetAutoLoginCompleted(ok);
         }
 
         /// <summary>
-        /// 세션 복원 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
-        /// <c>OnEnable()</c>에서 호출하고 <c>OnDisable()</c>에서 <see cref="UnsubscribeSessionRestored"/>로 해제하세요.
+        /// 자동 로그인 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
+        /// <c>OnEnable()</c>에서 호출하고 <c>OnDisable()</c>에서 <see cref="UnsubscribeAutoLoginCompleted"/>로 해제하세요.
         /// </summary>
         /// <example><code>
-        /// void OnEnable() => SupabaseRuntime.SubscribeSessionRestored(HandleSessionRestored);
-        /// void OnDisable() => SupabaseRuntime.UnsubscribeSessionRestored(HandleSessionRestored);
+        /// void OnEnable() => SupabaseRuntime.SubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
+        /// void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
         /// </code></example>
-        public static void SubscribeSessionRestored(Action<bool> callback)
+        public static void SubscribeAutoLoginCompleted(Action<bool> callback)
         {
-            if (IsSessionRestoreCompleted)
+            if (IsAutoLoginCompleted)
             {
-                callback?.Invoke(SessionRestoreResult);
+                callback?.Invoke(AutoLoginResult);
                 return;
             }
-            OnSessionRestored += callback;
+            OnAutoLoginCompleted += callback;
         }
 
         /// <summary>
-        /// <see cref="SubscribeSessionRestored"/>로 등록한 콜백을 해제합니다.
+        /// <see cref="SubscribeAutoLoginCompleted"/>로 등록한 콜백을 해제합니다.
         /// </summary>
-        public static void UnsubscribeSessionRestored(Action<bool> callback)
+        public static void UnsubscribeAutoLoginCompleted(Action<bool> callback)
         {
-            OnSessionRestored -= callback;
+            OnAutoLoginCompleted -= callback;
         }
 
-        private static void SetSessionRestoreCompleted(bool result)
+        private static void SetAutoLoginCompleted(bool result)
         {
-            if (IsSessionRestoreCompleted) return;
-            IsSessionRestoreCompleted = true;
-            SessionRestoreResult = result || Supabase.IsLoggedIn;
-            OnSessionRestored?.Invoke(SessionRestoreResult);
+            if (IsAutoLoginCompleted) return;
+            IsAutoLoginCompleted = true;
+            AutoLoginResult = result || Supabase.IsLoggedIn;
+            OnAutoLoginCompleted?.Invoke(AutoLoginResult);
         }
 
         private void EnsureGoogleLoginBridge()

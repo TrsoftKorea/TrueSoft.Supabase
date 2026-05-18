@@ -93,29 +93,29 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | 기능 | 설명 |
 |------|------|
 | SDK 초기화 | `SupabaseSettings`를 읽어 모든 서비스를 초기화합니다 |
-| 세션 복원 | Inspector의 **세션 자동 복원**이 ON이면 `Awake` 시 자동 실행, OFF이면 `TriggerSessionRestoreAsync()`로 수동 호출 |
+| 자동 로그인 | Inspector의 **즉시 자동 로그인**이 ON이면 `Awake` 시 자동 실행, OFF이면 `TriggerAutoLoginAsync()`로 수동 호출 |
 | 유저 세이브 자동 동기화 | 변경된 세이브 데이터를 쿨타임 주기로 자동 업로드합니다 ([유저 세이브](./user-saves.md) 참고) |
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 포커스를 잃을 때 세이브 데이터를 즉시 플러시합니다 |
 
-**세션 자동 복원 OFF 시** 원하는 타이밍에 직접 호출합니다.
+**즉시 자동 로그인 OFF 시** 원하는 타이밍에 직접 호출합니다.
 
 ```csharp
 // 로그인 화면 → 로그인 완료 후, 또는 원하는 씬 진입 시점에 호출
-await SupabaseRuntime.TriggerSessionRestoreAsync();
+await SupabaseRuntime.TriggerAutoLoginAsync();
 ```
 
-세션 복원 완료를 기다려야 하는 코드는 `OnSessionRestored` 이벤트를 사용합니다.
+자동 로그인 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.
 
 ```csharp
-void OnEnable()  => SupabaseRuntime.SubscribeSessionRestored(OnReady);
-void OnDisable() => SupabaseRuntime.UnsubscribeSessionRestored(OnReady);
+void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(OnReady);
+void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(OnReady);
 
 void OnReady(bool success)
 {
     if (success)
     {
-        // 기존 세션 복원 성공 → 유저 세이브 로드도 완료된 상태
+        // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
         InitGame();
     }
     else
@@ -161,15 +161,15 @@ void OnReady(bool success)
 // 익명 로그인 (가장 간단)
 var (ok, _) = await Supabase.TrySignInAnonymouslyAsync();
 
-// 세션 복원 (앱 재시작 시)
+// 자동 로그인 (앱 재시작 시)
 await Supabase.TryRestoreSessionAsync();
 
-// SupabaseRuntime을 씬에 배치하면 위 복원이 자동으로 처리됩니다
+// SupabaseRuntime을 씬에 배치하면 위 자동 로그인이 자동으로 처리됩니다
 ```
 
 > [!NOTE]
-> `SupabaseRuntime`을 씬에 배치하면 `Awake()`에서 자동으로 세션 복원을 시도합니다.  
-> 수동 로그인과 세션 복원을 모두 처리하려면 `Supabase.IsLoggedIn` 플래그를 폴링하거나 로그인 완료 콜백 안에서 초기화 코드를 호출하세요.
+> `SupabaseRuntime`을 씬에 배치하면 `Awake()`에서 자동으로 자동 로그인을 시도합니다.  
+> 수동 로그인과 자동 로그인을 모두 처리하려면 `Supabase.IsLoggedIn` 플래그를 폴링하거나 로그인 완료 콜백 안에서 초기화 코드를 호출하세요.
 
 ---
 

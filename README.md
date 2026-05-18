@@ -33,7 +33,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 | 기능 | 가이드 |
 |------|--------|
-| 익명·Google 로그인, 세션 복원, 소셜 연동 | [인증](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/auth) |
+| 익명·Google 로그인, 자동 로그인, 소셜 연동 | [인증](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/auth) |
 | diff-patch 자동 동기화, StaticUserSave 패턴 | [유저 세이브](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/user-saves) |
 | Reader·Binding·Listener 세 가지 패턴 | [Remote Config](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/remote-config) |
 | Google Play · Apple App Store 서버 검증 | [인앱 결제 (IAP)](https://trsoftkorea.github.io/TrueSoft.Supabase/guide/iap) |
