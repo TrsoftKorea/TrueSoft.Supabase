@@ -2,14 +2,18 @@
 
 ## 닉네임
 
+> [!IMPORTANT]
+> `TrySetMyDisplayNameAsync`와 `TryGetPublicDisplayNameAsync`는 **`displayname-set` / `displayname-get` Edge Function**이 배포되어 있어야 동작합니다.  
+> 배포 방법은 [Edge Functions](./edge-functions.md#sdk-내장-edge-functions)을 참고하세요.
+
 ```csharp
-// 중복 확인 (현재 내 닉네임은 사용 가능으로 나옴)
+// 중복 확인 (현재 내 닉네임은 사용 가능으로 나옴) — DB RPC 직접 호출, Edge Function 불필요
 bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
 
-// 설정
+// 설정 — displayname-set Edge Function 필요
 await Supabase.TrySetMyDisplayNameAsync("Player123");
 
-// 다른 사용자 닉네임 조회
+// 다른 사용자 닉네임 조회 — displayname-get Edge Function 필요
 // userId = 조회 대상의 auth.users.id (리더보드·매칭 결과 등에서 얻은 값)
 string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 
@@ -40,15 +44,24 @@ await Supabase.TryGetMyWithdrawalStatusAsync(); // 탈퇴 상태 조회
 await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 예약 취소
 ```
 
-탈퇴 예약 철회 토큰 방식:
+유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
+
+> [!NOTE]
+> 로그인 시 탈퇴 유예 기간이 만료된 계정은 **`withdrawal-guard` Edge Function**이 자동으로 처리합니다.  
+> 이 함수가 배포되지 않으면 탈퇴 완료 계정이 다시 로그인될 수 있습니다.
+
+### 탈퇴 취소 (토큰 방식)
+
+> [!IMPORTANT]
+> `TryRequestWithdrawalCancelTokenAsync`와 `TryRedeemWithdrawalCancelAsync`는  
+> **`withdrawal-cancel-issue` / `withdrawal-cancel-redeem` Edge Function**이 필요합니다.  
+> 배포 방법은 [Edge Functions](./edge-functions.md#sdk-내장-edge-functions)을 참고하세요.
 
 ```csharp
 var token = await Supabase.TryRequestWithdrawalCancelTokenAsync();
 // 이메일 등으로 토큰 전달 후
 await Supabase.TryRedeemWithdrawalCancelAsync(token);
 ```
-
-유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
 
 ---
 

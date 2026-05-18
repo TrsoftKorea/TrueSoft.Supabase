@@ -190,7 +190,7 @@ begin
 
   -- account_id unique: ts_ensure_my_row의 ON CONFLICT (account_id) 에 필수
   v_sql := format($f$
-    create table %s (
+    create table if not exists %s (
       id uuid primary key default gen_random_uuid(),
       user_id text not null,
       account_id uuid not null unique references auth.users(id) on delete cascade,
@@ -202,6 +202,7 @@ begin
 
   execute v_sql;
 
+  execute format('drop trigger if exists set_updated_at on %s', v_table_ident);
   execute format($f$
     create trigger set_updated_at
     before update on %s
@@ -209,6 +210,7 @@ begin
     execute function public.set_updated_at();
   $f$, v_table_ident);
 
+  execute format('drop trigger if exists update_last_activity_at on %s', v_table_ident);
   execute format($f$
     create trigger update_last_activity_at
     after update on %s

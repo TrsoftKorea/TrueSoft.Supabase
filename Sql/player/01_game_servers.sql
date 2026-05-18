@@ -76,3 +76,24 @@ drop policy if exists "game_servers_select_public" on public.game_servers;
 create policy "game_servers_select_public"
 on public.game_servers for select
 using (true);
+
+-- ---------------------------------------------------------------------------
+-- ts_server_now — 서버 현재 시각 반환
+-- ---------------------------------------------------------------------------
+-- 클라이언트 시각 조작 방지용. clock_timestamp()를 사용하여 트랜잭션 내에서도
+-- 실제 현재 시각을 반환합니다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_server_now()
+returns table(server_time timestamptz)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select clock_timestamp() as server_time;
+$$;
+
+comment on function public.ts_server_now() is
+  '서버 현재 시각 반환. 클라이언트 시각 조작 방지용.';
+
+grant execute on function public.ts_server_now() to anon, authenticated;

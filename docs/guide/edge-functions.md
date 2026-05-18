@@ -8,6 +8,74 @@ Node.js와 문법이 비슷하지만 패키지 관리자 없이 URL로 모듈을
 
 ---
 
+## SDK 내장 Edge Functions
+
+SDK는 닉네임 설정·탈퇴 관리에 필요한 Edge Function 소스를 `Sql/edge-functions/` 폴더에 포함합니다.  
+**SQL 실행만으로는 이 기능들이 동작하지 않습니다.** 아래 절차를 완료해야 합니다.
+
+### 기능별 필요 함수
+
+| SDK API | 필요한 Edge Function |
+|---------|---------------------|
+| `TrySetMyDisplayNameAsync` | `displayname-set` |
+| `TryGetPublicDisplayNameAsync` | `displayname-get` |
+| `TryRequestWithdrawalCancelTokenAsync` | `withdrawal-cancel-issue` |
+| `TryRedeemWithdrawalCancelAsync` | `withdrawal-cancel-redeem` |
+| 로그인 시 탈퇴 완료 계정 자동 처리 | `withdrawal-guard` |
+
+### 1. Supabase CLI 설치 및 프로젝트 연결
+
+```bash
+npm install -g supabase
+supabase login
+supabase link --project-ref <project-id>
+```
+
+`<project-id>`는 Supabase 대시보드 **Project Settings > General** 또는 대시보드 URL(`…/project/<project-id>`)에서 확인합니다.
+
+### 2. 함수 배포
+
+`Sql/edge-functions/` 폴더를 CLI 작업 디렉터리의 `supabase/functions/` 아래에 복사한 뒤 배포합니다.
+
+```bash
+supabase functions deploy displayname-get
+supabase functions deploy displayname-set
+supabase functions deploy withdrawal-cancel-issue
+supabase functions deploy withdrawal-cancel-redeem
+supabase functions deploy withdrawal-guard
+```
+
+### 3. Secrets 설정
+
+대시보드 **Edge Functions > Secrets** 또는 CLI로 아래 시크릿을 등록합니다.
+
+| 시크릿 키 | 값 형식 | 필요 함수 |
+|----------|---------|----------|
+| `SUPABASE_PUBLISHABLE_KEYS` | `{"defence_r":"<Publishable Key>"}` | 전체 |
+| `SUPABASE_SECRET_KEYS` | `{"defence_r":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
+| `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
+
+> [!NOTE]
+> `SUPABASE_URL`은 Supabase가 자동 주입합니다. 직접 등록하지 않아도 됩니다.
+
+> [!TIP]
+> `CANCEL_TOKEN_SECRET`은 `openssl rand -base64 32` 명령으로 생성하거나 임의 문자열을 사용합니다.  
+> `withdrawal-cancel-issue`와 `withdrawal-cancel-redeem` 양쪽에 **동일한 값**을 설정해야 합니다.
+
+> [!WARNING]
+> `SUPABASE_SECRET_KEYS`의 Secret Key는 절대 클라이언트에 노출하지 마세요.  
+> Edge Function 내부에서만 사용됩니다.
+
+CLI로 시크릿을 일괄 등록하려면:
+
+```bash
+supabase secrets set SUPABASE_PUBLISHABLE_KEYS='{"defence_r":"sb_publishable_..."}'
+supabase secrets set SUPABASE_SECRET_KEYS='{"defence_r":"sb_secret_..."}'
+supabase secrets set CANCEL_TOKEN_SECRET="your-random-secret-here"
+```
+
+---
+
 ## 함수 파일 구조 및 배포
 
 Edge Function은 Unity 프로젝트 **외부**의 별도 디렉터리에서 관리합니다.

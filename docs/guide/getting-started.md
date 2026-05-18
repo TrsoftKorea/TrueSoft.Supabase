@@ -97,13 +97,18 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 | 5 | `05_user_sessions.sql` | 유저 데이터 | 중복 로그인 감지 |
 | 6 | `06_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
 | 7 | `07_server_transfer.sql` | 서버 이주 | server_id 동기화 트리거 + 이주 RPC |
-| 8 | `08_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약 인덱스 + 취소 RPC |
+| 8 | `08_withdrawal.sql` | 탈퇴 | 탈퇴 이력 + 예약·상태 조회·취소 RPC |
 | 9 | `09_remote_config.sql` | 기능 | Remote Config |
 | 10 | `10_mails.sql` | 기능 | 우편함 |
 | 11 | `11_mails_hardening.sql` | 기능 | 우편함 RLS 강화 (선택) |
 | 12 | `12_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
-| 13 | `13_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
+| 13 | `13_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
 | 14 | `14_field_protection.sql` | 유저 데이터 | 세이브 필드 클라이언트 증가 차단 (선택) |
+
+> [!WARNING]
+> `13_cron_jobs.sql`은 **pg_cron** 확장이 필요합니다.  
+> 실행 전 Supabase 대시보드 **Database > Extensions** 에서 `pg_cron`을 활성화하세요.  
+> Free 플랜은 pg_cron을 지원하지 않습니다. 크론 잡 없이 운영하려면 이 파일을 건너뛰세요.
 
 > [!TIP]
 > `99_verify_player_schema.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
@@ -128,6 +133,8 @@ await Supabase.TrySignInAnonymouslyAsync();
 |------|--------|
 | 게임 세이브 데이터 저장·동기화 | [유저 세이브](./user-saves.md) |
 | 로그인·소셜 연동·익명 복구 | [인증](./auth.md) |
+| 닉네임·탈퇴 관리 | [공개 프로필](./public-profile.md) |
+| 닉네임·탈퇴 기능 서버 함수 배포 | [Edge Functions](./edge-functions.md#sdk-내장-edge-functions) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
 

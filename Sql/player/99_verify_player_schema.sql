@@ -86,6 +86,9 @@ from (
       ('ts_delete_read_mails_for_user'),
       ('ts_cleanup_expired_mails'),
       ('ts_mail_inbox_counts'),
+      ('ts_server_now'),
+      ('ts_request_withdrawal'),
+      ('ts_my_withdrawal_status'),
       ('ts_withdrawal_cancel_redeem'),
       ('ts_withdrawal_cleanup_batch')
   ) as exp(name)

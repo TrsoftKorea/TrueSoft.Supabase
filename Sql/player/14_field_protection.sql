@@ -27,6 +27,7 @@ comment on table public.ts_protected_fields is
 -- 클라이언트는 조회만 가능, 변경은 service_role(Edge Function 등)만
 alter table public.ts_protected_fields enable row level security;
 
+drop policy if exists ts_protected_fields_select on public.ts_protected_fields;
 create policy ts_protected_fields_select on public.ts_protected_fields
     for select to authenticated using (true);
 
