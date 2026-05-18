@@ -204,7 +204,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         var myId = SupabaseClient.Session?.User?.Id;
         var profile = await SupabaseClient.TryGetPublicProfileAsync(myId);
-        if (profile != null) Debug.Log($"[Supabase] 프로필 조회 완료 — 닉네임: {profile.display_name}");
+        if (profile != null) Debug.Log($"[Supabase] 프로필 조회 완료 — 닉네임: {profile.DisplayName}");
         else                 Debug.LogWarning("[Supabase] 프로필 조회 실패.");
     }
 
