@@ -13,6 +13,7 @@ using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
 ///   Q — 익명 로그인       I — Google 로그인      P — Google 연동       W — 로그아웃
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
 ///   T — RC Reader         U — RC Binding          E — RC Listener 토글
+///   Y — Edge Function 호출  N — 닉네임 설정 및 프로필 조회
 /// </summary>
 public sealed class ExampleSupabaseScenarios : MonoBehaviour
 {
@@ -164,24 +165,48 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         Debug.Log("[RC ③] Listener 시작.");
     }
 
-    // ─── 선택 기능 (주석 해제하여 사용) ──────────────────────────────────────
+    // ─── Edge Function ────────────────────────────────────────────────────────
 
-    // Y: Edge Function 호출
-    // private async Task InvokeEdgeFunctionAsync()
-    // {
-    //     var result = await SupabaseClient.TryInvokeFunctionAsync<object>(
-    //         "gacha-draw", new { drawCount = 1 });
-    //     Debug.Log($"[Supabase] Edge Function 결과: {result}");
-    // }
+    /// <summary>
+    /// Y — Edge Function 호출 예시.
+    /// "my-function"을 실제 배포된 함수 이름으로, 요청 본문을 함수에 맞게 변경하세요.
+    /// Edge Function이 배포되어 있어야 합니다 (가이드: edge-functions.md).
+    /// </summary>
+    private async Task InvokeEdgeFunctionAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-    // N: 닉네임 설정 및 공개 프로필 조회
-    // private async Task TestPublicProfileAsync()
-    // {
-    //     await SupabaseClient.TrySetMyDisplayNameAsync("TestPlayer");
-    //     var profile = await SupabaseClient.TryGetPublicProfileAsync(
-    //         SupabaseClient.Session?.User?.Id);
-    //     Debug.Log($"[Supabase] 닉네임: {profile?.display_name}");
-    // }
+        // ↓ 함수 이름과 요청 본문을 프로젝트에 맞게 변경하세요.
+        var result = await SupabaseClient.TryInvokeFunctionAsync<object>(
+            "my-function", new { });
+
+        if (result != null) Debug.Log($"[Supabase] Edge Function 결과: {result}");
+        else                Debug.LogWarning("[Supabase] Edge Function 호출 실패 또는 null 응답.");
+    }
+
+    // ─── 공개 프로필 ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// N — 닉네임 설정 후 내 프로필을 조회합니다.
+    /// displayname-set / displayname-get Edge Function이 배포되어 있어야 합니다.
+    /// </summary>
+    private async Task TestPublicProfileAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var setOk = await SupabaseClient.TrySetMyDisplayNameAsync("TestPlayer");
+        if (!setOk)
+        {
+            Debug.LogWarning("[Supabase] 닉네임 설정 실패 (이미 사용 중이거나 Edge Function 미배포).");
+            return;
+        }
+        Debug.Log("[Supabase] 닉네임 설정 완료: TestPlayer");
+
+        var myId = SupabaseClient.Session?.User?.Id;
+        var profile = await SupabaseClient.TryGetPublicProfileAsync(myId);
+        if (profile != null) Debug.Log($"[Supabase] 프로필 조회 완료 — 닉네임: {profile.display_name}");
+        else                 Debug.LogWarning("[Supabase] 프로필 조회 실패.");
+    }
 
     // ─── Update ──────────────────────────────────────────────────────────────
 
@@ -200,8 +225,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.U)) TestRemoteConfigBinding();
         if (Input.GetKeyDown(KeyCode.E)) ToggleRemoteConfigListener();
 
-        // 선택 기능 — 주석 해제하여 사용
-        // if (Input.GetKeyDown(KeyCode.Y)) _ = InvokeEdgeFunctionAsync();
-        // if (Input.GetKeyDown(KeyCode.N)) _ = TestPublicProfileAsync();
+        if (Input.GetKeyDown(KeyCode.Y)) _ = InvokeEdgeFunctionAsync();
+        if (Input.GetKeyDown(KeyCode.N)) _ = TestPublicProfileAsync();
     }
 }
