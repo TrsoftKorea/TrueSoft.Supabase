@@ -25,9 +25,6 @@ features:
   - title: 인앱 결제 (IAP)
     details: Google Play · Apple App Store 서버 영수증 검증, 중복 지급 방지
     link: /guide/iap
-  - title: Edge Functions
-    details: JWT 인증 포함 서버 함수 호출, 보안 체크리스트
-    link: /guide/edge-functions
   - title: 공개 프로필
     details: 닉네임 설정·중복 확인, 프로필 조회, 탈퇴 예약·취소
     link: /guide/public-profile

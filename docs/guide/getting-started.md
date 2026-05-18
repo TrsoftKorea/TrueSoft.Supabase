@@ -134,7 +134,6 @@ await Supabase.TrySignInAnonymouslyAsync();
 | 게임 세이브 데이터 저장·동기화 | [유저 세이브](./user-saves.md) |
 | 로그인·소셜 연동·익명 복구 | [인증](./auth.md) |
 | 닉네임·탈퇴 관리 | [공개 프로필](./public-profile.md) |
-| 닉네임·탈퇴 기능 서버 함수 배포 | [Edge Functions](./edge-functions.md#sdk-내장-edge-functions) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
 

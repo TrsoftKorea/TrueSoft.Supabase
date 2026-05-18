@@ -6,7 +6,7 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 
 | 파일 | 설명 |
 |------|------|
-| `ExampleSupabaseScenarios.cs` | 인증·세이브·RemoteConfig·Edge Function·프로필 키보드 단축키 테스트 |
+| `ExampleSupabaseScenarios.cs` | 인증·세이브·RemoteConfig·프로필 키보드 단축키 테스트 |
 | `SamplePlayerSave.cs` | `StaticUserSave` 최소 구현 예시 |
 | `SampleIAPScenarios.cs` | IAP 서버 검증 예시 (`TRUESOFT_IAP_AVAILABLE` 필요) |
 
@@ -28,8 +28,7 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 | `T` | RemoteConfig Reader 호출 |
 | `U` | RemoteConfig Binding 값 출력 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
-| `Y` | Edge Function 호출 (`my-function` 플레이스홀더 — 함수명 변경 후 사용) |
-| `N` | 닉네임 설정 후 내 프로필 조회 (Edge Function 배포 필요) |
+| `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
 
 ---
 
