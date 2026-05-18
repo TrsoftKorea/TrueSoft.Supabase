@@ -1,33 +1,24 @@
 # 인증 (Auth)
 
-## Google 로그인 설정
-
-소셜 로그인을 사용하기 전에 Google Cloud Console과 Supabase 대시보드에서 OAuth를 구성합니다.
-
-1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 만들고 **OAuth 동의 화면**을 설정합니다.  
-   앱 이름·이메일을 입력하고 사용자 유형은 **외부**를 선택합니다.
-2. **사용자 인증 정보 > OAuth 클라이언트 ID**에서 애플리케이션 유형을 **웹 애플리케이션**으로 생성합니다.  
-   승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback`을 추가합니다.  
-   생성 후 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사합니다.
-3. Supabase 대시보드 **Authentication > Providers > Google**에 위 두 값을 입력합니다.
-4. **(Android 네이티브 로그인 사용 시)** 같은 메뉴에서 유형을 **Android**로 OAuth 클라이언트를 추가 생성합니다.  
-   패키지명과 SHA-1 지문을 입력합니다.  
-   웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
+## 목차
+- [로그인](#로그인)
+- [로그아웃](#로그아웃)
+- [자동 로그인](#자동-로그인)
+- [익명 계정 복구](#익명-계정-복구)
+- [소셜 로그인 (선택)](#소셜-로그인-선택)
+  - [Google](#google)
+- [주의사항](#주의사항)
 
 ---
 
 ## 로그인
 
 ```csharp
-// 익명 로그인
+// 익명 로그인 — 계정 생성 없이 바로 시작
 await Supabase.TrySignInAnonymouslyAsync();
-
-// Google 로그인 (Android 네이티브)
-await Supabase.TrySignInWithGoogleAsync();
-
-// Google 로그인 (ID 토큰 직접 전달 — iOS / 커스텀 OAuth)
-await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
 ```
+
+소셜 로그인 코드는 [소셜 로그인 (선택)](#소셜-로그인-선택) 섹션을 참고하세요.
 
 ---
 
@@ -40,26 +31,6 @@ await Supabase.TrySignOutFullyAsync();
 > [!WARNING]
 > `TrySignOutAsync()`만 쓰면 Android에서 Google 계정 선택기 상태가 남아 다음 로그인 시 자동으로 이전 계정이 선택될 수 있습니다.  
 > 반드시 `TrySignOutFullyAsync()`를 사용하세요.
-
----
-
-## 익명 → Google 연동
-
-> [!IMPORTANT]
-> 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
-> 반드시 아래 연동 전용 API를 사용하세요.
-
-```csharp
-// Google 연동 (Android 네이티브)
-await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
-
-// Google 연동 (ID 토큰 직접 전달)
-await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
-```
-
-- 연동 성공 시 동일 `auth.users.id`를 유지하면서 `is_anonymous`가 false가 됩니다.
-- 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
-- Supabase 대시보드 Authentication 설정에서 **Manual linking (beta)** 를 활성화해야 합니다.
 
 ---
 
@@ -131,7 +102,59 @@ void OnReady(bool success)
 **복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
 별도 오류 이벤트는 발행되지 않습니다.
 
-관련 SQL: `Sql/player/06_anonymous_recovery.sql`
+관련 SQL: `Sql/player/03_anonymous_recovery.sql`
+
+---
+
+## 소셜 로그인 (선택)
+
+> [!TIP]
+> 소셜 로그인은 선택 기능입니다. 익명 로그인만으로도 게임을 운영할 수 있습니다.  
+> 각 Provider는 독립적으로 추가할 수 있습니다.
+
+---
+
+### Google
+
+#### 대시보드 설정
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 만들고 **OAuth 동의 화면**을 설정합니다.  
+   앱 이름·이메일을 입력하고 사용자 유형은 **외부**를 선택합니다.
+2. **사용자 인증 정보 > OAuth 클라이언트 ID**에서 애플리케이션 유형을 **웹 애플리케이션**으로 생성합니다.  
+   승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback`을 추가합니다.  
+   생성 후 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사합니다.
+3. Supabase 대시보드 **Authentication > Providers > Google**에 위 두 값을 입력합니다.
+4. **(Android 네이티브 로그인 사용 시)** 같은 메뉴에서 유형을 **Android**로 OAuth 클라이언트를 추가 생성합니다.  
+   패키지명과 SHA-1 지문을 입력합니다.  
+   웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
+
+#### 로그인
+
+```csharp
+// Android 네이티브 (Play Services)
+await Supabase.TrySignInWithGoogleAsync();
+
+// iOS · 커스텀 OAuth (ID 토큰 직접 전달)
+await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
+```
+
+#### 익명 → Google 연동
+
+> [!IMPORTANT]
+> 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
+> 반드시 아래 연동 전용 API를 사용하세요.
+
+```csharp
+// Android 네이티브
+await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
+
+// iOS · 커스텀 OAuth (ID 토큰 직접 전달)
+await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
+```
+
+- 연동 성공 시 동일 `auth.users.id`를 유지하면서 `is_anonymous`가 false가 됩니다.
+- 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
+- Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
 
 ---
 

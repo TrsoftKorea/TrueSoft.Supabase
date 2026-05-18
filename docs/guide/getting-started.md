@@ -98,11 +98,10 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 | 6 | `06_mails.sql` | 기능 | 우편함 |
 | 7 | `07_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
 | 8 | `08_remote_config.sql` | 기능 | Remote Config |
-| 9 | `09_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 (pg_cron 필요) |
+| 9 | `09_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
 
 > [!NOTE]
-> `09_cron_jobs.sql`은 파일 내 `CREATE EXTENSION IF NOT EXISTS pg_cron;`으로 확장을 자동 활성화합니다.  
-> 크론 잡이 필요 없으면 이 파일을 건너뛰어도 됩니다.
+> `09_cron_jobs.sql`은 파일 내 `CREATE EXTENSION IF NOT EXISTS pg_cron;`으로 확장을 자동 활성화합니다.
 
 > [!TIP]
 > `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
