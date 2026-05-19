@@ -16,7 +16,7 @@ using Truesoft.Supabase.Unity;
 /// 평상시 저장은 SupabaseRuntime이 쿨타임 주기로 자동 처리합니다.
 /// 새 컬럼 추가 시 Row 클래스에 [DataColumn] 필드만 추가하면 됩니다.
 /// </summary>
-public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
+public sealed partial class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
 {
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }

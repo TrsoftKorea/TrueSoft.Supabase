@@ -211,7 +211,7 @@ namespace Truesoft.Supabase.Editor
             IReadOnlyList<OpenApiColumn> columns)
         {
             sb.AppendLine(indent + "/// <summary>유저 세이브 클래스.</summary>");
-            sb.AppendLine(indent + "public sealed class " + className + " : StaticUserSave<" + className + ".Row>");
+            sb.AppendLine(indent + "public sealed partial class " + className + " : StaticUserSave<" + className + ".Row>");
             sb.AppendLine(indent + "{");
             sb.AppendLine(indent + "    public static readonly " + className + " Instance = new();");
             sb.AppendLine(indent + "    private " + className + "() : base() { }");
@@ -228,6 +228,19 @@ namespace Truesoft.Supabase.Editor
             }
 
             sb.AppendLine(indent + "    }");
+
+            foreach (var c in columns)
+            {
+                var fieldName = LegalFieldName(c.Name);
+                var propName = ToPascalCase(c.Name);
+                sb.AppendLine();
+                sb.AppendLine(indent + "    public static " + c.ClrType + " " + propName);
+                sb.AppendLine(indent + "    {");
+                sb.AppendLine(indent + "        get => Instance.Current." + fieldName + ";");
+                sb.AppendLine(indent + "        set { Instance.Current." + fieldName + " = value; Instance.MarkDirty(); }");
+                sb.AppendLine(indent + "    }");
+            }
+
             sb.AppendLine(indent + "}");
         }
 
@@ -463,6 +476,19 @@ namespace Truesoft.Supabase.Editor
                 default:
                     return false;
             }
+        }
+
+        private static string ToPascalCase(string name)
+        {
+            var parts = name.Split('_');
+            var sb = new StringBuilder();
+            foreach (var part in parts)
+            {
+                if (part.Length == 0) continue;
+                sb.Append(char.ToUpperInvariant(part[0]));
+                if (part.Length > 1) sb.Append(part, 1, part.Length - 1);
+            }
+            return sb.Length > 0 ? sb.ToString() : name;
         }
 
         private static string EscapeXml(string s)

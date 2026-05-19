@@ -6,7 +6,7 @@
 > `StaticUserSave<TRow>`를 상속하면 스냅샷 관리·더티 추적·자동 동기화 등록을 모두 베이스 클래스가 처리합니다.
 
 ```csharp
-public sealed class GameSave : StaticUserSave<GameSave.Row>
+public sealed partial class GameSave : StaticUserSave<GameSave.Row>
 {
     public static readonly GameSave Instance = new();
     private GameSave() : base() { }
@@ -17,6 +17,28 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
         [DataColumn("level")] public int level;
         [DataColumn("coins")] public int coins;
     }
+
+    public static int Level
+    {
+        get => Instance.Current.level;
+        set { Instance.Current.level = value; Instance.MarkDirty(); }
+    }
+
+    public static int Coins
+    {
+        get => Instance.Current.coins;
+        set { Instance.Current.coins = value; Instance.MarkDirty(); }
+    }
+}
+```
+
+`partial`이므로 게임 로직은 별도 파일로 분리할 수 있습니다.
+
+```csharp
+// GameSave.Hooks.cs
+public sealed partial class GameSave
+{
+    public static void OnLoadAll() { /* 로드 후 처리 */ }
 }
 ```
 
@@ -25,21 +47,17 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
 ```csharp
 // 신규 유저: DB에 행을 자동 생성하고 컬럼 기본값을 로드합니다
 bool ok = await GameSave.Instance.TryLoadAsync();
-int lv = GameSave.Instance.Current.level;
+int lv = GameSave.Level;
 ```
 
 ### 저장
 
 ```csharp
-GameSave.Instance.Current.level = 10;
-GameSave.Instance.MarkDirty();  // 쿨타임 배치 자동 전송
+GameSave.Level = 10;  // setter가 MarkDirty() 자동 호출
 
 // 즉시 저장 (변경분만 PATCH, 변경 없으면 네트워크 없음)
 bool ok = await GameSave.Instance.TrySaveIfChangedAsync();
 ```
-
-> [!TIP]
-> `Row` 필드를 static 프로퍼티로 래핑하면 `GameSave.Level = 10;`처럼 간결하게 호출할 수 있습니다.
 
 ### 자동 동기화 (쿨타임 배치)
 
