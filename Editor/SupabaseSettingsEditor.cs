@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using Truesoft.Supabase.Unity;
 using UnityEditor;
 using UnityEngine;
@@ -197,12 +198,79 @@ namespace Truesoft.Supabase.Editor
                     });
                 }
 
+                // 기존 PlayerSave.cs가 있으면 타입 덮어쓰기
+                var existing = TryLoadExistingColumnTypes();
+                if (existing.Count > 0)
+                {
+                    foreach (var col in _editableColumns)
+                    {
+                        if (!existing.TryGetValue(col.Name, out var existingType)) continue;
+                        var idx = Array.IndexOf(s_typeOptions, existingType);
+                        if (idx >= 0)
+                        {
+                            col.TypeIndex = idx;
+                        }
+                        else
+                        {
+                            col.TypeIndex = CustomTypeIndex;
+                            col.CustomType = existingType;
+                        }
+                        col.IsAmbiguous = false;
+                    }
+                }
+
                 _columnsFetched = true;
             }
             catch (Exception e)
             {
                 EditorUtility.DisplayDialog(DialogTitle, "가져오기에 실패했습니다.\n" + e.Message, "확인");
             }
+        }
+
+        /// <summary>
+        /// 프로젝트에서 PlayerSave.cs를 찾아 [DataColumn] 필드의 컬럼명→타입 매핑을 반환합니다.
+        /// 파일이 없거나 파싱 실패 시 빈 딕셔너리를 반환합니다.
+        /// </summary>
+        private static Dictionary<string, string> TryLoadExistingColumnTypes()
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string assetPath = null;
+            foreach (var guid in AssetDatabase.FindAssets(ClassName))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.EndsWith(ClassName + ".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    assetPath = path;
+                    break;
+                }
+            }
+
+            if (assetPath == null) return result;
+
+            try
+            {
+                var source = File.ReadAllText(assetPath, System.Text.Encoding.UTF8);
+                // [DataColumn("col_name")] public TYPE field;
+                // [DataColumn] public TYPE field;
+                var pattern = new Regex(
+                    @"\[DataColumn(?:\(""([^""]*)""\))?\]\s+public\s+(.+?)\s+(\w+)\s*;",
+                    RegexOptions.Multiline);
+
+                foreach (Match m in pattern.Matches(source))
+                {
+                    var colName = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[3].Value;
+                    var typeName = m.Groups[2].Value.Trim();
+                    if (!string.IsNullOrEmpty(colName) && !string.IsNullOrEmpty(typeName))
+                        result[colName] = typeName;
+                }
+            }
+            catch
+            {
+                // 파싱 실패 시 무시
+            }
+
+            return result;
         }
 
         private static void BuildPreviewFromColumns()

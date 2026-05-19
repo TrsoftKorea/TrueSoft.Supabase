@@ -161,7 +161,6 @@ namespace Truesoft.Supabase.Editor
                 list.Add(new OpenApiColumn(colName, MapToClr(propObj), desc));
             }
 
-            list.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
             return ParseTableResult.Ok(list, warnings);
         }
 
