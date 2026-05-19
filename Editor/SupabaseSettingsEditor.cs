@@ -15,11 +15,31 @@ namespace Truesoft.Supabase.Editor
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
 
+        private static readonly string[] s_typeOptions =
+            { "bool", "int", "short", "long", "ulong", "float", "double", "string" };
+
         private static bool _foldout;
         private static string _secretKey = "";
-        private static string _previewText = "";
-        private static Vector2 _scroll;
+        private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
+        private static bool _columnsFetched;
         private static List<string> _warnings = new List<string>();
+        private static Vector2 _columnScroll;
+        private static string _previewText = "";
+        private static Vector2 _previewScroll;
+        private static GUIStyle _ambiguousStyle;
+
+        private static GUIStyle AmbiguousStyle
+        {
+            get
+            {
+                if (_ambiguousStyle == null)
+                    _ambiguousStyle = new GUIStyle(EditorStyles.label)
+                    {
+                        normal = { textColor = new Color(1f, 0.75f, 0.1f) }
+                    };
+                return _ambiguousStyle;
+            }
+        }
 
         private void OnEnable()
         {
@@ -50,18 +70,28 @@ namespace Truesoft.Supabase.Editor
             }
 
             EditorGUILayout.Space(4);
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
             {
-                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
-                {
-                    if (GUILayout.Button("미리보기", GUILayout.Height(26)))
-                        FetchPreview((SupabaseSettings)target);
-                }
+                if (GUILayout.Button("스키마 가져오기", GUILayout.Height(26)))
+                    FetchColumns((SupabaseSettings)target);
+            }
 
-                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_previewText)))
+            if (_columnsFetched && _editableColumns.Count > 0)
+            {
+                EditorGUILayout.Space(6);
+                DrawColumnList();
+
+                EditorGUILayout.Space(4);
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(".cs 저장…", GUILayout.Height(26)))
-                        SaveToProject();
+                    if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
+                        BuildPreviewFromColumns();
+
+                    using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_previewText)))
+                    {
+                        if (GUILayout.Button(".cs 저장…", GUILayout.Height(26)))
+                            SaveToProject();
+                    }
                 }
             }
 
@@ -72,9 +102,9 @@ namespace Truesoft.Supabase.Editor
             {
                 EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("미리보기", EditorStyles.boldLabel);
-                using (var sv = new EditorGUILayout.ScrollViewScope(_scroll, GUILayout.Height(220)))
+                using (var sv = new EditorGUILayout.ScrollViewScope(_previewScroll, GUILayout.Height(220)))
                 {
-                    _scroll = sv.scrollPosition;
+                    _previewScroll = sv.scrollPosition;
                     var w = EditorGUIUtility.currentViewWidth - 32f;
                     var h = EditorStyles.textArea.CalcHeight(new GUIContent(_previewText), w);
                     EditorGUILayout.SelectableLabel(_previewText, EditorStyles.textArea,
@@ -83,8 +113,40 @@ namespace Truesoft.Supabase.Editor
             }
         }
 
-        private static void FetchPreview(SupabaseSettings settings)
+        private static void DrawColumnList()
         {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("컬럼", EditorStyles.miniLabel, GUILayout.MinWidth(100));
+                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.Width(80));
+                EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
+            }
+
+            var rowHeight = EditorGUIUtility.singleLineHeight + 2f;
+            var listHeight = Mathf.Min(_editableColumns.Count * rowHeight + 4f, 200f);
+
+            using (var sv = new EditorGUILayout.ScrollViewScope(_columnScroll, GUILayout.Height(listHeight)))
+            {
+                _columnScroll = sv.scrollPosition;
+                foreach (var col in _editableColumns)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        var label = col.IsAmbiguous ? "⚠ " + col.Name : col.Name;
+                        EditorGUILayout.LabelField(label,
+                            col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
+                            GUILayout.MinWidth(100));
+                        col.TypeIndex = EditorGUILayout.Popup(col.TypeIndex, s_typeOptions, GUILayout.Width(80));
+                        col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
+                    }
+                }
+            }
+        }
+
+        private static void FetchColumns(SupabaseSettings settings)
+        {
+            _editableColumns.Clear();
+            _columnsFetched = false;
             _warnings.Clear();
             _previewText = "";
 
@@ -92,7 +154,42 @@ namespace Truesoft.Supabase.Editor
             {
                 var url = PostgrestOpenApiUserSaveClass.BuildRestRootUrl(settings.projectUrl);
                 var json = PostgrestOpenApiUserSaveClass.FetchOpenApiJson(url, _secretKey, settings.timeoutSeconds);
-                BuildPreview(json);
+
+                var skip = ParseSkip(SkipColumns);
+                var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(json, "user_data", skip);
+                if (!parsed.IsSuccess)
+                {
+                    EditorUtility.DisplayDialog(DialogTitle, parsed.ErrorMessage, "확인");
+                    return;
+                }
+
+                _warnings = new List<string>(parsed.Warnings);
+
+                if (parsed.Columns == null || parsed.Columns.Count == 0)
+                {
+                    EditorUtility.DisplayDialog(DialogTitle, "가져온 컬럼이 없습니다. 제외 목록·스키마를 확인하세요.", "확인");
+                    return;
+                }
+
+                var stringIdx = Array.IndexOf(s_typeOptions, "string");
+                foreach (var col in parsed.Columns)
+                {
+                    var isAmbiguous = col.ClrType.Contains("/*");
+                    var typeIdx = isAmbiguous
+                        ? stringIdx
+                        : Array.IndexOf(s_typeOptions, col.ClrType);
+                    if (typeIdx < 0) typeIdx = stringIdx;
+
+                    _editableColumns.Add(new EditableColumn
+                    {
+                        Name = col.Name,
+                        Comment = col.Comment,
+                        TypeIndex = typeIdx,
+                        IsAmbiguous = isAmbiguous
+                    });
+                }
+
+                _columnsFetched = true;
             }
             catch (Exception e)
             {
@@ -100,26 +197,23 @@ namespace Truesoft.Supabase.Editor
             }
         }
 
-        private static void BuildPreview(string openApiJson)
+        private static void BuildPreviewFromColumns()
         {
-            var skip = ParseSkip(SkipColumns);
-            var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(openApiJson, "user_data", skip);
-            if (!parsed.IsSuccess)
+            var cols = new List<OpenApiColumn>();
+            foreach (var ec in _editableColumns)
             {
-                EditorUtility.DisplayDialog(DialogTitle, parsed.ErrorMessage, "확인");
-                return;
+                if (!ec.Include) continue;
+                cols.Add(new OpenApiColumn(ec.Name, s_typeOptions[ec.TypeIndex], ec.Comment));
             }
 
-            _warnings = new List<string>(parsed.Warnings);
-
-            if (parsed.Columns == null || parsed.Columns.Count == 0)
+            if (cols.Count == 0)
             {
-                EditorUtility.DisplayDialog(DialogTitle, "생성할 컬럼이 없습니다.", "확인");
+                EditorUtility.DisplayDialog(DialogTitle, "포함된 컬럼이 없습니다.", "확인");
                 return;
             }
 
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
-            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(parsed.Columns, ClassName, ns, "user_data");
+            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data");
         }
 
         private static void SaveToProject()
@@ -150,6 +244,15 @@ namespace Truesoft.Supabase.Editor
             }
 
             return set;
+        }
+
+        private sealed class EditableColumn
+        {
+            public string Name;
+            public string Comment;
+            public bool Include = true;
+            public int TypeIndex;
+            public bool IsAmbiguous;
         }
     }
 }
