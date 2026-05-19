@@ -58,10 +58,10 @@ GameSave.Instance.ConfigureCooldown(seconds: 5f);
 
 ### 컬럼 추가
 
-새 게임 데이터 컬럼은 `admin_add_user_data_column` RPC로 추가합니다:
+새 게임 데이터 컬럼은 Supabase SQL Editor 또는 Retool에서 `admin_add_user_data_column` RPC로 추가합니다 (게임 클라이언트에서 호출하지 않습니다):
 
 ```sql
--- 컬럼명, 타입·제약 순서로 입력
+-- Supabase SQL Editor 또는 Retool에서 실행
 SELECT admin_add_user_data_column('exp',           'int not null default 0');
 SELECT admin_add_user_data_column('last_login_at', 'timestamptz');
 ```
