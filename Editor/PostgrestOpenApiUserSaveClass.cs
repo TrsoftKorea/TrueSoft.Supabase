@@ -216,6 +216,8 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine(indent + "    public static readonly " + className + " Instance = new();");
             sb.AppendLine(indent + "    private " + className + "() : base() { }");
             sb.AppendLine();
+            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<bool> TryLoadAsync() => Instance.TryLoadAsync();");
+            sb.AppendLine();
             sb.AppendLine(indent + "    [Serializable]");
             sb.AppendLine(indent + "    public sealed class Row");
             sb.AppendLine(indent + "    {");

@@ -2,7 +2,7 @@
 
 ## 클래스 생성
 
-`SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고 **스키마 가져오기 → 소스 생성 → .cs 저장**으로 `PlayerSave.cs`를 생성합니다.
+`SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고 **스키마 가져오기 → 소스 생성 → 저장**으로 `PlayerSave.cs`를 생성합니다.
 
 > [!NOTE]
 > 타입을 자동으로 결정하지 못한 컬럼은 ⚠ 표시되며, 드롭다운에서 직접 지정할 수 있습니다.
@@ -15,6 +15,8 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 {
     public static readonly PlayerSave Instance = new();
     private PlayerSave() : base() { }
+
+    public static Task<bool> TryLoadAsync() => Instance.TryLoadAsync();
 
     [Serializable]
     public sealed class Row
@@ -46,7 +48,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 로그인 완료 후 한 번 호출합니다.
 
 ```csharp
-bool ok = await PlayerSave.Instance.TryLoadAsync();
+bool ok = await PlayerSave.TryLoadAsync();
 ```
 
 로드가 끝난 뒤 실행할 코드가 있으면 `OnLoaded` 이벤트를 구독합니다.
@@ -68,7 +70,7 @@ PlayerSave.Instance.OnLoaded += ApplyGameData;
 ```csharp
 int lv = PlayerSave.Level;
 
-PlayerSave.Level  = 10;
+PlayerSave.Level = 10;
 PlayerSave.Coins += 100;
 ```
 

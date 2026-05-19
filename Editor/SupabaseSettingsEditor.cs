@@ -96,7 +96,7 @@ namespace Truesoft.Supabase.Editor
 
                     using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_previewText)))
                     {
-                        if (GUILayout.Button(".cs 저장…", GUILayout.Height(26)))
+                        if (GUILayout.Button("저장", GUILayout.Height(26)))
                             SaveToProject();
                     }
                 }
