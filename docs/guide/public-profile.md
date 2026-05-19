@@ -17,8 +17,7 @@ string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 string myId = Supabase.Session?.User?.Id;
 ```
 
-닉네임은 클라이언트에서 최대 64자로 잘립니다.  
-DB 유니크 인덱스는 `lower(trim(display_name))` 기준입니다.
+닉네임은 클라이언트에서 최대 64자로 잘립니다.
 
 > [!IMPORTANT]
 > `TrySetMyDisplayNameAsync`·`TryGetPublicDisplayNameAsync`는 `displayname-set` / `displayname-get` Edge Function이 배포되어 있어야 동작합니다.  

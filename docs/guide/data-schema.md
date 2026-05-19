@@ -28,29 +28,6 @@
 
 ---
 
-## DataSchema 유틸리티
-
-`DataSchema` 정적 클래스는 `[DataColumn]` 어노테이션 기반 reflection 헬퍼를 제공합니다.
-
-| 메서드 | 설명 |
-|--------|------|
-| `GetSelectColumnsCsv<T>()` | PostgREST `select=` 파라미터용 CSV 생성 |
-| `BuildPatch<T>(prev, curr)` | 두 스냅샷을 비교해 변경된 컬럼만 딕셔너리로 반환 |
-| `CloneRow<T>(src)` | `[DataColumn]` 멤버만 복사한 새 인스턴스 반환 |
-| `CopyInto<T>(dst, src)` | `[DataColumn]` 멤버를 `src`에서 `dst`로 복사 (ref 유지) |
-| `ResolveTableName<T>()` | 유저 세이브 테이블명 `"user_data"` 반환 (고정값) |
-| `UserDataTableName` | 상수 `"user_data"` |
-
-`CloneRow` / `CopyInto`는 `StaticUserSave<TRow>` 내부에서 스냅샷 관리에 사용됩니다.
-
-```csharp
-var snapshot = DataSchema.CloneRow(current);          // 스냅샷 복사
-DataSchema.CopyInto(current, newRow);                 // 기존 ref 유지하며 값만 덮어쓰기
-var patch = DataSchema.BuildPatch(snapshot, current); // 변경분만 추출
-```
-
----
-
 ## 플레이어 테이블 SQL 실행 순서
 
 `Sql/player/` 폴더에서 번호 순으로 실행합니다.

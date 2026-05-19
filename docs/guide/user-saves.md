@@ -99,37 +99,7 @@ await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
 
 ---
 
-## 참고
-
-### 클래스 직접 작성
-
-생성기를 사용하지 않고 직접 작성할 수도 있습니다.
-
-```csharp
-public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
-{
-    public static readonly PlayerSave Instance = new();
-    private PlayerSave() : base() { }
-
-    [Serializable]
-    public sealed class Row
-    {
-        [DataColumn("level")] public int level;
-    }
-
-    public static int Level
-    {
-        get => Instance.Current.level;
-        set { Instance.Current.level = value; Instance.MarkDirty(); }
-    }
-}
-```
-
-> [!IMPORTANT]
-> 이 클래스는 프로젝트 전체에서 **정확히 하나**만 존재해야 합니다.  
-> 모든 게임 데이터를 하나의 `Row` 안에 선언하세요.
-
-### JSON 직렬화 주의사항
+## JSON 직렬화 주의사항
 
 > [!WARNING]
 > `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화는 **필드 이름** 기준입니다.  

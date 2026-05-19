@@ -229,15 +229,6 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 ```
 
-### 로우레벨 구독
-
-```csharp
-Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
-    var cfg = Newtonsoft.Json.JsonConvert.DeserializeObject<GameplayConfig>(json);
-    ApplyConfig(cfg);
-}, invokeIfCached: true);
-```
-
 ### 테이블 이름
 
 `remote_config`로 고정되어 있습니다.  
