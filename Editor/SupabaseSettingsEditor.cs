@@ -16,7 +16,8 @@ namespace Truesoft.Supabase.Editor
         private const string DialogTitle = "유저 데이터 클래스";
 
         private static readonly string[] s_typeOptions =
-            { "bool", "int", "short", "long", "ulong", "float", "double", "string" };
+            { "bool", "int", "short", "long", "ulong", "float", "double", "string", "커스텀..." };
+        private const int CustomTypeIndex = 8;
 
         private static bool _foldout;
         private static string _secretKey = "";
@@ -135,8 +136,10 @@ namespace Truesoft.Supabase.Editor
                         var label = col.IsAmbiguous ? "⚠ " + col.Name : col.Name;
                         EditorGUILayout.LabelField(label,
                             col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
-                            GUILayout.MinWidth(100));
+                            GUILayout.MinWidth(col.TypeIndex == CustomTypeIndex ? 60 : 100));
                         col.TypeIndex = EditorGUILayout.Popup(col.TypeIndex, s_typeOptions, GUILayout.Width(80));
+                        if (col.TypeIndex == CustomTypeIndex)
+                            col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
                     }
                 }
@@ -203,7 +206,10 @@ namespace Truesoft.Supabase.Editor
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                cols.Add(new OpenApiColumn(ec.Name, s_typeOptions[ec.TypeIndex], ec.Comment));
+                var clrType = ec.TypeIndex == CustomTypeIndex
+                    ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
+                    : s_typeOptions[ec.TypeIndex];
+                cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment));
             }
 
             if (cols.Count == 0)
@@ -253,6 +259,7 @@ namespace Truesoft.Supabase.Editor
             public bool Include = true;
             public int TypeIndex;
             public bool IsAmbiguous;
+            public string CustomType = "";  // TypeIndex == CustomTypeIndex 일 때 사용
         }
     }
 }
