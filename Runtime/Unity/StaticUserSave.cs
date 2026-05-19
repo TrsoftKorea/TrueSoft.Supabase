@@ -33,12 +33,37 @@ namespace Truesoft.Supabase.Unity
     /// </para>
     /// <para>syncKey는 등록된 세이브 간 고유해야 합니다. 기본값은 <c>typeof(TRow).FullName</c>입니다.</para>
     /// <para>
-    /// <b>단일 테이블 정책</b>: 이 클래스를 상속하는 클래스는 프로젝트 전체에서 정확히 하나여야 합니다.
-    /// 여러 인스턴스를 만들면 모두 동일한 <c>user_data</c> 테이블에서 읽고 쓰므로 컬럼이 겹치면 값이 덮어씌워질 수 있습니다.
+    /// <b>단일 서브클래스 정책</b>: 이 클래스를 상속하는 클래스는 프로젝트 전체에서 정확히 하나여야 합니다.
+    /// 두 번째 서브클래스의 인스턴스가 생성되면 <see cref="InvalidOperationException"/>이 발생합니다.
+    /// 모든 게임 데이터는 하나의 <c>Row</c> 클래스 안에 <c>[DataColumn]</c> 필드로 선언하세요.
     /// </para>
     /// </summary>
     public abstract class StaticUserSave<TRow> where TRow : class, new()
     {
+        // ── 단일 서브클래스 강제 ──────────────────────────────────────────────
+        private static class SingletonGuard
+        {
+            private static Type _registeredType;
+
+            public static void Assert(Type newType)
+            {
+                if (_registeredType == null)
+                {
+                    _registeredType = newType;
+                    return;
+                }
+
+                if (_registeredType == newType)
+                    return;
+
+                throw new InvalidOperationException(
+                    $"[StaticUserSave] 서브클래스는 프로젝트 전체에서 정확히 하나만 허용됩니다.\n" +
+                    $"이미 등록됨: {_registeredType.FullName}\n" +
+                    $"중복 등록 시도: {newType.FullName}\n" +
+                    $"모든 게임 데이터를 하나의 Row 클래스 안에 [DataColumn] 필드로 선언하세요.");
+            }
+        }
+
         protected readonly TRow   Current;
         private            TRow   _lastSynced;
         private            bool   _isDirty;
@@ -52,6 +77,8 @@ namespace Truesoft.Supabase.Unity
         /// <summary>syncKey를 직접 지정합니다. 여러 인스턴스가 같은 TRow를 공유하는 경우 사용합니다.</summary>
         protected StaticUserSave(string syncKey)
         {
+            SingletonGuard.Assert(GetType());
+
             if (string.IsNullOrWhiteSpace(syncKey))
                 throw new ArgumentException("syncKey must not be empty.", nameof(syncKey));
 

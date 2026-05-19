@@ -48,7 +48,8 @@ await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 예약 취소
 
 > [!NOTE]
 > 로그인 시 탈퇴 유예 기간이 만료된 계정은 `withdrawal-guard` Edge Function이 자동으로 처리합니다.  
-> 이 함수가 배포되지 않으면 탈퇴 완료 계정이 다시 로그인될 수 있습니다.
+> 이 함수가 배포되지 않으면 탈퇴 완료 계정이 다시 로그인될 수 있습니다.  
+> 배포 방법은 아래 [Edge Function 배포](#edge-function-배포)를 참고하세요.
 
 ### 탈퇴 취소 (토큰 방식)
 
@@ -72,7 +73,7 @@ await Supabase.TryTransferMyServerAsync("GLOBAL");
 ```
 
 운영/Retool에서 특정 계정을 이주시킬 때는 RPC `ts_admin_transfer_user_server`를 Secret 키로 호출합니다.  
-자세한 내용은 [데이터 스키마](./data-schema.md)를 참고하세요.
+요청 형식은 [데이터 스키마 > 서버 이주](./data-schema.md#서버-이주-server_id)를 참고하세요.
 
 ---
 

@@ -3,8 +3,7 @@
 ## StaticUserSave — 권장 패턴
 
 > [!TIP]
-> `StaticUserSave<TRow>`를 상속하면 스냅샷 관리·더티 추적·자동 동기화 등록을 모두 베이스 클래스가 처리합니다.  
-> 저수준 API는 특수한 경우에만 사용하세요.
+> `StaticUserSave<TRow>`를 상속하면 스냅샷 관리·더티 추적·자동 동기화 등록을 모두 베이스 클래스가 처리합니다.
 
 ```csharp
 public sealed class GameSave : StaticUserSave<GameSave.Row>
@@ -94,13 +93,12 @@ SELECT admin_add_user_data_column('last_login_at', 'timestamptz');
 
 > [!IMPORTANT]
 > `StaticUserSave<TRow>`를 상속하는 클래스는 프로젝트 전체에서 **정확히 하나**여야 합니다.  
-> 여러 클래스를 만들면 모두 같은 `user_data` 테이블에 접근해 컬럼 충돌이 발생할 수 있습니다.
+> 두 번째 서브클래스의 인스턴스가 생성되는 순간 `InvalidOperationException`이 발생합니다.  
+> 모든 게임 데이터는 하나의 `Row` 클래스 안에 `[DataColumn]` 필드로 선언하세요.
 
 ---
 
 ## 저수준 API (직접 사용)
-
-`StaticUserSave` 없이 직접 로드/저장이 필요한 경우 사용합니다.
 
 ### [DataColumn] 어노테이션
 
@@ -142,7 +140,7 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 메뉴 **TrueSoft > Supabase > 유저 데이터 클래스 생성**에서 DB 스키마를 기반으로 `[DataColumn]`이 붙은 C# 클래스 초안을 자동 생성할 수 있습니다.
 
 1. `Resources/SupabaseSettings`가 있으면 URL·테이블명이 자동으로 채워집니다.
-2. **Secret 키**는 Supabase 대시보드에서 복사해 창에 직접 입력합니다 (에셋에 저장하지 마세요).
+2. **Secret 키**는 대시보드 **Project Settings > API > Secret key**에서 복사해 창에 직접 입력합니다 (에셋에 저장하지 마세요).
 3. 테이블명·제외 컬럼·클래스 이름·네임스페이스를 조정한 뒤 미리보기를 확인합니다.
 4. **프로젝트에 .cs 저장…**으로 `Assets` 아래에 저장합니다.
 

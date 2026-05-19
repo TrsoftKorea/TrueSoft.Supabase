@@ -99,4 +99,3 @@ Body: {"p_account_id":"<uuid>","p_target_server_code":"KR1","p_reason":"support_
 
 - 운영 테이블은 `auth.users`에 `ON DELETE CASCADE`로 묶어 계정 삭제 시 함께 제거합니다.
 - 보관 테이블은 `auth.users`에 FK를 두지 않고 `user_id`만 보유해 계정 삭제 후에도 유지합니다.
-- 보관 항목·기간·목적은 법무·회계와 확인 후 개인정보 처리방침에 기재하세요.
