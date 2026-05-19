@@ -11,7 +11,6 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
     public static readonly GameSave Instance = new();
     private GameSave() : base() { }
 
-    // DB 테이블: user_data (고정)
     [Serializable]
     public sealed class Row
     {
