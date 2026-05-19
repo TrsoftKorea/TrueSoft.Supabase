@@ -14,6 +14,109 @@
 
 ---
 
+## 설정 클래스 작성
+
+### 지원 타입
+
+```csharp
+public class GameplayConfig
+{
+    // 기본 타입
+    public int count;
+    public float damage;
+    public bool enabled;
+    public string message;
+
+    // 컬렉션
+    public int[] values;
+    public List<string> items;
+    public Dictionary<string, int> rates;
+
+    // nullable
+    public int? optionalCount;
+
+    // 열거형 — 문자열("Normal") 또는 숫자(1) 모두 가능
+    public Difficulty difficulty;
+
+    // 중첩 클래스
+    public BattleConfig battle;
+    public List<RewardConfig> rewards;
+}
+```
+
+### 규칙
+
+> [!WARNING]
+> 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
+> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+
+```csharp
+public class BattleConfig
+{
+    public float playerDmg;
+    public BattleConfig() { }
+    public BattleConfig(float dmg) { playerDmg = dmg; }
+}
+```
+
+**필드명과 JSON 키가 다를 때** — `[JsonProperty]`로 매핑합니다.
+
+```csharp
+using Newtonsoft.Json;
+
+public class BattleConfig
+{
+    [JsonProperty("player_dmg")]
+    public float PlayerDmg;
+}
+```
+
+**필수 필드 선언** — 키가 없으면 fetch 자체를 실패시킵니다.
+
+```csharp
+[JsonProperty("player_dmg", Required = Required.Always)]
+public float PlayerDmg;
+```
+
+**중첩 객체는 항상 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
+
+```csharp
+float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
+```
+
+---
+
+## 대시보드에서 값 입력
+
+관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다. 스칼라 값마다 키를 만들지 않아도 됩니다.
+
+```csharp
+[Serializable]
+public class GameplayConfig
+{
+    public StaminaConfig stamina;
+    public BattleConfig battle;
+}
+```
+
+Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테이블에서 행을 추가합니다.
+
+| 컬럼 | 값 예시 | 설명 |
+|------|---------|------|
+| `key` | `gameplay_v1` | C#에서 조회할 키 이름 |
+| `value_json` | `{"stamina":{...},"battle":{...}}` | JSON 형태의 설정값 |
+| `max_stale_seconds` | `300` | 캐시 유효 시간(초). 0이면 300초로 처리 |
+| `poll_interval_seconds` | `60` | 백그라운드 갱신 주기(초). 0이면 폴링 없음 |
+
+```json
+{
+  "stamina": { "maxEnergy": 100, "regenSeconds": 300 },
+  "battle":  { "playerDmg": 1.5 }
+}
+```
+
+---
+
 ## 읽기 함수 (CreateRemoteConfigReader)
 
 첫 호출 시 생성(`??=`)해두고 간결하게 호출합니다. 캐시가 만료됐으면 서버 응답을 기다린 후 반환합니다.
@@ -79,125 +182,12 @@ private void OnDestroy() => _maintenanceSub?.Dispose();
 
 ---
 
-## 설정 클래스 작성 규칙
-
-### 지원 타입
-
-```csharp
-public class GameplayConfig
-{
-    // 기본 타입
-    public int count;
-    public float damage;
-    public bool enabled;
-    public string message;
-
-    // 컬렉션
-    public int[] values;
-    public List<string> items;
-    public Dictionary<string, int> rates;
-
-    // nullable
-    public int? optionalCount;
-
-    // 열거형 — 문자열("Normal") 또는 숫자(1) 모두 가능
-    public Difficulty difficulty;
-
-    // 중첩 클래스
-    public BattleConfig battle;
-    public List<RewardConfig> rewards;
-}
-```
-
-### 규칙
-
-> [!WARNING]
-> 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
-> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
-
-```csharp
-// 기본 생성자가 사라진 경우
-public class BattleConfig
-{
-    public float playerDmg;
-    public BattleConfig(float dmg) { playerDmg = dmg; }
-}
-
-// 기본 생성자 명시
-public class BattleConfig
-{
-    public float playerDmg;
-    public BattleConfig() { }
-    public BattleConfig(float dmg) { playerDmg = dmg; }
-}
-```
-
-**필드명과 JSON 키가 다를 때** — `[JsonProperty]`로 매핑합니다.
-
-```csharp
-using Newtonsoft.Json;
-
-public class BattleConfig
-{
-    [JsonProperty("player_dmg")]
-    public float PlayerDmg;
-}
-```
-
-**필수 필드 선언** — 키가 없으면 fetch 자체를 실패시킵니다.
-
-```csharp
-[JsonProperty("player_dmg", Required = Required.Always)]
-public float PlayerDmg;
-```
-
-**중첩 객체는 항상 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
-
-```csharp
-float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
-```
-
----
-
 ## Cold Start 패턴
 
 > [!NOTE]
 > 앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  
 > 위 API를 처음 호출하는 순간 해당 키만 서버에서 조회합니다.  
 > 이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 **만료된 캐시 값을 즉시 반환하면서 동시에 백그라운드에서 서버 갱신을 시작합니다** (stale-while-revalidate 패턴). 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
-
----
-
-## 설정 키 구조 권장
-
-관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다. 스칼라 값마다 키를 만들지 않아도 됩니다.
-
-```csharp
-[Serializable]
-public class GameplayConfig
-{
-    public StaminaConfig stamina;
-    public BattleConfig battle;
-}
-```
-
-**Supabase 대시보드에서 값 입력:**
-
-Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테이블에서 행을 추가합니다.
-
-| 컬럼 | 값 예시 | 설명 |
-|------|---------|------|
-| `key` | `gameplay_v1` | C#에서 조회할 키 이름 |
-| `value_json` | `{"stamina":{...},"battle":{...}}` | JSON 형태의 설정값 |
-| `max_stale_seconds` | `300` | 캐시 유효 시간(초). 0이면 300초로 처리 |
-| `poll_interval_seconds` | `60` | 백그라운드 갱신 주기(초). 0이면 폴링 없음 |
-
-```json
-{
-  "stamina": { "maxEnergy": 100, "regenSeconds": 300 },
-  "battle":  { "playerDmg": 1.5 }
-}
-```
 
 ---
 
@@ -221,7 +211,7 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 
 패키지 루트 `RoslynAnalyzers/Truesoft.Supabase.RemoteConfig.SourceGenerator.dll`이 자동으로 포함됩니다.
 
-### 로우레벨 폴링 설정
+### 폴링 주기 사전 설정
 
 초기화 시 1회 호출합니다. 이후 해당 키의 Binding·Listener 생성 시 별도 지정이 없어도 이 주기가 사용됩니다.
 

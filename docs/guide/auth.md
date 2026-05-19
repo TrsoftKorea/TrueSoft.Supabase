@@ -7,19 +7,7 @@
 await Supabase.TrySignInAnonymouslyAsync();
 ```
 
-소셜 로그인 코드는 [소셜 로그인 (선택)](#social-login) 섹션을 참고하세요.
-
----
-
-## 로그아웃
-
-```csharp
-await Supabase.TrySignOutFullyAsync();
-```
-
-### 동작 방식
-
-Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
+소셜 로그인은 [소셜 로그인 (선택)](#social-login) 섹션을 참고하세요.
 
 ---
 
@@ -79,23 +67,6 @@ void OnReady(bool success)
 
 ---
 
-## 익명 계정 복구
-
-앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.  
-`TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 자동 로그인 시 내부적으로 수행됩니다. 별도로 호출할 필요가 없습니다.
-
-### 동작 방식
-
-**복구 조건:**
-- 같은 기기에서 재설치한 경우 복구됩니다.
-- 기기를 변경하거나 지문이 달라진 경우 복구되지 않고 새 익명 계정이 생성됩니다.
-- 소셜 계정으로 연동한 이후에는 소셜 로그인으로 복원되므로 이 기능이 필요하지 않습니다.
-
-**복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
-별도 오류 이벤트는 발행되지 않습니다.
-
----
-
 ## 소셜 로그인 (선택) {#social-login}
 
 > [!TIP]
@@ -145,6 +116,31 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 **동작 방식:**
 - 연동 성공 시 동일 `auth.users.id`를 유지하면서 `is_anonymous`가 false가 됩니다.
 - 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
+
+---
+
+## 로그아웃
+
+```csharp
+await Supabase.TrySignOutFullyAsync();
+```
+
+Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
+
+---
+
+## 익명 계정 복구
+
+앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.  
+`TrySignInAnonymouslyAsync()` 또는 `SupabaseRuntime`의 자동 로그인 시 내부적으로 수행됩니다. 별도로 호출할 필요가 없습니다.
+
+**복구 조건:**
+- 같은 기기에서 재설치한 경우 복구됩니다.
+- 기기를 변경하거나 지문이 달라진 경우 복구되지 않고 새 익명 계정이 생성됩니다.
+- 소셜 계정으로 연동한 이후에는 소셜 로그인으로 복원되므로 이 기능이 필요하지 않습니다.
+
+**복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
+별도 오류 이벤트는 발행되지 않습니다.
 
 ---
 
