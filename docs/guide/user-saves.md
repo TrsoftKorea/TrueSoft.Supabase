@@ -83,11 +83,7 @@ PlayerSave.Coins += 100;
 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
 
 ```csharp
-// 모든 세이브 즉시 전송 (앱 종료 직전 등)
 await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
-
-// 특정 세이브만 즉시 전송
-await PlayerSave.Instance.TryFlushNowAsync(timeoutMs: 5000);
 ```
 
 > [!NOTE]
@@ -97,7 +93,7 @@ await PlayerSave.Instance.TryFlushNowAsync(timeoutMs: 5000);
 
 ## 컬럼 추가
 
-새 컬럼은 Supabase SQL Editor 또는 Retool에서 `admin_add_user_data_column` RPC로 추가합니다. 게임 클라이언트에서 호출하지 않습니다.
+새 컬럼은 Supabase SQL Editor 또는 Retool에서 추가합니다. 게임 클라이언트에서 호출하지 않습니다.
 
 추가 후 생성기를 다시 실행하면 `PlayerSave.cs`에 해당 프로퍼티가 자동으로 추가됩니다.
 
@@ -145,23 +141,3 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 public string lastLoginAt;
 ```
 
-### 저수준 API
-
-`StaticUserSave` 없이 직접 호출하는 방식입니다.
-
-```csharp
-[Serializable]
-public class MySave
-{
-    [DataColumn] public int level;
-    [DataColumn("last_login_at")] public string lastLoginAt;
-}
-
-// 로드
-var (success, hasRow, save) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<MySave>();
-
-// 저장 (변경분만 전송)
-var prev = DataSchema.CloneRow(save);
-save.level = 5;
-await Supabase.TryPatchUserDataDiffAsync(prev, save);
-```
