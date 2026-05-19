@@ -33,7 +33,7 @@ The SDK has three layers:
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
 - `Auth/Google/` — `GoogleLoginBridge`, `AndroidGoogleLoginProvider` for Play Services OAuth
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
-- `Json/UnitySupabaseJsonSerializer.cs` — `JsonUtility` + Newtonsoft bridge
+- `Json/UnitySupabaseJsonSerializer.cs` — Newtonsoft.Json implementation of `ISupabaseJsonSerializer`
 
 **Editor** (`Editor/`) — Unity editor tooling:
 - `SupabaseSetupMenu.cs` — creates `SupabaseSettings.asset` via `TrueSoft > Supabase > 설정 에셋 만들기`
@@ -50,8 +50,8 @@ The SDK has three layers:
 ### SupabaseResult\<T\> and Try API Pattern
 
 Every data API comes in two forms:
-- `Supabase.LoadUserSaveAttributedAsync<T>()` → returns `SupabaseResult<T>` (check `.IsSuccess`, `.Data`, `.ErrorMessage`)
-- `Supabase.TryLoadUserSaveAttributedAsync<T>()` → returns `(bool success, T value)`, logs internally with a fixed tag like `[Supabase.UserData.LoadAttributed]`
+- `Supabase.LoadUserDataAttributedAsync<T>()` → returns `SupabaseResult<T>` (check `.IsSuccess`, `.Data`, `.ErrorMessage`)
+- `Supabase.TryLoadUserDataAttributedAsync<T>()` → returns `T`, logs internally with a fixed tag like `[Supabase.UserData.LoadAttributed]`
 
 Use `Try*` variants in game code. Use the non-Try variants when you need to inspect `SupabaseResult` directly.
 
@@ -64,12 +64,12 @@ Use `Try*` variants in game code. Use the non-Try variants when you need to insp
 
 ### User Saves (Diff Patching)
 
-- Decorate C# fields with `[UserSaveColumn("db_column_name")]` to map to PostgREST columns. Omit the argument to use the member name as the column name.
-- `Supabase.TryLoadUserSaveAttributedAsync<T>()` — loads only mapped columns.
-- `Supabase.TryLoadUserSaveAttributedWithRowStateAsync<T>()` — additionally returns `hasRow` to distinguish new user (empty array) from auth failure.
-- `Supabase.TryPatchUserSaveDiffAsync(previous, current)` — sends only changed fields; skips network if nothing changed.
-- `UserSavesFacade` — auto-syncs on dirty with cooldown. Use `TryRequestImmediateSave()` or `TryFlushNowAsync()` for critical moments.
-- **JsonUtility constraint:** PostgREST JSON keys must match C# field names exactly. `[UserSaveColumn("other_name")]` changes the select/PATCH key but does NOT change JSON deserialization. If DB column name ≠ C# field name, use Newtonsoft or a manual mapping.
+- Decorate C# fields with `[DataColumn("db_column_name")]` to map to PostgREST columns. Omit the argument to use the member name as the column name.
+- `Supabase.TryLoadUserDataAttributedAsync<T>()` — loads only mapped columns.
+- `Supabase.TryLoadUserDataAttributedWithRowStateAsync<T>()` — additionally returns `hasRow` to distinguish new user (empty array) from auth failure.
+- `Supabase.TryPatchUserDataDiffAsync(previous, current)` — sends only changed fields; skips network if nothing changed.
+- `StaticUserSave<TRow>` — recommended pattern; auto-syncs on dirty with cooldown. Use `TryRequestImmediateSave()` or `TryFlushNowAsync()` for critical moments.
+- **Newtonsoft.Json:** SDK uses Newtonsoft.Json for deserialization. `[DataColumn("other_name")]` changes the select/PATCH key but does NOT change deserialization. If DB column name ≠ C# field name, also add `[JsonProperty("db_column_name")]`.
 
 ### Remote Config (Cold Start Pattern)
 

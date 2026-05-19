@@ -140,6 +140,5 @@ supabase secrets set CANCEL_TOKEN_SECRET="your-random-secret-here"
 
 ## SQL
 
-- `Sql/player/02_profiles.sql` — profiles 테이블
-- `Sql/player/03_display_names.sql` — 닉네임 유니크 인덱스
-- `Sql/player/08_withdrawal.sql` — 탈퇴 이력 + 취소 RPC
+- `Sql/player/02_profiles.sql` — profiles 테이블 · 닉네임 유니크 인덱스
+- `Sql/player/05_account_management.sql` — 탈퇴 이력 · 취소 RPC

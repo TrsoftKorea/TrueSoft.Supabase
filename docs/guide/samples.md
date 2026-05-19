@@ -73,7 +73,7 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 1. `com.unity.purchasing` 5.2.1 이상 설치
 2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
 3. Edge Function 배포: `supabase functions deploy purchase-verify-google`
-4. `Sql/player/12_purchases.sql` 실행
+4. `Sql/player/07_purchases.sql` 실행
 5. Inspector에서 `productId` 입력
 
 **구매 흐름:**

@@ -49,8 +49,7 @@ supabase functions deploy purchase-verify-apple
 ```
 
 ### 5. DB 마이그레이션
-`Sql/player/12_purchases.sql`을 Supabase SQL Editor에서 실행하세요.  
-기존 테이블이 있는 경우 `store` 컬럼만 추가됩니다 (기존 데이터 영향 없음).
+`Sql/player/07_purchases.sql`을 Supabase SQL Editor에서 실행하세요.
 
 ---
 

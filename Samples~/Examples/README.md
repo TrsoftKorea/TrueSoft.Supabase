@@ -26,7 +26,7 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 1. **TrueSoft > Supabase > 설정 에셋 만들기**로 `SupabaseSettings` 생성
 2. `projectUrl`, `publishableKey` 입력 후 `Assets/Resources/SupabaseSettings.asset`으로 저장
 3. (Google 로그인 사용 시) `googleWebClientId` 입력 + Supabase 대시보드 Google Provider 활성화
-4. Supabase SQL Editor에서 `Sql/player/15_user_data.sql` 실행 (표준 `user_data` 테이블 생성)
+4. Supabase SQL Editor에서 `Sql/player/04_user_data.sql` 실행 (표준 `user_data` 테이블 생성)
 
 ---
 
@@ -57,10 +57,11 @@ Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
 
 **SampleIAPScenarios** (`com.unity.purchasing` 5.2.1 이상 필요):
 
+IAP는 로그인 감지 시 자동으로 초기화됩니다.
+
 | 키 | 기능 |
 |----|------|
-| **O** | IAP 초기화 (로그인 후 호출) |
-| **B** | 아이템 구매 (결제창 표시) |
+| **B** | 아이템 구매 (결제창 표시, IAP 초기화 완료 후 동작) |
 
 선택 기능(Edge Function, 공개 프로필 등)은 `ExampleSupabaseScenarios.cs`의 주석을 해제하면 사용할 수 있습니다.
 

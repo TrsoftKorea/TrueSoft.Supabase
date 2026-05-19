@@ -16,7 +16,7 @@ using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
 ///   1. Window > Package Manager > com.unity.purchasing 5.2.1 이상 설치
 ///   2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
 ///   3. supabase functions deploy purchase-verify-google (또는 purchase-verify-apple)
-///   4. Sql/player/14_purchases.sql 실행
+///   4. Sql/player/07_purchases.sql 실행
 ///   5. Inspector에서 productId 입력
 /// </summary>
 public sealed class SampleIAPScenarios : MonoBehaviour
