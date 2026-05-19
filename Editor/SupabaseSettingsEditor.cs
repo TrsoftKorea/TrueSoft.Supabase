@@ -36,7 +36,12 @@ namespace Truesoft.Supabase.Editor
                 if (_ambiguousStyle == null)
                     _ambiguousStyle = new GUIStyle(EditorStyles.label)
                     {
-                        normal = { textColor = new Color(1f, 0.75f, 0.1f) }
+                        normal =
+                        {
+                            textColor = EditorGUIUtility.isProSkin
+                                ? new Color(1f, 0.75f, 0.1f)   // 다크 테마: 밝은 노란색
+                                : new Color(0.65f, 0.35f, 0f)  // 라이트 테마: 진한 황갈색
+                        }
                     };
                 return _ambiguousStyle;
             }
