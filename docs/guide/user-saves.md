@@ -11,7 +11,6 @@ public sealed class GameSave : StaticUserSave<GameSave.Row>
     public static readonly GameSave Instance = new();
     private GameSave() : base() { }  // syncKey 기본값: typeof(Row).FullName
 
-    // DB 테이블: user_data (고정)
     [Serializable]
     public sealed class Row
     {
@@ -43,13 +42,6 @@ bool ok = await GameSave.Instance.TryLoadAsync();
 int lv = GameSave.Level;
 ```
 
-#### 동작 방식
-
-신규 유저(DB에 행이 없는 경우):
-1. `EnsureMyRowAsync`로 DB에 행 생성 (`ts_ensure_my_row` RPC)
-2. DB 컬럼 `DEFAULT` 값을 로드해 `Current`에 반영
-3. 이후 `MarkDirty()` / `TrySaveIfChangedAsync()` 정상 동작
-
 ### 저장
 
 ```csharp
@@ -74,12 +66,6 @@ await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
 // 쿨타임 조정
 GameSave.Instance.ConfigureCooldown(seconds: 5f);
 ```
-
-#### 동작 방식
-
-`MarkDirty()` 호출 시 `UserSaveStaticSyncRegistry`에 등록되어 쿨타임 내 자동으로 flush됩니다.  
-`SupabaseRuntime`이 씬에 있으면 앱 Pause/Quit 시 dirty가 있으면 즉시 전송을 시도합니다.
-
 
 ### 컬럼 추가
 
