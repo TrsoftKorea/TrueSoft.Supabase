@@ -14,7 +14,8 @@ namespace Truesoft.Supabase.Editor
     /// </summary>
     public sealed class SupabaseUserSaveClassGeneratorWindow : EditorWindow
     {
-        private const string DefaultClassName = "UserSaveRow";
+        private const string DefaultClassName = "GameSave";
+        private const string DefaultSkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
         private const string PrefsPrefix = "Truesoft.Supabase.UserSaveClassGenerator.";
 
@@ -22,7 +23,6 @@ namespace Truesoft.Supabase.Editor
         private static string PrefsKeySettingsGuid => PrefsPrefix + "SettingsGuid";
         private static string PrefsKeyProjectUrl => PrefsPrefix + "ProjectUrl";
         private static string PrefsKeySecret => PrefsPrefix + "SecretKey";
-        private static string PrefsKeyTableName => PrefsPrefix + "TableName";
         private static string PrefsKeySkipColumns => PrefsPrefix + "SkipColumnsCsv";
         private static string PrefsKeyClassName => PrefsPrefix + "ClassName";
         private static string PrefsKeyNamespace => PrefsPrefix + "NamespaceName";
@@ -31,8 +31,7 @@ namespace Truesoft.Supabase.Editor
         [SerializeField] private string projectUrl = "";
         [FormerlySerializedAs("serviceRoleKey")]
         [SerializeField] private string secretKeyInput = "";
-        [SerializeField] private string tableName = "user_saves";
-        [SerializeField] private string skipColumnsCsv = "";
+        [SerializeField] private string skipColumnsCsv = DefaultSkipColumns;
         [SerializeField] private string className = DefaultClassName;
         [SerializeField] private string namespaceName = "";
         [SerializeField] private string previewText = "";
@@ -69,8 +68,7 @@ namespace Truesoft.Supabase.Editor
         {
             projectUrl = EditorPrefs.GetString(PrefsKeyProjectUrl, "");
             secretKeyInput = EditorPrefs.GetString(PrefsKeySecret, "");
-            tableName = EditorPrefs.GetString(PrefsKeyTableName, "user_saves");
-            skipColumnsCsv = EditorPrefs.GetString(PrefsKeySkipColumns, "");
+            skipColumnsCsv = EditorPrefs.GetString(PrefsKeySkipColumns, DefaultSkipColumns);
             className = EditorPrefs.GetString(PrefsKeyClassName, DefaultClassName);
             namespaceName = EditorPrefs.GetString(PrefsKeyNamespace, "");
 
@@ -92,10 +90,7 @@ namespace Truesoft.Supabase.Editor
             EditorPrefs.SetString(PrefsKeyProjectUrl, projectUrl ?? "");
             EditorPrefs.SetString(PrefsKeySecret, secretKeyInput ?? "");
             if (string.IsNullOrWhiteSpace(secretKeyInput) == false)
-                UnityEngine.Debug.LogWarning("[Supabase] service_role key가 EditorPrefs(로컬 레지스트리)에 저장됩니다. 공유 PC 환경에서는 주의하세요.");
-            EditorPrefs.SetString(
-                PrefsKeyTableName,
-                string.IsNullOrWhiteSpace(tableName) ? "user_saves" : tableName);
+                UnityEngine.Debug.LogWarning("[Supabase] Secret 키가 EditorPrefs(로컬 레지스트리)에 저장됩니다. 공유 PC 환경에서는 주의하세요.");
             EditorPrefs.SetString(PrefsKeySkipColumns, skipColumnsCsv ?? "");
             EditorPrefs.SetString(
                 PrefsKeyClassName,
@@ -119,7 +114,7 @@ namespace Truesoft.Supabase.Editor
             using (new EditorGUILayout.VerticalScope(GUILayout.ExpandHeight(true)))
             {
                 EditorGUILayout.HelpBox(
-                    "OpenAPI로 세이브 테이블 C# 초안을 만듭니다. static 클래스 + 내부 Row가 생성되며, 프로퍼티 변경은 쿨타임 자동 저장 대상입니다. 아래 입력값은 이 머신의 EditorPrefs에 저장되어 창을 다시 열어도 유지됩니다.",
+                    "user_data 테이블 스키마를 OpenAPI로 읽어 StaticUserSave<TRow>를 상속하는 C# 클래스 초안을 생성합니다. 아래 입력값은 이 머신의 EditorPrefs에 저장되어 창을 다시 열어도 유지됩니다.",
                     MessageType.Info);
 
                 var prevSettings = settings;
@@ -131,7 +126,6 @@ namespace Truesoft.Supabase.Editor
                 projectUrl = EditorGUILayout.TextField("프로젝트 URL", projectUrl);
                 secretKeyInput = EditorGUILayout.PasswordField("Secret 키", secretKeyInput);
 
-                tableName = EditorGUILayout.TextField("테이블 이름", tableName);
                 skipColumnsCsv = EditorGUILayout.TextField("제외 컬럼", skipColumnsCsv);
                 className = EditorGUILayout.TextField("클래스 이름", className);
                 namespaceName = EditorGUILayout.TextField("네임스페이스", namespaceName);
@@ -182,7 +176,6 @@ namespace Truesoft.Supabase.Editor
         private void PullFromSettings()
         {
             projectUrl = settings.projectUrl ?? "";
-            // tableName은 에디터에서 직접 입력. 멀티 테이블 구조로 단일 userSavesTable 필드가 없음.
         }
 
         private static HashSet<string> ParseSkipCsv(string csv)
@@ -253,7 +246,7 @@ namespace Truesoft.Supabase.Editor
             }
 
             var skip = ParseSkipCsv(skipColumnsCsv);
-            var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(openApiJson, tableName, skip);
+            var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(openApiJson, "user_data", skip);
             if (!parsed.IsSuccess)
             {
                 EditorUtility.DisplayDialog(DialogTitle, parsed.ErrorMessage, "확인");
@@ -272,7 +265,7 @@ namespace Truesoft.Supabase.Editor
                 parsed.Columns,
                 cn,
                 namespaceName,
-                tableName);
+                "user_data");
 
             Repaint();
         }

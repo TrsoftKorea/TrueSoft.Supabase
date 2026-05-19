@@ -58,15 +58,7 @@ GameSave.Instance.ConfigureCooldown(seconds: 5f);
 
 ### 컬럼 추가
 
-새 게임 데이터 컬럼은 Supabase SQL Editor 또는 Retool에서 `admin_add_user_data_column` RPC로 추가합니다 (게임 클라이언트에서 호출하지 않습니다):
-
-```sql
--- Supabase SQL Editor 또는 Retool에서 실행
-SELECT admin_add_user_data_column('exp',           'int not null default 0');
-SELECT admin_add_user_data_column('last_login_at', 'timestamptz');
-```
-
-이미 존재하는 컬럼이면 아무것도 하지 않습니다(멱등 실행 안전).
+새 게임 데이터 컬럼은 Supabase SQL Editor 또는 Retool에서 `admin_add_user_data_column` RPC로 추가합니다 (게임 클라이언트에서 호출하지 않습니다).
 
 > [!IMPORTANT]
 > `StaticUserSave<TRow>`를 상속하는 클래스는 프로젝트 전체에서 **정확히 하나**여야 합니다.  
@@ -101,7 +93,7 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 
 ### 에디터 클래스 생성기
 
-메뉴 **TrueSoft > Supabase > 유저 데이터 클래스 생성**에서 DB 스키마 기반으로 `[DataColumn]`이 붙은 C# 클래스 초안을 자동 생성합니다. Secret 키(**Project Settings > API > Secret key**)를 창에 직접 입력한 뒤 저장합니다.
+메뉴 **TrueSoft > Supabase > 유저 데이터 클래스 생성**에서 DB 스키마 기반으로 `StaticUserSave<TRow>`를 상속하는 클래스와 `[DataColumn]` Row 클래스 초안을 자동 생성합니다. Secret 키(**Project Settings > API > Secret key**)를 창에 직접 입력한 뒤 저장합니다.
 
 > [!NOTE]
 > 생성기가 타입을 추론하지 못한 컬럼(`string /* refine */`)은 직접 수정해야 합니다.
