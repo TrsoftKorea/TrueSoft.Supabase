@@ -7,7 +7,7 @@
 await Supabase.TrySignInAnonymouslyAsync();
 ```
 
-소셜 로그인 코드는 [소셜 로그인 (선택)](#소셜-로그인-선택) 섹션을 참고하세요.
+소셜 로그인 코드는 [소셜 로그인 (선택)](#social-login) 섹션을 참고하세요.
 
 ---
 
@@ -96,7 +96,7 @@ void OnReady(bool success)
 
 ---
 
-## 소셜 로그인 (선택)
+## 소셜 로그인 (선택) {#social-login}
 
 > [!TIP]
 > 소셜 로그인은 선택 기능입니다. 익명 로그인만으로도 게임을 운영할 수 있습니다.
