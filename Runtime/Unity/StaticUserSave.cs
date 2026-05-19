@@ -122,6 +122,13 @@ namespace Truesoft.Supabase.Unity
             _isDirty    = false;
         }
 
+        // ── 이벤트 ───────────────────────────────────────────────────────────
+        /// <summary>
+        /// <see cref="TryLoadAsync"/> 성공 후 발행됩니다.
+        /// 로드 완료 후 게임 데이터를 적용하거나 UI를 갱신할 때 사용합니다.
+        /// </summary>
+        public event Action OnLoaded;
+
         // ── Public API ────────────────────────────────────────────────────────
         public void ConfigureCooldown(float seconds) =>
             Supabase.ConfigureUserSaveAutoSyncCooldown(seconds);
@@ -177,6 +184,7 @@ namespace Truesoft.Supabase.Unity
             DataSchema.CopyInto(Current, row);
             _lastSynced = DataSchema.CloneRow(row);
             _isDirty    = false;
+            OnLoaded?.Invoke();
             return true;
         }
 

@@ -50,6 +50,13 @@ bool ok = await GameSave.Instance.TryLoadAsync();
 int lv = GameSave.Level;
 ```
 
+로드 완료 후 처리가 필요하면 `OnLoaded` 이벤트를 구독합니다.
+
+```csharp
+// Awake() 등 원하는 위치에서 한 번만 등록
+GameSave.Instance.OnLoaded += ApplyGameData;
+```
+
 ### 저장
 
 ```csharp
