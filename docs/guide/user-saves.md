@@ -92,10 +92,10 @@ await Supabase.TryPatchUserDataDiffAsync(prev, save);
 
 ### 에디터 클래스 생성기
 
-메뉴 **TrueSoft > Supabase > 유저 데이터 클래스 생성**에서 DB 스키마 기반으로 `StaticUserSave<TRow>`를 상속하는 클래스와 `[DataColumn]` Row 클래스 초안을 자동 생성합니다. Secret 키(**Project Settings > API > Secret key**)를 창에 직접 입력한 뒤 저장합니다.
+`SupabaseSettings` 에셋 Inspector 하단에서 Secret 키(**Project Settings > API > Secret key**)를 입력하고 **스키마 가져오기**를 누르면 DB 컬럼 목록이 표시됩니다. 컬럼별로 타입을 확인·수정한 뒤 **소스 생성 → .cs 저장**으로 `PlayerSave` 클래스를 생성합니다.
 
 > [!NOTE]
-> 생성기가 타입을 추론하지 못한 컬럼(`string /* refine */`)은 직접 수정해야 합니다.
+> 타입을 자동으로 결정하지 못한 컬럼은 ⚠ 표시되며, 드롭다운에서 직접 지정할 수 있습니다.
 
 ### JSON 직렬화 주의사항
 

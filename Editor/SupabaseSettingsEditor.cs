@@ -64,7 +64,7 @@ namespace Truesoft.Supabase.Editor
             if (!_foldout) return;
 
             EditorGUILayout.HelpBox(
-                "게임 데이터 스키마를 OpenAPI로 읽어 StaticUserSave<TRow>를 상속하는 PlayerSave 클래스 초안을 생성합니다.",
+                "게임 데이터 스키마를 OpenAPI로 읽어 PlayerSave 클래스를 생성합니다.",
                 MessageType.Info);
 
             EditorGUI.BeginChangeCheck();
