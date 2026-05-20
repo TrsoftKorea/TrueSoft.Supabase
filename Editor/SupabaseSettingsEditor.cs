@@ -18,9 +18,8 @@ namespace Truesoft.Supabase.Editor
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
 
-        private static readonly string[] s_typeOptions =
-            { "bool", "int", "short", "long", "ulong", "float", "double", "string", "커스텀..." };
-        private const int CustomTypeIndex = 8;
+        // TypeOptions / RemoteConfigClassGenerator.CustomTypeIndex 는 RemoteConfigClassGenerator 에서 가져옴
+        // (두 생성기가 같은 배열을 공유 → 중복 선언 제거)
 
         private static bool _foldout;
         private static string _secretKey     = "";
@@ -69,6 +68,20 @@ namespace Truesoft.Supabase.Editor
         {
             _secretKey   = EditorPrefs.GetString(PrefsKeySecret,      "");
             _extraUsings = EditorPrefs.GetString(PrefsKeyExtraUsings, "");
+
+            // Settings 에셋이 바뀔 때 이전 워크플로 상태를 초기화
+            // (static 필드는 에셋 변경 후에도 잔존하므로 OnEnable에서 명시적으로 클리어)
+            _editableColumns.Clear();
+            _columnsFetched = false;
+            _warnings.Clear();
+            _previewText    = "";
+
+            _rcKeyList.Clear();
+            _rcKeysFetched  = false;
+            _rcFields.Clear();
+            _rcFieldsParsed = false;
+            _rcPreviewText  = "";
+            _rcWarnings.Clear();
         }
 
         public override void OnInspectorGUI()
@@ -336,9 +349,9 @@ namespace Truesoft.Supabase.Editor
                         var label = col.IsAmbiguous ? "⚠ " + col.Name : col.Name;
                         EditorGUILayout.LabelField(label,
                             col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
-                            GUILayout.MinWidth(col.TypeIndex == CustomTypeIndex ? 60 : 100));
+                            GUILayout.MinWidth(col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 100));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
-                        if (col.TypeIndex == CustomTypeIndex)
+                        if (col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
                         {
                             if (TryParseDictionaryTypes(col.CustomType, out _, out _))
                                 DrawDictionaryTypeControls(ref col.CustomType);
@@ -379,13 +392,13 @@ namespace Truesoft.Supabase.Editor
                     return;
                 }
 
-                var stringIdx = Array.IndexOf(s_typeOptions, "string");
+                var stringIdx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, "string");
                 foreach (var col in parsed.Columns)
                 {
                     var isAmbiguous = col.ClrType.Contains("/*");
                     var typeIdx = isAmbiguous
                         ? stringIdx
-                        : Array.IndexOf(s_typeOptions, col.ClrType);
+                        : Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, col.ClrType);
                     if (typeIdx < 0) typeIdx = stringIdx;
 
                     _editableColumns.Add(new EditableColumn
@@ -415,14 +428,14 @@ namespace Truesoft.Supabase.Editor
                     foreach (var col in _editableColumns)
                     {
                         if (!existing.TryGetValue(col.Name, out var existingType)) continue;
-                        var idx = Array.IndexOf(s_typeOptions, existingType);
+                        var idx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, existingType);
                         if (idx >= 0)
                         {
                             col.TypeIndex = idx;
                         }
                         else
                         {
-                            col.TypeIndex  = CustomTypeIndex;
+                            col.TypeIndex  = RemoteConfigClassGenerator.CustomTypeIndex;
                             col.CustomType = existingType;
                             // Dictionary 타입은 항상 Json 카테고리로 표시해야 전용 팝업이 뜸
                             if (TryParseDictionaryTypes(existingType, out _, out _))
@@ -492,9 +505,9 @@ namespace Truesoft.Supabase.Editor
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                var clrType = ec.TypeIndex == CustomTypeIndex
+                var clrType = ec.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex
                     ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
-                    : s_typeOptions[ec.TypeIndex];
+                    : RemoteConfigClassGenerator.TypeOptions[ec.TypeIndex];
                 cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment));
             }
 
@@ -533,9 +546,9 @@ namespace Truesoft.Supabase.Editor
             var dict = new Dictionary<string, string>();
             foreach (var col in _editableColumns)
             {
-                var type = col.TypeIndex == CustomTypeIndex
+                var type = col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex
                     ? (string.IsNullOrWhiteSpace(col.CustomType) ? "string" : col.CustomType.Trim())
-                    : s_typeOptions[col.TypeIndex];
+                    : RemoteConfigClassGenerator.TypeOptions[col.TypeIndex];
                 dict[col.Name] = type;
             }
             EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
@@ -552,6 +565,9 @@ namespace Truesoft.Supabase.Editor
                 AssetDatabase.ImportAsset(path);
                 var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
                 if (asset != null) EditorGUIUtility.PingObject(asset);
+
+                // 저장 시점에도 타입 설정을 EditorPrefs에 기록
+                SaveColumnTypesToPrefs();
             }
             catch (Exception e)
             {
@@ -578,7 +594,7 @@ namespace Truesoft.Supabase.Editor
             public bool              Include      = true;
             public int               TypeIndex;
             public bool              IsAmbiguous;
-            public string            CustomType   = "";  // TypeIndex == CustomTypeIndex 일 때 사용
+            public string            CustomType   = "";  // TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex 일 때 사용
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
         }
 
