@@ -322,13 +322,14 @@ namespace Truesoft.Supabase.Editor
         /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
         public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
         {
+            // TypeOptions = { bool(0), int(1), short(2), long(3), ulong(4), float(5), double(6), string(7), 커스텀(8) }
             switch (cat)
             {
-                case FieldTypeCategory.Boolean: return new[] { 0, 7, 8 };                  // bool, string, 커스텀
-                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4, 5, 6, 7, 8 };  // int~double, string, 커스텀
-                case FieldTypeCategory.Float:   return new[] { 5, 6, 7, 8 };               // float, double, string, 커스텀
-                case FieldTypeCategory.String:  return new[] { 7, 8 };                     // string, 커스텀
-                case FieldTypeCategory.Array:   return new[] { 8 };                        // 커스텀 전용
+                case FieldTypeCategory.Boolean: return new[] { 0, 8 };             // bool, 커스텀
+                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4, 8 };   // int, short, long, ulong, 커스텀
+                case FieldTypeCategory.Float:   return new[] { 5, 6, 8 };          // float, double, 커스텀
+                case FieldTypeCategory.String:  return new[] { 7, 8 };             // string, 커스텀
+                case FieldTypeCategory.Array:   return new[] { 8 };                // 커스텀 전용
                 default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }; // 전체
             }
         }
@@ -482,10 +483,10 @@ namespace Truesoft.Supabase.Editor
     /// <summary>필드의 JSON 타입 카테고리 — Inspector 드롭다운 필터링에 사용합니다.</summary>
     internal enum FieldTypeCategory
     {
-        Boolean,  // bool + string + 커스텀
-        Integer,  // int / short / long / ulong / float / double + string + 커스텀
-        Float,    // float / double + string + 커스텀
-        String,   // string + 커스텀
+        Boolean,  // bool, 커스텀
+        Integer,  // int, short, long, ulong, 커스텀
+        Float,    // float, double, 커스텀
+        String,   // string, 커스텀
         Array,    // 커스텀 전용
         Unknown,  // 전체 표시
     }
