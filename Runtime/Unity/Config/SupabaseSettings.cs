@@ -33,23 +33,23 @@ namespace Truesoft.Supabase.Unity
         [Tooltip("Try API 호출 결과를 콘솔에 출력합니다.")]
         public bool enableApiResultLogs = true;
 
-        [Label("HTTP 타임아웃 (초)")]
+        [Label("HTTP 타임아웃")]
         [Tooltip("서버 요청 타임아웃(초).")]
         [Min(1)]
         public int timeoutSeconds = 30;
 
         [Header("유저 세이브 저장 주기")]
-        [Label("높음 우선순위 쿨다운 (초)")]
+        [Label("높음 우선순위 쿨다운")]
         [Tooltip("레벨·튜토리얼 등 중요 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float urgentSaveCooldownSeconds = 1f;
 
-        [Label("보통 우선순위 쿨다운 (초)")]
+        [Label("보통 우선순위 쿨다운")]
         [Tooltip("우선순위를 지정하지 않은 기본 필드의 저장 대기 시간(초).")]
         [Min(0f)]
         public float normalSaveCooldownSeconds = 5f;
 
-        [Label("낮음 우선순위 쿨다운 (초)")]
+        [Label("낮음 우선순위 쿨다운")]
         [Tooltip("골드 등 자주 변하고 중요도가 낮은 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float lazySaveCooldownSeconds = 30f;
@@ -60,7 +60,7 @@ namespace Truesoft.Supabase.Unity
         [Min(1)]
         public int defaultMailExpirationDays = 30;
 
-        [Label("우편함 폴링 간격 (초, 0=비활성)")]
+        [Label("우편함 폴링 간격")]
         [Tooltip("새 메일 확인 주기(초). 0이면 자동 폴링을 사용하지 않습니다.")]
         [Min(0)]
         public int mailPollingIntervalSeconds = 0;
@@ -71,18 +71,18 @@ namespace Truesoft.Supabase.Unity
         public string defaultServerCode = "GLOBAL";
 
         [Header("중복 로그인")]
-        [Label("중복 감지 폴링 주기 (초, 0=1회)")]
+        [Label("중복 감지 폴링 주기")]
         [Tooltip("중복 로그인 감지 확인 주기(초). 0이면 1회만 확인합니다.")]
         [Min(0f)]
         public float duplicateSessionPollSeconds = 0f;
 
-        [Label("중복 로그인 쿨다운 (초)")]
+        [Label("중복 로그인 쿨다운")]
         [Tooltip("중복 로그인 감지 후 다음 검사까지의 대기 시간(초).")]
         [Min(0f)]
         public float duplicateSessionActionCheckCooldownSeconds = 5f;
 
         [Header("탈퇴")]
-        [Label("탈퇴 유예 기간 (일)")]
+        [Label("탈퇴 유예 기간")]
         [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수.")]
         [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
