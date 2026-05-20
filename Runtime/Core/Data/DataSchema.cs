@@ -187,6 +187,60 @@ namespace Truesoft.Supabase.Core.Data
             return null;
         }
 
+        /// <summary>멤버에 붙은 DataColumnAttribute의 <see cref="DataSavePriority"/>를 반환합니다. 어트리뷰트가 없거나 Priority를 읽을 수 없으면 <see cref="DataSavePriority.Normal"/>.</summary>
+        private static DataSavePriority ResolveColumnPriority(MemberInfo m)
+        {
+            // Core 어트리뷰트 (타입 안전)
+            var attr = m.GetCustomAttribute<DataColumnAttribute>();
+            if (attr != null) return attr.Priority;
+
+            // 폴백: 이름 기반 조회 (Unity 어셈블리 등)
+            foreach (var a in m.GetCustomAttributes(false))
+            {
+                if (a.GetType().Name != nameof(DataColumnAttribute)) continue;
+                var prop = a.GetType().GetProperty("Priority");
+                if (prop?.GetValue(a) is int intVal)
+                    return (DataSavePriority)intVal;
+                // DataSavePriority 타입 자체로 읽히는 경우도 처리
+                if (prop?.GetValue(a) is DataSavePriority p)
+                    return p;
+            }
+
+            return DataSavePriority.Normal;
+        }
+
+        /// <summary>
+        /// <paramref name="previous"/>와 <paramref name="current"/>를 비교해
+        /// 변경된 필드 중 가장 높은(Urgent에 가까운) <see cref="DataSavePriority"/>를 반환합니다.
+        /// 변경된 필드가 없으면 <c>null</c>을 반환합니다.
+        /// </summary>
+        public static DataSavePriority? GetHighestDirtyPriority<T>(T previous, T current)
+        {
+            if (current == null) return null;
+
+            DataSavePriority? highest = null;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var col = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
+                    continue;
+
+                var oldVal = GetValue(m, previous);
+                var newVal = GetValue(m, current);
+                if (EqualsValues(oldVal, newVal)) continue;
+
+                var priority = ResolveColumnPriority(m);
+                if (highest == null || (int)priority < (int)highest.Value)
+                    highest = priority;
+
+                // Urgent(0) は最高値 — これ以上上がらない
+                if (highest == DataSavePriority.Urgent) break;
+            }
+
+            return highest;
+        }
+
         /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
         public static string ResolveTableName<T>() => UserDataTableName;
 

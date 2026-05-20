@@ -229,10 +229,11 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine(indent + "    {");
             foreach (var c in columns)
             {
-                var fieldName = LegalFieldName(c.Name);
+                var fieldName     = LegalFieldName(c.Name);
+                var priorityParam = c.Priority == 1 /* Normal */ ? string.Empty : ", DataSavePriority." + PriorityName(c.Priority);
                 if (string.IsNullOrWhiteSpace(c.Comment) == false)
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
-                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\")] public " + c.ClrType + " " + fieldName + ";");
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] public " + c.ClrType + " " + fieldName + ";");
             }
 
             sb.AppendLine(indent + "    }");
@@ -499,6 +500,13 @@ namespace Truesoft.Supabase.Editor
             return sb.Length > 0 ? sb.ToString() : name;
         }
 
+        private static string PriorityName(int priority) => priority switch
+        {
+            0 => "Urgent",
+            2 => "Lazy",
+            _ => "Normal"
+        };
+
         private static string EscapeXml(string s)
         {
             if (string.IsNullOrEmpty(s))
@@ -517,16 +525,20 @@ namespace Truesoft.Supabase.Editor
 
     internal readonly struct OpenApiColumn
     {
-        public OpenApiColumn(string name, string clrType, string comment)
+        /// <param name="priority">저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</param>
+        public OpenApiColumn(string name, string clrType, string comment, int priority = 1)
         {
-            Name = name;
-            ClrType = clrType;
-            Comment = comment;
+            Name     = name;
+            ClrType  = clrType;
+            Comment  = comment;
+            Priority = priority;
         }
 
-        public string Name { get; }
+        public string Name    { get; }
         public string ClrType { get; }
         public string Comment { get; }
+        /// <summary>저장 우선순위. 0=Urgent, 1=Normal, 2=Lazy.</summary>
+        public int    Priority { get; }
     }
 
     internal sealed class ParseTableResult

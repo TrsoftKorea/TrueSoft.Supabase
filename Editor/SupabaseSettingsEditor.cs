@@ -11,9 +11,10 @@ namespace Truesoft.Supabase.Editor
     [CustomEditor(typeof(SupabaseSettings))]
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
-        private const string PrefsKeySecret      = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
-        private const string PrefsKeyExtraUsings = "Truesoft.Supabase.ClassGenerator.ExtraUsings";
-        private const string PrefsKeyColumnTypes = "Truesoft.Supabase.PlayerSave.ColumnTypes";
+        private const string PrefsKeySecret            = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
+        private const string PrefsKeyExtraUsings       = "Truesoft.Supabase.ClassGenerator.ExtraUsings";
+        private const string PrefsKeyColumnTypes       = "Truesoft.Supabase.PlayerSave.ColumnTypes";
+        private const string PrefsKeyColumnPriorities  = "Truesoft.Supabase.PlayerSave.ColumnPriorities";
         private const string ClassName = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -186,6 +187,10 @@ namespace Truesoft.Supabase.Editor
         private static readonly string[] s_jsonTypeOptions =
             { "string", "Dictionary<K, V>", "커스텀..." };
 
+        // DataSavePriority 드롭다운 옵션 (label → int 매핑)
+        private static readonly string[] s_priorityOptions = { "Normal", "Urgent", "Lazy" };
+        private static readonly int[]    s_priorityValues  = {  1,        0,        2     };
+
         // Dictionary key 타입 선택지 (value 타입은 자유 텍스트)
         private static readonly string[] s_dictKeyOptions = { "string", "int" };
 
@@ -331,12 +336,13 @@ namespace Truesoft.Supabase.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(100));
-                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.Width(80));
-                EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
+                EditorGUILayout.LabelField("필드",     EditorStyles.miniLabel, GUILayout.MinWidth(100));
+                EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
+                EditorGUILayout.LabelField("Priority", EditorStyles.miniLabel, GUILayout.Width(58));
+                EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
             }
 
-            var rowHeight = EditorGUIUtility.singleLineHeight + 2f;
+            var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
             var listHeight = Mathf.Min(_editableColumns.Count * rowHeight + 4f, 200f);
 
             using (var sv = new EditorGUILayout.ScrollViewScope(_columnScroll, GUILayout.Height(listHeight)))
@@ -358,6 +364,13 @@ namespace Truesoft.Supabase.Editor
                             else
                                 col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
                         }
+
+                        // Priority 드롭다운
+                        var prioLabelIdx    = Array.IndexOf(s_priorityValues, col.Priority);
+                        if (prioLabelIdx < 0) prioLabelIdx = 0;
+                        var newPrioLabelIdx = EditorGUILayout.Popup(prioLabelIdx, s_priorityOptions, GUILayout.Width(58));
+                        col.Priority = s_priorityValues[newPrioLabelIdx];
+
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
                     }
                 }
@@ -445,6 +458,17 @@ namespace Truesoft.Supabase.Editor
                     }
                 }
 
+                // EditorPrefs에서 Priority 설정 복원
+                var existingPriorities = LoadColumnPrioritiesFromPrefs();
+                if (existingPriorities.Count > 0)
+                {
+                    foreach (var col in _editableColumns)
+                    {
+                        if (existingPriorities.TryGetValue(col.Name, out var p))
+                            col.Priority = p;
+                    }
+                }
+
                 _columnsFetched = true;
             }
             catch (Exception e)
@@ -508,7 +532,7 @@ namespace Truesoft.Supabase.Editor
                 var clrType = ec.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex
                     ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
                     : RemoteConfigClassGenerator.TypeOptions[ec.TypeIndex];
-                cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment));
+                cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment, ec.Priority));
             }
 
             if (cols.Count == 0)
@@ -520,8 +544,9 @@ namespace Truesoft.Supabase.Editor
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
             _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data", ParseExtraUsings(_extraUsings));
 
-            // 소스 생성 시점에 현재 타입 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
+            // 소스 생성 시점에 현재 타입·Priority 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
             SaveColumnTypesToPrefs();
+            SaveColumnPrioritiesToPrefs();
         }
 
         /// <summary>EditorPrefs에서 컬럼명→타입 매핑을 로드합니다.</summary>
@@ -538,6 +563,28 @@ namespace Truesoft.Supabase.Editor
             {
                 return new Dictionary<string, string>();
             }
+        }
+
+        /// <summary>현재 _editableColumns의 Priority 설정을 EditorPrefs에 직렬화해 저장합니다.</summary>
+        private static void SaveColumnPrioritiesToPrefs()
+        {
+            var dict = new Dictionary<string, int>();
+            foreach (var col in _editableColumns)
+                dict[col.Name] = col.Priority;
+            EditorPrefs.SetString(PrefsKeyColumnPriorities, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+        }
+
+        /// <summary>EditorPrefs에서 컬럼명→Priority 매핑을 로드합니다.</summary>
+        private static Dictionary<string, int> LoadColumnPrioritiesFromPrefs()
+        {
+            var json = EditorPrefs.GetString(PrefsKeyColumnPriorities, "");
+            if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, int>();
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, int>>(json)
+                       ?? new Dictionary<string, int>();
+            }
+            catch { return new Dictionary<string, int>(); }
         }
 
         /// <summary>현재 _editableColumns의 타입 설정을 EditorPrefs에 직렬화해 저장합니다.</summary>
@@ -566,8 +613,9 @@ namespace Truesoft.Supabase.Editor
                 var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
                 if (asset != null) EditorGUIUtility.PingObject(asset);
 
-                // 저장 시점에도 타입 설정을 EditorPrefs에 기록
+                // 저장 시점에도 타입·Priority 설정을 EditorPrefs에 기록
                 SaveColumnTypesToPrefs();
+                SaveColumnPrioritiesToPrefs();
             }
             catch (Exception e)
             {
@@ -596,6 +644,8 @@ namespace Truesoft.Supabase.Editor
             public bool              IsAmbiguous;
             public string            CustomType   = "";  // TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex 일 때 사용
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
+            /// <summary>저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</summary>
+            public int               Priority     = 1;
         }
 
         // ══════════════════════════════════════════════════════════════════════

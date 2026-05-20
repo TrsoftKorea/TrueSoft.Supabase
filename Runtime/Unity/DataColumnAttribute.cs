@@ -1,11 +1,19 @@
 using System;
 
-namespace Truesoft.Supabase.Core.Data
+namespace Truesoft.Supabase.Unity
 {
     /// <summary>
-    /// 데이터 테이블 컬럼과 C# 멤버를 묶습니다.
-    /// <see cref="DataSchema"/>가 <c>select</c> CSV와 PATCH 키를 자동 생성할 때 사용합니다.
+    /// 유저 세이브 테이블 컬럼과 C# 멤버를 묶습니다.
+    /// <c>Truesoft.Supabase.Core.Data.DataColumnAttribute</c>의 Unity 네임스페이스 미러입니다.
+    /// 게임 어셈블리에서 Core 어셈블리 참조 없이 사용할 수 있도록 제공됩니다.
     /// </summary>
+    /// <example>
+    /// <code>
+    /// [DataColumn("gold",  DataSavePriority.Lazy)]   public int gold;
+    /// [DataColumn("level", DataSavePriority.Urgent)]  public int level;
+    /// [DataColumn]                                     public int hp;   // Normal
+    /// </code>
+    /// </example>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
     public sealed class DataColumnAttribute : Attribute
     {

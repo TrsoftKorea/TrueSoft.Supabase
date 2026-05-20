@@ -17,6 +17,8 @@ namespace Truesoft.Supabase.Unity
             public bool IsInFlight;
             public bool RequestImmediateAfterInFlight;
             public float NextAllowedAtRealtime;
+            /// <summary>null이면 전역 <see cref="_cooldownSeconds"/> 사용. non-null이면 dirty 우선순위별 쿨다운 반환.</summary>
+            public Func<float> GetDirtyCooldown;
         }
 
         private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal);
@@ -33,7 +35,8 @@ namespace Truesoft.Supabase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null)
+            Func<Task<bool>> loadAsync = null,
+            Func<float> getDirtyCooldown = null)
         {
             if (string.IsNullOrWhiteSpace(key) || hasDirty == null || flushAsync == null)
                 return;
@@ -45,6 +48,7 @@ namespace Truesoft.Supabase.Unity
                 existing.FlushAsync = flushAsync;
                 existing.ResetLocalState = resetLocalState;
                 existing.LoadAsync = loadAsync;
+                existing.GetDirtyCooldown = getDirtyCooldown;
                 return;
             }
 
@@ -55,6 +59,7 @@ namespace Truesoft.Supabase.Unity
                 FlushAsync = flushAsync,
                 ResetLocalState = resetLocalState,
                 LoadAsync = loadAsync,
+                GetDirtyCooldown = getDirtyCooldown,
                 NextAllowedAtRealtime = 0f
             };
         }
@@ -63,6 +68,22 @@ namespace Truesoft.Supabase.Unity
         {
             if (!TryGetEntry(key, out var entry))
                 return;
+
+            // 우선순위 기반 타이머 재계산
+            if (entry.GetDirtyCooldown != null)
+            {
+                var now       = Time.realtimeSinceStartup;
+                var cooldown  = entry.GetDirtyCooldown.Invoke();
+                var candidate = now + cooldown;
+
+                if (entry.NextAllowedAtRealtime <= now)
+                    // 타이머가 만료됐거나 초기 상태 → 새로 시작
+                    entry.NextAllowedAtRealtime = candidate;
+                else if (candidate < entry.NextAllowedAtRealtime)
+                    // 더 높은 우선순위(짧은 쿨다운) → 타이머 단축
+                    entry.NextAllowedAtRealtime = candidate;
+                // else: 낮은 우선순위(긴 쿨다운) → 기존 타이머 유지
+            }
 
             TryStartFlush(entry, immediate: false);
         }
@@ -238,7 +259,20 @@ namespace Truesoft.Supabase.Unity
             {
                 var now = Time.realtimeSinceStartup;
                 _lastRealtime = now;
-                entry.NextAllowedAtRealtime = now + _cooldownSeconds;
+
+                if (entry.GetDirtyCooldown != null)
+                {
+                    // 우선순위 기반: dirty 없으면 타이머 리셋(대기 상태),
+                    // dirty 남아있으면 MarkDirty가 이미 올바르게 설정한 타이머 유지
+                    if (!SafeHasDirty(entry))
+                        entry.NextAllowedAtRealtime = 0f;
+                }
+                else
+                {
+                    // 전역 쿨다운(레거시): flush 후 항상 쿨다운 재설정
+                    entry.NextAllowedAtRealtime = now + _cooldownSeconds;
+                }
+
                 entry.IsInFlight = false;
             }
 

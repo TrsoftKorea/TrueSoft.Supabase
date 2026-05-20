@@ -217,8 +217,9 @@ namespace Truesoft.Supabase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null) =>
-            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, loadAsync);
+            Func<Task<bool>> loadAsync = null,
+            Func<float> getDirtyCooldown = null) =>
+            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, loadAsync, getDirtyCooldown);
 
         /// <summary>정적 세이브 값이 바뀌었음을 알립니다(쿨타임 스케줄).</summary>
         public static void MarkUserSaveStaticDirty(string key) =>

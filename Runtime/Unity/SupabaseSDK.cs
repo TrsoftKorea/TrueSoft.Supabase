@@ -598,9 +598,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null)
+            Func<Task<bool>> loadAsync = null,
+            Func<float> getDirtyCooldown = null)
         {
-            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, loadAsync);
+            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, loadAsync, getDirtyCooldown);
         }
 
         /// <summary>정적 세이브에 변경이 생겼음을 알립니다(쿨타임 스케줄).</summary>

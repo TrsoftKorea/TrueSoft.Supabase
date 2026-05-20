@@ -18,7 +18,11 @@ namespace Truesoft.Supabase.Unity.Config
     [AddComponentMenu("TrueSoft/Supabase/Supabase 런타임")]
     public sealed class SupabaseRuntime : MonoBehaviour
     {
-        private const float UserSaveAutoSyncCooldownSeconds = 1f;
+        /// <summary>
+        /// StaticUserSave.GetDirtyCooldown를 사용하지 않는 레거시 항목의 전역 fallback 쿨다운.
+        /// DataSavePriority.Normal 기본값(5 s)과 맞춥니다.
+        /// </summary>
+        private const float UserSaveAutoSyncCooldownSeconds = 5f;
 
         private static SupabaseRuntime _instance;
 
