@@ -71,8 +71,6 @@ namespace Truesoft.Supabase.Unity
         protected readonly string _syncKey;
         protected readonly string LogTag;
 
-        private readonly Dictionary<DataSavePriority, float> _priorityCooldowns = new();
-
         /// <summary>syncKey를 <c>typeof(TRow).FullName</c>으로 자동 설정합니다.</summary>
         protected StaticUserSave() : this(typeof(TRow).FullName) { }
 
@@ -104,18 +102,14 @@ namespace Truesoft.Supabase.Unity
 
         /// <summary>
         /// dirty 필드 중 가장 높은 우선순위(Urgent에 가까운)의 쿨다운(초)을 반환합니다.
-        /// <see cref="_priorityCooldowns"/>에 오버라이드가 없으면 기본값(Urgent 1 s, Normal 5 s, Lazy 30 s)을 사용합니다.
+        /// <see cref="SupabaseSettings"/>의 유저 세이브 저장 주기 설정값을 사용합니다.
         /// </summary>
         private float GetDirtyCooldown()
         {
-            // DataSchema는 Core.Data.DataSavePriority를 반환하므로 int 경유로 Unity DataSavePriority로 변환합니다.
+            // DataSchema는 Core.Data.DataSavePriority를 반환하므로 int 경유로 변환합니다.
             var coreP = DataSchema.GetHighestDirtyPriority(_lastSynced, Current);
-            var p = coreP.HasValue ? (DataSavePriority)(int)coreP.Value : DataSavePriority.Normal;
-            // 인스턴스별 오버라이드 우선, 없으면 SupabaseSettings에서 설정한 전역 기본값 사용
-            if (_priorityCooldowns.TryGetValue(p, out var c))
-                return c;
-
-            return UserSaveStaticSyncRegistry.GetPriorityCooldown((int)p);
+            var p     = coreP.HasValue ? (int)coreP.Value : 1; // 기본 Normal(1)
+            return UserSaveStaticSyncRegistry.GetPriorityCooldown(p);
         }
 
         // ── 레지스트리 콜백 ───────────────────────────────────────────────────
@@ -153,40 +147,31 @@ namespace Truesoft.Supabase.Unity
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
-        /// 저장 쿨다운을 설정합니다.
+        /// 저장 쿨다운을 전역으로 설정합니다.
         /// <para>
-        /// <paramref name="priority"/>가 <c>null</c>이면 모든 우선순위를 동일한 <paramref name="seconds"/>로 초기화합니다
-        /// (기존 단일 쿨다운 동작 유지).<br/>
-        /// <paramref name="priority"/>를 지정하면 해당 우선순위의 쿨다운만 설정합니다.
+        /// <paramref name="priority"/>가 <c>null</c>이면 모든 우선순위를 동일한 <paramref name="seconds"/>로 설정합니다.<br/>
+        /// <paramref name="priority"/>를 지정하면 해당 우선순위의 쿨다운만 변경합니다.
         /// </para>
-        /// <example>
-        /// <code>
-        /// // 전체 3 초로 통일
-        /// Instance.ConfigureCooldown(3f);
-        ///
-        /// // Lazy 필드만 60 초로 늦춤
-        /// Instance.ConfigureCooldown(60f, DataSavePriority.Lazy);
-        ///
-        /// // Urgent 필드를 0.5 초 이내로 빠르게
-        /// Instance.ConfigureCooldown(0.5f, DataSavePriority.Urgent);
-        /// </code>
-        /// </example>
+        /// <remarks>
+        /// 유저 세이브 클래스는 프로젝트 전체에서 하나만 존재하므로 이 설정은 전역에 적용됩니다.
+        /// 일반적으로는 <see cref="SupabaseSettings"/> Inspector에서 저장 주기를 지정하는 것을 권장합니다.
+        /// </remarks>
         /// </summary>
         public void ConfigureCooldown(float seconds, DataSavePriority? priority = null)
         {
             var s = Mathf.Max(0f, seconds);
             if (priority == null)
             {
-                // 전체 초기화: 모든 우선순위를 동일한 쿨다운으로 덮어씁니다.
-                _priorityCooldowns[DataSavePriority.Urgent] = s;
-                _priorityCooldowns[DataSavePriority.Normal] = s;
-                _priorityCooldowns[DataSavePriority.Lazy]   = s;
-                // 전역 fallback도 갱신 (GetDirtyCooldown 없는 다른 레지스트리 항목과 호환)
-                Supabase.ConfigureUserSaveAutoSyncCooldown(s);
+                // 모든 우선순위를 동일하게 설정
+                Supabase.ConfigureUserSavePriorityCooldowns(s, s, s);
             }
             else
             {
-                _priorityCooldowns[priority.Value] = s;
+                // 지정한 우선순위만 변경, 나머지는 현재 값 유지
+                var urgent = priority.Value == DataSavePriority.Urgent ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(0);
+                var normal = priority.Value == DataSavePriority.Normal ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(1);
+                var lazy   = priority.Value == DataSavePriority.Lazy   ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(2);
+                Supabase.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
             }
         }
 
