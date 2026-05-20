@@ -35,7 +35,7 @@ type AppleVerifyReceiptResponse = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
-const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const APPLE_SHARED_SECRET = Deno.env.get("APPLE_SHARED_SECRET")!;
 
 if (!APPLE_SHARED_SECRET) {

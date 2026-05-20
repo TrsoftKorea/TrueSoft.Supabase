@@ -43,8 +43,8 @@ supabase functions deploy withdrawal-guard
 
 | 시크릿 키 | 값 형식 | 필요 함수 |
 |----------|---------|----------|
-| `SUPABASE_PUBLISHABLE_KEYS` | `{"defence_r":"<Publishable Key>"}` | 전체 |
-| `SUPABASE_SECRET_KEYS` | `{"defence_r":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
+| `SUPABASE_PUBLISHABLE_KEYS` | `{"default":"<Publishable Key>"}` | 전체 |
+| `SUPABASE_SECRET_KEYS` | `{"default":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
 | `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
 
 > [!TIP]
@@ -55,8 +55,8 @@ supabase functions deploy withdrawal-guard
 > `SUPABASE_SECRET_KEYS`의 Secret Key는 절대 클라이언트에 노출하지 마세요.
 
 ```bash
-supabase secrets set SUPABASE_PUBLISHABLE_KEYS='{"defence_r":"sb_publishable_..."}'
-supabase secrets set SUPABASE_SECRET_KEYS='{"defence_r":"sb_secret_..."}'
+supabase secrets set SUPABASE_PUBLISHABLE_KEYS='{"default":"sb_publishable_..."}'
+supabase secrets set SUPABASE_SECRET_KEYS='{"default":"sb_secret_..."}'
 supabase secrets set CANCEL_TOKEN_SECRET="your-random-secret-here"
 ```
 

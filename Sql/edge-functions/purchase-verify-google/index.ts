@@ -24,7 +24,7 @@ type GoogleProductPurchase = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
-const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const GOOGLE_SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")!;
 
 if (!GOOGLE_SERVICE_ACCOUNT_JSON) {

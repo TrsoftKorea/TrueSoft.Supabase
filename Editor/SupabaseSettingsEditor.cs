@@ -81,7 +81,6 @@ namespace Truesoft.Supabase.Editor
 
                 if (prop.name == "publishableKey")
                 {
-                    //EditorGUILayout.Space(2);
                     DrawSecretKeyField();
                 }
             }
@@ -95,13 +94,13 @@ namespace Truesoft.Supabase.Editor
             if (_foldout)
             {
                 EditorGUILayout.HelpBox(
-                    "게임 데이터 스키마를 OpenAPI로 읽어 PlayerSave 클래스를 생성합니다.",
+                    "DB에서 유저 데이터 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.",
                     MessageType.Info);
 
                 EditorGUILayout.Space(4);
                 using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
                 {
-                    if (GUILayout.Button("스키마 가져오기", GUILayout.Height(26)))
+                    if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
                         FetchColumns((SupabaseSettings)target);
                 }
 
@@ -167,7 +166,7 @@ namespace Truesoft.Supabase.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("컬럼", EditorStyles.miniLabel, GUILayout.MinWidth(100));
+                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(100));
                 EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.Width(80));
                 EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
             }
@@ -219,7 +218,7 @@ namespace Truesoft.Supabase.Editor
 
                 if (parsed.Columns == null || parsed.Columns.Count == 0)
                 {
-                    EditorUtility.DisplayDialog(DialogTitle, "가져온 컬럼이 없습니다. 제외 목록·스키마를 확인하세요.", "확인");
+                    EditorUtility.DisplayDialog(DialogTitle, "가져온 필드가 없습니다. 제외 목록을 확인하세요.", "확인");
                     return;
                 }
 
@@ -330,7 +329,7 @@ namespace Truesoft.Supabase.Editor
 
             if (cols.Count == 0)
             {
-                EditorUtility.DisplayDialog(DialogTitle, "포함된 컬럼이 없습니다.", "확인");
+                EditorUtility.DisplayDialog(DialogTitle, "포함된 필드가 없습니다.", "확인");
                 return;
             }
 
@@ -385,7 +384,7 @@ namespace Truesoft.Supabase.Editor
         private static void DrawRemoteConfigSection(SupabaseSettings settings)
         {
             EditorGUILayout.HelpBox(
-                "remote_config 테이블에서 키를 읽어 DTO + 접근자 클래스를 생성합니다.",
+                "DB에서 Remote Config 키 목록을 읽어 설정 클래스를 생성합니다.",
                 MessageType.Info);
 
             EditorGUILayout.Space(4);
@@ -541,7 +540,7 @@ namespace Truesoft.Supabase.Editor
 
                 if (_rcKeyList.Count == 0)
                 {
-                    EditorUtility.DisplayDialog(RcDialogTitle, "remote_config 테이블에 행이 없습니다.", "확인");
+                    EditorUtility.DisplayDialog(RcDialogTitle, "Remote Config 키가 없습니다. 대시보드에서 먼저 키를 추가하세요.", "확인");
                     _rcKeysFetched = false;
                     return;
                 }

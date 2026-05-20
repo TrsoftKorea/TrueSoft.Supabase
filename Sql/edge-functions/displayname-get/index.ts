@@ -12,7 +12,7 @@ type GetResponse = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
-const SUPABASE_PUBLISHABLE_KEY = publishableKeys.defence_r;
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
