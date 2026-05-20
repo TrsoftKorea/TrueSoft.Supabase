@@ -219,6 +219,63 @@ var result = await GameRemoteConfig.Gameplay().FetchAsync();
 Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 ```
 
+### 클래스 생성기 (선택)
+
+`SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고  
+**키 목록 가져오기 → 키 선택 → 필드 파싱 → 소스 생성 → 저장**으로  
+`GameplayV1Config.cs`를 생성합니다.
+
+생성된 파일 구조 예시:
+
+```csharp
+// GameplayV1Config.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
+[Serializable]
+public sealed partial class GameplayV1Config
+{
+    [JsonProperty("stamina")] public StaminaConfig stamina;
+    [JsonProperty("battle")]  public BattleConfig battle;
+    [JsonProperty("enabled")] public bool enabled;
+
+    [Serializable]
+    public sealed class StaminaConfig
+    {
+        [JsonProperty("max")]      public int max;
+        [JsonProperty("regenSec")] public int regenSec;
+    }
+
+    [Serializable]
+    public sealed class BattleConfig
+    {
+        [JsonProperty("dmg")] public float dmg;
+    }
+}
+
+public static partial class GameplayV1RemoteConfig
+{
+    public const string Key = "gameplay_v1";
+
+    public static Func<Task<GameplayV1Config>> CreateReader(int maxStaleSeconds = 0) => ...;
+    public static RemoteConfigBinding<GameplayV1Config> CreateBinding(float pollIntervalSeconds = 60f) => ...;
+    public static RemoteConfigListener<GameplayV1Config> CreateListener(Action<GameplayV1Config> onChange, ...) => ...;
+}
+```
+
+사용 예:
+
+```csharp
+// Reader
+var reader = GameplayV1RemoteConfig.CreateReader();
+var cfg    = await reader();
+
+// Binding
+_binding = GameplayV1RemoteConfig.CreateBinding(pollIntervalSeconds: 60f);
+float dmg = _binding.Value?.battle?.dmg ?? 1f;
+```
+
+> [!NOTE]
+> DB에 행이 있어야 필드 목록을 가져올 수 있습니다.  
+> 재생성 시 기존 파일의 타입 설정을 자동으로 복원합니다.
+
 ### 테이블 이름
 
 `remote_config`로 고정되어 있습니다.  
