@@ -25,7 +25,7 @@ namespace Truesoft.Supabase.Unity
     /// • <see cref="SignInWithGoogleAsync()"/> — Android 네이티브 플러그인으로 계정 선택·ID 토큰 획득까지 포함한 끝단 흐름.<br/>
     /// • <see cref="SignInWithGoogleIdTokenAsync"/> — 이미 가진 Google ID 토큰 문자열만 넘겨 Supabase에만 맞출 때(iOS, 커스텀 OAuth, 테스트 등). 입력 형태가 달라 둘 다 유지합니다.
     /// </remarks>
-    public static class SupabaseSDK
+    internal static class SupabaseSDK
     {
         private const string RefreshTokenKey = "Truesoft.Supabase.RefreshToken";
         private const string LastSignInMethodKey = "Truesoft.Supabase.LastSignInMethod";
