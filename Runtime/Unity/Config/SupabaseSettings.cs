@@ -16,74 +16,74 @@ namespace Truesoft.Supabase.Unity
     {
         [Header("프로젝트 (필수)")]
         [Label("Project URL")]
-        [Tooltip("Supabase 대시보드 → Project Settings → API → Project URL")]
+        [Tooltip("Supabase 대시보드 → Project Settings → API")]
         public string projectUrl;
 
         [Label("Publishable Key")]
-        [Tooltip("Supabase 대시보드 → Project Settings → API → Publishable Key")]
+        [Tooltip("Supabase 대시보드 → Project Settings → API")]
         public string publishableKey;
 
         [Header("인증")]
         [Label("Google 웹 클라이언트 ID")]
-        [Tooltip("Google Cloud Console → OAuth 2.0 클라이언트 ID → 웹 애플리케이션 클라이언트 ID\nAndroid 네이티브 로그인 전용. Google 로그인 미사용 시 공란.")]
+        [Tooltip("Google Cloud Console의 웹 애플리케이션 OAuth 클라이언트 ID. Google 로그인 미사용 시 공란.")]
         public string googleWebClientId;
 
         [Header("기본 옵션")]
         [Label("API 결과 로그 사용")]
-        [Tooltip("Try API 결과를 콘솔에 로그합니다.")]
+        [Tooltip("Try API 호출 결과를 콘솔에 출력합니다.")]
         public bool enableApiResultLogs = true;
 
         [Label("HTTP 타임아웃 (초)")]
-        [Tooltip("HTTP 타임아웃(초).")]
+        [Tooltip("서버 요청 타임아웃(초).")]
         [Min(1)]
         public int timeoutSeconds = 30;
 
         [Header("유저 세이브 저장 주기")]
         [Label("높음 우선순위 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Urgent — 레벨·튜토리얼 완료 등 중요 데이터.\n변경 후 이 시간(초) 뒤에 서버로 전송됩니다. 권장: 0.5 ~ 2 s")]
+        [Tooltip("레벨·튜토리얼 등 중요 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float urgentSaveCooldownSeconds = 1f;
 
         [Label("보통 우선순위 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Normal — 우선순위를 지정하지 않은 기본 필드.\n권장: 3 ~ 10 s")]
+        [Tooltip("우선순위를 지정하지 않은 기본 필드의 저장 대기 시간(초).")]
         [Min(0f)]
         public float normalSaveCooldownSeconds = 5f;
 
         [Label("낮음 우선순위 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Lazy — 골드 등 자주 변하고 중요도가 낮은 데이터.\n권장: 15 ~ 60 s")]
+        [Tooltip("골드 등 자주 변하고 중요도가 낮은 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float lazySaveCooldownSeconds = 30f;
 
         [Header("우편함")]
         [Label("메일 기본 만료 일수")]
-        [Tooltip("메일 만료 일수(클라이언트·발송 보조 참고).")]
+        [Tooltip("수신된 메일의 기본 만료 일수.")]
         [Min(1)]
         public int defaultMailExpirationDays = 30;
 
         [Label("우편함 폴링 간격 (초, 0=비활성)")]
-        [Tooltip("우편함 폴링 간격(초). 0이면 비활성.")]
+        [Tooltip("새 메일 확인 주기(초). 0이면 자동 폴링을 사용하지 않습니다.")]
         [Min(0)]
         public int mailPollingIntervalSeconds = 0;
 
         [Header("게임 서버")]
         [Label("기본 서버 코드")]
-        [Tooltip("기본 server_code. DB game_servers 테이블의 server_code 값과 일치해야 합니다.")]
+        [Tooltip("게임 서버 배정에 사용할 기본 server_code.")]
         public string defaultServerCode = "GLOBAL";
 
         [Header("중복 로그인")]
         [Label("중복 감지 폴링 주기 (초, 0=1회)")]
-        [Tooltip("세션 폴링 주기(초). 0이면 1회만.")]
+        [Tooltip("중복 로그인 감지 확인 주기(초). 0이면 1회만 확인합니다.")]
         [Min(0f)]
         public float duplicateSessionPollSeconds = 0f;
 
         [Label("중복 로그인 쿨다운 (초)")]
-        [Tooltip("중복 로그인 검사 쿨다운(초).")]
+        [Tooltip("중복 로그인 감지 후 다음 검사까지의 대기 시간(초).")]
         [Min(0f)]
         public float duplicateSessionActionCheckCooldownSeconds = 5f;
 
         [Header("탈퇴")]
         [Label("탈퇴 유예 기간 (일)")]
-        [Tooltip("탈퇴 신청 후 실제 삭제까지 유예 일수.")]
+        [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수.")]
         [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
 
