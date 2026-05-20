@@ -217,6 +217,7 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using Newtonsoft.Json;");
             sb.AppendLine("using Truesoft.Supabase.Core.Data;");
             sb.AppendLine("using Truesoft.Supabase.Unity;");
+            sb.AppendLine("using Truesoft.Supabase.Unity.RemoteConfig;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
                     if (!string.IsNullOrWhiteSpace(ns))
