@@ -170,7 +170,10 @@ namespace Truesoft.Supabase.Editor
 
         // Json 카테고리 전용 드롭다운 옵션
         private static readonly string[] s_jsonTypeOptions =
-            { "string", "Dictionary<string, object>", "커스텀..." };
+            { "string", "Dictionary<K, V>", "커스텀..." };
+
+        // Dictionary key 타입 선택지 (value 타입은 자유 텍스트)
+        private static readonly string[] s_dictKeyOptions = { "string", "int" };
 
         /// <summary>
         /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
@@ -183,18 +186,27 @@ namespace Truesoft.Supabase.Editor
             // Json 카테고리 전용 처리
             if (category == FieldTypeCategory.Json)
             {
+                var isDictionary = TryParseDictionaryTypes(customType, out _, out _);
+
                 int selIdx;
                 if (currentTypeIndex != RemoteConfigClassGenerator.CustomTypeIndex)
                     selIdx = 0; // string
-                else if (customType == "Dictionary<string, object>")
-                    selIdx = 1; // Dictionary 프리셋
+                else if (isDictionary)
+                    selIdx = 1; // Dictionary<K, V>
                 else
                     selIdx = 2; // 커스텀
 
                 var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
-                if (picked == 0) { customType = ""; return 7; }                          // string
-                if (picked == 1) { customType = "Dictionary<string, object>"; return RemoteConfigClassGenerator.CustomTypeIndex; }
-                return RemoteConfigClassGenerator.CustomTypeIndex;                        // 커스텀, 텍스트 필드 유지
+                if (picked == 0) { customType = ""; return 7; }   // string
+                if (picked == 1)
+                {
+                    // Dictionary로 처음 전환할 때 기본값 설정
+                    if (!isDictionary) customType = "Dictionary<string, object>";
+                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                }
+                // 커스텀으로 전환할 때 Dictionary 값 초기화
+                if (isDictionary) customType = "";
+                return RemoteConfigClassGenerator.CustomTypeIndex;
             }
 
             var allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(category);
@@ -223,6 +235,56 @@ namespace Truesoft.Supabase.Editor
                 case "string":                                       return FieldTypeCategory.String;
                 default:                                             return FieldTypeCategory.Unknown;
             }
+        }
+
+        /// <summary>
+        /// customType이 Dictionary&lt;K, V&gt; 형식이면 K와 V를 파싱합니다.
+        /// 중첩 제네릭(e.g. Dictionary&lt;string, List&lt;int&gt;&gt;)도 처리합니다.
+        /// </summary>
+        private static bool TryParseDictionaryTypes(string customType, out string keyType, out string valueType)
+        {
+            keyType   = "string";
+            valueType = "object";
+            if (string.IsNullOrWhiteSpace(customType)) return false;
+
+            var s = customType.Trim();
+            if (!s.StartsWith("Dictionary<", StringComparison.Ordinal) ||
+                !s.EndsWith(">", StringComparison.Ordinal))
+                return false;
+
+            var inner = s.Substring("Dictionary<".Length, s.Length - "Dictionary<".Length - 1);
+            var depth = 0;
+            for (var i = 0; i < inner.Length; i++)
+            {
+                if (inner[i] == '<')      depth++;
+                else if (inner[i] == '>') depth--;
+                else if (inner[i] == ',' && depth == 0)
+                {
+                    keyType   = inner.Substring(0, i).Trim();
+                    valueType = inner.Substring(i + 1).Trim();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>
+        private static void DrawDictionaryTypeControls(ref string customType)
+        {
+            TryParseDictionaryTypes(customType, out var keyType, out var valueType);
+
+            // Key 타입 popup (string / int)
+            var keyIdx    = Math.Max(0, Array.IndexOf(s_dictKeyOptions, keyType));
+            var newKeyIdx = EditorGUILayout.Popup(keyIdx, s_dictKeyOptions, GUILayout.Width(50));
+            var newKey    = s_dictKeyOptions[newKeyIdx];
+
+            EditorGUILayout.LabelField(",", GUILayout.Width(8));
+
+            // Value 타입 자유 텍스트
+            var newValue = EditorGUILayout.TextField(valueType, GUILayout.ExpandWidth(true));
+            if (string.IsNullOrWhiteSpace(newValue)) newValue = "object";
+
+            customType = "Dictionary<" + newKey + ", " + newValue + ">";
         }
 
         /// <summary>두 생성기가 공유하는 추가 네임스페이스 입력 영역.</summary>
@@ -276,7 +338,12 @@ namespace Truesoft.Supabase.Editor
                             GUILayout.MinWidth(col.TypeIndex == CustomTypeIndex ? 60 : 100));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
                         if (col.TypeIndex == CustomTypeIndex)
-                            col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
+                        {
+                            if (TryParseDictionaryTypes(col.CustomType, out _, out _))
+                                DrawDictionaryTypeControls(ref col.CustomType);
+                            else
+                                col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
+                        }
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
                     }
                 }
@@ -607,7 +674,12 @@ namespace Truesoft.Supabase.Editor
 
                             f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f, ref f.CustomType);
                             if (f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
-                                f.CustomType = EditorGUILayout.TextField(f.CustomType, GUILayout.ExpandWidth(true));
+                            {
+                                if (TryParseDictionaryTypes(f.CustomType, out _, out _))
+                                    DrawDictionaryTypeControls(ref f.CustomType);
+                                else
+                                    f.CustomType = EditorGUILayout.TextField(f.CustomType, GUILayout.ExpandWidth(true));
+                            }
 
                             f.Include = EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
                         }
