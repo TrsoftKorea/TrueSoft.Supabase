@@ -863,6 +863,7 @@ namespace Truesoft.Supabase.Editor
             }
 
             var key          = _rcKeyList[_rcKeyIndex].Key;
+            var description  = _rcKeyList[_rcKeyIndex].Description;
             var configCls    = _rcClassName.Trim();
             var accessorCls  = RcAccessorClassName(configCls);
             var ns           = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
@@ -870,7 +871,7 @@ namespace Truesoft.Supabase.Editor
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
-                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_extraUsings));
+                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_extraUsings), description);
             }
             catch (Exception e)
             {
