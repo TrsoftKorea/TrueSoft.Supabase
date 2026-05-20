@@ -133,6 +133,7 @@ namespace Truesoft.Supabase.Editor
                             IsAmbiguous  = ambiguous,
                             TypeIndex    = CustomTypeIndex, // List 계열은 커스텀
                             CustomType   = clrType,
+                            JsonCategory = FieldTypeCategory.Array,
                             Include      = true
                         });
                         break;
@@ -149,6 +150,7 @@ namespace Truesoft.Supabase.Editor
                             IsObjectNode = false,
                             IsAmbiguous  = ambiguous,
                             TypeIndex    = typeIndex,
+                            JsonCategory = MapCategory(prop.Value.Type),
                             Include      = true
                         });
                         break;
@@ -317,6 +319,32 @@ namespace Truesoft.Supabase.Editor
 
         internal const int CustomTypeIndex = 8;
 
+        /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
+        public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
+        {
+            switch (cat)
+            {
+                case FieldTypeCategory.Boolean: return new[] { 0, 7, 8 };                  // bool, string, 커스텀
+                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4, 5, 6, 7, 8 };  // int~double, string, 커스텀
+                case FieldTypeCategory.Float:   return new[] { 5, 6, 7, 8 };               // float, double, string, 커스텀
+                case FieldTypeCategory.String:  return new[] { 7, 8 };                     // string, 커스텀
+                case FieldTypeCategory.Array:   return new[] { 8 };                        // 커스텀 전용
+                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }; // 전체
+            }
+        }
+
+        private static FieldTypeCategory MapCategory(JTokenType t)
+        {
+            switch (t)
+            {
+                case JTokenType.Boolean: return FieldTypeCategory.Boolean;
+                case JTokenType.Integer: return FieldTypeCategory.Integer;
+                case JTokenType.Float:   return FieldTypeCategory.Float;
+                case JTokenType.String:  return FieldTypeCategory.String;
+                default:                 return FieldTypeCategory.Unknown;
+            }
+        }
+
         private static int IndexOf(string type)
         {
             for (var i = 0; i < TypeOptions.Length - 1; i++)
@@ -439,14 +467,26 @@ namespace Truesoft.Supabase.Editor
 
     internal sealed class RcEditableField
     {
-        public string JsonKey;
-        public string FullPath;
-        public int    Depth;
-        public bool   IsObjectNode;
-        public string NestedClassName;   // IsObjectNode일 때만 사용
-        public bool   Include = true;
-        public int    TypeIndex;
-        public bool   IsAmbiguous;
-        public string CustomType = "";   // TypeIndex == CustomTypeIndex 일 때
+        public string           JsonKey;
+        public string           FullPath;
+        public int              Depth;
+        public bool             IsObjectNode;
+        public string           NestedClassName;          // IsObjectNode일 때만 사용
+        public bool             Include = true;
+        public int              TypeIndex;
+        public bool             IsAmbiguous;
+        public string           CustomType = "";          // TypeIndex == CustomTypeIndex 일 때
+        public FieldTypeCategory JsonCategory = FieldTypeCategory.Unknown;
+    }
+
+    /// <summary>필드의 JSON 타입 카테고리 — Inspector 드롭다운 필터링에 사용합니다.</summary>
+    internal enum FieldTypeCategory
+    {
+        Boolean,  // bool + string + 커스텀
+        Integer,  // int / short / long / ulong / float / double + string + 커스텀
+        Float,    // float / double + string + 커스텀
+        String,   // string + 커스텀
+        Array,    // 커스텀 전용
+        Unknown,  // 전체 표시
     }
 }

@@ -162,6 +162,44 @@ namespace Truesoft.Supabase.Editor
             }
         }
 
+        /// <summary>
+        /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
+        /// 현재 TypeIndex가 카테고리에 없으면 전체 목록을 표시합니다.
+        /// </summary>
+        private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width)
+        {
+            var allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(category);
+
+            // 기존 파일 복원 등으로 카테고리에 맞지 않는 타입이 들어있으면 전체 표시
+            if (Array.IndexOf(allowed, currentTypeIndex) < 0)
+                allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(FieldTypeCategory.Unknown);
+
+            var options = new string[allowed.Length];
+            for (var j = 0; j < allowed.Length; j++)
+                options[j] = RemoteConfigClassGenerator.TypeOptions[allowed[j]];
+
+            var selIdx    = Math.Max(0, Array.IndexOf(allowed, currentTypeIndex));
+            var newSelIdx = EditorGUILayout.Popup(selIdx, options, GUILayout.Width(width));
+            return allowed[newSelIdx];
+        }
+
+        /// <summary>ClrType 문자열에서 FieldTypeCategory를 결정합니다.</summary>
+        private static FieldTypeCategory ResolveTypeCategory(string rawClrType)
+        {
+            // "/* ... */" 포함 → 수동 수정 필요 케이스, 전체 표시
+            if (rawClrType?.Contains("/*") == true)
+                return FieldTypeCategory.Unknown;
+
+            switch (rawClrType?.Trim())
+            {
+                case "bool":                                         return FieldTypeCategory.Boolean;
+                case "int": case "short": case "long": case "ulong": return FieldTypeCategory.Integer;
+                case "float": case "double":                         return FieldTypeCategory.Float;
+                case "string":                                       return FieldTypeCategory.String;
+                default:                                             return FieldTypeCategory.Unknown;
+            }
+        }
+
         private static void DrawColumnList()
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -185,7 +223,7 @@ namespace Truesoft.Supabase.Editor
                         EditorGUILayout.LabelField(label,
                             col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
                             GUILayout.MinWidth(col.TypeIndex == CustomTypeIndex ? 60 : 100));
-                        col.TypeIndex = EditorGUILayout.Popup(col.TypeIndex, s_typeOptions, GUILayout.Width(80));
+                        col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f);
                         if (col.TypeIndex == CustomTypeIndex)
                             col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
@@ -233,10 +271,11 @@ namespace Truesoft.Supabase.Editor
 
                     _editableColumns.Add(new EditableColumn
                     {
-                        Name = col.Name,
-                        Comment = col.Comment,
-                        TypeIndex = typeIdx,
-                        IsAmbiguous = isAmbiguous
+                        Name         = col.Name,
+                        Comment      = col.Comment,
+                        TypeIndex    = typeIdx,
+                        IsAmbiguous  = isAmbiguous,
+                        TypeCategory = ResolveTypeCategory(col.ClrType)
                     });
                 }
 
@@ -369,12 +408,13 @@ namespace Truesoft.Supabase.Editor
 
         private sealed class EditableColumn
         {
-            public string Name;
-            public string Comment;
-            public bool Include = true;
-            public int TypeIndex;
-            public bool IsAmbiguous;
-            public string CustomType = "";  // TypeIndex == CustomTypeIndex 일 때 사용
+            public string            Name;
+            public string            Comment;
+            public bool              Include      = true;
+            public int               TypeIndex;
+            public bool              IsAmbiguous;
+            public string            CustomType   = "";  // TypeIndex == CustomTypeIndex 일 때 사용
+            public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -510,7 +550,7 @@ namespace Truesoft.Supabase.Editor
                                 f.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
                                 GUILayout.MinWidth(f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 100));
 
-                            f.TypeIndex = EditorGUILayout.Popup(f.TypeIndex, RemoteConfigClassGenerator.TypeOptions, GUILayout.Width(80));
+                            f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f);
                             if (f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
                                 f.CustomType = EditorGUILayout.TextField(f.CustomType, GUILayout.ExpandWidth(true));
 
