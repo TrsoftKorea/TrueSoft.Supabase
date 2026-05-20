@@ -184,7 +184,6 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using Truesoft.Supabase.Core.Data;");
             sb.AppendLine("using Truesoft.Supabase.Unity;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
