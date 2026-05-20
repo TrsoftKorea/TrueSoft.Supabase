@@ -5,7 +5,6 @@ using Truesoft.Supabase.Core.Auth;
 using Truesoft.Supabase.Core.Common;
 using Truesoft.Supabase.Core.Data;
 using Truesoft.Supabase.Core.Models;
-using Truesoft.Supabase.Unity.RemoteConfig;
 #if TRUESOFT_IAP_AVAILABLE
 using UnityEngine.Purchasing;
 #endif
@@ -385,17 +384,14 @@ namespace Truesoft.Supabase.Unity
         public static void SetRemoteConfigKeyPolling(string key, float intervalSeconds) =>
             SupabaseSDK.SetRemoteConfigKeyPolling(key, intervalSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigReader{T}(string, int)"/>
-        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
+        internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStaleSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigBinding{T}(string, float)"/>
-        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds)
+        internal static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds)
             where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollIntervalSeconds);
 
-        /// <inheritdoc cref="SupabaseSDK.CreateRemoteConfigListener{T}(string, float, Action{T}, bool)"/>
-        public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
+        internal static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
             string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
             where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);

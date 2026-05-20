@@ -925,16 +925,15 @@ namespace Truesoft.Supabase.Editor
                 return;
             }
 
-            var key          = _rcKeyList[_rcKeyIndex].Key;
-            var description  = _rcKeyList[_rcKeyIndex].Description;
-            var configCls    = _rcClassName.Trim();
-            var accessorCls  = RcAccessorClassName(configCls);
-            var ns           = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
+            var key         = _rcKeyList[_rcKeyIndex].Key;
+            var description = _rcKeyList[_rcKeyIndex].Description;
+            var configCls   = _rcClassName.Trim();
+            var ns          = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
 
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
-                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_rcExtraUsings), description);
+                    includedFields, configCls, key, ns, ParseExtraUsings(_rcExtraUsings), description);
             }
             catch (Exception e)
             {
@@ -970,13 +969,5 @@ namespace Truesoft.Supabase.Editor
             return pascal.EndsWith("Config", StringComparison.OrdinalIgnoreCase) ? pascal : pascal + "Config";
         }
 
-        private static string RcAccessorClassName(string configClassName)
-        {
-            // GameplayV1Config → GameplayV1RemoteConfig
-            var stem = configClassName.EndsWith("Config", StringComparison.OrdinalIgnoreCase)
-                ? configClassName.Substring(0, configClassName.Length - "Config".Length)
-                : configClassName;
-            return stem + "RemoteConfig";
-        }
     }
 }

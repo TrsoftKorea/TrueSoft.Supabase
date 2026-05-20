@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -329,12 +330,13 @@ namespace Truesoft.Supabase.Unity
 
         private static async Task<bool> WaitForSettledAsync(Entry entry, int timeoutMs)
         {
-            var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(250, timeoutMs));
-            while (DateTime.UtcNow < deadline)
+            var sw = Stopwatch.StartNew();
+            var limitMs = Math.Max(250, timeoutMs);
+            while (sw.ElapsedMilliseconds < limitMs)
             {
                 if (!entry.IsInFlight && !SafeHasDirty(entry))
                     return true;
-                await Task.Delay(16);
+                await Task.Delay(16).ConfigureAwait(true);
             }
 
             return false;

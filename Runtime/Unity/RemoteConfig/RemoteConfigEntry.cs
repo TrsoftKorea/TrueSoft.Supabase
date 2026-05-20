@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using Truesoft.Supabase.Core.Common;
 
-namespace Truesoft.Supabase.Unity.RemoteConfig
+namespace Truesoft.Supabase.Unity
 {
     /// <summary>
     /// 단일 RemoteConfig 키에 대한 타입 안전 fetch.

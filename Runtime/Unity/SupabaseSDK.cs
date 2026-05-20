@@ -9,7 +9,6 @@ using Truesoft.Supabase.Unity.Auth.Anonymous;
 using Truesoft.Supabase.Unity.Auth;
 using Truesoft.Supabase.Unity.Auth.Google;
 using Truesoft.Supabase.Unity.Config;
-using Truesoft.Supabase.Unity.RemoteConfig;
 using UnityEngine;
 #if TRUESOFT_IAP_AVAILABLE
 using UnityEngine.Purchasing;

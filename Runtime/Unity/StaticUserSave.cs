@@ -119,14 +119,24 @@ namespace Truesoft.Supabase.Unity
         {
             if (!_isDirty) return true;
 
+            // await 이전에 현재 값을 스냅샷하고 dirty를 먼저 해제합니다.
+            // 이렇게 하면 네트워크 대기 중 게임 코드가 새 값을 쓰고 MarkDirty()를 호출해도
+            // dirty 플래그가 올바르게 유지됩니다.
+            var snapshot = DataSchema.CloneRow(Current);
+            _isDirty = false;
+
             var ok = await Supabase.TryPatchUserDataDiffAsync(
-                _lastSynced, Current,
+                _lastSynced, snapshot,
                 ensureRowFirst: true, setUpdatedAtIsoUtc: true);
 
-            if (!ok) return false;
+            if (!ok)
+            {
+                // 전송 실패 시 dirty 복원 — 다음 flush 때 재전송
+                _isDirty = true;
+                return false;
+            }
 
-            _lastSynced = DataSchema.CloneRow(Current);
-            _isDirty    = false;
+            _lastSynced = snapshot;
             return true;
         }
 

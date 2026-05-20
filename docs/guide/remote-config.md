@@ -8,17 +8,21 @@
 
 | 패턴 | API | 특징 |
 |---|---|---|
-| 읽기 함수 | `CreateRemoteConfigReader` | 필드에 선언 후 `await _getter()`. 만료 시 서버 응답 대기 후 반환 |
-| 값 바인딩 | `CreateRemoteConfigBinding` | 폴링으로 자동 갱신. `Value`로 언제든 읽기 |
-| 반응형 구독 | `CreateRemoteConfigListener` | 폴링으로 자동 갱신. 값 변경 시 콜백 호출 |
+| 읽기 함수 | `RemoteConfig<T>.CreateReader()` | 필드에 선언 후 `await _getter()`. 만료 시 서버 응답 대기 후 반환 |
+| 값 바인딩 | `RemoteConfig<T>.CreateBinding()` | 폴링으로 자동 갱신. `Value`로 언제든 읽기 |
+| 반응형 구독 | `RemoteConfig<T>.CreateListener(onChange)` | 폴링으로 자동 갱신. 값 변경 시 콜백 호출 |
 
 ---
 
 ## 설정 클래스 작성
 
-### 지원 타입
+설정 클래스에 `[RemoteConfigKey("키이름")]` 어트리뷰트를 붙이면 `RemoteConfig<T>`가 자동으로 키를 읽습니다.
 
 ```csharp
+using Newtonsoft.Json;
+using Truesoft.Supabase.Unity;
+
+[RemoteConfigKey("gameplay_v1")]
 public class GameplayConfig
 {
     // 기본 타입
@@ -27,54 +31,19 @@ public class GameplayConfig
     public bool enabled;
     public string message;
 
-    // 컬렉션
-    public int[] values;
-    public List<string> items;
-    public Dictionary<string, int> rates;
-
-    // nullable
-    public int? optionalCount;
-
-    // 열거형 — 문자열("Normal") 또는 숫자(1) 모두 가능
-    public Difficulty difficulty;
-
     // 중첩 클래스
-    public BattleConfig battle;
-    public List<RewardConfig> rewards;
-}
-```
+    public StaminaConfig stamina;
+    public BattleConfig  battle;
 
-### 규칙
-
-> [!WARNING]
-> 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
-> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
-
-```csharp
-public class BattleConfig
-{
-    public float playerDmg;
-    public BattleConfig() { }
-    public BattleConfig(float dmg) { playerDmg = dmg; }
+    public class StaminaConfig { public int max; public int regenSec; }
+    public class BattleConfig  { public float playerDmg; }
 }
 ```
 
 **필드명과 JSON 키가 다를 때** — `[JsonProperty]`로 매핑합니다.
 
 ```csharp
-using Newtonsoft.Json;
-
-public class BattleConfig
-{
-    [JsonProperty("player_dmg")]
-    public float PlayerDmg;
-}
-```
-
-**필수 필드 선언** — 키가 없으면 fetch 자체를 실패시킵니다.
-
-```csharp
-[JsonProperty("player_dmg", Required = Required.Always)]
+[JsonProperty("player_dmg")]
 public float PlayerDmg;
 ```
 
@@ -84,20 +53,17 @@ public float PlayerDmg;
 float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
 ```
 
+### 규칙
+
+> [!WARNING]
+> 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
+> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+
 ---
 
 ## 대시보드에서 값 입력
 
 관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다. 스칼라 값마다 키를 만들지 않아도 됩니다.
-
-```csharp
-[Serializable]
-public class GameplayConfig
-{
-    public StaminaConfig stamina;
-    public BattleConfig battle;
-}
-```
 
 Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테이블에서 행을 추가합니다.
 
@@ -117,7 +83,7 @@ Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테�
 
 ---
 
-## 읽기 함수 (CreateRemoteConfigReader)
+## 읽기 함수 (CreateReader)
 
 첫 호출 시 생성(`??=`)해두고 간결하게 호출합니다. 캐시가 만료됐으면 서버 응답을 기다린 후 반환합니다.
 
@@ -126,7 +92,7 @@ private Func<Task<GameplayConfig>> _getConfig;
 
 private async Task LoadConfigAsync()
 {
-    _getConfig ??= Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1");
+    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader();
 
     var cfg = await _getConfig();
     float dmg = cfg?.battle?.playerDmg ?? 1f;
@@ -135,12 +101,12 @@ private async Task LoadConfigAsync()
 
 ```csharp
 // 유효시간 직접 지정 (기본값 300초)
-_getConfig ??= Supabase.CreateRemoteConfigReader<GameplayConfig>("gameplay_v1", maxStaleSeconds: 60);
+_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStaleSeconds: 60);
 ```
 
 ---
 
-## 값 바인딩 (CreateRemoteConfigBinding)
+## 값 바인딩 (CreateBinding)
 
 폴링으로 값을 최신 상태로 유지합니다. `Value`로 언제든 동기 읽기.
 
@@ -149,7 +115,7 @@ private RemoteConfigBinding<GameplayConfig> _gameplay;
 
 private void Start()
 {
-    _gameplay = Supabase.CreateRemoteConfigBinding<GameplayConfig>("gameplay_v1", pollIntervalSeconds: 30f);
+    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollIntervalSeconds: 30f);
 }
 
 private void Update()
@@ -162,7 +128,7 @@ private void OnDestroy() => _gameplay?.Dispose();
 
 ---
 
-## 반응형 구독 (CreateRemoteConfigListener)
+## 반응형 구독 (CreateListener)
 
 폴링으로 값이 바뀔 때마다 콜백을 호출합니다.
 
@@ -171,14 +137,14 @@ private RemoteConfigListener<MaintenanceConfig> _maintenanceSub;
 
 private void Start()
 {
-    _maintenanceSub = Supabase.CreateRemoteConfigListener<MaintenanceConfig>(
-        "maintenance", pollIntervalSeconds: 30f, ApplyMaintenanceConfig);
+    _maintenanceSub = RemoteConfig<MaintenanceConfig>.CreateListener(
+        ApplyMaintenanceConfig, pollIntervalSeconds: 30f);
 }
 
 private void OnDestroy() => _maintenanceSub?.Dispose();
 ```
 
-> `invokeIfCached: false`를 지정하면 생성 시 캐시 값으로 즉시 콜백하지 않습니다 (기본 `true`).
+> `invokeIfCached: false` 옵션이 필요하면 `new RemoteConfigListener<T>(key, interval, callback, false)` 로 직접 생성합니다.
 
 ---
 
@@ -193,24 +159,6 @@ private void OnDestroy() => _maintenanceSub?.Dispose();
 
 ## 고급 설정
 
-### Source Generator (선택)
-
-`static partial` 메서드에 어노테이션을 붙이면 구현이 자동 생성됩니다.
-
-```csharp
-[RemoteConfig]
-public static partial class GameRemoteConfig
-{
-    [RemoteConfigKey("gameplay_v1")]
-    public static partial RemoteConfigEntry<GameplayConfig> Gameplay();
-}
-
-// 사용
-var result = await GameRemoteConfig.Gameplay().FetchAsync();
-```
-
-패키지 루트 `RoslynAnalyzers/Truesoft.Supabase.RemoteConfig.SourceGenerator.dll`이 자동으로 포함됩니다.
-
 ### 폴링 주기 사전 설정
 
 초기화 시 1회 호출합니다. 이후 해당 키의 Binding·Listener 생성 시 별도 지정이 없어도 이 주기가 사용됩니다.
@@ -223,12 +171,16 @@ Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 
 `SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고  
 **키 목록 가져오기 → 키 선택 → 필드 파싱 → 소스 생성 → 저장**으로  
-`GameplayV1Config.cs`를 생성합니다.
+설정 클래스를 자동 생성합니다.
 
 생성된 파일 구조 예시:
 
 ```csharp
 // GameplayV1Config.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
+using Newtonsoft.Json;
+using Truesoft.Supabase.Unity;
+
+[RemoteConfigKey("gameplay_v1")]
 [Serializable]
 public sealed partial class GameplayV1Config
 {
@@ -249,27 +201,21 @@ public sealed partial class GameplayV1Config
         [JsonProperty("dmg")] public float dmg;
     }
 }
-
-public static partial class GameplayV1RemoteConfig
-{
-    public const string Key = "gameplay_v1";
-
-    public static Func<Task<GameplayV1Config>> CreateReader(int maxStaleSeconds = 0) => ...;
-    public static RemoteConfigBinding<GameplayV1Config> CreateBinding(float pollIntervalSeconds = 60f) => ...;
-    public static RemoteConfigListener<GameplayV1Config> CreateListener(Action<GameplayV1Config> onChange, ...) => ...;
-}
 ```
 
 사용 예:
 
 ```csharp
 // Reader
-var reader = GameplayV1RemoteConfig.CreateReader();
+var reader = RemoteConfig<GameplayV1Config>.CreateReader();
 var cfg    = await reader();
 
 // Binding
-_binding = GameplayV1RemoteConfig.CreateBinding(pollIntervalSeconds: 60f);
+_binding = RemoteConfig<GameplayV1Config>.CreateBinding(pollIntervalSeconds: 60f);
 float dmg = _binding.Value?.battle?.dmg ?? 1f;
+
+// Listener
+_listener = RemoteConfig<GameplayV1Config>.CreateListener(cfg => ApplyConfig(cfg));
 ```
 
 > [!NOTE]

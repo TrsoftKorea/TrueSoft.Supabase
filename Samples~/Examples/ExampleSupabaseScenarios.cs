@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Truesoft.Supabase.Unity;
-using Truesoft.Supabase.Unity.RemoteConfig;
 using UnityEngine;
 using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
 
@@ -118,9 +117,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     // ③ Listener (E): 값 변경 시 콜백 호출 — E를 다시 누르면 종료
     // ─────────────────────────────────────────────────────────────────────────
 
-    private const string TestRemoteConfigKey = "test";
-
+    // TestConfig: RemoteConfigKey 어트리뷰트로 DB 키를 선언합니다.
     [Serializable]
+    [RemoteConfigKey("test")]
     private sealed class TestConfig { public string a; public int b; public bool c; }
 
     private Func<Task<TestConfig>>           _rcReader;
@@ -130,7 +129,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>T — RemoteConfig Reader. 캐시 만료 시 서버에서 최신 값을 가져옵니다.</summary>
     private async Task TestRemoteConfigReaderAsync()
     {
-        _rcReader ??= SupabaseClient.CreateRemoteConfigReader<TestConfig>(TestRemoteConfigKey);
+        _rcReader ??= RemoteConfig<TestConfig>.CreateReader();
 
         var val = await _rcReader();
         if (val != null) Debug.Log($"[RC ①] Reader: a={val.a}, b={val.b}, c={val.c}");
@@ -140,8 +139,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>U — RemoteConfig Binding. 60초 폴링, .Value로 즉시 읽기.</summary>
     private void TestRemoteConfigBinding()
     {
-        _rcBinding ??= SupabaseClient.CreateRemoteConfigBinding<TestConfig>(
-            TestRemoteConfigKey, pollIntervalSeconds: 60f);
+        _rcBinding ??= RemoteConfig<TestConfig>.CreateBinding(pollIntervalSeconds: 60f);
 
         var val = _rcBinding.Value;
         if (val != null) Debug.Log($"[RC ②] Binding: a={val.a}, b={val.b}, c={val.c}");
@@ -159,9 +157,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             return;
         }
 
-        _rcListener = SupabaseClient.CreateRemoteConfigListener<TestConfig>(
-            TestRemoteConfigKey, pollIntervalSeconds: 60f,
-            val => Debug.Log($"[RC ③] Listener 콜백: a={val.a}, b={val.b}, c={val.c}"));
+        _rcListener = RemoteConfig<TestConfig>.CreateListener(
+            val => Debug.Log($"[RC ③] Listener 콜백: a={val.a}, b={val.b}, c={val.c}"),
+            pollIntervalSeconds: 60f);
         Debug.Log("[RC ③] Listener 시작.");
     }
 

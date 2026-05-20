@@ -263,7 +263,7 @@ namespace Truesoft.Supabase.Unity
             try
             {
                 var accessToken = _accessTokenGetter?.Invoke();
-                await PollKeyAsync(key, accessToken).ConfigureAwait(false);
+                await PollKeyAsync(key, accessToken).ConfigureAwait(true);
             }
             catch (Exception e)
             {

@@ -190,12 +190,14 @@ namespace Truesoft.Supabase.Editor
 
         // ── Source generation ────────────────────────────────────────────────
 
-        /// <summary>DTO + 접근자 클래스 C# 소스를 생성합니다.</summary>
+        /// <summary>
+        /// <c>[RemoteConfigKey]</c> 어트리뷰트가 포함된 DTO 클래스 C# 소스를 생성합니다.
+        /// 접근자 클래스는 생성하지 않습니다. 게임 코드에서 <c>RemoteConfig&lt;T&gt;</c>를 직접 사용하세요.
+        /// </summary>
         /// <param name="description">DB remote_config.description 값. 클래스 주석에 포함됩니다.</param>
         public static string GenerateSource(
             IReadOnlyList<RcEditableField> fields,
             string configClassName,
-            string accessorClassName,
             string keyName,
             string namespaceName,
             IReadOnlyList<string> extraUsings = null,
@@ -217,9 +219,7 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using Newtonsoft.Json;");
-            sb.AppendLine("using Truesoft.Supabase.Core.Data;");
             sb.AppendLine("using Truesoft.Supabase.Unity;");
-            sb.AppendLine("using Truesoft.Supabase.Unity.RemoteConfig;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
                     if (!string.IsNullOrWhiteSpace(ns))
@@ -232,12 +232,8 @@ namespace Truesoft.Supabase.Editor
                 sb.AppendLine("{");
             }
 
-            // DTO 클래스
-            AppendConfigClass(sb, ind, configClassName, fields, depth: 0, keyName: keyName);
-            sb.AppendLine();
-
-            // 접근자 클래스
-            AppendAccessorClass(sb, ind, accessorClassName, configClassName, keyName, description);
+            // DTO 클래스 ([RemoteConfigKey] 포함)
+            AppendConfigClass(sb, ind, configClassName, fields, depth: 0, keyName: keyName, description: description);
 
             if (useNs)
                 sb.AppendLine("}");
@@ -251,14 +247,16 @@ namespace Truesoft.Supabase.Editor
             string className,
             IReadOnlyList<RcEditableField> allFields,
             int depth,
-            string keyName = null)
+            string keyName = null,
+            string description = null)
         {
             // 이 depth에 속하는 필드만 (자식 depth의 필드는 재귀 호출에서 처리)
             if (depth == 0 && !string.IsNullOrWhiteSpace(keyName))
             {
+                var descPart = string.IsNullOrWhiteSpace(description) ? "" : " — " + EscapeXml(description.Trim());
                 sb.AppendLine(ind + "/// <summary>");
-                sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCs(keyName) + "\"</c> 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
-                sb.AppendLine(ind + "/// DB 값이 갱신되면 폴링 주기에 따라 자동 반영됩니다.");
+                sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCs(keyName) + "\"</c>" + descPart + " 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
+                sb.AppendLine(ind + "/// <c>RemoteConfig&lt;" + className + "&gt;.CreateListener/Binding/Reader()</c> 로 사용하세요.");
                 sb.AppendLine(ind + "/// <para><b>이 파일은 자동 생성됩니다. 직접 수정하지 마세요.</b></para>");
                 sb.AppendLine(ind + "/// </summary>");
             }
@@ -266,6 +264,9 @@ namespace Truesoft.Supabase.Editor
             {
                 sb.AppendLine(ind + "/// <summary>중첩 설정 구조체입니다.</summary>");
             }
+
+            if (depth == 0 && !string.IsNullOrWhiteSpace(keyName))
+                sb.AppendLine(ind + "[RemoteConfigKey(\"" + EscapeCs(keyName) + "\")]");
 
             sb.AppendLine(ind + "[Serializable]");
             sb.AppendLine(ind + "public sealed partial class " + className);
@@ -301,86 +302,6 @@ namespace Truesoft.Supabase.Editor
                 }
             }
 
-            sb.AppendLine(ind + "}");
-        }
-
-        private static void AppendAccessorClass(
-            StringBuilder sb, string ind,
-            string accessorClass, string configClass, string keyName, string description = null)
-        {
-            var descLine = string.IsNullOrWhiteSpace(description)
-                ? ""
-                : " — " + description.Trim();
-
-            // ─ 클래스 XML doc ────────────────────────────────────────────────
-            sb.AppendLine(ind + "/// <summary>");
-            sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCs(keyName) + "\"</c>" + EscapeXml(descLine) + " 에 대한 정적 접근자입니다.");
-            sb.AppendLine(ind + "/// <list type=\"bullet\">");
-            sb.AppendLine(ind + "/// <item><description>");
-            sb.AppendLine(ind + "///   <see cref=\"CreateReader\"/> — 비동기로 값을 한 번 읽습니다.");
-            sb.AppendLine(ind + "/// </description></item>");
-            sb.AppendLine(ind + "/// <item><description>");
-            sb.AppendLine(ind + "///   <see cref=\"CreateBinding\"/> — 폴링 자동 갱신 바인딩 객체를 만듭니다. (<c>binding.Value</c> 로 동기 접근)");
-            sb.AppendLine(ind + "/// </description></item>");
-            sb.AppendLine(ind + "/// <item><description>");
-            sb.AppendLine(ind + "///   <see cref=\"CreateListener\"/> — 값이 갱신될 때마다 콜백을 받습니다.");
-            sb.AppendLine(ind + "/// </description></item>");
-            sb.AppendLine(ind + "/// </list>");
-            sb.AppendLine(ind + "/// </summary>");
-            sb.AppendLine(ind + "public static partial class " + accessorClass);
-            sb.AppendLine(ind + "{");
-
-            // ─ Key 상수 ──────────────────────────────────────────────────────
-            sb.AppendLine(ind + "    /// <summary>DB <c>remote_config</c> 테이블의 키 이름입니다.</summary>");
-            sb.AppendLine(ind + "    public const string Key = \"" + EscapeCs(keyName) + "\";");
-            sb.AppendLine();
-
-            // ─ CreateReader ───────────────────────────────────────────────────
-            sb.AppendLine(ind + "    /// <summary>");
-            sb.AppendLine(ind + "    /// 값을 비동기로 한 번 읽습니다.<br/>");
-            sb.AppendLine(ind + "    /// 캐시가 신선하면 즉시 반환하고, 만료됐으면 서버에서 갱신합니다.");
-            sb.AppendLine(ind + "    /// </summary>");
-            sb.AppendLine(ind + "    /// <param name=\"maxStaleSeconds\">");
-            sb.AppendLine(ind + "    ///   유효로 간주할 최대 캐시 경과 시간(초).<br/>");
-            sb.AppendLine(ind + "    ///   0이면 DB의 <c>max_stale_seconds</c> 설정을 따릅니다.");
-            sb.AppendLine(ind + "    /// </param>");
-            sb.AppendLine(ind + "    /// <example><code>");
-            sb.AppendLine(ind + "    /// var config = await " + accessorClass + ".CreateReader()();");
-            sb.AppendLine(ind + "    /// </code></example>");
-            sb.AppendLine(ind + "    public static System.Func<System.Threading.Tasks.Task<" + configClass + ">> CreateReader(");
-            sb.AppendLine(ind + "        int maxStaleSeconds = 0) =>");
-            sb.AppendLine(ind + "        Supabase.CreateRemoteConfigReader<" + configClass + ">(Key, maxStaleSeconds);");
-            sb.AppendLine();
-
-            // ─ CreateBinding ─────────────────────────────────────────────────
-            sb.AppendLine(ind + "    /// <summary>");
-            sb.AppendLine(ind + "    /// 폴링으로 값을 자동 갱신하는 바인딩 객체를 만듭니다.<br/>");
-            sb.AppendLine(ind + "    /// <c>binding.Value</c> 로 최신 값을 동기적으로 읽을 수 있습니다.<br/>");
-            sb.AppendLine(ind + "    /// 객체 파괴 시 <see cref=\"IDisposable.Dispose\"/> 를 호출하세요.");
-            sb.AppendLine(ind + "    /// </summary>");
-            sb.AppendLine(ind + "    /// <param name=\"pollIntervalSeconds\">갱신 확인 주기(초). 0이면 자동 폴링 없음.</param>");
-            sb.AppendLine(ind + "    /// <example><code>");
-            sb.AppendLine(ind + "    /// _binding = " + accessorClass + ".CreateBinding();");
-            sb.AppendLine(ind + "    /// var config = _binding.Value; // 매 프레임 최신 값 읽기");
-            sb.AppendLine(ind + "    /// </code></example>");
-            sb.AppendLine(ind + "    public static RemoteConfigBinding<" + configClass + "> CreateBinding(");
-            sb.AppendLine(ind + "        float pollIntervalSeconds = 60f) =>");
-            sb.AppendLine(ind + "        Supabase.CreateRemoteConfigBinding<" + configClass + ">(Key, pollIntervalSeconds);");
-            sb.AppendLine();
-
-            // ─ CreateListener ────────────────────────────────────────────────
-            sb.AppendLine(ind + "    /// <summary>");
-            sb.AppendLine(ind + "    /// 값이 갱신될 때마다 콜백을 호출하는 리스너를 만듭니다.<br/>");
-            sb.AppendLine(ind + "    /// 객체 파괴 시 <see cref=\"IDisposable.Dispose\"/> 를 호출하세요.");
-            sb.AppendLine(ind + "    /// </summary>");
-            sb.AppendLine(ind + "    /// <param name=\"onChange\">값이 갱신될 때 호출되는 콜백.</param>");
-            sb.AppendLine(ind + "    /// <param name=\"pollIntervalSeconds\">갱신 확인 주기(초). 0이면 자동 폴링 없음.</param>");
-            sb.AppendLine(ind + "    /// <example><code>");
-            sb.AppendLine(ind + "    /// _listener = " + accessorClass + ".CreateListener(cfg => ApplyConfig(cfg));");
-            sb.AppendLine(ind + "    /// </code></example>");
-            sb.AppendLine(ind + "    public static RemoteConfigListener<" + configClass + "> CreateListener(");
-            sb.AppendLine(ind + "        System.Action<" + configClass + "> onChange, float pollIntervalSeconds = 60f) =>");
-            sb.AppendLine(ind + "        Supabase.CreateRemoteConfigListener<" + configClass + ">(Key, pollIntervalSeconds, onChange);");
             sb.AppendLine(ind + "}");
         }
 
