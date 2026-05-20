@@ -15,7 +15,7 @@ namespace Truesoft.Supabase.Unity.Config
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
     /// </summary>
     [DefaultExecutionOrder(-100)]
-    [AddComponentMenu("TrueSoft/Supabase/Supabase 런타임")]
+    [AddComponentMenu("TrueSoft/Supabase/SupabaseRuntime")]
     public sealed class SupabaseRuntime : MonoBehaviour
     {
 
