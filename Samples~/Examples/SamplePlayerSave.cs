@@ -20,7 +20,8 @@ public sealed partial class SamplePlayerSave : StaticUserSave<SamplePlayerSave.R
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
 
-    public static System.Threading.Tasks.Task<bool> TryLoadAsync() => Instance.TryLoadAsync();
+    public static System.Threading.Tasks.Task<bool> TryLoadAsync() =>
+        ((StaticUserSave<Row>)Instance).TryLoadAsync();
 
     [Serializable]
     public sealed class Row
