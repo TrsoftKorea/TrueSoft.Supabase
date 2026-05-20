@@ -39,18 +39,18 @@ namespace Truesoft.Supabase.Unity
         public int timeoutSeconds = 30;
 
         [Header("유저 세이브 저장 주기")]
-        [Label("Urgent 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Urgent 필드가 dirty일 때 서버 전송까지 대기하는 최소 시간(초).\n레벨·튜토리얼 완료 등 중요 데이터에 권장: 0.5 ~ 2 s")]
+        [Label("높음 우선순위 쿨다운 (초)")]
+        [Tooltip("DataSavePriority.Urgent — 레벨·튜토리얼 완료 등 중요 데이터.\n변경 후 이 시간(초) 뒤에 서버로 전송됩니다. 권장: 0.5 ~ 2 s")]
         [Min(0f)]
         public float urgentSaveCooldownSeconds = 1f;
 
-        [Label("Normal 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Normal(기본) 필드가 dirty일 때 대기 시간(초).\n일반 진행 데이터에 권장: 3 ~ 10 s")]
+        [Label("보통 우선순위 쿨다운 (초)")]
+        [Tooltip("DataSavePriority.Normal — 우선순위를 지정하지 않은 기본 필드.\n권장: 3 ~ 10 s")]
         [Min(0f)]
         public float normalSaveCooldownSeconds = 5f;
 
-        [Label("Lazy 쿨다운 (초)")]
-        [Tooltip("DataSavePriority.Lazy 필드가 dirty일 때 대기 시간(초).\n골드 등 자주 변하고 중요도가 낮은 데이터에 권장: 15 ~ 60 s")]
+        [Label("낮음 우선순위 쿨다운 (초)")]
+        [Tooltip("DataSavePriority.Lazy — 골드 등 자주 변하고 중요도가 낮은 데이터.\n권장: 15 ~ 60 s")]
         [Min(0f)]
         public float lazySaveCooldownSeconds = 30f;
 

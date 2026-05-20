@@ -188,8 +188,9 @@ namespace Truesoft.Supabase.Editor
             { "string", "Dictionary<K, V>", "커스텀..." };
 
         // DataSavePriority 드롭다운 옵션 (label → int 매핑)
-        private static readonly string[] s_priorityOptions = { "Normal", "Urgent", "Lazy" };
-        private static readonly int[]    s_priorityValues  = {  1,        0,        2     };
+        // Normal=1(보통), Urgent=0(높음), Lazy=2(낮음)
+        private static readonly string[] s_priorityOptions = { "보통", "높음", "낮음" };
+        private static readonly int[]    s_priorityValues  = {  1,      0,      2     };
 
         // Dictionary key 타입 선택지 (value 타입은 자유 텍스트)
         private static readonly string[] s_dictKeyOptions = { "string", "int" };
