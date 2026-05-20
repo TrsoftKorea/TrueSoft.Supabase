@@ -69,9 +69,23 @@ namespace Truesoft.Supabase.Editor
 
         public override void OnInspectorGUI()
         {
-            DrawDefaultInspector();
+            // DrawDefaultInspector 대신 직접 이터레이션 — publishableKey 뒤에 Secret 키 삽입
+            serializedObject.Update();
+            var prop = serializedObject.GetIterator();
+            var enterChildren = true;
+            while (prop.NextVisible(enterChildren))
+            {
+                enterChildren = false;
+                using (new EditorGUI.DisabledScope(prop.propertyPath == "m_Script"))
+                    EditorGUILayout.PropertyField(prop, true);
 
-            DrawSecretKeyField();
+                if (prop.name == "publishableKey")
+                {
+                    EditorGUILayout.Space(2);
+                    DrawSecretKeyField();
+                }
+            }
+            serializedObject.ApplyModifiedProperties();
 
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
