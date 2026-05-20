@@ -111,15 +111,11 @@ namespace Truesoft.Supabase.Unity
             // DataSchema는 Core.Data.DataSavePriority를 반환하므로 int 경유로 Unity DataSavePriority로 변환합니다.
             var coreP = DataSchema.GetHighestDirtyPriority(_lastSynced, Current);
             var p = coreP.HasValue ? (DataSavePriority)(int)coreP.Value : DataSavePriority.Normal;
+            // 인스턴스별 오버라이드 우선, 없으면 SupabaseSettings에서 설정한 전역 기본값 사용
             if (_priorityCooldowns.TryGetValue(p, out var c))
                 return c;
 
-            return p switch
-            {
-                DataSavePriority.Urgent => 1f,
-                DataSavePriority.Lazy   => 30f,
-                _                       => 5f   // Normal 기본값
-            };
+            return UserSaveStaticSyncRegistry.GetPriorityCooldown((int)p);
         }
 
         // ── 레지스트리 콜백 ───────────────────────────────────────────────────

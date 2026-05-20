@@ -592,6 +592,15 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             UserSaveStaticSyncRegistry.ConfigureCooldown(seconds);
         }
 
+        /// <summary>
+        /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
+        /// <see cref="SupabaseSettings"/>에서 읽은 값을 <see cref="Config.SupabaseRuntime"/>이 자동으로 적용합니다.
+        /// </summary>
+        public static void ConfigureUserSavePriorityCooldowns(float urgent, float normal, float lazy)
+        {
+            UserSaveStaticSyncRegistry.ConfigurePriorityCooldowns(urgent, normal, lazy);
+        }
+
         /// <summary>생성된 정적 세이브 타입을 자동 동기화 레지스트리에 등록합니다.</summary>
         public static void RegisterUserSaveStaticSync(
             string key,

@@ -211,6 +211,13 @@ namespace Truesoft.Supabase.Unity
         public static void ConfigureUserSaveAutoSyncCooldown(float seconds) =>
             SupabaseSDK.ConfigureUserSaveAutoSyncCooldown(seconds);
 
+        /// <summary>
+        /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
+        /// 인스턴스별 <c>ConfigureCooldown</c> 오버라이드가 있으면 그 값이 우선합니다.
+        /// </summary>
+        public static void ConfigureUserSavePriorityCooldowns(float urgent, float normal, float lazy) =>
+            SupabaseSDK.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
+
         /// <summary>생성된 정적 세이브 타입을 자동 동기화 레지스트리에 등록합니다.</summary>
         public static void RegisterUserSaveStaticSync(
             string key,

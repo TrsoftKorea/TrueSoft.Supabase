@@ -22,8 +22,34 @@ namespace Truesoft.Supabase.Unity
         }
 
         private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal);
-        private static float _cooldownSeconds = 1f;
+        private static float _cooldownSeconds = 5f;
         private static float _lastRealtime;
+
+        // ── 전역 Priority 쿨다운 테이블 ────────────────────────────────────────
+        private static float _urgentCooldown = 1f;
+        private static float _normalCooldown = 5f;
+        private static float _lazyCooldown   = 30f;
+
+        /// <summary>
+        /// 모든 <see cref="StaticUserSave{TRow}"/> 인스턴스에 공통으로 적용되는
+        /// 우선순위별 기본 쿨다운(초)을 설정합니다.
+        /// 인스턴스별 <c>ConfigureCooldown</c> 오버라이드가 있으면 그 값이 우선합니다.
+        /// </summary>
+        public static void ConfigurePriorityCooldowns(float urgent, float normal, float lazy)
+        {
+            _urgentCooldown  = Mathf.Max(0f, urgent);
+            _normalCooldown  = Mathf.Max(0f, normal);
+            _lazyCooldown    = Mathf.Max(0f, lazy);
+            _cooldownSeconds = _normalCooldown; // 레거시 fallback도 Normal과 동기화
+        }
+
+        /// <summary>우선순위 정수(0=Urgent, 1=Normal, 2=Lazy)에 해당하는 전역 기본 쿨다운(초)을 반환합니다.</summary>
+        internal static float GetPriorityCooldown(int priority) => priority switch
+        {
+            0 => _urgentCooldown,
+            2 => _lazyCooldown,
+            _ => _normalCooldown
+        };
 
         public static void ConfigureCooldown(float seconds)
         {

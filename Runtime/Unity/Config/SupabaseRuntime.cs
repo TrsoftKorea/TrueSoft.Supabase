@@ -18,11 +18,6 @@ namespace Truesoft.Supabase.Unity.Config
     [AddComponentMenu("TrueSoft/Supabase/Supabase 런타임")]
     public sealed class SupabaseRuntime : MonoBehaviour
     {
-        /// <summary>
-        /// StaticUserSave.GetDirtyCooldown를 사용하지 않는 레거시 항목의 전역 fallback 쿨다운.
-        /// DataSavePriority.Normal 기본값(5 s)과 맞춥니다.
-        /// </summary>
-        private const float UserSaveAutoSyncCooldownSeconds = 5f;
 
         private static SupabaseRuntime _instance;
 
@@ -83,7 +78,11 @@ namespace Truesoft.Supabase.Unity.Config
             var bootstrap = new SupabaseUnityBootstrap();
             bootstrap.Initialize(settings);
 
-            Supabase.ConfigureUserSaveAutoSyncCooldown(UserSaveAutoSyncCooldownSeconds);
+            // SupabaseSettings의 우선순위별 저장 주기를 전역에 적용
+            Supabase.ConfigureUserSavePriorityCooldowns(
+                settings.urgentSaveCooldownSeconds,
+                settings.normalSaveCooldownSeconds,
+                settings.lazySaveCooldownSeconds);
 
             DontDestroyOnLoad(gameObject);
 
