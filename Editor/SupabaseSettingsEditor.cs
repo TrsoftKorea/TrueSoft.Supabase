@@ -71,6 +71,8 @@ namespace Truesoft.Supabase.Editor
         {
             DrawDefaultInspector();
 
+            DrawSecretKeyField();
+
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
@@ -81,8 +83,6 @@ namespace Truesoft.Supabase.Editor
                 EditorGUILayout.HelpBox(
                     "게임 데이터 스키마를 OpenAPI로 읽어 PlayerSave 클래스를 생성합니다.",
                     MessageType.Info);
-
-                DrawSecretKeyField();
 
                 EditorGUILayout.Space(4);
                 using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
@@ -373,9 +373,6 @@ namespace Truesoft.Supabase.Editor
             EditorGUILayout.HelpBox(
                 "remote_config 테이블에서 키를 읽어 DTO + 접근자 클래스를 생성합니다.",
                 MessageType.Info);
-
-            // Secret 키는 유저 세이브 섹션과 공유
-            EditorGUILayout.LabelField("Secret 키", _secretKey.Length > 0 ? "(입력됨)" : "(없음)", EditorStyles.miniLabel);
 
             EditorGUILayout.Space(4);
             using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
