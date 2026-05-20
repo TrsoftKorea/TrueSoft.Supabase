@@ -183,18 +183,9 @@ namespace Truesoft.Supabase.Editor
             return allowed[newSelIdx];
         }
 
-        /// <summary>ClrType 문자열에서 FieldTypeCategory를 결정합니다.</summary>
+        /// <summary>명확한 ClrType 문자열에서 FieldTypeCategory를 결정합니다 (isAmbiguous=false인 경우만 호출).</summary>
         private static FieldTypeCategory ResolveTypeCategory(string rawClrType)
         {
-            if (rawClrType?.Contains("/*") == true)
-            {
-                // json/jsonb → string 또는 커스텀 클래스로 매핑
-                if (rawClrType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0)
-                    return FieldTypeCategory.String;
-                // array, composite, allOf, $ref, unknown → 전체 표시
-                return FieldTypeCategory.Unknown;
-            }
-
             switch (rawClrType?.Trim())
             {
                 case "bool":                                         return FieldTypeCategory.Boolean;
@@ -280,7 +271,8 @@ namespace Truesoft.Supabase.Editor
                         Comment      = col.Comment,
                         TypeIndex    = typeIdx,
                         IsAmbiguous  = isAmbiguous,
-                        TypeCategory = ResolveTypeCategory(col.ClrType)
+                        // isAmbiguous(/* 포함) = 복잡한 타입(jsonb, array, $ref 등) → string 또는 커스텀 클래스만 허용
+                        TypeCategory = isAmbiguous ? FieldTypeCategory.String : ResolveTypeCategory(col.ClrType)
                     });
                 }
 
