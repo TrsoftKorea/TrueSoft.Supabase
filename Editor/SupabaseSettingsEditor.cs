@@ -12,7 +12,8 @@ namespace Truesoft.Supabase.Editor
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
         private const string PrefsKeySecret            = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
-        private const string PrefsKeyExtraUsings       = "Truesoft.Supabase.ClassGenerator.ExtraUsings";
+        private const string PrefsKeyExtraUsings       = "Truesoft.Supabase.PlayerSave.ExtraUsings";
+        private const string PrefsKeyRcExtraUsings     = "Truesoft.Supabase.RemoteConfig.ExtraUsings";
         private const string PrefsKeyColumnTypes       = "Truesoft.Supabase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "Truesoft.Supabase.PlayerSave.ColumnPriorities";
         private const string ClassName = "PlayerSave";
@@ -25,6 +26,7 @@ namespace Truesoft.Supabase.Editor
         private static bool _foldout;
         private static string _secretKey     = "";
         private static string _extraUsings   = "";
+        private static string _rcExtraUsings = "";
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
         private static bool _columnsFetched;
         private static List<string> _warnings = new List<string>();
@@ -67,8 +69,9 @@ namespace Truesoft.Supabase.Editor
 
         private void OnEnable()
         {
-            _secretKey   = EditorPrefs.GetString(PrefsKeySecret,      "");
-            _extraUsings = EditorPrefs.GetString(PrefsKeyExtraUsings, "");
+            _secretKey     = EditorPrefs.GetString(PrefsKeySecret,        "");
+            _extraUsings   = EditorPrefs.GetString(PrefsKeyExtraUsings,   "");
+            _rcExtraUsings = EditorPrefs.GetString(PrefsKeyRcExtraUsings, "");
 
             // Settings 에셋이 바뀔 때 이전 워크플로 상태를 초기화
             // (static 필드는 에셋 변경 후에도 잔존하므로 OnEnable에서 명시적으로 클리어)
@@ -315,6 +318,15 @@ namespace Truesoft.Supabase.Editor
             _extraUsings = EditorGUILayout.TextArea(_extraUsings, GUILayout.Height(40));
             if (EditorGUI.EndChangeCheck())
                 EditorPrefs.SetString(PrefsKeyExtraUsings, _extraUsings);
+        }
+
+        private static void DrawRcExtraUsingsField()
+        {
+            EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
+            EditorGUI.BeginChangeCheck();
+            _rcExtraUsings = EditorGUILayout.TextArea(_rcExtraUsings, GUILayout.Height(40));
+            if (EditorGUI.EndChangeCheck())
+                EditorPrefs.SetString(PrefsKeyRcExtraUsings, _rcExtraUsings);
         }
 
         /// <summary>추가 네임스페이스 텍스트 → 정규화된 네임스페이스 목록.</summary>
@@ -703,7 +715,7 @@ namespace Truesoft.Supabase.Editor
             DrawRcFieldList();
 
             EditorGUILayout.Space(4);
-            DrawExtraUsingsField();
+            DrawRcExtraUsingsField();
 
             // 클래스명 입력
             EditorGUILayout.Space(4);
@@ -922,7 +934,7 @@ namespace Truesoft.Supabase.Editor
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
-                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_extraUsings), description);
+                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_rcExtraUsings), description);
             }
             catch (Exception e)
             {
