@@ -81,7 +81,7 @@ namespace Truesoft.Supabase.Editor
 
                 if (prop.name == "publishableKey")
                 {
-                    EditorGUILayout.Space(2);
+                    //EditorGUILayout.Space(2);
                     DrawSecretKeyField();
                 }
             }
