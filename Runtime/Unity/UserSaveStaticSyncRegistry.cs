@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -330,7 +329,7 @@ namespace Truesoft.Supabase.Unity
 
         private static async Task<bool> WaitForSettledAsync(Entry entry, int timeoutMs)
         {
-            var sw = Stopwatch.StartNew();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var limitMs = Math.Max(250, timeoutMs);
             while (sw.ElapsedMilliseconds < limitMs)
             {
