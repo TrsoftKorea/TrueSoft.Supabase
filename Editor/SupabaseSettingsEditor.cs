@@ -186,9 +186,14 @@ namespace Truesoft.Supabase.Editor
         /// <summary>ClrType 문자열에서 FieldTypeCategory를 결정합니다.</summary>
         private static FieldTypeCategory ResolveTypeCategory(string rawClrType)
         {
-            // "/* ... */" 포함 → 수동 수정 필요 케이스, 전체 표시
             if (rawClrType?.Contains("/*") == true)
+            {
+                // json/jsonb → string 또는 커스텀 클래스로 매핑
+                if (rawClrType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return FieldTypeCategory.String;
+                // array, composite, allOf, $ref, unknown → 전체 표시
                 return FieldTypeCategory.Unknown;
+            }
 
             switch (rawClrType?.Trim())
             {
