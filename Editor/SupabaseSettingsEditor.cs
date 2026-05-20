@@ -11,7 +11,8 @@ namespace Truesoft.Supabase.Editor
     [CustomEditor(typeof(SupabaseSettings))]
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
-        private const string PrefsKeySecret = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
+        private const string PrefsKeySecret      = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
+        private const string PrefsKeyExtraUsings = "Truesoft.Supabase.ClassGenerator.ExtraUsings";
         private const string ClassName = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -21,7 +22,8 @@ namespace Truesoft.Supabase.Editor
         private const int CustomTypeIndex = 8;
 
         private static bool _foldout;
-        private static string _secretKey = "";
+        private static string _secretKey     = "";
+        private static string _extraUsings   = "";
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
         private static bool _columnsFetched;
         private static List<string> _warnings = new List<string>();
@@ -64,7 +66,8 @@ namespace Truesoft.Supabase.Editor
 
         private void OnEnable()
         {
-            _secretKey = EditorPrefs.GetString(PrefsKeySecret, "");
+            _secretKey   = EditorPrefs.GetString(PrefsKeySecret,      "");
+            _extraUsings = EditorPrefs.GetString(PrefsKeyExtraUsings, "");
         }
 
         public override void OnInspectorGUI()
@@ -108,6 +111,9 @@ namespace Truesoft.Supabase.Editor
                 {
                     EditorGUILayout.Space(6);
                     DrawColumnList();
+
+                    EditorGUILayout.Space(4);
+                    DrawExtraUsingsField();
 
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
@@ -217,6 +223,32 @@ namespace Truesoft.Supabase.Editor
                 case "string":                                       return FieldTypeCategory.String;
                 default:                                             return FieldTypeCategory.Unknown;
             }
+        }
+
+        /// <summary>두 생성기가 공유하는 추가 네임스페이스 입력 영역.</summary>
+        private static void DrawExtraUsingsField()
+        {
+            EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
+            EditorGUI.BeginChangeCheck();
+            _extraUsings = EditorGUILayout.TextArea(_extraUsings, GUILayout.Height(40));
+            if (EditorGUI.EndChangeCheck())
+                EditorPrefs.SetString(PrefsKeyExtraUsings, _extraUsings);
+        }
+
+        /// <summary>추가 네임스페이스 텍스트 → 정규화된 네임스페이스 목록.</summary>
+        private static List<string> ParseExtraUsings(string raw)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(raw)) return result;
+            foreach (var line in raw.Split('\n'))
+            {
+                var ns = line.Trim().TrimEnd(';');
+                if (ns.StartsWith("using ", StringComparison.Ordinal))
+                    ns = ns.Substring("using ".Length).Trim();
+                if (!string.IsNullOrWhiteSpace(ns))
+                    result.Add(ns);
+            }
+            return result;
         }
 
         private static void DrawColumnList()
@@ -393,7 +425,7 @@ namespace Truesoft.Supabase.Editor
             }
 
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
-            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data");
+            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data", ParseExtraUsings(_extraUsings));
         }
 
         private static void SaveToProject()
@@ -489,6 +521,9 @@ namespace Truesoft.Supabase.Editor
             // 필드 목록
             EditorGUILayout.Space(6);
             DrawRcFieldList();
+
+            EditorGUILayout.Space(4);
+            DrawExtraUsingsField();
 
             // 클래스명 입력
             EditorGUILayout.Space(4);
@@ -701,7 +736,7 @@ namespace Truesoft.Supabase.Editor
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
-                    includedFields, configCls, accessorCls, key, ns);
+                    includedFields, configCls, accessorCls, key, ns, ParseExtraUsings(_extraUsings));
             }
             catch (Exception e)
             {

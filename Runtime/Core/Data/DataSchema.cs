@@ -137,7 +137,7 @@ namespace Truesoft.Supabase.Core.Data
             {
                 if (p.GetIndexParameters().Length > 0)
                     continue;
-                if (p.GetCustomAttribute<DataColumnAttribute>() == null)
+                if (!HasDataColumnAttribute(p))
                     continue;
                 if (p.CanRead == false)
                     continue;
@@ -146,20 +146,45 @@ namespace Truesoft.Supabase.Core.Data
 
             foreach (var f in t.GetFields(flags))
             {
-                if (f.GetCustomAttribute<DataColumnAttribute>() == null)
+                if (!HasDataColumnAttribute(f))
                     continue;
                 yield return f;
             }
         }
 
+        /// <summary>
+        /// Core 또는 Unity 어셈블리의 DataColumnAttribute 여부를 확인합니다.
+        /// 타입 동등성 대신 이름 비교를 사용해 어셈블리와 무관하게 동작합니다.
+        /// </summary>
+        private static bool HasDataColumnAttribute(MemberInfo m)
+        {
+            // 빠른 경로: Core 자신의 어트리뷰트
+            if (m.GetCustomAttribute<DataColumnAttribute>() != null)
+                return true;
+            // 폴백: Unity 어셈블리 등 다른 어셈블리에 정의된 동명 어트리뷰트
+            foreach (var attr in m.GetCustomAttributes(false))
+                if (attr.GetType().Name == nameof(DataColumnAttribute))
+                    return true;
+            return false;
+        }
+
         private static string ResolveColumnName(MemberInfo m)
         {
+            // Core 어트리뷰트 (타입 안전)
             var attr = m.GetCustomAttribute<DataColumnAttribute>();
-            if (attr == null)
-                return null;
-            if (string.IsNullOrWhiteSpace(attr.ColumnName) == false)
-                return attr.ColumnName.Trim();
-            return m.Name;
+            if (attr != null)
+                return string.IsNullOrWhiteSpace(attr.ColumnName) ? m.Name : attr.ColumnName.Trim();
+
+            // 폴백: 이름 기반 조회 (Unity 어셈블리 등)
+            foreach (var a in m.GetCustomAttributes(false))
+            {
+                if (a.GetType().Name != nameof(DataColumnAttribute)) continue;
+                var prop    = a.GetType().GetProperty("ColumnName");
+                var colName = prop?.GetValue(a) as string;
+                return string.IsNullOrWhiteSpace(colName) ? m.Name : colName.Trim();
+            }
+
+            return null;
         }
 
         /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>

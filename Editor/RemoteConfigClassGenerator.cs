@@ -196,7 +196,8 @@ namespace Truesoft.Supabase.Editor
             string configClassName,
             string accessorClassName,
             string keyName,
-            string namespaceName)
+            string namespaceName,
+            IReadOnlyList<string> extraUsings = null)
         {
             if (fields == null || fields.Count == 0)
                 throw new InvalidOperationException("생성할 필드가 없습니다.");
@@ -215,6 +216,10 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using Newtonsoft.Json;");
             sb.AppendLine("using Truesoft.Supabase.Unity;");
+            if (extraUsings != null)
+                foreach (var ns in extraUsings)
+                    if (!string.IsNullOrWhiteSpace(ns))
+                        sb.AppendLine("using " + ns.Trim() + ";");
             sb.AppendLine();
 
             if (useNs)

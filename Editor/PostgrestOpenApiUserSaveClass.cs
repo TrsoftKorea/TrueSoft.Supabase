@@ -168,7 +168,8 @@ namespace Truesoft.Supabase.Editor
             IReadOnlyList<OpenApiColumn> columns,
             string className,
             string namespaceName,
-            string tableLabel)
+            string tableLabel,
+            IReadOnlyList<string> extraUsings = null)
         {
             if (columns == null || columns.Count == 0)
                 throw new InvalidOperationException("생성할 컬럼이 없습니다.");
@@ -183,8 +184,11 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using Truesoft.Supabase.Core.Data;");
             sb.AppendLine("using Truesoft.Supabase.Unity;");
+            if (extraUsings != null)
+                foreach (var ns in extraUsings)
+                    if (!string.IsNullOrWhiteSpace(ns))
+                        sb.AppendLine("using " + ns.Trim() + ";");
             sb.AppendLine();
 
             var useNs = string.IsNullOrWhiteSpace(namespaceName) == false;
