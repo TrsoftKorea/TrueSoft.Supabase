@@ -412,8 +412,11 @@ namespace Truesoft.Supabase.Editor
                         }
                         else
                         {
-                            col.TypeIndex = CustomTypeIndex;
+                            col.TypeIndex  = CustomTypeIndex;
                             col.CustomType = existingType;
+                            // Dictionary 타입은 항상 Json 카테고리로 표시해야 전용 팝업이 뜸
+                            if (TryParseDictionaryTypes(existingType, out _, out _))
+                                col.TypeCategory = FieldTypeCategory.Json;
                         }
                         col.IsAmbiguous = false;
                     }
@@ -454,7 +457,7 @@ namespace Truesoft.Supabase.Editor
                 // [DataColumn("col_name")] public TYPE field;
                 // [DataColumn] public TYPE field;
                 var pattern = new Regex(
-                    @"\[DataColumn(?:\(""([^""]*)""\))?\]\s+public\s+(.+?)\s+(\w+)\s*;",
+                    @"\[DataColumn(?:\(""([^""]*)""\))?\]\s+public\s+(.+?)\s+@?(\w+)\s*;",
                     RegexOptions.Multiline);
 
                 foreach (Match m in pattern.Matches(source))
