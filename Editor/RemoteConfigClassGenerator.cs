@@ -329,6 +329,7 @@ namespace Truesoft.Supabase.Editor
                 case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4, 8 };   // int, short, long, ulong, 커스텀
                 case FieldTypeCategory.Float:   return new[] { 5, 6, 8 };          // float, double, 커스텀
                 case FieldTypeCategory.String:  return new[] { 7, 8 };             // string, 커스텀
+                case FieldTypeCategory.Json:    return new[] { 7, 8 };             // string, 커스텀 (Dictionary 프리셋은 별도 처리)
                 case FieldTypeCategory.Array:   return new[] { 8 };                // 커스텀 전용
                 default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }; // 전체
             }
@@ -487,6 +488,7 @@ namespace Truesoft.Supabase.Editor
         Integer,  // int, short, long, ulong, 커스텀
         Float,    // float, double, 커스텀
         String,   // string, 커스텀
+        Json,     // string, Dictionary<string,object>(프리셋), 커스텀  ← jsonb/$ref/allOf 등 복잡한 DB 타입
         Array,    // 커스텀 전용
         Unknown,  // 전체 표시
     }

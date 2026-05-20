@@ -162,12 +162,35 @@ namespace Truesoft.Supabase.Editor
             }
         }
 
+        // Json 카테고리 전용 드롭다운 옵션
+        private static readonly string[] s_jsonTypeOptions =
+            { "string", "Dictionary<string, object>", "커스텀..." };
+
         /// <summary>
         /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
+        /// Json 카테고리는 string / Dictionary 프리셋 / 커스텀 세 선택지를 제공합니다.
         /// 현재 TypeIndex가 카테고리에 없으면 전체 목록을 표시합니다.
         /// </summary>
-        private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width)
+        private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width,
+            ref string customType)
         {
+            // Json 카테고리 전용 처리
+            if (category == FieldTypeCategory.Json)
+            {
+                int selIdx;
+                if (currentTypeIndex != RemoteConfigClassGenerator.CustomTypeIndex)
+                    selIdx = 0; // string
+                else if (customType == "Dictionary<string, object>")
+                    selIdx = 1; // Dictionary 프리셋
+                else
+                    selIdx = 2; // 커스텀
+
+                var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
+                if (picked == 0) { customType = ""; return 7; }                          // string
+                if (picked == 1) { customType = "Dictionary<string, object>"; return RemoteConfigClassGenerator.CustomTypeIndex; }
+                return RemoteConfigClassGenerator.CustomTypeIndex;                        // 커스텀, 텍스트 필드 유지
+            }
+
             var allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(category);
 
             // 기존 파일 복원 등으로 카테고리에 맞지 않는 타입이 들어있으면 전체 표시
@@ -178,9 +201,9 @@ namespace Truesoft.Supabase.Editor
             for (var j = 0; j < allowed.Length; j++)
                 options[j] = RemoteConfigClassGenerator.TypeOptions[allowed[j]];
 
-            var selIdx    = Math.Max(0, Array.IndexOf(allowed, currentTypeIndex));
-            var newSelIdx = EditorGUILayout.Popup(selIdx, options, GUILayout.Width(width));
-            return allowed[newSelIdx];
+            var selIdx2    = Math.Max(0, Array.IndexOf(allowed, currentTypeIndex));
+            var newSelIdx2 = EditorGUILayout.Popup(selIdx2, options, GUILayout.Width(width));
+            return allowed[newSelIdx2];
         }
 
         /// <summary>명확한 ClrType 문자열에서 FieldTypeCategory를 결정합니다 (isAmbiguous=false인 경우만 호출).</summary>
@@ -219,7 +242,7 @@ namespace Truesoft.Supabase.Editor
                         EditorGUILayout.LabelField(label,
                             col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
                             GUILayout.MinWidth(col.TypeIndex == CustomTypeIndex ? 60 : 100));
-                        col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f);
+                        col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
                         if (col.TypeIndex == CustomTypeIndex)
                             col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
@@ -271,8 +294,8 @@ namespace Truesoft.Supabase.Editor
                         Comment      = col.Comment,
                         TypeIndex    = typeIdx,
                         IsAmbiguous  = isAmbiguous,
-                        // isAmbiguous(/* 포함) = 복잡한 타입(jsonb, array, $ref 등) → string 또는 커스텀 클래스만 허용
-                        TypeCategory = isAmbiguous ? FieldTypeCategory.String : ResolveTypeCategory(col.ClrType)
+                        // isAmbiguous(/* 포함) = 복잡한 타입(jsonb, array, $ref 등) → Json 카테고리 (Dictionary 프리셋 포함)
+                        TypeCategory = isAmbiguous ? FieldTypeCategory.Json : ResolveTypeCategory(col.ClrType)
                     });
                 }
 
@@ -547,7 +570,7 @@ namespace Truesoft.Supabase.Editor
                                 f.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
                                 GUILayout.MinWidth(f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 100));
 
-                            f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f);
+                            f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f, ref f.CustomType);
                             if (f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
                                 f.CustomType = EditorGUILayout.TextField(f.CustomType, GUILayout.ExpandWidth(true));
 
