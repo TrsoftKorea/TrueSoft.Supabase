@@ -13,6 +13,7 @@ namespace Truesoft.Supabase.Editor
     {
         private const string PrefsKeySecret      = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
         private const string PrefsKeyExtraUsings = "Truesoft.Supabase.ClassGenerator.ExtraUsings";
+        private const string PrefsKeyColumnTypes = "Truesoft.Supabase.PlayerSave.ColumnTypes";
         private const string ClassName = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -398,8 +399,17 @@ namespace Truesoft.Supabase.Editor
                     });
                 }
 
-                // 기존 PlayerSave.cs가 있으면 타입 덮어쓰기
-                var existing = TryLoadExistingColumnTypes();
+                // EditorPrefs 우선, 파일 파싱 폴백으로 기존 타입 복원
+                var prefsTypes = LoadColumnTypesFromPrefs();
+                var fileTypes  = TryLoadExistingColumnTypes();
+
+                // 두 소스 병합 (EditorPrefs가 더 최신이므로 덮어씀)
+                var existing = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in fileTypes)
+                    existing[kv.Key] = kv.Value;
+                foreach (var kv in prefsTypes)
+                    existing[kv.Key] = kv.Value;
+
                 if (existing.Count > 0)
                 {
                     foreach (var col in _editableColumns)
@@ -496,6 +506,39 @@ namespace Truesoft.Supabase.Editor
 
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
             _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data", ParseExtraUsings(_extraUsings));
+
+            // 소스 생성 시점에 현재 타입 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
+            SaveColumnTypesToPrefs();
+        }
+
+        /// <summary>EditorPrefs에서 컬럼명→타입 매핑을 로드합니다.</summary>
+        private static Dictionary<string, string> LoadColumnTypesFromPrefs()
+        {
+            var json = EditorPrefs.GetString(PrefsKeyColumnTypes, "");
+            if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, string>();
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(json)
+                       ?? new Dictionary<string, string>();
+            }
+            catch
+            {
+                return new Dictionary<string, string>();
+            }
+        }
+
+        /// <summary>현재 _editableColumns의 타입 설정을 EditorPrefs에 직렬화해 저장합니다.</summary>
+        private static void SaveColumnTypesToPrefs()
+        {
+            var dict = new Dictionary<string, string>();
+            foreach (var col in _editableColumns)
+            {
+                var type = col.TypeIndex == CustomTypeIndex
+                    ? (string.IsNullOrWhiteSpace(col.CustomType) ? "string" : col.CustomType.Trim())
+                    : s_typeOptions[col.TypeIndex];
+                dict[col.Name] = type;
+            }
+            EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
         }
 
         private static void SaveToProject()
