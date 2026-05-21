@@ -7,11 +7,13 @@
 
 ## 닉네임
 
+플레이어가 처음 게임을 시작하면 닉네임이 없는 상태입니다. 닉네임 설정 화면에서 중복 확인 후 저장하는 흐름이 일반적입니다.
+
 ```csharp
 // 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
 string myName = Supabase.MyProfile.DisplayName;
 
-// 중복 확인 (현재 내 닉네임은 사용 가능으로 나옴)
+// 중복 확인 — 설정 전에 호출. 현재 내 닉네임은 사용 가능으로 나옴
 bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
 
 // 설정
@@ -22,7 +24,7 @@ await Supabase.TrySetMyDisplayNameAsync("Player123");
 string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 ```
 
-닉네임은 클라이언트에서 최대 64자로 잘립니다.
+닉네임은 최대 64자이며, 초과 시 클라이언트에서 자동으로 잘립니다.
 
 ---
 
@@ -35,10 +37,9 @@ Debug.Log(Supabase.MyProfile.DisplayName);  // 닉네임
 Debug.Log(Supabase.MyProfile.IsWithdrawn);  // 탈퇴 예약 여부
 ```
 
-다른 플레이어의 프로필을 조회할 때는 별도 API를 사용합니다.
+다른 플레이어의 프로필을 조회할 때는 별도 API를 사용합니다. 리더보드나 매칭 결과에서 얻은 상대방 ID를 전달합니다.
 
 ```csharp
-// userId = 조회 대상 플레이어의 ID (리더보드·매칭 결과 등에서 얻은 값)
 var profile = await Supabase.TryGetPublicProfileAsync(userId);
 ```
 
@@ -46,23 +47,30 @@ var profile = await Supabase.TryGetPublicProfileAsync(userId);
 
 ## 탈퇴 처리
 
+즉시 삭제하지 않고 일정 유예 기간 후에 처리됩니다. 유예 기간 동안 플레이어가 탈퇴를 취소할 수 있습니다.
+
 ```csharp
-await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 예약 (유예 기간 후 처리)
-await Supabase.TryGetMyWithdrawalStatusAsync(); // 탈퇴 상태 조회
-await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 예약 취소
+await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 예약
+await Supabase.TryGetMyWithdrawalStatusAsync(); // 예약 상태 및 남은 시간 조회
+await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
 ```
 
 유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
 
 > [!NOTE]
-> 탈퇴 유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
+> 유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
 > [빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
 
 ### 탈퇴 취소 (토큰 방식)
 
+유예 기간이 지나 이미 탈퇴가 완료된 경우, 토큰을 이용해 계정을 복구할 수 있습니다.  
+서버에서 토큰을 발급받아 이메일 등으로 전달하고, 플레이어가 해당 토큰으로 취소를 완료하는 방식입니다.
+
 ```csharp
+// 탈퇴 취소 토큰 발급 — 플레이어에게 전달
 var token = await Supabase.TryRequestWithdrawalCancelTokenAsync();
-// 이메일 등으로 토큰 전달 후
+
+// 플레이어가 토큰을 입력해 취소 완료
 await Supabase.TryRedeemWithdrawalCancelAsync(token);
 ```
 
@@ -71,11 +79,12 @@ await Supabase.TryRedeemWithdrawalCancelAsync(token);
 
 ---
 
-## 서버 샤드 이주
+## 서버 이주
+
+플레이어를 다른 서버로 이동시킵니다. 서버별로 닉네임 고유성이 관리되므로, 이주 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.
 
 ```csharp
+// 현재 접속 서버를 설정하고 이주 요청
 Supabase.SetCurrentServerCode("KR1");
 await Supabase.TryTransferMyServerAsync("GLOBAL");
 ```
-
-
