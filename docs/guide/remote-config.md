@@ -221,8 +221,3 @@ float dmg    = cfg?.battle?.playerDmg ?? 1f;
 float bossHp = cfg?.battle?.boss?.hpMultiplier ?? 1f;
 int   maxSt  = cfg?.stamina?.max ?? 100;
 ```
-
-### 테이블 이름
-
-`remote_config`로 고정되어 있습니다.  
-SQL: `Sql/player/08_remote_config.sql`
