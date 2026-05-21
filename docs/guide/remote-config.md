@@ -5,7 +5,7 @@ Remote Config는 앱을 업데이트하지 않고도 서버에서 게임 수치�
 
 ---
 
-## 빠른 시작 (3단계)
+## 빠른 시작
 
 ### 1단계 — 설정 클래스 작성
 
@@ -26,14 +26,9 @@ public class GameplayConfig
 
 ### 2단계 — DB에 값 입력
 
-Supabase 대시보드 **Table Editor → remote_config** 테이블에 행을 추가합니다.
+Retool에서 `remote_config` 테이블에 값을 입력합니다.
 
-| 컬럼 | 예시 값 |
-|------|---------|
-| `key` | `gameplay_v1` |
-| `value_json` | `{"enabled": true, "maxStamina": 100, "spawnInterval": 3.0}` |
-| `max_stale_seconds` | `300` |
-| `poll_interval_seconds` | `60` |
+> 자세한 내용은 추후 업데이트 예정입니다.
 
 ### 3단계 — 코드에서 사용
 
@@ -64,7 +59,7 @@ if (cfg != null)
 
 ---
 
-## 읽기 함수 — Reader
+## Reader
 
 "지금 이 값이 필요해"라고 요청하는 방식입니다.  
 서버에서 한 번 가져와 저장해두고, 다음 호출부터는 저장된 값을 빠르게 반환합니다.  
@@ -90,7 +85,7 @@ _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStaleSeconds: 0);
 
 ---
 
-## 값 바인딩 — Binding
+## Binding
 
 백그라운드에서 주기적으로 값을 자동 갱신하는 방식입니다.  
 `Value`로 언제든 최신 값을 바로 읽을 수 있습니다.
@@ -115,7 +110,7 @@ private void OnDestroy() => _gameplay?.Dispose();  // 반드시 해제
 
 ---
 
-## 반응형 구독 — Listener
+## Listener
 
 값이 바뀌는 순간 자동으로 콜백 함수를 호출하는 방식입니다.
 
@@ -142,7 +137,7 @@ private void OnDestroy() => _listener?.Dispose();  // 반드시 해제
 
 ## 설정 클래스 작성
 
-DB의 JSON 구조에 맞게 클래스를 작성합니다. 지원하는 타입은 다음과 같습니다.
+DB에 저장된 JSON 구조에 맞게 클래스를 작성합니다. 지원하는 타입은 다음과 같습니다.
 
 ```csharp
 using System.Collections.Generic;
