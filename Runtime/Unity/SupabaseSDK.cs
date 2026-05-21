@@ -44,7 +44,7 @@ namespace TrueBase.Unity
 
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;
-        private static PublicProfileSnapshot _myProfile;
+        private static PublicProfileSnapshot _myProfile = PublicProfileSnapshot.Empty;
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
         private static RemoteConfigFacade _remoteConfig;
@@ -177,8 +177,14 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// <summary>현재 로그인된 세션. 로그인 후 SetSession으로 설정하세요.</summary>
         public static SupabaseSession Session => _currentSession;
 
-        /// <summary>로그인 직후 자동으로 조회·캐시된 내 프로필. 로그아웃 시 null로 초기화됩니다.</summary>
+        /// <summary>로그인 직후 자동으로 조회·캐시된 내 프로필. 비로그인 시 <see cref="PublicProfileSnapshot.Empty"/>를 반환합니다.</summary>
         public static PublicProfileSnapshot MyProfile => _myProfile;
+
+        /// <summary>현재 로그인 계정의 ID(<c>auth.users.id</c>). 비로그인 시 빈 문자열.</summary>
+        public static string UserId => _currentSession?.User?.Id ?? string.Empty;
+
+        /// <summary>현재 세션이 익명 로그인이면 true. 비로그인 시 false.</summary>
+        public static bool IsAnonymous => _currentSession?.User?.IsAnonymous ?? false;
 
         /// <summary>현재 로그인 여부 (세션이 있고 유효한 토큰이 있는지).</summary>
         public static bool IsLoggedIn =>
@@ -2118,7 +2124,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
             _currentSession = null;
             _remoteConfig   = null;
-            _myProfile      = null;
+            _myProfile      = PublicProfileSnapshot.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);

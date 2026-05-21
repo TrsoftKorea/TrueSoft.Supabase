@@ -6,6 +6,9 @@
     /// </summary>
     public sealed class PublicProfileSnapshot
     {
+        /// <summary>로그인 전 또는 프로필 조회 실패 시 반환되는 빈 인스턴스.</summary>
+        public static readonly PublicProfileSnapshot Empty = new PublicProfileSnapshot(string.Empty, string.Empty, string.Empty, null);
+
         public PublicProfileSnapshot(string profileRowId, string playerUserId, string displayName, string withdrawnAtIso)
         {
             ProfileRowId = profileRowId ?? string.Empty;

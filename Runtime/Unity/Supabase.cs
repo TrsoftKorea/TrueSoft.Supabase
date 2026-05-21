@@ -31,10 +31,16 @@ namespace TrueBase.Unity
         /// <summary>현재 로그인 여부.</summary>
         public static bool IsLoggedIn => SupabaseSDK.IsLoggedIn;
 
+        /// <summary>현재 로그인 계정의 ID(<c>auth.users.id</c>). 비로그인 시 빈 문자열.</summary>
+        public static string UserId => SupabaseSDK.UserId;
+
+        /// <summary>현재 세션이 익명 로그인이면 true. 비로그인 시 false.</summary>
+        public static bool IsAnonymous => SupabaseSDK.IsAnonymous;
+
         /// <summary>
         /// 로그인 직후 자동으로 조회·캐시된 내 프로필.
         /// 닉네임·탈퇴 상태 등 로그인 시 1회 조회로 충분한 정보를 담습니다.
-        /// 로그아웃 시 null로 초기화됩니다.
+        /// 로그아웃 후 또는 조회 전에는 <see cref="PublicProfileSnapshot.Empty"/>를 반환합니다.
         /// </summary>
         public static PublicProfileSnapshot MyProfile => SupabaseSDK.MyProfile;
 

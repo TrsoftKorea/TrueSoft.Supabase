@@ -9,7 +9,7 @@
 
 ```csharp
 // 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
-string myName = Supabase.MyProfile?.DisplayName;
+string myName = Supabase.MyProfile.DisplayName;
 
 // 중복 확인 (현재 내 닉네임은 사용 가능으로 나옴)
 bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
@@ -31,9 +31,8 @@ string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 로그인이 완료되면 내 프로필은 자동으로 조회·캐시됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.
 
 ```csharp
-var profile = Supabase.MyProfile;
-Debug.Log(profile?.DisplayName);  // 닉네임
-Debug.Log(profile?.IsWithdrawn);  // 탈퇴 예약 여부
+Debug.Log(Supabase.MyProfile.DisplayName);  // 닉네임
+Debug.Log(Supabase.MyProfile.IsWithdrawn);  // 탈퇴 예약 여부
 ```
 
 다른 플레이어의 프로필을 조회할 때는 별도 API를 사용합니다.
