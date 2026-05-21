@@ -25,26 +25,6 @@ Supabase Edge Functions Secrets에 `GOOGLE_SERVICE_ACCOUNT_JSON`으로 등록합
 App Store Connect > 앱 정보에서 앱 공유 암호를 발급받아  
 Supabase Edge Functions Secrets에 `APPLE_SHARED_SECRET`으로 등록합니다.
 
-### 3. Edge Function 배포
-
-아래 과정을 두 함수 각각 반복합니다.
-
-1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
-2. 함수 이름을 정확히 입력하고 생성
-3. **Database Setup** 샘플을 임포트한 후 `EdgeFunctions/<함수명>/index.ts` 파일을 열어 전체 내용 복사
-4. 에디터에 붙여넣고 **Deploy** 클릭
-
-배포할 함수:
-
-| 함수 이름 |
-|-----------|
-| `purchase-verify-google` |
-| `purchase-verify-apple` |
-
-### 4. DB 설정
-
-**Database Setup** 샘플을 임포트한 후 `SQL/player/07_purchases.sql`을 Supabase SQL Editor에서 실행합니다.
-
 ---
 
 ## 사용법

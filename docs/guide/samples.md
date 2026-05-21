@@ -70,10 +70,8 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 
 **사전 준비:**
 1. `com.unity.purchasing` 5.2.1 이상 설치
-2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
-3. Edge Function 배포: Supabase 대시보드 > Edge Functions에서 함수를 생성하고 **Database Setup** 샘플 > `EdgeFunctions/` 안의 코드를 붙여넣기
-4. **Database Setup** 샘플 > `SQL/player/07_purchases.sql` 실행
-5. Inspector에서 `productId` 입력
+2. [빠른 시작](./getting-started.md)의 DB 스키마 및 Edge Function 배포 완료
+3. Inspector에서 `productId` 입력
 
 **구매 흐름:**
 

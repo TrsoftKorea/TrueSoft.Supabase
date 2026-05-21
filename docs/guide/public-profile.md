@@ -5,65 +5,6 @@
 
 ---
 
-## Edge Function 배포
-
-닉네임·탈퇴 취소 기능은 Edge Function이 배포되어 있어야 동작합니다.  
-소스 위치: **Database Setup** 샘플 > `EdgeFunctions/`
-
-### 기능별 필요 함수
-
-| 기능 | Edge Function |
-|------|--------------|
-| 닉네임 설정 | `displayname-set` |
-| 닉네임 조회 | `displayname-get` |
-| 탈퇴 취소 토큰 발급 | `withdrawal-cancel-issue` |
-| 탈퇴 취소 토큰 사용 | `withdrawal-cancel-redeem` |
-| 로그인 시 탈퇴 계정 자동 처리 | `withdrawal-guard` |
-
-### 배포 순서
-
-아래 과정을 각 함수마다 반복합니다.
-
-1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
-2. 함수 이름을 정확히 입력하고 생성
-3. **Database Setup** 샘플을 임포트한 후 `EdgeFunctions/<함수명>/index.ts` 파일을 열어 전체 내용 복사
-4. 에디터에 붙여넣고 **Deploy** 클릭
-
-배포할 함수 목록:
-
-| 함수 이름 |
-|-----------|
-| `displayname-get` |
-| `displayname-set` |
-| `withdrawal-cancel-issue` |
-| `withdrawal-cancel-redeem` |
-| `withdrawal-guard` |
-
-### Secrets 설정
-
-대시보드 **Edge Functions > Secrets**에 등록합니다.
-
-| 시크릿 키 | 값 형식 | 필요 함수 |
-|----------|---------|----------|
-| `SUPABASE_PUBLISHABLE_KEYS` | `{"default":"<Publishable Key>"}` | 전체 |
-| `SUPABASE_SECRET_KEYS` | `{"default":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
-| `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
-
-> [!TIP]
-> `CANCEL_TOKEN_SECRET`은 `openssl rand -base64 32`로 생성합니다.  
-> `withdrawal-cancel-issue`와 `withdrawal-cancel-redeem` 양쪽에 **동일한 값**을 설정해야 합니다.
-
-> [!WARNING]
-> `SUPABASE_SECRET_KEYS`의 Secret Key는 절대 클라이언트에 노출하지 마세요.
-
-```bash
-supabase secrets set SUPABASE_PUBLISHABLE_KEYS='{"default":"sb_publishable_..."}'
-supabase secrets set SUPABASE_SECRET_KEYS='{"default":"sb_secret_..."}'
-supabase secrets set CANCEL_TOKEN_SECRET="your-random-secret-here"
-```
-
----
-
 ## 닉네임
 
 ```csharp
@@ -133,11 +74,3 @@ await Supabase.TryTransferMyServerAsync("GLOBAL");
 운영/Retool에서 특정 계정을 이주시킬 때는 RPC `ts_admin_transfer_user_server`를 Secret 키로 호출합니다.  
 요청 형식은 [데이터 스키마 > 서버 이주](./data-schema.md#서버-이주-server_id)를 참고하세요.
 
----
-
-## SQL
-
-- `SQL/player/02_profiles.sql` — profiles 테이블 · 닉네임 유니크 인덱스
-- `SQL/player/05_account_management.sql` — 탈퇴 이력 · 취소 RPC
-
-Database Setup 샘플을 임포트한 후 위 파일을 실행합니다.

@@ -85,30 +85,76 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ---
 
+## Database Setup 샘플 임포트
+
+Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database Setup**을 Import합니다.  
+`Assets/Samples/.../DatabaseSetup/` 폴더에 SQL 파일과 Edge Function 소스가 생성됩니다.  
+설정 완료 후 이 폴더는 삭제해도 됩니다.
+
+---
+
 ## DB 스키마 실행
 
-**Database Setup** 샘플을 임포트한 후 `SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
+`SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
 > [!TIP]
 > Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
 
-| 순서 | 파일 | 카테고리 | 내용 |
-|------|------|----------|------|
-| 1 | `01_servers.sql` | 기반 | 게임 서버 목록·ts_default_server_id·ts_server_now |
-| 2 | `02_profiles.sql` | 기반 | 플레이어 프로필·표시 이름(닉네임)·세션 |
-| 3 | `03_anonymous_recovery.sql` | 유저 데이터 | 익명 계정 복구 |
-| 4 | `04_user_data.sql` | 유저 데이터 | 세이브 공통 인프라·user_data 테이블·필드 보호 |
-| 5 | `05_account_management.sql` | 계정 관리 | 서버 이주·탈퇴 예약·취소·상태 조회 |
-| 6 | `06_mails.sql` | 기능 | 우편함 |
-| 7 | `07_purchases.sql` | 기능 | IAP 구매 검증 (IAP 사용 시) |
-| 8 | `08_remote_config.sql` | 기능 | Remote Config |
-| 9 | `09_cron_jobs.sql` | 운영 | 만료 정리·탈퇴 배치 크론 잡 |
-
-> [!NOTE]
-> `09_cron_jobs.sql`은 파일 내 `CREATE EXTENSION IF NOT EXISTS pg_cron;`으로 확장을 자동 활성화합니다.
+| 순서 | 파일 | 내용 |
+|------|------|------|
+| 1 | `01_servers.sql` | 게임 서버 목록 |
+| 2 | `02_profiles.sql` | 플레이어 프로필·닉네임 |
+| 3 | `03_anonymous_recovery.sql` | 익명 계정 복구 |
+| 4 | `04_user_data.sql` | 유저 데이터 |
+| 5 | `05_account_management.sql` | 서버 이주·탈퇴 |
+| 6 | `06_mails.sql` | 우편함 |
+| 7 | `07_purchases.sql` | 인앱 결제 (IAP 사용 시) |
+| 8 | `08_remote_config.sql` | Remote Config |
+| 9 | `09_cron_jobs.sql` | 자동화 크론 잡 |
 
 > [!TIP]
 > `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
+
+---
+
+## Edge Function 배포
+
+기능별로 필요한 Edge Function만 배포하세요.
+
+아래 과정을 각 함수마다 반복합니다.
+
+1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
+2. 함수 이름을 정확히 입력하고 생성
+3. `EdgeFunctions/<함수명>/index.ts` 파일을 열어 전체 내용 복사
+4. 에디터에 붙여넣고 **Deploy** 클릭
+
+| 함수 이름 | 필요 기능 |
+|-----------|----------|
+| `displayname-get` | 공개 프로필 — 닉네임 조회 |
+| `displayname-set` | 공개 프로필 — 닉네임 설정 |
+| `withdrawal-cancel-issue` | 공개 프로필 — 탈퇴 취소 토큰 발급 |
+| `withdrawal-cancel-redeem` | 공개 프로필 — 탈퇴 취소 토큰 사용 |
+| `withdrawal-guard` | 공개 프로필 — 탈퇴 계정 자동 처리 |
+| `purchase-verify-google` | 인앱 결제 — Android |
+| `purchase-verify-apple` | 인앱 결제 — iOS |
+
+### Secrets 설정
+
+대시보드 **Edge Functions > Secrets**에 등록합니다.
+
+| 시크릿 키 | 값 | 필요 함수 |
+|----------|----|----------|
+| `SUPABASE_PUBLISHABLE_KEYS` | `{"default":"<Publishable Key>"}` | 전체 |
+| `SUPABASE_SECRET_KEYS` | `{"default":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
+| `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Service Account JSON | `purchase-verify-google` |
+| `APPLE_SHARED_SECRET` | 앱 공유 암호 | `purchase-verify-apple` |
+
+> [!TIP]
+> `CANCEL_TOKEN_SECRET`은 `withdrawal-cancel-issue`와 `withdrawal-cancel-redeem` 양쪽에 **동일한 값**을 설정해야 합니다.
+
+> [!WARNING]
+> `SUPABASE_SECRET_KEYS`의 Secret Key는 절대 클라이언트에 노출하지 마세요.
 
 ---
 

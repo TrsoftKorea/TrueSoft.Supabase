@@ -28,25 +28,6 @@
 
 ---
 
-## 플레이어 테이블 SQL 실행 순서
-
-**Database Setup** 샘플을 임포트한 후 `SQL/player/` 폴더의 파일을 번호 순으로 실행합니다.
-
-| 파일 | 내용 |
-|------|------|
-| `01_servers.sql` | 게임 서버 목록·ts_default_server_id·ts_server_now |
-| `02_profiles.sql` | 플레이어 프로필·표시 이름(닉네임)·세션 |
-| `03_anonymous_recovery.sql` | 익명 계정 복구 |
-| `04_user_data.sql` | 세이브 공통 인프라·user_data 테이블·필드 보호 |
-| `05_account_management.sql` | 서버 이주·탈퇴 예약·취소·상태 조회 |
-| `06_mails.sql` | 우편함 |
-| `07_purchases.sql` | IAP 구매 검증 기록 |
-| `08_remote_config.sql` | Remote Config |
-| `09_cron_jobs.sql` | 크론 잡 |
-| `99_verify.sql` | 스키마 검증 (선택) |
-
----
-
 ## 서버 이주 (server_id)
 
 **유저 자가 이주:**
