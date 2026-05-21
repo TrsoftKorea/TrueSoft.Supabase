@@ -167,61 +167,6 @@ private void OnDestroy() => _maintenanceSub?.Dispose();
 Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
 ```
 
-### 클래스 생성기 (선택)
-
-`SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고  
-**키 목록 가져오기 → 키 선택 → 필드 파싱 → 소스 생성 → 저장**으로  
-설정 클래스를 자동 생성합니다.
-
-생성된 파일 구조 예시:
-
-```csharp
-// GameplayV1Config.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
-using Newtonsoft.Json;
-using Truesoft.Supabase.Unity;
-
-[RemoteConfigKey("gameplay_v1")]
-[Serializable]
-public sealed partial class GameplayV1Config
-{
-    [JsonProperty("stamina")] public StaminaConfig stamina;
-    [JsonProperty("battle")]  public BattleConfig battle;
-    [JsonProperty("enabled")] public bool enabled;
-
-    [Serializable]
-    public sealed class StaminaConfig
-    {
-        [JsonProperty("max")]      public int max;
-        [JsonProperty("regenSec")] public int regenSec;
-    }
-
-    [Serializable]
-    public sealed class BattleConfig
-    {
-        [JsonProperty("dmg")] public float dmg;
-    }
-}
-```
-
-사용 예:
-
-```csharp
-// Reader
-var reader = RemoteConfig<GameplayV1Config>.CreateReader();
-var cfg    = await reader();
-
-// Binding
-_binding = RemoteConfig<GameplayV1Config>.CreateBinding(pollIntervalSeconds: 60f);
-float dmg = _binding.Value?.battle?.dmg ?? 1f;
-
-// Listener
-_listener = RemoteConfig<GameplayV1Config>.CreateListener(cfg => ApplyConfig(cfg));
-```
-
-> [!NOTE]
-> DB에 행이 있어야 필드 목록을 가져올 수 있습니다.  
-> 재생성 시 기존 파일의 타입 설정을 자동으로 복원합니다.
-
 ### 테이블 이름
 
 `remote_config`로 고정되어 있습니다.  
