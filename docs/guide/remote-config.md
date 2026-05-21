@@ -1,22 +1,148 @@
 # Remote Config
 
-## 패턴 선택
+Remote Config는 앱을 업데이트하지 않고도 서버에서 게임 수치를 바꿀 수 있는 기능입니다.  
+예를 들어 스테미나 최대치, 몬스터 체력 배율, 이벤트 배너 텍스트 등을 DB에서 관리할 수 있습니다.
 
-> [!TIP]
-> 대부분의 경우 **읽기 함수** 또는 **값 바인딩** 패턴으로 충분합니다.  
-> 값이 바뀔 때 UI를 즉시 갱신해야 하는 경우에만 반응형 구독을 사용하세요.
+---
 
-| 패턴 | API | 특징 |
-|---|---|---|
-| 읽기 함수 | `RemoteConfig<T>.CreateReader()` | 필드에 선언 후 `await _getter()`. 만료 시 서버 응답 대기 후 반환 |
-| 값 바인딩 | `RemoteConfig<T>.CreateBinding()` | 폴링으로 자동 갱신. `Value`로 언제든 읽기 |
-| 반응형 구독 | `RemoteConfig<T>.CreateListener(onChange)` | 폴링으로 자동 갱신. 값 변경 시 콜백 호출 |
+## 빠른 시작 (3단계)
+
+### 1단계 — 설정 클래스 작성
+
+DB에 저장된 JSON 구조와 같은 모양의 C# 클래스를 만들고 `[RemoteConfigKey]`를 붙입니다.
+
+```csharp
+using Newtonsoft.Json;
+using Truesoft.Supabase.Unity;
+
+[RemoteConfigKey("gameplay_v1")]   // DB의 키 이름
+public class GameplayConfig
+{
+    public bool  enabled;
+    public int   maxStamina;
+    public float spawnInterval;
+}
+```
+
+### 2단계 — DB에 값 입력
+
+Supabase 대시보드 **Table Editor → remote_config** 테이블에 행을 추가합니다.
+
+| 컬럼 | 예시 값 |
+|------|---------|
+| `key` | `gameplay_v1` |
+| `value_json` | `{"enabled": true, "maxStamina": 100, "spawnInterval": 3.0}` |
+| `max_stale_seconds` | `300` |
+| `poll_interval_seconds` | `60` |
+
+### 3단계 — 코드에서 사용
+
+```csharp
+// 가장 간단한 사용법 — 값이 필요할 때 한 번 읽기
+var reader = RemoteConfig<GameplayConfig>.CreateReader();
+var cfg = await reader();
+
+if (cfg != null)
+{
+    maxStamina = cfg.maxStamina;
+}
+```
+
+이게 전부입니다. 이후 패턴은 상황에 따라 선택하세요.
+
+---
+
+## 어떤 패턴을 써야 하나요?
+
+| 상황 | 추천 패턴 |
+|------|-----------|
+| 씬 시작 시 한 번만 읽으면 충분할 때 | **Reader** |
+| 매 프레임 또는 자주 값을 읽어야 할 때 | **Binding** |
+| 값이 바뀌는 순간 즉시 반응해야 할 때 (UI 갱신, 이벤트 시작 등) | **Listener** |
+
+> 대부분의 경우 **Reader**나 **Binding**으로 충분합니다.
+
+---
+
+## 읽기 함수 — Reader
+
+"지금 이 값이 필요해"라고 요청하는 방식입니다.  
+서버에서 한 번 가져와 저장해두고, 다음 호출부터는 저장된 값을 빠르게 반환합니다.  
+저장된 값이 오래됐으면 서버에서 새 값을 받아온 뒤 반환합니다.
+
+```csharp
+private Func<Task<GameplayConfig>> _getConfig;
+
+private async Task LoadConfigAsync()
+{
+    // 처음 한 번만 생성하고 재사용합니다
+    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader();
+
+    var cfg = await _getConfig();
+    float interval = cfg?.spawnInterval ?? 3f;  // 값이 없으면 기본값 3f 사용
+}
+```
+
+```csharp
+// 저장된 값을 무시하고 항상 서버에서 새로 받고 싶을 때
+_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStaleSeconds: 0);
+```
+
+---
+
+## 값 바인딩 — Binding
+
+백그라운드에서 주기적으로 값을 자동 갱신하는 방식입니다.  
+`Value`로 언제든 최신 값을 바로 읽을 수 있습니다.
+
+```csharp
+private RemoteConfigBinding<GameplayConfig> _gameplay;
+
+private void Start()
+{
+    // 60초마다 서버에서 자동으로 값을 갱신합니다
+    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollIntervalSeconds: 60f);
+}
+
+private void Update()
+{
+    // .Value로 저장된 최신 값을 즉시 읽습니다 (네트워크 호출 없음)
+    float interval = _gameplay.Value?.spawnInterval ?? 3f;
+}
+
+private void OnDestroy() => _gameplay?.Dispose();  // 반드시 해제
+```
+
+---
+
+## 반응형 구독 — Listener
+
+값이 바뀌는 순간 자동으로 콜백 함수를 호출하는 방식입니다.
+
+```csharp
+private RemoteConfigListener<GameplayConfig> _listener;
+
+private void Start()
+{
+    _listener = RemoteConfig<GameplayConfig>.CreateListener(
+        onChange: cfg => ApplyConfig(cfg),  // 값이 바뀔 때 호출
+        pollIntervalSeconds: 60f);
+}
+
+private void ApplyConfig(GameplayConfig cfg)
+{
+    spawnInterval = cfg?.spawnInterval ?? 3f;
+    Debug.Log("설정 갱신됨");
+}
+
+private void OnDestroy() => _listener?.Dispose();  // 반드시 해제
+```
 
 ---
 
 ## 설정 클래스 작성
 
-설정 클래스에 `[RemoteConfigKey("키이름")]` 어트리뷰트를 붙이면 `RemoteConfig<T>`가 자동으로 키를 읽습니다.
+DB의 JSON 구조에 맞게 클래스를 작성합니다. 지원하는 타입은 다음과 같습니다.
 
 ```csharp
 using System.Collections.Generic;
@@ -37,13 +163,13 @@ public class GameplayConfig
     public int MaxStamina;          // JSON: "max_stamina" → C#: MaxStamina
 
     // ── nullable (JSON에 키가 없을 때 null로 남겨두고 싶을 때) ────────────────
-    public int?   bonusLevel;       // JSON 키 없으면 null
-    public float? eventMultiplier;  // null이면 기본값 적용
+    public int?   bonusLevel;       // null이면 기본값 적용
+    public float? eventMultiplier;
 
     // ── 컬렉션 ────────────────────────────────────────────────────────────────
-    public List<string>          bannedWords;    // JSON: ["word1", "word2"]
-    public int[]                 stageClearExp;  // JSON: [100, 200, 400]
-    public Dictionary<string, int> itemDropRate; // JSON: {"sword": 10, "shield": 5}
+    public List<string>            bannedWords;    // JSON: ["word1", "word2"]
+    public int[]                   stageClearExp;  // JSON: [100, 200, 400]
+    public Dictionary<string, int> itemDropRate;   // JSON: {"sword": 10, "shield": 5}
 
     // ── 중첩 클래스 ───────────────────────────────────────────────────────────
     public StaminaConfig stamina;   // JSON: "stamina": { ... }
@@ -51,15 +177,15 @@ public class GameplayConfig
 
     public class StaminaConfig
     {
-        public int   max;           // JSON: "max"
-        public int   regenSec;      // JSON: "regenSec"
-        public float regenAmount;   // JSON: "regenAmount"
+        public int   max;
+        public int   regenSec;
+        public float regenAmount;
     }
 
     public class BattleConfig
     {
-        public float playerDmg;     // JSON: "playerDmg"
-        public float enemyHpScale;  // JSON: "enemyHpScale"
+        public float playerDmg;
+        public float enemyHpScale;
 
         // 중첩 안의 중첩도 가능
         public BossConfig boss;
@@ -75,111 +201,27 @@ public class GameplayConfig
 
 > [!WARNING]
 > 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
-> 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+> 생성자를 직접 정의했다면 기본 생성자도 명시해야 합니다.
 
-**중첩 객체는 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
+**중첩 객체는 `?.`로 접근** — JSON에 해당 키가 없으면 `null`이므로 반드시 null 체크를 합니다.
 
 ```csharp
-float dmg       = cfg?.battle?.playerDmg ?? 1f;
-float bossHp    = cfg?.battle?.boss?.hpMultiplier ?? 1f;
-int   staminaMax = cfg?.stamina?.max ?? 100;
+float dmg    = cfg?.battle?.playerDmg ?? 1f;
+float bossHp = cfg?.battle?.boss?.hpMultiplier ?? 1f;
+int   maxSt  = cfg?.stamina?.max ?? 100;
 ```
 
 ---
 
-## 대시보드에서 값 입력
+## 동작 방식
 
-관련 설정은 하나의 키에 JSON 객체로 묶어 관리합니다. 스칼라 값마다 키를 만들지 않아도 됩니다.
+앱을 시작할 때 Remote Config를 자동으로 가져오지 않습니다.  
+`CreateReader()`, `CreateBinding()`, `CreateListener()` 중 하나를 처음 호출하는 순간 해당 키만 서버에서 가져옵니다.
 
-Supabase 대시보드 좌측 사이드바 **Table Editor > remote_config** 테이블에서 행을 추가합니다.
+이후에는 가져온 값을 메모리에 보관해두고 빠르게 반환합니다.  
+`max_stale_seconds`에 설정한 시간이 지나면 낡은 값을 즉시 반환하면서 **동시에** 백그라운드에서 서버 갱신을 시작합니다. 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
 
-| 컬럼 | 값 예시 | 설명 |
-|------|---------|------|
-| `key` | `gameplay_v1` | C#에서 조회할 키 이름 |
-| `value_json` | `{"stamina":{...},"battle":{...}}` | JSON 형태의 설정값 |
-| `max_stale_seconds` | `300` | 캐시 유효 시간(초). 0이면 300초로 처리 |
-| `poll_interval_seconds` | `60` | 백그라운드 갱신 주기(초). 0이면 폴링 없음 |
-
-```json
-{
-  "stamina": { "maxEnergy": 100, "regenSeconds": 300 },
-  "battle":  { "playerDmg": 1.5 }
-}
-```
-
----
-
-## 읽기 함수 (CreateReader)
-
-첫 호출 시 생성(`??=`)해두고 간결하게 호출합니다. 캐시가 만료됐으면 서버 응답을 기다린 후 반환합니다.
-
-```csharp
-private Func<Task<GameplayConfig>> _getConfig;
-
-private async Task LoadConfigAsync()
-{
-    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader();
-
-    var cfg = await _getConfig();
-    float dmg = cfg?.battle?.playerDmg ?? 1f;
-}
-```
-
-```csharp
-// 유효시간 직접 지정 (기본값 300초)
-_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStaleSeconds: 60);
-```
-
----
-
-## 값 바인딩 (CreateBinding)
-
-폴링으로 값을 최신 상태로 유지합니다. `Value`로 언제든 동기 읽기.
-
-```csharp
-private RemoteConfigBinding<GameplayConfig> _gameplay;
-
-private void Start()
-{
-    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollIntervalSeconds: 30f);
-}
-
-private void Update()
-{
-    float dmg = _gameplay.Value?.battle?.playerDmg ?? 1f;
-}
-
-private void OnDestroy() => _gameplay?.Dispose();
-```
-
----
-
-## 반응형 구독 (CreateListener)
-
-폴링으로 값이 바뀔 때마다 콜백을 호출합니다.
-
-```csharp
-private RemoteConfigListener<MaintenanceConfig> _maintenanceSub;
-
-private void Start()
-{
-    _maintenanceSub = RemoteConfig<MaintenanceConfig>.CreateListener(
-        ApplyMaintenanceConfig, pollIntervalSeconds: 30f);
-}
-
-private void OnDestroy() => _maintenanceSub?.Dispose();
-```
-
-> `invokeIfCached: false` 옵션이 필요하면 `new RemoteConfigListener<T>(key, interval, callback, false)` 로 직접 생성합니다.
-
----
-
-## Cold Start 패턴
-
-> [!NOTE]
-> 앱 시작 시 RemoteConfig를 자동으로 가져오지 않습니다.  
-> 위 API를 처음 호출하는 순간 해당 키만 서버에서 조회합니다.  
-> 이후에는 캐시에서 읽고, `maxStaleSeconds`가 지나면 **만료된 캐시 값을 즉시 반환하면서 동시에 백그라운드에서 서버 갱신을 시작합니다** (stale-while-revalidate 패턴). 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
+> 즉, 값을 읽는 속도는 항상 빠르고, 서버 갱신은 뒤에서 알아서 처리됩니다.
 
 ---
 
@@ -187,10 +229,10 @@ private void OnDestroy() => _maintenanceSub?.Dispose();
 
 ### 폴링 주기 사전 설정
 
-초기화 시 1회 호출합니다. 이후 해당 키의 Binding·Listener 생성 시 별도 지정이 없어도 이 주기가 사용됩니다.
+초기화 시 1회 호출하면 이후 해당 키의 Binding·Listener 생성 시 자동으로 이 주기가 사용됩니다.
 
 ```csharp
-Supabase.SetRemoteConfigKeyPolling("maintenance", intervalSeconds: 30f);
+Supabase.SetRemoteConfigKeyPolling("gameplay_v1", intervalSeconds: 30f);
 ```
 
 ### 테이블 이름
