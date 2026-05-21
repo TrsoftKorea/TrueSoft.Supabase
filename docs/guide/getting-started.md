@@ -144,17 +144,12 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 
 | 시크릿 키 | 값 | 필요 함수 |
 |----------|----|----------|
-| `SUPABASE_PUBLISHABLE_KEYS` | `{"default":"<Publishable Key>"}` | 전체 |
-| `SUPABASE_SECRET_KEYS` | `{"default":"<Secret Key>"}` | `displayname-set`, `withdrawal-guard` |
 | `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Service Account JSON | `purchase-verify-google` |
 | `APPLE_SHARED_SECRET` | 앱 공유 암호 | `purchase-verify-apple` |
 
 > [!TIP]
 > `CANCEL_TOKEN_SECRET`은 `withdrawal-cancel-issue`와 `withdrawal-cancel-redeem` 양쪽에 **동일한 값**을 설정해야 합니다.
-
-> [!WARNING]
-> `SUPABASE_SECRET_KEYS`의 Secret Key는 절대 클라이언트에 노출하지 마세요.
 
 ---
 
