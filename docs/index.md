@@ -16,6 +16,9 @@ features:
   - title: 인증
     details: 익명·Google 로그인, 익명→소셜 연동, 자동 로그인
     link: /guide/auth
+  - title: 계정
+    details: 닉네임 설정·중복 확인, 프로필 조회, 탈퇴 예약·취소
+    link: /guide/account
   - title: 유저 데이터
     details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
     link: /guide/user-data
@@ -25,9 +28,6 @@ features:
   - title: 인앱 결제 (IAP)
     details: Google Play · Apple App Store 서버 영수증 검증, 중복 지급 방지
     link: /guide/iap
-  - title: 계정
-    details: 닉네임 설정·중복 확인, 프로필 조회, 탈퇴 예약·취소
-    link: /guide/account
   - title: 샘플
     details: ExampleSupabaseScenarios, SamplePlayerSave, SampleIAPScenarios 동작 예시
     link: /guide/samples
