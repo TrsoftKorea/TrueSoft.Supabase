@@ -1,8 +1,8 @@
-using Truesoft.Supabase.Unity;
+﻿using TrueBase.Unity;
 using UnityEditor;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Editor
+namespace TrueBase.Editor
 {
     [CustomPropertyDrawer(typeof(LabelAttribute))]
     internal sealed class LabelDrawer : PropertyDrawer

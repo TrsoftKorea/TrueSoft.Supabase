@@ -1,20 +1,20 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
-using Truesoft.Supabase.Unity;
+using TrueBase.Unity;
 using UnityEditor;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Editor
+namespace TrueBase.Editor
 {
     [CustomEditor(typeof(SupabaseSettings))]
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
-        private const string PrefsKeySecret            = "Truesoft.Supabase.UserSaveClassGenerator.SecretKey";
-        private const string PrefsKeyExtraUsings       = "Truesoft.Supabase.PlayerSave.ExtraUsings";
-        private const string PrefsKeyColumnTypes       = "Truesoft.Supabase.PlayerSave.ColumnTypes";
-        private const string PrefsKeyColumnPriorities  = "Truesoft.Supabase.PlayerSave.ColumnPriorities";
+        private const string PrefsKeySecret            = "TrueBase.UserSaveClassGenerator.SecretKey";
+        private const string PrefsKeyExtraUsings       = "TrueBase.PlayerSave.ExtraUsings";
+        private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
+        private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
         private const string ClassName = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";

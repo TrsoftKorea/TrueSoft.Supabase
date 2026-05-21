@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Unity;
+using TrueBase.Unity;
 using UnityEngine;
-using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
+using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// Supabase SDK 기능 예제 컴포넌트.

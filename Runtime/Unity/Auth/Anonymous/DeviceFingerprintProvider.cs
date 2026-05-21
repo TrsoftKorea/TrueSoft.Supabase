@@ -1,8 +1,8 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity.Auth.Anonymous
+namespace TrueBase.Unity.Auth.Anonymous
 {
     /// <summary>
     /// 기기 고유값을 직접 전송하지 않기 위해 SHA-256 해시 지문을 생성합니다.

@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// Remote Config 키를 DTO 클래스에 직접 선언합니다.

@@ -1,6 +1,6 @@
-{
-  "name": "Truesoft.Supabase.Core",
-  "rootNamespace": "Truesoft.Supabase",
+﻿{
+  "name": "TrueBase.Core",
+  "rootNamespace": "TrueBase",
   "references": [
     "Unity.Newtonsoft.Json"
   ],

@@ -1,20 +1,20 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Auth;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Data;
-using Truesoft.Supabase.Core.Models;
-using Truesoft.Supabase.Unity.Auth.Anonymous;
-using Truesoft.Supabase.Unity.Auth;
-using Truesoft.Supabase.Unity.Auth.Google;
-using Truesoft.Supabase.Unity.Config;
+using TrueBase.Core.Auth;
+using TrueBase.Core.Common;
+using TrueBase.Core.Data;
+using TrueBase.Core.Models;
+using TrueBase.Unity.Auth.Anonymous;
+using TrueBase.Unity.Auth;
+using TrueBase.Unity.Auth.Google;
+using TrueBase.Unity.Config;
 using UnityEngine;
 #if TRUESOFT_IAP_AVAILABLE
 using UnityEngine.Purchasing;
 #endif
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// Unity용 Supabase 정적 진입점. 초기화·인증·유저 데이터·공개 닉네임·Remote Config·Edge Functions·채팅 API를 한 곳에 둡니다.
@@ -26,21 +26,21 @@ namespace Truesoft.Supabase.Unity
     /// </remarks>
     internal static class SupabaseSDK
     {
-        private const string RefreshTokenKey = "Truesoft.Supabase.RefreshToken";
-        private const string LastSignInMethodKey = "Truesoft.Supabase.LastSignInMethod";
-        private const string AutoLoginBlockedKey = "Truesoft.Supabase.AutoLoginBlocked";
-        private const string CurrentServerCodeKey = "Truesoft.Supabase.CurrentServerCode";
-        private const string WithdrawalCancelTokenKey = "Truesoft.Supabase.WithdrawalCancelToken";
-        private const string WithdrawalCancelTokenExpiresAtKey = "Truesoft.Supabase.WithdrawalCancelTokenExpiresAt";
-        private const string WithdrawalGateDisplayNameKey = "Truesoft.Supabase.WithdrawalGateDisplayName";
-        private const string WithdrawalGateWithdrawnAtKey = "Truesoft.Supabase.WithdrawalGateWithdrawnAt";
-        private const string WithdrawalGateServerNowKey = "Truesoft.Supabase.WithdrawalGateServerNow";
-        private const string WithdrawalGateSecondsRemainingKey = "Truesoft.Supabase.WithdrawalGateSecondsRemaining";
+        private const string RefreshTokenKey = "TrueBase.RefreshToken";
+        private const string LastSignInMethodKey = "TrueBase.LastSignInMethod";
+        private const string AutoLoginBlockedKey = "TrueBase.AutoLoginBlocked";
+        private const string CurrentServerCodeKey = "TrueBase.CurrentServerCode";
+        private const string WithdrawalCancelTokenKey = "TrueBase.WithdrawalCancelToken";
+        private const string WithdrawalCancelTokenExpiresAtKey = "TrueBase.WithdrawalCancelTokenExpiresAt";
+        private const string WithdrawalGateDisplayNameKey = "TrueBase.WithdrawalGateDisplayName";
+        private const string WithdrawalGateWithdrawnAtKey = "TrueBase.WithdrawalGateWithdrawnAt";
+        private const string WithdrawalGateServerNowKey = "TrueBase.WithdrawalGateServerNow";
+        private const string WithdrawalGateSecondsRemainingKey = "TrueBase.WithdrawalGateSecondsRemaining";
         private const string WithdrawalCancelIssueFunctionName = "withdrawal-cancel-issue";
         private const string WithdrawalCancelRedeemFunctionName = "withdrawal-cancel-redeem";
 
         /// <summary>계정별 로컬 세션 토큰 저장 키 접두어. <c>PlayerPrefs</c> 키는 <c>{접두어}{account_id}</c> 입니다.</summary>
-        internal const string SessionTokenPlayerPrefsKeyPrefix = "Truesoft.Supabase.SessionToken.";
+        internal const string SessionTokenPlayerPrefsKeyPrefix = "TrueBase.SessionToken.";
 
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;

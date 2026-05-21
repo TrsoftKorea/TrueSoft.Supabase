@@ -1,6 +1,6 @@
-using UnityEngine;
+﻿using UnityEngine;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// Supabase 프로젝트의 "공통 설정값"을 담는 에셋입니다.

@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using Newtonsoft.Json;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// RemoteConfig 키에 대한 폴링 기반 반응형 구독.

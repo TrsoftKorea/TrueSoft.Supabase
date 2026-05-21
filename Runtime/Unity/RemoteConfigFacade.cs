@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Data;
+using TrueBase.Core.Common;
+using TrueBase.Core.Data;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// RemoteConfig 캐시 + 조회 API. Cold Start(시작 시 fetch 없음), 키 단위 폴링, Stale-While-Revalidate 조회를 지원합니다.

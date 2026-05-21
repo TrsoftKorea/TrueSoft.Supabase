@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 데이터 테이블 컬럼과 C# 멤버를 묶습니다.

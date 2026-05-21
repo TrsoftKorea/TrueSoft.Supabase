@@ -1,4 +1,4 @@
-# Remote Config
+﻿# Remote Config
 
 Remote Config는 앱을 업데이트하지 않고도 서버에서 게임 수치를 바꿀 수 있는 기능입니다.  
 예를 들어 스테미나 최대치, 몬스터 체력 배율, 이벤트 배너 텍스트 등을 DB에서 관리할 수 있습니다.
@@ -13,7 +13,7 @@ DB에 저장된 JSON 구조와 같은 모양의 C# 클래스를 만들고 `[Remo
 
 ```csharp
 using Newtonsoft.Json;
-using Truesoft.Supabase.Unity;
+using TrueBase.Unity;
 
 [RemoteConfigKey("gameplay_v1")]   // DB의 키 이름
 public class GameplayConfig
@@ -158,7 +158,7 @@ DB에 저장된 JSON 구조에 맞게 클래스를 작성합니다. 지원하는
 ```csharp
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Truesoft.Supabase.Unity;
+using TrueBase.Unity;
 
 [RemoteConfigKey("gameplay_v1")]
 public class GameplayConfig

@@ -1,11 +1,11 @@
-using System.IO;
-using Truesoft.Supabase.Unity;
-using Truesoft.Supabase.Unity.Config;
+﻿using System.IO;
+using TrueBase.Unity;
+using TrueBase.Unity.Config;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Editor
+namespace TrueBase.Editor
 {
     public static class SupabaseSetupMenu
     {

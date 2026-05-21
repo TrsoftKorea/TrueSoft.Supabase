@@ -1,8 +1,8 @@
-{
-  "name": "Truesoft.Supabase.Unity",
-  "rootNamespace": "Truesoft.Supabase.Unity",
+﻿{
+  "name": "TrueBase.Unity",
+  "rootNamespace": "TrueBase.Unity",
   "references": [
-    "Truesoft.Supabase.Core",
+    "TrueBase.Core",
     "UnityEngine.UnityWebRequestModule",
     "UnityEngine.JSONSerializeModule",
     "Unity.Purchasing",

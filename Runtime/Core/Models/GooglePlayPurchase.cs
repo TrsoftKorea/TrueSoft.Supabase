@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Core.Models
+namespace TrueBase.Core.Models
 {
     [Serializable]
     public sealed class GooglePlayPurchaseRequest

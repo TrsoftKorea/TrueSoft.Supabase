@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using Newtonsoft.Json;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     public sealed class UnitySupabaseJsonSerializer : ISupabaseJsonSerializer
     {

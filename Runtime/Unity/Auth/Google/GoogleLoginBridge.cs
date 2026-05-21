@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity.Auth.Google
+namespace TrueBase.Unity.Auth.Google
 {
     public sealed class GoogleLoginBridge : MonoBehaviour
     {

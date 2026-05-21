@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
 
-namespace Truesoft.Supabase.Editor
+namespace TrueBase.Editor
 {
     /// <summary>remote_config 테이블에서 키·JSON을 읽어 DTO + 접근자 클래스 소스를 생성합니다.</summary>
     internal static class RemoteConfigClassGenerator
@@ -219,7 +219,7 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using Newtonsoft.Json;");
-            sb.AppendLine("using Truesoft.Supabase.Unity;");
+            sb.AppendLine("using TrueBase.Unity;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
                     if (!string.IsNullOrWhiteSpace(ns))

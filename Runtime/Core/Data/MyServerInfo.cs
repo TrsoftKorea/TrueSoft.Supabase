@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Data
+﻿namespace TrueBase.Core.Data
 {
     public readonly struct MyServerInfo
     {

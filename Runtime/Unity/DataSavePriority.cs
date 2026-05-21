@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Unity
+﻿namespace TrueBase.Unity
 {
     /// <summary>
     /// 유저 데이터 필드의 저장 우선순위입니다.
@@ -13,8 +13,8 @@ namespace Truesoft.Supabase.Unity
     /// </list>
     /// dirty 필드가 여러 우선순위를 가지면 가장 높은(Urgent에 가까운) 쿨다운을 사용합니다.
     /// <para>
-    /// <b>참고:</b> 이 타입은 <c>Truesoft.Supabase.Core.Data.DataSavePriority</c>와 동일한 정수값을 가집니다.
-    /// 게임 어셈블리에서 <c>using Truesoft.Supabase.Unity;</c>만으로 사용할 수 있도록 Unity 네임스페이스에 선언됩니다.
+    /// <b>참고:</b> 이 타입은 <c>TrueBase.Core.Data.DataSavePriority</c>와 동일한 정수값을 가집니다.
+    /// 게임 어셈블리에서 <c>using TrueBase.Unity;</c>만으로 사용할 수 있도록 Unity 네임스페이스에 선언됩니다.
     /// </para>
     /// </remarks>
     public enum DataSavePriority

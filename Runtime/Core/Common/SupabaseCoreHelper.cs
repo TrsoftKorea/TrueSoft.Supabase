@@ -1,6 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
-namespace Truesoft.Supabase.Core.Common
+namespace TrueBase.Core.Common
 {
     /// <summary>
     /// Core 레이어 내부에서 공통으로 사용하는 유틸리티입니다.

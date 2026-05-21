@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 공개 프로필(soft 탈퇴 시각, 활동 시각) 및 표시 이름(displayName) 관련 API.

@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>PostgREST <c>/rest/v1/{table}</c> 경로에 쓰는 테이블 식별자 검증·URL 조립.</summary>
     internal static class SupabaseRestTableRef

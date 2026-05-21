@@ -1,9 +1,9 @@
-{
-  "name": "Truesoft.Supabase.Editor",
-  "rootNamespace": "Truesoft.Supabase.Editor",
+﻿{
+  "name": "TrueBase.Editor",
+  "rootNamespace": "TrueBase.Editor",
   "references": [
-    "Truesoft.Supabase.Core",
-    "Truesoft.Supabase.Unity",
+    "TrueBase.Core",
+    "TrueBase.Unity",
     "Unity.Newtonsoft.Json"
   ],
   "includePlatforms": [

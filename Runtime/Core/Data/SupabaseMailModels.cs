@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>우편 <c>items</c> JSON 배열 원소 (<c>key</c>, <c>count</c>).</summary>
     public sealed class MailItemPayload

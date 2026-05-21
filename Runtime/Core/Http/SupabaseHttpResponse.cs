@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Http
+﻿namespace TrueBase.Core.Http
 {
     public sealed class SupabaseHttpResponse
     {

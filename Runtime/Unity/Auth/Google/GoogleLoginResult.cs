@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Unity.Auth.Google
+namespace TrueBase.Unity.Auth.Google
 {
     [Serializable]
     public sealed class GoogleLoginResult

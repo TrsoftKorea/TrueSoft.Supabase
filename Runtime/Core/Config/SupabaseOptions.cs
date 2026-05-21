@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase
+﻿namespace TrueBase
 {
     public sealed class SupabaseOptions
     {

@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Data
+﻿namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 공개 프로필 조회 결과. <c>profiles</c>의 <c>id</c>(행 PK), <c>user_id</c>(안정 플레이어 id), <c>withdrawn_at</c>를 반영합니다.

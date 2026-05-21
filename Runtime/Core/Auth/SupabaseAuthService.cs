@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Auth
+namespace TrueBase.Core.Auth
 {
     public sealed class SupabaseAuthService
     {

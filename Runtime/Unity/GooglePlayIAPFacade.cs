@@ -1,14 +1,14 @@
-#if TRUESOFT_IAP_AVAILABLE
+﻿#if TRUESOFT_IAP_AVAILABLE
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Models;
+using TrueBase.Core.Models;
 using Unity.Services.Core;
 using UnityEngine;
 using UnityEngine.Purchasing;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// Unity IAP v5 + Google Play 영수증 서버 검증 파사드.

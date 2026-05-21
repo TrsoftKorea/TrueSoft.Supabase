@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     public sealed class SupabaseUserDataService
     {

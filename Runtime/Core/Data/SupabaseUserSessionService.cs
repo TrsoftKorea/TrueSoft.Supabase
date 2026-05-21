@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 계정당 하나의 활성 세션 토큰(<c>user_sessions.session_token</c>)을 두어, 다른 기기에서 로그인하면 이전 기기에서 감지할 수 있게 합니다.

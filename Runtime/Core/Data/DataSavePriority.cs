@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Data
+﻿namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 유저 데이터 필드의 저장 우선순위입니다.

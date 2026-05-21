@@ -1,15 +1,15 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Auth;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Data;
-using Truesoft.Supabase.Core.Models;
+using TrueBase.Core.Auth;
+using TrueBase.Core.Common;
+using TrueBase.Core.Data;
+using TrueBase.Core.Models;
 #if TRUESOFT_IAP_AVAILABLE
 using UnityEngine.Purchasing;
 #endif
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// 게임 코드에서 쓰기 위한 정적 진입점입니다. 실제 구현은 <see cref="SupabaseSDK"/>에 있습니다.

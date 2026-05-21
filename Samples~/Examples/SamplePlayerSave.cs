@@ -1,5 +1,5 @@
-using System;
-using Truesoft.Supabase.Unity;
+﻿using System;
+using TrueBase.Unity;
 
 /// <summary>
 /// StaticUserSave 상속 최소 예시.

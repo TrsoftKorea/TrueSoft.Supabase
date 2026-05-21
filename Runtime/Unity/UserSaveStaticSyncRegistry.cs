@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     internal static class UserSaveStaticSyncRegistry
     {

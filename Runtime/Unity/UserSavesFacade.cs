@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Auth;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Data;
+using TrueBase.Core.Auth;
+using TrueBase.Core.Common;
+using TrueBase.Core.Data;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     public sealed class UserSavesFacade
     {

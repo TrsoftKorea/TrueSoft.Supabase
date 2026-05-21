@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
 
-namespace Truesoft.Supabase.Editor
+namespace TrueBase.Editor
 {
     /// <summary>PostgREST OpenAPI(JSON)에서 세이브 테이블 컬럼을 읽고 DataColumn이 붙은 C# 클래스 소스를 만듭니다.</summary>
     internal static class PostgrestOpenApiUserSaveClass
@@ -184,7 +184,7 @@ namespace Truesoft.Supabase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using Truesoft.Supabase.Unity;");
+            sb.AppendLine("using TrueBase.Unity;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
                     if (!string.IsNullOrWhiteSpace(ns))

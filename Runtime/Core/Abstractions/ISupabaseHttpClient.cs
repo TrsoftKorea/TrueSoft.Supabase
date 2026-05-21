@@ -1,7 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Truesoft.Supabase.Core.Http
+namespace TrueBase.Core.Http
 {
     public interface ISupabaseHttpClient
     {

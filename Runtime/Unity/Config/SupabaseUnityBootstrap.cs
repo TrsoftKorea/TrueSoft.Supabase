@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using UnityEngine;
-using Truesoft.Supabase.Core.Auth;
-using Truesoft.Supabase.Core.Data;
-using Truesoft.Supabase.Core.Http;
-using Truesoft.Supabase.Unity;
+using TrueBase.Core.Auth;
+using TrueBase.Core.Data;
+using TrueBase.Core.Http;
+using TrueBase.Unity;
 
-namespace Truesoft.Supabase.Unity.Config
+namespace TrueBase.Unity.Config
 {
     public sealed class SupabaseUnityBootstrap
     {

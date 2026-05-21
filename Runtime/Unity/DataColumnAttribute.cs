@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// 유저 세이브 테이블 컬럼과 C# 멤버를 묶습니다.
-    /// <c>Truesoft.Supabase.Core.Data.DataColumnAttribute</c>의 Unity 네임스페이스 미러입니다.
+    /// <c>TrueBase.Core.Data.DataColumnAttribute</c>의 Unity 네임스페이스 미러입니다.
     /// 게임 어셈블리에서 Core 어셈블리 참조 없이 사용할 수 있도록 제공됩니다.
     /// </summary>
     /// <example>

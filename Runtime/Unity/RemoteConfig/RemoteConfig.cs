@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// <typeparamref name="T"/>의 <see cref="RemoteConfigKeyAttribute"/>에서 키를 자동으로 읽어

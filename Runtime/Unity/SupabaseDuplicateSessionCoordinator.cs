@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Auth;
+using TrueBase.Core.Auth;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// <c>user_sessions</c>의 <c>session_token</c>을 등록·폴링해 다른 기기에서 같은 계정으로 로그인했을 때 이 기기에서 세션을 끊습니다.

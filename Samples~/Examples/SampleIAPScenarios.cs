@@ -1,9 +1,9 @@
-#if TRUESOFT_IAP_AVAILABLE
+﻿#if TRUESOFT_IAP_AVAILABLE
 using System.Threading.Tasks;
-using Truesoft.Supabase.Unity;
+using TrueBase.Unity;
 using UnityEngine;
 using UnityEngine.Purchasing;
-using SupabaseClient = global::Truesoft.Supabase.Unity.Supabase;
+using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// Supabase IAP 서버 검증 예제 컴포넌트.

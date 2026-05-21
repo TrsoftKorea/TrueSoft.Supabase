@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>
     /// Supabase remote_config 테이블을 통해 원격 설정을 조회합니다.

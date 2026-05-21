@@ -41,9 +41,9 @@ The SDK has three layers:
 
 ### Assembly Definitions
 
-- `Truesoft.Supabase.Core.asmdef` — Core only, no UnityEngine references
-- `Truesoft.Supabase.Unity.asmdef` — Unity layer, depends on Core
-- `Truesoft.Supabase.Editor.asmdef` — Editor tools only
+- `TrueBase.Core.asmdef` — Core only, no UnityEngine references
+- `TrueBase.Unity.asmdef` — Unity layer, depends on Core
+- `TrueBase.Editor.asmdef` — Editor tools only
 
 ## Key Concepts
 

@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Unity;
-using Truesoft.Supabase.Unity.Auth.Google;
+using TrueBase.Unity;
+using TrueBase.Unity.Auth.Google;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity.Config
+namespace TrueBase.Unity.Config
 {
     /// <summary>
     /// Supabase SDK의 "씬 실행 정책"을 제어하는 런타임 컴포넌트입니다.

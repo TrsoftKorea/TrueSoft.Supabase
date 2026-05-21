@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Common
+﻿namespace TrueBase.Core.Common
 {
     public sealed class SupabaseResult<T>
     {

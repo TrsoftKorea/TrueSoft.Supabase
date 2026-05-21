@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Data
+﻿namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 로그인 사용자 본인 기준 탈퇴 예약 상태 스냅샷.

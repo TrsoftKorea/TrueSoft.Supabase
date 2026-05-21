@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Truesoft.Supabase.Core.Data;
+using TrueBase.Core.Data;
 using UnityEngine;
 
-namespace Truesoft.Supabase.Unity
+namespace TrueBase.Unity
 {
     /// <summary>
     /// 유저 데이터 저장/불러오기 싱글턴 베이스 클래스.

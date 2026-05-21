@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Truesoft.Supabase.Core.Common;
-using Truesoft.Supabase.Core.Http;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
 
-namespace Truesoft.Supabase.Core.Data
+namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 우편함 REST + RPC. 상세 <c>ts_view_mail_for_user</c>, 수령 <c>ts_claim_*</c>, 삭제 <c>ts_delete_mail_for_user</c>·<c>ts_delete_read_mails_for_user</c>, 카운트 <c>ts_mail_inbox_counts</c>.

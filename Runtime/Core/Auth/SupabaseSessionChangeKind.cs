@@ -1,4 +1,4 @@
-namespace Truesoft.Supabase.Core.Auth
+﻿namespace TrueBase.Core.Auth
 {
     /// <summary>
     /// 세션을 설정할 때의 출처(새 로그인 vs 복원·갱신). 중복 로그인 토큰 정책에 사용합니다.

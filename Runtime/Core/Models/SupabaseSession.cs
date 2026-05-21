@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 
-namespace Truesoft.Supabase.Core.Auth
+namespace TrueBase.Core.Auth
 {
     [Serializable]
     public sealed class SupabaseSession
