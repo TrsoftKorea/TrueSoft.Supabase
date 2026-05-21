@@ -34,6 +34,7 @@ string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 
 ```csharp
 Debug.Log(Supabase.MyProfile.DisplayName);  // 닉네임
+Debug.Log(Supabase.MyProfile.ServerCode);   // 서버 코드 (예: "GLOBAL", "KR1")
 Debug.Log(Supabase.MyProfile.IsWithdrawn);  // 탈퇴 예약 여부
 ```
 
@@ -84,7 +85,5 @@ await Supabase.TryRedeemWithdrawalCancelAsync(token);
 플레이어를 다른 서버로 이동시킵니다. 서버별로 닉네임 고유성이 관리되므로, 이주 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.
 
 ```csharp
-// 현재 접속 서버를 설정하고 이주 요청
-Supabase.SetCurrentServerCode("KR1");
 await Supabase.TryTransferMyServerAsync("GLOBAL");
 ```

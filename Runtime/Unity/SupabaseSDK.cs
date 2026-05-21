@@ -2675,20 +2675,27 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 if (profileResult?.IsSuccess == true)
                     _myProfile = profileResult.Data;
 
-                var selectedCode = GetCurrentServerCode();
-                if (string.IsNullOrWhiteSpace(selectedCode))
-                    return;
-
                 var mine = await svc.GetMyServerIdAsync(s.AccessToken);
                 if (mine == null || !mine.IsSuccess || mine.Data.ServerCode.Length == 0)
                     return;
 
-                if (string.Equals(mine.Data.ServerCode, selectedCode, StringComparison.OrdinalIgnoreCase))
+                // _myProfile에 DB 서버 코드 반영
+                _myProfile = new PublicProfileSnapshot(
+                    _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
+                    _myProfile.WithdrawnAtIso, mine.Data.ServerCode);
+
+                var selectedCode = GetCurrentServerCode();
+                if (string.IsNullOrWhiteSpace(selectedCode) ||
+                    string.Equals(mine.Data.ServerCode, selectedCode, StringComparison.OrdinalIgnoreCase))
                     return;
 
                 var moved = await svc.TransferMyServerAsync(s.AccessToken, selectedCode, "sdk_signin_server_sync");
                 if (moved == null || !moved.IsSuccess)
                     Debug.LogWarning("[Supabase] server transfer after sign-in failed: " + (moved?.ErrorMessage ?? "unknown"));
+                else
+                    _myProfile = new PublicProfileSnapshot(
+                        _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
+                        _myProfile.WithdrawnAtIso, selectedCode);
             }
             catch (Exception e)
             {
