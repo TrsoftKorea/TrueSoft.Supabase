@@ -145,11 +145,19 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | 시크릿 키 | 값 | 필요 함수 |
 |----------|----|----------|
 | `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Service Account JSON | `purchase-verify-google` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Service Account JSON 전체 | `purchase-verify-google` |
 | `APPLE_SHARED_SECRET` | 앱 공유 암호 | `purchase-verify-apple` |
 
-> [!TIP]
-> `CANCEL_TOKEN_SECRET`은 `withdrawal-cancel-issue`와 `withdrawal-cancel-redeem` 양쪽에 **동일한 값**을 설정해야 합니다.
+**`GOOGLE_SERVICE_ACCOUNT_JSON` 발급 방법**
+
+1. [Google Play Console](https://play.google.com/console) > **설정 > API 액세스**로 이동합니다.
+2. Google Cloud 프로젝트에 연결한 뒤 **서비스 계정 관리**를 클릭합니다.
+3. Google Cloud Console에서 **키 만들기 > JSON** 유형으로 키 파일을 발급합니다.
+4. 다운로드된 `.json` 파일을 텍스트 편집기로 열어 **전체 내용**을 복사합니다.
+5. Supabase 대시보드 **Edge Functions > Secrets**에서 키 이름 `GOOGLE_SERVICE_ACCOUNT_JSON`, 값에 복사한 JSON을 붙여넣고 저장합니다.
+
+> [!NOTE]
+> JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파일 경로가 아닌 **파일 내용 전체**를 값으로 입력해야 합니다.
 
 ---
 
