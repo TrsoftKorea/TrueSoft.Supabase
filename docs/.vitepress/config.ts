@@ -27,7 +27,7 @@ export default defineConfig({
           { text: '유저 데이터', link: '/guide/user-data' },
           { text: 'Remote Config', link: '/guide/remote-config' },
           { text: '인앱 결제 (IAP)', link: '/guide/iap' },
-          { text: '공개 프로필', link: '/guide/public-profile' },
+          { text: '계정', link: '/guide/account' },
           { text: '데이터 스키마', link: '/guide/data-schema' }
         ]
       }

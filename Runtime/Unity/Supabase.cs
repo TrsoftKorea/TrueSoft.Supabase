@@ -32,6 +32,13 @@ namespace TrueBase.Unity
         public static bool IsLoggedIn => SupabaseSDK.IsLoggedIn;
 
         /// <summary>
+        /// 로그인 직후 자동으로 조회·캐시된 내 프로필.
+        /// 닉네임·탈퇴 상태 등 로그인 시 1회 조회로 충분한 정보를 담습니다.
+        /// 로그아웃 시 null로 초기화됩니다.
+        /// </summary>
+        public static PublicProfileSnapshot MyProfile => SupabaseSDK.MyProfile;
+
+        /// <summary>
         /// 씬의 SupabaseRuntime 초기화를 잠시 대기한 뒤, 필요 시 Resources의 SupabaseSettings로 부트스트랩합니다.
         /// 대부분의 API가 내부에서 호출하므로, 게임 코드에서는 생략해도 됩니다.
         /// </summary>
