@@ -2,7 +2,7 @@
 
 Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스크립트를 프로젝트로 가져옵니다.
 
-임포트 후 `Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/` 폴더에 아래 세 파일이 생성됩니다.
+임포트 후 `Assets/Samples/TrueBase/<버전>/Examples/` 폴더에 아래 세 파일이 생성됩니다.
 
 | 파일 | 설명 |
 |------|------|

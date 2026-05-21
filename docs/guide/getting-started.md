@@ -44,8 +44,6 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | **Project URL** | `https://<project-id>.supabase.co` | `SupabaseSettings.projectUrl` |
 | **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
 
-> [!NOTE]
-> Project URL에 포함된 `<project-id>`는 소셜 로그인 콜백 URL(`https://<project-id>.supabase.co/auth/v1/callback`) 설정 시 별도로 필요합니다.
 
 ### 3. Authentication 설정
 
@@ -125,7 +123,7 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 
 1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
 2. 함수 이름을 정확히 입력하고 생성
-3. `EdgeFunctions/<함수명>/index.ts` 파일을 열어 전체 내용 복사
+3. Unity Project 창에서 `Assets/Samples/.../DatabaseSetup/EdgeFunctions/<함수명>/index.ts`를 열어 전체 내용 복사
 4. 에디터에 붙여넣고 **Deploy** 클릭
 
 | 함수 이름 | 필요 기능 |

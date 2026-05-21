@@ -25,7 +25,7 @@ private async void Start()
     _iapFacade?.Dispose();
     _iapFacade = await Supabase.CreateIAPAsync(
         productIds: new[] { "com.mygame.coins_100", "com.mygame.coins_500", "com.mygame.gems_10" },
-        onGrant: async (productId, isResuming, alreadyVerified) =>
+        onGrant: async (productId, _, _) =>
         {
             switch (productId)
             {
@@ -49,7 +49,8 @@ private void OnDestroy()
 ```
 
 `onGrant` 콜백은 서버 영수증 검증이 완료된 직후 호출됩니다.  
-아이템 지급 후 `true`를 반환하면 구매가 소비(consume) 처리됩니다.
+아이템 지급 후 `true`를 반환하면 구매가 소비 처리됩니다.  
+두 번째·세 번째 파라미터는 중복 지급 방지 등 고급 처리에 사용합니다. [더 알아보기](#더-알아보기)를 참고하세요.
 
 ---
 
@@ -91,11 +92,12 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 ### 구매 실패 콜백
 
 ```csharp
+_iapFacade?.Dispose();
 _iapFacade = await Supabase.CreateIAPAsync(
-    productIds: new[] { "com.mygame.item_1000" },
-    onGrant: async (productId, isResuming, alreadyVerified) =>
+    productIds: new[] { "com.mygame.coins_100", "com.mygame.gems_10" },
+    onGrant: async (productId, _, _) =>
     {
-        await MyInventory.GiveItemAsync(productId);
+        // 아이템 지급
         return true;
     },
     onFailed: order => Debug.LogWarning("구매 실패: " + order));

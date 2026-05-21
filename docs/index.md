@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Truesoft Supabase SDK
+  name: TrueBase
   tagline: Unity에서 Supabase를 간단하게
   actions:
     - theme: brand

@@ -11,12 +11,12 @@
 
 ## 샘플 가져오기
 
-1. **Window > Package Manager** → **Truesoft Supabase SDK** 선택
+1. **Window > Package Manager** → **TrueBase** 선택
 2. **Samples** 탭 → **Examples** 옆 **Import** 클릭
 
 Import 후 경로:
 ```
-Assets/Samples/Truesoft Supabase SDK/<버전>/Examples/
+Assets/Samples/TrueBase/<버전>/Examples/
 ```
 
 ---

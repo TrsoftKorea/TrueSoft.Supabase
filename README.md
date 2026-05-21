@@ -1,4 +1,4 @@
-# Truesoft Supabase SDK
+# TrueBase
 
 Unity에서 Supabase Auth, REST, Edge Functions를 사용하기 위한 UPM 패키지입니다.
 
