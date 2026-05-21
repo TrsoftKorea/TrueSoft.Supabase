@@ -93,7 +93,9 @@ await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
 
 ## 컬럼 추가
 
-새 컬럼은 Supabase SQL Editor 또는 Retool에서 추가합니다. 게임 클라이언트에서 호출하지 않습니다.
+Retool에서 `user_saves` 테이블에 컬럼을 추가합니다.
+
+> 자세한 내용은 추후 업데이트 예정입니다.
 
 추가 후 생성기를 다시 실행하면 `PlayerSave.cs`에 해당 프로퍼티가 자동으로 추가됩니다.
 

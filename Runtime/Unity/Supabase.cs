@@ -248,8 +248,8 @@ namespace Truesoft.Supabase.Unity
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
         /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        public static Task<bool> TryFlushAllUserSaveImmediateAsync(int timeoutMs = 5000) =>
-            SupabaseSDK.TryFlushAllUserSaveImmediateAsync(timeoutMs);
+        public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000) =>
+            SupabaseSDK.TrySaveAllAsync(timeoutMs);
 
         /// <summary>다른 사용자 공개 displayName 조회 (내부 Result API).</summary>
         internal static Task<SupabaseResult<string>> GetPublicDisplayNameAsync(string userId) =>

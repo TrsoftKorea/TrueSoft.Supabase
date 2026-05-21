@@ -99,7 +99,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SupabaseClient.TryFlushAllUserSaveImmediateAsync();
+        var ok = await SupabaseClient.TrySaveAllAsync();
         if (!ok) Debug.LogWarning("[Supabase] 데이터 저장 실패.");
         else     Debug.Log("[Supabase] 데이터 저장 완료.");
     }

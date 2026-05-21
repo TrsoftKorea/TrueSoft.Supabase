@@ -9,7 +9,7 @@ using Truesoft.Supabase.Unity;
 /// <code>
 /// SamplePlayerSave.Level = 10;     // 변경 → MarkDirty 자동 호출
 /// SamplePlayerSave.Coins += 100;
-/// await Supabase.TryFlushAllUserSaveImmediateAsync();  // 즉시 저장
+/// await Supabase.TrySaveAllAsync();  // 즉시 저장
 /// </code>
 ///
 /// 평상시 저장은 SupabaseRuntime이 쿨타임 주기로 자동 처리합니다.

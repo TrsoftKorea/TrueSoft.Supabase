@@ -641,7 +641,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         }
 
         /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        public static Task<bool> TryFlushAllUserSaveImmediateAsync(int timeoutMs = 5000)
+        public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000)
         {
             return UserSaveStaticSyncRegistry.RequestImmediateFlushAllAsync(timeoutMs);
         }
@@ -2082,7 +2082,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         {
             if (await EnsureInitializedAsync())
             {
-                await TryFlushAllUserSaveImmediateAsync();
+                await TrySaveAllAsync();
                 _ = await SignOutFromGoogleAsync();
             }
 
