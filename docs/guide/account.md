@@ -8,18 +8,18 @@
 ## 닉네임
 
 ```csharp
+// 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
+string myName = Supabase.MyProfile?.DisplayName;
+
 // 중복 확인 (현재 내 닉네임은 사용 가능으로 나옴)
 bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
 
 // 설정
 await Supabase.TrySetMyDisplayNameAsync("Player123");
 
-// 다른 사용자 닉네임 조회
-// userId = 조회 대상의 auth.users.id (리더보드·매칭 결과 등에서 얻은 값)
+// 다른 플레이어 닉네임 조회
+// userId = 조회 대상의 ID (리더보드·매칭 결과 등에서 얻은 값)
 string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
-
-// 내 ID 확인
-string myId = Supabase.Session?.User?.Id;
 ```
 
 닉네임은 클라이언트에서 최대 64자로 잘립니다.
@@ -28,10 +28,19 @@ string myId = Supabase.Session?.User?.Id;
 
 ## 프로필 조회
 
+로그인이 완료되면 내 프로필은 자동으로 조회·캐시됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.
+
 ```csharp
-// userId = 조회 대상의 auth.users.id
+var profile = Supabase.MyProfile;
+Debug.Log(profile?.DisplayName);  // 닉네임
+Debug.Log(profile?.IsWithdrawn);  // 탈퇴 예약 여부
+```
+
+다른 플레이어의 프로필을 조회할 때는 별도 API를 사용합니다.
+
+```csharp
+// userId = 조회 대상 플레이어의 ID (리더보드·매칭 결과 등에서 얻은 값)
 var profile = await Supabase.TryGetPublicProfileAsync(userId);
-// profile.DisplayName, profile.IsWithdrawn 등
 ```
 
 ---
