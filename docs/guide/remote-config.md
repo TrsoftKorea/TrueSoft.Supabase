@@ -217,20 +217,3 @@ int   maxSt  = cfg?.stamina?.max ?? 100;
 `max_stale_seconds`에 설정한 시간이 지나면 낡은 값을 즉시 반환하면서 **동시에** 백그라운드에서 서버 갱신을 시작합니다. 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
 
 > 즉, 값을 읽는 속도는 항상 빠르고, 서버 갱신은 뒤에서 알아서 처리됩니다.
-
----
-
-## 고급 설정
-
-### 폴링 주기 사전 설정
-
-초기화 시 1회 호출하면 이후 해당 키의 Binding·Listener 생성 시 자동으로 이 주기가 사용됩니다.
-
-```csharp
-Supabase.SetRemoteConfigKeyPolling("gameplay_v1", interval: 30f);
-```
-
-### 테이블 이름
-
-`remote_config`로 고정되어 있습니다.  
-SQL: `Sql/player/08_remote_config.sql`

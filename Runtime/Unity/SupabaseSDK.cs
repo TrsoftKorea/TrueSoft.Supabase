@@ -1803,11 +1803,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             return new RemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
         }
 
-        /// <summary>
-        /// 키별 백그라운드 폴링 주기를 설정합니다. 0 이하이면 폴링 비활성.
-        /// 앱 초기화 시 1회 호출하면 이후 <see cref="GetRemoteConfigAsync{T}"/>에서 별도 지정 없이 동작합니다.
-        /// </summary>
-        public static void SetRemoteConfigKeyPolling(string key, float interval)
+        internal static void SetRemoteConfigKeyPolling(string key, float interval)
         {
             if (IsInitialized)
                 RemoteConfig.SetKeyPollIntervalOverride(key, interval);

@@ -380,10 +380,6 @@ namespace Truesoft.Supabase.Unity
         public static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new() =>
             SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStale);
 
-        /// <inheritdoc cref="SupabaseSDK.SetRemoteConfigKeyPolling"/>
-        public static void SetRemoteConfigKeyPolling(string key, float interval) =>
-            SupabaseSDK.SetRemoteConfigKeyPolling(key, interval);
-
         internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStale);
 
