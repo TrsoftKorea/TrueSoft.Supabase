@@ -85,15 +85,17 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ---
 
-## Database Setup 샘플 임포트
+## Database Setup
+
+DB 스키마와 Edge Function은 **Database Setup** 샘플에 포함된 파일로 설정합니다.
+
+### 1. 샘플 임포트
 
 Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database Setup**을 Import합니다.  
 `Assets/Samples/.../DatabaseSetup/` 폴더에 SQL 파일과 Edge Function 소스가 생성됩니다.  
 설정 완료 후 이 폴더는 삭제해도 됩니다.
 
----
-
-## DB 스키마 실행
+### 2. DB 스키마 실행
 
 `SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
@@ -115,9 +117,7 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 > [!TIP]
 > `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
 
----
-
-## Edge Function 배포
+### 3. Edge Function 배포
 
 기능별로 필요한 Edge Function만 배포하세요.
 
@@ -138,7 +138,7 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | `purchase-verify-google` | 인앱 결제 — Android |
 | `purchase-verify-apple` | 인앱 결제 — iOS |
 
-### Secrets 설정
+### 4. Secrets 설정
 
 대시보드 **Edge Functions > Secrets**에 등록합니다.
 
