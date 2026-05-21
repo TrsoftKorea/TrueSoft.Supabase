@@ -22,8 +22,8 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 | `I` | Google 로그인 (Android 네이티브) |
 | `P` | 익명 계정에 Google 연동 |
 | `W` | 로그아웃 |
-| `R` | 유저 세이브 전체 로드 |
-| `V` | 유저 세이브 즉시 저장 |
+| `R` | 유저 데이터 전체 로드 |
+| `V` | 유저 데이터 즉시 저장 |
 | `F` | 레벨 +1 (자동 저장 시연) |
 | `T` | RemoteConfig Reader 호출 |
 | `U` | RemoteConfig Binding 값 출력 |

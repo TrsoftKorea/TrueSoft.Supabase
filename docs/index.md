@@ -16,9 +16,9 @@ features:
   - title: 인증
     details: 익명·Google 로그인, 익명→소셜 연동, 자동 로그인
     link: /guide/auth
-  - title: 유저 세이브
+  - title: 유저 데이터
     details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
-    link: /guide/user-saves
+    link: /guide/user-data
   - title: Remote Config
     details: Cold Start 로딩, Reader·Binding·Listener 세 가지 패턴, 스테일-와일-리밸리데이트
     link: /guide/remote-config
