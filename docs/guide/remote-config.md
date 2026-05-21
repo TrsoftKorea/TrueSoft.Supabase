@@ -19,45 +19,71 @@
 설정 클래스에 `[RemoteConfigKey("키이름")]` 어트리뷰트를 붙이면 `RemoteConfig<T>`가 자동으로 키를 읽습니다.
 
 ```csharp
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Truesoft.Supabase.Unity;
 
 [RemoteConfigKey("gameplay_v1")]
 public class GameplayConfig
 {
-    // 기본 타입
-    public int count;
-    public float damage;
-    public bool enabled;
-    public string message;
+    // ── 기본 타입 ────────────────────────────────────────────────────────────
+    public bool   enabled;          // JSON: "enabled"
+    public int    maxLevel;         // JSON: "maxLevel"
+    public float  spawnInterval;    // JSON: "spawnInterval"
+    public string announcement;     // JSON: "announcement"
 
-    // 중첩 클래스
-    public StaminaConfig stamina;
-    public BattleConfig  battle;
+    // ── JSON 키와 필드명이 다를 때 ────────────────────────────────────────────
+    [JsonProperty("max_stamina")]
+    public int MaxStamina;          // JSON: "max_stamina" → C#: MaxStamina
 
-    public class StaminaConfig { public int max; public int regenSec; }
-    public class BattleConfig  { public float playerDmg; }
+    // ── nullable (JSON에 키가 없을 때 null로 남겨두고 싶을 때) ────────────────
+    public int?   bonusLevel;       // JSON 키 없으면 null
+    public float? eventMultiplier;  // null이면 기본값 적용
+
+    // ── 컬렉션 ────────────────────────────────────────────────────────────────
+    public List<string>          bannedWords;    // JSON: ["word1", "word2"]
+    public int[]                 stageClearExp;  // JSON: [100, 200, 400]
+    public Dictionary<string, int> itemDropRate; // JSON: {"sword": 10, "shield": 5}
+
+    // ── 중첩 클래스 ───────────────────────────────────────────────────────────
+    public StaminaConfig stamina;   // JSON: "stamina": { ... }
+    public BattleConfig  battle;    // JSON: "battle":  { ... }
+
+    public class StaminaConfig
+    {
+        public int   max;           // JSON: "max"
+        public int   regenSec;      // JSON: "regenSec"
+        public float regenAmount;   // JSON: "regenAmount"
+    }
+
+    public class BattleConfig
+    {
+        public float playerDmg;     // JSON: "playerDmg"
+        public float enemyHpScale;  // JSON: "enemyHpScale"
+
+        // 중첩 안의 중첩도 가능
+        public BossConfig boss;
+
+        public class BossConfig
+        {
+            public float hpMultiplier;
+            public int   spawnFloor;
+        }
+    }
 }
 ```
-
-**필드명과 JSON 키가 다를 때** — `[JsonProperty]`로 매핑합니다.
-
-```csharp
-[JsonProperty("player_dmg")]
-public float PlayerDmg;
-```
-
-**중첩 객체는 항상 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
-
-```csharp
-float dmg = cfg?.battle?.playerDmg ?? 1f;  // battle이 없어도 안전
-```
-
-### 규칙
 
 > [!WARNING]
 > 중첩 클래스를 포함한 모든 설정 클래스에 **매개변수 없는 생성자**가 필요합니다.  
 > 생성자를 직접 정의했다면 기본 생성자를 명시해야 합니다.
+
+**중첩 객체는 `?.`로 접근** — JSON에 해당 키가 없으면 `null`입니다.
+
+```csharp
+float dmg       = cfg?.battle?.playerDmg ?? 1f;
+float bossHp    = cfg?.battle?.boss?.hpMultiplier ?? 1f;
+int   staminaMax = cfg?.stamina?.max ?? 100;
+```
 
 ---
 
