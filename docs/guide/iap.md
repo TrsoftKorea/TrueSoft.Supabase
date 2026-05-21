@@ -27,10 +27,9 @@ private async void Start()
         productIds: new[] { "com.mygame.item_1000" },
         onGrant: async (productId, isResuming, alreadyVerified) =>
         {
-            // 서버 검증 완료 → 아이템 지급
+            // 서버 검증 완료 → 아이템 지급 후 구매 소비
             await MyInventory.GiveItemAsync(productId);
-            return true;  // true 반환 시 구매 소비 완료
-                          // false 반환 시 다음 앱 시작 때 자동 재처리
+            return true;
         });
 }
 
@@ -46,8 +45,8 @@ private void OnDestroy()
 ```
 
 `onGrant` 콜백은 서버 영수증 검증이 완료된 직후 호출됩니다.  
-`true`를 반환하면 구매가 소비(consume)되고 완료 처리됩니다.  
-`false`를 반환하면 Pending 상태로 남아 다음 앱 시작 시 자동으로 재시도합니다.
+아이템 지급에 성공했으면 `true`를 반환해 구매를 소비(consume) 처리합니다.  
+지급 중 예외가 발생하는 등 실패한 경우 `false`를 반환하면 Pending 상태로 남아 다음 앱 시작 시 자동으로 재시도합니다.
 
 ---
 
@@ -56,7 +55,6 @@ private void OnDestroy()
 - **로그인 후 초기화**: `CreateIAPAsync`는 반드시 로그인 완료 이후에 호출하세요. 자동 로그인 경로에서도 마찬가지입니다.
 - **소모품 전용**: 비소모품(Non-Consumable)과 구독(Subscription)은 현재 지원하지 않습니다.
 - **반드시 Dispose**: `OnDestroy`에서 `Dispose()`를 호출하지 않으면 이벤트 핸들러가 누수됩니다.
-- **Apple 샌드박스**: 테스트 환경에서 별도 설정 없이 자동으로 샌드박스로 전환됩니다.
 
 ---
 
