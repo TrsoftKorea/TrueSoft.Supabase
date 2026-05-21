@@ -22,24 +22,29 @@ private IAPFacade _iapFacade;
 
 private async void Start()
 {
+    _iapFacade?.Dispose();
     _iapFacade = await Supabase.CreateIAPAsync(
-        productIds: new[] { "com.mygame.item_1000" },
+        productIds: new[] { "com.mygame.coins_100", "com.mygame.coins_500", "com.mygame.gems_10" },
         onGrant: async (productId, isResuming, alreadyVerified) =>
         {
-            // 서버 검증 완료 → 아이템 지급 후 구매 소비
-            await MyInventory.GiveItemAsync(productId);
+            switch (productId)
+            {
+                case "com.mygame.coins_100": await GiveCoinsAsync(100); break;
+                case "com.mygame.coins_500": await GiveCoinsAsync(500); break;
+                case "com.mygame.gems_10":   await GiveGemsAsync(10);   break;
+            }
             return true;
         });
 }
 
-private void OnBuyButtonClicked()
-{
-    _iapFacade?.Purchase("com.mygame.item_1000");
-}
+// 구매 버튼마다 호출
+private void OnBuyCoins100Clicked() => _iapFacade?.Purchase("com.mygame.coins_100");
+private void OnBuyCoins500Clicked() => _iapFacade?.Purchase("com.mygame.coins_500");
+private void OnBuyGems10Clicked()   => _iapFacade?.Purchase("com.mygame.gems_10");
 
 private void OnDestroy()
 {
-    _iapFacade?.Dispose();  // 반드시 해제
+    _iapFacade?.Dispose();
 }
 ```
 
