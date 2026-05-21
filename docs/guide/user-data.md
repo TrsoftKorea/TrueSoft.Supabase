@@ -88,7 +88,7 @@ PlayerSave.Coins += 100;
 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
 
 ```csharp
-await Supabase.TryFlushAllUserSaveImmediateAsync(timeoutMs: 5000);
+await Supabase.TrySaveAllAsync(timeoutMs: 5000);
 ```
 
 > [!NOTE]

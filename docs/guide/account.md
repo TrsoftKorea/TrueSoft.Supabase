@@ -1,7 +1,7 @@
 # 계정
 
 닉네임 설정·변경, 계정 탈퇴 등 플레이어 계정의 수명 주기를 관리하는 기능입니다.  
-닉네임은 전체 고유이며, Edge Function을 통해 서버에서 검증됩니다.
+닉네임은 서버에서 중복 여부를 검증하므로 전체 고유합니다.
 
 ---
 
@@ -55,8 +55,8 @@ await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 예약 취소
 유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
 
 > [!NOTE]
-> 로그인 시 탈퇴 유예 기간이 만료된 계정은 `withdrawal-guard` Edge Function이 자동으로 처리합니다.  
-> 이 함수가 배포되지 않으면 탈퇴 완료 계정이 다시 로그인될 수 있습니다.
+> 탈퇴 유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
+> [빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
 
 ### 탈퇴 취소 (토큰 방식)
 
@@ -67,8 +67,7 @@ await Supabase.TryRedeemWithdrawalCancelAsync(token);
 ```
 
 > [!IMPORTANT]
-> `TryRequestWithdrawalCancelTokenAsync`·`TryRedeemWithdrawalCancelAsync`는  
-> `withdrawal-cancel-issue` / `withdrawal-cancel-redeem` Edge Function이 필요합니다.
+> [빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
 
 ---
 
@@ -79,6 +78,4 @@ Supabase.SetCurrentServerCode("KR1");
 await Supabase.TryTransferMyServerAsync("GLOBAL");
 ```
 
-운영/Retool에서 특정 계정을 이주시킬 때는 RPC `ts_admin_transfer_user_server`를 Secret 키로 호출합니다.  
-요청 형식은 [데이터 스키마 > 서버 이주](./data-schema.md#서버-이주-server_id)를 참고하세요.
 

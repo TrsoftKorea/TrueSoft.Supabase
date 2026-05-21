@@ -119,7 +119,7 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 ```
 
 **동작 방식:**
-- 연동 성공 시 동일 `auth.users.id`를 유지하면서 `is_anonymous`가 false가 됩니다.
+- 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다. 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
 - 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
 
 ---
