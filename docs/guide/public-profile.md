@@ -8,7 +8,7 @@
 ## Edge Function 배포
 
 닉네임·탈퇴 취소 기능은 Edge Function이 배포되어 있어야 동작합니다.  
-소스 위치: `Sql/edge-functions/`
+소스 위치: **Database Setup** 샘플 > `EdgeFunctions/`
 
 ### 기능별 필요 함수
 
@@ -22,29 +22,26 @@
 
 ### 배포 순서
 
-**1. Supabase CLI 설치 및 프로젝트 연결 (최초 1회)**
+아래 과정을 각 함수마다 반복합니다.
 
-```bash
-npm install -g supabase
-supabase login
-supabase link --project-ref <project-id>
-```
+1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
+2. 함수 이름을 정확히 입력하고 생성
+3. **Database Setup** 샘플을 임포트한 후 `EdgeFunctions/<함수명>/index.ts` 파일을 열어 전체 내용 복사
+4. 에디터에 붙여넣고 **Deploy** 클릭
 
-**2. 함수 배포**
+배포할 함수 목록:
 
-`Sql/edge-functions/` 폴더를 CLI 작업 디렉터리의 `supabase/functions/` 아래에 복사한 뒤 배포합니다.
-
-```bash
-supabase functions deploy displayname-get
-supabase functions deploy displayname-set
-supabase functions deploy withdrawal-cancel-issue
-supabase functions deploy withdrawal-cancel-redeem
-supabase functions deploy withdrawal-guard
-```
+| 함수 이름 |
+|-----------|
+| `displayname-get` |
+| `displayname-set` |
+| `withdrawal-cancel-issue` |
+| `withdrawal-cancel-redeem` |
+| `withdrawal-guard` |
 
 ### Secrets 설정
 
-대시보드 **Edge Functions > Secrets** 또는 CLI로 등록합니다.
+대시보드 **Edge Functions > Secrets**에 등록합니다.
 
 | 시크릿 키 | 값 형식 | 필요 함수 |
 |----------|---------|----------|
@@ -140,5 +137,7 @@ await Supabase.TryTransferMyServerAsync("GLOBAL");
 
 ## SQL
 
-- `Sql/player/02_profiles.sql` — profiles 테이블 · 닉네임 유니크 인덱스
-- `Sql/player/05_account_management.sql` — 탈퇴 이력 · 취소 RPC
+- `SQL/player/02_profiles.sql` — profiles 테이블 · 닉네임 유니크 인덱스
+- `SQL/player/05_account_management.sql` — 탈퇴 이력 · 취소 RPC
+
+Database Setup 샘플을 임포트한 후 위 파일을 실행합니다.

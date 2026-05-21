@@ -15,6 +15,11 @@
       "displayName": "Examples",
       "description": "Practical examples: login, save/load, remote config, edge functions, server shard (ExampleSupabaseScenarios + keyboard shortcuts).",
       "path": "Samples~/Examples"
+    },
+    {
+      "displayName": "Database Setup",
+      "description": "SQL migration scripts and Edge Function source files for initial project setup. Import, apply to Supabase, then delete.",
+      "path": "Samples~/DatabaseSetup"
     }
   ]
 }

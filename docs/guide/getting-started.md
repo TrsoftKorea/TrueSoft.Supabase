@@ -87,7 +87,7 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ## DB 스키마 실행
 
-`Sql/player/` 폴더의 SQL 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
+**Database Setup** 샘플을 임포트한 후 `SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
 > [!TIP]
 > Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
