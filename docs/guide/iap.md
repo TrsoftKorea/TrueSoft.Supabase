@@ -8,8 +8,7 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 ## 사전 준비
 
-[빠른 시작](./getting-started.md)의 **Database Setup** 절차를 먼저 완료하세요.  
-DB 스키마(`07_purchases.sql`), Edge Function(`purchase-verify-google`, `purchase-verify-apple`), Secrets(`GOOGLE_SERVICE_ACCOUNT_JSON`, `APPLE_SHARED_SECRET`) 등록이 모두 포함되어 있습니다.
+[빠른 시작](./getting-started.md)의 **Database Setup** 절차를 먼저 완료하세요.
 
 이후 Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
 설치 후 `TRUESOFT_IAP_AVAILABLE` 심볼이 자동으로 정의됩니다.
