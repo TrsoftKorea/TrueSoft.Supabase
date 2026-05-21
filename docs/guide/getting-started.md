@@ -142,11 +142,11 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 
 대시보드 **Edge Functions > Secrets**에 등록합니다.
 
-| 시크릿 키 | 값 | 필요 함수 |
-|----------|----|----------|
-| `CANCEL_TOKEN_SECRET` | 랜덤 문자열 32자 이상 | `withdrawal-cancel-issue`, `withdrawal-cancel-redeem` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Service Account JSON 전체 | `purchase-verify-google` |
-| `APPLE_SHARED_SECRET` | 앱 공유 암호 | `purchase-verify-apple` |
+| 시크릿 키 | 필수 | 용도 |
+|----------|----|------|
+| `CANCEL_TOKEN_SECRET` | 탈퇴 취소 사용 시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
+| `APPLE_SHARED_SECRET` | iOS IAP 사용 시 | App Store 결제 영수증 서버 검증에 사용하는 앱 공유 암호 |
 
 **`GOOGLE_SERVICE_ACCOUNT_JSON` 발급 방법**
 
