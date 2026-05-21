@@ -15,10 +15,10 @@ namespace Truesoft.Supabase.Unity
         private bool _disposed;
 
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
+        /// <param name="pollInterval">폴링 주기(초).</param>
         /// <param name="onChange">값이 갱신될 때 호출되는 콜백.</param>
         /// <param name="invokeIfCached">생성 시 캐시에 값이 있으면 즉시 콜백 호출 여부.</param>
-        public RemoteConfigListener(string key, float pollIntervalSeconds, Action<T> onChange,
+        public RemoteConfigListener(string key, float pollInterval, Action<T> onChange,
             bool invokeIfCached = true)
         {
             _key = key;
@@ -32,10 +32,10 @@ namespace Truesoft.Supabase.Unity
                 }
                 catch { }
             };
-            if (pollIntervalSeconds > 0f)
-                SupabaseSDK.SetRemoteConfigKeyPolling(_key, pollIntervalSeconds);
+            if (pollInterval > 0f)
+                SupabaseSDK.SetRemoteConfigKeyPolling(_key, pollInterval);
             SupabaseSDK.SubscribeRemoteConfig(_key, _onRawChanged, invokeIfCached);
-            _ = SupabaseSDK.GetRemoteConfigAsync<T>(_key, maxStaleSeconds: 0);
+            _ = SupabaseSDK.GetRemoteConfigAsync<T>(_key, maxStale: 0);
         }
 
         public void Dispose()

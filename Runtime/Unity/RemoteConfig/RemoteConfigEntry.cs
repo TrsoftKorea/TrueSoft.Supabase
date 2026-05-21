@@ -9,19 +9,19 @@ namespace Truesoft.Supabase.Unity
     public sealed class RemoteConfigEntry<T> where T : class, new()
     {
         private readonly string _key;
-        private readonly int _maxStaleSeconds;
+        private readonly int _maxStale;
 
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="maxStaleSeconds">0 초과이면 캐시 유효 시간(초). 0 이하면 기본값(300초) 사용.</param>
-        public RemoteConfigEntry(string key, int maxStaleSeconds = 0)
+        /// <param name="maxStale">0 초과이면 캐시 유효 시간(초). 0 이하면 기본값(300초) 사용.</param>
+        public RemoteConfigEntry(string key, int maxStale = 0)
         {
             _key = key;
-            _maxStaleSeconds = maxStaleSeconds;
+            _maxStale = maxStale;
         }
 
         public string Key => _key;
 
-        public Task<SupabaseResult<T>> FetchAsync() => SupabaseSDK.GetRemoteConfigAsync<T>(_key, _maxStaleSeconds);
+        public Task<SupabaseResult<T>> FetchAsync() => SupabaseSDK.GetRemoteConfigAsync<T>(_key, _maxStale);
 
         public async Task<(bool success, T value)> TryFetchAsync()
         {

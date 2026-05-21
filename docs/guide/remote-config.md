@@ -51,9 +51,9 @@ if (cfg != null)
 
 | 상황 | 추천 패턴 |
 |------|-----------|
-| 씬 시작 시 한 번만 읽으면 충분할 때 | **Reader** |
+| 가끔 한 번만 읽으면 충분할 때 | **Reader** |
 | 매 프레임 또는 자주 값을 읽어야 할 때 | **Binding** |
-| 값이 바뀌는 순간 즉시 반응해야 할 때 (UI 갱신, 이벤트 시작 등) | **Listener** |
+| 값이 바뀌는 순간 즉시 반응해야 할 때 | **Listener** |
 
 > 대부분의 경우 **Reader**나 **Binding**으로 충분합니다.
 
@@ -80,7 +80,7 @@ private async Task LoadConfigAsync()
 
 ```csharp
 // 저장된 값을 무시하고 항상 서버에서 새로 받고 싶을 때
-_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStaleSeconds: 0);
+_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStale: 0);
 ```
 
 ---
@@ -96,7 +96,7 @@ private RemoteConfigBinding<GameplayConfig> _gameplay;
 private void Start()
 {
     // 60초마다 서버에서 자동으로 값을 갱신합니다
-    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollIntervalSeconds: 60f);
+    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollInterval: 60f);
 }
 
 private void Update()
@@ -121,7 +121,7 @@ private void Start()
 {
     _listener = RemoteConfig<GameplayConfig>.CreateListener(
         onChange: cfg => ApplyConfig(cfg),  // 값이 바뀔 때 호출
-        pollIntervalSeconds: 60f);
+        pollInterval: 60f);
 }
 
 private void ApplyConfig(GameplayConfig cfg)
@@ -227,7 +227,7 @@ int   maxSt  = cfg?.stamina?.max ?? 100;
 초기화 시 1회 호출하면 이후 해당 키의 Binding·Listener 생성 시 자동으로 이 주기가 사용됩니다.
 
 ```csharp
-Supabase.SetRemoteConfigKeyPolling("gameplay_v1", intervalSeconds: 30f);
+Supabase.SetRemoteConfigKeyPolling("gameplay_v1", interval: 30f);
 ```
 
 ### 테이블 이름

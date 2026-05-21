@@ -19,15 +19,15 @@ namespace Truesoft.Supabase.Unity
         public T Value => _value;
 
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
-        public RemoteConfigBinding(string key, float pollIntervalSeconds)
+        /// <param name="pollInterval">폴링 주기(초).</param>
+        public RemoteConfigBinding(string key, float pollInterval)
         {
             _key = key;
             _onRawChanged = OnRawValueChanged;
-            if (pollIntervalSeconds > 0f)
-                SupabaseSDK.SetRemoteConfigKeyPolling(_key, pollIntervalSeconds);
+            if (pollInterval > 0f)
+                SupabaseSDK.SetRemoteConfigKeyPolling(_key, pollInterval);
             SupabaseSDK.SubscribeRemoteConfig(_key, _onRawChanged, invokeIfCached: true);
-            _ = SupabaseSDK.GetRemoteConfigAsync<T>(_key, maxStaleSeconds: 0);
+            _ = SupabaseSDK.GetRemoteConfigAsync<T>(_key, maxStale: 0);
         }
 
         private void OnRawValueChanged(string json)

@@ -666,9 +666,9 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출하고 성공 여부를 로그로 남깁니다.
         /// 실패 시 <c>value</c>는 null입니다.
         /// </summary>
-        public static async Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        public static async Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
-            var r = await GetRemoteConfigAsync<T>(key, maxStaleSeconds);
+            var r = await GetRemoteConfigAsync<T>(key, maxStale);
             var ok = r.IsSuccess;
             LogApiResult(ApiLogTags.RemoteConfigGet, ok, ok ? null : r.ErrorMessage ?? "remote_config_get_failed");
             return (ok, ok ? r.Data : null);
@@ -1741,39 +1741,39 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
         /// <summary>
         /// Remote Config를 서버와 맞춘 뒤 역직렬화합니다.
-        /// 폴링이 활성화된 키는 폴링이 갱신을 담당하며, 그 외 키는 <paramref name="maxStaleSeconds"/> 초과 시 읽기 시점에 백그라운드 갱신이 트리거됩니다(기본 300초).
+        /// 폴링이 활성화된 키는 폴링이 갱신을 담당하며, 그 외 키는 <paramref name="maxStale"/> 초과 시 읽기 시점에 백그라운드 갱신이 트리거됩니다(기본 300초).
         /// 폴링 설정은 <see cref="SetRemoteConfigKeyPolling"/>을 사용합니다.
         /// </summary>
-        public static async Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        public static async Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<T>.Fail("supabase_not_initialized");
 
-            return await RemoteConfig.GetTypedAsync<T>(key, maxStaleSeconds);
+            return await RemoteConfig.GetTypedAsync<T>(key, maxStale);
         }
 
         /// <summary>
         /// Remote Config를 가져옵니다. 캐시가 없거나 만료된 경우 서버에서 직접 기다린 후 신선한 값을 반환합니다.
         /// </summary>
-        internal static async Task<SupabaseResult<T>> GetRemoteConfigFreshAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        internal static async Task<SupabaseResult<T>> GetRemoteConfigFreshAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<T>.Fail("supabase_not_initialized");
 
-            return await RemoteConfig.GetTypedFreshAsync<T>(key, maxStaleSeconds);
+            return await RemoteConfig.GetTypedFreshAsync<T>(key, maxStale);
         }
 
         /// <summary>
         /// RemoteConfig 읽기 함수를 생성합니다. 반환된 함수를 호출하면 캐시가 신선하면 즉시, 만료됐으면 서버 조회 후 값을 반환합니다.
         /// </summary>
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="maxStaleSeconds">캐시 유효 시간(초). 0이면 기본값(300초).</param>
-        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        /// <param name="maxStale">캐시 유효 시간(초). 0이면 기본값(300초).</param>
+        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new()
         {
-            _ = GetRemoteConfigAsync<T>(key, maxStaleSeconds); // 캐시 워밍
+            _ = GetRemoteConfigAsync<T>(key, maxStale); // 캐시 워밍
             return async () =>
             {
-                var result = await GetRemoteConfigFreshAsync<T>(key, maxStaleSeconds);
+                var result = await GetRemoteConfigFreshAsync<T>(key, maxStale);
                 return result.IsSuccess ? result.Data : null;
             };
         }
@@ -1782,35 +1782,35 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 폴링 기반 RemoteConfigBinding을 생성합니다. 지정한 주기마다 서버에서 값을 갱신하며 Value로 읽습니다.
         /// </summary>
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
-        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds)
+        /// <param name="pollInterval">폴링 주기(초).</param>
+        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollInterval)
             where T : class, new()
         {
-            return new RemoteConfigBinding<T>(key, pollIntervalSeconds);
+            return new RemoteConfigBinding<T>(key, pollInterval);
         }
 
         /// <summary>
         /// 폴링 기반 반응형 RemoteConfig 구독을 생성합니다. 값이 갱신될 때마다 onChange가 호출됩니다.
         /// </summary>
         /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="pollIntervalSeconds">폴링 주기(초).</param>
+        /// <param name="pollInterval">폴링 주기(초).</param>
         /// <param name="onChange">값이 갱신될 때 호출되는 콜백.</param>
         /// <param name="invokeIfCached">생성 시 캐시에 값이 있으면 즉시 콜백 호출 여부.</param>
         public static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
-            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            string key, float pollInterval, Action<T> onChange, bool invokeIfCached = true)
             where T : class, new()
         {
-            return new RemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
+            return new RemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
         }
 
         /// <summary>
         /// 키별 백그라운드 폴링 주기를 설정합니다. 0 이하이면 폴링 비활성.
         /// 앱 초기화 시 1회 호출하면 이후 <see cref="GetRemoteConfigAsync{T}"/>에서 별도 지정 없이 동작합니다.
         /// </summary>
-        public static void SetRemoteConfigKeyPolling(string key, float intervalSeconds)
+        public static void SetRemoteConfigKeyPolling(string key, float interval)
         {
             if (IsInitialized)
-                RemoteConfig.SetKeyPollIntervalOverride(key, intervalSeconds);
+                RemoteConfig.SetKeyPollIntervalOverride(key, interval);
         }
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson)

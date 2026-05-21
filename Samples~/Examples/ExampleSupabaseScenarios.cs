@@ -139,7 +139,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>U — RemoteConfig Binding. 60초 폴링, .Value로 즉시 읽기.</summary>
     private void TestRemoteConfigBinding()
     {
-        _rcBinding ??= RemoteConfig<TestConfig>.CreateBinding(pollIntervalSeconds: 60f);
+        _rcBinding ??= RemoteConfig<TestConfig>.CreateBinding(pollInterval: 60f);
 
         var val = _rcBinding.Value;
         if (val != null) Debug.Log($"[RC ②] Binding: a={val.a}, b={val.b}, c={val.c}");
@@ -159,7 +159,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         _rcListener = RemoteConfig<TestConfig>.CreateListener(
             val => Debug.Log($"[RC ③] Listener 콜백: a={val.a}, b={val.b}, c={val.c}"),
-            pollIntervalSeconds: 60f);
+            pollInterval: 60f);
         Debug.Log("[RC ③] Listener 시작.");
     }
 

@@ -373,28 +373,28 @@ namespace Truesoft.Supabase.Unity
             SupabaseSDK.GetRemoteConfig(key, defaultValue);
 
         /// <inheritdoc cref="SupabaseSDK.GetRemoteConfigAsync{T}(string, int)"/>
-        public static Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
-            SupabaseSDK.GetRemoteConfigAsync<T>(key, maxStaleSeconds);
+        public static Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new() =>
+            SupabaseSDK.GetRemoteConfigAsync<T>(key, maxStale);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetRemoteConfigAsync{T}(string, int)"/>
-        public static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
-            SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStaleSeconds);
+        public static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new() =>
+            SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStale);
 
         /// <inheritdoc cref="SupabaseSDK.SetRemoteConfigKeyPolling"/>
-        public static void SetRemoteConfigKeyPolling(string key, float intervalSeconds) =>
-            SupabaseSDK.SetRemoteConfigKeyPolling(key, intervalSeconds);
+        public static void SetRemoteConfigKeyPolling(string key, float interval) =>
+            SupabaseSDK.SetRemoteConfigKeyPolling(key, interval);
 
-        internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStaleSeconds = 0) where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStaleSeconds);
+        internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new() =>
+            SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStale);
 
-        internal static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollIntervalSeconds)
+        internal static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollInterval)
             where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollIntervalSeconds);
+            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollInterval);
 
         internal static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
-            string key, float pollIntervalSeconds, Action<T> onChange, bool invokeIfCached = true)
+            string key, float pollInterval, Action<T> onChange, bool invokeIfCached = true)
             where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollIntervalSeconds, onChange, invokeIfCached);
+            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
 
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
             SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);

@@ -21,7 +21,7 @@ namespace Truesoft.Supabase.Unity
         private readonly Dictionary<string, KeyPollState> _keyPollStates = new Dictionary<string, KeyPollState>(StringComparer.Ordinal);
         private readonly Dictionary<string, List<Action<string>>> _keySubscribers = new Dictionary<string, List<Action<string>>>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pollIntervalOverrideByKey = new Dictionary<string, float>(StringComparer.Ordinal);
-        private readonly Dictionary<string, int> _maxStaleSecondsByKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _maxStaleByKey = new Dictionary<string, int>(StringComparer.Ordinal);
 
         /// <summary>Remote config가 변경되어 캐시가 갱신되면 호출됩니다. 인자는 변경된 key 목록.</summary>
         public event Action<IReadOnlyList<string>> OnChanged;
@@ -61,7 +61,7 @@ namespace Truesoft.Supabase.Unity
             if (string.IsNullOrWhiteSpace(key))
                 return;
 
-            _maxStaleSecondsByKey[key.Trim()] = seconds > 0 ? seconds : 0;
+            _maxStaleByKey[key.Trim()] = seconds > 0 ? seconds : 0;
         }
 
         /// <summary>특정 key가 서버에서 갱신될 때마다 콜백을 호출합니다.</summary>
@@ -132,7 +132,7 @@ namespace Truesoft.Supabase.Unity
         /// <summary>
         /// Cold Start 패턴: 캐시에 없으면 키 단위로 fetch합니다.
         /// 폴링이 활성화된 키는 읽기 시 stale 체크를 건너뜁니다(폴링이 갱신 담당).
-        /// 폴링이 없는 키는 Stale-While-Revalidate: <paramref name="maxStaleSeconds"/> 초과 시 백그라운드 갱신을 트리거합니다(기본 300초).
+        /// 폴링이 없는 키는 Stale-While-Revalidate: <paramref name="maxStale"/> 초과 시 백그라운드 갱신을 트리거합니다(기본 300초).
         /// 폴링 설정은 <see cref="SetKeyPollIntervalOverride"/>를 사용합니다.
         /// fetch 실패·키 없음·역직렬화 실패 시 <see cref="SupabaseResult{T}.Fail"/>를 반환합니다.
         /// 실패 시 <see cref="SupabaseResult{T}.ErrorMessage"/> 예:
@@ -140,15 +140,15 @@ namespace Truesoft.Supabase.Unity
         /// <c>remote_config_key_disabled</c>, <c>remote_config_key_requires_auth</c>,
         /// <c>remote_config_value_must_be_object_json</c>(뒤에 <c>:</c>로 이유·접두 미리보기가 붙을 수 있음).
         /// </summary>
-        public async Task<SupabaseResult<T>> GetTypedAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        public async Task<SupabaseResult<T>> GetTypedAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (string.IsNullOrWhiteSpace(key))
                 return SupabaseResult<T>.Fail("remote_config_key_empty");
 
             var trimmedKey = key.Trim();
 
-            if (maxStaleSeconds > 0)
-                SetKeyMaxStaleSeconds(trimmedKey, maxStaleSeconds);
+            if (maxStale > 0)
+                SetKeyMaxStaleSeconds(trimmedKey, maxStale);
 
             if (_cache.TryGetValue(trimmedKey, out _) == false)
             {
@@ -170,15 +170,15 @@ namespace Truesoft.Supabase.Unity
         /// Remote Config를 가져옵니다. 캐시가 없거나 만료된 경우 서버 응답을 기다린 후 신선한 값을 반환합니다.
         /// <see cref="GetTypedAsync{T}"/>와 달리, 만료 시 현재 호출이 서버 응답을 기다립니다.
         /// </summary>
-        public async Task<SupabaseResult<T>> GetTypedFreshAsync<T>(string key, int maxStaleSeconds = 0) where T : class, new()
+        public async Task<SupabaseResult<T>> GetTypedFreshAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (string.IsNullOrWhiteSpace(key))
                 return SupabaseResult<T>.Fail("remote_config_key_empty");
 
             var trimmedKey = key.Trim();
 
-            if (maxStaleSeconds > 0)
-                SetKeyMaxStaleSeconds(trimmedKey, maxStaleSeconds);
+            if (maxStale > 0)
+                SetKeyMaxStaleSeconds(trimmedKey, maxStale);
 
             // 캐시 없음 또는 만료 시 서버에서 직접 fetch (await)
             bool needsFetch = !_cache.ContainsKey(trimmedKey);
@@ -354,7 +354,7 @@ namespace Truesoft.Supabase.Unity
 
         private int GetEffectiveMaxStaleSeconds(string key)
         {
-            if (_maxStaleSecondsByKey.TryGetValue(key, out var s) && s > 0)
+            if (_maxStaleByKey.TryGetValue(key, out var s) && s > 0)
                 return s;
 
             return DefaultMaxStaleSeconds;
