@@ -8,22 +8,11 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 ## 사전 준비
 
-### 1. Unity IAP 설치
+[빠른 시작](./getting-started.md)의 **Database Setup** 절차를 먼저 완료하세요.  
+DB 스키마(`07_purchases.sql`), Edge Function(`purchase-verify-google`, `purchase-verify-apple`), Secrets(`GOOGLE_SERVICE_ACCOUNT_JSON`, `APPLE_SHARED_SECRET`) 등록이 모두 포함되어 있습니다.
 
-Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
+이후 Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
 설치 후 `TRUESOFT_IAP_AVAILABLE` 심볼이 자동으로 정의됩니다.
-
-### 2. 플랫폼별 키 등록
-
-서버가 결제를 검증하려면 각 스토어의 인증 키가 필요합니다.
-
-**Android**  
-Google Play Console > 설정 > API 액세스에서 Service Account JSON을 발급받아  
-Supabase Edge Functions Secrets에 `GOOGLE_SERVICE_ACCOUNT_JSON`으로 등록합니다.
-
-**iOS**  
-App Store Connect > 앱 정보에서 앱 공유 암호를 발급받아  
-Supabase Edge Functions Secrets에 `APPLE_SHARED_SECRET`으로 등록합니다.
 
 ---
 
