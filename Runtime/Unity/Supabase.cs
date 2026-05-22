@@ -437,17 +437,19 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.VerifyApplePurchaseAsync"/>
         internal static Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
-            string receiptData,
+            string data,
             string productId,
-            string bundleId = null) =>
-            SupabaseSDK.VerifyApplePurchaseAsync(receiptData, productId, bundleId);
+            string bundleId = null,
+            bool isJws = false) =>
+            SupabaseSDK.VerifyApplePurchaseAsync(data, productId, bundleId, isJws);
 
         /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseAsync"/>
         public static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
-            string receiptData,
+            string data,
             string productId,
-            string bundleId = null) =>
-            SupabaseSDK.TryVerifyApplePurchaseAsync(receiptData, productId, bundleId);
+            string bundleId = null,
+            bool isJws = false) =>
+            SupabaseSDK.TryVerifyApplePurchaseAsync(data, productId, bundleId, isJws);
 
 #if TRUESOFT_IAP_AVAILABLE
         /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>

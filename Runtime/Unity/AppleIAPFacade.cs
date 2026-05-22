@@ -32,7 +32,8 @@ namespace TrueBase.Unity
     public sealed class AppleIAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        private readonly Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
+        // (data, productId, isJws) → (success, response)
+        private readonly Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -62,7 +63,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateAppleIAP()로만 생성) ──────────
         internal AppleIAPFacade(
-            Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -239,14 +240,7 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var receipt   = pendingOrder.Info?.Receipt;
             var cartItems = pendingOrder.CartOrdered?.Items();
-
-            if (string.IsNullOrEmpty(receipt))
-            {
-                Debug.LogWarning("[Supabase.IAP.Apple] Receipt가 비어 있습니다.");
-                return;
-            }
 
             if (cartItems == null || cartItems.Count == 0)
             {
@@ -256,14 +250,28 @@ namespace TrueBase.Unity
 
             var productId = cartItems[0].Product.definition.id;
 
-            var receiptData = ExtractReceiptPayload(receipt);
-            if (string.IsNullOrEmpty(receiptData))
+            // StoreKit 2 (iOS 15+): jwsRepresentation 우선, 없으면 StoreKit 1 폴백
+            var appleInfo = pendingOrder.Info as IAppleOrderInfo;
+            var jws = appleInfo?.jwsRepresentation;
+            bool isJws = !string.IsNullOrEmpty(jws);
+
+            string verifyData;
+            if (isJws)
             {
-                Debug.LogWarning($"[Supabase.IAP.Apple] receipt payload 추출 실패. product={productId}");
-                return;
+                verifyData = jws;
+            }
+            else
+            {
+                var receipt = pendingOrder.Info?.Receipt;
+                verifyData = ExtractReceiptPayload(receipt);
+                if (string.IsNullOrEmpty(verifyData))
+                {
+                    Debug.LogWarning($"[Supabase.IAP.Apple] receipt payload 추출 실패. product={productId}");
+                    return;
+                }
             }
 
-            var (success, response) = await _verifyAsync(receiptData, productId);
+            var (success, response) = await _verifyAsync(verifyData, productId, isJws);
 
             if (!success || response == null)
             {

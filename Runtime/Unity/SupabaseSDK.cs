@@ -1896,28 +1896,34 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
         /// <summary>Apple App Store 영수증(base64 payload)을 서버에서 검증합니다.</summary>
         public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
-            string receiptData,
+            string data,
             string productId,
-            string bundleId = null)
+            string bundleId = null,
+            bool isJws = false)
         {
             var req = new AppleIAPPurchaseRequest
             {
-                receipt_data = receiptData,
-                product_id   = productId,
-                bundle_id    = bundleId ?? UnityEngine.Application.identifier,
+                product_id = productId,
+                bundle_id  = bundleId ?? UnityEngine.Application.identifier,
             };
+            if (isJws)
+                req.jws_token = data;
+            else
+                req.receipt_data = data;
+
             return await Functions.InvokeAsync<AppleIAPPurchaseResponse>(
                 _purchaseVerifyAppleFunctionName, req, requireAuth: true);
         }
 
         /// <summary><see cref="VerifyApplePurchaseAsync"/>를 호출하고 성공 시 응답을 반환, 실패 시 <c>default</c>를 반환합니다.</summary>
         public static async Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
-            string receiptData,
+            string data,
             string productId,
-            string bundleId = null)
+            string bundleId = null,
+            bool isJws = false)
         {
             const string tag = "[Supabase.Purchase.VerifyApple]";
-            var result = await VerifyApplePurchaseAsync(receiptData, productId, bundleId);
+            var result = await VerifyApplePurchaseAsync(data, productId, bundleId, isJws);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -1942,7 +1948,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="AppleIAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static AppleIAPFacade CreateAppleIAP()
-            => new AppleIAPFacade((receiptData, productId) => TryVerifyApplePurchaseAsync(receiptData, productId));
+            => new AppleIAPFacade((data, productId, isJws) => TryVerifyApplePurchaseAsync(data, productId, isJws: isJws));
 
         /// <summary>
         /// 통합 IAP 파사드를 생성합니다. Android(Google Play)와 iOS(Apple App Store)를 플랫폼 자동 감지로 처리합니다.

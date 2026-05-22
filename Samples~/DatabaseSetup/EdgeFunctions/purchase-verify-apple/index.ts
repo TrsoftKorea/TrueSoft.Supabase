@@ -1,9 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { compactVerify, decodeProtectedHeader, importX509 } from "npm:jose";
 
 type VerifyRequest = {
-  receipt_data?: string;   // Unity IAP receipt의 Payload (base64 앱 영수증)
+  receipt_data?: string;  // StoreKit 1: base64 앱 영수증
+  jws_token?: string;     // StoreKit 2: jwsRepresentation (iOS 15+)
   product_id?: string;
-  bundle_id?: string;      // Application.identifier (클라이언트가 자동 전달)
+  bundle_id?: string;
 };
 
 type VerifyResponse = {
@@ -15,7 +17,7 @@ type VerifyResponse = {
   reason?: string;
 };
 
-// Apple verifyReceipt 응답 내 in_app 항목
+// Apple verifyReceipt 응답 내 in_app 항목 (StoreKit 1)
 type AppleInAppItem = {
   product_id: string;
   transaction_id: string;
@@ -25,7 +27,7 @@ type AppleInAppItem = {
 };
 
 type AppleVerifyReceiptResponse = {
-  status: number;           // 0=valid, 21007=sandbox receipt
+  status: number;
   receipt?: {
     bundle_id?: string;
     in_app?: AppleInAppItem[];
@@ -33,19 +35,27 @@ type AppleVerifyReceiptResponse = {
   latest_receipt_info?: AppleInAppItem[];
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+// StoreKit 2 JWS 페이로드
+type JWSTransactionPayload = {
+  productId?: string;
+  transactionId?: string;
+  bundleId?: string;
+  price?: number;      // 밀리유닛 (÷1000 = 실제 금액)
+  currency?: string;   // ISO 4217 (예: "KRW")
+  purchaseDate?: number;
+  type?: string;
+};
+
+const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
+const publishableKeys     = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const APPLE_SHARED_SECRET = Deno.env.get("APPLE_SHARED_SECRET")!;
-
-if (!APPLE_SHARED_SECRET) {
-  throw new Error("APPLE_SHARED_SECRET is required");
-}
 
 const APPLE_VERIFY_URL_PROD    = "https://buy.itunes.apple.com/verifyReceipt";
 const APPLE_VERIFY_URL_SANDBOX = "https://sandbox.itunes.apple.com/verifyReceipt";
 
-// Apple verifyReceipt 호출. 프로덕션 먼저 시도, status 21007이면 샌드박스로 재시도.
+// ── StoreKit 1: verifyReceipt ─────────────────────────────────────────────────
+
 async function verifyAppleReceipt(
   receiptData: string,
 ): Promise<AppleVerifyReceiptResponse> {
@@ -62,7 +72,6 @@ async function verifyAppleReceipt(
   });
   const prodJson: AppleVerifyReceiptResponse = await prodRes.json();
 
-  // 21007: 샌드박스 영수증이 프로덕션에 제출됨 → 샌드박스로 재시도
   if (prodJson.status === 21007) {
     const sandboxRes = await fetch(APPLE_VERIFY_URL_SANDBOX, {
       method: "POST",
@@ -75,6 +84,22 @@ async function verifyAppleReceipt(
   return prodJson;
 }
 
+// ── StoreKit 2: JWS 서명 검증 ─────────────────────────────────────────────────
+
+async function verifyAppleJWS(jws: string): Promise<JWSTransactionPayload> {
+  // x5c 인증서 체인에서 공개키 추출
+  const header = decodeProtectedHeader(jws) as { x5c?: string[] };
+  if (!header.x5c?.length) throw new Error("jws_missing_x5c");
+
+  const pem = `-----BEGIN CERTIFICATE-----\n${header.x5c[0]}\n-----END CERTIFICATE-----`;
+  const publicKey = await importX509(pem, "ES256");
+
+  const { payload } = await compactVerify(jws, publicKey);
+  return JSON.parse(new TextDecoder().decode(payload)) as JWSTransactionPayload;
+}
+
+// ── 메인 핸들러 ───────────────────────────────────────────────────────────────
+
 Deno.serve(async (req) => {
   const json = <T>(body: T, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -82,7 +107,6 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
 
-  // JWT 검증
   const authHeader = req.headers.get("Authorization") ?? "";
   const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!jwt) {
@@ -98,7 +122,6 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "user_not_found" } satisfies VerifyResponse, 401);
   }
 
-  // 요청 파싱
   let body: VerifyRequest;
   try {
     body = await req.json();
@@ -106,13 +129,74 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { receipt_data, product_id, bundle_id } = body;
-
-  if (!receipt_data || !product_id) {
-    return json({ ok: false, reason: "missing_fields" } satisfies VerifyResponse, 400);
+  const { receipt_data, jws_token, product_id, bundle_id } = body;
+  if (!product_id) {
+    return json({ ok: false, reason: "missing_product_id" } satisfies VerifyResponse, 400);
   }
 
-  // Apple verifyReceipt 호출
+  // ── StoreKit 2 경로 ────────────────────────────────────────────────────────
+  if (jws_token) {
+    let jwsData: JWSTransactionPayload;
+    try {
+      jwsData = await verifyAppleJWS(jws_token);
+    } catch (e) {
+      return json({ ok: false, reason: `jws_verify_failed: ${e}` } satisfies VerifyResponse, 502);
+    }
+
+    if (jwsData.productId !== product_id) {
+      return json({ ok: false, reason: "product_id_mismatch" } satisfies VerifyResponse);
+    }
+
+    const transactionId = jwsData.transactionId ?? "";
+    if (!transactionId) {
+      return json({ ok: false, reason: "jws_missing_transaction_id" } satisfies VerifyResponse);
+    }
+
+    const { data: profile } = await userClient
+      .from("user_profiles").select("user_id").maybeSingle();
+    const userId: string | null = profile?.user_id ?? null;
+
+    // price: 밀리유닛(÷1000=실제금액) → micros(÷1,000,000=실제금액) 로 통일 (×1000)
+    const priceMicros = typeof jwsData.price === "number"
+      ? jwsData.price * 1000
+      : null;
+
+    const { error: insertError } = await userClient
+      .from("purchases")
+      .insert({
+        account_id: user.id,
+        user_id: userId,
+        product_id,
+        purchase_token: transactionId,
+        order_id: transactionId,
+        package_name: bundle_id || jwsData.bundleId || "unknown",
+        purchase_state: 0,
+        store: "apple_app_store",
+        price_currency_code: jwsData.currency ?? null,
+        price_amount_micros: priceMicros,
+      });
+
+    if (insertError) {
+      if (insertError.code === "23505") {
+        return json({
+          ok: true, already_verified: true,
+          transaction_id: transactionId, product_id, purchase_state: 0,
+        } satisfies VerifyResponse);
+      }
+      return json({ ok: false, reason: insertError.message } satisfies VerifyResponse, 500);
+    }
+
+    return json({
+      ok: true, already_verified: false,
+      transaction_id: transactionId, product_id, purchase_state: 0,
+    } satisfies VerifyResponse);
+  }
+
+  // ── StoreKit 1 폴백 경로 ───────────────────────────────────────────────────
+  if (!receipt_data) {
+    return json({ ok: false, reason: "missing_receipt_or_jws" } satisfies VerifyResponse, 400);
+  }
+
   let appleResponse: AppleVerifyReceiptResponse;
   try {
     appleResponse = await verifyAppleReceipt(receipt_data);
@@ -120,7 +204,6 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: `apple_api_exception: ${e}` } satisfies VerifyResponse, 502);
   }
 
-  // status 0 이외는 유효하지 않은 영수증
   if (appleResponse.status !== 0) {
     return json({
       ok: false,
@@ -129,7 +212,6 @@ Deno.serve(async (req) => {
     } satisfies VerifyResponse);
   }
 
-  // in_app 배열에서 product_id가 일치하는 최신 트랜잭션 탐색
   const inAppItems: AppleInAppItem[] = [
     ...(appleResponse.receipt?.in_app ?? []),
     ...(appleResponse.latest_receipt_info ?? []),
@@ -141,27 +223,17 @@ Deno.serve(async (req) => {
 
   if (!matched) {
     return json({
-      ok: false,
-      reason: "product_not_found_in_receipt",
-      purchase_state: -1,
+      ok: false, reason: "product_not_found_in_receipt", purchase_state: -1,
     } satisfies VerifyResponse);
   }
 
   const transactionId = matched.transaction_id;
 
-  // user_id 조회
   let userId: string | null = null;
   const { data: profile, error: profileError } = await userClient
-    .from("user_profiles")
-    .select("user_id")
-    .maybeSingle();
-  if (!profileError) {
-    userId = profile?.user_id ?? null;
-  } else {
-    console.error(`[purchase-verify-apple] profile_query_error: ${profileError.message}`);
-  }
+    .from("user_profiles").select("user_id").maybeSingle();
+  if (!profileError) userId = profile?.user_id ?? null;
 
-  // 구매 기록 INSERT (purchase_token = transaction_id, UNIQUE 충돌 시 already_verified)
   const { error: insertError } = await userClient
     .from("purchases")
     .insert({
@@ -178,21 +250,15 @@ Deno.serve(async (req) => {
   if (insertError) {
     if (insertError.code === "23505") {
       return json({
-        ok: true,
-        already_verified: true,
-        transaction_id: transactionId,
-        product_id,
-        purchase_state: 0,
+        ok: true, already_verified: true,
+        transaction_id: transactionId, product_id, purchase_state: 0,
       } satisfies VerifyResponse);
     }
     return json({ ok: false, reason: insertError.message } satisfies VerifyResponse, 500);
   }
 
   return json({
-    ok: true,
-    already_verified: false,
-    transaction_id: transactionId,
-    product_id,
-    purchase_state: 0,
+    ok: true, already_verified: false,
+    transaction_id: transactionId, product_id, purchase_state: 0,
   } satisfies VerifyResponse);
 });
