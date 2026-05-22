@@ -70,6 +70,18 @@ void OnReady(bool success)
 }
 ```
 
+### 로그인 후 사용 가능한 값
+
+로그인이 성공하면 아래 프로퍼티를 바로 사용할 수 있습니다.
+
+| 프로퍼티 | 설명 |
+|---------|------|
+| `Supabase.MyProfile.DisplayName` | 닉네임. 설정 전에는 빈 문자열 |
+| `Supabase.MyProfile.ServerCode` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
+| `Supabase.MyProfile.IsWithdrawn` | 탈퇴 예약 여부 |
+| `Supabase.UserId` | 플레이어 고유 ID. 재로그인·계정 연동 후에도 변하지 않음 |
+| `Supabase.IsAnonymous` | 익명 로그인 여부 |
+
 ---
 
 ## 소셜 로그인 (선택) {#social-login}
