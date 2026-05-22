@@ -20,6 +20,8 @@ Supabase SQL Editor에서 `SQL/player/` 폴더의 파일을 **번호 순서대�
 | 07_purchases.sql | 인앱 결제 |
 | 08_remote_config.sql | Remote Config |
 | 09_cron_jobs.sql | 자동화 작업 |
+| 10_analytics.sql | 애널리틱스 세션·이벤트 (선택) |
+| 11_product_catalog.sql | 인앱 상품 카탈로그 (Retool 관리용, 선택) |
 
 `99_verify.sql`은 설치 완료 후 정상 여부를 확인하는 쿼리입니다.
 

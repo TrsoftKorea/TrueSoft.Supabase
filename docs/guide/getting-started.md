@@ -111,6 +111,8 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | 7 | `07_purchases.sql` | 인앱 결제 (IAP 사용 시) |
 | 8 | `08_remote_config.sql` | Remote Config |
 | 9 | `09_cron_jobs.sql` | 자동화 크론 잡 |
+| 10 | `10_analytics.sql` | 애널리틱스 세션·이벤트 (선택) |
+| 11 | `11_product_catalog.sql` | 인앱 상품 카탈로그 (Retool 관리용, 선택) |
 
 > [!TIP]
 > `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
@@ -180,4 +182,5 @@ await Supabase.TrySignInAnonymouslyAsync();
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
+| 세션·광고 이벤트 추적 | [애널리틱스](./analytics.md) |
 

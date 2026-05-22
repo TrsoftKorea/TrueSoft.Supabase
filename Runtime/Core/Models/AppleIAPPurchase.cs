@@ -9,6 +9,7 @@ namespace TrueBase.Core.Models
         public string jws_token;      // StoreKit 2: jwsRepresentation (iOS 15+)
         public string product_id;     // 기대하는 상품 ID
         public string bundle_id;      // 앱 Bundle ID (null이면 Edge Function에서 env var 사용)
+        public string session_id;     // 애널리틱스 세션 ID (선택)
     }
 
     [Serializable]

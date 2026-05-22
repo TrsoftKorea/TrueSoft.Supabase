@@ -4,6 +4,7 @@ type VerifyRequest = {
   purchase_token?: string;
   product_id?: string;
   package_name?: string;
+  session_id?: string;     // 애널리틱스 세션 ID (선택)
 };
 
 type VerifyResponse = {
@@ -128,7 +129,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { purchase_token, product_id, package_name } = body;
+  const { purchase_token, product_id, package_name, session_id } = body;
   if (!purchase_token || !product_id || !package_name) {
     return json({ ok: false, reason: "missing_fields" } satisfies VerifyResponse, 400);
   }
@@ -189,6 +190,7 @@ Deno.serve(async (req) => {
       order_id: googlePurchase.orderId ?? null,
       package_name,
       purchase_state: googlePurchase.purchaseState,
+      session_id: session_id ?? null,
     });
 
   if (insertError) {

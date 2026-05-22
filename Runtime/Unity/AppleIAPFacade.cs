@@ -32,8 +32,8 @@ namespace TrueBase.Unity
     public sealed class AppleIAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        // (data, productId, isJws) → (success, response)
-        private readonly Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
+        // (data, productId, isJws, sessionId) → (success, response)
+        private readonly Func<string, string, bool, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -63,7 +63,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateAppleIAP()로만 생성) ──────────
         internal AppleIAPFacade(
-            Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, bool, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -271,7 +271,9 @@ namespace TrueBase.Unity
                 }
             }
 
-            var (success, response) = await _verifyAsync(verifyData, productId, isJws);
+            var sessionId = SupabaseSDK.SessionId;
+
+            var (success, response) = await _verifyAsync(verifyData, productId, isJws, sessionId);
 
             if (!success || response == null)
             {

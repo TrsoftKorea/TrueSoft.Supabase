@@ -25,9 +25,11 @@ create table if not exists public.purchases (
   verified_at     timestamptz not null default now()
 );
 
--- 기존 테이블이 있는 경우 store 컬럼만 추가 (기존 데이터 영향 없음)
+-- 기존 테이블이 있는 경우 컬럼 추가 (기존 데이터 영향 없음)
 alter table public.purchases
-  add column if not exists store text not null default 'google_play';
+  add column if not exists store        text   not null default 'google_play',
+  add column if not exists session_id   text,          -- 구매 시점 애널리틱스 세션 ID
+  add column if not exists price_amount bigint;        -- 실제 원화 정수 (KRW)
 
 alter table public.purchases enable row level security;
 

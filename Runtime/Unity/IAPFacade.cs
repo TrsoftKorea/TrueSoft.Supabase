@@ -33,7 +33,8 @@ namespace TrueBase.Unity
     public sealed class IAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
+        // (token, productId, sessionId) → (success, response)
+        private readonly Func<string, string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -63,7 +64,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateIAP()로만 생성) ─────────────────
         internal IAPFacade(
-            Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -264,7 +265,9 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var (success, response) = await _verifyAsync(token, productId);
+            var sessionId = SupabaseSDK.SessionId;
+
+            var (success, response) = await _verifyAsync(token, productId, sessionId);
 
             if (!success || response == null)
             {
