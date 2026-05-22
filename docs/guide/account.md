@@ -30,12 +30,21 @@ string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
 
 ## 프로필 조회
 
-로그인이 완료되면 내 프로필은 자동으로 조회·캐시됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.
+로그인이 완료되면 플레이어 정보가 자동으로 조회·캐시됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.
+
+| 프로퍼티 | 설명 |
+|---------|------|
+| `Supabase.MyProfile.DisplayName` | 닉네임. 설정 전에는 빈 문자열 |
+| `Supabase.MyProfile.ServerCode` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
+| `Supabase.MyProfile.IsWithdrawn` | 탈퇴 예약 여부 |
+| `Supabase.UserId` | 플레이어 고유 ID. 재로그인·계정 연동 후에도 변하지 않음 |
+| `Supabase.IsAnonymous` | 익명 로그인 여부 |
 
 ```csharp
-Debug.Log(Supabase.MyProfile.DisplayName);  // 닉네임
-Debug.Log(Supabase.MyProfile.ServerCode);   // 서버 코드 (예: "GLOBAL", "KR1")
-Debug.Log(Supabase.MyProfile.IsWithdrawn);  // 탈퇴 예약 여부
+string name   = Supabase.MyProfile.DisplayName;
+string server = Supabase.MyProfile.ServerCode;
+string userId = Supabase.UserId;
+bool isAnon   = Supabase.IsAnonymous;
 ```
 
 다른 플레이어의 프로필을 조회할 때는 별도 API를 사용합니다. 리더보드나 매칭 결과에서 얻은 상대방 ID를 전달합니다.
