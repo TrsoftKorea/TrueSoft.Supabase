@@ -13,6 +13,17 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 이후 Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
 설치 후 `TRUESOFT_IAP_AVAILABLE` 심볼이 자동으로 정의됩니다.
 
+### 플랫폼 요구사항
+
+| 플랫폼 | 최소 버전 | 이유 |
+|--------|----------|------|
+| iOS | **15.0 이상** | StoreKit 2 (JWS) 사용. StoreKit 1은 지원하지 않습니다. |
+| Android | 기존 프로젝트 기준 | 별도 제약 없음 |
+
+> **iOS 배포 대상 자동 설정**  
+> SDK가 포함하는 Editor 스크립트(`IOSDeploymentTargetPostProcessor`)가 iOS 빌드 시 Xcode의 `IPHONEOS_DEPLOYMENT_TARGET`을 자동으로 **15.0 이상**으로 설정합니다.  
+> 이미 15.0 이상으로 설정되어 있으면 변경하지 않습니다. App Store에서 iOS 14 이하 기기의 다운로드가 자동으로 차단됩니다.
+
 ---
 
 ## 사용법
@@ -102,3 +113,20 @@ _iapFacade = await Supabase.CreateIAPAsync(
     },
     onFailed: order => Debug.LogWarning("구매 실패: " + order));
 ```
+
+### 결제 금액 자동 기록
+
+구매 검증이 완료되면 `purchases` 테이블에 결제 금액 정보가 자동으로 저장됩니다.
+
+| 컬럼 | 타입 | 내용 |
+|------|------|------|
+| `price_amount` | bigint | 결제 원금 (정수). Android는 `localizedPrice`, iOS는 JWS에서 추출 |
+| `price_currency` | text | ISO 4217 통화 코드 (예: `"KRW"`, `"USD"`) |
+| `price_amount_krw` | bigint | KRW 환산 금액. 결제 시점 환율 기준 (frankfurter.app). 환산 실패 시 null |
+
+**플랫폼별 처리 방식**
+
+- **Android**: 클라이언트가 Unity IAP `Product.metadata.localizedPrice` / `isoCurrencyCode`를 서버로 전달합니다.
+- **iOS**: JWS 토큰에 가격 정보가 포함되어 있어 클라이언트가 별도로 전달하지 않습니다. 서버가 JWS에서 자동으로 추출합니다.
+
+Retool 등 관리 도구에서 집계 시 `price_amount_krw` 컬럼을 사용하면 해외 결제 포함 합산이 가능합니다. 환산에 실패한 행은 `COALESCE(price_amount_krw, 0)`으로 처리하세요.

@@ -32,8 +32,8 @@ namespace TrueBase.Unity
     public sealed class AppleIAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        // (data, productId, isJws) → (success, response)
-        private readonly Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
+        // (jwsToken, productId) → (success, response)
+        private readonly Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -63,7 +63,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateAppleIAP()로만 생성) ──────────
         internal AppleIAPFacade(
-            Func<string, string, bool, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -90,6 +90,16 @@ namespace TrueBase.Unity
                 Debug.LogWarning("[Supabase.IAP.Apple] productIds가 비어 있습니다.");
                 return false;
             }
+
+#if UNITY_IOS
+            // StoreKit 2 (JWS)는 iOS 15+ 필수. 미만이면 즉시 실패.
+            if (System.Version.TryParse(UnityEngine.iOS.Device.systemVersion, out var iosVer)
+                && iosVer < new System.Version(15, 0))
+            {
+                Debug.LogError($"[Supabase.IAP.Apple] iOS {UnityEngine.iOS.Device.systemVersion} 은 지원되지 않습니다. 최소 iOS 15가 필요합니다.");
+                return false;
+            }
+#endif
 
             if (UnityServices.State != ServicesInitializationState.Initialized)
             {
@@ -250,28 +260,16 @@ namespace TrueBase.Unity
 
             var productId = cartItems[0].Product.definition.id;
 
-            // StoreKit 2 (iOS 15+): jwsRepresentation 우선, 없으면 StoreKit 1 폴백
+            // StoreKit 2 (iOS 15+): JWS만 지원
             var appleInfo = pendingOrder.Info as IAppleOrderInfo;
             var jws = appleInfo?.jwsRepresentation;
-            bool isJws = !string.IsNullOrEmpty(jws);
-
-            string verifyData;
-            if (isJws)
+            if (string.IsNullOrEmpty(jws))
             {
-                verifyData = jws;
-            }
-            else
-            {
-                var receipt = pendingOrder.Info?.Receipt;
-                verifyData = ExtractReceiptPayload(receipt);
-                if (string.IsNullOrEmpty(verifyData))
-                {
-                    Debug.LogWarning($"[Supabase.IAP.Apple] receipt payload 추출 실패. product={productId}");
-                    return;
-                }
+                Debug.LogWarning($"[Supabase.IAP.Apple] JWS를 가져올 수 없습니다. iOS 15+ 기기에서만 지원됩니다. product={productId}");
+                return;
             }
 
-            var (success, response) = await _verifyAsync(verifyData, productId, isJws);
+            var (success, response) = await _verifyAsync(jws, productId);
 
             if (!success || response == null)
             {
@@ -308,30 +306,6 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"[Supabase.IAP.Apple] 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
         }
 
-        /// <summary>
-        /// Unity IAP 영수증 JSON에서 Apple App Store receipt payload(base64)를 추출합니다.
-        /// receipt 구조: {"Store":"AppleAppStore","Payload":"&lt;base64&gt;"}
-        /// </summary>
-        internal static string ExtractReceiptPayload(string unityReceipt)
-        {
-            if (string.IsNullOrWhiteSpace(unityReceipt))
-                return null;
-            try
-            {
-                var wrapper = JsonUtility.FromJson<ReceiptWrapper>(unityReceipt);
-                return string.IsNullOrWhiteSpace(wrapper?.Payload) ? null : wrapper.Payload;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        [Serializable]
-        private sealed class ReceiptWrapper
-        {
-            public string Payload;
-        }
     }
 }
 #endif // TRUESOFT_IAP_AVAILABLE

@@ -144,7 +144,6 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 |----------|----|------|
 | `CANCEL_TOKEN_SECRET` | 탈퇴 취소 사용 시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
-| `APPLE_SHARED_SECRET` | iOS IAP 사용 시 | App Store 결제 영수증 서버 검증에 사용하는 앱 공유 암호 |
 
 **`GOOGLE_SERVICE_ACCOUNT_JSON` 발급 방법**
 

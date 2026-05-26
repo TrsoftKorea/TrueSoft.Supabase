@@ -2,8 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { compactVerify, decodeProtectedHeader, importX509 } from "npm:jose";
 
 type VerifyRequest = {
-  receipt_data?: string;  // StoreKit 1: base64 앱 영수증
-  jws_token?: string;     // StoreKit 2: jwsRepresentation (iOS 15+)
+  jws_token?: string;   // StoreKit 2: jwsRepresentation (iOS 15+)
   product_id?: string;
   bundle_id?: string;
 };
@@ -17,30 +16,13 @@ type VerifyResponse = {
   reason?: string;
 };
 
-// Apple verifyReceipt 응답 내 in_app 항목 (StoreKit 1)
-type AppleInAppItem = {
-  product_id: string;
-  transaction_id: string;
-  original_transaction_id: string;
-  purchase_date_ms: string;
-  quantity: string;
-};
-
-type AppleVerifyReceiptResponse = {
-  status: number;
-  receipt?: {
-    bundle_id?: string;
-    in_app?: AppleInAppItem[];
-  };
-  latest_receipt_info?: AppleInAppItem[];
-};
-
 // StoreKit 2 JWS 페이로드
 type JWSTransactionPayload = {
   productId?: string;
   transactionId?: string;
   bundleId?: string;
-  price?: number;      // 밀리유닛 (÷1000 = 실제 원화)
+  price?: number;      // 밀리유닛 (÷1000 = 실제 금액 정수)
+  currency?: string;   // ISO 4217 통화 코드 (예: "KRW", "USD")
   purchaseDate?: number;
   type?: string;
 };
@@ -48,42 +30,27 @@ type JWSTransactionPayload = {
 const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys     = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
-const APPLE_SHARED_SECRET = Deno.env.get("APPLE_SHARED_SECRET")!;
-
-const APPLE_VERIFY_URL_PROD    = "https://buy.itunes.apple.com/verifyReceipt";
-const APPLE_VERIFY_URL_SANDBOX = "https://sandbox.itunes.apple.com/verifyReceipt";
-
-// ── StoreKit 1: verifyReceipt ─────────────────────────────────────────────────
-
-async function verifyAppleReceipt(
-  receiptData: string,
-): Promise<AppleVerifyReceiptResponse> {
-  const body = JSON.stringify({
-    "receipt-data": receiptData,
-    "password": APPLE_SHARED_SECRET,
-    "exclude-old-transactions": true,
-  });
-
-  const prodRes = await fetch(APPLE_VERIFY_URL_PROD, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-  });
-  const prodJson: AppleVerifyReceiptResponse = await prodRes.json();
-
-  if (prodJson.status === 21007) {
-    const sandboxRes = await fetch(APPLE_VERIFY_URL_SANDBOX, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-    });
-    return await sandboxRes.json();
-  }
-
-  return prodJson;
-}
 
 // ── StoreKit 2: JWS 서명 검증 ─────────────────────────────────────────────────
+
+// 구매 금액을 KRW로 환산합니다 (frankfurter.app — 무료, API 키 불필요, ECB 일 1회 갱신).
+// KRW이면 그대로 반환. 환율 API 실패 시 null 반환.
+async function convertToKrw(amount: number, currency: string): Promise<number | null> {
+  if (!currency || currency.toUpperCase() === "KRW") return amount;
+  try {
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?from=${encodeURIComponent(currency)}&to=KRW`,
+      { signal: AbortSignal.timeout(3000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rate = data?.rates?.KRW;
+    if (typeof rate !== "number") return null;
+    return Math.round(amount * rate);
+  } catch {
+    return null;
+  }
+}
 
 async function verifyAppleJWS(jws: string): Promise<JWSTransactionPayload> {
   // x5c 인증서 체인에서 공개키 추출
@@ -128,109 +95,45 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { receipt_data, jws_token, product_id, bundle_id } = body;
+  const { jws_token, product_id, bundle_id } = body;
+
   if (!product_id) {
     return json({ ok: false, reason: "missing_product_id" } satisfies VerifyResponse, 400);
   }
 
-  // ── StoreKit 2 경로 ────────────────────────────────────────────────────────
-  if (jws_token) {
-    let jwsData: JWSTransactionPayload;
-    try {
-      jwsData = await verifyAppleJWS(jws_token);
-    } catch (e) {
-      return json({ ok: false, reason: `jws_verify_failed: ${e}` } satisfies VerifyResponse, 502);
-    }
-
-    if (jwsData.productId !== product_id) {
-      return json({ ok: false, reason: "product_id_mismatch" } satisfies VerifyResponse);
-    }
-
-    const transactionId = jwsData.transactionId ?? "";
-    if (!transactionId) {
-      return json({ ok: false, reason: "jws_missing_transaction_id" } satisfies VerifyResponse);
-    }
-
-    const { data: profile } = await userClient
-      .from("user_profiles").select("user_id").maybeSingle();
-    const userId: string | null = profile?.user_id ?? null;
-
-    // price: 밀리유닛 (÷1000 = 실제 원화 정수)
-    const priceAmount = typeof jwsData.price === "number"
-      ? Math.round(jwsData.price / 1000)
-      : null;
-
-    const { error: insertError } = await userClient
-      .from("purchases")
-      .insert({
-        account_id: user.id,
-        user_id: userId,
-        product_id,
-        purchase_token: transactionId,
-        order_id: transactionId,
-        package_name: bundle_id || jwsData.bundleId || "unknown",
-        purchase_state: 0,
-        store: "apple_app_store",
-        price_amount: priceAmount,
-      });
-
-    if (insertError) {
-      if (insertError.code === "23505") {
-        return json({
-          ok: true, already_verified: true,
-          transaction_id: transactionId, product_id, purchase_state: 0,
-        } satisfies VerifyResponse);
-      }
-      return json({ ok: false, reason: insertError.message } satisfies VerifyResponse, 500);
-    }
-
-    return json({
-      ok: true, already_verified: false,
-      transaction_id: transactionId, product_id, purchase_state: 0,
-    } satisfies VerifyResponse);
+  if (!jws_token) {
+    return json({ ok: false, reason: "missing_jws_token" } satisfies VerifyResponse, 400);
   }
 
-  // ── StoreKit 1 폴백 경로 ───────────────────────────────────────────────────
-  if (!receipt_data) {
-    return json({ ok: false, reason: "missing_receipt_or_jws" } satisfies VerifyResponse, 400);
-  }
-
-  let appleResponse: AppleVerifyReceiptResponse;
+  // ── StoreKit 2 JWS 검증 ───────────────────────────────────────────────────
+  let jwsData: JWSTransactionPayload;
   try {
-    appleResponse = await verifyAppleReceipt(receipt_data);
+    jwsData = await verifyAppleJWS(jws_token);
   } catch (e) {
-    return json({ ok: false, reason: `apple_api_exception: ${e}` } satisfies VerifyResponse, 502);
+    return json({ ok: false, reason: `jws_verify_failed: ${e}` } satisfies VerifyResponse, 502);
   }
 
-  if (appleResponse.status !== 0) {
-    return json({
-      ok: false,
-      reason: `apple_status_${appleResponse.status}`,
-      purchase_state: -1,
-    } satisfies VerifyResponse);
+  if (jwsData.productId !== product_id) {
+    return json({ ok: false, reason: "product_id_mismatch" } satisfies VerifyResponse);
   }
 
-  const inAppItems: AppleInAppItem[] = [
-    ...(appleResponse.receipt?.in_app ?? []),
-    ...(appleResponse.latest_receipt_info ?? []),
-  ];
-
-  const matched = inAppItems
-    .filter((item) => item.product_id === product_id)
-    .sort((a, b) => Number(b.purchase_date_ms) - Number(a.purchase_date_ms))[0];
-
-  if (!matched) {
-    return json({
-      ok: false, reason: "product_not_found_in_receipt", purchase_state: -1,
-    } satisfies VerifyResponse);
+  const transactionId = jwsData.transactionId ?? "";
+  if (!transactionId) {
+    return json({ ok: false, reason: "jws_missing_transaction_id" } satisfies VerifyResponse);
   }
 
-  const transactionId = matched.transaction_id;
-
-  let userId: string | null = null;
-  const { data: profile, error: profileError } = await userClient
+  const { data: profile } = await userClient
     .from("user_profiles").select("user_id").maybeSingle();
-  if (!profileError) userId = profile?.user_id ?? null;
+  const userId: string | null = profile?.user_id ?? null;
+
+  // price: 밀리유닛 (÷1000 = 실제 금액 정수), currency: ISO 4217 코드
+  const priceAmount    = typeof jwsData.price === "number"
+    ? Math.round(jwsData.price / 1000)
+    : null;
+  const priceCurrency  = jwsData.currency || null;
+  const priceAmountKrw = priceAmount !== null
+    ? await convertToKrw(priceAmount, priceCurrency || "KRW")
+    : null;
 
   const { error: insertError } = await userClient
     .from("purchases")
@@ -240,9 +143,12 @@ Deno.serve(async (req) => {
       product_id,
       purchase_token: transactionId,
       order_id: transactionId,
-      package_name: bundle_id || "unknown",
+      package_name: bundle_id || jwsData.bundleId || "unknown",
       purchase_state: 0,
       store: "apple_app_store",
+      price_amount: priceAmount,
+      price_currency: priceCurrency,
+      price_amount_krw: priceAmountKrw,
     });
 
   if (insertError) {

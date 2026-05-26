@@ -4,6 +4,8 @@ type VerifyRequest = {
   purchase_token?: string;
   product_id?: string;
   package_name?: string;
+  price_amount?: number;
+  price_currency?: string;
 };
 
 type VerifyResponse = {
@@ -97,6 +99,25 @@ async function getGoogleAccessToken(): Promise<string> {
   return tokenJson.access_token as string;
 }
 
+// 구매 금액을 KRW로 환산합니다 (frankfurter.app — 무료, API 키 불필요, ECB 일 1회 갱신).
+// KRW이면 그대로 반환. 환율 API 실패 시 null 반환.
+async function convertToKrw(amount: number, currency: string): Promise<number | null> {
+  if (!currency || currency.toUpperCase() === "KRW") return amount;
+  try {
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?from=${encodeURIComponent(currency)}&to=KRW`,
+      { signal: AbortSignal.timeout(3000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rate = data?.rates?.KRW;
+    if (typeof rate !== "number") return null;
+    return Math.round(amount * rate);
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   const json = <T>(body: T, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -128,7 +149,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { purchase_token, product_id, package_name } = body;
+  const { purchase_token, product_id, package_name, price_amount, price_currency } = body;
   if (!purchase_token || !product_id || !package_name) {
     return json({ ok: false, reason: "missing_fields" } satisfies VerifyResponse, 400);
   }
@@ -178,6 +199,11 @@ Deno.serve(async (req) => {
     console.error(`[purchase-verify-google] profile_query_error: ${profileError.message}`);
   }
 
+  // KRW 환산 (price_amount가 있을 때만)
+  const priceAmountKrw = (price_amount && price_amount > 0)
+    ? await convertToKrw(price_amount, price_currency || "KRW")
+    : null;
+
   // 구매 기록 INSERT (purchase_token UNIQUE — 충돌 시 중복 요청으로 처리)
   const { error: insertError } = await userClient
     .from("purchases")
@@ -189,6 +215,9 @@ Deno.serve(async (req) => {
       order_id: googlePurchase.orderId ?? null,
       package_name,
       purchase_state: googlePurchase.purchaseState,
+      price_amount: (price_amount && price_amount > 0) ? price_amount : null,
+      price_currency: price_currency || null,
+      price_amount_krw: priceAmountKrw,
     });
 
   if (insertError) {

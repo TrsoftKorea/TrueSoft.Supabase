@@ -33,8 +33,8 @@ namespace TrueBase.Unity
     public sealed class IAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        // (token, productId) → (success, response)
-        private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
+        // (token, productId, priceAmount, priceCurrency) → (success, response)
+        private readonly Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -64,7 +64,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateIAP()로만 생성) ─────────────────
         internal IAPFacade(
-            Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -91,6 +91,16 @@ namespace TrueBase.Unity
                 Debug.LogWarning("[Supabase.IAP] productIds가 비어 있습니다.");
                 return false;
             }
+
+#if UNITY_IOS
+            // StoreKit 2 (JWS)는 iOS 15+ 필수. 미만이면 즉시 실패.
+            if (System.Version.TryParse(UnityEngine.iOS.Device.systemVersion, out var iosVer)
+                && iosVer < new System.Version(15, 0))
+            {
+                Debug.LogError($"[Supabase.IAP] iOS {UnityEngine.iOS.Device.systemVersion} 은 지원되지 않습니다. 최소 iOS 15가 필요합니다.");
+                return false;
+            }
+#endif
 
             if (UnityServices.State != ServicesInitializationState.Initialized)
             {
@@ -241,15 +251,7 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var receipt   = pendingOrder.Info?.Receipt;
             var cartItems = pendingOrder.CartOrdered?.Items();
-
-            if (string.IsNullOrEmpty(receipt))
-            {
-                Debug.LogWarning("[Supabase.IAP] Receipt가 비어 있습니다.");
-                return;
-            }
-
             if (cartItems == null || cartItems.Count == 0)
             {
                 Debug.LogWarning("[Supabase.IAP] CartOrdered.Items()가 비어 있습니다.");
@@ -258,14 +260,42 @@ namespace TrueBase.Unity
 
             var productId = cartItems[0].Product.definition.id;
 
-            var token = ExtractToken(receipt);
-            if (string.IsNullOrEmpty(token))
+            // 플랫폼별 토큰 추출
+            string token;
+            long   priceAmount;
+            string priceCurrency;
+#if UNITY_ANDROID
+            var receipt = pendingOrder.Info?.Receipt;
+            if (string.IsNullOrEmpty(receipt))
             {
-                Debug.LogWarning($"[Supabase.IAP] 영수증 토큰 추출 실패. product={productId}");
+                Debug.LogWarning("[Supabase.IAP] Receipt가 비어 있습니다.");
                 return;
             }
+            token = GooglePlayIAPFacade.ExtractPurchaseToken(receipt);
+            if (string.IsNullOrEmpty(token))
+            {
+                Debug.LogWarning($"[Supabase.IAP] purchaseToken 추출 실패. product={productId}");
+                return;
+            }
+            priceAmount   = (long)(cartItems[0].Product.metadata.localizedPrice);
+            priceCurrency = cartItems[0].Product.metadata.isoCurrencyCode;
+#elif UNITY_IOS
+            // StoreKit 2 (iOS 15+): JWS만 지원. 가격·통화는 서버가 JWS에서 추출.
+            var appleInfo = pendingOrder.Info as IAppleOrderInfo;
+            token = appleInfo?.jwsRepresentation;
+            if (string.IsNullOrEmpty(token))
+            {
+                Debug.LogWarning($"[Supabase.IAP] JWS를 가져올 수 없습니다. iOS 15+ 기기에서만 지원됩니다. product={productId}");
+                return;
+            }
+            priceAmount   = 0;
+            priceCurrency = null;
+#else
+            Debug.LogWarning("[Supabase.IAP] 지원되지 않는 플랫폼입니다.");
+            return;
+#endif
 
-            var (success, response) = await _verifyAsync(token, productId);
+            var (success, response) = await _verifyAsync(token, productId, priceAmount, priceCurrency);
 
             if (!success || response == null)
             {
@@ -302,16 +332,6 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"[Supabase.IAP] 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
         }
 
-        private static string ExtractToken(string receipt)
-        {
-#if UNITY_ANDROID
-            return GooglePlayIAPFacade.ExtractPurchaseToken(receipt);
-#elif UNITY_IOS
-            return AppleIAPFacade.ExtractReceiptPayload(receipt);
-#else
-            return null;
-#endif
-        }
     }
 }
 #endif // TRUESOFT_IAP_AVAILABLE

@@ -8,6 +8,8 @@ namespace TrueBase.Core.Models
         public string purchase_token;
         public string product_id;
         public string package_name;
+        public long   price_amount;   // 클라이언트 ProductDetails.localizedPrice (정수, 0 = 미제공)
+        public string price_currency; // ISO 4217 통화 코드 (예: "KRW", "USD"). null = 미제공
     }
 
     [Serializable]

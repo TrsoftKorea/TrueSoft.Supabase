@@ -425,35 +425,33 @@ namespace TrueBase.Unity
         internal static Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null,
-            string sessionId   = null) =>
-            SupabaseSDK.VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, sessionId);
+            string packageName   = null,
+            long   priceAmount   = 0,
+            string priceCurrency = null) =>
+            SupabaseSDK.VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency);
 
         /// <inheritdoc cref="SupabaseSDK.TryVerifyGooglePlayPurchaseAsync"/>
         public static Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null,
-            string sessionId   = null) =>
-            SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, sessionId);
+            string packageName   = null,
+            long   priceAmount   = 0,
+            string priceCurrency = null) =>
+            SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency);
 
         /// <inheritdoc cref="SupabaseSDK.VerifyApplePurchaseAsync"/>
         internal static Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
-            string data,
+            string jwsToken,
             string productId,
-            string bundleId  = null,
-            bool   isJws     = false,
-            string sessionId = null) =>
-            SupabaseSDK.VerifyApplePurchaseAsync(data, productId, bundleId, isJws, sessionId);
+            string bundleId = null) =>
+            SupabaseSDK.VerifyApplePurchaseAsync(jwsToken, productId, bundleId);
 
         /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseAsync"/>
         public static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
-            string data,
+            string jwsToken,
             string productId,
-            string bundleId  = null,
-            bool   isJws     = false,
-            string sessionId = null) =>
-            SupabaseSDK.TryVerifyApplePurchaseAsync(data, productId, bundleId, isJws, sessionId);
+            string bundleId = null) =>
+            SupabaseSDK.TryVerifyApplePurchaseAsync(jwsToken, productId, bundleId);
 
 #if TRUESOFT_IAP_AVAILABLE
         /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>

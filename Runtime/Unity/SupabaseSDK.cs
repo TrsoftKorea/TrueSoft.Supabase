@@ -1861,11 +1861,14 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// <param name="purchaseToken">Google Play 구매 토큰.</param>
         /// <param name="productId">상품 ID.</param>
         /// <param name="packageName">앱 패키지명. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
-        /// <param name="sessionId">애널리틱스 세션 ID (선택). DB에 함께 저장됩니다.</param>
+        /// <param name="priceAmount">결제 금액 정수. Unity IAP <c>Product.metadata.localizedPrice</c>를 long으로 변환한 값. 0이면 미제공.</param>
+        /// <param name="priceCurrency">ISO 4217 통화 코드 (예: "KRW", "USD"). Unity IAP <c>Product.metadata.isoCurrencyCode</c>. null이면 미제공.</param>
         public static async Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null)
+            string packageName    = null,
+            long   priceAmount    = 0,
+            string priceCurrency  = null)
         {
             var finalPackageName = packageName ?? UnityEngine.Application.identifier;
             var req = new GooglePlayPurchaseRequest
@@ -1873,6 +1876,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 purchase_token = purchaseToken,
                 product_id     = productId,
                 package_name   = finalPackageName,
+                price_amount   = priceAmount,
+                price_currency = priceCurrency,
             };
             return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
                 _purchaseVerifyGoogleFunctionName, req, requireAuth: true);
@@ -1882,10 +1887,12 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         public static async Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null)
+            string packageName    = null,
+            long   priceAmount    = 0,
+            string priceCurrency  = null)
         {
             const string tag = "[Supabase.Purchase.VerifyGoogle]";
-            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
+            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -1895,26 +1902,21 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             return (true, result.Data);
         }
 
-        /// <summary>Apple App Store 영수증(base64 payload 또는 JWS)을 서버에서 검증합니다.</summary>
-        /// <param name="data">StoreKit 1이면 base64 payload, StoreKit 2이면 jwsRepresentation.</param>
+        /// <summary>Apple App Store JWS(StoreKit 2, iOS 15+)를 서버에서 검증합니다.</summary>
+        /// <param name="jwsToken">StoreKit 2 jwsRepresentation 토큰.</param>
         /// <param name="productId">상품 ID.</param>
         /// <param name="bundleId">앱 Bundle ID. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
-        /// <param name="isJws">StoreKit 2 JWS이면 true.</param>
         public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
-            string data,
+            string jwsToken,
             string productId,
-            string bundleId  = null,
-            bool   isJws     = false)
+            string bundleId = null)
         {
             var req = new AppleIAPPurchaseRequest
             {
+                jws_token  = jwsToken,
                 product_id = productId,
                 bundle_id  = bundleId ?? UnityEngine.Application.identifier,
             };
-            if (isJws)
-                req.jws_token = data;
-            else
-                req.receipt_data = data;
 
             return await Functions.InvokeAsync<AppleIAPPurchaseResponse>(
                 _purchaseVerifyAppleFunctionName, req, requireAuth: true);
@@ -1922,13 +1924,12 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
         /// <summary><see cref="VerifyApplePurchaseAsync"/>를 호출하고 성공 시 응답을 반환, 실패 시 <c>default</c>를 반환합니다.</summary>
         public static async Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
-            string data,
+            string jwsToken,
             string productId,
-            string bundleId  = null,
-            bool   isJws     = false)
+            string bundleId = null)
         {
             const string tag = "[Supabase.Purchase.VerifyApple]";
-            var result = await VerifyApplePurchaseAsync(data, productId, bundleId, isJws);
+            var result = await VerifyApplePurchaseAsync(jwsToken, productId, bundleId);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -1945,8 +1946,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="GooglePlayIAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static GooglePlayIAPFacade CreateGooglePlayIAP()
-            => new GooglePlayIAPFacade((token, productId) =>
-                TryVerifyGooglePlayPurchaseAsync(token, productId));
+            => new GooglePlayIAPFacade((token, productId, priceAmount, priceCurrency) =>
+                TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency));
 
         /// <summary>
         /// Apple App Store IAP 파사드를 생성합니다.
@@ -1954,8 +1955,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="AppleIAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static AppleIAPFacade CreateAppleIAP()
-            => new AppleIAPFacade((data, productId, isJws) =>
-                TryVerifyApplePurchaseAsync(data, productId, isJws: isJws));
+            => new AppleIAPFacade((jws, productId) =>
+                TryVerifyApplePurchaseAsync(jws, productId));
 
         /// <summary>
         /// 통합 IAP 파사드를 생성합니다. Android(Google Play)와 iOS(Apple App Store)를 플랫폼 자동 감지로 처리합니다.
@@ -1964,8 +1965,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="IAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static IAPFacade CreateIAP()
-            => new IAPFacade((token, productId) =>
-                VerifyForIAPFacadeAsync(token, productId));
+            => new IAPFacade((token, productId, priceAmount, priceCurrency) =>
+                VerifyForIAPFacadeAsync(token, productId, priceAmount, priceCurrency));
 
         /// <summary>
         /// 통합 IAP 파사드를 생성하고 초기화까지 수행합니다.
@@ -2035,10 +2036,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         }
 
         private static async Task<(bool, IAPPurchaseResponse)> VerifyForIAPFacadeAsync(
-            string token, string productId)
+            string token, string productId, long priceAmount = 0, string priceCurrency = null)
         {
 #if UNITY_ANDROID
-            var (ok, r) = await TryVerifyGooglePlayPurchaseAsync(token, productId);
+            var (ok, r) = await TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
