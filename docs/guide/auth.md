@@ -86,8 +86,9 @@ void OnReady(bool success)
 
 ## 소셜 로그인 (선택) {#social-login}
 
-> [!TIP]
-> 소셜 로그인은 선택 기능입니다. 익명 로그인만으로도 게임을 운영할 수 있습니다.
+::: tip
+소셜 로그인은 선택 기능입니다. 익명 로그인만으로도 게임을 운영할 수 있습니다.
+:::
 
 ---
 
@@ -117,10 +118,11 @@ await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
 
 #### 익명 → Google 연동
 
-> [!IMPORTANT]
-> 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
-> 반드시 아래 연동 전용 API를 사용하세요.  
-> Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
+::: warning
+익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
+반드시 아래 연동 전용 API를 사용하세요.  
+Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
+:::
 
 ```csharp
 // Android 네이티브
@@ -163,6 +165,7 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 
 ## 주의사항
 
-> [!WARNING]
-> Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
-> 먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
+::: warning
+Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
+먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
+:::

@@ -22,9 +22,12 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 1. [supabase.com](https://supabase.com)에서 로그인 후 **New project**를 클릭합니다.
 2. Organization, 프로젝트 이름, DB 비밀번호, 리전을 입력합니다.
-   > [!TIP]
-   > 한국 중심 서비스라면 리전은 **Northeast Asia (Tokyo)** 를 추천합니다.  
-   > 리전은 프로젝트 생성 후 변경할 수 없으므로 처음에 신중하게 선택하세요.
+
+   ::: tip
+   한국 중심 서비스라면 리전은 **Northeast Asia (Tokyo)** 를 추천합니다.  
+   리전은 프로젝트 생성 후 변경할 수 없으므로 처음에 신중하게 선택하세요.
+   :::
+
 3. 고급 옵션에서 아래와 같이 설정합니다.
 
    | 옵션 | 설정 | 이유 |
@@ -68,16 +71,18 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 2. Inspector에서 **Project URL**과 **Publishable Key**를 입력합니다.
 3. 파일을 **`Assets/Resources/SupabaseSettings.asset`** 위치에 저장합니다.
 
-> [!IMPORTANT]
-> `SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 런타임에 로드됩니다.
+::: warning
+`SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 런타임에 로드됩니다.
+:::
 
 ### 2. SupabaseRuntime 배치
 
 메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 를 클릭합니다.  
 앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
 
-> [!TIP]
-> 씬에 이미 런타임 오브젝트가 있으면 중복 생성 없이 기존 오브젝트를 선택합니다.
+::: tip
+씬에 이미 런타임 오브젝트가 있으면 중복 생성 없이 기존 오브젝트를 선택합니다.
+:::
 
 자동 로그인 타이밍 제어와 이벤트 콜백 사용법은 [인증](./auth.md)을 참고하세요.
 
@@ -97,8 +102,9 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 
 `SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
-> [!TIP]
-> Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
+::: tip
+Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
+:::
 
 | 순서 | 파일 | 내용 |
 |------|------|------|
@@ -112,8 +118,9 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | 8 | `08_remote_config.sql` | Remote Config |
 | 9 | `09_cron_jobs.sql` | 자동화 크론 잡 |
 
-> [!TIP]
-> `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
+::: tip
+`99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
+:::
 
 ### 3. Edge Function 배포
 
@@ -153,8 +160,9 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 4. 다운로드된 `.json` 파일을 텍스트 편집기로 열어 **전체 내용**을 복사합니다.
 5. Supabase 대시보드 **Edge Functions > Secrets**에서 키 이름 `GOOGLE_SERVICE_ACCOUNT_JSON`, 값에 복사한 JSON을 붙여넣고 저장합니다.
 
-> [!NOTE]
-> JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파일 경로가 아닌 **파일 내용 전체**를 값으로 입력해야 합니다.
+::: info
+JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파일 경로가 아닌 **파일 내용 전체**를 값으로 입력해야 합니다.
+:::
 
 ---
 

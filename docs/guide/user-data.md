@@ -9,8 +9,9 @@
 
 `SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고 **스키마 가져오기 → 소스 생성 → 저장**으로 `PlayerSave.cs`를 생성합니다.
 
-> [!NOTE]
-> 타입을 자동으로 결정하지 못한 컬럼은 ⚠ 표시되며, 드롭다운에서 직접 지정할 수 있습니다.
+::: info
+타입을 자동으로 결정하지 못한 컬럼은 ⚠ 표시되며, 드롭다운에서 직접 지정할 수 있습니다.
+:::
 
 생성된 파일은 다음과 같은 구조입니다.
 
@@ -63,8 +64,9 @@ bool ok = await PlayerSave.TryLoadAsync();
 PlayerSave.Instance.OnLoaded += ApplyGameData;
 ```
 
-> [!NOTE]
-> 신규 유저는 DB 행이 자동으로 생성됩니다.
+::: info
+신규 유저는 DB 행이 자동으로 생성됩니다.
+:::
 
 ---
 
@@ -91,8 +93,9 @@ PlayerSave.Coins += 100;
 await Supabase.TrySaveAllAsync(timeoutMs: 5000);
 ```
 
-> [!NOTE]
-> `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.
+::: info
+`SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.
+:::
 
 ---
 
@@ -108,9 +111,10 @@ Retool에서 `user_saves` 테이블에 컬럼을 추가합니다.
 
 ## JSON 직렬화 주의사항
 
-> [!WARNING]
-> `[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화는 **필드 이름** 기준입니다.  
-> DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 사용하세요.
+::: warning
+`[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화는 **필드 이름** 기준입니다.  
+DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 사용하세요.
+:::
 
 ```csharp
 [DataColumn("last_login_at")]
