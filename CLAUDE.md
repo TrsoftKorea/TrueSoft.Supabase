@@ -117,3 +117,61 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 ## Debug Logs
 
 Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace root** (`d:\Project\TrueSoft.Supabase`), never under `Runtime/`, `Sql/`, or `Samples~/`. Do not commit them.
+
+## Documentation Rules
+
+All user-facing docs live in `docs/guide/`. Apply these rules on every code change — do not wait to be asked.
+
+### 1. Update docs alongside code
+
+When adding, changing, or removing a feature, update the corresponding `docs/guide/*.md` in the **same task**:
+- New API or behavior → add/update the relevant guide page.
+- Removed API, file, or Secret key → remove every reference to it across all doc files.
+- Changed parameter names or signatures → update code examples in the docs.
+
+### 2. Dead link prevention
+
+Whenever a doc file or section is removed or renamed:
+1. Search all `docs/guide/*.md` for links pointing to the old file/anchor.
+2. Remove or update every match before finishing the task.
+
+Korean heading anchors are unreliable in VitePress. Any heading that is **linked to from elsewhere** must have an explicit anchor ID:
+```md
+## 더 알아보기 {#more}   ← link target
+[더 알아보기](#more)      ← link
+```
+Do NOT rely on auto-generated Korean slugs like `#더-알아보기`.
+
+### 3. Callout box style — VitePress `:::` only
+
+**Never use** GitHub-style alerts (`> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!IMPORTANT]`, `> [!CAUTION]`). VitePress does not render them correctly.
+
+Always use VitePress custom containers:
+
+| 용도 | 컨테이너 |
+|------|---------|
+| 팁 / 추천 사항 | `::: tip` |
+| 중립적 참고 정보 | `::: info` |
+| 주의 / 경고 / 중요 | `::: warning` |
+| 위험 / 데이터 손실 가능성 | `::: danger` |
+| 접을 수 있는 부가 설명 | `::: details 제목` |
+
+```md
+::: warning
+`SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 합니다.
+:::
+
+::: tip iOS 배포 대상 자동 설정
+SDK가 빌드 시 자동으로 15.0으로 설정합니다.
+:::
+```
+
+### 4. What goes in a callout box
+
+Use callout boxes for **supplementary content** — content the reader can skip on first read but needs for edge cases:
+- 주의사항 (warnings, "반드시 ~하세요") → `::: warning`
+- 팁 / 자동 처리 안내 → `::: tip`
+- 참고 / 동작 방식 보충 → `::: info`
+- 긴 선택적 내용 → `::: details`
+
+Core usage (the happy path) must remain as **plain prose + code blocks**, not buried in callout boxes.

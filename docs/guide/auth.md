@@ -1,7 +1,7 @@
 # 인증 (Auth)
 
 인증은 플레이어 계정을 만들고 관리하는 기능입니다.  
-별도 회원가입 없이 바로 시작하는 익명 로그인과, Google 계정 연동을 통한 기기 간 이어하기를 지원합니다.
+별도 회원가입 없이 바로 시작하는 익명 로그인과, 소셜 계정 연동을 통한 기기 간 이어하기를 지원합니다.
 
 ---
 
@@ -12,7 +12,7 @@
 await Supabase.TrySignInAnonymouslyAsync();
 ```
 
-소셜 로그인은 [소셜 로그인 (선택)](#social-login) 섹션을 참고하세요.
+소셜 로그인은 [소셜 로그인 (선택)](#social-login)을 참고하세요.
 
 ---
 
@@ -90,8 +90,6 @@ void OnReady(bool success)
 소셜 로그인은 선택 기능입니다. 익명 로그인만으로도 게임을 운영할 수 있습니다.
 :::
 
----
-
 ### Google
 
 #### 대시보드 설정
@@ -116,6 +114,11 @@ await Supabase.TrySignInWithGoogleAsync();
 await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
 ```
 
+::: warning
+Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
+먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
+:::
+
 #### 익명 → Google 연동
 
 ::: warning
@@ -132,7 +135,6 @@ await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
 await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 ```
 
-**동작 방식:**
 - 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다. 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
 - 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
 
@@ -160,12 +162,3 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 
 **복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
 별도 오류 이벤트는 발행되지 않습니다.
-
----
-
-## 주의사항
-
-::: warning
-Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
-먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
-:::
