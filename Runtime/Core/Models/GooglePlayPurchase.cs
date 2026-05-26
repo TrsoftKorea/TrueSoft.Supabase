@@ -8,7 +8,6 @@ namespace TrueBase.Core.Models
         public string purchase_token;
         public string product_id;
         public string package_name;
-        public string session_id;     // 애널리틱스 세션 ID (선택)
     }
 
     [Serializable]

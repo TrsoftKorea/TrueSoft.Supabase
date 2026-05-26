@@ -6,7 +6,6 @@ type VerifyRequest = {
   jws_token?: string;     // StoreKit 2: jwsRepresentation (iOS 15+)
   product_id?: string;
   bundle_id?: string;
-  session_id?: string;    // 애널리틱스 세션 ID (선택)
 };
 
 type VerifyResponse = {
@@ -129,7 +128,7 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "invalid_json" } satisfies VerifyResponse, 400);
   }
 
-  const { receipt_data, jws_token, product_id, bundle_id, session_id } = body;
+  const { receipt_data, jws_token, product_id, bundle_id } = body;
   if (!product_id) {
     return json({ ok: false, reason: "missing_product_id" } satisfies VerifyResponse, 400);
   }
@@ -173,7 +172,6 @@ Deno.serve(async (req) => {
         purchase_state: 0,
         store: "apple_app_store",
         price_amount: priceAmount,
-        session_id: session_id ?? null,
       });
 
     if (insertError) {
@@ -245,7 +243,6 @@ Deno.serve(async (req) => {
       package_name: bundle_id || "unknown",
       purchase_state: 0,
       store: "apple_app_store",
-      session_id: session_id ?? null,
     });
 
   if (insertError) {

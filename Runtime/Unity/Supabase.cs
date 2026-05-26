@@ -260,24 +260,6 @@ namespace TrueBase.Unity
         public static void RequestImmediateUserSaveStaticFlushAll() =>
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
-        /// <summary>
-        /// 현재 애널리틱스 세션을 종료합니다 (fire-and-forget).
-        /// 앱 일시정지 또는 종료 시 자동으로 호출됩니다.
-        /// </summary>
-        public static void RequestAnalyticsSessionClose() =>
-            SupabaseSDK.RequestAnalyticsSessionClose();
-
-        /// <summary>
-        /// 애널리틱스 이벤트를 기록합니다.
-        /// <c>account_id</c> / <c>user_id</c> / <c>session_id</c>는 자동으로 주입됩니다.
-        /// </summary>
-        public static Task<SupabaseResult<bool>> RecordAnalyticsEventAsync(string eventName) =>
-            SupabaseSDK.RecordAnalyticsEventAsync(eventName);
-
-        /// <inheritdoc cref="RecordAnalyticsEventAsync"/>
-        public static Task<bool> TryRecordAnalyticsEventAsync(string eventName) =>
-            SupabaseSDK.TryRecordAnalyticsEventAsync(eventName);
-
         /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
         public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000) =>
             SupabaseSDK.TrySaveAllAsync(timeoutMs);
@@ -482,9 +464,6 @@ namespace TrueBase.Unity
 
         /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
         public static AppleIAPFacade CreateAppleIAP() => SupabaseSDK.CreateAppleIAP();
-
-        /// <summary>현재 활성 애널리틱스 세션 ID. 로그인 전에는 빈 문자열.</summary>
-        public static string SessionId => SupabaseSDK.SessionId;
 
         /// <summary>
         /// 통합 IAP 파사드를 생성하고 초기화까지 수행합니다. Android/iOS를 자동 감지합니다.

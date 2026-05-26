@@ -105,7 +105,6 @@ namespace TrueBase.Unity.Config
 
             SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
-            SupabaseSDK.TickAnalyticsSessionKeepAlive(Time.realtimeSinceStartup);
         }
 
         private void OnApplicationPause(bool pause)
@@ -114,13 +113,11 @@ namespace TrueBase.Unity.Config
                 return;
 
             Supabase.RequestImmediateUserSaveStaticFlushAll();
-            Supabase.RequestAnalyticsSessionClose();
         }
 
         private void OnApplicationQuit()
         {
             Supabase.RequestImmediateUserSaveStaticFlushAll();
-            Supabase.RequestAnalyticsSessionClose();
         }
 
         private IEnumerator RunLifecycle()

@@ -54,12 +54,6 @@ namespace TrueBase.Unity
 
         private static Task _remoteConfigKeyPollTickTask;
 
-        // ── 애널리틱스 세션 ────────────────────────────────────────────────────
-        private static string _sessionId = string.Empty;
-        private static float  _nextSessionKeepAliveRealtime = 0f;
-        private static Task   _sessionKeepAliveTask;
-        private const float   SessionKeepAliveIntervalSeconds = 300f; // 5분
-
         private static float _duplicateSessionPollSeconds = 15f;
         private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
@@ -158,115 +152,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             public const string MailboxDeleteReadBulk = "Supabase.Mailbox.Delete.ReadBulk";
             public const string MailboxUnreadCount = "Supabase.Mailbox.UnreadCount";
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
-            public const string AnalyticsSessionStart  = "Supabase.Analytics.Session.Start";
-            public const string AnalyticsEventRecord   = "Supabase.Analytics.Event.Record";
-        }
-
-        /// <summary>현재 활성 애널리틱스 세션 ID. 로그인 전 또는 세션 종료 후에는 빈 문자열.</summary>
-        public static string SessionId => _sessionId;
-
-        /// <summary>
-        /// 5분 주기로 <c>analytics_sessions.last_active_at</c>을 갱신합니다.
-        /// <see cref="Config.SupabaseRuntime.Update"/> 등에서 호출하세요.
-        /// </summary>
-        public static void TickAnalyticsSessionKeepAlive(float realtimeSinceStartup)
-        {
-            if (string.IsNullOrEmpty(_sessionId))
-                return;
-
-            if (realtimeSinceStartup < _nextSessionKeepAliveRealtime)
-                return;
-
-            if (_sessionKeepAliveTask != null && !_sessionKeepAliveTask.IsCompleted)
-                return;
-
-            _nextSessionKeepAliveRealtime = realtimeSinceStartup + SessionKeepAliveIntervalSeconds;
-            _sessionKeepAliveTask = DoSessionKeepAliveAsync();
-        }
-
-        private static async Task DoSessionKeepAliveAsync()
-        {
-            var svc = _bootstrap?.AnalyticsSessionService;
-            if (svc == null) return;
-
-            var accessToken = _currentSession?.AccessToken;
-            var sessionId   = _sessionId;
-            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(sessionId))
-                return;
-
-            try
-            {
-                await svc.UpdateLastActiveAsync(accessToken, sessionId);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Supabase] analytics session keep-alive failed: " + e.Message);
-            }
-        }
-
-        /// <summary>
-        /// 세션을 종료합니다 (fire-and-forget). 앱 일시정지/종료 시 호출하세요.
-        /// </summary>
-        public static void RequestAnalyticsSessionClose()
-        {
-            if (string.IsNullOrEmpty(_sessionId))
-                return;
-
-            var svc = _bootstrap?.AnalyticsSessionService;
-            if (svc == null) return;
-
-            var accessToken = _currentSession?.AccessToken;
-            var sessionId   = _sessionId;
-            if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(sessionId))
-                return;
-
-            _ = CloseAnalyticsSessionAsync(svc, accessToken, sessionId);
-        }
-
-        private static async Task CloseAnalyticsSessionAsync(
-            SupabaseAnalyticsSessionService svc, string accessToken, string sessionId)
-        {
-            try
-            {
-                await svc.CloseSessionAsync(accessToken, sessionId);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Supabase] analytics session close failed: " + e.Message);
-            }
-        }
-
-        /// <summary>
-        /// 애널리틱스 이벤트를 기록합니다.
-        /// <c>account_id</c> / <c>user_id</c> / <c>session_id</c>는 자동으로 주입됩니다.
-        /// </summary>
-        public static async Task<SupabaseResult<bool>> RecordAnalyticsEventAsync(string eventName)
-        {
-            if (!IsInitialized)
-                return SupabaseResult<bool>.Fail("not_initialized");
-
-            var s = _currentSession;
-            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
-                return SupabaseResult<bool>.Fail("not_logged_in");
-
-            var svc = _bootstrap?.AnalyticsEventService;
-            if (svc == null)
-                return SupabaseResult<bool>.Fail("analytics_event_service_null");
-
-            return await svc.RecordEventAsync(
-                s.AccessToken,
-                s.User?.Id ?? string.Empty,
-                _myProfile.UserId,
-                _sessionId,
-                eventName);
-        }
-
-        /// <inheritdoc cref="RecordAnalyticsEventAsync"/>
-        public static async Task<bool> TryRecordAnalyticsEventAsync(string eventName)
-        {
-            var r = await RecordAnalyticsEventAsync(eventName);
-            LogApiResult(ApiLogTags.AnalyticsEventRecord, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess;
         }
 
         /// <summary>
@@ -1980,8 +1865,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         public static async Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null,
-            string sessionId   = null)
+            string packageName = null)
         {
             var finalPackageName = packageName ?? UnityEngine.Application.identifier;
             var req = new GooglePlayPurchaseRequest
@@ -1989,7 +1873,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 purchase_token = purchaseToken,
                 product_id     = productId,
                 package_name   = finalPackageName,
-                session_id     = sessionId,
             };
             return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
                 _purchaseVerifyGoogleFunctionName, req, requireAuth: true);
@@ -1999,11 +1882,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         public static async Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
-            string packageName = null,
-            string sessionId   = null)
+            string packageName = null)
         {
             const string tag = "[Supabase.Purchase.VerifyGoogle]";
-            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, sessionId);
+            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -2018,19 +1900,16 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// <param name="productId">상품 ID.</param>
         /// <param name="bundleId">앱 Bundle ID. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
         /// <param name="isJws">StoreKit 2 JWS이면 true.</param>
-        /// <param name="sessionId">애널리틱스 세션 ID (선택). DB에 함께 저장됩니다.</param>
         public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseAsync(
             string data,
             string productId,
             string bundleId  = null,
-            bool   isJws     = false,
-            string sessionId = null)
+            bool   isJws     = false)
         {
             var req = new AppleIAPPurchaseRequest
             {
                 product_id = productId,
                 bundle_id  = bundleId ?? UnityEngine.Application.identifier,
-                session_id = sessionId,
             };
             if (isJws)
                 req.jws_token = data;
@@ -2046,11 +1925,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             string data,
             string productId,
             string bundleId  = null,
-            bool   isJws     = false,
-            string sessionId = null)
+            bool   isJws     = false)
         {
             const string tag = "[Supabase.Purchase.VerifyApple]";
-            var result = await VerifyApplePurchaseAsync(data, productId, bundleId, isJws, sessionId);
+            var result = await VerifyApplePurchaseAsync(data, productId, bundleId, isJws);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -2067,8 +1945,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="GooglePlayIAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static GooglePlayIAPFacade CreateGooglePlayIAP()
-            => new GooglePlayIAPFacade((token, productId, sessionId) =>
-                TryVerifyGooglePlayPurchaseAsync(token, productId, sessionId: sessionId));
+            => new GooglePlayIAPFacade((token, productId) =>
+                TryVerifyGooglePlayPurchaseAsync(token, productId));
 
         /// <summary>
         /// Apple App Store IAP 파사드를 생성합니다.
@@ -2076,8 +1954,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="AppleIAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static AppleIAPFacade CreateAppleIAP()
-            => new AppleIAPFacade((data, productId, isJws, sessionId) =>
-                TryVerifyApplePurchaseAsync(data, productId, isJws: isJws, sessionId: sessionId));
+            => new AppleIAPFacade((data, productId, isJws) =>
+                TryVerifyApplePurchaseAsync(data, productId, isJws: isJws));
 
         /// <summary>
         /// 통합 IAP 파사드를 생성합니다. Android(Google Play)와 iOS(Apple App Store)를 플랫폼 자동 감지로 처리합니다.
@@ -2086,8 +1964,8 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         /// 씬 언로드 시 <see cref="IAPFacade.Dispose"/>를 호출하세요.
         /// </summary>
         public static IAPFacade CreateIAP()
-            => new IAPFacade((token, productId, sessionId) =>
-                VerifyForIAPFacadeAsync(token, productId, sessionId));
+            => new IAPFacade((token, productId) =>
+                VerifyForIAPFacadeAsync(token, productId));
 
         /// <summary>
         /// 통합 IAP 파사드를 생성하고 초기화까지 수행합니다.
@@ -2157,11 +2035,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         }
 
         private static async Task<(bool, IAPPurchaseResponse)> VerifyForIAPFacadeAsync(
-            string token, string productId, string sessionId)
+            string token, string productId)
         {
 #if UNITY_ANDROID
-            var (ok, r) = await TryVerifyGooglePlayPurchaseAsync(token, productId,
-                sessionId: sessionId);
+            var (ok, r) = await TryVerifyGooglePlayPurchaseAsync(token, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -2172,8 +2049,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 store            = "google_play"
             });
 #elif UNITY_IOS
-            var (ok, r) = await TryVerifyApplePurchaseAsync(token, productId,
-                sessionId: sessionId);
+            var (ok, r) = await TryVerifyApplePurchaseAsync(token, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -2263,8 +2139,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             _currentSession = null;
             _remoteConfig   = null;
             _myProfile      = PublicProfileSnapshot.Empty;
-            _sessionId      = string.Empty;
-            _nextSessionKeepAliveRealtime = 0f;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
@@ -2842,52 +2716,6 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 Debug.LogWarning("[Supabase] ensure profile row exception: " + e.Message);
             }
 
-            _ = TryStartAnalyticsSessionAsync();
-        }
-
-        private static async Task TryStartAnalyticsSessionAsync()
-        {
-            var sessionSvc = _bootstrap?.AnalyticsSessionService;
-            if (sessionSvc == null) return;
-
-            var s = _currentSession;
-            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
-                return;
-
-            var newSessionId = System.Guid.NewGuid().ToString();
-            var accountId    = s.User?.Id ?? string.Empty;
-            var userId       = _myProfile.UserId;
-
-            var platform = UnityEngine.Application.platform switch
-            {
-                UnityEngine.RuntimePlatform.Android       => "android",
-                UnityEngine.RuntimePlatform.IPhonePlayer  => "ios",
-                UnityEngine.RuntimePlatform.WindowsPlayer => "windows",
-                UnityEngine.RuntimePlatform.OSXPlayer     => "macos",
-                var p => p.ToString().ToLower()
-            };
-
-            var appVersion = UnityEngine.Application.version;
-
-            try
-            {
-                var result = await sessionSvc.StartSessionAsync(
-                    s.AccessToken, newSessionId, accountId, userId, platform, appVersion);
-
-                if (result != null && result.IsSuccess)
-                {
-                    _sessionId = newSessionId;
-                    _nextSessionKeepAliveRealtime = UnityEngine.Time.realtimeSinceStartup + SessionKeepAliveIntervalSeconds;
-                }
-                else if (_enableApiResultLogs)
-                {
-                    Debug.LogWarning($"{ApiLogTags.AnalyticsSessionStart} {result?.ErrorMessage ?? "unknown"}");
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Supabase] analytics session start failed: " + e.Message);
-            }
         }
 
         /// <summary>

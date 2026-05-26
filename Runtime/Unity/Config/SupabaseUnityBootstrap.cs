@@ -22,9 +22,6 @@ namespace TrueBase.Unity.Config
         public SupabaseAnonymousRecoveryService AnonymousRecoveryService { get; private set; }
         public SupabaseServerTimeService ServerTimeService { get; private set; }
         public SupabaseMailboxService MailboxService { get; private set; }
-        public SupabaseAnalyticsSessionService AnalyticsSessionService { get; private set; }
-        public SupabaseAnalyticsEventService AnalyticsEventService { get; private set; }
-
         /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public float DuplicateSessionPollSeconds { get; private set; }
 
@@ -117,20 +114,6 @@ namespace TrueBase.Unity.Config
                 options.PublishableKey,
                 http,
                 "mails");
-
-            AnalyticsSessionService = new SupabaseAnalyticsSessionService(
-                options.ProjectURL,
-                options.PublishableKey,
-                http,
-                json,
-                "analytics_sessions");
-
-            AnalyticsEventService = new SupabaseAnalyticsEventService(
-                options.ProjectURL,
-                options.PublishableKey,
-                http,
-                json,
-                "analytics_events");
 
             DuplicateSessionPollSeconds = settings.duplicateSessionPollSeconds;
             DuplicateSessionActionCheckCooldownSeconds = options.DuplicateSessionActionCheckCooldownSeconds;

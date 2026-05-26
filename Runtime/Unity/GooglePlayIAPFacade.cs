@@ -32,8 +32,8 @@ namespace TrueBase.Unity
     public sealed class GooglePlayIAPFacade : IDisposable
     {
         // ── 의존성 ────────────────────────────────────────────────────────────
-        // (purchaseToken, productId, sessionId) → (success, response)
-        private readonly Func<string, string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> _verifyAsync;
+        // (purchaseToken, productId) → (success, response)
+        private readonly Func<string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> _verifyAsync;
 
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
         private StoreController _storeController;
@@ -63,7 +63,7 @@ namespace TrueBase.Unity
 
         // ── 생성자 (internal — Supabase.CreateGooglePlayIAP()로만 생성) ─────────
         internal GooglePlayIAPFacade(
-            Func<string, string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)
+            Func<string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -278,10 +278,8 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var sessionId = SupabaseSDK.SessionId;
-
             // 3. Supabase Edge Function 서버 검증
-            var (success, response) = await _verifyAsync(purchaseToken, productId, sessionId);
+            var (success, response) = await _verifyAsync(purchaseToken, productId);
 
             if (!success || response == null)
             {
