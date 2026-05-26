@@ -179,5 +179,4 @@ await Supabase.TrySignInAnonymouslyAsync();
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
-| 세션·광고 이벤트 추적 | [애널리틱스](./analytics.md) |
 
