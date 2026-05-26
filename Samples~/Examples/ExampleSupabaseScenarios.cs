@@ -13,6 +13,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
 ///   T — RC Reader         U — RC Binding          E — RC Listener 토글
 ///   N — 닉네임 설정 및 프로필 조회
+///   A — 내 상태 출력       J — 서버 시간 조회
 /// </summary>
 public sealed class ExampleSupabaseScenarios : MonoBehaviour
 {
@@ -187,6 +188,33 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else                 Debug.LogWarning("[Supabase] 프로필 조회 실패.");
     }
 
+    // ─── 세션 상태 / 서버 ────────────────────────────────────────────────────
+
+    /// <summary>A — 현재 세션 상태를 Console에 출력합니다.</summary>
+    private void PrintStatus()
+    {
+        if (!SupabaseClient.IsLoggedIn)
+        {
+            Debug.Log("[Supabase] 로그인되지 않은 상태.");
+            return;
+        }
+        var profile = SupabaseClient.MyProfile;
+        Debug.Log($"[Supabase] 상태\n" +
+                  $"  IsAnonymous = {SupabaseClient.IsAnonymous}\n" +
+                  $"  UserId      = {SupabaseClient.UserId}\n" +
+                  $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
+                  $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
+                  $"  IsWithdrawn = {profile?.IsWithdrawn}");
+    }
+
+    /// <summary>J — 서버 시간을 조회합니다.</summary>
+    private async Task GetServerTimeAsync()
+    {
+        var time = await SupabaseClient.TryGetServerUtcNowAsync();
+        if (time == default) Debug.LogWarning("[Supabase] 서버 시간 조회 실패.");
+        else                 Debug.Log($"[Supabase] 서버 시간: {time:yyyy-MM-dd HH:mm:ss} UTC");
+    }
+
     // ─── Update ──────────────────────────────────────────────────────────────
 
     private void Update()
@@ -205,5 +233,8 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.E)) ToggleRemoteConfigListener();
 
         if (Input.GetKeyDown(KeyCode.N)) _ = TestPublicProfileAsync();
+
+        if (Input.GetKeyDown(KeyCode.A)) PrintStatus();
+        if (Input.GetKeyDown(KeyCode.J)) _ = GetServerTimeAsync();
     }
 }
