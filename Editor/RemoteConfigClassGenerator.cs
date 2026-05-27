@@ -317,23 +317,32 @@ namespace TrueBase.Editor
         // ── Type helpers ──────────────────────────────────────────────────────
 
         internal static readonly string[] TypeOptions =
-            { "bool", "int", "short", "long", "ulong", "float", "double", "string", "커스텀..." };
+        {
+            "bool",    // 0
+            "int",     // 1
+            "short",   // 2
+            "long",    // 3
+            "ulong",   // 4
+            "float",   // 5
+            "double",  // 6
+            "string",  // 7
+        };
 
+        /// <summary>Dictionary / List&lt;T&gt; / T[] 등 TypeOptions에 없는 타입을 내부적으로 표현하는 sentinel 인덱스.</summary>
         internal const int CustomTypeIndex = 8;
 
         /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
         public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
         {
-            // TypeOptions = { bool(0), int(1), short(2), long(3), ulong(4), float(5), double(6), string(7), 커스텀(8) }
             switch (cat)
             {
-                case FieldTypeCategory.Boolean: return new[] { 0, 8 };             // bool, 커스텀
-                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4, 8 };   // int, short, long, ulong, 커스텀
-                case FieldTypeCategory.Float:   return new[] { 5, 6, 8 };          // float, double, 커스텀
-                case FieldTypeCategory.String:  return new[] { 7, 8 };             // string, 커스텀
-                case FieldTypeCategory.Json:    return new[] { 7, 8 };             // string, 커스텀 (Dictionary 프리셋은 별도 처리)
-                case FieldTypeCategory.Array:   return new[] { 8 };                // 커스텀 전용
-                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }; // 전체
+                case FieldTypeCategory.Boolean: return new[] { 0 };             // bool
+                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };   // int/short/long/ulong
+                case FieldTypeCategory.Float:   return new[] { 5, 6 };          // float/double
+                case FieldTypeCategory.String:  return new[] { 7 };             // string
+                case FieldTypeCategory.Json:    return new[] { 7 };             // string (Dictionary는 별도 팝업)
+                case FieldTypeCategory.Array:   return new int[0];              // 별도 팝업 처리 (DrawTypePopup 참조)
+                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7 };
             }
         }
 
@@ -351,7 +360,7 @@ namespace TrueBase.Editor
 
         private static int IndexOf(string type)
         {
-            for (var i = 0; i < TypeOptions.Length - 1; i++)
+            for (var i = 0; i < TypeOptions.Length; i++)
                 if (TypeOptions[i] == type) return i;
             return IndexOf("string");
         }

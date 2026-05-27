@@ -157,7 +157,14 @@ namespace TrueBase.Editor
 
         // Json 카테고리 전용 드롭다운 옵션
         private static readonly string[] s_jsonTypeOptions =
-            { "string", "Dictionary<K, V>", "커스텀..." };
+            { "string", "Dictionary<K, V>" };
+
+        // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류)
+        private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
+
+        // 컬렉션 요소 타입 선택지
+        private static readonly string[] s_collectionElementOptions =
+            { "bool", "int", "short", "long", "ulong", "float", "double", "string" };
 
         // DataSavePriority 드롭다운 옵션 (label → int 매핑)
         // Normal=1(보통/5초), Urgent=0(짧게/1초), Lazy=2(길게/30초)
@@ -169,7 +176,8 @@ namespace TrueBase.Editor
 
         /// <summary>
         /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
-        /// Json 카테고리는 string / Dictionary 프리셋 / 커스텀 세 선택지를 제공합니다.
+        /// Json 카테고리는 string / Dictionary 두 선택지를 제공합니다.
+        /// Array 카테고리는 List&lt;T&gt; / T[] 두 선택지를 제공하며 요소 타입은 별도 컨트롤로 편집합니다.
         /// 현재 TypeIndex가 카테고리에 없으면 전체 목록을 표시합니다.
         /// </summary>
         private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width,
@@ -180,24 +188,44 @@ namespace TrueBase.Editor
             {
                 var isDictionary = TryParseDictionaryTypes(customType, out _, out _);
 
-                int selIdx;
-                if (currentTypeIndex != RemoteConfigClassGenerator.CustomTypeIndex)
-                    selIdx = 0; // string
-                else if (isDictionary)
-                    selIdx = 1; // Dictionary<K, V>
-                else
-                    selIdx = 2; // 커스텀
+                var selIdx = (currentTypeIndex == RemoteConfigClassGenerator.CustomTypeIndex && isDictionary)
+                    ? 1  // Dictionary<K, V>
+                    : 0; // string
 
                 var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
                 if (picked == 0) { customType = ""; return 7; }   // string
-                if (picked == 1)
+                // Dictionary로 처음 전환할 때 기본값 설정
+                if (!isDictionary) customType = "Dictionary<string, object>";
+                return RemoteConfigClassGenerator.CustomTypeIndex;
+            }
+
+            // Array 카테고리 전용 처리
+            if (category == FieldTypeCategory.Array)
+            {
+                var isList  = TryParseListType(customType, out _);
+                var isArray = !isList && TryParseArrayType(customType, out _);
+
+                // 둘 다 아니면 List<T>를 기본으로
+                var selIdx = (isArray) ? 1 : 0;
+                var picked = EditorGUILayout.Popup(selIdx, s_arrayTypeOptions, GUILayout.Width(width));
+
+                if (picked == 0 && !isList)
                 {
-                    // Dictionary로 처음 전환할 때 기본값 설정
-                    if (!isDictionary) customType = "Dictionary<string, object>";
-                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                    // T[] → List<T> 전환: 요소 타입 유지
+                    TryParseArrayType(customType, out var elem);
+                    customType = "List<" + (string.IsNullOrEmpty(elem) ? "int" : elem) + ">";
                 }
-                // 커스텀으로 전환할 때 Dictionary 값 초기화
-                if (isDictionary) customType = "";
+                else if (picked == 1 && !isArray)
+                {
+                    // List<T> → T[] 전환: 요소 타입 유지
+                    TryParseListType(customType, out var elem);
+                    customType = (string.IsNullOrEmpty(elem) ? "int" : elem) + "[]";
+                }
+                else if (currentTypeIndex != RemoteConfigClassGenerator.CustomTypeIndex)
+                {
+                    // 다른 카테고리에서 Array로 처음 진입할 때 기본값 설정
+                    customType = picked == 0 ? "List<int>" : "int[]";
+                }
                 return RemoteConfigClassGenerator.CustomTypeIndex;
             }
 
@@ -258,6 +286,47 @@ namespace TrueBase.Editor
                 }
             }
             return false;
+        }
+
+        /// <summary>customType이 List&lt;T&gt; 형식이면 요소 타입을 파싱합니다.</summary>
+        private static bool TryParseListType(string customType, out string elementType)
+        {
+            elementType = "int";
+            if (string.IsNullOrWhiteSpace(customType)) return false;
+            var s = customType.Trim();
+            if (!s.StartsWith("List<", StringComparison.Ordinal) || !s.EndsWith(">", StringComparison.Ordinal))
+                return false;
+            elementType = s.Substring(5, s.Length - 6).Trim();
+            return !string.IsNullOrEmpty(elementType);
+        }
+
+        /// <summary>customType이 T[] 형식이면 요소 타입을 파싱합니다.</summary>
+        private static bool TryParseArrayType(string customType, out string elementType)
+        {
+            elementType = "int";
+            if (string.IsNullOrWhiteSpace(customType)) return false;
+            var s = customType.Trim();
+            if (!s.EndsWith("[]", StringComparison.Ordinal)) return false;
+            elementType = s.Substring(0, s.Length - 2).Trim();
+            return !string.IsNullOrEmpty(elementType);
+        }
+
+        /// <summary>List&lt;T&gt; 요소 타입 선택 드롭다운.</summary>
+        private static void DrawListTypeControls(ref string customType)
+        {
+            TryParseListType(customType, out var elem);
+            var idx    = Math.Max(0, Array.IndexOf(s_collectionElementOptions, elem));
+            var newIdx = EditorGUILayout.Popup(idx, s_collectionElementOptions, GUILayout.ExpandWidth(true));
+            customType = "List<" + s_collectionElementOptions[newIdx] + ">";
+        }
+
+        /// <summary>T[] 요소 타입 선택 드롭다운.</summary>
+        private static void DrawArrayTypeControls(ref string customType)
+        {
+            TryParseArrayType(customType, out var elem);
+            var idx    = Math.Max(0, Array.IndexOf(s_collectionElementOptions, elem));
+            var newIdx = EditorGUILayout.Popup(idx, s_collectionElementOptions, GUILayout.ExpandWidth(true));
+            customType = s_collectionElementOptions[newIdx] + "[]";
         }
 
         /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>
@@ -334,8 +403,12 @@ namespace TrueBase.Editor
                         {
                             if (TryParseDictionaryTypes(col.CustomType, out _, out _))
                                 DrawDictionaryTypeControls(ref col.CustomType);
+                            else if (TryParseListType(col.CustomType, out _))
+                                DrawListTypeControls(ref col.CustomType);
+                            else if (TryParseArrayType(col.CustomType, out _))
+                                DrawArrayTypeControls(ref col.CustomType);
                             else
-                                col.CustomType = EditorGUILayout.TextField(col.CustomType, GUILayout.ExpandWidth(true));
+                                EditorGUILayout.LabelField(col.CustomType, GUILayout.ExpandWidth(true));
                         }
 
                         // Priority 드롭다운
@@ -423,9 +496,11 @@ namespace TrueBase.Editor
                         {
                             col.TypeIndex  = RemoteConfigClassGenerator.CustomTypeIndex;
                             col.CustomType = existingType;
-                            // Dictionary 타입은 항상 Json 카테고리로 표시해야 전용 팝업이 뜸
+                            // 타입 패턴에 따라 전용 팝업이 열리도록 카테고리 설정
                             if (TryParseDictionaryTypes(existingType, out _, out _))
                                 col.TypeCategory = FieldTypeCategory.Json;
+                            else if (TryParseListType(existingType, out _) || TryParseArrayType(existingType, out _))
+                                col.TypeCategory = FieldTypeCategory.Array;
                         }
                         col.IsAmbiguous = false;
                     }
