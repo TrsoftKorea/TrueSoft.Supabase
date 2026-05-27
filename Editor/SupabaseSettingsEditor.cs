@@ -160,8 +160,8 @@ namespace TrueBase.Editor
             { "string", "Dictionary<K, V>", "커스텀..." };
 
         // DataSavePriority 드롭다운 옵션 (label → int 매핑)
-        // Normal=1(보통), Urgent=0(높음), Lazy=2(낮음)
-        private static readonly string[] s_priorityOptions = { "보통", "높음", "낮음" };
+        // Normal=1(보통/5초), Urgent=0(짧게/1초), Lazy=2(길게/30초)
+        private static readonly string[] s_priorityOptions = { "보통", "짧게", "길게" };
         private static readonly int[]    s_priorityValues  = {  1,      0,      2     };
 
         // Dictionary key 타입 선택지 (value 타입은 자유 텍스트)
@@ -311,7 +311,7 @@ namespace TrueBase.Editor
             {
                 EditorGUILayout.LabelField("필드",     EditorStyles.miniLabel, GUILayout.MinWidth(100));
                 EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
-                EditorGUILayout.LabelField("Priority", EditorStyles.miniLabel, GUILayout.Width(58));
+                EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
                 EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
             }
 
