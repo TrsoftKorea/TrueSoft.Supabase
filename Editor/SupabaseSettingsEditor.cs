@@ -155,9 +155,9 @@ namespace TrueBase.Editor
             }
         }
 
-        // Json 카테고리 전용 드롭다운 옵션
+        // Json 카테고리 전용 드롭다운 옵션 (jsonb 컬럼: 어떤 JSON 값이든 가능)
         private static readonly string[] s_jsonTypeOptions =
-            { "string", "Dictionary<K, V>" };
+            { "string", "Dictionary<K, V>", "List<T>", "T[]" };
 
         // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류)
         private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
@@ -183,19 +183,36 @@ namespace TrueBase.Editor
         private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width,
             ref string customType)
         {
-            // Json 카테고리 전용 처리
+            // Json 카테고리 전용 처리 (jsonb 컬럼: string / Dictionary / List<T> / T[])
             if (category == FieldTypeCategory.Json)
             {
-                var isDictionary = TryParseDictionaryTypes(customType, out _, out _);
-
-                var selIdx = (currentTypeIndex == RemoteConfigClassGenerator.CustomTypeIndex && isDictionary)
-                    ? 1  // Dictionary<K, V>
-                    : 0; // string
+                int selIdx;
+                if (currentTypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
+                {
+                    if      (TryParseDictionaryTypes(customType, out _, out _)) selIdx = 1;
+                    else if (TryParseListType(customType, out _))                selIdx = 2;
+                    else if (TryParseArrayType(customType, out _))               selIdx = 3;
+                    else                                                          selIdx = 0;
+                }
+                else selIdx = 0; // string
 
                 var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
-                if (picked == 0) { customType = ""; return 7; }   // string
-                // Dictionary로 처음 전환할 때 기본값 설정
-                if (!isDictionary) customType = "Dictionary<string, object>";
+                if (picked == 0) { customType = ""; return 7; }  // string
+                if (picked == 1)
+                {
+                    if (!TryParseDictionaryTypes(customType, out _, out _))
+                        customType = "Dictionary<string, object>";
+                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                }
+                if (picked == 2)
+                {
+                    if (!TryParseListType(customType, out _))
+                        customType = "List<int>";
+                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                }
+                // picked == 3: T[]
+                if (!TryParseArrayType(customType, out _))
+                    customType = "int[]";
                 return RemoteConfigClassGenerator.CustomTypeIndex;
             }
 
