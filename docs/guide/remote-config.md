@@ -222,3 +222,29 @@ float dmg    = cfg?.battle?.playerDmg ?? 1f;
 float bossHp = cfg?.battle?.boss?.hpMultiplier ?? 1f;
 int   maxSt  = cfg?.stamina?.max ?? 100;
 ```
+
+---
+
+### 클래스 생성기 (선택)
+
+JSON 구조를 보고 C# 클래스를 직접 작성하는 대신 Inspector에서 자동으로 생성할 수 있습니다.
+
+1. `SupabaseSettings` 에셋 선택 → Inspector 하단 **Remote Config 클래스 생성** foldout 열기
+2. Secret 키 입력 후 **키 목록 가져오기** — `remote_config` 테이블의 키 목록이 드롭다운으로 표시됩니다
+3. 키 선택 후 **필드 파싱** — DB의 JSON 구조가 필드 목록으로 표시됩니다
+4. 필요하면 각 필드의 C# 타입을 변경합니다 (`int` → `long`, `string` → `List<string>` 등)
+5. 클래스명 확인 (키 이름에서 자동 유도, 수정 가능)
+6. **소스 생성** → **저장**으로 `.cs` 파일을 프로젝트에 저장합니다
+
+생성된 클래스는 `[RemoteConfigKey]` 어트리뷰트가 포함되어 있어 바로 사용할 수 있습니다.
+
+```csharp
+// 생성된 클래스는 세 패턴 모두 그대로 사용 가능
+var reader  = RemoteConfig<GameplayV1Config>.CreateReader();
+var binding = RemoteConfig<GameplayV1Config>.CreateBinding(pollInterval: 60f);
+var listener = RemoteConfig<GameplayV1Config>.CreateListener(cfg => Apply(cfg), pollInterval: 60f);
+```
+
+::: tip
+같은 JSON 키 이름이 중첩 객체에서 반복되면 기존 파일 타입 복원이 해당 키에 대해 스킵됩니다. JSON 키 이름이 겹치지 않도록 설계하세요.
+:::

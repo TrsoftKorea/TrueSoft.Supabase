@@ -29,6 +29,8 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 | `U` | RemoteConfig Binding 값 출력 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
 | `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
+| `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, DisplayName 등) |
+| `J` | 서버 시간 조회 |
 
 ---
 
