@@ -17,6 +17,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
+        private const string PrefsKeyRcExtraUsings     = "TrueBase.RemoteConfig.ExtraUsings";
         private const string ClassName   = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -39,6 +40,7 @@ namespace TrueBase.Editor
 
         // ── Remote Config 생성기 ─────────────────────────────────────────────────
         private static bool                  _rcFoldout;
+        private static string                _rcExtraUsings = "";
         private static List<RcKeyRow>        _rcKeyList     = new List<RcKeyRow>();
         private static int                   _rcKeyIndex;
         private static bool                  _rcKeysFetched;
@@ -79,7 +81,8 @@ namespace TrueBase.Editor
             _warnings.Clear();
             _previewText    = "";
 
-            _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName, "");
+            _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName,   "");
+            _rcExtraUsings  = EditorPrefs.GetString(PrefsKeyRcExtraUsings, "");
             _rcKeyList.Clear();
             _rcKeysFetched  = false;
             _rcFields.Clear();
@@ -221,7 +224,7 @@ namespace TrueBase.Editor
                         EditorPrefs.SetString(PrefsKeyRcClassName, _rcClassName);
 
                     EditorGUILayout.Space(4);
-                    DrawExtraUsingsField();
+                    DrawRcExtraUsingsField();
 
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
@@ -474,7 +477,7 @@ namespace TrueBase.Editor
             customType = "Dictionary<" + newKey + ", " + newValue + ">";
         }
 
-        /// <summary>두 생성기가 공유하는 추가 네임스페이스 입력 영역.</summary>
+        /// <summary>UserSave 생성기용 추가 네임스페이스 입력 영역.</summary>
         private static void DrawExtraUsingsField()
         {
             EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
@@ -482,6 +485,16 @@ namespace TrueBase.Editor
             _extraUsings = EditorGUILayout.TextArea(_extraUsings, GUILayout.Height(40));
             if (EditorGUI.EndChangeCheck())
                 EditorPrefs.SetString(PrefsKeyExtraUsings, _extraUsings);
+        }
+
+        /// <summary>Remote Config 생성기 전용 추가 네임스페이스 입력 영역.</summary>
+        private static void DrawRcExtraUsingsField()
+        {
+            EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
+            EditorGUI.BeginChangeCheck();
+            _rcExtraUsings = EditorGUILayout.TextArea(_rcExtraUsings, GUILayout.Height(40));
+            if (EditorGUI.EndChangeCheck())
+                EditorPrefs.SetString(PrefsKeyRcExtraUsings, _rcExtraUsings);
         }
 
         /// <summary>추가 네임스페이스 텍스트 → 정규화된 네임스페이스 목록.</summary>
@@ -581,6 +594,9 @@ namespace TrueBase.Editor
             _rcFieldsParsed = false;
             _rcPreviewText  = "";
 
+            // ③ 방어: 인덱스 유효성 확인
+            if (_rcKeyList.Count == 0 || _rcKeyIndex < 0 || _rcKeyIndex >= _rcKeyList.Count) return;
+
             var row = _rcKeyList[_rcKeyIndex];
 
             // 클래스명 자동 유도 (비어있을 때만)
@@ -601,22 +617,31 @@ namespace TrueBase.Editor
             var existing = RemoteConfigClassGenerator.TryLoadExistingFieldTypes(_rcClassName);
             if (existing.Count > 0)
             {
+                // ② 중복 JsonKey 감지: 서로 다른 depth에 같은 키가 있으면 복원 스킵 (오작동 방지)
+                var keyCount = new Dictionary<string, int>(StringComparer.Ordinal);
                 foreach (var f in _rcFields)
                 {
                     if (f.IsObjectNode) continue;
+                    keyCount[f.JsonKey] = keyCount.TryGetValue(f.JsonKey, out var c) ? c + 1 : 1;
+                }
+
+                foreach (var f in _rcFields)
+                {
+                    if (f.IsObjectNode) continue;
+                    if (keyCount.TryGetValue(f.JsonKey, out var cnt) && cnt > 1) continue; // 중복 키 스킵
                     if (!existing.TryGetValue(f.JsonKey, out var et)) continue;
 
                     var idx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, et);
                     if (idx >= 0)
                     {
-                        f.TypeIndex    = idx;
-                        f.IsAmbiguous  = false;
+                        f.TypeIndex   = idx;
+                        f.IsAmbiguous = false;
                     }
                     else
                     {
-                        f.TypeIndex    = RemoteConfigClassGenerator.CustomTypeIndex;
-                        f.CustomType   = et;
-                        f.IsAmbiguous  = false;
+                        f.TypeIndex   = RemoteConfigClassGenerator.CustomTypeIndex;
+                        f.CustomType  = et;
+                        f.IsAmbiguous = false;
                         if      (TryParseDictionaryTypes(et, out _, out _)) f.JsonCategory = FieldTypeCategory.Json;
                         else if (TryParseListType(et, out _) || TryParseArrayType(et, out _)) f.JsonCategory = FieldTypeCategory.Array;
                     }
@@ -628,13 +653,16 @@ namespace TrueBase.Editor
 
         private static void BuildRcPreview()
         {
+            // ③ 방어: 인덱스 유효성 확인
+            if (_rcKeyList.Count == 0 || _rcKeyIndex < 0 || _rcKeyIndex >= _rcKeyList.Count) return;
+
             var row = _rcKeyList[_rcKeyIndex];
             var ns  = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
                     _rcFields, _rcClassName, row.Key, ns,
-                    ParseExtraUsings(_extraUsings), row.Description);
+                    ParseExtraUsings(_rcExtraUsings), row.Description);  // ① RC 전용 네임스페이스 사용
             }
             catch (Exception e)
             {
