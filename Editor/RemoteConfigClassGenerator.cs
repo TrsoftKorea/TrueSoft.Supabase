@@ -362,7 +362,8 @@ namespace TrueBase.Editor
         {
             for (var i = 0; i < TypeOptions.Length; i++)
                 if (TypeOptions[i] == type) return i;
-            return IndexOf("string");
+            // "string"은 인덱스 7로 고정 — TypeOptions 변경 시 이 상수도 함께 수정할 것
+            return 7;
         }
 
         private static string ResolveClrType(RcEditableField f)

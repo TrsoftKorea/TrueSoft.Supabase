@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using TrueBase.Unity;
 using UnityEditor;
@@ -15,23 +16,38 @@ namespace TrueBase.Editor
         private const string PrefsKeyExtraUsings       = "TrueBase.PlayerSave.ExtraUsings";
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
-        private const string ClassName = "PlayerSave";
+        private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
+        private const string ClassName   = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
+        private const string RcDialogTitle = "Remote Config 클래스";
 
         // TypeOptions / RemoteConfigClassGenerator.CustomTypeIndex 는 RemoteConfigClassGenerator 에서 가져옴
         // (두 생성기가 같은 배열을 공유 → 중복 선언 제거)
 
-        private static bool _foldout;
-        private static string _secretKey   = "";
-        private static string _extraUsings = "";
+        // ── UserSave 생성기 ──────────────────────────────────────────────────────
+        private static bool                 _foldout;
+        private static string               _secretKey       = "";
+        private static string               _extraUsings     = "";
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
-        private static bool _columnsFetched;
-        private static List<string> _warnings = new List<string>();
-        private static Vector2 _columnScroll;
-        private static string _previewText = "";
-        private static Vector2 _previewScroll;
-        private static GUIStyle _ambiguousStyle;
+        private static bool                 _columnsFetched;
+        private static List<string>         _warnings        = new List<string>();
+        private static Vector2              _columnScroll;
+        private static string               _previewText     = "";
+        private static Vector2              _previewScroll;
+        private static GUIStyle             _ambiguousStyle;
+
+        // ── Remote Config 생성기 ─────────────────────────────────────────────────
+        private static bool                  _rcFoldout;
+        private static List<RcKeyRow>        _rcKeyList     = new List<RcKeyRow>();
+        private static int                   _rcKeyIndex;
+        private static bool                  _rcKeysFetched;
+        private static List<RcEditableField> _rcFields      = new List<RcEditableField>();
+        private static bool                  _rcFieldsParsed;
+        private static string                _rcClassName   = "";
+        private static string                _rcPreviewText = "";
+        private static Vector2               _rcFieldScroll;
+        private static Vector2               _rcPreviewScroll;
 
         private static GUIStyle AmbiguousStyle
         {
@@ -62,6 +78,13 @@ namespace TrueBase.Editor
             _columnsFetched = false;
             _warnings.Clear();
             _previewText    = "";
+
+            _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName, "");
+            _rcKeyList.Clear();
+            _rcKeysFetched  = false;
+            _rcFields.Clear();
+            _rcFieldsParsed = false;
+            _rcPreviewText  = "";
         }
 
         public override void OnInspectorGUI()
@@ -141,6 +164,96 @@ namespace TrueBase.Editor
                 }
             }
 
+            EditorGUILayout.Space(6);
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+
+            // ── Remote Config 클래스 생성 ────────────────────────────────────────
+            _rcFoldout = EditorGUILayout.Foldout(_rcFoldout, "Remote Config 클래스 생성", true, EditorStyles.foldoutHeader);
+            if (_rcFoldout)
+            {
+                EditorGUILayout.HelpBox(
+                    "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.",
+                    MessageType.Info);
+
+                EditorGUILayout.Space(4);
+                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_secretKey)))
+                {
+                    if (GUILayout.Button("키 목록 가져오기", GUILayout.Height(26)))
+                        FetchRcKeys((SupabaseSettings)target);
+                }
+
+                if (_rcKeysFetched)
+                {
+                    if (_rcKeyList.Count > 0)
+                    {
+                        EditorGUILayout.Space(4);
+                        var keyNames = _rcKeyList.Select(r => r.Key).ToArray();
+                        var prevIdx  = _rcKeyIndex;
+                        _rcKeyIndex  = EditorGUILayout.Popup("키 선택", _rcKeyIndex, keyNames);
+                        // 키가 바뀌면 파싱 상태 초기화
+                        if (_rcKeyIndex != prevIdx)
+                        {
+                            _rcFields.Clear();
+                            _rcFieldsParsed = false;
+                            _rcPreviewText  = "";
+                            _rcClassName    = "";
+                        }
+
+                        EditorGUILayout.Space(2);
+                        if (GUILayout.Button("필드 파싱", GUILayout.Height(24)))
+                            ParseRcFields();
+                    }
+                    else
+                    {
+                        EditorGUILayout.HelpBox("remote_config 테이블에 행이 없습니다.", MessageType.Warning);
+                    }
+                }
+
+                if (_rcFieldsParsed && _rcFields.Count > 0)
+                {
+                    EditorGUILayout.Space(6);
+                    DrawRcFieldList();
+
+                    EditorGUILayout.Space(4);
+                    EditorGUI.BeginChangeCheck();
+                    _rcClassName = EditorGUILayout.TextField("클래스명", _rcClassName);
+                    if (EditorGUI.EndChangeCheck())
+                        EditorPrefs.SetString(PrefsKeyRcClassName, _rcClassName);
+
+                    EditorGUILayout.Space(4);
+                    DrawExtraUsingsField();
+
+                    EditorGUILayout.Space(4);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcClassName)))
+                        {
+                            if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
+                                BuildRcPreview();
+                        }
+                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcPreviewText)))
+                        {
+                            if (GUILayout.Button("저장", GUILayout.Height(26)))
+                                SaveRcToProject();
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(_rcPreviewText))
+                {
+                    EditorGUILayout.Space(4);
+                    EditorGUILayout.LabelField("미리보기", EditorStyles.boldLabel);
+                    using (var sv = new EditorGUILayout.ScrollViewScope(_rcPreviewScroll, GUILayout.Height(220)))
+                    {
+                        _rcPreviewScroll = sv.scrollPosition;
+                        var w = EditorGUIUtility.currentViewWidth - 32f;
+                        var h = EditorStyles.textArea.CalcHeight(new GUIContent(_rcPreviewText), w);
+                        EditorGUILayout.SelectableLabel(_rcPreviewText, EditorStyles.textArea,
+                            GUILayout.Width(w), GUILayout.Height(Mathf.Max(h, 48f)));
+                    }
+                }
+            }
+
         }
 
         private static void DrawSecretKeyField()
@@ -161,10 +274,6 @@ namespace TrueBase.Editor
 
         // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류)
         private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
-
-        // 컬렉션 요소 타입 선택지
-        private static readonly string[] s_collectionElementOptions =
-            { "bool", "int", "short", "long", "ulong", "float", "double", "string" };
 
         // DataSavePriority 드롭다운 옵션 (label → int 매핑)
         // Normal=1(보통/5초), Urgent=0(짧게/1초), Lazy=2(길게/30초)
@@ -332,18 +441,18 @@ namespace TrueBase.Editor
         private static void DrawListTypeControls(ref string customType)
         {
             TryParseListType(customType, out var elem);
-            var idx    = Math.Max(0, Array.IndexOf(s_collectionElementOptions, elem));
-            var newIdx = EditorGUILayout.Popup(idx, s_collectionElementOptions, GUILayout.ExpandWidth(true));
-            customType = "List<" + s_collectionElementOptions[newIdx] + ">";
+            var idx    = Math.Max(0, Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, elem));
+            var newIdx = EditorGUILayout.Popup(idx, RemoteConfigClassGenerator.TypeOptions, GUILayout.ExpandWidth(true));
+            customType = "List<" + RemoteConfigClassGenerator.TypeOptions[newIdx] + ">";
         }
 
         /// <summary>T[] 요소 타입 선택 드롭다운.</summary>
         private static void DrawArrayTypeControls(ref string customType)
         {
             TryParseArrayType(customType, out var elem);
-            var idx    = Math.Max(0, Array.IndexOf(s_collectionElementOptions, elem));
-            var newIdx = EditorGUILayout.Popup(idx, s_collectionElementOptions, GUILayout.ExpandWidth(true));
-            customType = s_collectionElementOptions[newIdx] + "[]";
+            var idx    = Math.Max(0, Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, elem));
+            var newIdx = EditorGUILayout.Popup(idx, RemoteConfigClassGenerator.TypeOptions, GUILayout.ExpandWidth(true));
+            customType = RemoteConfigClassGenerator.TypeOptions[newIdx] + "[]";
         }
 
         /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>
@@ -390,6 +499,167 @@ namespace TrueBase.Editor
             }
             return result;
         }
+
+        // ── Remote Config 생성기 메서드 ──────────────────────────────────────────
+
+        private static void DrawRcFieldList()
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(120));
+                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.Width(80));
+                EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
+            }
+
+            var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
+            var listHeight = Mathf.Min(_rcFields.Count * rowHeight + 4f, 220f);
+
+            using (var sv = new EditorGUILayout.ScrollViewScope(_rcFieldScroll, GUILayout.Height(listHeight)))
+            {
+                _rcFieldScroll = sv.scrollPosition;
+                foreach (var f in _rcFields)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        // 깊이만큼 들여쓰기
+                        if (f.Depth > 0) GUILayout.Space(f.Depth * 12f);
+
+                        if (f.IsObjectNode)
+                        {
+                            // 중첩 객체 헤더 행 — 타입 팝업 없음
+                            var nodeLabel = f.JsonKey + " → " + f.NestedClassName;
+                            EditorGUILayout.LabelField(nodeLabel, EditorStyles.boldLabel, GUILayout.ExpandWidth(true));
+                            f.Include = EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
+                        }
+                        else
+                        {
+                            var fieldLabel = f.IsAmbiguous ? "⚠ " + f.JsonKey : f.JsonKey;
+                            EditorGUILayout.LabelField(fieldLabel,
+                                f.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
+                                GUILayout.MinWidth(f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 120));
+
+                            f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f, ref f.CustomType);
+
+                            if (f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
+                            {
+                                if      (TryParseDictionaryTypes(f.CustomType, out _, out _)) DrawDictionaryTypeControls(ref f.CustomType);
+                                else if (TryParseListType(f.CustomType, out _))                DrawListTypeControls(ref f.CustomType);
+                                else if (TryParseArrayType(f.CustomType, out _))               DrawArrayTypeControls(ref f.CustomType);
+                                else EditorGUILayout.LabelField(f.CustomType, GUILayout.ExpandWidth(true));
+                            }
+
+                            f.Include = EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void FetchRcKeys(SupabaseSettings settings)
+        {
+            _rcKeyList.Clear();
+            _rcKeysFetched  = false;
+            _rcFields.Clear();
+            _rcFieldsParsed = false;
+            _rcPreviewText  = "";
+
+            try
+            {
+                _rcKeyList     = RemoteConfigClassGenerator.FetchConfigRows(settings.projectUrl, _secretKey, settings.timeoutSeconds);
+                _rcKeyIndex    = 0;
+                _rcKeysFetched = true;
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, "가져오기에 실패했습니다.\n" + e.Message, "확인");
+            }
+        }
+
+        private static void ParseRcFields()
+        {
+            _rcFields.Clear();
+            _rcFieldsParsed = false;
+            _rcPreviewText  = "";
+
+            var row = _rcKeyList[_rcKeyIndex];
+
+            // 클래스명 자동 유도 (비어있을 때만)
+            if (string.IsNullOrWhiteSpace(_rcClassName))
+            {
+                _rcClassName = RemoteConfigClassGenerator.ToPascalCase(row.Key) + "Config";
+                EditorPrefs.SetString(PrefsKeyRcClassName, _rcClassName);
+            }
+
+            _rcFields = RemoteConfigClassGenerator.ParseJsonToFields(row.ValueJson);
+            if (_rcFields.Count == 0)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, "파싱할 필드가 없습니다. value_json을 확인하세요.", "확인");
+                return;
+            }
+
+            // 기존 파일에서 타입 복원 (JsonProperty 기반)
+            var existing = RemoteConfigClassGenerator.TryLoadExistingFieldTypes(_rcClassName);
+            if (existing.Count > 0)
+            {
+                foreach (var f in _rcFields)
+                {
+                    if (f.IsObjectNode) continue;
+                    if (!existing.TryGetValue(f.JsonKey, out var et)) continue;
+
+                    var idx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, et);
+                    if (idx >= 0)
+                    {
+                        f.TypeIndex    = idx;
+                        f.IsAmbiguous  = false;
+                    }
+                    else
+                    {
+                        f.TypeIndex    = RemoteConfigClassGenerator.CustomTypeIndex;
+                        f.CustomType   = et;
+                        f.IsAmbiguous  = false;
+                        if      (TryParseDictionaryTypes(et, out _, out _)) f.JsonCategory = FieldTypeCategory.Json;
+                        else if (TryParseListType(et, out _) || TryParseArrayType(et, out _)) f.JsonCategory = FieldTypeCategory.Array;
+                    }
+                }
+            }
+
+            _rcFieldsParsed = true;
+        }
+
+        private static void BuildRcPreview()
+        {
+            var row = _rcKeyList[_rcKeyIndex];
+            var ns  = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
+            try
+            {
+                _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
+                    _rcFields, _rcClassName, row.Key, ns,
+                    ParseExtraUsings(_extraUsings), row.Description);
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, e.Message, "확인");
+            }
+        }
+
+        private static void SaveRcToProject()
+        {
+            var path = EditorUtility.SaveFilePanelInProject("Remote Config 클래스 저장", _rcClassName + ".cs", "cs", "");
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                File.WriteAllText(path, _rcPreviewText, new System.Text.UTF8Encoding(false));
+                AssetDatabase.ImportAsset(path);
+                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                if (asset != null) EditorGUIUtility.PingObject(asset);
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, e.Message, "확인");
+            }
+        }
+
+        // ── UserSave 생성기 메서드 ────────────────────────────────────────────────
 
         private static void DrawColumnList()
         {
