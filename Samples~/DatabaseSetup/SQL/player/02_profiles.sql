@@ -109,7 +109,7 @@ comment on column public.user_profiles.server_id is '플레이어가 속한 서�
 comment on column public.user_profiles.withdrawn_at is '탈퇴 표시 시각 (운영 정책에 따라 설정/해제 가능).';
 comment on column public.user_profiles.last_activity_at is '마지막 게임 활동 시각. Retool 운영 대시보드용 활동 추적.';
 comment on column public.user_profiles.country_code is '최초 가입 시 Cloudflare CF-IPCountry 헤더에서 기록한 ISO 3166-1 alpha-2 국가 코드. 운영 대시보드용.';
-comment on column public.user_profiles.platform is '최초 가입 시 클라이언트가 전달한 OS/플랫폼 (android, ios, windows, macos, webgl 등). 운영 대시보드용.';
+comment on column public.user_profiles.platform is '가장 최근 로그인 시 클라이언트가 전달한 플랫폼 (android, ios, windows, macos, webgl 등). 매 로그인마다 갱신.';
 
 create index if not exists profiles_user_id_idx on public.user_profiles (user_id);
 create index if not exists profiles_server_id_idx on public.user_profiles (server_id);
@@ -257,8 +257,7 @@ begin
     withdrawn_at = excluded.withdrawn_at,
     server_id    = coalesce(user_profiles.server_id, excluded.server_id),
     country_code = coalesce(user_profiles.country_code, excluded.country_code),
-    platform     = coalesce(user_profiles.platform, excluded.platform);
-    -- country_code, platform: 기존 값 우선 유지 (최초 1회 보장)
+    platform     = excluded.platform;  -- 매 로그인마다 최신 값으로 갱신
 end;
 $$;
 
