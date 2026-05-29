@@ -39,3 +39,41 @@ drop policy if exists "users_read_own_purchases" on public.purchases;
 create policy "users_read_own_purchases"
   on public.purchases for select
   using (account_id = auth.uid());
+
+-- =============================================================================
+-- 결제 완료 시 user_profiles.total_paid_krw 원자적 증분 트리거
+-- 선행: 02_profiles.sql (user_profiles.total_paid_krw 컬럼)
+-- =============================================================================
+
+create or replace function public.ts_after_purchase_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.price_amount_krw is not null and new.price_amount_krw > 0 then
+    update public.user_profiles
+       set total_paid_krw = total_paid_krw + new.price_amount_krw
+     where account_id = new.account_id;
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.ts_after_purchase_insert() is
+  'purchases INSERT 후 user_profiles.total_paid_krw를 price_amount_krw만큼 증분. SECURITY DEFINER.';
+
+drop trigger if exists tr_after_purchase_insert on public.purchases;
+create trigger tr_after_purchase_insert
+  after insert on public.purchases
+  for each row execute function public.ts_after_purchase_insert();
+
+-- 기존 결제 데이터 초기화 (마이그레이션 1회 실행, 이후 불필요)
+-- UPDATE public.user_profiles p
+--    SET total_paid_krw = COALESCE((
+--      SELECT SUM(pu.price_amount_krw)
+--      FROM public.purchases pu
+--      WHERE pu.account_id = p.account_id
+--        AND pu.price_amount_krw IS NOT NULL
+--    ), 0);

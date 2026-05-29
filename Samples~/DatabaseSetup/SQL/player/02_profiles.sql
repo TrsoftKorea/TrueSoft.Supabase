@@ -20,7 +20,8 @@ create table if not exists public.user_profiles (
   withdrawn_at timestamptz null,
   last_activity_at timestamptz default now(),
   country_code text null,
-  platform     text null
+  platform     text null,
+  total_paid_krw bigint not null default 0
 );
 
 -- 기존 DB에 컬럼만 없을 때 보강(신규 생성 테이블에서는 IF NOT EXISTS 로 무시됨)
@@ -31,6 +32,7 @@ alter table public.user_profiles add column if not exists withdrawn_at timestamp
 alter table public.user_profiles add column if not exists last_activity_at timestamptz default now();
 alter table public.user_profiles add column if not exists country_code text;
 alter table public.user_profiles add column if not exists platform text;
+alter table public.user_profiles add column if not exists total_paid_krw bigint not null default 0;
 
 update public.user_profiles p
 set server_id = public.ts_default_server_id()
@@ -110,6 +112,7 @@ comment on column public.user_profiles.withdrawn_at is '탈퇴 표시 시각 (�
 comment on column public.user_profiles.last_activity_at is '마지막 게임 활동 시각. Retool 운영 대시보드용 활동 추적.';
 comment on column public.user_profiles.country_code is '최초 가입 시 Cloudflare CF-IPCountry 헤더에서 기록한 ISO 3166-1 alpha-2 국가 코드. 운영 대시보드용.';
 comment on column public.user_profiles.platform is '가장 최근 로그인 시 클라이언트가 전달한 플랫폼 (android, ios, windows, macos, webgl 등). 매 로그인마다 갱신.';
+comment on column public.user_profiles.total_paid_krw is '누적 결제금액(KRW). purchases INSERT 트리거(07_purchases.sql)가 원자적으로 증분. Retool 운영 대시보드용.';
 
 create index if not exists profiles_user_id_idx on public.user_profiles (user_id);
 create index if not exists profiles_server_id_idx on public.user_profiles (server_id);
@@ -584,5 +587,90 @@ with check (
 create policy "user_sessions_delete_own"
 on public.user_sessions for delete
 using (account_id = auth.uid());
+
+-- =============================================================================
+-- ts_admin_set_display_name — 운영 전용 닉네임 강제 변경
+-- =============================================================================
+
+create or replace function public.ts_admin_set_display_name(
+  p_display_name text,
+  p_account_id   uuid  default null,
+  p_user_id      text  default null
+)
+returns table(ok boolean, reason text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_account_id   uuid;
+  v_user_id      text;
+  v_server_id    uuid;
+  v_norm_name    text;
+begin
+  if coalesce(auth.jwt() ->> 'role', '') <> 'service_role' then
+    return query select false, 'forbidden_not_service_role'::text; return;
+  end if;
+
+  if p_account_id is null and (p_user_id is null or trim(p_user_id) = '') then
+    return query select false, 'both_identifiers_null'::text; return;
+  end if;
+
+  v_norm_name := trim(coalesce(p_display_name, ''));
+
+  if v_norm_name = '' then
+    return query select false, 'display_name_empty'::text; return;
+  end if;
+
+  if char_length(v_norm_name) > 64 then
+    return query select false, 'display_name_too_long'::text; return;
+  end if;
+
+  if p_account_id is not null then
+    v_account_id := p_account_id;
+    select p.server_id, p.user_id
+      into v_server_id, v_user_id
+    from public.user_profiles p
+    where p.account_id = v_account_id
+    limit 1;
+  else
+    select p.account_id, p.server_id, p.user_id
+      into v_account_id, v_server_id, v_user_id
+    from public.user_profiles p
+    where p.user_id = trim(p_user_id)
+    limit 1;
+  end if;
+
+  if v_account_id is null or v_server_id is null then
+    return query select false, 'profile_not_found'::text; return;
+  end if;
+
+  if exists (
+    select 1 from public.display_names d
+    where d.server_id = v_server_id
+      and lower(trim(d.display_name)) = lower(v_norm_name)
+      and trim(d.display_name) <> ''
+      and d.account_id <> v_account_id
+  ) then
+    return query select false, 'display_name_taken'::text; return;
+  end if;
+
+  insert into public.display_names (account_id, user_id, server_id, display_name, updated_at)
+  values (v_account_id, v_user_id, v_server_id, v_norm_name, now())
+  on conflict (account_id) do update set
+    display_name = excluded.display_name,
+    updated_at   = excluded.updated_at;
+
+  return query select true, null::text;
+end;
+$$;
+
+comment on function public.ts_admin_set_display_name(text, uuid, text) is
+  '운영 전용: service_role만 호출 가능. display_names 행 Upsert.
+   ※ auth.users.user_metadata(displayName)는 변경하지 않음 — 동기화 필요 시 displayname-set Edge Function 별도 호출.';
+
+revoke all on function public.ts_admin_set_display_name(text, uuid, text) from public;
+revoke all on function public.ts_admin_set_display_name(text, uuid, text) from anon, authenticated;
+grant execute on function public.ts_admin_set_display_name(text, uuid, text) to service_role;
 
 notify pgrst, 'reload schema';
