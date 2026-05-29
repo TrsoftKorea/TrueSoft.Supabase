@@ -18,7 +18,8 @@ create table if not exists public.user_profiles (
   account_id uuid unique references auth.users (id) on delete set null,
   server_id uuid references public.game_servers (id) on delete restrict,
   withdrawn_at timestamptz null,
-  last_activity_at timestamptz default now()
+  last_activity_at timestamptz default now(),
+  country_code text null
 );
 
 -- 기존 DB에 컬럼만 없을 때 보강(신규 생성 테이블에서는 IF NOT EXISTS 로 무시됨)
@@ -27,6 +28,7 @@ alter table public.user_profiles add column if not exists account_id uuid;
 alter table public.user_profiles add column if not exists server_id uuid;
 alter table public.user_profiles add column if not exists withdrawn_at timestamptz;
 alter table public.user_profiles add column if not exists last_activity_at timestamptz default now();
+alter table public.user_profiles add column if not exists country_code text;
 
 update public.user_profiles p
 set server_id = public.ts_default_server_id()
@@ -104,6 +106,7 @@ comment on column public.user_profiles.account_id is 'auth.users.id. 탈퇴 시 
 comment on column public.user_profiles.server_id is '플레이어가 속한 서버 id (public.game_servers.id).';
 comment on column public.user_profiles.withdrawn_at is '탈퇴 표시 시각 (운영 정책에 따라 설정/해제 가능).';
 comment on column public.user_profiles.last_activity_at is '마지막 게임 활동 시각. Retool 운영 대시보드용 활동 추적.';
+comment on column public.user_profiles.country_code is '최초 가입 시 Cloudflare CF-IPCountry 헤더에서 기록한 ISO 3166-1 alpha-2 국가 코드. 운영 대시보드용.';
 
 create index if not exists profiles_user_id_idx on public.user_profiles (user_id);
 create index if not exists profiles_server_id_idx on public.user_profiles (server_id);
@@ -216,9 +219,10 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid uuid;
-  v_stable text;
-  v_server uuid;
+  v_uid     uuid;
+  v_stable  text;
+  v_server  uuid;
+  v_country text;
 begin
   v_uid := auth.uid();
   if v_uid is null then
@@ -228,12 +232,25 @@ begin
   v_stable := coalesce(nullif(trim(p_user_id), ''), v_uid::text);
   v_server := public.ts_default_server_id();
 
-  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id)
-  values (v_stable, v_uid, null, v_server)
+  -- CF-IPCountry 헤더에서 국가 코드 추출 (PostgREST request context)
+  -- 'XX' = Cloudflare 미판정, 없으면 NULL (로컬 개발 환경 등)
+  begin
+    v_country := nullif(trim(
+      current_setting('request.headers', true)::jsonb->>'cf-ipcountry'
+    ), '');
+    if v_country = 'XX' then v_country := null; end if;
+  exception when others then
+    v_country := null;
+  end;
+
+  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code)
+  values (v_stable, v_uid, null, v_server, v_country)
   on conflict (account_id) do update set
-    user_id = excluded.user_id,
+    user_id      = excluded.user_id,
     withdrawn_at = excluded.withdrawn_at,
-    server_id = coalesce(user_profiles.server_id, excluded.server_id);
+    server_id    = coalesce(user_profiles.server_id, excluded.server_id),
+    country_code = coalesce(user_profiles.country_code, excluded.country_code);
+    -- country_code: 기존 값 우선 유지 (최초 1회 보장)
 end;
 $$;
 

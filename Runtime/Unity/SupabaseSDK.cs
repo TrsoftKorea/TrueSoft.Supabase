@@ -689,7 +689,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         public static async Task<bool> TryRestoreSessionAsync()
         {
             var ok = await RestoreSessionAsync();
-            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "restore_session_failed");
+            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "restore_session_failed", errorOnFail: false);
             return ok;
         }
 
@@ -703,7 +703,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 return false;
 
             var ok = await RestoreSessionAsync();
-            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed");
+            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
             return ok;
         }
 
@@ -743,7 +743,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             return ok ? result.Data : defaultValue;
         }
 
-        private static void LogApiResult(string logTag, bool isSuccess, string message = null)
+        private static void LogApiResult(string logTag, bool isSuccess, string message = null, bool errorOnFail = true)
         {
             if (!_enableApiResultLogs)
                 return;
@@ -756,7 +756,10 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             }
 
             var detail = string.IsNullOrWhiteSpace(message) ? "unknown_error" : message.Trim();
-            Debug.LogError($"{prefix} Failed: {FormatLogDetail(detail)}");
+            if (errorOnFail)
+                Debug.LogError($"{prefix} Failed: {FormatLogDetail(detail)}");
+            else
+                Debug.Log($"{prefix} Failed: {FormatLogDetail(detail)}");
         }
 
         /// <summary>
