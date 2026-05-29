@@ -266,7 +266,8 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<bool>> EnsureMyProfileRowAsync(
             string accessToken,
             string accountId,
-            string playerUserId)
+            string playerUserId,
+            string platform = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -277,7 +278,7 @@ namespace TrueBase.Core.Data
             var stable = string.IsNullOrWhiteSpace(playerUserId) ? accountId.Trim() : playerUserId.Trim();
 
             var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_ensure_my_profile";
-            var bodyJson = _jsonSerializer.ToJson(new EnsureMyProfileRpcBody { p_user_id = stable });
+            var bodyJson = _jsonSerializer.ToJson(new EnsureMyProfileRpcBody { p_user_id = stable, p_platform = platform });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -653,6 +654,7 @@ namespace TrueBase.Core.Data
         private sealed class EnsureMyProfileRpcBody
         {
             public string p_user_id;
+            public string p_platform;
         }
 
         private sealed class GameServerIdRow

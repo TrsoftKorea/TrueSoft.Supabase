@@ -2682,7 +2682,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
 
             try
             {
-                var r = await svc.EnsureMyProfileRowAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId);
+                var r = await svc.EnsureMyProfileRowAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
                 if (r == null || !r.IsSuccess)
                 {
                     Debug.LogWarning("[Supabase] ensure profile row failed: " + (r?.ErrorMessage ?? "unknown"));
@@ -2720,6 +2720,24 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                 Debug.LogWarning("[Supabase] ensure profile row exception: " + e.Message);
             }
 
+        }
+
+        /// <summary>현재 Unity 런타임 플랫폼을 소문자 문자열로 반환합니다 (android, ios, windows, macos, webgl 등).</summary>
+        private static string GetPlatformString()
+        {
+            switch (UnityEngine.Application.platform)
+            {
+                case UnityEngine.RuntimePlatform.Android:         return "android";
+                case UnityEngine.RuntimePlatform.IPhonePlayer:    return "ios";
+                case UnityEngine.RuntimePlatform.WindowsPlayer:
+                case UnityEngine.RuntimePlatform.WindowsEditor:   return "windows";
+                case UnityEngine.RuntimePlatform.OSXPlayer:
+                case UnityEngine.RuntimePlatform.OSXEditor:       return "macos";
+                case UnityEngine.RuntimePlatform.WebGLPlayer:     return "webgl";
+                case UnityEngine.RuntimePlatform.LinuxPlayer:
+                case UnityEngine.RuntimePlatform.LinuxEditor:     return "linux";
+                default: return UnityEngine.Application.platform.ToString().ToLowerInvariant();
+            }
         }
 
         /// <summary>

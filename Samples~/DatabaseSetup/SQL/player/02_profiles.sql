@@ -19,7 +19,8 @@ create table if not exists public.user_profiles (
   server_id uuid references public.game_servers (id) on delete restrict,
   withdrawn_at timestamptz null,
   last_activity_at timestamptz default now(),
-  country_code text null
+  country_code text null,
+  platform     text null
 );
 
 -- 기존 DB에 컬럼만 없을 때 보강(신규 생성 테이블에서는 IF NOT EXISTS 로 무시됨)
@@ -29,6 +30,7 @@ alter table public.user_profiles add column if not exists server_id uuid;
 alter table public.user_profiles add column if not exists withdrawn_at timestamptz;
 alter table public.user_profiles add column if not exists last_activity_at timestamptz default now();
 alter table public.user_profiles add column if not exists country_code text;
+alter table public.user_profiles add column if not exists platform text;
 
 update public.user_profiles p
 set server_id = public.ts_default_server_id()
@@ -107,6 +109,7 @@ comment on column public.user_profiles.server_id is '플레이어가 속한 서�
 comment on column public.user_profiles.withdrawn_at is '탈퇴 표시 시각 (운영 정책에 따라 설정/해제 가능).';
 comment on column public.user_profiles.last_activity_at is '마지막 게임 활동 시각. Retool 운영 대시보드용 활동 추적.';
 comment on column public.user_profiles.country_code is '최초 가입 시 Cloudflare CF-IPCountry 헤더에서 기록한 ISO 3166-1 alpha-2 국가 코드. 운영 대시보드용.';
+comment on column public.user_profiles.platform is '최초 가입 시 클라이언트가 전달한 OS/플랫폼 (android, ios, windows, macos, webgl 등). 운영 대시보드용.';
 
 create index if not exists profiles_user_id_idx on public.user_profiles (user_id);
 create index if not exists profiles_server_id_idx on public.user_profiles (server_id);
@@ -212,7 +215,11 @@ execute function public.ts_profiles_coalesce_server_id();
 
 -- 클라이언트 ensure-profile: PostgREST upsert만으로는 RLS/병합 순서에 따라 42501이 남을 수 있어 RPC로 통일.
 -- account_id는 항상 auth.uid()만 사용(클라이언트 조작 불가). user_id는 p_user_id 또는 uid 문자열.
-create or replace function public.ts_ensure_my_profile(p_user_id text default null)
+drop function if exists public.ts_ensure_my_profile(text);
+create or replace function public.ts_ensure_my_profile(
+  p_user_id  text default null,
+  p_platform text default null
+)
 returns void
 language plpgsql
 security definer
@@ -243,21 +250,22 @@ begin
     v_country := null;
   end;
 
-  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code)
-  values (v_stable, v_uid, null, v_server, v_country)
+  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform)
+  values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''))
   on conflict (account_id) do update set
     user_id      = excluded.user_id,
     withdrawn_at = excluded.withdrawn_at,
     server_id    = coalesce(user_profiles.server_id, excluded.server_id),
-    country_code = coalesce(user_profiles.country_code, excluded.country_code);
-    -- country_code: 기존 값 우선 유지 (최초 1회 보장)
+    country_code = coalesce(user_profiles.country_code, excluded.country_code),
+    platform     = coalesce(user_profiles.platform, excluded.platform);
+    -- country_code, platform: 기존 값 우선 유지 (최초 1회 보장)
 end;
 $$;
 
 comment on function public.ts_ensure_my_profile(text) is
   '로그인 직후 본인 profiles 행 보장(upsert). SECURITY DEFINER. SDK EnsureMyProfileRowAsync 가 호출.';
 
-grant execute on function public.ts_ensure_my_profile(text) to authenticated;
+grant execute on function public.ts_ensure_my_profile(text, text) to authenticated;
 
 -- nickname은 auth.user_metadata.displayName으로 이동했으므로 profiles에 두지 않습니다.
 
