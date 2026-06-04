@@ -64,6 +64,39 @@ namespace TrueBase.Unity
         private const string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
         private const string _getBanInfoFunctionName = "get-ban-info";
 
+        // ── PlayNanoo 이관 브릿지 인터셉터 ─────────────────────────────────────────
+        // 브릿지가 씬에 있을 때만 설정됩니다. null이면 기본 SDK 흐름으로 동작합니다.
+        internal static Func<Func<Task<bool>>, Task<bool>>         _interceptSignInAnonymously;
+        internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptSignInWithGoogleIdToken;
+        internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptSignInWithAppleIdToken;
+        internal static Func<Func<Task<bool>>, Task<bool>>         _interceptSignOutFully;
+        internal static Func<Func<Task<bool>>, Task<bool>>         _interceptRequestMyWithdrawal;
+
+        /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
+        internal static void RegisterPlayNanooInterceptors(
+            Func<Func<Task<bool>>, Task<bool>>         signInAnonymously,
+            Func<string, Func<Task<bool>>, Task<bool>> signInWithGoogleIdToken,
+            Func<string, Func<Task<bool>>, Task<bool>> signInWithAppleIdToken,
+            Func<Func<Task<bool>>, Task<bool>>         signOutFully,
+            Func<Func<Task<bool>>, Task<bool>>         requestMyWithdrawal)
+        {
+            _interceptSignInAnonymously       = signInAnonymously;
+            _interceptSignInWithGoogleIdToken = signInWithGoogleIdToken;
+            _interceptSignInWithAppleIdToken  = signInWithAppleIdToken;
+            _interceptSignOutFully            = signOutFully;
+            _interceptRequestMyWithdrawal     = requestMyWithdrawal;
+        }
+
+        /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
+        internal static void UnregisterPlayNanooInterceptors()
+        {
+            _interceptSignInAnonymously       = null;
+            _interceptSignInWithGoogleIdToken = null;
+            _interceptSignInWithAppleIdToken  = null;
+            _interceptSignOutFully            = null;
+            _interceptRequestMyWithdrawal     = null;
+        }
+
         private enum SignInMethodKind
         {
             Unknown = 0,
@@ -467,8 +500,13 @@ namespace TrueBase.Unity
         /// <summary><see cref="SignInWithGoogleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TrySignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true)
         {
-            var r = await SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
-            return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+            if (_interceptSignInWithGoogleIdToken != null)
+                return await _interceptSignInWithGoogleIdToken(idToken, async () => {
+                    var r = await SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+                    return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+                });
+            var r2 = await SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
         }
 
         /// <summary><see cref="LinkGoogleToCurrentAnonymousAsync(bool)"/>를 bool 기반으로 호출합니다.</summary>
@@ -593,8 +631,13 @@ namespace TrueBase.Unity
             string rawNonce = null,
             bool saveSessionToStorage = true)
         {
-            var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
-            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+            if (_interceptSignInWithAppleIdToken != null)
+                return await _interceptSignInWithAppleIdToken(idToken, async () => {
+                    var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+                    return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+                });
+            var r2 = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -610,8 +653,13 @@ namespace TrueBase.Unity
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TrySignInAnonymouslyAsync(bool saveSessionToStorage = true)
         {
-            var r = await SignInAnonymouslyAsync(saveSessionToStorage);
-            return LogAndReturn(ApiLogTags.AuthAnonymous, r);
+            if (_interceptSignInAnonymously != null)
+                return await _interceptSignInAnonymously(async () => {
+                    var r = await SignInAnonymouslyAsync(saveSessionToStorage);
+                    return LogAndReturn(ApiLogTags.AuthAnonymous, r);
+                });
+            var r2 = await SignInAnonymouslyAsync(saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAnonymous, r2);
         }
 
         /// <summary><see cref="SignOutFromGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -1704,8 +1752,13 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="RequestMyWithdrawalAsync"/>
         public static async Task<bool> TryRequestMyWithdrawalAsync()
         {
-            var r = await RequestMyWithdrawalAsync();
-            return LogAndReturn(ApiLogTags.ProfileWithdrawnRequest, r);
+            if (_interceptRequestMyWithdrawal != null)
+                return await _interceptRequestMyWithdrawal(async () => {
+                    var r = await RequestMyWithdrawalAsync();
+                    return LogAndReturn(ApiLogTags.ProfileWithdrawnRequest, r);
+                });
+            var r2 = await RequestMyWithdrawalAsync();
+            return LogAndReturn(ApiLogTags.ProfileWithdrawnRequest, r2);
         }
 
         /// <inheritdoc cref="ClearMyWithdrawalAsync"/>
@@ -2248,6 +2301,12 @@ namespace TrueBase.Unity
         /// <summary><see cref="SignOutFullyAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<bool> TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
         {
+            if (_interceptSignOutFully != null)
+                return await _interceptSignOutFully(async () => {
+                    await SignOutFullyAsync(clearStorage, deleteUserSessionRow);
+                    LogApiResult(ApiLogTags.AuthSignOut, true, null);
+                    return true;
+                });
             await SignOutFullyAsync(clearStorage, deleteUserSessionRow);
             LogApiResult(ApiLogTags.AuthSignOut, true, null);
             return true;
