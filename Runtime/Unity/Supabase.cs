@@ -92,6 +92,16 @@ namespace TrueBase.Unity
         public static Task<bool> TrySignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true) =>
             SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
 
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string, bool)"/>
+        public static Task<bool> TrySignInWithAppleIdTokenAsync(
+            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
+            SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string, string, bool)"/>
+        public static Task<bool> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
+            SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync(bool)"/>
         public static Task<bool> TryLinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true) =>
             SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync(saveSessionToStorage);

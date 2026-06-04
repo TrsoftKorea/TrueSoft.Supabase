@@ -51,6 +51,14 @@ namespace TrueBase.Core.Auth
             return await SignInWithIdTokenAsync("google", idToken);
         }
 
+        /// <summary>Apple ID Token을 사용하여 로그인합니다.</summary>
+        /// <param name="idToken">Apple에서 발급한 ID Token.</param>
+        /// <param name="nonce">Sign In with Apple 요청 시 사용한 nonce (옵션).</param>
+        public async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(string idToken, string nonce = null)
+        {
+            return await SignInWithIdTokenAsync("apple", idToken, nonce);
+        }
+
         /// <summary>
         /// 게스트(익명) 로그인.
         /// Supabase Auth의 signInAnonymously()와 동일한 개념으로, 사용자가 입력 없이 가입만 수행합니다.

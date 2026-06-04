@@ -235,9 +235,14 @@ namespace TrueBase.Editor
                 sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] public " + c.ClrType + " " + fieldName + ";");
             }
 
+            // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
+            if (!columns.Any(c => c.Name == "updated_at"))
+                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] public string updated_at;");
+
             sb.AppendLine(indent + "    }");
 
-            foreach (var c in columns)
+            // updated_at은 DB 트리거가 자동 설정 — 개발자가 실수로 set하지 않도록 정적 프로퍼티 제외
+            foreach (var c in columns.Where(c => c.Name != "updated_at"))
             {
                 var fieldName = LegalFieldName(c.Name);
                 var propName = ToPascalCase(c.Name);

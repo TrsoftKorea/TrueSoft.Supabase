@@ -197,6 +197,18 @@ namespace TrueBase.Unity
             return Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs);
         }
 
+        /// <summary>
+        /// 외부에서 로드한 Row를 Current와 _lastSynced에 적용합니다.
+        /// PlayNanoo 이관 등 DB 재조회 없이 데이터를 주입할 때 사용합니다.
+        /// </summary>
+        public void ApplyRow(TRow row)
+        {
+            DataSchema.CopyInto(Current, row);
+            _lastSynced = DataSchema.CloneRow(row);
+            _isDirty    = false;
+            OnLoaded?.Invoke();
+        }
+
         public async Task<bool> TryEnsureRowAsync()
         {
             EnsureRegistered();

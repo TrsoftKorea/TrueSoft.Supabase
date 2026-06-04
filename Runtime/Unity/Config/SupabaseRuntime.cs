@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Threading.Tasks;
 using TrueBase.Unity;
@@ -10,13 +10,14 @@ namespace TrueBase.Unity.Config
     /// <summary>
     /// Supabase SDK의 "씬 실행 정책"을 제어하는 런타임 컴포넌트입니다.
     /// - 초기화 시점
-    /// - 앱 시작 자동 로그인 시도
     /// - RemoteConfig: Cold Start(시작 시 fetch 없음), 키 단위 백그라운드 폴링
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
+    ///
+    /// 로그인은 자동 실행되지 않습니다. 원하는 타이밍에 <see cref="TriggerAutoLoginAsync"/>를 직접 호출하세요.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     [AddComponentMenu("TrueSoft/Supabase/SupabaseRuntime")]
-    public sealed class SupabaseRuntime : MonoBehaviour
+    public class SupabaseRuntime : MonoBehaviour
     {
 
         private static SupabaseRuntime _instance;
@@ -26,15 +27,10 @@ namespace TrueBase.Unity.Config
         [Tooltip("SupabaseSettings. 비우면 Resources에서 로드.")]
         [SerializeField] private SupabaseSettings settings;
 
-        [Header("자동 로그인")]
-        [Label("즉시 자동 로그인")]
-        [Tooltip("Awake 시 저장된 세션으로 자동 로그인합니다. false이면 TriggerAutoLoginAsync()를 직접 호출해야 합니다.")]
-        [SerializeField] private bool autoLoginOnAwake = true;
-
         /// <summary>
-        /// 자동 로그인 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
+        /// 로그인 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// 로그인 성공 시 등록된 모든 <c>StaticUserSave</c> 로드가 완료된 뒤 발행됩니다.
-        /// autoLoginOnAwake(자동) 또는 <see cref="TriggerAutoLoginAsync"/>(수동) 모두 이 이벤트를 발행합니다.
+        /// <see cref="TriggerAutoLoginAsync"/> 호출 시 이 이벤트를 발행합니다.
         /// </summary>
         /// <remarks>
         /// 구독 시점에 이미 완료된 경우를 자동으로 처리하는 <see cref="SubscribeAutoLoginCompleted"/>를 사용하면
@@ -42,16 +38,16 @@ namespace TrueBase.Unity.Config
         /// </remarks>
         public static event Action<bool> OnAutoLoginCompleted;
 
-        /// <summary>자동 로그인 시도가 완료되었는지 여부.</summary>
+        /// <summary>로그인 시도가 완료되었는지 여부.</summary>
         public static bool IsAutoLoginCompleted { get; private set; }
 
         /// <summary>
-        /// 자동 로그인 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
+        /// 로그인 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
         /// <see cref="IsAutoLoginCompleted"/>가 true일 때만 유효합니다.
         /// </summary>
         public static bool AutoLoginResult { get; private set; }
 
-        private void Awake()
+        protected virtual void Awake()
         {
             if (_instance != null && _instance != this)
             {
@@ -87,9 +83,6 @@ namespace TrueBase.Unity.Config
             DontDestroyOnLoad(gameObject);
 
             EnsureGoogleLoginBridge();
-
-            if (autoLoginOnAwake)
-                StartCoroutine(RunLifecycle());
         }
 
         private void OnDestroy()
@@ -127,8 +120,8 @@ namespace TrueBase.Unity.Config
         }
 
         /// <summary>
-        /// 자동 로그인을 수동으로 시작합니다. 완료 시 <see cref="OnAutoLoginCompleted"/> 이벤트를 발행합니다.
-        /// autoLoginOnAwake가 false일 때 원하는 타이밍에 호출합니다.
+        /// 저장된 세션으로 로그인을 시도합니다. 완료 시 <see cref="OnAutoLoginCompleted"/> 이벤트를 발행합니다.
+        /// 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
         /// </summary>
         public static Task TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
 
@@ -143,7 +136,7 @@ namespace TrueBase.Unity.Config
         }
 
         /// <summary>
-        /// 자동 로그인 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
+        /// 로그인 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
         /// <c>OnEnable()</c>에서 호출하고 <c>OnDisable()</c>에서 <see cref="UnsubscribeAutoLoginCompleted"/>로 해제하세요.
         /// </summary>
         /// <example><code>

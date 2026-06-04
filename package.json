@@ -20,6 +20,11 @@
       "displayName": "Database Setup",
       "description": "SQL migration scripts and Edge Function source files for initial project setup. Import, apply to Supabase, then delete.",
       "path": "Samples~/DatabaseSetup"
+    },
+    {
+      "displayName": "PlayNanoo 이관",
+      "description": "PlayNanoo → SDK 병행 운영 및 이관 패턴 참고 예제. 직접 사용하지 않고 프로젝트에 맞게 수정하세요.",
+      "path": "Samples~/PlayNanooMigration"
     }
   ]
 }

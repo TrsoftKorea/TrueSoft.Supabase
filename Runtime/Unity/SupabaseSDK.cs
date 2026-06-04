@@ -68,7 +68,8 @@ namespace TrueBase.Unity
         {
             Unknown = 0,
             Anonymous = 1,
-            Google = 2
+            Google = 2,
+            Apple = 3
         }
 
         /// <summary>익명 복구 RPC 경로 결과. GateBlocked/GuardFailed/Banned 시 새 익명 가입을 하면 안 된다.</summary>
@@ -122,7 +123,8 @@ namespace TrueBase.Unity
         {
             public const string AuthGoogleSettings = "Supabase.Auth.Google.Settings";
             public const string AuthGoogleIdToken = "Supabase.Auth.Google.IdToken";
-public const string AuthAnonymous = "Supabase.Auth.Anonymous";
+            public const string AuthAppleIdToken = "Supabase.Auth.Apple.IdToken";
+            public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             public const string AuthSignOut = "Supabase.Auth.SignOut";
             public const string AuthGoogleSignOut = "Supabase.Auth.Google.SignOut";
             public const string BootStart = "Supabase.Boot.Start";
@@ -484,6 +486,125 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
         {
             var r = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
             return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+        }
+
+        /// <summary>
+        /// Apple ID 토큰 문자열로 Supabase에 로그인하고 SDK 세션을 맞춥니다.
+        /// 익명(게스트) 세션에서는 자동 연동을 수행하지 않습니다. 연동은 <see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 사용하세요.
+        /// </summary>
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (IsAnonymousSession(_currentSession))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+
+            var result = await Auth.SignInWithAppleIdTokenAsync(idToken, rawNonce);
+            if (result.IsSuccess && result.Data != null)
+            {
+                SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
+                if (saveSessionToStorage)
+                    SaveSessionToStorage();
+
+                RememberLastSignInMethod(SignInMethodKind.Apple);
+                if (!_isRecreatingAfterWithdrawalDelete)
+                {
+                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
+                        SignInMethodKind.Apple,
+                        saveSessionToStorage,
+                        allowRecreateOnDeletion: true);
+                    if (guarded != null)
+                        return guarded;
+
+                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                    if (reserved != null)
+                        return reserved;
+                }
+
+                await TryEnsureProfileRowAfterSignInAsync();
+            }
+
+            return result;
+        }
+
+        /// <summary>현재 익명 세션에 Apple identity를 연동합니다(ID 토큰 직접 전달).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+
+            if (string.IsNullOrWhiteSpace(idToken))
+                return SupabaseResult<SupabaseSession>.Fail("apple_id_token_empty");
+
+            var s = _currentSession;
+            if (!IsAnonymousSession(s))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_required");
+
+            if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.RefreshToken))
+                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_token_missing");
+
+            var linked = await Auth.LinkIdentityWithIdTokenAsync(s.AccessToken, "apple", idToken.Trim(), rawNonce, null);
+            if (linked == null || !linked.IsSuccess || linked.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "apple_link_failed");
+
+            if (linked.Data.User == null || linked.Data.User.IsAnonymous)
+                return SupabaseResult<SupabaseSession>.Fail("apple_link_anonymous_not_cleared");
+
+            SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
+            if (saveSessionToStorage)
+                SaveSessionToStorage();
+
+            RememberLastSignInMethod(SignInMethodKind.Apple);
+            await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+            if (!_isRecreatingAfterWithdrawalDelete)
+            {
+                var guarded = await HandleWithdrawalGuardAfterSignInAsync(
+                    SignInMethodKind.Apple,
+                    saveSessionToStorage,
+                    allowRecreateOnDeletion: true);
+                if (guarded != null)
+                    return guarded;
+
+                var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                if (reserved != null)
+                    return reserved;
+            }
+
+            await TryEnsureProfileRowAfterSignInAsync();
+            return SupabaseResult<SupabaseSession>.Success(_currentSession);
+        }
+
+        /// <summary><see cref="SignInWithAppleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TrySignInWithAppleIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        /// <summary><see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<bool> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null,
+            bool saveSessionToStorage = true)
+        {
+            var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
         }
 
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>

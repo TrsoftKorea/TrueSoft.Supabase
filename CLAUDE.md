@@ -27,7 +27,7 @@ The SDK has three layers:
 - `Supabase.cs` — static entry point, all public-facing API
 - `SupabaseSDK.cs` — MonoBehaviour singleton, all implementation
 - `Config/SupabaseSettings.cs` — ScriptableObject for static values (URL, keys, table names). Must be saved to `Assets/Resources/SupabaseSettings.asset`.
-- `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: session restore on start, RemoteConfig per-key polling. Optional but recommended.
+- `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: RemoteConfig per-key polling, UserSave auto-sync. **로그인은 자동 실행되지 않음** — 개발자가 `SupabaseRuntime.TriggerAutoLoginAsync()` 또는 직접 로그인 API를 원하는 타이밍에 호출. `public class` (non-sealed), `protected virtual Awake()` — 상속 가능. Optional but recommended.
 - `Config/SupabaseUnityBootstrap.cs` — Auto-bootstraps from `Resources/SupabaseSettings` if no scene-placed runtime is present. Async APIs internally await initialization.
 - Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `ChatChannelFacade`, `ServerFunctionsFacade`) — high-level auto-sync wrappers
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
@@ -85,7 +85,10 @@ Use `Try*` variants in game code. Use the non-Try variants when you need to insp
 - Anonymous sign-in: `Supabase.TrySignInAnonymouslyAsync()`
 - Google OAuth (Android): `TrySignInWithGoogleAsync()` via native Play Services (`GoogleLoginBridge`)
 - Google OAuth (iOS/custom): `TrySignInWithGoogleIdTokenAsync(idToken)`
+- Apple OAuth (ID token): `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)` — 외부 SDK 없이 토큰 직접 전달
 - Guest → Google linking: `TryLinkGoogleToCurrentAnonymousAsync()` or `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync()`. Must use these — calling plain `TrySignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.
+- Guest → Apple linking: `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
+- Session restore (수동): `SupabaseRuntime.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출
 - Sign-out: `TrySignOutFullyAsync()` (handles Android Google native logout + Supabase signout + anonymous recovery upsert).
 
 ### Table Names
@@ -113,6 +116,8 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 ## Samples
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
+
+`Samples~/PlayNanooMigration/` — PlayNanoo + SDK 병행 운영 브릿지. `PlayNanooMigrationBridge.cs`는 `SupabaseRuntime`을 상속하며 씬에 SupabaseRuntime 대신 배치. 게스트·구글·애플 로그인(양쪽 동시 처리), 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `lastCheckTime` vs `updated_at` 비교 기반 데이터 동기화 포함. `YourSaveData`를 생성기로 만든 실제 클래스명으로 교체 후 사용. PlayNanoo 제거 시 이 파일만 삭제.
 
 ## Debug Logs
 

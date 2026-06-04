@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "retool-local": {
+      "command": "npx",
+      "args": ["-y", "@retool/mcp-server@latest"],
+      "env": {
+        "RETOOL_HOST": "https://truesoft.retool.com",
+        "RETOOL_API_TOKEN": "retool_01kt2wzpt1vrkm8q12g70vngac"
+      }
+    }
+  }
+}
