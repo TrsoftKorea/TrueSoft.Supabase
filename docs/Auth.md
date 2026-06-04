@@ -64,7 +64,7 @@ await TriggerAutoLoginAsync();
 ## 익명 계정 복구
 
 기기 지문 기반으로 익명 계정을 복구합니다. SDK가 내부적으로 처리합니다.  
-관련 SQL: [`Sql/player/03_anonymous_recovery.sql`](../Sql/player/03_anonymous_recovery.sql)
+관련 SQL: `Sql/player/03_anonymous_recovery.sql`
 
 ## 주의사항
 

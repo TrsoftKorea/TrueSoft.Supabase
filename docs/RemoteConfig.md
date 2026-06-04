@@ -64,4 +64,4 @@ Supabase.SubscribeRemoteConfig("gameplay_v1", json => {
 ## 테이블 이름 변경
 
 기본값은 `remote_config`입니다. `SupabaseSettings.remoteConfigTable`에서 변경할 수 있습니다.  
-SQL: [`Sql/player/08_remote_config.sql`](../Sql/player/08_remote_config.sql)
+SQL: `Sql/player/08_remote_config.sql`

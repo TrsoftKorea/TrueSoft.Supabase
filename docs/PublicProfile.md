@@ -55,5 +55,5 @@ await Supabase.TryTransferMyServerAsync("GLOBAL");
 
 ## SQL
 
-- [`Sql/player/02_profiles.sql`](../Sql/player/02_profiles.sql) — user_profiles, display_names, user_sessions
-- [`Sql/player/05_account_management.sql`](../Sql/player/05_account_management.sql) — 탈퇴 RPC, 서버 이주 RPC
+- `Sql/player/02_profiles.sql` — user_profiles, display_names, user_sessions
+- `Sql/player/05_account_management.sql` — 탈퇴 RPC, 서버 이주 RPC
