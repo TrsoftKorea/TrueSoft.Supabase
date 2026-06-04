@@ -38,7 +38,8 @@ from (
       ('remote_config'),
       ('mails'),
       ('purchases'),
-      ('withdrawal_delete_queue')
+      ('withdrawal_delete_queue'),
+      ('user_ban_messages')
   ) as exp(name)
   left join lateral (
     select c.oid, c.relrowsecurity
@@ -89,8 +90,7 @@ from (
       ('ts_request_withdrawal'),
       ('ts_my_withdrawal_status'),
       ('ts_withdrawal_cancel_redeem'),
-      ('ts_withdrawal_cleanup_batch'),
-      ('ts_admin_set_display_name')
+      ('ts_withdrawal_cleanup_batch')
   ) as exp(name)
   left join lateral (
     select p.oid

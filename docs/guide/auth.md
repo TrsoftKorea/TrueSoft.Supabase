@@ -162,3 +162,67 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 
 **복구 실패 시:** 새 익명 계정으로 로그인이 진행됩니다.  
 별도 오류 이벤트는 발행되지 않습니다.
+
+---
+
+## 차단된 계정 처리 {#ban-handling}
+
+Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
+
+```csharp
+var result = await Supabase.SignInAnonymouslyAsync();
+
+if (!result.IsSuccess && result.BanInfo != null)
+{
+    var info = result.BanInfo;
+
+    // 차단 해제 일시
+    if (info.IsPermanentBan)
+        Debug.Log("영구 차단");
+    else
+        Debug.Log($"차단 해제: {info.BannedUntil:yyyy-MM-dd HH:mm}");
+
+    // 어드민 메시지 (설정된 경우)
+    if (!string.IsNullOrEmpty(info.BanMessage))
+        Debug.Log($"사유: {info.BanMessage}");
+}
+```
+
+`Try*` 계열(bool 반환)을 사용하는 경우, `Result` API로 전환해야 `BanInfo`에 접근할 수 있습니다.
+
+::: info
+`BanInfo` 조회는 `get-ban-info` Edge Function을 호출합니다. 차단 상태가 아닌 경우 `result.BanInfo`는 항상 `null`입니다.
+:::
+
+### 어드민 메시지 설정 방법
+
+Supabase 대시보드 또는 Retool에서 차단과 함께 메시지를 설정합니다.
+
+**1단계 — 계정 차단** (Supabase 대시보드)  
+`Authentication` → `Users` → 해당 유저 선택 → `Ban user` → 차단 해제 일시 입력
+
+**2단계 — 메시지 저장** (SQL 또는 Retool)
+
+```sql
+-- 새 메시지 등록
+insert into user_ban_messages (account_id, ban_message)
+values ('유저-uuid', '규칙 위반으로 인해 차단되었습니다.')
+on conflict (account_id) do update set
+  ban_message = excluded.ban_message,
+  updated_at  = now();
+
+-- 메시지 삭제
+delete from user_ban_messages where account_id = '유저-uuid';
+```
+
+### 수동 조회
+
+이미 로그인된 계정의 차단 여부를 확인하거나, `account_id`를 직접 알고 있는 경우:
+
+```csharp
+var banInfo = await Supabase.TryGetBanInfoAsync(accountId);
+if (banInfo != null)
+{
+    // 차단 중
+}
+```

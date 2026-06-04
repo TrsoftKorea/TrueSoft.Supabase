@@ -27,6 +27,7 @@ namespace TrueBase.Unity
     internal static class SupabaseSDK
     {
         private const string RefreshTokenKey = "TrueBase.RefreshToken";
+        private const string AccountIdPlayerPrefsKey = "TrueBase.AccountId";
         private const string LastSignInMethodKey = "TrueBase.LastSignInMethod";
         private const string AutoLoginBlockedKey = "TrueBase.AutoLoginBlocked";
         private const string CurrentServerCodeKey = "TrueBase.CurrentServerCode";
@@ -61,6 +62,7 @@ namespace TrueBase.Unity
         private static bool _isRecreatingAfterWithdrawalDelete;
         private const string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
         private const string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
+        private const string _getBanInfoFunctionName = "get-ban-info";
 
         private enum SignInMethodKind
         {
@@ -81,14 +83,16 @@ namespace TrueBase.Unity
 
         private readonly struct AnonymousRecoveryResult
         {
-            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string errorMessage = null)
+            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string errorMessage = null, SupabaseBanInfo banInfo = null)
             {
                 Kind = kind;
                 ErrorMessage = errorMessage;
+                BanInfo = banInfo;
             }
 
             public AnonymousRecoveryKind Kind { get; }
             public string ErrorMessage { get; }
+            public SupabaseBanInfo BanInfo { get; }
         }
 
         /// <summary>
@@ -859,7 +863,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
                     return SupabaseResult<SupabaseSession>.Fail(
                         string.IsNullOrWhiteSpace(recovery.ErrorMessage) ? "withdrawal_guard_failed" : recovery.ErrorMessage);
                 if (recovery.Kind == AnonymousRecoveryKind.Banned)
-                    return SupabaseResult<SupabaseSession>.Fail("user_banned");
+                    return SupabaseResult<SupabaseSession>.Fail("user_banned", recovery.BanInfo);
                 if (recovery.Kind == AnonymousRecoveryKind.Restored && IsLoggedIn)
                 {
                     if (!IsAnonymousSession(_currentSession))
@@ -2086,6 +2090,9 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.User.Id))
                 return;
 
+            // ban 감지 시 account_id 조회에 사용하기 위해 저장 (PlayerPrefs.Save는 이후 흐름에서 처리)
+            PlayerPrefs.SetString(AccountIdPlayerPrefsKey, session.User.Id);
+
             SupabaseDuplicateSessionCoordinator.ScheduleSyncAfterSessionChange(kind);
         }
 
@@ -2179,6 +2186,7 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             ClearSession(clearStorage: true, deleteUserSessionRow: false);
 
             // SDK가 관리하는 나머지 모든 키 삭제
+            PlayerPrefs.DeleteKey(AccountIdPlayerPrefsKey);
             PlayerPrefs.DeleteKey(LastSignInMethodKey);
             PlayerPrefs.DeleteKey(CurrentServerCodeKey);
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
@@ -2595,7 +2603,11 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             if (refreshResult == null || refreshResult.IsSuccess == false || refreshResult.Data == null)
             {
                 if (refreshResult?.ErrorMessage?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) >= 0)
-                    return new AnonymousRecoveryResult(AnonymousRecoveryKind.Banned);
+                {
+                    var accountId = PlayerPrefs.GetString(AccountIdPlayerPrefsKey, null);
+                    var banInfo = string.IsNullOrWhiteSpace(accountId) ? null : await FetchBanInfoAsync(accountId);
+                    return new AnonymousRecoveryResult(AnonymousRecoveryKind.Banned, banInfo: banInfo);
+                }
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
 
@@ -2644,6 +2656,61 @@ public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             catch (Exception e)
             {
                 Debug.LogWarning($"[Supabase.AnonymousRecovery] Upsert failed: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 차단된 계정의 차단 정보를 조회합니다. 차단 상태가 아니거나 조회 실패 시 <see langword="null"/> 반환.
+        /// </summary>
+        public static async Task<SupabaseBanInfo> TryGetBanInfoAsync(string accountId)
+        {
+            if (!await EnsureInitializedAsync())
+                return null;
+            return await FetchBanInfoAsync(accountId);
+        }
+
+        [Serializable]
+        private sealed class BanInfoRequest
+        {
+            public string account_id;
+        }
+
+        [Serializable]
+        private sealed class BanInfoResponse
+        {
+            public bool ok;
+            public bool is_banned;
+            public string banned_until;
+            public string ban_message;
+            public string reason;
+        }
+
+        private static async Task<SupabaseBanInfo> FetchBanInfoAsync(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId) || _bootstrap?.EdgeFunctionsService == null)
+                return null;
+
+            try
+            {
+                var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<BanInfoResponse>(
+                    _getBanInfoFunctionName,
+                    accessToken: null,
+                    requestBody: new BanInfoRequest { account_id = accountId });
+
+                if (result == null || !result.IsSuccess || result.Data == null || !result.Data.ok || !result.Data.is_banned)
+                    return null;
+
+                DateTimeOffset? bannedUntil = null;
+                if (!string.IsNullOrWhiteSpace(result.Data.banned_until)
+                    && DateTimeOffset.TryParse(result.Data.banned_until, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+                    bannedUntil = parsed;
+
+                return new SupabaseBanInfo(accountId, bannedUntil, result.Data.ban_message);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Supabase.BanInfo] fetch failed: {e.Message}");
+                return null;
             }
         }
 

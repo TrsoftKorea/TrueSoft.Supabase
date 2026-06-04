@@ -111,6 +111,17 @@ namespace TrueBase.Unity
         public static Task<bool> TrySignOutFromGoogleAsync() =>
             SupabaseSDK.TrySignOutFromGoogleAsync();
 
+        /// <summary>
+        /// 지정한 계정의 차단 정보를 조회합니다.
+        /// 차단 상태가 아니거나 조회 실패 시 <see langword="null"/>을 반환합니다.
+        /// </summary>
+        /// <remarks>
+        /// 주로 로그인 실패 결과의 <c>result.BanInfo</c>를 통해 자동으로 채워집니다.
+        /// 별도로 조회가 필요한 경우에만 직접 호출하세요.
+        /// </remarks>
+        public static Task<SupabaseBanInfo> TryGetBanInfoAsync(string accountId) =>
+            SupabaseSDK.TryGetBanInfoAsync(accountId);
+
         /// <inheritdoc cref="SupabaseSDK.TryRefreshSessionAsync"/>
         public static Task<bool> TryRefreshSessionAsync(string refreshToken, bool saveSessionToStorage = true) =>
             SupabaseSDK.TryRefreshSessionAsync(refreshToken, saveSessionToStorage);
