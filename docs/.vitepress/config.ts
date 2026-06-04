@@ -29,6 +29,12 @@ export default defineConfig({
           { text: 'Remote Config', link: '/guide/remote-config' },
           { text: '인앱 결제 (IAP)', link: '/guide/iap' }
         ]
+      },
+      {
+        text: '이관',
+        items: [
+          { text: 'PlayNanoo 이관', link: '/guide/playnanoo-migration' }
+        ]
       }
     ],
 
