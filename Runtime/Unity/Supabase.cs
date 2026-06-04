@@ -639,5 +639,23 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryGetServerUtcNowAsync"/>
         public static Task<DateTime> TryGetServerUtcNowAsync(DateTime defaultValue = default) =>
             SupabaseSDK.TryGetServerUtcNowAsync(defaultValue);
+
+        // ── PlayNanoo 이관 브릿지 전용 ─────────────────────────────────────────
+        // 게임 코드에서 직접 호출하지 마세요. PlayNanooMigrationBridge가 내부적으로 사용합니다.
+
+        /// <inheritdoc cref="SupabaseSDK.RegisterPlayNanooInterceptors"/>
+        public static void RegisterPlayNanooInterceptors(
+            Func<Func<Task<bool>>, Task<bool>>         signInAnonymously,
+            Func<string, Func<Task<bool>>, Task<bool>> signInWithGoogleIdToken,
+            Func<string, Func<Task<bool>>, Task<bool>> signInWithAppleIdToken,
+            Func<Func<Task<bool>>, Task<bool>>         signOutFully,
+            Func<Func<Task<bool>>, Task<bool>>         requestMyWithdrawal) =>
+            SupabaseSDK.RegisterPlayNanooInterceptors(
+                signInAnonymously, signInWithGoogleIdToken, signInWithAppleIdToken,
+                signOutFully, requestMyWithdrawal);
+
+        /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
+        public static void UnregisterPlayNanooInterceptors() =>
+            SupabaseSDK.UnregisterPlayNanooInterceptors();
     }
 }

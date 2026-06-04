@@ -432,34 +432,12 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(loginResult.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail("google_id_token_empty");
 
-            var googleResult = await Auth.SignInWithGoogleIdTokenAsync(loginResult.Data.IdToken.Trim());
-            if (googleResult.IsSuccess && googleResult.Data != null)
-            {
-                SetSession(googleResult.Data, SupabaseSessionChangeKind.NewSignIn);
-                if (saveSessionToStorage)
-                    SaveSessionToStorage();
-
-                RememberLastSignInMethod(SignInMethodKind.Google);
-
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        SignInMethodKind.Google,
-                        saveSessionToStorage,
-                        allowRecreateOnDeletion: true);
-                    if (guarded != null)
-                        return guarded;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
-
-                    await TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync(saveSessionToStorage);
-                    await TryEnsureProfileRowAfterSignInAsync();
-                }
-            }
-
-            return googleResult;
+            // TrySignInWithGoogleIdTokenAsync를 경유해 인터셉터(PlayNanoo 브릿지 등)를 지원합니다.
+            var idToken = loginResult.Data.IdToken.Trim();
+            var ok = await TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail("google_signin_failed");
         }
 
         /// <summary>

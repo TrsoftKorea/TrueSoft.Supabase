@@ -8,22 +8,20 @@ PlayNanoo 기반 라이브 서비스를 SDK로 전환할 때 사용하는 브릿
 ## 동작 방식
 
 `PlayNanooMigrationBridge`는 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
-이후 게임 코드가 `Supabase.TrySignInAnonymouslyAsync()` 등을 호출하면, **PlayNanoo 로그인이 먼저 실행된 뒤 SDK 로그인이 이어집니다.**
+이후 게임 코드가 `Supabase.TrySignInAnonymouslyAsync()` 등을 호출하면 **PlayNanoo 로그인이 먼저 실행된 뒤 SDK 로그인이 이어집니다.**
 
-게임 코드는 `Supabase.*`를 그대로 사용합니다. 브릿지를 제거하면 인터셉터도 함께 사라지고, 같은 호출이 SDK 기본 흐름으로 동작합니다.
+브릿지가 없으면 인터셉터도 없으므로, **게임 코드는 이관 전·중·후 동일합니다.**
 
-| 이관 중 | PlayNanoo 제거 후 |
-|---------|-----------------|
-| `await Supabase.TrySignInAnonymouslyAsync()` | 변경 없음 |
-| `await bridge.TrySignInWithGoogleAsync()` | `await Supabase.TrySignInWithGoogleAsync()` |
-| `await Supabase.TrySignInWithAppleIdTokenAsync(token)` | 변경 없음 |
-| `await Supabase.TrySignOutFullyAsync()` | 변경 없음 |
-| `await Supabase.TryRequestMyWithdrawalAsync()` | 변경 없음 |
+| 로그인 | 이관 중 | PlayNanoo 제거 후 |
+|--------|---------|-----------------|
+| 익명 | `await Supabase.TrySignInAnonymouslyAsync()` | 변경 없음 |
+| Google | `await Supabase.TrySignInWithGoogleAsync()` | 변경 없음 |
+| Apple | `await Supabase.TrySignInWithAppleIdTokenAsync(token)` | 변경 없음 |
+| 로그아웃 | `await Supabase.TrySignOutFullyAsync()` | 변경 없음 |
+| 탈퇴 | `await Supabase.TryRequestMyWithdrawalAsync()` | 변경 없음 |
 
 ::: info
-Google 로그인만 브릿지 메서드(`bridge.TrySignInWithGoogleAsync()`)를 사용합니다.  
-Google OAuth는 PlayNanoo의 브라우저 흐름을 거쳐 토큰을 받아야 하므로, SDK 기본 흐름과 시작점이 다릅니다.  
-토큰 수신 후에는 `Supabase.TrySignInWithGoogleIdTokenAsync(token)`이 자동으로 호출됩니다 (이 단계는 인터셉터가 처리합니다).
+Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 토큰을 받아 `TrySignInWithGoogleIdTokenAsync(token)`을 호출하므로, 해당 단계에서 인터셉터가 자동으로 동작합니다. 별도 브릿지 메서드가 필요 없습니다.
 :::
 
 ---
@@ -42,8 +40,6 @@ private const string NanooStorageKey = "save";  // ← PlayNanoo 콘솔 스토�
 YourSaveData  // ← 생성기로 만든 실제 세이브 클래스명으로 전체 교체
 ```
 
-Google 로그인을 사용하는 경우 Inspector의 **Google Client Id** 필드에 웹 OAuth 클라이언트 ID를 입력합니다.
-
 ---
 
 ## 씬 설정
@@ -58,30 +54,17 @@ Google 로그인을 사용하는 경우 Inspector의 **Google Client Id** 필드
 
 ## 로그인
 
-### 게스트(익명)
-
 ```csharp
+// 게스트(익명) — PlayNanoo + SDK 동시 처리
 await Supabase.TrySignInAnonymouslyAsync();
-```
 
-PlayNanoo 게스트 로그인 → SDK 익명 로그인 → 데이터 동기화 순서로 자동 처리됩니다.
+// Google — SDK가 토큰 획득 후 PlayNanoo SocialSignIn + SDK 로그인 자동 처리
+await Supabase.TrySignInWithGoogleAsync();
 
-### Google
-
-```csharp
-// 브릿지 컴포넌트 참조 (씬에서 GetComponent 또는 Inspector 연결)
-await bridge.TrySignInWithGoogleAsync();
-```
-
-PlayNanoo OAuth 브라우저 → 토큰 수신 → PlayNanoo SocialSignIn + SDK 로그인 → 데이터 동기화까지 자동 처리됩니다.
-
-### Apple
-
-```csharp
-// iOS: 외부 SDK(예: AppleAuthManager)로 idToken 획득 후
+// Apple (iOS)
 await Supabase.TrySignInWithAppleIdTokenAsync(idToken);
 
-// Android: PlayNanoo 내장 WebView 사용
+// Apple (Android) — PlayNanoo WebView로 토큰 획득
 bridge.StartAppleSignInAndroid();
 ```
 
@@ -114,7 +97,7 @@ PlayNanoo 토큰 해지 → SDK 로그아웃 순서로 자동 처리됩니다.
 ### 탈퇴 신청
 
 ```csharp
-await Supabase.TryRequestMyWithdrawalAsync();  // PlayNanoo + SDK 동시 처리
+await Supabase.TryRequestMyWithdrawalAsync();
 ```
 
 ### 복구 흐름
@@ -134,10 +117,8 @@ bridge.OnWithdrawalPending += withdrawalKey =>
 bridge.RestoreWithdrawal(withdrawalKey);
 ```
 
-복구 완료 후 동작:
-
-| 로그인 유형 | 동작 |
-|-------------|------|
+| 로그인 유형 | 복구 후 동작 |
+|-------------|------------|
 | 게스트 | `Supabase.TrySignInAnonymouslyAsync()` 자동 재호출 |
 | Google / Apple | `OnWithdrawalRestored` 이벤트 발행 → 개발자가 재인증 UI 표시 |
 
@@ -152,7 +133,7 @@ bridge.OnWithdrawalRestored += () =>
 
 ## 데이터 동기화
 
-로그인 성공 시 자동으로 실행됩니다. 아래 로직을 따릅니다.
+로그인 성공 시 자동으로 실행됩니다.
 
 ```
 SDK 행 없음 (신규 유저)
@@ -163,11 +144,6 @@ SDK 행 있음 (기존 유저)
   └─ lastCheckTime > updated_at → PlayNanoo 최신 → SDK 갱신 후 ApplyRow
   └─ lastCheckTime ≤ updated_at → SDK 최신 → ApplyRow 후 PlayNanoo 갱신
 ```
-
-::: info
-`lastCheckTime`은 PlayNanoo Storage JSON 안의 타임스탬프 필드입니다.  
-`updated_at`은 SDK DB 테이블의 자동 관리 컬럼으로, 생성기가 Row 클래스에 자동으로 포함합니다.
-:::
 
 ### SDK 저장 후 PlayNanoo 동기화
 
@@ -181,11 +157,9 @@ bridge.SaveToNanoo(YourSaveData.Instance.Current);
 
 1. `PlayNanooMigrationBridge.cs` 삭제
 2. 씬에 `SupabaseRuntime` 배치
-3. `bridge.TrySignInWithGoogleAsync()` → `await Supabase.TrySignInWithGoogleAsync()` 교체
-4. 나머지 `Supabase.*` 호출은 변경 없음
-5. `YourSaveData.*` 접근 코드는 변경 없음
+3. 게임 코드 변경 없음
 
 ::: tip
-Google 로그인 한 곳만 교체하면 됩니다.  
-`bridge.` 접두사를 `await Supabase.`로 바꾸는 것이 전부입니다.
+`Supabase.*` 로그인 호출은 브릿지 제거 전후 완전히 동일합니다.  
+씬 컴포넌트만 교체하면 됩니다.
 :::

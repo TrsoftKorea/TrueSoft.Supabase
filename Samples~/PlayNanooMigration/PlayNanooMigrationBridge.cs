@@ -5,22 +5,20 @@
 // 1. 이 파일을 프로젝트로 복사 (Package Manager > Samples > PlayNanoo 이관)
 // 2. YourSaveData → 생성기로 만든 실제 세이브 클래스명으로 교체
 // 3. NanooStorageKey → PlayNanoo 콘솔에 등록한 스토리지 키로 교체
-// 4. Inspector에서 Google Client Id 입력 (Google 로그인 사용 시)
-// 5. 씬에서 SupabaseRuntime 대신 이 컴포넌트를 배치
+// 4. 씬에서 SupabaseRuntime 대신 이 컴포넌트를 배치
 //
-// [게임 코드에서 로그인 호출]
-//   await Supabase.TrySignInAnonymouslyAsync()         — 그대로 사용
-//   bridge.TrySignInWithGoogleAsync()                  — Google OAuth (브릿지 메서드)
-//   await Supabase.TrySignInWithAppleIdTokenAsync(tok) — 그대로 사용
-//   await Supabase.TrySignOutFullyAsync()              — 그대로 사용
-//   await Supabase.TryRequestMyWithdrawalAsync()       — 그대로 사용
+// [게임 코드에서 로그인 호출 — 브릿지 유무와 무관하게 동일]
+//   await Supabase.TrySignInAnonymouslyAsync()
+//   await Supabase.TrySignInWithGoogleAsync()
+//   await Supabase.TrySignInWithAppleIdTokenAsync(token)
+//   await Supabase.TrySignOutFullyAsync()
+//   await Supabase.TryRequestMyWithdrawalAsync()
 //
 // [PlayNanoo 제거 후]
 // 1. 이 파일 삭제
 // 2. 씬에 SupabaseRuntime 배치
-// 3. bridge.TrySignInWithGoogleAsync() → await Supabase.TrySignInWithGoogleAsync() 로 교체
-// 4. 나머지 Supabase.* 호출은 변경 없음
-// 5. YourSaveData.* 접근 코드는 변경 없음
+// 3. 게임 코드 변경 없음 (Supabase.* 호출은 그대로)
+// 4. YourSaveData.* 접근 코드 변경 없음
 // =============================================================================
 
 using System;
@@ -41,14 +39,9 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
     // [TODO] PlayNanoo 콘솔에 등록한 스토리지 키로 교체
     private const string NanooStorageKey = "save";
 
-    // Google 로그인에 사용하는 웹 OAuth 클라이언트 ID (Google Cloud Console에서 발급)
-    [SerializeField] private string _googleClientId;
-
     private Plugin _plugin;
     private string _nanooAccessToken;  // 로그인 성공 시 저장, 로그아웃에 사용
     private string _pendingLoginType;  // "guest"|"google"|"apple" — 탈퇴 복구 후 재로그인에 사용
-
-    private TaskCompletionSource<bool> _googleSignInTcs;
 
     // ── 이벤트 ───────────────────────────────────────────────────────────────
 
@@ -65,8 +58,8 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
         base.Awake();
         _plugin = Plugin.GetInstance();
 
-        // SupabaseSDK.Try* 호출을 이 브릿지가 가로챕니다.
-        SupabaseSDK.RegisterPlayNanooInterceptors(
+        // Supabase.Try* 호출을 이 브릿지가 가로챕니다.
+        Supabase.RegisterPlayNanooInterceptors(
             signInAnonymously:       InterceptSignInAnonymously,
             signInWithGoogleIdToken: InterceptSignInWithGoogleIdToken,
             signInWithAppleIdToken:  InterceptSignInWithAppleIdToken,
@@ -75,16 +68,9 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
         );
     }
 
-    private void Start()
-    {
-        Application.deepLinkActivated += OnGoogleDeepLink;   // Android 구글 OAuth 콜백
-        _plugin.SetGoogleAuthCallback(OnGoogleAuthCallback);  // iOS 구글 OAuth 콜백
-    }
-
     private void OnDestroy()
     {
-        Application.deepLinkActivated -= OnGoogleDeepLink;
-        SupabaseSDK.UnregisterPlayNanooInterceptors();
+        Supabase.UnregisterPlayNanooInterceptors();
     }
 
     // ── 인터셉터 구현 ─────────────────────────────────────────────────────────
@@ -94,11 +80,7 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
         var tcs = new TaskCompletionSource<bool>();
         _plugin.AccountManagerV20240401.GuestSignIn(async (status, _, _, values) =>
         {
-            if (!await HandleNanooCallback(status, values, "guest"))
-            {
-                tcs.SetResult(false);
-                return;
-            }
+            if (!await HandleNanooCallback(status, values, "guest")) { tcs.SetResult(false); return; }
             var ok = await sdkSignIn();
             if (ok) await SyncDataAfterLogin();
             tcs.SetResult(ok);
@@ -113,11 +95,7 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             token, Configure.PN_ACCOUNT_GOOGLE,
             async (status, _, _, values) =>
             {
-                if (!await HandleNanooCallback(status, values, "google"))
-                {
-                    tcs.SetResult(false);
-                    return;
-                }
+                if (!await HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
                 var ok = await sdkSignIn();
                 if (ok) await SyncDataAfterLogin();
                 tcs.SetResult(ok);
@@ -132,11 +110,7 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             token, Configure.PN_ACCOUNT_APPLE_ID,
             async (status, _, _, values) =>
             {
-                if (!await HandleNanooCallback(status, values, "apple"))
-                {
-                    tcs.SetResult(false);
-                    return;
-                }
+                if (!await HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
                 var ok = await sdkSignIn();
                 if (ok) await SyncDataAfterLogin();
                 tcs.SetResult(ok);
@@ -170,7 +144,6 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
 
     // ── PlayNanoo 콜백 공통 처리 ──────────────────────────────────────────────
 
-    /// <summary>PlayNanoo 로그인 콜백 상태를 처리합니다. false 반환 시 SDK 로그인을 중단하세요.</summary>
     private Task<bool> HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
@@ -178,7 +151,6 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             _nanooAccessToken = values["access_token"]?.ToString();
             return Task.FromResult(true);
         }
-
         if (values?["ErrorCode"]?.ToString() == "30007")
         {
             _pendingLoginType = loginType;
@@ -187,51 +159,7 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
         return Task.FromResult(false);
     }
 
-    // ── Google 로그인 (브릿지 전용 — OAuth 흐름 특성상 브릿지 메서드 필요) ───────
-
-    /// <summary>
-    /// 구글 로그인. PlayNanoo OAuth 브라우저를 열고 토큰 수신 후 Supabase.TrySignInWithGoogleIdTokenAsync를 자동 호출합니다.
-    /// clientId는 Inspector의 Google Client Id 필드에 입력합니다.
-    /// 제거 후: await Supabase.TrySignInWithGoogleAsync()
-    /// </summary>
-    public Task<bool> TrySignInWithGoogleAsync()
-    {
-        _googleSignInTcs = new TaskCompletionSource<bool>();
-        _plugin.AccountManagerV20240401.SignInWithGoogle(_googleClientId);
-        return _googleSignInTcs.Task;
-    }
-
-    // Android: DeepLink 콜백
-    private void OnGoogleDeepLink(string url)
-    {
-        var token = ExtractIdToken(url);
-        if (!string.IsNullOrEmpty(token)) CompleteGoogleSignIn(token);
-    }
-
-    // iOS: Google OAuth 콜백
-    private void OnGoogleAuthCallback(string result)
-    {
-        if (result.StartsWith("error:")) return;
-        var token = ExtractIdToken(result);
-        if (!string.IsNullOrEmpty(token)) CompleteGoogleSignIn(token);
-    }
-
-    // 토큰 수신 → Supabase.TrySignInWithGoogleIdTokenAsync 호출 (인터셉터가 PlayNanoo SocialSignIn 처리)
-    private async void CompleteGoogleSignIn(string token)
-    {
-        var ok = await Supabase.TrySignInWithGoogleIdTokenAsync(token);
-        _googleSignInTcs?.TrySetResult(ok);
-        _googleSignInTcs = null;
-    }
-
-    private static string ExtractIdToken(string url)
-    {
-        if (!url.Contains("#")) return null;
-        foreach (var p in url.Split('#')[1].Split('&'))
-            if (p.StartsWith("id_token="))
-                return p.Substring("id_token=".Length);
-        return null;
-    }
+    // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────
 
     /// <summary>애플 로그인 (Android). PlayNanoo 내장 WebView로 토큰 획득 후 Supabase.TrySignInWithAppleIdTokenAsync 자동 호출.</summary>
     public void StartAppleSignInAndroid() =>
@@ -252,12 +180,10 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             async (status, _, _, _) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS) return;
-
                 if (_pendingLoginType == "guest")
-                    await Supabase.TrySignInAnonymouslyAsync(); // 인터셉터가 PlayNanoo + SDK 처리
+                    await Supabase.TrySignInAnonymouslyAsync();
                 else
-                    OnWithdrawalRestored?.Invoke();             // 개발자가 재로그인 UI 표시
-
+                    OnWithdrawalRestored?.Invoke();
                 _pendingLoginType = null;
             });
     }
@@ -274,7 +200,6 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
 
         if (!hasRow)
         {
-            // 최초 이관: PlayNanoo → SDK
             if (nanooJson != null)
             {
                 var nanooRow = JsonUtility.FromJson<YourSaveData.Row>(nanooJson);
@@ -288,20 +213,17 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             return;
         }
 
-        // lastCheckTime(PlayNanoo) vs updated_at(SDK) 비교
         var nanooTime = ParseNanooTimestamp(nanooJson);
         var sdkTime   = DateTime.TryParse(sdkRow.updated_at, out var t1) ? t1 : DateTime.MinValue;
 
         if (nanooTime > sdkTime)
         {
-            // PlayNanoo 최신 → SDK 갱신
             var nanooRow = JsonUtility.FromJson<YourSaveData.Row>(nanooJson);
             await Supabase.TryPatchUserDataDiffAsync(sdkRow, nanooRow);
             YourSaveData.Instance.ApplyRow(nanooRow);
         }
         else
         {
-            // SDK 최신 (또는 동점) → PlayNanoo 갱신
             YourSaveData.Instance.ApplyRow(sdkRow);
             SaveToNanoo(sdkRow);
         }
