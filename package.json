@@ -22,8 +22,8 @@
       "path": "Samples~/DatabaseSetup"
     },
     {
-      "displayName": "PlayNanoo 이관",
-      "description": "PlayNanoo와 SDK 병행 운영 및 단계적 이관 참고 예제. 직접 사용하지 않고 프로젝트 코드에 통합하세요.",
+      "displayName": "PlayNANOO Migration",
+      "description": "Reference example for running PlayNANOO and the SDK side-by-side, then gradually migrating to the SDK. Integrate into your project code rather than using directly.",
       "path": "Samples~/PlayNanooMigration"
     }
   ]

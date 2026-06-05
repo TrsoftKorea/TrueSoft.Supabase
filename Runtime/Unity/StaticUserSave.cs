@@ -202,9 +202,9 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// PlayNanoo Storage JSON을 Row로 역직렬화합니다.
+        /// PlayNANOO Storage JSON을 Row로 역직렬화합니다.
         /// 기본 구현은 Newtonsoft.Json을 사용합니다 — 필드명 또는 <c>[JsonProperty]</c> 값이 JSON 키와 일치해야 합니다.
-        /// PlayNanoo JSON 키(camelCase)와 Row 필드명(snake_case)이 다를 때 서브클래스에서 override하세요.
+        /// PlayNANOO JSON 키(camelCase)와 Row 필드명(snake_case)이 다를 때 서브클래스에서 override하세요.
         /// <example>
         /// <code>
         /// protected override Row NanooDeserializeJson(string json)
@@ -220,7 +220,7 @@ namespace TrueBase.Unity
             => Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
 
         /// <summary>
-        /// Row를 PlayNanoo Storage JSON으로 직렬화합니다.
+        /// Row를 PlayNANOO Storage JSON으로 직렬화합니다.
         /// 기본 구현은 Newtonsoft.Json을 사용합니다.
         /// <see cref="NanooDeserializeJson"/>를 override한 경우 이 메서드도 함께 override하세요.
         /// </summary>
@@ -284,7 +284,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 외부에서 로드한 Row를 Current와 _lastSynced에 적용합니다.
-        /// PlayNanoo 이관 등 DB 재조회 없이 데이터를 주입할 때 사용합니다.
+        /// PlayNANOO 이관 등 DB 재조회 없이 데이터를 주입할 때 사용합니다.
         /// </summary>
         public void ApplyRow(TRow row)
         {

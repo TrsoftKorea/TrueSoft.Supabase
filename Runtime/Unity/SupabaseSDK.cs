@@ -64,11 +64,11 @@ namespace TrueBase.Unity
         private const string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
         private const string _getBanInfoFunctionName = "get-ban-info";
 
-        // ── PlayNanoo 이관 브릿지 ──────────────────────────────────────────────────
+        // ── PlayNANOO 이관 브릿지 ──────────────────────────────────────────────────
         // StaticUserSave<TRow> 생성 시 자동 등록됩니다. PlayNanooRuntime이 세이브 동기화에 사용합니다.
         internal static INanooSaveSyncable _nanooSaveBridge;
 
-        // ── PlayNanoo 이관 브릿지 인터셉터 ─────────────────────────────────────────
+        // ── PlayNANOO 이관 브릿지 인터셉터 ─────────────────────────────────────────
         // 브릿지가 씬에 있을 때만 설정됩니다. null이면 기본 SDK 흐름으로 동작합니다.
         internal static Func<Func<Task<bool>>, Task<bool>>         _interceptSignInAnonymously;
         internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptSignInWithGoogleIdToken;
@@ -78,7 +78,7 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
         internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
 
-        /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
+        /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void RegisterPlayNanooInterceptors(
             Func<Func<Task<bool>>, Task<bool>>         signInAnonymously,
             Func<string, Func<Task<bool>>, Task<bool>> signInWithGoogleIdToken,
@@ -97,7 +97,7 @@ namespace TrueBase.Unity
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = linkAppleToCurrentAnonymousWithIdToken;
         }
 
-        /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
+        /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void UnregisterPlayNanooInterceptors()
         {
             _interceptSignInAnonymously                       = null;

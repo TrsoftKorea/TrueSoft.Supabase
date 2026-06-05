@@ -640,8 +640,8 @@ namespace TrueBase.Unity
         public static Task<DateTime> TryGetServerUtcNowAsync(DateTime defaultValue = default) =>
             SupabaseSDK.TryGetServerUtcNowAsync(defaultValue);
 
-        // ── PlayNanoo 이관 브릿지 전용 ─────────────────────────────────────────
-        // 게임 코드에서 직접 호출하지 마세요. PlayNanooMigrationBridge가 내부적으로 사용합니다.
+        // ── PlayNANOO 이관 브릿지 전용 ─────────────────────────────────────────
+        // 게임 코드에서 직접 호출하지 마세요. PlayNanooRuntime이 내부적으로 사용합니다.
 
         /// <inheritdoc cref="SupabaseSDK.RegisterPlayNanooInterceptors"/>
         public static void RegisterPlayNanooInterceptors(

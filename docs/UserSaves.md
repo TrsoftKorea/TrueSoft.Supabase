@@ -79,7 +79,7 @@ await Supabase.TryPatchUserDataDiffAsync(prev, current);
 
 ## ApplyRow — 외부 데이터 주입
 
-DB를 재조회하지 않고 `Row`를 직접 주입합니다. PlayNanoo 이관 등 외부 소스에서 데이터를 가져올 때 사용합니다.
+DB를 재조회하지 않고 `Row`를 직접 주입합니다. PlayNANOO 이관 등 외부 소스에서 데이터를 가져올 때 사용합니다.
 
 ```csharp
 var nanooRow = JsonUtility.FromJson<GameSave.Row>(nanooJson);

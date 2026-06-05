@@ -1,10 +1,10 @@
 // =============================================================================
-// PlayNanoo → Supabase SDK 이관 런타임
+// PlayNANOO → Supabase SDK 이관 런타임
 //
 // [사용법]
-// 1. Package Manager > Samples > PlayNanoo 이관 에서 Import
+// 1. Package Manager > Samples > PlayNANOO Migration 에서 Import
 // 2. 씬에서 SupabaseRuntime 대신 PlayNanooRuntime 컴포넌트를 배치
-// 3. Inspector에서 Nanoo Storage Key → PlayNanoo 콘솔 스토리지 키로 변경
+// 3. Inspector에서 Nanoo Storage Key → PlayNANOO 콘솔 스토리지 키로 변경
 //    (StaticUserSave 인스턴스는 자동 연결됩니다)
 //
 // [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
@@ -31,14 +31,14 @@ using TrueBase.Unity.Config;
 using UnityEngine;
 
 /// <summary>
-/// PlayNanoo + SDK 병행 운영 런타임.
+/// PlayNANOO + SDK 병행 운영 런타임.
 /// SupabaseRuntime을 대신하여 씬에 하나만 배치합니다.
-/// Awake 시 인터셉터를 등록해 Supabase.Try* 호출이 PlayNanoo를 자동으로 경유합니다.
+/// Awake 시 인터셉터를 등록해 Supabase.Try* 호출이 PlayNANOO를 자동으로 경유합니다.
 /// StaticUserSave&lt;TRow&gt; 인스턴스는 SDK를 통해 자동으로 연결됩니다.
 /// </summary>
 public class PlayNanooRuntime : SupabaseRuntime
 {
-    [Tooltip("PlayNanoo 콘솔에 등록한 스토리지 키")]
+    [Tooltip("PlayNANOO 콘솔에 등록한 스토리지 키")]
     [SerializeField] private string _nanooStorageKey = "save";
 
     private Plugin _plugin;
@@ -148,7 +148,7 @@ public class PlayNanooRuntime : SupabaseRuntime
         return await tcs.Task;
     }
 
-    // ── PlayNanoo 콜백 공통 처리 ──────────────────────────────────────────────
+    // ── PlayNANOO 콜백 공통 처리 ──────────────────────────────────────────────
 
     private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
     {
@@ -199,7 +199,7 @@ public class PlayNanooRuntime : SupabaseRuntime
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────
 
-    /// <summary>애플 로그인 (Android). PlayNanoo 내장 WebView로 토큰 획득 후 Supabase.TrySignInWithAppleIdTokenAsync 자동 호출.</summary>
+    /// <summary>애플 로그인 (Android). PlayNANOO 내장 WebView로 토큰 획득 후 Supabase.TrySignInWithAppleIdTokenAsync 자동 호출.</summary>
     public void StartAppleSignInAndroid() =>
         _plugin.OpenAppleID(
             async token => await Supabase.TrySignInWithAppleIdTokenAsync(token));
@@ -260,7 +260,7 @@ public class PlayNanooRuntime : SupabaseRuntime
         }
     }
 
-    // ── PlayNanoo 저장/로드 ───────────────────────────────────────────────────
+    // ── PlayNANOO 저장/로드 ───────────────────────────────────────────────────
 
     private Task<string> LoadRawFromNanoo()
     {
@@ -282,11 +282,11 @@ public class PlayNanooRuntime : SupabaseRuntime
         var h = JsonUtility.FromJson<NanooTimestampHelper>(json);
         if (!string.IsNullOrEmpty(h?.updated_at) && DateTime.TryParse(h.updated_at, out var t))
             return t;
-        // updated_at 없음 = 이관 전 순수 PlayNanoo 데이터 → PlayNanoo 항상 우선
+        // updated_at 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
         return DateTime.MaxValue;
     }
 
-    /// <summary>PlayNanoo에 JSON 데이터를 저장합니다.</summary>
+    /// <summary>PlayNANOO에 JSON 데이터를 저장합니다.</summary>
     public void SaveToNanoo(string json)
     {
         if (string.IsNullOrEmpty(json)) return;
@@ -294,11 +294,11 @@ public class PlayNanooRuntime : SupabaseRuntime
             (status, _, _, _) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
-                    Debug.LogWarning("[PlayNanooRuntime] PlayNanoo 저장 실패");
+                    Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 저장 실패");
             });
     }
 
-    /// <summary>현재 로컬 세이브 데이터를 PlayNanoo에 저장합니다.</summary>
+    /// <summary>현재 로컬 세이브 데이터를 PlayNANOO에 저장합니다.</summary>
     public void SaveCurrentToNanoo()
     {
         var json = Save?.NanooCurrentJson;

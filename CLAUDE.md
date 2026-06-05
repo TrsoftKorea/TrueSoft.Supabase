@@ -117,7 +117,7 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNanoo + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToCurrentAnonymousWithIdTokenAsync`), 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
+`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToCurrentAnonymousWithIdTokenAsync`), 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
 ## Debug Logs
 
@@ -181,6 +181,10 @@ Use callout boxes for **supplementary content** — content the reader can skip 
 
 Core usage (the happy path) must remain as **plain prose + code blocks**, not buried in callout boxes.
 
-### 5. No parenthetical asides in tables or steps
+### 5. Sample display names — English only
+
+`package.json`의 `samples[].displayName`은 영어만 사용한다. 한글 단독 또는 한영 혼용 이름은 금지. 예: `"PlayNANOO Migration"` (O), `"PlayNANOO 이관"` (X).
+
+### 6. No parenthetical asides in tables or steps
 
 Do **not** append parenthetical clarifications like `(자동 생성됨)`, `(reveal 불필요)`, `(선택 사항)` to table cells or numbered steps. They hurt readability. If the information matters, state it as a separate sentence or callout box; if it doesn't, omit it.
