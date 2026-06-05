@@ -57,12 +57,14 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ### 1. API 키 확인
 
-프로젝트 오버뷰 페이지에서 URL 옆 **Copy** 버튼을 클릭하면 드롭다운에 바로 표시됩니다.
+**Settings > API Keys** 페이지에서 아래 두 키를 확인합니다.
 
 | 항목 | 설명 | 사용처 |
 |------|------|--------|
-| **Project URL** | `https://<project-id>.supabase.co` | `SupabaseSettings.projectUrl` |
 | **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
+| **Secret key** | `sb_secret_...` | 서버 사이드 전용. Unity 에셋에 포함하지 마세요 |
+
+프로젝트 오버뷰의 URL 옆 **Copy** 버튼 드롭다운에서 **Project URL**과 **Publishable key**를 바로 복사할 수 있습니다.
 
 ### 2. SupabaseSettings 에셋 생성
 
@@ -151,7 +153,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | `CANCEL_TOKEN_SECRET` | 탈퇴 취소 사용 시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
 
-**`GOOGLE_SERVICE_ACCOUNT_JSON` 발급 방법**
+::: details GOOGLE_SERVICE_ACCOUNT_JSON 발급 방법
 
 1. [Google Play Console](https://play.google.com/console) > **설정 > API 액세스**로 이동합니다.
 2. Google Cloud 프로젝트에 연결한 뒤 **서비스 계정 관리**를 클릭합니다.
@@ -159,7 +161,6 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 4. 다운로드된 `.json` 파일을 텍스트 편집기로 열어 **전체 내용**을 복사합니다.
 5. Supabase 대시보드 **Edge Functions > Secrets**에서 키 이름 `GOOGLE_SERVICE_ACCOUNT_JSON`, 값에 복사한 JSON을 붙여넣고 저장합니다.
 
-::: info
 JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파일 경로가 아닌 **파일 내용 전체**를 값으로 입력해야 합니다.
 :::
 
