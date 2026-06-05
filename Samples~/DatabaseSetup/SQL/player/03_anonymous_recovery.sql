@@ -260,7 +260,7 @@ end;
 $$;
 
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text) to anon, authenticated;
-grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, text, text) to authenticated;
+grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, uuid, text) to authenticated;
 grant execute on function public.ts_anon_recovery_delete_by_fingerprint(text, text) to anon, authenticated;
 
 -- 본인 account_id(auth.uid())에 매달린 익명 복구 행만 삭제. 탈퇴 RPC(ts_request_withdrawal) 등에서 호출.
