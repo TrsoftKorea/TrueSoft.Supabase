@@ -264,7 +264,7 @@ begin
 end;
 $$;
 
-comment on function public.ts_ensure_my_profile(text) is
+comment on function public.ts_ensure_my_profile(text, text) is
   '로그인 직후 본인 profiles 행 보장(upsert). SECURITY DEFINER. SDK EnsureMyProfileRowAsync 가 호출.';
 
 grant execute on function public.ts_ensure_my_profile(text, text) to authenticated;
