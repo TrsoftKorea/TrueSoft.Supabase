@@ -125,6 +125,56 @@ playNanooRuntime.OnWithdrawalRestored += () =>
 
 ---
 
+## DB 컬럼 설정
+
+PlayNanoo Storage JSON은 **camelCase** 키를 사용합니다 (`bgmVolume`, `cameraShake` 등).  
+SDK Row 클래스 필드명과 일치시키려면 DB 컬럼도 camelCase로 생성합니다.
+
+::: warning
+PostgreSQL은 따옴표 없이 camelCase를 쓰면 자동으로 소문자로 변환합니다.  
+컬럼 생성 시 반드시 **큰따옴표**로 감싸야 합니다.
+:::
+
+```sql
+ALTER TABLE user_data
+  ADD COLUMN "bgmVolume"          int     NOT NULL DEFAULT 0,
+  ADD COLUMN "sfxVolume"          int     NOT NULL DEFAULT 0,
+  ADD COLUMN "cameraShake"        boolean NOT NULL DEFAULT true,
+  ADD COLUMN "showFont"           boolean NOT NULL DEFAULT true,
+  ADD COLUMN "fontSplit"          boolean NOT NULL DEFAULT true,
+  ADD COLUMN "showSkillDirect"    boolean NOT NULL DEFAULT true,
+  ADD COLUMN "showMysticDirect"   boolean NOT NULL DEFAULT true;
+```
+
+컬럼명을 camelCase로 통일하면 DB 응답 JSON, PlayNanoo Storage JSON, C# 필드명이 모두 일치해  
+`[JsonProperty]`나 커스텀 역직렬화 없이 자동으로 매핑됩니다.
+
+생성기로 Row 클래스를 만들면 필드명이 DB 컬럼명(`bgmVolume`)과 동일하게 생성됩니다:
+
+```csharp
+public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
+{
+    [Serializable]
+    public sealed class Row
+    {
+        [DataColumn("bgmVolume")]       public int  bgmVolume;
+        [DataColumn("sfxVolume")]       public int  sfxVolume;
+        [DataColumn("cameraShake")]     public bool cameraShake;
+        [DataColumn("showFont")]        public bool showFont;
+        [DataColumn("fontSplit")]       public bool fontSplit;
+        [DataColumn("showSkillDirect")] public bool showSkillDirect;
+        [DataColumn("showMysticDirect")] public bool showMysticDirect;
+        [DataColumn("updated_at")]      public string updated_at;
+    }
+}
+```
+
+::: info
+`updated_at`은 관례상 snake_case를 유지합니다. SDK 내부에서 자동으로 처리되므로 변경하지 않아도 됩니다.
+:::
+
+---
+
 ## 데이터 동기화
 
 로그인 성공 시 자동으로 실행됩니다.

@@ -186,7 +186,7 @@ namespace TrueBase.Unity
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromEmptyAsync(string nanooJson)
         {
-            var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
+            var nanooRow = NanooDeserializeJson(nanooJson);
             var ok = await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
             if (ok) ApplyRow(nanooRow);
             return ok;
@@ -194,12 +194,30 @@ namespace TrueBase.Unity
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromLastLoadedAsync(string nanooJson)
         {
-            var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
+            var nanooRow = NanooDeserializeJson(nanooJson);
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await Supabase.TryPatchUserDataDiffAsync(prev, nanooRow);
             if (ok) ApplyRow(nanooRow);
             return ok;
         }
+
+        /// <summary>
+        /// PlayNanoo Storage JSON을 Row로 역직렬화합니다.
+        /// 기본 구현은 Newtonsoft.Json을 사용합니다 — 필드명 또는 <c>[JsonProperty]</c> 값이 JSON 키와 일치해야 합니다.
+        /// PlayNanoo JSON 키(camelCase)와 Row 필드명(snake_case)이 다를 때 서브클래스에서 override하세요.
+        /// <example>
+        /// <code>
+        /// protected override Row NanooDeserializeJson(string json)
+        /// {
+        ///     var pn = JsonConvert.DeserializeObject&lt;PlayNanooSave&gt;(json);
+        ///     return new Row { bgm_volume = pn.bgmVolume, camera_shake = pn.cameraShake };
+        /// }
+        /// [Serializable] private class PlayNanooSave { public int bgmVolume; public bool cameraShake; }
+        /// </code>
+        /// </example>
+        /// </summary>
+        protected virtual TRow NanooDeserializeJson(string json)
+            => Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
 
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {

@@ -239,13 +239,16 @@ public class PlayNanooRuntime : SupabaseRuntime
     }
 
     [Serializable]
-    private class NanooTimestampHelper { public string lastCheckTime; }
+    private class NanooTimestampHelper { public string updated_at; }
 
     private static DateTime ParseNanooTimestamp(string json)
     {
         if (string.IsNullOrEmpty(json)) return DateTime.MinValue;
         var h = JsonUtility.FromJson<NanooTimestampHelper>(json);
-        return DateTime.TryParse(h?.lastCheckTime, out var t) ? t : DateTime.MinValue;
+        if (!string.IsNullOrEmpty(h?.updated_at) && DateTime.TryParse(h.updated_at, out var t))
+            return t;
+        // updated_at 없음 = 이관 전 순수 PlayNanoo 데이터 → PlayNanoo 항상 우선
+        return DateTime.MaxValue;
     }
 
     /// <summary>PlayNanoo에 JSON 데이터를 저장합니다.</summary>
