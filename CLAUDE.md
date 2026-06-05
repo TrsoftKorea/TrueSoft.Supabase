@@ -180,3 +180,7 @@ Use callout boxes for **supplementary content** — content the reader can skip 
 - 긴 선택적 내용 → `::: details`
 
 Core usage (the happy path) must remain as **plain prose + code blocks**, not buried in callout boxes.
+
+### 5. No parenthetical asides in tables or steps
+
+Do **not** append parenthetical clarifications like `(자동 생성됨)`, `(reveal 불필요)`, `(선택 사항)` to table cells or numbered steps. They hurt readability. If the information matters, state it as a separate sentence or callout box; if it doesn't, omit it.

@@ -57,14 +57,13 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ### 1. API 키 확인
 
-**Settings > API Keys** 페이지에서 아래 두 항목을 확인합니다.
+아래 세 항목을 미리 복사해 둡니다.
 
-| 항목 | 설명 | 사용처 |
-|------|------|--------|
-| **Project URL** | `https://<ref>.supabase.co` | `SupabaseSettings.projectUrl` |
-| **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
-
-프로젝트 오버뷰의 URL 옆 **Copy** 버튼 드롭다운에서 **Project URL**과 **Publishable key**를 바로 복사할 수 있습니다.
+| 항목 | 찾는 위치 | 사용처 |
+|------|-----------|--------|
+| **Project URL** | 프로젝트 오버뷰 URL 옆 **Copy** 드롭다운 | `SupabaseSettings.projectUrl` |
+| **Publishable key** | **Settings > API Keys** → Publishable key 섹션 복사 버튼 | `SupabaseSettings.publishableKey` |
+| **Secret key** | **Settings > API Keys** → Secret keys 섹션 복사 버튼 | Inspector의 유저 데이터 클래스 생성 도구 전용. EditorPrefs 저장, 빌드 미포함 |
 
 ### 2. SupabaseSettings 에셋 생성
 
