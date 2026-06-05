@@ -82,7 +82,7 @@ public class PlayNanooRuntime : SupabaseRuntime
         var tcs = new TaskCompletionSource<bool>();
         _plugin.AccountManagerV20240401.GuestSignIn(async (status, _, _, values) =>
         {
-            if (!await HandleNanooCallback(status, values, "guest")) { tcs.SetResult(false); return; }
+            if (!HandleNanooCallback(status, values, "guest")) { tcs.SetResult(false); return; }
             var ok = await sdkSignIn();
             if (ok) await SyncDataAfterLogin();
             tcs.SetResult(ok);
@@ -97,7 +97,7 @@ public class PlayNanooRuntime : SupabaseRuntime
             token, Configure.PN_ACCOUNT_GOOGLE,
             async (status, _, _, values) =>
             {
-                if (!await HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
+                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
                 var ok = await sdkSignIn();
                 if (ok) await SyncDataAfterLogin();
                 tcs.SetResult(ok);
@@ -112,7 +112,7 @@ public class PlayNanooRuntime : SupabaseRuntime
             token, Configure.PN_ACCOUNT_APPLE_ID,
             async (status, _, _, values) =>
             {
-                if (!await HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
+                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
                 var ok = await sdkSignIn();
                 if (ok) await SyncDataAfterLogin();
                 tcs.SetResult(ok);
@@ -146,19 +146,19 @@ public class PlayNanooRuntime : SupabaseRuntime
 
     // ── PlayNanoo 콜백 공통 처리 ──────────────────────────────────────────────
 
-    private Task<bool> HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
+    private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
             _nanooAccessToken = values["access_token"]?.ToString();
-            return Task.FromResult(true);
+            return true;
         }
         if (values?["ErrorCode"]?.ToString() == "30007")
         {
             _pendingLoginType = loginType;
             OnWithdrawalPending?.Invoke(values["WithdrawalKey"]?.ToString());
         }
-        return Task.FromResult(false);
+        return false;
     }
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────

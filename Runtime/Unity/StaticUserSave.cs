@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TrueBase.Core.Data;
@@ -164,7 +164,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
-        /// <para>PlayNanooRuntime&lt;TRow&gt; 등 외부에서 세이브 인스턴스를 참조할 때 사용합니다.</para>
+        /// <para>PlayNanooRuntime 등 외부에서 세이브 인스턴스를 참조할 때 사용합니다.</para>
         /// </summary>
         public static StaticUserSave<TRow> SharedInstance => _sharedInstance;
 
@@ -219,17 +219,25 @@ namespace TrueBase.Unity
         protected virtual TRow NanooDeserializeJson(string json)
             => Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
 
+        /// <summary>
+        /// Row를 PlayNanoo Storage JSON으로 직렬화합니다.
+        /// 기본 구현은 Newtonsoft.Json을 사용합니다.
+        /// <see cref="NanooDeserializeJson"/>를 override한 경우 이 메서드도 함께 override하세요.
+        /// </summary>
+        protected virtual string NanooSerializeJson(TRow row)
+            => Newtonsoft.Json.JsonConvert.SerializeObject(row);
+
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {
             if (_nanooLastLoaded != null) ApplyRow(_nanooLastLoaded);
         }
 
         string INanooSaveSyncable.NanooGetLastLoadedJson()
-            => _nanooLastLoaded != null ? JsonUtility.ToJson(_nanooLastLoaded) : null;
+            => _nanooLastLoaded != null ? NanooSerializeJson(_nanooLastLoaded) : null;
 
         Task<bool> INanooSaveSyncable.TryLoadAsync() => TryLoadAsync();
 
-        string INanooSaveSyncable.NanooCurrentJson => JsonUtility.ToJson(Current);
+        string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
 
         // ── Public API ────────────────────────────────────────────────────────
 

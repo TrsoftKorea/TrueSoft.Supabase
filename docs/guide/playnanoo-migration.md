@@ -185,8 +185,9 @@ SDK 행 없음 (신규 유저)
   └─ PlayNanoo 데이터 없음 → TryLoadAsync (빈 행 생성)
 
 SDK 행 있음 (기존 유저)
-  └─ lastCheckTime > updated_at → PlayNanoo 최신 → SDK 갱신 후 ApplyRow
-  └─ lastCheckTime ≤ updated_at → SDK 최신 → ApplyRow 후 PlayNanoo 갱신
+  └─ PlayNanoo에 updated_at 없음 (이관 전 순수 PlayNanoo 데이터) → PlayNanoo 우선 → SDK 갱신 후 ApplyRow
+  └─ PlayNanoo updated_at > DB updated_at → PlayNanoo 최신 → SDK 갱신 후 ApplyRow
+  └─ DB updated_at ≥ PlayNanoo updated_at → SDK 최신 → ApplyRow 후 PlayNanoo 갱신
 ```
 
 ### SDK 저장 후 PlayNanoo 동기화
