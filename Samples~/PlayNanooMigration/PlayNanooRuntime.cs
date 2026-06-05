@@ -166,8 +166,7 @@ public class PlayNanooRuntime : SupabaseRuntime
     /// <summary>애플 로그인 (Android). PlayNanoo 내장 WebView로 토큰 획득 후 Supabase.TrySignInWithAppleIdTokenAsync 자동 호출.</summary>
     public void StartAppleSignInAndroid() =>
         _plugin.OpenAppleID(
-            async token => await Supabase.TrySignInWithAppleIdTokenAsync(token),
-            _ => { });
+            async token => await Supabase.TrySignInWithAppleIdTokenAsync(token));
 
     // ── 탈퇴 복구 ────────────────────────────────────────────────────────────
 
