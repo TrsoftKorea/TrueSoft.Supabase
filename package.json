@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "com.truesoft.supabase",
   "version": "0.1.0",
   "displayName": "TrueBase",
@@ -23,7 +23,7 @@
     },
     {
       "displayName": "PlayNanoo 이관",
-      "description": "PlayNanoo → SDK 병행 운영 및 이관 패턴 참고 예제. 직접 사용하지 않고 프로젝트에 맞게 수정하세요.",
+      "description": "PlayNanoo와 SDK 병행 운영 및 단계적 이관 참고 예제. 직접 사용하지 않고 프로젝트 코드에 통합하세요.",
       "path": "Samples~/PlayNanooMigration"
     }
   ]
