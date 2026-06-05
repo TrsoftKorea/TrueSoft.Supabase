@@ -1,20 +1,28 @@
 # 샘플
 
-Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스크립트를 프로젝트로 가져옵니다.
+Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import합니다.
 
-임포트 후 `Assets/Samples/TrueBase/<버전>/Examples/` 폴더에 아래 세 파일이 생성됩니다.
-
-| 파일 | 설명 |
+| 샘플 | 용도 |
 |------|------|
-| `ExampleSupabaseScenarios.cs` | 인증·세이브·RemoteConfig·프로필 키보드 단축키 테스트 |
-| `SamplePlayerSave.cs` | `StaticUserSave` 최소 구현 예시 |
-| `SampleIAPScenarios.cs` | IAP 서버 검증 예시 (`TRUESOFT_IAP_AVAILABLE` 필요) |
+| **Database Setup** | Supabase 프로젝트 초기 설정용 SQL·Edge Function 소스. 설정 완료 후 삭제 |
+| **Examples** | 인증·세이브·RemoteConfig 등 주요 기능을 Play Mode 키보드로 바로 테스트 |
+| **PlayNanoo 이관** | PlayNanoo와 SDK를 병행 운영하다가 단계적으로 SDK로 전환하는 패턴 예제 |
 
 ---
 
-## ExampleSupabaseScenarios
+## Database Setup
 
-`SupabaseRuntime`이 있는 씬에 이 컴포넌트를 추가하면 Play Mode에서 키보드로 각 기능을 테스트할 수 있습니다.
+초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.  
+설정을 완료하면 이 폴더는 삭제해도 됩니다.
+
+사용 방법은 [빠른 시작 — Database Setup](./getting-started.md#database-setup)을 참고하세요.
+
+---
+
+## Examples
+
+`SupabaseRuntime`이 있는 씬에 `ExampleSupabaseScenarios` 컴포넌트를 추가하면  
+Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 
 | 키 | 동작 |
 |----|------|
@@ -32,9 +40,7 @@ Package Manager의 **Samples** 탭에서 **Import**를 눌러 예제 씬과 스�
 | `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, DisplayName 등) |
 | `J` | 서버 시간 조회 |
 
----
-
-## SamplePlayerSave
+### SamplePlayerSave
 
 `StaticUserSave`를 상속해 DB 컬럼을 C# 프로퍼티에 연결하는 최소 예시입니다.
 
@@ -62,13 +68,9 @@ SamplePlayerSave.Level += 1;                             // 변경 → 자동 �
 await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 ```
 
-새 컬럼을 추가할 때는 `Row` 클래스에 `[DataColumn]` 필드만 추가하면 됩니다.
+### SampleIAPScenarios
 
----
-
-## SampleIAPScenarios
-
-`#if TRUESOFT_IAP_AVAILABLE` 블록으로 감싸져 있습니다. `com.unity.purchasing` 5.2.1 이상을 설치하면 심볼이 자동으로 정의되어 이 파일이 활성화됩니다.
+`com.unity.purchasing` 5.2.1 이상을 설치하면 자동으로 활성화됩니다.
 
 **사전 준비:**
 1. `com.unity.purchasing` 5.2.1 이상 설치
@@ -96,5 +98,22 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 }
 ```
 
-> [!IMPORTANT]
-> `alreadyVerified=true`는 서버에 이미 검증 기록이 있는 경우입니다(지급 후 크래시). DB에서 지급 여부를 확인해 중복 지급을 방지하세요.
+::: warning
+`alreadyVerified=true`는 서버에 이미 검증 기록이 있는 경우입니다(지급 후 크래시). DB에서 지급 여부를 확인해 중복 지급을 방지하세요.
+:::
+
+---
+
+## PlayNanoo 이관
+
+PlayNanoo와 SDK를 동시에 운영하면서 단계적으로 SDK로 전환할 때 사용합니다.  
+`SupabaseRuntime` 대신 `PlayNanooRuntime`을 씬에 배치하면, 게임 코드의 `Supabase.*` 호출이 자동으로 PlayNanoo를 경유합니다.
+
+**지원 기능:**
+- 게스트·Google·Apple 로그인
+- 익명 계정 → Google·Apple 연동
+- 로그아웃, 탈퇴 예약
+- 탈퇴 복구 (`OnWithdrawalPending` · `OnWithdrawalRestored` 이벤트)
+- `updated_at` 기반 PlayNanoo ↔ SDK 데이터 동기화
+
+자세한 사용법은 [PlayNanoo 이관](./playnanoo-migration.md)을 참고하세요.
