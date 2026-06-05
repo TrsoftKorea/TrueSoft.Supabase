@@ -64,6 +64,8 @@ namespace TrueBase.Unity
             }
         }
 
+        private static StaticUserSave<TRow> _sharedInstance;
+
         protected readonly TRow   Current;
         private            TRow   _lastSynced;
         private            bool   _isDirty;
@@ -78,6 +80,7 @@ namespace TrueBase.Unity
         protected StaticUserSave(string syncKey)
         {
             SingletonGuard.Assert(GetType());
+            _sharedInstance = this;
 
             if (string.IsNullOrWhiteSpace(syncKey))
                 throw new ArgumentException("syncKey must not be empty.", nameof(syncKey));
@@ -153,6 +156,17 @@ namespace TrueBase.Unity
         /// 로드 완료 후 게임 데이터를 적용하거나 UI를 갱신할 때 사용합니다.
         /// </summary>
         public event Action OnLoaded;
+
+        // ── 공유 인스턴스 ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
+        /// <para>PlayNanooRuntime&lt;TRow&gt; 등 외부에서 세이브 인스턴스를 참조할 때 사용합니다.</para>
+        /// </summary>
+        public static StaticUserSave<TRow> SharedInstance => _sharedInstance;
+
+        /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
+        public TRow CurrentRow => Current;
 
         // ── Public API ────────────────────────────────────────────────────────
 

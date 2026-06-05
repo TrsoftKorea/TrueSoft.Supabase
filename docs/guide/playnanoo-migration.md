@@ -28,26 +28,41 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 
 ## 준비
 
-Package Manager **Samples** 탭에서 **PlayNanoo 이관**을 Import한 뒤, 두 곳을 교체합니다.
+Package Manager **Samples** 탭에서 **PlayNanoo 이관**을 Import합니다.
+
+### 1. 서브클래스 생성
+
+`PlayNanooRuntime<TRow>`는 추상 제네릭 클래스로, 런타임 클래스명을 지정한 서브클래스가 필요합니다.
+
+**방법 A — SupabaseSettings에서 자동 생성 (권장)**
+
+`SupabaseSettings` Inspector 하단 **PlayNanoo 이관 런타임** 섹션에서:
+
+1. **세이브 클래스** — 유저 데이터 클래스 생성 시 자동 입력됨 (기본 `PlayerSave`)
+2. **런타임 클래스** — 원하는 클래스명 입력 (기본 `GameRuntime`)
+3. **런타임 클래스 생성** 버튼 클릭 → `GameRuntime.cs` 생성
+
+**방법 B — 수동으로 한 줄 파일 생성**
 
 ```csharp
-// PlayNanooRuntime.cs 상단
-private const string NanooStorageKey = "save";  // ← PlayNanoo 콘솔 스토리지 키로 교체
+// GameRuntime.cs — 신규 파일 (한 줄)
+public class GameRuntime : PlayNanooRuntime<PlayerSave.Row> { }
 ```
 
-```csharp
-// SyncDataAfterLogin, SaveToNanoo 등에서 사용하는 타입
-YourSaveData  // ← 생성기로 만든 실제 세이브 클래스명으로 전체 교체
-```
+`StaticUserSave<TRow>.SharedInstance`로 세이브 인스턴스가 자동 연결됩니다.
+
+### 2. 스토리지 키 설정
+
+씬에 배치한 `GameRuntime` 컴포넌트의 Inspector에서 **Nanoo Storage Key**를 PlayNanoo 콘솔에 등록한 키로 변경합니다.
 
 ---
 
 ## 씬 설정
 
-기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 `PlayNanooRuntime`를 배치합니다.
+기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 `GameRuntime`을 배치합니다.
 
 ::: warning
-두 컴포넌트를 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
+`SupabaseRuntime`과 `GameRuntime`을 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
 :::
 
 ---
@@ -65,7 +80,7 @@ await Supabase.TrySignInWithGoogleAsync();
 await Supabase.TrySignInWithAppleIdTokenAsync(idToken);
 
 // Apple (Android) — PlayNanoo WebView로 토큰 획득
-bridge.StartAppleSignInAndroid();
+gameRuntime.StartAppleSignInAndroid();
 ```
 
 ### 로그인 완료 감지
@@ -105,7 +120,7 @@ await Supabase.TryRequestMyWithdrawalAsync();
 로그인 시 탈퇴 예약 계정이 감지되면 `OnWithdrawalPending` 이벤트가 발행됩니다.
 
 ```csharp
-bridge.OnWithdrawalPending += withdrawalKey =>
+gameRuntime.OnWithdrawalPending += withdrawalKey =>
 {
     ShowWithdrawalRestoreDialog(withdrawalKey);
 };
@@ -114,7 +129,7 @@ bridge.OnWithdrawalPending += withdrawalKey =>
 플레이어가 복구를 선택하면:
 
 ```csharp
-bridge.RestoreWithdrawal(withdrawalKey);
+gameRuntime.RestoreWithdrawal(withdrawalKey);
 ```
 
 | 로그인 유형 | 복구 후 동작 |
@@ -123,7 +138,7 @@ bridge.RestoreWithdrawal(withdrawalKey);
 | Google / Apple | `OnWithdrawalRestored` 이벤트 발행 → 개발자가 재인증 UI 표시 |
 
 ```csharp
-bridge.OnWithdrawalRestored += () =>
+gameRuntime.OnWithdrawalRestored += () =>
 {
     ShowSocialLoginScreen();
 };
@@ -148,14 +163,14 @@ SDK 행 있음 (기존 유저)
 ### SDK 저장 후 PlayNanoo 동기화
 
 ```csharp
-bridge.SaveToNanoo(YourSaveData.Instance.Current);
+gameRuntime.SaveCurrentToNanoo();
 ```
 
 ---
 
 ## PlayNanoo 제거 후
 
-1. `PlayNanooRuntime.cs` 삭제
+1. `PlayNanooRuntime.cs`, `GameRuntime.cs` 삭제
 2. 씬에 `SupabaseRuntime` 배치
 3. 게임 코드 변경 없음
 
