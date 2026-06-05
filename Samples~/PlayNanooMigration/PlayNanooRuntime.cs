@@ -62,11 +62,13 @@ public class PlayNanooRuntime : SupabaseRuntime
         _plugin = Plugin.GetInstance();
 
         Supabase.RegisterPlayNanooInterceptors(
-            signInAnonymously:       InterceptSignInAnonymously,
-            signInWithGoogleIdToken: InterceptSignInWithGoogleIdToken,
-            signInWithAppleIdToken:  InterceptSignInWithAppleIdToken,
-            signOutFully:            InterceptSignOutFully,
-            requestMyWithdrawal:     InterceptRequestMyWithdrawal
+            signInAnonymously:                       InterceptSignInAnonymously,
+            signInWithGoogleIdToken:                 InterceptSignInWithGoogleIdToken,
+            signInWithAppleIdToken:                  InterceptSignInWithAppleIdToken,
+            signOutFully:                            InterceptSignOutFully,
+            requestMyWithdrawal:                     InterceptRequestMyWithdrawal,
+            linkGoogleToCurrentAnonymousWithIdToken: InterceptLinkGoogleToCurrentAnonymousWithIdToken,
+            linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken
         );
     }
 
@@ -159,6 +161,38 @@ public class PlayNanooRuntime : SupabaseRuntime
             OnWithdrawalPending?.Invoke(values["WithdrawalKey"]?.ToString());
         }
         return false;
+    }
+
+    // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
+
+    private async Task<bool> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<bool>> sdkLink)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        _plugin.AccountManagerV20240401.SocialSignIn(
+            token, Configure.PN_ACCOUNT_GOOGLE,
+            async (status, _, _, values) =>
+            {
+                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
+                var ok = await sdkLink();
+                if (ok) await SyncDataAfterLogin();
+                tcs.SetResult(ok);
+            });
+        return await tcs.Task;
+    }
+
+    private async Task<bool> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<bool>> sdkLink)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        _plugin.AccountManagerV20240401.SocialSignIn(
+            token, Configure.PN_ACCOUNT_APPLE_ID,
+            async (status, _, _, values) =>
+            {
+                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
+                var ok = await sdkLink();
+                if (ok) await SyncDataAfterLogin();
+                tcs.SetResult(ok);
+            });
+        return await tcs.Task;
     }
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────

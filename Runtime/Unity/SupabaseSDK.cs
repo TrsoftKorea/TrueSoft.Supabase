@@ -75,6 +75,8 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptSignInWithAppleIdToken;
         internal static Func<Func<Task<bool>>, Task<bool>>         _interceptSignOutFully;
         internal static Func<Func<Task<bool>>, Task<bool>>         _interceptRequestMyWithdrawal;
+        internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
+        internal static Func<string, Func<Task<bool>>, Task<bool>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
 
         /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void RegisterPlayNanooInterceptors(
@@ -82,23 +84,29 @@ namespace TrueBase.Unity
             Func<string, Func<Task<bool>>, Task<bool>> signInWithGoogleIdToken,
             Func<string, Func<Task<bool>>, Task<bool>> signInWithAppleIdToken,
             Func<Func<Task<bool>>, Task<bool>>         signOutFully,
-            Func<Func<Task<bool>>, Task<bool>>         requestMyWithdrawal)
+            Func<Func<Task<bool>>, Task<bool>>         requestMyWithdrawal,
+            Func<string, Func<Task<bool>>, Task<bool>> linkGoogleToCurrentAnonymousWithIdToken = null,
+            Func<string, Func<Task<bool>>, Task<bool>> linkAppleToCurrentAnonymousWithIdToken  = null)
         {
-            _interceptSignInAnonymously       = signInAnonymously;
-            _interceptSignInWithGoogleIdToken = signInWithGoogleIdToken;
-            _interceptSignInWithAppleIdToken  = signInWithAppleIdToken;
-            _interceptSignOutFully            = signOutFully;
-            _interceptRequestMyWithdrawal     = requestMyWithdrawal;
+            _interceptSignInAnonymously                       = signInAnonymously;
+            _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
+            _interceptSignInWithAppleIdToken                  = signInWithAppleIdToken;
+            _interceptSignOutFully                            = signOutFully;
+            _interceptRequestMyWithdrawal                     = requestMyWithdrawal;
+            _interceptLinkGoogleToCurrentAnonymousWithIdToken = linkGoogleToCurrentAnonymousWithIdToken;
+            _interceptLinkAppleToCurrentAnonymousWithIdToken  = linkAppleToCurrentAnonymousWithIdToken;
         }
 
         /// <summary>PlayNanoo 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void UnregisterPlayNanooInterceptors()
         {
-            _interceptSignInAnonymously       = null;
-            _interceptSignInWithGoogleIdToken = null;
-            _interceptSignInWithAppleIdToken  = null;
-            _interceptSignOutFully            = null;
-            _interceptRequestMyWithdrawal     = null;
+            _interceptSignInAnonymously                       = null;
+            _interceptSignInWithGoogleIdToken                 = null;
+            _interceptSignInWithAppleIdToken                  = null;
+            _interceptSignOutFully                            = null;
+            _interceptRequestMyWithdrawal                     = null;
+            _interceptLinkGoogleToCurrentAnonymousWithIdToken = null;
+            _interceptLinkAppleToCurrentAnonymousWithIdToken  = null;
         }
 
         private enum SignInMethodKind
@@ -504,8 +512,13 @@ namespace TrueBase.Unity
             string googleAccessToken = null,
             bool saveSessionToStorage = true)
         {
-            var r = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
-            return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+            if (_interceptLinkGoogleToCurrentAnonymousWithIdToken != null)
+                return await _interceptLinkGoogleToCurrentAnonymousWithIdToken(idToken, async () => {
+                    var r = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+                    return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+                });
+            var r2 = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
         }
 
         /// <summary>
@@ -628,8 +641,13 @@ namespace TrueBase.Unity
             string rawNonce = null,
             bool saveSessionToStorage = true)
         {
-            var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
-            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+            if (_interceptLinkAppleToCurrentAnonymousWithIdToken != null)
+                return await _interceptLinkAppleToCurrentAnonymousWithIdToken(idToken, async () => {
+                    var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+                    return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+                });
+            var r2 = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>
