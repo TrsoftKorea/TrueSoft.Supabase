@@ -11,6 +11,8 @@
 //   await Supabase.TrySignInAnonymouslyAsync()
 //   await Supabase.TrySignInWithGoogleAsync()
 //   await Supabase.TrySignInWithAppleIdTokenAsync(token)
+//   await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(token)   // 익명 → Google 연동
+//   await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(token)    // 익명 → Apple 연동
 //   await Supabase.TrySignOutFullyAsync()
 //   await Supabase.TryRequestMyWithdrawalAsync()
 //
