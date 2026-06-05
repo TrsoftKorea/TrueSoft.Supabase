@@ -7,7 +7,7 @@ PlayNanoo 기반 라이브 서비스를 SDK로 전환할 때 사용하는 브릿
 
 ## 동작 방식
 
-`PlayNanooMigrationBridge`는 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
+`PlayNanooRuntime`는 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
 이후 게임 코드가 `Supabase.TrySignInAnonymouslyAsync()` 등을 호출하면 **PlayNanoo 로그인이 먼저 실행된 뒤 SDK 로그인이 이어집니다.**
 
 브릿지가 없으면 인터셉터도 없으므로, **게임 코드는 이관 전·중·후 동일합니다.**
@@ -31,7 +31,7 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 Package Manager **Samples** 탭에서 **PlayNanoo 이관**을 Import한 뒤, 두 곳을 교체합니다.
 
 ```csharp
-// PlayNanooMigrationBridge.cs 상단
+// PlayNanooRuntime.cs 상단
 private const string NanooStorageKey = "save";  // ← PlayNanoo 콘솔 스토리지 키로 교체
 ```
 
@@ -44,7 +44,7 @@ YourSaveData  // ← 생성기로 만든 실제 세이브 클래스명으로 전
 
 ## 씬 설정
 
-기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 `PlayNanooMigrationBridge`를 배치합니다.
+기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 `PlayNanooRuntime`를 배치합니다.
 
 ::: warning
 두 컴포넌트를 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
@@ -155,7 +155,7 @@ bridge.SaveToNanoo(YourSaveData.Instance.Current);
 
 ## PlayNanoo 제거 후
 
-1. `PlayNanooMigrationBridge.cs` 삭제
+1. `PlayNanooRuntime.cs` 삭제
 2. 씬에 `SupabaseRuntime` 배치
 3. 게임 코드 변경 없음
 

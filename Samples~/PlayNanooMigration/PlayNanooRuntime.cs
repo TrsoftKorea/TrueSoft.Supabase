@@ -1,5 +1,5 @@
 // =============================================================================
-// PlayNanoo → Supabase SDK 이관 브릿지
+// PlayNanoo → Supabase SDK 이관 런타임
 //
 // [사용법]
 // 1. 이 파일을 프로젝트로 복사 (Package Manager > Samples > PlayNanoo 이관)
@@ -7,7 +7,7 @@
 // 3. NanooStorageKey → PlayNanoo 콘솔에 등록한 스토리지 키로 교체
 // 4. 씬에서 SupabaseRuntime 대신 이 컴포넌트를 배치
 //
-// [게임 코드에서 로그인 호출 — 브릿지 유무와 무관하게 동일]
+// [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
 //   await Supabase.TrySignInAnonymouslyAsync()
 //   await Supabase.TrySignInWithGoogleAsync()
 //   await Supabase.TrySignInWithAppleIdTokenAsync(token)
@@ -29,12 +29,12 @@ using TrueBase.Unity;
 using UnityEngine;
 
 /// <summary>
-/// PlayNanoo + SDK 병행 운영 브릿지.
+/// PlayNanoo + SDK 병행 운영 런타임.
 /// SupabaseRuntime을 대신하여 씬에 하나만 배치합니다.
-/// Awake 시 SupabaseSDK에 인터셉터를 등록해 Supabase.Try* 호출을 자동으로 가로챕니다.
+/// Awake 시 인터셉터를 등록해 Supabase.Try* 호출이 PlayNanoo를 자동으로 경유합니다.
 /// [TODO] YourSaveData → 생성기로 만든 실제 세이브 클래스명으로 교체하세요.
 /// </summary>
-public class PlayNanooMigrationBridge : SupabaseRuntime
+public class PlayNanooRuntime : SupabaseRuntime
 {
     // [TODO] PlayNanoo 콘솔에 등록한 스토리지 키로 교체
     private const string NanooStorageKey = "save";
@@ -58,7 +58,6 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
         base.Awake();
         _plugin = Plugin.GetInstance();
 
-        // Supabase.Try* 호출을 이 브릿지가 가로챕니다.
         Supabase.RegisterPlayNanooInterceptors(
             signInAnonymously:       InterceptSignInAnonymously,
             signInWithGoogleIdToken: InterceptSignInWithGoogleIdToken,
@@ -259,7 +258,7 @@ public class PlayNanooMigrationBridge : SupabaseRuntime
             (status, _, _, _) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
-                    Debug.LogWarning("[Bridge] PlayNanoo 저장 실패");
+                    Debug.LogWarning("[PlayNanooRuntime] PlayNanoo 저장 실패");
             });
     }
 }

@@ -117,7 +117,7 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNanoo + SDK 병행 운영 브릿지. `PlayNanooMigrationBridge.cs`는 `SupabaseRuntime`을 상속하며 씬에 SupabaseRuntime 대신 배치. 게스트·구글·애플 로그인(양쪽 동시 처리), 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `lastCheckTime` vs `updated_at` 비교 기반 데이터 동기화 포함. `YourSaveData`를 생성기로 만든 실제 클래스명으로 교체 후 사용. PlayNanoo 제거 시 이 파일만 삭제.
+`Samples~/PlayNanooMigration/` — PlayNanoo + SDK 병행 운영 런타임. `PlayNanooRuntime.cs`는 `SupabaseRuntime`을 상속하며 씬에 SupabaseRuntime 대신 배치. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `lastCheckTime` vs `updated_at` 비교 기반 데이터 동기화 포함. `YourSaveData`를 생성기로 만든 실제 클래스명으로 교체 후 사용. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
 ## Debug Logs
 
