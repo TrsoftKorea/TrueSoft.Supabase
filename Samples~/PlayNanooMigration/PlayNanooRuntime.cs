@@ -16,7 +16,7 @@
 //   await Supabase.TrySignOutFullyAsync()
 //   await Supabase.TryRequestMyWithdrawalAsync()
 //
-// [PlayNanoo 제거 후]
+// [PlayNANOO 제거 후]
 // 1. 이 파일 삭제
 // 2. 씬에 SupabaseRuntime 배치
 // 3. 게임 코드 변경 없음 (Supabase.* 호출은 그대로)
@@ -81,52 +81,52 @@ public class PlayNanooRuntime : SupabaseRuntime
 
     // ── 인터셉터 구현 ─────────────────────────────────────────────────────────
 
-    private async Task<bool> InterceptSignInAnonymously(Func<Task<bool>> sdkSignIn)
+    private async Task<SupabaseCallResult> InterceptSignInAnonymously(Func<Task<SupabaseCallResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.GuestSignIn(async (status, _, _, values) =>
         {
-            if (!HandleNanooCallback(status, values, "guest")) { tcs.SetResult(false); return; }
-            var ok = await sdkSignIn();
-            if (ok) await SyncDataAfterLogin();
-            tcs.SetResult(ok);
+            if (!HandleNanooCallback(status, values, "guest")) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_guest_signin_failed")); return; }
+            var result = await sdkSignIn();
+            if (result.Success) await SyncDataAfterLogin();
+            tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<bool> InterceptSignInWithGoogleIdToken(string token, Func<Task<bool>> sdkSignIn)
+    private async Task<SupabaseCallResult> InterceptSignInWithGoogleIdToken(string token, Func<Task<SupabaseCallResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.SocialSignIn(
             token, Configure.PN_ACCOUNT_GOOGLE,
             async (status, _, _, values) =>
             {
-                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
-                var ok = await sdkSignIn();
-                if (ok) await SyncDataAfterLogin();
-                tcs.SetResult(ok);
+                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed")); return; }
+                var result = await sdkSignIn();
+                if (result.Success) await SyncDataAfterLogin();
+                tcs.SetResult(result);
             });
         return await tcs.Task;
     }
 
-    private async Task<bool> InterceptSignInWithAppleIdToken(string token, Func<Task<bool>> sdkSignIn)
+    private async Task<SupabaseCallResult> InterceptSignInWithAppleIdToken(string token, Func<Task<SupabaseCallResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.SocialSignIn(
             token, Configure.PN_ACCOUNT_APPLE_ID,
             async (status, _, _, values) =>
             {
-                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
-                var ok = await sdkSignIn();
-                if (ok) await SyncDataAfterLogin();
-                tcs.SetResult(ok);
+                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed")); return; }
+                var result = await sdkSignIn();
+                if (result.Success) await SyncDataAfterLogin();
+                tcs.SetResult(result);
             });
         return await tcs.Task;
     }
 
-    private async Task<bool> InterceptSignOutFully(Func<Task<bool>> sdkSignOut)
+    private async Task<SupabaseCallResult> InterceptSignOutFully(Func<Task<SupabaseCallResult>> sdkSignOut)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.TokenSignOut(
             _nanooAccessToken,
             async (_, _, _, _) =>
@@ -137,12 +137,12 @@ public class PlayNanooRuntime : SupabaseRuntime
         return await tcs.Task;
     }
 
-    private async Task<bool> InterceptRequestMyWithdrawal(Func<Task<bool>> sdkWithdrawal)
+    private async Task<SupabaseCallResult> InterceptRequestMyWithdrawal(Func<Task<SupabaseCallResult>> sdkWithdrawal)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.WithDrawal(15, async (status, _, _, _) =>
         {
-            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(false); return; }
+            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_withdrawal_request_failed")); return; }
             tcs.SetResult(await sdkWithdrawal());
         });
         return await tcs.Task;
@@ -167,32 +167,32 @@ public class PlayNanooRuntime : SupabaseRuntime
 
     // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
 
-    private async Task<bool> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<bool>> sdkLink)
+    private async Task<SupabaseCallResult> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.SocialSignIn(
             token, Configure.PN_ACCOUNT_GOOGLE,
             async (status, _, _, values) =>
             {
-                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(false); return; }
-                var ok = await sdkLink();
-                if (ok) await SyncDataAfterLogin();
-                tcs.SetResult(ok);
+                if (!HandleNanooCallback(status, values, "google")) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_link_failed")); return; }
+                var result = await sdkLink();
+                if (result.Success) await SyncDataAfterLogin();
+                tcs.SetResult(result);
             });
         return await tcs.Task;
     }
 
-    private async Task<bool> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<bool>> sdkLink)
+    private async Task<SupabaseCallResult> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
         _plugin.AccountManagerV20240401.SocialSignIn(
             token, Configure.PN_ACCOUNT_APPLE_ID,
             async (status, _, _, values) =>
             {
-                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(false); return; }
-                var ok = await sdkLink();
-                if (ok) await SyncDataAfterLogin();
-                tcs.SetResult(ok);
+                if (!HandleNanooCallback(status, values, "apple")) { tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_link_failed")); return; }
+                var result = await sdkLink();
+                if (result.Success) await SyncDataAfterLogin();
+                tcs.SetResult(result);
             });
         return await tcs.Task;
     }
