@@ -38,17 +38,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 4. **Create new project**를 클릭하고 프로비저닝이 완료될 때까지 약 1~2분 대기합니다.
 
-### 2. API 키 확인
-
-대시보드 상단의 **Connect** 버튼을 클릭하거나 **Project Settings > API** 페이지에서 아래 두 값을 복사합니다.
-
-| 항목 | 설명 | 사용처 |
-|------|------|--------|
-| **Project URL** | `https://<project-id>.supabase.co` | `SupabaseSettings.projectUrl` |
-| **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
-
-
-### 3. Authentication 설정
+### 2. Authentication 설정
 
 **Authentication > Settings** 에서 아래 항목을 설정합니다.
 
@@ -65,7 +55,16 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ## 초기 설정
 
-### 1. SupabaseSettings 에셋 생성
+### 1. API 키 확인
+
+프로젝트 오버뷰 페이지에서 URL 옆 **Copy** 버튼을 클릭하면 드롭다운에 바로 표시됩니다.
+
+| 항목 | 설명 | 사용처 |
+|------|------|--------|
+| **Project URL** | `https://<project-id>.supabase.co` | `SupabaseSettings.projectUrl` |
+| **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
+
+### 2. SupabaseSettings 에셋 생성
 
 1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 로 `SupabaseSettings`를 생성합니다.
 2. Inspector에서 **Project URL**과 **Publishable Key**를 입력합니다.
@@ -75,7 +74,7 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 `SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 런타임에 로드됩니다.
 :::
 
-### 2. SupabaseRuntime 배치
+### 3. SupabaseRuntime 배치
 
 메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 를 클릭합니다.  
 앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
@@ -187,4 +186,3 @@ await Supabase.TrySignInAnonymouslyAsync();
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
-
