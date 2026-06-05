@@ -57,23 +57,22 @@ Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
 ### 1. API 키 확인
 
-**Settings > API Keys** 페이지에서 아래 두 키를 확인합니다.
+**Settings > API Keys** 페이지에서 아래 두 항목을 확인합니다.
 
 | 항목 | 설명 | 사용처 |
 |------|------|--------|
+| **Project URL** | `https://<ref>.supabase.co` | `SupabaseSettings.projectUrl` |
 | **Publishable key** | `sb_publishable_...` | `SupabaseSettings.publishableKey` |
-| **Secret key** | `sb_secret_...` | 서버 사이드 전용. Unity 에셋에 포함하지 마세요 |
 
 프로젝트 오버뷰의 URL 옆 **Copy** 버튼 드롭다운에서 **Project URL**과 **Publishable key**를 바로 복사할 수 있습니다.
 
 ### 2. SupabaseSettings 에셋 생성
 
-1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 로 `SupabaseSettings`를 생성합니다.
-2. Inspector에서 **Project URL**과 **Publishable Key**를 입력합니다.
-3. 파일을 **`Assets/Resources/SupabaseSettings.asset`** 위치에 저장합니다.
+1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 를 클릭합니다. `Assets/Resources/SupabaseSettings.asset`이 자동 생성됩니다.
+2. Inspector에서 **Project URL**, **Publishable Key**를 입력합니다.
 
 ::: warning
-`SupabaseSettings.asset`은 반드시 `Assets/Resources/` 하위에 있어야 런타임에 로드됩니다.
+에셋을 직접 이동할 경우 반드시 `Assets/Resources/` 하위에 두어야 런타임에 로드됩니다.
 :::
 
 ### 3. SupabaseRuntime 배치
