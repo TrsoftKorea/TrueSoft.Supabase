@@ -657,5 +657,11 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>
             SupabaseSDK.UnregisterPlayNanooInterceptors();
+
+        /// <summary>
+        /// PlayNanooRuntime 전용. 현재 등록된 StaticUserSave 인스턴스를 반환합니다.
+        /// StaticUserSave&lt;TRow&gt; 생성 시 자동 등록되므로 게임 코드에서 직접 호출할 필요가 없습니다.
+        /// </summary>
+        public static INanooSaveSyncable GetNanooSaveBridge() => SupabaseSDK._nanooSaveBridge;
     }
 }

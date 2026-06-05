@@ -38,7 +38,7 @@ namespace TrueBase.Unity
     /// 모든 게임 데이터는 하나의 <c>Row</c> 클래스 안에 <c>[DataColumn]</c> 필드로 선언하세요.
     /// </para>
     /// </summary>
-    public abstract class StaticUserSave<TRow> where TRow : class, new()
+    public abstract class StaticUserSave<TRow> : INanooSaveSyncable where TRow : class, new()
     {
         // ── 단일 서브클래스 강제 ──────────────────────────────────────────────
         private static class SingletonGuard
@@ -66,6 +66,8 @@ namespace TrueBase.Unity
 
         private static StaticUserSave<TRow> _sharedInstance;
 
+        private TRow _nanooLastLoaded;  // NanooLoadWithStateAsync 캐시 (PlayNanoo 동기화용)
+
         protected readonly TRow   Current;
         private            TRow   _lastSynced;
         private            bool   _isDirty;
@@ -81,6 +83,7 @@ namespace TrueBase.Unity
         {
             SingletonGuard.Assert(GetType());
             _sharedInstance = this;
+            SupabaseSDK._nanooSaveBridge = this;
 
             if (string.IsNullOrWhiteSpace(syncKey))
                 throw new ArgumentException("syncKey must not be empty.", nameof(syncKey));
@@ -167,6 +170,48 @@ namespace TrueBase.Unity
 
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
+
+        // ── INanooSaveSyncable 구현 (PlayNanooRuntime 전용) ────────────────────────
+
+        async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
+        {
+            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
+            if (!success) return (false, false, DateTime.MinValue);
+            _nanooLastLoaded = row;
+            if (!hasRow || row == null) return (true, false, DateTime.MinValue);
+            var val = typeof(TRow).GetField("updated_at")?.GetValue(row)?.ToString();
+            var updatedAt = DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
+            return (true, true, updatedAt);
+        }
+
+        async Task<bool> INanooSaveSyncable.NanooPatchFromEmptyAsync(string nanooJson)
+        {
+            var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
+            var ok = await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
+            if (ok) ApplyRow(nanooRow);
+            return ok;
+        }
+
+        async Task<bool> INanooSaveSyncable.NanooPatchFromLastLoadedAsync(string nanooJson)
+        {
+            var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
+            var prev = _nanooLastLoaded ?? new TRow();
+            var ok = await Supabase.TryPatchUserDataDiffAsync(prev, nanooRow);
+            if (ok) ApplyRow(nanooRow);
+            return ok;
+        }
+
+        void INanooSaveSyncable.NanooApplyLastLoaded()
+        {
+            if (_nanooLastLoaded != null) ApplyRow(_nanooLastLoaded);
+        }
+
+        string INanooSaveSyncable.NanooGetLastLoadedJson()
+            => _nanooLastLoaded != null ? JsonUtility.ToJson(_nanooLastLoaded) : null;
+
+        Task<bool> INanooSaveSyncable.TryLoadAsync() => TryLoadAsync();
+
+        string INanooSaveSyncable.NanooCurrentJson => JsonUtility.ToJson(Current);
 
         // ── Public API ────────────────────────────────────────────────────────
 

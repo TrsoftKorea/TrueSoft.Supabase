@@ -87,10 +87,6 @@ namespace TrueBase.Unity
         [Min(0f)]
         public float withdrawalRequestDelayDays = 7f;
 
-        // ── 코드 생성 (Editor 전용) ──────────────────────────────────────────
-        // 런타임에서는 사용되지 않습니다. SupabaseSettings Inspector에서 코드 생성 시 참조합니다.
-        [HideInInspector] public string nanooSaveClassName    = "PlayerSave";
-        [HideInInspector] public string nanooRuntimeClassName = "GameRuntime";
 
         public SupabaseOptions ToOptions()
         {

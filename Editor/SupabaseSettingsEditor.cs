@@ -40,9 +40,6 @@ namespace TrueBase.Editor
 
         // ── Remote Config 생성기 ─────────────────────────────────────────────────
         private static bool                  _rcFoldout;
-
-        // ── PlayNanoo 이관 런타임 생성기 ──────────────────────────────────────────
-        private static bool _nanooFoldout;
         private static string                _rcExtraUsings = "";
         private static List<RcKeyRow>        _rcKeyList     = new List<RcKeyRow>();
         private static int                   _rcKeyIndex;
@@ -260,47 +257,6 @@ namespace TrueBase.Editor
                 }
             }
 
-            EditorGUILayout.Space(6);
-            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
-
-            // ── PlayNanoo 이관 런타임 ─────────────────────────────────────────
-            _nanooFoldout = EditorGUILayout.Foldout(_nanooFoldout, "PlayNanoo 이관 런타임", true, EditorStyles.foldoutHeader);
-            if (_nanooFoldout)
-            {
-                EditorGUILayout.HelpBox(
-                    "PlayNanooRuntime<TRow> 서브클래스를 생성합니다.\n" +
-                    "Package Manager > Samples > PlayNanoo 이관 을 Import한 뒤 사용하세요.",
-                    MessageType.Info);
-
-                EditorGUILayout.Space(4);
-                var s = (SupabaseSettings)target;
-
-                EditorGUI.BeginChangeCheck();
-                var saveProp    = serializedObject.FindProperty("nanooSaveClassName");
-                var runtimeProp = serializedObject.FindProperty("nanooRuntimeClassName");
-                EditorGUILayout.PropertyField(saveProp,    new GUIContent("세이브 클래스",  "StaticUserSave 서브클래스 이름. 예: PlayerSave"));
-                EditorGUILayout.PropertyField(runtimeProp, new GUIContent("런타임 클래스", "생성할 MonoBehaviour 클래스 이름. 예: GameRuntime"));
-                if (EditorGUI.EndChangeCheck())
-                    serializedObject.ApplyModifiedProperties();
-
-                var saveName    = s.nanooSaveClassName?.Trim();
-                var runtimeName = s.nanooRuntimeClassName?.Trim();
-                var hasNames    = !string.IsNullOrEmpty(saveName) && !string.IsNullOrEmpty(runtimeName);
-
-                if (hasNames)
-                {
-                    EditorGUILayout.Space(4);
-                    var preview = $"public class {runtimeName} : PlayNanooRuntime<{saveName}.Row> {{ }}";
-                    EditorGUILayout.SelectableLabel(preview, EditorStyles.helpBox, GUILayout.Height(22f));
-                }
-
-                EditorGUILayout.Space(4);
-                using (new EditorGUI.DisabledScope(!hasNames))
-                {
-                    if (GUILayout.Button("런타임 클래스 생성", GUILayout.Height(26)))
-                        SaveNanooRuntimeToProject((SupabaseSettings)target);
-                }
-            }
 
         }
 
@@ -1009,7 +965,7 @@ namespace TrueBase.Editor
             EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
         }
 
-        private void SaveToProject()
+        private static void SaveToProject()
         {
             var path = EditorUtility.SaveFilePanelInProject("유저 데이터 클래스 저장", ClassName + ".cs", "cs", "");
             if (string.IsNullOrEmpty(path)) return;
@@ -1024,38 +980,10 @@ namespace TrueBase.Editor
                 // 저장 시점에도 타입·Priority 설정을 EditorPrefs에 기록
                 SaveColumnTypesToPrefs();
                 SaveColumnPrioritiesToPrefs();
-
-                // nanooSaveClassName을 생성된 클래스 이름으로 자동 업데이트
-                var settings = (SupabaseSettings)target;
-                settings.nanooSaveClassName = ClassName;
-                EditorUtility.SetDirty(settings);
             }
             catch (Exception e)
             {
                 EditorUtility.DisplayDialog(DialogTitle, e.Message, "확인");
-            }
-        }
-
-        private static void SaveNanooRuntimeToProject(SupabaseSettings settings)
-        {
-            var runtimeName = settings.nanooRuntimeClassName?.Trim();
-            var saveName    = settings.nanooSaveClassName?.Trim();
-            if (string.IsNullOrEmpty(runtimeName) || string.IsNullOrEmpty(saveName)) return;
-
-            var source = PlayNanooRuntimeClassGenerator.GenerateSource(runtimeName, saveName);
-            var path   = EditorUtility.SaveFilePanelInProject("PlayNanoo 런타임 클래스 저장", runtimeName + ".cs", "cs", "");
-            if (string.IsNullOrEmpty(path)) return;
-
-            try
-            {
-                File.WriteAllText(path, source, new System.Text.UTF8Encoding(false));
-                AssetDatabase.ImportAsset(path);
-                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-                if (asset != null) EditorGUIUtility.PingObject(asset);
-            }
-            catch (Exception e)
-            {
-                EditorUtility.DisplayDialog("PlayNanoo 런타임 클래스", e.Message, "확인");
             }
         }
 

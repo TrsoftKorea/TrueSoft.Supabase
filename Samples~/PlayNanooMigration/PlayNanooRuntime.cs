@@ -3,10 +3,9 @@
 //
 // [사용법]
 // 1. Package Manager > Samples > PlayNanoo 이관 에서 Import
-// 2. TRow에 생성기로 만든 세이브 Row 타입을 지정하여 서브클래스를 만드세요:
-//    public class GameRuntime : PlayNanooRuntime<BasicSave.Row> { }
+// 2. 씬에서 SupabaseRuntime 대신 PlayNanooRuntime 컴포넌트를 배치
 // 3. Inspector에서 Nanoo Storage Key → PlayNanoo 콘솔 스토리지 키로 변경
-// 4. 씬에서 SupabaseRuntime 대신 GameRuntime 컴포넌트를 배치
+//    (StaticUserSave 인스턴스는 자동 연결됩니다)
 //
 // [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
 //   await Supabase.TrySignInAnonymouslyAsync()
@@ -16,7 +15,7 @@
 //   await Supabase.TryRequestMyWithdrawalAsync()
 //
 // [PlayNanoo 제거 후]
-// 1. 이 파일 및 GameRuntime.cs 삭제
+// 1. 이 파일 삭제
 // 2. 씬에 SupabaseRuntime 배치
 // 3. 게임 코드 변경 없음 (Supabase.* 호출은 그대로)
 // =============================================================================
@@ -33,13 +32,9 @@ using UnityEngine;
 /// PlayNanoo + SDK 병행 운영 런타임.
 /// SupabaseRuntime을 대신하여 씬에 하나만 배치합니다.
 /// Awake 시 인터셉터를 등록해 Supabase.Try* 호출이 PlayNanoo를 자동으로 경유합니다.
-/// <para>
-/// <b>사용법</b>: TRow에 생성기로 만든 세이브 Row 타입을 지정하여 서브클래스를 만드세요.<br/>
-/// <c>public class GameRuntime : PlayNanooRuntime&lt;BasicSave.Row&gt; { }</c>
-/// </para>
+/// StaticUserSave&lt;TRow&gt; 인스턴스는 SDK를 통해 자동으로 연결됩니다.
 /// </summary>
-public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
-    where TRow : class, new()
+public class PlayNanooRuntime : SupabaseRuntime
 {
     [Tooltip("PlayNanoo 콘솔에 등록한 스토리지 키")]
     [SerializeField] private string _nanooStorageKey = "save";
@@ -48,8 +43,8 @@ public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
     private string _nanooAccessToken;  // 로그인 성공 시 저장, 로그아웃에 사용
     private string _pendingLoginType;  // "guest"|"google"|"apple" — 탈퇴 복구 후 재로그인에 사용
 
-    // 세이브 싱글턴 — StaticUserSave<TRow>.SharedInstance로 자동 연결
-    private StaticUserSave<TRow> Save => StaticUserSave<TRow>.SharedInstance;
+    // 세이브 싱글턴 — StaticUserSave<TRow> 생성 시 자동 등록됨
+    private INanooSaveSyncable Save => Supabase.GetNanooSaveBridge();
 
     // ── 이벤트 ───────────────────────────────────────────────────────────────
 
@@ -202,12 +197,11 @@ public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
         var save = Save;
         if (save == null)
         {
-            Debug.LogWarning("[PlayNanooRuntime] StaticUserSave<TRow> 인스턴스가 없습니다. 세이브 클래스를 초기화했는지 확인하세요.");
+            Debug.LogWarning("[PlayNanooRuntime] StaticUserSave 인스턴스가 없습니다. 세이브 클래스를 초기화했는지 확인하세요.");
             return;
         }
 
-        var (ok, hasRow, sdkRow) =
-            await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>();
+        var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync();
         if (!ok) return;
 
         var nanooJson = await LoadRawFromNanoo();
@@ -215,31 +209,19 @@ public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
         if (!hasRow)
         {
             if (nanooJson != null)
-            {
-                var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
-                await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
-                save.ApplyRow(nanooRow);
-            }
+                await save.NanooPatchFromEmptyAsync(nanooJson);
             else
-            {
                 await save.TryLoadAsync();
-            }
             return;
         }
 
         var nanooTime = ParseNanooTimestamp(nanooJson);
-        var sdkTime   = GetUpdatedAt(sdkRow);
-
         if (nanooTime > sdkTime)
-        {
-            var nanooRow = JsonUtility.FromJson<TRow>(nanooJson);
-            await Supabase.TryPatchUserDataDiffAsync(sdkRow, nanooRow);
-            save.ApplyRow(nanooRow);
-        }
+            await save.NanooPatchFromLastLoadedAsync(nanooJson);
         else
         {
-            save.ApplyRow(sdkRow);
-            SaveToNanoo(sdkRow);
+            save.NanooApplyLastLoaded();
+            SaveToNanoo(save.NanooGetLastLoadedJson());
         }
     }
 
@@ -266,17 +248,11 @@ public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
         return DateTime.TryParse(h?.lastCheckTime, out var t) ? t : DateTime.MinValue;
     }
 
-    private static DateTime GetUpdatedAt(TRow row)
+    /// <summary>PlayNanoo에 JSON 데이터를 저장합니다.</summary>
+    public void SaveToNanoo(string json)
     {
-        if (row == null) return DateTime.MinValue;
-        var val = typeof(TRow).GetField("updated_at")?.GetValue(row)?.ToString();
-        return DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
-    }
-
-    /// <summary>PlayNanoo에 데이터를 저장합니다. SDK 저장 직후 또는 SDK 데이터가 최신일 때 호출하세요.</summary>
-    public void SaveToNanoo(TRow row)
-    {
-        _plugin.Storage.Save(_nanooStorageKey, JsonUtility.ToJson(row), true,
+        if (string.IsNullOrEmpty(json)) return;
+        _plugin.Storage.Save(_nanooStorageKey, json, true,
             (status, _, _, _) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
@@ -287,7 +263,7 @@ public abstract class PlayNanooRuntime<TRow> : SupabaseRuntime
     /// <summary>현재 로컬 세이브 데이터를 PlayNanoo에 저장합니다.</summary>
     public void SaveCurrentToNanoo()
     {
-        var row = Save?.CurrentRow;
-        if (row != null) SaveToNanoo(row);
+        var json = Save?.NanooCurrentJson;
+        if (json != null) SaveToNanoo(json);
     }
 }
