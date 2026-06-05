@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using PlayNANOO;
 using TrueBase.Unity;
+using TrueBase.Unity.Config;
 using UnityEngine;
 
 /// <summary>
