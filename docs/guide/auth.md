@@ -104,6 +104,20 @@ void OnReady(bool success)
    패키지명과 SHA-1 지문을 입력합니다.  
    웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
 
+#### Android 사전 설정
+
+`TrySignInWithGoogleAsync()`는 내부적으로 Android Credential Manager API를 사용합니다. 아래 의존성이 프로젝트에 포함되어 있어야 합니다.
+
+**External Dependency Manager(EDM)가 있는 경우:** SDK에 포함된 `GoogleLoginDependencies.xml`이 자동으로 해결합니다. `Assets > External Dependency Manager > Android Resolver > Force Resolve`를 실행하세요.
+
+**EDM이 없는 경우:** `Assets/Plugins/Android/mainTemplate.gradle`의 `dependencies` 블록에 수동으로 추가합니다.
+
+```gradle
+implementation 'androidx.credentials:credentials:1.3.0'
+implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
+implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+```
+
 #### 로그인
 
 ```csharp
