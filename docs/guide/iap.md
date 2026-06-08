@@ -139,3 +139,56 @@ _iapFacade = await Supabase.CreateIAPAsync(
 `price_amount_krw` 컬럼을 사용하면 해외 결제 포함 합산이 가능합니다.  
 환산에 실패한 행은 `COALESCE(price_amount_krw, 0)`으로 처리하세요.
 :::
+
+---
+
+## v4 → v5 + SDK 마이그레이션 {#migration}
+
+Unity IAP v4에서 `IStoreListener`/`ConfigurationBuilder`로 직접 구현하던 프로젝트를 이 SDK로 전환하는 절차입니다.
+
+### 1. 패키지 업데이트
+
+Package Manager에서 `com.unity.purchasing`을 **5.2.1 이상**으로 업데이트합니다.
+
+### 2. 기존 코드 제거
+
+```csharp
+// 삭제 — v4 초기화
+var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance());
+builder.AddProduct("com.mygame.item", ProductType.Consumable);
+UnityPurchasing.Initialize(this, builder);
+
+// 삭제 — IStoreListener 구현
+void IStoreListener.OnInitialized(IStoreController ctrl, IExtensionProvider ext) { ... }
+void IStoreListener.OnInitializeFailed(InitializationFailureReason error) { ... }
+PurchaseProcessingResult IStoreListener.ProcessPurchase(PurchaseEventArgs args)
+{
+    // 서버 검증 직접 호출 ...
+    storeController.ConfirmPendingPurchase(args.purchasedProduct);
+    return PurchaseProcessingResult.Complete;
+}
+void IDetailedStoreListener.OnPurchaseFailed(Product p, PurchaseFailureDescription d) { ... }
+```
+
+### 3. SDK로 교체
+
+```csharp
+private IAPFacade _iapFacade;
+
+private async void Start()
+{
+    _iapFacade?.Dispose();
+    _iapFacade = await Supabase.CreateIAPAsync(
+        productIds: new[] { "com.mygame.item" },
+        onGrant: async (productId, isResuming, alreadyVerified) =>
+        {
+            // 서버 검증은 SDK가 완료한 상태. 아이템만 지급.
+            await GiveItemAsync(productId);
+            return true; // true → SDK가 소비 처리
+        });
+}
+
+private void OnDestroy() => _iapFacade?.Dispose();
+```
+
+초기화·서버 검증·미처리 주문 재처리가 모두 SDK 내부에서 자동으로 처리됩니다.
