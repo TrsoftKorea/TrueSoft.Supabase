@@ -155,6 +155,46 @@ playNanooRuntime.OnWithdrawalRestoreLoginFailed += async () =>
 
 ---
 
+## 인앱 결제 (IAP)
+
+`PlayNanooRuntime`이 씬에 있으면 IAP 결제도 **PlayNanoo → SDK 순서**로 자동 처리됩니다.  
+게임 코드(`SupabaseIAP.CreateIAPAsync(...)`)는 변경 없이 동작합니다.
+
+### iOS SK1 강제
+
+PlayNanoo IAP는 StoreKit 1 영수증(base64 receipt)만 지원합니다.  
+`PlayNanooRuntime`은 `Awake`에서 자동으로 SK1을 강제합니다.
+
+| Unity IAP 버전 | 동작 |
+|---------------|------|
+| v4 | SK1 기본 동작 — 별도 설정 불필요 |
+| v5.1 이상 | `StoreKitSelector.forceStoreKit1 = true` 자동 설정 |
+| v5.0.x | SK1 강제 불가 — iOS 15 이상에서 PlayNanoo IAP 작동 안 함. 콘솔에 **오류** 출력 |
+
+::: warning Unity IAP 5.0.x 사용 시
+iOS 15+ 기기에서 PlayNanoo IAP가 작동하지 않습니다.  
+PlayNanoo와 함께 사용한다면 Unity IAP를 **4.x 또는 5.1 이상**으로 유지하세요.
+:::
+
+### 결제 흐름
+
+구매가 완료되면 PlayNanoo가 먼저 검증하고, 성공 시 SDK 서버 검증이 이어집니다.  
+PlayNanoo 검증이 실패하면 SDK 검증은 실행되지 않고 구매가 중단됩니다.
+
+```
+구매 완료
+  └─ PlayNanoo IAP 검증
+       └─ 성공 → SDK 서버 검증 → onGrant 콜백 → 소비(Confirm)
+       └─ 실패 → onFailed 콜백
+```
+
+### PlayNANOO 제거 후
+
+PlayNanoo 런타임을 제거하면 인터셉터도 함께 해제됩니다.  
+이후 IAP는 SDK 서버 검증만 거칩니다. 게임 코드 변경 없음.
+
+---
+
 ## DB 컬럼 설정
 
 PlayNANOO Storage JSON은 **camelCase** 키를 사용합니다 (`bgmVolume`, `cameraShake` 등).  

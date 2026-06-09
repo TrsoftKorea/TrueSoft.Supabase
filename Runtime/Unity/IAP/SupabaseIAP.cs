@@ -6,7 +6,7 @@ namespace TrueBase.Unity
 {
     /// <summary>
     /// IAP(인앱 결제) 관련 Supabase API.
-    /// <c>com.unity.purchasing</c> 5.2.1 이상이 프로젝트에 설치되어 있어야 사용 가능합니다.
+    /// Unity IAP v4 (<c>com.unity.purchasing</c> 4.x) 및 v5 (5.x) 모두 지원합니다.
     /// </summary>
     public static class SupabaseIAP
     {
@@ -14,7 +14,13 @@ namespace TrueBase.Unity
 
         /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>
         public static IAPFacade CreateIAP()
-            => new IAPFacade(VerifyForIAPFacadeAsync);
+        {
+#if UNITY_IAP_V5
+            return new IAPFacade(VerifyForIAPFacadeAsync, VerifyReceiptForIAPFacadeAsync);
+#else
+            return new IAPFacade(VerifyGoogleForIAPFacadeV4Async, VerifyAppleForIAPFacadeV4Async);
+#endif
+        }
 
         /// <summary>Google Play IAP 파사드를 생성합니다.</summary>
         public static GooglePlayIAPFacade CreateGooglePlayIAP()
@@ -23,8 +29,16 @@ namespace TrueBase.Unity
 
         /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
         public static AppleIAPFacade CreateAppleIAP()
-            => new AppleIAPFacade((jws, productId) =>
-                Supabase.TryVerifyApplePurchaseAsync(jws, productId));
+        {
+#if UNITY_IAP_V5
+            return new AppleIAPFacade(
+                (jws, productId)     => Supabase.TryVerifyApplePurchaseAsync(jws, productId),
+                (receipt, productId) => Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
+#else
+            return new AppleIAPFacade(
+                (receipt, productId) => Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
+#endif
+        }
 
         // ── 파사드 생성 + 초기화 ───────────────────────────────────────────────
 
@@ -39,7 +53,7 @@ namespace TrueBase.Unity
         public static async Task<IAPFacade> CreateIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
-            Action<FailedOrder>                  onFailed  = null,
+            Action<IAPPurchaseFailedInfo>         onFailed  = null,
             int                                  timeoutMs = 10_000)
         {
             var facade = CreateIAP();
@@ -61,7 +75,7 @@ namespace TrueBase.Unity
         public static async Task<GooglePlayIAPFacade> CreateGooglePlayIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
-            Action<FailedOrder>                  onFailed  = null,
+            Action<IAPPurchaseFailedInfo>         onFailed  = null,
             int                                  timeoutMs = 10_000)
         {
             var facade = CreateGooglePlayIAP();
@@ -83,7 +97,7 @@ namespace TrueBase.Unity
         public static async Task<AppleIAPFacade> CreateAppleIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
-            Action<FailedOrder>                  onFailed  = null,
+            Action<IAPPurchaseFailedInfo>         onFailed  = null,
             int                                  timeoutMs = 10_000)
         {
             var facade = CreateAppleIAP();
@@ -94,8 +108,10 @@ namespace TrueBase.Unity
             return facade;
         }
 
-        // ── 내부 검증 ──────────────────────────────────────────────────────────
+        // ── 내부 검증 헬퍼 (IAPFacade 전용) ──────────────────────────────────
 
+#if UNITY_IAP_V5
+        // v5: token = JWS(iOS SK2) 또는 purchaseToken(Android)
         private static async Task<(bool, IAPPurchaseResponse)> VerifyForIAPFacadeAsync(
             string token, string productId, long priceAmount = 0, string priceCurrency = null)
         {
@@ -111,6 +127,7 @@ namespace TrueBase.Unity
                 store            = "google_play"
             });
 #elif UNITY_IOS
+            // SK2 (JWS) 경로
             var (ok, r) = await Supabase.TryVerifyApplePurchaseAsync(token, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
@@ -127,5 +144,57 @@ namespace TrueBase.Unity
             return (false, default);
 #endif
         }
+
+        // v5: SK1 폴백 (iOS 14 이하, forceStoreKit1)
+        private static async Task<(bool, IAPPurchaseResponse)> VerifyReceiptForIAPFacadeAsync(
+            string receipt, string productId)
+        {
+            var (ok, r) = await Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
+            if (!ok || r == null) return (false, default);
+            return (true, new IAPPurchaseResponse {
+                ok               = true,
+                already_verified = r.already_verified,
+                order_id         = r.transaction_id,
+                product_id       = r.product_id,
+                purchase_state   = r.purchase_state,
+                reason           = r.reason,
+                store            = "apple_app_store"
+            });
+        }
+
+#else
+        // v4: Google Play 검증
+        private static async Task<(bool, IAPPurchaseResponse)> VerifyGoogleForIAPFacadeV4Async(
+            string token, string productId, long priceAmount = 0, string priceCurrency = null)
+        {
+            var (ok, r) = await Supabase.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
+            if (!ok || r == null) return (false, default);
+            return (true, new IAPPurchaseResponse {
+                ok               = true,
+                already_verified = r.already_verified,
+                order_id         = r.order_id,
+                purchase_state   = r.purchase_state,
+                reason           = r.reason,
+                store            = "google_play"
+            });
+        }
+
+        // v4: Apple SK1 검증
+        private static async Task<(bool, IAPPurchaseResponse)> VerifyAppleForIAPFacadeV4Async(
+            string receipt, string productId)
+        {
+            var (ok, r) = await Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
+            if (!ok || r == null) return (false, default);
+            return (true, new IAPPurchaseResponse {
+                ok               = true,
+                already_verified = r.already_verified,
+                order_id         = r.transaction_id,
+                product_id       = r.product_id,
+                purchase_state   = r.purchase_state,
+                reason           = r.reason,
+                store            = "apple_app_store"
+            });
+        }
+#endif
     }
 }

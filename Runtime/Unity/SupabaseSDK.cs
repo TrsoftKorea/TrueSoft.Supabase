@@ -57,8 +57,9 @@ namespace TrueBase.Unity
         private static float _withdrawalRequestDelayDays = 7f;
         private const string _withdrawalGuardFunctionName = "withdrawal-guard";
         private static bool _isRecreatingAfterWithdrawalDelete;
-        private const string _purchaseVerifyGoogleFunctionName = "purchase-verify-google";
-        private const string _purchaseVerifyAppleFunctionName  = "purchase-verify-apple";
+        private const string _purchaseVerifyGoogleFunctionName       = "purchase-verify-google";
+        private const string _purchaseVerifyAppleFunctionName        = "purchase-verify-apple";
+        private const string _purchaseVerifyAppleLegacyFunctionName  = "purchase-verify-apple-legacy";
         private const string _getBanInfoFunctionName = "get-ban-info";
 
         // ── PlayNANOO 이관 브릿지 ──────────────────────────────────────────────────
@@ -74,6 +75,21 @@ namespace TrueBase.Unity
         internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptRequestMyWithdrawal;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
+
+        // ── PlayNANOO IAP 인터셉터 ────────────────────────────────────────────
+        // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
+        internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;
+        internal static Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> _interceptIAPGoogle;
+
+        /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
+        public static void RegisterIAPAppleInterceptor(
+            Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor)
+            => _interceptIAPApple = interceptor;
+
+        /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
+        public static void RegisterIAPGoogleInterceptor(
+            Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor)
+            => _interceptIAPGoogle = interceptor;
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void RegisterPlayNanooInterceptors(
@@ -104,6 +120,8 @@ namespace TrueBase.Unity
             _interceptRequestMyWithdrawal                     = null;
             _interceptLinkGoogleToCurrentAnonymousWithIdToken = null;
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = null;
+            _interceptIAPApple  = null;
+            _interceptIAPGoogle = null;
         }
 
         private enum SignInMethodKind
@@ -2058,6 +2076,11 @@ namespace TrueBase.Unity
                 price_amount   = priceAmount,
                 price_currency = priceCurrency,
             };
+
+            if (_interceptIAPGoogle != null)
+                return await _interceptIAPGoogle(purchaseToken, productId, priceAmount, priceCurrency,
+                    () => Functions.InvokeAsync<GooglePlayPurchaseResponse>(_purchaseVerifyGoogleFunctionName, req, requireAuth: true));
+
             return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
                 _purchaseVerifyGoogleFunctionName, req, requireAuth: true);
         }
@@ -2109,6 +2132,47 @@ namespace TrueBase.Unity
         {
             const string tag = "[Supabase.Purchase.VerifyApple]";
             var result = await VerifyApplePurchaseAsync(jwsToken, productId, bundleId);
+            if (!result.IsSuccess)
+            {
+                if (_enableApiResultLogs)
+                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                return (false, default);
+            }
+            return (true, result.Data);
+        }
+
+        /// <summary>Apple App Store SK1 영수증(verifyReceipt)을 서버에서 검증합니다. Unity IAP v4 또는 iOS 14 이하에서 사용합니다.</summary>
+        /// <param name="receipt">SK1 base64 encoded receipt blob (Unity IAP 영수증의 Payload 필드).</param>
+        /// <param name="productId">상품 ID.</param>
+        /// <param name="bundleId">앱 Bundle ID. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
+        public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseLegacyAsync(
+            string receipt,
+            string productId,
+            string bundleId = null)
+        {
+            var req = new AppleIAPLegacyPurchaseRequest
+            {
+                receipt    = receipt,
+                product_id = productId,
+                bundle_id  = bundleId ?? UnityEngine.Application.identifier,
+            };
+
+            if (_interceptIAPApple != null)
+                return await _interceptIAPApple(receipt, productId,
+                    () => Functions.InvokeAsync<AppleIAPPurchaseResponse>(_purchaseVerifyAppleLegacyFunctionName, req, requireAuth: true));
+
+            return await Functions.InvokeAsync<AppleIAPPurchaseResponse>(
+                _purchaseVerifyAppleLegacyFunctionName, req, requireAuth: true);
+        }
+
+        /// <summary><see cref="VerifyApplePurchaseLegacyAsync"/>를 호출하고 성공 시 응답을 반환, 실패 시 <c>default</c>를 반환합니다.</summary>
+        public static async Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseLegacyAsync(
+            string receipt,
+            string productId,
+            string bundleId = null)
+        {
+            const string tag = "[Supabase.Purchase.VerifyAppleLegacy]";
+            var result = await VerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)

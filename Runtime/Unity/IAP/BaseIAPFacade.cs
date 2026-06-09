@@ -1,3 +1,4 @@
+#if UNITY_IAP_V5
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -40,7 +41,7 @@ namespace TrueBase.Unity
         public Func<string, bool, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
-        public event Action<FailedOrder> OnPurchaseFailed;
+        public event Action<IAPPurchaseFailedInfo> OnPurchaseFailed;
 
         /// <summary>SDK IAP 초기화 완료 여부.</summary>
         public bool IsInitialized => _isInitialized;
@@ -67,15 +68,6 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"{LogTag} productIds가 비어 있습니다.");
                 return false;
             }
-
-#if UNITY_IOS
-            if (System.Version.TryParse(UnityEngine.iOS.Device.systemVersion, out var iosVer)
-                && iosVer < new System.Version(15, 0))
-            {
-                Debug.LogError($"{LogTag} iOS {UnityEngine.iOS.Device.systemVersion} 은 지원되지 않습니다. 최소 iOS 15가 필요합니다.");
-                return false;
-            }
-#endif
 
             if (UnityServices.State != ServicesInitializationState.Initialized)
             {
@@ -257,8 +249,13 @@ namespace TrueBase.Unity
 
         private void OnPurchaseFailedHandler(FailedOrder order)
         {
-            Debug.LogWarning($"{LogTag} 구매 실패: {order}");
-            OnPurchaseFailed?.Invoke(order);
+            string productId;
+            try   { productId = order.CartOrdered.Items()[0].Product.definition.id; }
+            catch { productId = "unknown"; }
+            var info = new IAPPurchaseFailedInfo { ProductId = productId, FailureReason = order.ToString() };
+            Debug.LogWarning($"{LogTag} 구매 실패: product={info.ProductId}");
+            OnPurchaseFailed?.Invoke(info);
         }
     }
 }
+#endif

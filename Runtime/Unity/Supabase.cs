@@ -473,6 +473,20 @@ namespace TrueBase.Unity
             string bundleId = null) =>
             SupabaseSDK.TryVerifyApplePurchaseAsync(jwsToken, productId, bundleId);
 
+        /// <inheritdoc cref="SupabaseSDK.VerifyApplePurchaseLegacyAsync"/>
+        internal static Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseLegacyAsync(
+            string receipt,
+            string productId,
+            string bundleId = null) =>
+            SupabaseSDK.VerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseLegacyAsync"/>
+        public static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseLegacyAsync(
+            string receipt,
+            string productId,
+            string bundleId = null) =>
+            SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
+
         /// <summary>로그인 성공 시 세션을 SDK에 설정. 이후 Patch/LoadColumns API는 세션 인자 없이 사용 가능.</summary>
         public static void SetSession(SupabaseSession session) => SupabaseSDK.SetSession(session);
 
@@ -615,6 +629,16 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>
             SupabaseSDK.UnregisterPlayNanooInterceptors();
+
+        /// <inheritdoc cref="SupabaseSDK.RegisterIAPAppleInterceptor"/>
+        public static void RegisterIAPAppleInterceptor(
+            Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor) =>
+            SupabaseSDK.RegisterIAPAppleInterceptor(interceptor);
+
+        /// <inheritdoc cref="SupabaseSDK.RegisterIAPGoogleInterceptor"/>
+        public static void RegisterIAPGoogleInterceptor(
+            Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor) =>
+            SupabaseSDK.RegisterIAPGoogleInterceptor(interceptor);
 
         /// <summary>
         /// PlayNanooRuntime 전용. 현재 등록된 StaticUserSave 인스턴스를 반환합니다.

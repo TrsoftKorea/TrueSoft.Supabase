@@ -11,6 +11,14 @@ namespace TrueBase.Core.Models
     }
 
     [Serializable]
+    public sealed class AppleIAPLegacyPurchaseRequest
+    {
+        public string receipt;    // SK1: base64 encoded receipt blob (Unity IAP receipt의 Payload 필드)
+        public string product_id; // 기대하는 상품 ID
+        public string bundle_id;  // 앱 Bundle ID (null이면 Application.identifier 사용)
+    }
+
+    [Serializable]
     public sealed class AppleIAPPurchaseResponse
     {
         public bool ok;

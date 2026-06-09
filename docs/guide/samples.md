@@ -70,10 +70,10 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 
 ### SampleIAPScenarios
 
-`com.unity.purchasing` 5.2.1 이상을 설치하면 자동으로 활성화됩니다.
+`com.unity.purchasing` 4.x 이상을 설치하면 자동으로 활성화됩니다.
 
 **사전 준비:**
-1. `com.unity.purchasing` 5.2.1 이상 설치
+1. `com.unity.purchasing` 4.x 이상 설치
 2. [Database Setup](./getting-started.md#database-setup) 완료
 3. Inspector에서 `productId` 입력
 

@@ -10,21 +10,7 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 [Database Setup](./getting-started.md#database-setup) 절차를 먼저 완료하세요.
 
-이후 Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
-설치 후 `TRUESOFT_IAP_AVAILABLE` 심볼이 자동으로 정의됩니다.
-
-### 플랫폼 요구사항
-
-| 플랫폼 | 최소 버전 | 이유 |
-|--------|----------|------|
-| iOS | **15.0 이상** | StoreKit 2 (JWS) 사용. StoreKit 1은 지원하지 않습니다. |
-| Android | 기존 프로젝트 기준 | 별도 제약 없음 |
-
-::: tip iOS 배포 대상 자동 설정
-SDK가 포함하는 Editor 스크립트(`IOSDeploymentTargetPostProcessor`)가 iOS 빌드 시 Xcode의 `IPHONEOS_DEPLOYMENT_TARGET`을 자동으로 **15.0 이상**으로 설정합니다.  
-이미 15.0 이상으로 설정되어 있으면 변경하지 않습니다.  
-App Store에서 iOS 14 이하 기기의 다운로드가 자동으로 차단됩니다.
-:::
+이후 Package Manager에서 `com.unity.purchasing` **4.x 이상**을 설치합니다.
 
 ---
 
@@ -73,7 +59,7 @@ private void OnDestroy()
 
 ## 주의사항
 
-::: warning 주의사항
+::: warning
 - **로그인 후 초기화**: `CreateIAPAsync`는 반드시 로그인 완료 이후에 호출하세요. 자동 로그인 경로에서도 마찬가지입니다.
 - **소모품 전용**: 비소모품(Non-Consumable)과 구독(Subscription)은 현재 지원하지 않습니다.
 - **반드시 Dispose**: `OnDestroy`에서 `Dispose()`를 호출하지 않으면 이벤트 핸들러가 누수됩니다.
@@ -111,15 +97,14 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 ### 구매 실패 콜백
 
 ```csharp
-_iapFacade?.Dispose();
 _iapFacade = await SupabaseIAP.CreateIAPAsync(
-    productIds: new[] { "com.mygame.coins_100", "com.mygame.gems_10" },
+    productIds: new[] { "com.mygame.coins_100" },
     onGrant: async (productId, _, _) =>
     {
-        // 아이템 지급
+        await GiveItemAsync(productId);
         return true;
     },
-    onFailed: order => Debug.LogWarning("구매 실패: " + order));
+    onFailed: info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"));
 ```
 
 ### 결제 금액 자동 기록
@@ -128,12 +113,13 @@ _iapFacade = await SupabaseIAP.CreateIAPAsync(
 
 | 컬럼 | 타입 | 내용 |
 |------|------|------|
-| `price_amount` | bigint | 결제 원금 (정수). Android는 `localizedPrice`, iOS는 JWS에서 추출 |
+| `price_amount` | bigint | 결제 원금 (정수). Android는 `localizedPrice`에서 추출 |
 | `price_currency` | text | ISO 4217 통화 코드 (예: `"KRW"`, `"USD"`) |
 | `price_amount_krw` | bigint | KRW 환산 금액. 결제 시점 환율 기준 (frankfurter.app). 환산 실패 시 null |
 
 - **Android**: 클라이언트가 Unity IAP `Product.metadata.localizedPrice` / `isoCurrencyCode`를 서버로 전달합니다.
-- **iOS**: JWS 토큰에 가격 정보가 포함되어 있어 클라이언트가 별도로 전달하지 않습니다. 서버가 JWS에서 자동으로 추출합니다.
+- **iOS SK2** (Unity IAP v5, StoreKit 2): JWS 토큰에 가격 정보가 포함되어 있어 서버가 자동으로 추출합니다.
+- **iOS SK1** (Unity IAP v4, 또는 SK1 강제 모드): 가격 정보가 영수증에 없으므로 `price_amount` / `price_currency`는 저장되지 않습니다.
 
 ::: tip Retool 집계
 `price_amount_krw` 컬럼을 사용하면 해외 결제 포함 합산이 가능합니다.  
@@ -142,53 +128,19 @@ _iapFacade = await SupabaseIAP.CreateIAPAsync(
 
 ---
 
-## v4 → v5 + SDK 마이그레이션 {#migration}
+## Unity IAP 버전별 차이 {#iap-versions}
 
-Unity IAP v4에서 `IStoreListener`/`ConfigurationBuilder`로 직접 구현하던 프로젝트를 이 SDK로 전환하는 절차입니다.
+SDK는 Unity IAP **v4와 v5를 모두 지원**합니다. 게임 코드는 동일하며, 내부 영수증 처리 방식만 다릅니다.
 
-### 1. 패키지 업데이트
+| 항목 | v4 (4.x) | v5 (5.x) |
+|------|----------|----------|
+| iOS 영수증 형식 | SK1 (base64 receipt blob) | SK2 JWS (iOS 15+) / SK1 폴백 (iOS 14 이하, 또는 `forceStoreKit1`) |
+| iOS 서버 검증 함수 | `purchase-verify-apple-legacy` | `purchase-verify-apple` (SK2) + `purchase-verify-apple-legacy` (SK1 폴백) |
+| iOS 가격 자동 추출 | ✗ | ✔ (SK2 경로만 해당) |
+| PlayNanoo IAP 연동 | ✔ | ✔ (v5.1+ 에서 `forceStoreKit1` 자동 설정) |
 
-Package Manager에서 `com.unity.purchasing`을 **5.2.1 이상**으로 업데이트합니다.
-
-### 2. 기존 코드 제거
-
-```csharp
-// 삭제 — v4 초기화
-var builder = ConfigurationBuilder.Instance(StandardPurchasingModule.Instance());
-builder.AddProduct("com.mygame.item", ProductType.Consumable);
-UnityPurchasing.Initialize(this, builder);
-
-// 삭제 — IStoreListener 구현
-void IStoreListener.OnInitialized(IStoreController ctrl, IExtensionProvider ext) { ... }
-void IStoreListener.OnInitializeFailed(InitializationFailureReason error) { ... }
-PurchaseProcessingResult IStoreListener.ProcessPurchase(PurchaseEventArgs args)
-{
-    // 서버 검증 직접 호출 ...
-    storeController.ConfirmPendingPurchase(args.purchasedProduct);
-    return PurchaseProcessingResult.Complete;
-}
-void IDetailedStoreListener.OnPurchaseFailed(Product p, PurchaseFailureDescription d) { ... }
-```
-
-### 3. SDK로 교체
-
-```csharp
-private IAPFacade _iapFacade;
-
-private async void Start()
-{
-    _iapFacade?.Dispose();
-    _iapFacade = await SupabaseIAP.CreateIAPAsync(
-        productIds: new[] { "com.mygame.item" },
-        onGrant: async (productId, isResuming, alreadyVerified) =>
-        {
-            // 서버 검증은 SDK가 완료한 상태. 아이템만 지급.
-            await GiveItemAsync(productId);
-            return true; // true → SDK가 소비 처리
-        });
-}
-
-private void OnDestroy() => _iapFacade?.Dispose();
-```
-
-초기화·서버 검증·미처리 주문 재처리가 모두 SDK 내부에서 자동으로 처리됩니다.
+::: warning Unity IAP 5.0.x + PlayNanoo
+Unity IAP 5.0.x는 iOS 15 미만 기기에서 SK1을 강제할 수 없습니다.  
+PlayNanoo IAP는 SK1만 지원하므로, PlayNanoo와 함께 사용한다면 **Unity IAP 5.1 이상**으로 업그레이드하세요.  
+5.0.x에서 `PlayNanooRuntime`을 씬에 배치하면 콘솔에 오류가 출력됩니다.
+:::

@@ -138,7 +138,8 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | `withdrawal-cancel-redeem` | 공개 프로필 — 탈퇴 취소 토큰 사용 |
 | `withdrawal-guard` | 공개 프로필 — 탈퇴 계정 자동 처리 |
 | `purchase-verify-google` | 인앱 결제 — Android |
-| `purchase-verify-apple` | 인앱 결제 — iOS |
+| `purchase-verify-apple` | 인앱 결제 — iOS (SK2 / Unity IAP v5) |
+| `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 / Unity IAP v4, 또는 SK1 강제 모드) |
 
 ### 4. Secrets 설정
 
@@ -148,6 +149,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 |----------|----|------|
 | `CANCEL_TOKEN_SECRET` | 탈퇴 취소 사용 시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
+| `APPLE_SHARED_SECRET` | iOS IAP 사용 시 (SK1) | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
 
 ::: details GOOGLE_SERVICE_ACCOUNT_JSON 발급 방법
 

@@ -28,6 +28,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PlayNANOO;
+using TrueBase.Core.Common;
+using TrueBase.Core.Models;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
 using UnityEngine;
@@ -79,6 +81,28 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <summary>PlayNANOO 탈퇴 취소. 완료 후 callback(status)을 호출해야 합니다.</summary>
     protected abstract void NanooWithDrawalRestore(string key, Func<string, Task> callback);
 
+    // ── PlayNANOO IAP 메서드 (virtual — 필요 시 서브클래스에서 override) ─────────
+
+    /// <summary>
+    /// PlayNANOO iOS IAP 검증 호출. callback(status)로 결과를 반환합니다.
+    /// 구/신버전 PlayNANOO 모두 동일 API이므로 일반적으로 override 불필요합니다.
+    /// </summary>
+    protected virtual void NanooIAPIOS(
+        string receipt, string productId, string currency, double price,
+        Func<string, Task> callback)
+        => _plugin.IAP.IOS(receipt, productId, currency, (float)price,
+            async (s, _, _, _) => await callback(s));
+
+    /// <summary>
+    /// PlayNANOO Android IAP 검증 호출. callback(status)로 결과를 반환합니다.
+    /// 구/신버전 PlayNANOO 모두 동일 API이므로 일반적으로 override 불필요합니다.
+    /// </summary>
+    protected virtual void NanooIAPAndroid(
+        string purchaseToken,
+        Func<string, Task> callback)
+        => _plugin.IAP.Android(purchaseToken,
+            async (s, _, _, _) => await callback(s));
+
     // ── 초기화 ───────────────────────────────────────────────────────────────
 
     protected override void Awake()
@@ -95,11 +119,49 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             linkGoogleToCurrentAnonymousWithIdToken: InterceptLinkGoogleToCurrentAnonymousWithIdToken,
             linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken
         );
+
+        // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
+#if UNITY_IAP_V5_1 && UNITY_IOS
+        UnityEngine.Purchasing.StoreKitSelector.forceStoreKit1 = true;
+#elif UNITY_IAP_V5 && UNITY_IOS
+        Debug.LogError("[PlayNanoo] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
+#endif
+
+        Supabase.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>
+        {
+            var tcs = new TaskCompletionSource<SupabaseResult<AppleIAPPurchaseResponse>>();
+            NanooIAPIOS(receipt, productId, string.Empty, 0d, async status =>
+            {
+                if (status != Configure.PN_API_STATE_SUCCESS)
+                {
+                    tcs.SetResult(SupabaseResult<AppleIAPPurchaseResponse>.Fail("playnanoo_iap_ios_failed"));
+                    return;
+                }
+                tcs.SetResult(await sdkVerify());
+            });
+            return await tcs.Task;
+        });
+
+        Supabase.RegisterIAPGoogleInterceptor(async (purchaseToken, productId, priceAmount, priceCurrency, sdkVerify) =>
+        {
+            var tcs = new TaskCompletionSource<SupabaseResult<GooglePlayPurchaseResponse>>();
+            NanooIAPAndroid(purchaseToken, async status =>
+            {
+                if (status != Configure.PN_API_STATE_SUCCESS)
+                {
+                    tcs.SetResult(SupabaseResult<GooglePlayPurchaseResponse>.Fail("playnanoo_iap_android_failed"));
+                    return;
+                }
+                tcs.SetResult(await sdkVerify());
+            });
+            return await tcs.Task;
+        });
     }
 
     private void OnDestroy()
     {
         Supabase.UnregisterPlayNanooInterceptors();
+        // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
     }
 
     // ── 인터셉터 구현 ─────────────────────────────────────────────────────────

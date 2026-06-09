@@ -1,3 +1,4 @@
+#if UNITY_IAP_V5
 using System;
 using System.Threading.Tasks;
 using TrueBase.Core.Models;
@@ -28,12 +29,15 @@ namespace TrueBase.Unity
     public sealed class IAPFacade : BaseIAPFacade
     {
         private readonly Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
+        private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyReceiptAsync;
 
         // ── 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성) ─────────────
         internal IAPFacade(
-            Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync)
+            Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync,
+            Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyReceiptAsync = null)
         {
-            _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
+            _verifyAsync        = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
+            _verifyReceiptAsync = verifyReceiptAsync;
         }
 
         // ── 서버 검증 (플랫폼 자동 감지) ─────────────────────────────────────
@@ -66,7 +70,7 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"{LogTag} Receipt가 비어 있습니다.");
                 return;
             }
-            token = GooglePlayIAPFacade.ExtractPurchaseToken(receipt);
+            token = GooglePlayReceiptParser.ExtractPurchaseToken(receipt);
             if (string.IsNullOrEmpty(token))
             {
                 Debug.LogWarning($"{LogTag} purchaseToken 추출 실패. product={productId}");
@@ -74,36 +78,65 @@ namespace TrueBase.Unity
             }
             priceAmount   = (long)(cartItems[0].Product.metadata.localizedPrice);
             priceCurrency = cartItems[0].Product.metadata.isoCurrencyCode;
-#elif UNITY_IOS
-            var appleInfo = pendingOrder.Info as IAppleOrderInfo;
-            token = appleInfo?.jwsRepresentation;
-            if (string.IsNullOrEmpty(token))
-            {
-                Debug.LogWarning($"{LogTag} JWS를 가져올 수 없습니다. iOS 15+ 기기에서만 지원됩니다. product={productId}");
-                return;
-            }
-            priceAmount   = 0;
-            priceCurrency = null;
-#else
-            Debug.LogWarning($"{LogTag} 지원되지 않는 플랫폼입니다.");
-            return;
-#endif
 
             var (success, response) = await _verifyAsync(token, productId, priceAmount, priceCurrency);
-
-            if (!success || response == null)
-            {
-                Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}");
-                return;
-            }
-
-            if (!response.ok)
-            {
-                Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}");
-                return;
-            }
-
+            if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
+            if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
             await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+
+#elif UNITY_IOS
+            var appleInfo = pendingOrder.Info as IAppleOrderInfo;
+            var jws = appleInfo?.jwsRepresentation;
+
+            if (!string.IsNullOrEmpty(jws))
+            {
+                // StoreKit 2 경로 (iOS 15+)
+                priceAmount   = 0;
+                priceCurrency = null;
+                var (success, response) = await _verifyAsync(jws, productId, priceAmount, priceCurrency);
+                if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
+                if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
+                await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+            }
+            else
+            {
+                // StoreKit 1 폴백 (iOS 14 이하, IAP 5.1+ forceStoreKit1 활성화 시)
+                if (_verifyReceiptAsync == null)
+                {
+                    Debug.LogWarning($"{LogTag} JWS를 가져올 수 없고 SK1 검증 함수도 없습니다. product={productId}");
+                    return;
+                }
+                var receiptPayload = ExtractAppleReceiptPayload(pendingOrder.Info?.Receipt);
+                if (string.IsNullOrEmpty(receiptPayload))
+                {
+                    Debug.LogWarning($"{LogTag} Apple 영수증 Payload를 추출할 수 없습니다. product={productId}");
+                    return;
+                }
+                var (success, response) = await _verifyReceiptAsync(receiptPayload, productId);
+                if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증(SK1) 실패. product={productId}"); return; }
+                if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다(SK1). reason={response.reason}, product={productId}"); return; }
+                await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+            }
+#else
+            Debug.LogWarning($"{LogTag} 지원되지 않는 플랫폼입니다.");
+#endif
         }
+
+        // ── 헬퍼 ──────────────────────────────────────────────────────────────
+
+        private static string ExtractAppleReceiptPayload(string unityReceipt)
+        {
+            if (string.IsNullOrWhiteSpace(unityReceipt)) return null;
+            try
+            {
+                var wrapper = UnityEngine.JsonUtility.FromJson<AppleReceiptWrapper>(unityReceipt);
+                return wrapper?.Payload;
+            }
+            catch { return null; }
+        }
+
+        [System.Serializable]
+        private sealed class AppleReceiptWrapper { public string Payload; }
     }
 }
+#endif
