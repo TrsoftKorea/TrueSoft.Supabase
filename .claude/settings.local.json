@@ -3,7 +3,8 @@
     "allow": [
       "mcp__rider__list_directory_tree",
       "mcp__rider__get_file_text_by_path",
-      "Bash(Find \"D:\\\\Project\\\\TrueSoft.Supabase\\\\Samples~\\\\DatabaseSetup\\\\SQL\\\\edge-functions\" -name \"displayname-*\" -type f)"
+      "Bash(Find \"D:\\\\Project\\\\TrueSoft.Supabase\\\\Samples~\\\\DatabaseSetup\\\\SQL\\\\edge-functions\" -name \"displayname-*\" -type f)",
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__get_logs"
     ]
   }
 }

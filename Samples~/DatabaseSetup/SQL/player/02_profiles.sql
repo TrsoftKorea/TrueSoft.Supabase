@@ -191,6 +191,8 @@ on public.user_profiles for update
 using (account_id is not null and account_id = auth.uid())
 with check (server_id is not null);
 
+grant select, insert, update on public.user_profiles to authenticated;
+
 -- PostgREST upsert(merge-duplicates) UPDATE 분기에서 기존 server_id가 NULL이면 WITH CHECK(server_id is not null)가 계속 실패(42501→403).
 -- INSERT 시에도 JSON에 server_id가 없을 때 RLS/기본값 평가 순서에 따라 NULL로 남는 경우가 있어 BEFORE에서 보강.
 create or replace function public.ts_profiles_coalesce_server_id()
@@ -587,5 +589,7 @@ with check (
 create policy "user_sessions_delete_own"
 on public.user_sessions for delete
 using (account_id = auth.uid());
+
+grant select, insert, update, delete on public.user_sessions to authenticated;
 
 notify pgrst, 'reload schema';

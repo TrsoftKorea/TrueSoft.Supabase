@@ -12,6 +12,18 @@
 await Supabase.TrySignInAnonymouslyAsync();
 ```
 
+`Try*` 메서드는 `SupabaseCallResult`를 반환합니다. `if (await ...)` 패턴과 완전히 호환되며, 실패 원인을 확인할 때는 결과를 변수에 받습니다.
+
+```csharp
+var result = await Supabase.TrySignInAnonymouslyAsync();
+if (!result.Success)
+{
+    Debug.Log(result.Reason);  // 실패 원인 ("user_banned", "http_response_null" 등)
+    if (result.Reason == SupabaseFailReason.UserBanned)
+        ShowBanScreen(result.BanInfo);  // 차단 정보 포함
+}
+```
+
 소셜 로그인은 [소셜 로그인 (선택)](#social-login)을 참고하세요.
 
 ---
@@ -140,6 +152,29 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 
 ---
 
+### Apple
+
+#### 로그인
+
+외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
+
+```csharp
+await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
+```
+
+#### 익명 → Apple 연동
+
+::: warning
+익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 아래 연동 전용 API를 사용하세요.  
+Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
+:::
+
+```csharp
+await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
+```
+
+---
+
 ## 로그아웃
 
 ```csharp
@@ -170,9 +205,9 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
-var result = await Supabase.SignInAnonymouslyAsync();
+var result = await Supabase.TrySignInAnonymouslyAsync();
 
-if (!result.IsSuccess && result.BanInfo != null)
+if (!result.Success && result.BanInfo != null)
 {
     var info = result.BanInfo;
 
@@ -188,7 +223,7 @@ if (!result.IsSuccess && result.BanInfo != null)
 }
 ```
 
-`Try*` 계열(bool 반환)을 사용하는 경우, `Result` API로 전환해야 `BanInfo`에 접근할 수 있습니다.
+`SupabaseCallResult.Reason == SupabaseFailReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
 
 ::: info
 `BanInfo` 조회는 `get-ban-info` Edge Function을 호출합니다. 차단 상태가 아닌 경우 `result.BanInfo`는 항상 `null`입니다.

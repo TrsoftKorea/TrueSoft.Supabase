@@ -28,7 +28,6 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
 
-  // ✅ 변경: service_role → 새 Secret Key (SECRET_KEY)
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -42,10 +41,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  const profileRes = await adminClient
+  // userClient로 조회 — RLS(auth.uid() = user.id)가 적용되므로 본인 프로필만 반환
+  const profileRes = await userClient
     .from("user_profiles")
-    .select("account_id, withdrawn_at")
-    .eq("account_id", user.id)
+    .select("withdrawn_at")
     .maybeSingle();
 
   if (profileRes.error) {

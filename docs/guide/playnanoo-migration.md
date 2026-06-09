@@ -7,10 +7,22 @@ PlayNANOO 기반 라이브 서비스를 SDK로 전환할 때 사용하는 브릿
 
 ## 동작 방식
 
-`PlayNanooRuntime`는 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
+`PlayNanooRuntimeBase`가 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
 이후 게임 코드가 `Supabase.TrySignInAnonymouslyAsync()` 등을 호출하면 **PlayNANOO 로그인이 먼저 실행된 뒤 SDK 로그인이 이어집니다.**
 
+PlayNANOO SDK 버전에 따라 두 구현체 중 하나를 씬에 배치합니다:
+
+| 구현체 | 사용 API | 비고 |
+|--------|---------|------|
+| `PlayNanooRuntime` | `AccountManagerV20240401.*` | 신버전 |
+| `PlayNanooLegacyRuntime` | `AccountGuestSignIn` / `AccountManager.*` | 구버전 |
+
 브릿지가 없으면 인터셉터도 없으므로, **게임 코드는 이관 전·중·후 동일합니다.**
+
+::: info 롤백
+PlayNANOO 로그인 성공 후 Supabase 로그인이 실패하면 PlayNANOO도 자동으로 로그아웃 처리됩니다. 한쪽만 로그인된 상태로 남지 않습니다.  
+**로그인·계정 연동 시에만 적용**됩니다. 로그아웃·탈퇴는 한쪽 실패 시 롤백 없이 경고 로그만 출력됩니다.
+:::
 
 | 로그인 | 이관 중 | PlayNANOO 제거 후 |
 |--------|---------|-----------------|
@@ -29,7 +41,9 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 ## 준비
 
 1. Package Manager **Samples** 탭에서 **PlayNANOO Migration**을 Import합니다.
-2. 씬에서 `SupabaseRuntime` 대신 `PlayNanooRuntime` 컴포넌트를 배치합니다.
+2. 씬에서 `SupabaseRuntime` 대신 SDK 버전에 맞는 컴포넌트를 배치합니다.
+   - 신버전(`AccountManagerV20240401`): `PlayNanooRuntime`
+   - 구버전(`AccountGuestSignIn` / `AccountManager.*`): `PlayNanooLegacyRuntime`
 3. Inspector에서 **Nanoo Storage Key**를 PlayNANOO 콘솔에 등록한 키로 변경합니다.
 
 `StaticUserSave<TRow>` 인스턴스는 SDK가 자동으로 연결합니다. 별도 서브클래스 파일이 필요 없습니다.
@@ -38,10 +52,10 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 
 ## 씬 설정
 
-기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 `PlayNanooRuntime`을 배치합니다.
+기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 버전에 맞는 구현체(`PlayNanooRuntime` 또는 `PlayNanooLegacyRuntime`)를 배치합니다.
 
 ::: warning
-`SupabaseRuntime`과 `PlayNanooRuntime`을 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
+`SupabaseRuntime`과 PlayNanoo 런타임을 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
 :::
 
 ---
@@ -113,13 +127,29 @@ playNanooRuntime.RestoreWithdrawal(withdrawalKey);
 
 | 로그인 유형 | 복구 후 동작 |
 |-------------|------------|
-| 게스트 | `Supabase.TrySignInAnonymouslyAsync()` 자동 재호출 |
+| 게스트 | `TrySignInAnonymouslyAsync()` 자동 재호출 → 성공 시 `TryClearMyWithdrawalAsync()` 자동 호출 |
 | Google / Apple | `OnWithdrawalRestored` 이벤트 발행 → 개발자가 재인증 UI 표시 |
 
 ```csharp
 playNanooRuntime.OnWithdrawalRestored += () =>
 {
     ShowSocialLoginScreen();
+};
+```
+
+::: tip Google / Apple 탈퇴 취소 후 재로그인
+소셜 로그인은 자동 재로그인이 불가능하므로, `OnWithdrawalRestored`에서 재인증 UI를 표시합니다.  
+재인증 성공 후에는 평소와 동일하게 `TrySignInWithGoogleAsync()` 등을 호출하면 되며,  
+Supabase `withdrawn_at` 해제(`TryClearMyWithdrawalAsync()`)는 개발자가 로그인 완료 시점에 직접 호출합니다.
+:::
+
+게스트 자동 재로그인이 실패한 경우 (`OnWithdrawalRestoreLoginFailed` 이벤트는 게스트 전용):
+
+```csharp
+playNanooRuntime.OnWithdrawalRestoreLoginFailed += async () =>
+{
+    // Supabase 재로그인 실패 → 개발자가 직접 재시도
+    await Supabase.TrySignInAnonymouslyAsync();
 };
 ```
 
@@ -200,7 +230,7 @@ playNanooRuntime.SaveCurrentToNanoo();
 
 ## PlayNANOO 제거 후
 
-1. `PlayNanooRuntime.cs` 삭제
+1. `PlayNanooRuntimeBase.cs` / `PlayNanooRuntime.cs` / `PlayNanooLegacyRuntime.cs` 삭제
 2. 씬에 `SupabaseRuntime` 배치
 3. 게임 코드 변경 없음
 
