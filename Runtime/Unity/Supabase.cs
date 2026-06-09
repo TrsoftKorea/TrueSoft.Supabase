@@ -5,9 +5,6 @@ using TrueBase.Core.Auth;
 using TrueBase.Core.Common;
 using TrueBase.Core.Data;
 using TrueBase.Core.Models;
-#if TRUESOFT_IAP_AVAILABLE
-using UnityEngine.Purchasing;
-#endif
 
 namespace TrueBase.Unity
 {
@@ -475,50 +472,6 @@ namespace TrueBase.Unity
             string productId,
             string bundleId = null) =>
             SupabaseSDK.TryVerifyApplePurchaseAsync(jwsToken, productId, bundleId);
-
-#if TRUESOFT_IAP_AVAILABLE
-        /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>
-        public static IAPFacade CreateIAP() => SupabaseSDK.CreateIAP();
-
-        /// <summary>Google Play IAP 파사드를 생성합니다.</summary>
-        public static GooglePlayIAPFacade CreateGooglePlayIAP() => SupabaseSDK.CreateGooglePlayIAP();
-
-        /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
-        public static AppleIAPFacade CreateAppleIAP() => SupabaseSDK.CreateAppleIAP();
-
-        /// <summary>
-        /// 통합 IAP 파사드를 생성하고 초기화까지 수행합니다. Android/iOS를 자동 감지합니다.
-        /// </summary>
-        /// <inheritdoc cref="SupabaseSDK.CreateIAPAsync"/>
-        public static Task<IAPFacade> CreateIAPAsync(
-            string[]                                     productIds,
-            Func<string, bool, bool, Task<bool>>         onGrant,
-            Action<FailedOrder>                          onFailed  = null,
-            int                                          timeoutMs = 10_000) =>
-            SupabaseSDK.CreateIAPAsync(productIds, onGrant, onFailed, timeoutMs);
-
-        /// <summary>
-        /// Google Play IAP 파사드를 생성하고 초기화까지 수행합니다.
-        /// </summary>
-        /// <inheritdoc cref="SupabaseSDK.CreateGooglePlayIAPAsync"/>
-        public static Task<GooglePlayIAPFacade> CreateGooglePlayIAPAsync(
-            string[]                                     productIds,
-            Func<string, bool, bool, Task<bool>>         onGrant,
-            Action<FailedOrder>                          onFailed  = null,
-            int                                          timeoutMs = 10_000) =>
-            SupabaseSDK.CreateGooglePlayIAPAsync(productIds, onGrant, onFailed, timeoutMs);
-
-        /// <summary>
-        /// Apple App Store IAP 파사드를 생성하고 초기화까지 수행합니다.
-        /// </summary>
-        /// <inheritdoc cref="SupabaseSDK.CreateAppleIAPAsync"/>
-        public static Task<AppleIAPFacade> CreateAppleIAPAsync(
-            string[]                                     productIds,
-            Func<string, bool, bool, Task<bool>>         onGrant,
-            Action<FailedOrder>                          onFailed  = null,
-            int                                          timeoutMs = 10_000) =>
-            SupabaseSDK.CreateAppleIAPAsync(productIds, onGrant, onFailed, timeoutMs);
-#endif
 
         /// <summary>로그인 성공 시 세션을 SDK에 설정. 이후 Patch/LoadColumns API는 세션 인자 없이 사용 가능.</summary>
         public static void SetSession(SupabaseSession session) => SupabaseSDK.SetSession(session);

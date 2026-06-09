@@ -4,9 +4,7 @@
   "references": [
     "TrueBase.Core",
     "UnityEngine.UnityWebRequestModule",
-    "UnityEngine.JSONSerializeModule",
-    "Unity.Purchasing",
-    "Unity.Services.Core"
+    "UnityEngine.JSONSerializeModule"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

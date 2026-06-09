@@ -121,9 +121,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
 :::
 
-### 3. Edge Function 배포
-
-기능별로 필요한 Edge Function만 배포하세요.
+### 3. Edge Function 배포 {#edge-function-deploy}
 
 아래 과정을 각 함수마다 반복합니다.
 

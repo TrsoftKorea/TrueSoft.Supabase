@@ -8,7 +8,7 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 ## 사전 준비
 
-[빠른 시작](./getting-started.md)의 **Database Setup** 절차를 먼저 완료하세요.
+[Database Setup](./getting-started.md#database-setup) 절차를 먼저 완료하세요.
 
 이후 Package Manager에서 `com.unity.purchasing` **5.2.1 이상**을 설치합니다.  
 설치 후 `TRUESOFT_IAP_AVAILABLE` 심볼이 자동으로 정의됩니다.
@@ -36,7 +36,7 @@ private IAPFacade _iapFacade;
 private async void Start()
 {
     _iapFacade?.Dispose();
-    _iapFacade = await Supabase.CreateIAPAsync(
+    _iapFacade = await SupabaseIAP.CreateIAPAsync(
         productIds: new[] { "com.mygame.coins_100", "com.mygame.coins_500", "com.mygame.gems_10" },
         onGrant: async (productId, _, _) =>
         {
@@ -112,7 +112,7 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 
 ```csharp
 _iapFacade?.Dispose();
-_iapFacade = await Supabase.CreateIAPAsync(
+_iapFacade = await SupabaseIAP.CreateIAPAsync(
     productIds: new[] { "com.mygame.coins_100", "com.mygame.gems_10" },
     onGrant: async (productId, _, _) =>
     {
@@ -178,7 +178,7 @@ private IAPFacade _iapFacade;
 private async void Start()
 {
     _iapFacade?.Dispose();
-    _iapFacade = await Supabase.CreateIAPAsync(
+    _iapFacade = await SupabaseIAP.CreateIAPAsync(
         productIds: new[] { "com.mygame.item" },
         onGrant: async (productId, isResuming, alreadyVerified) =>
         {

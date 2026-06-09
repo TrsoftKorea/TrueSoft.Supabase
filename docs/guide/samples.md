@@ -15,7 +15,7 @@ Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import
 초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.  
 설정을 완료하면 이 폴더는 삭제해도 됩니다.
 
-사용 방법은 [빠른 시작 — Database Setup](./getting-started.md#database-setup)을 참고하세요.
+사용 방법은 [Database Setup](./getting-started.md#database-setup)을 참고하세요.
 
 ---
 
@@ -74,14 +74,14 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 
 **사전 준비:**
 1. `com.unity.purchasing` 5.2.1 이상 설치
-2. [빠른 시작](./getting-started.md)의 DB 스키마 및 Edge Function 배포 완료
+2. [Database Setup](./getting-started.md#database-setup) 완료
 3. Inspector에서 `productId` 입력
 
 **구매 흐름:**
 
 ```csharp
 // 1. 로그인 후 IAP 초기화
-_iapFacade = await Supabase.CreateIAPAsync(
+_iapFacade = await SupabaseIAP.CreateIAPAsync(
     productIds: new[] { productId },
     onGrant:    OnGrantItemAsync,
     onFailed:   OnPurchaseFailed);

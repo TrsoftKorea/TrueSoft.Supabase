@@ -1,0 +1,21 @@
+{
+  "name": "TrueBase.Unity.IAP",
+  "rootNamespace": "TrueBase.Unity",
+  "references": [
+    "TrueBase.Core",
+    "TrueBase.Unity",
+    "Unity.Purchasing",
+    "Unity.Services.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "TRUESOFT_IAP_AVAILABLE"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

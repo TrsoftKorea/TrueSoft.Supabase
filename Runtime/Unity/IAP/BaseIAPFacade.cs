@@ -1,9 +1,7 @@
-﻿#if TRUESOFT_IAP_AVAILABLE
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using TrueBase.Core.Models;
 using Unity.Services.Core;
 using UnityEngine;
 using UnityEngine.Purchasing;
@@ -11,31 +9,17 @@ using UnityEngine.Purchasing;
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// Unity IAP v5 + Apple App Store 영수증 서버 검증 파사드.
-    /// 초기화·영수증 파싱·Supabase 검증·ConfirmPurchase를 SDK 내부에서 처리합니다.
+    /// IAP 파사드 공통 기반 클래스.
+    /// Unity IAP v5 인프라(초기화·이벤트·소비)를 담당합니다.
+    /// 플랫폼별 토큰 추출 및 서버 검증은 <see cref="ProcessPendingOrderAsync"/>에서 구현합니다.
     /// </summary>
     /// <remarks>
-    /// 사용 방법:
-    /// <code>
-    /// var iap = await Supabase.CreateAppleIAPAsync(
-    ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, isResuming, alreadyVerified) =>
-    ///     {
-    ///         await MyInventory.GiveItemAsync(productId);
-    ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
-    ///                      // false → Pending 유지 → 다음 InitializeAsync에서 재처리
-    ///     });
-    /// </code>
-    ///
-    /// 씬 언로드 시 반드시 <see cref="Dispose"/>를 호출하세요.
+    /// 직접 사용하지 말고 <see cref="SupabaseIAP"/>를 통해 생성하세요.
     /// </remarks>
-    public sealed class AppleIAPFacade : IDisposable
+    public abstract class BaseIAPFacade : IDisposable
     {
-        // ── 의존성 ────────────────────────────────────────────────────────────
-        // (jwsToken, productId) → (success, response)
-        private readonly Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyAsync;
-
         // ── Unity IAP v5 상태 ─────────────────────────────────────────────────
+
         private StoreController _storeController;
         private bool _isInitialized;
         private bool _isFetchingPurchases;
@@ -61,13 +45,6 @@ namespace TrueBase.Unity
         /// <summary>SDK IAP 초기화 완료 여부.</summary>
         public bool IsInitialized => _isInitialized;
 
-        // ── 생성자 (internal — Supabase.CreateAppleIAP()로만 생성) ──────────
-        internal AppleIAPFacade(
-            Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyAsync)
-        {
-            _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
-        }
-
         // ── 공개 메서드 ────────────────────────────────────────────────────────
 
         /// <summary>
@@ -81,22 +58,21 @@ namespace TrueBase.Unity
         {
             if (_disposed)
             {
-                Debug.LogWarning("[Supabase.IAP.Apple] Disposed 상태에서 InitializeAsync를 호출했습니다.");
+                Debug.LogWarning($"{LogTag} Disposed 상태에서 InitializeAsync를 호출했습니다.");
                 return false;
             }
 
             if (productIds == null || productIds.Length == 0)
             {
-                Debug.LogWarning("[Supabase.IAP.Apple] productIds가 비어 있습니다.");
+                Debug.LogWarning($"{LogTag} productIds가 비어 있습니다.");
                 return false;
             }
 
 #if UNITY_IOS
-            // StoreKit 2 (JWS)는 iOS 15+ 필수. 미만이면 즉시 실패.
             if (System.Version.TryParse(UnityEngine.iOS.Device.systemVersion, out var iosVer)
                 && iosVer < new System.Version(15, 0))
             {
-                Debug.LogError($"[Supabase.IAP.Apple] iOS {UnityEngine.iOS.Device.systemVersion} 은 지원되지 않습니다. 최소 iOS 15가 필요합니다.");
+                Debug.LogError($"{LogTag} iOS {UnityEngine.iOS.Device.systemVersion} 은 지원되지 않습니다. 최소 iOS 15가 필요합니다.");
                 return false;
             }
 #endif
@@ -109,13 +85,13 @@ namespace TrueBase.Unity
                 }
                 catch (Exception e)
                 {
-                    Debug.LogWarning("[Supabase.IAP.Apple] Unity Services 초기화 실패: " + e.Message);
+                    Debug.LogWarning($"{LogTag} Unity Services 초기화 실패: {e.Message}");
                     return false;
                 }
             }
 
-            _isInitialized       = false;
-            _isFetchingPurchases = false;
+            _isInitialized         = false;
+            _isFetchingPurchases   = false;
             _resumingPurchaseCount = 0;
 
             _storeController = UnityIAPServices.StoreController();
@@ -142,32 +118,32 @@ namespace TrueBase.Unity
                 await Task.Delay(50);
 
             if (!_isInitialized)
-                Debug.LogWarning("[Supabase.IAP.Apple] 초기화 타임아웃.");
+                Debug.LogWarning($"{LogTag} 초기화 타임아웃.");
 
             return _isInitialized;
         }
 
         /// <summary>
-        /// Apple App Store 결제창을 표시합니다.
+        /// 결제창을 표시합니다.
         /// 결제 완료 후 <see cref="OnGrantItemAsync"/>가 자동 호출됩니다.
         /// </summary>
         public bool Purchase(string productId)
         {
             if (_disposed)
             {
-                Debug.LogWarning("[Supabase.IAP.Apple] Disposed 상태에서 Purchase를 호출했습니다.");
+                Debug.LogWarning($"{LogTag} Disposed 상태에서 Purchase를 호출했습니다.");
                 return false;
             }
 
             if (!_isInitialized || _storeController == null)
             {
-                Debug.LogWarning("[Supabase.IAP.Apple] IAP가 초기화되지 않았습니다. InitializeAsync를 먼저 호출하세요.");
+                Debug.LogWarning($"{LogTag} IAP가 초기화되지 않았습니다. InitializeAsync를 먼저 호출하세요.");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(productId))
             {
-                Debug.LogWarning("[Supabase.IAP.Apple] productId가 비어 있습니다.");
+                Debug.LogWarning($"{LogTag} productId가 비어 있습니다.");
                 return false;
             }
 
@@ -197,35 +173,80 @@ namespace TrueBase.Unity
             OnPurchaseFailed = null;
         }
 
-        // ── Unity IAP v5 이벤트 핸들러 ───────────────────────────────────────
+        // ── 서브클래스 구현 ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 플랫폼별 토큰 추출 → 서버 검증 → 아이템 지급을 수행합니다.
+        /// 구현 완료 후 <see cref="GrantAndConfirmAsync"/>를 호출하세요.
+        /// </summary>
+        protected abstract Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming);
+
+        /// <summary>로그 접두사. 서브클래스에서 재정의하세요.</summary>
+        protected virtual string LogTag => "[Supabase.IAP]";
+
+        // ── 공통 지급 + 소비 ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// 아이템 지급 콜백을 호출하고, 성공 시 소모품을 소비합니다.
+        /// </summary>
+        protected async Task GrantAndConfirmAsync(
+            string productId, bool isResuming, bool alreadyVerified, PendingOrder pendingOrder)
+        {
+            if (OnGrantItemAsync == null)
+            {
+                Debug.LogWarning($"{LogTag} OnGrantItemAsync가 설정되지 않았습니다. 구매가 Pending 상태로 남습니다.");
+                return;
+            }
+
+            bool granted;
+            try
+            {
+                granted = await OnGrantItemAsync(productId, isResuming, alreadyVerified);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"{LogTag} OnGrantItemAsync 예외: {e.Message}");
+                granted = false;
+            }
+
+            if (granted)
+                _storeController?.ConfirmPurchase(pendingOrder);
+            else
+                Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
+        }
+
+        // ── Unity IAP v5 이벤트 핸들러 (공통) ───────────────────────────────────
 
         private void OnProductsFetchedHandler(List<Product> products)
         {
+            // FetchPurchases 호출 전에 플래그 세팅
+            // — OnPurchasePending이 OnPurchasesFetched보다 먼저 올 경우 isResuming을 올바르게 판별하기 위함
             _isFetchingPurchases = true;
             _storeController.FetchPurchases();
         }
 
         private void OnProductsFetchFailedHandler(ProductFetchFailed failure)
-        {
-            Debug.LogWarning("[Supabase.IAP.Apple] 상품 조회 실패: " + failure.FailureReason);
-        }
+            => Debug.LogWarning($"{LogTag} 상품 조회 실패: {failure.FailureReason}");
 
         private void OnPurchasesFetchedHandler(Orders orders)
         {
             _resumingPurchaseCount = orders.PendingOrders?.Count ?? 0;
-            _isFetchingPurchases = false;
-            _isInitialized       = true;
+            _isFetchingPurchases   = false;
+            _isInitialized         = true;
         }
 
         private void OnPurchasesFetchFailedHandler(PurchasesFetchFailureDescription failure)
         {
-            Debug.LogWarning($"[Supabase.IAP.Apple] 구매 이력 조회 실패: {failure.FailureReason} — {failure.Message}");
+            Debug.LogWarning($"{LogTag} 구매 이력 조회 실패: {failure.FailureReason} — {failure.Message}");
             _isFetchingPurchases = false;
-            _isInitialized       = true;
+            _isInitialized       = true; // 실패해도 초기화 완료 처리 (신규 구매는 가능)
         }
 
         private void OnPurchasePendingHandler(PendingOrder pendingOrder)
         {
+            // isResuming 이중 판별 (Unity IAP v5 타이밍 이슈 대응):
+            // - _isFetchingPurchases == true : OnPurchasePending이 OnPurchasesFetched보다 먼저 온 경우
+            // - _resumingPurchaseCount > 0   : OnPurchasePending이 OnPurchasesFetched 이후에 온 경우
             var isResuming = _isFetchingPurchases || _resumingPurchaseCount > 0;
             if (_resumingPurchaseCount > 0) _resumingPurchaseCount--;
 
@@ -236,76 +257,8 @@ namespace TrueBase.Unity
 
         private void OnPurchaseFailedHandler(FailedOrder order)
         {
-            Debug.LogWarning("[Supabase.IAP.Apple] 구매 실패: " + order);
+            Debug.LogWarning($"{LogTag} 구매 실패: {order}");
             OnPurchaseFailed?.Invoke(order);
         }
-
-        // ── 내부 검증 로직 ────────────────────────────────────────────────────
-
-        private async Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming)
-        {
-            if (pendingOrder == null)
-            {
-                Debug.LogWarning("[Supabase.IAP.Apple] PendingOrder가 null입니다.");
-                return;
-            }
-
-            var cartItems = pendingOrder.CartOrdered?.Items();
-
-            if (cartItems == null || cartItems.Count == 0)
-            {
-                Debug.LogWarning("[Supabase.IAP.Apple] CartOrdered.Items()가 비어 있습니다.");
-                return;
-            }
-
-            var productId = cartItems[0].Product.definition.id;
-
-            // StoreKit 2 (iOS 15+): JWS만 지원
-            var appleInfo = pendingOrder.Info as IAppleOrderInfo;
-            var jws = appleInfo?.jwsRepresentation;
-            if (string.IsNullOrEmpty(jws))
-            {
-                Debug.LogWarning($"[Supabase.IAP.Apple] JWS를 가져올 수 없습니다. iOS 15+ 기기에서만 지원됩니다. product={productId}");
-                return;
-            }
-
-            var (success, response) = await _verifyAsync(jws, productId);
-
-            if (!success || response == null)
-            {
-                Debug.LogWarning($"[Supabase.IAP.Apple] 서버 검증 실패. product={productId}");
-                return;
-            }
-
-            if (!response.ok)
-            {
-                Debug.LogWarning($"[Supabase.IAP.Apple] Apple이 구매를 거부했습니다. reason={response.reason}, product={productId}");
-                return;
-            }
-
-            if (OnGrantItemAsync == null)
-            {
-                Debug.LogWarning("[Supabase.IAP.Apple] OnGrantItemAsync가 설정되지 않았습니다. 구매가 Pending 상태로 남습니다.");
-                return;
-            }
-
-            bool granted;
-            try
-            {
-                granted = await OnGrantItemAsync(productId, isResuming, response.already_verified);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError("[Supabase.IAP.Apple] OnGrantItemAsync 예외: " + e.Message);
-                granted = false;
-            }
-
-            if (granted)
-                _storeController?.ConfirmPurchase(pendingOrder);
-            else
-                Debug.LogWarning($"[Supabase.IAP.Apple] 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
-        }
-
     }
 }
-#endif // TRUESOFT_IAP_AVAILABLE

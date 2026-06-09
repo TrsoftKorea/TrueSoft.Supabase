@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Supabase services into Unity games. Targets Unity 2022.3+. Written in C# 11+. Distributed via Git URL, no npm/build scripts — Unity compiles the source directly.
 
+## Retool 수정 규칙
+
+- Retool 파일 수정 요청 시 **반드시 `retool_read_react_app_files`로 실제 파일을 먼저 읽은 후** 작업한다.
+- 수정된 파일은 **전체 코드**를 제공한다. 부분 코드(diff/snippet)만 제공하지 않는다.
+- Retool AI(`retool_create_or_append_react_app_thread_message`)는 AI 크레딧을 소모하므로 사용하지 않는다. 코드를 직접 작성해 사용자가 붙여넣도록 한다.
+
 ## Unity-Specific Rules
 
 - **Never create `.meta` files manually.** Unity auto-generates them for every asset. Adding them by hand causes conflicts.
@@ -180,6 +186,20 @@ Use callout boxes for **supplementary content** — content the reader can skip 
 - 긴 선택적 내용 → `::: details`
 
 Core usage (the happy path) must remain as **plain prose + code blocks**, not buried in callout boxes.
+
+### 5. Link directly to the target section
+
+When referencing a specific section in another doc, link directly to the section anchor — never link to the page and name the section in surrounding text.
+
+```md
+❌ [빠른 시작](./getting-started.md)의 **Database Setup** 절차를 먼저 완료하세요.
+✅ [Database Setup](./getting-started.md#database-setup) 절차를 먼저 완료하세요.
+
+❌ [빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
+✅ [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
+```
+
+If the target heading contains Korean, add an explicit anchor ID to the heading first (see Rule 2).
 
 ### 5. Sample display names — English only
 

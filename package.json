@@ -7,9 +7,7 @@
   "author": {
     "name": "Truesoft"
   },
-  "dependencies": {
-    "com.unity.purchasing": "5.2.1"
-  },
+  "dependencies": {},
   "samples": [
     {
       "displayName": "Examples",

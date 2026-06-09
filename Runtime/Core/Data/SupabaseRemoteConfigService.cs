@@ -141,10 +141,40 @@ namespace TrueBase.Core.Data
             if (vj == null || vj.Type == JTokenType.Null)
                 return string.Empty;
 
+            string raw;
             if (vj.Type == JTokenType.String)
-                return vj.Value<string>() ?? string.Empty;
+                raw = vj.Value<string>() ?? string.Empty;
+            else
+                raw = vj.ToString(Formatting.None);
 
-            return vj.ToString(Formatting.None);
+            return StripMetaFromJson(raw);
+        }
+
+        /// <summary>
+        /// <c>value_json</c>에서 <c>__meta</c> 키를 제거합니다.
+        /// <c>__meta</c>는 Retool에서 각 항목의 C# 타입 힌트를 저장하는 데 사용되며,
+        /// 게임 런타임 역직렬화에는 포함되지 않아야 합니다.
+        /// </summary>
+        private static string StripMetaFromJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return json;
+
+            try
+            {
+                var obj = JObject.Parse(json);
+                if (obj.ContainsKey("__meta"))
+                {
+                    obj.Remove("__meta");
+                    return obj.ToString(Formatting.None);
+                }
+
+                return json;
+            }
+            catch
+            {
+                return json;
+            }
         }
 
         private Dictionary<string, string> CreateHeaders(string accessToken) =>

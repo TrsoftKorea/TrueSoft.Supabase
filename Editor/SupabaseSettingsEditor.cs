@@ -383,6 +383,8 @@ namespace TrueBase.Editor
                 case "int": case "short": case "long": case "ulong": return FieldTypeCategory.Integer;
                 case "float": case "double":                         return FieldTypeCategory.Float;
                 case "string":                                       return FieldTypeCategory.String;
+                case "DateTimeOffset": case "DateTime":
+                case "DateOnly": case "TimeOnly":                    return FieldTypeCategory.String;
                 default:                                             return FieldTypeCategory.Unknown;
             }
         }

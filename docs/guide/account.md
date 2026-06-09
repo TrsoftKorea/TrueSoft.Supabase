@@ -55,7 +55,7 @@ await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
 
 ::: info
 유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
-[빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
+[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
 ### 탈퇴 취소 (토큰 방식)
@@ -72,7 +72,7 @@ await Supabase.TryRedeemWithdrawalCancelAsync(token);
 ```
 
 ::: warning
-[빠른 시작](./getting-started.md)의 Edge Function 배포가 완료되어 있어야 합니다.
+[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
 ---

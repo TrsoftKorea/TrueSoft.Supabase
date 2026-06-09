@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -81,6 +81,7 @@ namespace TrueBase.Editor
         /// <summary>
         /// value_json 문자열 → 평탄화된 RcEditableField 목록.
         /// 중첩 객체는 IsObjectNode 항목(Depth N) + 자식 필드(Depth N+1)로 삽입됩니다.
+        /// <c>__meta</c> 키는 건너뜁니다. <c>__meta</c>에 타입 힌트가 있으면 해당 필드의 TypeIndex를 설정합니다.
         /// </summary>
         public static List<RcEditableField> ParseJsonToFields(string valueJson)
         {
@@ -92,15 +93,22 @@ namespace TrueBase.Editor
             try { root = JObject.Parse(valueJson); }
             catch { return result; }
 
-            AppendFields(result, root, depth: 0, pathPrefix: "");
+            // __meta 에서 타입 힌트를 추출하여 필드 파싱에 전달
+            var metaHints = root["__meta"] as JObject;
+            AppendFields(result, root, depth: 0, pathPrefix: "", metaHints: metaHints);
             return result;
         }
 
-        private static void AppendFields(List<RcEditableField> list, JObject obj, int depth, string pathPrefix)
+        private static void AppendFields(List<RcEditableField> list, JObject obj, int depth, string pathPrefix,
+            JObject metaHints = null)
         {
             foreach (var prop in obj.Properties())
             {
                 var jsonKey  = prop.Name;
+
+                // __meta 키는 타입 힌트 저장 전용이므로 필드 목록에서 제외
+                if (jsonKey == "__meta") continue;
+
                 var fullPath = pathPrefix.Length > 0 ? pathPrefix + "." + jsonKey : jsonKey;
 
                 switch (prop.Value.Type)
@@ -117,6 +125,7 @@ namespace TrueBase.Editor
                             NestedClassName = nestedClassName,
                             Include         = true
                         });
+                        // 중첩 객체는 자체 __meta가 없으므로 metaHints 전달하지 않음
                         AppendFields(list, (JObject)prop.Value, depth + 1, fullPath);
                         break;
                     }
@@ -141,7 +150,9 @@ namespace TrueBase.Editor
 
                     default:
                     {
-                        var (typeIndex, ambiguous) = MapPrimitiveType(prop.Value.Type);
+                        // __meta 힌트가 있으면 해당 타입 우선 사용
+                        var metaType = metaHints?[jsonKey]?.Value<string>();
+                        var (typeIndex, ambiguous) = MapPrimitiveTypeWithMeta(prop.Value.Type, metaType);
                         list.Add(new RcEditableField
                         {
                             JsonKey      = jsonKey,
@@ -157,6 +168,19 @@ namespace TrueBase.Editor
                     }
                 }
             }
+        }
+
+        private static (int typeIndex, bool ambiguous) MapPrimitiveTypeWithMeta(JTokenType t, string metaType)
+        {
+            // __meta 힌트가 있으면 TypeOptions에서 찾아 사용 (ambiguity 없음)
+            if (!string.IsNullOrEmpty(metaType))
+            {
+                for (var i = 0; i < TypeOptions.Length; i++)
+                    if (TypeOptions[i] == metaType)
+                        return (i, false);
+            }
+
+            return MapPrimitiveType(t);
         }
 
         private static (int typeIndex, bool ambiguous) MapPrimitiveType(JTokenType t)
@@ -318,31 +342,35 @@ namespace TrueBase.Editor
 
         internal static readonly string[] TypeOptions =
         {
-            "bool",    // 0
-            "int",     // 1
-            "short",   // 2
-            "long",    // 3
-            "ulong",   // 4
-            "float",   // 5
-            "double",  // 6
-            "string",  // 7
+            "bool",            // 0
+            "int",             // 1
+            "short",           // 2
+            "long",            // 3
+            "ulong",           // 4
+            "float",           // 5
+            "double",          // 6
+            "string",          // 7
+            "DateTimeOffset",  // 8
+            "DateTime",        // 9
+            "DateOnly",        // 10
+            "TimeOnly",        // 11
         };
 
         /// <summary>Dictionary / List&lt;T&gt; / T[] 등 TypeOptions에 없는 타입을 내부적으로 표현하는 sentinel 인덱스.</summary>
-        internal const int CustomTypeIndex = 8;
+        internal const int CustomTypeIndex = 12;
 
         /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
         public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
         {
             switch (cat)
             {
-                case FieldTypeCategory.Boolean: return new[] { 0 };             // bool
-                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };   // int/short/long/ulong
-                case FieldTypeCategory.Float:   return new[] { 5, 6 };          // float/double
-                case FieldTypeCategory.String:  return new[] { 7 };             // string
-                case FieldTypeCategory.Json:    return new[] { 7 };             // string (Dictionary는 별도 팝업)
-                case FieldTypeCategory.Array:   return new int[0];              // 별도 팝업 처리 (DrawTypePopup 참조)
-                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+                case FieldTypeCategory.Boolean: return new[] { 0 };                       // bool
+                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };             // int/short/long/ulong
+                case FieldTypeCategory.Float:   return new[] { 5, 6 };                    // float/double
+                case FieldTypeCategory.String:  return new[] { 7, 8, 9, 10, 11 };        // string + 날짜 타입
+                case FieldTypeCategory.Json:    return new[] { 7 };                       // string (Dictionary는 별도 팝업)
+                case FieldTypeCategory.Array:   return new int[0];                         // 별도 팝업 처리 (DrawTypePopup 참조)
+                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
             }
         }
 
@@ -503,7 +531,7 @@ namespace TrueBase.Editor
         Boolean,  // bool, 커스텀
         Integer,  // int, short, long, ulong, 커스텀
         Float,    // float, double, 커스텀
-        String,   // string, 커스텀
+        String,   // string, DateTimeOffset, DateTime, DateOnly, TimeOnly, 커스텀
         Json,     // string, Dictionary<string,object>(프리셋), 커스텀  ← jsonb/$ref/allOf 등 복잡한 DB 타입
         Array,    // 커스텀 전용
         Unknown,  // 전체 표시
