@@ -65,7 +65,7 @@ public static int Level
 
 ```csharp
 SamplePlayerSave.Level += 1;                             // 변경 → 자동 저장 예약
-await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
+await Supabase.TrySaveAllAsync(timeoutMs: 5000);           // 즉시 저장
 ```
 
 ### SampleIAPScenarios

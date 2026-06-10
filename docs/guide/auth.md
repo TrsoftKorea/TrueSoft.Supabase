@@ -33,8 +33,8 @@ if (!result.Success)
 
 ## 자동 로그인
 
-씬에 `SupabaseRuntime` 컴포넌트를 배치하면 자동 로그인이 활성화됩니다.  
-Inspector의 **즉시 자동 로그인** 필드가 실행 타이밍을 결정합니다.
+씬에 `SupabaseRuntime` 컴포넌트를 배치하면 SDK가 초기화됩니다.  
+로그인은 자동 실행되지 않으므로 원하는 타이밍에 직접 호출합니다.
 
 ### SupabaseRuntime
 
@@ -43,18 +43,9 @@ Inspector의 **즉시 자동 로그인** 필드가 실행 타이밍을 결정합
 | 기능 | 설명 |
 |------|------|
 | SDK 초기화 | `SupabaseSettings`를 읽어 모든 서비스를 초기화합니다 |
-| 자동 로그인 | Inspector의 **즉시 자동 로그인**이 ON이면 `Awake` 시 자동 실행, OFF이면 `TriggerAutoLoginAsync()`로 수동 호출 |
 | 유저 세이브 자동 동기화 | 변경된 세이브 데이터를 쿨타임 주기로 자동 업로드합니다 ([유저 데이터](./user-data.md) 참고) |
 | RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
 | 앱 일시정지·종료 처리 | 앱이 일시정지(`OnApplicationPause`)되거나 종료될 때 세이브 데이터를 즉시 플러시합니다 |
-
-### 즉시 자동 로그인 ON
-
-`Awake` 시점에 저장된 세션으로 자동 로그인합니다. 별도 코드가 필요 없습니다.
-
-### 즉시 자동 로그인 OFF
-
-원하는 타이밍에 직접 호출합니다.
 
 ```csharp
 // 로그인 화면 진입 후, 또는 원하는 씬 진입 시점에 호출
@@ -63,8 +54,7 @@ await SupabaseRuntime.TriggerAutoLoginAsync();
 
 ### 완료 이벤트
 
-자동 로그인 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.  
-**즉시 자동 로그인 ON·OFF 모두** 이 이벤트가 발행됩니다.
+`TriggerAutoLoginAsync()` 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.
 
 ```csharp
 void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(OnReady);

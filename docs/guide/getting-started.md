@@ -116,6 +116,8 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | 7 | `07_purchases.sql` | 인앱 결제 (IAP 사용 시) |
 | 8 | `08_remote_config.sql` | Remote Config |
 | 9 | `09_cron_jobs.sql` | 자동화 크론 잡 |
+| 10 | `10_bans.sql` | 계정 차단 메시지 |
+| 11 | `11_user_data_logs.sql` | 유저 데이터 변경 로그 |
 
 ::: tip
 `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
@@ -140,6 +142,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | `purchase-verify-google` | 인앱 결제 — Android |
 | `purchase-verify-apple` | 인앱 결제 — iOS (SK2 / Unity IAP v5) |
 | `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 / Unity IAP v4, 또는 SK1 강제 모드) |
+| `get-ban-info` | 인증 — 차단된 계정 정보 조회 |
 
 ### 4. Secrets 설정
 
@@ -171,7 +174,7 @@ JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파�
 await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 ```
 
-`SupabaseRuntime`이 씬에 배치되어 있으면 앱 재시작 시 자동으로 세션을 복원합니다.  
+다음 실행 시 세션을 복원하려면 `TriggerAutoLoginAsync()`를 원하는 타이밍에 호출합니다.  
 로그인 API 전체 목록과 소셜 로그인은 [인증](./auth.md)을 참고하세요.
 
 ---
