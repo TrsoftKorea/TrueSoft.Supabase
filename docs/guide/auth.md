@@ -9,13 +9,13 @@
 
 ```csharp
 // 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync();
+await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 ```
 
 `Try*` 메서드는 `SupabaseCallResult`를 반환합니다. `if (await ...)` 패턴과 완전히 호환되며, 실패 원인을 확인할 때는 결과를 변수에 받습니다.
 
 ```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync();
+var result = await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 if (!result.Success)
 {
     Debug.Log(result.Reason);  // 실패 원인 ("user_banned", "http_response_null" 등)
@@ -120,10 +120,10 @@ void OnReady(bool success)
 
 ```csharp
 // Android 네이티브 (Play Services)
-await Supabase.TrySignInWithGoogleAsync();
+await Supabase.TrySignInWithGoogleAsync(saveSessionToStorage: true);
 
 // iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
+await Supabase.TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage: true);
 ```
 
 ::: warning
@@ -141,10 +141,10 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 
 ```csharp
 // Android 네이티브
-await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
+await Supabase.TryLinkGoogleToCurrentAnonymousAsync(saveSessionToStorage: true);
 
 // iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
+await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken: null, saveSessionToStorage: true);
 ```
 
 - 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다. 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
@@ -159,7 +159,7 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken);
 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
 
 ```csharp
-await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
+await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage: true);
 ```
 
 #### 익명 → Apple 연동
@@ -170,7 +170,7 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 :::
 
 ```csharp
-await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
+await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage: true);
 ```
 
 ---
@@ -178,7 +178,7 @@ await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)
 ## 로그아웃
 
 ```csharp
-await Supabase.TrySignOutFullyAsync();
+await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
 ```
 
 Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
@@ -205,7 +205,7 @@ Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복�
 Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync();
+var result = await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 
 if (!result.Success && result.BanInfo != null)
 {

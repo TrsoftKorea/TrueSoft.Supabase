@@ -64,13 +64,13 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 
 ```csharp
 // 게스트(익명) — PlayNANOO + SDK 동시 처리
-await Supabase.TrySignInAnonymouslyAsync();
+await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 
 // Google — SDK가 토큰 획득 후 PlayNANOO SocialSignIn + SDK 로그인 자동 처리
-await Supabase.TrySignInWithGoogleAsync();
+await Supabase.TrySignInWithGoogleAsync(saveSessionToStorage: true);
 
 // Apple (iOS)
-await Supabase.TrySignInWithAppleIdTokenAsync(idToken);
+await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce: null, saveSessionToStorage: true);
 
 // Apple (Android) — PlayNANOO WebView로 토큰 획득
 playNanooRuntime.StartAppleSignInAndroid();
@@ -93,7 +93,7 @@ void OnReady(bool success)
 ## 로그아웃
 
 ```csharp
-await Supabase.TrySignOutFullyAsync();
+await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
 ```
 
 PlayNANOO 토큰 해지 → SDK 로그아웃 순서로 자동 처리됩니다.

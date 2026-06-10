@@ -168,7 +168,7 @@ JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파�
 
 ```csharp
 // 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync();
+await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
 ```
 
 `SupabaseRuntime`이 씬에 배치되어 있으면 앱 재시작 시 자동으로 세션을 복원합니다.  

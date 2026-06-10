@@ -21,7 +21,7 @@ await Supabase.TrySetMyDisplayNameAsync("Player123");
 
 // 다른 플레이어 닉네임 조회
 // userId = 조회 대상의 ID (리더보드·매칭 결과 등에서 얻은 값)
-string name = await Supabase.TryGetPublicDisplayNameAsync(userId);
+string name = await Supabase.TryGetPublicDisplayNameAsync(userId, defaultValue: "");
 ```
 
 닉네임은 최대 64자이며, 초과 시 클라이언트에서 자동으로 잘립니다.
@@ -82,5 +82,5 @@ await Supabase.TryRedeemWithdrawalCancelAsync(token);
 플레이어를 다른 서버로 이동시킵니다. 서버별로 닉네임 고유성이 관리되므로, 이주 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.
 
 ```csharp
-await Supabase.TryTransferMyServerAsync("GLOBAL");
+await Supabase.TryTransferMyServerAsync("GLOBAL", reason: null);
 ```

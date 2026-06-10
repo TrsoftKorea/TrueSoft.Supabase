@@ -256,3 +256,23 @@ Do **not** append parenthetical clarifications to headings, table cells, or numb
 - ✅ `# 인증`, `### 클래스 생성기`, or move the aside to prose/callout
 
 If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it. For sub-type headings use an em-dash instead: `### 탈퇴 취소 — 토큰 방식`.
+
+### 7. Show all parameters in code examples
+
+Code examples must include **all parameters**, including optional ones with their default values. Use named parameter syntax (`paramName: value`) to make each argument's role clear.
+
+```csharp
+// ❌ 선택적 파라미터 생략
+await Supabase.TrySignInAnonymouslyAsync();
+_iapFacade = await SupabaseIAP.CreateIAPAsync(productIds, onGrant);
+
+// ✅ 모든 파라미터 명시
+await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
+_iapFacade = await SupabaseIAP.CreateIAPAsync(
+    productIds: ...,
+    onGrant:    ...,
+    onFailed:   info => ...,
+    timeoutMs:  10_000);
+```
+
+When a signature changes, update **all** examples in `docs/guide/` that call that API.

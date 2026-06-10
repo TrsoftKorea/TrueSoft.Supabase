@@ -71,7 +71,7 @@ private Func<Task<GameplayConfig>> _getConfig;
 private async Task LoadConfigAsync()
 {
     // 처음 한 번만 생성하고 재사용합니다
-    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader();
+    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStale: 0);
 
     var cfg = await _getConfig();
     float interval = cfg?.spawnInterval ?? 3f;  // 값이 없으면 기본값 3f 사용

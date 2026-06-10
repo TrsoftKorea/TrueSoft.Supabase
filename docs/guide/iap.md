@@ -24,7 +24,7 @@ private async void Start()
     _iapFacade?.Dispose();
     _iapFacade = await SupabaseIAP.CreateIAPAsync(
         productIds: new[] { "com.mygame.coins_100", "com.mygame.coins_500", "com.mygame.gems_10" },
-        onGrant: async (productId, _, _) =>
+        onGrant: async (productId, isResuming, alreadyVerified) =>
         {
             switch (productId)
             {
@@ -32,8 +32,10 @@ private async void Start()
                 case "com.mygame.coins_500": await GiveCoinsAsync(500); break;
                 case "com.mygame.gems_10":   await GiveGemsAsync(10);   break;
             }
-            return true;
-        });
+            return true; // true → 소비(Confirm) 처리
+        },
+        onFailed:  info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"),
+        timeoutMs: 10_000); // 기본값 — 생략 가능
 }
 
 // 구매 버튼마다 호출
@@ -47,13 +49,14 @@ private void OnDestroy()
 }
 ```
 
-`onGrant` 콜백은 서버 영수증 검증이 완료된 직후 호출됩니다.  
-아이템 지급 후 `true`를 반환하면 구매가 소비 처리됩니다.
+| 파라미터 | 설명 |
+|----------|------|
+| `productIds` | 등록할 소모품 ID 목록 |
+| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `true` 반환 시 SDK가 소비 처리 |
+| `onFailed` | 구매 실패 콜백 (선택) |
+| `timeoutMs` | 초기화 대기 최대 시간 ms (기본 10초) |
 
-::: info
-두 번째·세 번째 파라미터(`isResuming`, `alreadyVerified`)는 중복 지급 방지 등 고급 처리에 사용합니다.  
-[더 알아보기](#more)를 참고하세요.
-:::
+`onGrant`의 `isResuming` · `alreadyVerified` 파라미터는 [중복 지급 방지](#중복-지급-방지)를 참고하세요.
 
 ---
 
@@ -104,7 +107,8 @@ _iapFacade = await SupabaseIAP.CreateIAPAsync(
         await GiveItemAsync(productId);
         return true;
     },
-    onFailed: info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"));
+    onFailed:  info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"),
+        timeoutMs: 10_000);
 ```
 
 ### 결제 금액 자동 기록

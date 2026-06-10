@@ -84,7 +84,8 @@ await Supabase.TryFlushAllUserSaveImmediateAsync();       // 즉시 저장
 _iapFacade = await SupabaseIAP.CreateIAPAsync(
     productIds: new[] { productId },
     onGrant:    OnGrantItemAsync,
-    onFailed:   OnPurchaseFailed);
+    onFailed:   OnPurchaseFailed,
+    timeoutMs:  10_000);
 
 // 2. 구매 시작
 _iapFacade.Purchase(productId);
