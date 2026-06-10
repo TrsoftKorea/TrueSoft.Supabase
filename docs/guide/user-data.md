@@ -5,6 +5,18 @@
 
 ---
 
+## 동작 방식
+
+`StaticUserSave<TRow>`는 유저 세이브 데이터를 관리하는 기반 클래스입니다.
+
+| 동작 | 설명 |
+|------|------|
+| Diff 패치 | 이전 상태와 비교해 변경된 필드만 서버에 전송합니다. 변경이 없으면 네트워크 요청을 생략합니다. |
+| 쿨타임 자동 저장 | 값을 쓰면 `MarkDirty()`가 자동 호출되고, `SupabaseRuntime`이 설정된 쿨타임 주기로 업로드합니다. |
+| 즉시 저장 | 씬 전환·결제 완료처럼 지금 바로 저장해야 할 때는 `TrySaveAllAsync()`로 강제 플러시합니다. |
+
+---
+
 ## 클래스 생성
 
 `SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고 **스키마 가져오기 → 소스 생성 → 저장**으로 `PlayerSave.cs`를 생성합니다.
@@ -51,7 +63,12 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 
 ## 로드
 
-로그인 완료 후 한 번 호출합니다.
+```csharp
+public Task<bool> TryLoadAsync()
+```
+
+서버에서 유저 데이터를 가져와 `Current` 프로퍼티에 채웁니다.  
+신규 유저는 DB 행이 자동으로 생성됩니다. 로그인 완료 후 한 번 호출합니다.
 
 ```csharp
 bool ok = await PlayerSave.TryLoadAsync();
@@ -63,10 +80,6 @@ bool ok = await PlayerSave.TryLoadAsync();
 // 구독은 TryLoadAsync() 호출 전 어디서든 한 번만
 PlayerSave.Instance.OnLoaded += ApplyGameData;
 ```
-
-::: info
-신규 유저는 DB 행이 자동으로 생성됩니다.
-:::
 
 ---
 
@@ -86,6 +99,14 @@ PlayerSave.Coins += 100;
 ---
 
 ## 즉시 저장
+
+```csharp
+public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000)
+```
+
+| 파라미터 | 타입 | 설명 |
+|----------|------|------|
+| `timeoutMs` | `int` | 저장 완료 대기 최대 시간 ms (기본 5초) |
 
 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
 

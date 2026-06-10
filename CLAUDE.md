@@ -259,20 +259,30 @@ If the information matters, state it as a separate sentence or callout box. If i
 
 ### 7. Show all parameters in code examples
 
-Code examples must include **all parameters**, including optional ones with their default values. Use named parameter syntax (`paramName: value`) to make each argument's role clear.
+API 섹션은 아래 순서로 구성한다:
 
-```csharp
-// ❌ 선택적 파라미터 생략
-await Supabase.TrySignInAnonymouslyAsync();
-_iapFacade = await SupabaseIAP.CreateIAPAsync(productIds, onGrant);
+1. **시그니처** — C# 메서드 선언 전체 (반환 타입, 이름, 모든 파라미터)
+2. **파라미터 표** — `| 파라미터 | 타입 | 설명 |` 3열. 선택 파라미터는 설명에 기본값 명시
+3. **동작 설명** — 1–3문장 산문
+4. **사용 예시** — 모든 파라미터를 명시한 코드 (named argument 사용)
 
-// ✅ 모든 파라미터 명시
-await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
-_iapFacade = await SupabaseIAP.CreateIAPAsync(
-    productIds: ...,
-    onGrant:    ...,
-    onFailed:   info => ...,
-    timeoutMs:  10_000);
+```md
+## 섹션명
+
+\`\`\`csharp
+public static Task<Result> MethodAsync(string required, int optional = 0)
+\`\`\`
+
+| 파라미터 | 타입 | 설명 |
+|----------|------|------|
+| `required` | `string` | 필수 파라미터 설명 |
+| `optional` | `int`    | 선택 파라미터 설명 (기본값: `0`) |
+
+동작에 대한 간략한 설명.
+
+\`\`\`csharp
+await Supabase.MethodAsync(required: "value", optional: 0);
+\`\`\`
 ```
 
-When a signature changes, update **all** examples in `docs/guide/` that call that API.
+When a signature changes, update **all** matching examples in `docs/guide/`.
