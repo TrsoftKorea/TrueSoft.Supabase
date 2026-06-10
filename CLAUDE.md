@@ -248,6 +248,11 @@ If the target heading contains Korean, add an explicit anchor ID to the heading 
 
 `package.json`의 `samples[].displayName`은 영어만 사용한다. 한글 단독 또는 한영 혼용 이름은 금지. 예: `"PlayNANOO Migration"` (O), `"PlayNANOO 이관"` (X).
 
-### 6. No parenthetical asides in tables or steps
+### 6. No parenthetical asides in headings, tables, or steps
 
-Do **not** append parenthetical clarifications like `(자동 생성됨)`, `(reveal 불필요)`, `(선택 사항)` to table cells or numbered steps. They hurt readability. If the information matters, state it as a separate sentence or callout box; if it doesn't, omit it.
+Do **not** append parenthetical clarifications to headings, table cells, or numbered steps.
+
+- ❌ `# 인증 (Auth)`, `### 클래스 생성기 (선택)`, `| (자동 생성됨) |`
+- ✅ `# 인증`, `### 클래스 생성기`, or move the aside to prose/callout
+
+If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it. For sub-type headings use an em-dash instead: `### 탈퇴 취소 — 토큰 방식`.

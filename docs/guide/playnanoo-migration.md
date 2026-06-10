@@ -155,7 +155,7 @@ playNanooRuntime.OnWithdrawalRestoreLoginFailed += async () =>
 
 ---
 
-## 인앱 결제 (IAP)
+## 인앱 결제
 
 `PlayNanooRuntime`이 씬에 있으면 IAP 결제도 **PlayNanoo → SDK 순서**로 자동 처리됩니다.  
 게임 코드(`SupabaseIAP.CreateIAPAsync(...)`)는 변경 없이 동작합니다.
