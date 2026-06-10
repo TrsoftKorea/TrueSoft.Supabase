@@ -7,14 +7,6 @@
 
 ## 로그인
 
-```csharp
-public static Task<SupabaseCallResult> TrySignInAnonymouslyAsync(bool saveSessionToStorage = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `saveSessionToStorage` | `bool` | 세션을 기기에 저장할지 여부. `true`(기본값)이면 다음 실행 시 자동 복원 |
-
 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성해 로그인합니다.  
 `saveSessionToStorage: true`(기본값)로 호출하면 세션이 기기에 저장되어 다음 실행 시 자동 복원됩니다.
 
@@ -129,16 +121,6 @@ void OnReady(bool success)
 
 #### 로그인
 
-```csharp
-public static Task<SupabaseCallResult> TrySignInWithGoogleAsync(bool saveSessionToStorage = true)
-public static Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `idToken` | `string` | 외부 OAuth SDK에서 발급받은 Google ID 토큰 |
-| `saveSessionToStorage` | `bool` | 세션을 기기에 저장할지 여부 (기본값: `true`) |
-
 `TrySignInWithGoogleAsync`는 Android에서 Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다.  
 iOS나 커스텀 OAuth 흐름에서는 외부 SDK에서 발급받은 ID 토큰을 직접 `TrySignInWithGoogleIdTokenAsync`로 전달합니다.
 
@@ -156,17 +138,6 @@ Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출
 :::
 
 #### 익명 → Google 연동
-
-```csharp
-public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true)
-public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null, bool saveSessionToStorage = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `idToken` | `string` | 외부 OAuth SDK에서 발급받은 Google ID 토큰 |
-| `googleAccessToken` | `string` | Google Access Token (일부 OAuth 흐름에서 필요) |
-| `saveSessionToStorage` | `bool` | 세션을 기기에 저장할지 여부 (기본값: `true`) |
 
 ::: warning
 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
@@ -191,16 +162,6 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAc
 
 #### 로그인
 
-```csharp
-public static Task<SupabaseCallResult> TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null, bool saveSessionToStorage = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `idToken` | `string` | 외부 Sign in with Apple SDK에서 발급받은 ID 토큰 |
-| `rawNonce` | `string` | PKCE 흐름에서 사용하는 원본 nonce 값 |
-| `saveSessionToStorage` | `bool` | 세션을 기기에 저장할지 여부 (기본값: `true`) |
-
 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
 
 ```csharp
@@ -208,16 +169,6 @@ await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToSt
 ```
 
 #### 익명 → Apple 연동
-
-```csharp
-public static Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null, bool saveSessionToStorage = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `idToken` | `string` | 외부 Sign in with Apple SDK에서 발급받은 ID 토큰 |
-| `rawNonce` | `string` | PKCE 흐름에서 사용하는 원본 nonce 값 |
-| `saveSessionToStorage` | `bool` | 세션을 기기에 저장할지 여부 (기본값: `true`) |
 
 ::: warning
 익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 아래 연동 전용 API를 사용하세요.  
@@ -231,15 +182,6 @@ await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce,
 ---
 
 ## 로그아웃
-
-```csharp
-public static Task<SupabaseCallResult> TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
-```
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `clearStorage` | `bool` | 기기에 저장된 세션을 삭제할지 여부 (기본값: `true`) |
-| `deleteUserSessionRow` | `bool` | 서버의 중복 로그인 감지 행을 삭제할지 여부 (기본값: `true`) |
 
 Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
 

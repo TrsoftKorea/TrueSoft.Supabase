@@ -259,30 +259,26 @@ If the information matters, state it as a separate sentence or callout box. If i
 
 ### 7. Show all parameters in code examples
 
-API 섹션은 아래 순서로 구성한다:
+기본 구성: **설명** → **파라미터 표** (필요 시) → **예시 코드**
 
-1. **시그니처** — C# 메서드 선언 전체 (반환 타입, 이름, 모든 파라미터)
-2. **파라미터 표** — `| 파라미터 | 타입 | 설명 |` 3열. 선택 파라미터는 설명에 기본값 명시
-3. **동작 설명** — 1–3문장 산문
-4. **사용 예시** — 모든 파라미터를 명시한 코드 (named argument 사용)
+**시그니처 블록은 타입이 복잡할 때만** 추가한다. 판단 기준:
+- ✅ 추가: 델리게이트(`Func<...>`, `Action<...>`), 제네릭이 2단계 이상, 파라미터가 5개 이상
+- ❌ 생략: `string`, `bool`, `int` 조합의 단순 파라미터
 
 ```md
-## 섹션명
+// ❌ 단순 — 시그니처 불필요
+await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
 
+// ✅ 복잡 — 시그니처 추가
 \`\`\`csharp
-public static Task<Result> MethodAsync(string required, int optional = 0)
-\`\`\`
-
-| 파라미터 | 타입 | 설명 |
-|----------|------|------|
-| `required` | `string` | 필수 파라미터 설명 |
-| `optional` | `int`    | 선택 파라미터 설명 (기본값: `0`) |
-
-동작에 대한 간략한 설명.
-
-\`\`\`csharp
-await Supabase.MethodAsync(required: "value", optional: 0);
+public static async Task<IAPFacade> CreateIAPAsync(
+    string[]                              productIds,
+    Func<string, bool, bool, Task<bool>>  onGrant,
+    Action<IAPPurchaseFailedInfo>          onFailed  = null,
+    int                                   timeoutMs = 10_000)
 \`\`\`
 ```
+
+파라미터 표는 타입 열 없이 `| 파라미터 | 설명 |` 2열로. 이름만으로 의미가 명확한 파라미터는 생략한다.
 
 When a signature changes, update **all** matching examples in `docs/guide/`.

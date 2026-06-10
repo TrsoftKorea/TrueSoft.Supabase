@@ -120,7 +120,7 @@ _iapFacade = await SupabaseIAP.CreateIAPAsync(
         return true;
     },
     onFailed:  info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"),
-        timeoutMs: 10_000);
+    timeoutMs: 10_000);
 ```
 
 ### 결제 금액 자동 기록
