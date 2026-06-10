@@ -28,6 +28,8 @@ namespace TrueBase.Unity
     {
         private readonly Func<string, string, long, string, Task<(bool success, GooglePlayPurchaseResponse value)>> _verifyAsync;
 
+        protected override string LogTag => "[Supabase.IAP.Google]";
+
         // ── 생성자 (internal — SupabaseIAP.CreateGooglePlayIAP()로만 생성) ─────
         internal GooglePlayIAPFacade(
             Func<string, string, long, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)

@@ -67,7 +67,7 @@ namespace TrueBase.Unity
             var receipt = pendingOrder.Info?.Receipt;
             if (string.IsNullOrEmpty(receipt))
             {
-                Debug.LogWarning($"{LogTag} Receipt가 비어 있습니다.");
+                Debug.LogWarning($"{LogTag} Receipt가 비어 있습니다. product={productId}");
                 return;
             }
             token = GooglePlayReceiptParser.ExtractPurchaseToken(receipt);

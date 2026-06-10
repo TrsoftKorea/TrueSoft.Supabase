@@ -253,7 +253,7 @@ namespace TrueBase.Unity
             try   { productId = order.CartOrdered.Items()[0].Product.definition.id; }
             catch { productId = "unknown"; }
             var info = new IAPPurchaseFailedInfo { ProductId = productId, FailureReason = order.ToString() };
-            Debug.LogWarning($"{LogTag} 구매 실패: product={info.ProductId}");
+            Debug.LogWarning($"{LogTag} 구매 실패: product={info.ProductId}, reason={info.FailureReason}");
             OnPurchaseFailed?.Invoke(info);
         }
     }

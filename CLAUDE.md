@@ -132,6 +132,42 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 
 `Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToCurrentAnonymousWithIdTokenAsync`), 로그아웃, 탈퇴/복구(`OnWithdrawalPending`·`OnWithdrawalRestored` 이벤트), `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
+## IAP 코딩 규칙
+
+### LogTag 명명
+
+IAP 파사드마다 `LogTag`를 override해 로그 출처를 구분한다.
+
+| 클래스 | LogTag |
+|--------|--------|
+| `BaseIAPFacade` (기본값) | `[Supabase.IAP]` |
+| `IAPFacade` | `[Supabase.IAP]` (기본값 사용) |
+| `AppleIAPFacade` | `[Supabase.IAP.Apple]` |
+| `GooglePlayIAPFacade` | `[Supabase.IAP.Google]` |
+
+새 플랫폼별 파사드를 추가할 때는 반드시 `protected override string LogTag`를 정의한다.
+
+### 로그 메시지 형식
+
+모든 로그는 `$"{LogTag} 메시지"` 형식. `productId`를 알 수 있는 시점이면 항상 포함한다.
+
+| 상황 | 포함할 필드 | 예시 |
+|------|------------|------|
+| receipt / token 파싱 실패 | `product={productId}` | `purchaseToken 추출 실패. product={productId}` |
+| 서버 검증 실패 (네트워크·응답 이상) | `product={productId}` | `서버 검증 실패. product={productId}` |
+| 서버 검증 거부 (ok=false) | `reason={response.reason}, product={productId}` | `구매를 거부했습니다. reason={...}, product={...}` |
+| 구매 실패 이벤트 (OnPurchaseFailed) | `product={productId}, reason={failureReason}` | `구매 실패: product={...}, reason={...}` |
+
+`productId`를 아직 모르는 시점(null 체크 등)은 생략해도 된다.
+
+### 로그 레벨
+
+- `Debug.LogWarning` — 구매 흐름 이상 (파싱 실패, 서버 거부, 타임아웃 등 복구 가능)
+- `Debug.LogError` — 내부 예외 (`OnGrantItemAsync` 예외, `ProcessPurchaseAsync` 예외)
+- `Debug.LogError` — 설정 오류로 절대 동작할 수 없는 상황 (예: Unity IAP 5.0.x + PlayNanooRuntime)
+
+---
+
 ## Debug Logs
 
 Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace root** (`d:\Project\TrueSoft.Supabase`), never under `Runtime/`, `Sql/`, or `Samples~/`. Do not commit them.
