@@ -166,16 +166,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
 | `APPLE_SHARED_SECRET` | iOS IAP 사용 시 (SK1) | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
 
-::: details GOOGLE_SERVICE_ACCOUNT_JSON 발급 방법
-
-1. [Google Play Console](https://play.google.com/console) > **설정 > API 액세스**로 이동합니다.
-2. Google Cloud 프로젝트에 연결한 뒤 **서비스 계정 관리**를 클릭합니다.
-3. Google Cloud Console에서 **키 만들기 > JSON** 유형으로 키 파일을 발급합니다.
-4. 다운로드된 `.json` 파일을 텍스트 편집기로 열어 **전체 내용**을 복사합니다.
-5. Supabase 대시보드 **Edge Functions > Secrets**에서 키 이름 `GOOGLE_SERVICE_ACCOUNT_JSON`, 값에 복사한 JSON을 붙여넣고 저장합니다.
-
-JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파일 경로가 아닌 **파일 내용 전체**를 값으로 입력해야 합니다.
-:::
+발급 절차는 [Google 서비스 계정 JSON 발급](./google-service-account.md)을 참고하세요.
 
 ---
 
@@ -202,3 +193,4 @@ await Supabase.TrySignInAnonymouslyAsync();
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
+| Google 서비스 계정 JSON 발급 | [발급 가이드](./google-service-account.md) |
