@@ -46,8 +46,6 @@ Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-취소와 오류를 구분하는 예시:
-
 ```csharp
 var result = await Supabase.TrySignInWithGoogleAsync();
 if (!result)
@@ -71,9 +69,9 @@ iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰�
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 | `string` |
 
 **실패 원인**
 
@@ -90,7 +88,7 @@ iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰�
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
 ```
 
-익명 세션에 Android Play Services Google 계정을 연동합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환되며, 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
+익명 세션에 Android Play Services Google 계정을 연동합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다.
 
 ::: warning
 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
@@ -120,10 +118,10 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
-| `googleAccessToken` | Google Access Token (기본값: null) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 | `string` |
+| `googleAccessToken` | Google Access Token (기본값: `null`) | `string` |
 
 **실패 원인**
 
@@ -151,10 +149,10 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
-| `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: null) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 | `string` |
+| `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: `null`) | `string` |
 
 **실패 원인**
 
@@ -171,7 +169,7 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null)
 ```
 
-익명 세션에 Apple 계정을 연동합니다. 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다.
+익명 세션에 Apple 계정을 연동합니다. 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
 
 ::: warning
 익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 이 메서드를 사용하세요.  
@@ -180,10 +178,10 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
-| `rawNonce` | 토큰과 함께 전달된 nonce (기본값: null) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 | `string` |
+| `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) | `string` |
 
 **실패 원인**
 

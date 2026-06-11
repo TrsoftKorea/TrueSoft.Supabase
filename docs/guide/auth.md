@@ -5,7 +5,7 @@
 
 ---
 
-## 로그인
+## 익명 로그인
 
 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성해 로그인합니다.  
 로그인하면 세션이 기기에 자동으로 저장되어, 다음 실행 시 `TriggerAutoLoginAsync()`로 복원할 수 있습니다.
@@ -19,8 +19,6 @@ Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 ```
 
 익명(게스트) 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다.
-
-`Try*` 메서드는 `SupabaseCallResult`를 반환합니다. `if (await ...)` 패턴과 완전히 호환되며, 실패 원인을 확인할 때는 결과를 변수에 받습니다.
 
 ```csharp
 var result = await Supabase.TrySignInAnonymouslyAsync();
@@ -114,10 +112,10 @@ Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync(bool clearStorage = true,
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `clearStorage` | 기기에 저장된 세션 토큰 삭제 여부 (기본값: `true`) |
-| `deleteUserSessionRow` | 중복 로그인 감지용 DB 행 삭제 여부 (기본값: `true`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `clearStorage` | 기기에 저장된 세션 토큰 삭제 여부 (기본값: `true`) | `bool` |
+| `deleteUserSessionRow` | 중복 로그인 감지용 DB 행 삭제 여부 (기본값: `true`) | `bool` |
 
 #### `TryRefreshSessionAsync(refreshToken)`
 
@@ -129,9 +127,9 @@ Task<SupabaseCallResult> Supabase.TryRefreshSessionAsync(string refreshToken)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `refreshToken` | 갱신에 사용할 리프레시 토큰 |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `refreshToken` | 갱신에 사용할 리프레시 토큰 | `string` |
 
 ---
 
@@ -212,9 +210,9 @@ Task<SupabaseBanInfo?> Supabase.TryGetBanInfoAsync(string accountId)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `accountId` | 조회할 계정 ID (`auth.users.id`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `accountId` | 조회할 계정 ID (`auth.users.id`) | `string` |
 
 **반환**
 

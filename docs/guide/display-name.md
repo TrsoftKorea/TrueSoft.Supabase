@@ -7,8 +7,6 @@
 
 ## 닉네임
 
-플레이어가 처음 게임을 시작하면 닉네임이 없는 상태입니다. 닉네임 설정 화면에서 중복 확인 후 저장하는 흐름이 일반적입니다.
-
 ```csharp
 // 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
 string myName = Supabase.MyProfile.DisplayName;
@@ -25,9 +23,9 @@ Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayN
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `displayName` | 확인할 닉네임. 최대 64자 |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `displayName` | 확인할 닉네임. 최대 64자 | `string` |
 
 **실패 원인**
 
@@ -47,9 +45,9 @@ Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `displayName` | 설정할 닉네임. 최대 64자 |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `displayName` | 설정할 닉네임. 최대 64자 | `string` |
 
 **실패 원인**
 
@@ -77,10 +75,10 @@ Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string default
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `userId` | 조회할 플레이어 ID (`profiles.user_id`) |
-| `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `""`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `userId` | 조회할 플레이어 ID (`profiles.user_id`) | `string` |
+| `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `""`) | `string` |
 
 ---
 
@@ -100,9 +98,9 @@ Task<PublicProfileSnapshot?> Supabase.TryGetPublicProfileAsync(string userId)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `userId` | 조회할 플레이어 ID (`profiles.user_id`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `userId` | 조회할 플레이어 ID (`profiles.user_id`) | `string` |
 
 **반환**
 

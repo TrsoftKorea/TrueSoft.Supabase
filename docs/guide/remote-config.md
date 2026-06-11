@@ -1,4 +1,4 @@
-﻿# Remote Config
+# Remote Config
 
 Remote Config는 앱을 업데이트하지 않고도 서버에서 게임 수치를 바꿀 수 있는 기능입니다.  
 예를 들어 스테미나 최대치, 몬스터 체력 배율, 이벤트 배너 텍스트 등을 DB에서 관리할 수 있습니다.
@@ -43,8 +43,6 @@ if (cfg != null)
 }
 ```
 
-이게 전부입니다. 이후 패턴은 상황에 따라 선택하세요.
-
 ---
 
 ## 어떤 패턴을 써야 하나요?
@@ -61,9 +59,7 @@ if (cfg != null)
 
 ## Reader
 
-"지금 이 값이 필요해"라고 요청하는 방식입니다.  
-서버에서 한 번 가져와 저장해두고, 다음 호출부터는 저장된 값을 빠르게 반환합니다.  
-저장된 값이 오래됐으면 서버에서 새 값을 받아온 뒤 반환합니다.
+요청 시 캐시 값을 즉시 반환합니다. 캐시가 오래됐으면 서버에서 새 값을 받아온 뒤 반환합니다.
 
 #### `RemoteConfig<T>.CreateReader(maxStale)`
 
@@ -75,9 +71,9 @@ Func<Task<T?>> RemoteConfig<T>.CreateReader(int maxStale = -1)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `maxStale` | 캐시 유효 시간 초과. `0`이면 항상 서버에서 새로 받음. `-1`이면 DB 설정값 사용 (기본값: `-1`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `maxStale` | 캐시 유효 시간 초과. `0`이면 항상 서버에서 새로 받음. `-1`이면 DB 설정값 사용 (기본값: `-1`) | `int` |
 
 ```csharp
 private Func<Task<GameplayConfig>> _getConfig;
@@ -110,9 +106,9 @@ RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 0f)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
 
 ```csharp
 private RemoteConfigBinding<GameplayConfig> _gameplay;
@@ -149,10 +145,10 @@ RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T?> onChange, floa
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `onChange` | 값이 바뀔 때 호출되는 콜백 |
-| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `onChange` | 값이 바뀔 때 호출되는 콜백 | `Action<T?>` |
+| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
 
 ```csharp
 private RemoteConfigListener<GameplayConfig> _listener;

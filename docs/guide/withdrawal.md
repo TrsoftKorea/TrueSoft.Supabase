@@ -85,9 +85,9 @@ Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue =
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) | `string` |
 
 #### `TryRedeemWithdrawalCancelAsync(cancelToken)`
 
@@ -99,9 +99,9 @@ Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelTo
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `cancelToken` | 플레이어가 입력한 취소 토큰 |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `cancelToken` | 플레이어가 입력한 취소 토큰 | `string` |
 
 **실패 원인**
 
@@ -134,10 +134,10 @@ Task<SupabaseCallResult> Supabase.TryTransferMyServerAsync(string targetServerCo
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `targetServerCode` | 이주할 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
-| `reason` | 이주 사유. 서버 로그에만 기록됨 (기본값: `null`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `targetServerCode` | 이주할 서버 코드 (예: `"GLOBAL"`, `"KR1"`) | `string` |
+| `reason` | 이주 사유. 서버 로그에만 기록됨 (기본값: `null`) | `string` |
 
 **실패 원인**
 

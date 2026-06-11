@@ -30,14 +30,12 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `productIds` | 등록할 소모품 ID 목록 |
-| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, isResuming, alreadyVerified)` — `true` 반환 시 SDK가 소비(Confirm) 처리 |
-| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` |
-| `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) |  
-결제가 완료되면 **클라이언트 → Edge Function → 스토어 서버** 순으로 검증하고, 성공 시 `onGrant` 콜백에서 아이템을 지급합니다.  
-반환된 `IAPFacade`로 구매를 트리거하고, 사용이 끝나면 `Dispose()`로 해제합니다.
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `productIds` | 등록할 소모품 ID 목록 | `string[]` |
+| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, isResuming, alreadyVerified)` — `true` 반환 시 SDK가 소비(Confirm) 처리 | `Func<string, bool, bool, Task<bool>>` |
+| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` | `Action<IAPPurchaseFailedInfo>` |
+| `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) | `int` |
 
 ```csharp
 private IAPFacade _iapFacade;
@@ -112,20 +110,6 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 |--------|------|
 | `isResuming` | 이전 세션의 미처리 주문을 재처리 중 |
 | `alreadyVerified` | 서버 DB에 이미 검증 기록이 있음 |
-
-### 구매 실패 콜백
-
-```csharp
-_iapFacade = await SupabaseIAP.CreateIAPAsync(
-    productIds: new[] { "com.mygame.coins_100" },
-    onGrant: async (productId, _, _) =>
-    {
-        await GiveItemAsync(productId);
-        return true;
-    },
-    onFailed:  info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"),
-    timeoutMs: 10_000);
-```
 
 ### 결제 금액 자동 기록
 

@@ -72,7 +72,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 Task<bool> PlayerSave.TryLoadAsync()
 ```
 
-서버에서 유저 데이터를 로드합니다. 성공 시 `true`, 실패 시 `false`를 반환합니다.
+서버에서 유저 데이터를 로드합니다.
 
 ```csharp
 bool ok = await PlayerSave.TryLoadAsync();
@@ -116,9 +116,9 @@ Task<bool> Supabase.TrySaveAllAsync(int timeoutMs = 5000)
 
 **파라미터**
 
-| 파라미터 | 설명 |
-|----------|------|
-| `timeoutMs` | 최대 대기 시간 ms (기본값: `5000`) |
+| 파라미터 | 설명 | 타입 |
+|----------|------|------|
+| `timeoutMs` | 최대 대기 시간 ms (기본값: `5000`) | `int` |
 
 ```csharp
 await Supabase.TrySaveAllAsync(timeoutMs: 5000);
@@ -132,11 +132,7 @@ await Supabase.TrySaveAllAsync(timeoutMs: 5000);
 
 ## 컬럼 추가
 
-Retool에서 `user_saves` 테이블에 컬럼을 추가합니다.
-
-> 자세한 내용은 추후 업데이트 예정입니다.
-
-추가 후 생성기를 다시 실행하면 `PlayerSave.cs`에 해당 프로퍼티가 자동으로 추가됩니다.
+Retool에서 `user_saves` 테이블에 컬럼을 추가합니다. 추가 후 생성기를 다시 실행하면 `PlayerSave.cs`에 해당 프로퍼티가 자동으로 추가됩니다.
 
 ---
 
