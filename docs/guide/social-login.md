@@ -22,7 +22,7 @@
 
 ---
 
-#### Android 로그인
+### Android 로그인
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()
@@ -50,7 +50,7 @@ Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출
 
 ---
 
-#### iOS · 커스텀 로그인
+### iOS · 커스텀 로그인
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)
@@ -75,7 +75,7 @@ iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토
 
 ---
 
-#### Android — 게스트 연동
+### Android — 게스트 연동
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
@@ -103,7 +103,7 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 
 ---
 
-#### iOS · 커스텀 — 게스트 연동
+### iOS · 커스텀 — 게스트 연동
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
@@ -134,7 +134,7 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 ## Apple
 
-#### 로그인
+### 로그인
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
@@ -160,7 +160,7 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 
 ---
 
-#### 게스트 연동
+### 게스트 연동
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null)

@@ -12,7 +12,7 @@
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
-#### 탈퇴 신청
+### 탈퇴 신청
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
@@ -29,7 +29,7 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 
 ---
 
-#### 예약 상태 확인
+### 예약 상태 확인
 
 ```csharp
 Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
@@ -47,7 +47,7 @@ Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
 
 ---
 
-#### 탈퇴 취소
+### 탈퇴 취소
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
@@ -73,7 +73,7 @@ Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
-#### 취소 토큰 발급
+### 취소 토큰 발급
 
 ```csharp
 Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue = null)
@@ -89,7 +89,7 @@ Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue =
 
 ---
 
-#### 취소 토큰 사용
+### 취소 토큰 사용
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelToken = null)

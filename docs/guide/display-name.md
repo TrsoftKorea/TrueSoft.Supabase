@@ -14,7 +14,7 @@ string myName = Supabase.MyProfile.DisplayName;
 
 ---
 
-#### 중복 확인
+### 중복 확인
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayName)
@@ -39,7 +39,7 @@ Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayN
 
 ---
 
-#### 닉네임 설정
+### 닉네임 설정
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
@@ -64,7 +64,7 @@ Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
 
 ---
 
-#### 다른 플레이어 조회
+### 다른 플레이어 조회
 
 ```csharp
 Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string defaultValue = "")
