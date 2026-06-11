@@ -75,6 +75,7 @@ namespace TrueBase.Unity
         internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptRequestMyWithdrawal;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
+        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSetMyDisplayName;
 
         // ── PlayNANOO IAP 인터셉터 ────────────────────────────────────────────
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
@@ -99,7 +100,8 @@ namespace TrueBase.Unity
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         signOutFully,
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         requestMyWithdrawal,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null)
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null)
         {
             _interceptSignInAnonymously                       = signInAnonymously;
             _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
@@ -108,6 +110,7 @@ namespace TrueBase.Unity
             _interceptRequestMyWithdrawal                     = requestMyWithdrawal;
             _interceptLinkGoogleToCurrentAnonymousWithIdToken = linkGoogleToCurrentAnonymousWithIdToken;
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = linkAppleToCurrentAnonymousWithIdToken;
+            _interceptSetMyDisplayName                        = setMyDisplayName;
         }
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
@@ -120,6 +123,7 @@ namespace TrueBase.Unity
             _interceptRequestMyWithdrawal                     = null;
             _interceptLinkGoogleToCurrentAnonymousWithIdToken = null;
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = null;
+            _interceptSetMyDisplayName                        = null;
             _interceptIAPApple  = null;
             _interceptIAPGoogle = null;
         }
@@ -484,9 +488,10 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
 
             var google = loginResult.Data;
-            return await LinkGoogleToCurrentAnonymousWithIdTokenAsync(
-                google.IdToken,
-                google.AccessToken);
+            var ok = await TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(google.IdToken, google.AccessToken);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.GoogleLinkFailed);
         }
 
         /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -1508,6 +1513,13 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SetMyDisplayNameAsync"/>
         public static async Task<SupabaseCallResult> TrySetMyDisplayNameAsync(string displayName)
+        {
+            if (_interceptSetMyDisplayName != null)
+                return await _interceptSetMyDisplayName(displayName, () => TrySetMyDisplayNameSdkOnlyAsync(displayName));
+            return await TrySetMyDisplayNameSdkOnlyAsync(displayName);
+        }
+
+        private static async Task<SupabaseCallResult> TrySetMyDisplayNameSdkOnlyAsync(string displayName)
         {
             var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
             var r = await SetMyDisplayNameAsync(displayName);

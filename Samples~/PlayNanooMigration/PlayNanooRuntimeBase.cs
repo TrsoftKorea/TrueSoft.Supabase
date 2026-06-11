@@ -6,7 +6,6 @@
 // 2. 씬에서 SupabaseRuntime 대신 버전에 맞는 컴포넌트를 배치
 //    - PlayNANOO SDK 신버전 (AccountManagerV20240401): PlayNanooRuntime
 //    - PlayNANOO SDK 구버전 (AccountGuestSignIn / AccountManager.*): PlayNanooLegacyRuntime
-// 3. Inspector에서 Nanoo Storage Key → PlayNANOO 콘솔 스토리지 키로 변경
 //    (StaticUserSave 인스턴스는 자동 연결됩니다)
 //
 // [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
@@ -41,11 +40,9 @@ using UnityEngine;
 /// </summary>
 public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
-    [Tooltip("PlayNANOO 콘솔에 등록한 스토리지 키")]
-    [SerializeField] private string _nanooStorageKey = "save";
-
     protected Plugin _plugin;
     private string _nanooAccessToken;  // 로그인 성공 시 저장, 로그아웃·롤백에 사용
+    private string _nanooNickname;     // 닉네임 변경 롤백용
     private string _pendingLoginType;  // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
 
     private INanooSaveSyncable Save => Supabase.GetNanooSaveBridge();
@@ -80,6 +77,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 탈퇴 취소. 완료 후 callback(status)을 호출해야 합니다.</summary>
     protected abstract void NanooWithDrawalRestore(string key, Func<string, Task> callback);
+
+    /// <summary>PlayNANOO 닉네임 변경. 완료 후 callback(status)을 호출해야 합니다.</summary>
+    protected abstract void NanooSetNickname(string nickname, Func<string, Task> callback);
 
     // ── PlayNANOO IAP 메서드 (virtual — 필요 시 서브클래스에서 override) ─────────
 
@@ -117,7 +117,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             signOutFully:                            InterceptSignOutFully,
             requestMyWithdrawal:                     InterceptRequestMyWithdrawal,
             linkGoogleToCurrentAnonymousWithIdToken: InterceptLinkGoogleToCurrentAnonymousWithIdToken,
-            linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken
+            linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken,
+            setMyDisplayName:                        InterceptSetMyDisplayName
         );
 
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
@@ -255,6 +256,33 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return await tcs.Task;
     }
 
+    // ── 닉네임 변경 인터셉터 ──────────────────────────────────────────────────────
+
+    private Task<SupabaseCallResult> InterceptSetMyDisplayName(string nickname, Func<Task<SupabaseCallResult>> sdkSet)
+    {
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        NanooSetNickname(nickname, async status =>
+        {
+            if (status != Configure.PN_API_STATE_SUCCESS)
+            {
+                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_set_nickname_failed"));
+                return;
+            }
+            var result = await sdkSet();
+            if (!result.Success)
+            {
+                var prev = _nanooNickname;
+                if (!string.IsNullOrEmpty(prev))
+                    NanooSetNickname(prev, _ => Task.CompletedTask);
+                tcs.SetResult(result);
+                return;
+            }
+            _nanooNickname = nickname;
+            tcs.SetResult(result);
+        });
+        return tcs.Task;
+    }
+
     // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
 
     private async Task<SupabaseCallResult> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
@@ -295,11 +323,16 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── PlayNANOO 콜백 공통 처리 ──────────────────────────────────────────────
 
+    /// <summary>PlayNANOO 로그인 성공 시 호출. 서브클래스에서 응답 values를 추가로 처리할 수 있습니다.</summary>
+    protected virtual void OnNanooLoginSuccess(Dictionary<string, object> values) { }
+
     private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
             _nanooAccessToken = values["access_token"]?.ToString();
+            _nanooNickname = values["nickname"]?.ToString();
+            OnNanooLoginSuccess(values);
             return true;
         }
         if (values?["ErrorCode"]?.ToString() == "30007")
@@ -391,10 +424,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── PlayNANOO 저장/로드 ───────────────────────────────────────────────────
 
-    private Task<string> LoadRawFromNanoo()
+    protected virtual Task<string> LoadRawFromNanoo()
     {
         var tcs = new TaskCompletionSource<string>();
-        _plugin.Storage.Load(_nanooStorageKey, (status, _, _, values) =>
+        _plugin.Storage.Load("Data", (status, _, _, values) =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(null); return; }
             tcs.SetResult(values["StorageValue"]?.ToString());
@@ -416,10 +449,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     }
 
     /// <summary>PlayNANOO에 JSON 데이터를 저장합니다.</summary>
-    public void SaveToNanoo(string json)
+    public virtual void SaveToNanoo(string json)
     {
         if (string.IsNullOrEmpty(json)) return;
-        _plugin.Storage.Save(_nanooStorageKey, json, true,
+        _plugin.Storage.Save("Data", json, true,
             (status, _, _, _) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)

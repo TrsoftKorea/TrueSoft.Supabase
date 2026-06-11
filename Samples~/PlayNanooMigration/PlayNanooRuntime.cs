@@ -32,4 +32,7 @@ public class PlayNanooRuntime : PlayNanooRuntimeBase
 
     protected override void NanooWithDrawalRestore(string key, Func<string, Task> cb)
         => _plugin.AccountManagerV20240401.WithDrawalRestore(key, async (s, _, _, _) => await cb(s));
+
+    protected override void NanooSetNickname(string nickname, Func<string, Task> cb)
+        => _plugin.AccountManagerV20240401.NicknamePut(nickname, true, async (s, _, _, _) => await cb(s));
 }
