@@ -8,17 +8,17 @@
 ## 로그인
 
 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성해 로그인합니다.  
-`saveSessionToStorage: true`(기본값)로 호출하면 세션이 기기에 저장되어 다음 실행 시 자동 복원됩니다.
+로그인하면 세션이 기기에 자동으로 저장되어, 다음 실행 시 `TriggerAutoLoginAsync()`로 복원할 수 있습니다.
 
 ```csharp
 // 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
+await Supabase.TrySignInAnonymouslyAsync();
 ```
 
 `Try*` 메서드는 `SupabaseCallResult`를 반환합니다. `if (await ...)` 패턴과 완전히 호환되며, 실패 원인을 확인할 때는 결과를 변수에 받습니다.
 
 ```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
+var result = await Supabase.TrySignInAnonymouslyAsync();
 if (!result.Success)
 {
     Debug.Log(result.Reason);  // 실패 원인 ("user_banned", "http_response_null" 등)
@@ -116,10 +116,10 @@ iOS나 커스텀 OAuth 흐름에서는 외부 SDK에서 발급받은 ID 토큰�
 
 ```csharp
 // Android 네이티브 (Play Services)
-await Supabase.TrySignInWithGoogleAsync(saveSessionToStorage: true);
+await Supabase.TrySignInWithGoogleAsync();
 
 // iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage: true);
+await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
 ```
 
 ::: warning
@@ -137,10 +137,10 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 
 ```csharp
 // Android 네이티브
-await Supabase.TryLinkGoogleToCurrentAnonymousAsync(saveSessionToStorage: true);
+await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
 
 // iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken: null, saveSessionToStorage: true);
+await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken: null);
 ```
 
 - 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다. 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
@@ -155,7 +155,7 @@ await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAc
 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
 
 ```csharp
-await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage: true);
+await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
 ```
 
 #### 익명 → Apple 연동
@@ -166,7 +166,7 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 :::
 
 ```csharp
-await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage: true);
+await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
 ```
 
 ---
@@ -201,7 +201,7 @@ await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: tr
 Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
+var result = await Supabase.TrySignInAnonymouslyAsync();
 
 if (!result.Success && result.BanInfo != null)
 {

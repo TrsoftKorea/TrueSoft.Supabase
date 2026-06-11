@@ -325,10 +325,10 @@ namespace TrueBase.Unity
 
         /// <summary>이미 가진 Google ID 토큰 문자열로 Supabase에 로그인하고 SDK 세션을 맞춥니다.</summary>
         /// <remarks>
-        /// Android 네이티브 <see cref="SignInWithGoogleAsync(bool)"/>와 달리 «토큰 획득»은 호출자 책임입니다(iOS 플러그인, 웹 OAuth, 수동 입력 등).
+        /// Android 네이티브 <see cref="SignInWithGoogleAsync"/>와 달리 «토큰 획득»은 호출자 책임입니다(iOS 플러그인, 웹 OAuth, 수동 입력 등).
         /// 익명(게스트) 세션에서는 자동 연동을 수행하지 않습니다. 연동은 <see cref="LinkGoogleToCurrentAnonymousWithIdTokenAsync"/>를 사용하세요.
         /// </remarks>
-        public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true)
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -343,15 +343,13 @@ namespace TrueBase.Unity
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
-                if (saveSessionToStorage)
-                    SaveSessionToStorage();
+                SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Google);
                 if (!_isRecreatingAfterWithdrawalDelete)
                 {
                     var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                         SignInMethodKind.Google,
-                        saveSessionToStorage,
                         allowRecreateOnDeletion: true);
                     if (guarded != null)
                         return guarded;
@@ -361,7 +359,7 @@ namespace TrueBase.Unity
                         return reserved;
                 }
 
-                await TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync(saveSessionToStorage);
+                await TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync();
                 await TryEnsureProfileRowAfterSignInAsync();
             }
 
@@ -374,8 +372,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string googleAccessToken = null,
-            bool saveSessionToStorage = true)
+            string googleAccessToken = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -406,8 +403,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail("google_link_anonymous_not_cleared");
 
             SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
-            if (saveSessionToStorage)
-                SaveSessionToStorage();
+            SaveSessionToStorage();
 
             RememberLastSignInMethod(SignInMethodKind.Google);
             await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
@@ -415,7 +411,6 @@ namespace TrueBase.Unity
             {
                 var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                     SignInMethodKind.Google,
-                    saveSessionToStorage,
                     allowRecreateOnDeletion: true);
                 if (guarded != null)
                     return guarded;
@@ -435,7 +430,7 @@ namespace TrueBase.Unity
         /// <remarks>
         /// 인스펙터에 Web Client ID를 저장해 두고, 게임 코드에서는 인자 없이 호출할 때 쓰는 오버로드입니다.
         /// </remarks>
-        public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync(bool saveSessionToStorage = true)
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync()
         {
             var webClientId = TryGetGoogleWebClientIdFromSettings();
             if (string.IsNullOrWhiteSpace(webClientId))
@@ -461,7 +456,7 @@ namespace TrueBase.Unity
 
             // TrySignInWithGoogleIdTokenAsync를 경유해 인터셉터(PlayNanoo 브릿지 등)를 지원합니다.
             var idToken = loginResult.Data.IdToken.Trim();
-            var ok = await TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+            var ok = await TrySignInWithGoogleIdTokenAsync(idToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
                 : SupabaseResult<SupabaseSession>.Fail("google_signin_failed");
@@ -470,7 +465,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 현재 익명 세션에 Google identity를 연동합니다(Android 네이티브 Google 로그인 사용).
         /// </summary>
-        public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true)
+        public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousAsync()
         {
             var webClientId = TryGetGoogleWebClientIdFromSettings();
             if (string.IsNullOrWhiteSpace(webClientId))
@@ -491,48 +486,46 @@ namespace TrueBase.Unity
             var google = loginResult.Data;
             return await LinkGoogleToCurrentAnonymousWithIdTokenAsync(
                 google.IdToken,
-                google.AccessToken,
-                saveSessionToStorage);
+                google.AccessToken);
         }
 
-        /// <summary><see cref="SignInWithGoogleAsync(bool)"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInWithGoogleAsync(bool saveSessionToStorage = true)
+        /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TrySignInWithGoogleAsync()
         {
-            var r = await SignInWithGoogleAsync(saveSessionToStorage);
+            var r = await SignInWithGoogleAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
         }
 
         /// <summary><see cref="SignInWithGoogleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true)
+        public static async Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken)
         {
             if (_interceptSignInWithGoogleIdToken != null)
                 return await _interceptSignInWithGoogleIdToken(idToken, async () => {
-                    var r = await SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+                    var r = await SignInWithGoogleIdTokenAsync(idToken);
                     return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
                 });
-            var r2 = await SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+            var r2 = await SignInWithGoogleIdTokenAsync(idToken);
             return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
         }
 
-        /// <summary><see cref="LinkGoogleToCurrentAnonymousAsync(bool)"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true)
+        /// <summary><see cref="LinkGoogleToCurrentAnonymousAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync()
         {
-            var r = await LinkGoogleToCurrentAnonymousAsync(saveSessionToStorage);
+            var r = await LinkGoogleToCurrentAnonymousAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
         }
 
         /// <summary><see cref="LinkGoogleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string googleAccessToken = null,
-            bool saveSessionToStorage = true)
+            string googleAccessToken = null)
         {
             if (_interceptLinkGoogleToCurrentAnonymousWithIdToken != null)
                 return await _interceptLinkGoogleToCurrentAnonymousWithIdToken(idToken, async () => {
-                    var r = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+                    var r = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
                     return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
                 });
-            var r2 = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+            var r2 = await LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
             return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
         }
 
@@ -542,8 +535,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(
             string idToken,
-            string rawNonce = null,
-            bool saveSessionToStorage = true)
+            string rawNonce = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -558,15 +550,13 @@ namespace TrueBase.Unity
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
-                if (saveSessionToStorage)
-                    SaveSessionToStorage();
+                SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Apple);
                 if (!_isRecreatingAfterWithdrawalDelete)
                 {
                     var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                         SignInMethodKind.Apple,
-                        saveSessionToStorage,
                         allowRecreateOnDeletion: true);
                     if (guarded != null)
                         return guarded;
@@ -585,8 +575,7 @@ namespace TrueBase.Unity
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(ID 토큰 직접 전달).</summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string rawNonce = null,
-            bool saveSessionToStorage = true)
+            string rawNonce = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -612,8 +601,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail("apple_link_anonymous_not_cleared");
 
             SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
-            if (saveSessionToStorage)
-                SaveSessionToStorage();
+            SaveSessionToStorage();
 
             RememberLastSignInMethod(SignInMethodKind.Apple);
             await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
@@ -621,7 +609,6 @@ namespace TrueBase.Unity
             {
                 var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                     SignInMethodKind.Apple,
-                    saveSessionToStorage,
                     allowRecreateOnDeletion: true);
                 if (guarded != null)
                     return guarded;
@@ -638,42 +625,40 @@ namespace TrueBase.Unity
         /// <summary><see cref="SignInWithAppleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<SupabaseCallResult> TrySignInWithAppleIdTokenAsync(
             string idToken,
-            string rawNonce = null,
-            bool saveSessionToStorage = true)
+            string rawNonce = null)
         {
             if (_interceptSignInWithAppleIdToken != null)
                 return await _interceptSignInWithAppleIdToken(idToken, async () => {
-                    var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+                    var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce);
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
-            var r2 = await SignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            var r2 = await SignInWithAppleIdTokenAsync(idToken, rawNonce);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string rawNonce = null,
-            bool saveSessionToStorage = true)
+            string rawNonce = null)
         {
             if (_interceptLinkAppleToCurrentAnonymousWithIdToken != null)
                 return await _interceptLinkAppleToCurrentAnonymousWithIdToken(idToken, async () => {
-                    var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+                    var r = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
-            var r2 = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            var r2 = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInAnonymouslyAsync(bool saveSessionToStorage = true)
+        public static async Task<SupabaseCallResult> TrySignInAnonymouslyAsync()
         {
             if (_interceptSignInAnonymously != null)
                 return await _interceptSignInAnonymously(async () => {
-                    var r = await SignInAnonymouslyAsync(saveSessionToStorage);
+                    var r = await SignInAnonymouslyAsync();
                     return LogAndReturn(ApiLogTags.AuthAnonymous, r);
                 });
-            var r2 = await SignInAnonymouslyAsync(saveSessionToStorage);
+            var r2 = await SignInAnonymouslyAsync();
             return LogAndReturn(ApiLogTags.AuthAnonymous, r2);
         }
 
@@ -685,9 +670,9 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="RefreshSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryRefreshSessionAsync(string refreshToken, bool saveSessionToStorage = true)
+        public static async Task<SupabaseCallResult> TryRefreshSessionAsync(string refreshToken)
         {
-            var r = await RefreshSessionAsync(refreshToken, saveSessionToStorage);
+            var r = await RefreshSessionAsync(refreshToken);
             return LogAndReturn(ApiLogTags.AuthRefreshSession, r);
         }
 
@@ -1015,7 +1000,7 @@ namespace TrueBase.Unity
         /// 저장된 refresh_token이 있으면 먼저 <see cref="RestoreSessionAsync"/>를 시도해 동일 계정을 이어갑니다(수동 로그인 버튼 흐름).<br/>
         /// 이미 Google 등 <b>비익명</b>으로 로그인 중이면 실패(<c>signed_in_non_anonymous_sign_out_first</c>) — 먼저 로그아웃한 뒤 호출하세요.
         /// </remarks>
-        public static async Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync(bool saveSessionToStorage = true)
+        public static async Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync()
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -1062,8 +1047,7 @@ namespace TrueBase.Unity
                     else
                     {
                         RememberLastSignInMethod(SignInMethodKind.Anonymous);
-                        if (saveSessionToStorage)
-                            SaveSessionToStorage();
+                        SaveSessionToStorage();
                         return SupabaseResult<SupabaseSession>.Success(_currentSession);
                     }
                 }
@@ -1081,8 +1065,7 @@ namespace TrueBase.Unity
 
                     await TryEnsureProfileRowAfterSignInAsync();
 
-                    if (saveSessionToStorage)
-                        SaveSessionToStorage();
+                    SaveSessionToStorage();
                     return SupabaseResult<SupabaseSession>.Success(_currentSession);
                 }
 
@@ -1102,8 +1085,7 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
                 await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-                if (saveSessionToStorage)
-                    SaveSessionToStorage();
+                SaveSessionToStorage();
 
                 await TryUpsertAnonymousRecoveryTokenAsync(result.Data);
                 RememberLastSignInMethod(SignInMethodKind.Anonymous);
@@ -1111,7 +1093,6 @@ namespace TrueBase.Unity
                 {
                     var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                         SignInMethodKind.Anonymous,
-                        saveSessionToStorage,
                         allowRecreateOnDeletion: true);
                     if (guarded != null)
                         return guarded;
@@ -1193,7 +1174,7 @@ namespace TrueBase.Unity
         /// <remarks>
         /// 앱 재실행 시 저장된 토큰 복원은 <see cref="RestoreSessionAsync"/>를 쓰는 편이 일반적입니다.
         /// </remarks>
-        public static async Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(string refreshToken, bool saveSessionToStorage = true)
+        public static async Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(string refreshToken)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
@@ -1205,8 +1186,7 @@ namespace TrueBase.Unity
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
-                if (saveSessionToStorage)
-                    SaveSessionToStorage();
+                SaveSessionToStorage();
             }
 
             return result;
@@ -2362,7 +2342,6 @@ namespace TrueBase.Unity
                     var method = ReadLastSignInMethod();
                     var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                         method == SignInMethodKind.Unknown ? SignInMethodKind.Anonymous : method,
-                        saveSessionToStorage: true,
                         allowRecreateOnDeletion: allowRecreateOnDeletion);
                     if (guarded != null)
                         return guarded.IsSuccess;
@@ -2620,7 +2599,6 @@ namespace TrueBase.Unity
 
         private static async Task<SupabaseResult<SupabaseSession>> HandleWithdrawalGuardAfterSignInAsync(
             SignInMethodKind method,
-            bool saveSessionToStorage,
             bool allowRecreateOnDeletion)
         {
             if (_isRecreatingAfterWithdrawalDelete)
@@ -2642,7 +2620,7 @@ namespace TrueBase.Unity
             _isRecreatingAfterWithdrawalDelete = true;
             try
             {
-                var recreated = await RecreateSessionByMethodAsync(method, saveSessionToStorage);
+                var recreated = await RecreateSessionByMethodAsync(method);
                 if (recreated == null || !recreated.IsSuccess || recreated.Data == null)
                     return SupabaseResult<SupabaseSession>.Fail("withdrawal_deleted_recreate_failed");
 
@@ -2655,13 +2633,12 @@ namespace TrueBase.Unity
         }
 
         private static async Task<SupabaseResult<SupabaseSession>> RecreateSessionByMethodAsync(
-            SignInMethodKind method,
-            bool saveSessionToStorage)
+            SignInMethodKind method)
         {
             return method switch
             {
-                SignInMethodKind.Google => await SignInWithGoogleAsync(saveSessionToStorage),
-                SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(saveSessionToStorage),
+                SignInMethodKind.Google => await SignInWithGoogleAsync(),
+                SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(),
                 _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method")
             };
         }
@@ -2712,7 +2689,7 @@ namespace TrueBase.Unity
             if (tokenResult == null || tokenResult.IsSuccess == false || string.IsNullOrWhiteSpace(tokenResult.Data))
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
 
-            var refreshResult = await RefreshSessionAsync(tokenResult.Data, saveSessionToStorage: true);
+            var refreshResult = await RefreshSessionAsync(tokenResult.Data);
             if (refreshResult == null || refreshResult.IsSuccess == false || refreshResult.Data == null)
             {
                 if (refreshResult?.ErrorMessage?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -2728,7 +2705,6 @@ namespace TrueBase.Unity
             // allowRecreate=true 로 처리합니다(자동 복원 경로와 분리 목적).
             var guarded = await HandleWithdrawalGuardAfterSignInAsync(
                 SignInMethodKind.Anonymous,
-                saveSessionToStorage: true,
                 allowRecreateOnDeletion: true);
 
             if (guarded != null)
@@ -2923,7 +2899,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// Google 신규 가입으로 판단되면 구글이 넣은 <c>user_metadata.displayName</c>을 <c>Player_xxxxxxxx</c>로 덮어쓰고 세션을 갱신합니다.
         /// </summary>
-        private static async Task TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync(bool saveSessionToStorage)
+        private static async Task TryApplyAnonymousDisplayNameAfterNewGoogleSignUpAsync()
         {
             var s = _currentSession;
             if (s == null || s.User == null || s.likely_brand_new_google_signup == false)
@@ -2952,8 +2928,7 @@ namespace TrueBase.Unity
 
             refr.Data.likely_brand_new_google_signup = false;
             SetSession(refr.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
-            if (saveSessionToStorage)
-                SaveSessionToStorage();
+            SaveSessionToStorage();
         }
 
         [Serializable]

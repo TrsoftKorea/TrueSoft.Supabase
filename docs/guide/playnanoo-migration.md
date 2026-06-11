@@ -55,47 +55,29 @@ Google 로그인은 `Supabase.TrySignInWithGoogleAsync()`가 SDK 내부에서 �
 기존 `SupabaseRuntime` 컴포넌트를 **제거**하고 버전에 맞는 구현체(`PlayNanooRuntime` 또는 `PlayNanooLegacyRuntime`)를 배치합니다.
 
 ::: warning
-`SupabaseRuntime`과 PlayNanoo 런타임을 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
+`SupabaseRuntime`과 `PlayNanooRuntime` / `PlayNanooLegacyRuntime`을 동시에 씬에 두지 마세요. `SupabaseRuntime`은 싱글턴으로 동작합니다.
 :::
 
 ---
 
 ## 로그인
 
+로그인 API는 이관 전·중·후 동일합니다. 자세한 내용은 [인증](./auth.md)을 참고하세요.
+
+Android에서 Apple 로그인은 PlayNANOO WebView를 통해 토큰을 획득한 뒤 호출합니다.
+
 ```csharp
-// 게스트(익명) — PlayNANOO + SDK 동시 처리
-await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
-
-// Google — SDK가 토큰 획득 후 PlayNANOO SocialSignIn + SDK 로그인 자동 처리
-await Supabase.TrySignInWithGoogleAsync(saveSessionToStorage: true);
-
-// Apple (iOS)
-await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce: null, saveSessionToStorage: true);
-
 // Apple (Android) — PlayNANOO WebView로 토큰 획득
 playNanooRuntime.StartAppleSignInAndroid();
 ```
 
-### 로그인 완료 감지
-
-```csharp
-SupabaseRuntime.SubscribeAutoLoginCompleted(OnReady);
-
-void OnReady(bool success)
-{
-    if (success) InitGame();
-    else         ShowLoginScreen();
-}
-```
+로그인 완료 이벤트와 로그인 후 사용 가능한 값은 [인증](./auth.md)을 참고하세요.
 
 ---
 
 ## 로그아웃
 
-```csharp
-await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
-```
-
+로그아웃 API는 이관 전·중·후 동일합니다. [인증](./auth.md)을 참고하세요.  
 PlayNANOO 토큰 해지 → SDK 로그아웃 순서로 자동 처리됩니다.
 
 ---

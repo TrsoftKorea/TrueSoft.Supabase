@@ -12,7 +12,7 @@ namespace TrueBase.Unity
     /// 게임 코드에서 쓰기 위한 정적 진입점입니다. 실제 구현은 <see cref="SupabaseSDK"/>에 있습니다.
     /// </summary>
     /// <remarks>
-    /// • 구글: <see cref="TrySignInWithGoogleAsync(bool)"/>는 Android 네이티브 전체 플로우(설정의 Web Client ID), <see cref="TrySignInWithGoogleIdTokenAsync"/>는 ID 토큰 문자열만 넘길 때.<br/>
+    /// • 구글: <see cref="TrySignInWithGoogleAsync"/>는 Android 네이티브 전체 플로우(설정의 Web Client ID), <see cref="TrySignInWithGoogleIdTokenAsync"/>는 ID 토큰 문자열만 넘길 때.<br/>
     /// • 공개 프로필: <see cref="TryGetPublicProfileAsync"/>, displayName <see cref="TryIsDisplayNameAvailableAsync"/> → <see cref="TrySetMyDisplayNameAsync"/>, 탈퇴 표시 <see cref="TryMarkMyWithdrawnAsync"/> 등 (DB <c>profiles</c>, README).<br/>
     /// • 우편함: <see cref="TryGetMyMailsAsync"/>, <see cref="TryClaimMailItemsAsync"/>, <see cref="TryClaimAllMailItemsAsync"/>, <see cref="TryDeleteReadMailsAsync"/>, <see cref="Mailbox"/> (SQL <c>Sql/player/11_mails.sql</c>).<br/>
     /// • Try API들은 <c>SupabaseSettings.enableApiResultLogs</c>에 따라 API별 고정 태그로 성공/실패 로그를 자동 출력합니다.
@@ -49,70 +49,65 @@ namespace TrueBase.Unity
             SupabaseSDK.EnsureInitializedAsync(timeoutMs);
 
         /// <summary>이미 가진 Google ID 토큰으로 Supabase 세션을 맞춥니다(iOS·커스텀 OAuth·테스트 등).</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(
-            string idToken,
-            bool saveSessionToStorage = true) =>
-            SupabaseSDK.SignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken) =>
+            SupabaseSDK.SignInWithGoogleIdTokenAsync(idToken);
 
         /// <summary>
         /// Android 네이티브 Google 로그인 후 Supabase 세션까지 한 번에 처리합니다.
         /// <c>SupabaseSettings.googleWebClientId</c>(Resources)를 사용합니다.
         /// </summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync(bool saveSessionToStorage = true) =>
-            SupabaseSDK.SignInWithGoogleAsync(saveSessionToStorage);
+        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync() =>
+            SupabaseSDK.SignInWithGoogleAsync();
 
         /// <summary>Android 네이티브 Google 계정 로그아웃 (Supabase 세션은 유지).</summary>
         internal static Task<SupabaseResult<bool>> SignOutFromGoogleAsync() =>
             SupabaseSDK.SignOutFromGoogleAsync();
 
         /// <summary>현재 익명 세션에 Google identity를 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true) =>
-            SupabaseSDK.LinkGoogleToCurrentAnonymousAsync(saveSessionToStorage);
+        internal static Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousAsync() =>
+            SupabaseSDK.LinkGoogleToCurrentAnonymousAsync();
 
         /// <summary>현재 익명 세션에 Google identity를 연동합니다(ID 토큰 직접 전달).</summary>
         internal static Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string googleAccessToken = null,
-            bool saveSessionToStorage = true) =>
-            SupabaseSDK.LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+            string googleAccessToken = null) =>
+            SupabaseSDK.LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
 
         /// <summary>게스트(익명)로 가입하고 SDK 세션을 자동 설정.</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync(
-            bool saveSessionToStorage = true) =>
-            SupabaseSDK.SignInAnonymouslyAsync(saveSessionToStorage);
+        internal static Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync() =>
+            SupabaseSDK.SignInAnonymouslyAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync(bool)"/>
-        public static Task<SupabaseCallResult> TrySignInWithGoogleAsync(bool saveSessionToStorage = true) =>
-            SupabaseSDK.TrySignInWithGoogleAsync(saveSessionToStorage);
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync"/>
+        public static Task<SupabaseCallResult> TrySignInWithGoogleAsync() =>
+            SupabaseSDK.TrySignInWithGoogleAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleIdTokenAsync(string, bool)"/>
-        public static Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken, bool saveSessionToStorage = true) =>
-            SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken, saveSessionToStorage);
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleIdTokenAsync(string)"/>
+        public static Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken) =>
+            SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string, bool)"/>
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string)"/>
         public static Task<SupabaseCallResult> TrySignInWithAppleIdTokenAsync(
-            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
-            SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            string idToken, string rawNonce = null) =>
+            SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string, string, bool)"/>
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
-            string idToken, string rawNonce = null, bool saveSessionToStorage = true) =>
-            SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce, saveSessionToStorage);
+            string idToken, string rawNonce = null) =>
+            SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync(bool)"/>
-        public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync(bool saveSessionToStorage = true) =>
-            SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync(saveSessionToStorage);
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync"/>
+        public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync() =>
+            SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string, string, bool)"/>
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
-            string googleAccessToken = null,
-            bool saveSessionToStorage = true) =>
-            SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken, saveSessionToStorage);
+            string googleAccessToken = null) =>
+            SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync(bool)"/>
-        public static Task<SupabaseCallResult> TrySignInAnonymouslyAsync(bool saveSessionToStorage = true) =>
-            SupabaseSDK.TrySignInAnonymouslyAsync(saveSessionToStorage);
+        /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync"/>
+        public static Task<SupabaseCallResult> TrySignInAnonymouslyAsync() =>
+            SupabaseSDK.TrySignInAnonymouslyAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFromGoogleAsync"/>
         public static Task<SupabaseCallResult> TrySignOutFromGoogleAsync() =>
@@ -130,8 +125,8 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetBanInfoAsync(accountId);
 
         /// <inheritdoc cref="SupabaseSDK.TryRefreshSessionAsync"/>
-        public static Task<SupabaseCallResult> TryRefreshSessionAsync(string refreshToken, bool saveSessionToStorage = true) =>
-            SupabaseSDK.TryRefreshSessionAsync(refreshToken, saveSessionToStorage);
+        public static Task<SupabaseCallResult> TryRefreshSessionAsync(string refreshToken) =>
+            SupabaseSDK.TryRefreshSessionAsync(refreshToken);
 
         /// <summary>초기화 + 로그인 세션을 확인합니다. 미로그인이면 실패를 반환합니다.</summary>
         internal static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionAsync() =>
@@ -145,10 +140,8 @@ namespace TrueBase.Unity
             SupabaseSDK.StartAsync(restoreSessionFirst);
 
         /// <summary>refresh_token으로 세션 갱신 후 SDK 세션 자동 설정.</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(
-            string refreshToken,
-            bool saveSessionToStorage = true) =>
-            SupabaseSDK.RefreshSessionAsync(refreshToken, saveSessionToStorage);
+        internal static Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(string refreshToken) =>
+            SupabaseSDK.RefreshSessionAsync(refreshToken);
 
         /// <summary>로그인 직후 <typeparamref name="T"/>의 테이블에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다.</summary>
         public static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>

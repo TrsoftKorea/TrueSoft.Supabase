@@ -4,7 +4,17 @@
       "mcp__rider__list_directory_tree",
       "mcp__rider__get_file_text_by_path",
       "Bash(Find \"D:\\\\Project\\\\TrueSoft.Supabase\\\\Samples~\\\\DatabaseSetup\\\\SQL\\\\edge-functions\" -name \"displayname-*\" -type f)",
-      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__get_logs"
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__get_logs",
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__get_project_url",
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__get_publishable_keys",
+      "mcp__retool__retool_list_resources",
+      "mcp__retool__retool_get_resource",
+      "mcp__retool__retool_list_apps",
+      "mcp__retool__retool_list_react_app_files",
+      "mcp__retool__retool_read_react_app_files",
+      "mcp__retool__retool_list_react_app_threads",
+      "mcp__retool__retool_create_or_append_react_app_thread_message",
+      "mcp__retool__retool_tail_react_app_thread_stream"
     ]
   }
 }

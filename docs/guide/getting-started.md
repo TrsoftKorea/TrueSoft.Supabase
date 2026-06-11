@@ -51,6 +51,18 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.  
 Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
 
+### 3. Database SSL 설정
+
+**Database > Settings > SSL configuration** 에서 아래 항목을 확인합니다.
+
+| 항목 | 설정 | 이유 |
+|------|------|------|
+| **Enforce SSL on incoming connections** | ON | Retool 등 외부 도구에서 DB에 직접 연결할 때 필요 |
+
+::: tip
+신규 프로젝트는 기본적으로 ON입니다. OFF로 되어 있다면 켜고 **Save**를 클릭하세요.
+:::
+
 ---
 
 ## 초기 설정
@@ -127,7 +139,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 
 아래 과정을 각 함수마다 반복합니다.
 
-1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** 클릭
+1. Supabase 대시보드 > **Edge Functions** > **Deploy a new function** > **Via Editor** 클릭
 2. 함수 이름을 정확히 입력하고 생성
 3. Unity Project 창에서 `Assets/Samples/.../DatabaseSetup/EdgeFunctions/<함수명>/index.ts`를 열어 전체 내용 복사
 4. 에디터에 붙여넣고 **Deploy** 클릭
@@ -171,7 +183,7 @@ JSON 파일은 중괄호 `{`로 시작하는 여러 줄 텍스트입니다. 파�
 
 ```csharp
 // 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync(saveSessionToStorage: true);
+await Supabase.TrySignInAnonymouslyAsync();
 ```
 
 다음 실행 시 세션을 복원하려면 `TriggerAutoLoginAsync()`를 원하는 타이밍에 호출합니다.  
