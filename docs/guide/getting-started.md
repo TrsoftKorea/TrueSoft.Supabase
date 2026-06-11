@@ -49,7 +49,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 | **Manual linking** | ON | 비회원(익명)으로 플레이하다가 소셜 계정으로 전환할 때 필요. 이 옵션이 OFF면 연동 API가 오류를 반환합니다 |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.  
-Google OAuth 설정 방법은 [인증](./auth.md)을 참고하세요.
+Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하세요.
 
 ### 3. Database SSL 설정
 
@@ -195,8 +195,10 @@ await Supabase.TrySignInAnonymouslyAsync();
 
 | 주제 | 가이드 |
 |------|--------|
-| 로그인·소셜 연동·익명 복구 | [인증](./auth.md) |
-| 닉네임·탈퇴 관리 | [계정](./account.md) |
+| 로그인·익명 복구 | [인증](./auth.md) |
+| 소셜 로그인 (Google · Apple) | [소셜 로그인](./social-login.md) |
+| 닉네임·프로필 | [닉네임 · 프로필](./display-name.md) |
+| 탈퇴·서버 이주 | [탈퇴 · 서버 이주](./withdrawal.md) |
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
 | 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |

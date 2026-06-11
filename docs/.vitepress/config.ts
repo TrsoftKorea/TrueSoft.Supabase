@@ -21,12 +21,29 @@ export default defineConfig({
         ]
       },
       {
-        text: '기능 가이드',
+        text: '인증',
         items: [
-          { text: '인증', link: '/guide/auth' },
-          { text: '계정', link: '/guide/account' },
+          { text: '로그인', link: '/guide/auth' },
+          { text: '소셜 로그인', link: '/guide/social-login' }
+        ]
+      },
+      {
+        text: '계정',
+        items: [
+          { text: '닉네임 · 프로필', link: '/guide/display-name' },
+          { text: '탈퇴 · 서버 이주', link: '/guide/withdrawal' }
+        ]
+      },
+      {
+        text: '게임 데이터',
+        items: [
           { text: '유저 데이터', link: '/guide/user-data' },
-          { text: 'Remote Config', link: '/guide/remote-config' },
+          { text: 'Remote Config', link: '/guide/remote-config' }
+        ]
+      },
+      {
+        text: '서비스',
+        items: [
           { text: '인앱 결제 (IAP)', link: '/guide/iap' }
         ]
       },
