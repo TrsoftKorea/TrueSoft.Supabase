@@ -610,11 +610,13 @@ namespace TrueBase.Unity
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         signOutFully,
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         requestMyWithdrawal,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null) =>
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null) =>
             SupabaseSDK.RegisterPlayNanooInterceptors(
                 signInAnonymously, signInWithGoogleIdToken, signInWithAppleIdToken,
                 signOutFully, requestMyWithdrawal,
-                linkGoogleToCurrentAnonymousWithIdToken, linkAppleToCurrentAnonymousWithIdToken);
+                linkGoogleToCurrentAnonymousWithIdToken, linkAppleToCurrentAnonymousWithIdToken,
+                setMyDisplayName);
 
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>
