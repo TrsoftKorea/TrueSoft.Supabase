@@ -14,6 +14,9 @@ namespace TrueBase.Unity
         /// <summary>로그인 상태가 아닙니다.</summary>
         public const string NotSignedIn = "auth_not_signed_in";
 
+        /// <summary>사용자가 Google 로그인 화면을 직접 취소했습니다.</summary>
+        public const string GoogleSignInCancelled = "google_signin_cancelled";
+
         /// <summary>계정이 차단되었습니다. <see cref="SupabaseCallResult.BanInfo"/>에서 상세 정보를 확인하세요.</summary>
         public const string UserBanned = "user_banned";
 

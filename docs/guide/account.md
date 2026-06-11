@@ -9,24 +9,78 @@
 
 플레이어가 처음 게임을 시작하면 닉네임이 없는 상태입니다. 닉네임 설정 화면에서 중복 확인 후 저장하는 흐름이 일반적입니다.
 
-| 파라미터 | 설명 |
-|----------|------|
-| `displayName` | 확인하거나 설정할 닉네임. 최대 64자 (초과 시 자동으로 잘림) |
-| `defaultValue` | 닉네임 조회 실패 시 반환할 기본값 |
-
 ```csharp
 // 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
 string myName = Supabase.MyProfile.DisplayName;
-
-// 중복 확인
-bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
-
-// 설정
-await Supabase.TrySetMyDisplayNameAsync("Player123");
-
-// 다른 플레이어 닉네임 조회
-string name = await Supabase.TryGetPublicDisplayNameAsync(userId, defaultValue: "");
 ```
+
+#### `TryIsDisplayNameAvailableAsync(displayName)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayName)
+```
+
+닉네임 사용 가능 여부를 확인합니다. `result.Success`가 `true`면 사용 가능, `false`면 이미 사용 중입니다.  
+현재 계정이 이미 사용 중인 닉네임은 사용 가능으로 처리합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `displayName` | 확인할 닉네임. 최대 64자 |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.DisplayNameTaken` | 이미 사용 중인 닉네임 |
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+#### `TrySetMyDisplayNameAsync(displayName)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
+```
+
+내 닉네임을 설정합니다. 현재 닉네임과 동일하면 네트워크 요청 없이 성공 처리됩니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `displayName` | 설정할 닉네임. 최대 64자 |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.DisplayNameTaken` | 이미 사용 중인 닉네임 |
+| `SupabaseFailReason.DisplayNameTooLong` | 허용 길이 초과 |
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+```csharp
+// 중복 확인 후 설정
+bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
+if (available)
+    await Supabase.TrySetMyDisplayNameAsync("Player123");
+```
+
+#### `TryGetPublicDisplayNameAsync(userId, defaultValue)`
+
+```csharp
+Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string defaultValue = "")
+```
+
+다른 플레이어의 닉네임을 조회합니다. 조회 실패 시 `defaultValue`를 반환합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `userId` | 조회할 플레이어 ID (`profiles.user_id`) |
+| `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `""`) |
 
 ---
 
@@ -35,6 +89,28 @@ string name = await Supabase.TryGetPublicDisplayNameAsync(userId, defaultValue: 
 다른 플레이어의 공개 프로필(닉네임, 서버 코드 등)을 조회합니다.  
 **내 프로필은 로그인 완료 시 자동으로 조회·캐시**됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.  
 사용 가능한 프로퍼티 목록은 [인증 > 로그인 후 사용 가능한 값](./auth.md#로그인-후-사용-가능한-값)을 참고하세요.
+
+#### `TryGetPublicProfileAsync(userId)`
+
+```csharp
+Task<PublicProfileSnapshot?> Supabase.TryGetPublicProfileAsync(string userId)
+```
+
+다른 플레이어의 공개 프로필을 조회합니다. 조회 실패 시 `null`을 반환합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `userId` | 조회할 플레이어 ID (`profiles.user_id`) |
+
+**반환**
+
+| 프로퍼티 | 타입 | 설명 |
+|---------|------|------|
+| `.DisplayName` | `string` | 닉네임 |
+| `.ServerCode` | `string` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
+| `.IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
 
 ```csharp
 var profile = await Supabase.TryGetPublicProfileAsync(userId);
@@ -47,26 +123,106 @@ var profile = await Supabase.TryGetPublicProfileAsync(userId);
 즉시 삭제하지 않고 일정 유예 기간 후에 처리됩니다. 유예 기간 동안 플레이어가 탈퇴를 취소할 수 있습니다.  
 유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
 
+::: info
+유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
+[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
+:::
+
+#### `TryRequestMyWithdrawalAsync()`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
+```
+
+탈퇴를 예약합니다. 요청이 성공하면 즉시 로그아웃 처리됩니다.
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+#### `TryGetMyWithdrawalStatusAsync()`
+
+```csharp
+Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
+```
+
+현재 탈퇴 예약 상태를 조회합니다. 조회 실패 시 `null`을 반환합니다.
+
+**반환**
+
+| 프로퍼티 | 타입 | 설명 |
+|---------|------|------|
+| `.IsScheduled` | `bool` | 탈퇴 유예 예약 여부 |
+| `.SecondsRemaining` | `long` | 탈퇴까지 남은 시간 (초) |
+| `.WithdrawnAtIso` | `string` | 탈퇴 예약 일시 (ISO 8601) |
+
+#### `TryClearMyWithdrawalAsync()`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
+```
+
+탈퇴 예약을 취소합니다.
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
 ```csharp
 await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 예약
 await Supabase.TryGetMyWithdrawalStatusAsync(); // 예약 상태 및 남은 시간 조회
 await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
 ```
 
-::: info
-유예 기간이 만료된 계정은 로그인 시 자동으로 처리됩니다.  
-[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
-:::
-
 ### 탈퇴 취소 — 토큰 방식
 
 유예 기간이 지나 이미 탈퇴가 완료된 경우, 토큰을 이용해 계정을 복구할 수 있습니다.  
 서버에서 토큰을 발급받아 이메일 등으로 전달하고, 플레이어가 해당 토큰으로 취소를 완료하는 방식입니다.
 
+::: warning
+[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
+:::
+
+#### `TryRequestWithdrawalCancelTokenAsync(defaultValue)`
+
+```csharp
+Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue = null)
+```
+
+탈퇴 취소 토큰을 발급합니다. 실패 시 `defaultValue`를 반환합니다.
+
+**파라미터**
+
 | 파라미터 | 설명 |
 |----------|------|
-| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 |
+| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) |
+
+#### `TryRedeemWithdrawalCancelAsync(cancelToken)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelToken = null)
+```
+
+탈퇴 취소 토큰을 사용해 탈퇴를 취소합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
 | `cancelToken` | 플레이어가 입력한 취소 토큰 |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ```csharp
 // 탈퇴 취소 토큰 발급 — 플레이어에게 전달
@@ -76,20 +232,33 @@ var token = await Supabase.TryRequestWithdrawalCancelTokenAsync(defaultValue: nu
 await Supabase.TryRedeemWithdrawalCancelAsync(cancelToken: token);
 ```
 
-::: warning
-[Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
-:::
-
 ---
 
 ## 서버 이주
 
 플레이어를 다른 서버로 이동시킵니다. 서버별로 닉네임 고유성이 관리되므로, 이주 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.
 
+#### `TryTransferMyServerAsync(targetServerCode, reason)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryTransferMyServerAsync(string targetServerCode, string reason = null)
+```
+
+현재 계정을 지정한 서버로 이주합니다.
+
+**파라미터**
+
 | 파라미터 | 설명 |
 |----------|------|
 | `targetServerCode` | 이주할 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
-| `reason` | 이주 사유 (서버 로그용) |
+| `reason` | 이주 사유. 서버 로그에만 기록됨 (기본값: `null`) |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ```csharp
 await Supabase.TryTransferMyServerAsync("GLOBAL", reason: null);

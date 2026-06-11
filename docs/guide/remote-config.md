@@ -65,6 +65,20 @@ if (cfg != null)
 서버에서 한 번 가져와 저장해두고, 다음 호출부터는 저장된 값을 빠르게 반환합니다.  
 저장된 값이 오래됐으면 서버에서 새 값을 받아온 뒤 반환합니다.
 
+#### `RemoteConfig<T>.CreateReader(maxStale)`
+
+```csharp
+Func<Task<T?>> RemoteConfig<T>.CreateReader(int maxStale = -1)
+```
+
+값을 읽는 함수를 반환합니다. 반환된 함수를 호출할 때마다 캐시된 값 또는 서버 최신 값을 반환합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `maxStale` | 캐시 유효 시간 초과. `0`이면 항상 서버에서 새로 받음. `-1`이면 DB 설정값 사용 (기본값: `-1`) |
+
 ```csharp
 private Func<Task<GameplayConfig>> _getConfig;
 
@@ -78,17 +92,27 @@ private async Task LoadConfigAsync()
 }
 ```
 
-```csharp
-// 저장된 값을 무시하고 항상 서버에서 새로 받고 싶을 때
-_getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStale: 0);
-```
-
 ---
 
 ## Binding
 
 백그라운드에서 주기적으로 값을 자동 갱신하는 방식입니다.  
 `Value`로 언제든 최신 값을 바로 읽을 수 있습니다.
+
+#### `RemoteConfig<T>.CreateBinding(pollInterval)`
+
+```csharp
+RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 0f)
+```
+
+백그라운드 자동 갱신 바인딩을 생성합니다. `.Value`로 캐시된 최신 값을 동기적으로 읽을 수 있습니다.  
+사용이 끝나면 반드시 `Dispose()`를 호출하세요.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) |
 
 ```csharp
 private RemoteConfigBinding<GameplayConfig> _gameplay;
@@ -113,6 +137,22 @@ private void OnDestroy() => _gameplay?.Dispose();  // 반드시 해제
 ## Listener
 
 값이 바뀌는 순간 자동으로 콜백 함수를 호출하는 방식입니다.
+
+#### `RemoteConfig<T>.CreateListener(onChange, pollInterval)`
+
+```csharp
+RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T?> onChange, float pollInterval = 0f)
+```
+
+값이 변경될 때 콜백을 호출하는 리스너를 생성합니다.  
+사용이 끝나면 반드시 `Dispose()`를 호출하세요.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `onChange` | 값이 바뀔 때 호출되는 콜백 |
+| `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) |
 
 ```csharp
 private RemoteConfigListener<GameplayConfig> _listener;

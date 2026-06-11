@@ -459,7 +459,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithGoogleIdTokenAsync(idToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail("google_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "google_signin_failed");
         }
 
         /// <summary>
@@ -1127,8 +1127,11 @@ namespace TrueBase.Unity
                 },
                 err =>
                 {
-                    tcs.TrySetResult(SupabaseResult<GoogleLoginResult>.Fail(
-                        string.IsNullOrWhiteSpace(err) ? "google_signin_failed" : err));
+                    // Play Services 12501 = SIGN_IN_CANCELLED (사용자가 직접 취소)
+                    var reason = err == "12501" ? "google_signin_cancelled"
+                               : string.IsNullOrWhiteSpace(err) ? "google_signin_failed"
+                               : err;
+                    tcs.TrySetResult(SupabaseResult<GoogleLoginResult>.Fail(reason));
                 });
             return await tcs.Task;
         }

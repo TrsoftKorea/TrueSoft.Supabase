@@ -10,10 +10,15 @@
 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성해 로그인합니다.  
 로그인하면 세션이 기기에 자동으로 저장되어, 다음 실행 시 `TriggerAutoLoginAsync()`로 복원할 수 있습니다.
 
+소셜 로그인은 [소셜 로그인](#social-login)을 참고하세요.
+
+#### `TrySignInAnonymouslyAsync()`
+
 ```csharp
-// 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync();
+Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 ```
+
+익명(게스트) 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다.
 
 `Try*` 메서드는 `SupabaseCallResult`를 반환합니다. `if (await ...)` 패턴과 완전히 호환되며, 실패 원인을 확인할 때는 결과를 변수에 받습니다.
 
@@ -27,7 +32,13 @@ if (!result.Success)
 }
 ```
 
-소셜 로그인은 [소셜 로그인](#social-login)을 참고하세요.
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
 
@@ -109,65 +120,182 @@ void OnReady(bool success)
    패키지명과 SHA-1 지문을 입력합니다.  
    웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
 
-#### 로그인
-
-`TrySignInWithGoogleAsync`는 Android에서 Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다.  
-iOS나 커스텀 OAuth 흐름에서는 외부 SDK에서 발급받은 ID 토큰을 직접 `TrySignInWithGoogleIdTokenAsync`로 전달합니다.
+#### `TrySignInWithGoogleAsync()`
 
 ```csharp
-// Android 네이티브 (Play Services)
-await Supabase.TrySignInWithGoogleAsync();
-
-// iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TrySignInWithGoogleIdTokenAsync(idToken);
+Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()
 ```
+
+Android에서 Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다.
 
 ::: warning
 Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
 먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
 :::
 
-#### 익명 → Google 연동
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
+| `"google_signin_failed"` | Play Services 오류 |
+| `"google_id_token_empty"` | ID 토큰 획득 실패 |
+| `"google_web_client_id_empty"` | `SupabaseSettings.googleWebClientId` 미설정 |
+| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkGoogleToCurrentAnonymousAsync` 사용 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+취소와 오류를 구분하는 예시:
+
+```csharp
+var result = await Supabase.TrySignInWithGoogleAsync();
+if (!result)
+{
+    if (result.Reason == SupabaseFailReason.GoogleSignInCancelled)
+        return; // 사용자가 직접 취소 — 오류 UI 불필요
+    if (result.Reason == SupabaseFailReason.UserBanned)
+        ShowBanScreen(result.BanInfo);
+    else
+        ShowErrorPopup(result.Reason);
+}
+```
+
+#### `TrySignInWithGoogleIdTokenAsync(idToken)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)
+```
+
+iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync` 사용 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+#### `TryLinkGoogleToCurrentAnonymousAsync()`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
+```
+
+익명 세션에 Android Play Services Google 계정을 연동합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환되며, 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
 
 ::: warning
 익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
-반드시 아래 연동 전용 API를 사용하세요.  
+반드시 이 메서드를 사용하세요.  
 Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
 :::
 
-```csharp
-// Android 네이티브
-await Supabase.TryLinkGoogleToCurrentAnonymousAsync();
+**실패 원인**
 
-// iOS · 커스텀 OAuth (ID 토큰 직접 전달)
-await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken: null);
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 |
+| `"google_signin_failed"` | Play Services 오류 |
+| `"google_web_client_id_empty"` | `SupabaseSettings.googleWebClientId` 미설정 |
+| `SupabaseFailReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+#### `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
 ```
 
-- 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다. 플레이어 ID와 게임 데이터는 그대로 유지됩니다.
-- 이미 다른 사용자에 연결된 계정이면 연동이 실패하고 기존 익명 세션은 유지됩니다.
+익명 세션에 Google 계정을 연동합니다. iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 ID 토큰을 직접 전달합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
+| `googleAccessToken` | Google Access Token (기본값: null) |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
+| `"google_id_token_empty"` | 전달된 ID 토큰이 비어있음 |
+| `"anonymous_session_token_missing"` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `"google_link_failed"` | Supabase identity 연동 실패 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
 
 ### Apple
 
-#### 로그인
-
-외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
+#### `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)`
 
 ```csharp
-await Supabase.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
+Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
 ```
 
-#### 익명 → Apple 연동
+외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰으로 Supabase에 로그인합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
+| `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: null) |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkAppleToCurrentAnonymousWithIdTokenAsync` 사용 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+#### `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null)
+```
+
+익명 세션에 Apple 계정을 연동합니다. 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다.
 
 ::: warning
-익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 아래 연동 전용 API를 사용하세요.  
+익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 이 메서드를 사용하세요.  
 Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
 :::
 
-```csharp
-await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
-```
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
+| `rawNonce` | 토큰과 함께 전달된 nonce (기본값: null) |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
+| `"apple_id_token_empty"` | 전달된 ID 토큰이 비어있음 |
+| `"anonymous_session_token_missing"` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `"apple_link_failed"` | Supabase identity 연동 실패 |
+| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
 
@@ -175,9 +303,34 @@ await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)
 
 Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
 
+#### `TrySignOutFullyAsync(clearStorage, deleteUserSessionRow)`
+
 ```csharp
-await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
+Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
 ```
+
+로그아웃하고 세션을 정리합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `clearStorage` | 기기에 저장된 세션 토큰 삭제 여부 (기본값: `true`) |
+| `deleteUserSessionRow` | 중복 로그인 감지용 DB 행 삭제 여부 (기본값: `true`) |
+
+#### `TryRefreshSessionAsync(refreshToken)`
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryRefreshSessionAsync(string refreshToken)
+```
+
+리프레시 토큰으로 세션을 갱신합니다. SDK가 자동으로 처리하므로 직접 호출할 필요가 없습니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `refreshToken` | 갱신에 사용할 리프레시 토큰 |
 
 ---
 
@@ -248,7 +401,27 @@ delete from user_ban_messages where account_id = '유저-uuid';
 
 ### 수동 조회
 
-이미 로그인된 계정의 차단 여부를 확인하거나, `account_id`를 직접 알고 있는 경우:
+#### `TryGetBanInfoAsync(accountId)`
+
+```csharp
+Task<SupabaseBanInfo?> Supabase.TryGetBanInfoAsync(string accountId)
+```
+
+특정 계정의 차단 정보를 조회합니다. 차단 상태가 아니거나 조회 실패 시 `null`을 반환합니다.
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `accountId` | 조회할 계정 ID (`auth.users.id`) |
+
+**반환**
+
+| 프로퍼티 | 타입 | 설명 |
+|---------|------|------|
+| `.IsPermanentBan` | `bool` | 영구 차단 여부 |
+| `.BannedUntil` | `DateTime` | 차단 해제 일시. 영구 차단이면 의미 없음 |
+| `.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |
 
 ```csharp
 var banInfo = await Supabase.TryGetBanInfoAsync(accountId);
