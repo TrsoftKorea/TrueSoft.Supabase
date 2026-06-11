@@ -66,8 +66,6 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 서버에서 유저 데이터를 가져와 `Current` 프로퍼티에 채웁니다.  
 신규 유저는 DB 행이 자동으로 생성됩니다. 로그인 완료 후 한 번 호출합니다.
 
-#### `PlayerSave.TryLoadAsync()`
-
 ```csharp
 Task<bool> PlayerSave.TryLoadAsync()
 ```
@@ -105,8 +103,6 @@ PlayerSave.Coins += 100;
 ## 즉시 저장
 
 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
-
-#### `Supabase.TrySaveAllAsync(timeoutMs)`
 
 ```csharp
 Task<bool> Supabase.TrySaveAllAsync(int timeoutMs = 5000)

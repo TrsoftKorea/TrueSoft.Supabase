@@ -8,7 +8,7 @@
 
 ## Google
 
-#### 대시보드 설정
+### 대시보드 설정
 
 1. [Google Cloud Console](https://console.cloud.google.com/apis/dashboard)에서 프로젝트를 만들고 **OAuth 동의 화면**을 설정합니다.  
    앱 이름·이메일을 입력하고 사용자 유형은 **외부**를 선택합니다.
@@ -20,7 +20,7 @@
    패키지명과 SHA-1 지문을 입력합니다.  
    웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
 
-#### `TrySignInWithGoogleAsync()`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()
@@ -59,7 +59,7 @@ if (!result)
 }
 ```
 
-#### `TrySignInWithGoogleIdTokenAsync(idToken)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)
@@ -82,7 +82,7 @@ iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰�
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-#### `TryLinkGoogleToCurrentAnonymousAsync()`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
@@ -108,7 +108,7 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-#### `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
@@ -139,8 +139,6 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 ## Apple
 
-#### `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)`
-
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
 ```
@@ -163,7 +161,7 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-#### `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null)

@@ -61,8 +61,6 @@ if (cfg != null)
 
 요청 시 캐시 값을 즉시 반환합니다. 캐시가 오래됐으면 서버에서 새 값을 받아온 뒤 반환합니다.
 
-#### `RemoteConfig<T>.CreateReader(maxStale)`
-
 ```csharp
 Func<Task<T?>> RemoteConfig<T>.CreateReader(int maxStale = -1)
 ```
@@ -94,8 +92,6 @@ private async Task LoadConfigAsync()
 
 백그라운드에서 주기적으로 값을 자동 갱신하는 방식입니다.  
 `Value`로 언제든 최신 값을 바로 읽을 수 있습니다.
-
-#### `RemoteConfig<T>.CreateBinding(pollInterval)`
 
 ```csharp
 RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 0f)
@@ -133,8 +129,6 @@ private void OnDestroy() => _gameplay?.Dispose();  // 반드시 해제
 ## Listener
 
 값이 바뀌는 순간 자동으로 콜백 함수를 호출하는 방식입니다.
-
-#### `RemoteConfig<T>.CreateListener(onChange, pollInterval)`
 
 ```csharp
 RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T?> onChange, float pollInterval = 0f)

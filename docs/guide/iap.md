@@ -16,8 +16,6 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 ## 사용법
 
-#### `SupabaseIAP.CreateIAPAsync(productIds, onGrant, onFailed, timeoutMs)`
-
 ```csharp
 public static async Task<IAPFacade> SupabaseIAP.CreateIAPAsync(
     string[]                              productIds,

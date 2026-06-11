@@ -12,7 +12,7 @@
 string myName = Supabase.MyProfile.DisplayName;
 ```
 
-#### `TryIsDisplayNameAvailableAsync(displayName)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayName)
@@ -35,7 +35,7 @@ Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayN
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-#### `TrySetMyDisplayNameAsync(displayName)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
@@ -65,7 +65,7 @@ if (available)
     await Supabase.TrySetMyDisplayNameAsync("Player123");
 ```
 
-#### `TryGetPublicDisplayNameAsync(userId, defaultValue)`
+---
 
 ```csharp
 Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string defaultValue = "")
@@ -87,8 +87,6 @@ Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string default
 다른 플레이어의 공개 프로필(닉네임, 서버 코드 등)을 조회합니다.  
 **내 프로필은 로그인 완료 시 자동으로 조회·캐시**됩니다. 별도 API 호출 없이 바로 사용할 수 있습니다.  
 사용 가능한 프로퍼티 목록은 [인증 > 로그인 후 사용 가능한 값](./auth.md#로그인-후-사용-가능한-값)을 참고하세요.
-
-#### `TryGetPublicProfileAsync(userId)`
 
 ```csharp
 Task<PublicProfileSnapshot?> Supabase.TryGetPublicProfileAsync(string userId)

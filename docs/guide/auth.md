@@ -12,8 +12,6 @@
 
 소셜 로그인은 [소셜 로그인](./social-login.md)을 참고하세요.
 
-#### `TrySignInAnonymouslyAsync()`
-
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 ```
@@ -45,17 +43,6 @@ if (!result.Success)
 씬에 `SupabaseRuntime` 컴포넌트를 배치하면 SDK가 초기화됩니다.  
 로그인은 자동 실행되지 않으므로 원하는 타이밍에 직접 호출합니다.
 
-### SupabaseRuntime
-
-`SupabaseRuntime`은 SDK의 핵심 진입점으로, 아래 기능을 담당합니다.
-
-| 기능 | 설명 |
-|------|------|
-| SDK 초기화 | `SupabaseSettings`를 읽어 모든 서비스를 초기화합니다 |
-| 유저 세이브 자동 동기화 | 변경된 세이브 데이터를 쿨타임 주기로 자동 업로드합니다 ([유저 데이터](./user-data.md) 참고) |
-| RemoteConfig 폴링 | 키별 백그라운드 갱신을 `Update`에서 처리합니다 |
-| 앱 일시정지·종료 처리 | 앱이 일시정지(`OnApplicationPause`)되거나 종료될 때 세이브 데이터를 즉시 플러시합니다 |
-
 ```csharp
 // 로그인 화면 진입 후, 또는 원하는 씬 진입 시점에 호출
 await SupabaseRuntime.TriggerAutoLoginAsync();
@@ -84,7 +71,7 @@ void OnReady(bool success)
 }
 ```
 
-### 로그인 후 사용 가능한 값
+### 로그인 후 사용 가능한 값 {#로그인-후-사용-가능한-값}
 
 로그인이 성공하면 아래 프로퍼티를 바로 사용할 수 있습니다.
 
@@ -102,8 +89,6 @@ void OnReady(bool success)
 
 Android Google 계정 선택기 초기화 + Supabase 세션 해제 + 익명 복구 토큰 저장을 한 번에 처리합니다.
 
-#### `TrySignOutFullyAsync(clearStorage, deleteUserSessionRow)`
-
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
 ```
@@ -117,7 +102,7 @@ Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync(bool clearStorage = true,
 | `clearStorage` | 기기에 저장된 세션 토큰 삭제 여부 (기본값: `true`) | `bool` |
 | `deleteUserSessionRow` | 중복 로그인 감지용 DB 행 삭제 여부 (기본값: `true`) | `bool` |
 
-#### `TryRefreshSessionAsync(refreshToken)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRefreshSessionAsync(string refreshToken)
@@ -159,13 +144,11 @@ if (!result.Success && result.BanInfo != null)
 {
     var info = result.BanInfo;
 
-    // 차단 해제 일시
     if (info.IsPermanentBan)
         Debug.Log("영구 차단");
     else
         Debug.Log($"차단 해제: {info.BannedUntil:yyyy-MM-dd HH:mm}");
 
-    // 어드민 메시지 (설정된 경우)
     if (!string.IsNullOrEmpty(info.BanMessage))
         Debug.Log($"사유: {info.BanMessage}");
 }
@@ -178,8 +161,6 @@ if (!result.Success && result.BanInfo != null)
 :::
 
 ### 어드민 메시지 설정 방법
-
-Supabase 대시보드 또는 Retool에서 차단과 함께 메시지를 설정합니다.
 
 **1단계 — 계정 차단** (Supabase 대시보드)  
 `Authentication` → `Users` → 해당 유저 선택 → `Ban user` → 차단 해제 일시 입력
@@ -199,8 +180,6 @@ delete from user_ban_messages where account_id = '유저-uuid';
 ```
 
 ### 수동 조회
-
-#### `TryGetBanInfoAsync(accountId)`
 
 ```csharp
 Task<SupabaseBanInfo?> Supabase.TryGetBanInfoAsync(string accountId)

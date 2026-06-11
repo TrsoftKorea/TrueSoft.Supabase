@@ -12,8 +12,6 @@
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
-#### `TryRequestMyWithdrawalAsync()`
-
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 ```
@@ -27,7 +25,7 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-#### `TryGetMyWithdrawalStatusAsync()`
+---
 
 ```csharp
 Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
@@ -43,7 +41,7 @@ Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
 | `.SecondsRemaining` | `long` | 탈퇴까지 남은 시간 (초) |
 | `.WithdrawnAtIso` | `string` | 탈퇴 예약 일시 (ISO 8601) |
 
-#### `TryClearMyWithdrawalAsync()`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
@@ -75,8 +73,6 @@ await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
-#### `TryRequestWithdrawalCancelTokenAsync(defaultValue)`
-
 ```csharp
 Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue = null)
 ```
@@ -89,7 +85,7 @@ Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue =
 |----------|------|------|
 | `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) | `string` |
 
-#### `TryRedeemWithdrawalCancelAsync(cancelToken)`
+---
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelToken = null)
@@ -123,8 +119,6 @@ await Supabase.TryRedeemWithdrawalCancelAsync(cancelToken: token);
 ## 서버 이주
 
 플레이어를 다른 서버로 이동시킵니다. 서버별로 닉네임 고유성이 관리되므로, 이주 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.
-
-#### `TryTransferMyServerAsync(targetServerCode, reason)`
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryTransferMyServerAsync(string targetServerCode, string reason = null)
