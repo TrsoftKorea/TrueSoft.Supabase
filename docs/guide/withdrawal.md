@@ -12,6 +12,8 @@
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
+#### 탈퇴 신청
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 ```
@@ -26,6 +28,8 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
+
+#### 예약 상태 확인
 
 ```csharp
 Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
@@ -43,6 +47,8 @@ Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
 
 ---
 
+#### 탈퇴 취소
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
 ```
@@ -57,9 +63,9 @@ Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ```csharp
-await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 예약
+await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 신청
 await Supabase.TryGetMyWithdrawalStatusAsync(); // 예약 상태 및 남은 시간 조회
-await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
+await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 취소
 ```
 
 ---
@@ -72,6 +78,8 @@ await Supabase.TryClearMyWithdrawalAsync();     // 예약 취소
 ::: warning
 [Edge Function 배포](./getting-started.md#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
+
+#### 취소 토큰 발급
 
 ```csharp
 Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue = null)
@@ -86,6 +94,8 @@ Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue =
 | `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) | `string` |
 
 ---
+
+#### 취소 토큰 사용
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelToken = null)

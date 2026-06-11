@@ -22,6 +22,8 @@
 
 ---
 
+#### Android 로그인
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()
 ```
@@ -61,11 +63,13 @@ if (!result)
 
 ---
 
+#### iOS · 커스텀 로그인
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)
 ```
 
-iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다.
+iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다.
 
 **파라미터**
 
@@ -83,6 +87,8 @@ iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰�
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
+
+#### Android — 게스트 연동
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
@@ -110,11 +116,13 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 
 ---
 
+#### iOS · 커스텀 — 게스트 연동
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
 ```
 
-익명 세션에 Google 계정을 연동합니다. iOS · 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 ID 토큰을 직접 전달합니다.
+익명 세션에 Google 계정을 연동합니다. iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 ID 토큰을 직접 전달합니다.
 
 **파라미터**
 
@@ -139,6 +147,8 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 ## Apple
 
+#### 로그인
+
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
 ```
@@ -162,6 +172,8 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ---
+
+#### 게스트 연동
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string idToken, string rawNonce = null)

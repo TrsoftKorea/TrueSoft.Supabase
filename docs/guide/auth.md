@@ -104,20 +104,6 @@ Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync(bool clearStorage = true,
 
 ---
 
-```csharp
-Task<SupabaseCallResult> Supabase.TryRefreshSessionAsync(string refreshToken)
-```
-
-리프레시 토큰으로 세션을 갱신합니다. SDK가 자동으로 처리하므로 직접 호출할 필요가 없습니다.
-
-**파라미터**
-
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `refreshToken` | 갱신에 사용할 리프레시 토큰 | `string` |
-
----
-
 ## 익명 계정 복구
 
 앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.  
