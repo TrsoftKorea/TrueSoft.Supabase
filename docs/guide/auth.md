@@ -125,28 +125,6 @@ if (!result.Success && result.BanInfo != null)
 
 `SupabaseCallResult.Reason == SupabaseFailReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
 
-::: info
-`BanInfo` 조회는 `get-ban-info` Edge Function을 호출합니다. 차단 상태가 아닌 경우 `result.BanInfo`는 항상 `null`입니다.
-:::
-
-### 어드민 메시지 설정 방법
-
-**1단계 — 계정 차단** (Supabase 대시보드)  
-`Authentication` → `Users` → 해당 유저 선택 → `Ban user` → 차단 해제 일시 입력
-
-**2단계 — 메시지 저장** (SQL 또는 Retool)
-
-```sql
--- 새 메시지 등록
-insert into user_ban_messages (account_id, ban_message)
-values ('유저-uuid', '규칙 위반으로 인해 차단되었습니다.')
-on conflict (account_id) do update set
-  ban_message = excluded.ban_message,
-  updated_at  = now();
-
--- 메시지 삭제
-delete from user_ban_messages where account_id = '유저-uuid';
-```
 
 ### 수동 조회
 

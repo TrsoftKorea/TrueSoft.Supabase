@@ -48,6 +48,12 @@ export default defineConfig({
         ]
       },
       {
+        text: '설정 가이드',
+        items: [
+          { text: 'Google 서비스 계정 JSON', link: '/guide/google-service-account' }
+        ]
+      },
+      {
         text: '이관',
         items: [
           { text: 'PlayNanoo 이관', link: '/guide/playnanoo-migration' }
