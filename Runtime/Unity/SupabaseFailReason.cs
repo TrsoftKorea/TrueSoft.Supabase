@@ -32,6 +32,27 @@ namespace TrueBase.Unity
         /// <summary>계정이 탈퇴 처리되어 재로그인이 필요합니다.</summary>
         public const string WithdrawalDeleted = "withdrawal_deleted_manual_login_required";
 
+        // ── Google ────────────────────────────────────────────────────────────────
+        /// <summary>Play Services 내부 오류입니다.</summary>
+        public const string GoogleSignInFailed = "google_signin_failed";
+
+        /// <summary>Google ID 토큰을 획득하지 못했습니다.</summary>
+        public const string GoogleIdTokenEmpty = "google_id_token_empty";
+
+        /// <summary>Supabase Google identity 연동에 실패했습니다.</summary>
+        public const string GoogleLinkFailed = "google_link_failed";
+
+        // ── Apple ─────────────────────────────────────────────────────────────────
+        /// <summary>전달된 Apple ID 토큰이 비어있습니다.</summary>
+        public const string AppleIdTokenEmpty = "apple_id_token_empty";
+
+        /// <summary>Supabase Apple identity 연동에 실패했습니다.</summary>
+        public const string AppleLinkFailed = "apple_link_failed";
+
+        // ── Session ───────────────────────────────────────────────────────────────
+        /// <summary>익명 세션 토큰이 없습니다. 재로그인이 필요합니다.</summary>
+        public const string AnonymousSessionTokenMissing = "anonymous_session_token_missing";
+
         // ── Network ──────────────────────────────────────────────────────────────
         /// <summary>HTTP 요청 자체가 실패했습니다(네트워크 없음 또는 타임아웃).</summary>
         public const string NetworkError = "http_response_null";

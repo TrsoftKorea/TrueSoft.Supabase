@@ -40,10 +40,8 @@ Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출
 | Reason | 설명 |
 |--------|------|
 | `SupabaseFailReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
-| `"google_signin_failed"` | Play Services 오류 |
-| `"google_id_token_empty"` | ID 토큰 획득 실패 |
-| `"google_web_client_id_empty"` | `SupabaseSettings.googleWebClientId` 미설정 |
-| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkGoogleToCurrentAnonymousAsync` 사용 |
+| `SupabaseFailReason.GoogleSignInFailed` | Play Services 오류 |
+| `SupabaseFailReason.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
@@ -68,7 +66,6 @@ iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync` 사용 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
@@ -94,8 +91,7 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 | Reason | 설명 |
 |--------|------|
 | `SupabaseFailReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 |
-| `"google_signin_failed"` | Play Services 오류 |
-| `"google_web_client_id_empty"` | `SupabaseSettings.googleWebClientId` 미설정 |
+| `SupabaseFailReason.GoogleSignInFailed` | Play Services 오류 |
 | `SupabaseFailReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
@@ -123,9 +119,9 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 | Reason | 설명 |
 |--------|------|
 | `SupabaseFailReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
-| `"google_id_token_empty"` | 전달된 ID 토큰이 비어있음 |
-| `"anonymous_session_token_missing"` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `"google_link_failed"` | Supabase identity 연동 실패 |
+| `SupabaseFailReason.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseFailReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseFailReason.GoogleLinkFailed` | Supabase identity 연동 실패 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
@@ -153,7 +149,6 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.AnonymousRequiresLink` | 익명 세션에서 호출 — `TryLinkAppleToCurrentAnonymousWithIdTokenAsync` 사용 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
@@ -185,9 +180,9 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 | Reason | 설명 |
 |--------|------|
 | `SupabaseFailReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
-| `"apple_id_token_empty"` | 전달된 ID 토큰이 비어있음 |
-| `"anonymous_session_token_missing"` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `"apple_link_failed"` | Supabase identity 연동 실패 |
+| `SupabaseFailReason.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseFailReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseFailReason.AppleLinkFailed` | Supabase identity 연동 실패 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
