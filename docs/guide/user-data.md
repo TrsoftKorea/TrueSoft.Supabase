@@ -70,18 +70,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 Task<bool> PlayerSave.TryLoadAsync()
 ```
 
-서버에서 유저 데이터를 로드합니다.
-
-```csharp
-bool ok = await PlayerSave.TryLoadAsync();
-```
-
-로드가 끝난 뒤 실행할 코드가 있으면 `OnLoaded` 이벤트를 구독합니다.
-
-```csharp
-// 구독은 TryLoadAsync() 호출 전 어디서든 한 번만
-PlayerSave.Instance.OnLoaded += ApplyGameData;
-```
+서버에서 유저 데이터를 로드합니다. 로드가 끝난 뒤 실행할 코드가 있으면 `PlayerSave.Instance.OnLoaded` 이벤트를 구독하세요.
 
 ---
 
@@ -115,10 +104,6 @@ Task<bool> Supabase.TrySaveAllAsync(int timeoutMs = 5000)
 | 파라미터 | 설명 | 타입 |
 |----------|------|------|
 | `timeoutMs` | 최대 대기 시간 ms (기본값: `5000`) | `int` |
-
-```csharp
-await Supabase.TrySaveAllAsync(timeoutMs: 5000);
-```
 
 ::: info
 `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.

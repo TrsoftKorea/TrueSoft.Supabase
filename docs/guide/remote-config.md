@@ -73,19 +73,6 @@ Func<Task<T?>> RemoteConfig<T>.CreateReader(int maxStale = -1)
 |----------|------|------|
 | `maxStale` | 캐시 유효 시간 초과. `0`이면 항상 서버에서 새로 받음. `-1`이면 DB 설정값 사용 (기본값: `-1`) | `int` |
 
-```csharp
-private Func<Task<GameplayConfig>> _getConfig;
-
-private async Task LoadConfigAsync()
-{
-    // 처음 한 번만 생성하고 재사용합니다
-    _getConfig ??= RemoteConfig<GameplayConfig>.CreateReader(maxStale: 0);
-
-    var cfg = await _getConfig();
-    float interval = cfg?.spawnInterval ?? 3f;  // 값이 없으면 기본값 3f 사용
-}
-```
-
 ---
 
 ## Binding
@@ -106,24 +93,6 @@ RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 0f)
 |----------|------|------|
 | `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
 
-```csharp
-private RemoteConfigBinding<GameplayConfig> _gameplay;
-
-private void Start()
-{
-    // 60초마다 서버에서 자동으로 값을 갱신합니다
-    _gameplay = RemoteConfig<GameplayConfig>.CreateBinding(pollInterval: 60f);
-}
-
-private void Update()
-{
-    // .Value로 저장된 최신 값을 즉시 읽습니다 (네트워크 호출 없음)
-    float interval = _gameplay.Value?.spawnInterval ?? 3f;
-}
-
-private void OnDestroy() => _gameplay?.Dispose();  // 반드시 해제
-```
-
 ---
 
 ## Listener
@@ -143,25 +112,6 @@ RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T?> onChange, floa
 |----------|------|------|
 | `onChange` | 값이 바뀔 때 호출되는 콜백 | `Action<T?>` |
 | `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
-
-```csharp
-private RemoteConfigListener<GameplayConfig> _listener;
-
-private void Start()
-{
-    _listener = RemoteConfig<GameplayConfig>.CreateListener(
-        onChange: cfg => ApplyConfig(cfg),  // 값이 바뀔 때 호출
-        pollInterval: 60f);
-}
-
-private void ApplyConfig(GameplayConfig cfg)
-{
-    spawnInterval = cfg?.spawnInterval ?? 3f;
-    Debug.Log("설정 갱신됨");
-}
-
-private void OnDestroy() => _listener?.Dispose();  // 반드시 해제
-```
 
 ---
 

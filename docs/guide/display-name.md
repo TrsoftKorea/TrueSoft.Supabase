@@ -62,13 +62,6 @@ Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-```csharp
-// 중복 확인 후 설정
-bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
-if (available)
-    await Supabase.TrySetMyDisplayNameAsync("Player123");
-```
-
 ---
 
 #### 다른 플레이어 조회

@@ -48,19 +48,6 @@ Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-```csharp
-var result = await Supabase.TrySignInWithGoogleAsync();
-if (!result)
-{
-    if (result.Reason == SupabaseFailReason.GoogleSignInCancelled)
-        return; // 사용자가 직접 취소 — 오류 UI 불필요
-    if (result.Reason == SupabaseFailReason.UserBanned)
-        ShowBanScreen(result.BanInfo);
-    else
-        ShowErrorPopup(result.Reason);
-}
-```
-
 ---
 
 #### iOS · 커스텀 로그인

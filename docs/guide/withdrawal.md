@@ -62,12 +62,6 @@ Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-```csharp
-await Supabase.TryRequestMyWithdrawalAsync();   // 탈퇴 신청
-await Supabase.TryGetMyWithdrawalStatusAsync(); // 예약 상태 및 남은 시간 조회
-await Supabase.TryClearMyWithdrawalAsync();     // 탈퇴 취소
-```
-
 ---
 
 ## 탈퇴 취소 — 토큰 방식
@@ -115,14 +109,6 @@ Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelTo
 |--------|------|
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
-
-```csharp
-// 탈퇴 취소 토큰 발급 — 플레이어에게 전달
-var token = await Supabase.TryRequestWithdrawalCancelTokenAsync(defaultValue: null);
-
-// 플레이어가 토큰을 입력해 취소 완료
-await Supabase.TryRedeemWithdrawalCancelAsync(cancelToken: token);
-```
 
 ---
 

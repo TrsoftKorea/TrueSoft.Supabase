@@ -35,39 +35,6 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 | `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` | `Action<IAPPurchaseFailedInfo>` |
 | `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) | `int` |
 
-```csharp
-private IAPFacade _iapFacade;
-
-private async void Start()
-{
-    _iapFacade?.Dispose();
-    _iapFacade = await SupabaseIAP.CreateIAPAsync(
-        productIds: new[] { "com.mygame.coins_100", "com.mygame.coins_500", "com.mygame.gems_10" },
-        onGrant: async (productId, isResuming, alreadyVerified) =>
-        {
-            switch (productId)
-            {
-                case "com.mygame.coins_100": await GiveCoinsAsync(100); break;
-                case "com.mygame.coins_500": await GiveCoinsAsync(500); break;
-                case "com.mygame.gems_10":   await GiveGemsAsync(10);   break;
-            }
-            return true; // true → 소비(Confirm) 처리
-        },
-        onFailed:  info => Debug.LogWarning($"구매 실패: {info.ProductId} / {info.FailureReason}"),
-        timeoutMs: 10_000); // 기본값 — 생략 가능
-}
-
-// 구매 버튼마다 호출
-private void OnBuyCoins100Clicked() => _iapFacade?.Purchase("com.mygame.coins_100");
-private void OnBuyCoins500Clicked() => _iapFacade?.Purchase("com.mygame.coins_500");
-private void OnBuyGems10Clicked()   => _iapFacade?.Purchase("com.mygame.gems_10");
-
-private void OnDestroy()
-{
-    _iapFacade?.Dispose();
-}
-```
-
 `onGrant`의 `isResuming` · `alreadyVerified` 파라미터는 [중복 지급 방지](#중복-지급-방지)를 참고하세요.
 
 ---

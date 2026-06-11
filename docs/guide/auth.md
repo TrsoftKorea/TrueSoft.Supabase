@@ -18,16 +18,6 @@ Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 
 익명(게스트) 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다.
 
-```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync();
-if (!result.Success)
-{
-    Debug.Log(result.Reason);  // 실패 원인 ("user_banned", "http_response_null" 등)
-    if (result.Reason == SupabaseFailReason.UserBanned)
-        ShowBanScreen(result.BanInfo);  // 차단 정보 포함
-}
-```
-
 **실패 원인**
 
 | Reason | 설명 |
@@ -186,11 +176,3 @@ Task<SupabaseBanInfo?> Supabase.TryGetBanInfoAsync(string accountId)
 | `.IsPermanentBan` | `bool` | 영구 차단 여부 |
 | `.BannedUntil` | `DateTime` | 차단 해제 일시. 영구 차단이면 의미 없음 |
 | `.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |
-
-```csharp
-var banInfo = await Supabase.TryGetBanInfoAsync(accountId);
-if (banInfo != null)
-{
-    // 차단 중
-}
-```
