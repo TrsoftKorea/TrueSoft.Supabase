@@ -50,7 +50,7 @@ export default defineConfig({
       {
         text: '설정 가이드',
         items: [
-          { text: 'Google 서비스 계정 JSON', link: '/guide/google-service-account' }
+          { text: '서비스 계정 JSON 발급', link: '/guide/google-service-account' }
         ]
       },
       {
