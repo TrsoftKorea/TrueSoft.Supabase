@@ -505,16 +505,13 @@ namespace TrueBase.Unity
         public static void ClearLocalStorage() => SupabaseSDK.ClearLocalStorage();
 
         /// <inheritdoc cref="SupabaseSDK.SignOutAsync"/>
-        public static Task SignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
-            SupabaseSDK.SignOutAsync(clearStorage, deleteUserSessionRow);
+        public static Task SignOutAsync() => SupabaseSDK.SignOutAsync();
 
         /// <inheritdoc cref="SupabaseSDK.SignOutFullyAsync"/>
-        public static Task SignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
-            SupabaseSDK.SignOutFullyAsync(clearStorage, deleteUserSessionRow);
+        public static Task SignOutFullyAsync() => SupabaseSDK.SignOutFullyAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFullyAsync"/>
-        public static Task<SupabaseCallResult> TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true) =>
-            SupabaseSDK.TrySignOutFullyAsync(clearStorage, deleteUserSessionRow);
+        public static Task<SupabaseCallResult> TrySignOutFullyAsync() => SupabaseSDK.TrySignOutFullyAsync();
 
         /// <summary>현재 세션을 기기에 저장. 앱 재시작 후 RestoreSessionAsync로 복원 가능.</summary>
         public static void SaveSessionToStorage() => SupabaseSDK.SaveSessionToStorage();

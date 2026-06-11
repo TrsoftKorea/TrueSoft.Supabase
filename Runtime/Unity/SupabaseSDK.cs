@@ -1040,7 +1040,7 @@ namespace TrueBase.Unity
                     {
                         // 연동 등으로 더 이상 익명이 아닌 계정의 refresh가 복구 테이블에 남은 경우 — 게스트 버튼은 새 익명을 의미함.
                         await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-                        await SignOutAsync(clearStorage: true, deleteUserSessionRow: true);
+                        await SignOutAsync();
                         RememberLastSignInMethod(SignInMethodKind.Google);
                         PlayerPrefs.Save();
                     }
@@ -1070,7 +1070,7 @@ namespace TrueBase.Unity
                 }
 
                 // 저장된 refresh 복원 등으로 비익명 세션이 잡힌 경우 — 익명 로그인 의도에 맞게 끊고 신규 익명 가입으로 진행
-                await SignOutAsync(clearStorage: true, deleteUserSessionRow: true);
+                await SignOutAsync();
                 RememberLastSignInMethod(SignInMethodKind.Google);
                 PlayerPrefs.Save();
             }
@@ -2187,15 +2187,15 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 로그아웃. 익명 세션이고 <paramref name="clearStorage"/>가 true이면, 로컬 refresh를 지우기 전에 지문 기반 복구용 refresh를 서버에 남깁니다.
-        /// 동일 기기에서 다시 익명 로그인할 때 같은 <c>auth.users</c> 계정으로 이어지게 하려면 이 메서드(또는 탈퇴 예약 등 SDK가 호출하는 경로)를 쓰세요.
+        /// 로그아웃. 익명 세션이면 로컬 refresh를 지우기 전에 지문 기반 복구용 refresh를 서버에 남깁니다.
+        /// 동일 기기에서 다시 익명 로그인할 때 같은 <c>auth.users</c> 계정으로 이어집니다.
         /// </summary>
-        public static async Task SignOutAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
+        public static async Task SignOutAsync()
         {
-            if (clearStorage && IsAnonymousSession(_currentSession))
+            if (IsAnonymousSession(_currentSession))
                 await TryUpsertAnonymousRecoveryTokenAsync(_currentSession);
 
-            ClearSession(clearStorage, deleteUserSessionRow);
+            ClearSession(true, true);
         }
 
         /// <summary>
@@ -2203,7 +2203,7 @@ namespace TrueBase.Unity
         /// 에디터·비 Android에서는 Google 단계가 실패해도 Supabase 로그아웃은 진행합니다.
         /// 로그아웃 전 미전송 세이브를 자동으로 flush합니다.
         /// </summary>
-        public static async Task SignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
+        public static async Task SignOutFullyAsync()
         {
             if (await EnsureInitializedAsync())
             {
@@ -2211,19 +2211,19 @@ namespace TrueBase.Unity
                 _ = await SignOutFromGoogleAsync();
             }
 
-            await SignOutAsync(clearStorage, deleteUserSessionRow);
+            await SignOutAsync();
         }
 
         /// <summary><see cref="SignOutFullyAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignOutFullyAsync(bool clearStorage = true, bool deleteUserSessionRow = true)
+        public static async Task<SupabaseCallResult> TrySignOutFullyAsync()
         {
             if (_interceptSignOutFully != null)
                 return await _interceptSignOutFully(async () => {
-                    await SignOutFullyAsync(clearStorage, deleteUserSessionRow);
+                    await SignOutFullyAsync();
                     LogApiResult(ApiLogTags.AuthSignOut, true, null);
                     return SupabaseCallResult.Ok;
                 });
-            await SignOutFullyAsync(clearStorage, deleteUserSessionRow);
+            await SignOutFullyAsync();
             LogApiResult(ApiLogTags.AuthSignOut, true, null);
             return SupabaseCallResult.Ok;
         }
