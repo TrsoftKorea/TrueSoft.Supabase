@@ -23,8 +23,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///
 ///   D — 탈퇴 신청          S — 탈퇴 상태 조회      C — 탈퇴 취소
 ///
-///   M — 우편함 목록 + 미수령 전체 수령
-/// </summary>
+///</summary>
 public sealed class ExampleSupabaseScenarios : MonoBehaviour
 {
     // ─── 초기화 이벤트 ───────────────────────────────────────────────────────
@@ -293,35 +292,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
     }
 
-    // ─── 우편함 ──────────────────────────────────────────────────────────────
-
-    /// <summary>M — 우편함 목록 조회 + 미수령 아이템 전체 수령.</summary>
-    private async Task TestMailboxAsync()
-    {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
-
-        var mails = await SupabaseClient.TryGetMyMailsAsync(limit: 10);
-        if (mails == null || mails.Count == 0)
-        {
-            Debug.Log("[Supabase] 우편함 비어있음.");
-            return;
-        }
-
-        Debug.Log($"[Supabase] 우편함 {mails.Count}개:");
-        foreach (var mail in mails)
-            Debug.Log($"  [{mail.MailId}] {mail.Title} — 읽음: {mail.IsRead}, 수령: {mail.IsClaimed}");
-
-        var results = await SupabaseClient.TryClaimAllMailItemsAsync();
-        if (results == null || results.Count == 0)
-            Debug.Log("[Supabase] 수령할 아이템 없음.");
-        else
-        {
-            Debug.Log($"[Supabase] 아이템 수령 완료 ({results.Count}건):");
-            foreach (var r in results)
-                Debug.Log($"  mailId={r.MailId}, success={r.Success}");
-        }
-    }
-
     // ─── Update ──────────────────────────────────────────────────────────────
 
     private void Update()
@@ -350,6 +320,5 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.S)) _ = GetWithdrawalStatusAsync();
         if (Input.GetKeyDown(KeyCode.C)) _ = ClearWithdrawalAsync();
 
-        if (Input.GetKeyDown(KeyCode.M)) _ = TestMailboxAsync();
     }
 }
