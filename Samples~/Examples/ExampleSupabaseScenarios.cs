@@ -1,5 +1,7 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
+using TrueBase.Core.Data;
+using TrueBase.Core.Models;
 using TrueBase.Unity;
 using UnityEngine;
 using SupabaseClient = global::TrueBase.Unity.Supabase;
@@ -10,10 +12,18 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///
 /// 키보드 단축키 (Play Mode):
 ///   Q — 익명 로그인       I — Google 로그인      P — Google 연동       W — 로그아웃
+///   O — 세션 복원
+///
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
+///
 ///   T — RC Reader         U — RC Binding          E — RC Listener 토글
-///   N — 닉네임 설정 및 프로필 조회
-///   A — 내 상태 출력       J — 서버 시간 조회
+///
+///   N — 닉네임 가용성 확인 + 설정 + 프로필 조회
+///   A — 내 상태 출력       J — 서버 시간 조회      B — 차단 정보 조회
+///
+///   D — 탈퇴 신청          S — 탈퇴 상태 조회      C — 탈퇴 취소
+///
+///   M — 우편함 목록 + 미수령 전체 수령
 /// </summary>
 public sealed class ExampleSupabaseScenarios : MonoBehaviour
 {
@@ -43,7 +53,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignInAnonymouslyAsync()
     {
         var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
-        if (!ok) Debug.LogWarning("[Supabase] 익명 로그인 실패.");
+        if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.Reason}");
         else     Debug.Log("[Supabase] 익명 로그인 성공.");
     }
 
@@ -51,7 +61,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignInWithGoogleAsync()
     {
         var ok = await SupabaseClient.TrySignInWithGoogleAsync();
-        if (!ok) Debug.LogWarning("[Supabase] Google 로그인 실패.");
+        if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.Reason}");
         else     Debug.Log("[Supabase] Google 로그인 성공.");
     }
 
@@ -65,15 +75,24 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
 
         var ok = await SupabaseClient.TryLinkGoogleToCurrentAnonymousAsync();
-        if (!ok) Debug.LogWarning("[Supabase] Google 연동 실패 (이미 사용 중인 계정일 수 있음).");
+        if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.Reason}");
         else     Debug.Log("[Supabase] Google 연동 성공.");
     }
 
     /// <summary>W — 로그아웃. Google 네이티브 로그아웃 포함, 로그아웃 전 자동 flush.</summary>
     private async Task SignOutAsync()
     {
-        await SupabaseClient.TrySignOutFullyAsync();
-        Debug.Log("[Supabase] 로그아웃 완료.");
+        var ok = await SupabaseClient.TrySignOutFullyAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] 로그아웃 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] 로그아웃 완료.");
+    }
+
+    /// <summary>O — 로컬 저장 세션으로 로그인 복원.</summary>
+    private async Task RestoreSessionAsync()
+    {
+        var ok = await SupabaseClient.TryRestoreSessionAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] 세션 복원 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] 세션 복원 성공.");
     }
 
     // ─── 유저 데이터 ─────────────────────────────────────────────────────────
@@ -118,7 +137,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     // ③ Listener (E): 값 변경 시 콜백 호출 — E를 다시 누르면 종료
     // ─────────────────────────────────────────────────────────────────────────
 
-    // TestConfig: RemoteConfigKey 어트리뷰트로 DB 키를 선언합니다.
     [Serializable]
     [RemoteConfigKey("test")]
     private sealed class TestConfig { public string a; public int b; public bool c; }
@@ -167,44 +185,57 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     // ─── 공개 프로필 ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// N — 닉네임 설정 후 내 프로필을 조회합니다.
+    /// N — 닉네임 가용성 확인 → 설정 → 내 프로필 조회.
     /// displayname-set / displayname-get Edge Function이 배포되어 있어야 합니다.
     /// </summary>
     private async Task TestPublicProfileAsync()
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var setOk = await SupabaseClient.TrySetMyDisplayNameAsync("TestPlayer");
-        if (!setOk)
+        const string nickname = "TestPlayer";
+
+        var available = await SupabaseClient.TryIsDisplayNameAvailableAsync(nickname);
+        if (!available)
         {
-            Debug.LogWarning("[Supabase] 닉네임 설정 실패 (이미 사용 중이거나 Edge Function 미배포).");
+            Debug.LogWarning($"[Supabase] 닉네임 '{nickname}' 이미 사용 중 또는 확인 실패: {available.Reason}");
             return;
         }
-        Debug.Log("[Supabase] 닉네임 설정 완료: TestPlayer");
+        Debug.Log($"[Supabase] 닉네임 '{nickname}' 사용 가능.");
+
+        var setOk = await SupabaseClient.TrySetMyDisplayNameAsync(nickname);
+        if (!setOk)
+        {
+            Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.Reason}");
+            return;
+        }
+        Debug.Log($"[Supabase] 닉네임 설정 완료: {nickname}");
 
         var myId = SupabaseClient.Session?.User?.Id;
         var profile = await SupabaseClient.TryGetPublicProfileAsync(myId);
-        if (profile != null) Debug.Log($"[Supabase] 프로필 조회 완료 — 닉네임: {profile.DisplayName}");
+        if (profile != null) Debug.Log($"[Supabase] 프로필 — 닉네임: {profile.DisplayName}, 서버: {profile.ServerCode}");
         else                 Debug.LogWarning("[Supabase] 프로필 조회 실패.");
     }
 
     // ─── 세션 상태 / 서버 ────────────────────────────────────────────────────
 
-    /// <summary>A — 현재 세션 상태를 Console에 출력합니다.</summary>
-    private void PrintStatus()
+    /// <summary>A — 현재 세션 상태 및 서버 정보를 Console에 출력합니다.</summary>
+    private async Task PrintStatusAsync()
     {
         if (!SupabaseClient.IsLoggedIn)
         {
             Debug.Log("[Supabase] 로그인되지 않은 상태.");
             return;
         }
-        var profile = SupabaseClient.MyProfile;
+        var profile    = SupabaseClient.MyProfile;
+        var serverInfo = await SupabaseClient.TryGetMyServerInfoAsync();
         Debug.Log($"[Supabase] 상태\n" +
                   $"  IsAnonymous = {SupabaseClient.IsAnonymous}\n" +
+                  $"  AccountId   = {SupabaseClient.Session?.User?.Id}\n" +
                   $"  UserId      = {SupabaseClient.UserId}\n" +
                   $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
                   $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
-                  $"  IsWithdrawn = {profile?.IsWithdrawn}");
+                  $"  IsWithdrawn = {profile?.IsWithdrawn}\n" +
+                  $"  ServerId    = {serverInfo?.ServerId}, ServerCode = {serverInfo?.ServerCode}");
     }
 
     /// <summary>J — 서버 시간을 조회합니다.</summary>
@@ -215,6 +246,82 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else                 Debug.Log($"[Supabase] 서버 시간: {time:yyyy-MM-dd HH:mm:ss} UTC");
     }
 
+    /// <summary>B — 현재 계정의 차단 정보를 조회합니다.</summary>
+    private async Task GetBanInfoAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var accountId = SupabaseClient.Session?.User?.Id;
+        var banInfo = await SupabaseClient.TryGetBanInfoAsync(accountId);
+        if (banInfo == null)
+            Debug.Log("[Supabase] 차단 정보 없음 (정상 계정).");
+        else
+            Debug.LogWarning($"[Supabase] 차단 정보 — IsPermanent: {banInfo.IsPermanentBan}, Until: {banInfo.BannedUntil}, Message: {banInfo.BanMessage}");
+    }
+
+    // ─── 탈퇴 ────────────────────────────────────────────────────────────────
+
+    /// <summary>D — 탈퇴 신청 (15일 유예). 실제 테스트 시 주의.</summary>
+    private async Task RequestWithdrawalAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var ok = await SupabaseClient.TryRequestMyWithdrawalAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
+    }
+
+    /// <summary>S — 탈퇴 예약 상태를 조회합니다.</summary>
+    private async Task GetWithdrawalStatusAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var status = await SupabaseClient.TryGetMyWithdrawalStatusAsync();
+        if (status == null)
+            Debug.Log("[Supabase] 탈퇴 예약 없음.");
+        else
+            Debug.Log($"[Supabase] 탈퇴 예약 — IsScheduled: {status.IsScheduled}, 남은 시간: {status.SecondsRemaining}초, 예약일: {status.WithdrawnAtIso}");
+    }
+
+    /// <summary>C — 탈퇴 취소. 탈퇴 예약 상태여야 합니다.</summary>
+    private async Task ClearWithdrawalAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var ok = await SupabaseClient.TryClearMyWithdrawalAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
+    }
+
+    // ─── 우편함 ──────────────────────────────────────────────────────────────
+
+    /// <summary>M — 우편함 목록 조회 + 미수령 아이템 전체 수령.</summary>
+    private async Task TestMailboxAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var mails = await SupabaseClient.TryGetMyMailsAsync(limit: 10);
+        if (mails == null || mails.Count == 0)
+        {
+            Debug.Log("[Supabase] 우편함 비어있음.");
+            return;
+        }
+
+        Debug.Log($"[Supabase] 우편함 {mails.Count}개:");
+        foreach (var mail in mails)
+            Debug.Log($"  [{mail.MailId}] {mail.Title} — 읽음: {mail.IsRead}, 수령: {mail.IsClaimed}");
+
+        var results = await SupabaseClient.TryClaimAllMailItemsAsync();
+        if (results == null || results.Count == 0)
+            Debug.Log("[Supabase] 수령할 아이템 없음.");
+        else
+        {
+            Debug.Log($"[Supabase] 아이템 수령 완료 ({results.Count}건):");
+            foreach (var r in results)
+                Debug.Log($"  mailId={r.MailId}, success={r.Success}");
+        }
+    }
+
     // ─── Update ──────────────────────────────────────────────────────────────
 
     private void Update()
@@ -223,6 +330,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.I)) _ = SignInWithGoogleAsync();
         if (Input.GetKeyDown(KeyCode.P)) _ = LinkGoogleAsync();
         if (Input.GetKeyDown(KeyCode.W)) _ = SignOutAsync();
+        if (Input.GetKeyDown(KeyCode.O)) _ = RestoreSessionAsync();
 
         if (Input.GetKeyDown(KeyCode.R)) _ = LoadPlayerDataAsync();
         if (Input.GetKeyDown(KeyCode.V)) _ = SavePlayerDataAsync();
@@ -234,7 +342,14 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.N)) _ = TestPublicProfileAsync();
 
-        if (Input.GetKeyDown(KeyCode.A)) PrintStatus();
+        if (Input.GetKeyDown(KeyCode.A)) _ = PrintStatusAsync();
         if (Input.GetKeyDown(KeyCode.J)) _ = GetServerTimeAsync();
+        if (Input.GetKeyDown(KeyCode.B)) _ = GetBanInfoAsync();
+
+        if (Input.GetKeyDown(KeyCode.D)) _ = RequestWithdrawalAsync();
+        if (Input.GetKeyDown(KeyCode.S)) _ = GetWithdrawalStatusAsync();
+        if (Input.GetKeyDown(KeyCode.C)) _ = ClearWithdrawalAsync();
+
+        if (Input.GetKeyDown(KeyCode.M)) _ = TestMailboxAsync();
     }
 }
