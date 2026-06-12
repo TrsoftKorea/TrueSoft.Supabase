@@ -130,7 +130,8 @@ namespace TrueBase.Unity.Config
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
             if (ok && _instance != null)
-                ok = await _instance.OnAfterAutoLoginAsync(ok);
+                if (!await _instance.OnAfterAutoLoginAsync(ok))
+                    ok = SupabaseCallResult.Fail("after_auto_login_failed");
 
             if (ok)
                 await Supabase.TryLoadAllUserSavesAsync();
