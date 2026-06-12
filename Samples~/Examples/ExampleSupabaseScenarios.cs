@@ -3,12 +3,16 @@ using System.Threading.Tasks;
 using TrueBase.Core.Data;
 using TrueBase.Core.Models;
 using TrueBase.Unity;
+using TrueBase.Unity.Config;
 using UnityEngine;
 using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// Supabase SDK 기능 예제 컴포넌트.
 /// SupabaseRuntime이 씬에 있어야 합니다 (같은 GameObject에 붙이거나 별도 배치).
+///
+/// 씬 시작 시 저장된 세션으로 자동 로그인을 시도합니다 (Start → TriggerAutoLoginAsync).
+/// 로그인 성공 여부는 HandleAutoLoginCompleted 콜백으로 전달됩니다.
 ///
 /// 키보드 단축키 (Play Mode):
 ///   Q — 익명 로그인       I — Google 로그인      P — Google 연동       W — 로그아웃
@@ -33,11 +37,30 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
     }
 
+    // 구독 시점에 이미 완료된 경우를 자동 처리하므로 OnEnable/OnDisable을 사용합니다.
+    private void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
+    private void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
+
+    private void Start()
+    {
+        // 저장된 세션을 복원합니다. 완료 시 HandleAutoLoginCompleted가 호출됩니다.
+        // 로그인 성공 시 등록된 모든 StaticUserSave 데이터 로드를 자동으로 수행합니다.
+        _ = SupabaseRuntime.TriggerAutoLoginAsync();
+    }
+
     private void OnDestroy()
     {
         SupabaseClient.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
         _rcListener?.Dispose();
         _rcBinding?.Dispose();
+    }
+
+    private void HandleAutoLoginCompleted(bool success)
+    {
+        if (success)
+            Debug.Log($"[Supabase] 자동 로그인 성공. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
+        else
+            Debug.Log("[Supabase] 저장된 세션 없음 — 익명 로그인(Q) 또는 소셜 로그인(I)을 시도하세요.");
     }
 
     private void HandleDuplicateLoginDetected()
@@ -319,6 +342,36 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) _ = RequestWithdrawalAsync();
         if (Input.GetKeyDown(KeyCode.S)) _ = GetWithdrawalStatusAsync();
         if (Input.GetKeyDown(KeyCode.C)) _ = ClearWithdrawalAsync();
+    }
+}
 
+// =============================================================================
+// 예제용 유저 저장 클래스.
+// SupabaseSettings의 User Data Table 항목과 DB 테이블 컬럼명을 맞춰주세요.
+// 실제 프로젝트에서는 이 파일 대신 별도 파일에 정의하는 것을 권장합니다.
+// =============================================================================
+
+public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
+{
+    public static readonly SamplePlayerSave Instance = new();
+    private SamplePlayerSave() : base() { }
+
+    [Serializable]
+    public sealed class Row
+    {
+        [DataColumn("level")] public int level;
+        [DataColumn("coins")] public int coins;
+    }
+
+    public static int Level
+    {
+        get => Instance.Current.level;
+        set { if (Instance.Current.level == value) return; Instance.Current.level = value; Instance.MarkDirty(); }
+    }
+
+    public static int Coins
+    {
+        get => Instance.Current.coins;
+        set { if (Instance.Current.coins == value) return; Instance.Current.coins = value; Instance.MarkDirty(); }
     }
 }
