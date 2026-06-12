@@ -62,8 +62,8 @@ Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
 
 ```csharp
 // 중복 확인 후 설정
-bool available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
-if (available)
+var available = await Supabase.TryIsDisplayNameAvailableAsync("Player123");
+if (available.Success)
     await Supabase.TrySetMyDisplayNameAsync("Player123");
 ```
 

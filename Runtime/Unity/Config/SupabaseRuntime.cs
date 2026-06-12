@@ -27,25 +27,6 @@ namespace TrueBase.Unity.Config
         [Tooltip("SupabaseSettings. 비우면 Resources에서 로드.")]
         [SerializeField] private SupabaseSettings settings;
 
-        /// <summary>
-        /// 로그인 시도가 완료되면 발행됩니다. bool: 복원 성공 또는 이미 로그인 상태이면 true입니다.
-        /// 로그인 성공 시 등록된 모든 <c>StaticUserSave</c> 로드가 완료된 뒤 발행됩니다.
-        /// <see cref="TriggerAutoLoginAsync"/> 호출 시 이 이벤트를 발행합니다.
-        /// </summary>
-        /// <remarks>
-        /// 구독 시점에 이미 완료된 경우를 자동으로 처리하는 <see cref="SubscribeAutoLoginCompleted"/>를 사용하면
-        /// 보일러플레이트 없이 한 줄로 구독할 수 있습니다.
-        /// </remarks>
-        public static event Action<bool> OnAutoLoginCompleted;
-
-        /// <summary>로그인 시도가 완료되었는지 여부.</summary>
-        public static bool IsAutoLoginCompleted { get; private set; }
-
-        /// <summary>
-        /// 로그인 결과. 복원 성공 또는 이미 로그인 상태이면 true입니다.
-        /// <see cref="IsAutoLoginCompleted"/>가 true일 때만 유효합니다.
-        /// </summary>
-        public static bool AutoLoginResult { get; private set; }
 
         protected virtual void Awake()
         {
@@ -120,12 +101,12 @@ namespace TrueBase.Unity.Config
         }
 
         /// <summary>
-        /// 저장된 세션으로 로그인을 시도합니다. 완료 시 <see cref="OnAutoLoginCompleted"/> 이벤트를 발행합니다.
+        /// 저장된 세션으로 로그인을 시도합니다.
         /// 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
         /// </summary>
-        public static Task TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
+        public static Task<SupabaseCallResult> TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
 
-        private static async Task AutoLoginAndMaybeLoadAsync()
+        private static async Task<SupabaseCallResult> AutoLoginAndMaybeLoadAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
@@ -136,7 +117,7 @@ namespace TrueBase.Unity.Config
             if (ok)
                 await Supabase.TryLoadAllUserSavesAsync();
 
-            SetAutoLoginCompleted(ok);
+            return ok;
         }
 
         /// <summary>
@@ -145,39 +126,7 @@ namespace TrueBase.Unity.Config
         /// </summary>
         protected virtual Task<bool> OnAfterAutoLoginAsync(bool success) => Task.FromResult(success);
 
-        /// <summary>
-        /// 로그인 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.
-        /// <c>OnEnable()</c>에서 호출하고 <c>OnDisable()</c>에서 <see cref="UnsubscribeAutoLoginCompleted"/>로 해제하세요.
-        /// </summary>
-        /// <example><code>
-        /// void OnEnable() => SupabaseRuntime.SubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
-        /// void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
-        /// </code></example>
-        public static void SubscribeAutoLoginCompleted(Action<bool> callback)
-        {
-            if (IsAutoLoginCompleted)
-            {
-                callback?.Invoke(AutoLoginResult);
-                return;
-            }
-            OnAutoLoginCompleted += callback;
-        }
 
-        /// <summary>
-        /// <see cref="SubscribeAutoLoginCompleted"/>로 등록한 콜백을 해제합니다.
-        /// </summary>
-        public static void UnsubscribeAutoLoginCompleted(Action<bool> callback)
-        {
-            OnAutoLoginCompleted -= callback;
-        }
-
-        private static void SetAutoLoginCompleted(bool result)
-        {
-            if (IsAutoLoginCompleted) return;
-            IsAutoLoginCompleted = true;
-            AutoLoginResult = result || Supabase.IsLoggedIn;
-            OnAutoLoginCompleted?.Invoke(AutoLoginResult);
-        }
 
         private void EnsureGoogleLoginBridge()
         {

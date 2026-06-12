@@ -34,30 +34,16 @@ Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 로그인은 자동 실행되지 않으므로 원하는 타이밍에 직접 호출합니다.
 
 ```csharp
-// 로그인 화면 진입 후, 또는 원하는 씬 진입 시점에 호출
-await SupabaseRuntime.TriggerAutoLoginAsync();
-```
-
-### 완료 이벤트
-
-`TriggerAutoLoginAsync()` 완료를 기다려야 하는 코드는 `OnAutoLoginCompleted` 이벤트를 사용합니다.
-
-```csharp
-void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(OnReady);
-void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(OnReady);
-
-void OnReady(bool success)
+var result = await SupabaseRuntime.TriggerAutoLoginAsync();
+if (result.Success)
 {
-    if (success)
-    {
-        // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
-        InitGame();
-    }
-    else
-    {
-        // 저장된 세션 없음 (첫 실행 또는 로그아웃 후) → 로그인 화면으로 이동
-        ShowLoginScreen();
-    }
+    // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
+    InitGame();
+}
+else
+{
+    // 저장된 세션 없음 (첫 실행 또는 로그아웃 후) → 로그인 화면으로 이동
+    ShowLoginScreen();
 }
 ```
 

@@ -37,15 +37,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
     }
 
-    // 구독 시점에 이미 완료된 경우를 자동 처리하므로 OnEnable/OnDisable을 사용합니다.
-    private void OnEnable()  => SupabaseRuntime.SubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
-    private void OnDisable() => SupabaseRuntime.UnsubscribeAutoLoginCompleted(HandleAutoLoginCompleted);
-
-    private void Start()
+    private async void Start()
     {
-        // 저장된 세션을 복원합니다. 완료 시 HandleAutoLoginCompleted가 호출됩니다.
-        // 로그인 성공 시 등록된 모든 StaticUserSave 데이터 로드를 자동으로 수행합니다.
-        _ = SupabaseRuntime.TriggerAutoLoginAsync();
+        var result = await SupabaseRuntime.TriggerAutoLoginAsync();
+        if (result)
+            Debug.Log($"[Supabase] 자동 로그인 성공. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
+        else
+            Debug.Log("[Supabase] 저장된 세션 없음 — 익명 로그인(Q) 또는 소셜 로그인(I)을 시도하세요.");
     }
 
     private void OnDestroy()
@@ -55,13 +53,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         _rcBinding?.Dispose();
     }
 
-    private void HandleAutoLoginCompleted(bool success)
-    {
-        if (success)
-            Debug.Log($"[Supabase] 자동 로그인 성공. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
-        else
-            Debug.Log("[Supabase] 저장된 세션 없음 — 익명 로그인(Q) 또는 소셜 로그인(I)을 시도하세요.");
-    }
 
     private void HandleDuplicateLoginDetected()
     {
