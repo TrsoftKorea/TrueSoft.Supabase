@@ -125,11 +125,7 @@ SDK 행 있음 (기존 유저)
   └─ DB updated_at ≥ 플레이나누 updated_at → SDK 최신 → ApplyRow 후 플레이나누 갱신
 ```
 
-SDK 저장 후 플레이나누에도 반영하려면:
-
-```csharp
-playNanooRuntime.SaveCurrentToNanoo();
-```
+SDK 저장 이후 플레이나누에도 자동으로 반영됩니다.
 
 ---
 
