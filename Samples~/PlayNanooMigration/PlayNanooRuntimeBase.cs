@@ -41,9 +41,18 @@ using UnityEngine;
 public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
     protected Plugin _plugin;
-    private string _nanooAccessToken;  // 로그인 성공 시 저장, 로그아웃·롤백에 사용
-    private string _nanooNickname;     // 닉네임 변경 롤백용
-    private string _pendingLoginType;  // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
+    private string _nanooAccessToken;   // 로그인 성공 시 저장, 로그아웃·롤백에 사용
+    private string _nanooRefreshToken;  // 앱 재시작 시 세션 복원용, PlayerPrefs에도 보존
+    private string _nanooNickname;      // 닉네임 변경 롤백용
+    private string _pendingLoginType;   // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
+
+    private const string NanooRefreshTokenKey = "TrueBase.NanooRefreshToken";
+
+    /// <summary>PlayNANOO 로그인 성공 시 반환된 uuid. 로그인 전에는 null.</summary>
+    public static string UserId { get; private set; }
+
+    /// <summary>PlayNANOO 로그인 성공 시 반환된 openid. SDK가 반환하지 않으면 null.</summary>
+    public static string OpenId { get; private set; }
 
     private INanooSaveSyncable Save => Supabase.GetNanooSaveBridge();
 
@@ -80,6 +89,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 닉네임 변경. 완료 후 callback(status)을 호출해야 합니다.</summary>
     protected abstract void NanooSetNickname(string nickname, Func<string, Task> callback);
+
+    /// <summary>PlayNANOO refresh token으로 세션을 갱신합니다. 완료 후 callback(status, values)을 호출해야 합니다.</summary>
+    protected abstract void NanooTokenRefresh(string refreshToken, Func<string, Dictionary<string, object>, Task> callback);
 
     // ── PlayNANOO IAP 메서드 (virtual — 필요 시 서브클래스에서 override) ─────────
 
@@ -230,6 +242,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         NanooTokenSignOut(_nanooAccessToken, async () =>
         {
             _nanooAccessToken = null;
+            ClearNanooTokens();
+            UserId = null;
+            OpenId = null;
             var result = await sdkSignOut();
             if (!result.Success)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 로그아웃 실패. PlayNANOO 로그아웃은 완료됨.");
@@ -330,8 +345,12 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
-            _nanooAccessToken = values["access_token"]?.ToString();
-            _nanooNickname = values["nickname"]?.ToString();
+            _nanooAccessToken  = values["access_token"]?.ToString();
+            _nanooRefreshToken = values.TryGetValue("refresh_token", out var rt) ? rt?.ToString() : null;
+            _nanooNickname     = values["nickname"]?.ToString();
+            UserId   = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
+            OpenId = values.TryGetValue("openid", out var openidVal) ? openidVal?.ToString() : null;
+            SaveNanooTokens();
             OnNanooLoginSuccess(values);
             return true;
         }
@@ -356,6 +375,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (string.IsNullOrEmpty(_nanooAccessToken)) return Task.CompletedTask;
         var token = _nanooAccessToken;
         _nanooAccessToken = null;
+        ClearNanooTokens();
+        UserId = null;
+        OpenId = null;
         var tcs = new TaskCompletionSource<bool>();
         NanooTokenSignOut(token, async () => tcs.SetResult(true));
         return tcs.Task;
@@ -390,6 +412,62 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 OnWithdrawalRestored?.Invoke();
             _pendingLoginType = null;
         });
+    }
+
+    // ── 자동 로그인 후 PlayNANOO 세션 복원 ────────────────────────────────────
+
+    protected override async Task<bool> OnAfterAutoLoginAsync(bool success)
+    {
+        if (!success) return false;
+        var storedToken = PlayerPrefs.GetString(NanooRefreshTokenKey, null);
+        if (string.IsNullOrEmpty(storedToken)) return true;
+
+        var nanooOk = await RestoreNanooSessionAsync(storedToken);
+        if (!nanooOk)
+            await Supabase.TrySignOutFullyAsync();
+        return nanooOk;
+    }
+
+    private Task<bool> RestoreNanooSessionAsync(string refreshToken)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        NanooTokenRefresh(refreshToken, async (status, values) =>
+        {
+            if (status == Configure.PN_API_STATE_SUCCESS)
+            {
+                _nanooAccessToken  = values["access_token"]?.ToString();
+                _nanooRefreshToken = values.TryGetValue("refresh_token", out var rt) ? rt?.ToString() : null;
+                _nanooNickname     = values.TryGetValue("nickname",      out var nk) ? nk?.ToString() : _nanooNickname;
+                UserId = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
+                OpenId = values.TryGetValue("openid", out var ov) ? ov?.ToString() : null;
+                SaveNanooTokens();
+                tcs.TrySetResult(true);
+            }
+            else
+            {
+                Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 토큰 갱신 실패. 재로그인이 필요합니다.");
+                ClearNanooTokens();
+                tcs.TrySetResult(false);
+            }
+            await Task.CompletedTask;
+        });
+        return tcs.Task;
+    }
+
+    private void SaveNanooTokens()
+    {
+        if (!string.IsNullOrEmpty(_nanooRefreshToken))
+            PlayerPrefs.SetString(NanooRefreshTokenKey, _nanooRefreshToken);
+        else
+            PlayerPrefs.DeleteKey(NanooRefreshTokenKey);
+        PlayerPrefs.Save();
+    }
+
+    private void ClearNanooTokens()
+    {
+        _nanooRefreshToken = null;
+        PlayerPrefs.DeleteKey(NanooRefreshTokenKey);
+        PlayerPrefs.Save();
     }
 
     // ── 데이터 동기화 ─────────────────────────────────────────────────────────

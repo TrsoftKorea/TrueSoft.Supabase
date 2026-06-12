@@ -73,6 +73,15 @@ playNanooRuntime.StartAppleSignInAndroid();
 
 로그인 완료 이벤트와 로그인 후 사용 가능한 값은 [인증](./auth.md)을 참고하세요.
 
+### 로그인 후 사용 가능한 값
+
+PlayNANOO 로그인이 성공하면 아래 프로퍼티를 사용할 수 있습니다.
+
+| 프로퍼티 | 설명 |
+|---------|------|
+| `PlayNanooRuntimeBase.UserId` | PlayNANOO uuid. 로그인 전에는 null |
+| `PlayNanooRuntimeBase.OpenId` | PlayNANOO 로그인 openid. SDK가 반환하지 않으면 null |
+
 ---
 
 ## 로그아웃

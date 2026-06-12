@@ -129,11 +129,20 @@ namespace TrueBase.Unity.Config
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
+            if (ok && _instance != null)
+                ok = await _instance.OnAfterAutoLoginAsync(ok);
+
             if (ok)
                 await Supabase.TryLoadAllUserSavesAsync();
 
             SetAutoLoginCompleted(ok);
         }
+
+        /// <summary>
+        /// Supabase 자동 로그인 성공 후, UserSave 로드 전에 호출됩니다.
+        /// 서브클래스에서 추가 세션 복원 로직을 구현하세요. false 반환 시 자동 로그인 실패로 처리됩니다.
+        /// </summary>
+        protected virtual Task<bool> OnAfterAutoLoginAsync(bool success) => Task.FromResult(success);
 
         /// <summary>
         /// 로그인 완료 콜백을 등록합니다. 이미 완료된 경우 즉시 호출합니다.

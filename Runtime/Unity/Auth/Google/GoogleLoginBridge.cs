@@ -37,6 +37,33 @@ namespace TrueBase.Unity.Auth.Google
 #endif
         }
 
+        /// <summary>UI 없이 마지막으로 로그인한 Google 계정의 ID 토큰을 반환합니다. 저장된 계정이 없으면 onError를 호출합니다.</summary>
+        public void SilentSignIn(string webClientId, Action<GoogleLoginResult> onSuccess, Action<string> onError)
+        {
+            if (string.IsNullOrWhiteSpace(webClientId))
+            {
+                onError?.Invoke("web_client_id_empty");
+                return;
+            }
+
+            _onSuccess = onSuccess;
+            _onError = onError;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using var plugin = new AndroidJavaClass(PluginClass);
+                plugin.CallStatic("silentSignIn", gameObject.name, webClientId);
+            }
+            catch (Exception e)
+            {
+                _onError?.Invoke("google_silent_signin_exception:" + e.Message);
+            }
+#else
+            onError?.Invoke("google_login_android_only");
+#endif
+        }
+
         public void SignOut(Action onComplete, Action<string> onError)
         {
             _onLogout = onComplete;

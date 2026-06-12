@@ -18,6 +18,11 @@ namespace TrueBase.Unity.Auth.Google
             _bridge.SignIn(_webClientId, onSuccess, onError);
         }
 
+        public void SilentSignIn(Action<GoogleLoginResult> onSuccess, Action<string> onError)
+        {
+            _bridge.SilentSignIn(_webClientId, onSuccess, onError);
+        }
+
         public void SignOut(Action onComplete, Action<string> onError)
         {
             _bridge.SignOut(onComplete, onError);

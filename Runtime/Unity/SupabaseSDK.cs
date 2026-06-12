@@ -881,6 +881,7 @@ namespace TrueBase.Unity
                 return SupabaseCallResult.Fail("auto_login_blocked_or_no_token");
 
             var ok = await RestoreSessionAsync();
+
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
             return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail("auto_login_on_start_failed");
         }
