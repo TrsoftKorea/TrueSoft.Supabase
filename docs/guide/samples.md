@@ -6,7 +6,7 @@ Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import
 |------|------|
 | **Database Setup** | Supabase 프로젝트 초기 설정용 SQL·Edge Function 소스. 설정 완료 후 삭제 |
 | **Examples** | 인증·세이브·RemoteConfig 등 주요 기능을 Play Mode 키보드로 바로 테스트 |
-| **PlayNANOO Migration** | PlayNANOO와 SDK를 병행 운영하다가 단계적으로 SDK로 전환하는 패턴 예제 |
+| **플레이나누 이관** | 플레이나누와 SDK를 병행 운영하다가 단계적으로 SDK로 전환하는 패턴 예제 |
 
 ---
 
@@ -105,10 +105,10 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 
 ---
 
-## PlayNANOO Migration
+## 플레이나누 이관
 
-PlayNANOO와 SDK를 동시에 운영하면서 단계적으로 SDK로 전환할 때 사용합니다.  
-`SupabaseRuntime` 대신 `PlayNanooRuntime`을 씬에 배치하면, 게임 코드의 `Supabase.*` 호출이 자동으로 PlayNANOO를 경유합니다.
+플레이나누와 SDK를 동시에 운영하면서 단계적으로 SDK로 전환할 때 사용합니다.  
+`SupabaseRuntime` 대신 `PlayNanooRuntime`을 씬에 배치하면, 게임 코드의 `Supabase.*` 호출이 자동으로 플레이나누를 경유합니다.
 
 **지원 기능:**
 - 게스트·Google·Apple 로그인
@@ -117,4 +117,4 @@ PlayNANOO와 SDK를 동시에 운영하면서 단계적으로 SDK로 전환할 �
 - 탈퇴 복구 (`OnWithdrawalPending` · `OnWithdrawalRestored` 이벤트)
 - `updated_at` 기반 PlayNANOO ↔ SDK 데이터 동기화
 
-자세한 사용법은 [PlayNANOO Migration](./playnanoo-migration.md)을 참고하세요.
+자세한 사용법은 [플레이나누 이관](./playnanoo-migration.md)을 참고하세요.

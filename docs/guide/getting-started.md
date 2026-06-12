@@ -38,7 +38,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 
 4. **Create new project**를 클릭하고 프로비저닝이 완료될 때까지 약 1~2분 대기합니다.
 
-### 2. Authentication 설정
+### 2. 인증 설정
 
 **Authentication > Settings** 에서 아래 항목을 설정합니다.
 
@@ -51,7 +51,7 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.  
 Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하세요.
 
-### 3. Database SSL 설정
+### 3. 데이터베이스 SSL 설정
 
 **Database > Settings > SSL configuration** 에서 아래 항목을 확인합니다.
 
@@ -77,7 +77,7 @@ Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하
 | **Publishable key** | **Settings > API Keys** → Publishable key 섹션 복사 버튼 | `SupabaseSettings.publishableKey` |
 | **Secret key** | **Settings > API Keys** → Secret keys 섹션 복사 버튼 | Inspector의 유저 데이터 클래스 생성 도구 전용. EditorPrefs 저장, 빌드 미포함 |
 
-### 2. Settings 에셋 생성
+### 2. 설정 에셋 생성
 
 1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 를 클릭합니다. `Assets/Resources/SupabaseSettings.asset`이 자동 생성됩니다.
 2. Inspector에서 **Project URL**, **Publishable Key**를 입력합니다.
@@ -86,7 +86,7 @@ Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하
 에셋을 직접 이동할 경우 반드시 `Assets/Resources/` 하위에 두어야 런타임에 로드됩니다.
 :::
 
-### 3. Runtime 배치
+### 3. 런타임 배치
 
 메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 를 클릭합니다.  
 앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
@@ -135,7 +135,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 `99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
 :::
 
-### 3. Edge Function 배포 {#edge-function-deploy}
+### 3. 엣지 함수 배포 {#edge-function-deploy}
 
 아래 과정을 각 함수마다 반복합니다.
 
@@ -156,7 +156,7 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 | `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 / Unity IAP v4, 또는 SK1 강제 모드) |
 | `get-ban-info` | 인증 — 차단된 계정 정보 조회 |
 
-### 4. Secrets 설정
+### 4. 시크릿 설정
 
 대시보드 **Edge Functions > Secrets**에 등록합니다.
 
