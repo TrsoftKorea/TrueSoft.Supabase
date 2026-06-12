@@ -349,7 +349,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             _nanooRefreshToken = values.TryGetValue("refresh_token", out var rt) ? rt?.ToString() : null;
             _nanooNickname     = values["nickname"]?.ToString();
             UserId   = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
-            OpenId = values.TryGetValue("openid", out var openidVal) ? openidVal?.ToString() : null;
+            OpenId = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
             SaveNanooTokens();
             OnNanooLoginSuccess(values);
             return true;
@@ -439,7 +439,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 _nanooRefreshToken = values.TryGetValue("refresh_token", out var rt) ? rt?.ToString() : null;
                 _nanooNickname     = values.TryGetValue("nickname",      out var nk) ? nk?.ToString() : _nanooNickname;
                 UserId = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
-                OpenId = values.TryGetValue("openid", out var ov) ? ov?.ToString() : null;
+                OpenId = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
                 SaveNanooTokens();
                 tcs.TrySetResult(true);
             }
