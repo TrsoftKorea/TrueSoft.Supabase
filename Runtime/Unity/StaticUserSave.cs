@@ -383,4 +383,31 @@ namespace TrueBase.Unity
             Supabase.MarkUserSaveStaticDirty(_syncKey);
         }
     }
+
+    // StaticUserSave<T> 서브클래스를 씬 로드 전에 자동으로 초기화합니다.
+    // 서브클래스의 static 필드 초기화자(Instance = new())를 강제 실행해
+    // SupabaseSDK._nanooSaveBridge 등록을 보장합니다.
+    internal static class StaticUserSaveAutoInit
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void InitAll()
+        {
+            var openGeneric = typeof(StaticUserSave<>);
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try { types = assembly.GetTypes(); }
+                catch { continue; }
+
+                foreach (var type in types)
+                {
+                    if (type.IsAbstract) continue;
+                    var baseType = type.BaseType;
+                    if (baseType == null || !baseType.IsGenericType) continue;
+                    if (baseType.GetGenericTypeDefinition() != openGeneric) continue;
+                    System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+                }
+            }
+        }
+    }
 }
