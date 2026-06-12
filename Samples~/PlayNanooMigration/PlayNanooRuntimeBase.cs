@@ -335,10 +335,15 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             OnNanooLoginSuccess(values);
             return true;
         }
-        if (values?["ErrorCode"]?.ToString() == "30007")
+        var errorCode = values?["ErrorCode"]?.ToString();
+        if (errorCode == "30007")
         {
             _pendingLoginType = loginType;
             OnWithdrawalPending?.Invoke(values["WithdrawalKey"]?.ToString());
+        }
+        else
+        {
+            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO {loginType} 로그인 실패 — status: {status}, ErrorCode: {errorCode}");
         }
         return false;
     }
