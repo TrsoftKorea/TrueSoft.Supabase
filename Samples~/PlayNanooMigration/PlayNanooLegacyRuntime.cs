@@ -41,7 +41,7 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
 
     // 로그인 성공 시 UserID를 저장합니다 (스토리지 키에 사용).
     protected override void OnNanooLoginSuccess(Dictionary<string, object> values)
-        => _nanooUserId = values["UserID"]?.ToString();
+        => _nanooUserId = values["uuid"]?.ToString();
 
     // ── 구버전 스토리지: 키 = "ServerData_{UserID}", isPrivate = false ──────────
 
