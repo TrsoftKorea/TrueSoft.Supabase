@@ -38,13 +38,13 @@ export default defineConfig({
         text: '게임 데이터',
         items: [
           { text: '유저 데이터', link: '/guide/user-data' },
-          { text: 'Remote Config', link: '/guide/remote-config' }
+          { text: '원격 설정', link: '/guide/remote-config' }
         ]
       },
       {
         text: '서비스',
         items: [
-          { text: '인앱 결제 (IAP)', link: '/guide/iap' }
+          { text: '인앱 결제', link: '/guide/iap' }
         ]
       },
       {
@@ -56,7 +56,7 @@ export default defineConfig({
       {
         text: '이관',
         items: [
-          { text: 'PlayNanoo 이관', link: '/guide/playnanoo-migration' }
+          { text: '플레이나누 이관', link: '/guide/playnanoo-migration' }
         ]
       }
     ],

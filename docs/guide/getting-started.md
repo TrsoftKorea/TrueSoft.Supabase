@@ -197,6 +197,6 @@ void OnDuplicateLogin()
 | 닉네임·프로필 | [닉네임 · 프로필](./display-name.md) |
 | 탈퇴·서버 이주 | [탈퇴 · 서버 이주](./withdrawal.md) |
 | 게임 세이브 데이터 저장·동기화 | [유저 데이터](./user-data.md) |
-| 서버 설정값 런타임 변경 | [Remote Config](./remote-config.md) |
+| 서버 설정값 런타임 변경 | [원격 설정](./remote-config.md) |
 | 결제 영수증 서버 검증 | [인앱 결제](./iap.md) |
 | Google 서비스 계정 JSON 발급 | [발급 가이드](./google-service-account.md) |
