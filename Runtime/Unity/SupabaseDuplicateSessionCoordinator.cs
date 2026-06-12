@@ -133,15 +133,6 @@ namespace TrueBase.Unity
                 if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(accessToken))
                     yield break;
 
-                var getTask = svc.GetSessionTokenAsync(accessToken, accountId);
-                yield return new WaitUntil(() => getTask.IsCompleted);
-
-                var serverResult = getTask.Result;
-                if (serverResult == null || !serverResult.IsSuccess)
-                    yield break;
-
-                var serverToken = serverResult.Data;
-
                 if (kind == SupabaseSessionChangeKind.NewSignIn)
                 {
                     var newToken = Guid.NewGuid().ToString("D");
@@ -155,6 +146,15 @@ namespace TrueBase.Unity
                     StartPollingIfNeeded(accountId);
                     yield break;
                 }
+
+                var getTask = svc.GetSessionTokenAsync(accessToken, accountId);
+                yield return new WaitUntil(() => getTask.IsCompleted);
+
+                var serverResult = getTask.Result;
+                if (serverResult == null || !serverResult.IsSuccess)
+                    yield break;
+
+                var serverToken = serverResult.Data;
 
                 var localKey = SupabaseSDK.SessionTokenPlayerPrefsKeyPrefix + accountId;
                 var localToken = PlayerPrefs.GetString(localKey, "");
