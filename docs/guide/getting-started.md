@@ -170,24 +170,6 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 
 ---
 
-## 중복 로그인 감지
-
-다른 기기에서 같은 계정으로 로그인되면 `OnDuplicateLoginDetected`가 발행됩니다.  
-앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록합니다.
-
-```csharp
-void Awake()     => Supabase.OnDuplicateLoginDetected += OnDuplicateLogin;
-void OnDestroy() => Supabase.OnDuplicateLoginDetected -= OnDuplicateLogin;
-
-void OnDuplicateLogin()
-{
-    // 강제 로그아웃 후 로그인 화면으로 이동
-    _ = Supabase.TrySignOutFullyAsync();
-}
-```
-
----
-
 ## 다음 단계
 
 | 주제 | 가이드 |
