@@ -170,15 +170,21 @@ Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+
 
 ---
 
-## 최초 로그인
+## 중복 로그인 감지
+
+다른 기기에서 같은 계정으로 로그인되면 `OnDuplicateLoginDetected`가 발행됩니다.  
+앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록합니다.
 
 ```csharp
-// 익명 로그인 — 계정 생성 없이 바로 시작
-await Supabase.TrySignInAnonymouslyAsync();
-```
+void Awake()     => Supabase.OnDuplicateLoginDetected += OnDuplicateLogin;
+void OnDestroy() => Supabase.OnDuplicateLoginDetected -= OnDuplicateLogin;
 
-다음 실행 시 세션을 복원하려면 `TriggerAutoLoginAsync()`를 원하는 타이밍에 호출합니다.  
-로그인 API 전체 목록과 소셜 로그인은 [인증](./auth.md)을 참고하세요.
+void OnDuplicateLogin()
+{
+    // 강제 로그아웃 후 로그인 화면으로 이동
+    _ = Supabase.TrySignOutFullyAsync();
+}
+```
 
 ---
 
