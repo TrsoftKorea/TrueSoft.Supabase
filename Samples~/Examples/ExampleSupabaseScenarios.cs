@@ -234,7 +234,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
                   $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
                   $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
                   $"  IsWithdrawn = {profile?.IsWithdrawn}\n" +
-                  $"  ServerId    = {serverInfo?.ServerId}, ServerCode = {serverInfo?.ServerCode}");
+                  $"  ServerId    = {serverInfo.ServerId}, ServerCode = {serverInfo.ServerCode}");
     }
 
     /// <summary>J — 서버 시간을 조회합니다.</summary>
