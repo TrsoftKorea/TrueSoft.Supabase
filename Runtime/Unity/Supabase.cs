@@ -135,6 +135,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseCallResult> TrySignOutFromGoogleAsync() =>
             SupabaseSDK.TrySignOutFromGoogleAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.TryRevokeGoogleAccessAsync"/>
+        public static Task<SupabaseCallResult> TryRevokeGoogleAccessAsync() =>
+            SupabaseSDK.TryRevokeGoogleAccessAsync();
+
         /// <summary>
         /// 지정한 계정의 차단 정보를 조회합니다.
         /// 차단 상태가 아니거나 조회 실패 시 <see langword="null"/>을 반환합니다.

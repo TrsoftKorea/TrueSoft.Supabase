@@ -199,6 +199,7 @@ namespace TrueBase.Unity
             public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             public const string AuthSignOut = "Supabase.Auth.SignOut";
             public const string AuthGoogleSignOut = "Supabase.Auth.Google.SignOut";
+            public const string AuthGoogleRevoke  = "Supabase.Auth.Google.Revoke";
             public const string BootStart = "Supabase.Boot.Start";
             public const string AuthRefreshSession = "Supabase.Auth.RefreshSession";
             public const string UserDataSave = "Supabase.UserData.Save";
@@ -829,6 +830,27 @@ namespace TrueBase.Unity
                 });
             var r2 = await SignInAnonymouslyAsync();
             return LogAndReturn(ApiLogTags.AuthAnonymous, r2);
+        }
+
+        /// <summary>Android Play Services에서 Google 앱 접근 권한을 revoke합니다. 계정 삭제 시 호출하세요.</summary>
+        public static async Task<SupabaseResult<bool>> RevokeGoogleAccessAsync()
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
+
+            var bridge = EnsureGoogleLoginBridge();
+            var tcs = new TaskCompletionSource<SupabaseResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            bridge.RevokeAccess(
+                () => tcs.TrySetResult(SupabaseResult<bool>.Success(true)),
+                err => tcs.TrySetResult(SupabaseResult<bool>.Fail(string.IsNullOrWhiteSpace(err) ? "google_revoke_failed" : err)));
+            return await tcs.Task;
+        }
+
+        /// <inheritdoc cref="RevokeGoogleAccessAsync"/>
+        public static async Task<SupabaseCallResult> TryRevokeGoogleAccessAsync()
+        {
+            var r = await RevokeGoogleAccessAsync();
+            return LogAndReturn(ApiLogTags.AuthGoogleRevoke, r);
         }
 
         /// <summary><see cref="SignOutFromGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>

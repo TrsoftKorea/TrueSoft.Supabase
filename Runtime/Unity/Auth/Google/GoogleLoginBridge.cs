@@ -10,6 +10,7 @@ namespace TrueBase.Unity.Auth.Google
         private Action<GoogleLoginResult> _onSuccess;
         private Action<string> _onError;
         private Action _onLogout;
+        private Action _onRevoke;
 
         public void SignIn(string webClientId, Action<GoogleLoginResult> onSuccess, Action<string> onError)
         {
@@ -84,6 +85,26 @@ namespace TrueBase.Unity.Auth.Google
 #endif
         }
 
+        public void RevokeAccess(Action onComplete, Action<string> onError)
+        {
+            _onRevoke = onComplete;
+            _onError = onError;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using var plugin = new AndroidJavaClass(PluginClass);
+                plugin.CallStatic("revokeAccess", gameObject.name);
+            }
+            catch (Exception e)
+            {
+                _onError?.Invoke("google_revoke_bridge_exception:" + e.Message);
+            }
+#else
+            onError?.Invoke("google_revoke_android_only");
+#endif
+        }
+
         // Android AAR -> UnityPlayer.UnitySendMessage(...)
         public void OnGoogleLoginSuccess(string payload)
         {
@@ -118,6 +139,11 @@ namespace TrueBase.Unity.Auth.Google
         public void OnGoogleLogout(string _)
         {
             _onLogout?.Invoke();
+        }
+
+        public void OnGoogleRevokeAccess(string _)
+        {
+            _onRevoke?.Invoke();
         }
 
         private static string Unescape(string[] parts, int index)

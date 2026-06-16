@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // PlayNANOO → Supabase SDK 이관 런타임 — 추상 베이스
 //
 // [사용법]
@@ -44,6 +44,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
     private string   _nanooNickname;       // 닉네임 변경 롤백용
     private string   _pendingLoginType;    // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
+
     private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
     private float    _lastNanooRefreshCheckTime   = float.MinValue;
 
@@ -210,7 +211,23 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             if (!HandleNanooCallback(status, values, "google"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed"));
+                // 30007: 탈퇴 신청 중 — Supabase도 호출해 취소 토큰을 발급·저장해 둠(세션은 게이트가 정리)
+                if (values != null && values.TryGetValue("ErrorCode", out var ecObjG) && ecObjG?.ToString() == "30007")
+                {
+                    await sdkSignIn();
+                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed"));
+                    return;
+                }
+                // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
+                var sdkResult = await sdkSignIn();
+                if (!sdkResult.Success) { tcs.SetResult(sdkResult); return; }
+                if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google"))
+                {
+                    await Supabase.TrySignOutFullyAsync();
+                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed"));
+                    return;
+                }
+                tcs.SetResult(sdkResult);
                 return;
             }
             var result = await sdkSignIn();
@@ -228,7 +245,23 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             if (!HandleNanooCallback(status, values, "apple"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed"));
+                // 30007: 탈퇴 신청 중 — Supabase도 호출해 취소 토큰을 발급·저장해 둠(세션은 게이트가 정리)
+                if (values != null && values.TryGetValue("ErrorCode", out var ecObjA) && ecObjA?.ToString() == "30007")
+                {
+                    await sdkSignIn();
+                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed"));
+                    return;
+                }
+                // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
+                var sdkResult = await sdkSignIn();
+                if (!sdkResult.Success) { tcs.SetResult(sdkResult); return; }
+                if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple"))
+                {
+                    await Supabase.TrySignOutFullyAsync();
+                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed"));
+                    return;
+                }
+                tcs.SetResult(sdkResult);
                 return;
             }
             var result = await sdkSignIn();
@@ -237,6 +270,25 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             tcs.SetResult(result);
         });
         return await tcs.Task;
+    }
+
+    private Task<bool> RetryNanooSignInAfterRecreateAsync(string token, string accountType, string loginType)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        NanooSocialSignIn(token, accountType, async (status, values) =>
+        {
+            if (HandleNanooCallback(status, values, loginType))
+            {
+                await SyncDataAfterLogin();
+                tcs.TrySetResult(true);
+            }
+            else
+            {
+                Debug.LogWarning($"[PlayNanooRuntime] 계정 재가입 후 PlayNANOO {loginType} 재로그인 실패.");
+                tcs.TrySetResult(false);
+            }
+        });
+        return tcs.Task;
     }
 
     private async Task<SupabaseCallResult> InterceptSignOutFully(Func<Task<SupabaseCallResult>> sdkSignOut)
@@ -262,6 +314,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private async Task<SupabaseCallResult> InterceptRequestMyWithdrawal(Func<Task<SupabaseCallResult>> sdkWithdrawal)
     {
         var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
         NanooWithDrawal(15, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS)
@@ -272,6 +325,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             var result = await sdkWithdrawal();
             if (!result.Success)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨.");
+            if (isGoogle)
+                await Supabase.TryRevokeGoogleAccessAsync();
             tcs.SetResult(result);
         });
         return await tcs.Task;
@@ -398,11 +453,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             OnNanooLoginSuccess(values);
             return true;
         }
-        var errorCode = values?["ErrorCode"]?.ToString();
+        string errorCode = null;
+        if (values != null && values.TryGetValue("ErrorCode", out var ecObj))
+            errorCode = ecObj?.ToString();
         if (errorCode == "30007")
         {
             _pendingLoginType = loginType;
-            OnWithdrawalPending?.Invoke(values["WithdrawalKey"]?.ToString());
+            values?.TryGetValue("WithdrawalKey", out var wkObj);
+            OnWithdrawalPending?.Invoke(wkObj?.ToString());
         }
         else
         {
@@ -453,7 +511,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 else                 { await Supabase.TryClearMyWithdrawalAsync(); }
             }
             else
-                OnWithdrawalRestored?.Invoke();
+            {
+                var redeemResult = await Supabase.TryRedeemWithdrawalCancelAsync();
+                if (redeemResult.Success)
+                    OnWithdrawalRestored?.Invoke();
+                else
+                    OnWithdrawalRestoreLoginFailed?.Invoke();
+            }
             _pendingLoginType = null;
         });
     }
