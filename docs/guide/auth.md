@@ -60,7 +60,6 @@ else
 | `Supabase.IsAnonymous` | 익명 로그인 여부 |
 | `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
 | `Supabase.IsLinkedWithApple` | Apple 연동 여부 |
-| `Supabase.HasLinkedProvider("email")` | 특정 프로바이더 연동 여부 |
 
 ---
 

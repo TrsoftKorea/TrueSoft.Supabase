@@ -41,7 +41,6 @@ namespace TrueBase.Unity
         public static bool IsLinkedWithApple => SupabaseSDK.IsLinkedWithApple;
 
         /// <summary>현재 계정에 지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
-        public static bool HasLinkedProvider(string provider) => SupabaseSDK.HasLinkedProvider(provider);
 
         /// <summary>
         /// 로그인 직후 자동으로 조회·캐시된 내 프로필.

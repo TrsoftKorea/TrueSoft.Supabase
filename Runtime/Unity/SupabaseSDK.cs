@@ -296,7 +296,6 @@ namespace TrueBase.Unity
         public static bool IsLinkedWithApple => _currentSession?.User?.IsLinkedWithApple ?? false;
 
         /// <summary>현재 계정에 지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
-        public static bool HasLinkedProvider(string provider) => _currentSession?.User?.HasLinkedProvider(provider) ?? false;
 
         /// <summary>현재 로그인 여부 (세션이 있고 유효한 토큰이 있는지).</summary>
         public static bool IsLoggedIn =>

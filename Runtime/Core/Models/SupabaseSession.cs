@@ -80,7 +80,7 @@ namespace TrueBase.Core.Auth
         public bool IsLinkedWithApple => HasLinkedProvider("apple");
 
         /// <summary>지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
-        public bool HasLinkedProvider(string provider)
+        private bool HasLinkedProvider(string provider)
         {
             if (linked_providers == null || string.IsNullOrWhiteSpace(provider))
                 return false;
