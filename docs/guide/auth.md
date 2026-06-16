@@ -58,6 +58,9 @@ else
 | `Supabase.MyProfile.IsWithdrawn` | 탈퇴 예약 여부 |
 | `Supabase.UserId` | 플레이어 고유 ID. 재로그인·계정 연동 후에도 변하지 않음 |
 | `Supabase.IsAnonymous` | 익명 로그인 여부 |
+| `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
+| `Supabase.IsLinkedWithApple` | Apple 연동 여부 |
+| `Supabase.HasLinkedProvider("email")` | 특정 프로바이더 연동 여부 |
 
 ---
 

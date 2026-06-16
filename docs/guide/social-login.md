@@ -128,6 +128,26 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 ---
 
+### Android — 소셜 계정에 Google 추가 연동
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkGoogleNativeAsync()
+```
+
+이미 로그인된 계정(익명 포함)에 Android Play Services Google 계정을 추가 연동합니다.
+
+---
+
+### iOS · 커스텀 — 소셜 계정에 Google 추가 연동
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkGoogleWithIdTokenAsync(string idToken, string googleAccessToken = null)
+```
+
+이미 로그인된 계정(익명 포함)에 Google 계정을 추가 연동합니다.
+
+---
+
 ## Apple
 
 ### 로그인
@@ -186,3 +206,13 @@ Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으�
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+---
+
+### 소셜 계정에 Apple 추가 연동
+
+```csharp
+Task<SupabaseCallResult> Supabase.TryLinkAppleWithIdTokenAsync(string idToken, string rawNonce = null)
+```
+
+이미 로그인된 계정(익명 포함)에 Apple 계정을 추가 연동합니다.

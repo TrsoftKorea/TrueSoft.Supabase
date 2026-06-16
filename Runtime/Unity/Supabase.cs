@@ -104,6 +104,20 @@ namespace TrueBase.Unity
             string idToken, string rawNonce = null) =>
             SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
 
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleWithIdTokenAsync(string, string)"/>
+        public static Task<SupabaseCallResult> TryLinkGoogleWithIdTokenAsync(
+            string idToken, string googleAccessToken = null) =>
+            SupabaseSDK.TryLinkGoogleWithIdTokenAsync(idToken, googleAccessToken);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleWithIdTokenAsync(string, string)"/>
+        public static Task<SupabaseCallResult> TryLinkAppleWithIdTokenAsync(
+            string idToken, string rawNonce = null) =>
+            SupabaseSDK.TryLinkAppleWithIdTokenAsync(idToken, rawNonce);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleNativeAsync"/>
+        public static Task<SupabaseCallResult> TryLinkGoogleNativeAsync() =>
+            SupabaseSDK.TryLinkGoogleNativeAsync();
+
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync"/>
         public static Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync() =>
             SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync();
@@ -620,12 +634,14 @@ namespace TrueBase.Unity
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         requestMyWithdrawal,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null) =>
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleWithIdToken                  = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleWithIdToken                   = null) =>
             SupabaseSDK.RegisterPlayNanooInterceptors(
                 signInAnonymously, signInWithGoogleIdToken, signInWithAppleIdToken,
                 signOutFully, requestMyWithdrawal,
                 linkGoogleToCurrentAnonymousWithIdToken, linkAppleToCurrentAnonymousWithIdToken,
-                setMyDisplayName);
+                setMyDisplayName, linkGoogleWithIdToken, linkAppleWithIdToken);
 
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>

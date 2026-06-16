@@ -75,6 +75,8 @@ namespace TrueBase.Unity
         internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptRequestMyWithdrawal;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
+        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleWithIdToken;
+        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleWithIdToken;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSetMyDisplayName;
 
         // ── PlayNANOO IAP 인터셉터 ────────────────────────────────────────────
@@ -101,7 +103,9 @@ namespace TrueBase.Unity
             Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         requestMyWithdrawal,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
             Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null)
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleWithIdToken                  = null,
+            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleWithIdToken                   = null)
         {
             _interceptSignInAnonymously                       = signInAnonymously;
             _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
@@ -111,6 +115,8 @@ namespace TrueBase.Unity
             _interceptLinkGoogleToCurrentAnonymousWithIdToken = linkGoogleToCurrentAnonymousWithIdToken;
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = linkAppleToCurrentAnonymousWithIdToken;
             _interceptSetMyDisplayName                        = setMyDisplayName;
+            _interceptLinkGoogleWithIdToken                   = linkGoogleWithIdToken;
+            _interceptLinkAppleWithIdToken                    = linkAppleWithIdToken;
         }
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
@@ -124,6 +130,8 @@ namespace TrueBase.Unity
             _interceptLinkGoogleToCurrentAnonymousWithIdToken = null;
             _interceptLinkAppleToCurrentAnonymousWithIdToken  = null;
             _interceptSetMyDisplayName                        = null;
+            _interceptLinkGoogleWithIdToken                   = null;
+            _interceptLinkAppleWithIdToken                    = null;
             _interceptIAPApple  = null;
             _interceptIAPGoogle = null;
         }
@@ -238,6 +246,31 @@ namespace TrueBase.Unity
             _remoteConfigKeyPollTickTask = RemoteConfig.TickKeyPollsAsync(realtimeSinceStartup);
         }
 
+        private static bool  _isRefreshingSession;
+        private static float _lastSessionRefreshCheckTime = float.MinValue;
+        private const  float SessionRefreshCheckIntervalSeconds = 30f;
+        private const  long  SessionRefreshLeadSeconds = 90L;
+
+        /// <summary>
+        /// JWT 만료 직전에 자동으로 세션을 갱신합니다. SupabaseRuntime.Update에서 매 프레임 호출합니다.
+        /// </summary>
+        internal static void TickSessionRefresh(float realtimeSinceStartup)
+        {
+            if (_currentSession == null) return;
+            if (string.IsNullOrEmpty(_currentSession.refresh_token)) return;
+            if (_isRefreshingSession) return;
+            if (realtimeSinceStartup - _lastSessionRefreshCheckTime < SessionRefreshCheckIntervalSeconds) return;
+
+            _lastSessionRefreshCheckTime = realtimeSinceStartup;
+
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (_currentSession.expires_at - nowUnix > SessionRefreshLeadSeconds) return;
+
+            _isRefreshingSession = true;
+            var token = _currentSession.refresh_token;
+            _ = TryRefreshSessionAsync(token).ContinueWith(_ => _isRefreshingSession = false);
+        }
+
         /// <summary><see cref="EnsureInitializedAsync"/> 기본 대기 시간(ms). 씬의 <c>SupabaseRuntime</c> Awake를 기다립니다.</summary>
         public const int DefaultEnsureInitTimeoutMs = 30000;
 
@@ -344,13 +377,13 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (IsAnonymousSession(_currentSession))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequiresLink);
 
             var result = await Auth.SignInWithGoogleIdTokenAsync(idToken);
             if (result.IsSuccess && result.Data != null)
@@ -388,23 +421,53 @@ namespace TrueBase.Unity
             string googleAccessToken = null)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (string.IsNullOrWhiteSpace(idToken))
-                return SupabaseResult<SupabaseSession>.Fail("google_id_token_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleIdTokenEmpty);
 
             var s = _currentSession;
             if (!IsAnonymousSession(s))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_required");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequired);
 
             if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.RefreshToken))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_token_missing");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousSessionTokenMissing);
 
+            return await PerformLinkGoogleAsync(s, idToken, googleAccessToken, deleteAnonymousRecovery: true);
+        }
+
+        /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(ID 토큰 직접 전달).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleWithIdTokenAsync(
+            string idToken,
+            string googleAccessToken = null)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (string.IsNullOrWhiteSpace(idToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleIdTokenEmpty);
+
+            var s = _currentSession;
+            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.SessionRequired);
+
+            return await PerformLinkGoogleAsync(s, idToken, googleAccessToken, deleteAnonymousRecovery: false);
+        }
+
+        private static async Task<SupabaseResult<SupabaseSession>> PerformLinkGoogleAsync(
+            SupabaseSession session,
+            string idToken,
+            string googleAccessToken,
+            bool deleteAnonymousRecovery)
+        {
             var linked = await Auth.LinkIdentityWithIdTokenAsync(
-                s.AccessToken,
+                session.AccessToken,
                 "google",
                 idToken.Trim(),
                 nonce: null,
@@ -413,13 +476,14 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "google_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
-                return SupabaseResult<SupabaseSession>.Fail("google_link_anonymous_not_cleared");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleLinkNotCleared);
 
             SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
             SaveSessionToStorage();
 
             RememberLastSignInMethod(SignInMethodKind.Google);
-            await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+            if (deleteAnonymousRecovery)
+                await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
             if (!_isRecreatingAfterWithdrawalDelete)
             {
                 var guarded = await HandleWithdrawalGuardAfterSignInAsync(
@@ -447,16 +511,16 @@ namespace TrueBase.Unity
         {
             var webClientId = TryGetGoogleWebClientIdFromSettings();
             if (string.IsNullOrWhiteSpace(webClientId))
-                return SupabaseResult<SupabaseSession>.Fail("google_web_client_id_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleWebClientIdEmpty);
 
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (IsAnonymousSession(_currentSession))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequiresLink);
 
             var bridge = EnsureGoogleLoginBridge();
             var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
@@ -465,7 +529,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
 
             if (string.IsNullOrWhiteSpace(loginResult.Data.IdToken))
-                return SupabaseResult<SupabaseSession>.Fail("google_id_token_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleIdTokenEmpty);
 
             // TrySignInWithGoogleIdTokenAsync를 경유해 인터셉터(PlayNanoo 브릿지 등)를 지원합니다.
             var idToken = loginResult.Data.IdToken.Trim();
@@ -482,13 +546,13 @@ namespace TrueBase.Unity
         {
             var webClientId = TryGetGoogleWebClientIdFromSettings();
             if (string.IsNullOrWhiteSpace(webClientId))
-                return SupabaseResult<SupabaseSession>.Fail("google_web_client_id_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleWebClientIdEmpty);
 
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             var bridge = EnsureGoogleLoginBridge();
             var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
@@ -501,6 +565,32 @@ namespace TrueBase.Unity
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
                 : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.GoogleLinkFailed);
+        }
+
+        /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleNativeAsync()
+        {
+            var webClientId = TryGetGoogleWebClientIdFromSettings();
+            if (string.IsNullOrWhiteSpace(webClientId))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleWebClientIdEmpty);
+
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            var bridge = EnsureGoogleLoginBridge();
+            var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
+            var loginResult = await RequestGoogleLoginResultAsync(provider);
+            if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
+
+            var google = loginResult.Data;
+            var ok = await TryLinkGoogleWithIdTokenAsync(google.IdToken, google.AccessToken);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "google_link_failed");
         }
 
         /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -543,6 +633,27 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
         }
 
+        /// <summary><see cref="LinkGoogleWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkGoogleWithIdTokenAsync(
+            string idToken,
+            string googleAccessToken = null)
+        {
+            if (_interceptLinkGoogleWithIdToken != null)
+                return await _interceptLinkGoogleWithIdToken(idToken, async () => {
+                    var r = await LinkGoogleWithIdTokenAsync(idToken, googleAccessToken);
+                    return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r);
+                });
+            var r2 = await LinkGoogleWithIdTokenAsync(idToken, googleAccessToken);
+            return LogAndReturn(ApiLogTags.AuthGoogleIdToken, r2);
+        }
+
+        /// <summary><see cref="LinkGoogleNativeAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkGoogleNativeAsync()
+        {
+            var r = await LinkGoogleNativeAsync();
+            return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
+        }
+
         /// <summary>
         /// Apple ID 토큰 문자열로 Supabase에 로그인하고 SDK 세션을 맞춥니다.
         /// 익명(게스트) 세션에서는 자동 연동을 수행하지 않습니다. 연동은 <see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 사용하세요.
@@ -552,13 +663,13 @@ namespace TrueBase.Unity
             string rawNonce = null)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (IsAnonymousSession(_currentSession))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_requires_explicit_link");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequiresLink);
 
             var result = await Auth.SignInWithAppleIdTokenAsync(idToken, rawNonce);
             if (result.IsSuccess && result.Data != null)
@@ -592,33 +703,64 @@ namespace TrueBase.Unity
             string rawNonce = null)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (string.IsNullOrWhiteSpace(idToken))
-                return SupabaseResult<SupabaseSession>.Fail("apple_id_token_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
 
             var s = _currentSession;
             if (!IsAnonymousSession(s))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_required");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequired);
 
             if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.RefreshToken))
-                return SupabaseResult<SupabaseSession>.Fail("anonymous_session_token_missing");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousSessionTokenMissing);
 
-            var linked = await Auth.LinkIdentityWithIdTokenAsync(s.AccessToken, "apple", idToken.Trim(), rawNonce, null);
+            return await PerformLinkAppleAsync(s, idToken, rawNonce, deleteAnonymousRecovery: true);
+        }
+
+        /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(ID 토큰 직접 전달).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (string.IsNullOrWhiteSpace(idToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
+
+            var s = _currentSession;
+            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.SessionRequired);
+
+            return await PerformLinkAppleAsync(s, idToken, rawNonce, deleteAnonymousRecovery: false);
+        }
+
+        private static async Task<SupabaseResult<SupabaseSession>> PerformLinkAppleAsync(
+            SupabaseSession session,
+            string idToken,
+            string rawNonce,
+            bool deleteAnonymousRecovery)
+        {
+            var linked = await Auth.LinkIdentityWithIdTokenAsync(session.AccessToken, "apple", idToken.Trim(), rawNonce, null);
             if (linked == null || !linked.IsSuccess || linked.Data == null)
                 return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "apple_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
-                return SupabaseResult<SupabaseSession>.Fail("apple_link_anonymous_not_cleared");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleLinkNotCleared);
 
             SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
             SaveSessionToStorage();
 
             RememberLastSignInMethod(SignInMethodKind.Apple);
-            await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+            if (deleteAnonymousRecovery)
+                await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
             if (!_isRecreatingAfterWithdrawalDelete)
             {
                 var guarded = await HandleWithdrawalGuardAfterSignInAsync(
@@ -661,6 +803,20 @@ namespace TrueBase.Unity
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
             var r2 = await LinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
+        }
+
+        /// <summary><see cref="LinkAppleWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkAppleWithIdTokenAsync(
+            string idToken,
+            string rawNonce = null)
+        {
+            if (_interceptLinkAppleWithIdToken != null)
+                return await _interceptLinkAppleWithIdToken(idToken, async () => {
+                    var r = await LinkAppleWithIdTokenAsync(idToken, rawNonce);
+                    return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+                });
+            var r2 = await LinkAppleWithIdTokenAsync(idToken, rawNonce);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
@@ -742,7 +898,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("select_columns_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseFailReason.SelectColumnsEmpty);
 
             return await UserSaves.LoadColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
         }
@@ -877,7 +1033,7 @@ namespace TrueBase.Unity
         {
             var ok = await RestoreSessionAsync();
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "restore_session_failed", errorOnFail: false);
-            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail("restore_session_failed");
+            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail(SupabaseFailReason.RestoreSessionFailed);
         }
 
         /// <summary>
@@ -887,12 +1043,12 @@ namespace TrueBase.Unity
         public static async Task<SupabaseCallResult> TryAutoLoginOnStartAsync()
         {
             if (IsAutoLoginBlocked() || HasStoredRefreshToken() == false)
-                return SupabaseCallResult.Fail("auto_login_blocked_or_no_token");
+                return SupabaseCallResult.Fail(SupabaseFailReason.AutoLoginNoToken);
 
             var ok = await RestoreSessionAsync();
 
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
-            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail("auto_login_on_start_failed");
+            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail(SupabaseFailReason.AutoLoginFailed);
         }
 
         /// <summary>
@@ -901,11 +1057,11 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<DateTime>> GetServerUtcNowAsync()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<DateTime>.Fail("sdk_not_initialized");
+                return SupabaseResult<DateTime>.Fail(SupabaseFailReason.NotInitialized);
 
             var svc = ServerTimeService;
             if (svc == null)
-                return SupabaseResult<DateTime>.Fail("sdk_not_initialized");
+                return SupabaseResult<DateTime>.Fail(SupabaseFailReason.NotInitialized);
 
             return await svc.GetServerUtcNowAsync();
         }
@@ -997,7 +1153,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<bool>> SignOutFromGoogleAsync()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             var bridge = EnsureGoogleLoginBridge();
             var tcs = new TaskCompletionSource<SupabaseResult<bool>>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1018,10 +1174,10 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (IsLoggedIn && !IsAnonymousSession(_currentSession))
-                return SupabaseResult<SupabaseSession>.Fail("signed_in_non_anonymous_sign_out_first");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.SignedInNonAnonymous);
 
             var forceFreshAnonymous = false;
             var lastMethod = ReadLastSignInMethod();
@@ -1043,7 +1199,7 @@ namespace TrueBase.Unity
             {
                 var recovery = await TryRestoreSessionFromAnonymousRecoveryAsync();
                 if (recovery.Kind == AnonymousRecoveryKind.GateBlocked)
-                    return SupabaseResult<SupabaseSession>.Fail("withdrawal_scheduled_gate_blocked");
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalGateBlocked);
                 if (recovery.Kind == AnonymousRecoveryKind.GuardFailed)
                     return SupabaseResult<SupabaseSession>.Fail(
                         string.IsNullOrWhiteSpace(recovery.ErrorMessage) ? "withdrawal_guard_failed" : recovery.ErrorMessage);
@@ -1091,7 +1247,7 @@ namespace TrueBase.Unity
             }
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             var result = await Auth.SignInAnonymouslyAsync();
 
@@ -1126,7 +1282,7 @@ namespace TrueBase.Unity
         private static async Task<SupabaseResult<GoogleLoginResult>> RequestGoogleLoginResultAsync(AndroidGoogleLoginProvider provider)
         {
             if (provider == null)
-                return SupabaseResult<GoogleLoginResult>.Fail("google_provider_null");
+                return SupabaseResult<GoogleLoginResult>.Fail(SupabaseFailReason.GoogleProviderNull);
 
             var tcs = new TaskCompletionSource<SupabaseResult<GoogleLoginResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
             provider.SignIn(
@@ -1134,7 +1290,7 @@ namespace TrueBase.Unity
                 {
                     if (result == null)
                     {
-                        tcs.TrySetResult(SupabaseResult<GoogleLoginResult>.Fail("google_result_null"));
+                        tcs.TrySetResult(SupabaseResult<GoogleLoginResult>.Fail(SupabaseFailReason.GoogleResultNull));
                         return;
                     }
 
@@ -1158,19 +1314,19 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<SupabaseSession>> EnsureReadySessionAsync()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             // 이미 로그인되어 있으면 재로그인 없이 현재 세션을 그대로 사용합니다.
             if (IsLoggedIn)
             {
                 var singleSessionOk = await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync();
                 if (singleSessionOk == false)
-                    return SupabaseResult<SupabaseSession>.Fail("duplicate_login_detected");
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.DuplicateLogin);
 
                 return SupabaseResult<SupabaseSession>.Success(_currentSession);
             }
 
-            return SupabaseResult<SupabaseSession>.Fail("auth_not_signed_in");
+            return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotSignedIn);
         }
 
         /// <summary>
@@ -1195,10 +1351,10 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(string refreshToken)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail("sdk_not_initialized");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
 
             var result = await Auth.RefreshSessionAsync(refreshToken);
             if (result.IsSuccess && result.Data != null)
@@ -1421,7 +1577,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<T>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<T>.Fail("select_columns_empty");
+                return SupabaseResult<T>.Fail(SupabaseFailReason.SelectColumnsEmpty);
 
             return await UserSaves.LoadColumnsAsync<T>(tableName, selectColumnsCsv);
         }
@@ -1475,7 +1631,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.EdgeFunctionsService == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
 
@@ -1623,7 +1779,7 @@ namespace TrueBase.Unity
 
             var svc = _bootstrap?.PublicProfileService;
             if (svc == null)
-                return SupabaseResult<MyServerInfo>.Fail("sdk_not_initialized");
+                return SupabaseResult<MyServerInfo>.Fail(SupabaseFailReason.NotInitialized);
 
             return await svc.GetMyServerIdAsync(_currentSession.AccessToken);
         }
@@ -1651,7 +1807,7 @@ namespace TrueBase.Unity
 
             var svc = _bootstrap?.PublicProfileService;
             if (svc == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             var r = await svc.TransferMyServerAsync(_currentSession.AccessToken, targetServerCode, reason);
             if (r != null && r.IsSuccess && string.IsNullOrWhiteSpace(targetServerCode) == false)
@@ -1698,10 +1854,10 @@ namespace TrueBase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             if (string.IsNullOrWhiteSpace(withdrawnAtIsoUtc))
-                return SupabaseResult<bool>.Fail("withdrawn_at_empty");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.WithdrawnAtEmpty);
 
             return await _bootstrap.PublicProfileService.PatchMyWithdrawnAtAsync(
                 _currentSession.AccessToken,
@@ -1717,7 +1873,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             return await _bootstrap.PublicProfileService.PatchMyWithdrawnAtAsync(
                 _currentSession.AccessToken,
@@ -1743,7 +1899,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             var delayDays = _withdrawalRequestDelayDays < 0f ? 0f : _withdrawalRequestDelayDays;
             var delayInt = Mathf.RoundToInt(delayDays);
@@ -1806,7 +1962,7 @@ namespace TrueBase.Unity
                 return LogAndReturn("Supabase.Profile.LastActivityAt", ready);
 
             if (_bootstrap?.PublicProfileService == null)
-                return LogAndReturn("Supabase.Profile.LastActivityAt", SupabaseResult<bool>.Fail("sdk_not_initialized"));
+                return LogAndReturn("Supabase.Profile.LastActivityAt", SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized));
 
             var r = await _bootstrap.PublicProfileService.PatchMyLastActivityAtAsync(_currentSession.AccessToken, _currentSession.User.Id);
             return LogAndReturn("Supabase.Profile.LastActivityAt", r);
@@ -1822,7 +1978,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<MyWithdrawalStatus>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<MyWithdrawalStatus>.Fail("sdk_not_initialized");
+                return SupabaseResult<MyWithdrawalStatus>.Fail(SupabaseFailReason.NotInitialized);
 
             return await _bootstrap.PublicProfileService.GetMyWithdrawalStatusAsync(_currentSession.AccessToken);
         }
@@ -1845,7 +2001,7 @@ namespace TrueBase.Unity
                 return SupabaseResult<string>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
             if (_bootstrap?.EdgeFunctionsService == null)
-                return SupabaseResult<string>.Fail("sdk_not_initialized");
+                return SupabaseResult<string>.Fail(SupabaseFailReason.NotInitialized);
 
             var issue = await RequestWithdrawalCancelTokenCoreAsync(_currentSession.AccessToken);
             if (issue == null || !issue.IsSuccess || issue.Data == null)
@@ -1868,16 +2024,16 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<bool>> RedeemWithdrawalCancelAsync(string cancelToken = null)
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             if (_bootstrap?.EdgeFunctionsService == null)
-                return SupabaseResult<bool>.Fail("sdk_not_initialized");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
 
             var token = string.IsNullOrWhiteSpace(cancelToken)
                 ? ReadStoredWithdrawalCancelToken()
                 : cancelToken.Trim();
             if (string.IsNullOrWhiteSpace(token))
-                return SupabaseResult<bool>.Fail("withdrawal_cancel_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.WithdrawalCancelTokenEmpty);
 
             var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<WithdrawalCancelRedeemResponse>(
                 WithdrawalCancelRedeemFunctionName,
@@ -1888,7 +2044,7 @@ namespace TrueBase.Unity
             {
                 var err = result?.ErrorMessage ?? "withdrawal_cancel_redeem_failed";
                 if (err.IndexOf("Missing authorization header", StringComparison.OrdinalIgnoreCase) >= 0)
-                    return SupabaseResult<bool>.Fail("withdrawal_cancel_redeem_verify_jwt_must_be_off");
+                    return SupabaseResult<bool>.Fail(SupabaseFailReason.WithdrawalCancelJwtVerifyMustBeOff);
 
                 return SupabaseResult<bool>.Fail(result?.ErrorMessage ?? "withdrawal_cancel_redeem_failed");
             }
@@ -1959,7 +2115,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<T>> GetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<T>.Fail("supabase_not_initialized");
+                return SupabaseResult<T>.Fail(SupabaseFailReason.NotInitialized);
 
             return await RemoteConfig.GetTypedAsync<T>(key, maxStale);
         }
@@ -1970,7 +2126,7 @@ namespace TrueBase.Unity
         internal static async Task<SupabaseResult<T>> GetRemoteConfigFreshAsync<T>(string key, int maxStale = 0) where T : class, new()
         {
             if (!await EnsureInitializedAsync())
-                return SupabaseResult<T>.Fail("supabase_not_initialized");
+                return SupabaseResult<T>.Fail(SupabaseFailReason.NotInitialized);
 
             return await RemoteConfig.GetTypedFreshAsync<T>(key, maxStale);
         }
@@ -2503,10 +2659,10 @@ namespace TrueBase.Unity
             string issueTrigger = "withdrawal_gate")
         {
             if (_bootstrap?.EdgeFunctionsService == null)
-                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail("sdk_not_initialized");
+                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseFailReason.NotInitialized);
 
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail("access_token_empty");
+                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseFailReason.AccessTokenEmpty);
 
             var trigger = string.IsNullOrWhiteSpace(issueTrigger) ? "withdrawal_gate" : issueTrigger.Trim();
             var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<WithdrawalCancelIssueResponse>(
@@ -2522,7 +2678,7 @@ namespace TrueBase.Unity
                     string.IsNullOrWhiteSpace(result.Data.reason) ? "withdrawal_cancel_issue_failed" : result.Data.reason);
 
             if (string.IsNullOrWhiteSpace(result.Data.cancel_token))
-                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail("withdrawal_cancel_token_empty");
+                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseFailReason.WithdrawalCancelTokenEmpty);
 
             var info = new WithdrawalCancelIssueInfo(
                 result.Data.cancel_token.Trim(),
@@ -2562,9 +2718,9 @@ namespace TrueBase.Unity
             ClearSession(clearStorage: true, deleteUserSessionRow: true);
 
             if (issue == null || !issue.IsSuccess || issue.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail("withdrawal_scheduled_cancel_token_issue_failed");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalCancelIssueFailed);
 
-            return SupabaseResult<SupabaseSession>.Fail("withdrawal_scheduled_gate_blocked");
+            return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalGateBlocked);
         }
 
         private static void SaveStoredWithdrawalGateStatus(MyWithdrawalStatus status)
@@ -2638,7 +2794,7 @@ namespace TrueBase.Unity
             if (!allowRecreateOnDeletion)
             {
                 // 앱 시작(버튼 없이) 자동 복원 흐름에서는 자동 재로그인을 막습니다.
-                return SupabaseResult<SupabaseSession>.Fail("withdrawal_deleted_manual_login_required");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalDeleted);
             }
 
             // 수동 로그인 흐름에서는 삭제 감지 시 자동으로 새 계정을 만들어 로그인시킵니다.
@@ -2647,7 +2803,7 @@ namespace TrueBase.Unity
             {
                 var recreated = await RecreateSessionByMethodAsync(method);
                 if (recreated == null || !recreated.IsSuccess || recreated.Data == null)
-                    return SupabaseResult<SupabaseSession>.Fail("withdrawal_deleted_recreate_failed");
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalDeletedRecreateFailed);
 
                 return recreated;
             }
@@ -2664,7 +2820,7 @@ namespace TrueBase.Unity
             {
                 SignInMethodKind.Google => await SignInWithGoogleAsync(),
                 SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(),
-                _ => SupabaseResult<SupabaseSession>.Fail("invalid_signin_method")
+                _ => SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.InvalidSignInMethod)
             };
         }
 

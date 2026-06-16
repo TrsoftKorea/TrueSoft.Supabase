@@ -72,13 +72,14 @@ namespace TrueBase.Unity.Config
                 _instance = null;
         }
 
-        private void Update()
+        protected virtual void Update()
         {
             if (!Supabase.IsInitialized)
                 return;
 
             SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
+            SupabaseSDK.TickSessionRefresh(Time.realtimeSinceStartup);
         }
 
         private void OnApplicationPause(bool pause)

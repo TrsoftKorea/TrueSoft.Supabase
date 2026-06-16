@@ -41,11 +41,16 @@ using UnityEngine;
 public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
     protected Plugin _plugin;
-    private string _nanooAccessToken;   // 로그인 성공 시 저장, 로그아웃·롤백에 사용
-    private string _nanooNickname;      // 닉네임 변경 롤백용
-    private string _pendingLoginType;   // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
+    private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
+    private string   _nanooNickname;       // 닉네임 변경 롤백용
+    private string   _pendingLoginType;    // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
+    private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
+    private float    _lastNanooRefreshCheckTime   = float.MinValue;
 
-    private const string NanooAccessTokenKey = "TrueBase.NanooAccessToken";
+    private const string NanooAccessTokenKey        = "TrueBase.NanooAccessToken";
+    private const double NanooTokenLifetimeHours    = 24.0;
+    private const double NanooTokenRefreshLeadHours = 1.0;   // 만료 1시간 전부터 갱신
+    private const float  NanooRefreshCheckInterval  = 600f;  // 10분마다 체크
 
     /// <summary>PlayNANOO 로그인 성공 시 반환된 uuid. 로그인 전에는 null.</summary>
     public static string UserId { get; private set; }
@@ -129,7 +134,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             requestMyWithdrawal:                     InterceptRequestMyWithdrawal,
             linkGoogleToCurrentAnonymousWithIdToken: InterceptLinkGoogleToCurrentAnonymousWithIdToken,
             linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken,
-            setMyDisplayName:                        InterceptSetMyDisplayName
+            setMyDisplayName:                        InterceptSetMyDisplayName,
+            linkGoogleWithIdToken:                   InterceptLinkGoogleWithIdToken,
+            linkAppleWithIdToken:                    InterceptLinkAppleWithIdToken
         );
 
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
@@ -335,6 +342,44 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return await tcs.Task;
     }
 
+    // ── 소셜 → 소셜 추가 연동 인터셉터 ───────────────────────────────────────────
+
+    private async Task<SupabaseCallResult> InterceptLinkGoogleWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    {
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
+        {
+            if (!HandleNanooCallback(status, values, "google"))
+            {
+                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_link_failed"));
+                return;
+            }
+            var result = await sdkLink();
+            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            await SyncDataAfterLogin();
+            tcs.SetResult(result);
+        });
+        return await tcs.Task;
+    }
+
+    private async Task<SupabaseCallResult> InterceptLinkAppleWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    {
+        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
+        {
+            if (!HandleNanooCallback(status, values, "apple"))
+            {
+                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_link_failed"));
+                return;
+            }
+            var result = await sdkLink();
+            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            await SyncDataAfterLogin();
+            tcs.SetResult(result);
+        });
+        return await tcs.Task;
+    }
+
     // ── PlayNANOO 콜백 공통 처리 ──────────────────────────────────────────────
 
     /// <summary>PlayNANOO 로그인 성공 시 호출. 서브클래스에서 응답 values를 추가로 처리할 수 있습니다.</summary>
@@ -344,10 +389,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
-            _nanooAccessToken = values["access_token"]?.ToString();
-            _nanooNickname    = values["nickname"]?.ToString();
-            UserId  = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
-            OpenId  = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
+            _nanooAccessToken      = values["access_token"]?.ToString();
+            _nanooNickname         = values["nickname"]?.ToString();
+            UserId                 = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
+            OpenId                 = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
+            _nanooTokenRefreshedAt = DateTime.UtcNow;
             SaveNanooTokens();
             OnNanooLoginSuccess(values);
             return true;
@@ -412,6 +458,33 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         });
     }
 
+    // ── PlayNANOO 토큰 독립 갱신 (24시간 주기) ───────────────────────────────────
+
+    protected override void Update()
+    {
+        base.Update();
+        TickNanooTokenRefresh(Time.realtimeSinceStartup);
+    }
+
+    private void TickNanooTokenRefresh(float realtimeSinceStartup)
+    {
+        if (_nanooTokenRefreshedAt == DateTime.MinValue) return;
+        if (realtimeSinceStartup - _lastNanooRefreshCheckTime < NanooRefreshCheckInterval) return;
+        _lastNanooRefreshCheckTime = realtimeSinceStartup;
+
+        var hoursSinceRefresh = (DateTime.UtcNow - _nanooTokenRefreshedAt).TotalHours;
+        if (hoursSinceRefresh < NanooTokenLifetimeHours - NanooTokenRefreshLeadHours) return;
+
+        var storedToken = PlayerPrefs.GetString(NanooAccessTokenKey, null);
+        if (string.IsNullOrEmpty(storedToken)) return;
+
+        _ = RestoreNanooSessionAsync(storedToken).ContinueWith(t =>
+        {
+            if (!t.Result)
+                Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 토큰 갱신 실패. 재로그인이 필요할 수 있습니다.");
+        });
+    }
+
     // ── 자동 로그인 후 PlayNANOO 세션 복원 ────────────────────────────────────
 
     protected override async Task<bool> OnAfterAutoLoginAsync(bool success)
@@ -433,10 +506,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             if (status == Configure.PN_API_STATE_SUCCESS)
             {
-                _nanooAccessToken = values["access_token"]?.ToString();
-                _nanooNickname    = values.TryGetValue("nickname", out var nk) ? nk?.ToString() : _nanooNickname;
-                UserId = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
-                OpenId = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
+                _nanooAccessToken    = values["access_token"]?.ToString();
+                _nanooNickname      = values.TryGetValue("nickname", out var nk) ? nk?.ToString() : _nanooNickname;
+                UserId              = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
+                OpenId              = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
+                _nanooTokenRefreshedAt = DateTime.UtcNow;
                 SaveNanooTokens();
                 Debug.Log("[PlayNanooRuntime] PlayNANOO 토큰 로그인 성공.");
                 tcs.TrySetResult(true);
