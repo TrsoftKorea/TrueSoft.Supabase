@@ -338,8 +338,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
 // =============================================================================
 // 예제용 유저 저장 클래스.
-// SupabaseSettings의 User Data Table 항목과 DB 테이블 컬럼명을 맞춰주세요.
-// 실제 프로젝트에서는 이 파일 대신 별도 파일에 정의하는 것을 권장합니다.
+// 실제 프로젝트에서는 TrueSoft > Supabase > 유저 데이터 클래스 생성으로 자동 생성하세요.
 // =============================================================================
 
 public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
