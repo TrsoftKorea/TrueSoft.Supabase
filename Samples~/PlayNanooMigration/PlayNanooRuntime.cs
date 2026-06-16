@@ -36,6 +36,6 @@ public class PlayNanooRuntime : PlayNanooRuntimeBase
     protected override void NanooSetNickname(string nickname, Func<string, Task> cb)
         => _plugin.AccountManagerV20240401.NicknamePut(nickname, true, async (s, _, _, _) => await cb(s));
 
-    protected override void NanooTokenRefresh(string refreshToken, Func<string, Dictionary<string, object>, Task> cb)
-        => _plugin.AccountManagerV20240401.TokenRefresh(refreshToken, async (s, _, _, v) => await cb(s, v));
+    protected override void NanooTokenSignIn(string accessToken, Func<string, Dictionary<string, object>, Task> cb)
+        => _plugin.AccountManagerV20240401.TokenSignIn(accessToken, async (s, _, _, v) => await cb(s, v));
 }

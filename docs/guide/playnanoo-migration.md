@@ -60,17 +60,17 @@ playNanooRuntime.StartAppleSignInAndroid();
 `SupabaseRuntime.TriggerAutoLoginAsync()`는 플레이나누 런타임이 있을 때 두 세션을 모두 복원합니다.
 
 1. Supabase 리프레시 토큰으로 세션 복원
-2. 저장된 플레이나누 리프레시 토큰으로 `TokenRefresh` 호출
-3. 둘 다 성공하면 `OnAutoLoginCompleted(true)` 발행
+2. 저장된 플레이나누 액세스 토큰으로 `TokenSignIn` 호출
+3. 둘 다 성공하면 `true` 반환
 
-플레이나누 복원이 실패하면 Supabase 세션도 롤백한 뒤 `OnAutoLoginCompleted(false)`를 발행합니다. 두 세션이 항상 동시에 유효하도록 보장합니다.
+플레이나누 복원이 실패하면 Supabase 세션도 롤백한 뒤 `false`를 반환합니다. 두 세션이 항상 동시에 유효하도록 보장합니다.
 
 ::: info
 저장된 플레이나누 토큰이 없으면(신규 유저 또는 이관 완료 후) 자동 로그인은 Supabase 세션만으로 성공 처리됩니다.
 :::
 
 ::: warning
-`TrySignOutFullyAsync()`를 호출하면 Supabase와 플레이나누 리프레시 토큰이 모두 삭제됩니다. 이후 앱을 재시작해도 자동 로그인은 실패하며, 플레이어가 직접 로그인해야 합니다.
+`TrySignOutFullyAsync()`를 호출하면 Supabase와 플레이나누 액세스 토큰이 모두 삭제됩니다. 플레이나누 액세스 토큰 유효기간은 24시간이므로 그 이후에는 자동 로그인이 실패하며 플레이어가 직접 로그인해야 합니다.
 :::
 
 ---
