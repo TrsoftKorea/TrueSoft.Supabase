@@ -459,8 +459,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (errorCode == "30007")
         {
             _pendingLoginType = loginType;
-            values?.TryGetValue("WithdrawalKey", out var wkObj);
-            OnWithdrawalPending?.Invoke(wkObj?.ToString());
+            string wk = null;
+            if (values != null && values.TryGetValue("WithdrawalKey", out var wkObj))
+                wk = wkObj?.ToString();
+            OnWithdrawalPending?.Invoke(wk);
         }
         else
         {
