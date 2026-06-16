@@ -136,7 +136,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 #if UNITY_IAP_V5_1 && UNITY_IOS
         UnityEngine.Purchasing.StoreKitSelector.forceStoreKit1 = true;
 #elif UNITY_IAP_V5 && UNITY_IOS
-        Debug.LogError("[PlayNanoo] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
+        Debug.LogError("[PlayNanooRuntime] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
 #endif
 
         Supabase.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>

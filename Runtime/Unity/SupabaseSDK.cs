@@ -2677,7 +2677,7 @@ namespace TrueBase.Unity
 
             if (result == null || !result.IsSuccess)
             {
-                Debug.LogWarning("[Supabase] withdrawal guard invoke failed: " + (result?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] withdrawal guard 호출 실패: " + (result?.ErrorMessage ?? "unknown"));
                 return false;
             }
 
@@ -2760,7 +2760,7 @@ namespace TrueBase.Unity
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[Supabase.AnonymousRecovery] Upsert failed: {e.Message}");
+                Debug.LogWarning($"[Supabase.AnonymousRecovery] 익명 복구 토큰 저장 실패: {e.Message}");
             }
         }
 
@@ -2814,7 +2814,7 @@ namespace TrueBase.Unity
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[Supabase.BanInfo] fetch failed: {e.Message}");
+                Debug.LogWarning($"[Supabase.BanInfo] 차단 정보 조회 실패: {e.Message}");
                 return null;
             }
         }
@@ -2857,7 +2857,7 @@ namespace TrueBase.Unity
                 var r = await svc.EnsureMyProfileRowAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
                 if (r == null || !r.IsSuccess)
                 {
-                    Debug.LogWarning("[Supabase] ensure profile row failed: " + (r?.ErrorMessage ?? "unknown"));
+                    Debug.LogWarning("[Supabase] 프로필 행 생성 실패: " + (r?.ErrorMessage ?? "unknown"));
                     return;
                 }
 
@@ -2881,7 +2881,7 @@ namespace TrueBase.Unity
 
                 var moved = await svc.TransferMyServerAsync(s.AccessToken, selectedCode, "sdk_signin_server_sync");
                 if (moved == null || !moved.IsSuccess)
-                    Debug.LogWarning("[Supabase] server transfer after sign-in failed: " + (moved?.ErrorMessage ?? "unknown"));
+                    Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorMessage ?? "unknown"));
                 else
                     _myProfile = new PublicProfileSnapshot(
                         _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
@@ -2889,7 +2889,7 @@ namespace TrueBase.Unity
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[Supabase] ensure profile row exception: " + e.Message);
+                Debug.LogWarning("[Supabase] 프로필 행 생성 중 예외: " + e.Message);
             }
 
         }
@@ -2931,14 +2931,14 @@ namespace TrueBase.Unity
             var upd = await Auth.UpdateUserMetadataDisplayNameAsync(s.AccessToken, def);
             if (upd == null || !upd.IsSuccess)
             {
-                Debug.LogWarning("[Supabase] new Google user: displayName metadata reset failed: " + (upd?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 메타데이터 초기화 실패: " + (upd?.ErrorMessage ?? "unknown"));
                 return;
             }
 
             var refr = await Auth.RefreshSessionAsync(s.RefreshToken);
             if (refr == null || !refr.IsSuccess || refr.Data == null)
             {
-                Debug.LogWarning("[Supabase] new Google user: displayName updated but session refresh failed: " + (refr?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 업데이트 후 세션 갱신 실패: " + (refr?.ErrorMessage ?? "unknown"));
                 return;
             }
 

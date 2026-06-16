@@ -171,6 +171,26 @@ namespace TrueBase.Unity
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
 
+        // ── 플레이나누 변환 커스터마이징 ──────────────────────────────────────────────
+
+        private static Func<string, TRow> _nanooToDbConverter;
+        private static Func<TRow, string> _dbToNanooConverter;
+
+        /// <summary>
+        /// 플레이나누 ↔ DB 데이터 변환 함수를 등록합니다.
+        /// List · Dictionary 등 기본 역직렬화로 처리하기 어려운 타입이 있을 때 사용합니다.
+        /// <para><see cref="NanooDeserializeJson"/> / <see cref="NanooSerializeJson"/>을 override한 경우 이 메서드는 무시됩니다.</para>
+        /// </summary>
+        /// <param name="nanooToDb">플레이나누 JSON → TRow 변환 함수</param>
+        /// <param name="dbToNanoo">TRow → 플레이나누 JSON 변환 함수. null이면 기본 직렬화를 사용합니다.</param>
+        public static void RegisterNanooConverters(
+            Func<string, TRow> nanooToDb,
+            Func<TRow, string> dbToNanoo = null)
+        {
+            _nanooToDbConverter = nanooToDb;
+            _dbToNanooConverter = dbToNanoo;
+        }
+
         // ── INanooSaveSyncable 구현 (PlayNanooRuntime 전용) ────────────────────────
 
         async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
@@ -186,7 +206,13 @@ namespace TrueBase.Unity
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromEmptyAsync(string nanooJson)
         {
-            var nanooRow = NanooDeserializeJson(nanooJson);
+            TRow nanooRow;
+            try { nanooRow = NanooDeserializeJson(nanooJson); }
+            catch (Exception e)
+            {
+                Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 (NanooPatchFromEmptyAsync): {e.Message}");
+                return false;
+            }
             var ok = await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
             if (ok) ApplyRow(nanooRow);
             return ok;
@@ -194,7 +220,13 @@ namespace TrueBase.Unity
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromLastLoadedAsync(string nanooJson)
         {
-            var nanooRow = NanooDeserializeJson(nanooJson);
+            TRow nanooRow;
+            try { nanooRow = NanooDeserializeJson(nanooJson); }
+            catch (Exception e)
+            {
+                Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 (NanooPatchFromLastLoadedAsync): {e.Message}");
+                return false;
+            }
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await Supabase.TryPatchUserDataDiffAsync(prev, nanooRow);
             if (ok) ApplyRow(nanooRow);
@@ -202,30 +234,24 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// PlayNANOO Storage JSON을 Row로 역직렬화합니다.
-        /// 기본 구현은 Newtonsoft.Json을 사용합니다 — 필드명 또는 <c>[JsonProperty]</c> 값이 JSON 키와 일치해야 합니다.
-        /// PlayNANOO JSON 키(camelCase)와 Row 필드명(snake_case)이 다를 때 서브클래스에서 override하세요.
-        /// <example>
-        /// <code>
-        /// protected override Row NanooDeserializeJson(string json)
-        /// {
-        ///     var pn = JsonConvert.DeserializeObject&lt;PlayNanooSave&gt;(json);
-        ///     return new Row { bgm_volume = pn.bgmVolume, camera_shake = pn.cameraShake };
-        /// }
-        /// [Serializable] private class PlayNanooSave { public int bgmVolume; public bool cameraShake; }
-        /// </code>
-        /// </example>
+        /// 플레이나누 Storage JSON을 Row로 역직렬화합니다.
+        /// <see cref="RegisterNanooConverters"/>로 등록한 변환 함수가 있으면 그것을 사용하고, 없으면 Newtonsoft.Json 기본 변환을 사용합니다.
+        /// 서브클래스에서 override하면 등록된 함수보다 우선합니다.
         /// </summary>
         protected virtual TRow NanooDeserializeJson(string json)
-            => Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
+            => _nanooToDbConverter != null
+                ? _nanooToDbConverter(json)
+                : Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
 
         /// <summary>
-        /// Row를 PlayNANOO Storage JSON으로 직렬화합니다.
-        /// 기본 구현은 Newtonsoft.Json을 사용합니다.
-        /// <see cref="NanooDeserializeJson"/>를 override한 경우 이 메서드도 함께 override하세요.
+        /// Row를 플레이나누 Storage JSON으로 직렬화합니다.
+        /// <see cref="RegisterNanooConverters"/>로 등록한 변환 함수가 있으면 그것을 사용하고, 없으면 Newtonsoft.Json 기본 직렬화를 사용합니다.
+        /// 서브클래스에서 override하면 등록된 함수보다 우선합니다.
         /// </summary>
         protected virtual string NanooSerializeJson(TRow row)
-            => Newtonsoft.Json.JsonConvert.SerializeObject(row);
+            => _dbToNanooConverter != null
+                ? _dbToNanooConverter(row)
+                : Newtonsoft.Json.JsonConvert.SerializeObject(row);
 
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {

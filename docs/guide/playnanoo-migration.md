@@ -123,6 +123,50 @@ SDK 행 있음 (기존 유저)
 
 SDK 저장 이후 플레이나누에도 자동으로 반영됩니다.
 
+### 필드명 규칙
+
+플레이나누 Storage JSON은 camelCase 키를 사용합니다. SDK의 기본 변환은 C# 필드명을 그대로 JSON 키로 사용하므로, **C# 필드명을 camelCase로 선언하면 별도 매핑 없이 자동으로 연결됩니다.**
+
+DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 C# 필드명과 달라도 됩니다.
+
+```csharp
+[Serializable]
+public sealed class Row
+{
+    [DataColumn("player_level")] public int playerLevel;      // DB: player_level, 플레이나누: playerLevel
+    [DataColumn("item_ids")]     public List<int> itemIds;    // DB: item_ids,     플레이나누: itemIds
+}
+```
+
+### 데이터 변환 커스터마이징
+
+camelCase 필드명으로 처리하기 어려운 타입이 있거나 플레이나누 키명이 다를 때 사용합니다.
+
+```csharp
+PlayerSave.RegisterNanooConverters(
+    nanooToDb: json =>
+    {
+        var src = JsonConvert.DeserializeObject<NanooData>(json);
+        return new PlayerSave.Row
+        {
+            playerLevel = src.playerLevel,
+            itemIds     = src.itemList,
+        };
+    },
+    dbToNanoo: row => JsonConvert.SerializeObject(new NanooData
+    {
+        playerLevel = row.playerLevel,
+        itemList    = row.itemIds,
+    })
+);
+```
+
+`dbToNanoo`를 생략하면 DB → 플레이나누 방향은 기본 직렬화를 사용합니다.
+
+::: warning
+`NanooDeserializeJson` / `NanooSerializeJson`을 서브클래스에서 override한 경우, 등록된 변환 함수보다 override가 우선합니다.
+:::
+
 ---
 
 ## 플레이나누 제거 후
