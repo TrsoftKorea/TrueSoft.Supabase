@@ -226,6 +226,7 @@ namespace TrueBase.Core.Auth
 
                 // profiles.user_id / user_saves.user_id에 넣을 안정 id를 session에 반영합니다.
                 ApplyStablePlayerUserId(session, response.Body);
+                ApplyLinkedProviders(session, response.Body);
                 session.likely_brand_new_google_signup = ComputeLikelyBrandNewGoogleSignUp(response.Body);
 
                 return SupabaseResult<SupabaseSession>.Success(session);
@@ -233,6 +234,38 @@ namespace TrueBase.Core.Auth
             catch (Exception e)
             {
                 return SupabaseResult<SupabaseSession>.Fail("session_parse_exception:" + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// 응답 JSON의 <c>user.identities[].provider</c>를 읽어 <see cref="SupabaseUser.linked_providers"/>에 저장합니다.
+        /// </summary>
+        private static void ApplyLinkedProviders(SupabaseSession session, string responseBody)
+        {
+            if (session?.user == null || string.IsNullOrWhiteSpace(responseBody))
+                return;
+
+            try
+            {
+                var jo = JObject.Parse(responseBody);
+                if (jo["user"]?["identities"] is not JArray identities || identities.Count == 0)
+                {
+                    session.user.linked_providers = System.Array.Empty<string>();
+                    return;
+                }
+
+                var providers = new System.Collections.Generic.List<string>(identities.Count);
+                foreach (var identity in identities)
+                {
+                    var p = identity?["provider"]?.Value<string>();
+                    if (!string.IsNullOrWhiteSpace(p))
+                        providers.Add(p.ToLowerInvariant());
+                }
+                session.user.linked_providers = providers.ToArray();
+            }
+            catch
+            {
+                session.user.linked_providers = System.Array.Empty<string>();
             }
         }
 

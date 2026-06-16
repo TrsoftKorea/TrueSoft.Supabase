@@ -55,6 +55,12 @@ namespace TrueBase.Core.Auth
         /// <summary><c>auth.user_metadata</c>. 닉네임 설정 시 <c>displayName</c>이 동기화됩니다.</summary>
         public SupabaseUserMetadata user_metadata;
 
+        /// <summary>
+        /// 현재 계정에 연동된 인증 프로바이더 목록 (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등).
+        /// 익명 계정은 빈 배열. 로그인 응답의 <c>identities[].provider</c>에서 자동으로 채워집니다.
+        /// </summary>
+        public string[] linked_providers;
+
         public string Id => id;
         public string Email => email;
         public bool IsAnonymous => is_anonymous;
@@ -66,5 +72,22 @@ namespace TrueBase.Core.Auth
         /// <summary>현재 세션에 캐시된 표시 이름. 닉네임 설정 성공 후 SDK가 자동 갱신합니다.</summary>
         public string DisplayName =>
             string.IsNullOrWhiteSpace(user_metadata?.displayName) ? string.Empty : user_metadata.displayName.Trim();
+
+        /// <summary>Google 계정이 연동되어 있으면 true.</summary>
+        public bool IsLinkedWithGoogle => HasLinkedProvider("google");
+
+        /// <summary>Apple 계정이 연동되어 있으면 true.</summary>
+        public bool IsLinkedWithApple => HasLinkedProvider("apple");
+
+        /// <summary>지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
+        public bool HasLinkedProvider(string provider)
+        {
+            if (linked_providers == null || string.IsNullOrWhiteSpace(provider))
+                return false;
+            foreach (var p in linked_providers)
+                if (string.Equals(p, provider, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
     }
 }
