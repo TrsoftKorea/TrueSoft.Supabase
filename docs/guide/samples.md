@@ -12,8 +12,7 @@ Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import
 
 ## Database Setup
 
-초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.  
-설정을 완료하면 이 폴더는 삭제해도 됩니다.
+초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.
 
 사용 방법은 [Database Setup](./getting-started.md#database-setup)을 참고하세요.
 

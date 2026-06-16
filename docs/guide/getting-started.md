@@ -59,10 +59,6 @@ Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하
 |------|------|------|
 | **Enforce SSL on incoming connections** | ON | Retool 등 외부 도구에서 DB에 직접 연결할 때 필요 |
 
-::: tip
-신규 프로젝트는 기본적으로 ON입니다. OFF로 되어 있다면 켜고 **Save**를 클릭하세요.
-:::
-
 ---
 
 ## 초기 설정
@@ -91,10 +87,6 @@ Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하
 메뉴 **TrueSoft > Supabase > 씬에 런타임 오브젝트 만들기** 를 클릭합니다.  
 앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
 
-::: tip
-씬에 이미 런타임 오브젝트가 있으면 중복 생성 없이 기존 오브젝트를 선택합니다.
-:::
-
 자동 로그인 타이밍 제어와 이벤트 콜백 사용법은 [인증](./auth.md)을 참고하세요.
 
 ---
@@ -106,15 +98,14 @@ DB 스키마와 Edge Function은 **Database Setup** 샘플에 포함된 파일�
 ### 1. 샘플 임포트
 
 Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database Setup**을 Import합니다.  
-`Assets/Samples/.../DatabaseSetup/` 폴더에 SQL 파일과 Edge Function 소스가 생성됩니다.  
-설정 완료 후 이 폴더는 삭제해도 됩니다.
+`Assets/Samples/.../DatabaseSetup/` 폴더에 SQL 파일과 Edge Function 소스가 생성됩니다.
 
 ### 2. DB 스키마 실행
 
 `SQL/player/` 폴더의 파일을 **번호 순서대로** Supabase SQL Editor에서 실행합니다.
 
 ::: tip
-Supabase 대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다. 파일 내용을 붙여 넣고 **Run**을 클릭하면 됩니다.
+대시보드 어느 화면에서나 **SQL Editor** 버튼 또는 `Ctrl+E`로 열 수 있습니다.
 :::
 
 | 순서 | 파일 | 내용 |
