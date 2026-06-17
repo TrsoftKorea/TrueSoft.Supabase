@@ -16,6 +16,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyExtraUsings       = "TrueBase.PlayerSave.ExtraUsings";
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
+        private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
         private const string PrefsKeyRcExtraUsings     = "TrueBase.RemoteConfig.ExtraUsings";
         private const string ClassName   = "PlayerSave";
@@ -145,7 +146,19 @@ namespace TrueBase.Editor
                         {
                             if (GUILayout.Button("저장", GUILayout.Height(26)))
                                 SaveToProject();
+
+                            if (GUILayout.Button("다른 위치에 저장…", GUILayout.Height(26), GUILayout.Width(120)))
+                                SaveToProject(forcePicker: true);
                         }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(_previewText))
+                    {
+                        var autoPath = ResolveAutoSavePath();
+                        EditorGUILayout.LabelField(
+                            "저장 위치",
+                            string.IsNullOrEmpty(autoPath) ? "최초 저장 시 폴더 선택" : autoPath,
+                            EditorStyles.miniLabel);
                     }
                 }
 
@@ -851,17 +864,7 @@ namespace TrueBase.Editor
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            string assetPath = null;
-            foreach (var guid in AssetDatabase.FindAssets(ClassName))
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.EndsWith(ClassName + ".cs", StringComparison.OrdinalIgnoreCase))
-                {
-                    assetPath = path;
-                    break;
-                }
-            }
-
+            var assetPath = FindExistingClassAssetPath();
             if (assetPath == null) return result;
 
             try
@@ -967,10 +970,49 @@ namespace TrueBase.Editor
             EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
         }
 
-        private static void SaveToProject()
+        /// <summary>
+        /// 프로젝트에서 기존 <see cref="ClassName"/>.cs 의 에셋 경로(Assets/... 상대)를 찾습니다. 없으면 null.
+        /// </summary>
+        private static string FindExistingClassAssetPath()
         {
-            var path = EditorUtility.SaveFilePanelInProject("유저 데이터 클래스 저장", ClassName + ".cs", "cs", "");
-            if (string.IsNullOrEmpty(path)) return;
+            foreach (var guid in AssetDatabase.FindAssets(ClassName))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.EndsWith(ClassName + ".cs", StringComparison.OrdinalIgnoreCase))
+                    return path;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 저장 대상 경로를 자동 결정합니다. 우선순위:
+        /// ① 프로젝트에 이미 있는 PlayerSave.cs → 같은 위치(덮어쓰기)
+        /// ② 마지막으로 저장한 폴더(EditorPrefs) → 그 폴더의 PlayerSave.cs
+        /// 둘 다 없으면 null(최초 1회는 폴더 선택 다이얼로그 필요).
+        /// </summary>
+        private static string ResolveAutoSavePath()
+        {
+            var existing = FindExistingClassAssetPath();
+            if (!string.IsNullOrEmpty(existing)) return existing;
+
+            var lastDir = EditorPrefs.GetString(PrefsKeyLastSaveDir, "");
+            if (!string.IsNullOrEmpty(lastDir) && AssetDatabase.IsValidFolder(lastDir))
+                return lastDir.TrimEnd('/') + "/" + ClassName + ".cs";
+
+            return null;
+        }
+
+        /// <summary>저장 대상을 자동 결정해 저장합니다. 경로를 못 정하면 폴더 선택 다이얼로그로 폴백합니다.</summary>
+        private static void SaveToProject() => SaveToProject(forcePicker: false);
+
+        private static void SaveToProject(bool forcePicker)
+        {
+            var path = forcePicker ? null : ResolveAutoSavePath();
+            if (string.IsNullOrEmpty(path))
+            {
+                path = EditorUtility.SaveFilePanelInProject("유저 데이터 클래스 저장", ClassName + ".cs", "cs", "");
+                if (string.IsNullOrEmpty(path)) return;
+            }
 
             try
             {
@@ -978,6 +1020,11 @@ namespace TrueBase.Editor
                 AssetDatabase.ImportAsset(path);
                 var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
                 if (asset != null) EditorGUIUtility.PingObject(asset);
+
+                // 다음 자동 저장을 위해 저장 폴더를 기억
+                var dir = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+                if (!string.IsNullOrEmpty(dir))
+                    EditorPrefs.SetString(PrefsKeyLastSaveDir, dir);
 
                 // 저장 시점에도 타입·Priority 설정을 EditorPrefs에 기록
                 SaveColumnTypesToPrefs();
