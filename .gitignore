@@ -144,11 +144,10 @@ GameAnalytics.meta
 # Claude Code worktrees
 .claude/worktrees/
 
-# VitePress docs
-docs/node_modules
-docs/node_modules.meta
-docs/.vitepress/dist
-docs/.vitepress/cache
+# VitePress docs (docs~ : Unity가 무시하는 폴더)
+docs~/node_modules
+docs~/.vitepress/dist
+docs~/.vitepress/cache
 
 # Supabase CLI (로컬 개발 ?�구, ?�키지 배포???�함?��? ?�음)
 supabase/
