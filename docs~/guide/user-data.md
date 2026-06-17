@@ -40,14 +40,14 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 
     public static Task<bool> TryLoadAsync() => Instance.TryLoadAsync();
 
-    // 필드는 private — 반드시 아래 정적 프로퍼티로만 접근합니다.
+    // 필드는 internal — 데이터는 아래 정적 프로퍼티로 접근합니다.
     [Serializable]
-    [JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 private 필드를 저장/로드
+    [JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 internal 필드를 저장/로드
     public sealed class Row
     {
-        [DataColumn("level")]     private int            level;
-        [DataColumn("coins")]     private int            coins;
-        [DataColumn("inventory")] private List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
+        [DataColumn("level")]     internal int            level;
+        [DataColumn("coins")]     internal int            coins;
+        [DataColumn("inventory")] internal List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
     }
 
     // 스칼라: get/set — 쓰면 MarkDirty 자동
@@ -73,7 +73,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 ```
 
 ::: warning
-`Row` 필드는 private입니다. 데이터는 정적 프로퍼티(`PlayerSave.Level`)로만 읽고 씁니다.
+`Row` 필드는 internal입니다. 데이터는 정적 프로퍼티(`PlayerSave.Level`)로 읽고 씁니다.
 :::
 
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
@@ -180,7 +180,7 @@ DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 지정�
 ```csharp
 [DataColumn("last_login_at")]
 [JsonProperty("last_login_at")]
-private string lastLoginAt;
+internal string lastLoginAt;
 ```
 
 ::: info 커스텀 클래스 요소

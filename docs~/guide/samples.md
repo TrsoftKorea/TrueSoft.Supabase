@@ -45,11 +45,11 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 
 ```csharp
 [Serializable]
-[JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 private 필드 저장/로드
+[JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 internal 필드 저장/로드
 public sealed class Row
 {
-    [DataColumn("level")] private int level;   // 필드는 private — 프로퍼티로만 접근
-    [DataColumn("coins")] private int coins;
+    [DataColumn("level")] internal int level;   // 필드는 internal — 프로퍼티로 접근
+    [DataColumn("coins")] internal int coins;
 }
 
 public static int Level

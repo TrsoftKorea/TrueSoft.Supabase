@@ -225,8 +225,8 @@ namespace TrueBase.Editor
             sb.AppendLine();
             sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<bool> TryLoadAsync() => ((StaticUserSave<Row>)Instance).TryLoadAsync();");
             sb.AppendLine();
-            sb.AppendLine(indent + "    // 필드는 private — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근하세요.");
-            sb.AppendLine(indent + "    // [JsonObject(Fields)]로 Newtonsoft가 private 필드를 직렬화/역직렬화합니다.");
+            sb.AppendLine(indent + "    // 필드는 internal — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근하세요.");
+            sb.AppendLine(indent + "    // [JsonObject(Fields)]로 Newtonsoft가 internal 필드를 직렬화/역직렬화합니다.");
             sb.AppendLine(indent + "    [Serializable]");
             sb.AppendLine(indent + "    [JsonObject(MemberSerialization.Fields)]");
             sb.AppendLine(indent + "    public sealed class Row");
@@ -240,13 +240,14 @@ namespace TrueBase.Editor
                 if (string.IsNullOrWhiteSpace(c.Comment) == false)
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
                 // 컬렉션(List·배열·Dictionary 등)은 null 방지를 위해 빈 인스턴스로 초기화(읽기만 해도 변경으로 오인되지 않게).
+                // 필드는 internal — 정적 프로퍼티로 접근. (private는 중첩 Row라 바깥 클래스에서 접근 불가)
                 var fieldInit = TryGetCollectionInit(c.ClrType, out var fieldInitExpr) ? " = " + fieldInitExpr : string.Empty;
-                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] private " + c.ClrType + " " + fieldName + fieldInit + ";");
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] internal " + c.ClrType + " " + fieldName + fieldInit + ";");
             }
 
             // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
             if (!columns.Any(c => c.Name == "updated_at"))
-                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] private string updated_at;");
+                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] internal string updated_at;");
 
             sb.AppendLine(indent + "#pragma warning restore CS0169, CS0649");
             sb.AppendLine(indent + "    }");

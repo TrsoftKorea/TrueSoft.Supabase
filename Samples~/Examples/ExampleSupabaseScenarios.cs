@@ -346,13 +346,13 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
 
-    // 필드는 private — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근합니다.
+    // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
     [Serializable]
     [JsonObject(MemberSerialization.Fields)]
     public sealed class Row
     {
-        [DataColumn("level")] private int level;
-        [DataColumn("coins")] private int coins;
+        [DataColumn("level")] internal int level;
+        [DataColumn("coins")] internal int coins;
     }
 
     public static int Level
