@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using TrueBase.Core.Models;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
 using UnityEngine;

@@ -184,7 +184,6 @@ namespace TrueBase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using TrueBase.Core.Data;");
             sb.AppendLine("using TrueBase.Unity;");
             if (extraUsings != null)
                 foreach (var ns in extraUsings)
