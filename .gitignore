@@ -146,6 +146,7 @@ GameAnalytics.meta
 
 # VitePress docs
 docs/node_modules
+docs/node_modules.meta
 docs/.vitepress/dist
 docs/.vitepress/cache
 
