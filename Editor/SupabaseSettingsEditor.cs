@@ -456,22 +456,20 @@ namespace TrueBase.Editor
             return !string.IsNullOrEmpty(elementType);
         }
 
-        /// <summary>List&lt;T&gt; 요소 타입 선택 드롭다운.</summary>
+        /// <summary>List&lt;T&gt; 요소 타입 입력(자유 텍스트). 중첩(List&lt;int&gt;)·클래스 요소(MyClass)도 지정 가능.</summary>
         private static void DrawListTypeControls(ref string customType)
         {
             TryParseListType(customType, out var elem);
-            var idx    = Math.Max(0, Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, elem));
-            var newIdx = EditorGUILayout.Popup(idx, RemoteConfigClassGenerator.TypeOptions, GUILayout.ExpandWidth(true));
-            customType = "List<" + RemoteConfigClassGenerator.TypeOptions[newIdx] + ">";
+            var newElem = EditorGUILayout.TextField(elem, GUILayout.ExpandWidth(true));
+            customType = "List<" + (string.IsNullOrWhiteSpace(newElem) ? "int" : newElem.Trim()) + ">";
         }
 
-        /// <summary>T[] 요소 타입 선택 드롭다운.</summary>
+        /// <summary>T[] 요소 타입 입력(자유 텍스트). 예: int → int[], List&lt;int&gt; → List&lt;int&gt;[].</summary>
         private static void DrawArrayTypeControls(ref string customType)
         {
             TryParseArrayType(customType, out var elem);
-            var idx    = Math.Max(0, Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, elem));
-            var newIdx = EditorGUILayout.Popup(idx, RemoteConfigClassGenerator.TypeOptions, GUILayout.ExpandWidth(true));
-            customType = RemoteConfigClassGenerator.TypeOptions[newIdx] + "[]";
+            var newElem = EditorGUILayout.TextField(elem, GUILayout.ExpandWidth(true));
+            customType = (string.IsNullOrWhiteSpace(newElem) ? "int" : newElem.Trim()) + "[]";
         }
 
         /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>

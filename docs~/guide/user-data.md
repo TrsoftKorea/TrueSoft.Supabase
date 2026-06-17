@@ -12,7 +12,7 @@
 | 동작 | 설명 |
 |------|------|
 | Diff 패치 | 이전 상태와 비교해 변경된 필드만 서버에 전송합니다. 변경이 없으면 네트워크 요청을 생략합니다. |
-| 쿨타임 자동 저장 | 값을 쓰면 `MarkDirty()`가 자동 호출되고, `SupabaseRuntime`이 설정된 쿨타임 주기로 업로드합니다. |
+| 쿨타임 자동 저장 | 프로퍼티 값을 바꾸거나 컬렉션을 수정하면 `SupabaseRuntime`이 쿨타임 주기로 자동 업로드합니다. |
 | 즉시 저장 | 씬 전환·결제 완료처럼 지금 바로 저장해야 할 때는 `TrySaveAllAsync()`로 강제 플러시합니다. |
 
 ---
@@ -29,6 +29,10 @@
 
 ```csharp
 // PlayerSave.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
+using Newtonsoft.Json;
+using TrueBase.Core.Data;
+using TrueBase.Unity;
+
 public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 {
     public static readonly PlayerSave Instance = new();
@@ -36,13 +40,17 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 
     public static Task<bool> TryLoadAsync() => Instance.TryLoadAsync();
 
+    // 필드는 private — 반드시 아래 정적 프로퍼티로만 접근합니다.
     [Serializable]
+    [JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 private 필드를 저장/로드
     public sealed class Row
     {
-        [DataColumn("level")] public int level;
-        [DataColumn("coins")] public int coins;
+        [DataColumn("level")]     private int            level;
+        [DataColumn("coins")]     private int            coins;
+        [DataColumn("inventory")] private List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
     }
 
+    // 스칼라: get/set — 쓰면 MarkDirty 자동
     public static int Level
     {
         get => Instance.Current.level;
@@ -54,8 +62,19 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
         get => Instance.Current.coins;
         set { Instance.Current.coins = value; Instance.MarkDirty(); }
     }
+
+    // 컬렉션: 일반 컬렉션처럼 사용 — 제자리 수정도 자동 동기화에 반영
+    public static List<int> Inventory
+    {
+        get => Instance.Current.inventory;
+        set { Instance.Current.inventory = value ?? new List<int>(); Instance.MarkDirty(); }
+    }
 }
 ```
+
+::: warning
+`Row` 필드는 private입니다. 데이터는 정적 프로퍼티(`PlayerSave.Level`)로만 읽고 씁니다.
+:::
 
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
 
@@ -87,6 +106,19 @@ PlayerSave.Coins += 100;
 
 값을 쓰면 `MarkDirty()`가 자동으로 호출되고, `SupabaseRuntime`이 쿨타임 주기로 자동 저장합니다.
 
+### 컬렉션
+
+`List`, 배열, `Dictionary` 컬럼은 일반 컬렉션과 똑같이 다루면 됩니다. 항목을 추가하거나 바꾸면 다른 값과 마찬가지로 쿨타임 주기에 자동 저장됩니다.
+
+```csharp
+PlayerSave.Inventory.Add(5);
+PlayerSave.Inventory[0] = 9;
+PlayerSave.Stats["atk"] = 100;
+PlayerSave.Matrix[0].Add(3);               // List<List<int>> 같은 중첩도 동일
+
+PlayerSave.Inventory = new List<int>{1, 2}; // 통째 교체도 가능
+```
+
 ---
 
 ## 즉시 저장
@@ -117,16 +149,41 @@ Retool에서 `user_saves` 테이블에 컬럼을 추가합니다. 추가 후 생
 
 ---
 
+## 지원 타입
+
+직렬화는 **Newtonsoft.Json** 기반이라 폭넓은 타입을 지원합니다.
+
+| C# 타입 | DB 컬럼 타입 | 비고 |
+|---|---|---|
+| `bool` `int` `long` `float` `double` | `bool` `int4` `int8` `float4` `float8` | |
+| `decimal` | `numeric` | 정밀 금액 |
+| `string` | `text` | |
+| `DateTime` / `DateTimeOffset` | `timestamptz` | ISO8601 자동 파싱 |
+| `int?` `long?` 등 nullable | 같은 타입(NULL 허용) | null/0 구분 시 |
+| `List<T>` / `List<List<T>>` | `jsonb` | 이중 리스트 가능 |
+| `T[]` | `jsonb` | |
+| `Dictionary<K,V>` | `jsonb` | |
+| 중첩 클래스 | `jsonb` | 요소 클래스는 파라미터 없는 생성자 필요 |
+
+생성 창에서 컬럼 타입을 지정할 수 있고(컬렉션은 요소 타입을 자유 텍스트로 입력), 지정한 타입은 재생성 시에도 보존됩니다.
+
+---
+
 ## JSON 직렬화 주의사항
 
 ::: warning
-`[DataColumn("other_name")]`은 select/PATCH 키만 바꿉니다. 역직렬화는 **필드 이름** 기준입니다.  
-DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 사용하세요.
+`Row`는 `[JsonObject(MemberSerialization.Fields)]`로 직렬화되어 **필드 이름**을 JSON 키로 사용합니다.
+`[DataColumn("other_name")]`은 select/PATCH 키만 바꿀 뿐 역직렬화 키는 바꾸지 않습니다.
+DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 지정하세요.
 :::
 
 ```csharp
 [DataColumn("last_login_at")]
 [JsonProperty("last_login_at")]
-public string lastLoginAt;
+private string lastLoginAt;
 ```
+
+::: info 커스텀 클래스 요소
+`List<MyItem>` · `Dictionary<string, MyItem>`처럼 요소가 클래스이고 그 **private 필드까지** 저장하려면, `MyItem`에도 `[JsonObject(MemberSerialization.Fields)]`를 붙이세요. 없으면 public 멤버만 저장됩니다.
+:::
 

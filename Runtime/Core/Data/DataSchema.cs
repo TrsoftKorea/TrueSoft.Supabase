@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Newtonsoft.Json;
 
 namespace TrueBase.Core.Data
 {
@@ -80,6 +81,56 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
+        /// <paramref name="previous"/>와 <paramref name="current"/> 사이에 값이 바뀐 매핑 컬럼이
+        /// 하나라도 있으면 true. 컬렉션 등 참조 타입의 제자리 변경도 값 비교로 감지합니다.
+        /// (MarkDirty 플래그 없이 변경을 잡아내는 동기화 경로에 사용)
+        /// </summary>
+        public static bool HasChanges<T>(T previous, T current)
+        {
+            if (current == null)
+                return false;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var col = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
+                    continue;
+
+                if (!EqualsValues(GetValue(m, previous), GetValue(m, current)))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static readonly Dictionary<Type, bool> _hasRefColumnsCache = new();
+
+        /// <summary>
+        /// T에 값 타입·string이 아닌(컬렉션·클래스 등) 매핑 컬럼이 하나라도 있으면 true. 결과는 캐시됩니다.
+        /// 참조 컬럼이 없는 스칼라 전용 Row는 값 비교 비용을 들일 필요가 없으므로 이 판별로 건너뜁니다.
+        /// </summary>
+        public static bool HasReferenceColumns<T>()
+        {
+            var t = typeof(T);
+            if (_hasRefColumnsCache.TryGetValue(t, out var cached))
+                return cached;
+
+            var has = false;
+            foreach (var m in GetMappedMembers(t))
+            {
+                var mt = (m as FieldInfo)?.FieldType ?? (m as PropertyInfo)?.PropertyType;
+                if (mt != null && !mt.IsValueType && mt != typeof(string))
+                {
+                    has = true;
+                    break;
+                }
+            }
+
+            _hasRefColumnsCache[t] = has;
+            return has;
+        }
+
+        /// <summary>
         /// <see cref="DataColumnAttribute"/> 멤버를 reflection으로 복사한 새 인스턴스를 반환합니다.
         /// <paramref name="src"/>가 null이면 <c>new T()</c>를 반환합니다.
         /// </summary>
@@ -105,12 +156,28 @@ namespace TrueBase.Core.Data
         {
             foreach (var m in GetMappedMembers(typeof(T)))
             {
-                var value = GetValue(m, src);
+                // 참조 타입은 깊은 복사 — 스냅샷이 현재 인스턴스와 참조를 공유하지 않게 해
+                // EqualsValues가 내부 값 변경을 감지하고, 불변 시 PATCH에서 제외할 수 있게 합니다.
+                var value = DeepCloneIfReference(GetValue(m, src));
                 if (m is FieldInfo f)
                     f.SetValue(dst, value);
                 else if (m is PropertyInfo p && p.CanWrite)
                     p.SetValue(dst, value);
             }
+        }
+
+        /// <summary>
+        /// 참조 타입(컬렉션·클래스)을 JSON 왕복으로 독립 복제합니다. 값 타입·string은 그대로 반환.
+        /// 복제 불가(순환참조 등) 시 원본 참조를 반환 → EqualsValues의 ReferenceEquals 경로가
+        /// 안전하게 '변경됨'으로 처리(이전 동작과 동일, 데이터 누락 없음).
+        /// </summary>
+        private static object DeepCloneIfReference(object value)
+        {
+            if (value == null) return null;
+            var t = value.GetType();
+            if (t.IsValueType || t == typeof(string)) return value;
+            try { return JsonConvert.DeserializeObject(JsonConvert.SerializeObject(value), t); }
+            catch { return value; }
         }
 
         private static bool EqualsValues(object a, object b)
@@ -120,19 +187,26 @@ namespace TrueBase.Core.Data
             if (a == null || b == null)
                 return false;
 
-            // 클래스 타입(string 제외)이 같은 참조인 경우:
-            // CloneRow가 참조를 그대로 복사한 것이므로 내부 변경을 감지할 수 없습니다.
-            // 항상 변경된 것으로 처리해 패치에 포함합니다.
             var t = a.GetType();
-            if (!t.IsValueType && t != typeof(string) && ReferenceEquals(a, b))
+            if (t.IsValueType || t == typeof(string))
+                return a.Equals(b);
+
+            // 참조 타입이 같은 인스턴스 = 스냅샷 깊은복제 실패로 참조를 공유 중.
+            // 내부 변경을 값으로 판별할 수 없으므로 안전하게 '변경됨'으로 처리합니다.
+            if (ReferenceEquals(a, b))
                 return false;
 
-            return a.Equals(b);
+            // 독립 인스턴스 → 전송될 JSON 기준으로 구조적 값 비교.
+            // 같으면 실제 변경 없음 → PATCH에서 제외(불필요한 전송 방지).
+            try { return JsonConvert.SerializeObject(a) == JsonConvert.SerializeObject(b); }
+            catch { return false; }
         }
 
         private static IEnumerable<MemberInfo> GetMappedMembers(Type t)
         {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public;
+            // private 필드도 매핑 — 생성 클래스가 [DataColumn] 필드를 private으로 두고
+            // 정적 프로퍼티(MarkDirty setter)로만 접근하도록 강제하기 위함.
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             foreach (var p in t.GetProperties(flags))
             {
                 if (p.GetIndexParameters().Length > 0)

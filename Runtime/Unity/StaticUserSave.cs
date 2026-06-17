@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading.Tasks;
 using TrueBase.Core.Data;
 using UnityEngine;
@@ -72,6 +73,9 @@ namespace TrueBase.Unity
         private            TRow   _lastSynced;
         private            bool   _isDirty;
         private            bool   _isRegistered;
+        private readonly   bool   _hasReferenceColumns;  // 컬렉션·클래스 컬럼 보유 여부(값 비교 감지용)
+        private            float  _lastDeepCheckTime = float.MinValue;  // 값 비교 throttle 타임스탬프
+        private            bool   _lastDeepResult;                      // 캐시된 값 비교 결과
         protected readonly string _syncKey;
         protected readonly string LogTag;
 
@@ -92,6 +96,7 @@ namespace TrueBase.Unity
             LogTag      = $"[StaticUserSave<{typeof(TRow).Name}>]";
             Current     = new TRow();
             _lastSynced = new TRow();
+            _hasReferenceColumns = DataSchema.HasReferenceColumns<TRow>();
 
             EnsureRegistered();
         }
@@ -119,11 +124,34 @@ namespace TrueBase.Unity
         }
 
         // ── 레지스트리 콜백 ───────────────────────────────────────────────────
-        private bool HasDirty() => _isDirty;
+        // 스칼라는 setter의 MarkDirty(_isDirty)로 즉시 잡습니다. 컬렉션·클래스는 직접 수정 시
+        // 플래그가 안 걸리므로 마지막 동기화본과 값 비교(HasChanges)로 변경을 감지합니다.
+        // → 리스트를 일반 리스트처럼 자유롭게 수정해도 자동 저장됩니다.
+        //
+        // Tick은 매 프레임 호출되므로 비싼 값 비교는 throttle합니다. 어차피 전송은 쿨타임까지
+        // 대기하므로 그보다 자주 검사할 이유가 없어, 검사 주기를 쿨타임에 맞춰 idle GC를 최소화합니다.
+        // 즉시 저장(앱 종료 등)은 FlushDirtyAsync가 throttle을 무시하고 신선하게 검사하므로 정확성은 보장됩니다.
+        private bool HasDirty()
+        {
+            if (_isDirty) return true;
+            if (!_hasReferenceColumns) return false;
+
+            var interval = Mathf.Max(1f, UserSaveStaticSyncRegistry.GetPriorityCooldown(1)); // Normal 쿨타임
+            var now = Time.realtimeSinceStartup;
+            if (now - _lastDeepCheckTime >= interval)
+            {
+                _lastDeepCheckTime = now;
+                _lastDeepResult = DataSchema.HasChanges(_lastSynced, Current);
+            }
+            return _lastDeepResult;
+        }
 
         private async Task<bool> FlushDirtyAsync()
         {
-            if (!_isDirty) return true;
+            // flush 시점에는 throttle을 무시하고 신선하게 검사 — 즉시 저장(앱 종료 등)에서
+            // 컬렉션 제자리 수정이 throttle 캐시 때문에 누락되지 않도록 합니다.
+            _lastDeepCheckTime = float.MinValue;
+            if (!HasDirty()) return true;
 
             // await 이전에 현재 값을 스냅샷하고 dirty를 먼저 해제합니다.
             // 이렇게 하면 네트워크 대기 중 게임 코드가 새 값을 쓰고 MarkDirty()를 호출해도
@@ -143,6 +171,9 @@ namespace TrueBase.Unity
             }
 
             _lastSynced = snapshot;
+            // 방금 동기화했으므로 값 비교 캐시를 초기화(새 _lastSynced 기준으로 재평가)
+            _lastDeepResult = false;
+            _lastDeepCheckTime = float.MinValue;
             return true;
         }
 
@@ -199,7 +230,9 @@ namespace TrueBase.Unity
             if (!success) return (false, false, DateTime.MinValue);
             _nanooLastLoaded = row;
             if (!hasRow || row == null) return (true, false, DateTime.MinValue);
-            var val = typeof(TRow).GetField("updated_at")?.GetValue(row)?.ToString();
+            var val = typeof(TRow)
+                .GetField("updated_at", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                ?.GetValue(row)?.ToString();
             var updatedAt = DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
             return (true, true, updatedAt);
         }

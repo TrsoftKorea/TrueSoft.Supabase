@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using TrueBase.Core.Data;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
@@ -345,11 +346,13 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
 
+    // 필드는 private — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근합니다.
     [Serializable]
+    [JsonObject(MemberSerialization.Fields)]
     public sealed class Row
     {
-        [DataColumn("level")] public int level;
-        [DataColumn("coins")] public int coins;
+        [DataColumn("level")] private int level;
+        [DataColumn("coins")] private int coins;
     }
 
     public static int Level

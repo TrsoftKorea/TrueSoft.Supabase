@@ -131,10 +131,11 @@ DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 C# 필드명과 달�
 
 ```csharp
 [Serializable]
+[JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 private 필드(필드명을 JSON 키로) 처리
 public sealed class Row
 {
-    [DataColumn("player_level")] public int playerLevel;      // DB: player_level, 플레이나누: playerLevel
-    [DataColumn("item_ids")]     public List<int> itemIds;    // DB: item_ids,     플레이나누: itemIds
+    [DataColumn("player_level")] private int       playerLevel;          // DB: player_level, 플레이나누: playerLevel
+    [DataColumn("item_ids")]     private List<int> itemIds = new();       // DB: item_ids,     플레이나누: itemIds
 }
 ```
 

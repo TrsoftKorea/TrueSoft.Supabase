@@ -256,7 +256,9 @@ namespace TrueBase.Unity
                 return false;
             }
 
-            if (!SafeHasDirty(entry))
+            // 즉시 flush는 throttle된 dirty 캐시를 우회하고 FlushAsync 내부의 신선한 검사에 맡깁니다.
+            // (컬렉션 제자리 수정이 값 비교 throttle 창 안에서 유실되는 것을 방지)
+            if (!immediate && !SafeHasDirty(entry))
                 return false;
 
             var now = Time.realtimeSinceStartup;

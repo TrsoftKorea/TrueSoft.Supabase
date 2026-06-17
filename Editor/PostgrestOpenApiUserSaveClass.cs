@@ -184,6 +184,7 @@ namespace TrueBase.Editor
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using UnityEngine;");
+            sb.AppendLine("using Newtonsoft.Json;");
             sb.AppendLine("using TrueBase.Core.Data;");
             sb.AppendLine("using TrueBase.Unity;");
             if (extraUsings != null)
@@ -224,22 +225,30 @@ namespace TrueBase.Editor
             sb.AppendLine();
             sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<bool> TryLoadAsync() => ((StaticUserSave<Row>)Instance).TryLoadAsync();");
             sb.AppendLine();
+            sb.AppendLine(indent + "    // 필드는 private — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근하세요.");
+            sb.AppendLine(indent + "    // [JsonObject(Fields)]로 Newtonsoft가 private 필드를 직렬화/역직렬화합니다.");
             sb.AppendLine(indent + "    [Serializable]");
+            sb.AppendLine(indent + "    [JsonObject(MemberSerialization.Fields)]");
             sb.AppendLine(indent + "    public sealed class Row");
             sb.AppendLine(indent + "    {");
+            // 필드는 리플렉션(Newtonsoft 역직렬화) / 정적 프로퍼티로만 접근 → '미사용/미할당' 경고 억제
+            sb.AppendLine(indent + "#pragma warning disable CS0169, CS0649");
             foreach (var c in columns)
             {
                 var fieldName     = LegalFieldName(c.Name);
                 var priorityParam = c.Priority == 1 /* Normal */ ? string.Empty : ", DataSavePriority." + PriorityName(c.Priority);
                 if (string.IsNullOrWhiteSpace(c.Comment) == false)
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
-                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] public " + c.ClrType + " " + fieldName + ";");
+                // 컬렉션(List·배열·Dictionary 등)은 null 방지를 위해 빈 인스턴스로 초기화(읽기만 해도 변경으로 오인되지 않게).
+                var fieldInit = TryGetCollectionInit(c.ClrType, out var fieldInitExpr) ? " = " + fieldInitExpr : string.Empty;
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] private " + c.ClrType + " " + fieldName + fieldInit + ";");
             }
 
             // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
             if (!columns.Any(c => c.Name == "updated_at"))
-                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] public string updated_at;");
+                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] private string updated_at;");
 
+            sb.AppendLine(indent + "#pragma warning restore CS0169, CS0649");
             sb.AppendLine(indent + "    }");
 
             // updated_at은 DB 트리거가 자동 설정 — 개발자가 실수로 set하지 않도록 정적 프로퍼티 제외
@@ -248,6 +257,21 @@ namespace TrueBase.Editor
                 var fieldName = LegalFieldName(c.Name);
                 var propName = ToPascalCase(c.Name);
                 sb.AppendLine();
+
+                if (TryGetCollectionInit(c.ClrType, out var propInitExpr))
+                {
+                    // 컬렉션(List·배열·Dictionary 등): 일반 컬렉션처럼 그대로 사용하세요.
+                    // Add/[key]=/[i]= 같은 제자리 수정도 자동 동기화가 값 비교로 감지해 저장합니다(MarkDirty 수동 불필요).
+                    // 필드가 빈 인스턴스로 초기화돼 있어 null 걱정 없이 바로 쓸 수 있습니다.
+                    sb.AppendLine(indent + "    /// <summary>일반 컬렉션처럼 사용하세요. 직접 수정(Add/[key]=/[i]=)해도 자동 저장에 반영됩니다.</summary>");
+                    sb.AppendLine(indent + "    public static " + c.ClrType + " " + propName);
+                    sb.AppendLine(indent + "    {");
+                    sb.AppendLine(indent + "        get => Instance.Current." + fieldName + ";");
+                    sb.AppendLine(indent + "        set { Instance.Current." + fieldName + " = value ?? " + propInitExpr + "; Instance.MarkDirty(); }");
+                    sb.AppendLine(indent + "    }");
+                    continue;
+                }
+
                 sb.AppendLine(indent + "    public static " + c.ClrType + " " + propName);
                 sb.AppendLine(indent + "    {");
                 sb.AppendLine(indent + "        get => Instance.Current." + fieldName + ";");
@@ -511,6 +535,52 @@ namespace TrueBase.Editor
             2 => "Lazy",
             _ => "Normal"
         };
+
+        // new 가능한(파라미터 없는 생성자) 컬렉션 타입 prefix 목록.
+        private static readonly string[] s_newableCollectionPrefixes =
+        {
+            "List<", "Dictionary<", "HashSet<", "SortedList<", "SortedDictionary<",
+            "SortedSet<", "Queue<", "Stack<", "LinkedList<", "ObservableCollection<"
+        };
+
+        /// <summary>
+        /// ClrType이 컬렉션(List·Dictionary·HashSet·배열 등)이면 true와 null 방지용 초기화식을 반환합니다.
+        /// 예: <c>List&lt;int&gt;</c>→<c>new List&lt;int&gt;()</c>, <c>int[]</c>→<c>System.Array.Empty&lt;int&gt;()</c>.
+        /// 컬렉션 컬럼은 필드를 빈 인스턴스로 초기화하고 일반 mutable 프로퍼티로 노출하기 위해 분기합니다.
+        /// </summary>
+        private static bool TryGetCollectionInit(string clrType, out string initExpr)
+        {
+            initExpr = null;
+            if (string.IsNullOrWhiteSpace(clrType))
+                return false;
+
+            var t = clrType.Trim();
+            // 주석(예: "string /* json */")이 붙은 경우 타입 부분만 사용
+            var commentIdx = t.IndexOf("/*", StringComparison.Ordinal);
+            if (commentIdx >= 0)
+                t = t.Substring(0, commentIdx).Trim();
+
+            // 배열 T[] → new T[]() 는 불가하므로 System.Array.Empty<T>() 사용
+            if (t.EndsWith("[]", StringComparison.Ordinal))
+            {
+                var elem = t.Substring(0, t.Length - 2).Trim();
+                if (elem.Length == 0) return false;
+                initExpr = "System.Array.Empty<" + elem + ">()";
+                return true;
+            }
+
+            // new 가능한 제네릭 컬렉션 → new TYPE()
+            foreach (var prefix in s_newableCollectionPrefixes)
+            {
+                if (t.StartsWith(prefix, StringComparison.Ordinal) && t.EndsWith(">", StringComparison.Ordinal))
+                {
+                    initExpr = "new " + t + "()";
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         private static string EscapeXml(string s)
         {
