@@ -99,6 +99,17 @@ namespace TrueBase.Unity
             _hasReferenceColumns = DataSchema.HasReferenceColumns<TRow>();
 
             EnsureRegistered();
+
+#if UNITY_EDITOR
+            // 에디터 디버그 창에서 현재 데이터를 보고·편집·저장할 수 있도록 등록(빌드 미포함)
+            StaticUserSaveDebug.Register(new StaticUserSaveDebug.Entry
+            {
+                SyncKey     = _syncKey,
+                GetRow      = () => Current,
+                MarkDirty   = MarkDirty,
+                ReloadAsync = () => TryLoadAsync(),
+            });
+#endif
         }
 
         private void EnsureRegistered()
