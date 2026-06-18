@@ -78,9 +78,7 @@ Google OAuth 설정 방법은 [소셜 로그인](./social-login.md)을 참고하
 1. 메뉴 **TrueSoft > Supabase > 설정 에셋 만들기** 를 클릭합니다. `Assets/Resources/SupabaseSettings.asset`이 자동 생성됩니다.
 2. Inspector에서 **Project URL**, **Publishable Key**를 입력합니다.
 
-::: warning
-에셋을 직접 이동할 경우 반드시 `Assets/Resources/` 하위에 두어야 런타임에 로드됩니다.
-:::
+에셋을 옮긴다면 `Assets/Resources/` 하위에 두세요. 런타임은 이 경로에서 설정을 로드합니다.
 
 ### 3. 런타임 배치
 

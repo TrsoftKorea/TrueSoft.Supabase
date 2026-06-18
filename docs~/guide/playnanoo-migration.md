@@ -31,9 +31,7 @@
 
 3. Inspector에서 **Nanoo Storage Key**를 플레이나누 콘솔에 등록한 키로 변경합니다.
 
-::: warning
-`SupabaseRuntime`과 `PlayNanooRuntime` / `PlayNanooLegacyRuntime`을 동시에 씬에 두지 마세요.
-:::
+씬에는 `PlayNanooRuntime` / `PlayNanooLegacyRuntime` 중 하나만 둡니다. `SupabaseRuntime`을 따로 배치하지 않습니다(이 런타임들이 상속합니다).
 
 ---
 
@@ -65,9 +63,7 @@ playNanooRuntime.StartAppleSignInAndroid();
 
 플레이나누 복원이 실패하면 Supabase 세션도 롤백한 뒤 `false`를 반환합니다. 두 세션이 항상 동시에 유효하도록 보장합니다.
 
-::: warning
-`TrySignOutFullyAsync()`를 호출하면 Supabase와 플레이나누 액세스 토큰이 모두 삭제됩니다. 플레이나누 액세스 토큰 유효기간은 24시간이므로 그 이후에는 자동 로그인이 실패하며 플레이어가 직접 로그인해야 합니다.
-:::
+`TrySignOutFullyAsync()`는 Supabase와 플레이나누 액세스 토큰을 모두 삭제합니다. 플레이나누 액세스 토큰 유효기간은 24시간이라, 그 이후에는 자동 로그인이 만료되어 플레이어가 직접 로그인합니다.
 
 ---
 
@@ -164,9 +160,7 @@ PlayerSave.RegisterNanooConverters(
 
 `dbToNanoo`를 생략하면 DB → 플레이나누 방향은 기본 직렬화를 사용합니다.
 
-::: warning
-`NanooDeserializeJson` / `NanooSerializeJson`을 서브클래스에서 override한 경우, 등록된 변환 함수보다 override가 우선합니다.
-:::
+`NanooDeserializeJson` / `NanooSerializeJson`을 서브클래스에서 override하면, 등록된 변환 함수보다 override가 우선합니다.
 
 ---
 

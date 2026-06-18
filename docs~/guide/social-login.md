@@ -30,10 +30,7 @@ Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()
 
 Android에서 Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다.
 
-::: warning
-Google이 이미 로그인된 상태에서 `TrySignInAnonymouslyAsync`를 호출하면 실패합니다.  
-먼저 `TrySignOutFullyAsync`로 로그아웃하세요.
-:::
+Google 로그인 상태에서 익명 로그인으로 전환하려면 먼저 `TrySignOutFullyAsync`로 로그아웃한 뒤 `TrySignInAnonymouslyAsync`를 호출합니다.
 
 **실패 원인**
 
@@ -80,11 +77,8 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
 
 익명 세션에 Android Play Services Google 계정을 연동합니다. 연동 성공 시 기존 익명 계정이 소셜 계정으로 전환됩니다.
 
-::: warning
-익명 세션에서 직접 `TrySignInWithGoogleAsync`를 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
-반드시 이 메서드를 사용하세요.  
-Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
-:::
+익명 세션에서는 직접 로그인(`TrySignInWithGoogleAsync`) 대신 이 메서드로 연동합니다. 직접 호출하면 `anonymous_session_requires_explicit_link` 오류가 반환됩니다.  
+연동은 Supabase 대시보드 **Authentication > Settings > Manual linking** 이 ON일 때 동작합니다.
 
 **실패 원인**
 
@@ -183,10 +177,8 @@ Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync
 
 익명 세션에 Apple 계정을 연동합니다. 외부 SDK(Sign in with Apple)에서 발급받은 ID 토큰을 직접 전달합니다.
 
-::: warning
-익명 세션에서는 `TrySignInWithAppleIdTokenAsync` 대신 반드시 이 메서드를 사용하세요.  
-Supabase 대시보드 **Authentication > Settings > Manual linking** 을 ON으로 설정해야 합니다.
-:::
+익명 세션에서는 직접 로그인(`TrySignInWithAppleIdTokenAsync`) 대신 이 메서드로 연동합니다.  
+연동은 Supabase 대시보드 **Authentication > Settings > Manual linking** 이 ON일 때 동작합니다.
 
 **파라미터**
 

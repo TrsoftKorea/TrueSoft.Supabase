@@ -72,10 +72,6 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 }
 ```
 
-::: warning
-`Row` 필드는 internal입니다. 데이터는 정적 프로퍼티(`PlayerSave.Level`)로 읽고 씁니다.
-:::
-
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
 
 ---
