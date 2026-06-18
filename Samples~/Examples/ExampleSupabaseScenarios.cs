@@ -62,20 +62,20 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     // ─── 인증 ────────────────────────────────────────────────────────────────
 
-    /// <summary>Q — 익명 로그인.</summary>
+    /// <summary>Q — 익명 로그인. 로그인과 데이터 로드는 별개 단계 — 로그인 후 데이터 로드(R)를 호출합니다.</summary>
     private async Task SignInAnonymouslyAsync()
     {
         var ok = await SupabaseClient.TrySignInAnonymouslyAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.Reason}");
-        else     Debug.Log("[Supabase] 익명 로그인 성공.");
+        else     Debug.Log("[Supabase] 익명 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
 
-    /// <summary>I — Google 로그인 (Android 네이티브).</summary>
+    /// <summary>I — Google 로그인 (Android 네이티브). 로그인 후 데이터 로드(R)를 호출합니다.</summary>
     private async Task SignInWithGoogleAsync()
     {
         var ok = await SupabaseClient.TrySignInWithGoogleAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.Reason}");
-        else     Debug.Log("[Supabase] Google 로그인 성공.");
+        else     Debug.Log("[Supabase] Google 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
 
     /// <summary>P — 익명 계정에 Google 연동. 익명 세션이 아니면 실패.</summary>
