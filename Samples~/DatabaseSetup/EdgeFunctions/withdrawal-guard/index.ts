@@ -41,10 +41,11 @@ Deno.serve(async (req) => {
     );
   }
 
-  // userClient로 조회 — RLS(auth.uid() = user.id)가 적용되므로 본인 프로필만 반환
+  // user_profiles는 SELECT가 공개(프로필 표시용)이므로 account_id로 본인 행을 명시 필터해야 함
   const profileRes = await userClient
     .from("user_profiles")
     .select("withdrawn_at")
+    .eq("account_id", user.id)
     .maybeSingle();
 
   if (profileRes.error) {

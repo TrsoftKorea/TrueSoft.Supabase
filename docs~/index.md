@@ -16,9 +16,12 @@ features:
   - title: 인증
     details: 익명·Google 로그인, 익명→소셜 연동, 자동 로그인
     link: /guide/auth
-  - title: 계정
-    details: 닉네임 설정·중복 확인, 프로필 조회, 탈퇴 예약·취소
-    link: /guide/account
+  - title: 닉네임 · 프로필
+    details: 닉네임 설정·중복 확인, 공개 프로필 조회
+    link: /guide/display-name
+  - title: 탈퇴 · 서버 이주
+    details: 탈퇴 예약·취소, 서버 이주
+    link: /guide/withdrawal
   - title: 유저 데이터
     details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
     link: /guide/user-data

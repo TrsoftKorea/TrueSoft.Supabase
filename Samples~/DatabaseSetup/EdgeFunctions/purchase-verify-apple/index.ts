@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
   }
 
   const { data: profile } = await userClient
-    .from("user_profiles").select("user_id").maybeSingle();
+    .from("user_profiles").select("user_id").eq("account_id", user.id).maybeSingle();
   const userId: string | null = profile?.user_id ?? null;
 
   // price: 밀리유닛 (÷1000 = 실제 금액 정수), currency: ISO 4217 코드

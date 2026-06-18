@@ -38,6 +38,7 @@ export default defineConfig({
         text: '게임 데이터',
         items: [
           { text: '유저 데이터', link: '/guide/user-data' },
+          { text: '데이터 타입', link: '/guide/data-types' },
           { text: '원격 설정', link: '/guide/remote-config' }
         ]
       },

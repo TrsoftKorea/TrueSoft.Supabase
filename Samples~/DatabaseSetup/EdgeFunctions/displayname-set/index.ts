@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
   const myProfile = await userClient
     .from("user_profiles")
     .select("server_id")
-    .limit(1)
+    .eq("account_id", user.id)
     .maybeSingle();
 
   if (myProfile.error || !myProfile.data?.server_id) {

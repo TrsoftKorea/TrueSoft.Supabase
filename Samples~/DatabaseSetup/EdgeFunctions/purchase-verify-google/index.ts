@@ -186,11 +186,12 @@ Deno.serve(async (req) => {
     } satisfies VerifyResponse);
   }
 
-  // user_id 조회 (RLS 적용 userClient 사용)
+  // user_profiles는 SELECT가 공개이므로 account_id로 본인 행을 명시 필터
   let userId: string | null = null;
   const { data: profile, error: profileError } = await userClient
     .from("user_profiles")
     .select("user_id")
+    .eq("account_id", user.id)
     .maybeSingle();
   if (!profileError) {
     userId = profile?.user_id ?? null;
