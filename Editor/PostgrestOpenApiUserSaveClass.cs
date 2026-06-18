@@ -242,7 +242,11 @@ namespace TrueBase.Editor
                 // 컬렉션(List·배열·Dictionary 등)은 null 방지를 위해 빈 인스턴스로 초기화(읽기만 해도 변경으로 오인되지 않게).
                 // 필드는 internal — 정적 프로퍼티로 접근. (private는 중첩 Row라 바깥 클래스에서 접근 불가)
                 var fieldInit = TryGetCollectionInit(c.ClrType, out var fieldInitExpr) ? " = " + fieldInitExpr : string.Empty;
-                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] internal " + c.ClrType + " " + fieldName + fieldInit + ";");
+                // 정리된 필드명이 컬럼명과 다르면 JSON 키를 컬럼명으로 보존(직렬화 자동 보장).
+                var jsonProp = MemberNameOf(fieldName) != c.Name
+                    ? "[JsonProperty(\"" + EscapeCSharpString(c.Name) + "\")] "
+                    : string.Empty;
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] " + jsonProp + "internal " + c.ClrType + " " + fieldName + fieldInit + ";");
             }
 
             // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
@@ -425,10 +429,29 @@ namespace TrueBase.Editor
             return true;
         }
 
+        /// <summary>
+        /// 컬럼명을 유효한 C# 필드 식별자로 변환합니다. 유효하지 않은 문자는 '_'로,
+        /// 숫자로 시작하면 '_' 접두, C# 키워드는 '@' 접두. 변환 결과가 컬럼명과 다르면
+        /// 호출부에서 <c>[JsonProperty]</c>로 JSON 키를 보존합니다(<see cref="MemberNameOf"/> 비교).
+        /// </summary>
         private static string LegalFieldName(string columnName)
         {
-            return IsCSharpKeyword(columnName) ? "@" + columnName : columnName;
+            if (string.IsNullOrEmpty(columnName)) return "_";
+
+            var sb = new StringBuilder(columnName.Length);
+            foreach (var ch in columnName)
+                sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
+
+            var name = sb.ToString();
+            if (name.Length == 0 || char.IsDigit(name[0]))
+                name = "_" + name;
+
+            return IsCSharpKeyword(name) ? "@" + name : name;
         }
+
+        /// <summary>필드 토큰에서 실제 멤버 이름(JSON 키로 쓰임)을 구합니다 — '@' 접두만 제거.</summary>
+        private static string MemberNameOf(string fieldToken) =>
+            fieldToken.StartsWith("@", StringComparison.Ordinal) ? fieldToken.Substring(1) : fieldToken;
 
         private static bool IsCSharpKeyword(string s)
         {
@@ -519,15 +542,21 @@ namespace TrueBase.Editor
 
         private static string ToPascalCase(string name)
         {
-            var parts = name.Split('_');
-            var sb = new StringBuilder();
-            foreach (var part in parts)
+            if (string.IsNullOrEmpty(name)) return "_";
+
+            // 비식별 문자(_, -, ., 공백 등)를 단어 구분자로 보고 각 단어 첫 글자를 대문자로.
+            var sb = new StringBuilder(name.Length);
+            var startOfWord = true;
+            foreach (var ch in name)
             {
-                if (part.Length == 0) continue;
-                sb.Append(char.ToUpperInvariant(part[0]));
-                if (part.Length > 1) sb.Append(part, 1, part.Length - 1);
+                if (!char.IsLetterOrDigit(ch)) { startOfWord = true; continue; }
+                sb.Append(startOfWord ? char.ToUpperInvariant(ch) : ch);
+                startOfWord = false;
             }
-            return sb.Length > 0 ? sb.ToString() : name;
+
+            if (sb.Length == 0) return "_";
+            if (char.IsDigit(sb[0])) sb.Insert(0, '_'); // 숫자로 시작하면 식별자 무효 → '_' 접두
+            return sb.ToString();
         }
 
         private static string PriorityName(int priority) => priority switch

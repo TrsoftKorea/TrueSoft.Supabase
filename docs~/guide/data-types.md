@@ -1,6 +1,6 @@
 # 데이터 타입
 
-유저 세이브 필드에 쓸 수 있는 타입과 직렬화 규칙입니다. 직렬화는 Newtonsoft.Json 기반이라 폭넓은 타입을 지원합니다.
+유저 세이브 필드에 쓸 수 있는 타입입니다. 직렬화는 Newtonsoft.Json 기반이라 폭넓은 타입을 지원합니다.
 
 ---
 
@@ -18,24 +18,21 @@
 | `Dictionary<K,V>` | `jsonb` | |
 | 중첩 클래스 | `jsonb` | 요소 클래스는 파라미터 없는 생성자 필요 |
 
-생성 창에서 컬럼 타입을 지정할 수 있고(컬렉션은 요소 타입을 자유 텍스트로 입력), 지정한 타입은 재생성 시에도 보존됩니다.
+생성 창에서 컬럼 타입을 지정할 수 있고(컬렉션은 요소 타입을 자유 텍스트로 입력), 지정한 타입은 재생성 시에도 보존됩니다. 직렬화는 생성기가 알아서 처리하므로 추가로 신경 쓸 것은 없습니다.
 
 ---
 
-## 직렬화 규칙
+## 커스텀 클래스 요소
 
-::: warning
-`Row`는 `[JsonObject(MemberSerialization.Fields)]`로 직렬화되어 **필드 이름**을 JSON 키로 사용합니다.
-`[DataColumn("other_name")]`은 select/PATCH 키만 바꿀 뿐 역직렬화 키는 바꾸지 않습니다.
-DB 컬럼명과 C# 필드명이 다를 때는 `[JsonProperty]`를 함께 지정하세요.
-:::
+`List<MyItem>` · `Dictionary<string, MyItem>`처럼 요소를 직접 만든 클래스로 둘 수 있습니다. `MyItem`에 파라미터 없는 생성자가 있으면 그대로 저장·로드됩니다.
 
 ```csharp
-[DataColumn("last_login_at")]
-[JsonProperty("last_login_at")]
-internal string lastLoginAt;
+[Serializable]
+public sealed class MyItem
+{
+    public int  id;
+    public int  count;
+}
 ```
 
-::: info 커스텀 클래스 요소
-`List<MyItem>` · `Dictionary<string, MyItem>`처럼 요소가 클래스이고 그 **private 필드까지** 저장하려면, `MyItem`에도 `[JsonObject(MemberSerialization.Fields)]`를 붙이세요. 없으면 public 멤버만 저장됩니다.
-:::
+`MyItem`의 private 필드까지 저장하려면 `[JsonObject(MemberSerialization.Fields)]`를 붙입니다.
