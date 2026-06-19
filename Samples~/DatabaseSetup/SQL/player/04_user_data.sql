@@ -217,6 +217,163 @@ comment on function public.admin_add_user_data_column(text, text) is
 -- [의도적] grant 없음 — service_role 전용.
 
 
+-- ---------------------------------------------------------------------------
+-- admin_add_user_data_column (구조화 인자판) — Retool dataManager/addColumn.ts 전용
+-- ---------------------------------------------------------------------------
+-- 컬럼명·타입·nullable·default를 분리해 받습니다. 이미 존재하면 오류.
+--   SELECT admin_add_user_data_column('exp', 'int', false, '0');
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_add_user_data_column(
+  p_colname     text,
+  p_coltype     text,
+  p_nullable    boolean,
+  p_default_sql text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  colname        text := nullif(btrim(p_colname), '');
+  coltype        text := nullif(btrim(p_coltype), '');
+  default_sql    text := nullif(btrim(p_default_sql), '');
+  notnull_sql    text;
+  default_clause text;
+begin
+  if colname is null then
+    raise exception 'Column name is required';
+  end if;
+  if coltype is null then
+    raise exception 'Column type is required';
+  end if;
+  if colname !~ '^[a-z_][a-z0-9_]*$' then
+    raise exception 'Invalid column name: %', colname;
+  end if;
+  if colname in ('id','user_id','account_id','server_id','updated_at') then
+    raise exception 'Reserved column name: %', colname;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'user_data' and column_name = colname
+  ) then
+    raise exception 'Column already exists: %', colname;
+  end if;
+
+  notnull_sql    := case when p_nullable then '' else 'not null' end;
+  default_clause := case when default_sql is null then '' else 'default ' || default_sql end;
+
+  execute format(
+    'alter table public.user_data add column %I %s %s %s',
+    colname, coltype, notnull_sql, default_clause
+  );
+end;
+$$;
+
+comment on function public.admin_add_user_data_column(text, text, boolean, text) is
+  'user_data 컬럼 추가(구조화 인자판, Retool 전용). 이미 존재하면 오류.';
+-- [의도적] grant 없음 — service_role 전용.
+
+
+-- ---------------------------------------------------------------------------
+-- admin_update_user_data_column — user_data 컬럼의 NOT NULL/DEFAULT 변경 (어드민/Retool 전용)
+-- ---------------------------------------------------------------------------
+-- 예약 컬럼은 거부, 존재하지 않으면 오류. default_sql 에 세미콜론 금지(인젝션 차단).
+--   SELECT admin_update_user_data_column('exp', true,  null);   -- NULL 허용 + default 제거
+--   SELECT admin_update_user_data_column('exp', false, '0');    -- NOT NULL + default 0
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_update_user_data_column(
+  p_colname     text,
+  p_nullable    boolean,
+  p_default_sql text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  colname     text := nullif(btrim(p_colname), '');
+  default_sql text := nullif(btrim(p_default_sql), '');
+begin
+  if colname is null then
+    raise exception 'Column name is required';
+  end if;
+  if colname !~ '^[a-z_][a-z0-9_]*$' then
+    raise exception 'Invalid column name: %', colname;
+  end if;
+  if colname in ('id','user_id','account_id','server_id','created_at','updated_at') then
+    raise exception 'Reserved column name: %', colname;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'user_data' and column_name = colname
+  ) then
+    raise exception 'Column does not exist: %', colname;
+  end if;
+  if position(';' in coalesce(p_default_sql, '')) > 0 then
+    raise exception 'Invalid default: semicolon is not allowed';
+  end if;
+
+  if p_nullable then
+    execute format('alter table public.user_data alter column %I drop not null', colname);
+  else
+    execute format('alter table public.user_data alter column %I set not null', colname);
+  end if;
+
+  if default_sql is null then
+    execute format('alter table public.user_data alter column %I drop default', colname);
+  else
+    execute format('alter table public.user_data alter column %I set default %s', colname, default_sql);
+  end if;
+end;
+$$;
+
+comment on function public.admin_update_user_data_column(text, boolean, text) is
+  'user_data 컬럼의 NOT NULL/DEFAULT 변경(어드민/Retool 전용). 예약 컬럼 거부.';
+-- [의도적] grant 없음 — service_role 전용.
+
+
+-- ---------------------------------------------------------------------------
+-- admin_drop_user_data_column — user_data 컬럼 삭제 (어드민/Retool 전용)
+-- ---------------------------------------------------------------------------
+-- 예약 컬럼은 거부, 존재하지 않으면 오류. (append-only 정책의 예외 — 운영 도구 전용)
+--   SELECT admin_drop_user_data_column('exp');
+-- ---------------------------------------------------------------------------
+create or replace function public.admin_drop_user_data_column(p_colname text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  colname text := nullif(btrim(p_colname), '');
+begin
+  if colname is null then
+    raise exception 'Column name is required';
+  end if;
+  if colname !~ '^[a-z_][a-z0-9_]*$' then
+    raise exception 'Invalid column name: %', colname;
+  end if;
+  if colname in ('id','user_id','account_id','server_id','created_at','updated_at') then
+    raise exception 'Reserved column name: %', colname;
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'user_data' and column_name = colname
+  ) then
+    raise exception 'Column does not exist: %', colname;
+  end if;
+
+  execute format('alter table public.user_data drop column %I', colname);
+end;
+$$;
+
+comment on function public.admin_drop_user_data_column(text) is
+  'user_data 컬럼 삭제(어드민/Retool 전용). 예약 컬럼 거부, 미존재 시 오류.';
+-- [의도적] grant 없음 — service_role 전용.
+
+
 -- =============================================================================
 -- 필드 보호 (선택) — 클라이언트 증가 차단 + 최솟값 제약
 -- =============================================================================

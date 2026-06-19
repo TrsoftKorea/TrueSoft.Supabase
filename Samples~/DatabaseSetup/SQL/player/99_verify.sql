@@ -65,6 +65,8 @@ from (
       ('set_updated_at'),
       ('ts_update_last_activity_at'),
       ('admin_add_user_data_column'),
+      ('admin_update_user_data_column'),
+      ('admin_drop_user_data_column'),
       ('ts_anon_recovery_get_refresh_token'),
       ('ts_anon_recovery_upsert_refresh_token'),
       ('ts_anon_recovery_delete_by_fingerprint'),
