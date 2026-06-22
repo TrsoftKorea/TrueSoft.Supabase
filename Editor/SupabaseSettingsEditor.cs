@@ -24,7 +24,7 @@ namespace TrueBase.Editor
         private const string DialogTitle = "유저 데이터 클래스";
         private const string RcDialogTitle = "Remote Config 클래스";
 
-        // TypeOptions / RemoteConfigClassGenerator.CustomTypeIndex 는 RemoteConfigClassGenerator 에서 가져옴
+        // TypeOptions / GeneratorTypeCatalog.CustomTypeIndex 는 RemoteConfigClassGenerator 에서 가져옴
         // (두 생성기가 같은 배열을 공유 → 중복 선언 제거)
 
         // ── UserSave 생성기 ──────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ namespace TrueBase.Editor
             if (category == FieldTypeCategory.Json)
             {
                 int selIdx;
-                if (currentTypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
+                if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
                 {
                     if      (TryParseDictionaryTypes(customType, out _, out _)) selIdx = 1;
                     else if (TryParseListType(customType, out _))                selIdx = 2;
@@ -328,18 +328,18 @@ namespace TrueBase.Editor
                 {
                     if (!TryParseDictionaryTypes(customType, out _, out _))
                         customType = "Dictionary<string, object>";
-                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                    return GeneratorTypeCatalog.CustomTypeIndex;
                 }
                 if (picked == 2)
                 {
                     if (!TryParseListType(customType, out _))
                         customType = "List<int>";
-                    return RemoteConfigClassGenerator.CustomTypeIndex;
+                    return GeneratorTypeCatalog.CustomTypeIndex;
                 }
                 // picked == 3: T[]
                 if (!TryParseArrayType(customType, out _))
                     customType = "int[]";
-                return RemoteConfigClassGenerator.CustomTypeIndex;
+                return GeneratorTypeCatalog.CustomTypeIndex;
             }
 
             // Array 카테고리 전용 처리 (RemoteConfig 필드 등). 유저 세이브 jsonb 컬럼은 Json 카테고리를 사용합니다.
@@ -364,23 +364,23 @@ namespace TrueBase.Editor
                     TryParseListType(customType, out var elem);
                     customType = (string.IsNullOrEmpty(elem) ? "int" : elem) + "[]";
                 }
-                else if (currentTypeIndex != RemoteConfigClassGenerator.CustomTypeIndex)
+                else if (currentTypeIndex != GeneratorTypeCatalog.CustomTypeIndex)
                 {
                     // 다른 카테고리에서 Array로 처음 진입할 때 기본값 설정
                     customType = picked == 0 ? "List<int>" : "int[]";
                 }
-                return RemoteConfigClassGenerator.CustomTypeIndex;
+                return GeneratorTypeCatalog.CustomTypeIndex;
             }
 
-            var allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(category);
+            var allowed = GeneratorTypeCatalog.GetAllowedTypeIndices(category);
 
             // 기존 파일 복원 등으로 카테고리에 맞지 않는 타입이 들어있으면 전체 표시
             if (Array.IndexOf(allowed, currentTypeIndex) < 0)
-                allowed = RemoteConfigClassGenerator.GetAllowedTypeIndices(FieldTypeCategory.Unknown);
+                allowed = GeneratorTypeCatalog.GetAllowedTypeIndices(FieldTypeCategory.Unknown);
 
             var options = new string[allowed.Length];
             for (var j = 0; j < allowed.Length; j++)
-                options[j] = RemoteConfigClassGenerator.TypeOptions[allowed[j]];
+                options[j] = GeneratorTypeCatalog.TypeOptions[allowed[j]];
 
             var selIdx2    = Math.Max(0, Array.IndexOf(allowed, currentTypeIndex));
             var newSelIdx2 = EditorGUILayout.Popup(selIdx2, options, GUILayout.Width(width));
@@ -563,11 +563,11 @@ namespace TrueBase.Editor
                             var fieldLabel = f.IsAmbiguous ? "⚠ " + f.JsonKey : f.JsonKey;
                             EditorGUILayout.LabelField(fieldLabel,
                                 f.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
-                                GUILayout.MinWidth(f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 120));
+                                GUILayout.MinWidth(f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex ? 60 : 120));
 
                             f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f, ref f.CustomType);
 
-                            if (f.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
+                            if (f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
                             {
                                 if      (TryParseDictionaryTypes(f.CustomType, out _, out _)) DrawDictionaryTypeControls(ref f.CustomType);
                                 else if (TryParseListType(f.CustomType, out _))                DrawListTypeControls(ref f.CustomType);
@@ -645,7 +645,7 @@ namespace TrueBase.Editor
                     if (keyCount.TryGetValue(f.JsonKey, out var cnt) && cnt > 1) continue; // 중복 키 스킵
                     if (!existing.TryGetValue(f.JsonKey, out var et)) continue;
 
-                    var idx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, et);
+                    var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, et);
                     if (idx >= 0)
                     {
                         f.TypeIndex   = idx;
@@ -653,7 +653,7 @@ namespace TrueBase.Editor
                     }
                     else
                     {
-                        f.TypeIndex   = RemoteConfigClassGenerator.CustomTypeIndex;
+                        f.TypeIndex   = GeneratorTypeCatalog.CustomTypeIndex;
                         f.CustomType  = et;
                         f.IsAmbiguous = false;
                         if      (TryParseDictionaryTypes(et, out _, out _)) f.JsonCategory = FieldTypeCategory.Json;
@@ -726,9 +726,9 @@ namespace TrueBase.Editor
                         var label = col.IsAmbiguous ? "⚠ " + col.Name : col.Name;
                         EditorGUILayout.LabelField(label,
                             col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
-                            GUILayout.MinWidth(col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex ? 60 : 100));
+                            GUILayout.MinWidth(col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex ? 60 : 100));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
-                        if (col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex)
+                        if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
                         {
                             if (TryParseDictionaryTypes(col.CustomType, out _, out _))
                                 DrawDictionaryTypeControls(ref col.CustomType);
@@ -780,13 +780,13 @@ namespace TrueBase.Editor
                     return;
                 }
 
-                var stringIdx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, "string");
+                var stringIdx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, "string");
                 foreach (var col in parsed.Columns)
                 {
                     var isAmbiguous = col.ClrType.Contains("/*");
                     var typeIdx = isAmbiguous
                         ? stringIdx
-                        : Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, col.ClrType);
+                        : Array.IndexOf(GeneratorTypeCatalog.TypeOptions, col.ClrType);
                     if (typeIdx < 0) typeIdx = stringIdx;
 
                     _editableColumns.Add(new EditableColumn
@@ -816,14 +816,14 @@ namespace TrueBase.Editor
                     foreach (var col in _editableColumns)
                     {
                         if (!existing.TryGetValue(col.Name, out var existingType)) continue;
-                        var idx = Array.IndexOf(RemoteConfigClassGenerator.TypeOptions, existingType);
+                        var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, existingType);
                         if (idx >= 0)
                         {
                             col.TypeIndex = idx;
                         }
                         else
                         {
-                            col.TypeIndex  = RemoteConfigClassGenerator.CustomTypeIndex;
+                            col.TypeIndex  = GeneratorTypeCatalog.CustomTypeIndex;
                             col.CustomType = existingType;
                             // jsonb 컬럼(List·배열·Dictionary)은 항상 전체 선택지(string/Dictionary/List/T[])를
                             // 제공하도록 Json 카테고리로 둡니다. (Array로 두면 Dictionary 선택지가 사라짐)
@@ -861,34 +861,18 @@ namespace TrueBase.Editor
         /// </summary>
         private static Dictionary<string, string> TryLoadExistingColumnTypes()
         {
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
             var assetPath = FindExistingClassAssetPath();
-            if (assetPath == null) return result;
+            if (assetPath == null) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
                 var source = File.ReadAllText(assetPath, System.Text.Encoding.UTF8);
-                // [DataColumn("col_name")] public TYPE field;
-                // [DataColumn] public TYPE field;
-                var pattern = new Regex(
-                    @"\[DataColumn(?:\(""([^""]*)""\))?\]\s+public\s+(.+?)\s+@?(\w+)\s*;",
-                    RegexOptions.Multiline);
-
-                foreach (Match m in pattern.Matches(source))
-                {
-                    var colName = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[3].Value;
-                    var typeName = m.Groups[2].Value.Trim();
-                    if (!string.IsNullOrEmpty(colName) && !string.IsNullOrEmpty(typeName))
-                        result[colName] = typeName;
-                }
+                return GeneratorTypeCatalog.ExtractAttributedFieldTypes(source, "DataColumn");
             }
             catch
             {
-                // 파싱 실패 시 무시
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
-
-            return result;
         }
 
         private static void BuildPreviewFromColumns()
@@ -897,9 +881,9 @@ namespace TrueBase.Editor
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                var clrType = ec.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex
+                var clrType = ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
                     ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
-                    : RemoteConfigClassGenerator.TypeOptions[ec.TypeIndex];
+                    : GeneratorTypeCatalog.TypeOptions[ec.TypeIndex];
                 cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment, ec.Priority));
             }
 
@@ -966,9 +950,9 @@ namespace TrueBase.Editor
             var dict = new Dictionary<string, string>();
             foreach (var col in _editableColumns)
             {
-                var type = col.TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex
+                var type = col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
                     ? (string.IsNullOrWhiteSpace(col.CustomType) ? "string" : col.CustomType.Trim())
-                    : RemoteConfigClassGenerator.TypeOptions[col.TypeIndex];
+                    : GeneratorTypeCatalog.TypeOptions[col.TypeIndex];
                 dict[col.Name] = type;
             }
             EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
@@ -1064,7 +1048,7 @@ namespace TrueBase.Editor
             public bool              Include      = true;
             public int               TypeIndex;
             public bool              IsAmbiguous;
-            public string            CustomType   = "";  // TypeIndex == RemoteConfigClassGenerator.CustomTypeIndex 일 때 사용
+            public string            CustomType   = "";  // TypeIndex == GeneratorTypeCatalog.CustomTypeIndex 일 때 사용
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
             /// <summary>저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</summary>
             public int               Priority     = 1;

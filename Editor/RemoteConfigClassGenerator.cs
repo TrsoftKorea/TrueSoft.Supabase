@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
+using static TrueBase.Editor.GeneratorTypeCatalog;
 
 namespace TrueBase.Editor
 {
@@ -340,40 +341,6 @@ namespace TrueBase.Editor
 
         // ── Type helpers ──────────────────────────────────────────────────────
 
-        internal static readonly string[] TypeOptions =
-        {
-            "bool",            // 0
-            "int",             // 1
-            "short",           // 2
-            "long",            // 3
-            "ulong",           // 4
-            "float",           // 5
-            "double",          // 6
-            "string",          // 7
-            "DateTimeOffset",  // 8
-            "DateTime",        // 9
-            "DateOnly",        // 10
-            "TimeOnly",        // 11
-        };
-
-        /// <summary>Dictionary / List&lt;T&gt; / T[] 등 TypeOptions에 없는 타입을 내부적으로 표현하는 sentinel 인덱스.</summary>
-        internal const int CustomTypeIndex = 12;
-
-        /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
-        public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
-        {
-            switch (cat)
-            {
-                case FieldTypeCategory.Boolean: return new[] { 0 };                       // bool
-                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };             // int/short/long/ulong
-                case FieldTypeCategory.Float:   return new[] { 5, 6 };                    // float/double
-                case FieldTypeCategory.String:  return new[] { 7, 8, 9, 10, 11 };        // string + 날짜 타입
-                case FieldTypeCategory.Json:    return new[] { 7 };                       // string (Dictionary는 별도 팝업)
-                case FieldTypeCategory.Array:   return new int[0];                         // 별도 팝업 처리 (DrawTypePopup 참조)
-                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
-            }
-        }
-
         private static FieldTypeCategory MapCategory(JTokenType t)
         {
             switch (t)
@@ -384,14 +351,6 @@ namespace TrueBase.Editor
                 case JTokenType.String:  return FieldTypeCategory.String;
                 default:                 return FieldTypeCategory.Unknown;
             }
-        }
-
-        private static int IndexOf(string type)
-        {
-            for (var i = 0; i < TypeOptions.Length; i++)
-                if (TypeOptions[i] == type) return i;
-            // "string"은 인덱스 7로 고정 — TypeOptions 변경 시 이 상수도 함께 수정할 것
-            return 7;
         }
 
         private static string ResolveClrType(RcEditableField f)
@@ -425,17 +384,8 @@ namespace TrueBase.Editor
 
             try
             {
-                var src     = File.ReadAllText(assetPath, Encoding.UTF8);
-                var pattern = new Regex(
-                    @"\[JsonProperty\(""([^""]*)""\)\]\s+public\s+(.+?)\s+\w+\s*;",
-                    RegexOptions.Multiline);
-                foreach (Match m in pattern.Matches(src))
-                {
-                    var jsonKey  = m.Groups[1].Value;
-                    var typeName = m.Groups[2].Value.Trim();
-                    if (!string.IsNullOrEmpty(jsonKey) && !string.IsNullOrEmpty(typeName))
-                        result[jsonKey] = typeName;
-                }
+                var src = File.ReadAllText(assetPath, Encoding.UTF8);
+                return ExtractAttributedFieldTypes(src, "JsonProperty");
             }
             catch { /* 파싱 실패 시 무시 */ }
 
@@ -525,15 +475,4 @@ namespace TrueBase.Editor
         public FieldTypeCategory JsonCategory = FieldTypeCategory.Unknown;
     }
 
-    /// <summary>필드의 JSON 타입 카테고리 — Inspector 드롭다운 필터링에 사용합니다.</summary>
-    internal enum FieldTypeCategory
-    {
-        Boolean,  // bool, 커스텀
-        Integer,  // int, short, long, ulong, 커스텀
-        Float,    // float, double, 커스텀
-        String,   // string, DateTimeOffset, DateTime, DateOnly, TimeOnly, 커스텀
-        Json,     // string, Dictionary<string,object>(프리셋), 커스텀  ← jsonb/$ref/allOf 등 복잡한 DB 타입
-        Array,    // 커스텀 전용
-        Unknown,  // 전체 표시
-    }
 }
