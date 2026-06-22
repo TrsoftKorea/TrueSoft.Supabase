@@ -289,7 +289,7 @@ namespace TrueBase.Editor
         private static readonly string[] s_jsonTypeOptions =
             { "string", "Dictionary<K, V>", "List<T>", "T[]" };
 
-        // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류)
+        // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류) — RemoteConfig 필드 등에서 사용
         private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
 
         // DataSavePriority 드롭다운 옵션 (label → int 매핑)
@@ -342,7 +342,7 @@ namespace TrueBase.Editor
                 return RemoteConfigClassGenerator.CustomTypeIndex;
             }
 
-            // Array 카테고리 전용 처리
+            // Array 카테고리 전용 처리 (RemoteConfig 필드 등). 유저 세이브 jsonb 컬럼은 Json 카테고리를 사용합니다.
             if (category == FieldTypeCategory.Array)
             {
                 var isList  = TryParseListType(customType, out _);
@@ -825,11 +825,12 @@ namespace TrueBase.Editor
                         {
                             col.TypeIndex  = RemoteConfigClassGenerator.CustomTypeIndex;
                             col.CustomType = existingType;
-                            // 타입 패턴에 따라 전용 팝업이 열리도록 카테고리 설정
-                            if (TryParseDictionaryTypes(existingType, out _, out _))
+                            // jsonb 컬럼(List·배열·Dictionary)은 항상 전체 선택지(string/Dictionary/List/T[])를
+                            // 제공하도록 Json 카테고리로 둡니다. (Array로 두면 Dictionary 선택지가 사라짐)
+                            if (TryParseDictionaryTypes(existingType, out _, out _)
+                                || TryParseListType(existingType, out _)
+                                || TryParseArrayType(existingType, out _))
                                 col.TypeCategory = FieldTypeCategory.Json;
-                            else if (TryParseListType(existingType, out _) || TryParseArrayType(existingType, out _))
-                                col.TypeCategory = FieldTypeCategory.Array;
                         }
                         col.IsAmbiguous = false;
                     }
