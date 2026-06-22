@@ -180,6 +180,7 @@ namespace TrueBase.Unity
         private void ResetLocalState()
         {
             DataSchema.CopyInto(Current, new TRow());
+            DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = new TRow();
             _isDirty    = false;
         }
@@ -201,26 +202,6 @@ namespace TrueBase.Unity
 
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
-
-        // ── 플레이나누 변환 커스터마이징 ──────────────────────────────────────────────
-
-        private static Func<string, TRow> _nanooToDbConverter;
-        private static Func<TRow, string> _dbToNanooConverter;
-
-        /// <summary>
-        /// 플레이나누 ↔ DB 데이터 변환 함수를 등록합니다.
-        /// List · Dictionary 등 기본 역직렬화로 처리하기 어려운 타입이 있을 때 사용합니다.
-        /// <para><see cref="NanooDeserializeJson"/> / <see cref="NanooSerializeJson"/>을 override한 경우 이 메서드는 무시됩니다.</para>
-        /// </summary>
-        /// <param name="nanooToDb">플레이나누 JSON → TRow 변환 함수</param>
-        /// <param name="dbToNanoo">TRow → 플레이나누 JSON 변환 함수. null이면 기본 직렬화를 사용합니다.</param>
-        public static void RegisterNanooConverters(
-            Func<string, TRow> nanooToDb,
-            Func<TRow, string> dbToNanoo = null)
-        {
-            _nanooToDbConverter = nanooToDb;
-            _dbToNanooConverter = dbToNanoo;
-        }
 
         // ── INanooSaveSyncable 구현 (PlayNanooRuntime 전용) ────────────────────────
 
@@ -266,25 +247,48 @@ namespace TrueBase.Unity
             return ok;
         }
 
+        // ── 플레이나누 필드 변환 (선택적 편의) ──────────────────────────────────────
+        private NanooFieldMap<TRow> _nanooMap;
+        private bool _nanooMapBuilt;
+
+        private NanooFieldMap<TRow> GetNanooMap()
+        {
+            if (!_nanooMapBuilt)
+            {
+                var m = new NanooFieldMap<TRow>();
+                ConfigureNanoo(m);
+                _nanooMap = m.IsEmpty ? null : m;
+                _nanooMapBuilt = true;
+            }
+            return _nanooMap;
+        }
+
+        /// <summary>
+        /// 플레이나누 JSON에서 특정 필드만 다른 형태로 저장/복원할 때, 그 필드 변환을 등록합니다.
+        /// <para>필요한 필드만 <c>map.Field(r =&gt; r.field, toString, fromString)</c>로 추가하세요. 등록 안 한 필드는 자동 변환됩니다.</para>
+        /// <para>전체 JSON 모양을 직접 제어하려면 <see cref="NanooSerializeJson"/> / <see cref="NanooDeserializeJson"/>을 직접 override하세요.</para>
+        /// </summary>
+        protected virtual void ConfigureNanoo(NanooFieldMap<TRow> map) { }
+
         /// <summary>
         /// 플레이나누 Storage JSON을 Row로 역직렬화합니다.
-        /// <see cref="RegisterNanooConverters"/>로 등록한 변환 함수가 있으면 그것을 사용하고, 없으면 Newtonsoft.Json 기본 변환을 사용합니다.
-        /// 서브클래스에서 override하면 등록된 함수보다 우선합니다.
+        /// 기본은 <see cref="ConfigureNanoo"/> 등록 변환(없으면 Newtonsoft.Json)이며, 통째로 제어하려면 override하세요.
         /// </summary>
         protected virtual TRow NanooDeserializeJson(string json)
-            => _nanooToDbConverter != null
-                ? _nanooToDbConverter(json)
-                : Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
+        {
+            var map = GetNanooMap();
+            return map != null ? map.Deserialize(json) : Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
+        }
 
         /// <summary>
         /// Row를 플레이나누 Storage JSON으로 직렬화합니다.
-        /// <see cref="RegisterNanooConverters"/>로 등록한 변환 함수가 있으면 그것을 사용하고, 없으면 Newtonsoft.Json 기본 직렬화를 사용합니다.
-        /// 서브클래스에서 override하면 등록된 함수보다 우선합니다.
+        /// 기본은 <see cref="ConfigureNanoo"/> 등록 변환(없으면 Newtonsoft.Json)이며, 통째로 제어하려면 override하세요.
         /// </summary>
         protected virtual string NanooSerializeJson(TRow row)
-            => _dbToNanooConverter != null
-                ? _dbToNanooConverter(row)
-                : Newtonsoft.Json.JsonConvert.SerializeObject(row);
+        {
+            var map = GetNanooMap();
+            return map != null ? map.Serialize(row) : Newtonsoft.Json.JsonConvert.SerializeObject(row);
+        }
 
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {
@@ -348,6 +352,7 @@ namespace TrueBase.Unity
         public void ApplyRow(TRow row)
         {
             DataSchema.CopyInto(Current, row);
+            DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (CopyInto가 새 인스턴스를 만들므로 매번 필요)
             _lastSynced = DataSchema.CloneRow(row);
             _isDirty    = false;
             OnLoaded?.Invoke();
@@ -390,6 +395,7 @@ namespace TrueBase.Unity
             }
 
             DataSchema.CopyInto(Current, row);
+            DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = DataSchema.CloneRow(row);
             _isDirty    = false;
             OnLoaded?.Invoke();

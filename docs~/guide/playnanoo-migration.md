@@ -137,30 +137,29 @@ public sealed class Row
 
 ### 데이터 변환 커스터마이징
 
-camelCase 필드명으로 처리하기 어려운 타입이 있거나 플레이나누 키명이 다를 때 사용합니다.
+`int` · `string` 등 단순 필드와 정상적인 JSON 배열/객체는 자동으로 변환됩니다. **특정 필드를 플레이나누에서 다른 형태로 저장**해야 하면, 생성 클래스의 partial에서 `ConfigureNanoo`를 override해 그 필드 변환만 등록합니다. 예를 들어 `List<int>` `[2, 3]`을 플레이나누엔 `"2_3"`으로 저장할 때:
 
 ```csharp
-PlayerSave.RegisterNanooConverters(
-    nanooToDb: json =>
-    {
-        var src = JsonConvert.DeserializeObject<NanooData>(json);
-        return new PlayerSave.Row
-        {
-            playerLevel = src.playerLevel,
-            itemIds     = src.itemList,
-        };
-    },
-    dbToNanoo: row => JsonConvert.SerializeObject(new NanooData
-    {
-        playerLevel = row.playerLevel,
-        itemList    = row.itemIds,
-    })
-);
+using System.Linq;
+
+public sealed partial class PlayerSave   // 생성기가 만든 클래스
+{
+    protected override void ConfigureNanoo(NanooFieldMap<Row> map) => map
+        .Field(r => r.itemIds,                                  // 필드 선택식 — 키 하드코딩·타입 지정 불필요
+            v => string.Join("_", v),                           // List<int> → "2_3"
+            s => s.Split('_').Select(int.Parse).ToList())       // "2_3" → List<int>
+        .Field(r => r.isVip,                                    // 필드 더 필요하면 한 줄씩
+            v => v ? "Y" : "N",
+            s => s == "Y");
+}
 ```
 
-`dbToNanoo`를 생략하면 DB → 플레이나누 방향은 기본 직렬화를 사용합니다.
+- **필드 선택식**(`r => r.itemIds`)으로 등록하므로 키 문자열을 쓸 필요가 없고, 타입(`List<int>`·`bool`)도 자동 추론됩니다. 필드명을 바꾸면 컴파일러가 잡아줍니다.
+- 등록한 **그 필드만** 가공되고, 나머지(및 `updated_at`)는 자동 처리 → 동기화 비교도 그대로 유지됩니다.
+- 플레이나누 직렬화·역직렬화 양쪽에 적용되며, **REST/DB 저장·로드에는 영향이 없습니다.**
+- 변환 방식이 더 복잡해 전체 JSON 모양을 직접 짜야 하면, `NanooSerializeJson` / `NanooDeserializeJson`을 직접 override하세요(등록 변환 대신 그게 쓰입니다).
 
-`NanooDeserializeJson` / `NanooSerializeJson`을 서브클래스에서 override하면, 등록된 변환 함수보다 override가 우선합니다.
+단순한 키명 차이는 변환 등록이 아니라 [필드명 규칙](#필드명-규칙)으로 해결합니다(C# 필드명을 플레이나누 키에 맞추고 DB 컬럼은 `[DataColumn]`로 지정).
 
 ---
 

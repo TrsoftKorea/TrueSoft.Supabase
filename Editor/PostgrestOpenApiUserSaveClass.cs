@@ -217,6 +217,9 @@ namespace TrueBase.Editor
             string tableLabel,
             IReadOnlyList<OpenApiColumn> columns)
         {
+            // 단순 값 요소 컬렉션을 자동 확장 타입(AutoList/AutoDict/2D)으로 치환. 튜플·struct·클래스 요소는 그대로.
+            columns = MapColumnsToAutoTypes(columns);
+
             sb.AppendLine(indent + "/// <summary>유저 세이브 클래스.</summary>");
             sb.AppendLine(indent + "public sealed partial class " + className + " : StaticUserSave<" + className + ".Row>");
             sb.AppendLine(indent + "{");
@@ -570,7 +573,8 @@ namespace TrueBase.Editor
         private static readonly string[] s_newableCollectionPrefixes =
         {
             "List<", "Dictionary<", "HashSet<", "SortedList<", "SortedDictionary<",
-            "SortedSet<", "Queue<", "Stack<", "LinkedList<", "ObservableCollection<"
+            "SortedSet<", "Queue<", "Stack<", "LinkedList<", "ObservableCollection<",
+            "AutoList<", "AutoList2D<", "AutoDict<", "AutoDict2D<"
         };
 
         /// <summary>
@@ -610,6 +614,184 @@ namespace TrueBase.Editor
             }
 
             return false;
+        }
+
+        // 자동 확장 타입으로 치환 가능한 "단순 값" 요소 타입(튜플·struct·클래스는 제외).
+        private static readonly HashSet<string> s_autoValueLeafTypes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "int", "long", "short", "ulong", "uint", "byte", "sbyte", "float", "double", "decimal", "bool", "string"
+        };
+
+        private static bool IsAutoValueLeaf(string t) => t != null && s_autoValueLeafTypes.Contains(t.Trim());
+
+        private static IReadOnlyList<OpenApiColumn> MapColumnsToAutoTypes(IReadOnlyList<OpenApiColumn> columns)
+        {
+            var list = new List<OpenApiColumn>(columns.Count);
+            foreach (var c in columns)
+                list.Add(new OpenApiColumn(c.Name, MapToAutoType(c.ClrType), c.Comment, c.Priority));
+            return list;
+        }
+
+        /// <summary>
+        /// 요소가 단순 값 타입인 컬렉션을 자동 확장 타입으로 치환합니다.
+        /// List/배열→AutoList, 이중 리스트→AutoList2D, Dictionary→AutoDict, 이중 딕셔너리→AutoDict2D.
+        /// 튜플·struct·클래스 요소, 미인식 타입은 그대로 둡니다.
+        /// </summary>
+        private static string MapToAutoType(string clrType)
+        {
+            if (string.IsNullOrWhiteSpace(clrType)) return clrType;
+            var t = clrType.Trim();
+            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0) return clrType; // 미해결 스칼라(주석) → 그대로
+
+            // 이중 리스트: List<List<X>> / X[][] → AutoList2D<X>
+            if (TryUnwrapList(t, out var li) && TryUnwrapList(li, out var l2) && IsAutoValueLeaf(l2))
+                return "AutoList2D<" + l2 + ">";
+            if (TryUnwrapArray(t, out var ai) && TryUnwrapArray(ai, out var a2) && IsAutoValueLeaf(a2))
+                return "AutoList2D<" + a2 + ">";
+
+            // 1차원 리스트/배열: List<X> / X[] → AutoList<X>
+            if (TryUnwrapList(t, out var l1) && IsAutoValueLeaf(l1)) return "AutoList<" + l1 + ">";
+            if (TryUnwrapArray(t, out var a1) && IsAutoValueLeaf(a1)) return "AutoList<" + a1 + ">";
+
+            // 이중 딕셔너리: Dictionary<K1, Dictionary<K2, X>> → AutoDict2D<K1, K2, X>
+            if (TryUnwrapDict(t, out var k1, out var v1) && TryUnwrapDict(v1, out var k2, out var dv) && IsAutoValueLeaf(dv))
+                return "AutoDict2D<" + k1 + ", " + k2 + ", " + dv + ">";
+
+            // 1차원 딕셔너리: Dictionary<K, X> → AutoDict<K, X>
+            if (TryUnwrapDict(t, out var k, out var v) && IsAutoValueLeaf(v)) return "AutoDict<" + k + ", " + v + ">";
+
+            return clrType;
+        }
+
+        private static bool TryUnwrapList(string t, out string inner)
+        {
+            inner = null;
+            t = t.Trim();
+            if (t.StartsWith("List<", StringComparison.Ordinal) && t.EndsWith(">", StringComparison.Ordinal))
+            {
+                inner = t.Substring(5, t.Length - 6).Trim();
+                return inner.Length > 0;
+            }
+            return false;
+        }
+
+        private static bool TryUnwrapArray(string t, out string elem)
+        {
+            elem = null;
+            t = t.Trim();
+            if (t.EndsWith("[]", StringComparison.Ordinal))
+            {
+                elem = t.Substring(0, t.Length - 2).Trim();
+                return elem.Length > 0;
+            }
+            return false;
+        }
+
+        private static bool TryUnwrapDict(string t, out string key, out string val)
+        {
+            key = val = null;
+            t = t.Trim();
+            if (!t.StartsWith("Dictionary<", StringComparison.Ordinal) || !t.EndsWith(">", StringComparison.Ordinal))
+                return false;
+
+            var inner = t.Substring("Dictionary<".Length, t.Length - "Dictionary<".Length - 1);
+            var depth = 0;
+            var comma = -1;
+            for (var i = 0; i < inner.Length; i++)
+            {
+                var ch = inner[i];
+                if (ch == '<') depth++;
+                else if (ch == '>') depth--;
+                else if (ch == ',' && depth == 0) { comma = i; break; }
+            }
+            if (comma < 0) return false;
+
+            key = inner.Substring(0, comma).Trim();
+            val = inner.Substring(comma + 1).Trim();
+            return key.Length > 0 && val.Length > 0;
+        }
+
+        /// <summary>
+        /// 재생성된 소스(<paramref name="newSource"/>)에 기존 파일(<paramref name="existingSource"/>)의
+        /// 필드별 <c>[AutoDefault(...)]</c>를 컬럼명 기준으로 병합해 보존합니다.
+        /// (생성기는 커스텀 기본값을 모르므로, 수동으로 붙인 기본값이 재생성에 사라지지 않게 합니다.)
+        /// 같은 컬럼 필드에 이미 AutoDefault가 있으면 건너뜁니다.
+        /// </summary>
+        public static string MergePreservedAutoDefaults(string newSource, string existingSource)
+        {
+            if (string.IsNullOrEmpty(newSource) || string.IsNullOrEmpty(existingSource))
+                return newSource;
+
+            var preserved = ExtractAutoDefaultsByColumn(existingSource);
+            if (preserved.Count == 0)
+                return newSource;
+
+            var lines = newSource.Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (line.IndexOf("[DataColumn(", StringComparison.Ordinal) < 0)
+                    continue;
+                if (line.IndexOf("[AutoDefault(", StringComparison.Ordinal) >= 0)
+                    continue;
+
+                var col = ExtractDataColumnName(line);
+                if (col == null || !preserved.TryGetValue(col, out var attr))
+                    continue;
+
+                var dcIdx = line.IndexOf("[DataColumn(", StringComparison.Ordinal);
+                var closeIdx = line.IndexOf(']', dcIdx);
+                if (closeIdx < 0)
+                    continue;
+
+                // [DataColumn(...)] 뒤에 보존 [AutoDefault(...)] 삽입 (줄 끝 '\r' 등은 그대로 유지)
+                lines[i] = line.Substring(0, closeIdx + 1) + " " + attr + line.Substring(closeIdx + 1);
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private static Dictionary<string, string> ExtractAutoDefaultsByColumn(string source)
+        {
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var line in source.Split('\n'))
+            {
+                if (line.IndexOf("[AutoDefault(", StringComparison.Ordinal) < 0)
+                    continue;
+                if (line.IndexOf("[DataColumn(", StringComparison.Ordinal) < 0)
+                    continue;
+
+                var col = ExtractDataColumnName(line);
+                if (col == null)
+                    continue;
+                var attr = ExtractBracketedAttribute(line, "[AutoDefault(");
+                if (!string.IsNullOrEmpty(attr))
+                    map[col] = attr;
+            }
+
+            return map;
+        }
+
+        /// <summary>필드 줄에서 <c>[DataColumn("name"…)]</c>의 컬럼명(첫 문자열 인자)을 추출합니다.</summary>
+        private static string ExtractDataColumnName(string line)
+        {
+            var i = line.IndexOf("[DataColumn(", StringComparison.Ordinal);
+            if (i < 0) return null;
+            var q1 = line.IndexOf('"', i);
+            if (q1 < 0) return null;
+            var q2 = line.IndexOf('"', q1 + 1);
+            if (q2 < 0) return null;
+            return line.Substring(q1 + 1, q2 - q1 - 1);
+        }
+
+        /// <summary><paramref name="startToken"/>(예: <c>[AutoDefault(</c>)부터 첫 <c>]</c>까지의 어트리뷰트 문자열을 반환합니다.</summary>
+        private static string ExtractBracketedAttribute(string line, string startToken)
+        {
+            var i = line.IndexOf(startToken, StringComparison.Ordinal);
+            if (i < 0) return null;
+            var end = line.IndexOf(']', i);
+            if (end < 0) return null;
+            return line.Substring(i, end - i + 1);
         }
 
         private static string EscapeXml(string s)

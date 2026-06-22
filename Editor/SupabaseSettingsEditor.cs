@@ -911,6 +911,11 @@ namespace TrueBase.Editor
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
             _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data", ParseExtraUsings(_extraUsings));
 
+            // 기존 파일에 수동으로 붙인 [AutoDefault]를 보존(생성기는 커스텀 기본값을 모름)
+            var existingPath = FindExistingClassAssetPath();
+            if (existingPath != null && File.Exists(existingPath))
+                _previewText = PostgrestOpenApiUserSaveClass.MergePreservedAutoDefaults(_previewText, File.ReadAllText(existingPath));
+
             // 소스 생성 시점에 현재 타입·Priority 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
             SaveColumnTypesToPrefs();
             SaveColumnPrioritiesToPrefs();
@@ -1014,7 +1019,12 @@ namespace TrueBase.Editor
 
             try
             {
-                File.WriteAllText(path, _previewText, new System.Text.UTF8Encoding(false));
+                // 저장 대상 파일에 수동 추가된 [AutoDefault]가 있으면 보존(미리보기와 다른 경로로 저장하는 경우 대비)
+                var sourceToWrite = _previewText;
+                if (File.Exists(path))
+                    sourceToWrite = PostgrestOpenApiUserSaveClass.MergePreservedAutoDefaults(_previewText, File.ReadAllText(path));
+
+                File.WriteAllText(path, sourceToWrite, new System.Text.UTF8Encoding(false));
                 AssetDatabase.ImportAsset(path);
                 var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
                 if (asset != null) EditorGUIUtility.PingObject(asset);

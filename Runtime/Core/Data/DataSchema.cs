@@ -315,6 +315,44 @@ namespace TrueBase.Core.Data
             return highest;
         }
 
+        private static readonly Dictionary<Type, MemberInfo[]> _autoDefaultMembersCache = new();
+
+        /// <summary>
+        /// <paramref name="row"/>의 <see cref="AutoDefaultAttribute"/> 멤버(AutoList/AutoDict)에 지정 기본값을 주입합니다.
+        /// 로드 직후(Current 구성 후) 호출하세요. 멤버 목록은 타입별 1회 캐시됩니다.
+        /// </summary>
+        public static void ApplyAutoDefaults<T>(T row) where T : class
+        {
+            if (row == null) return;
+
+            foreach (var m in GetAutoDefaultMembers(typeof(T)))
+            {
+                var attr = m.GetCustomAttribute<AutoDefaultAttribute>();
+                if (attr == null) continue;
+                if (GetValue(m, row) is IAutoDefaultable target)
+                    target.SetDefaultValue(attr.Values);
+            }
+        }
+
+        private static MemberInfo[] GetAutoDefaultMembers(Type t)
+        {
+            if (_autoDefaultMembersCache.TryGetValue(t, out var cached))
+                return cached;
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var list = new List<MemberInfo>();
+            foreach (var f in t.GetFields(flags))
+                if (f.GetCustomAttribute<AutoDefaultAttribute>() != null)
+                    list.Add(f);
+            foreach (var p in t.GetProperties(flags))
+                if (p.GetIndexParameters().Length == 0 && p.CanRead && p.GetCustomAttribute<AutoDefaultAttribute>() != null)
+                    list.Add(p);
+
+            var arr = list.ToArray();
+            _autoDefaultMembersCache[t] = arr;
+            return arr;
+        }
+
         /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
         public static string ResolveTableName<T>() => UserDataTableName;
 
