@@ -784,24 +784,20 @@ namespace TrueBase.Editor
                 EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(92));
                 EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(110));
                 EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
-                GUILayout.FlexibleSpace(); // 저장 주기·포함을 행과 동일하게 오른쪽 끝에 정렬
                 EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
                 EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
+                EditorGUILayout.LabelField("요소 타입", EditorStyles.miniLabel); // 커스텀 타입일 때만(가변 폭)
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
-            // 커스텀(List/Dictionary 등) 타입은 요소 선택을 다음 줄에 그리므로 그만큼 줄 수를 더해 높이를 잡는다.
-            var customRows = 0;
-            foreach (var c in _editableColumns)
-                if (c.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex) customRows++;
-            var listHeight = Mathf.Min((_editableColumns.Count + customRows) * rowHeight + 4f, 260f);
+            var listHeight = Mathf.Min(_editableColumns.Count * rowHeight + 4f, 240f);
 
             using (var sv = new EditorGUILayout.ScrollViewScope(_columnScroll, GUILayout.Height(listHeight)))
             {
                 _columnScroll = sv.scrollPosition;
                 foreach (var col in _editableColumns)
                 {
-                    // 메인 행: 컬럼·필드명·타입 + (오른쪽 정렬) 저장 주기·포함. 행마다 동일하게 정렬.
+                    // 모든 칼럼은 고정 폭 → 행마다 정렬. 가변 폭 요소 컨트롤은 맨 끝에 둬서 어떤 칼럼도 밀지 않는다.
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         var warn  = col.IsAmbiguous || IsUnspecifiedType(ResolveColumnClrType(col));
@@ -814,24 +810,17 @@ namespace TrueBase.Editor
                         col.FieldName = EditorGUILayout.TextField(col.FieldName, GUILayout.Width(110));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
 
-                        // 저장 주기·포함은 항상 오른쪽 끝에 정렬(요소 컨트롤은 다음 줄로 분리됨).
-                        GUILayout.FlexibleSpace();
-
                         var prioLabelIdx    = Array.IndexOf(s_priorityValues, col.Priority);
                         if (prioLabelIdx < 0) prioLabelIdx = 0;
                         var newPrioLabelIdx = EditorGUILayout.Popup(prioLabelIdx, s_priorityOptions, GUILayout.Width(58));
                         col.Priority = s_priorityValues[newPrioLabelIdx];
 
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
-                    }
 
-                    // 커스텀 타입(List·Dictionary 등)은 요소 선택을 다음 줄에 들여써서 표시 → 메인 행이 밀리지 않음.
-                    if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
-                    {
-                        using (new EditorGUILayout.HorizontalScope())
+                        // 요소 타입 컨트롤(List·Dictionary 등): 행 맨 끝. 뒤에 아무것도 없어 다른 칼럼을 밀지 않는다.
+                        if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
                         {
-                            GUILayout.Space(16);
-                            EditorGUILayout.LabelField("└ 요소 타입", EditorStyles.miniLabel, GUILayout.Width(64));
+                            GUILayout.Space(8);
                             if (TryParseDictionaryTypes(col.CustomType, out _, out _))
                                 DrawDictionaryTypeControls(ref col.CustomType);
                             else if (TryParseListType(col.CustomType, out _))
@@ -840,7 +829,6 @@ namespace TrueBase.Editor
                                 DrawArrayTypeControls(ref col.CustomType);
                             else
                                 EditorGUILayout.LabelField(col.CustomType);
-                            GUILayout.FlexibleSpace();
                         }
                     }
                 }
