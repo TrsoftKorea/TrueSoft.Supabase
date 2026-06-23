@@ -1,24 +1,4 @@
-# 샘플
-
-Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import합니다.
-
-| 샘플 | 용도 |
-|------|------|
-| **Database Setup** | Supabase 프로젝트 초기 설정용 SQL·Edge Function 소스. 설정 완료 후 삭제 |
-| **Examples** | 인증·세이브·RemoteConfig 등 주요 기능을 Play Mode 키보드로 바로 테스트 |
-| **플레이나누 이관** | 플레이나누와 SDK를 병행 운영하다가 단계적으로 SDK로 전환하는 패턴 예제 |
-
----
-
-## Database Setup
-
-초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.
-
-사용 방법은 [Database Setup](./getting-started.md#database-setup)을 참고하세요.
-
----
-
-## Examples
+# Examples
 
 `SupabaseRuntime`이 있는 씬에 `ExampleSupabaseScenarios` 컴포넌트를 추가하면  
 Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
@@ -39,7 +19,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, DisplayName 등) |
 | `J` | 서버 시간 조회 |
 
-### SamplePlayerSave
+## SamplePlayerSave
 
 `StaticUserSave`를 상속해 DB 컬럼을 C# 프로퍼티에 연결하는 최소 예시입니다.
 
@@ -68,13 +48,13 @@ SamplePlayerSave.Level += 1;                             // 변경 → 자동 �
 await Supabase.TrySaveAllAsync(timeoutMs: 5000);           // 즉시 저장
 ```
 
-### SampleIAPScenarios
+## SampleIAPScenarios
 
 `com.unity.purchasing` 4.x 이상을 설치하면 자동으로 활성화됩니다.
 
 **사전 준비:**
 1. `com.unity.purchasing` 4.x 이상 설치
-2. [Database Setup](./getting-started.md#database-setup) 완료
+2. [Database Setup](/guide/start/database-setup) 완료
 3. Inspector에서 `productId` 입력
 
 **구매 흐름:**
@@ -104,17 +84,3 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 :::
 
 ---
-
-## 플레이나누 이관
-
-플레이나누와 SDK를 동시에 운영하면서 단계적으로 SDK로 전환할 때 사용합니다.  
-`SupabaseRuntime` 대신 `PlayNanooRuntime`을 씬에 배치하면, 게임 코드의 `Supabase.*` 호출이 자동으로 플레이나누를 경유합니다.
-
-**지원 기능:**
-- 게스트·Google·Apple 로그인
-- 익명 계정 → Google·Apple 연동
-- 로그아웃, 탈퇴 예약
-- 탈퇴 복구 (`OnWithdrawalPending` · `OnWithdrawalRestored` 이벤트)
-- `updated_at` 기반 PlayNANOO ↔ SDK 데이터 동기화
-
-자세한 사용법은 [플레이나누 이관](./playnanoo-migration.md)을 참고하세요.

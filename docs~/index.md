@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: 빠른 시작
-      link: /guide/getting-started
+      link: /guide/start/install
     - theme: alt
       text: GitHub
       link: https://github.com/trsoftkorea/TrueSoft.Supabase
@@ -15,23 +15,23 @@ hero:
 features:
   - title: 인증
     details: 익명·Google 로그인, 익명→소셜 연동, 자동 로그인
-    link: /guide/auth
+    link: /guide/auth/anonymous
   - title: 닉네임 · 프로필
     details: 닉네임 설정·중복 확인, 공개 프로필 조회
-    link: /guide/display-name
+    link: /guide/display-name/nickname
   - title: 탈퇴 · 서버 이주
     details: 탈퇴 예약·취소, 서버 이주
-    link: /guide/withdrawal
+    link: /guide/withdrawal/request
   - title: 유저 데이터
     details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
-    link: /guide/user-data
+    link: /guide/user-data/how-it-works
   - title: Remote Config
     details: Cold Start 로딩, Reader·Binding·Listener 세 가지 패턴, 스테일-와일-리밸리데이트
-    link: /guide/remote-config
+    link: /guide/remote-config/quickstart
   - title: 인앱 결제 (IAP)
     details: Google Play · Apple App Store 서버 영수증 검증, 중복 지급 방지
-    link: /guide/iap
+    link: /guide/iap/prepare
   - title: 샘플
     details: ExampleSupabaseScenarios, SamplePlayerSave, SampleIAPScenarios 동작 예시
-    link: /guide/samples
+    link: /guide/samples/examples
 ---
