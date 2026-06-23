@@ -92,7 +92,7 @@ export default defineConfig({
             text: '유저 데이터',
             collapsed: false,
             items: [
-              { text: '동작 방식', link: '/guide/user-data/how-it-works' },
+              { text: '개요', link: '/guide/user-data/how-it-works' },
               { text: '클래스 생성', link: '/guide/user-data/class-gen' },
               { text: '로드', link: '/guide/user-data/load' },
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
@@ -113,12 +113,11 @@ export default defineConfig({
             text: '원격 설정',
             collapsed: true,
             items: [
+              { text: '개요', link: '/guide/remote-config/how-it-works' },
               { text: '빠른 시작', link: '/guide/remote-config/quickstart' },
-              { text: '패턴 선택', link: '/guide/remote-config/pattern' },
               { text: 'Reader', link: '/guide/remote-config/reader' },
               { text: 'Binding', link: '/guide/remote-config/binding' },
               { text: 'Listener', link: '/guide/remote-config/listener' },
-              { text: '동작 방식', link: '/guide/remote-config/how-it-works' },
               { text: '더 알아보기', link: '/guide/remote-config/advanced' }
             ]
           }
@@ -160,7 +159,7 @@ export default defineConfig({
             text: '플레이나누 이관',
             collapsed: true,
             items: [
-              { text: '동작 방식', link: '/guide/migration/how-it-works' },
+              { text: '개요', link: '/guide/migration/how-it-works' },
               { text: '설치', link: '/guide/migration/install' },
               { text: '로그인', link: '/guide/migration/login' },
               { text: '로그아웃', link: '/guide/migration/logout' },
