@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
 using static TrueBase.Editor.GeneratorTypeCatalog;
@@ -33,7 +32,7 @@ namespace TrueBase.Editor
             using var req = UnityWebRequest.Get(url);
             req.timeout = Math.Max(5, timeoutSeconds);
             req.SetRequestHeader("apikey", key);
-            if (IsLegacyJwt(key))
+            if (IsLegacyJwtStyleApiKey(key))
                 req.SetRequestHeader("Authorization", "Bearer " + key);
 
             var op = req.SendWebRequest();
@@ -280,7 +279,7 @@ namespace TrueBase.Editor
             {
                 var descPart = string.IsNullOrWhiteSpace(description) ? "" : " — " + EscapeXml(description.Trim());
                 sb.AppendLine(ind + "/// <summary>");
-                sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCs(keyName) + "\"</c>" + descPart + " 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
+                sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCSharpString(keyName) + "\"</c>" + descPart + " 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
                 sb.AppendLine(ind + "/// <c>RemoteConfig&lt;" + className + "&gt;.CreateListener/Binding/Reader()</c> 로 사용하세요.");
                 sb.AppendLine(ind + "/// <para><b>이 파일은 자동 생성됩니다. 직접 수정하지 마세요.</b></para>");
                 sb.AppendLine(ind + "/// </summary>");
@@ -291,7 +290,7 @@ namespace TrueBase.Editor
             }
 
             if (depth == 0 && !string.IsNullOrWhiteSpace(keyName))
-                sb.AppendLine(ind + "[RemoteConfigKey(\"" + EscapeCs(keyName) + "\")]");
+                sb.AppendLine(ind + "[RemoteConfigKey(\"" + EscapeCSharpString(keyName) + "\")]");
 
             sb.AppendLine(ind + "[Serializable]");
             sb.AppendLine(ind + "public sealed partial class " + className);
@@ -307,7 +306,7 @@ namespace TrueBase.Editor
                 if (f.IsObjectNode)
                 {
                     // 필드 선언 (자식 클래스 타입)
-                    sb.AppendLine(ind + "    [JsonProperty(\"" + EscapeCs(f.JsonKey) + "\")] public " + f.NestedClassName + " " + LegalField(f.JsonKey) + ";");
+                    sb.AppendLine(ind + "    [JsonProperty(\"" + EscapeCSharpString(f.JsonKey) + "\")] public " + f.NestedClassName + " " + LegalFieldName(f.JsonKey) + ";");
                     i++;
 
                     // 자식 필드 범위를 수집해 재귀 생성
@@ -322,7 +321,7 @@ namespace TrueBase.Editor
                 else
                 {
                     var clr = ResolveClrType(f);
-                    sb.AppendLine(ind + "    [JsonProperty(\"" + EscapeCs(f.JsonKey) + "\")] public " + clr + " " + LegalField(f.JsonKey) + ";");
+                    sb.AppendLine(ind + "    [JsonProperty(\"" + EscapeCSharpString(f.JsonKey) + "\")] public " + clr + " " + LegalFieldName(f.JsonKey) + ";");
                     i++;
                 }
             }
@@ -392,49 +391,8 @@ namespace TrueBase.Editor
             return result;
         }
 
-        // ── String utilities ──────────────────────────────────────────────────
-
-        internal static string ToPascalCase(string name)
-        {
-            var parts = name.Split('_', '-', ' ');
-            var sb    = new StringBuilder();
-            foreach (var part in parts)
-            {
-                if (part.Length == 0) continue;
-                sb.Append(char.ToUpperInvariant(part[0]));
-                if (part.Length > 1) sb.Append(part, 1, part.Length - 1);
-            }
-            return sb.Length > 0 ? sb.ToString() : name;
-        }
-
-        private static string LegalField(string key)
-        {
-            // C# 예약어 충돌 방지
-            switch (key)
-            {
-                case "bool": case "int": case "float": case "double": case "string":
-                case "object": case "class": case "namespace": case "public":
-                case "private": case "protected": case "static": case "new":
-                case "override": case "virtual": case "abstract": case "sealed":
-                case "event": case "delegate": case "void": case "null":
-                case "true": case "false": case "base": case "this":
-                    return "@" + key;
-                default:
-                    return key;
-            }
-        }
-
-        private static string EscapeCs(string s) =>
-            s?.Replace("\\", "\\\\").Replace("\"", "\\\"") ?? "";
-
-        /// <summary>XML 문서 주석 안에 넣을 수 있도록 특수문자를 이스케이프합니다.</summary>
-        private static string EscapeXml(string s) =>
-            s?.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;") ?? "";
-
-        private static bool IsLegacyJwt(string key) =>
-            !string.IsNullOrEmpty(key) && key.Length >= 20
-            && key.StartsWith("eyJ", StringComparison.Ordinal)
-            && key.IndexOf('.') > 0;
+        // 문자열 유틸(ToPascalCase·LegalFieldName·EscapeXml·EscapeCSharpString·IsLegacyJwtStyleApiKey)은
+        // GeneratorTypeCatalog로 통합됨(using static). 두 생성기 단일 소스.
 
         // ── SubList helper ────────────────────────────────────────────────────
 

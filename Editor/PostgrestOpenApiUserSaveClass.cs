@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
+using static TrueBase.Editor.GeneratorTypeCatalog;
 
 namespace TrueBase.Editor
 {
@@ -55,21 +56,6 @@ namespace TrueBase.Editor
             if (string.IsNullOrWhiteSpace(baseUrl))
                 throw new ArgumentException("프로젝트 URL이 비어 있습니다.", nameof(projectUrl));
             return baseUrl.TrimEnd('/') + "/rest/v1/";
-        }
-
-        /// <summary>
-        /// 레거시 대시보드 JWT 키(예: <c>eyJ…</c>)는 PostgREST에서 <c>Authorization: Bearer</c>에 동일 값을 두는 패턴이 흔합니다.
-        /// 새 Publishable/Secret 키(<c>sb_publishable_</c>, <c>sb_secret_</c>)는 JWT가 아니며,
-        /// <c>apikey</c>와 같은 값을 Bearer에 넣으면 게이트웨이 뒤에서 거절될 수 있습니다.
-        /// (<see href="https://supabase.com/docs/guides/api/api-keys">Supabase API keys</see>)
-        /// </summary>
-        private static bool IsLegacyJwtStyleApiKey(string key)
-        {
-            if (string.IsNullOrEmpty(key) || key.Length < 20)
-                return false;
-            if (!key.StartsWith("eyJ", StringComparison.Ordinal))
-                return false;
-            return key.IndexOf('.', StringComparison.Ordinal) > 0;
         }
 
         private static void SetOpenApiFetchHeaders(UnityWebRequest req, string apiKey)
@@ -368,7 +354,12 @@ namespace TrueBase.Editor
                 return "string /* $ref: refine manually */";
 
             if (typeStr == "array")
-                return "string /* array / composite — refine manually */";
+            {
+                var elem = MapArrayElementClr(prop);
+                return elem != null
+                    ? "List<" + elem + ">"
+                    : "string /* array of objects/composite — refine manually */";
+            }
 
             if (typeStr == "object")
                 return "string /* json/jsonb — refine manually */";
@@ -395,6 +386,19 @@ namespace TrueBase.Editor
                 return "string";
 
             return "string /* unknown type — refine manually */";
+        }
+
+        /// <summary>
+        /// 배열 컬럼(<c>int[]</c>·<c>text[]</c> 등)의 요소 CLR 타입을 구합니다. <c>items</c> 스키마를
+        /// <see cref="MapToClr"/>로 재매핑하며, 요소가 미해결(주석 포함: object/$ref 등)이면 null을 반환해
+        /// 호출부가 수동 정제 플레이스홀더로 떨어지게 합니다. (스칼라 요소만 자동 <c>List&lt;T&gt;</c>로 매핑)
+        /// </summary>
+        private static string MapArrayElementClr(JObject prop)
+        {
+            if (!(prop["items"] is JObject items))
+                return null;
+            var itemClr = MapToClr(items);
+            return itemClr.IndexOf("/*", StringComparison.Ordinal) >= 0 ? null : itemClr;
         }
 
         private static string PrimaryType(JToken typeToken)
@@ -432,135 +436,9 @@ namespace TrueBase.Editor
             return true;
         }
 
-        /// <summary>
-        /// 컬럼명을 유효한 C# 필드 식별자로 변환합니다. 유효하지 않은 문자는 '_'로,
-        /// 숫자로 시작하면 '_' 접두, C# 키워드는 '@' 접두. 변환 결과가 컬럼명과 다르면
-        /// 호출부에서 <c>[JsonProperty]</c>로 JSON 키를 보존합니다(<see cref="MemberNameOf"/> 비교).
-        /// </summary>
-        private static string LegalFieldName(string columnName)
-        {
-            if (string.IsNullOrEmpty(columnName)) return "_";
-
-            var sb = new StringBuilder(columnName.Length);
-            foreach (var ch in columnName)
-                sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
-
-            var name = sb.ToString();
-            if (name.Length == 0 || char.IsDigit(name[0]))
-                name = "_" + name;
-
-            return IsCSharpKeyword(name) ? "@" + name : name;
-        }
-
         /// <summary>필드 토큰에서 실제 멤버 이름(JSON 키로 쓰임)을 구합니다 — '@' 접두만 제거.</summary>
         private static string MemberNameOf(string fieldToken) =>
             fieldToken.StartsWith("@", StringComparison.Ordinal) ? fieldToken.Substring(1) : fieldToken;
-
-        private static bool IsCSharpKeyword(string s)
-        {
-            switch (s)
-            {
-                case "abstract":
-                case "as":
-                case "base":
-                case "bool":
-                case "break":
-                case "byte":
-                case "case":
-                case "catch":
-                case "char":
-                case "checked":
-                case "class":
-                case "const":
-                case "continue":
-                case "decimal":
-                case "default":
-                case "delegate":
-                case "do":
-                case "double":
-                case "else":
-                case "enum":
-                case "event":
-                case "explicit":
-                case "extern":
-                case "false":
-                case "finally":
-                case "fixed":
-                case "float":
-                case "for":
-                case "foreach":
-                case "goto":
-                case "if":
-                case "implicit":
-                case "in":
-                case "int":
-                case "interface":
-                case "internal":
-                case "is":
-                case "lock":
-                case "long":
-                case "namespace":
-                case "new":
-                case "null":
-                case "object":
-                case "operator":
-                case "out":
-                case "override":
-                case "params":
-                case "private":
-                case "protected":
-                case "public":
-                case "readonly":
-                case "ref":
-                case "return":
-                case "sbyte":
-                case "sealed":
-                case "short":
-                case "sizeof":
-                case "stackalloc":
-                case "static":
-                case "string":
-                case "struct":
-                case "switch":
-                case "this":
-                case "throw":
-                case "true":
-                case "try":
-                case "typeof":
-                case "uint":
-                case "ulong":
-                case "unchecked":
-                case "unsafe":
-                case "ushort":
-                case "using":
-                case "virtual":
-                case "void":
-                case "volatile":
-                case "while":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
-        private static string ToPascalCase(string name)
-        {
-            if (string.IsNullOrEmpty(name)) return "_";
-
-            // 비식별 문자(_, -, ., 공백 등)를 단어 구분자로 보고 각 단어 첫 글자를 대문자로.
-            var sb = new StringBuilder(name.Length);
-            var startOfWord = true;
-            foreach (var ch in name)
-            {
-                if (!char.IsLetterOrDigit(ch)) { startOfWord = true; continue; }
-                sb.Append(startOfWord ? char.ToUpperInvariant(ch) : ch);
-                startOfWord = false;
-            }
-
-            if (sb.Length == 0) return "_";
-            if (char.IsDigit(sb[0])) sb.Insert(0, '_'); // 숫자로 시작하면 식별자 무효 → '_' 접두
-            return sb.ToString();
-        }
 
         private static string PriorityName(int priority) => priority switch
         {
@@ -620,8 +498,26 @@ namespace TrueBase.Editor
         {
             var list = new List<OpenApiColumn>(columns.Count);
             foreach (var c in columns)
-                list.Add(new OpenApiColumn(c.Name, GeneratorTypeCatalog.MapToAutoType(c.ClrType), c.Comment, c.Priority));
+            {
+                var clr = GeneratorTypeCatalog.MapToAutoType(c.ClrType);
+                clr = FallbackUnrefinedJsonType(clr);
+                list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority));
+            }
             return list;
+        }
+
+        /// <summary>
+        /// 사용자가 정제하지 않은 jsonb(객체) 플레이스홀더(<c>string /* json/jsonb … */</c>)를
+        /// 안전한 <c>Dictionary&lt;string, object&gt;</c>로 떨굽니다. (string 필드로 굳으면 object→string 역직렬화가 깨짐)
+        /// $ref·allOf·unknown 등 구조를 알 수 없는 플레이스홀더는 그대로 둬 수동 정제를 유도합니다.
+        /// </summary>
+        private static string FallbackUnrefinedJsonType(string clrType)
+        {
+            if (string.IsNullOrWhiteSpace(clrType)) return clrType;
+            if (clrType.IndexOf("/*", StringComparison.Ordinal) >= 0 &&
+                clrType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "Dictionary<string, object>";
+            return clrType;
         }
 
         /// <summary>
@@ -707,20 +603,6 @@ namespace TrueBase.Editor
             return line.Substring(i, end - i + 1);
         }
 
-        private static string EscapeXml(string s)
-        {
-            if (string.IsNullOrEmpty(s))
-                return "";
-            return s.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
-        }
-
-        private static string EscapeCSharpString(string s)
-        {
-            if (string.IsNullOrEmpty(s))
-                return string.Empty;
-
-            return s.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-        }
     }
 
     internal readonly struct OpenApiColumn

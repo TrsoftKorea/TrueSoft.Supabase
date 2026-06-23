@@ -285,9 +285,10 @@ namespace TrueBase.Editor
             }
         }
 
-        // Json 카테고리 전용 드롭다운 옵션 (jsonb 컬럼: 어떤 JSON 값이든 가능)
+        // Json 카테고리 전용 드롭다운 옵션 (jsonb 컬럼). string은 jsonb↔C# string 타입 불일치라 제외(text 컬럼 전용).
+        // 배열(T[])도 생성 시 AutoList로 치환돼 List와 결과가 같으므로 제외 — jsonb는 Dictionary/List 중 선택.
         private static readonly string[] s_jsonTypeOptions =
-            { "string", "Dictionary<K, V>", "List<T>", "T[]" };
+            { "Dictionary<K, V>", "List<T>" };
 
         // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류) — RemoteConfig 필드 등에서 사용
         private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
@@ -302,43 +303,41 @@ namespace TrueBase.Editor
 
         /// <summary>
         /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
-        /// Json 카테고리는 string / Dictionary 두 선택지를 제공합니다.
-        /// Array 카테고리는 List&lt;T&gt; / T[] 두 선택지를 제공하며 요소 타입은 별도 컨트롤로 편집합니다.
+        /// Json 카테고리(유저 세이브 jsonb 등)는 Dictionary / List 선택지를 제공합니다(string은 text 컬럼 전용, 배열은 List로 통일).
+        /// Array 카테고리(RemoteConfig 필드 등)는 List&lt;T&gt; / T[] 두 선택지를 제공하며 요소 타입은 별도 컨트롤로 편집합니다.
         /// 현재 TypeIndex가 카테고리에 없으면 전체 목록을 표시합니다.
         /// </summary>
         private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width,
             ref string customType)
         {
-            // Json 카테고리 전용 처리 (jsonb 컬럼: string / Dictionary / List<T> / T[])
+            // Json 카테고리 전용 처리 (jsonb 컬럼: Dictionary / List<T>). string은 text 전용이라 제외, 배열은 List로 통일.
             if (category == FieldTypeCategory.Json)
             {
                 int selIdx;
-                if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
+                if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex && TryParseListType(customType, out _))
                 {
-                    if      (TryParseDictionaryTypes(customType, out _, out _)) selIdx = 1;
-                    else if (TryParseListType(customType, out _))                selIdx = 2;
-                    else if (TryParseArrayType(customType, out _))               selIdx = 3;
-                    else                                                          selIdx = 0;
+                    selIdx = 1; // List
                 }
-                else selIdx = 0; // string
+                else if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex && TryParseArrayType(customType, out var arrElem))
+                {
+                    customType = "List<" + arrElem + ">"; // 기존 배열 → List로 정규화
+                    selIdx = 1;
+                }
+                else
+                {
+                    selIdx = 0; // Dictionary (미정 jsonb의 기본 — 모든 JSON 객체를 담을 수 있음)
+                }
 
                 var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
-                if (picked == 0) { customType = ""; return 7; }  // string
-                if (picked == 1)
+                if (picked == 0)
                 {
                     if (!TryParseDictionaryTypes(customType, out _, out _))
                         customType = "Dictionary<string, object>";
                     return GeneratorTypeCatalog.CustomTypeIndex;
                 }
-                if (picked == 2)
-                {
-                    if (!TryParseListType(customType, out _))
-                        customType = "List<int>";
-                    return GeneratorTypeCatalog.CustomTypeIndex;
-                }
-                // picked == 3: T[]
-                if (!TryParseArrayType(customType, out _))
-                    customType = "int[]";
+                // picked == 1: List<T> (jsonb의 리스트/배열은 모두 List로, 생성 시 AutoList로 치환됨)
+                if (!TryParseListType(customType, out _))
+                    customType = "List<int>";
                 return GeneratorTypeCatalog.CustomTypeIndex;
             }
 
@@ -616,7 +615,7 @@ namespace TrueBase.Editor
             // 클래스명 자동 유도 (비어있을 때만)
             if (string.IsNullOrWhiteSpace(_rcClassName))
             {
-                _rcClassName = RemoteConfigClassGenerator.ToPascalCase(row.Key) + "Config";
+                _rcClassName = GeneratorTypeCatalog.ToPascalCase(row.Key) + "Config";
                 EditorPrefs.SetString(PrefsKeyRcClassName, _rcClassName);
             }
 

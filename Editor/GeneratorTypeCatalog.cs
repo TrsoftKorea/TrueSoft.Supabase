@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TrueBase.Editor
@@ -38,7 +39,7 @@ namespace TrueBase.Editor
                 case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };             // int/short/long/ulong
                 case FieldTypeCategory.Float:   return new[] { 5, 6 };                    // float/double
                 case FieldTypeCategory.String:  return new[] { 7, 8, 9, 10, 11 };        // string + 날짜 타입
-                case FieldTypeCategory.Json:    return new[] { 7 };                       // string (Dictionary는 별도 팝업)
+                case FieldTypeCategory.Json:    return new int[0];                         // 전부 별도 팝업 처리 (Dictionary/List). string은 text 전용
                 case FieldTypeCategory.Array:   return new int[0];                         // 별도 팝업 처리 (DrawTypePopup 참조)
                 default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
             }
@@ -169,6 +170,101 @@ namespace TrueBase.Editor
 
             return result;
         }
+
+        // ── 공용 문자열 유틸 (두 생성기 단일 소스) ────────────────────────────────────
+
+        /// <summary>
+        /// 이름을 PascalCase 식별자로 변환합니다. 비식별 문자(_, -, ., 공백 등)는 단어 구분자로 보고
+        /// 각 단어 첫 글자를 대문자로, 구분자는 제거합니다. 숫자로 시작하면 '_' 접두.
+        /// </summary>
+        internal static string ToPascalCase(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "_";
+
+            var sb = new StringBuilder(name.Length);
+            var startOfWord = true;
+            foreach (var ch in name)
+            {
+                if (!char.IsLetterOrDigit(ch)) { startOfWord = true; continue; }
+                sb.Append(startOfWord ? char.ToUpperInvariant(ch) : ch);
+                startOfWord = false;
+            }
+
+            if (sb.Length == 0) return "_";
+            if (char.IsDigit(sb[0])) sb.Insert(0, '_'); // 숫자로 시작하면 식별자 무효 → '_' 접두
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 컬럼/키 이름을 유효한 C# 필드 식별자로 변환합니다. 유효하지 않은 문자는 '_'로,
+        /// 숫자로 시작하면 '_' 접두, C# 키워드는 '@' 접두. (JSON 키는 호출부에서 <c>[JsonProperty]</c>로 보존)
+        /// </summary>
+        internal static string LegalFieldName(string rawName)
+        {
+            if (string.IsNullOrEmpty(rawName)) return "_";
+
+            var sb = new StringBuilder(rawName.Length);
+            foreach (var ch in rawName)
+                sb.Append(char.IsLetterOrDigit(ch) || ch == '_' ? ch : '_');
+
+            var name = sb.ToString();
+            if (name.Length == 0 || char.IsDigit(name[0]))
+                name = "_" + name;
+
+            return IsCSharpKeyword(name) ? "@" + name : name;
+        }
+
+        internal static bool IsCSharpKeyword(string s)
+        {
+            switch (s)
+            {
+                case "abstract": case "as": case "base": case "bool": case "break":
+                case "byte": case "case": case "catch": case "char": case "checked":
+                case "class": case "const": case "continue": case "decimal": case "default":
+                case "delegate": case "do": case "double": case "else": case "enum":
+                case "event": case "explicit": case "extern": case "false": case "finally":
+                case "fixed": case "float": case "for": case "foreach": case "goto":
+                case "if": case "implicit": case "in": case "int": case "interface":
+                case "internal": case "is": case "lock": case "long": case "namespace":
+                case "new": case "null": case "object": case "operator": case "out":
+                case "override": case "params": case "private": case "protected": case "public":
+                case "readonly": case "ref": case "return": case "sbyte": case "sealed":
+                case "short": case "sizeof": case "stackalloc": case "static": case "string":
+                case "struct": case "switch": case "this": case "throw": case "true":
+                case "try": case "typeof": case "uint": case "ulong": case "unchecked":
+                case "unsafe": case "ushort": case "using": case "virtual": case "void":
+                case "volatile": case "while":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        internal static string EscapeXml(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s.Replace("&", "&amp;", StringComparison.Ordinal)
+                    .Replace("<", "&lt;", StringComparison.Ordinal)
+                    .Replace(">", "&gt;", StringComparison.Ordinal);
+        }
+
+        internal static string EscapeCSharpString(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s.Replace("\\", "\\\\", StringComparison.Ordinal)
+                    .Replace("\"", "\\\"", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// 레거시 대시보드 JWT 키(<c>eyJ…</c>) 여부. PostgREST에서 <c>Authorization: Bearer</c>에 동일 값을 두는 패턴 판별용.
+        /// 새 Publishable/Secret 키(<c>sb_publishable_</c>·<c>sb_secret_</c>)는 JWT가 아니므로 false.
+        /// </summary>
+        internal static bool IsLegacyJwtStyleApiKey(string key)
+        {
+            return !string.IsNullOrEmpty(key) && key.Length >= 20
+                && key.StartsWith("eyJ", StringComparison.Ordinal)
+                && key.IndexOf('.', StringComparison.Ordinal) > 0;
+        }
     }
 
     /// <summary>필드의 JSON 타입 카테고리 — Inspector 드롭다운 필터링에 사용합니다.</summary>
@@ -178,7 +274,7 @@ namespace TrueBase.Editor
         Integer,  // int, short, long, ulong, 커스텀
         Float,    // float, double, 커스텀
         String,   // string, DateTimeOffset, DateTime, DateOnly, TimeOnly, 커스텀
-        Json,     // string, Dictionary<string,object>(프리셋), 커스텀  ← jsonb/$ref/allOf 등 복잡한 DB 타입
+        Json,     // Dictionary<string,object>(기본) / List<T> — 별도 팝업. string은 text 전용  ← jsonb/$ref/allOf 등 복잡한 DB 타입
         Array,    // 커스텀 전용
         Unknown,  // 전체 표시
     }
