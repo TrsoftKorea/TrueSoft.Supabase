@@ -2,8 +2,27 @@
 
 `SupabaseSettings` 에셋 Inspector 하단에서 Secret 키를 입력하고 **스키마 가져오기 → 소스 생성 → 저장**으로 `PlayerSave.cs`를 생성합니다.
 
-::: info
-타입을 자동으로 결정하지 못한 컬럼은 ⚠ 표시되며, 드롭다운에서 직접 지정할 수 있습니다.
+스키마를 가져오면 컬럼이 표로 나옵니다. 행마다 아래를 조정한 뒤 소스를 생성합니다.
+
+| 칸 | 설명 |
+|----|------|
+| **컬럼** | DB 컬럼명(읽기 전용). `[DataColumn]` 매핑 키로 그대로 쓰입니다. |
+| **필드명** | 생성될 C# 필드·프로퍼티 이름. 기본값은 컬럼명이고 자유롭게 바꿀 수 있습니다. 컬럼명과 다르면 직렬화 보존을 위해 `[JsonProperty("컬럼명")]`이 자동으로 붙습니다. |
+| **타입** | 스칼라는 그대로, jsonb 컬럼은 `Dictionary` / `List` 중에서 고릅니다. 요소 타입은 값 타입 또는 2차원에서 선택하며, 단순 값 컬렉션은 생성 시 `AutoList` / `AutoDict`로 변환됩니다. [데이터 타입](../data-types/auto-collections)을 참고하세요. |
+| **저장 주기** | 자동 저장 배치 우선순위 — 보통(기본) · 짧게 · 길게. |
+| **포함** | 해제하면 그 컬럼은 생성에서 제외됩니다. |
+
+타입·필드명·저장 주기 설정은 **재생성 시 컬럼 기준으로 보존**됩니다.
+
+예를 들어 컬럼 `user_id`의 필드명을 `playerId`로 바꾸면 다음과 같이 생성됩니다.
+
+```csharp
+[DataColumn("user_id")] [JsonProperty("user_id")] internal int playerId;
+public static int PlayerId { get => Instance.Current.playerId; set { Instance.Current.playerId = value; Instance.MarkDirty(); } }
+```
+
+::: warning 타입을 정해야 생성됩니다
+jsonb 컬럼에서 Dictionary의 value나 리스트 요소 타입을 정하지 않으면 ⚠ 로 표시되고, 그 상태로는 **소스 생성이 막힙니다**. 타입을 값 타입 등으로 좁히면(예: `Dictionary<string, int>`) 풀립니다.
 :::
 
 생성된 파일은 다음과 같은 구조입니다.
