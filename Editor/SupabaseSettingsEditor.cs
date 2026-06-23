@@ -298,8 +298,33 @@ namespace TrueBase.Editor
         private static readonly string[] s_priorityOptions = { "보통", "짧게", "길게" };
         private static readonly int[]    s_priorityValues  = {  1,      0,      2     };
 
-        // Dictionary key 타입 선택지 (value 타입은 자유 텍스트)
+        // Dictionary key 타입 선택지
         private static readonly string[] s_dictKeyOptions = { "string", "int" };
+
+        // 컬렉션 요소 값 타입 12종 — AutoList/AutoDict 변환 대상(= 기본값 지정 가능 타입).
+        // GeneratorTypeCatalog의 AutoList leaf 집합과 동일. 기본값을 못 박는 타입(struct·tuple·커스텀 클래스)은
+        // 자동 확장 컬렉션에서 무의미하므로 노출하지 않습니다.
+        private static readonly string[] s_valueTypeOptions =
+        {
+            "int", "long", "short", "ulong", "uint", "byte", "sbyte",
+            "float", "double", "decimal", "bool", "string"
+        };
+
+        // List/배열 요소 드롭다운: 값 타입 + "2차원"(→ List<값타입>, 생성 시 AutoList2D로 치환·셀 기본값 지정 가능).
+        private const string ElementTwoDimLabel = "2차원(List)";
+        private static readonly string[] s_listElementOptions = AppendOne(s_valueTypeOptions, ElementTwoDimLabel);
+
+        // Dictionary value 드롭다운: 값 타입(→ AutoDict) + "object"(원시 JSON 컨테이너 — jsonb 기본 Dictionary<string,object> 유지).
+        private const string DictValueRawLabel = "object(원시 JSON)";
+        private static readonly string[] s_dictValueOptions = AppendOne(s_valueTypeOptions, DictValueRawLabel);
+
+        private static string[] AppendOne(string[] src, string tail)
+        {
+            var arr = new string[src.Length + 1];
+            Array.Copy(src, arr, src.Length);
+            arr[src.Length] = tail;
+            return arr;
+        }
 
         /// <summary>
         /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
@@ -455,20 +480,58 @@ namespace TrueBase.Editor
             return !string.IsNullOrEmpty(elementType);
         }
 
-        /// <summary>List&lt;T&gt; 요소 타입 입력(자유 텍스트). 중첩(List&lt;int&gt;)·클래스 요소(MyClass)도 지정 가능.</summary>
+        /// <summary>
+        /// List&lt;T&gt;·배열 요소 타입을 선택합니다 — 값 타입 12종 또는 "2차원"(→ List&lt;값타입&gt;, 생성 시 AutoList2D).
+        /// 모두 기본값 지정이 가능한 타입만 노출합니다. 인식 못 하는 기존 타입은 첫 값 타입(int)으로 정규화됩니다.
+        /// </summary>
+        private static string DrawListElementPopup(string current, float width)
+        {
+            var cur       = (current ?? string.Empty).Trim();
+            var twoDimIdx = s_listElementOptions.Length - 1; // "2차원(List)"
+
+            var isTwoDim = TryParseListType(cur, out var inner); // 현재가 List<X>면 2차원
+            var selIdx   = isTwoDim ? twoDimIdx : Math.Max(0, Array.IndexOf(s_valueTypeOptions, cur));
+
+            var picked = EditorGUILayout.Popup(selIdx, s_listElementOptions, GUILayout.Width(width));
+            if (picked != twoDimIdx)
+                return s_valueTypeOptions[picked]; // 값 타입(1D)
+
+            // 2차원: 안쪽 값 타입 드롭다운 → List<값타입> 반환(AutoList2D로 치환됨)
+            var innerSel = Math.Max(0, Array.IndexOf(s_valueTypeOptions, isTwoDim ? inner : "int"));
+            var newInner = EditorGUILayout.Popup(innerSel, s_valueTypeOptions, GUILayout.Width(width));
+            return "List<" + s_valueTypeOptions[newInner] + ">";
+        }
+
+        /// <summary>값 타입 12종 드롭다운. 인식 못 하는 값은 int로 정규화.</summary>
+        private static string DrawValueTypePopup(string current, float width)
+        {
+            var vi     = Math.Max(0, Array.IndexOf(s_valueTypeOptions, (current ?? string.Empty).Trim()));
+            var picked = EditorGUILayout.Popup(vi, s_valueTypeOptions, GUILayout.Width(width));
+            return s_valueTypeOptions[picked];
+        }
+
+        /// <summary>Dictionary value 타입 드롭다운 — 값 타입(→ AutoDict) 또는 object(원시 JSON 컨테이너 유지).</summary>
+        private static string DrawDictValuePopup(string current, float width)
+        {
+            var rawIdx = s_dictValueOptions.Length - 1; // "object(원시 JSON)"
+            var vi     = Array.IndexOf(s_valueTypeOptions, (current ?? string.Empty).Trim());
+            var selIdx = vi >= 0 ? vi : rawIdx; // 값 타입이 아니면(object 등) 원시 JSON
+            var picked = EditorGUILayout.Popup(selIdx, s_dictValueOptions, GUILayout.Width(width));
+            return picked == rawIdx ? "object" : s_valueTypeOptions[picked];
+        }
+
+        /// <summary>List&lt;T&gt; 요소 타입 선택(값 타입 / 2차원).</summary>
         private static void DrawListTypeControls(ref string customType)
         {
             TryParseListType(customType, out var elem);
-            var newElem = EditorGUILayout.TextField(elem, GUILayout.ExpandWidth(true));
-            customType = "List<" + (string.IsNullOrWhiteSpace(newElem) ? "int" : newElem.Trim()) + ">";
+            customType = "List<" + DrawListElementPopup(elem, 90) + ">";
         }
 
-        /// <summary>T[] 요소 타입 입력(자유 텍스트). 예: int → int[], List&lt;int&gt; → List&lt;int&gt;[].</summary>
+        /// <summary>T[] 요소 타입 선택(값 타입). 예: int → int[].</summary>
         private static void DrawArrayTypeControls(ref string customType)
         {
             TryParseArrayType(customType, out var elem);
-            var newElem = EditorGUILayout.TextField(elem, GUILayout.ExpandWidth(true));
-            customType = (string.IsNullOrWhiteSpace(newElem) ? "int" : newElem.Trim()) + "[]";
+            customType = DrawValueTypePopup(elem, 90) + "[]";
         }
 
         /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>
@@ -483,9 +546,8 @@ namespace TrueBase.Editor
 
             EditorGUILayout.LabelField(",", GUILayout.Width(8));
 
-            // Value 타입 자유 텍스트
-            var newValue = EditorGUILayout.TextField(valueType, GUILayout.ExpandWidth(true));
-            if (string.IsNullOrWhiteSpace(newValue)) newValue = "object";
+            // Value 타입 선택(값 타입 / object)
+            var newValue = DrawDictValuePopup(valueType, 90);
 
             customType = "Dictionary<" + newKey + ", " + newValue + ">";
         }
