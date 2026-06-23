@@ -20,7 +20,7 @@ alter table if exists public.remote_config drop column if exists max_stale_secon
 
 create table if not exists public.remote_config (
   key text primary key,
-  value_json text not null,  -- JSON 객체 루트 ({...}) 필수 (컬럼이 jsonb여도 클라이언트 SDK가 객체/문자열 응답 모두 처리)
+  value_json jsonb not null,  -- JSON 객체 루트 ({...}) 필수. jsonb로 쓰기 시점 JSON 검증 + 서버측 쿼리. (SDK는 jsonb·text 응답 모두 처리)
   updated_at timestamptz not null default now(),
   version int not null default 1,
   enabled boolean not null default true,
@@ -29,7 +29,7 @@ create table if not exists public.remote_config (
   -- 폴링 주기·캐시 유효 시간은 클라이언트(Unity)에서 키 조회 시 지정합니다.
 );
 
-alter table public.remote_config add column if not exists value_json text;
+alter table public.remote_config add column if not exists value_json jsonb;
 alter table public.remote_config add column if not exists updated_at timestamptz not null default now();
 alter table public.remote_config add column if not exists version int not null default 1;
 alter table public.remote_config add column if not exists enabled boolean not null default true;
