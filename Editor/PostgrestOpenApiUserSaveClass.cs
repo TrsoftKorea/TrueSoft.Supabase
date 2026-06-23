@@ -224,7 +224,7 @@ namespace TrueBase.Editor
             sb.AppendLine(indent + "#pragma warning disable CS0169, CS0649");
             foreach (var c in columns)
             {
-                var fieldName     = LegalFieldName(c.Name);
+                var fieldName     = LegalFieldName(MemberSourceOf(c));
                 var priorityParam = c.Priority == 1 /* Normal */ ? string.Empty : ", DataSavePriority." + PriorityName(c.Priority);
                 if (string.IsNullOrWhiteSpace(c.Comment) == false)
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
@@ -248,8 +248,9 @@ namespace TrueBase.Editor
             // updated_at은 DB 트리거가 자동 설정 — 개발자가 실수로 set하지 않도록 정적 프로퍼티 제외
             foreach (var c in columns.Where(c => c.Name != "updated_at"))
             {
-                var fieldName = LegalFieldName(c.Name);
-                var propName = ToPascalCase(c.Name);
+                var memberSource = MemberSourceOf(c);
+                var fieldName = LegalFieldName(memberSource);
+                var propName = ToPascalCase(memberSource);
                 sb.AppendLine();
 
                 if (TryGetCollectionInit(c.ClrType, out var propInitExpr))
@@ -440,6 +441,10 @@ namespace TrueBase.Editor
         private static string MemberNameOf(string fieldToken) =>
             fieldToken.StartsWith("@", StringComparison.Ordinal) ? fieldToken.Substring(1) : fieldToken;
 
+        /// <summary>필드·프로퍼티 이름의 원천 — 커스텀 FieldName이 있으면 그것을, 없으면 컬럼명을 사용합니다.</summary>
+        private static string MemberSourceOf(OpenApiColumn c) =>
+            string.IsNullOrWhiteSpace(c.FieldName) ? c.Name : c.FieldName.Trim();
+
         private static string PriorityName(int priority) => priority switch
         {
             0 => "Urgent",
@@ -501,7 +506,7 @@ namespace TrueBase.Editor
             {
                 var clr = GeneratorTypeCatalog.MapToAutoType(c.ClrType);
                 clr = FallbackUnrefinedJsonType(clr);
-                list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority));
+                list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority, c.FieldName));
             }
             return list;
         }
@@ -608,12 +613,14 @@ namespace TrueBase.Editor
     internal readonly struct OpenApiColumn
     {
         /// <param name="priority">저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</param>
-        public OpenApiColumn(string name, string clrType, string comment, int priority = 1)
+        /// <param name="fieldName">C# 필드명 커스터마이즈. null/빈 값이면 컬럼명(<paramref name="name"/>)을 사용.</param>
+        public OpenApiColumn(string name, string clrType, string comment, int priority = 1, string fieldName = null)
         {
-            Name     = name;
-            ClrType  = clrType;
-            Comment  = comment;
-            Priority = priority;
+            Name      = name;
+            ClrType   = clrType;
+            Comment   = comment;
+            Priority  = priority;
+            FieldName = fieldName;
         }
 
         public string Name    { get; }
@@ -621,6 +628,8 @@ namespace TrueBase.Editor
         public string Comment { get; }
         /// <summary>저장 우선순위. 0=Urgent, 1=Normal, 2=Lazy.</summary>
         public int    Priority { get; }
+        /// <summary>C# 필드명(커스텀). null/빈 값이면 컬럼명을 사용. DataColumn 매핑은 항상 컬럼명을 씁니다.</summary>
+        public string FieldName { get; }
     }
 
     internal sealed class ParseTableResult

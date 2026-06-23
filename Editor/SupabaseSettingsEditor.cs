@@ -16,6 +16,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyExtraUsings       = "TrueBase.PlayerSave.ExtraUsings";
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
+        private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";
         private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
         private const string PrefsKeyRcExtraUsings     = "TrueBase.RemoteConfig.ExtraUsings";
@@ -780,7 +781,8 @@ namespace TrueBase.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("필드",     EditorStyles.miniLabel, GUILayout.MinWidth(100));
+                EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(92));
+                EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(110));
                 EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
                 EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
                 EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
@@ -798,9 +800,12 @@ namespace TrueBase.Editor
                     {
                         var warn  = col.IsAmbiguous || IsUnspecifiedType(ResolveColumnClrType(col));
                         var label = warn ? "⚠ " + col.Name : col.Name;
-                        EditorGUILayout.LabelField(label,
+                        // 컬럼명: DB 식별자(읽기 전용). 전체 이름은 툴팁으로 노출.
+                        EditorGUILayout.LabelField(new GUIContent(label, col.Name),
                             warn ? AmbiguousStyle : EditorStyles.label,
-                            GUILayout.MinWidth(col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex ? 60 : 100));
+                            GUILayout.Width(92));
+                        // 필드명: C# 식별자(편집 가능, 기본=컬럼명). 컬럼명과 다르면 생성기가 [JsonProperty]로 직렬화를 보존.
+                        col.FieldName = EditorGUILayout.TextField(col.FieldName, GUILayout.Width(110));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
                         if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
                         {
@@ -866,6 +871,7 @@ namespace TrueBase.Editor
                     _editableColumns.Add(new EditableColumn
                     {
                         Name         = col.Name,
+                        FieldName    = col.Name, // 기본 필드명 = 컬럼명 (아래에서 커스텀 복원)
                         Comment      = col.Comment,
                         TypeIndex    = typeIdx,
                         IsAmbiguous  = isAmbiguous,
@@ -920,6 +926,16 @@ namespace TrueBase.Editor
                             col.Priority = p;
                     }
                 }
+
+                // 커스텀 필드명 복원 — 기존 파일 폴백, EditorPrefs 우선
+                var existingFieldNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in TryLoadExistingFieldNames())
+                    existingFieldNames[kv.Key] = kv.Value;
+                foreach (var kv in LoadColumnFieldNamesFromPrefs())
+                    existingFieldNames[kv.Key] = kv.Value;
+                foreach (var col in _editableColumns)
+                    if (existingFieldNames.TryGetValue(col.Name, out var fn) && !string.IsNullOrWhiteSpace(fn))
+                        col.FieldName = fn;
 
                 _columnsFetched = true;
             }
@@ -986,7 +1002,7 @@ namespace TrueBase.Editor
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                cols.Add(new OpenApiColumn(ec.Name, ResolveColumnClrType(ec), ec.Comment, ec.Priority));
+                cols.Add(new OpenApiColumn(ec.Name, ResolveColumnClrType(ec), ec.Comment, ec.Priority, ec.FieldName));
             }
 
             if (cols.Count == 0)
@@ -1013,9 +1029,10 @@ namespace TrueBase.Editor
             if (existingPath != null && File.Exists(existingPath))
                 _previewText = PostgrestOpenApiUserSaveClass.MergePreservedAutoDefaults(_previewText, File.ReadAllText(existingPath));
 
-            // 소스 생성 시점에 현재 타입·Priority 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
+            // 소스 생성 시점에 현재 타입·Priority·필드명 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
             SaveColumnTypesToPrefs();
             SaveColumnPrioritiesToPrefs();
+            SaveColumnFieldNamesToPrefs();
         }
 
         /// <summary>EditorPrefs에서 컬럼명→타입 매핑을 로드합니다.</summary>
@@ -1068,6 +1085,48 @@ namespace TrueBase.Editor
                 dict[col.Name] = type;
             }
             EditorPrefs.SetString(PrefsKeyColumnTypes, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+        }
+
+        /// <summary>현재 _editableColumns의 커스텀 필드명을 EditorPrefs에 저장합니다(컬럼명과 같으면 생략).</summary>
+        private static void SaveColumnFieldNamesToPrefs()
+        {
+            var dict = new Dictionary<string, string>();
+            foreach (var col in _editableColumns)
+            {
+                var fn = col.FieldName?.Trim();
+                if (!string.IsNullOrEmpty(fn) && fn != col.Name) // 기본값(=컬럼명)은 저장 불필요
+                    dict[col.Name] = fn;
+            }
+            EditorPrefs.SetString(PrefsKeyColumnFieldNames, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+        }
+
+        /// <summary>EditorPrefs에서 컬럼명→커스텀 필드명 매핑을 로드합니다.</summary>
+        private static Dictionary<string, string> LoadColumnFieldNamesFromPrefs()
+        {
+            var json = EditorPrefs.GetString(PrefsKeyColumnFieldNames, "");
+            if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, string>();
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(json)
+                       ?? new Dictionary<string, string>();
+            }
+            catch { return new Dictionary<string, string>(); }
+        }
+
+        /// <summary>기존 PlayerSave.cs에서 컬럼명→C# 필드 식별자 매핑을 읽습니다. 없으면 빈 딕셔너리.</summary>
+        private static Dictionary<string, string> TryLoadExistingFieldNames()
+        {
+            var assetPath = FindExistingClassAssetPath();
+            if (assetPath == null) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var source = File.ReadAllText(assetPath, System.Text.Encoding.UTF8);
+                return GeneratorTypeCatalog.ExtractDataColumnFieldNames(source);
+            }
+            catch
+            {
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
         }
 
         /// <summary>
@@ -1131,9 +1190,10 @@ namespace TrueBase.Editor
                 if (!string.IsNullOrEmpty(dir))
                     EditorPrefs.SetString(PrefsKeyLastSaveDir, dir);
 
-                // 저장 시점에도 타입·Priority 설정을 EditorPrefs에 기록
+                // 저장 시점에도 타입·Priority·필드명 설정을 EditorPrefs에 기록
                 SaveColumnTypesToPrefs();
                 SaveColumnPrioritiesToPrefs();
+                SaveColumnFieldNamesToPrefs();
             }
             catch (Exception e)
             {
@@ -1156,6 +1216,8 @@ namespace TrueBase.Editor
         private sealed class EditableColumn
         {
             public string            Name;
+            /// <summary>C# 필드명(커스텀). 기본=컬럼명(Name). 컬럼명과 다르면 생성기가 [JsonProperty]로 직렬화 보존.</summary>
+            public string            FieldName    = "";
             public string            Comment;
             public bool              Include      = true;
             public int               TypeIndex;

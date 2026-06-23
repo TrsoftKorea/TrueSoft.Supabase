@@ -171,6 +171,32 @@ namespace TrueBase.Editor
             return result;
         }
 
+        /// <summary>
+        /// 생성된 유저 세이브 .cs 에서 <c>[DataColumn("col")] [JsonProperty?] public/internal TYPE field …;</c> 를 읽어
+        /// (컬럼명 → C# 필드 식별자) 매핑을 반환합니다. 사이에 <c>[JsonProperty(...)]</c> 등 다른 어트리뷰트가 끼어 있어도 매칭합니다.
+        /// 재생성 시 커스텀 필드명 복원에 사용합니다. ('@' 키워드 접두는 제거)
+        /// </summary>
+        internal static Dictionary<string, string> ExtractDataColumnFieldNames(string source)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(source)) return result;
+
+            var pattern = new Regex(
+                @"\[DataColumn\(""([^""]*)""[^)]*\)\]\s*(?:\[[^\]]*\]\s*)*(?:public|internal)\s+.+?\s+(@?\w+)\s*(?:=[^;]*)?;",
+                RegexOptions.Multiline);
+
+            foreach (Match m in pattern.Matches(source))
+            {
+                var col   = m.Groups[1].Value;
+                var field = m.Groups[2].Value;
+                if (field.StartsWith("@", StringComparison.Ordinal)) field = field.Substring(1);
+                if (!string.IsNullOrEmpty(col) && !string.IsNullOrEmpty(field))
+                    result[col] = field;
+            }
+
+            return result;
+        }
+
         // ── 공용 문자열 유틸 (두 생성기 단일 소스) ────────────────────────────────────
 
         /// <summary>
