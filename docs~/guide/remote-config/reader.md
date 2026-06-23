@@ -13,5 +13,3 @@ Func<Task<T?>> RemoteConfig<T>.CreateReader(int maxStale = -1)
 | 파라미터 | 설명 | 타입 |
 |----------|------|------|
 | `maxStale` | 캐시 유효 시간 초과. `0`이면 항상 서버에서 새로 받음. `-1`이면 DB 설정값 사용 (기본값: `-1`) | `int` |
-
----

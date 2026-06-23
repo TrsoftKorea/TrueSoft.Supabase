@@ -15,5 +15,3 @@ void OnDuplicateLogin()
     _ = Supabase.TrySignOutFullyAsync();
 }
 ```
-
----

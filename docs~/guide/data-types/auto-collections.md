@@ -1,4 +1,4 @@
-# 자동 확장 컬렉션 (AutoList · AutoDict)
+# 자동 확장 컬렉션
 
 게임 버전업으로 크기가 늘어나는 컬렉션(예: 3 → 5 스테이지)은 매 접속마다 칸을 미리 늘려두는 선작업이 번거롭습니다. `AutoList<T>` / `AutoDict<TKey,TValue>`를 쓰면 그 작업이 사라집니다.
 
@@ -75,5 +75,3 @@ int c = PlayerSave.Counts["ice", 9];   // 없으면 0 반환
 ```
 
 JSON에는 `{"k1":{"k2":v}}` 중첩 객체로 직렬화됩니다(`Dictionary` 중첩과 동일 형태).
-
----

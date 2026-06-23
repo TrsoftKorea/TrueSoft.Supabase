@@ -24,9 +24,7 @@ public class GameplayConfig
 
 ## 2단계 — DB에 값 입력
 
-Retool에서 `remote_config` 테이블에 값을 입력합니다.
-
-> 자세한 내용은 추후 업데이트 예정입니다.
+Retool 등 관리 도구에서 `remote_config` 테이블에 행을 추가합니다 — `key`(예: `gameplay_v1`)와 클래스 구조와 같은 모양의 `value_json`을 입력합니다.
 
 ## 3단계 — 코드에서 사용
 
@@ -40,5 +38,3 @@ if (cfg != null)
     maxStamina = cfg.maxStamina;
 }
 ```
-
----

@@ -21,7 +21,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 
 ## SamplePlayerSave
 
-`StaticUserSave`를 상속해 DB 컬럼을 C# 프로퍼티에 연결하는 최소 예시입니다.
+`StaticUserSave`를 상속해 DB 컬럼을 C# 프로퍼티에 연결하는 최소 예시 클래스로, `ExampleSupabaseScenarios.cs` 안에 함께 정의돼 있습니다(별도 파일이 아닙니다). 실제 프로젝트에서는 [클래스 생성기](/guide/user-data/class-gen)로 만드세요.
 
 ```csharp
 [Serializable]
@@ -82,5 +82,3 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 ::: warning
 `alreadyVerified=true`는 서버에 이미 검증 기록이 있는 경우입니다(지급 후 크래시). DB에서 지급 여부를 확인해 중복 지급을 방지하세요.
 :::
-
----

@@ -13,5 +13,3 @@ Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import
 초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.
 
 사용 방법은 [Database Setup](/guide/start/database-setup)을 참고하세요.
-
----

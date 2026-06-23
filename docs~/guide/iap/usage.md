@@ -20,5 +20,3 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 | `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) | `int` |
 
 `onGrant`의 `isResuming` · `alreadyVerified` 파라미터는 [중복 지급 방지](/guide/iap/advanced#중복-지급-방지)를 참고하세요.
-
----

@@ -3,8 +3,7 @@
 인증·유저 데이터·RemoteConfig·IAP 핵심 기능을 키보드 단축키로 빠르게 테스트할 수 있는 예제입니다.
 
 **파일 구성:**
-- `SamplePlayerSave.cs` — `StaticUserSave<Row>` 상속 예시 (유저 세이브 클래스 정의 방법)
-- `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트
+- `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트 (`StaticUserSave` 상속 예시인 `SamplePlayerSave` 클래스 포함)
 - `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`TRUESOFT_IAP_AVAILABLE` 심볼 필요)
 
 ---

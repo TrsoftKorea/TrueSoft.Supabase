@@ -65,5 +65,3 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | `APPLE_SHARED_SECRET` | iOS IAP 사용 시 (SK1) | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
 
 발급 절차는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)을 참고하세요.
-
----

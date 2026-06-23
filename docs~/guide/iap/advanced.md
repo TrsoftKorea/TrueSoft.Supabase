@@ -43,5 +43,3 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 `price_amount_krw` 컬럼을 사용하면 해외 결제 포함 합산이 가능합니다.  
 환산에 실패한 행은 `COALESCE(price_amount_krw, 0)`으로 처리하세요.
 :::
-
----

@@ -73,5 +73,3 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 ```
 
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
-
----

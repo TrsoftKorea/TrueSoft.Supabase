@@ -25,5 +25,3 @@ Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 로그인 후 유저 데이터를 쓰려면 [데이터 로드](/guide/user-data/load)를 호출합니다. 자동 로그인은 이 로드를 내부에서 함께 처리합니다.
-
----

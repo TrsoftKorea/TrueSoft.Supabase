@@ -11,5 +11,3 @@ https://github.com/trsoftkorea/TrueSoft.Supabase.git
 ```
 
 특정 버전 설치 시 `#버전`을 추가합니다 (예: `...git#0.1.0`).
-
----

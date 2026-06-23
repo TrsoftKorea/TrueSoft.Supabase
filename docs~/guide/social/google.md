@@ -137,5 +137,3 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleWithIdTokenAsync(string idToken, 
 ```
 
 이미 로그인된 계정(익명 포함)에 Google 계정을 추가 연동합니다.
-
----

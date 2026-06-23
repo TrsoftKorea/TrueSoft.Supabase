@@ -23,5 +23,3 @@
 앱의 첫 씬에 `SupabaseSDK` 게임 오브젝트가 생성되고 `SupabaseRuntime` 컴포넌트와 `SupabaseSettings`가 자동으로 연결됩니다.
 
 자동 로그인 타이밍 제어와 이벤트 콜백 사용법은 [인증](/guide/auth/anonymous)을 참고하세요.
-
----

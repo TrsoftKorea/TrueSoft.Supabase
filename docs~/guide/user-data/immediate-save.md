@@ -17,5 +17,3 @@ Task<bool> Supabase.TrySaveAllAsync(int timeoutMs = 5000)
 ::: info
 `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.
 :::
-
----

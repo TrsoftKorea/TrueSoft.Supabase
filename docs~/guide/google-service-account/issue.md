@@ -86,5 +86,3 @@ Google Play 영수증 검증에 필요한 서비스 계정 JSON 키 발급 절�
 :::
 
 ![](/google-service-account/image8.png)
-
----

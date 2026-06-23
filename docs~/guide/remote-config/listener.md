@@ -15,5 +15,3 @@ RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T?> onChange, floa
 |----------|------|------|
 | `onChange` | 값이 바뀔 때 호출되는 콜백 | `Action<T?>` |
 | `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
-
----

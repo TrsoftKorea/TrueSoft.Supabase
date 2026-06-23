@@ -76,5 +76,3 @@ Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string default
 |----------|------|------|
 | `userId` | 조회할 플레이어 ID (`profiles.user_id`) | `string` |
 | `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `""`) | `string` |
-
----

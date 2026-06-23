@@ -40,5 +40,3 @@ Google OAuth 설정 방법은 [소셜 로그인](/guide/social/google)을 참고
 | 항목 | 설정 | 이유 |
 |------|------|------|
 | **Enforce SSL on incoming connections** | ON | Retool 등 외부 도구에서 DB에 직접 연결할 때 필요 |
-
----

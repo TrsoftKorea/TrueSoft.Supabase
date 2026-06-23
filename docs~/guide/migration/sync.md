@@ -34,12 +34,19 @@ public sealed class Row
 
 ## 데이터 변환 커스터마이징
 
-`int` · `string` 등 단순 필드와 정상적인 JSON 배열/객체는 자동으로 변환됩니다. **특정 필드를 플레이나누에서 다른 형태로 저장**해야 하면, 생성 클래스의 partial에서 `ConfigureNanoo`를 override해 그 필드 변환만 등록합니다. 예를 들어 `List<int>` `[2, 3]`을 플레이나누엔 `"2_3"`으로 저장할 때:
+`int` · `string` 등 단순 필드와 정상적인 JSON 배열/객체는 자동으로 변환됩니다. **특정 필드를 플레이나누에서 다른 형태로 저장**해야 하면 `ConfigureNanoo`를 override해 그 필드 변환만 등록합니다.
+
+::: warning 생성 파일이 아닌 별도 partial 파일에 작성하세요
+`PlayerSave.cs`는 생성기가 **덮어쓰는 자동 생성 파일**입니다. `ConfigureNanoo`·`NanooSerializeJson` 같은 override를 거기에 넣으면 재생성 시 사라집니다. `PlayerSave`는 `partial`이므로 **별도 파일**(예: `PlayerSave.Nanoo.cs`)에 작성하세요.
+:::
+
+예를 들어 `List<int>` `[2, 3]`을 플레이나누엔 `"2_3"`으로 저장할 때:
 
 ```csharp
+// PlayerSave.Nanoo.cs — 직접 만드는 별도 partial 파일 (자동 생성 PlayerSave.cs는 수정하지 않음)
 using System.Linq;
 
-public sealed partial class PlayerSave   // 생성기가 만든 클래스
+public sealed partial class PlayerSave
 {
     protected override void ConfigureNanoo(NanooFieldMap<Row> map) => map
         .Field(r => r.itemIds,                                  // 필드 선택식 — 키 하드코딩·타입 지정 불필요
@@ -57,5 +64,3 @@ public sealed partial class PlayerSave   // 생성기가 만든 클래스
 - 변환 방식이 더 복잡해 전체 JSON 모양을 직접 짜야 하면, `NanooSerializeJson` / `NanooDeserializeJson`을 직접 override하세요(등록 변환 대신 그게 쓰입니다).
 
 단순한 키명 차이는 변환 등록이 아니라 [필드명 규칙](/guide/migration/sync#필드명-규칙)으로 해결합니다(C# 필드명을 플레이나누 키에 맞추고 DB 컬럼은 `[DataColumn]`로 지정).
-
----

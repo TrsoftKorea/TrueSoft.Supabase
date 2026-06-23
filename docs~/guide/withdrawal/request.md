@@ -1,7 +1,5 @@
 # 탈퇴 처리
 
----
-
 즉시 삭제하지 않고 일정 유예 기간 후에 처리됩니다. 유예 기간 동안 플레이어가 탈퇴를 취소할 수 있습니다.  
 유예 기간은 `SupabaseSettings.withdrawalRequestDelayDays`에서 설정합니다.
 
@@ -59,5 +57,3 @@ Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
 |--------|------|
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
-
----

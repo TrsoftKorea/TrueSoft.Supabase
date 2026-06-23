@@ -25,5 +25,3 @@ PlayerSave.Inventory = new List<int>{1, 2}; // 통째 교체도 가능
 ```
 
 쓸 수 있는 타입과 직렬화 규칙은 [데이터 타입](/guide/data-types/supported)을 참고하세요.
-
----

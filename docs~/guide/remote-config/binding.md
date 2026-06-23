@@ -15,5 +15,3 @@ RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 0f)
 | 파라미터 | 설명 | 타입 |
 |----------|------|------|
 | `pollInterval` | 자동 갱신 주기 초. `0`이면 폴링 없음 (기본값: `0`) | `float` |
-
----
