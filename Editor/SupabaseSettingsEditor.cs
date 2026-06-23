@@ -136,11 +136,22 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(4);
                     DrawExtraUsingsField();
 
+                    // 미지정(정제 안 된 jsonb) 필드가 있으면 경고 + 생성 차단.
+                    var unspecifiedNames = CollectUnspecifiedColumnNames();
+                    if (unspecifiedNames.Count > 0)
+                        EditorGUILayout.HelpBox(
+                            "타입 미지정 필드: " + string.Join(", ", unspecifiedNames)
+                            + "\njsonb 컬럼은 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
+                            MessageType.Warning);
+
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
-                            BuildPreviewFromColumns();
+                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0))
+                        {
+                            if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
+                                BuildPreviewFromColumns();
+                        }
 
                         using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_previewText)))
                         {
@@ -314,8 +325,9 @@ namespace TrueBase.Editor
         private const string ElementTwoDimLabel = "2차원(List)";
         private static readonly string[] s_listElementOptions = AppendOne(s_valueTypeOptions, ElementTwoDimLabel);
 
-        // Dictionary value 드롭다운: 값 타입(→ AutoDict) + "object"(원시 JSON 컨테이너 — jsonb 기본 Dictionary<string,object> 유지).
-        private const string DictValueRawLabel = "object(원시 JSON)";
+        // Dictionary value 드롭다운: 값 타입(→ AutoDict) + "미지정"(value=object).
+        // object는 정상 타입이 아니라 "아직 타입을 안 정한 jsonb" 센티넬 — 경고로 표시하고 소스 생성을 막습니다.
+        private const string DictValueRawLabel = "⚠ 미지정(타입 선택)";
         private static readonly string[] s_dictValueOptions = AppendOne(s_valueTypeOptions, DictValueRawLabel);
 
         private static string[] AppendOne(string[] src, string tail)
@@ -784,9 +796,10 @@ namespace TrueBase.Editor
                 {
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        var label = col.IsAmbiguous ? "⚠ " + col.Name : col.Name;
+                        var warn  = col.IsAmbiguous || IsUnspecifiedType(ResolveColumnClrType(col));
+                        var label = warn ? "⚠ " + col.Name : col.Name;
                         EditorGUILayout.LabelField(label,
-                            col.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
+                            warn ? AmbiguousStyle : EditorStyles.label,
                             GUILayout.MinWidth(col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex ? 60 : 100));
                         col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
                         if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
@@ -936,21 +949,59 @@ namespace TrueBase.Editor
             }
         }
 
+        /// <summary>컬럼의 최종 CLR 타입을 해석합니다(커스텀이면 CustomType, 아니면 TypeOptions).</summary>
+        private static string ResolveColumnClrType(EditableColumn ec)
+            => ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
+                ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
+                : GeneratorTypeCatalog.TypeOptions[ec.TypeIndex];
+
+        /// <summary>
+        /// 타입이 "미지정"인지 — 정제하지 않은 jsonb 상태. Dictionary value가 object이거나
+        /// <c>/* refine manually */</c> 플레이스홀더가 남아 있으면 true. 이 상태로는 소스 생성을 막습니다.
+        /// </summary>
+        private static bool IsUnspecifiedType(string clrType)
+        {
+            if (string.IsNullOrWhiteSpace(clrType)) return true;
+            var t = clrType.Trim();
+            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0) return true; // 미해결 플레이스홀더
+            if (TryParseDictionaryTypes(t, out _, out var valueType)
+                && string.Equals(valueType?.Trim(), "object", StringComparison.Ordinal))
+                return true; // Dictionary<…, object> = value 타입 미지정
+            return false;
+        }
+
+        /// <summary>포함(Include)된 컬럼 중 타입이 미지정인 것들의 이름 목록.</summary>
+        private static List<string> CollectUnspecifiedColumnNames()
+        {
+            var names = new List<string>();
+            foreach (var ec in _editableColumns)
+                if (ec.Include && IsUnspecifiedType(ResolveColumnClrType(ec)))
+                    names.Add(ec.Name);
+            return names;
+        }
+
         private static void BuildPreviewFromColumns()
         {
             var cols = new List<OpenApiColumn>();
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                var clrType = ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
-                    ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
-                    : GeneratorTypeCatalog.TypeOptions[ec.TypeIndex];
-                cols.Add(new OpenApiColumn(ec.Name, clrType, ec.Comment, ec.Priority));
+                cols.Add(new OpenApiColumn(ec.Name, ResolveColumnClrType(ec), ec.Comment, ec.Priority));
             }
 
             if (cols.Count == 0)
             {
                 EditorUtility.DisplayDialog(DialogTitle, "포함된 필드가 없습니다.", "확인");
+                return;
+            }
+
+            // 미지정(정제 안 된 jsonb) 필드가 있으면 생성 차단 — 타입을 반드시 지정하도록 강제.
+            var unspecified = CollectUnspecifiedColumnNames();
+            if (unspecified.Count > 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "다음 필드의 타입이 미지정 상태입니다(jsonb). Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
+                    + string.Join("\n• ", unspecified), "확인");
                 return;
             }
 
