@@ -266,8 +266,7 @@ namespace TrueBase.Unity
             if (!_nanooMapBuilt)
             {
                 var m = new NanooFieldMap<TRow>();
-                ConfigureNanoo(m);            // override 경로(있으면)
-                s_nanooConfigure?.Invoke(m);  // 코드 등록 경로(있으면)
+                s_nanooConfigure?.Invoke(m);  // UseNanooConverters로 등록한 변환(있으면)
                 _nanooMap = m.IsEmpty ? null : m;
                 _nanooMapBuilt = true;
             }
@@ -275,15 +274,10 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 필드 변환을 등록하는 override 훅. 코드에서 등록하려면 <see cref="UseNanooConverters"/>를 쓰세요(권장 — partial 불필요).
-        /// </summary>
-        protected virtual void ConfigureNanoo(NanooFieldMap<TRow> map) { }
-
-        /// <summary>
         /// 플레이나누 Storage JSON을 Row로 역직렬화합니다.
-        /// 기본은 등록 변환(없으면 Newtonsoft.Json)이며, override로 통째로 제어할 수 있습니다.
+        /// 등록 변환(<see cref="UseNanooConverters"/>)이 있으면 적용하고, 없으면 Newtonsoft.Json을 사용합니다.
         /// </summary>
-        protected virtual TRow NanooDeserializeJson(string json)
+        private TRow NanooDeserializeJson(string json)
         {
             var map = GetNanooMap();
             return map != null ? map.Deserialize(json) : Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
@@ -291,9 +285,9 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// Row를 플레이나누 Storage JSON으로 직렬화합니다.
-        /// 기본은 등록 변환(없으면 Newtonsoft.Json)이며, override로 통째로 제어할 수 있습니다.
+        /// 등록 변환(<see cref="UseNanooConverters"/>)이 있으면 적용하고, 없으면 Newtonsoft.Json을 사용합니다.
         /// </summary>
-        protected virtual string NanooSerializeJson(TRow row)
+        private string NanooSerializeJson(TRow row)
         {
             var map = GetNanooMap();
             return map != null ? map.Serialize(row) : Newtonsoft.Json.JsonConvert.SerializeObject(row);

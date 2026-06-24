@@ -9,7 +9,7 @@ namespace TrueBase.Unity
 {
     /// <summary>
     /// 플레이나누 JSON에서 특정 필드만 다른 형태(보통 문자열)로 저장/복원하도록 등록하는 편의 클래스.
-    /// <para><see cref="StaticUserSave{TRow}.ConfigureNanoo"/>에서 필요한 필드만
+    /// <para><see cref="StaticUserSave{TRow}.UseNanooConverters"/>로 필요한 필드만
     /// <c>map.Field(r =&gt; r.field, toString, fromString)</c>로 추가합니다.
     /// 등록하지 않은 필드는 기본 Newtonsoft.Json 변환을 사용합니다.</para>
     /// <para>플레이나누 직렬화·역직렬화 경로 전용 — REST/DB 저장·로드에는 영향이 없습니다.</para>
