@@ -13,14 +13,12 @@ namespace TrueBase.Editor
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
         private const string PrefsKeySecret            = "TrueBase.UserSaveClassGenerator.SecretKey";
-        private const string PrefsKeyExtraUsings       = "TrueBase.PlayerSave.ExtraUsings";
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
         private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";
         private const string PrefsKeyColumnDefaults    = "TrueBase.PlayerSave.ColumnDefaults";
         private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
-        private const string PrefsKeyRcExtraUsings     = "TrueBase.RemoteConfig.ExtraUsings";
         private const string ClassName   = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -32,7 +30,6 @@ namespace TrueBase.Editor
         // ── UserSave 생성기 ──────────────────────────────────────────────────────
         private static bool                 _foldout;
         private static string               _secretKey       = "";
-        private static string               _extraUsings     = "";
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
         private static bool                 _columnsFetched;
         private static List<string>         _warnings        = new List<string>();
@@ -43,7 +40,6 @@ namespace TrueBase.Editor
 
         // ── Remote Config 생성기 ─────────────────────────────────────────────────
         private static bool                  _rcFoldout;
-        private static string                _rcExtraUsings = "";
         private static List<RcKeyRow>        _rcKeyList     = new List<RcKeyRow>();
         private static int                   _rcKeyIndex;
         private static bool                  _rcKeysFetched;
@@ -74,8 +70,7 @@ namespace TrueBase.Editor
 
         private void OnEnable()
         {
-            _secretKey   = EditorPrefs.GetString(PrefsKeySecret,      "");
-            _extraUsings = EditorPrefs.GetString(PrefsKeyExtraUsings, "");
+            _secretKey   = EditorPrefs.GetString(PrefsKeySecret, "");
 
             // Settings 에셋이 바뀔 때 이전 워크플로 상태를 초기화
             // (static 필드는 에셋 변경 후에도 잔존하므로 OnEnable에서 명시적으로 클리어)
@@ -84,8 +79,7 @@ namespace TrueBase.Editor
             _warnings.Clear();
             _previewText    = "";
 
-            _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName,   "");
-            _rcExtraUsings  = EditorPrefs.GetString(PrefsKeyRcExtraUsings, "");
+            _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName, "");
             _rcKeyList.Clear();
             _rcKeysFetched  = false;
             _rcFields.Clear();
@@ -134,9 +128,6 @@ namespace TrueBase.Editor
                 {
                     EditorGUILayout.Space(6);
                     DrawColumnList();
-
-                    EditorGUILayout.Space(4);
-                    DrawExtraUsingsField();
 
                     // 미지정(정제 안 된 jsonb) 필드가 있으면 경고 + 생성 차단.
                     var unspecifiedNames = CollectUnspecifiedColumnNames();
@@ -248,9 +239,6 @@ namespace TrueBase.Editor
                     _rcClassName = EditorGUILayout.TextField("클래스명", _rcClassName);
                     if (EditorGUI.EndChangeCheck())
                         EditorPrefs.SetString(PrefsKeyRcClassName, _rcClassName);
-
-                    EditorGUILayout.Space(4);
-                    DrawRcExtraUsingsField();
 
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
@@ -566,42 +554,6 @@ namespace TrueBase.Editor
             customType = "Dictionary<" + newKey + ", " + newValue + ">";
         }
 
-        /// <summary>UserSave 생성기용 추가 네임스페이스 입력 영역.</summary>
-        private static void DrawExtraUsingsField()
-        {
-            EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
-            EditorGUI.BeginChangeCheck();
-            _extraUsings = EditorGUILayout.TextArea(_extraUsings, GUILayout.Height(40));
-            if (EditorGUI.EndChangeCheck())
-                EditorPrefs.SetString(PrefsKeyExtraUsings, _extraUsings);
-        }
-
-        /// <summary>Remote Config 생성기 전용 추가 네임스페이스 입력 영역.</summary>
-        private static void DrawRcExtraUsingsField()
-        {
-            EditorGUILayout.LabelField("추가 네임스페이스  (줄 단위, using · ; 생략)", EditorStyles.miniLabel);
-            EditorGUI.BeginChangeCheck();
-            _rcExtraUsings = EditorGUILayout.TextArea(_rcExtraUsings, GUILayout.Height(40));
-            if (EditorGUI.EndChangeCheck())
-                EditorPrefs.SetString(PrefsKeyRcExtraUsings, _rcExtraUsings);
-        }
-
-        /// <summary>추가 네임스페이스 텍스트 → 정규화된 네임스페이스 목록.</summary>
-        private static List<string> ParseExtraUsings(string raw)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(raw)) return result;
-            foreach (var line in raw.Split('\n'))
-            {
-                var ns = line.Trim().TrimEnd(';');
-                if (ns.StartsWith("using ", StringComparison.Ordinal))
-                    ns = ns.Substring("using ".Length).Trim();
-                if (!string.IsNullOrWhiteSpace(ns))
-                    result.Add(ns);
-            }
-            return result;
-        }
-
         // ── Remote Config 생성기 메서드 ──────────────────────────────────────────
 
         private static void DrawRcFieldList()
@@ -750,8 +702,7 @@ namespace TrueBase.Editor
             try
             {
                 _rcPreviewText = RemoteConfigClassGenerator.GenerateSource(
-                    _rcFields, _rcClassName, row.Key, ns,
-                    ParseExtraUsings(_rcExtraUsings), row.Description);  // ① RC 전용 네임스페이스 사용
+                    _rcFields, _rcClassName, row.Key, ns, row.Description);
             }
             catch (Exception e)
             {
@@ -1055,7 +1006,7 @@ namespace TrueBase.Editor
             }
 
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
-            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data", ParseExtraUsings(_extraUsings));
+            _previewText = PostgrestOpenApiUserSaveClass.GenerateSource(cols, ClassName, ns, "user_data");
 
             // 기존 파일에 수동으로 붙인 [AutoDefault]를 보존(생성기는 커스텀 기본값을 모름)
             var existingPath = FindExistingClassAssetPath();

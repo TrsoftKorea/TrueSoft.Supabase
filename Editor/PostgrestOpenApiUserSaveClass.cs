@@ -157,8 +157,7 @@ namespace TrueBase.Editor
             IReadOnlyList<OpenApiColumn> columns,
             string className,
             string namespaceName,
-            string tableLabel,
-            IReadOnlyList<string> extraUsings = null)
+            string tableLabel)
         {
             if (columns == null || columns.Count == 0)
                 throw new InvalidOperationException("생성할 컬럼이 없습니다.");
@@ -176,10 +175,6 @@ namespace TrueBase.Editor
             sb.AppendLine("using Newtonsoft.Json;");
             sb.AppendLine("using TrueBase.Core.Data;");
             sb.AppendLine("using TrueBase.Unity;");
-            if (extraUsings != null)
-                foreach (var ns in extraUsings)
-                    if (!string.IsNullOrWhiteSpace(ns))
-                        sb.AppendLine("using " + ns.Trim() + ";");
             sb.AppendLine();
 
             var useNs = string.IsNullOrWhiteSpace(namespaceName) == false;

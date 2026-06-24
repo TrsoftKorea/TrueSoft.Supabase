@@ -224,7 +224,6 @@ namespace TrueBase.Editor
             string configClassName,
             string keyName,
             string namespaceName,
-            IReadOnlyList<string> extraUsings = null,
             string description = null)
         {
             if (fields == null || fields.Count == 0)
@@ -244,10 +243,6 @@ namespace TrueBase.Editor
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using Newtonsoft.Json;");
             sb.AppendLine("using TrueBase.Unity;");
-            if (extraUsings != null)
-                foreach (var ns in extraUsings)
-                    if (!string.IsNullOrWhiteSpace(ns))
-                        sb.AppendLine("using " + ns.Trim() + ";");
             sb.AppendLine();
 
             if (useNs)
