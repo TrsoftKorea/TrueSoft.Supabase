@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine.Networking;
 using static TrueBase.Editor.GeneratorTypeCatalog;
@@ -228,14 +229,28 @@ namespace TrueBase.Editor
                 var priorityParam = c.Priority == 1 /* Normal */ ? string.Empty : ", DataSavePriority." + PriorityName(c.Priority);
                 if (string.IsNullOrWhiteSpace(c.Comment) == false)
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
+
+                // 기본값: 스칼라면 필드 초기화식(= 리터럴), Auto 컬렉션이면 [AutoDefault(...)]로 분기.
+                var autoDefaultAttr = string.Empty;
+                string scalarInit = null;
+                if (!string.IsNullOrWhiteSpace(c.DefaultValue))
+                {
+                    if (GeneratorTypeCatalog.IsAutoDefaultableType(c.ClrType, out var elemType))
+                        autoDefaultAttr = "[AutoDefault(" + GeneratorTypeCatalog.FormatAutoDefaultArgs(elemType, c.DefaultValue) + ")] ";
+                    else if (GeneratorTypeCatalog.IsScalarTypeName(c.ClrType)
+                             && GeneratorTypeCatalog.TryFormatScalarLiteral(c.ClrType, c.DefaultValue, out var lit))
+                        scalarInit = " = " + lit;
+                }
+
                 // 컬렉션(List·배열·Dictionary 등)은 null 방지를 위해 빈 인스턴스로 초기화(읽기만 해도 변경으로 오인되지 않게).
+                // 스칼라 기본값이 있으면 그 초기화식을 우선(스칼라는 컬렉션 init 대상이 아님).
                 // 필드는 internal — 정적 프로퍼티로 접근. (private는 중첩 Row라 바깥 클래스에서 접근 불가)
-                var fieldInit = TryGetCollectionInit(c.ClrType, out var fieldInitExpr) ? " = " + fieldInitExpr : string.Empty;
+                var fieldInit = scalarInit ?? (TryGetCollectionInit(c.ClrType, out var fieldInitExpr) ? " = " + fieldInitExpr : string.Empty);
                 // 정리된 필드명이 컬럼명과 다르면 JSON 키를 컬럼명으로 보존(직렬화 자동 보장).
                 var jsonProp = MemberNameOf(fieldName) != c.Name
                     ? "[JsonProperty(\"" + EscapeCSharpString(c.Name) + "\")] "
                     : string.Empty;
-                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] " + jsonProp + "internal " + c.ClrType + " " + fieldName + fieldInit + ";");
+                sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] " + autoDefaultAttr + jsonProp + "internal " + c.ClrType + " " + fieldName + fieldInit + ";");
             }
 
             // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
@@ -506,7 +521,7 @@ namespace TrueBase.Editor
             {
                 var clr = GeneratorTypeCatalog.MapToAutoType(c.ClrType);
                 clr = FallbackUnrefinedJsonType(clr);
-                list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority, c.FieldName));
+                list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority, c.FieldName, c.DefaultValue));
             }
             return list;
         }
@@ -586,6 +601,68 @@ namespace TrueBase.Editor
             return map;
         }
 
+        /// <summary>
+        /// 생성된 소스에서 컬럼별 "기본값 원본 입력"을 복원합니다(재생성 시 UI 복원용).
+        /// <c>[AutoDefault(args)]</c>→ args 그대로. 스칼라 <c>= expr</c>→ 따옴표·Parse 해제값. 컬렉션 init(<c>new …</c>)은 무시.
+        /// </summary>
+        public static Dictionary<string, string> ExtractDefaultsByColumn(string source)
+        {
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (string.IsNullOrEmpty(source)) return map;
+
+            foreach (var line in source.Split('\n'))
+            {
+                if (line.IndexOf("[DataColumn(", StringComparison.Ordinal) < 0) continue;
+                var col = ExtractDataColumnName(line);
+                if (col == null) continue;
+
+                // 1) [AutoDefault(args)] → args 그대로
+                var adIdx = line.IndexOf("[AutoDefault(", StringComparison.Ordinal);
+                if (adIdx >= 0)
+                {
+                    var open  = adIdx + "[AutoDefault(".Length;
+                    var close = line.IndexOf(")]", open, StringComparison.Ordinal);
+                    if (close > open)
+                    {
+                        map[col] = line.Substring(open, close - open).Trim();
+                        continue;
+                    }
+                }
+
+                // 2) 스칼라 초기화식
+                var raw = ExtractScalarInitRaw(line);
+                if (raw != null) map[col] = raw;
+            }
+
+            return map;
+        }
+
+        /// <summary>필드 줄에서 스칼라 초기화식(<c>= expr;</c>)의 원본 입력을 복원합니다. 컬렉션 init(<c>new …</c>/Array.Empty)이면 null.</summary>
+        private static string ExtractScalarInitRaw(string line)
+        {
+            var semi = line.LastIndexOf(';');
+            if (semi < 0) return null;
+            var internalIdx = line.IndexOf("internal ", StringComparison.Ordinal);
+            if (internalIdx < 0) return null;
+            var eq = line.IndexOf('=', internalIdx);
+            if (eq < 0 || eq > semi) return null;
+
+            var expr = line.Substring(eq + 1, semi - eq - 1).Trim();
+            if (expr.Length == 0) return null;
+            if (expr.StartsWith("new ", StringComparison.Ordinal) || expr.IndexOf("Array.Empty", StringComparison.Ordinal) >= 0)
+                return null; // 컬렉션 인스턴스 init — 기본값 아님
+
+            // TYPE.Parse("X") → X
+            var parse = Regex.Match(expr, @"^\w[\w.]*\.Parse\(""(.*)""\)$");
+            if (parse.Success) return parse.Groups[1].Value;
+
+            // "문자열" → 따옴표 제거
+            if (expr.Length >= 2 && expr[0] == '"' && expr[expr.Length - 1] == '"')
+                return expr.Substring(1, expr.Length - 2);
+
+            return expr; // 숫자/bool 등 — 멱등 포매터가 재변환
+        }
+
         /// <summary>필드 줄에서 <c>[DataColumn("name"…)]</c>의 컬럼명(첫 문자열 인자)을 추출합니다.</summary>
         private static string ExtractDataColumnName(string line)
         {
@@ -614,13 +691,15 @@ namespace TrueBase.Editor
     {
         /// <param name="priority">저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</param>
         /// <param name="fieldName">C# 필드명 커스터마이즈. null/빈 값이면 컬럼명(<paramref name="name"/>)을 사용.</param>
-        public OpenApiColumn(string name, string clrType, string comment, int priority = 1, string fieldName = null)
+        /// <param name="defaultValue">기본값(원본 입력). 스칼라면 필드 초기화식으로, Auto 컬렉션이면 <c>[AutoDefault]</c>로 변환. null/빈 값이면 미지정.</param>
+        public OpenApiColumn(string name, string clrType, string comment, int priority = 1, string fieldName = null, string defaultValue = null)
         {
-            Name      = name;
-            ClrType   = clrType;
-            Comment   = comment;
-            Priority  = priority;
-            FieldName = fieldName;
+            Name         = name;
+            ClrType      = clrType;
+            Comment      = comment;
+            Priority     = priority;
+            FieldName    = fieldName;
+            DefaultValue = defaultValue;
         }
 
         public string Name    { get; }
@@ -630,6 +709,8 @@ namespace TrueBase.Editor
         public int    Priority { get; }
         /// <summary>C# 필드명(커스텀). null/빈 값이면 컬럼명을 사용. DataColumn 매핑은 항상 컬럼명을 씁니다.</summary>
         public string FieldName { get; }
+        /// <summary>기본값(원본 입력). 스칼라→필드 초기화식, Auto 컬렉션→<c>[AutoDefault]</c>. null/빈 값이면 미지정.</summary>
+        public string DefaultValue { get; }
     }
 
     internal sealed class ParseTableResult

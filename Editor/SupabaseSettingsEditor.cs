@@ -17,6 +17,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
         private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";
+        private const string PrefsKeyColumnDefaults    = "TrueBase.PlayerSave.ColumnDefaults";
         private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
         private const string PrefsKeyRcExtraUsings     = "TrueBase.RemoteConfig.ExtraUsings";
@@ -785,6 +786,8 @@ namespace TrueBase.Editor
                 EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(110));
                 EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
                 EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
+                EditorGUILayout.LabelField(new GUIContent("기본값", "새 유저 시작값. 스칼라는 = 초기화, Auto 컬렉션은 [AutoDefault]로 생성됩니다."),
+                    EditorStyles.miniLabel, GUILayout.Width(84));
                 EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
                 EditorGUILayout.LabelField("요소 타입", EditorStyles.miniLabel); // 커스텀 타입일 때만(가변 폭)
             }
@@ -814,6 +817,10 @@ namespace TrueBase.Editor
                         if (prioLabelIdx < 0) prioLabelIdx = 0;
                         var newPrioLabelIdx = EditorGUILayout.Popup(prioLabelIdx, s_priorityOptions, GUILayout.Width(58));
                         col.Priority = s_priorityValues[newPrioLabelIdx];
+
+                        // 기본값: 스칼라·Auto 컬렉션에만 적용 가능. 그 외(plain List/Dictionary 등)는 비활성.
+                        using (new EditorGUI.DisabledScope(!DefaultValueApplicable(col)))
+                            col.DefaultValue = EditorGUILayout.TextField(col.DefaultValue ?? "", GUILayout.Width(84));
 
                         col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
 
@@ -941,6 +948,16 @@ namespace TrueBase.Editor
                     if (existingFieldNames.TryGetValue(col.Name, out var fn) && !string.IsNullOrWhiteSpace(fn))
                         col.FieldName = fn;
 
+                // 기본값 복원 — 기존 파일 폴백, EditorPrefs 우선
+                var existingDefaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in TryLoadExistingDefaults())
+                    existingDefaults[kv.Key] = kv.Value;
+                foreach (var kv in LoadColumnDefaultsFromPrefs())
+                    existingDefaults[kv.Key] = kv.Value;
+                foreach (var col in _editableColumns)
+                    if (existingDefaults.TryGetValue(col.Name, out var dv) && !string.IsNullOrWhiteSpace(dv))
+                        col.DefaultValue = dv;
+
                 _columnsFetched = true;
             }
             catch (Exception e)
@@ -976,6 +993,17 @@ namespace TrueBase.Editor
                 : GeneratorTypeCatalog.TypeOptions[ec.TypeIndex];
 
         /// <summary>
+        /// 기본값 입력이 적용 가능한 타입인지 — 스칼라(TypeOptions)이거나 Auto 컬렉션으로 치환될 컬렉션이면 true.
+        /// (UI 타입은 List/Dictionary 형태이므로 생성기와 동일하게 MapToAutoType을 거쳐 판정)
+        /// </summary>
+        private static bool DefaultValueApplicable(EditableColumn ec)
+        {
+            var resolved = ResolveColumnClrType(ec);
+            if (GeneratorTypeCatalog.IsScalarTypeName(resolved)) return true;
+            return GeneratorTypeCatalog.IsAutoDefaultableType(GeneratorTypeCatalog.MapToAutoType(resolved), out _);
+        }
+
+        /// <summary>
         /// 타입이 "미지정"인지 — 정제하지 않은 jsonb 상태. Dictionary value가 object이거나
         /// <c>/* refine manually */</c> 플레이스홀더가 남아 있으면 true. 이 상태로는 소스 생성을 막습니다.
         /// </summary>
@@ -1006,7 +1034,7 @@ namespace TrueBase.Editor
             foreach (var ec in _editableColumns)
             {
                 if (!ec.Include) continue;
-                cols.Add(new OpenApiColumn(ec.Name, ResolveColumnClrType(ec), ec.Comment, ec.Priority, ec.FieldName));
+                cols.Add(new OpenApiColumn(ec.Name, ResolveColumnClrType(ec), ec.Comment, ec.Priority, ec.FieldName, ec.DefaultValue));
             }
 
             if (cols.Count == 0)
@@ -1033,10 +1061,11 @@ namespace TrueBase.Editor
             if (existingPath != null && File.Exists(existingPath))
                 _previewText = PostgrestOpenApiUserSaveClass.MergePreservedAutoDefaults(_previewText, File.ReadAllText(existingPath));
 
-            // 소스 생성 시점에 현재 타입·Priority·필드명 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
+            // 소스 생성 시점에 현재 타입·Priority·필드명·기본값 설정을 EditorPrefs에 저장 → 다음 "필드 목록 가져오기" 시 복원
             SaveColumnTypesToPrefs();
             SaveColumnPrioritiesToPrefs();
             SaveColumnFieldNamesToPrefs();
+            SaveColumnDefaultsToPrefs();
         }
 
         /// <summary>EditorPrefs에서 컬럼명→타입 매핑을 로드합니다.</summary>
@@ -1117,6 +1146,48 @@ namespace TrueBase.Editor
             catch { return new Dictionary<string, string>(); }
         }
 
+        /// <summary>현재 _editableColumns의 기본값을 EditorPrefs에 저장합니다(빈 값은 생략).</summary>
+        private static void SaveColumnDefaultsToPrefs()
+        {
+            var dict = new Dictionary<string, string>();
+            foreach (var col in _editableColumns)
+            {
+                var dv = col.DefaultValue?.Trim();
+                if (!string.IsNullOrEmpty(dv))
+                    dict[col.Name] = dv;
+            }
+            EditorPrefs.SetString(PrefsKeyColumnDefaults, Newtonsoft.Json.JsonConvert.SerializeObject(dict));
+        }
+
+        /// <summary>EditorPrefs에서 컬럼명→기본값 매핑을 로드합니다.</summary>
+        private static Dictionary<string, string> LoadColumnDefaultsFromPrefs()
+        {
+            var json = EditorPrefs.GetString(PrefsKeyColumnDefaults, "");
+            if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, string>();
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(json)
+                       ?? new Dictionary<string, string>();
+            }
+            catch { return new Dictionary<string, string>(); }
+        }
+
+        /// <summary>프로젝트의 기존 생성 파일에서 컬럼명→기본값을 복원합니다. 없으면 빈 딕셔너리.</summary>
+        private static Dictionary<string, string> TryLoadExistingDefaults()
+        {
+            var assetPath = FindExistingClassAssetPath();
+            if (assetPath == null) return new Dictionary<string, string>(StringComparer.Ordinal);
+            try
+            {
+                var source = File.ReadAllText(assetPath, System.Text.Encoding.UTF8);
+                return PostgrestOpenApiUserSaveClass.ExtractDefaultsByColumn(source);
+            }
+            catch
+            {
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
+        }
+
         /// <summary>기존 PlayerSave.cs에서 컬럼명→C# 필드 식별자 매핑을 읽습니다. 없으면 빈 딕셔너리.</summary>
         private static Dictionary<string, string> TryLoadExistingFieldNames()
         {
@@ -1194,10 +1265,11 @@ namespace TrueBase.Editor
                 if (!string.IsNullOrEmpty(dir))
                     EditorPrefs.SetString(PrefsKeyLastSaveDir, dir);
 
-                // 저장 시점에도 타입·Priority·필드명 설정을 EditorPrefs에 기록
+                // 저장 시점에도 타입·Priority·필드명·기본값 설정을 EditorPrefs에 기록
                 SaveColumnTypesToPrefs();
                 SaveColumnPrioritiesToPrefs();
                 SaveColumnFieldNamesToPrefs();
+                SaveColumnDefaultsToPrefs();
             }
             catch (Exception e)
             {
@@ -1222,6 +1294,8 @@ namespace TrueBase.Editor
             public string            Name;
             /// <summary>C# 필드명(커스텀). 기본=컬럼명(Name). 컬럼명과 다르면 생성기가 [JsonProperty]로 직렬화 보존.</summary>
             public string            FieldName    = "";
+            /// <summary>기본값(원본 입력). 스칼라→필드 초기화식, Auto 컬렉션→[AutoDefault]. 빈 값이면 미지정.</summary>
+            public string            DefaultValue = "";
             public string            Comment;
             public bool              Include      = true;
             public int               TypeIndex;

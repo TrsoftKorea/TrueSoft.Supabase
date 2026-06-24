@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -279,6 +280,160 @@ namespace TrueBase.Editor
             if (string.IsNullOrEmpty(s)) return string.Empty;
             return s.Replace("\\", "\\\\", StringComparison.Ordinal)
                     .Replace("\"", "\\\"", StringComparison.Ordinal);
+        }
+
+        // ── 기본값(스칼라 초기화 / AutoDefault) 지원 ──────────────────────────────────
+
+        /// <summary>TypeOptions(스칼라 값 타입·string·날짜)인지 여부.</summary>
+        internal static bool IsScalarTypeName(string clrType)
+            => !string.IsNullOrWhiteSpace(clrType) && Array.IndexOf(TypeOptions, clrType.Trim()) >= 0;
+
+        /// <summary>
+        /// AutoList/AutoList2D/AutoDict/AutoDict2D 여부와 요소(값) 타입을 반환합니다.
+        /// AutoDict 계열은 마지막 제네릭 인자(값 타입)를 요소 타입으로 봅니다. (이들만 <c>[AutoDefault]</c> 대상)
+        /// </summary>
+        internal static bool IsAutoDefaultableType(string clrType, out string elementType)
+        {
+            elementType = null;
+            if (string.IsNullOrWhiteSpace(clrType)) return false;
+            var t = clrType.Trim();
+            if (!t.EndsWith(">", StringComparison.Ordinal)) return false;
+
+            foreach (var prefix in new[] { "AutoList2D<", "AutoList<" })
+                if (t.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    elementType = t.Substring(prefix.Length, t.Length - prefix.Length - 1).Trim();
+                    return elementType.Length > 0;
+                }
+
+            foreach (var prefix in new[] { "AutoDict2D<", "AutoDict<" })
+                if (t.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    var inner = t.Substring(prefix.Length, t.Length - prefix.Length - 1);
+                    var parts = SplitTopLevelCommas(inner);
+                    if (parts.Count == 0) return false;
+                    elementType = parts[parts.Count - 1].Trim();
+                    return elementType.Length > 0;
+                }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 스칼라 기본값(<paramref name="raw"/>)을 <paramref name="clrType"/>에 맞는 C# 리터럴로 변환합니다.
+        /// 멱등 — 이미 리터럴 형태(따옴표·접미사 포함)면 그대로 둡니다. raw가 비었거나 타입과 안 맞으면 false.
+        /// </summary>
+        internal static bool TryFormatScalarLiteral(string clrType, string raw, out string literal)
+        {
+            literal = null;
+            if (string.IsNullOrWhiteSpace(raw) || string.IsNullOrWhiteSpace(clrType)) return false;
+            var s = raw.Trim();
+            switch (clrType.Trim())
+            {
+                case "bool":
+                    if (string.Equals(s, "true",  StringComparison.OrdinalIgnoreCase)) { literal = "true";  return true; }
+                    if (string.Equals(s, "false", StringComparison.OrdinalIgnoreCase)) { literal = "false"; return true; }
+                    return false;
+                case "string":
+                    literal = IsQuoted(s) ? s : "\"" + EscapeCSharpString(s) + "\"";
+                    return true;
+                case "int":
+                    if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) { literal = s; return true; }
+                    return false;
+                case "short":
+                    if (short.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) { literal = s; return true; }
+                    return false;
+                case "long":
+                {
+                    var v = TrimNumericSuffix(s, "lL");
+                    if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) { literal = v + "L"; return true; }
+                    return false;
+                }
+                case "ulong":
+                {
+                    var v = TrimNumericSuffix(TrimNumericSuffix(s, "lL"), "uU");
+                    if (ulong.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) { literal = v + "UL"; return true; }
+                    return false;
+                }
+                case "float":
+                {
+                    var v = TrimNumericSuffix(s, "fF");
+                    if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) { literal = v + "f"; return true; }
+                    return false;
+                }
+                case "double":
+                {
+                    var v = TrimNumericSuffix(s, "dD");
+                    if (double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) { literal = v; return true; }
+                    return false;
+                }
+                case "DateTimeOffset":
+                case "DateTime":
+                case "DateOnly":
+                case "TimeOnly":
+                {
+                    var inner = IsQuoted(s) ? s.Substring(1, s.Length - 2) : s;
+                    literal = clrType.Trim() + ".Parse(\"" + EscapeCSharpString(inner) + "\")";
+                    return true;
+                }
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// <c>[AutoDefault(...)]</c> 인자 목록을 만듭니다. 단일 값은 요소 타입 리터럴로 변환(예: AutoList&lt;string&gt;→<c>"none"</c>),
+        /// 쉼표로 나뉜 여러 값(struct 생성자 인자)은 그대로 전달합니다.
+        /// </summary>
+        internal static string FormatAutoDefaultArgs(string elementType, string raw)
+        {
+            var s = (raw ?? string.Empty).Trim();
+            var parts = SplitTopLevelCommas(s);
+            if (parts.Count <= 1)
+            {
+                var p = (parts.Count == 1 ? parts[0] : s).Trim();
+                return TryFormatScalarLiteral(elementType, p, out var lit) ? lit : p;
+            }
+
+            for (var i = 0; i < parts.Count; i++) parts[i] = parts[i].Trim();
+            return string.Join(", ", parts);
+        }
+
+        private static bool IsQuoted(string s)
+            => s.Length >= 2 && s[0] == '"' && s[s.Length - 1] == '"';
+
+        private static string TrimNumericSuffix(string s, string suffixChars)
+            => s.Length > 1 && suffixChars.IndexOf(s[s.Length - 1]) >= 0 ? s.Substring(0, s.Length - 1) : s;
+
+        /// <summary>최상위(따옴표·꺾쇠·괄호 밖) 쉼표로 문자열을 분리합니다. 빈 입력은 빈 목록.</summary>
+        internal static List<string> SplitTopLevelCommas(string s)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(s)) return result;
+
+            var depth = 0;
+            var inStr = false;
+            var start = 0;
+            for (var i = 0; i < s.Length; i++)
+            {
+                var ch = s[i];
+                if (inStr)
+                {
+                    if (ch == '"' && (i == 0 || s[i - 1] != '\\')) inStr = false;
+                    continue;
+                }
+                switch (ch)
+                {
+                    case '"': inStr = true; break;
+                    case '<': case '(': case '[': depth++; break;
+                    case '>': case ')': case ']': depth--; break;
+                    case ',':
+                        if (depth == 0) { result.Add(s.Substring(start, i - start)); start = i + 1; }
+                        break;
+                }
+            }
+            result.Add(s.Substring(start));
+            return result;
         }
 
         /// <summary>
