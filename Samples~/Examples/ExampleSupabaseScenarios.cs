@@ -23,7 +23,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///   T — RC Reader         U — RC Binding          E — RC Listener 토글
 ///
 ///   N — 닉네임 가용성 확인 + 설정 + 프로필 조회
-///   A — 내 상태 출력       J — 서버 시간 조회      B — 차단 정보 조회
+///   A — 내 상태 출력       J — 서버 시간 조회      G — 차단 정보 조회
 ///
 ///   D — 탈퇴 신청          S — 탈퇴 상태 조회      C — 탈퇴 취소
 ///
@@ -259,7 +259,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else                 Debug.Log($"[Supabase] 서버 시간: {time:yyyy-MM-dd HH:mm:ss} UTC");
     }
 
-    /// <summary>B — 현재 계정의 차단 정보를 조회합니다.</summary>
+    /// <summary>G — 현재 계정의 차단 정보를 조회합니다.</summary>
     private async Task GetBanInfoAsync()
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
@@ -328,7 +328,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.A)) _ = PrintStatusAsync();
         if (Input.GetKeyDown(KeyCode.J)) _ = GetServerTimeAsync();
-        if (Input.GetKeyDown(KeyCode.B)) _ = GetBanInfoAsync();
+        if (Input.GetKeyDown(KeyCode.G)) _ = GetBanInfoAsync();
 
         if (Input.GetKeyDown(KeyCode.D)) _ = RequestWithdrawalAsync();
         if (Input.GetKeyDown(KeyCode.S)) _ = GetWithdrawalStatusAsync();

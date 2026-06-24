@@ -4,7 +4,7 @@ DB 스키마와 Edge Function은 **Database Setup** 샘플에 포함된 파일�
 
 ## 1. 샘플 임포트
 
-Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database Setup**을 Import합니다.  
+Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에서 **Database Setup**을 Import합니다.  
 `Assets/Samples/.../DatabaseSetup/` 폴더에 SQL 파일과 Edge Function 소스가 생성됩니다.
 
 ## 2. DB 스키마 실행
@@ -51,7 +51,7 @@ Package Manager > **Truesoft Supabase SDK** > **Samples** 탭에서 **Database S
 | `withdrawal-guard` | 공개 프로필 — 탈퇴 계정 자동 처리 |
 | `purchase-verify-google` | 인앱 결제 — Android |
 | `purchase-verify-apple` | 인앱 결제 — iOS (SK2 / Unity IAP v5) |
-| `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 / Unity IAP v4, 또는 SK1 강제 모드) |
+| `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 강제 모드) |
 | `get-ban-info` | 인증 — 차단된 계정 정보 조회 |
 
 ## 4. 시크릿 설정

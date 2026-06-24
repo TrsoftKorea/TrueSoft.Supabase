@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Truesoft Supabase SDK',
-  description: 'Unity UPM Supabase SDK 문서',
+  title: 'TrueBase',
+  description: 'TrueBase — Unity UPM Supabase SDK 문서',
   lang: 'ko-KR',
   base: '/TrueSoft.Supabase/',
 
@@ -66,23 +66,17 @@ export default defineConfig({
       {
         text: '계정',
         items: [
+          { text: '닉네임', link: '/guide/display-name/nickname' },
+          { text: '프로필', link: '/guide/display-name/profile' },
           {
-            text: '닉네임 · 프로필',
-            collapsed: true,
-            items: [
-              { text: '닉네임', link: '/guide/display-name/nickname' },
-              { text: '프로필 조회', link: '/guide/display-name/profile' }
-            ]
-          },
-          {
-            text: '탈퇴 · 서버 이주',
+            text: '탈퇴',
             collapsed: true,
             items: [
               { text: '탈퇴 처리', link: '/guide/withdrawal/request' },
-              { text: '탈퇴 취소 (토큰)', link: '/guide/withdrawal/token' },
-              { text: '서버 이주', link: '/guide/withdrawal/server-transfer' }
+              { text: '탈퇴 취소', link: '/guide/withdrawal/token' }
             ]
-          }
+          },
+          { text: '서버 이주', link: '/guide/withdrawal/server-transfer' }
         ]
       },
       {
@@ -147,7 +141,7 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '발급 절차', link: '/guide/google-service-account/issue' },
-              { text: '콘솔 등록 (선택)', link: '/guide/google-service-account/console' }
+              { text: '콘솔 등록', link: '/guide/google-service-account/console' }
             ]
           }
         ]

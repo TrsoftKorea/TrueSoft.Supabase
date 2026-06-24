@@ -47,12 +47,20 @@ Assets/Samples/TrueBase/<버전>/Examples/
 | **I** | Google 로그인 (Android) |
 | **P** | Google 연동 (익명 계정 필요) |
 | **W** | 로그아웃 (Google 포함, 로그아웃 전 자동 저장) |
+| **O** | 세션 복원 |
 | **R** | 유저 데이터 로드 |
 | **V** | 즉시 저장 (변경 없으면 전송 생략) |
 | **F** | 레벨 +1 (로컬 변경 + MarkDirty 시연) |
 | **T** | RemoteConfig Reader |
 | **U** | RemoteConfig Binding (.Value 읽기) |
 | **E** | RemoteConfig Listener 시작/종료 토글 |
+| **N** | 닉네임 가용성 확인 + 설정 + 프로필 조회 |
+| **A** | 내 세션 상태 출력 |
+| **J** | 서버 시간 조회 |
+| **G** | 차단 정보 조회 |
+| **D** | 탈퇴 신청 |
+| **S** | 탈퇴 상태 조회 |
+| **C** | 탈퇴 취소 |
 
 **SampleIAPScenarios** (`com.unity.purchasing` 5.2.1 이상 필요):
 

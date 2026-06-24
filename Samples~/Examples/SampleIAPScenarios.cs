@@ -2,7 +2,6 @@
 using System.Threading.Tasks;
 using TrueBase.Unity;
 using UnityEngine;
-using UnityEngine.Purchasing;
 using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
@@ -118,9 +117,9 @@ public sealed class SampleIAPScenarios : MonoBehaviour
     }
 
     /// <summary>결제 실패 시 호출됩니다 (사용자 취소 포함).</summary>
-    private void OnPurchaseFailed(FailedOrder order)
+    private void OnPurchaseFailed(IAPPurchaseFailedInfo info)
     {
-        Debug.LogWarning($"[Supabase.IAP] 구매 실패: {order}");
+        Debug.LogWarning($"[Supabase.IAP] 구매 실패: product={info.ProductId}, reason={info.FailureReason}");
         // TODO: UI 피드백 표시
     }
 }

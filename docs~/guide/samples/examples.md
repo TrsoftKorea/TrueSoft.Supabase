@@ -9,6 +9,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `I` | Google 로그인 (Android 네이티브) |
 | `P` | 익명 계정에 Google 연동 |
 | `W` | 로그아웃 |
+| `O` | 세션 복원 |
 | `R` | 유저 데이터 전체 로드 |
 | `V` | 유저 데이터 즉시 저장 |
 | `F` | 레벨 +1 (자동 저장 시연) |
@@ -18,6 +19,10 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
 | `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, DisplayName 등) |
 | `J` | 서버 시간 조회 |
+| `G` | 차단 정보 조회 |
+| `D` | 탈퇴 신청 |
+| `S` | 탈퇴 상태 조회 |
+| `C` | 탈퇴 취소 |
 
 ## SamplePlayerSave
 
@@ -50,10 +55,10 @@ await Supabase.TrySaveAllAsync(timeoutMs: 5000);           // 즉시 저장
 
 ## SampleIAPScenarios
 
-`com.unity.purchasing` 4.x 이상을 설치하면 자동으로 활성화됩니다.
+`com.unity.purchasing` 5.2.1 이상을 설치하면 자동으로 활성화됩니다.
 
 **사전 준비:**
-1. `com.unity.purchasing` 4.x 이상 설치
+1. `com.unity.purchasing` 5.2.1 이상 설치
 2. [Database Setup](/guide/start/database-setup) 완료
 3. Inspector에서 `productId` 입력
 
