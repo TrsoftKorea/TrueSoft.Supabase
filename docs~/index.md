@@ -13,31 +13,25 @@ hero:
       link: https://github.com/trsoftkorea/TrueSoft.Supabase
 
 features:
+  - title: 시작하기
+    details: 설치 · 프로젝트 생성 · 초기 설정 · Database Setup · 샘플
+    link: /guide/start/
   - title: 인증
-    details: 익명·Google 로그인, 익명→소셜 연동, 자동 로그인
-    link: /guide/auth/anonymous
-  - title: 닉네임
-    details: 닉네임 설정·중복 확인, 다른 플레이어 조회
-    link: /guide/display-name/nickname
-  - title: 프로필
-    details: 공개 프로필 조회
-    link: /guide/display-name/profile
-  - title: 탈퇴
-    details: 탈퇴 예약·취소
-    link: /guide/withdrawal/request
-  - title: 서버 이주
-    details: 서버 간 데이터 이주
-    link: /guide/withdrawal/server-transfer
-  - title: 유저 데이터
-    details: StaticUserSave 패턴, diff-patch 자동 동기화, 쿨타임 배치 저장
-    link: /guide/user-data/how-it-works
-  - title: Remote Config
-    details: Cold Start 로딩, Reader·Binding·Listener 세 가지 패턴, 스테일-와일-리밸리데이트
-    link: /guide/remote-config/quickstart
+    details: 익명·Google·Apple 로그인, 자동 로그인, 익명 복구, 중복·차단 처리
+    link: /guide/auth/
+  - title: 계정
+    details: 닉네임 · 프로필 · 탈퇴 · 서버 이주
+    link: /guide/account/
+  - title: 게임 데이터
+    details: 유저 데이터 · 데이터 타입 · 원격 설정
+    link: /guide/game-data/
   - title: 인앱 결제
-    details: Google Play · Apple App Store 서버 영수증 검증, 중복 지급 방지
-    link: /guide/iap/prepare
-  - title: 샘플
-    details: ExampleSupabaseScenarios, SamplePlayerSave, SampleIAPScenarios 동작 예시
-    link: /guide/samples/examples
+    details: Google Play · Apple App Store 서버 영수증 검증
+    link: /guide/iap/
+  - title: 설정 가이드
+    details: Google 서비스 계정 JSON 발급 · 콘솔 등록
+    link: /guide/google-service-account/
+  - title: 이관
+    details: 플레이나누 병행 운영 후 단계적 SDK 전환
+    link: /guide/migration/
 ---

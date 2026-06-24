@@ -15,6 +15,7 @@ export default defineConfig({
     sidebar: [
       {
         text: '시작하기',
+        link: '/guide/start/',
         items: [
           {
             text: '빠른 시작',
@@ -40,6 +41,7 @@ export default defineConfig({
       },
       {
         text: '인증',
+        link: '/guide/auth/',
         items: [
           {
             text: '로그인',
@@ -65,6 +67,7 @@ export default defineConfig({
       },
       {
         text: '계정',
+        link: '/guide/account/',
         items: [
           { text: '닉네임', link: '/guide/display-name/nickname' },
           { text: '프로필', link: '/guide/display-name/profile' },
@@ -81,9 +84,11 @@ export default defineConfig({
       },
       {
         text: '게임 데이터',
+        link: '/guide/game-data/',
         items: [
           {
             text: '유저 데이터',
+            link: '/guide/user-data/',
             collapsed: false,
             items: [
               { text: '개요', link: '/guide/user-data/how-it-works' },
@@ -96,6 +101,7 @@ export default defineConfig({
           },
           {
             text: '데이터 타입',
+            link: '/guide/data-types/',
             collapsed: true,
             items: [
               { text: '지원 타입', link: '/guide/data-types/supported' },
@@ -105,6 +111,7 @@ export default defineConfig({
           },
           {
             text: '원격 설정',
+            link: '/guide/remote-config/',
             collapsed: true,
             items: [
               { text: '개요', link: '/guide/remote-config/how-it-works' },
@@ -122,6 +129,7 @@ export default defineConfig({
         items: [
           {
             text: '인앱 결제',
+            link: '/guide/iap/',
             collapsed: true,
             items: [
               { text: '사전 준비', link: '/guide/iap/prepare' },
@@ -138,6 +146,7 @@ export default defineConfig({
         items: [
           {
             text: '서비스 계정 JSON 발급',
+            link: '/guide/google-service-account/',
             collapsed: true,
             items: [
               { text: '발급 절차', link: '/guide/google-service-account/issue' },
@@ -151,6 +160,7 @@ export default defineConfig({
         items: [
           {
             text: '플레이나누 이관',
+            link: '/guide/migration/',
             collapsed: true,
             items: [
               { text: '개요', link: '/guide/migration/how-it-works' },

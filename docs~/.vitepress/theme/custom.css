@@ -1,0 +1,40 @@
+/* 허브 페이지 카드 그리드 — doc 레이아웃(사이드바 유지) 안에서 사용 */
+.tb-cards ul {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.tb-cards li {
+  margin: 0;
+}
+
+.tb-cards li a {
+  display: block;
+  height: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--vp-c-text-1);
+  font-weight: 400;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.tb-cards li a:hover {
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-bg-soft);
+}
+
+.tb-cards li a strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--vp-c-text-1);
+}
+
+.tb-cards li a small {
+  color: var(--vp-c-text-2);
+}

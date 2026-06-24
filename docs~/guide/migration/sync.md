@@ -1,7 +1,6 @@
 # 데이터 동기화
 
-로그인 성공 시 자동으로 실행됩니다.  
-플레이나누 Storage JSON은 camelCase 키를 사용합니다. DB 컬럼도 camelCase로 생성하면 별도 매핑 없이 자동으로 연결됩니다.
+로그인 성공 시 SDK와 플레이나누 데이터가 자동으로 동기화됩니다.
 
 ```
 SDK 행 없음 (신규 유저)
@@ -15,22 +14,6 @@ SDK 행 있음 (기존 유저)
 ```
 
 SDK 저장 이후 플레이나누에도 자동으로 반영됩니다.
-
-## 필드명 규칙
-
-플레이나누 Storage JSON은 camelCase 키를 사용합니다. SDK의 기본 변환은 C# 필드명을 그대로 JSON 키로 사용하므로, **C# 필드명을 camelCase로 선언하면 별도 매핑 없이 자동으로 연결됩니다.**
-
-DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 C# 필드명과 달라도 됩니다.
-
-```csharp
-[Serializable]
-[JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 internal 필드(필드명을 JSON 키로) 처리
-public sealed class Row
-{
-    [DataColumn("player_level")] internal int       playerLevel;          // DB: player_level, 플레이나누: playerLevel
-    [DataColumn("item_ids")]     internal List<int> itemIds = new();       // DB: item_ids,     플레이나누: itemIds
-}
-```
 
 ## 데이터 변환 커스터마이징
 
@@ -59,4 +42,4 @@ PlayerSave.UseNanooConverters(map => map
 - 등록한 **그 필드만** 가공되고, 나머지(및 `updated_at`)는 자동 처리 → 동기화 비교도 그대로 유지됩니다.
 - 플레이나누 직렬화·역직렬화 양쪽에 적용되며, **REST/DB 저장·로드에는 영향이 없습니다.**
 
-단순한 키명 차이는 변환 등록이 아니라 [필드명 규칙](/guide/migration/sync#필드명-규칙)으로 해결합니다(C# 필드명을 플레이나누 키에 맞추고 DB 컬럼은 `[DataColumn]`로 지정).
+단순한 키명 차이는 변환 등록이 필요 없습니다. C# 필드명을 플레이나누 키(camelCase)에 맞추면 자동으로 연결되며, DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 영향이 없습니다.
