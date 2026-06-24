@@ -884,6 +884,7 @@ namespace TrueBase.Editor
                         Name         = col.Name,
                         FieldName    = col.Name, // 기본 필드명 = 컬럼명 (아래에서 커스텀 복원)
                         Comment      = col.Comment,
+                        DefaultValue = col.DefaultValue ?? "", // DB 기본값 프리필 (아래에서 사용자 설정으로 덮어씀)
                         TypeIndex    = typeIdx,
                         IsAmbiguous  = isAmbiguous,
                         // isAmbiguous(/* 포함) = 복잡한 타입(jsonb, array, $ref 등) → Json 카테고리 (Dictionary 프리셋 포함)

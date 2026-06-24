@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -145,7 +146,8 @@ namespace TrueBase.Editor
                 if (string.IsNullOrWhiteSpace(desc))
                     desc = propObj["title"]?.Value<string>();
 
-                list.Add(new OpenApiColumn(colName, MapToClr(propObj), desc));
+                var clr = MapToClr(propObj);
+                list.Add(new OpenApiColumn(colName, clr, desc, defaultValue: ExtractDbDefaultRaw(propObj, clr)));
             }
 
             return ParseTableResult.Ok(list, warnings);
@@ -355,6 +357,37 @@ namespace TrueBase.Editor
             }
 
             return cur as JObject;
+        }
+
+        /// <summary>
+        /// OpenAPI 속성의 <c>default</c>를 UI 기본값 원본 문자열로 변환합니다.
+        /// 스칼라 컬럼의 리터럴만 반환하고, 함수·캐스트(<c>now()</c>·<c>gen_random_uuid()</c>·<c>'…'::type</c>)·jsonb·컬렉션 기본값은 null.
+        /// PostgREST는 숫자/bool을 네이티브 JSON, 문자열/날짜를 문자열로 노출합니다.
+        /// </summary>
+        private static string ExtractDbDefaultRaw(JObject prop, string clrType)
+        {
+            if (!IsScalarTypeName(clrType)) return null; // 스칼라 컬럼만 (jsonb/배열/미해결 제외)
+            var token = prop["default"];
+            if (token == null || token.Type == JTokenType.Null) return null;
+
+            switch (token.Type)
+            {
+                case JTokenType.Boolean:
+                    return token.Value<bool>() ? "true" : "false";
+                case JTokenType.Integer:
+                case JTokenType.Float:
+                    return ((JValue)token).ToString(CultureInfo.InvariantCulture);
+                case JTokenType.String:
+                {
+                    var s = token.Value<string>()?.Trim();
+                    if (string.IsNullOrEmpty(s)) return null;
+                    // 함수/표현식 기본값 제외 — 괄호나 캐스트가 있으면 리터럴이 아님.
+                    if (s.IndexOf('(') >= 0 || s.IndexOf("::", StringComparison.Ordinal) >= 0) return null;
+                    return s;
+                }
+                default:
+                    return null; // object/array(jsonb 기본값) 등
+            }
         }
 
         private static string MapToClr(JObject prop)

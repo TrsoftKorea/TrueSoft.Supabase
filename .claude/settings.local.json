@@ -14,7 +14,8 @@
       "mcp__retool__retool_read_react_app_files",
       "mcp__retool__retool_list_react_app_threads",
       "mcp__retool__retool_create_or_append_react_app_thread_message",
-      "mcp__retool__retool_tail_react_app_thread_stream"
+      "mcp__retool__retool_tail_react_app_thread_stream",
+      "mcp__retool__retool_list_environments"
     ]
   }
 }
