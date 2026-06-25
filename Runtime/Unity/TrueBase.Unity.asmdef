@@ -15,16 +15,6 @@
   "defineConstraints": [],
   "versionDefines": [
     {
-      "name": "com.unity.purchasing",
-      "expression": "[4.0.0,5.0.0)",
-      "define": "TRUESOFT_IAP_AVAILABLE"
-    },
-    {
-      "name": "com.unity.purchasing",
-      "expression": "5.2.1",
-      "define": "TRUESOFT_IAP_AVAILABLE"
-    },
-    {
       "name": "com.unity.modules.appleauthenticationmanager",
       "expression": "",
       "define": "TRUESOFT_APPLE_AUTH_AVAILABLE"

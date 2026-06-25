@@ -16,6 +16,17 @@
   "defineConstraints": [
     "TRUESOFT_IAP_AVAILABLE"
   ],
-  "versionDefines": [],
+  "versionDefines": [
+    {
+      "name": "com.unity.purchasing",
+      "expression": "[4.0.0,5.0.0)",
+      "define": "TRUESOFT_IAP_AVAILABLE"
+    },
+    {
+      "name": "com.unity.purchasing",
+      "expression": "5.2.1",
+      "define": "TRUESOFT_IAP_AVAILABLE"
+    }
+  ],
   "noEngineReferences": false
 }
