@@ -13,9 +13,9 @@ Task<string> Supabase.TryRequestWithdrawalCancelTokenAsync(string defaultValue =
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `defaultValue` | 토큰 발급 실패 시 반환할 기본값 (기본값: `null`) |
 
 ---
 
@@ -29,9 +29,9 @@ Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelTo
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `cancelToken` | 플레이어가 입력한 취소 토큰 | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `cancelToken` | 플레이어가 입력한 취소 토큰 |
 
 **실패 원인**
 

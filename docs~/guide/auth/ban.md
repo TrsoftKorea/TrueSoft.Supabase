@@ -24,21 +24,21 @@ if (!result.Success && result.BanInfo != null)
 ## 수동 조회
 
 ```csharp
-Task<SupabaseBanInfo?> Supabase.TryGetBanInfoAsync(string accountId)
+Task<SupabaseBanInfo> Supabase.TryGetBanInfoAsync(string accountId)
 ```
 
 특정 계정의 차단 정보를 조회합니다. 차단 상태가 아니거나 조회 실패 시 `null`을 반환합니다.
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `accountId` | 조회할 계정 ID (`auth.users.id`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `accountId` | 조회할 계정 ID (`auth.users.id`) |
 
 **반환**
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 | `.IsPermanentBan` | `bool` | 영구 차단 여부 |
-| `.BannedUntil` | `DateTime` | 차단 해제 일시. 영구 차단이면 의미 없음 |
+| `.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 의미 없음 |
 | `.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |

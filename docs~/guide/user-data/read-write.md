@@ -19,9 +19,12 @@ PlayerSave.Coins += 100;
 PlayerSave.Inventory.Add(5);
 PlayerSave.Inventory[0] = 9;
 PlayerSave.Stats["atk"] = 100;
-PlayerSave.Matrix[0].Add(3);               // List<List<int>> 같은 중첩도 동일
 
 PlayerSave.Inventory = new List<int>{1, 2}; // 통째 교체도 가능
 ```
+
+::: tip 중첩 컬렉션
+2차원 컬렉션(`List<List<T>>` 등)은 `AutoList2D` / `AutoDict2D`를 사용하세요. 자세한 내용은 [자동 확장 컬렉션](/guide/data-types/auto-collections)을 참고하세요.
+:::
 
 쓸 수 있는 타입과 직렬화 규칙은 [데이터 타입](/guide/data-types/supported)을 참고하세요.

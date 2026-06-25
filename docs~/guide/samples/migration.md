@@ -10,4 +10,4 @@
 - 탈퇴 복구 (`OnWithdrawalPending` · `OnWithdrawalRestored` 이벤트)
 - `updated_at` 기반 PlayNANOO ↔ SDK 데이터 동기화
 
-자세한 사용법은 [플레이나누 이관](/guide/migration/how-it-works)을 참고하세요.
+자세한 사용법은 [이관 개요](/guide/migration/how-it-works)를 참고하세요.

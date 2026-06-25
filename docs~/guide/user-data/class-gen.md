@@ -57,6 +57,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
         [DataColumn("level")]     internal int            level;
         [DataColumn("coins")]     internal int            coins;
         [DataColumn("inventory")] internal List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
+        [DataColumn("updated_at")] internal string        updated_at;                    // 동기화 기준 컬럼 — 항상 포함
     }
 
     // 스칼라: get/set — 쓰면 MarkDirty 자동

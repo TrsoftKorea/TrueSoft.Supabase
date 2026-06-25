@@ -10,10 +10,10 @@ Task<SupabaseCallResult> Supabase.TryTransferMyServerAsync(string targetServerCo
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `targetServerCode` | 이주할 서버 코드 (예: `"GLOBAL"`, `"KR1"`) | `string` |
-| `reason` | 이주 사유. 서버 로그에만 기록됨 (기본값: `null`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `targetServerCode` | 이주할 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
+| `reason` | 이주 사유. 서버 로그에만 기록됨 (기본값: `null`) |
 
 **실패 원인**
 

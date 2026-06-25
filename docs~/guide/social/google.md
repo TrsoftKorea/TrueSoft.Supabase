@@ -14,7 +14,7 @@
    승인된 리디렉션 URI에 `https://<project-id>.supabase.co/auth/v1/callback`을 추가합니다.  
    생성 후 **클라이언트 ID**와 **클라이언트 보안 비밀번호**를 복사합니다.
 3. Supabase 대시보드 **Authentication > Providers > Google**에 위 두 값을 입력합니다.
-4. **(Android 네이티브 로그인 사용 시)** 같은 메뉴에서 유형을 **Android**로 OAuth 클라이언트를 추가 생성합니다.  
+4. Android 네이티브 로그인을 사용한다면 같은 메뉴에서 유형을 **Android**로 OAuth 클라이언트를 추가 생성합니다.  
    패키지명과 SHA-1 지문을 입력합니다.  
    웹 애플리케이션 클라이언트 ID는 `SupabaseSettings`의 `googleWebClientId` 필드에 입력합니다.
 
@@ -53,9 +53,9 @@ iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `idToken` | Google OAuth에서 발급받은 ID 토큰 | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
 
 **실패 원인**
 
@@ -101,10 +101,10 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsyn
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `idToken` | Google OAuth에서 발급받은 ID 토큰 | `string` |
-| `googleAccessToken` | Google Access Token (기본값: `null`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Google OAuth에서 발급받은 ID 토큰 |
+| `googleAccessToken` | Google Access Token (기본값: `null`) |
 
 **실패 원인**
 

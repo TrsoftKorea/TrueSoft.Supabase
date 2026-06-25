@@ -28,7 +28,7 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 ## 예약 상태 확인
 
 ```csharp
-Task<MyWithdrawalStatus?> Supabase.TryGetMyWithdrawalStatusAsync()
+Task<MyWithdrawalStatus> Supabase.TryGetMyWithdrawalStatusAsync()
 ```
 
 현재 탈퇴 예약 상태를 조회합니다. 조회 실패 시 `null`을 반환합니다.

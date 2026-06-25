@@ -10,10 +10,10 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 | `string` |
-| `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: `null`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
+| `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: `null`) |
 
 **실패 원인**
 
@@ -38,10 +38,10 @@ Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync
 
 **파라미터**
 
-| 파라미터 | 설명 | 타입 |
-|----------|------|------|
-| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 | `string` |
-| `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) | `string` |
+| 파라미터 | 설명 |
+|----------|------|
+| `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
+| `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) |
 
 **실패 원인**
 
