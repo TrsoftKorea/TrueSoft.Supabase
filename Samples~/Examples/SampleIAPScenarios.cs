@@ -12,7 +12,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///   B — 아이템 구매 (IAP 초기화 완료 후 동작)
 ///
 /// 사전 준비:
-///   1. Window > Package Manager > com.unity.purchasing 5.2.1 이상 설치
+///   1. Window > Package Manager > com.unity.purchasing 4.x 또는 5.2.1 이상 설치
 ///   2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
 ///   3. supabase functions deploy purchase-verify-google (또는 purchase-verify-apple)
 ///   4. Sql/player/07_purchases.sql 실행

@@ -6,7 +6,7 @@ namespace TrueBase.Unity
 {
     /// <summary>
     /// IAP(인앱 결제) 관련 Supabase API.
-    /// Unity IAP v4 (<c>com.unity.purchasing</c> 4.x) 및 v5 (5.x) 모두 지원합니다.
+    /// Unity IAP v4 (<c>com.unity.purchasing</c> 4.x) 및 v5 (5.2.1 이상) 모두 지원합니다. (5.0~5.2.0 미지원)
     /// </summary>
     public static class SupabaseIAP
     {
