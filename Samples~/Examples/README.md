@@ -4,7 +4,7 @@
 
 **파일 구성:**
 - `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트 (`StaticUserSave` 상속 예시인 `SamplePlayerSave` 클래스 포함)
-- `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`TRUESOFT_IAP_AVAILABLE` 심볼 필요)
+- `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`com.unity.purchasing` 설치 시 자동 컴파일)
 
 ---
 
