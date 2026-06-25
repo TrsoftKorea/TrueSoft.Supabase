@@ -60,7 +60,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
 
     private async Task InitializeIAPAsync()
     {
-        _iapFacade = await SupabaseClient.CreateIAPAsync(
+        _iapFacade = await SupabaseIAP.CreateIAPAsync(
             productIds: new[] { productId },
             onGrant:    OnGrantItemAsync,
             onFailed:   OnPurchaseFailed);
