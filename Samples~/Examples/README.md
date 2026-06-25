@@ -62,7 +62,7 @@ Assets/Samples/TrueBase/<버전>/Examples/
 | **S** | 탈퇴 상태 조회 |
 | **C** | 탈퇴 취소 |
 
-**SampleIAPScenarios** (`com.unity.purchasing` 4.x 또는 5.2.1 이상 필요):
+**SampleIAPScenarios** (`com.unity.purchasing` 4.0.0 이상 필요):
 
 IAP는 로그인 감지 시 자동으로 초기화됩니다.
 

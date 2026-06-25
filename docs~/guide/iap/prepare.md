@@ -8,4 +8,4 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 [Database Setup](/guide/start/database-setup) 절차를 먼저 완료하세요.
 
-이후 Package Manager에서 `com.unity.purchasing` **4.x 또는 5.2.1 이상**을 설치합니다. (5.0–5.2.0은 지원되지 않습니다.)
+이후 Package Manager에서 `com.unity.purchasing` **4.0.0 이상**을 설치합니다. (iOS에서 StoreKit 1 강제가 필요하면 [5.1 이상](./versions.md#iap-versions)이 필요합니다.)
