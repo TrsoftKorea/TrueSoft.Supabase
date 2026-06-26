@@ -11,6 +11,8 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `I` | Google 로그인 (Android 네이티브) |
 | `P` | 익명 계정에 Google 연동 |
 | `K` | Google 연동 해제 |
+| `B` | Apple 로그인 (iOS 네이티브) |
+| `H` | 익명 계정에 Apple 연동 (iOS 네이티브) |
 | `L` | Apple 연동 해제 |
 | `W` | 로그아웃 |
 | `O` | 세션 복원 |
@@ -27,6 +29,10 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `D` | 탈퇴 신청 |
 | `S` | 탈퇴 상태 조회 |
 | `C` | 탈퇴 취소 |
+
+::: info Apple 로그인·연동 테스트
+`B`/`H`는 iOS 네이티브 Sign in with Apple을 사용하므로 **iOS 실기기·시뮬레이터에서만** 동작합니다(에디터·Android에서는 `apple_login_ios_only`). Sign in with Apple Capability는 빌드 시 자동 추가됩니다.
+:::
 
 ## SamplePlayerSave
 

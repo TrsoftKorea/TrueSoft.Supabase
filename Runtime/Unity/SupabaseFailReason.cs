@@ -88,6 +88,21 @@ namespace TrueBase.Unity
         /// <summary>전달된 Apple ID 토큰이 비어있습니다.</summary>
         public const string AppleIdTokenEmpty = "apple_id_token_empty";
 
+        /// <summary>사용자가 Apple 로그인 화면을 직접 취소했습니다.</summary>
+        public const string AppleSignInCancelled = "apple_signin_cancelled";
+
+        /// <summary>네이티브 Apple 로그인은 iOS에서만 지원됩니다.</summary>
+        public const string AppleSignInIosOnly = "apple_login_ios_only";
+
+        /// <summary>웹 OAuth 리다이렉트에 세션 토큰(refresh_token)이 없습니다.</summary>
+        public const string OAuthRefreshTokenMissing = "oauth_refresh_token_missing";
+
+        /// <summary>OAuth 리다이렉트 스킴이 비어있습니다.</summary>
+        public const string OAuthRedirectSchemeEmpty = "oauth_redirect_scheme_empty";
+
+        /// <summary>이미 진행 중인 웹 OAuth 로그인이 있습니다.</summary>
+        public const string OAuthLoginInProgress = "oauth_login_already_in_progress";
+
         /// <summary>Supabase Apple identity 연동에 실패했습니다.</summary>
         public const string AppleLinkFailed = "apple_link_failed";
 

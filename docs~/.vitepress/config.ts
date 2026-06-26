@@ -79,9 +79,14 @@ export default defineConfig({
                 link: '/guide/social/apple/',
                 collapsed: true,
                 items: [
-                  { text: '신규 로그인', link: '/guide/social/apple/signin' },
+                  { text: '대시보드·빌드 설정', link: '/guide/social/apple/setup' },
+                  { text: '신규 로그인 · iOS', link: '/guide/social/apple/signin' },
+                  { text: '신규 로그인 · Android', link: '/guide/social/apple/signin-android' },
+                  { text: '신규 로그인 · 커스텀', link: '/guide/social/apple/signin-token' },
                   { text: '게스트 연동', link: '/guide/social/apple/link' },
+                  { text: '게스트 연동 · 커스텀', link: '/guide/social/apple/link-token' },
                   { text: '추가 연동', link: '/guide/social/apple/add' },
+                  { text: '추가 연동 · 커스텀', link: '/guide/social/apple/add-token' },
                   { text: '연동 해제', link: '/guide/social/apple/unlink' }
                 ]
               }

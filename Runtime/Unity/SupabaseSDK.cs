@@ -7,6 +7,7 @@ using TrueBase.Core.Data;
 using TrueBase.Core.Models;
 using TrueBase.Unity.Auth.Anonymous;
 using TrueBase.Unity.Auth;
+using TrueBase.Unity.Auth.Apple;
 using TrueBase.Unity.Auth.Google;
 using TrueBase.Unity.Config;
 using UnityEngine;
@@ -887,6 +888,262 @@ namespace TrueBase.Unity
                 });
             var r2 = await LinkAppleWithIdTokenAsync(idToken, rawNonce);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
+        }
+
+        // ── Apple 네이티브 로그인 (iOS Sign in with Apple) ──────────────────────────
+
+        /// <summary>
+        /// iOS 네이티브 Sign in with Apple로 ID 토큰을 받아 Supabase에 로그인합니다.
+        /// 익명(게스트) 세션에서는 자동 연동을 수행하지 않습니다. 연동은 <see cref="LinkAppleToCurrentAnonymousAsync"/>를 사용하세요.
+        /// </summary>
+        public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleAsync()
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (IsAnonymousSession(_currentSession))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AnonymousRequiresLink);
+
+            var rawNonce = GenerateRawNonce();
+            var login = await RequestAppleLoginResultAsync(rawNonce);
+            if (login == null || !login.IsSuccess || login.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+
+            if (string.IsNullOrWhiteSpace(login.Data.IdToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
+
+            var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "apple_signin_failed");
+        }
+
+        /// <summary>현재 익명 세션에 Apple identity를 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToCurrentAnonymousAsync()
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            var rawNonce = GenerateRawNonce();
+            var login = await RequestAppleLoginResultAsync(rawNonce);
+            if (login == null || !login.IsSuccess || login.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+
+            if (string.IsNullOrWhiteSpace(login.Data.IdToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
+
+            var ok = await TryLinkAppleToCurrentAnonymousWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.AppleLinkFailed);
+        }
+
+        /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
+        public static async Task<SupabaseResult<SupabaseSession>> LinkAppleNativeAsync()
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            var rawNonce = GenerateRawNonce();
+            var login = await RequestAppleLoginResultAsync(rawNonce);
+            if (login == null || !login.IsSuccess || login.Data == null)
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+
+            if (string.IsNullOrWhiteSpace(login.Data.IdToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
+
+            var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            return ok
+                ? SupabaseResult<SupabaseSession>.Success(_currentSession)
+                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.AppleLinkFailed);
+        }
+
+        /// <summary><see cref="SignInWithAppleAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TrySignInWithAppleAsync()
+        {
+            var r = await SignInWithAppleAsync();
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        /// <summary><see cref="LinkAppleToCurrentAnonymousAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousAsync()
+        {
+            var r = await LinkAppleToCurrentAnonymousAsync();
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        /// <summary><see cref="LinkAppleNativeAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLinkAppleNativeAsync()
+        {
+            var r = await LinkAppleNativeAsync();
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        private static async Task<SupabaseResult<AppleLoginResult>> RequestAppleLoginResultAsync(string rawNonce)
+        {
+            var bridge = EnsureAppleLoginBridge();
+            var hashedNonce = Sha256Hex(rawNonce);
+
+            var tcs = new TaskCompletionSource<SupabaseResult<AppleLoginResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            bridge.SignIn(
+                hashedNonce,
+                result => tcs.TrySetResult(result == null
+                    ? SupabaseResult<AppleLoginResult>.Fail("apple_result_null")
+                    : SupabaseResult<AppleLoginResult>.Success(result)),
+                err =>
+                {
+                    // ASAuthorizationErrorCanceled = 1001 (사용자가 직접 취소)
+                    var reason = err == "1001" ? SupabaseFailReason.AppleSignInCancelled
+                               : string.IsNullOrWhiteSpace(err) ? "apple_signin_failed"
+                               : err;
+                    tcs.TrySetResult(SupabaseResult<AppleLoginResult>.Fail(reason));
+                });
+
+            return await tcs.Task;
+        }
+
+        /// <summary>AppleLoginBridge가 씬에 없으면 생성합니다.</summary>
+        private static AppleLoginBridge EnsureAppleLoginBridge()
+        {
+            var existing = UnityEngine.Object.FindFirstObjectByType<AppleLoginBridge>();
+            if (existing != null)
+                return existing;
+
+            var go = new GameObject("TruesoftAppleLoginBridge");
+            UnityEngine.Object.DontDestroyOnLoad(go);
+            return go.AddComponent<AppleLoginBridge>();
+        }
+
+        /// <summary>Sign in with Apple용 raw nonce를 생성합니다(URL-safe 문자).</summary>
+        private static string GenerateRawNonce(int length = 32)
+        {
+            const string charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._";
+            var bytes = new byte[length];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+                rng.GetBytes(bytes);
+
+            var sb = new System.Text.StringBuilder(length);
+            foreach (var b in bytes)
+                sb.Append(charset[b % charset.Length]);
+            return sb.ToString();
+        }
+
+        /// <summary>문자열의 SHA256을 소문자 16진 문자열로 반환합니다(Apple <c>request.nonce</c>용).</summary>
+        private static string Sha256Hex(string input)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(input ?? string.Empty));
+            var sb = new System.Text.StringBuilder(hash.Length * 2);
+            foreach (var b in hash)
+                sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        // ── 웹 OAuth 리다이렉트 (Android Apple 로그인 등) ──────────────────────────
+
+        /// <summary>
+        /// Supabase 호스팅 OAuth authorize URL을 만듭니다. 브라우저/Custom Tab으로 열면 됩니다.
+        /// 로그인 완료 후 Supabase가 <paramref name="redirectTo"/>(앱 딥링크)로 세션 토큰을 붙여 돌려보냅니다.
+        /// </summary>
+        public static string BuildOAuthAuthorizeUrl(string provider, string redirectTo)
+        {
+            var baseUrl = (_initializedProjectUrl ?? string.Empty).TrimEnd('/');
+            return $"{baseUrl}/auth/v1/authorize"
+                 + $"?provider={Uri.EscapeDataString(provider ?? string.Empty)}"
+                 + $"&redirect_to={Uri.EscapeDataString(redirectTo ?? string.Empty)}";
+        }
+
+        /// <summary>
+        /// 웹 OAuth 리다이렉트(딥링크) URL에서 세션 토큰을 꺼내 로그인을 완료합니다.
+        /// URL fragment/query의 <c>refresh_token</c>으로 세션을 복원하고 로그인 후처리(차단·탈퇴 게이트·프로필 보장)를 수행합니다.
+        /// </summary>
+        public static async Task<SupabaseResult<SupabaseSession>> CompleteOAuthRedirectAsync(string redirectUrl)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (string.IsNullOrWhiteSpace(redirectUrl))
+                return SupabaseResult<SupabaseSession>.Fail("oauth_redirect_url_empty");
+
+            var values = ParseUrlParams(redirectUrl);
+            if (values.TryGetValue("error", out var err) && !string.IsNullOrWhiteSpace(err))
+            {
+                values.TryGetValue("error_description", out var desc);
+                return SupabaseResult<SupabaseSession>.Fail(string.IsNullOrWhiteSpace(desc) ? err : desc);
+            }
+
+            if (!values.TryGetValue("refresh_token", out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.OAuthRefreshTokenMissing);
+
+            var result = await Auth.RefreshSessionAsync(refreshToken.Trim());
+            if (result.IsSuccess && result.Data != null)
+            {
+                SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
+                SaveSessionToStorage();
+
+                if (!_isRecreatingAfterWithdrawalDelete)
+                {
+                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
+                        SignInMethodKind.Apple,
+                        allowRecreateOnDeletion: true);
+                    if (guarded != null)
+                        return guarded;
+
+                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                    if (reserved != null)
+                        return reserved;
+                }
+
+                await TryEnsureProfileRowAfterSignInAsync();
+            }
+
+            return result;
+        }
+
+        /// <summary><see cref="CompleteOAuthRedirectAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryCompleteOAuthRedirectAsync(string redirectUrl)
+        {
+            var r = await CompleteOAuthRedirectAsync(redirectUrl);
+            return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+        }
+
+        /// <summary>URL의 fragment(<c>#</c>) 또는 query(<c>?</c>)에서 key=value 쌍을 파싱합니다.</summary>
+        private static System.Collections.Generic.Dictionary<string, string> ParseUrlParams(string url)
+        {
+            var dict = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(url))
+                return dict;
+
+            var hash = url.IndexOf('#');
+            var query = url.IndexOf('?');
+            var start = hash >= 0 ? hash + 1 : (query >= 0 ? query + 1 : -1);
+            if (start < 0 || start >= url.Length)
+                return dict;
+
+            foreach (var pair in url.Substring(start).Split('&'))
+            {
+                if (pair.Length == 0)
+                    continue;
+                var eq = pair.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+                var key = Uri.UnescapeDataString(pair.Substring(0, eq));
+                var value = Uri.UnescapeDataString(pair.Substring(eq + 1));
+                dict[key] = value;
+            }
+            return dict;
         }
 
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>

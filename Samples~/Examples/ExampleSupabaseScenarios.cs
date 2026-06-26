@@ -15,8 +15,9 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 /// 로그인 성공 여부는 HandleAutoLoginCompleted 콜백으로 전달됩니다.
 ///
 /// 키보드 단축키 (Play Mode):
-///   Q — 익명 로그인       I — Google 로그인      P — Google 연동
-///   K — Google 연동 해제   L — Apple 연동 해제
+///   Q — 익명 로그인
+///   I — Google 로그인      P — Google 연동        K — Google 연동 해제
+///   B — Apple 로그인       H — Apple 연동         L — Apple 연동 해제
 ///   W — 로그아웃           O — 세션 복원
 ///
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
@@ -91,6 +92,28 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var ok = await SupabaseClient.TryLinkGoogleToCurrentAnonymousAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.Reason}");
         else     Debug.Log("[Supabase] Google 연동 성공.");
+    }
+
+    /// <summary>B — Apple 로그인 (iOS 네이티브 Sign in with Apple). 익명 세션이면 실패 — 연동은 H를 쓰세요.</summary>
+    private async Task SignInWithAppleAsync()
+    {
+        var ok = await SupabaseClient.TrySignInWithAppleAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] Apple 로그인 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] Apple 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+    }
+
+    /// <summary>H — 익명 계정에 Apple 연동 (iOS 네이티브 Sign in with Apple). 익명 세션이 아니면 실패.</summary>
+    private async Task LinkAppleAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn || !SupabaseClient.IsAnonymous)
+        {
+            Debug.LogWarning("[Supabase] Apple 연동 실패: 익명 세션이 아닙니다.");
+            return;
+        }
+
+        var ok = await SupabaseClient.TryLinkAppleToCurrentAnonymousAsync();
+        if (!ok) Debug.LogWarning($"[Supabase] Apple 연동 실패: {ok.Reason}");
+        else     Debug.Log("[Supabase] Apple 연동 성공.");
     }
 
     /// <summary>K — 현재 계정에서 Google 연동 해제. 마지막 남은 연동이면 실패하며, 성공 시 다음 연동 때 계정 선택창이 다시 뜹니다.</summary>
@@ -359,6 +382,8 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Q)) _ = SignInAnonymouslyAsync();
         if (Input.GetKeyDown(KeyCode.I)) _ = SignInWithGoogleAsync();
         if (Input.GetKeyDown(KeyCode.P)) _ = LinkGoogleAsync();
+        if (Input.GetKeyDown(KeyCode.B)) _ = SignInWithAppleAsync();
+        if (Input.GetKeyDown(KeyCode.H)) _ = LinkAppleAsync();
         if (Input.GetKeyDown(KeyCode.K)) _ = UnlinkGoogleAsync();
         if (Input.GetKeyDown(KeyCode.L)) _ = UnlinkAppleAsync();
         if (Input.GetKeyDown(KeyCode.W)) _ = SignOutAsync();
