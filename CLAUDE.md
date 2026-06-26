@@ -63,10 +63,10 @@ The SDK has three layers:
 ### SupabaseResult\<T\> and Try API Pattern
 
 Every data API comes in two forms:
-- `Supabase.LoadUserDataAttributedAsync<T>()` → returns `SupabaseResult<T>` (check `.IsSuccess`, `.Data`, `.ErrorMessage`)
+- `SupabaseSDK.LoadUserDataAttributedAsync<T>()` → returns `SupabaseResult<T>` (check `.IsSuccess`, `.Data`, `.ErrorMessage`)
 - `Supabase.TryLoadUserDataAttributedAsync<T>()` → returns `T`, logs internally with a fixed tag like `[Supabase.UserData.LoadAttributed]`
 
-Use `Try*` variants in game code. Use the non-Try variants when you need to inspect `SupabaseResult` directly.
+게임 코드는 `Supabase` 파사드의 `Try*`만 쓴다. non-Try(Result 반환) 변형은 `SupabaseSDK`에 `internal`로만 존재하며 SDK 내부 분기·로깅 전용이다. `Supabase` 파사드에는 게임에서 직접 결과 분기가 필요한 일부(예: `EnsureMyRowAsync`)를 제외하고 non-Try를 노출하지 않는다.
 
 **반환 타입 규칙:** 성공/실패만 알리는 `Try*` API는 **반드시 `SupabaseCallResult`를 반환**한다. 단순 `bool`을 반환하지 않는다(`SupabaseCallResult`는 암묵적 `bool` 변환을 제공하므로 `if (await Try*())` 패턴은 그대로 동작). 값을 돌려주는 `Try*`(예: `Task<string>`·상태 객체·`T`)는 그 값을 반환하고 실패 시 `defaultValue`로 폴백한다. 실패 사유는 `SupabaseFailReason` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드(`TryLoadAsync`·`TryFlushNowAsync`·`TrySaveIfChangedAsync` 등)와 생성기가 emit하는 래퍼에도 적용된다.
 
@@ -88,7 +88,7 @@ Use `Try*` variants in game code. Use the non-Try variants when you need to insp
 
 ### Remote Config (Cold Start Pattern)
 
-- No HTTP on app start. Config is lazy-loaded on first `Supabase.GetRemoteConfigAsync<T>(key)`.
+- No HTTP on app start. Config is lazy-loaded on first `RemoteConfig<T>.CreateReader()`/`CreateBinding()`/`CreateListener()` call.
 - Uses stale-while-revalidate (`max_stale_seconds` from DB; 0 treated as 300s). Stale cache is returned immediately while background refresh runs.
 - Per-key background polling via `poll_interval_seconds` (0 = no polling). `SupabaseRuntime` ticks polls in `Update`.
 - `GetRemoteConfig` (sync, no `Async`) reads the in-memory cache without network.
