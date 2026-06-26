@@ -8,6 +8,6 @@
 
 | 상황 | Android | iOS |
 |------|---------|-----|
-| 신규 로그인 | [네이티브 로그인](./signin-android) | [ID 토큰 로그인](./signin-ios) |
-| 게스트(익명) → 연동 | [네이티브 연동](./link-android) | [ID 토큰 연동](./link-ios) |
-| 로그인된 계정에 추가 연동 | [네이티브 추가 연동](./add-android) | [ID 토큰 추가 연동](./add-ios) |
+| 신규&nbsp;로그인 | [네이티브 로그인](./signin-android) | [ID 토큰 로그인](./signin-ios) |
+| 게스트(익명)&nbsp;→&nbsp;연동 | [네이티브 연동](./link-android) | [ID 토큰 연동](./link-ios) |
+| 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [네이티브 추가 연동](./add-android) | [ID 토큰 추가 연동](./add-ios) |

@@ -16,9 +16,9 @@
 
 | 상황 | 추천 패턴 |
 |------|-----------|
-| 가끔 읽으면 충분할 때 | **Reader** |
-| 매 프레임 또는 자주 값을 읽어야 할 때 | **Binding** |
-| 값이 바뀌는 순간 즉시 반응해야 할 때 | **Listener** |
+| 가끔&nbsp;읽으면&nbsp;충분할&nbsp;때 | **Reader** |
+| 매&nbsp;프레임&nbsp;또는&nbsp;자주&nbsp;값을&nbsp;읽어야&nbsp;할&nbsp;때 | **Binding** |
+| 값이&nbsp;바뀌는&nbsp;순간&nbsp;즉시&nbsp;반응해야&nbsp;할&nbsp;때 | **Listener** |
 
 ::: tip
 대부분의 경우 **Reader**나 **Binding**으로 충분합니다.
