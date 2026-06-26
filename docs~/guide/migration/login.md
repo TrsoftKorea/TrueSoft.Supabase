@@ -1,5 +1,7 @@
 # 로그인
 
+## 로그인 호출
+
 로그인 API는 이관 전·중·후 동일합니다. 자세한 내용은 [인증](/guide/auth/anonymous)을 참고하세요.
 
 Android에서 Apple 로그인은 플레이나누 WebView를 통해 토큰을 획득한 뒤 호출합니다.

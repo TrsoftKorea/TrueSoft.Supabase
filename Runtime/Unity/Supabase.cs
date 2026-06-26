@@ -40,8 +40,6 @@ namespace TrueBase.Unity
         /// <summary>현재 계정에 Apple이 연동되어 있으면 true.</summary>
         public static bool IsLinkedWithApple => SupabaseSDK.IsLinkedWithApple;
 
-        /// <summary>현재 계정에 지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
-
         /// <summary>
         /// 로그인 직후 자동으로 조회·캐시된 내 프로필.
         /// 닉네임·탈퇴 상태 등 로그인 시 1회 조회로 충분한 정보를 담습니다.

@@ -3,14 +3,12 @@
 닉네임 설정·변경과 공개 프로필 조회 기능입니다.  
 닉네임은 서버에서 중복 여부를 검증하므로 전체 고유합니다.
 
----
+## 내 닉네임 조회
 
 ```csharp
 // 내 닉네임 — 로그인 후 자동 캐시된 프로필에서 조회
 string myName = Supabase.MyProfile.DisplayName;
 ```
-
----
 
 ## 중복 확인
 
@@ -76,3 +74,7 @@ Task<string> Supabase.TryGetPublicDisplayNameAsync(string userId, string default
 |----------|------|
 | `userId` | 조회할 플레이어 ID (`profiles.user_id`) |
 | `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `""`) |
+
+**반환**
+
+조회한 플레이어의 닉네임 문자열. 조회 실패 시 `defaultValue`.

@@ -74,10 +74,6 @@ iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-::: info 익명 로그인으로 되돌리기
-Google 로그인 상태에서 익명 로그인으로 전환하려면 먼저 `TrySignOutFullyAsync`로 로그아웃한 뒤 `TrySignInAnonymouslyAsync`를 호출합니다.
-:::
-
 ## 게스트(익명) → Google 연동
 
 익명 세션을 Google 계정으로 전환합니다. 기존 익명 계정의 데이터가 그대로 이어집니다.

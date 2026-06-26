@@ -3,6 +3,8 @@
 `SupabaseRuntime`이 있는 씬에 `ExampleSupabaseScenarios` 컴포넌트를 추가하면  
 Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 
+## 키보드 단축키
+
 | 키 | 동작 |
 |----|------|
 | `Q` | 익명 로그인 |
