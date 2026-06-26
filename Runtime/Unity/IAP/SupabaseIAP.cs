@@ -13,7 +13,7 @@ namespace TrueBase.Unity
         // ── 파사드 생성 ────────────────────────────────────────────────────────
 
         /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>
-        public static IAPFacade CreateIAP()
+        internal static IAPFacade CreateIAP()
         {
 #if UNITY_IAP_V5
             return new IAPFacade(VerifyForIAPFacadeAsync, VerifyReceiptForIAPFacadeAsync);
@@ -23,12 +23,12 @@ namespace TrueBase.Unity
         }
 
         /// <summary>Google Play IAP 파사드를 생성합니다.</summary>
-        public static GooglePlayIAPFacade CreateGooglePlayIAP()
+        internal static GooglePlayIAPFacade CreateGooglePlayIAP()
             => new GooglePlayIAPFacade((token, productId, priceAmount, priceCurrency) =>
                 Supabase.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency));
 
         /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
-        public static AppleIAPFacade CreateAppleIAP()
+        internal static AppleIAPFacade CreateAppleIAP()
         {
 #if UNITY_IAP_V5
             return new AppleIAPFacade(

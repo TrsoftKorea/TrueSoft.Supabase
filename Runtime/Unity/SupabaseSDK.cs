@@ -1026,16 +1026,6 @@ namespace TrueBase.Unity
             UserSaveStaticSyncRegistry.Tick(realtimeNow);
         }
 
-        /// <summary><see cref="InvokeFunctionAsync{TResponse}(string, object)"/>를 호출하고 성공 시 데이터를 반환, 실패 시 default를 반환합니다.</summary>
-        public static async Task<TResponse> TryInvokeFunctionAsync<TResponse>(
-            string functionName,
-            object requestBody = null,
-            TResponse defaultValue = default)
-        {
-            var r = await InvokeFunctionAsync<TResponse>(functionName, requestBody);
-            return LogAndReturnData(ApiLogTags.EdgeFunctionInvoke, r, defaultValue);
-        }
-
         /// <summary>
         /// <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출하고 성공 여부를 로그로 남깁니다.
         /// 실패 시 <c>value</c>는 null입니다.
@@ -2228,12 +2218,6 @@ namespace TrueBase.Unity
                     _bootstrap.EdgeFunctionsService,
                     () => _currentSession);
             }
-        }
-
-        /// <summary>서버 함수 호출(로그인 세션 필요).</summary>
-        public static async Task<SupabaseResult<TResponse>> InvokeFunctionAsync<TResponse>(string functionName, object requestBody = null)
-        {
-            return await Functions.InvokeAsync<TResponse>(functionName, requestBody, requireAuth: true);
         }
 
         /// <summary>구글 플레이 인앱 상품 영수증을 서버에서 검증합니다.</summary>

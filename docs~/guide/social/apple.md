@@ -6,7 +6,7 @@
 
 Apple은 외부 SDK(Sign in with Apple)로 발급받은 ID 토큰을 직접 전달하는 방식입니다. 플랫폼 구분 없이 동일한 메서드를 사용합니다.
 
-## 신규 로그인
+## 신규 로그인 {#signin}
 
 처음 로그인하거나 로그아웃 상태에서 Apple 계정으로 로그인합니다.
 
@@ -31,7 +31,7 @@ Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken,
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-## 게스트(익명) → Apple 연동
+## 게스트(익명) → Apple 연동 {#link}
 
 익명 세션을 Apple 계정으로 전환합니다. 기존 익명 계정의 데이터가 그대로 이어집니다.
 
@@ -65,7 +65,7 @@ Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-## 이미 로그인된 계정에 추가 연동
+## 이미 로그인된 계정에 추가 연동 {#add}
 
 이미 로그인된 계정(익명 포함)에 Apple 계정을 하나 더 연결합니다.
 

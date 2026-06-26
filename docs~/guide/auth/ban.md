@@ -23,7 +23,7 @@ if (!result.Success && result.BanInfo != null)
 
 `SupabaseCallResult.Reason == SupabaseFailReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
 
-## 수동 조회
+## 수동 조회 {#manual-lookup}
 
 ```csharp
 Task<SupabaseBanInfo> Supabase.TryGetBanInfoAsync(string accountId)

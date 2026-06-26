@@ -138,7 +138,8 @@ export default defineConfig({
               { text: '더 알아보기', link: '/guide/iap/advanced' },
               { text: '버전별 차이', link: '/guide/iap/versions' }
             ]
-          }
+          },
+          { text: '서버 시간', link: '/guide/server-time' }
         ]
       },
       {
@@ -173,6 +174,17 @@ export default defineConfig({
               { text: '플레이나누 제거 후', link: '/guide/migration/after' }
             ]
           }
+        ]
+      },
+      {
+        text: 'API',
+        link: '/guide/api/',
+        items: [
+          { text: '인증', link: '/guide/api/auth' },
+          { text: '계정', link: '/guide/api/account' },
+          { text: '게임 데이터', link: '/guide/api/game-data' },
+          { text: '인앱 결제', link: '/guide/api/iap' },
+          { text: '기타', link: '/guide/api/etc' }
         ]
       }
     ],
