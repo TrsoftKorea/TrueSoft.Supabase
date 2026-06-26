@@ -1,4 +1,4 @@
-# Google 신규 로그인 — Android
+# Google 신규 로그인 · Android
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleAsync()

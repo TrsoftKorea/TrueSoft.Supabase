@@ -1,4 +1,4 @@
-# Google 게스트 연동 — iOS
+# Google 게스트 연동 · iOS
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)

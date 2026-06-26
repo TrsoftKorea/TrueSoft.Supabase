@@ -65,12 +65,12 @@ export default defineConfig({
                 collapsed: true,
                 items: [
                   { text: '대시보드 설정', link: '/guide/social/google/setup' },
-                  { text: '신규 로그인 — Android', link: '/guide/social/google/signin-android' },
-                  { text: '신규 로그인 — iOS', link: '/guide/social/google/signin-ios' },
-                  { text: '게스트 연동 — Android', link: '/guide/social/google/link-android' },
-                  { text: '게스트 연동 — iOS', link: '/guide/social/google/link-ios' },
-                  { text: '추가 연동 — Android', link: '/guide/social/google/add-android' },
-                  { text: '추가 연동 — iOS', link: '/guide/social/google/add-ios' }
+                  { text: '신규 로그인 · Android', link: '/guide/social/google/signin-android' },
+                  { text: '신규 로그인 · iOS', link: '/guide/social/google/signin-ios' },
+                  { text: '게스트 연동 · Android', link: '/guide/social/google/link-android' },
+                  { text: '게스트 연동 · iOS', link: '/guide/social/google/link-ios' },
+                  { text: '추가 연동 · Android', link: '/guide/social/google/add-android' },
+                  { text: '추가 연동 · iOS', link: '/guide/social/google/add-ios' }
                 ]
               },
               {
@@ -113,7 +113,7 @@ export default defineConfig({
             ]
           },
           {
-            text: '탈퇴 취소 (토큰)',
+            text: '탈퇴 취소 · 토큰',
             link: '/guide/withdrawal/token/',
             collapsed: true,
             items: [

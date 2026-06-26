@@ -21,7 +21,7 @@ PlayerSave.StageClears[4] = 1;        // 크기가 3이어도 자동 확장 후 
 int s = PlayerSave.StageClears[4];    // 범위 밖이면 기본값 반환, 확장하지 않음
 ```
 
-## 기본값 지정 — `[AutoDefault]`
+## 기본값 지정 · `[AutoDefault]`
 
 기본값이 `0`/`false`/`null`이 아니어야 하면 **필드에 `[AutoDefault(...)]` 한 줄**을 붙입니다(필드마다 클래스를 만들 필요 없음).
 
@@ -48,7 +48,7 @@ public struct Stage { public int score, stars; public Stage(int s, int st) { sco
 자동 확장 인덱서는 정적 타입이 `AutoList`/`AutoDict`일 때만 동작합니다. 생성 클래스의 **Row 필드와 정적 프로퍼티를 모두** `AutoList<T>`(또는 `AutoDict<TKey,TValue>`)로 선언하세요. `List<T>`로 캐스팅하면 기본 인덱서가 쓰입니다.
 :::
 
-## 이중 리스트 — `AutoList2D<T>`
+## 이중 리스트 · `AutoList2D<T>`
 
 행·열이 모두 가변인 이중 리스트는 `AutoList2D<T>` 하나로 처리합니다. `[i, j]` 단일 인덱서로 접근하며, **읽기는 비파괴**(범위 밖이면 기본값), **쓰기만 양쪽 차원을 확장 후 저장**합니다.
 
@@ -64,7 +64,7 @@ int v = PlayerSave.Scores[5, 3];   // 범위 밖이면 -1 반환, 확장하지 �
 - `[i, j]` 한 번의 호출이라 읽기가 데이터를 만들지 않습니다 — `AutoList`를 두 번 중첩할 때 생기는 "조회가 저장이 되는" 문제가 없습니다.
 - 값 타입 `T`에 적합합니다.
 
-## 이중 딕셔너리 — `AutoDict2D<TKey1, TKey2, TValue>`
+## 이중 딕셔너리 · `AutoDict2D<TKey1, TKey2, TValue>`
 
 2단계 딕셔너리는 `AutoDict2D`로 처리합니다. `[k1, k2]` 인덱서로 접근하며, 없는 키 조합 읽기는 기본값 반환(비파괴), 쓰기는 안쪽 딕셔너리를 자동 생성 후 저장합니다.
 

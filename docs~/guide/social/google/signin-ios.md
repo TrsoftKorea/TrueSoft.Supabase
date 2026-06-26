@@ -1,4 +1,4 @@
-# Google 신규 로그인 — iOS
+# Google 신규 로그인 · iOS
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)

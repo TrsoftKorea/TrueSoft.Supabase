@@ -1,4 +1,4 @@
-# Google 게스트 연동 — Android
+# Google 게스트 연동 · Android
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()

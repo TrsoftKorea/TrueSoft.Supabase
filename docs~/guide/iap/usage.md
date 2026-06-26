@@ -8,7 +8,7 @@ Task<IAPFacade> SupabaseIAP.CreateIAPAsync(
     int                                   timeoutMs = 10_000)
 ```
 
-Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결합니다.
+Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결합니다. Android/iOS를 자동 감지하므로 대부분의 게임은 이 메서드 하나면 됩니다.
 
 **파라미터**
 

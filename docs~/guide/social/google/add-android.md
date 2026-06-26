@@ -1,4 +1,4 @@
-# Google 추가 연동 — Android
+# Google 추가 연동 · Android
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleNativeAsync()

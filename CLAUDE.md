@@ -257,7 +257,12 @@ Do **not** append parenthetical clarifications to headings, table cells, or numb
 - ❌ `# 인증 (Auth)`, `### 클래스 생성기 (선택)`, `| (자동 생성됨) |`
 - ✅ `# 인증`, `### 클래스 생성기`, or move the aside to prose/callout
 
-If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it. For sub-type headings use an em-dash instead: `### 탈퇴 취소 — 토큰 방식`.
+If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it.
+
+하위 유형을 구분할 땐 **괄호도 em-dash(`—`)도 쓰지 않고 가운뎃점(`·`)**을 쓴다. 헤딩·사이드바 항목·표 라벨 모두 동일.
+
+- ❌ `### 탈퇴 취소 — 토큰 방식`, `### 신규 로그인 — Android`, 사이드바 `탈퇴 취소 (토큰)`
+- ✅ `### 탈퇴 취소 · 토큰 방식`, `### 신규 로그인 · Android`, 사이드바 `탈퇴 취소 · 토큰`
 
 ### 7. Show all parameters in code examples
 

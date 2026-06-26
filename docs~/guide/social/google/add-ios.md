@@ -1,4 +1,4 @@
-# Google 추가 연동 — iOS
+# Google 추가 연동 · iOS
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryLinkGoogleWithIdTokenAsync(string idToken, string googleAccessToken = null)
