@@ -8,7 +8,8 @@
   gap: 12px;
 }
 
-.tb-cards li {
+.tb-cards ul li,
+.tb-cards ul li + li {
   margin: 0;
 }
 
