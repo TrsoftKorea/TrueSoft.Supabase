@@ -1,7 +1,5 @@
 # 사용법
 
-소모품 결제를 초기화하고 서버 영수증 검증까지 한 번에 연결합니다.
-
 ```csharp
 Task<IAPFacade> SupabaseIAP.CreateIAPAsync(
     string[]                              productIds,

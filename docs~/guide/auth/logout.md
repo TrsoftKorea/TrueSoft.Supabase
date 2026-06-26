@@ -1,7 +1,5 @@
 # 로그아웃
 
-현재 계정에서 로그아웃합니다.
-
 ```csharp
 Task<SupabaseCallResult> Supabase.TrySignOutFullyAsync()
 ```
