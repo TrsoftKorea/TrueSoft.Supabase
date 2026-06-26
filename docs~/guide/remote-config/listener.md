@@ -15,3 +15,7 @@ RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T> onChange, float
 |----------|------|
 | `onChange` | 값이 바뀔 때 호출되는 콜백 |
 | `pollInterval` | 자동 갱신 주기(초). `0`이면 폴링 없음 (기본값: `60`) |
+
+**반환**
+
+값이 바뀔 때마다 콜백을 호출하는 리스너 객체. 사용 후 `Dispose()`를 호출하세요.

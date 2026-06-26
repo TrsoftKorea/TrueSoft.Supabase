@@ -71,8 +71,6 @@ float bossHp = cfg?.battle?.boss?.hpMultiplier ?? 1f;
 int   maxSt  = cfg?.stamina?.max ?? 100;
 ```
 
----
-
 ## 클래스 생성기
 
 JSON 구조를 보고 C# 클래스를 직접 작성하는 대신 Inspector에서 자동으로 생성할 수 있습니다.

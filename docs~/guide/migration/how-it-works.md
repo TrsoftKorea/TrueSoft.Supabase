@@ -3,8 +3,6 @@
 플레이나누 기반 라이브 서비스를 SDK로 전환할 때 사용하는 브릿지 패턴입니다.  
 두 백엔드를 동시에 운영하다가 플레이나누를 완전히 제거하는 흐름을 지원합니다.
 
----
-
 `PlayNanooRuntimeBase`가 `SupabaseRuntime`을 상속하며, `Awake` 시점에 `SupabaseSDK` 내부에 인터셉터를 등록합니다.  
 이후 게임 코드가 `Supabase.TrySignInAnonymouslyAsync()` 등을 호출하면 **플레이나누 로그인이 먼저 실행된 뒤 SDK 로그인이 이어집니다.**
 

@@ -2,8 +2,6 @@
 
 TrueBase를 Unity 프로젝트에 설치하고, 첫 번째 기능을 동작시키기까지의 과정을 안내합니다.
 
----
-
 **Window > Package Manager > + > Add package from git URL**
 
 ```

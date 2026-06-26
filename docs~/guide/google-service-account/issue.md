@@ -2,8 +2,6 @@
 
 Google Play 영수증 검증에 필요한 서비스 계정 JSON 키 발급 절차입니다.
 
----
-
 **1.** Google Cloud 콘솔에 접속해 JSON을 발급받을 프로젝트를 선택합니다. 프로젝트가 없으면 새로 생성합니다.
 
 ![](/google-service-account/image18.png)

@@ -2,8 +2,6 @@
 
 유저 세이브 필드에 쓸 수 있는 타입입니다. 직렬화는 Newtonsoft.Json 기반이라 폭넓은 타입을 지원합니다.
 
----
-
 | C# 타입 | DB 컬럼 타입 | 비고 |
 |---|---|---|
 | `bool` `int` `long` `float` `double` | `bool` `int4` `int8` `float4` `float8` | |

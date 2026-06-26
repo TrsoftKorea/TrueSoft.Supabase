@@ -15,3 +15,7 @@ RemoteConfigBinding<T> RemoteConfig<T>.CreateBinding(float pollInterval = 60f)
 | 파라미터 | 설명 |
 |----------|------|
 | `pollInterval` | 자동 갱신 주기(초). `0`이면 폴링 없음 (기본값: `60`) |
+
+**반환**
+
+`.Value`로 최신 값을 동기적으로 읽는 바인딩 객체. 사용 후 `Dispose()`를 호출하세요.

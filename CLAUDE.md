@@ -176,11 +176,11 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 ## Documentation Rules
 
-All user-facing docs live in `docs/guide/`. Apply these rules on every code change — do not wait to be asked.
+All user-facing docs live in `docs~/guide/`. Apply these rules on every code change — do not wait to be asked.
 
 ### 1. Update docs alongside code
 
-When adding, changing, or removing a feature, update the corresponding `docs/guide/*.md` in the **same task**:
+When adding, changing, or removing a feature, update the corresponding `docs~/guide/*.md` in the **same task**:
 - New API or behavior → add/update the relevant guide page.
 - Removed API, file, or Secret key → remove every reference to it across all doc files.
 - Changed parameter names or signatures → update code examples in the docs.
@@ -188,7 +188,7 @@ When adding, changing, or removing a feature, update the corresponding `docs/gui
 ### 2. Dead link prevention
 
 Whenever a doc file or section is removed or renamed:
-1. Search all `docs/guide/*.md` for links pointing to the old file/anchor.
+1. Search all `docs~/guide/*.md` for links pointing to the old file/anchor.
 2. Remove or update every match before finishing the task.
 
 Korean heading anchors are unreliable in VitePress. Any heading that is **linked to from elsewhere** must have an explicit anchor ID:
@@ -246,11 +246,11 @@ When referencing a specific section in another doc, link directly to the section
 
 If the target heading contains Korean, add an explicit anchor ID to the heading first (see Rule 2).
 
-### 5. Sample display names — English only
+### 6. Sample display names — English only
 
 `package.json`의 `samples[].displayName`은 영어만 사용한다. 한글 단독 또는 한영 혼용 이름은 금지. 예: `"PlayNANOO Migration"` (O), `"PlayNANOO 이관"` (X).
 
-### 6. No parenthetical asides in headings, tables, or steps
+### 7. No parenthetical asides in headings, tables, or steps
 
 Do **not** append parenthetical clarifications to headings, table cells, or numbered steps.
 
@@ -259,43 +259,35 @@ Do **not** append parenthetical clarifications to headings, table cells, or numb
 
 If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it.
 
+예외: 파라미터 표의 `(기본값: x)`처럼 **값을 정의하는 표준 표기**는 아사이드가 아니므로 허용한다(Rule 8·9).
+
 하위 유형을 구분할 땐 **괄호도 em-dash(`—`)도 쓰지 않고 가운뎃점(`·`)**을 쓴다. 헤딩·사이드바 항목·표 라벨 모두 동일.
 
 - ❌ `### 탈퇴 취소 — 토큰 방식`, `### 신규 로그인 — Android`, 사이드바 `탈퇴 취소 (토큰)`
 - ✅ `### 탈퇴 취소 · 토큰 방식`, `### 신규 로그인 · Android`, 사이드바 `탈퇴 취소 · 토큰`
 
-### 7. Show all parameters in code examples
+### 8. Show all parameters in code examples
 
-기본 구성: **설명** → **파라미터 표** (필요 시) → **예시 코드**
+함수 페이지는 **항상 시그니처로 시작**한다(Rule 11, 코드 우선). 시그니처는 `반환타입 Supabase.메서드(...)` 형태로 쓰고 `public`/`static`/`async` 등 수식어는 뺀다. 파라미터가 여러 줄이면 정렬해 가독성을 높인다.
 
-**시그니처 블록은 타입이 복잡할 때만** 추가한다. 판단 기준:
-- ✅ 추가: 델리게이트(`Func<...>`, `Action<...>`), 제네릭이 2단계 이상, 파라미터가 5개 이상
-- ❌ 생략: `string`, `bool`, `int` 조합의 단순 파라미터
-
-```md
-// ❌ 단순 — 시그니처 불필요
-await Supabase.TrySignOutFullyAsync(clearStorage: true, deleteUserSessionRow: true);
-
-// ✅ 복잡 — 시그니처 추가
-\`\`\`csharp
-public static async Task<IAPFacade> CreateIAPAsync(
+```csharp
+Task<IAPFacade> SupabaseIAP.CreateIAPAsync(
     string[]                              productIds,
     Func<string, bool, bool, Task<bool>>  onGrant,
     Action<IAPPurchaseFailedInfo>          onFailed  = null,
     int                                   timeoutMs = 10_000)
-\`\`\`
 ```
 
-파라미터 표는 타입 열 없이 `| 파라미터 | 설명 |` 2열로. 이름만으로 의미가 명확한 파라미터는 생략한다.
+파라미터 표는 타입 열 없이 `| 파라미터 | 설명 |` 2열로. 모든 파라미터를 표기하되 이름만으로 의미가 명확하면 생략 가능, optional은 `(기본값: x)` 표기.
 
-When a signature changes, update **all** matching examples in `docs/guide/`.
+When a signature changes, update **all** matching examples in `docs~/guide/`.
 
-### 8. 가이드 함수 블록 형식
+### 9. 가이드 함수 블록 형식
 
-`docs/guide/`의 각 공개 함수는 `####` 제목 + 아래 섹션으로 기술한다. 해당 항목이 없으면 섹션 자체를 생략한다.
+함수 블록의 **본문 구성**이다. 헤딩 레벨은 Rule 11이 정한다(단일 함수/메서드 페이지의 `#` 제목, 메서드명이 아니라 **서술형 기능 제목**). 해당 항목이 없으면 섹션 자체를 생략한다.
 
 ```md
-#### `메서드명(파라미터 나열)`
+# 기능명   ← 페이지 H1(서술형, Rule 11)
 
 ```csharp
 반환타입 Supabase.메서드명(타입 파라미터, ...)
@@ -323,13 +315,13 @@ When a signature changes, update **all** matching examples in `docs/guide/`.
 
 | 항목 | 규칙 |
 |------|------|
-| 섹션 제목 | 함수명을 `` ` `` 로 감싸 구분. 오버로드는 별도 블록 |
-| 시그니처 | `Supabase.` 접두어 사용. Rule 7과 무관하게 항상 포함 |
+| 헤딩 | 페이지 H1(서술형 기능 제목). 메서드명을 그대로 쓰지 않는다. 오버로드는 별도 페이지 |
+| 시그니처 | `Supabase.`(또는 `SupabaseIAP.`) 접두어 사용. 항상 포함, 수식어(`public`/`static`/`async`) 제외 |
 | 파라미터 표 | 타입 열 없이 2열. `(기본값: x)` 표기 포함 |
 | 반환 표 | `isSuccess` / `Success` 생략. 직접 반환 타입이나 `.Data` 프로퍼티만 기술 |
 | 실패 원인 | `SupabaseFailReason` 상수 우선, 없으면 raw 문자열 |
 
-### 9. H1 아래 본문에는 반드시 H2를 붙인다
+### 10. H1 아래 본문에는 반드시 H2를 붙인다
 
 VitePress 우측 책갈피(outline)는 `H2`(`## `)부터 표시하고 `H1`(페이지 제목)은 제외한다. 따라서 **H1 바로 아래에 헤딩 없이 실질 본문이 떠 있으면 그 내용은 책갈피에 안 잡혀 최상단 항목이 누락된다.**
 
@@ -340,11 +332,12 @@ H1과 첫 `## ` 사이에 **코드블록 / 표 / 2단락 이상**이 있으면, 
 
 예외 — **한 줄짜리 도입 문장**이나 `:::` 콜아웃만 있는 경우는 책갈피가 불필요하므로 H2를 붙이지 않는다. 페이지에 H2가 하나도 없는 단일 주제 문서(예: 단일 함수 페이지)도 그대로 둔다(책갈피 자체가 숨겨짐).
 
-### 10. 기능 페이지 캐노니컬 구조 — 코드 우선
+### 11. 기능 페이지 캐노니컬 구조 — 코드 우선
 
 API 색인이 링크하는 기능 페이지들은 **어느 페이지를 열어도 같은 구조**여야 한다. 핵심: 헤딩 바로 다음에 코드 시그니처가 와서 **코드가 눈에 띄어야** 한다 — **헤딩과 코드 사이에 설명 문장을 넣지 않는다**(설명이 길면 코드가 묻힘).
 
-1. **함수 블록 순서** (Rule 8): 헤딩 → ```csharp 시그니처(`반환타입 메서드(...)`, `public`/`static`/`async` 등 수식어 제외) → **한 줄 설명(코드 아래)** → 파라미터 표 → 반환 → 실패 원인. 코드 앞에 도입문/설명을 두지 않는다.
+1. **함수 블록 순서** (Rule 9): 헤딩 → ```csharp 시그니처(`반환타입 메서드(...)`, `public`/`static`/`async` 등 수식어 제외) → **한 줄 설명(코드 아래)** → 파라미터 표 → 반환 → 실패 원인. 코드 앞에 도입문/설명을 두지 않는다.
 2. **단일 함수 페이지**: `# 기능명` 직후 바로 시그니처. 부가 맥락(왜 쓰는지·주의사항)은 코드 아래 설명에 합치거나 `:::` 콜아웃으로 페이지 끝에 둔다.
 3. **다중 함수 페이지**: 함수가 여러 개라 코드가 많아지면 **폴더로 쪼갠다** — `<기능>/index.md`(개요 + 메서드 나열 표·결정 표로 각 페이지에 링크) + **메서드마다 별도 페이지(코드 블록 1개)**. 한 페이지에 시그니처를 2개 이상 두지 않는다. 예: `social/google/{index,setup,signin-android,signin-ios,link-android,...}`. 사이드바는 `기능`을 접이식 그룹으로 만들고 하위에 각 메서드 페이지를 둔다.
 4. 한 페이지 안에서 함수마다 같은 요소(파라미터/반환/실패 원인)는 **있으면 모두, 없으면 모두** 일관되게.
+5. **본문에 장식용 수평선(`---`)을 쓰지 않는다** — H1 도입문과 본문 사이, `##` 섹션들 사이 모두. `##`와 여백이 구분 역할을 한다. (예외: 이미지가 많은 단계별 절차 페이지의 단계 구분 `---`은 허용.)
