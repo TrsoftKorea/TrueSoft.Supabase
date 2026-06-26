@@ -22,7 +22,7 @@ namespace TrueBase.Unity
         internal static bool IsInitialized => SupabaseSDK.IsInitialized;
 
         /// <summary>현재 로그인된 세션.</summary>
-        public static SupabaseSession Session => SupabaseSDK.Session;
+        internal static SupabaseSession Session => SupabaseSDK.Session;
 
         /// <summary>현재 로그인 여부.</summary>
         public static bool IsLoggedIn => SupabaseSDK.IsLoggedIn;
@@ -288,17 +288,21 @@ namespace TrueBase.Unity
         internal static Task<bool> TryFlushUserSaveImmediateAsync(string key, int timeoutMs = 5000) =>
             SupabaseSDK.TryFlushUserSaveImmediateAsync(key, timeoutMs);
 
-        /// <summary>등록된 모든 정적 세이브를 로드합니다. 하나라도 실패하면 false를 반환합니다.</summary>
-        public static Task<bool> TryLoadAllUserSavesAsync() =>
-            SupabaseSDK.TryLoadAllUserSavesAsync();
+        /// <summary>등록된 모든 정적 세이브를 로드합니다. 하나라도 실패하면 실패를 반환합니다.</summary>
+        public static async Task<SupabaseCallResult> TryLoadAllUserSavesAsync() =>
+            await SupabaseSDK.TryLoadAllUserSavesAsync()
+                ? SupabaseCallResult.Ok
+                : SupabaseCallResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
         /// <summary>등록된 모든 정적 세이브에 즉시 전송을 요청합니다.</summary>
         internal static void RequestImmediateUserSaveStaticFlushAll() =>
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
         /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000) =>
-            SupabaseSDK.TrySaveAllAsync(timeoutMs);
+        public static async Task<SupabaseCallResult> TrySaveAllAsync(int timeoutMs = 5000) =>
+            await SupabaseSDK.TrySaveAllAsync(timeoutMs)
+                ? SupabaseCallResult.Ok
+                : SupabaseCallResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
 
         /// <summary>다른 사용자 공개 displayName 조회 (내부 Result API).</summary>
         internal static Task<SupabaseResult<string>> GetPublicDisplayNameAsync(string userId) =>

@@ -28,7 +28,8 @@ else
 | `Supabase.MyProfile.DisplayName` | 닉네임. 설정 전에는 빈 문자열 |
 | `Supabase.MyProfile.ServerCode` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
 | `Supabase.MyProfile.IsWithdrawn` | 탈퇴 예약 여부 |
-| `Supabase.UserId` | 플레이어 고유 ID. 재로그인·계정 연동 후에도 변하지 않음 |
+| `Supabase.IsLoggedIn` | 현재 로그인 여부 |
+| `Supabase.UserId` | 현재 로그인 계정 ID (`auth.users.id`) |
 | `Supabase.IsAnonymous` | 익명 로그인 여부 |
 | `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
 | `Supabase.IsLinkedWithApple` | Apple 연동 여부 |

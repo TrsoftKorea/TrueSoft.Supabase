@@ -81,7 +81,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>P — 익명 계정에 Google 연동. 익명 세션이 아니면 실패.</summary>
     private async Task LinkGoogleAsync()
     {
-        if (!SupabaseClient.IsLoggedIn || SupabaseClient.Session?.User?.IsAnonymous != true)
+        if (!SupabaseClient.IsLoggedIn || !SupabaseClient.IsAnonymous)
         {
             Debug.LogWarning("[Supabase] Google 연동 실패: 익명 세션이 아닙니다.");
             return;
@@ -223,7 +223,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
         Debug.Log($"[Supabase] 닉네임 설정 완료: {nickname}");
 
-        var myId = SupabaseClient.Session?.User?.Id;
+        var myId = SupabaseClient.UserId;
         var profile = await SupabaseClient.TryGetPublicProfileAsync(myId);
         if (profile != null) Debug.Log($"[Supabase] 프로필 — 닉네임: {profile.DisplayName}, 서버: {profile.ServerCode}");
         else                 Debug.LogWarning("[Supabase] 프로필 조회 실패.");
@@ -243,7 +243,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var serverInfo = await SupabaseClient.TryGetMyServerInfoAsync();
         Debug.Log($"[Supabase] 상태\n" +
                   $"  IsAnonymous = {SupabaseClient.IsAnonymous}\n" +
-                  $"  AccountId   = {SupabaseClient.Session?.User?.Id}\n" +
                   $"  UserId      = {SupabaseClient.UserId}\n" +
                   $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
                   $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
@@ -264,7 +263,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var accountId = SupabaseClient.Session?.User?.Id;
+        var accountId = SupabaseClient.UserId;
         var banInfo = await SupabaseClient.TryGetBanInfoAsync(accountId);
         if (banInfo == null)
             Debug.Log("[Supabase] 차단 정보 없음 (정상 계정).");

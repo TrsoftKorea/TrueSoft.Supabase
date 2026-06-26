@@ -1,15 +1,6 @@
 # 인증 API
 
-## 상태
-
-| 프로퍼티 | 설명 |
-|----------|------|
-| `Supabase.IsLoggedIn` | 현재 로그인 여부 |
-| `Supabase.Session` | 현재 로그인 세션 객체 |
-| [`Supabase.UserId`](/guide/auth/auto-login#after-login-values) | 플레이어 고유 ID. 재로그인·연동 후에도 불변 |
-| [`Supabase.IsAnonymous`](/guide/auth/auto-login#after-login-values) | 익명 로그인 여부 |
-| [`Supabase.IsLinkedWithGoogle`](/guide/auth/auto-login#after-login-values) | Google 연동 여부 |
-| [`Supabase.IsLinkedWithApple`](/guide/auth/auto-login#after-login-values) | Apple 연동 여부 |
+로그인 상태·프로필 등 값은 [로그인 후 사용 가능한 값](/guide/auth/auto-login#after-login-values)을 참고하세요.
 
 ## 로그인
 

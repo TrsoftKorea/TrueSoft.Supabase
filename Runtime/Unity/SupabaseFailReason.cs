@@ -121,5 +121,12 @@ namespace TrueBase.Unity
 
         /// <summary>지원하지 않는 로그인 방식입니다(내부 오류).</summary>
         public const string InvalidSignInMethod = "invalid_signin_method";
+
+        // ── User Save ────────────────────────────────────────────────────────────
+        /// <summary>유저 세이브 저장(플러시)에 실패했습니다(네트워크 오류 또는 타임아웃).</summary>
+        public const string UserSaveFlushFailed = "user_save_flush_failed";
+
+        /// <summary>유저 세이브 로드에 실패했습니다.</summary>
+        public const string UserSaveLoadFailed = "user_save_load_failed";
     }
 }

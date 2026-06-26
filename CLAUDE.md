@@ -68,6 +68,8 @@ Every data API comes in two forms:
 
 Use `Try*` variants in game code. Use the non-Try variants when you need to inspect `SupabaseResult` directly.
 
+**반환 타입 규칙:** 성공/실패만 알리는 `Try*` API는 **반드시 `SupabaseCallResult`를 반환**한다. 단순 `bool`을 반환하지 않는다(`SupabaseCallResult`는 암묵적 `bool` 변환을 제공하므로 `if (await Try*())` 패턴은 그대로 동작). 값을 돌려주는 `Try*`(예: `Task<string>`·상태 객체·`T`)는 그 값을 반환하고 실패 시 `defaultValue`로 폴백한다. 실패 사유는 `SupabaseFailReason` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드(`TryLoadAsync`·`TryFlushNowAsync`·`TrySaveIfChangedAsync` 등)와 생성기가 emit하는 래퍼에도 적용된다.
+
 ### account_id vs user_id
 
 - `account_id` = `auth.users.id` — the current login session identity. Changes on re-auth/account swap.
