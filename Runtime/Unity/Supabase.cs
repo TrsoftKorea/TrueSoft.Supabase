@@ -53,35 +53,6 @@ namespace TrueBase.Unity
         internal static Task<bool> EnsureInitializedAsync(int timeoutMs = SupabaseSDK.DefaultEnsureInitTimeoutMs) =>
             SupabaseSDK.EnsureInitializedAsync(timeoutMs);
 
-        /// <summary>이미 가진 Google ID 토큰으로 Supabase 세션을 맞춥니다(iOS·커스텀 OAuth·테스트 등).</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken) =>
-            SupabaseSDK.SignInWithGoogleIdTokenAsync(idToken);
-
-        /// <summary>
-        /// Android 네이티브 Google 로그인 후 Supabase 세션까지 한 번에 처리합니다.
-        /// <c>SupabaseSettings.googleWebClientId</c>(Resources)를 사용합니다.
-        /// </summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync() =>
-            SupabaseSDK.SignInWithGoogleAsync();
-
-        /// <summary>Android 네이티브 Google 계정 로그아웃 (Supabase 세션은 유지).</summary>
-        internal static Task<SupabaseResult<bool>> SignOutFromGoogleAsync() =>
-            SupabaseSDK.SignOutFromGoogleAsync();
-
-        /// <summary>현재 익명 세션에 Google identity를 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousAsync() =>
-            SupabaseSDK.LinkGoogleToCurrentAnonymousAsync();
-
-        /// <summary>현재 익명 세션에 Google identity를 연동합니다(ID 토큰 직접 전달).</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> LinkGoogleToCurrentAnonymousWithIdTokenAsync(
-            string idToken,
-            string googleAccessToken = null) =>
-            SupabaseSDK.LinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
-
-        /// <summary>게스트(익명)로 가입하고 SDK 세션을 자동 설정.</summary>
-        internal static Task<SupabaseResult<SupabaseSession>> SignInAnonymouslyAsync() =>
-            SupabaseSDK.SignInAnonymouslyAsync();
-
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync"/>
         public static Task<SupabaseCallResult> TrySignInWithGoogleAsync() =>
             SupabaseSDK.TrySignInWithGoogleAsync();
