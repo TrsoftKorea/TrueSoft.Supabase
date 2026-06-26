@@ -30,6 +30,15 @@ namespace TrueBase.Unity.Auth.Apple
             if (string.IsNullOrWhiteSpace(redirectScheme))
                 return Task.FromResult(SupabaseCallResult.Fail(SupabaseFailReason.OAuthRedirectSchemeEmpty));
 
+            // PlayNANOO 연동 중에는 브라우저 흐름이 PlayNANOO를 태우지 못합니다(Apple id_token이 앱에 없음).
+            // 데이터 분기를 막기 위해 조용히 진행하지 않고 실패시킵니다. PlayNANOO WebView 토큰을 TrySignInWithAppleIdTokenAsync에 전달하세요.
+            if (SupabaseSDK.IsPlayNanooAppleInterceptionActive)
+            {
+                Debug.LogError("[Supabase.Auth.Apple] PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. " +
+                               "PlayNANOO WebView로 받은 Apple id_token을 Supabase.TrySignInWithAppleIdTokenAsync에 전달하세요.");
+                return Task.FromResult(SupabaseCallResult.Fail(SupabaseFailReason.PlayNanooBrowserAppleUnsupported));
+            }
+
             // 진행 중이던 흐름이 있으면(사용자가 브라우저에서 취소 후 재시도 등) 교체합니다.
             if (_pending != null && !_pending.Task.IsCompleted)
             {

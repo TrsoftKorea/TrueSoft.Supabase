@@ -80,6 +80,9 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleWithIdToken;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSetMyDisplayName;
 
+        /// <summary>PlayNANOO Apple 로그인 인터셉터가 등록되어 있는지 여부. 브라우저 기반 Apple 로그인 가드에 사용합니다.</summary>
+        internal static bool IsPlayNanooAppleInterceptionActive => _interceptSignInWithAppleIdToken != null;
+
         // ── PlayNANOO IAP 인터셉터 ────────────────────────────────────────────
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
         internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;

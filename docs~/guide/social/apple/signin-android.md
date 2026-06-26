@@ -20,6 +20,7 @@ Android 등 네이티브 Sign in with Apple을 쓸 수 없는 플랫폼에서, �
 | `SupabaseFailReason.OAuthRedirectSchemeEmpty` | 딥링크 스킴이 비어있음 |
 | `SupabaseFailReason.OAuthRefreshTokenMissing` | 리다이렉트에 세션 토큰이 없음 |
 | `SupabaseFailReason.OAuthLoginInProgress` | 이미 진행 중인 로그인이 있음 |
+| `SupabaseFailReason.PlayNanooBrowserAppleUnsupported` | PlayNANOO 연동 중 — 아래 참고 |
 | `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 
 ## 사전 준비
@@ -46,4 +47,8 @@ if (!ok) Debug.LogWarning($"Apple 로그인 실패: {ok.Reason}");
 
 ::: info 딥링크를 직접 처리할 때
 브라우저 실행·딥링크 수신을 게임이 자체 관리한다면, `Supabase.BuildOAuthAuthorizeUrl("apple", redirectTo)`로 URL을 만들어 열고, 돌아온 URL을 `Supabase.TryCompleteOAuthRedirectAsync(url)`에 넘기세요.
+:::
+
+::: warning PlayNANOO 병행 운영 시
+이 브라우저 흐름은 Supabase 세션만 받고 Apple id_token을 앱에 노출하지 않아 **PlayNANOO에 로그인시킬 수 없습니다**. PlayNANOO를 함께 쓰는 동안 호출하면 `PlayNanooBrowserAppleUnsupported`로 실패합니다. PlayNANOO 게임의 Android Apple 로그인은 PlayNANOO WebView로 받은 토큰을 [신규 로그인 · 커스텀](./signin-token)(`TrySignInWithAppleIdTokenAsync`)에 전달하세요 — 이 경로는 인터셉터를 타 PlayNANOO·Supabase 둘 다 적용됩니다. iOS 네이티브([신규 로그인 · iOS](./signin))는 자동으로 둘 다 적용됩니다.
 :::
