@@ -8,7 +8,7 @@
 [Edge Function 배포](/guide/start/database-setup#edge-function-deploy)가 완료되어 있어야 합니다.
 :::
 
-## 탈퇴 신청
+## 탈퇴 신청 {#request}
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
@@ -23,7 +23,7 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-## 예약 상태 확인
+## 예약 상태 확인 {#status}
 
 ```csharp
 Task<MyWithdrawalStatus> Supabase.TryGetMyWithdrawalStatusAsync()
@@ -39,7 +39,7 @@ Task<MyWithdrawalStatus> Supabase.TryGetMyWithdrawalStatusAsync()
 | `.SecondsRemaining` | `long` | 탈퇴까지 남은 시간 (초) |
 | `.WithdrawnAtIso` | `string` | 탈퇴 예약 일시 (ISO 8601) |
 
-## 탈퇴 취소
+## 탈퇴 취소 {#clear}
 
 ```csharp
 Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
