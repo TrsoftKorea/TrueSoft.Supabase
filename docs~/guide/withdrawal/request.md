@@ -23,8 +23,6 @@ Task<SupabaseCallResult> Supabase.TryRequestMyWithdrawalAsync()
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
----
-
 ## 예약 상태 확인
 
 ```csharp
@@ -40,8 +38,6 @@ Task<MyWithdrawalStatus> Supabase.TryGetMyWithdrawalStatusAsync()
 | `.IsScheduled` | `bool` | 탈퇴 유예 예약 여부 |
 | `.SecondsRemaining` | `long` | 탈퇴까지 남은 시간 (초) |
 | `.WithdrawnAtIso` | `string` | 탈퇴 예약 일시 (ISO 8601) |
-
----
 
 ## 탈퇴 취소
 

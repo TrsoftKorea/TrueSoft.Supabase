@@ -33,8 +33,6 @@ Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayN
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
----
-
 ## 닉네임 설정
 
 ```csharp
@@ -57,8 +55,6 @@ Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
 | `SupabaseFailReason.DisplayNameTooLong` | 허용 길이 초과 |
 | `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
-
----
 
 ## 다른 플레이어 조회
 
