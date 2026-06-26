@@ -11,3 +11,4 @@ Apple은 외부 SDK(Sign in with Apple)로 발급받은 ID 토큰을 직접 전�
 | 신규&nbsp;로그인 | [Apple 로그인](./signin) |
 | 게스트(익명)&nbsp;→&nbsp;연동 | [게스트 연동](./link) |
 | 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [추가 연동](./add) |
+| 연동&nbsp;해제 | [Apple 연동 해제](./unlink) |

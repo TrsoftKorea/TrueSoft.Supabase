@@ -35,6 +35,15 @@ namespace TrueBase.Unity
         /// <summary>익명 세션에서는 <c>TryLink*</c> 메서드를 사용해야 합니다.</summary>
         public const string AnonymousRequiresLink = "anonymous_session_requires_explicit_link";
 
+        /// <summary>해제하려는 provider가 현재 계정에 연동되어 있지 않습니다.</summary>
+        public const string IdentityNotLinked = "identity_not_linked";
+
+        /// <summary>마지막 남은 연동은 해제할 수 없습니다(계정에 로그인 수단이 하나도 남지 않게 됨).</summary>
+        public const string CannotUnlinkLastIdentity = "cannot_unlink_last_identity";
+
+        /// <summary>연동 해제에 실패했습니다.</summary>
+        public const string UnlinkFailed = "unlink_failed";
+
         /// <summary>익명 세션 토큰이 없습니다. 재로그인이 필요합니다.</summary>
         public const string AnonymousSessionTokenMissing = "anonymous_session_token_missing";
 

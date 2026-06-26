@@ -70,7 +70,8 @@ export default defineConfig({
                   { text: '게스트 연동 · Android', link: '/guide/social/google/link-android' },
                   { text: '게스트 연동 · iOS', link: '/guide/social/google/link-ios' },
                   { text: '추가 연동 · Android', link: '/guide/social/google/add-android' },
-                  { text: '추가 연동 · iOS', link: '/guide/social/google/add-ios' }
+                  { text: '추가 연동 · iOS', link: '/guide/social/google/add-ios' },
+                  { text: '연동 해제', link: '/guide/social/google/unlink' }
                 ]
               },
               {
@@ -80,7 +81,8 @@ export default defineConfig({
                 items: [
                   { text: '신규 로그인', link: '/guide/social/apple/signin' },
                   { text: '게스트 연동', link: '/guide/social/apple/link' },
-                  { text: '추가 연동', link: '/guide/social/apple/add' }
+                  { text: '추가 연동', link: '/guide/social/apple/add' },
+                  { text: '연동 해제', link: '/guide/social/apple/unlink' }
                 ]
               }
             ]

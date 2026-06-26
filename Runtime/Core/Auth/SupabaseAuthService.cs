@@ -143,6 +143,94 @@ namespace TrueBase.Core.Auth
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 현재 사용자에 연동된 identity 중 지정 <paramref name="provider"/>를 해제합니다.
+        /// <c>GET /auth/v1/user</c>로 identity_id를 찾은 뒤 <c>DELETE /auth/v1/user/identities/{identity_id}</c>를 호출합니다.
+        /// GoTrue 제약상 마지막 남은 identity는 해제할 수 없습니다(해제 후 로그인 수단이 0개가 되는 경우).
+        /// </summary>
+        public async Task<SupabaseResult<bool>> UnlinkIdentityByProviderAsync(string accessToken, string provider)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<bool>.Fail("access_token_empty");
+
+            if (string.IsNullOrWhiteSpace(provider))
+                return SupabaseResult<bool>.Fail("provider_empty");
+
+            var headers = new Dictionary<string, string>
+            {
+                { "apikey", _publishableKey },
+                { "Authorization", "Bearer " + accessToken.Trim() },
+                { "Content-Type", "application/json" }
+            };
+
+            // 1) 현재 사용자의 identity 목록을 조회해 해제할 identity_id를 찾습니다.
+            var userResponse = await _httpClient.SendAsync(
+                method: "GET",
+                url: $"{_supabaseUrl}/auth/v1/user",
+                jsonBody: null,
+                headers: headers);
+
+            if (userResponse == null)
+                return SupabaseResult<bool>.Fail("http_response_null");
+
+            if (userResponse.IsSuccess == false)
+            {
+                var msg = ExtractErrorMessage(userResponse.Body)
+                          ?? userResponse.ErrorMessage ?? "unlink_user_fetch_failed";
+                return SupabaseResult<bool>.Fail(msg);
+            }
+
+            string identityId;
+            int identityCount;
+            try
+            {
+                var jo = JObject.Parse(userResponse.Body);
+                if (jo["identities"] is not JArray identities)
+                    return SupabaseResult<bool>.Fail("identity_not_linked");
+
+                identityCount = identities.Count;
+                identityId = null;
+                foreach (var id in identities)
+                {
+                    var p = id?["provider"]?.Value<string>();
+                    if (string.Equals(p, provider.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        identityId = id?["identity_id"]?.Value<string>() ?? id?["id"]?.Value<string>();
+                        break;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<bool>.Fail("unlink_identity_parse_failed:" + e.Message);
+            }
+
+            if (string.IsNullOrWhiteSpace(identityId))
+                return SupabaseResult<bool>.Fail("identity_not_linked");
+
+            if (identityCount <= 1)
+                return SupabaseResult<bool>.Fail("cannot_unlink_last_identity");
+
+            // 2) identity 해제.
+            var deleteResponse = await _httpClient.SendAsync(
+                method: "DELETE",
+                url: $"{_supabaseUrl}/auth/v1/user/identities/{identityId}",
+                jsonBody: null,
+                headers: headers);
+
+            if (deleteResponse == null)
+                return SupabaseResult<bool>.Fail("http_response_null");
+
+            if (deleteResponse.IsSuccess == false)
+            {
+                var msg = ExtractErrorMessage(deleteResponse.Body)
+                          ?? deleteResponse.ErrorMessage ?? "unlink_failed";
+                return SupabaseResult<bool>.Fail(msg);
+            }
+
+            return SupabaseResult<bool>.Success(true);
+        }
+
         public async Task<SupabaseResult<SupabaseSession>> SignInWithIdTokenAsync(
             string provider,
             string idToken,

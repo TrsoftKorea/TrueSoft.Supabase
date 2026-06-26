@@ -10,7 +10,7 @@ Task<DateTime> Supabase.TryGetServerUtcNowAsync(DateTime defaultValue = default)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `default`) |
+| `defaultValue` | 조회 실패 시 반환할 기본값 (기본값: `default` → `0001-01-01`) |
 
 **반환**
 

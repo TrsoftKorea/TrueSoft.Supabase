@@ -200,6 +200,8 @@ namespace TrueBase.Unity
             public const string AuthSignOut = "Supabase.Auth.SignOut";
             public const string AuthGoogleSignOut = "Supabase.Auth.Google.SignOut";
             public const string AuthGoogleRevoke  = "Supabase.Auth.Google.Revoke";
+            public const string AuthGoogleUnlink  = "Supabase.Auth.Google.Unlink";
+            public const string AuthAppleUnlink   = "Supabase.Auth.Apple.Unlink";
             public const string BootStart = "Supabase.Boot.Start";
             public const string AuthRefreshSession = "Supabase.Auth.RefreshSession";
             public const string UserDataSave = "Supabase.UserData.Save";
@@ -652,6 +654,73 @@ namespace TrueBase.Unity
         {
             var r = await LinkGoogleNativeAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
+        }
+
+        /// <summary>
+        /// 현재 계정에서 지정 provider 연동을 해제합니다. 해제 성공 시 세션을 갱신해 <see cref="IsLinkedWithGoogle"/>/<see cref="IsLinkedWithApple"/>에 반영합니다.
+        /// 마지막 남은 연동은 해제할 수 없습니다(GoTrue 제약).
+        /// </summary>
+        public static async Task<SupabaseResult<bool>> UnlinkProviderAsync(string provider)
+        {
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
+
+            var s = _currentSession;
+            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
+                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotSignedIn);
+
+            var r = await Auth.UnlinkIdentityByProviderAsync(s.AccessToken, provider);
+            if (r == null || !r.IsSuccess)
+                return SupabaseResult<bool>.Fail(r?.ErrorMessage ?? SupabaseFailReason.UnlinkFailed);
+
+            // identity 변경을 세션(linked_providers)에 반영하기 위해 갱신합니다.
+            if (!string.IsNullOrWhiteSpace(s.RefreshToken))
+            {
+                var refreshed = await Auth.RefreshSessionAsync(s.RefreshToken);
+                if (refreshed != null && refreshed.IsSuccess && refreshed.Data != null)
+                {
+                    SetSession(refreshed.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
+                    SaveSessionToStorage();
+                }
+            }
+
+            return SupabaseResult<bool>.Success(true);
+        }
+
+        /// <summary>
+        /// 현재 계정에서 Google 연동을 해제합니다.
+        /// 해제 성공 시 네이티브 Google credential 상태도 정리해, 다음 Google 연동 때 계정 선택창이 다시 뜨도록 합니다.
+        /// </summary>
+        public static async Task<SupabaseResult<bool>> UnlinkGoogleAsync()
+        {
+            var r = await UnlinkProviderAsync("google");
+            if (r != null && r.IsSuccess)
+            {
+                // 다음 Google 연동 시 계정 선택창이 다시 나타나도록 네이티브 credential 상태를 정리합니다(베스트 에포트).
+                // Android 외 플랫폼에서는 네이티브 상태가 없어 실패할 수 있으나, 해제 자체는 이미 성공이므로 무시합니다.
+                _ = await SignOutFromGoogleAsync();
+            }
+            return r;
+        }
+
+        /// <summary>현재 계정에서 Apple 연동을 해제합니다.</summary>
+        public static Task<SupabaseResult<bool>> UnlinkAppleAsync() => UnlinkProviderAsync("apple");
+
+        /// <summary><see cref="UnlinkGoogleAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryUnlinkGoogleAsync()
+        {
+            var r = await UnlinkGoogleAsync();
+            return LogAndReturn(ApiLogTags.AuthGoogleUnlink, r);
+        }
+
+        /// <summary><see cref="UnlinkAppleAsync"/>를 값 기반으로 호출합니다.</summary>
+        public static async Task<SupabaseCallResult> TryUnlinkAppleAsync()
+        {
+            var r = await UnlinkAppleAsync();
+            return LogAndReturn(ApiLogTags.AuthAppleUnlink, r);
         }
 
         /// <summary>

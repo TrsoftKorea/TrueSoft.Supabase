@@ -22,6 +22,8 @@
 | [`TryLinkGoogleNativeAsync`](/guide/social/google/add-android) | 로그인된 계정에 Google 추가 연동 (Android) |
 | [`TryLinkGoogleWithIdTokenAsync`](/guide/social/google/add-ios) | 로그인된 계정에 Google 추가 연동 (ID 토큰) |
 | [`TryLinkAppleWithIdTokenAsync`](/guide/social/apple/add) | 로그인된 계정에 Apple 추가 연동 (ID 토큰) |
+| [`TryUnlinkGoogleAsync`](/guide/social/google/unlink) | 계정에서 Google 연동 해제 |
+| [`TryUnlinkAppleAsync`](/guide/social/apple/unlink) | 계정에서 Apple 연동 해제 |
 
 ## 로그아웃 · 보안
 
