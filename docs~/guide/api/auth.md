@@ -7,21 +7,21 @@
 | 메서드 | 설명 |
 |--------|------|
 | [`TrySignInAnonymouslyAsync`](/guide/auth/anonymous) | 게스트(익명) 로그인 |
-| [`TrySignInWithGoogleAsync`](/guide/social/google#signin-android) | Google 로그인 (Android 네이티브) |
-| [`TrySignInWithGoogleIdTokenAsync`](/guide/social/google#signin-ios) | Google 로그인 (iOS·커스텀 ID 토큰) |
-| [`TrySignInWithAppleIdTokenAsync`](/guide/social/apple#signin) | Apple 로그인 (ID 토큰) |
+| [`TrySignInWithGoogleAsync`](/guide/social/google/signin-android) | Google 로그인 (Android 네이티브) |
+| [`TrySignInWithGoogleIdTokenAsync`](/guide/social/google/signin-ios) | Google 로그인 (iOS·커스텀 ID 토큰) |
+| [`TrySignInWithAppleIdTokenAsync`](/guide/social/apple/signin) | Apple 로그인 (ID 토큰) |
 | [`SupabaseRuntime.TriggerAutoLoginAsync`](/guide/auth/auto-login) | 저장된 세션으로 자동 로그인 |
 
 ## 계정 연동
 
 | 메서드 | 설명 |
 |--------|------|
-| [`TryLinkGoogleToCurrentAnonymousAsync`](/guide/social/google#link-android) | 익명 → Google 연동 (Android) |
-| [`TryLinkGoogleToCurrentAnonymousWithIdTokenAsync`](/guide/social/google#link-ios) | 익명 → Google 연동 (ID 토큰) |
-| [`TryLinkAppleToCurrentAnonymousWithIdTokenAsync`](/guide/social/apple#link) | 익명 → Apple 연동 (ID 토큰) |
-| [`TryLinkGoogleNativeAsync`](/guide/social/google#add-android) | 로그인된 계정에 Google 추가 연동 (Android) |
-| [`TryLinkGoogleWithIdTokenAsync`](/guide/social/google#add-ios) | 로그인된 계정에 Google 추가 연동 (ID 토큰) |
-| [`TryLinkAppleWithIdTokenAsync`](/guide/social/apple#add) | 로그인된 계정에 Apple 추가 연동 (ID 토큰) |
+| [`TryLinkGoogleToCurrentAnonymousAsync`](/guide/social/google/link-android) | 익명 → Google 연동 (Android) |
+| [`TryLinkGoogleToCurrentAnonymousWithIdTokenAsync`](/guide/social/google/link-ios) | 익명 → Google 연동 (ID 토큰) |
+| [`TryLinkAppleToCurrentAnonymousWithIdTokenAsync`](/guide/social/apple/link) | 익명 → Apple 연동 (ID 토큰) |
+| [`TryLinkGoogleNativeAsync`](/guide/social/google/add-android) | 로그인된 계정에 Google 추가 연동 (Android) |
+| [`TryLinkGoogleWithIdTokenAsync`](/guide/social/google/add-ios) | 로그인된 계정에 Google 추가 연동 (ID 토큰) |
+| [`TryLinkAppleWithIdTokenAsync`](/guide/social/apple/add) | 로그인된 계정에 Apple 추가 연동 (ID 토큰) |
 
 ## 로그아웃 · 보안
 

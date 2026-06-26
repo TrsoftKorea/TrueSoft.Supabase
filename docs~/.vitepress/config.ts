@@ -59,8 +59,30 @@ export default defineConfig({
             text: '소셜 로그인',
             collapsed: false,
             items: [
-              { text: 'Google', link: '/guide/social/google' },
-              { text: 'Apple', link: '/guide/social/apple' }
+              {
+                text: 'Google',
+                link: '/guide/social/google/',
+                collapsed: true,
+                items: [
+                  { text: '대시보드 설정', link: '/guide/social/google/setup' },
+                  { text: '신규 로그인 — Android', link: '/guide/social/google/signin-android' },
+                  { text: '신규 로그인 — iOS', link: '/guide/social/google/signin-ios' },
+                  { text: '게스트 연동 — Android', link: '/guide/social/google/link-android' },
+                  { text: '게스트 연동 — iOS', link: '/guide/social/google/link-ios' },
+                  { text: '추가 연동 — Android', link: '/guide/social/google/add-android' },
+                  { text: '추가 연동 — iOS', link: '/guide/social/google/add-ios' }
+                ]
+              },
+              {
+                text: 'Apple',
+                link: '/guide/social/apple/',
+                collapsed: true,
+                items: [
+                  { text: '신규 로그인', link: '/guide/social/apple/signin' },
+                  { text: '게스트 연동', link: '/guide/social/apple/link' },
+                  { text: '추가 연동', link: '/guide/social/apple/add' }
+                ]
+              }
             ]
           }
         ]
@@ -69,14 +91,34 @@ export default defineConfig({
         text: '계정',
         link: '/guide/account/',
         items: [
-          { text: '닉네임', link: '/guide/display-name/nickname' },
-          { text: '프로필', link: '/guide/display-name/profile' },
           {
-            text: '탈퇴',
+            text: '닉네임',
+            link: '/guide/display-name/nickname/',
             collapsed: true,
             items: [
-              { text: '탈퇴 처리', link: '/guide/withdrawal/request' },
-              { text: '탈퇴 취소', link: '/guide/withdrawal/token' }
+              { text: '중복 확인', link: '/guide/display-name/nickname/check' },
+              { text: '닉네임 설정', link: '/guide/display-name/nickname/set' },
+              { text: '다른 플레이어 조회', link: '/guide/display-name/nickname/get-other' }
+            ]
+          },
+          { text: '프로필', link: '/guide/display-name/profile' },
+          {
+            text: '탈퇴 처리',
+            link: '/guide/withdrawal/request/',
+            collapsed: true,
+            items: [
+              { text: '탈퇴 신청', link: '/guide/withdrawal/request/submit' },
+              { text: '예약 상태 확인', link: '/guide/withdrawal/request/status' },
+              { text: '예약 취소', link: '/guide/withdrawal/request/cancel' }
+            ]
+          },
+          {
+            text: '탈퇴 취소 (토큰)',
+            link: '/guide/withdrawal/token/',
+            collapsed: true,
+            items: [
+              { text: '취소 토큰 발급', link: '/guide/withdrawal/token/issue' },
+              { text: '취소 토큰 사용', link: '/guide/withdrawal/token/redeem' }
             ]
           },
           { text: '서버 이주', link: '/guide/withdrawal/server-transfer' }

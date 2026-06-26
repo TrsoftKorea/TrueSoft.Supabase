@@ -14,4 +14,4 @@ Task<SupabaseCallResult> Supabase.TrySignInAnonymouslyAsync()
 | `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
-소셜 로그인은 [소셜 로그인](/guide/social/google)을, 로그인 후 데이터 로드는 [데이터 로드](/guide/user-data/load)를 참고하세요. 자동 로그인은 이 로드를 내부에서 함께 처리합니다.
+소셜 로그인은 [소셜 로그인](/guide/social/google/)을, 로그인 후 데이터 로드는 [데이터 로드](/guide/user-data/load)를 참고하세요. 자동 로그인은 이 로드를 내부에서 함께 처리합니다.

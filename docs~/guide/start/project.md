@@ -31,7 +31,7 @@
 | **Manual linking** | ON | 비회원(익명)으로 플레이하다가 소셜 계정으로 전환할 때 필요. 이 옵션이 OFF면 연동 API가 오류를 반환합니다 |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.  
-Google OAuth 설정 방법은 [소셜 로그인](/guide/social/google)을 참고하세요.
+Google OAuth 설정 방법은 [Google 대시보드 설정](/guide/social/google/setup)을 참고하세요.
 
 ## 3. 데이터베이스 SSL 설정
 
