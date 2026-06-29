@@ -80,7 +80,6 @@ export default defineConfig({
                 collapsed: true,
                 items: [
                   { text: '대시보드 설정', link: '/guide/social/apple/setup' },
-                  { text: 'Apple 설정 자세히', link: '/guide/social/apple/setup-details' },
                   { text: '신규 로그인', link: '/guide/social/apple/signin' },
                   { text: '신규 로그인 · 커스텀', link: '/guide/social/apple/signin-token' },
                   { text: '게스트 연동', link: '/guide/social/apple/link' },
@@ -234,6 +233,13 @@ export default defineConfig({
           { text: '게임 데이터', link: '/guide/api/game-data' },
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '기타', link: '/guide/api/etc' }
+        ]
+      },
+      {
+        text: '상세 정보',
+        collapsed: true,
+        items: [
+          { text: 'Apple 설정', link: '/guide/social/apple/setup-details' }
         ]
       }
     ],
