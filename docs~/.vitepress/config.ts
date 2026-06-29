@@ -79,7 +79,7 @@ export default defineConfig({
                 link: '/guide/social/apple/',
                 collapsed: true,
                 items: [
-                  { text: '대시보드·빌드 설정', link: '/guide/social/apple/setup' },
+                  { text: '대시보드 설정', link: '/guide/social/apple/setup' },
                   { text: 'Apple 설정 자세히', link: '/guide/social/apple/setup-details' },
                   { text: '신규 로그인', link: '/guide/social/apple/signin' },
                   { text: '신규 로그인 · 커스텀', link: '/guide/social/apple/signin-token' },

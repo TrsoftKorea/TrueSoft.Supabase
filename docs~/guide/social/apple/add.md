@@ -4,7 +4,7 @@
 Task<SupabaseCallResult> Supabase.TryLinkAppleNativeAsync()
 ```
 
-이미 로그인된 계정(익명 포함)에 Apple 계정을 추가로 연동합니다(iOS). [대시보드·빌드 설정](./setup)을 먼저 완료하세요.
+이미 로그인된 계정(익명 포함)에 Apple 계정을 추가로 연동합니다(iOS). [대시보드 설정](./setup)을 먼저 완료하세요.
 
 **실패 원인**
 
