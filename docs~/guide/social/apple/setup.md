@@ -6,7 +6,23 @@ Apple 로그인([신규 로그인](./signin))을 쓰기 전 준비입니다. 커
 
 - App ID에 **Sign in with Apple**을 활성화합니다.
 
-Android를 지원하면 추가로:
+## Supabase
+
+**Authentication > Providers > Apple** 패널에서 설정합니다.
+
+| 필드 | 입력 |
+|------|------|
+| **Enable&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple** | ON |
+| **Client&nbsp;IDs** | 앱 **Bundle ID** |
+| **Allow&nbsp;users&nbsp;without&nbsp;an&nbsp;email** | Apple이 이메일 주소를 반환하지 않아도 로그인을 허용합니다(선택) |
+
+게스트 연동을 쓰면 **Authentication > Sign In / Providers**에서 **Manual Linking**을 활성화합니다.
+
+## Android 추가
+
+Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합니다.
+
+**Apple Developer**
 
 - **Identifiers > Services IDs**에서 Services ID를 만들고 Sign in with Apple을 구성합니다.
   - **Identifier**: `번들ID.Services` 형식 (예: `com.company.mygame.Services`)
@@ -15,22 +31,11 @@ Android를 지원하면 추가로:
   - **Return URLs**: `https://<프로젝트-ref>.supabase.co/auth/v1/callback`
 - **Sign in with Apple Key(.p8)**를 발급해 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)합니다.
 
-## Supabase · Apple 설정
+**Supabase · Providers > Apple**
 
-**Authentication > Providers > Apple** 패널에서 설정합니다.
+- **Client IDs**: 위 Bundle ID 앞에 **Services ID를 추가**합니다(Services ID가 맨 앞). 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](./setup-details#client-ids))
+- **Secret Key (for OAuth)**: `.p8` 파일 내용이 아니라 [생성한 client_secret(JWT)](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)을 넣습니다.
 
-| 필드 | 입력 |
-|------|------|
-| **Enable&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple** | ON |
-| **Client&nbsp;IDs** | **Services ID를 맨 앞**, iOS용 **Bundle ID**를 뒤에. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](./setup-details#client-ids)) |
-| **Secret&nbsp;Key&nbsp;(for&nbsp;OAuth)** | Android에만 필요. `.p8` 키로 생성한 client_secret. iOS만 지원하면 비워둡니다 |
-| **Allow&nbsp;users&nbsp;without&nbsp;an&nbsp;email** | Apple이 이메일 주소를 반환하지 않아도 로그인을 허용합니다(선택) |
+**Supabase · URL Configuration**
 
-## Supabase · 추가 설정
-
-- **Authentication > URL Configuration > Redirect URLs**에 `{패키지이름}://login-callback`을 추가합니다(Android). 패키지 이름은 Unity **Player Settings > Other Settings > Package Name** 값입니다.
-- 게스트 연동을 쓰면 **Authentication > Sign In / Providers**에서 **Manual Linking**을 활성화합니다.
-
-::: tip
-iOS만 지원하면 **Enable**과 **Client IDs**(Bundle ID)만 채우면 됩니다.
-:::
+- **Redirect URLs**에 `{패키지이름}://login-callback`을 추가합니다. 패키지 이름은 Unity **Player Settings > Other Settings > Package Name** 값입니다.
