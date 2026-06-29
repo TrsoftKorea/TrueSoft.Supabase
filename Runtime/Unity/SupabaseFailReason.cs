@@ -94,6 +94,9 @@ namespace TrueBase.Unity
         /// <summary>네이티브 Apple 로그인은 iOS에서만 지원됩니다.</summary>
         public const string AppleSignInIosOnly = "apple_login_ios_only";
 
+        /// <summary>현재 플랫폼(에디터 등)에서는 Apple 로그인을 지원하지 않습니다. iOS·Android 실기기 빌드에서 동작합니다.</summary>
+        public const string AppleSignInUnsupportedPlatform = "apple_signin_unsupported_platform";
+
         /// <summary>웹 OAuth 리다이렉트에 세션 토큰(refresh_token)이 없습니다.</summary>
         public const string OAuthRefreshTokenMissing = "oauth_refresh_token_missing";
 

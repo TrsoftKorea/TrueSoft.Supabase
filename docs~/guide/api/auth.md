@@ -9,8 +9,7 @@
 | [`TrySignInAnonymouslyAsync`](/guide/auth/anonymous) | 게스트(익명) 로그인 |
 | [`TrySignInWithGoogleAsync`](/guide/social/google/signin-android) | Google 로그인 (Android 네이티브) |
 | [`TrySignInWithGoogleIdTokenAsync`](/guide/social/google/signin-ios) | Google 로그인 (iOS·커스텀 ID 토큰) |
-| [`TrySignInWithAppleAsync`](/guide/social/apple/signin) | Apple 로그인 (iOS 네이티브) |
-| [`TrySignInWithAppleViaBrowserAsync`](/guide/social/apple/signin-android) | Apple 로그인 (Android 브라우저) |
+| [`TrySignInWithAppleAsync`](/guide/social/apple/signin) | Apple 로그인 (플랫폼 자동) |
 | [`TrySignInWithAppleIdTokenAsync`](/guide/social/apple/signin-token) | Apple 로그인 (커스텀 ID 토큰) |
 | [`SupabaseRuntime.TriggerAutoLoginAsync`](/guide/auth/auto-login) | 저장된 세션으로 자동 로그인 |
 

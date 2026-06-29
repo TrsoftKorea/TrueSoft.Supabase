@@ -15,7 +15,7 @@ namespace TrueBase.Unity.Auth.Apple
     /// 사전 준비: Supabase 대시보드 Apple provider 설정, Redirect URL 허용목록에 딥링크 등록,
     /// AndroidManifest에 해당 스킴의 deep link intent-filter 추가.
     /// </summary>
-    public static class AppleWebLogin
+    internal static class AppleWebLogin
     {
         private static TaskCompletionSource<SupabaseCallResult> _pending;
         private static string _expectedScheme;

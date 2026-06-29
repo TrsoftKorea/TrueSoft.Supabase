@@ -11,7 +11,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `I` | Google 로그인 (Android 네이티브) |
 | `P` | 익명 계정에 Google 연동 |
 | `K` | Google 연동 해제 |
-| `B` | Apple 로그인 (iOS 네이티브) |
+| `B` | Apple 로그인 (플랫폼 자동) |
 | `H` | 익명 계정에 Apple 연동 (iOS 네이티브) |
 | `L` | Apple 연동 해제 |
 | `W` | 로그아웃 |
@@ -31,7 +31,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `C` | 탈퇴 취소 |
 
 ::: info Apple 로그인·연동 테스트
-`B`/`H`는 iOS 네이티브 Sign in with Apple을 사용하므로 **iOS 실기기·시뮬레이터에서만** 동작합니다(에디터·Android에서는 `apple_login_ios_only`). Sign in with Apple Capability는 빌드 시 자동 추가됩니다.
+`B`(로그인)는 플랫폼을 자동 분기합니다 — iOS는 네이티브, Android는 브라우저(Supabase Redirect URL에 `{패키지이름}://login-callback` 등록 필요). `H`(연동)는 iOS 네이티브만 지원합니다. **에디터에서는 둘 다 동작하지 않으므로**(각각 `apple_signin_unsupported_platform`·`apple_login_ios_only`) 실기기 빌드에서 테스트하세요. Sign in with Apple Capability는 iOS 빌드 시 자동 추가됩니다.
 :::
 
 ## SamplePlayerSave

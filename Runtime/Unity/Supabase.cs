@@ -78,19 +78,12 @@ namespace TrueBase.Unity
         public static Task<SupabaseCallResult> TryLinkAppleNativeAsync() =>
             SupabaseSDK.TryLinkAppleNativeAsync();
 
-        /// <summary>
-        /// Android 등에서 브라우저 기반 Apple 로그인을 수행합니다(Supabase 호스팅 OAuth + 딥링크).
-        /// 사전에 Supabase Apple provider·Redirect URL 허용목록·AndroidManifest 딥링크 설정이 필요합니다.
-        /// </summary>
-        public static Task<SupabaseCallResult> TrySignInWithAppleViaBrowserAsync(string redirectScheme, string redirectHost = "login-callback") =>
-            Auth.Apple.AppleWebLogin.TrySignInAsync(redirectScheme, redirectHost);
-
         /// <inheritdoc cref="SupabaseSDK.BuildOAuthAuthorizeUrl"/>
-        public static string BuildOAuthAuthorizeUrl(string provider, string redirectTo) =>
+        internal static string BuildOAuthAuthorizeUrl(string provider, string redirectTo) =>
             SupabaseSDK.BuildOAuthAuthorizeUrl(provider, redirectTo);
 
         /// <inheritdoc cref="SupabaseSDK.TryCompleteOAuthRedirectAsync"/>
-        public static Task<SupabaseCallResult> TryCompleteOAuthRedirectAsync(string redirectUrl) =>
+        internal static Task<SupabaseCallResult> TryCompleteOAuthRedirectAsync(string redirectUrl) =>
             SupabaseSDK.TryCompleteOAuthRedirectAsync(redirectUrl);
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string, string)"/>

@@ -970,12 +970,26 @@ namespace TrueBase.Unity
                 : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.AppleLinkFailed);
         }
 
-        /// <summary><see cref="SignInWithAppleAsync"/>를 값 기반으로 호출합니다.</summary>
+        /// <summary>
+        /// 플랫폼에 맞는 Apple 로그인을 자동으로 수행합니다.
+        /// iOS는 네이티브 Sign in with Apple, Android는 브라우저 기반 OAuth(설정의 딥링크 스킴 사용)로 분기합니다.
+        /// </summary>
         public static async Task<SupabaseCallResult> TrySignInWithAppleAsync()
         {
+#if UNITY_IOS && !UNITY_EDITOR
             var r = await SignInWithAppleAsync();
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            // 딥링크 스킴은 앱 패키지 이름을 그대로 사용합니다(전역 고유 → 충돌 없음). 매니페스트도 같은 값으로 자동 주입됩니다.
+            return await AppleWebLogin.TrySignInAsync(Application.identifier, AppleAndroidRedirectHost);
+#else
+            LogApiResult(ApiLogTags.AuthAppleIdToken, false, SupabaseFailReason.AppleSignInUnsupportedPlatform);
+            return SupabaseCallResult.Fail(SupabaseFailReason.AppleSignInUnsupportedPlatform);
+#endif
         }
+
+        /// <summary>브라우저 기반 Apple 로그인 딥링크의 호스트(스킴은 앱 패키지 이름을 사용). 매니페스트 자동 주입·런타임이 공유합니다.</summary>
+        public const string AppleAndroidRedirectHost = "login-callback";
 
         /// <summary><see cref="LinkAppleToCurrentAnonymousAsync"/>를 값 기반으로 호출합니다.</summary>
         public static async Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousAsync()
