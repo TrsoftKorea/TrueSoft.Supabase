@@ -12,7 +12,7 @@
 | 게스트(익명)&nbsp;→&nbsp;연동 | [게스트 연동](./link) | [ID 토큰 연동](./link-token) |
 | 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [추가 연동](./add) | [ID 토큰 추가 연동](./add-token) |
 
-::: info Android 연동(게스트·추가)
+::: info Android 게스트·추가 연동
 연동은 iOS에서 동작합니다. Android에서 연동하려면 이미 가진 Apple ID 토큰을 커스텀 메서드([게스트 연동 · 커스텀](./link-token)·[추가 연동 · 커스텀](./add-token))에 전달하세요. 신규 로그인은 [신규 로그인](./signin)이 Android도 자동 처리합니다.
 :::
 
