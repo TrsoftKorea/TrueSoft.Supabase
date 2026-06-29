@@ -10,4 +10,4 @@
 
 3. Inspector에서 **Nanoo Storage Key**를 플레이나누 콘솔에 등록한 키로 변경합니다.
 
-씬에는 `PlayNanooRuntime` / `PlayNanooLegacyRuntime` 중 하나만 둡니다. `SupabaseRuntime`을 따로 배치하지 않습니다(이 런타임들이 상속합니다).
+씬에는 `PlayNanooRuntime` / `PlayNanooLegacyRuntime` 중 하나만 둡니다. `SupabaseRuntime`을 따로 배치하지 않습니다.
