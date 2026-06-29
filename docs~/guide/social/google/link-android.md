@@ -7,7 +7,7 @@ Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
 익명 세션에 Android Play Services Google 계정을 연동합니다. 기존 익명 계정의 데이터가 그대로 이어집니다.
 
 ::: warning
-익명 세션에서는 직접 로그인 메서드 대신 이 연동 메서드를 사용하세요. 연동은 Supabase 대시보드 **Authentication > Settings > Manual linking** 이 ON일 때 동작합니다.
+익명 세션에서는 직접 로그인 메서드 대신 이 연동 메서드를 사용하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
 :::
 
 **실패 원인**

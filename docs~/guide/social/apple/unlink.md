@@ -4,7 +4,7 @@
 Task<SupabaseCallResult> Supabase.TryUnlinkAppleAsync()
 ```
 
-현재 계정에서 Apple 연동을 해제합니다. 성공하면 세션이 갱신되어 `Supabase.IsLinkedWithApple`이 `false`가 됩니다.
+현재 계정에서 Apple 연동을 해제합니다. 해제 후 `Supabase.IsLinkedWithApple`이 `false`가 됩니다.
 
 **실패 원인**
 

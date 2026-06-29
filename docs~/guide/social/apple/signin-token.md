@@ -4,7 +4,7 @@
 Task<SupabaseCallResult> Supabase.TrySignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
 ```
 
-외부 SDK·웹 OAuth 등에서 직접 받은 Apple ID 토큰으로 Supabase에 로그인합니다. iOS 기본 흐름은 [Apple 신규 로그인](./signin)을 쓰세요.
+이미 가진 Apple ID 토큰으로 로그인합니다. 토큰을 직접 넘겨야 할 때만 쓰고, 일반적으로는 [Apple 신규 로그인](./signin)을 쓰세요.
 
 **파라미터**
 

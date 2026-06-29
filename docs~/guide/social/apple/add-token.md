@@ -4,7 +4,7 @@
 Task<SupabaseCallResult> Supabase.TryLinkAppleWithIdTokenAsync(string idToken, string rawNonce = null)
 ```
 
-외부 SDK·웹 OAuth로 받은 Apple ID 토큰으로, 이미 로그인된 계정(익명 포함)에 Apple 계정을 추가 연동합니다. iOS 기본 흐름은 [Apple 추가 연동](./add)을 쓰세요.
+이미 가진 Apple ID 토큰으로, 로그인된 계정(익명 포함)에 Apple 계정을 추가로 연동합니다. 일반적으로는 [Apple 추가 연동](./add)을 쓰세요.
 
 **파라미터**
 
