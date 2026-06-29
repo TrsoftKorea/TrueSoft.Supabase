@@ -23,7 +23,7 @@ int s = PlayerSave.StageClears[4];    // 범위 밖이면 기본값 반환, 확�
 
 ## 기본값 지정 · `[AutoDefault]`
 
-기본값이 `0`/`false`/`null`이 아니어야 하면 **필드에 `[AutoDefault(...)]` 한 줄**을 붙입니다(필드마다 클래스를 만들 필요 없음).
+기본값이 `0`/`false`/`null`이 아니어야 하면 **필드에 `[AutoDefault(...)]` 한 줄**을 붙입니다.
 
 ```csharp
 [DataColumn("stage_scores")] [AutoDefault(-1)]    internal AutoList<int>        stageScores = new();  // 미클리어 = -1

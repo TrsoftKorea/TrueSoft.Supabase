@@ -1,6 +1,6 @@
 # 대시보드 설정
 
-Apple 로그인([신규 로그인](./signin))을 쓰기 전 준비입니다. 커스텀 ID 토큰 방식만 쓴다면 필요 없습니다. 각 설정의 이유·자주 나는 오류는 [Apple 설정 자세히](./setup-details)에 있습니다.
+Apple 로그인([신규 로그인](./signin))을 쓰기 전 준비입니다. 각 설정의 이유·자주 나는 오류는 [Apple 설정 자세히](./setup-details)에 있습니다.
 
 ## Apple Developer
 
