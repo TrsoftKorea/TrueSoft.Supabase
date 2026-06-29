@@ -18,7 +18,9 @@ Android를 지원하면 추가로:
 Apple Services ID의 **Return URLs**는 Supabase 콜백(`https://<프로젝트-ref>.supabase.co/auth/v1/callback`)입니다. 앱 딥링크(`{패키지이름}://login-callback`)는 Supabase **Redirect URLs**에 넣는 별개 값입니다.
 :::
 
-## Supabase · Authentication > Providers > Apple
+## Supabase · Apple 설정
+
+**Authentication > Providers > Apple** 패널에서 설정합니다.
 
 | 필드 | 입력 |
 |------|------|
@@ -36,7 +38,7 @@ Supabase는 Android(웹) OAuth의 client_id로 **목록의 첫 값**을 사용�
 Apple OAuth secret key는 6개월마다 만료됩니다. 만료 전에 새로 생성해 교체하지 않으면 Android 로그인이 실패합니다.
 :::
 
-## Supabase · 그 외 설정
+## Supabase · 추가 설정
 
 - **Authentication > URL Configuration > Redirect URLs**에 `{패키지이름}://login-callback`을 추가합니다(Android). 패키지 이름은 Unity **Player Settings > Other Settings > Package Name** 값입니다.
 - 게스트 연동을 쓰면 **Authentication > Sign In / Providers**에서 **Manual Linking**을 활성화합니다.
