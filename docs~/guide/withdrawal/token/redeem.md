@@ -10,7 +10,7 @@ Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelTo
 
 | 파라미터 | 설명 |
 |----------|------|
-| `cancelToken` | 플레이어가 입력한 취소 토큰 |
+| `cancelToken` | 플레이어가 입력한 취소 토큰. 비우면 저장된 토큰 사용 (기본값: `null`) |
 
 **실패 원인**
 
