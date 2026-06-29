@@ -23,10 +23,14 @@ Apple Services ID의 **Return URLs**는 Supabase 콜백(`https://<프로젝트-r
 | 필드 | 입력 |
 |------|------|
 | **Enable&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple** | ON |
-| **Client&nbsp;IDs** | 쉼표로 구분한 목록(여러 개 가능). iOS는 앱 **Bundle ID**, Android는 **Services ID**(`번들ID.Services`). 예: `com.company.mygame, com.company.mygame.Services` |
+| **Client&nbsp;IDs** | 쉼표로 구분한 목록. **Services ID(`번들ID.Services`)를 맨 앞**에 두고, iOS용 앱 **Bundle ID**를 뒤에 둡니다. 예: `com.company.mygame.Services, com.company.mygame` |
 | **Secret&nbsp;Key&nbsp;(for&nbsp;OAuth)** | Android에만 필요. Apple `.p8` 키로 [생성한 client_secret](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret). iOS만 지원하면 비워둡니다 |
 | **Callback&nbsp;URL&nbsp;(for&nbsp;OAuth)** | Supabase가 표시하는 값. Apple Services ID의 Return URLs에 등록할 때 이 값을 복사합니다 |
 | **Allow&nbsp;users&nbsp;without&nbsp;an&nbsp;email** | Apple '이메일 숨김' 사용자를 받으려면 ON(선택) |
+
+::: warning Client IDs 순서가 중요합니다
+Supabase는 Android(웹) OAuth의 client_id로 **목록의 첫 값**을 사용합니다. 그래서 **Services ID가 맨 앞**이어야 합니다. 번들 ID가 첫 값이면 Apple이 `invalid_request: Invalid client id or web redirect url`로 거부합니다. 한편 iOS 네이티브는 토큰의 `aud`(=번들 ID)가 **목록에 포함**되어 있으면 되므로, 번들 ID는 뒤에 두면 됩니다.
+:::
 
 ::: warning Secret Key 6개월 만료
 Apple OAuth secret key는 6개월마다 만료됩니다. 만료 전에 새로 생성해 교체하지 않으면 Android 로그인이 실패합니다.
