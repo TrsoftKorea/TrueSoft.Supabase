@@ -28,7 +28,7 @@
 |------|------|------|
 | **Allow anonymous sign-ins** | ON | 로그인 없이 바로 게임을 시작하는 익명 플레이어를 지원 |
 | **Confirm email** | OFF | 이메일 인증 없이 즉시 로그인. 게임에서 이메일 로그인을 사용하지 않으면 불필요 |
-| **Manual linking** | ON | 비회원(익명)으로 플레이하다가 소셜 계정으로 전환할 때 필요. 이 옵션이 OFF면 연동 API가 오류를 반환합니다 |
+| **Manual linking** | ON | 익명 계정을 소셜 계정으로 전환(연동)할 때 필요 |
 
 소셜 로그인을 사용한다면 **Authentication > Sign In / Providers** 에서 추가로 활성화합니다.  
 Google OAuth 설정 방법은 [Google 대시보드 설정](/guide/social/google/setup)을 참고하세요.

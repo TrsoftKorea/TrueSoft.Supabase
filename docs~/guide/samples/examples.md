@@ -30,8 +30,8 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `S` | 탈퇴 상태 조회 |
 | `C` | 탈퇴 취소 |
 
-::: info Apple 로그인·연동 테스트
-`B`(로그인)는 플랫폼을 자동 분기합니다 — iOS는 네이티브, Android는 브라우저(Supabase Redirect URL에 `{패키지이름}://login-callback` 등록 필요). `H`(연동)는 iOS 네이티브만 지원합니다. **에디터에서는 둘 다 동작하지 않으므로**(각각 `apple_signin_unsupported_platform`·`apple_login_ios_only`) 실기기 빌드에서 테스트하세요. Sign in with Apple Capability는 iOS 빌드 시 자동 추가됩니다.
+::: info
+Apple 로그인(`B`)·연동(`H`)은 실기기 빌드에서만 동작합니다(에디터 미지원). 설정은 [Apple 로그인](/guide/social/apple/)을 참고하세요.
 :::
 
 ## SamplePlayerSave
@@ -94,6 +94,6 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 }
 ```
 
-::: warning
-`alreadyVerified=true`는 서버에 이미 검증 기록이 있는 경우입니다(지급 후 크래시). DB에서 지급 여부를 확인해 중복 지급을 방지하세요.
+::: tip
+`alreadyVerified` 처리는 [중복 지급 방지](/guide/iap/advanced#duplicate-grant)를 참고하세요.
 :::

@@ -6,4 +6,4 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 [Database Setup](/guide/start/database-setup) 절차를 먼저 완료하세요.
 
-이후 Package Manager에서 `com.unity.purchasing`을 설치합니다 — **최신 버전(최소 5.1) 권장**. 5.1부터 iOS SK1 강제를 포함한 전체 기능을 지원하며, 레거시 v4(4.x) 프로젝트는 최소 4.0.0부터 호환됩니다. [버전별 차이](./versions.md#iap-versions)를 참고하세요.
+이후 Package Manager에서 `com.unity.purchasing`을 설치합니다 — **최신 버전(최소 5.1) 권장**. [버전별 차이](./versions.md#iap-versions)를 참고하세요.
