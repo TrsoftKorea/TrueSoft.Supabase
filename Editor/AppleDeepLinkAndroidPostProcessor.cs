@@ -4,7 +4,6 @@ using System.Xml;
 using UnityEditor;
 using UnityEditor.Android;
 using UnityEngine;
-using TrueBase.Unity;
 
 namespace TrueBase.Editor
 {
@@ -20,6 +19,9 @@ namespace TrueBase.Editor
 
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
 
+        // 런타임(SupabaseSDK.AppleAndroidRedirectHost)과 동일해야 합니다.
+        private const string RedirectHost = "login-callback";
+
         public void OnPostGenerateGradleAndroidProject(string path)
         {
             // 딥링크 스킴 = 앱 패키지 이름(전역 고유). 런타임도 Application.identifier로 같은 값을 사용합니다.
@@ -27,7 +29,7 @@ namespace TrueBase.Editor
             if (string.IsNullOrEmpty(scheme))
                 return;
 
-            var host = SupabaseSDK.AppleAndroidRedirectHost;
+            var host = RedirectHost;
 
             var manifestPath = Path.Combine(path, "src", "main", "AndroidManifest.xml");
             if (!File.Exists(manifestPath))
