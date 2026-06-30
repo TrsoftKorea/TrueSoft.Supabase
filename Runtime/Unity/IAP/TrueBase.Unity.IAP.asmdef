@@ -5,7 +5,9 @@
     "TrueBase.Core",
     "TrueBase.Unity",
     "Unity.Purchasing",
+    "Unity.Purchasing.Stores",
     "UnityEngine.Purchasing",
+    "UnityEngine.Purchasing.Stores",
     "Unity.Services.Core"
   ],
   "includePlatforms": [],
