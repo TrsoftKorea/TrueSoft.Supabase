@@ -8,18 +8,6 @@
     "name": "Truesoft"
   },
   "dependencies": {},
-  "versionDefines": [
-    {
-      "name": "com.unity.purchasing",
-      "expression": ">=5.0.0",
-      "define": "UNITY_IAP_V5"
-    },
-    {
-      "name": "com.unity.purchasing",
-      "expression": ">=5.1.0",
-      "define": "UNITY_IAP_V5_1"
-    }
-  ],
   "samples": [
     {
       "displayName": "Examples",
