@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
@@ -38,6 +39,33 @@ namespace TrueBase.Core.Data
                 base[index] = value;
             }
         }
+
+        // ── 안전 헬퍼 ──────────────────────────────────────────────────────────
+
+        /// <summary>범위 밖이면 확장 없이 <see cref="DefaultValue"/>를 반환합니다(<c>this[i]</c> 읽기와 동일, 의도 명시용).</summary>
+        public T GetOrDefault(int index) => this[index];
+
+        /// <summary><paramref name="count"/>개가 되도록 <see cref="DefaultValue"/>로 채웁니다(이미 크거나 같으면 그대로). <c>Count</c>를 논리 크기에 맞출 때 사용.</summary>
+        public void EnsureCount(int count)
+        {
+            while (Count < count) Add(_default);
+        }
+
+        // ── 인덱스 시프트 경고 ──────────────────────────────────────────────────
+        // AutoList의 인덱스는 슬롯 의미(예: stageId)라, 원소를 밀거나 재정렬하면 이후 인덱스↔의미 매핑이 깨집니다.
+        // 슬롯을 비우려면 제거가 아니라 this[i] = DefaultValue 로 덮어쓰세요.
+        private const string ShiftWarning =
+            "AutoList의 인덱스는 슬롯 의미가 있어 이 연산은 이후 인덱스를 밀어 매핑을 깨뜨립니다. 슬롯을 비우려면 this[i] = 기본값 을 쓰세요.";
+
+        [Obsolete(ShiftWarning)] public new void Insert(int index, T item) => base.Insert(index, item);
+        [Obsolete(ShiftWarning)] public new void InsertRange(int index, IEnumerable<T> collection) => base.InsertRange(index, collection);
+        [Obsolete(ShiftWarning)] public new void RemoveAt(int index) => base.RemoveAt(index);
+        [Obsolete(ShiftWarning)] public new void RemoveRange(int index, int count) => base.RemoveRange(index, count);
+        [Obsolete(ShiftWarning)] public new void Reverse() => base.Reverse();
+        [Obsolete(ShiftWarning)] public new void Reverse(int index, int count) => base.Reverse(index, count);
+        [Obsolete(ShiftWarning)] public new void Sort() => base.Sort();
+        [Obsolete(ShiftWarning)] public new void Sort(Comparison<T> comparison) => base.Sort(comparison);
+        [Obsolete(ShiftWarning)] public new void Sort(IComparer<T> comparer) => base.Sort(comparer);
 
         void IAutoDefaultable.SetDefaultValue(object[] values) => _default = AutoDefaultConvert.To<T>(values);
     }

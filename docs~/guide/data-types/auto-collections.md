@@ -81,3 +81,29 @@ int c = PlayerSave.Counts["ice", 9];   // 없으면 0 반환
 ```
 
 JSON에는 `{"k1":{"k2":v}}` 중첩 객체로 직렬화됩니다(`Dictionary` 중첩과 동일 형태).
+
+## 일반 리스트처럼 쓸 때 주의
+
+`AutoList`·`AutoList2D`는 `List<T>`를 상속해 대부분의 List 연산이 그대로 되지만, **인덱스가 슬롯 의미**(예: `stageClears[stageId]`)라 일반 리스트처럼 다루면 매핑이 깨질 수 있습니다.
+
+- **`Count`·`foreach`·LINQ는 실제 저장된 값만** 봅니다. 자동 확장 기본값은 미리 채워지지 않으므로, 안 쓴 슬롯은 열거·`Count`에 잡히지 않습니다.
+- **인덱스를 미는 연산은 매핑을 깨뜨립니다.** `Insert`·`RemoveAt`·`Sort`·`Reverse` 등은 호출 시 `[Obsolete]` 경고가 표시됩니다. 슬롯을 비우려면 제거가 아니라 `list[i] = 기본값`으로 덮어쓰세요.
+
+::: warning `List<T>`로 캐스팅하지 마세요
+`AutoList<T>`를 `List<T>`·`IList<T>`로 캐스팅하거나 그 타입 파라미터로 넘기면 안전 인덱서가 사라져 **범위 밖 접근이 예외**가 됩니다. 필드·프로퍼티·지역변수·파라미터를 모두 `AutoList<T>`로 유지하세요. SDK에 포함된 Roslyn 분석기가 이 변환을 **컴파일 경고(`TB0001`)로 잡아줍니다.**
+:::
+
+### 안전 헬퍼
+
+| 메서드 | 대상 | 설명 |
+|--------|------|------|
+| `GetOrDefault(i)` | `AutoList` | 범위 밖이면 기본값 반환(확장 안 함) |
+| `EnsureCount(n)` | `AutoList` | `n`칸까지 기본값으로 확장 — `Count`를 논리 크기에 맞출 때 |
+| `Row(i)` | `AutoList2D` | 행 반환, 없으면 빈 리스트(비파괴) — 행 단위 조회·LINQ |
+| `Cells()` | `AutoList2D` | 모든 셀을 행 순서로 평탄화 열거 |
+
+```csharp
+if (PlayerSave.Scores.Row(0).Count > 0) { /* ... */ }   // 예외 없이 행 조회
+int total = PlayerSave.Scores.Cells().Sum();            // 모든 셀 합
+PlayerSave.StageClears.EnsureCount(10);                 // 10칸 확보
+```

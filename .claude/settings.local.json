@@ -18,7 +18,10 @@
       "mcp__retool__retool_list_environments",
       "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__execute_sql",
       "mcp__Claude_Preview__preview_start",
-      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__search_docs"
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__search_docs",
+      "Bash(dotnet --version)",
+      "Bash(dotnet --list-sdks)",
+      "Bash(dotnet build *)"
     ]
   }
 }

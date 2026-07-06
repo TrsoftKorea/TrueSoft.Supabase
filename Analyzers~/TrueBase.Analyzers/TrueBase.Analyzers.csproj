@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    TrueBase Roslyn 분석기.
+    Unity가 컴파일하지 않도록 소스는 `Analyzers~/`(숨김 폴더)에 둡니다.
+    빌드: dotnet build -c Release
+    산출물(bin/Release/netstandard2.0/TrueBase.Analyzers.dll)을 패키지의 `Analyzers/`에 복사하고
+    RoslynAnalyzer 라벨 .meta를 함께 커밋합니다.
+    Microsoft.CodeAnalysis 3.8 = Unity 2020.2+ 호환(2022.3 포함).
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>TrueBase.Analyzers</AssemblyName>
+    <RootNamespace>TrueBase.Analyzers</RootNamespace>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

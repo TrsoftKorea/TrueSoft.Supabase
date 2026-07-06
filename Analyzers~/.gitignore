@@ -1,0 +1,6 @@
+# 분석기 빌드 산출물 — 소스만 커밋, DLL은 패키지의 Analyzers/에 배치
+bin/
+obj/
+
+# 루트 .gitignore가 *.csproj를 무시하므로, 분석기 프로젝트 파일은 여기서 다시 포함
+!*.csproj
