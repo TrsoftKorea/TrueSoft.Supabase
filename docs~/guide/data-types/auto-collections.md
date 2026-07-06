@@ -50,41 +50,53 @@ public struct Stage { public int score, stars; public Stage(int s, int st) { sco
 
 ## 이중 리스트 · `AutoList2D<T>`
 
-행·열이 모두 가변인 이중 리스트는 `AutoList2D<T>` 하나로 처리합니다. `[i, j]` 단일 인덱서로 접근하며, **읽기는 비파괴**(범위 밖이면 기본값), **쓰기만 양쪽 차원을 확장 후 저장**합니다.
+행·열이 모두 가변인 이중 리스트입니다. `grid[i]`가 **지연 프록시**를 돌려줘서 `[i][j]`·`[i, j]` 모두 **모든 경우 안전**합니다 — 읽기는 비파괴(없는 행/열이면 기본값, 아무것도 안 만듦), 쓰기는 그 시점에 행·열을 생성·저장합니다.
 
 ```csharp
 [DataColumn("scores")] [AutoDefault(-1)] internal AutoList2D<int> scores = new();   // 예: [스테이지][웨이브]
 ```
 ```csharp
-PlayerSave.Scores[5, 3] = 100;     // 행 5·열 3까지 자동 확장 후 저장
-int v = PlayerSave.Scores[5, 3];   // 범위 밖이면 -1 반환, 확장하지 않음
+PlayerSave.Scores[5][3] = 100;    // 쓰기: 행 5·열 3을 그때 생성·저장
+int a = PlayerSave.Scores[5][3];  // 읽기: 없으면 -1, 아무것도 안 만듦(비파괴)
+int b = PlayerSave.Scores[5, 3];  // [i, j]도 동일하게 동작
+
+var pos = PlayerSave.Scores[5].FindAll(n => n > 0);      // 행 연산
+PlayerSave.Scores[5].Sort();                             // 정렬
+int sum = PlayerSave.Scores[5].Where(n => n > 0).Sum();  // LINQ
 ```
 
-- JSON에는 `[[...],[...]]` 중첩 배열로 직렬화됩니다(`List<List<T>>`와 동일 형태 → 기존 컬럼과 호환).
-- `[i, j]` 한 번의 호출이라 읽기가 데이터를 만들지 않습니다 — `AutoList`를 두 번 중첩할 때 생기는 "조회가 저장이 되는" 문제가 없습니다.
-- 값 타입 `T`에 적합합니다.
+- **읽기는 절대 데이터를 만들지 않습니다** — `grid[i]`·`grid[i][j]`를 조회만 하면 행이 생기지 않습니다(`Count`도 그대로).
+- **쓰기만 생성** — `grid[i][j] = v`를 하는 그 순간에만 행·열이 만들어집니다.
+- `grid[i]`는 `Count`·`FindAll`·`Sort`·인덱서·LINQ 열거를 지원합니다. 실제 `AutoList` 행이 필요하면 `Row(i)`, 통째 교체는 `SetRow(i, …)`.
+- 프록시를 변수·파라미터·반환에 담을 땐 `AutoRow<T>` 타입으로 명명합니다: `AutoRow<int> row = grid[i];`.
+- JSON에는 `[[...],[...]]` 중첩 배열로 직렬화됩니다(기존 컬럼과 호환).
 
-::: warning
-`AutoList2D`는 `List<List<T>>`를 상속해 `[i][j]`도 컴파일되지만, 범위 밖에서 예외가 나고 자동 확장이 동작하지 않습니다. 반드시 `[i, j]`로 접근하세요.
+::: info 왜 프록시인가
+`grid[i]`는 값을 즉시 만들지 않고 `(grid, i)`만 담은 가벼운 접근자(`AutoRow<T>`)를 돌려줍니다. 읽기/쓰기 판단을 `[j]`(get/set)로 미뤄서 **조회는 비파괴, 쓰기만 저장**이 됩니다. 대신 `AutoRow<T>`는 진짜 `AutoList`가 아니므로(그 위에 없는 `Add`·`Remove` 등 List 메서드가 필요하면 `Row(i)`), `List<T>`를 받는 API엔 `Row(i)`를 넘기세요.
 :::
 
 ## 이중 딕셔너리 · `AutoDict2D<TKey1, TKey2, TValue>`
 
-2단계 딕셔너리는 `AutoDict2D`로 처리합니다. `[k1, k2]` 인덱서로 접근하며, 없는 키 조합 읽기는 기본값 반환(비파괴), 쓰기는 안쪽 딕셔너리를 자동 생성 후 저장합니다.
+2단계 딕셔너리입니다. `dict[k1]`이 **지연 프록시**를 돌려줘서 `[k1][k2]`·`[k1, k2]` 모두 **모든 경우 안전**합니다(`AutoList2D`와 동일). 읽기는 비파괴(없는 키면 기본값), 쓰기는 그 시점에 안쪽 딕셔너리를 생성·저장합니다.
 
 ```csharp
 [DataColumn("counts")] [AutoDefault(0)] internal AutoDict2D<string, int, int> counts = new();
 ```
 ```csharp
-PlayerSave.Counts["fire", 3] = 10;     // 안쪽 딕셔너리 자동 생성 후 저장
-int c = PlayerSave.Counts["ice", 9];   // 없으면 0 반환
+PlayerSave.Counts["fire"][3] = 10;    // 쓰기: 안쪽 딕셔너리를 그때 생성·저장
+int c = PlayerSave.Counts["ice"][9];  // 읽기: 없으면 0, 아무것도 안 만듦(비파괴)
+int d = PlayerSave.Counts["fire", 3]; // [k1, k2]도 동일
+
+bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 ```
 
-JSON에는 `{"k1":{"k2":v}}` 중첩 객체로 직렬화됩니다(`Dictionary` 중첩과 동일 형태).
+- 읽기는 비파괴(키 생성 없음), 쓰기만 생성 — `AutoList2D`와 동일한 지연 프록시 방식.
+- `dict[k1]`은 `Count`·`ContainsKey`·`TryGetValue`·열거를 지원합니다. 실제 `AutoDict`가 필요하면 `Inner(k1)`, 통째 설정은 `SetInner(k1, …)`. 프록시를 담을 땐 `AutoDictRow<TKey1, TKey2, TValue>` 타입으로 명명합니다.
+- JSON에는 `{"k1":{"k2":v}}` 중첩 객체로 직렬화됩니다(기존 컬럼과 호환).
 
 ## 일반 리스트처럼 쓸 때 주의
 
-`AutoList`·`AutoList2D`는 `List<T>`를 상속해 대부분의 List 연산이 그대로 되지만, **인덱스가 슬롯 의미**(예: `stageClears[stageId]`)라 일반 리스트처럼 다루면 매핑이 깨질 수 있습니다.
+`AutoList`·`AutoList2D`는 리스트를 상속해 대부분의 List 연산이 그대로 되지만, **인덱스가 슬롯 의미**(예: `stageClears[stageId]`)라 일반 리스트처럼 다루면 매핑이 깨질 수 있습니다.
 
 - **`Count`·`foreach`·LINQ는 실제 저장된 값만** 봅니다. 자동 확장 기본값은 미리 채워지지 않으므로, 안 쓴 슬롯은 열거·`Count`에 잡히지 않습니다.
 - **인덱스를 미는 연산은 매핑을 깨뜨립니다.** `Insert`·`RemoveAt`·`Sort`·`Reverse` 등은 호출 시 `[Obsolete]` 경고가 표시됩니다. 슬롯을 비우려면 제거가 아니라 `list[i] = 기본값`으로 덮어쓰세요.
