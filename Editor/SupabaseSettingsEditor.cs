@@ -133,10 +133,14 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(2);
                     using (new EditorGUILayout.HorizontalScope())
                     {
+                        // 파일 다이얼로그·DisplayDialog는 layout 스코프 도중 열면 IMGUI 그룹 스택을
+                        // 깨뜨리므로(EndLayoutGroup 오류), delayCall로 OnInspectorGUI 밖에서 실행한다.
                         if (GUILayout.Button(new GUIContent("CSV 내보내기", "컬럼 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
-                            ExportColumnsCsv();
+                            EditorApplication.delayCall += ExportColumnsCsv;
                         if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 반영"), GUILayout.Height(22)))
-                            ImportColumnsCsv();
+                            EditorApplication.delayCall += ImportColumnsCsv;
+                        if (GUILayout.Button(new GUIContent("위치…", "CSV 파일 위치 지정/변경. 지정하면 이후 내보내기·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(22), GUILayout.Width(52)))
+                            EditorApplication.delayCall += PickCsvPath;
                     }
 
                     // 미지정(정제 안 된 jsonb) 필드가 있으면 경고 + 생성 차단.
@@ -977,12 +981,13 @@ namespace TrueBase.Editor
                 return;
             }
 
-            // 마지막으로 쓴 CSV 위치를 기억해 그 폴더·파일명으로 엽니다.
-            var remembered = EditorPrefs.GetString(PrefsKeyCsvPath, "");
-            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
-            var name = string.IsNullOrEmpty(remembered) ? "user_data_columns.csv" : Path.GetFileName(remembered);
-            var path = EditorUtility.SaveFilePanel("컬럼 설정 CSV 내보내기", dir, name, "csv");
-            if (string.IsNullOrEmpty(path)) return;
+            // 기억된 경로가 있으면 다이얼로그 없이 바로 쓴다. 없을 때만 위치를 묻는다('위치…' 버튼으로 변경 가능).
+            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            if (string.IsNullOrEmpty(path))
+            {
+                path = EditorUtility.SaveFilePanel("컬럼 설정 CSV 내보내기", "", "user_data_columns.csv", "csv");
+                if (string.IsNullOrEmpty(path)) return;
+            }
 
             var sb = new System.Text.StringBuilder();
             sb.Append("column,field,type,priority,default,include\n");
@@ -1001,7 +1006,7 @@ namespace TrueBase.Editor
             {
                 File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
                 EditorPrefs.SetString(PrefsKeyCsvPath, path);   // 위치 기억
-                EditorUtility.DisplayDialog(DialogTitle, $"{_editableColumns.Count}개 컬럼을 내보냈습니다.\n{path}", "확인");
+                Debug.Log($"[Supabase] CSV 내보내기 완료: {_editableColumns.Count}개 컬럼 → {path}");
             }
             catch (Exception e)
             {
@@ -1017,10 +1022,13 @@ namespace TrueBase.Editor
                 return;
             }
 
-            var remembered = EditorPrefs.GetString(PrefsKeyCsvPath, "");
-            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
-            var path = EditorUtility.OpenFilePanel("컬럼 설정 CSV 불러오기", dir, "csv");
-            if (string.IsNullOrEmpty(path)) return;
+            // 기억된 파일이 있으면 다이얼로그 없이 바로 읽는다. 없거나 파일이 사라졌을 때만 위치를 묻는다.
+            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                path = EditorUtility.OpenFilePanel("컬럼 설정 CSV 불러오기", "", "csv");
+                if (string.IsNullOrEmpty(path)) return;
+            }
             EditorPrefs.SetString(PrefsKeyCsvPath, path);   // 위치 기억
 
             string[] lines;
@@ -1061,13 +1069,27 @@ namespace TrueBase.Editor
 
             _previewText = ""; // 변경됐으니 재생성 필요
 
-            var msg = $"{applied}개 컬럼에 적용했습니다.";
+            Debug.Log($"[Supabase] CSV 불러오기 완료: {applied}개 컬럼 적용 ← {path}");
+            // 일치하는 컬럼이 없는 행이 있으면(오타·스키마 불일치) 팝업으로 알린다.
             if (unknown.Count > 0)
             {
                 var shown = unknown.Take(10).ToArray();
-                msg += $"\n\n일치하는 컬럼이 없어 건너뜀({unknown.Count}): " + string.Join(", ", shown) + (unknown.Count > shown.Length ? " …" : "");
+                EditorUtility.DisplayDialog(DialogTitle,
+                    $"{applied}개 컬럼에 적용했습니다.\n\n일치하는 컬럼이 없어 건너뜀({unknown.Count}): "
+                    + string.Join(", ", shown) + (unknown.Count > shown.Length ? " …" : ""), "확인");
             }
-            EditorUtility.DisplayDialog(DialogTitle, msg, "확인");
+        }
+
+        /// <summary>CSV 파일 위치(내보내기·불러오기 공용)를 지정/변경합니다.</summary>
+        private static void PickCsvPath()
+        {
+            var remembered = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
+            var name = string.IsNullOrEmpty(remembered) ? "user_data_columns.csv" : Path.GetFileName(remembered);
+            var path = EditorUtility.SaveFilePanel("CSV 파일 위치 지정", dir, name, "csv");
+            if (string.IsNullOrEmpty(path)) return;
+            EditorPrefs.SetString(PrefsKeyCsvPath, path);
+            Debug.Log($"[Supabase] CSV 위치 설정: {path}");
         }
 
         /// <summary>CLR 타입 문자열을 컬럼에 적용합니다(가져오기 시 862–877 로직과 동일).</summary>
