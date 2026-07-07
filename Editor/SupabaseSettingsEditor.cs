@@ -35,6 +35,7 @@ namespace TrueBase.Editor
         private static bool                 _columnsFetched;
         private static List<string>         _warnings        = new List<string>();
         private static Vector2              _columnScroll;
+        private static string              _columnFilter = "";   // 컬럼 표시 필터(생성엔 영향 없음)
         private static string               _previewText     = "";
         private static Vector2              _previewScroll;
         private static GUIStyle             _ambiguousStyle;
@@ -123,6 +124,11 @@ namespace TrueBase.Editor
                 {
                     if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
                         FetchColumns((SupabaseSettings)target);
+                    if (GUILayout.Button(new GUIContent("한 번에 업데이트", "가져오기 → 소스 생성 → 저장을 한 번에. 기존 클래스가 있으면 그 파일에 바로 저장합니다."), GUILayout.Height(22)))
+                    {
+                        var s = (SupabaseSettings)target;
+                        EditorApplication.delayCall += () => UpdateOneClick(s);
+                    }
                 }
 
                 if (_columnsFetched && _editableColumns.Count > 0)
@@ -745,6 +751,24 @@ namespace TrueBase.Editor
 
         private static void DrawColumnList()
         {
+            // 검색 필터 — 표시만 거릅니다(생성 대상엔 영향 없음).
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                _columnFilter = EditorGUILayout.TextField(new GUIContent("검색", "컬럼명·필드명으로 표시를 거릅니다. 생성 대상엔 영향 없습니다."), _columnFilter);
+                using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(_columnFilter)))
+                    if (GUILayout.Button("×", GUILayout.Width(22))) { _columnFilter = ""; GUI.FocusControl(null); }
+            }
+
+            var visible = _editableColumns;
+            if (!string.IsNullOrWhiteSpace(_columnFilter))
+            {
+                var f = _columnFilter.Trim();
+                visible = _editableColumns.Where(c =>
+                    (c.Name != null && c.Name.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (c.FieldName != null && c.FieldName.IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0)).ToList();
+                EditorGUILayout.LabelField($"필터 표시: {visible.Count} / {_editableColumns.Count}", EditorStyles.miniLabel);
+            }
+
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(92));
@@ -758,12 +782,12 @@ namespace TrueBase.Editor
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
-            var listHeight = Mathf.Min(_editableColumns.Count * rowHeight + 4f, 240f);
+            var listHeight = Mathf.Min(Mathf.Max(1, visible.Count) * rowHeight + 4f, 240f);
 
             using (var sv = new EditorGUILayout.ScrollViewScope(_columnScroll, GUILayout.Height(listHeight)))
             {
                 _columnScroll = sv.scrollPosition;
-                foreach (var col in _editableColumns)
+                foreach (var col in visible)
                 {
                     // 모든 칼럼은 고정 폭 → 행마다 정렬. 가변 폭 요소 컨트롤은 맨 끝에 둬서 어떤 칼럼도 밀지 않는다.
                     using (new EditorGUILayout.HorizontalScope())
@@ -930,6 +954,28 @@ namespace TrueBase.Editor
             {
                 EditorUtility.DisplayDialog(DialogTitle, "가져오기에 실패했습니다.\n" + e.Message, "확인");
             }
+        }
+
+        /// <summary>가져오기 → 소스 생성 → 저장을 한 번에. 기존 클래스가 있으면 그 경로에 바로 저장합니다.</summary>
+        private static void UpdateOneClick(SupabaseSettings settings)
+        {
+            FetchColumns(settings);
+            if (!_columnsFetched) return;   // 실패 시 FetchColumns가 이미 알림
+
+            var unspecified = CollectUnspecifiedColumnNames();
+            if (unspecified.Count > 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "타입 미지정 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unspecified)
+                    + "\n\n인스펙터에서 타입을 지정한 뒤 다시 시도하세요.", "확인");
+                return;
+            }
+
+            BuildPreviewFromColumns();
+            if (string.IsNullOrWhiteSpace(_previewText)) return;
+
+            SaveToProject();
+            Debug.Log($"[Supabase] 유저 데이터 클래스 업데이트 완료 ({_editableColumns.Count}개 컬럼).");
         }
 
         /// <summary>
