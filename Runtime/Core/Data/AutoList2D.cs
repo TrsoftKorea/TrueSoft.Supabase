@@ -143,8 +143,24 @@ namespace TrueBase.Core.Data
         public int LastIndexOf(T item) => L?.LastIndexOf(item) ?? -1;
         public bool Exists(Predicate<T> match) => L?.Exists(match) ?? false;
         public bool TrueForAll(Predicate<T> match) => L?.TrueForAll(match) ?? true;
-        public T Find(Predicate<T> match) { var l = L; return l != null ? l.Find(match) : default; }
-        public T FindLast(Predicate<T> match) { var l = L; return l != null ? l.FindLast(match) : default; }
+
+        /// <summary>조건에 맞는 첫 원소. 없거나 없는 행이면 <see cref="AutoList2D{T}.DefaultValue"/>(인덱서와 동일).</summary>
+        public T Find(Predicate<T> match)
+        {
+            var l = L;
+            if (l == null) return _owner.DefaultValue;
+            int idx = l.FindIndex(match);
+            return idx >= 0 ? l[idx] : _owner.DefaultValue;
+        }
+
+        /// <summary>조건에 맞는 마지막 원소. 없거나 없는 행이면 <see cref="AutoList2D{T}.DefaultValue"/>(인덱서와 동일).</summary>
+        public T FindLast(Predicate<T> match)
+        {
+            var l = L;
+            if (l == null) return _owner.DefaultValue;
+            int idx = l.FindLastIndex(match);
+            return idx >= 0 ? l[idx] : _owner.DefaultValue;
+        }
         public List<T> FindAll(Predicate<T> match) => L?.FindAll(match) ?? new List<T>();
         public int FindIndex(Predicate<T> match) => L?.FindIndex(match) ?? -1;
         public int FindLastIndex(Predicate<T> match) => L?.FindLastIndex(match) ?? -1;

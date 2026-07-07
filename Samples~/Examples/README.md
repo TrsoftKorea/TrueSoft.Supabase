@@ -5,6 +5,7 @@
 **파일 구성:**
 - `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트 (`StaticUserSave` 상속 예시인 `SamplePlayerSave` 클래스 포함)
 - `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`com.unity.purchasing` 설치 시 자동 컴파일)
+- `SampleAutoCollections.cs` — 자동 확장 2D 컬렉션(`AutoList2D`/`AutoDict2D`) 예제 (로그인·네트워크 불필요)
 
 ---
 
@@ -69,6 +70,16 @@ IAP는 로그인 감지 시 자동으로 초기화됩니다.
 | 키 | 기능 |
 |----|------|
 | **B** | 아이템 구매 (결제창 표시, IAP 초기화 완료 후 동작) |
+
+**SampleAutoCollections** (로그인·네트워크·설정 불필요):
+
+빈 GameObject에 이 컴포넌트만 붙이면 됩니다. `SupabaseRuntime` 없이 단독으로 동작합니다.
+
+| 키 | 기능 |
+|----|------|
+| **1** | AutoList2D 데모 (스테이지 × 웨이브 최고점수) |
+| **2** | AutoDict2D 데모 (지역 × 몬스터 처치수) |
+| **3** | 저장 → 로드 왕복 (직렬화) |
 
 선택 기능(Edge Function, 공개 프로필 등)은 `ExampleSupabaseScenarios.cs`의 주석을 해제하면 사용할 수 있습니다.
 

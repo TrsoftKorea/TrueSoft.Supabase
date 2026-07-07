@@ -1,5 +1,9 @@
 # 자동 확장 컬렉션
 
+::: tip 실행 가능한 예제
+`Examples` 샘플의 `SampleAutoCollections` 컴포넌트를 빈 GameObject에 붙이고 Play 후 **1·2·3** 키를 누르면 2D 컬렉션 동작이 Console에 출력됩니다(로그인·네트워크 불필요).
+:::
+
 ## 기본 사용법
 
 게임 버전업으로 크기가 늘어나는 컬렉션(예: 3 → 5 스테이지)은 매 접속마다 칸을 미리 늘려두는 선작업이 번거롭습니다. `AutoList<T>` / `AutoDict<TKey,TValue>`를 쓰면 그 작업이 사라집니다.
@@ -73,6 +77,12 @@ int sum = PlayerSave.Scores[5].Where(n => n > 0).Sum();  // LINQ
 
 ::: info 왜 프록시인가
 `grid[i]`는 값을 즉시 만들지 않고 `(grid, i)`만 담은 가벼운 접근자(`AutoRow<T>`)를 돌려줍니다. 읽기/쓰기 판단을 `[j]`(get/set)로 미뤄서 **조회는 비파괴, 쓰기만 저장**이 됩니다. `AutoRow<T>`는 `IList<T>`를 구현하므로 `IList<T>`·`IEnumerable<T>`를 받는 API엔 그대로 넘길 수 있습니다. 다만 구체 타입 `List<T>`는 아니므로, `List<int> row = grid[i]`(직접 대입)나 `List<T>`를 요구하는 API엔 `Row(i)`(진짜 `AutoList<int>`)를 쓰세요.
+:::
+
+::: tip 성능 · hot path
+`grid[i]`/`dict[k1]`는 접근마다 작은 프록시를 **할당**합니다. 세이브 데이터 접근엔 무해하지만, **매 프레임 큰 격자를 훑는** 코드라면 무할당 경로를 쓰세요:
+- **단일 셀** → `grid[i, j]` / `dict[k1, k2]` (프록시를 안 거침, 무할당)
+- **행/안쪽 반복** → `var row = grid[i]`로 한 번만 받아 재사용, 또는 `Row(i)`·`Inner(k1)`(기존 행/키는 저장된 객체를 그대로 반환 → 무할당)
 :::
 
 ## 이중 딕셔너리 · `AutoDict2D<TKey1, TKey2, TValue>`
