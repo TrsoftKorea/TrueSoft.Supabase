@@ -17,6 +17,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
         private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";
         private const string PrefsKeyColumnDefaults    = "TrueBase.PlayerSave.ColumnDefaults";
+        private const string PrefsKeyCsvPath           = "TrueBase.PlayerSave.CsvPath";
         private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
         private const string ClassName   = "PlayerSave";
@@ -976,7 +977,11 @@ namespace TrueBase.Editor
                 return;
             }
 
-            var path = EditorUtility.SaveFilePanel("컬럼 설정 CSV 내보내기", "", "user_data_columns.csv", "csv");
+            // 마지막으로 쓴 CSV 위치를 기억해 그 폴더·파일명으로 엽니다.
+            var remembered = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
+            var name = string.IsNullOrEmpty(remembered) ? "user_data_columns.csv" : Path.GetFileName(remembered);
+            var path = EditorUtility.SaveFilePanel("컬럼 설정 CSV 내보내기", dir, name, "csv");
             if (string.IsNullOrEmpty(path)) return;
 
             var sb = new System.Text.StringBuilder();
@@ -995,6 +1000,7 @@ namespace TrueBase.Editor
             try
             {
                 File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
+                EditorPrefs.SetString(PrefsKeyCsvPath, path);   // 위치 기억
                 EditorUtility.DisplayDialog(DialogTitle, $"{_editableColumns.Count}개 컬럼을 내보냈습니다.\n{path}", "확인");
             }
             catch (Exception e)
@@ -1011,8 +1017,11 @@ namespace TrueBase.Editor
                 return;
             }
 
-            var path = EditorUtility.OpenFilePanel("컬럼 설정 CSV 불러오기", "", "csv");
+            var remembered = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
+            var path = EditorUtility.OpenFilePanel("컬럼 설정 CSV 불러오기", dir, "csv");
             if (string.IsNullOrEmpty(path)) return;
+            EditorPrefs.SetString(PrefsKeyCsvPath, path);   // 위치 기억
 
             string[] lines;
             try { lines = File.ReadAllLines(path); }
