@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace TrueBase.Core.Data
@@ -9,8 +10,8 @@ namespace TrueBase.Core.Data
     /// <list type="bullet">
     /// <item><c>dict[k1][k2]</c> — <b>읽기는 비파괴</b>(없는 키면 기본값, 아무것도 만들지 않음). <b>쓰기는 그 시점에 안쪽 딕셔너리를 생성·저장</b>.</item>
     /// <item><c>dict[k1, k2]</c> — 한 번의 호출로 동일하게 동작.</item>
-    /// <item><c>dict[k1]</c>(=<see cref="AutoDictRow{TKey1,TKey2,TValue}"/>)은 <c>Count</c>·<c>ContainsKey</c>·<c>TryGetValue</c>·열거를 지원합니다.
-    ///   실제 <see cref="AutoDict{TKey,TValue}"/>가 필요하면 <see cref="Inner"/>를 쓰세요.</item>
+    /// <item><c>dict[k1]</c>(=<see cref="AutoDictRow{TKey1,TKey2,TValue}"/>)은 <see cref="IReadOnlyDictionary{TKey,TValue}"/>를 구현하고 <c>Add</c>·<c>Remove</c>·<c>Clear</c>를 지원합니다.
+    ///   실제 <see cref="AutoDict{TKey,TValue}"/>가 필요하면 <see cref="Inner"/>.</item>
     /// </list>
     /// JSON에는 <c>{"k1":{"k2":v}}</c> 중첩 객체로 직렬화됩니다(기존 컬럼과 호환).
     /// 기본값은 <c>default(TValue)</c>이며, 필드에 <see cref="AutoDefaultAttribute"/>로 바꿀 수 있습니다.
@@ -81,41 +82,54 @@ namespace TrueBase.Core.Data
 
     /// <summary>
     /// <see cref="AutoDict2D{TKey1,TKey2,TValue}"/>의 바깥 키 접근 프록시. <c>dict[k1]</c>이 반환합니다.
-    /// <c>[k2]</c> 읽기는 비파괴(없으면 기본값), 쓰기는 그 시점에 안쪽 딕셔너리를 생성·저장합니다.
-    /// <c>Count</c>·<c>ContainsKey</c>·<c>TryGetValue</c>·열거를 지원합니다. 실제 딕셔너리가 필요하면 <see cref="AutoDict2D{TKey1,TKey2,TValue}.Inner"/>.
+    /// <see cref="IReadOnlyDictionary{TKey,TValue}"/>를 구현하고 <c>Add</c>·<c>Remove</c>·<c>Clear</c>를 지원합니다.
+    /// <b>읽기는 비파괴</b>(없으면 기본값), <b>쓰기는 그 시점에 안쪽 딕셔너리를 생성·저장</b>합니다. 진짜 딕셔너리가 필요하면 <see cref="AutoDict2D{TKey1,TKey2,TValue}.Inner"/>.
     /// </summary>
-    public sealed class AutoDictRow<TKey1, TKey2, TValue> : IReadOnlyCollection<KeyValuePair<TKey2, TValue>>
+    public sealed class AutoDictRow<TKey1, TKey2, TValue> : IReadOnlyDictionary<TKey2, TValue>
     {
         private readonly AutoDict2D<TKey1, TKey2, TValue> _owner;
         private readonly TKey1 _k1;
 
         internal AutoDictRow(AutoDict2D<TKey1, TKey2, TValue> owner, TKey1 k1) { _owner = owner; _k1 = k1; }
 
-        /// <summary>이 바깥 키에 저장된 안쪽 항목 수(없으면 0).</summary>
-        public int Count => _owner.InnerOrNull(_k1)?.Count ?? 0;
+        // 저장된 안쪽 딕셔너리(없으면 null)
+        private AutoDict<TKey2, TValue> D => _owner.InnerOrNull(_k1);
+
+        public int Count => D?.Count ?? 0;
 
         /// <summary>안쪽 키 <paramref name="key2"/> 접근. 읽기는 비파괴(없으면 기본값), 쓰기는 안쪽 딕셔너리를 생성·저장.</summary>
         public TValue this[TKey2 key2]
         {
-            get { var inner = _owner.InnerOrNull(_k1); return inner != null ? inner[key2] : _owner.DefaultValue; }
+            get { var d = D; return d != null ? d[key2] : _owner.DefaultValue; }
             set => _owner.EnsureInner(_k1)[key2] = value;
         }
 
-        public bool ContainsKey(TKey2 key2) => _owner.InnerOrNull(_k1)?.ContainsKey(key2) ?? false;
+        public IEnumerable<TKey2> Keys { get { var d = D; return d != null ? d.Keys : Enumerable.Empty<TKey2>(); } }
+        public IEnumerable<TValue> Values { get { var d = D; return d != null ? d.Values : Enumerable.Empty<TValue>(); } }
+
+        public bool ContainsKey(TKey2 key2) => D?.ContainsKey(key2) ?? false;
+        public bool ContainsValue(TValue value) => D?.ContainsValue(value) ?? false;
 
         public bool TryGetValue(TKey2 key2, out TValue value)
         {
-            var inner = _owner.InnerOrNull(_k1);
-            if (inner != null && inner.TryGetValue(key2, out value)) return true;
+            var d = D;
+            if (d != null && d.TryGetValue(key2, out value)) return true;
             value = _owner.DefaultValue;
             return false;
         }
 
+        // ── 쓰기 (그 시점에 안쪽 딕셔너리 생성·저장) ──
+        public void Add(TKey2 key2, TValue value) => _owner.EnsureInner(_k1).Add(key2, value);
+
+        // ── 삭제 (없으면 no-op) ──
+        public bool Remove(TKey2 key2) => D?.Remove(key2) ?? false;
+        public void Clear() => D?.Clear();
+
         public IEnumerator<KeyValuePair<TKey2, TValue>> GetEnumerator()
         {
-            var inner = _owner.InnerOrNull(_k1);
-            if (inner == null) yield break;
-            foreach (var kv in inner) yield return kv;
+            var d = D;
+            if (d == null) yield break;
+            foreach (var kv in d) yield return kv;
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

@@ -10,8 +10,8 @@ namespace TrueBase.Core.Data
     /// <list type="bullet">
     /// <item><c>grid[i][j]</c> — <b>읽기는 비파괴</b>(없는 행/열이면 기본값, 아무것도 만들지 않음). <b>쓰기는 그 시점에 행·열을 생성·저장</b>.</item>
     /// <item><c>grid[i, j]</c> — 한 번의 호출로 동일하게 동작.</item>
-    /// <item><c>grid[i]</c>(=<see cref="AutoRow{T}"/>)는 <c>Count</c>·<c>FindAll</c>·<c>Sort</c>·인덱서·LINQ 열거를 지원합니다.
-    ///   실제 <see cref="AutoList{T}"/> 행이 필요하면 <see cref="Row"/>를 쓰세요.</item>
+    /// <item><c>grid[i]</c>(=<see cref="AutoRow{T}"/>)는 <see cref="IList{T}"/>를 구현해 List처럼 씁니다.
+    ///   실제 <see cref="AutoList{T}"/> 행이 필요하면 <see cref="Row"/>.</item>
     /// </list>
     /// JSON에는 <c>[[...],[...]]</c> 중첩 배열로 직렬화됩니다(기존 컬럼과 호환).
     /// 기본값은 <c>default(T)</c>이며, 필드에 <see cref="AutoDefaultAttribute"/>로 바꿀 수 있습니다.
@@ -97,19 +97,22 @@ namespace TrueBase.Core.Data
     }
 
     /// <summary>
-    /// <see cref="AutoList2D{T}"/>의 행 접근 프록시. <c>grid[i]</c>가 반환합니다.
-    /// <c>[j]</c> 읽기는 비파괴(없으면 기본값), 쓰기는 그 시점에 행을 생성·저장합니다.
-    /// <c>Count</c>·<c>FindAll</c>·<c>Sort</c>·인덱서·LINQ 열거를 지원합니다. 실제 행이 필요하면 <see cref="AutoList2D{T}.Row"/>.
+    /// <see cref="AutoList2D{T}"/>의 행 접근 프록시. <c>grid[i]</c>가 반환합니다. <see cref="IList{T}"/>를 구현해 List처럼 씁니다.
+    /// <b>읽기는 비파괴</b>(없는 행/열이면 기본값, 열거·검색은 저장분만), <b>추가/삽입/인덱서 쓰기는 그 시점에 행을 생성·저장</b>합니다.
+    /// 진짜 <see cref="AutoList{T}"/>가 필요하면 <see cref="AutoList2D{T}.Row"/>.
     /// </summary>
-    public sealed class AutoRow<T> : IReadOnlyList<T>
+    public sealed class AutoRow<T> : IList<T>, IReadOnlyList<T>
     {
         private readonly AutoList2D<T> _owner;
         private readonly int _i;
 
         internal AutoRow(AutoList2D<T> owner, int i) { _owner = owner; _i = i; }
 
-        /// <summary>이 행에 실제 저장된 원소 수(없는 행이면 0).</summary>
-        public int Count => _owner.RawRowOrNull(_i)?.Count ?? 0;
+        // 저장된 행(List<T>로 업캐스트, 없으면 null) — List 기본 메서드 위임용
+        private List<T> L => _owner.RawRowOrNull(_i);
+
+        public int Count => L?.Count ?? 0;
+        public bool IsReadOnly => false;
 
         /// <summary>열 <paramref name="j"/> 접근. 읽기는 비파괴(없으면 기본값), 쓰기는 이 행을 생성·저장 후 열 확장.</summary>
         public T this[int j]
@@ -118,27 +121,41 @@ namespace TrueBase.Core.Data
             set => _owner.EnsureRow(_i)[j] = value;
         }
 
-        /// <summary>조건에 맞는 원소들을 반환합니다(없는 행이면 빈 리스트).</summary>
-        public List<T> FindAll(Predicate<T> match)
-            => _owner.RawRowOrNull(_i)?.FindAll(match) ?? new List<T>();
+        // ── 추가/삽입 (쓰기 → 그 시점에 행 생성·저장) ──
+        public void Add(T item) => _owner.EnsureRow(_i).Add(item);
+        public void AddRange(IEnumerable<T> collection) => ((List<T>)_owner.EnsureRow(_i)).AddRange(collection);
+        public void Insert(int index, T item) => ((List<T>)_owner.EnsureRow(_i)).Insert(index, item);
+        public void InsertRange(int index, IEnumerable<T> collection) => ((List<T>)_owner.EnsureRow(_i)).InsertRange(index, collection);
 
-        /// <summary>이 행의 값을 정렬합니다(없는 행이면 no-op).</summary>
-        public void Sort()
-        {
-            var r = _owner.RawRowOrNull(_i);
-            if (r != null) ((List<T>)r).Sort();
-        }
+        // ── 삭제/정렬 (없는 행이면 no-op) ──
+        public bool Remove(T item) => L?.Remove(item) ?? false;
+        public void RemoveAt(int index) => L?.RemoveAt(index);
+        public int RemoveAll(Predicate<T> match) => L?.RemoveAll(match) ?? 0;
+        public void RemoveRange(int index, int count) => L?.RemoveRange(index, count);
+        public void Clear() => L?.Clear();
+        public void Sort() => L?.Sort();
+        public void Sort(Comparison<T> comparison) => L?.Sort(comparison);
+        public void Reverse() => L?.Reverse();
 
-        /// <summary>이 행의 값을 지정 비교자로 정렬합니다(없는 행이면 no-op).</summary>
-        public void Sort(Comparison<T> comparison)
-        {
-            var r = _owner.RawRowOrNull(_i);
-            if (r != null) ((List<T>)r).Sort(comparison);
-        }
+        // ── 조회 (저장분 대상, List<T>와 동일 시맨틱) ──
+        public bool Contains(T item) => L?.Contains(item) ?? false;
+        public int IndexOf(T item) => L?.IndexOf(item) ?? -1;
+        public int LastIndexOf(T item) => L?.LastIndexOf(item) ?? -1;
+        public bool Exists(Predicate<T> match) => L?.Exists(match) ?? false;
+        public bool TrueForAll(Predicate<T> match) => L?.TrueForAll(match) ?? true;
+        public T Find(Predicate<T> match) { var l = L; return l != null ? l.Find(match) : default; }
+        public T FindLast(Predicate<T> match) { var l = L; return l != null ? l.FindLast(match) : default; }
+        public List<T> FindAll(Predicate<T> match) => L?.FindAll(match) ?? new List<T>();
+        public int FindIndex(Predicate<T> match) => L?.FindIndex(match) ?? -1;
+        public int FindLastIndex(Predicate<T> match) => L?.FindLastIndex(match) ?? -1;
+        public List<T> GetRange(int index, int count) => L?.GetRange(index, count) ?? new List<T>();
+        public void ForEach(Action<T> action) => L?.ForEach(action);
+        public T[] ToArray() => L?.ToArray() ?? Array.Empty<T>();
+        public void CopyTo(T[] array, int arrayIndex) => L?.CopyTo(array, arrayIndex);
 
         public IEnumerator<T> GetEnumerator()
         {
-            var r = _owner.RawRowOrNull(_i);
+            var r = L;
             if (r == null) yield break;
             for (int j = 0; j < r.Count; j++) yield return r[j];
         }

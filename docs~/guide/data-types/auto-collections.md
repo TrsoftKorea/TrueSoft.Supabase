@@ -67,12 +67,12 @@ int sum = PlayerSave.Scores[5].Where(n => n > 0).Sum();  // LINQ
 
 - **읽기는 절대 데이터를 만들지 않습니다** — `grid[i]`·`grid[i][j]`를 조회만 하면 행이 생기지 않습니다(`Count`도 그대로).
 - **쓰기만 생성** — `grid[i][j] = v`를 하는 그 순간에만 행·열이 만들어집니다.
-- `grid[i]`는 `Count`·`FindAll`·`Sort`·인덱서·LINQ 열거를 지원합니다. 실제 `AutoList` 행이 필요하면 `Row(i)`, 통째 교체는 `SetRow(i, …)`.
+- `grid[i]`(`AutoRow<T>`)는 **`IList<T>`를 구현**합니다 — `Add`·`AddRange`·`Insert`·`Remove`·`RemoveAt`·`RemoveAll`·`Clear`·`Contains`·`IndexOf`·`Find`·`FindAll`·`FindIndex`·`Sort`·`Reverse`·`ToArray`·`ForEach`·LINQ 등 List 연산을 그대로 씁니다. 실제 `AutoList` 행은 `Row(i)`, 통째 교체는 `SetRow(i, …)`.
 - 프록시를 변수·파라미터·반환에 담을 땐 `AutoRow<T>` 타입으로 명명합니다: `AutoRow<int> row = grid[i];`.
 - JSON에는 `[[...],[...]]` 중첩 배열로 직렬화됩니다(기존 컬럼과 호환).
 
 ::: info 왜 프록시인가
-`grid[i]`는 값을 즉시 만들지 않고 `(grid, i)`만 담은 가벼운 접근자(`AutoRow<T>`)를 돌려줍니다. 읽기/쓰기 판단을 `[j]`(get/set)로 미뤄서 **조회는 비파괴, 쓰기만 저장**이 됩니다. 대신 `AutoRow<T>`는 진짜 `AutoList`가 아니므로(그 위에 없는 `Add`·`Remove` 등 List 메서드가 필요하면 `Row(i)`), `List<T>`를 받는 API엔 `Row(i)`를 넘기세요.
+`grid[i]`는 값을 즉시 만들지 않고 `(grid, i)`만 담은 가벼운 접근자(`AutoRow<T>`)를 돌려줍니다. 읽기/쓰기 판단을 `[j]`(get/set)로 미뤄서 **조회는 비파괴, 쓰기만 저장**이 됩니다. `AutoRow<T>`는 `IList<T>`를 구현하므로 `IList<T>`·`IEnumerable<T>`를 받는 API엔 그대로 넘길 수 있습니다. 다만 구체 타입 `List<T>`는 아니므로, `List<int> row = grid[i]`(직접 대입)나 `List<T>`를 요구하는 API엔 `Row(i)`(진짜 `AutoList<int>`)를 쓰세요.
 :::
 
 ## 이중 딕셔너리 · `AutoDict2D<TKey1, TKey2, TValue>`
@@ -91,7 +91,7 @@ bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 ```
 
 - 읽기는 비파괴(키 생성 없음), 쓰기만 생성 — `AutoList2D`와 동일한 지연 프록시 방식.
-- `dict[k1]`은 `Count`·`ContainsKey`·`TryGetValue`·열거를 지원합니다. 실제 `AutoDict`가 필요하면 `Inner(k1)`, 통째 설정은 `SetInner(k1, …)`. 프록시를 담을 땐 `AutoDictRow<TKey1, TKey2, TValue>` 타입으로 명명합니다.
+- `dict[k1]`(`AutoDictRow<…>`)은 **`IReadOnlyDictionary<TKey2, TValue>`를 구현**하고 `Add`·`Remove`·`Clear`·`ContainsKey`·`ContainsValue`·`TryGetValue`·`Keys`·`Values`·열거를 지원합니다. 실제 `AutoDict`는 `Inner(k1)`, 통째 설정은 `SetInner(k1, …)`. 담을 땐 `AutoDictRow<TKey1, TKey2, TValue>` 타입으로 명명합니다.
 - JSON에는 `{"k1":{"k2":v}}` 중첩 객체로 직렬화됩니다(기존 컬럼과 호환).
 
 ## 일반 리스트처럼 쓸 때 주의
