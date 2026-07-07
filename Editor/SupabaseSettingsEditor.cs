@@ -129,6 +129,15 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(6);
                     DrawColumnList();
 
+                    EditorGUILayout.Space(2);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        if (GUILayout.Button(new GUIContent("CSV 내보내기", "컬럼 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                            ExportColumnsCsv();
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 반영"), GUILayout.Height(22)))
+                            ImportColumnsCsv();
+                    }
+
                     // 미지정(정제 안 된 jsonb) 필드가 있으면 경고 + 생성 차단.
                     var unspecifiedNames = CollectUnspecifiedColumnNames();
                     if (unspecifiedNames.Count > 0)
@@ -953,6 +962,187 @@ namespace TrueBase.Editor
             var resolved = ResolveColumnClrType(ec);
             if (GeneratorTypeCatalog.IsScalarTypeName(resolved)) return true;
             return GeneratorTypeCatalog.IsAutoDefaultableType(GeneratorTypeCatalog.MapToAutoType(resolved), out _);
+        }
+
+        // ── CSV 내보내기 / 불러오기 ──────────────────────────────────────────────
+        // 컬럼이 많을 때 인스펙터 행 편집 대신 스프레드시트에서 일괄 편집하기 위한 왕복.
+        // 헤더: column,field,type,priority,default,include  (column=DB명, 매칭 키)
+
+        private static void ExportColumnsCsv()
+        {
+            if (_editableColumns.Count == 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle, "먼저 '필드 목록 가져오기'로 컬럼을 불러오세요.", "확인");
+                return;
+            }
+
+            var path = EditorUtility.SaveFilePanel("컬럼 설정 CSV 내보내기", "", "user_data_columns.csv", "csv");
+            if (string.IsNullOrEmpty(path)) return;
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("column,field,type,priority,default,include\n");
+            foreach (var c in _editableColumns)
+            {
+                sb.Append(CsvEscape(c.Name)).Append(',')
+                  .Append(CsvEscape(c.FieldName)).Append(',')
+                  .Append(CsvEscape(ResolveColumnClrType(c))).Append(',')
+                  .Append(CsvEscape(PriorityLabel(c.Priority))).Append(',')
+                  .Append(CsvEscape(c.DefaultValue ?? "")).Append(',')
+                  .Append(c.Include ? "1" : "0")
+                  .Append('\n');
+            }
+
+            try
+            {
+                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
+                EditorUtility.DisplayDialog(DialogTitle, $"{_editableColumns.Count}개 컬럼을 내보냈습니다.\n{path}", "확인");
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog(DialogTitle, "내보내기 실패:\n" + e.Message, "확인");
+            }
+        }
+
+        private static void ImportColumnsCsv()
+        {
+            if (_editableColumns.Count == 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle, "먼저 '필드 목록 가져오기'로 컬럼을 불러오세요. CSV는 컬럼명으로 매칭합니다.", "확인");
+                return;
+            }
+
+            var path = EditorUtility.OpenFilePanel("컬럼 설정 CSV 불러오기", "", "csv");
+            if (string.IsNullOrEmpty(path)) return;
+
+            string[] lines;
+            try { lines = File.ReadAllLines(path); }
+            catch (Exception e) { EditorUtility.DisplayDialog(DialogTitle, "읽기 실패:\n" + e.Message, "확인"); return; }
+
+            var byName = new Dictionary<string, EditableColumn>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in _editableColumns) byName[c.Name] = c;
+
+            int applied = 0;
+            var unknown = new List<string>();
+            bool firstRow = true;
+
+            foreach (var raw in lines)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var cells = ParseCsvLine(raw);
+                if (cells.Count == 0) continue;
+
+                // 헤더 행 스킵
+                if (firstRow)
+                {
+                    firstRow = false;
+                    if (cells[0].Trim().Equals("column", StringComparison.OrdinalIgnoreCase)) continue;
+                }
+
+                var name = cells[0].Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!byName.TryGetValue(name, out var col)) { unknown.Add(name); continue; }
+
+                if (cells.Count > 1 && !string.IsNullOrWhiteSpace(cells[1])) col.FieldName = cells[1].Trim();
+                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2])) ApplyClrTypeToColumn(col, cells[2].Trim());
+                if (cells.Count > 3 && !string.IsNullOrWhiteSpace(cells[3])) col.Priority = ParsePriority(cells[3].Trim(), col.Priority);
+                if (cells.Count > 4) col.DefaultValue = cells[4];   // 빈 값도 반영(기본값 지우기 허용)
+                if (cells.Count > 5 && !string.IsNullOrWhiteSpace(cells[5])) col.Include = ParseBool(cells[5].Trim(), col.Include);
+                applied++;
+            }
+
+            _previewText = ""; // 변경됐으니 재생성 필요
+
+            var msg = $"{applied}개 컬럼에 적용했습니다.";
+            if (unknown.Count > 0)
+            {
+                var shown = unknown.Take(10).ToArray();
+                msg += $"\n\n일치하는 컬럼이 없어 건너뜀({unknown.Count}): " + string.Join(", ", shown) + (unknown.Count > shown.Length ? " …" : "");
+            }
+            EditorUtility.DisplayDialog(DialogTitle, msg, "확인");
+        }
+
+        /// <summary>CLR 타입 문자열을 컬럼에 적용합니다(가져오기 시 862–877 로직과 동일).</summary>
+        private static void ApplyClrTypeToColumn(EditableColumn col, string type)
+        {
+            var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, type);
+            if (idx >= 0)
+            {
+                col.TypeIndex    = idx;
+                col.TypeCategory = ResolveTypeCategory(type);
+            }
+            else
+            {
+                col.TypeIndex  = GeneratorTypeCatalog.CustomTypeIndex;
+                col.CustomType = type;
+                // 컬렉션류(List·배열·Dictionary)는 전체 선택지를 위해 Json 카테고리로.
+                if (TryParseDictionaryTypes(type, out _, out _)
+                    || TryParseListType(type, out _)
+                    || TryParseArrayType(type, out _))
+                    col.TypeCategory = FieldTypeCategory.Json;
+            }
+            col.IsAmbiguous = false;
+        }
+
+        private static string PriorityLabel(int p)
+        {
+            var i = Array.IndexOf(s_priorityValues, p);
+            return i >= 0 ? s_priorityOptions[i] : s_priorityOptions[0];
+        }
+
+        private static int ParsePriority(string s, int fallback)
+        {
+            var i = Array.IndexOf(s_priorityOptions, s);
+            if (i >= 0) return s_priorityValues[i];
+            if (int.TryParse(s, out var n) && Array.IndexOf(s_priorityValues, n) >= 0) return n;
+            return fallback;
+        }
+
+        private static bool ParseBool(string s, bool fallback)
+        {
+            switch (s.Trim().ToLowerInvariant())
+            {
+                case "1": case "true": case "y": case "yes": case "o": return true;
+                case "0": case "false": case "n": case "no": case "x": return false;
+                default: return fallback;
+            }
+        }
+
+        // ── 최소 CSV 인코딩/파싱 (콤마 포함 타입 예: Dictionary<string,int> 대응) ──
+
+        private static string CsvEscape(string s)
+        {
+            s = s ?? "";
+            if (s.IndexOf(',') >= 0 || s.IndexOf('"') >= 0 || s.IndexOf('\n') >= 0 || s.IndexOf('\r') >= 0)
+                return "\"" + s.Replace("\"", "\"\"") + "\"";
+            return s;
+        }
+
+        private static List<string> ParseCsvLine(string line)
+        {
+            var result = new List<string>();
+            var sb = new System.Text.StringBuilder();
+            bool inQuotes = false;
+            for (int i = 0; i < line.Length; i++)
+            {
+                char ch = line[i];
+                if (inQuotes)
+                {
+                    if (ch == '"')
+                    {
+                        if (i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                        else inQuotes = false;
+                    }
+                    else sb.Append(ch);
+                }
+                else
+                {
+                    if (ch == '"') inQuotes = true;
+                    else if (ch == ',') { result.Add(sb.ToString()); sb.Clear(); }
+                    else sb.Append(ch);
+                }
+            }
+            result.Add(sb.ToString());
+            return result;
         }
 
         /// <summary>
