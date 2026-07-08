@@ -31,9 +31,9 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 
 | 컬럼 | 타입 | 내용 |
 |------|------|------|
-| `price_amount` | bigint | 결제 원금 (정수). Android는 `localizedPrice`에서 추출 |
+| `price_amount` | bigint | 결제 원금(**micros** = 주 단위 ×1,000,000). 정밀도 유지용 내부 값 |
 | `price_currency` | text | ISO 4217 통화 코드 (예: `"KRW"`, `"USD"`) |
-| `price_amount_krw` | bigint | KRW 환산 금액. 결제 시점 환율 기준 (frankfurter.app). 환산 실패 시 null |
+| `price_amount_krw` | bigint | **KRW 환산 금액(원, 정수)** — 매출 확인은 이 값을 쓰세요. 결제 시점 환율 기준(frankfurter.app). 환산 실패 시 null |
 
 - **Android**: 클라이언트가 Unity IAP `Product.metadata.localizedPrice` / `isoCurrencyCode`를 서버로 전달합니다.
 - **iOS SK2** (Unity IAP v5, StoreKit 2): JWS 토큰에 가격 정보가 포함되어 있어 서버가 자동으로 추출합니다.

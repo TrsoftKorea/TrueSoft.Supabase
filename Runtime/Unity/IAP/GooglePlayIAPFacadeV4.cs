@@ -50,7 +50,8 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var priceAmount   = (long)args.purchasedProduct.metadata.localizedPrice;
+            // micros(주 단위 ×1,000,000, 정수)로 전송 — 소수점 통화($0.99 등)가 0으로 잘리지 않도록.
+            var priceAmount   = (long)decimal.Round(args.purchasedProduct.metadata.localizedPrice * 1000000m);
             var priceCurrency = args.purchasedProduct.metadata.isoCurrencyCode;
 
             var (success, response) = await _verifyAsync(purchaseToken, productId, priceAmount, priceCurrency);

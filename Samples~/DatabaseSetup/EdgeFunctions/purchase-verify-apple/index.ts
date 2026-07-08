@@ -33,10 +33,11 @@ const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 
 // ── StoreKit 2: JWS 서명 검증 ─────────────────────────────────────────────────
 
-// 구매 금액을 KRW로 환산합니다 (frankfurter.app — 무료, API 키 불필요, ECB 일 1회 갱신).
-// KRW이면 그대로 반환. 환율 API 실패 시 null 반환.
-async function convertToKrw(amount: number, currency: string): Promise<number | null> {
-  if (!currency || currency.toUpperCase() === "KRW") return amount;
+// price_amount(micros = 주 단위 ×1,000,000)를 KRW 정수(원)로 환산합니다 (frankfurter.app — 무료, ECB 일 1회 갱신).
+// KRW이면 환율 없이, 그 외는 환율 API. 실패 시 null 반환.
+async function convertToKrw(micros: number, currency: string): Promise<number | null> {
+  const major = micros / 1_000_000;   // micros → 주 단위
+  if (!currency || currency.toUpperCase() === "KRW") return Math.round(major);
   try {
     const res = await fetch(
       `https://api.frankfurter.app/latest?from=${encodeURIComponent(currency)}&to=KRW`,
@@ -46,7 +47,7 @@ async function convertToKrw(amount: number, currency: string): Promise<number | 
     const data = await res.json();
     const rate = data?.rates?.KRW;
     if (typeof rate !== "number") return null;
-    return Math.round(amount * rate);
+    return Math.round(major * rate);
   } catch {
     return null;
   }
@@ -126,9 +127,9 @@ Deno.serve(async (req) => {
     .from("user_profiles").select("user_id").eq("account_id", user.id).maybeSingle();
   const userId: string | null = profile?.user_id ?? null;
 
-  // price: 밀리유닛 (÷1000 = 실제 금액 정수), currency: ISO 4217 코드
+  // JWS price: 밀리유닛(÷1000=주 단위). micros(주 단위 ×1,000,000 = millis ×1000)로 통일해 정밀 유지.
   const priceAmount    = typeof jwsData.price === "number"
-    ? Math.round(jwsData.price / 1000)
+    ? jwsData.price * 1000
     : null;
   const priceCurrency  = jwsData.currency || null;
   const priceAmountKrw = priceAmount !== null

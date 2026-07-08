@@ -99,10 +99,11 @@ async function getGoogleAccessToken(): Promise<string> {
   return tokenJson.access_token as string;
 }
 
-// 구매 금액을 KRW로 환산합니다 (frankfurter.app — 무료, API 키 불필요, ECB 일 1회 갱신).
-// KRW이면 그대로 반환. 환율 API 실패 시 null 반환.
-async function convertToKrw(amount: number, currency: string): Promise<number | null> {
-  if (!currency || currency.toUpperCase() === "KRW") return amount;
+// price_amount(micros = 주 단위 ×1,000,000)를 KRW 정수(원)로 환산합니다 (frankfurter.app — 무료, ECB 일 1회 갱신).
+// KRW이면 환율 없이, 그 외는 환율 API. 실패 시 null 반환.
+async function convertToKrw(micros: number, currency: string): Promise<number | null> {
+  const major = micros / 1_000_000;   // micros → 주 단위
+  if (!currency || currency.toUpperCase() === "KRW") return Math.round(major);
   try {
     const res = await fetch(
       `https://api.frankfurter.app/latest?from=${encodeURIComponent(currency)}&to=KRW`,
@@ -112,7 +113,7 @@ async function convertToKrw(amount: number, currency: string): Promise<number | 
     const data = await res.json();
     const rate = data?.rates?.KRW;
     if (typeof rate !== "number") return null;
-    return Math.round(amount * rate);
+    return Math.round(major * rate);
   } catch {
     return null;
   }
