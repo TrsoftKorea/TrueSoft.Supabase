@@ -31,6 +31,8 @@ namespace TrueBase.Unity
         /// </summary>
         public bool LastApplyHadChanges { get; private set; }
 
+        /// <param name="service">REST 호출을 수행할 서비스. null이면 예외.</param>
+        /// <param name="accessTokenGetter">현재 액세스 토큰 제공자. null이거나 빈 토큰을 반환하면 <c>requires_auth</c> 키는 조회에서 제외됩니다.</param>
         public RemoteConfigFacade(
             SupabaseRemoteConfigService service,
             Func<string> accessTokenGetter = null)
@@ -84,6 +86,7 @@ namespace TrueBase.Unity
                 onValueChanged.Invoke(json);
         }
 
+        /// <summary><see cref="Subscribe"/>로 등록한 콜백을 해지합니다. 등록 시와 동일한 델리게이트 인스턴스를 넘겨야 합니다.</summary>
         public void Unsubscribe(string key, Action<string> onValueChanged)
         {
             if (string.IsNullOrWhiteSpace(key) || onValueChanged == null)
@@ -98,6 +101,7 @@ namespace TrueBase.Unity
                 _keySubscribers.Remove(k);
         }
 
+        /// <summary>네트워크 없이 캐시에서 원본 JSON 문자열을 조회합니다. 캐시에 없으면 false.</summary>
         public bool TryGetRaw(string key, out string valueJson)
         {
             if (string.IsNullOrWhiteSpace(key))
@@ -109,6 +113,10 @@ namespace TrueBase.Unity
             return _cache.TryGetValue(key.Trim(), out valueJson);
         }
 
+        /// <summary>
+        /// 네트워크 없이 캐시에서 동기 조회 후 역직렬화합니다.
+        /// 캐시에 없거나 객체 루트 JSON이 아니거나 역직렬화에 실패하면 <paramref name="defaultValue"/>를 반환합니다.
+        /// </summary>
         public T Get<T>(string key, T defaultValue = default)
         {
             if (string.IsNullOrWhiteSpace(key) ||
@@ -249,6 +257,8 @@ namespace TrueBase.Unity
         }
 
 
+        /// <summary>키 1개를 서버에서 조회해 캐시에 반영합니다. 캐시에 실제 변경이 있었으면 true.</summary>
+        /// <param name="accessToken">null 허용. 비어 있으면 <c>requires_auth</c> 키는 결과에서 제외됩니다.</param>
         private async Task<bool> PollKeyAsync(string key, string accessToken)
         {
             var result = await _service.GetByKeysAsync(new[] { key }, accessToken).ConfigureAwait(true);
@@ -283,6 +293,11 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// 키들을 서버에서 조회해 캐시에 반영하고, 반영 후에도 캐시에 없는 키가 있으면
+        /// <see cref="DiagnoseKeyNotCached"/>로 좁힌 사유를 실패로 반환합니다.
+        /// </summary>
+        /// <param name="keys">조회할 키 목록. null/빈 배열이면 성공으로 간주합니다.</param>
         private async Task<FetchOutcome> EnsureKeysFetchedWithOutcomeAsync(string[] keys)
         {
             if (keys == null || keys.Length == 0)
@@ -368,6 +383,11 @@ namespace TrueBase.Unity
             return 0;
         }
 
+        /// <summary>
+        /// 서버 응답 행들을 캐시에 반영하고 변경된 키의 구독자·<see cref="OnChanged"/>를 호출합니다.
+        /// 실제 값이 바뀐 키가 하나라도 있으면 true.
+        /// 비활성(<c>enabled=false</c>)·인증 필요(비로그인) 행은 캐시에서 제거되며, 이 역시 변경으로 통지됩니다.
+        /// </summary>
         private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows)
         {
             if (rows == null)
@@ -432,6 +452,8 @@ namespace TrueBase.Unity
             return true;
         }
 
+        /// <summary>폴링이 활성인 키의 다음 폴링 시각을 초기화합니다. 이미 예약된 시각은 변경하지 않습니다.</summary>
+        /// <param name="realtimeSinceStartup"><c>Time.realtimeSinceStartup</c> 값(초).</param>
         private void RecomputeKeyPollState(string key, float realtimeSinceStartup)
         {
             if (_keyPollStates.TryGetValue(key, out var state) == false)
@@ -444,6 +466,8 @@ namespace TrueBase.Unity
             _keyPollStates[key] = state;
         }
 
+        /// <summary>행의 <c>updated_at</c>을 키 상태에 기록합니다. 기존 값보다 최신(ISO 문자열 사전순 비교)일 때만 갱신합니다.</summary>
+        /// <param name="updatedAtIso">ISO 8601 문자열. null/공백이면 무시합니다.</param>
         private void UpdateKeyTimestampFromRow(string key, string updatedAtIso)
         {
             if (string.IsNullOrWhiteSpace(updatedAtIso))
@@ -468,6 +492,7 @@ namespace TrueBase.Unity
         }
 
 
+        /// <summary>키 구독자들에게 현재 캐시 JSON을 전달합니다. 콜백 중 예외가 나도 나머지 구독자는 계속 호출됩니다.</summary>
         private void NotifyKeySubscribers(string key)
         {
             if (_keySubscribers.TryGetValue(key, out var list) == false || list.Count == 0)

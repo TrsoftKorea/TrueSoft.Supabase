@@ -6,10 +6,10 @@ namespace TrueBase.Unity
     /// SDK Try* 메서드의 통합 반환 타입. 성공 여부와 실패 이유를 함께 제공합니다.
     /// </summary>
     /// <remarks>
-    /// <c>implicit operator bool</c>을 통해 기존 <c>if (await Try*())</c> 패턴과 완전히 호환됩니다.
+    /// <c>implicit operator bool</c>을 제공하므로 <c>if (await Try*())</c> 형태로 바로 분기할 수 있습니다.
     /// <example>
     /// <code>
-    /// // 기존 패턴 — 수정 없이 그대로 동작
+    /// // 성공 여부만 필요할 때
     /// if (await Supabase.TrySignInAnonymouslyAsync()) { }
     ///
     /// // 실패 이유 확인
@@ -53,7 +53,7 @@ namespace TrueBase.Unity
         public static SupabaseCallResult Fail(string reason, SupabaseBanInfo banInfo = null)
             => new(false, reason, banInfo);
 
-        /// <summary>기존 <c>if (await Try*())</c> 패턴과의 호환성을 위한 암묵적 변환.</summary>
+        /// <summary><see cref="Success"/>로의 암묵적 변환. <c>if (await Try*())</c> 형태로 바로 분기할 수 있습니다.</summary>
         public static implicit operator bool(SupabaseCallResult r) => r.Success;
     }
 }

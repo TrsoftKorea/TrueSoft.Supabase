@@ -46,33 +46,18 @@ Deno.serve(async (req) => {
   });
 
   const me = await client.auth.getUser(jwt);
-  const accountId = me.data.user?.id;
-  if (!accountId) {
+  if (!me.data.user?.id) {
     return new Response(
       JSON.stringify({ ok: false, reason: "user_not_found" } satisfies GetResponse),
       { status: 401, headers: { "Content-Type": "application/json" } },
     );
   }
 
-  const myProfile = await client
-    .from("user_profiles")
-    .select("server_id")
-    .eq("account_id", accountId)
-    .limit(1)
-    .maybeSingle();
-
-  if (myProfile.error || !myProfile.data?.server_id) {
-    return new Response(
-      JSON.stringify({ ok: false, reason: myProfile.error?.message ?? "server_id_not_found" } satisfies GetResponse),
-      { status: 409, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
+  // 닉네임은 전역 고유이므로 user_id로만 조회한다(서버 스코프 없음 — 어느 서버 플레이어든 조회 가능).
   const res = await client
     .from("display_names")
     .select("display_name")
     .eq("user_id", userId)
-    .eq("server_id", myProfile.data.server_id)
     .limit(1)
     .maybeSingle();
 
@@ -88,4 +73,3 @@ Deno.serve(async (req) => {
     { headers: { "Content-Type": "application/json" } },
   );
 });
-

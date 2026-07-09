@@ -36,7 +36,7 @@ namespace TrueBase.Core.Data
                 if (inner != null) inner.DefaultValue = _default;
         }
 
-        // ── AutoDictRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용) ──
+        // AutoDictRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용)
         internal AutoDict<TKey2, TValue> InnerOrNull(TKey1 key1)
             => TryGetValue(key1, out var inner) ? inner : null;
 
@@ -60,7 +60,6 @@ namespace TrueBase.Core.Data
             set => EnsureInner(key1)[key2] = value;
         }
 
-        // ── 실제 안쪽 딕셔너리 접근 ────────────────────────────────────────────
 
         /// <summary>키 <paramref name="key1"/>의 실제 안쪽 <see cref="AutoDict{TKey,TValue}"/>를 반환합니다. 없으면 빈 딕셔너리(저장 안 함·비파괴).</summary>
         public AutoDict<TKey2, TValue> Inner(TKey1 key1)
@@ -118,10 +117,10 @@ namespace TrueBase.Core.Data
             return false;
         }
 
-        // ── 쓰기 (그 시점에 안쪽 딕셔너리 생성·저장) ──
+        // 쓰기 (그 시점에 안쪽 딕셔너리 생성·저장)
         public void Add(TKey2 key2, TValue value) => _owner.EnsureInner(_k1).Add(key2, value);
 
-        // ── 삭제 (없으면 no-op) ──
+        // 삭제 (없으면 no-op)
         public bool Remove(TKey2 key2) => D?.Remove(key2) ?? false;
         public void Clear() => D?.Clear();
 

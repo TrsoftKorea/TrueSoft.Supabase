@@ -41,7 +41,6 @@ namespace TrueBase.Unity
     /// </summary>
     public abstract class StaticUserSave<TRow> : INanooSaveSyncable where TRow : class, new()
     {
-        // ── 단일 서브클래스 강제 ──────────────────────────────────────────────
         private static class SingletonGuard
         {
             private static Type _registeredType;
@@ -123,7 +122,6 @@ namespace TrueBase.Unity
             return UserSaveStaticSyncRegistry.GetPriorityCooldown(p);
         }
 
-        // ── 레지스트리 콜백 ───────────────────────────────────────────────────
         // 스칼라는 setter의 MarkDirty(_isDirty)로 즉시 잡습니다. 컬렉션·클래스는 직접 수정 시
         // 플래그가 안 걸리므로 마지막 동기화본과 값 비교(HasChanges)로 변경을 감지합니다.
         // → 리스트를 일반 리스트처럼 자유롭게 수정해도 자동 저장됩니다.
@@ -185,14 +183,12 @@ namespace TrueBase.Unity
             _isDirty    = false;
         }
 
-        // ── 이벤트 ───────────────────────────────────────────────────────────
         /// <summary>
         /// <see cref="TryLoadAsync"/> 성공 후 발행됩니다.
         /// 로드 완료 후 게임 데이터를 적용하거나 UI를 갱신할 때 사용합니다.
         /// </summary>
         public event Action OnLoaded;
 
-        // ── 공유 인스턴스 ─────────────────────────────────────────────────────
 
         /// <summary>
         /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
@@ -203,7 +199,7 @@ namespace TrueBase.Unity
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
 
-        // ── INanooSaveSyncable 구현 (PlayNanooRuntime 전용) ────────────────────────
+        // INanooSaveSyncable 구현 (PlayNanooRuntime 전용)
 
         async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
         {
@@ -247,7 +243,7 @@ namespace TrueBase.Unity
             return ok;
         }
 
-        // ── 플레이나누 필드 변환 (선택적 편의) ──────────────────────────────────────
+        // 플레이나누 필드 변환 (선택적 편의)
         private NanooFieldMap<TRow> _nanooMap;
         private bool _nanooMapBuilt;
         // 등록값은 static — 인스턴스 없이 PlayerSave.UseNanooConverters(...)로 호출 가능. (닫힌 제네릭 타입당 1개)
@@ -305,7 +301,6 @@ namespace TrueBase.Unity
 
         string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
 
-        // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
         /// 저장 쿨다운을 전역으로 설정합니다.
@@ -313,11 +308,11 @@ namespace TrueBase.Unity
         /// <paramref name="priority"/>가 <c>null</c>이면 모든 우선순위를 동일한 <paramref name="seconds"/>로 설정합니다.<br/>
         /// <paramref name="priority"/>를 지정하면 해당 우선순위의 쿨다운만 변경합니다.
         /// </para>
+        /// </summary>
         /// <remarks>
         /// 유저 세이브 클래스는 프로젝트 전체에서 하나만 존재하므로 이 설정은 전역에 적용됩니다.
         /// 일반적으로는 <see cref="SupabaseSettings"/> Inspector에서 저장 주기를 지정하는 것을 권장합니다.
         /// </remarks>
-        /// </summary>
         public void ConfigureCooldown(float seconds, DataSavePriority? priority = null)
         {
             var s = Mathf.Max(0f, seconds);
@@ -336,6 +331,10 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 전송 완료를 기다리지 않습니다(fire-and-forget).
+        /// 이미 전송 중이면 완료 후 1회 재전송이 예약됩니다.
+        /// </summary>
         public SupabaseCallResult TryRequestImmediateSave()
         {
             EnsureRegistered();
@@ -344,6 +343,10 @@ namespace TrueBase.Unity
                 : SupabaseCallResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
         }
 
+        /// <summary>
+        /// 쿨다운을 무시하고 즉시 전송한 뒤 완료까지 대기합니다. 앱 종료 등 중요한 시점에 사용하세요.
+        /// </summary>
+        /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
         public async Task<SupabaseCallResult> TryFlushNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
@@ -365,6 +368,9 @@ namespace TrueBase.Unity
             OnLoaded?.Invoke();
         }
 
+        /// <summary>
+        /// DB에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
+        /// </summary>
         public async Task<SupabaseCallResult> TryEnsureRowAsync()
         {
             EnsureRegistered();
@@ -374,6 +380,11 @@ namespace TrueBase.Unity
                 : SupabaseCallResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
         }
 
+        /// <summary>
+        /// DB에서 세이브를 로드해 <see cref="CurrentRow"/>에 적용합니다. 행이 없으면 생성 후 재로드합니다.
+        /// 성공 시 <see cref="OnLoaded"/>가 발행됩니다.
+        /// </summary>
+        /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
         public async Task<SupabaseCallResult> TryLoadAsync(bool includeUpdatedAt = true)
         {
             EnsureRegistered();
@@ -411,6 +422,9 @@ namespace TrueBase.Unity
             return SupabaseCallResult.Ok;
         }
 
+        /// <summary>
+        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다. 변경이 없으면 네트워크 요청 없이 성공을 반환합니다.
+        /// </summary>
         public async Task<SupabaseCallResult> TrySaveIfChangedAsync()
         {
             EnsureRegistered();
@@ -449,7 +463,11 @@ namespace TrueBase.Unity
             return SupabaseCallResult.Ok;
         }
 
-        // ── 서브클래스용 ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 값이 변경되었음을 알립니다. 우선순위별 쿨다운이 지나면 자동으로 전송됩니다.
+        /// 스칼라 필드 setter에서 값이 실제로 바뀔 때 호출하세요(컬렉션·클래스 필드는 값 비교로 자동 감지).
+        /// </summary>
         protected void MarkDirty()
         {
             EnsureRegistered();

@@ -6,7 +6,10 @@
     /// </summary>
     public sealed class DataColumnsLoadResult<T> where T : class, new()
     {
+        /// <summary>본인 행이 DB에 존재했으면 true. false면 신규 유저(행 없음)입니다.</summary>
         public bool HasRow { get; }
+
+        /// <summary>로드된 행. 행이 없으면 <c>new T()</c>(null 아님).</summary>
         public T Row { get; }
 
         public DataColumnsLoadResult(bool hasRow, T row)

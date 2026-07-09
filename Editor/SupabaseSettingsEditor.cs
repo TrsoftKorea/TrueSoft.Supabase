@@ -9,26 +9,29 @@ using UnityEngine;
 
 namespace TrueBase.Editor
 {
+    /// <summary>
+    /// <c>SupabaseSettings</c> 커스텀 인스펙터.
+    /// 기본 설정 필드에 더해 Secret 키 입력, 유저 데이터 클래스 생성기, Remote Config 클래스 생성기 UI를 제공합니다.
+    /// </summary>
     [CustomEditor(typeof(SupabaseSettings))]
     public sealed class SupabaseSettingsEditor : UnityEditor.Editor
     {
-        private const string PrefsKeySecret            = "TrueBase.UserSaveClassGenerator.SecretKey";
-        private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";
-        private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";
-        private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";
-        private const string PrefsKeyColumnDefaults    = "TrueBase.PlayerSave.ColumnDefaults";
-        private const string PrefsKeyCsvPath           = "TrueBase.PlayerSave.CsvPath";
-        private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";
-        private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";
+        // EditorPrefs 키 — Secret 키와 생성기 컬럼 설정을 에디터 세션 간에 유지(에셋·프로젝트 파일에는 저장 안 함).
+        private const string PrefsKeySecret            = "TrueBase.UserSaveClassGenerator.SecretKey";           // Secret API 키(평문 주의)
+        private const string PrefsKeyColumnTypes       = "TrueBase.PlayerSave.ColumnTypes";                     // 컬럼명→CLR 타입 (JSON)
+        private const string PrefsKeyColumnPriorities  = "TrueBase.PlayerSave.ColumnPriorities";                // 컬럼명→저장 우선순위 (JSON)
+        private const string PrefsKeyColumnFieldNames  = "TrueBase.PlayerSave.ColumnFieldNames";                // 컬럼명→커스텀 C# 필드명 (JSON)
+        private const string PrefsKeyColumnDefaults    = "TrueBase.PlayerSave.ColumnDefaults";                  // 컬럼명→기본값 원본 입력 (JSON)
+        private const string PrefsKeyCsvPath           = "TrueBase.PlayerSave.CsvPath";                         // CSV 내보내기/불러오기 파일 경로
+        private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";                     // 마지막 클래스 저장 폴더
+        private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";                     // RemoteConfig 생성 클래스명
         private const string ClassName   = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
         private const string RcDialogTitle = "Remote Config 클래스";
 
-        // TypeOptions / GeneratorTypeCatalog.CustomTypeIndex 는 RemoteConfigClassGenerator 에서 가져옴
-        // (두 생성기가 같은 배열을 공유 → 중복 선언 제거)
+        // 타입 드롭다운 목록(TypeOptions)·CustomTypeIndex는 GeneratorTypeCatalog가 단일 소스(두 생성기 공유).
 
-        // ── UserSave 생성기 ──────────────────────────────────────────────────────
         private static bool                 _foldout;
         private static string               _secretKey       = "";
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
@@ -40,7 +43,6 @@ namespace TrueBase.Editor
         private static Vector2              _previewScroll;
         private static GUIStyle             _ambiguousStyle;
 
-        // ── Remote Config 생성기 ─────────────────────────────────────────────────
         private static bool                  _rcFoldout;
         private static List<RcKeyRow>        _rcKeyList     = new List<RcKeyRow>();
         private static int                   _rcKeyIndex;
@@ -111,7 +113,6 @@ namespace TrueBase.Editor
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-            // ── 유저 데이터 클래스 생성 ─────────────────────────────────────
             _foldout = EditorGUILayout.Foldout(_foldout, "유저 데이터 클래스 생성", true, EditorStyles.foldoutHeader);
             if (_foldout)
             {
@@ -207,7 +208,6 @@ namespace TrueBase.Editor
             EditorGUILayout.Space(6);
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-            // ── Remote Config 클래스 생성 ────────────────────────────────────────
             _rcFoldout = EditorGUILayout.Foldout(_rcFoldout, "Remote Config 클래스 생성", true, EditorStyles.foldoutHeader);
             if (_rcFoldout)
             {
@@ -574,7 +574,6 @@ namespace TrueBase.Editor
             customType = "Dictionary<" + newKey + ", " + newValue + ">";
         }
 
-        // ── Remote Config 생성기 메서드 ──────────────────────────────────────────
 
         private static void DrawRcFieldList()
         {
@@ -649,13 +648,16 @@ namespace TrueBase.Editor
             }
         }
 
+        /// <summary>
+        /// 선택된 키의 value_json을 필드 목록으로 파싱하고, 기존 생성 파일이 있으면
+        /// <c>[JsonProperty]</c> 기반으로 필드 타입을 복원합니다. 클래스명이 비어 있으면 키에서 자동 유도합니다.
+        /// </summary>
         private static void ParseRcFields()
         {
             _rcFields.Clear();
             _rcFieldsParsed = false;
             _rcPreviewText  = "";
 
-            // ③ 방어: 인덱스 유효성 확인
             if (_rcKeyList.Count == 0 || _rcKeyIndex < 0 || _rcKeyIndex >= _rcKeyList.Count) return;
 
             var row = _rcKeyList[_rcKeyIndex];
@@ -678,7 +680,7 @@ namespace TrueBase.Editor
             var existing = RemoteConfigClassGenerator.TryLoadExistingFieldTypes(_rcClassName);
             if (existing.Count > 0)
             {
-                // ② 중복 JsonKey 감지: 서로 다른 depth에 같은 키가 있으면 복원 스킵 (오작동 방지)
+                // 중복 JsonKey 감지: 서로 다른 depth에 같은 키가 있으면 어느 필드의 타입인지 알 수 없으므로 복원 스킵
                 var keyCount = new Dictionary<string, int>(StringComparer.Ordinal);
                 foreach (var f in _rcFields)
                 {
@@ -714,7 +716,6 @@ namespace TrueBase.Editor
 
         private static void BuildRcPreview()
         {
-            // ③ 방어: 인덱스 유효성 확인
             if (_rcKeyList.Count == 0 || _rcKeyIndex < 0 || _rcKeyIndex >= _rcKeyList.Count) return;
 
             var row = _rcKeyList[_rcKeyIndex];
@@ -747,7 +748,6 @@ namespace TrueBase.Editor
             }
         }
 
-        // ── UserSave 생성기 메서드 ────────────────────────────────────────────────
 
         private static void DrawColumnList()
         {
@@ -831,6 +831,10 @@ namespace TrueBase.Editor
             }
         }
 
+        /// <summary>
+        /// OpenAPI에서 <c>user_data</c> 컬럼을 가져와 편집 목록을 만듭니다.
+        /// 이후 EditorPrefs(우선)와 기존 생성 파일(폴백)에서 타입·우선순위·필드명·기본값 설정을 복원합니다.
+        /// </summary>
         private static void FetchColumns(SupabaseSettings settings)
         {
             _editableColumns.Clear();
@@ -1015,7 +1019,6 @@ namespace TrueBase.Editor
             return GeneratorTypeCatalog.IsAutoDefaultableType(GeneratorTypeCatalog.MapToAutoType(resolved), out _);
         }
 
-        // ── CSV 내보내기 / 불러오기 ──────────────────────────────────────────────
         // 컬럼이 많을 때 인스펙터 행 편집 대신 스프레드시트에서 일괄 편집하기 위한 왕복.
         // 헤더: column,field,type,priority,default,include  (column=DB명, 매칭 키)
 
@@ -1138,7 +1141,7 @@ namespace TrueBase.Editor
             Debug.Log($"[Supabase] CSV 위치 설정: {path}");
         }
 
-        /// <summary>CLR 타입 문자열을 컬럼에 적용합니다(가져오기 시 862–877 로직과 동일).</summary>
+        /// <summary>CLR 타입 문자열을 컬럼에 적용합니다(<see cref="FetchColumns"/>의 기존 타입 복원과 같은 규칙).</summary>
         private static void ApplyClrTypeToColumn(EditableColumn col, string type)
         {
             var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, type);
@@ -1184,8 +1187,9 @@ namespace TrueBase.Editor
             }
         }
 
-        // ── 최소 CSV 인코딩/파싱 (콤마 포함 타입 예: Dictionary<string,int> 대응) ──
+        // 최소 CSV 인코딩/파싱 (콤마 포함 타입 예: Dictionary<string,int> 대응)
 
+        /// <summary>셀에 콤마·따옴표·줄바꿈이 있으면 큰따옴표로 감싸고 내부 <c>"</c>는 <c>""</c>로 이스케이프합니다.</summary>
         private static string CsvEscape(string s)
         {
             s = s ?? "";
@@ -1194,6 +1198,10 @@ namespace TrueBase.Editor
             return s;
         }
 
+        /// <summary>
+        /// CSV 한 줄을 셀 목록으로 파싱합니다. 구분자는 콤마, 큰따옴표 인용 지원,
+        /// 인용 내부의 <c>""</c>는 <c>"</c> 한 글자로 해석합니다. 셀 내 줄바꿈(여러 줄 셀)은 지원하지 않습니다.
+        /// </summary>
         private static List<string> ParseCsvLine(string line)
         {
             var result = new List<string>();

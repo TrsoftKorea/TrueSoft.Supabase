@@ -2,6 +2,10 @@
 
 namespace TrueBase.Core.Auth
 {
+    /// <summary>
+    /// 로그인 세션. Auth 응답의 토큰과 사용자 정보를 담습니다.
+    /// <see cref="AccessToken"/>은 API 인증에, <see cref="RefreshToken"/>은 세션 복원에 사용합니다.
+    /// </summary>
     [Serializable]
     public sealed class SupabaseSession
     {
@@ -37,6 +41,9 @@ namespace TrueBase.Core.Auth
         public string name;
     }
 
+    /// <summary>
+    /// 로그인한 사용자 정보. Auth 응답의 <c>user</c> 필드에서 채워집니다.
+    /// </summary>
     [Serializable]
     public sealed class SupabaseUser
     {

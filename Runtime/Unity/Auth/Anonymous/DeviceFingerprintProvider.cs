@@ -9,6 +9,12 @@ namespace TrueBase.Unity.Auth.Anonymous
     /// </summary>
     internal static class DeviceFingerprintProvider
     {
+        /// <summary>
+        /// <c>프로젝트URL|앱번들ID|deviceUniqueIdentifier</c>를 SHA-256 해시한 소문자 hex 문자열을 반환합니다.
+        /// 프로젝트·앱 단위로 지문이 달라져 기기 ID가 서비스 간에 연결되지 않습니다.
+        /// </summary>
+        /// <param name="projectUrl">Supabase 프로젝트 URL. null이면 빈 문자열로 처리.</param>
+        /// <returns>64자 hex 지문. 기기 ID를 얻을 수 없는 플랫폼에서는 null.</returns>
         public static string TryCreateHashedFingerprint(string projectUrl)
         {
             var deviceId = SystemInfo.deviceUniqueIdentifier;

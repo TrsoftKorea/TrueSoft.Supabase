@@ -21,6 +21,8 @@ namespace TrueBase.Unity.Auth.Apple
         private Action<AppleLoginResult> _onSuccess;
         private Action<string> _onError;
 
+        /// <summary>네이티브 Sign in with Apple UI를 띄웁니다. iOS 외 플랫폼에서는 즉시 onError를 호출합니다.</summary>
+        /// <param name="hashedNonce">raw nonce의 SHA-256 해시(hex). 서버는 raw nonce로 identityToken의 nonce 클레임을 검증합니다. null이면 빈 문자열로 전달.</param>
         public void SignIn(string hashedNonce, Action<AppleLoginResult> onSuccess, Action<string> onError)
         {
             _onSuccess = onSuccess;
@@ -40,7 +42,9 @@ namespace TrueBase.Unity.Auth.Apple
 #endif
         }
 
-        // 네이티브 -> UnityPlayer.UnitySendMessage(...)
+        // 아래 OnApple* 메서드는 iOS 네이티브가 UnityPlayer.UnitySendMessage(...)로 호출하는 콜백입니다. 직접 호출하지 마세요.
+
+        /// <summary>네이티브 로그인 성공 콜백. payload는 <c>|||</c> 구분 필드(IdToken|AppleUserId|Email|GivenName|FamilyName).</summary>
         public void OnAppleLoginSuccess(string payload)
         {
             try
@@ -62,11 +66,17 @@ namespace TrueBase.Unity.Auth.Apple
             }
         }
 
+        /// <summary>네이티브 로그인 실패 콜백.</summary>
         public void OnAppleLoginError(string error)
         {
             _onError?.Invoke(error);
         }
 
+        /// <summary>
+        /// payload 필드를 꺼내며 네이티브에서 이스케이프된 구분자(<c>%7C%7C%7C</c>)를 <c>|||</c>로 복원합니다.
+        /// </summary>
+        /// <param name="parts">구분자로 분리된 필드 배열.</param>
+        /// <param name="index">꺼낼 필드 인덱스. 범위를 벗어나면 빈 문자열 반환.</param>
         private static string Unescape(string[] parts, int index)
         {
             if (parts == null || index < 0 || index >= parts.Length)

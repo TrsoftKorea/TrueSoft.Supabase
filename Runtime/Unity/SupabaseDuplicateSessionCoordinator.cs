@@ -18,6 +18,7 @@ namespace TrueBase.Unity
         private static float _lastActionCheckAtRealtime = -9999f;
         private static Task<bool> _inflightActionCheck;
 
+        /// <summary>싱글턴 GameObject를 생성합니다. 이미 존재하면 아무것도 하지 않습니다.</summary>
         internal static void EnsureExists()
         {
             if (_instance != null)
@@ -28,6 +29,7 @@ namespace TrueBase.Unity
             _instance = go.AddComponent<SupabaseDuplicateSessionCoordinator>();
         }
 
+        /// <summary>백그라운드 세션 토큰 폴링을 중지합니다. 로그아웃·세션 교체 시 호출됩니다.</summary>
         internal static void StopPolling()
         {
             if (_instance == null)
@@ -40,6 +42,15 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// 중요 동작(저장 등) 직전에 현재 세션이 여전히 유효한지 서버 토큰과 대조합니다.
+        /// 반환값 false는 비로그인 또는 중복 로그인 감지를 의미합니다.
+        /// <para>
+        /// 쿨다운(<c>SupabaseSDK.DuplicateSessionActionCheckCooldownSeconds</c>) 이내의 재호출은
+        /// 네트워크 없이 true를 반환하되, 쿨다운 만료 시점에 지연 검사를 예약합니다.
+        /// 이미 검사가 진행 중이면 새 요청 없이 그 결과를 공유합니다.
+        /// </para>
+        /// </summary>
         internal static async Task<bool> VerifyCurrentSessionForActionAsync()
         {
             if (SupabaseSDK.IsLoggedIn == false || SupabaseSDK.Session?.User == null)
@@ -73,6 +84,8 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>쿨다운 만료 후 1회 실행할 지연 검사를 예약합니다. 이미 예약돼 있으면 무시합니다.</summary>
+        /// <param name="dueAtRealtime">검사를 실행할 <c>Time.realtimeSinceStartup</c> 기준 시각(초).</param>
         private void ScheduleDeferredActionCheck(float dueAtRealtime)
         {
             if (_deferredActionCheckRoutine != null)
@@ -107,6 +120,11 @@ namespace TrueBase.Unity
             _deferredActionCheckRoutine = null;
         }
 
+        /// <summary>
+        /// 세션 변경 후 서버 <c>session_token</c>과 로컬 값을 동기화하는 루틴을 시작합니다.
+        /// 진행 중이던 동기화·폴링은 중지되고 새로 시작합니다.
+        /// </summary>
+        /// <param name="kind"><c>NewSignIn</c>이면 새 토큰을 발급해 무조건 덮어쓰고, 그 외(복원·갱신)에는 서버·로컬 토큰을 대조해 불일치 시 중복 로그인으로 처리합니다.</param>
         internal static void ScheduleSyncAfterSessionChange(SupabaseSessionChangeKind kind)
         {
             EnsureExists();
@@ -204,6 +222,10 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// 세션 토큰 폴링을 시작합니다. <c>SupabaseSDK.DuplicateSessionPollSeconds</c>가 0 이하이면 폴링하지 않습니다.
+        /// 기존 폴링은 중지하고 새로 시작합니다.
+        /// </summary>
         private void StartPollingIfNeeded(string accountId)
         {
             var interval = SupabaseSDK.DuplicateSessionPollSeconds;
@@ -219,6 +241,12 @@ namespace TrueBase.Unity
             _pollRoutine = StartCoroutine(PollLoop(accountId, interval));
         }
 
+        /// <summary>
+        /// 주기적으로 서버 <c>session_token</c>을 조회해 로컬 값과 대조합니다.
+        /// 불일치가 감지되면 <c>RaiseDuplicateLoginDetected</c>를 발생시키고 루프를 종료합니다.
+        /// 조회 실패는 무시하고 다음 주기에 재시도합니다.
+        /// </summary>
+        /// <param name="intervalSeconds">폴링 주기(초).</param>
         private IEnumerator PollLoop(string accountId, float intervalSeconds)
         {
             while (SupabaseSDK.IsLoggedIn && SupabaseSDK.Session != null)
@@ -267,6 +295,11 @@ namespace TrueBase.Unity
             _pollRoutine = null;
         }
 
+        /// <summary>
+        /// 서버 <c>session_token</c>과 로컬 값을 즉시 1회 대조합니다.
+        /// 서버에 토큰이 없으면 로컬 값(없으면 새 토큰)을 업서트하고 유효로 처리합니다.
+        /// 서비스 미초기화·조회 실패 시에는 true를 반환합니다(네트워크 문제로 게임 진행을 막지 않음 — fail-open).
+        /// </summary>
         private async Task<bool> VerifyCurrentSessionCoreAsync()
         {
             var svc = SupabaseSDK.UserSessionService;

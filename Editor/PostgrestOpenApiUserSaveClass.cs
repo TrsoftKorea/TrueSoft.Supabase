@@ -52,6 +52,7 @@ namespace TrueBase.Editor
             return u.TrimEnd('/');
         }
 
+        /// <summary>프로젝트 URL에서 PostgREST 루트(<c>…/rest/v1/</c>) URL을 만듭니다.</summary>
         public static string BuildRestRootUrl(string projectUrl)
         {
             var baseUrl = NormalizeProjectUrl(projectUrl);
@@ -68,6 +69,10 @@ namespace TrueBase.Editor
             req.SetRequestHeader("Accept", "application/openapi+json");
         }
 
+        /// <summary>
+        /// PostgREST 루트에 <c>Accept: application/openapi+json</c>으로 GET 해 OpenAPI 스키마 JSON을 받습니다.
+        /// 에디터 UI에서 쓰는 동기 호출이라 완료까지 블로킹합니다. 실패 시 응답 일부를 포함한 <c>IOException</c>.
+        /// </summary>
         public static string FetchOpenApiJson(string restRootUrl, string apiKey, int timeoutSeconds)
         {
             var key = NormalizeApiKey(apiKey);
@@ -100,6 +105,12 @@ namespace TrueBase.Editor
             return body;
         }
 
+        /// <summary>
+        /// OpenAPI JSON에서 테이블 스키마를 찾아 컬럼 목록으로 변환합니다.
+        /// Swagger 2.0(<c>definitions</c>)·OpenAPI 3(<c>components.schemas</c>) 모두 지원하고 <c>$ref</c>는 로컬 포인터만 해석합니다.
+        /// </summary>
+        /// <param name="tableName">테이블 이름. <c>schema.table</c> 형식이면 짧은 이름과 <c>_</c> 치환형 둘 다 시도합니다.</param>
+        /// <param name="skipColumns">생성에서 제외할 컬럼명 집합(id·user_id 등 인프라 컬럼). null 허용.</param>
         public static ParseTableResult ParseTableColumns(string openApiJson, string tableName, HashSet<string> skipColumns)
         {
             var warnings = new List<string>();
@@ -153,6 +164,10 @@ namespace TrueBase.Editor
             return ParseTableResult.Ok(list, warnings);
         }
 
+        /// <summary>
+        /// 컬럼 목록으로 <c>StaticUserSave&lt;Row&gt;</c> 기반 유저 세이브 클래스 C# 소스를 생성합니다.
+        /// <c>namespaceName</c>이 비어 있으면 네임스페이스 없이 생성합니다.
+        /// </summary>
         public static string GenerateSource(
             IReadOnlyList<OpenApiColumn> columns,
             string className,
@@ -385,6 +400,11 @@ namespace TrueBase.Editor
             }
         }
 
+        /// <summary>
+        /// OpenAPI 속성 스키마(<c>type</c>/<c>format</c>)를 CLR 타입명으로 매핑합니다.
+        /// 자동 매핑이 불가능한 타입(jsonb 객체·$ref·allOf·복합 배열 등)은
+        /// <c>string /* … refine manually */</c> 플레이스홀더를 반환해 사용자 정제를 유도합니다.
+        /// </summary>
         private static string MapToClr(JObject prop)
         {
             var typeStr = PrimaryType(prop["type"]);

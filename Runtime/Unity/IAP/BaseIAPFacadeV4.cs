@@ -16,14 +16,12 @@ namespace TrueBase.Unity
     /// </remarks>
     public abstract class BaseIAPFacade : IStoreListener, IDisposable
     {
-        // ── Unity IAP v4 상태 ─────────────────────────────────────────────────
 
         protected IStoreController Controller;
         private bool _isInitialized;
         private bool _disposed;
         private TaskCompletionSource<bool> _initTcs;
 
-        // ── 공개 API ──────────────────────────────────────────────────────────
 
         /// <summary>
         /// 아이템 지급 콜백 (필수 설정).
@@ -42,7 +40,6 @@ namespace TrueBase.Unity
         /// <summary>SDK IAP 초기화 완료 여부.</summary>
         public bool IsInitialized => _isInitialized;
 
-        // ── 공개 메서드 ────────────────────────────────────────────────────────
 
         /// <summary>
         /// Unity IAP를 초기화합니다.
@@ -124,7 +121,6 @@ namespace TrueBase.Unity
             OnPurchaseFailed = null;
         }
 
-        // ── IStoreListener 구현 ──────────────────────────────────────────────
 
         public void OnInitialized(IStoreController controller, IExtensionProvider extensions)
         {
@@ -169,22 +165,26 @@ namespace TrueBase.Unity
             OnPurchaseFailed?.Invoke(info);
         }
 
-        // ── 서브클래스 구현 ────────────────────────────────────────────────────
 
         /// <summary>
         /// 플랫폼별 토큰 추출 → 서버 검증 → 아이템 지급을 수행합니다.
         /// 구현 완료 후 <see cref="GrantAndConfirmAsync"/>를 호출하세요.
         /// </summary>
+        /// <param name="args">Unity IAP가 전달한 구매 이벤트. <c>purchasedProduct</c>에서 영수증·상품 정보를 읽습니다.</param>
         protected abstract Task ProcessPurchaseAsync(PurchaseEventArgs args);
 
         /// <summary>로그 접두사. 서브클래스에서 재정의하세요.</summary>
         protected virtual string LogTag => "[Supabase.IAP]";
 
-        // ── 공통 지급 + 소비 ──────────────────────────────────────────────────
 
         /// <summary>
         /// 아이템 지급 콜백을 호출하고, 성공 시 소모품을 소비합니다.
+        /// 콜백이 false를 반환하거나 예외를 던지면 Pending 상태로 남겨 다음 초기화 때 재처리됩니다.
         /// </summary>
+        /// <param name="productId">구매된 상품 ID.</param>
+        /// <param name="isResuming">앱 재시작 후 재처리 중이면 true.</param>
+        /// <param name="alreadyVerified">서버 DB에 이미 검증 기록이 있으면 true. 중복 지급 방지 판단용.</param>
+        /// <param name="product">소비(<c>ConfirmPendingPurchase</c>) 대상 상품.</param>
         protected async Task GrantAndConfirmAsync(
             string productId, bool isResuming, bool alreadyVerified, Product product)
         {

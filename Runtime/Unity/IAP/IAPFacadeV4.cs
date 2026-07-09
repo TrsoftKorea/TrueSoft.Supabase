@@ -31,7 +31,15 @@ namespace TrueBase.Unity
         private readonly Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyGoogleAsync;
         private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAppleAsync;
 
-        // ── 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성) ─────────────
+        // 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성)
+
+        /// <param name="verifyGoogleAsync">
+        /// Google Play 검증 함수. (purchaseToken, productId, priceAmount, priceCurrency) → (success, response).
+        /// priceAmount는 micros(주 단위 ×1,000,000) 정수, priceCurrency는 ISO 4217 코드. 필수.
+        /// </param>
+        /// <param name="verifyAppleAsync">
+        /// Apple SK1 검증 함수. (base64 영수증 Payload, productId) → (success, response). 필수.
+        /// </param>
         internal IAPFacade(
             Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyGoogleAsync,
             Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAppleAsync)
@@ -40,7 +48,7 @@ namespace TrueBase.Unity
             _verifyAppleAsync  = verifyAppleAsync  ?? throw new ArgumentNullException(nameof(verifyAppleAsync));
         }
 
-        // ── 서버 검증 (플랫폼 자동 감지) ─────────────────────────────────────
+        // 서버 검증 (플랫폼 자동 감지)
 
         protected override async Task ProcessPurchaseAsync(PurchaseEventArgs args)
         {

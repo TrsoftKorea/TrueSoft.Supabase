@@ -19,10 +19,13 @@ namespace TrueBase.Unity
             _maxStale = maxStale;
         }
 
+        /// <summary>remote_config 테이블의 key 값.</summary>
         public string Key => _key;
 
+        /// <summary>값을 비동기로 읽습니다. 캐시가 신선하면 즉시 반환하고, 만료됐으면 서버에서 갱신합니다.</summary>
         public Task<SupabaseResult<T>> FetchAsync() => SupabaseSDK.GetRemoteConfigAsync<T>(_key, _maxStale);
 
+        /// <summary><see cref="FetchAsync"/>의 튜플 반환 버전. 실패 시 <c>(false, null)</c>.</summary>
         public async Task<(bool success, T value)> TryFetchAsync()
         {
             var r = await FetchAsync().ConfigureAwait(true);

@@ -20,7 +20,6 @@ namespace TrueBase.Editor
             InjectGradleDependencies(path);
         }
 
-        // ── ProGuard ──────────────────────────────────────────────────────────
 
         private static void InjectProGuardRule(string path)
         {
@@ -41,7 +40,6 @@ namespace TrueBase.Editor
             }
         }
 
-        // ── Gradle 의존성 ─────────────────────────────────────────────────────
 
         private static void InjectGradleDependencies(string path)
         {

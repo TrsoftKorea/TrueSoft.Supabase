@@ -33,10 +33,12 @@ namespace TrueBase.Unity
         private void OnRawValueChanged(string json)
         {
             if (_disposed) return;
+            // 역직렬화 실패 시 이전 값을 유지합니다.
             try { _value = JsonConvert.DeserializeObject<T>(json); }
             catch { }
         }
 
+        /// <summary>구독을 해지합니다. 이후 <see cref="Value"/>는 마지막 값에 고정됩니다.</summary>
         public void Dispose()
         {
             if (_disposed) return;

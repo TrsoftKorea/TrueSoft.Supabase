@@ -7,8 +7,7 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// Supabase Edge Functions 호출 서비스.
-    /// endpoint: /functions/v1/{functionName}
+    /// Supabase Edge Functions 호출 서비스 (<c>POST /functions/v1/{functionName}</c>).
     /// </summary>
     public sealed class SupabaseEdgeFunctionsService
     {
@@ -29,6 +28,10 @@ namespace TrueBase.Core.Data
             _jsonSerializer = jsonSerializer ?? throw new ArgumentNullException(nameof(jsonSerializer));
         }
 
+        /// <summary>Edge Function을 호출해 상태 코드·본문을 그대로 반환합니다(파싱 없음).</summary>
+        /// <param name="functionName">함수 이름(URL 경로 세그먼트). 필수 — 자동으로 URL 인코딩됩니다.</param>
+        /// <param name="accessToken">로그인 세션의 access token. null이면 Publishable 키만으로 호출합니다(기본값: null).</param>
+        /// <param name="requestBody">JSON으로 직렬화할 요청 본문 객체. null이면 본문 없이 전송(기본값: null).</param>
         public async Task<SupabaseResult<SupabaseFunctionResponse>> InvokeRawAsync(
             string functionName,
             string accessToken = null,
@@ -61,6 +64,10 @@ namespace TrueBase.Core.Data
             return SupabaseResult<SupabaseFunctionResponse>.Success(data);
         }
 
+        /// <summary>Edge Function을 호출하고 응답 JSON을 <typeparamref name="TResponse"/>로 파싱합니다. 배열 루트 응답은 첫 원소를 사용합니다.</summary>
+        /// <param name="functionName">함수 이름(URL 경로 세그먼트). 필수.</param>
+        /// <param name="accessToken">로그인 세션의 access token. null이면 Publishable 키만으로 호출합니다(기본값: null).</param>
+        /// <param name="requestBody">JSON으로 직렬화할 요청 본문 객체. null이면 본문 없이 전송(기본값: null).</param>
         public async Task<SupabaseResult<TResponse>> InvokeAsync<TResponse>(
             string functionName,
             string accessToken = null,

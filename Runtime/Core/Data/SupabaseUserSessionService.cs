@@ -31,6 +31,9 @@ namespace TrueBase.Core.Data
             _table = SupabaseRestTableRef.Normalize(userSessionsTable, nameof(userSessionsTable));
         }
 
+        /// <summary>서버에 등록된 현재 계정의 세션 토큰을 조회합니다. 행이 없으면 성공 결과에 null을 담아 반환합니다.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
         public async Task<SupabaseResult<string>> GetSessionTokenAsync(string accessToken, string accountId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -71,6 +74,10 @@ namespace TrueBase.Core.Data
             }
         }
 
+        /// <summary>현재 계정의 세션 토큰을 upsert합니다(<c>on_conflict=account_id</c>). 이 기기의 토큰을 활성 세션으로 등록할 때 사용합니다.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
+        /// <param name="sessionToken">이 기기에서 발급한 세션 토큰. 필수.</param>
         public async Task<SupabaseResult<bool>> UpsertSessionTokenAsync(
             string accessToken,
             string accountId,
@@ -112,6 +119,9 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
+        /// <summary>현재 계정의 세션 행을 삭제합니다(로그아웃 시 호출).</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
         public async Task<SupabaseResult<bool>> DeleteMySessionRowAsync(string accessToken, string accountId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))

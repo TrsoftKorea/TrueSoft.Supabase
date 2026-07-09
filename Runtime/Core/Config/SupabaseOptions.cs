@@ -1,9 +1,17 @@
 ﻿namespace TrueBase
 {
+    /// <summary>
+    /// Core 서비스 구성 값. Unity 레이어에서는 <c>SupabaseSettings</c> ScriptableObject의 값이 여기에 채워집니다.
+    /// </summary>
     public sealed class SupabaseOptions
     {
+        /// <summary>Supabase 프로젝트 URL(<c>https://xxxx.supabase.co</c>).</summary>
         public string ProjectURL;
+
+        /// <summary>Publishable(anon) API 키. 모든 요청의 <c>apikey</c> 헤더에 사용됩니다.</summary>
         public string PublishableKey;
+
+        /// <summary>HTTP 요청 타임아웃(초).</summary>
         public int TimeoutSeconds = 30;
 
         /// <summary>기본 메일 만료 일수(클라이언트·Edge 발송 보조용, DB 기본값과 별개).</summary>

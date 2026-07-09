@@ -2,6 +2,7 @@
 
 namespace TrueBase.Core.Models
 {
+    /// <summary>Google Play 결제 검증 요청. Google 결제 검증 Edge Function에 전송합니다.</summary>
     [Serializable]
     public sealed class GooglePlayPurchaseRequest
     {
@@ -12,6 +13,7 @@ namespace TrueBase.Core.Models
         public string price_currency; // ISO 4217 통화 코드 (예: "KRW", "USD"). null = 미제공
     }
 
+    /// <summary>Google Play 결제 검증 응답.</summary>
     [Serializable]
     public sealed class GooglePlayPurchaseResponse
     {

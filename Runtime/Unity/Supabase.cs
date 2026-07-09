@@ -50,6 +50,7 @@ namespace TrueBase.Unity
         /// 씬의 SupabaseRuntime 초기화를 잠시 대기한 뒤, 필요 시 Resources의 SupabaseSettings로 부트스트랩합니다.
         /// 대부분의 API가 내부에서 호출하므로, 게임 코드에서는 생략해도 됩니다.
         /// </summary>
+        /// <param name="timeoutMs">초기화 완료를 기다리는 최대 시간(밀리초). 초과 시 false를 반환합니다.</param>
         internal static Task<bool> EnsureInitializedAsync(int timeoutMs = SupabaseSDK.DefaultEnsureInitTimeoutMs) =>
             SupabaseSDK.EnsureInitializedAsync(timeoutMs);
 
@@ -340,13 +341,18 @@ namespace TrueBase.Unity
         internal static Task<SupabaseCallResult> TryUpdateLastActivityAtAsync() =>
             SupabaseSDK.TryUpdateLastActivityAtAsync();
 
-        /// <summary>특정 key가 갱신될 때마다 콜백 (코드 연결, 실제 JSON 문자열 전달).</summary>
+        /// <summary>특정 key가 갱신될 때마다 콜백을 호출합니다. 콜백 인자는 해당 key의 원본 JSON 문자열입니다.</summary>
+        /// <param name="key">remote_config 테이블의 key.</param>
+        /// <param name="onValueChanged">갱신 시 호출되는 콜백. 해지하려면 같은 델리게이트로 <see cref="UnsubscribeRemoteConfig"/>를 호출해야 합니다.</param>
+        /// <param name="invokeIfCached">true면 구독 시점에 캐시된 값이 있을 때 즉시 1회 호출합니다.</param>
         internal static void SubscribeRemoteConfig(string key, Action<string> onValueChanged, bool invokeIfCached = true) =>
             SupabaseSDK.SubscribeRemoteConfig(key, onValueChanged, invokeIfCached);
 
+        /// <summary><see cref="SubscribeRemoteConfig"/>로 등록한 콜백을 해지합니다. 등록 시와 동일한 델리게이트 인스턴스를 넘겨야 합니다.</summary>
         internal static void UnsubscribeRemoteConfig(string key, Action<string> onValueChanged) =>
             SupabaseSDK.UnsubscribeRemoteConfig(key, onValueChanged);
 
+        /// <summary>네트워크 없이 인메모리 캐시에서 동기 조회합니다. 캐시에 없거나 역직렬화에 실패하면 <paramref name="defaultValue"/>를 반환합니다.</summary>
         internal static T GetRemoteConfig<T>(string key, T defaultValue = default) =>
             SupabaseSDK.GetRemoteConfig(key, defaultValue);
 
@@ -354,18 +360,26 @@ namespace TrueBase.Unity
         internal static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new() =>
             SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStale);
 
+        /// <summary>키의 값을 비동기로 1회 읽는 함수를 만듭니다.</summary>
+        /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 DB의 <c>max_stale_seconds</c> 설정을 따릅니다.</param>
         internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStale);
 
+        /// <summary>폴링으로 값을 자동 갱신하는 바인딩을 만듭니다.</summary>
+        /// <param name="pollInterval">갱신 확인 주기(초). 0 이하이면 자동 폴링 없음.</param>
         internal static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollInterval)
             where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollInterval);
 
+        /// <summary>값이 갱신될 때마다 <paramref name="onChange"/>를 호출하는 리스너를 만듭니다.</summary>
+        /// <param name="pollInterval">갱신 확인 주기(초). 0 이하이면 자동 폴링 없음.</param>
+        /// <param name="invokeIfCached">true면 생성 시점에 캐시된 값이 있을 때 즉시 1회 호출합니다.</param>
         internal static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
             string key, float pollInterval, Action<T> onChange, bool invokeIfCached = true)
             where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
 
+        /// <summary>인메모리 캐시에서 원본 JSON 문자열을 조회합니다. 캐시에 없으면 false를 반환하고 <paramref name="valueJson"/>은 null입니다.</summary>
         internal static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
             SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);
 
@@ -476,7 +490,7 @@ namespace TrueBase.Unity
         public static Task<DateTime> TryGetServerUtcNowAsync(DateTime defaultValue = default) =>
             SupabaseSDK.TryGetServerUtcNowAsync(defaultValue);
 
-        // ── PlayNANOO 이관 브릿지 전용 ─────────────────────────────────────────
+        // PlayNANOO 이관 브릿지 전용
         // 게임 코드에서 직접 호출하지 마세요. PlayNanooRuntime이 내부적으로 사용합니다.
 
         /// <inheritdoc cref="SupabaseSDK.RegisterPlayNanooInterceptors"/>

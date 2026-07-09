@@ -25,6 +25,7 @@ namespace TrueBase.Unity
             _onRawChanged = json =>
             {
                 if (_disposed) return;
+                // 역직렬화 실패 시 콜백을 호출하지 않습니다.
                 try
                 {
                     var value = JsonConvert.DeserializeObject<T>(json);
@@ -38,6 +39,7 @@ namespace TrueBase.Unity
             _ = SupabaseSDK.GetRemoteConfigAsync<T>(_key, maxStale: 0);
         }
 
+        /// <summary>구독을 해지합니다. 이후 콜백은 호출되지 않습니다.</summary>
         public void Dispose()
         {
             if (_disposed) return;

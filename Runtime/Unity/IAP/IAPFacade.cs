@@ -31,7 +31,17 @@ namespace TrueBase.Unity
         private readonly Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
         private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyReceiptAsync;
 
-        // ── 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성) ─────────────
+        // 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성)
+
+        /// <param name="verifyAsync">
+        /// 주 검증 함수. (token, productId, priceAmount, priceCurrency) → (success, response).
+        /// token은 Android면 purchaseToken, iOS면 SK2 JWS. priceAmount는 micros(주 단위 ×1,000,000) 정수,
+        /// priceCurrency는 ISO 4217 코드(iOS 경로는 0/null). 필수.
+        /// </param>
+        /// <param name="verifyReceiptAsync">
+        /// iOS StoreKit 1 폴백 검증 함수. (base64 영수증 Payload, productId) → (success, response).
+        /// null이면 SK1 폴백 미지원으로 동작.
+        /// </param>
         internal IAPFacade(
             Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync,
             Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyReceiptAsync = null)
@@ -40,7 +50,7 @@ namespace TrueBase.Unity
             _verifyReceiptAsync = verifyReceiptAsync;
         }
 
-        // ── 서버 검증 (플랫폼 자동 감지) ─────────────────────────────────────
+        // 서버 검증 (플랫폼 자동 감지)
 
         protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming)
         {
@@ -123,8 +133,11 @@ namespace TrueBase.Unity
 #endif
         }
 
-        // ── 헬퍼 ──────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Unity IAP 통합 영수증 JSON(<c>{"Store":...,"Payload":...}</c>)에서 base64 SK1 영수증 Payload를 추출합니다.
+        /// </summary>
+        /// <param name="unityReceipt">Unity IAP가 제공한 영수증 원문. null/공백이거나 파싱 실패 시 null 반환.</param>
         private static string ExtractAppleReceiptPayload(string unityReceipt)
         {
             if (string.IsNullOrWhiteSpace(unityReceipt)) return null;

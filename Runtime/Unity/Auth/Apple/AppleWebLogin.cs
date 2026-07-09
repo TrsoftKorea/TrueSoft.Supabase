@@ -58,6 +58,10 @@ namespace TrueBase.Unity.Auth.Apple
             return _pending.Task;
         }
 
+        /// <summary>
+        /// 딥링크 콜백. 기대한 스킴(<see cref="_expectedScheme"/>)이 아니면 무시하고 리스너를 유지합니다.
+        /// </summary>
+        /// <param name="url">OS가 전달한 딥링크 전체 URL. Supabase 세션 파라미터가 붙어 있습니다.</param>
         private static async void OnDeepLink(string url)
         {
             if (string.IsNullOrEmpty(url))

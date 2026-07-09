@@ -55,7 +55,6 @@ namespace TrueBase.Editor
             return 7;
         }
 
-        // ── 자동 확장 컬렉션 타입 치환 ────────────────────────────────────────────────
         // 정책: 유저 세이브 생성기에서만 적용(게임이 수정·저장). RemoteConfig(읽기 전용)는 호출하지 않음
         // — 안전 읽기가 잘못된 설정 구조를 가릴 수 있어 일반 List/Dictionary를 유지합니다.
 
@@ -146,7 +145,7 @@ namespace TrueBase.Editor
             return key.Length > 0 && val.Length > 0;
         }
 
-        // ── 기존 생성 파일에서 어트리뷰트별 (키 → 타입) 추출 (재생성 시 타입 보존용) ──────
+        // 기존 생성 파일에서 어트리뷰트별 (키 → 타입) 추출 (재생성 시 타입 보존용)
         /// <summary>
         /// 생성된 .cs 소스에서 <c>[attributeName("key")] public/internal TYPE field;</c> 패턴을 읽어
         /// (키 → 타입명) 매핑을 반환합니다. 키가 생략된 경우 필드명을 키로 사용합니다.
@@ -198,7 +197,7 @@ namespace TrueBase.Editor
             return result;
         }
 
-        // ── 공용 문자열 유틸 (두 생성기 단일 소스) ────────────────────────────────────
+        // 공용 문자열 유틸 (두 생성기 단일 소스)
 
         /// <summary>
         /// 이름을 PascalCase 식별자로 변환합니다. 비식별 문자(_, -, ., 공백 등)는 단어 구분자로 보고
@@ -282,7 +281,7 @@ namespace TrueBase.Editor
                     .Replace("\"", "\\\"", StringComparison.Ordinal);
         }
 
-        // ── 기본값(스칼라 초기화 / AutoDefault) 지원 ──────────────────────────────────
+        // 기본값(스칼라 초기화 / AutoDefault) 지원
 
         /// <summary>TypeOptions(스칼라 값 타입·string·날짜)인지 여부.</summary>
         internal static bool IsScalarTypeName(string clrType)

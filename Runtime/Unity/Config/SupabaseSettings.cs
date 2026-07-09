@@ -88,6 +88,9 @@ namespace TrueBase.Unity
         public float withdrawalRequestDelayDays = 7f;
 
 
+        /// <summary>
+        /// 인스펙터 값을 Core 계층의 <see cref="SupabaseOptions"/>로 변환합니다. 범위를 벗어난 값은 최소값으로 보정합니다.
+        /// </summary>
         public SupabaseOptions ToOptions()
         {
             return new SupabaseOptions

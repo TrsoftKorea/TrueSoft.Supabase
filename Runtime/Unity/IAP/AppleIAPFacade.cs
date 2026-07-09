@@ -32,7 +32,13 @@ namespace TrueBase.Unity
 
         protected override string LogTag => "[Supabase.IAP.Apple]";
 
-        // ── 생성자 (internal — SupabaseIAP.CreateAppleIAP()로만 생성) ──────────
+        // 생성자 (internal — SupabaseIAP.CreateAppleIAP()로만 생성)
+
+        /// <param name="verifyJwsAsync">StoreKit 2 검증 함수. (JWS 토큰, productId) → (success, response).</param>
+        /// <param name="verifyReceiptAsync">
+        /// StoreKit 1 폴백 검증 함수. (base64 영수증 Payload, productId) → (success, response).
+        /// null이면 SK1 폴백 미지원으로 동작.
+        /// </param>
         internal AppleIAPFacade(
             Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyJwsAsync,
             Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyReceiptAsync = null)
@@ -41,7 +47,6 @@ namespace TrueBase.Unity
             _verifyReceiptAsync = verifyReceiptAsync;
         }
 
-        // ── 서버 검증 ─────────────────────────────────────────────────────────
 
         protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming)
         {
@@ -101,8 +106,11 @@ namespace TrueBase.Unity
             }
         }
 
-        // ── 헬퍼 ──────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Unity IAP 통합 영수증 JSON(<c>{"Store":...,"Payload":...}</c>)에서 base64 SK1 영수증 Payload를 추출합니다.
+        /// </summary>
+        /// <param name="unityReceipt">Unity IAP가 제공한 영수증 원문. null/공백이거나 파싱 실패 시 null 반환.</param>
         private static string ExtractAppleReceiptPayload(string unityReceipt)
         {
             if (string.IsNullOrWhiteSpace(unityReceipt)) return null;

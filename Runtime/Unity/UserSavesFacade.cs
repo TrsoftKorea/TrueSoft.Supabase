@@ -7,11 +7,18 @@ using TrueBase.Core.Data;
 
 namespace TrueBase.Unity
 {
+    /// <summary>
+    /// 유저 세이브 로드·PATCH를 세션 관리와 함께 제공하는 파사드.
+    /// 각 API는 세션 없는 오버로드(생성자에 전달한 <c>sessionGetter</c>에서 현재 세션을 가져옴)와
+    /// 세션을 직접 지정하는 오버로드를 함께 제공합니다.
+    /// </summary>
     public sealed class UserSavesFacade
     {
         private readonly SupabaseUserDataService _userDataService;
         private readonly Func<SupabaseSession> _sessionGetter;
 
+        /// <param name="userDataService">REST 호출을 수행할 서비스. null이면 예외.</param>
+        /// <param name="sessionGetter">현재 세션 제공자. null이면 세션 없는 오버로드는 <c>session_null</c>로 실패합니다.</param>
         public UserSavesFacade(SupabaseUserDataService userDataService, Func<SupabaseSession> sessionGetter = null)
         {
             _userDataService = userDataService ?? throw new ArgumentNullException(nameof(userDataService));
@@ -28,6 +35,7 @@ namespace TrueBase.Unity
             return EnsureMyRowAsync<T>(session);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<bool>> EnsureMyRowAsync<T>(SupabaseSession session)
         {
             if (session == null)
@@ -57,6 +65,7 @@ namespace TrueBase.Unity
             return PatchAsync(session, tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<bool>> PatchAsync(
             SupabaseSession session,
             string tableName,
@@ -92,6 +101,7 @@ namespace TrueBase.Unity
             return LoadColumnsAsync<T>(session, tableName, selectColumnsCsv);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<T>> LoadColumnsAsync<T>(
             SupabaseSession session,
             string tableName,
@@ -122,6 +132,7 @@ namespace TrueBase.Unity
             return LoadColumnsWithRowStateAsync<T>(session, tableName, selectColumnsCsv);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
             SupabaseSession session,
             string tableName,
@@ -152,6 +163,7 @@ namespace TrueBase.Unity
             return LoadAttributedAsync<T>(session, includeUpdatedAt);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<T>> LoadAttributedAsync<T>(SupabaseSession session, bool includeUpdatedAt = true) where T : class, new()
         {
             if (session == null)
@@ -177,6 +189,7 @@ namespace TrueBase.Unity
             return LoadAttributedWithRowStateAsync<T>(session, includeUpdatedAt);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadAttributedWithRowStateAsync<T>(
             SupabaseSession session,
             bool includeUpdatedAt = true) where T : class, new()
@@ -209,6 +222,7 @@ namespace TrueBase.Unity
             return PatchDiffAsync(session, previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
         }
 
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             SupabaseSession session,
             T previous,

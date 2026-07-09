@@ -36,7 +36,7 @@ namespace TrueBase.Core.Data
                 if (base[i] != null) base[i].DefaultValue = _default;
         }
 
-        // ── AutoRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용) ──
+        // AutoRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용)
         internal AutoList<T> RawRowOrNull(int i) => (i >= 0 && i < Count) ? base[i] : null;
 
         internal AutoList<T> EnsureRow(int i)
@@ -56,7 +56,6 @@ namespace TrueBase.Core.Data
             set => EnsureRow(i)[j] = value;
         }
 
-        // ── 실제 행 접근 ──────────────────────────────────────────────────────
 
         /// <summary>행 <paramref name="i"/>의 실제 저장된 <see cref="AutoList{T}"/>를 반환합니다. 없으면 빈 리스트(저장 안 함·비파괴).</summary>
         public AutoList<T> Row(int i)
@@ -81,7 +80,7 @@ namespace TrueBase.Core.Data
             }
         }
 
-        // ── 행 시프트 경고(그리드의 행 조작) ──────────────────────────────────
+        // 행 시프트 경고(그리드의 행 조작)
         private const string ShiftWarning =
             "AutoList2D의 행 인덱스는 슬롯 의미가 있어 이 연산은 이후 행을 밀어 매핑을 깨뜨립니다. 값은 [i, j] 또는 [i][j]로 접근하세요.";
 
@@ -121,13 +120,13 @@ namespace TrueBase.Core.Data
             set => _owner.EnsureRow(_i)[j] = value;
         }
 
-        // ── 추가/삽입 (쓰기 → 그 시점에 행 생성·저장) ──
+        // 추가/삽입 (쓰기 → 그 시점에 행 생성·저장)
         public void Add(T item) => _owner.EnsureRow(_i).Add(item);
         public void AddRange(IEnumerable<T> collection) => ((List<T>)_owner.EnsureRow(_i)).AddRange(collection);
         public void Insert(int index, T item) => ((List<T>)_owner.EnsureRow(_i)).Insert(index, item);
         public void InsertRange(int index, IEnumerable<T> collection) => ((List<T>)_owner.EnsureRow(_i)).InsertRange(index, collection);
 
-        // ── 삭제/정렬 (없는 행이면 no-op) ──
+        // 삭제/정렬 (없는 행이면 no-op)
         public bool Remove(T item) => L?.Remove(item) ?? false;
         public void RemoveAt(int index) => L?.RemoveAt(index);
         public int RemoveAll(Predicate<T> match) => L?.RemoveAll(match) ?? 0;
@@ -137,7 +136,7 @@ namespace TrueBase.Core.Data
         public void Sort(Comparison<T> comparison) => L?.Sort(comparison);
         public void Reverse() => L?.Reverse();
 
-        // ── 조회 (저장분 대상, List<T>와 동일 시맨틱) ──
+        // 조회 (저장분 대상, List<T>와 동일 시맨틱)
         public bool Contains(T item) => L?.Contains(item) ?? false;
         public int IndexOf(T item) => L?.IndexOf(item) ?? -1;
         public int LastIndexOf(T item) => L?.LastIndexOf(item) ?? -1;

@@ -107,6 +107,10 @@ namespace TrueBase.Unity.Config
         /// </summary>
         public static Task<SupabaseCallResult> TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
 
+        /// <summary>
+        /// 자동 로그인 → <see cref="OnAfterAutoLoginAsync"/> 훅 → 전체 UserSave 로드를 순서대로 수행합니다.
+        /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리하고 UserSave 로드를 생략합니다.
+        /// </summary>
         private static async Task<SupabaseCallResult> AutoLoginAndMaybeLoadAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
@@ -129,6 +133,10 @@ namespace TrueBase.Unity.Config
 
 
 
+        /// <summary>
+        /// 씬에 <see cref="GoogleLoginBridge"/>가 없으면 <c>DontDestroyOnLoad</c> GameObject로 생성합니다.
+        /// Android 네이티브 플러그인이 <c>UnitySendMessage</c>로 콜백을 보낼 대상이 항상 존재하도록 보장합니다.
+        /// </summary>
         private void EnsureGoogleLoginBridge()
         {
             var existing = FindFirstObjectByType<GoogleLoginBridge>();

@@ -10,7 +10,7 @@ namespace TrueBase.Core.Data
 {
     /// <summary>
     /// 공개 프로필(soft 탈퇴 시각, 활동 시각) 및 표시 이름(displayName) 관련 API.
-    /// - DB: <c>profiles</c> (user_id / account_id / withdrawn_at / last_activity_at)
+    /// - DB: 프로필 테이블(기본 <c>user_profiles</c>) — user_id / account_id / withdrawn_at / last_activity_at
     /// - 표시 이름: Edge Function <c>displayname-get</c> (내부적으로 <c>display_names</c> 테이블 사용)
     /// - 유니크 강제: <c>display_names</c>의 unique index (<c>server_id</c>, lower(trim(display_name)))
     /// </summary>
@@ -48,9 +48,10 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 로그인 세션 기준(동일 서버)으로 표시 이름을 조회합니다.
-        /// Edge Function <c>displayname-get</c>를 호출하며, <paramref name="playerUserId"/>는 <c>profiles.user_id</c>(안정 플레이어 id)입니다.
+        /// 로그인 세션 기준(동일 서버)으로 표시 이름을 조회합니다. Edge Function <c>displayname-get</c>.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="playerUserId">조회 대상의 안정 플레이어 id(<c>profiles.user_id</c>). 필수 — 본인 외 다른 플레이어도 조회 가능합니다.</param>
         public async Task<SupabaseResult<string>> GetDisplayNameAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -90,9 +91,11 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// displayName이 사용 가능한지 조회합니다(현재 로그인 서버 기준).
-        /// 로그인 후 본인이 이미 같은 이름을 쓰는 경우(수정 화면 등)에는 <paramref name="ignoreAccountIdForSelf"/>에 현재 <c>auth.uid()</c>(세션의 사용자 id)를 넘기면 사용 가능으로 처리합니다.
+        /// displayName이 사용 가능한지 조회합니다(현재 로그인 서버 기준). RPC <c>ts_is_display_name_available</c>.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="displayName">검사할 표시 이름. 앞뒤 공백 제거 후 최대 64자.</param>
+        /// <param name="ignoreAccountIdForSelf">본인이 이미 같은 이름을 쓰는 경우(수정 화면 등) 현재 <c>auth.uid()</c>를 넘기면 그 계정의 기존 이름은 사용 가능으로 처리됩니다(기본값: null).</param>
         public async Task<SupabaseResult<bool>> IsDisplayNameAvailableAsync(
             string accessToken,
             string displayName,
@@ -142,6 +145,10 @@ namespace TrueBase.Core.Data
         /// 본인 displayName 유니크 claim을 upsert 합니다(<c>display_names</c>).
         /// auth.user_metadata(displayName) 업데이트는 별도(<c>/auth/v1/user</c>).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). upsert 충돌 키. 필수.</param>
+        /// <param name="playerUserId">안정 플레이어 id. null·공백이면 <paramref name="accountId"/>를 대신 사용합니다.</param>
+        /// <param name="displayName">등록할 표시 이름. 앞뒤 공백 제거 후 최대 64자.</param>
         public async Task<SupabaseResult<bool>> UpsertMyDisplayNameClaimAsync(
             string accessToken,
             string accountId,
@@ -190,9 +197,10 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 공개 프로필 한 행을 조회합니다. <paramref name="playerUserId"/>는 <c>profiles.user_id</c>입니다.
-        /// 행이 없으면 displayName·탈퇴 시각은 비어 있는 스냅샷을 반환합니다.
+        /// 공개 프로필 한 행을 조회합니다. 행이 없으면 displayName·탈퇴 시각이 비어 있는 스냅샷을 반환합니다(실패 아님).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="playerUserId">조회 대상의 안정 플레이어 id(<c>profiles.user_id</c>). 필수.</param>
         public async Task<SupabaseResult<PublicProfileSnapshot>> GetProfileAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -263,6 +271,10 @@ namespace TrueBase.Core.Data
         /// 로그인 직후, 현재 계정(account_id)에 대응하는 profiles 행이 항상 존재하도록 합니다.
         /// RPC <c>ts_ensure_my_profile</c>(SECURITY DEFINER)로 upsert하며, <c>withdrawn_at</c>은 null로 정리합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
+        /// <param name="playerUserId">안정 플레이어 id(<c>profiles.user_id</c>). null·공백이면 <paramref name="accountId"/>를 대신 사용합니다.</param>
+        /// <param name="platform">접속 플랫폼 문자열(예: <c>"Android"</c>). null이면 RPC에 null로 전달됩니다(기본값: null).</param>
         public async Task<SupabaseResult<bool>> EnsureMyProfileRowAsync(
             string accessToken,
             string accountId,
@@ -300,11 +312,6 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
-        /// <summary>
-        /// <c>game_servers</c> 공개 SELECT(RLS)로 <see cref="_defaultServerCode"/>에 해당하는 <c>id</c>를 한 번 조회해 캐시합니다.
-        /// (레거시/기타 REST 경로용. <see cref="EnsureMyProfileRowAsync"/> 는 <c>ts_ensure_my_profile</c> RPC를 사용합니다.)
-        /// </summary>
-
         private static string ExtractFirstUuidFromJson(string body)
         {
             if (string.IsNullOrWhiteSpace(body))
@@ -316,7 +323,8 @@ namespace TrueBase.Core.Data
             return m.Success ? m.Value : null;
         }
 
-        /// <summary>현재 로그인 계정의 서버 식별자를 조회합니다.</summary>
+        /// <summary>현재 로그인 계정의 서버 식별자를 조회합니다. RPC <c>ts_my_server_id</c>.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<MyServerInfo>> GetMyServerIdAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -351,7 +359,10 @@ namespace TrueBase.Core.Data
             }
         }
 
-        /// <summary>현재 로그인 계정을 지정 서버 코드로 이주시킵니다.</summary>
+        /// <summary>현재 로그인 계정을 지정 서버 코드로 이주시킵니다. RPC <c>ts_transfer_my_server</c>.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="targetServerCode">이동할 서버 코드(예: <c>KR1</c>). 필수.</param>
+        /// <param name="reason">이주 사유(감사 로그용). null·공백이면 전달하지 않습니다(기본값: null).</param>
         public async Task<SupabaseResult<bool>> TransferMyServerAsync(string accessToken, string targetServerCode, string reason = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -393,8 +404,11 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 본인 행의 <c>withdrawn_at</c>만 갱신합니다. <paramref name="withdrawnAtIso"/>가 null/빈 문자열이면 SQL NULL로 지웁니다(탈퇴 표시 해제).
+        /// 본인 행의 <c>withdrawn_at</c>만 갱신합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터에 사용. 필수.</param>
+        /// <param name="withdrawnAtIso">탈퇴 예약 시각(ISO 8601). null·빈 문자열이면 SQL NULL로 지웁니다(탈퇴 표시 해제).</param>
         public async Task<SupabaseResult<bool>> PatchMyWithdrawnAtAsync(
             string accessToken,
             string accountId,
@@ -432,8 +446,10 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 본인 행의 <c>last_activity_at</c>을 현재 시각으로 갱신합니다. Retool 운영 대시보드 모니터링용.
+        /// 본인 행의 <c>last_activity_at</c>을 현재 UTC 시각으로 갱신합니다. 운영 대시보드 모니터링용.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터에 사용. 필수.</param>
         public async Task<SupabaseResult<bool>> PatchMyLastActivityAtAsync(
             string accessToken,
             string accountId)
@@ -467,8 +483,10 @@ namespace TrueBase.Core.Data
 
         /// <summary>
         /// 서버에서 현재 시각 기준으로 유예 기간(일) 뒤의 <c>withdrawn_at</c>을 계산해 예약합니다.
-        /// RPC: <c>ts_request_withdrawal</c>.
+        /// RPC: <c>ts_request_withdrawal</c>. 성공 시 예약된 시각(ISO 8601)을 반환합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="delayDays">탈퇴까지 유예 일수. 음수는 0으로 보정됩니다.</param>
         public async Task<SupabaseResult<string>> RequestMyWithdrawalByDelayDaysAsync(
             string accessToken,
             int delayDays)
@@ -515,6 +533,7 @@ namespace TrueBase.Core.Data
         /// 로그인한 본인의 탈퇴 예약 게이트 상태를 조회합니다.
         /// RPC: <c>ts_my_withdrawal_status</c>.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<MyWithdrawalStatus>> GetMyWithdrawalStatusAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))

@@ -11,7 +11,6 @@ namespace TrueBase.Editor
     /// <summary>remote_config 테이블에서 키·JSON을 읽어 DTO + 접근자 클래스 소스를 생성합니다.</summary>
     internal static class RemoteConfigClassGenerator
     {
-        // ── DB fetch ─────────────────────────────────────────────────────────
 
         /// <summary>
         /// remote_config 테이블 전체 행을 가져옵니다.
@@ -56,7 +55,7 @@ namespace TrueBase.Editor
             var result = new List<RcKeyRow>(arr.Count);
             foreach (var item in arr)
             {
-                // value_json は text なら文字列、jsonb なら JObject で返る場合があるので正規化
+                // value_json은 컬럼이 text면 문자열, jsonb면 JObject로 반환될 수 있어 JSON 문자열로 정규화
                 var vjToken = item["value_json"];
                 string vj;
                 if (vjToken == null || vjToken.Type == JTokenType.Null)
@@ -76,7 +75,6 @@ namespace TrueBase.Editor
             return result;
         }
 
-        // ── JSON parsing ─────────────────────────────────────────────────────
 
         /// <summary>
         /// value_json 문자열 → 평탄화된 RcEditableField 목록.
@@ -212,7 +210,6 @@ namespace TrueBase.Editor
             }
         }
 
-        // ── Source generation ────────────────────────────────────────────────
 
         /// <summary>
         /// <c>[RemoteConfigKey]</c> 어트리뷰트가 포함된 DTO 클래스 C# 소스를 생성합니다.
@@ -324,7 +321,6 @@ namespace TrueBase.Editor
             sb.AppendLine(ind + "}");
         }
 
-        // ── Subtree helpers ───────────────────────────────────────────────────
 
         /// <summary>depth보다 깊은 자식 항목들을 건너뜁니다 (i를 다음 같은/낮은 depth로 이동).</summary>
         private static void SkipSubtree(IReadOnlyList<RcEditableField> fields, ref int i, int parentDepth)
@@ -333,7 +329,6 @@ namespace TrueBase.Editor
                 i++;
         }
 
-        // ── Type helpers ──────────────────────────────────────────────────────
 
         private static FieldTypeCategory MapCategory(JTokenType t)
         {
@@ -354,7 +349,6 @@ namespace TrueBase.Editor
             return TypeOptions[f.TypeIndex];
         }
 
-        // ── Existing file type restoration ────────────────────────────────────
 
         /// <summary>
         /// 기존 Config.cs 파일이 있으면 [JsonProperty("key")] 필드의 타입을 읽어 반환합니다.
@@ -386,10 +380,9 @@ namespace TrueBase.Editor
             return result;
         }
 
-        // 문자열 유틸(ToPascalCase·LegalFieldName·EscapeXml·EscapeCSharpString·IsLegacyJwtStyleApiKey)은
-        // GeneratorTypeCatalog로 통합됨(using static). 두 생성기 단일 소스.
+        // 문자열 유틸(ToPascalCase·LegalFieldName·EscapeXml 등)은 GeneratorTypeCatalog가 단일 소스이며
+        // 파일 상단의 using static으로 참조합니다.
 
-        // ── SubList helper ────────────────────────────────────────────────────
 
         private sealed class SubList : IReadOnlyList<RcEditableField>
         {
@@ -405,7 +398,6 @@ namespace TrueBase.Editor
         }
     }
 
-    // ── Data classes ──────────────────────────────────────────────────────────
 
     internal sealed class RcKeyRow
     {

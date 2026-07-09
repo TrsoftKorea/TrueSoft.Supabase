@@ -61,8 +61,14 @@ namespace TrueBase.Core.Data
     /// </summary>
     public interface IMailItemHandler
     {
+        /// <summary>이 핸들러가 처리하는 아이템 키(<c>items[].key</c>와 일치).</summary>
         string ItemKey { get; }
 
+        /// <summary>수령 확정된 아이템 1건을 게임에 지급합니다.</summary>
+        /// <param name="mailId">보상이 들어 있던 메일 UUID.</param>
+        /// <param name="itemIndex"><c>items</c> 배열 내 위치(0-based).</param>
+        /// <param name="itemKey">아이템 키.</param>
+        /// <param name="count">지급 수량.</param>
         Task<Common.SupabaseResult<ClaimResult>> HandleAsync(
             string mailId,
             int itemIndex,

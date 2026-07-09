@@ -30,7 +30,10 @@ namespace TrueBase.Core.Auth
 
         /// <summary>
         /// RPC <c>ts_anon_recovery_get_refresh_token</c>을 호출해 복구용 refresh_token을 조회합니다.
+        /// 등록된 토큰이 없으면 성공 결과에 <c>null</c>을 담아 반환합니다.
         /// </summary>
+        /// <param name="fingerprintHash">디바이스 지문 해시. 필수 — 비어 있으면 즉시 실패.</param>
+        /// <param name="serverCode">조회할 서버 코드. null·공백이면 DB 기본 서버 기준으로 조회합니다(기본값: null).</param>
         public async Task<SupabaseResult<string>> TryGetRefreshTokenByFingerprintAsync(string fingerprintHash, string serverCode = null)
         {
             if (string.IsNullOrWhiteSpace(fingerprintHash))
@@ -68,8 +71,12 @@ namespace TrueBase.Core.Auth
         }
 
         /// <summary>
-        /// RPC <c>ts_anon_recovery_upsert_refresh_token</c>을 호출해 복구용 refresh_token을 저장합니다.
+        /// RPC <c>ts_anon_recovery_upsert_refresh_token</c>을 호출해 복구용 refresh_token을 저장(upsert)합니다.
         /// </summary>
+        /// <param name="fingerprintHash">디바이스 지문 해시. 필수.</param>
+        /// <param name="refreshToken">저장할 Supabase Auth refresh_token. 필수.</param>
+        /// <param name="accountId">현재 계정 id(<c>auth.users.id</c>). null·공백이면 RPC에 null로 전달됩니다.</param>
+        /// <param name="serverCode">저장할 서버 코드. null·공백이면 DB 기본 서버 기준(기본값: null).</param>
         public async Task<SupabaseResult<bool>> UpsertRefreshTokenByFingerprintAsync(
             string fingerprintHash,
             string refreshToken,
@@ -109,6 +116,8 @@ namespace TrueBase.Core.Auth
         /// <summary>
         /// RPC <c>ts_anon_recovery_delete_by_fingerprint</c>으로 해당 지문 행을 삭제합니다(익명→OAuth 연동 후 정리용).
         /// </summary>
+        /// <param name="fingerprintHash">디바이스 지문 해시. 필수.</param>
+        /// <param name="serverCode">삭제할 서버 코드. null·공백이면 DB 기본 서버 기준(기본값: null).</param>
         public async Task<SupabaseResult<bool>> DeleteByFingerprintAsync(string fingerprintHash, string serverCode = null)
         {
             if (string.IsNullOrWhiteSpace(fingerprintHash))

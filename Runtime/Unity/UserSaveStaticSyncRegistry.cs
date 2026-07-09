@@ -5,6 +5,10 @@ using UnityEngine;
 
 namespace TrueBase.Unity
 {
+    /// <summary>
+    /// <see cref="StaticUserSave{TRow}"/> 인스턴스들의 자동 동기화 스케줄러.
+    /// key별로 dirty 검사·쿨다운 타이머·flush 실행을 관리하며, <see cref="Tick"/>은 <c>SupabaseRuntime.Update</c>에서 매 프레임 호출됩니다.
+    /// </summary>
     internal static class UserSaveStaticSyncRegistry
     {
         private sealed class Entry
@@ -25,7 +29,6 @@ namespace TrueBase.Unity
         private static float _cooldownSeconds = 5f;
         private static float _lastRealtime;
 
-        // ── 전역 Priority 쿨다운 테이블 ────────────────────────────────────────
         private static float _urgentCooldown = 1f;
         private static float _normalCooldown = 5f;
         private static float _lazyCooldown   = 30f;
@@ -51,11 +54,24 @@ namespace TrueBase.Unity
             _ => _normalCooldown
         };
 
+        /// <summary>
+        /// 우선순위 구분 없는 단일 전역 쿨다운(초)을 설정합니다.
+        /// <see cref="Entry.GetDirtyCooldown"/>이 없는 항목의 flush 후 대기 시간에만 사용됩니다. 음수는 0으로 보정됩니다.
+        /// </summary>
         public static void ConfigureCooldown(float seconds)
         {
             _cooldownSeconds = Mathf.Max(0f, seconds);
         }
 
+        /// <summary>
+        /// 세이브 항목을 등록합니다. 같은 key로 재등록하면 콜백만 교체되고 타이머 상태는 유지됩니다.
+        /// </summary>
+        /// <param name="key">항목 식별 key. 공백이면 무시됩니다(앞뒤 공백은 trim).</param>
+        /// <param name="hasDirty">전송할 변경이 있는지 검사. null이면 등록 자체가 무시됩니다.</param>
+        /// <param name="flushAsync">변경분 전송. null이면 등록 자체가 무시됩니다.</param>
+        /// <param name="resetLocalState"><see cref="ResetAll"/> 시 로컬 상태 초기화. null 허용.</param>
+        /// <param name="loadAsync"><see cref="LoadAllAsync"/>에서 호출할 로드. null이면 로드 대상에서 제외됩니다.</param>
+        /// <param name="getDirtyCooldown">dirty 우선순위별 쿨다운(초) 반환. null이면 전역 단일 쿨다운을 사용합니다.</param>
         public static void Register(
             string key,
             Func<bool> hasDirty,
@@ -90,6 +106,10 @@ namespace TrueBase.Unity
             };
         }
 
+        /// <summary>
+        /// 값 변경을 알리고 쿨다운 타이머를 재계산합니다. 타이머는 더 짧아지는 방향으로만 갱신됩니다
+        /// (긴 쿨다운의 dirty가 이미 예약된 짧은 타이머를 늘리지 않도록).
+        /// </summary>
         public static void MarkDirty(string key)
         {
             if (!TryGetEntry(key, out var entry))
@@ -114,6 +134,10 @@ namespace TrueBase.Unity
             TryStartFlush(entry, immediate: false);
         }
 
+        /// <summary>
+        /// 쿨다운을 무시하고 즉시 flush를 시작합니다(완료 대기 없음).
+        /// 이미 전송 중이면 완료 후 1회 재전송을 예약하고 false를 반환합니다.
+        /// </summary>
         public static bool RequestImmediateFlush(string key)
         {
             if (!TryGetEntry(key, out var entry))
@@ -128,6 +152,8 @@ namespace TrueBase.Unity
             return TryStartFlush(entry, immediate: true);
         }
 
+        /// <summary>즉시 flush를 시작하고 전송·dirty가 모두 정리될 때까지 대기합니다.</summary>
+        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
         public static async Task<bool> RequestImmediateFlushAsync(string key, int timeoutMs = 5000)
         {
             if (!TryGetEntry(key, out var entry))
@@ -137,12 +163,15 @@ namespace TrueBase.Unity
             return await WaitForSettledAsync(entry, timeoutMs);
         }
 
+        /// <summary>등록된 모든 항목에 즉시 flush를 요청합니다(완료 대기 없음).</summary>
         public static void RequestImmediateFlushAll()
         {
             foreach (var pair in Entries)
                 _ = RequestImmediateFlush(pair.Key);
         }
 
+        /// <summary>등록된 모든 항목에 즉시 flush를 요청하고, 전부 정리될 때까지 대기합니다.</summary>
+        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
         public static async Task<bool> RequestImmediateFlushAllAsync(int timeoutMs = 5000)
         {
             foreach (var pair in Entries)
@@ -170,6 +199,8 @@ namespace TrueBase.Unity
             return false;
         }
 
+        /// <summary>쿨다운이 만료된 dirty 항목의 flush를 시작합니다. 매 프레임 호출됩니다.</summary>
+        /// <param name="realtimeNow"><c>Time.realtimeSinceStartup</c> 값(초).</param>
         public static void Tick(float realtimeNow)
         {
             _lastRealtime = realtimeNow;
@@ -189,6 +220,10 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// <c>loadAsync</c>가 등록된 모든 항목을 병렬로 로드합니다. 하나라도 실패하면 false.
+        /// 로드 대상이 없으면 true를 반환합니다.
+        /// </summary>
         public static async Task<bool> LoadAllAsync()
         {
             var tasks = new List<Task<bool>>(Entries.Count);
@@ -216,6 +251,7 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>모든 항목의 전송 상태·타이머를 초기화하고 <c>resetLocalState</c> 콜백을 호출합니다. 세션 해제 시 호출됩니다.</summary>
         public static void ResetAll()
         {
             foreach (var entry in Entries.Values)
@@ -244,6 +280,8 @@ namespace TrueBase.Unity
             return Entries.TryGetValue(key.Trim(), out entry);
         }
 
+        /// <summary>flush 시작을 시도합니다. 시작했으면 true.</summary>
+        /// <param name="immediate">true면 쿨다운·dirty 사전 검사를 건너뛰고, 전송 중이면 완료 후 재전송을 예약합니다.</param>
         private static bool TryStartFlush(Entry entry, bool immediate)
         {
             if (entry == null)
@@ -329,6 +367,8 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>전송 중이 아니고 dirty도 없는 상태가 될 때까지 16ms 간격으로 대기합니다.</summary>
+        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정됩니다.</param>
         private static async Task<bool> WaitForSettledAsync(Entry entry, int timeoutMs)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();

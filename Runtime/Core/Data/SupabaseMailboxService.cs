@@ -59,6 +59,9 @@ namespace TrueBase.Core.Data
             return await FetchMailListAsync(accessToken, url);
         }
 
+        /// <summary>메일 한 건을 조회합니다. RPC <c>ts_view_mail_for_user</c> — 보상 items가 없는 메일은 조회 시 읽음 처리됩니다.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="mailId">조회할 메일 UUID. 필수 — 본인 소유가 아니거나 없으면 <c>mail_not_found</c> 실패.</param>
         public async Task<SupabaseResult<Mail>> GetMailByIdAsync(string accessToken, string mailId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -103,7 +106,9 @@ namespace TrueBase.Core.Data
             }
         }
 
-        /// <summary>단일 메일 수령 RPC. 보상 없음이면 빈 목록(no-op).</summary>
+        /// <summary>단일 메일의 보상을 수령 처리합니다. RPC <c>ts_claim_mail_items</c>. 보상 없음이면 빈 목록(no-op).</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="mailId">수령할 메일 UUID. 필수.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailItemPayload>>> ClaimMailItemsRpcAsync(
             string accessToken,
             string mailId)
@@ -133,6 +138,8 @@ namespace TrueBase.Core.Data
             return ParseClaimItemsArray(response.Body);
         }
 
+        /// <summary>수령 가능한 모든 메일의 보상을 한 번에 수령 처리합니다. RPC <c>ts_claim_all_mail_items</c>. 메일별 보상 묶음 목록을 반환합니다.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailClaimBundle>>> ClaimAllMailItemsRpcAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -155,6 +162,9 @@ namespace TrueBase.Core.Data
             return ParseClaimAllResponse(response.Body);
         }
 
+        /// <summary>메일 한 건을 소프트 삭제합니다. RPC <c>ts_delete_mail_for_user</c>.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="mailId">삭제할 메일 UUID. 필수.</param>
         public async Task<SupabaseResult<bool>> DeleteMailForUserRpcAsync(string accessToken, string mailId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -181,7 +191,8 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
-        /// <summary>읽음·삭제 가능한 메일만 일괄 소프트 삭제. 반환값은 처리한 행 수.</summary>
+        /// <summary>읽음·삭제 가능한 메일만 일괄 소프트 삭제합니다. RPC <c>ts_delete_read_mails_for_user</c>. 반환값은 처리한 행 수.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<int>> DeleteReadMailsForUserRpcAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -215,7 +226,8 @@ namespace TrueBase.Core.Data
             }
         }
 
-        /// <summary>미읽음·미수령 보상 메일 개수(JWT <c>auth.uid()</c> + 현재 프로필 서버).</summary>
+        /// <summary>미읽음·미수령 보상 메일 개수를 조회합니다(JWT <c>auth.uid()</c> + 현재 프로필 서버 기준). RPC <c>ts_mail_inbox_counts</c>.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<MailInboxCounts>> GetInboxCountsAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))

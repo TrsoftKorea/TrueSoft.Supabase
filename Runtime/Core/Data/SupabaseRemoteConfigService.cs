@@ -11,7 +11,7 @@ namespace TrueBase.Core.Data
 {
     /// <summary>
     /// Supabase remote_config 테이블을 통해 원격 설정을 조회합니다.
-    /// 스키마: <c>Sql/player/10_remote_config.sql</c> (key, value_json, updated_at, version, 메타데이터 컬럼).
+    /// 스키마: <c>Samples~/DatabaseSetup/SQL/player/08_remote_config.sql</c> (key, value_json, updated_at, version, 메타데이터 컬럼).
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
     /// </summary>
     public sealed class SupabaseRemoteConfigService
@@ -36,10 +36,10 @@ namespace TrueBase.Core.Data
             _remoteConfigTable = SupabaseRestTableRef.Normalize(remoteConfigTable, nameof(remoteConfigTable));
         }
 
-        /// <summary>특정 키 목록만 조회(Cold Start 시 첫 조회용).</summary>
-        /// <param name="keys">조회할 Remote Config 키 목록.</param>
-        /// <param name="accessToken">액세스 토큰(선택사항). null이면 기본 공개 액세스.</param>
-        /// <returns>요청한 키에 해당하는 Remote Config 행 배열. 미존재 키는 제외됨.</returns>
+        /// <summary>특정 키 목록만 조회합니다(Cold Start 시 첫 조회용).</summary>
+        /// <param name="keys">조회할 Remote Config 키 목록. null·빈 목록이면 요청 없이 빈 배열을 반환합니다.</param>
+        /// <param name="accessToken">로그인 세션의 액세스 토큰. null이면 공개(Publishable 키) 액세스 — <c>requires_auth</c> 행은 RLS로 제외됩니다(기본값: null).</param>
+        /// <returns>요청한 키에 해당하는 Remote Config 행 배열. 미존재 키는 제외됩니다.</returns>
         public async Task<SupabaseResult<RemoteConfigRow[]>> GetByKeysAsync(
             IReadOnlyList<string> keys,
             string accessToken = null)
@@ -103,8 +103,8 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// PostgREST는 <c>value_json</c>이 DB에서 <c>text</c>이면 JSON 문자열, <c>jsonb</c>이면 객체 리터럴로보냅니다.
-        /// Unity <see cref="ISupabaseJsonSerializer"/> 기본 구현(JsonUtility)은 객체 토큰을 <c>string</c> 필드에 넣지 못해 빈 값이 됩니다.
+        /// PostgREST는 <c>value_json</c>이 DB에서 <c>text</c>이면 JSON 문자열, <c>jsonb</c>이면 객체 리터럴로 보냅니다.
+        /// 두 형태 모두 문자열로 정규화하기 위해 JToken 기반으로 직접 파싱합니다.
         /// </summary>
         private static RemoteConfigRow[] DeserializeRemoteConfigRows(string body)
         {

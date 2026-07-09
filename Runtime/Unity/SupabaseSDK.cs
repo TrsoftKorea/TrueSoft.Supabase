@@ -63,11 +63,9 @@ namespace TrueBase.Unity
         private const string _purchaseVerifyAppleLegacyFunctionName  = "purchase-verify-apple-legacy";
         private const string _getBanInfoFunctionName = "get-ban-info";
 
-        // ── PlayNANOO 이관 브릿지 ──────────────────────────────────────────────────
         // StaticUserSave<TRow> 생성 시 자동 등록됩니다. PlayNanooRuntime이 세이브 동기화에 사용합니다.
         internal static INanooSaveSyncable _nanooSaveBridge;
 
-        // ── PlayNANOO 이관 브릿지 인터셉터 ─────────────────────────────────────────
         // 브릿지가 씬에 있을 때만 설정됩니다. null이면 기본 SDK 흐름으로 동작합니다.
         internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptSignInAnonymously;
         internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSignInWithGoogleIdToken;
@@ -83,7 +81,6 @@ namespace TrueBase.Unity
         /// <summary>PlayNANOO Apple 로그인 인터셉터가 등록되어 있는지 여부. 브라우저 기반 Apple 로그인 가드에 사용합니다.</summary>
         internal static bool IsPlayNanooAppleInterceptionActive => _interceptSignInWithAppleIdToken != null;
 
-        // ── PlayNANOO IAP 인터셉터 ────────────────────────────────────────────
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
         internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;
         internal static Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> _interceptIAPGoogle;
@@ -189,6 +186,8 @@ namespace TrueBase.Unity
 
         /// <summary>중복 로그인 감지용 <c>user_sessions</c> REST 서비스. 미초기화 시 null.</summary>
         public static SupabaseUserSessionService UserSessionService => _bootstrap?.UserSessionService;
+
+        /// <summary>기기 지문 기반 익명 계정 복구 토큰 서비스. 미초기화 시 null.</summary>
         public static SupabaseAnonymousRecoveryService AnonymousRecoveryService => _bootstrap?.AnonymousRecoveryService;
 
         /// <summary>서버 기준 시각 RPC. 로그인 없이 호출 가능합니다.</summary>
@@ -301,8 +300,6 @@ namespace TrueBase.Unity
 
         /// <summary>현재 계정에 Apple이 연동되어 있으면 true.</summary>
         public static bool IsLinkedWithApple => _currentSession?.User?.IsLinkedWithApple ?? false;
-
-        /// <summary>현재 계정에 지정한 프로바이더가 연동되어 있으면 true. (<c>"google"</c>, <c>"apple"</c>, <c>"email"</c> 등)</summary>
 
         /// <summary>현재 로그인 여부 (세션이 있고 유효한 토큰이 있는지).</summary>
         public static bool IsLoggedIn =>
@@ -466,6 +463,11 @@ namespace TrueBase.Unity
             return await PerformLinkGoogleAsync(s, idToken, googleAccessToken, deleteAnonymousRecovery: false);
         }
 
+        /// <summary>Google identity 연동 공통 처리. 연동 성공 후 세션 저장·탈퇴 가드·프로필 보장까지 수행합니다.</summary>
+        /// <param name="session">연동 대상 세션. AccessToken이 유효해야 합니다(검증은 호출자 책임).</param>
+        /// <param name="idToken">Google ID 토큰. 앞뒤 공백은 내부에서 제거합니다.</param>
+        /// <param name="googleAccessToken">Google OAuth access token. null이면 미전달(일부 GoTrue 설정에서 필요).</param>
+        /// <param name="deleteAnonymousRecovery">true면 연동 성공 후 이 기기의 익명 복구 토큰을 삭제합니다. 익명→Google 연동 경로에서만 true.</param>
         private static async Task<SupabaseResult<SupabaseSession>> PerformLinkGoogleAsync(
             SupabaseSession session,
             string idToken,
@@ -815,6 +817,11 @@ namespace TrueBase.Unity
             return await PerformLinkAppleAsync(s, idToken, rawNonce, deleteAnonymousRecovery: false);
         }
 
+        /// <summary>Apple identity 연동 공통 처리. 연동 성공 후 세션 저장·탈퇴 가드·프로필 보장까지 수행합니다.</summary>
+        /// <param name="session">연동 대상 세션. AccessToken이 유효해야 합니다(검증은 호출자 책임).</param>
+        /// <param name="idToken">Apple ID 토큰. 앞뒤 공백은 내부에서 제거합니다.</param>
+        /// <param name="rawNonce">토큰 발급 시 사용한 raw nonce. nonce 없이 발급된 토큰이면 null.</param>
+        /// <param name="deleteAnonymousRecovery">true면 연동 성공 후 이 기기의 익명 복구 토큰을 삭제합니다. 익명→Apple 연동 경로에서만 true.</param>
         private static async Task<SupabaseResult<SupabaseSession>> PerformLinkAppleAsync(
             SupabaseSession session,
             string idToken,
@@ -893,7 +900,7 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
-        // ── Apple 네이티브 로그인 (iOS Sign in with Apple) ──────────────────────────
+        // Apple 네이티브 로그인 (iOS Sign in with Apple)
 
         /// <summary>
         /// iOS 네이티브 Sign in with Apple로 ID 토큰을 받아 Supabase에 로그인합니다.
@@ -1005,6 +1012,8 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
         }
 
+        /// <summary>iOS 네이티브 Sign in with Apple 창을 띄우고 결과를 기다립니다.</summary>
+        /// <param name="rawNonce">해시 전 nonce. 내부에서 SHA256 후 요청에 사용하며, 반환된 ID 토큰 검증 시 같은 raw 값을 넘겨야 합니다.</param>
         private static async Task<SupabaseResult<AppleLoginResult>> RequestAppleLoginResultAsync(string rawNonce)
         {
             var bridge = EnsureAppleLoginBridge();
@@ -1065,7 +1074,7 @@ namespace TrueBase.Unity
             return sb.ToString();
         }
 
-        // ── 웹 OAuth 리다이렉트 (Android Apple 로그인 등) ──────────────────────────
+        // 웹 OAuth 리다이렉트 (Android Apple 로그인 등)
 
         /// <summary>
         /// Supabase 호스팅 OAuth authorize URL을 만듭니다. 브라우저/Custom Tab으로 열면 됩니다.
@@ -1381,7 +1390,6 @@ namespace TrueBase.Unity
             return (ok, ok ? r.Data : null);
         }
 
-
         /// <summary><see cref="RestoreSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<SupabaseCallResult> TryRestoreSessionAsync()
         {
@@ -1427,6 +1435,7 @@ namespace TrueBase.Unity
             return LogAndReturnData(ApiLogTags.ServerTime, r, defaultValue);
         }
 
+        /// <summary><see cref="SupabaseResult{T}"/>를 성공/실패 로그로 남기고 <see cref="SupabaseCallResult"/>로 변환합니다(BanInfo 전달 포함).</summary>
         private static SupabaseCallResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
@@ -1435,6 +1444,7 @@ namespace TrueBase.Unity
                       : SupabaseCallResult.Fail(result?.ErrorMessage, result?.BanInfo);
         }
 
+        /// <summary>결과를 성공/실패 로그로 남기고, 성공이면 <c>Data</c>를, 실패면 <paramref name="defaultValue"/>를 반환합니다.</summary>
         private static T LogAndReturnData<T>(string logTag, SupabaseResult<T> result, T defaultValue)
         {
             var ok = result != null && result.IsSuccess;
@@ -1442,6 +1452,9 @@ namespace TrueBase.Unity
             return ok ? result.Data : defaultValue;
         }
 
+        /// <summary>Try* API 결과를 <c>[logTag]</c> 접두어로 로그에 남깁니다. <see cref="_enableApiResultLogs"/>가 꺼져 있으면 무시합니다.</summary>
+        /// <param name="message">성공 시 부가 메시지(없으면 "Success"), 실패 시 사유 식별자.</param>
+        /// <param name="errorOnFail">true(기본)면 실패를 <c>Debug.LogError</c>로, false면 일반 로그로 남깁니다. 자동 로그인 미시도처럼 정상 범주의 실패에 false를 사용합니다.</param>
         private static void LogApiResult(string logTag, bool isSuccess, string message = null, bool errorOnFail = true)
         {
             if (!_enableApiResultLogs)
@@ -1633,6 +1646,8 @@ namespace TrueBase.Unity
             return result;
         }
 
+        /// <summary>Android 네이티브 Google 계정 선택 창을 띄우고 결과(ID 토큰 등)를 기다립니다.</summary>
+        /// <param name="provider">Web Client ID가 주입된 네이티브 로그인 프로바이더. null이면 즉시 실패.</param>
         private static async Task<SupabaseResult<GoogleLoginResult>> RequestGoogleLoginResultAsync(AndroidGoogleLoginProvider provider)
         {
             if (provider == null)
@@ -2039,6 +2054,7 @@ namespace TrueBase.Unity
             return await TrySetMyDisplayNameSdkOnlyAsync(displayName);
         }
 
+        /// <summary><see cref="SetMyDisplayNameAsync"/>의 인터셉터 미경유 본체. 변경/no_change를 구분해 로그를 남깁니다.</summary>
         private static async Task<SupabaseCallResult> TrySetMyDisplayNameSdkOnlyAsync(string displayName)
         {
             var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
@@ -2525,12 +2541,16 @@ namespace TrueBase.Unity
             return new RemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
         }
 
+        /// <summary>특정 key의 폴링 주기를 코드에서 덮어씁니다.</summary>
+        /// <param name="key"><c>remote_config</c> 테이블의 key 값.</param>
+        /// <param name="interval">폴링 주기(초). 0 이하면 해당 key의 폴링을 중지합니다.</param>
         internal static void SetRemoteConfigKeyPolling(string key, float interval)
         {
             if (IsInitialized)
                 RemoteConfig.SetKeyPollIntervalOverride(key, interval);
         }
 
+        /// <summary>로컬 캐시에서 key의 원본 JSON 문자열을 읽습니다(네트워크 호출 없음). 캐시에 없으면 false.</summary>
         public static bool TryGetRemoteConfigRaw(string key, out string valueJson)
         {
             return RemoteConfig.TryGetRaw(key, out valueJson);
@@ -2847,6 +2867,9 @@ namespace TrueBase.Unity
         public static Task<bool> RestoreSessionAsync() =>
             RestoreSessionAsyncCore(allowRecreateOnDeletion: false);
 
+        /// <summary>저장된 refresh_token으로 세션 복원 후 탈퇴 가드·예약 게이트·프로필 보장을 수행합니다. 갱신 실패 시 저장 토큰을 삭제합니다.</summary>
+        /// <param name="allowRecreateOnDeletion">탈퇴 유예 만료로 계정이 삭제 대상일 때 같은 방식으로 새 계정을 자동 생성할지 여부.
+        /// 사용자가 직접 누른 로그인 흐름에서만 true, 앱 시작 자동 복원에서는 false(자동 재가입 방지).</param>
         private static async Task<bool> RestoreSessionAsyncCore(bool allowRecreateOnDeletion)
         {
             if (!await EnsureInitializedAsync())
@@ -2931,9 +2954,7 @@ namespace TrueBase.Unity
                 SupabaseDuplicateSessionCoordinator.ScheduleSyncAfterSessionChange(SupabaseSessionChangeKind.RestoredOrRefreshed);
         }
 
-        /// <summary>
-        /// GoogleLoginBridge가 씬에 없으면 생성합니다. (<see cref="Config.SupabaseRuntime"/>와 동일한 이름의 오브젝트)
-        /// </summary>
+        /// <summary>GoogleLoginBridge가 씬에 없으면 생성합니다.</summary>
         private static GoogleLoginBridge EnsureGoogleLoginBridge()
         {
             var existing = UnityEngine.Object.FindFirstObjectByType<GoogleLoginBridge>();
@@ -2955,6 +2976,7 @@ namespace TrueBase.Unity
             return string.IsNullOrWhiteSpace(settings.googleWebClientId) ? null : settings.googleWebClientId.Trim();
         }
 
+        /// <summary>토큰이 유효한 익명 세션인지 판별합니다. null 세션·토큰 없는 세션은 false.</summary>
         private static bool IsAnonymousSession(SupabaseSession session)
         {
             if (session == null || session.User == null)
@@ -2975,6 +2997,7 @@ namespace TrueBase.Unity
             PlayerPrefs.Save();
         }
 
+        /// <summary>저장된 마지막 로그인 방식을 읽습니다. Google·Anonymous만 구분하며 그 외 값(Apple 포함)은 Unknown을 반환합니다.</summary>
         private static SignInMethodKind ReadLastSignInMethod()
         {
             var raw = PlayerPrefs.GetInt(LastSignInMethodKey, (int)SignInMethodKind.Unknown);
@@ -3002,6 +3025,9 @@ namespace TrueBase.Unity
             PlayerPrefs.Save();
         }
 
+        /// <summary>Edge Function <c>withdrawal-cancel-issue</c>로 철회 토큰을 발급받아 로컬에 저장합니다.</summary>
+        /// <param name="accessToken">발급 대상 계정의 로그인 access token. 비어 있으면 실패.</param>
+        /// <param name="issueTrigger">서버 감사 로그용 발급 사유 문자열. null·공백이면 <c>"withdrawal_gate"</c>로 대체.</param>
         private static async Task<SupabaseResult<WithdrawalCancelIssueInfo>> RequestWithdrawalCancelTokenCoreAsync(
             string accessToken,
             string issueTrigger = "withdrawal_gate")
@@ -3036,6 +3062,11 @@ namespace TrueBase.Unity
             return SupabaseResult<WithdrawalCancelIssueInfo>.Success(info);
         }
 
+        /// <summary>
+        /// 로그인 직후 탈퇴 예약(유예) 게이트를 처리합니다.
+        /// 예약 중이면 게이트 상태 저장 → 철회 토큰 발급 → 복구 토큰 upsert → 세션 정리 후 실패 결과를 반환합니다.
+        /// </summary>
+        /// <returns>게이트 미해당(예약 없음·상태 조회 불가)이면 null — 호출자는 로그인 흐름을 계속 진행하면 됩니다.</returns>
         private static async Task<SupabaseResult<SupabaseSession>> HandleWithdrawalReservationGateAfterSignInAsync()
         {
             if (_bootstrap?.PublicProfileService == null)
@@ -3126,6 +3157,11 @@ namespace TrueBase.Unity
             PlayerPrefs.Save();
         }
 
+        /// <summary>로그인 직후 탈퇴 가드(유예 만료 삭제)를 처리합니다. 삭제 대상이면 세션을 정리합니다.</summary>
+        /// <param name="method">삭제 후 재생성 시 사용할 로그인 방식. 재생성은 Google·Anonymous만 지원.</param>
+        /// <param name="allowRecreateOnDeletion">true면 삭제 감지 시 <paramref name="method"/>로 새 계정을 자동 생성해 로그인합니다(수동 로그인 흐름).
+        /// false면 <c>WithdrawalDeleted</c> 실패만 반환합니다(앱 시작 자동 복원 흐름).</param>
+        /// <returns>가드 미해당(삭제 대상 아님)이면 null — 호출자는 로그인 흐름을 계속 진행하면 됩니다.</returns>
         private static async Task<SupabaseResult<SupabaseSession>> HandleWithdrawalGuardAfterSignInAsync(
             SignInMethodKind method,
             bool allowRecreateOnDeletion)
@@ -3161,6 +3197,7 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>탈퇴 삭제 감지 후 재로그인용. <paramref name="method"/>에 따라 새 로그인을 수행합니다(Google·Anonymous 외에는 실패).</summary>
         private static async Task<SupabaseResult<SupabaseSession>> RecreateSessionByMethodAsync(
             SignInMethodKind method)
         {
@@ -3172,6 +3209,7 @@ namespace TrueBase.Unity
             };
         }
 
+        /// <summary>Edge Function <c>withdrawal-guard</c>로 현재 계정이 유예 만료 삭제 대상인지 확인합니다. 호출 실패는 false(삭제 안 함)로 처리합니다.</summary>
         private static async Task<bool> ShouldDeleteCurrentAccountByWithdrawalGuardAsync()
         {
             if (_bootstrap?.EdgeFunctionsService == null)
@@ -3203,6 +3241,10 @@ namespace TrueBase.Unity
                    || string.Equals(data.action, "deleted", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// 기기 지문으로 서버의 익명 복구 refresh_token을 찾아 세션 복원을 시도합니다(best-effort).
+        /// 복원 후 탈퇴 가드·예약 게이트를 통과해야 <see cref="AnonymousRecoveryKind.Restored"/>가 됩니다.
+        /// </summary>
         private static async Task<AnonymousRecoveryResult> TryRestoreSessionFromAnonymousRecoveryAsync()
         {
             var svc = AnonymousRecoveryService;
@@ -3250,6 +3292,8 @@ namespace TrueBase.Unity
             return new AnonymousRecoveryResult(AnonymousRecoveryKind.Restored);
         }
 
+        /// <summary>기기 지문 키로 <paramref name="session"/>의 refresh_token을 복구 테이블에 upsert합니다(best-effort, 실패는 경고 로그만).</summary>
+        /// <param name="session">복구 대상 세션. null이거나 refresh_token이 없으면 아무 것도 하지 않습니다.</param>
         private static async Task TryUpsertAnonymousRecoveryTokenAsync(SupabaseSession session)
         {
             var svc = AnonymousRecoveryService;
@@ -3303,6 +3347,8 @@ namespace TrueBase.Unity
             public string reason;
         }
 
+        /// <summary>Edge Function <c>get-ban-info</c>로 차단 정보를 조회합니다. 미차단·조회 실패는 null.</summary>
+        /// <param name="accountId">조회 대상 <c>auth.users.id</c>. 비어 있으면 null 반환.</param>
         private static async Task<SupabaseBanInfo> FetchBanInfoAsync(string accountId)
         {
             if (string.IsNullOrWhiteSpace(accountId) || _bootstrap?.EdgeFunctionsService == null)
@@ -3332,6 +3378,7 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>이 기기 지문의 익명 복구 토큰 행을 삭제합니다(best-effort, 실패 무시).</summary>
         private static async Task TryDeleteAnonymousRecoveryForCurrentDeviceAsync()
         {
             var svc = AnonymousRecoveryService;
@@ -3352,6 +3399,10 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>
+        /// 로그인 직후 <c>profiles</c> 본인 행을 보장하고 <see cref="MyProfile"/> 캐시를 채웁니다.
+        /// DB 서버 코드가 로컬 선택 서버와 다르면 자동 이주까지 수행합니다(best-effort, 실패는 경고 로그만).
+        /// </summary>
         private static async Task TryEnsureProfileRowAfterSignInAsync()
         {
             var svc = _bootstrap?.PublicProfileService;
@@ -3404,7 +3455,6 @@ namespace TrueBase.Unity
             {
                 Debug.LogWarning("[Supabase] 프로필 행 생성 중 예외: " + e.Message);
             }
-
         }
 
         /// <summary>현재 Unity 런타임 플랫폼을 소문자 문자열로 반환합니다 (android, ios, windows, macos, webgl 등).</summary>

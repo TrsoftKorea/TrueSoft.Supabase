@@ -6,11 +6,9 @@ namespace TrueBase.Unity
     /// </summary>
     public static class SupabaseFailReason
     {
-        // ── SDK ──────────────────────────────────────────────────────────────────
         /// <summary>SDK가 초기화되지 않았습니다.</summary>
         public const string NotInitialized = "sdk_not_initialized";
 
-        // ── Auth ─────────────────────────────────────────────────────────────────
         /// <summary>로그인 상태가 아닙니다.</summary>
         public const string NotSignedIn = "auth_not_signed_in";
 
@@ -62,7 +60,6 @@ namespace TrueBase.Unity
         /// <summary>계정이 탈퇴 처리되어 재로그인이 필요합니다.</summary>
         public const string WithdrawalDeleted = "withdrawal_deleted_manual_login_required";
 
-        // ── Google ────────────────────────────────────────────────────────────────
         /// <summary><c>SupabaseSettings.googleWebClientId</c>가 설정되지 않았습니다.</summary>
         public const string GoogleWebClientIdEmpty = "google_web_client_id_empty";
 
@@ -84,7 +81,6 @@ namespace TrueBase.Unity
         /// <summary>Google 로그인 결과가 null입니다(내부 오류).</summary>
         public const string GoogleResultNull = "google_result_null";
 
-        // ── Apple ─────────────────────────────────────────────────────────────────
         /// <summary>전달된 Apple ID 토큰이 비어있습니다.</summary>
         public const string AppleIdTokenEmpty = "apple_id_token_empty";
 
@@ -115,22 +111,18 @@ namespace TrueBase.Unity
         /// <summary>Apple 연동 후 익명 플래그가 해제되지 않았습니다.</summary>
         public const string AppleLinkNotCleared = "apple_link_anonymous_not_cleared";
 
-        // ── Network ──────────────────────────────────────────────────────────────
         /// <summary>HTTP 요청 자체가 실패했습니다(네트워크 없음 또는 타임아웃).</summary>
         public const string NetworkError = "http_response_null";
 
-        // ── Data ─────────────────────────────────────────────────────────────────
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
 
-        // ── Profile ──────────────────────────────────────────────────────────────
         /// <summary>이미 사용 중인 닉네임입니다.</summary>
         public const string DisplayNameTaken = "display_name_taken";
 
         /// <summary>닉네임이 허용 길이를 초과합니다.</summary>
         public const string DisplayNameTooLong = "display_name_too_long";
 
-        // ── Withdrawal ───────────────────────────────────────────────────────────
         /// <summary>탈퇴 예약 게이트에 의해 로그인이 차단되었습니다.</summary>
         public const string WithdrawalGateBlocked = "withdrawal_scheduled_gate_blocked";
 
@@ -152,7 +144,6 @@ namespace TrueBase.Unity
         /// <summary>지원하지 않는 로그인 방식입니다(내부 오류).</summary>
         public const string InvalidSignInMethod = "invalid_signin_method";
 
-        // ── User Save ────────────────────────────────────────────────────────────
         /// <summary>유저 세이브 저장(플러시)에 실패했습니다(네트워크 오류 또는 타임아웃).</summary>
         public const string UserSaveFlushFailed = "user_save_flush_failed";
 

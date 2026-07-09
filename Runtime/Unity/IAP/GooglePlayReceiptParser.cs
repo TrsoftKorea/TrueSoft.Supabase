@@ -12,6 +12,7 @@ namespace TrueBase.Unity
         /// Unity IAP 영수증 JSON에서 Google Play purchaseToken을 추출합니다.
         /// receipt 구조: {"Store":"GooglePlay","Payload":"{\"json\":\"{...purchaseToken...}\"}"}
         /// </summary>
+        /// <param name="unityReceipt">Unity IAP가 제공한 영수증 원문. null/공백이거나 파싱 실패 시 null 반환.</param>
         internal static string ExtractPurchaseToken(string unityReceipt)
         {
             if (string.IsNullOrWhiteSpace(unityReceipt)) return null;

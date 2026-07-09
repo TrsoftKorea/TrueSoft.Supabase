@@ -7,6 +7,9 @@ using TrueBase.Core.Http;
 
 namespace TrueBase.Core.Data
 {
+    /// <summary>
+    /// 유저 세이브 테이블 REST 서비스. <see cref="DataColumnAttribute"/> 기반 select 로드와 diff PATCH 저장을 담당합니다.
+    /// </summary>
     public sealed class SupabaseUserDataService
     {
         private readonly string _supabaseUrl;
@@ -30,6 +33,9 @@ namespace TrueBase.Core.Data
         /// 로그인 직후 지정 테이블에 본인 행이 존재하도록 보장합니다.
         /// DB RPC: <c>ts_ensure_my_row(p_table, p_user_id)</c> (SECURITY DEFINER).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
+        /// <param name="playerUserId">안정 플레이어 id(<c>user_id</c> 컬럼용). null·공백이면 RPC에 null로 전달되어 DB가 기존 값을 유지합니다.</param>
         public async Task<SupabaseResult<bool>> EnsureMyRowAsync(
             string accessToken,
             string tableName,
@@ -68,13 +74,13 @@ namespace TrueBase.Core.Data
         /// <summary>
         /// 명시 컬럼 기반으로 부분 저장(PATCH)합니다. <paramref name="patch"/>에는 변경된 필드만 넣는 것을 전제로 합니다.
         /// </summary>
-        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰.</param>
-        /// <param name="accountId">현재 계정 ID(auth.users.id).</param>
-        /// <param name="playerUserId">플레이어 사용자 ID. RLS 필터링에 사용.</param>
-        /// <param name="tableName">대상 테이블명.</param>
-        /// <param name="patch">변경할 컬럼과 값의 딕셔너리. 변경된 필드만 포함.</param>
-        /// <param name="ensureRowFirst">true일 때, PATCH 전에 해당 행이 존재하는지 확인하고 없으면 생성(기본값: true).</param>
-        /// <param name="setUpdatedAtIsoUtc">true일 때, patch에 updated_at을 현재 UTC 시각으로 자동 추가(기본값: true).</param>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터(<c>account_id=eq.</c>)에 사용. 필수.</param>
+        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRowFirst"/>가 true일 때 행 생성에만 사용됩니다.</param>
+        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
+        /// <param name="patch">변경할 컬럼과 값의 딕셔너리. 변경된 필드만 포함. 비어 있으면 실패.</param>
+        /// <param name="ensureRowFirst">true면 PATCH 전에 <see cref="EnsureMyRowAsync"/>로 본인 행 존재를 보장합니다(기본값: true).</param>
+        /// <param name="setUpdatedAtIsoUtc">true면 patch에 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
         public async Task<SupabaseResult<bool>> PatchAsync(
             string accessToken,
             string accountId,
@@ -137,8 +143,12 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 프로젝트별 명시 컬럼을 select로 지정해 로드합니다.
+        /// 명시 컬럼만 select해 본인 행을 로드합니다. 행이 없으면 <c>new T()</c>를 반환합니다(행 존재 여부가 필요하면 <see cref="LoadColumnsWithRowStateAsync{T}"/>).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 행 필터에 사용. 필수.</param>
+        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
+        /// <param name="selectColumnsCsv">조회할 컬럼 CSV(예: <c>"gold,level,updated_at"</c>). 필수.</param>
         public async Task<SupabaseResult<T>> LoadColumnsAsync<T>(
             string accessToken,
             string accountId,
@@ -152,8 +162,12 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 본인 행 존재 여부(<see cref="DataColumnsLoadResult{T}.HasRow"/>)와 함께 로드합니다.
+        /// 본인 행 존재 여부(<see cref="DataColumnsLoadResult{T}.HasRow"/>)와 함께 로드합니다. 신규 유저(행 없음)와 인증 실패를 구분할 수 있습니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 행 필터에 사용. 필수.</param>
+        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
+        /// <param name="selectColumnsCsv">조회할 컬럼 CSV. 필수.</param>
         public async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadColumnsWithRowStateAsync<T>(
             string accessToken,
             string accountId,
@@ -209,8 +223,11 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다.
+        /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다. 테이블명은 <see cref="DataSchema.ResolveTableName{T}"/>로 결정됩니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
+        /// <param name="includeUpdatedAt"><c>updated_at</c> 컬럼을 select에 포함할지(기본값: true).</param>
         public async Task<SupabaseResult<T>> LoadAttributedAsync<T>(
             string accessToken,
             string accountId,
@@ -253,8 +270,15 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다.
+        /// <see cref="DataSchema.BuildPatch{T}(T, T)"/>로 변경분만 PATCH합니다. 변경이 없으면 HTTP 요청 없이 <c>Success(false)</c>를 반환합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터에 사용. 필수.</param>
+        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRowFirst"/>가 true일 때 행 생성에만 사용됩니다.</param>
+        /// <param name="previous">직전 스냅샷. null이면 <paramref name="current"/>의 모든 매핑 컬럼이 전송됩니다.</param>
+        /// <param name="current">현재 상태. 필수.</param>
+        /// <param name="ensureRowFirst">true면 PATCH 전에 본인 행 존재를 보장합니다(기본값: true).</param>
+        /// <param name="setUpdatedAtIsoUtc">true면 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,
             string accountId,

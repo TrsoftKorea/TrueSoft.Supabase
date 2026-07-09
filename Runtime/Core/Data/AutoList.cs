@@ -40,7 +40,6 @@ namespace TrueBase.Core.Data
             }
         }
 
-        // ── 안전 헬퍼 ──────────────────────────────────────────────────────────
 
         /// <summary>범위 밖이면 확장 없이 <see cref="DefaultValue"/>를 반환합니다(<c>this[i]</c> 읽기와 동일, 의도 명시용).</summary>
         public T GetOrDefault(int index) => this[index];
@@ -51,7 +50,6 @@ namespace TrueBase.Core.Data
             while (Count < count) Add(_default);
         }
 
-        // ── 인덱스 시프트 경고 ──────────────────────────────────────────────────
         // AutoList의 인덱스는 슬롯 의미(예: stageId)라, 원소를 밀거나 재정렬하면 이후 인덱스↔의미 매핑이 깨집니다.
         // 슬롯을 비우려면 제거가 아니라 this[i] = DefaultValue 로 덮어쓰세요.
         private const string ShiftWarning =

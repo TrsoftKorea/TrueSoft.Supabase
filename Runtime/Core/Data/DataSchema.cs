@@ -169,7 +169,7 @@ namespace TrueBase.Core.Data
         /// <summary>
         /// 참조 타입(컬렉션·클래스)을 JSON 왕복으로 독립 복제합니다. 값 타입·string은 그대로 반환.
         /// 복제 불가(순환참조 등) 시 원본 참조를 반환 → EqualsValues의 ReferenceEquals 경로가
-        /// 안전하게 '변경됨'으로 처리(이전 동작과 동일, 데이터 누락 없음).
+        /// 안전하게 '변경됨'으로 처리(데이터 누락 없음).
         /// </summary>
         private static object DeepCloneIfReference(object value)
         {
@@ -308,7 +308,7 @@ namespace TrueBase.Core.Data
                 if (highest == null || (int)priority < (int)highest.Value)
                     highest = priority;
 
-                // Urgent(0) は最高値 — これ以上上がらない
+                // Urgent(0)가 최고 우선순위 — 더 올라갈 수 없음
                 if (highest == DataSavePriority.Urgent) break;
             }
 

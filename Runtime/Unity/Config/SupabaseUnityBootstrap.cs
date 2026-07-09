@@ -7,6 +7,10 @@ using TrueBase.Unity;
 
 namespace TrueBase.Unity.Config
 {
+    /// <summary>
+    /// <see cref="SupabaseSettings"/>로부터 Core 계층 서비스들을 생성해 <see cref="SupabaseSDK"/>에 주입하는 부트스트랩입니다.
+    /// <see cref="SupabaseRuntime"/> 또는 자동 부트스트랩이 사용합니다.
+    /// </summary>
     public sealed class SupabaseUnityBootstrap
     {
         /// <summary>현재 부트스트랩이 사용 중인 프로젝트 URL (동일 URL로 재초기화될 때 기존 로그인 세션 유지에 사용).</summary>
@@ -33,6 +37,10 @@ namespace TrueBase.Unity.Config
 
         public string DefaultServerCode { get; private set; } = "GLOBAL";
 
+        /// <summary>
+        /// 설정을 검증하고 모든 서비스를 생성한 뒤 <see cref="SupabaseSDK.Initialize"/>를 호출합니다.
+        /// </summary>
+        /// <param name="settings">로드된 <see cref="SupabaseSettings"/> 에셋. null이거나 projectUrl·publishableKey가 유효하지 않으면 예외를 던집니다.</param>
         public void Initialize(SupabaseSettings settings)
         {
             if (settings == null)

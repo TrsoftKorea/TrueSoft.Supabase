@@ -9,6 +9,9 @@ using TrueBase.Core.Http;
 
 namespace TrueBase.Core.Auth
 {
+    /// <summary>
+    /// Supabase Auth(GoTrue) REST 호출 서비스. 익명·OIDC ID 토큰 로그인, 세션 갱신, identity 연동/해제, user_metadata 갱신을 담당합니다.
+    /// </summary>
     public sealed class SupabaseAuthService
     {
         private readonly string _supabaseUrl;
@@ -41,9 +44,9 @@ namespace TrueBase.Core.Auth
         }
 
         /// <summary>Google OAuth ID Token을 사용하여 로그인합니다.</summary>
-        /// <param name="idToken">Google에서 발급한 ID Token. iOS/웹 클라이언트에서 사용.</param>
+        /// <param name="idToken">Google에서 발급한 ID Token(JWT). iOS/웹 클라이언트에서 사용.</param>
         /// <remarks>
-        /// Android에서는 GoogleLoginBridge의 TrySignInWithGoogleAsync()를 사용하세요.
+        /// Android에서는 <c>GoogleLoginBridge</c>의 <c>TrySignInWithGoogleAsync()</c>를 사용하세요.
         /// ID Token은 반드시 현재 애플리케이션의 OAuth 2.0 클라이언트 ID로 발급되어야 합니다.
         /// </remarks>
         public async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken)
@@ -52,8 +55,8 @@ namespace TrueBase.Core.Auth
         }
 
         /// <summary>Apple ID Token을 사용하여 로그인합니다.</summary>
-        /// <param name="idToken">Apple에서 발급한 ID Token.</param>
-        /// <param name="nonce">Sign In with Apple 요청 시 사용한 nonce (옵션).</param>
+        /// <param name="idToken">Apple에서 발급한 ID Token(JWT).</param>
+        /// <param name="nonce">Sign In with Apple 요청 시 사용한 raw nonce. 토큰에 nonce가 포함돼 있으면 반드시 같은 값을 전달해야 검증에 성공합니다(기본값: null).</param>
         public async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(string idToken, string nonce = null)
         {
             return await SignInWithIdTokenAsync("apple", idToken, nonce);
@@ -86,6 +89,11 @@ namespace TrueBase.Core.Auth
         /// <c>POST /token?grant_type=id_token</c> 바디에 <c>link_identity: true</c>를 두고,
         /// <c>Authorization: Bearer</c>에 현재 세션 access token을 넣는 방식(supabase-js <c>linkIdentity</c>)을 사용합니다.
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 access token. 이 세션의 계정에 identity가 연동됩니다. 필수.</param>
+        /// <param name="provider">OIDC 프로바이더 이름(<c>"google"</c>·<c>"apple"</c> 등). 필수.</param>
+        /// <param name="idToken">프로바이더가 발급한 ID Token(JWT). 필수.</param>
+        /// <param name="nonce">토큰 발급 시 사용한 raw nonce. 토큰에 nonce가 없으면 생략(기본값: null).</param>
+        /// <param name="oauthAccessToken">프로바이더의 OAuth access token. 일부 프로바이더 검증에 추가로 필요할 때만 전달(기본값: null).</param>
         public async Task<SupabaseResult<SupabaseSession>> LinkIdentityWithIdTokenAsync(
             string accessToken,
             string provider,
@@ -146,8 +154,10 @@ namespace TrueBase.Core.Auth
         /// <summary>
         /// 현재 사용자에 연동된 identity 중 지정 <paramref name="provider"/>를 해제합니다.
         /// <c>GET /auth/v1/user</c>로 identity_id를 찾은 뒤 <c>DELETE /auth/v1/user/identities/{identity_id}</c>를 호출합니다.
-        /// GoTrue 제약상 마지막 남은 identity는 해제할 수 없습니다(해제 후 로그인 수단이 0개가 되는 경우).
+        /// GoTrue 제약상 마지막 남은 identity는 해제할 수 없습니다(해제 후 로그인 수단이 0개가 되는 경우 <c>cannot_unlink_last_identity</c> 실패).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 access token. 필수.</param>
+        /// <param name="provider">해제할 프로바이더 이름(<c>"google"</c>·<c>"apple"</c> 등, 대소문자 무시). 연동돼 있지 않으면 <c>identity_not_linked</c> 실패.</param>
         public async Task<SupabaseResult<bool>> UnlinkIdentityByProviderAsync(string accessToken, string provider)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -231,6 +241,10 @@ namespace TrueBase.Core.Auth
             return SupabaseResult<bool>.Success(true);
         }
 
+        /// <summary>OIDC ID 토큰으로 로그인합니다 (<c>POST /auth/v1/token?grant_type=id_token</c>).</summary>
+        /// <param name="provider">OIDC 프로바이더 이름(<c>"google"</c>·<c>"apple"</c> 등). 필수.</param>
+        /// <param name="idToken">프로바이더가 발급한 ID Token(JWT). 필수.</param>
+        /// <param name="nonce">토큰 발급 시 사용한 raw nonce. 토큰에 nonce가 없으면 생략(기본값: null).</param>
         public async Task<SupabaseResult<SupabaseSession>> SignInWithIdTokenAsync(
             string provider,
             string idToken,
@@ -262,6 +276,8 @@ namespace TrueBase.Core.Auth
             return HandleSessionResponse(response, "supabase_auth_failed");
         }
 
+        /// <summary>refresh token으로 세션을 갱신합니다 (<c>POST /auth/v1/token?grant_type=refresh_token</c>). 성공 시 새 access/refresh 토큰 쌍이 발급됩니다.</summary>
+        /// <param name="refreshToken">저장해 둔 Supabase Auth refresh_token. 필수.</param>
         public async Task<SupabaseResult<SupabaseSession>> RefreshSessionAsync(string refreshToken)
         {
             if (string.IsNullOrWhiteSpace(refreshToken))
@@ -452,6 +468,8 @@ namespace TrueBase.Core.Auth
         /// <summary>
         /// <c>PUT /auth/v1/user</c>로 <c>user_metadata</c>의 <c>displayName</c>, <c>full_name</c>, <c>name</c>을 같은 값으로 갱신합니다(Google OIDC·대시보드 표시와 맞춤).
         /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 access token. 필수.</param>
+        /// <param name="displayName">설정할 표시 이름. 필수 — 앞뒤 공백은 제거되어 전송됩니다.</param>
         public async Task<SupabaseResult<bool>> UpdateUserMetadataDisplayNameAsync(string accessToken, string displayName)
         {
             if (string.IsNullOrWhiteSpace(accessToken))

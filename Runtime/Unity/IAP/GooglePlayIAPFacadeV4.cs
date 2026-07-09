@@ -30,14 +30,18 @@ namespace TrueBase.Unity
 
         protected override string LogTag => "[Supabase.IAP.Google]";
 
-        // ── 생성자 (internal — SupabaseIAP.CreateGooglePlayIAP()로만 생성) ─────
+        // 생성자 (internal — SupabaseIAP.CreateGooglePlayIAP()로만 생성)
+
+        /// <param name="verifyAsync">
+        /// Google Play 검증 함수. (purchaseToken, productId, priceAmount, priceCurrency) → (success, response).
+        /// priceAmount는 micros(주 단위 ×1,000,000) 정수, priceCurrency는 ISO 4217 코드. 필수.
+        /// </param>
         internal GooglePlayIAPFacade(
             Func<string, string, long, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
 
-        // ── 서버 검증 ─────────────────────────────────────────────────────────
 
         protected override async Task ProcessPurchaseAsync(PurchaseEventArgs args)
         {

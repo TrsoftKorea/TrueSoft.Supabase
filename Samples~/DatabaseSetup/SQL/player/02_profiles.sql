@@ -353,7 +353,7 @@ begin
   end if;
 end $$;
 
-comment on table public.display_names is '닉네임 유니크/공개 조회용. 실제 표시 이름은 auth.user_metadata.displayName이 소스.';
+comment on table public.display_names is '닉네임 전역 유니크/조회용. 정본은 auth.user_metadata.displayName, 이 테이블은 그 미러(seeding 트리거 + displayname-set).';
 comment on column public.display_names.account_id is 'auth.users.id (RLS: auth.uid()).';
 comment on column public.display_names.user_id is '플레이어 안정 id (profiles.user_id와 동일 값).';
 comment on column public.display_names.server_id is '표시 이름이 속한 서버 id.';
@@ -365,15 +365,14 @@ create index if not exists display_names_server_id_idx on public.display_names (
 alter table public.display_names enable row level security;
 
 drop policy if exists "display_names_select_public" on public.display_names;
+drop policy if exists "display_names_select_own" on public.display_names;
 drop policy if exists "display_names_insert_own" on public.display_names;
 drop policy if exists "display_names_update_own" on public.display_names;
 
-create policy "display_names_select_public"
+-- 직접 REST 조회는 본인 행만. 남의 닉네임은 displayname-get(service_role)으로만 노출한다.
+create policy "display_names_select_own"
 on public.display_names for select
-using (
-  auth.uid() is not null
-  and server_id = public.auth_user_server_id()
-);
+using (account_id = auth.uid());
 
 create policy "display_names_insert_own"
 on public.display_names for insert
@@ -392,8 +391,9 @@ with check (
   and server_id = public.auth_user_server_id()
 );
 
+-- 닉네임 전역 고유(서버 무관).
 create unique index if not exists display_names_display_name_unique
-on public.display_names (server_id, lower(trim(display_name)))
+on public.display_names (lower(trim(display_name)))
 where trim(display_name) <> '';
 
 -- INSERT/UPDATE 시 server_id가 NULL이면 현재 유저의 server_id로 자동 보완 (profiles 패턴과 동일).
@@ -425,9 +425,99 @@ execute function public.ts_display_names_coalesce_server_id();
 
 grant select, insert, update on public.display_names to authenticated;
 
+-- user_profiles 생성 시 display_names 자동 seeding: user_metadata.displayName, 없으면 Player_<account8>.
+-- 익명(metadata 빈 경우) metadata도 같은 값으로 채워 본인화면=조회=집계를 일치시킨다.
+create or replace function public.ts_seed_display_name_for_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_meta_name text;
+  v_default   text;
+  v_name      text;
+begin
+  if new.server_id is null then
+    return new;
+  end if;
+
+  if exists (select 1 from public.display_names where account_id = new.account_id) then
+    return new;
+  end if;
+
+  select nullif(trim(u.raw_user_meta_data->>'displayName'), '')
+    into v_meta_name
+  from auth.users u
+  where u.id = new.account_id;
+
+  v_default := 'Player_' || lower(left(replace(new.account_id::text, '-', ''), 8));
+  v_name := coalesce(v_meta_name, v_default);
+
+  -- 이름 충돌 시 account_id 기반 기본값으로 폴백
+  if exists (
+    select 1 from public.display_names d
+    where lower(trim(d.display_name)) = lower(trim(v_name))
+  ) then
+    v_name := v_default;
+  end if;
+
+  insert into public.display_names (account_id, user_id, server_id, display_name, updated_at)
+  values (new.account_id, new.user_id, new.server_id, v_name, now())
+  on conflict (account_id) do nothing;
+
+  -- metadata가 비면(익명) 같은 값으로 채움
+  if v_meta_name is null then
+    update auth.users
+       set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb)
+           || jsonb_build_object('displayName', v_name, 'full_name', v_name, 'name', v_name)
+     where id = new.account_id;
+  end if;
+
+  return new;
+exception when others then
+  -- seeding 실패가 프로필 생성 자체를 막지 않도록 방어
+  raise warning 'ts_seed_display_name_for_profile failed for %: %', new.account_id, sqlerrm;
+  return new;
+end;
+$$;
+
+comment on function public.ts_seed_display_name_for_profile() is
+  'user_profiles INSERT 시 display_names 자동 seeding. 정본=user_metadata.displayName, 없으면 Player_<account8>. 익명은 metadata도 채움(기존 보존). SECURITY DEFINER.';
+
+drop trigger if exists trg_seed_display_name on public.user_profiles;
+create trigger trg_seed_display_name
+after insert on public.user_profiles
+for each row execute function public.ts_seed_display_name_for_profile();
+
+-- 기존 설치본 1회 백필(신규 설치는 트리거가 처리 → 불필요). 필요 시 주석 해제.
+-- insert into public.display_names (account_id, user_id, server_id, display_name, updated_at)
+-- select p.account_id, p.user_id, p.server_id,
+--        case when exists (select 1 from public.display_names d2
+--                          where lower(trim(d2.display_name)) = lower(trim(nm.intended)))
+--             then nm.default_name else nm.intended end,
+--        now()
+-- from public.user_profiles p
+-- join auth.users u on u.id = p.account_id
+-- left join public.display_names d on d.account_id = p.account_id
+-- cross join lateral (
+--   select coalesce(nullif(trim(u.raw_user_meta_data->>'displayName'),''),
+--                   'Player_' || lower(left(replace(p.account_id::text,'-',''),8))) as intended,
+--          'Player_' || lower(left(replace(p.account_id::text,'-',''),8)) as default_name
+-- ) nm
+-- where p.server_id is not null and d.account_id is null
+-- on conflict (account_id) do nothing;
+--
+-- update auth.users u
+--    set raw_user_meta_data = coalesce(u.raw_user_meta_data,'{}'::jsonb)
+--        || jsonb_build_object('displayName', d.display_name, 'full_name', d.display_name, 'name', d.display_name)
+-- from public.display_names d
+-- where d.account_id = u.id
+--   and nullif(trim(u.raw_user_meta_data->>'displayName'),'') is null;
+
 -- ---------------------------------------------------------------------------
 -- ts_is_display_name_available
--- RLS를 우회(SECURITY DEFINER)하여 호출자의 서버 내에서 닉네임 사용 가능 여부를 확인합니다.
+-- RLS를 우회(SECURITY DEFINER)하여 닉네임 사용 가능 여부를 전역 기준으로 확인합니다.
 -- display_names SELECT RLS 에 의존하지 않으므로 RLS 설정과 무관하게 정확한 결과를 반환합니다.
 -- p_display_name  : 확인할 닉네임
 -- p_ignore_account_id : 본인 이름 수정 시 자신의 account_id를 넘기면 중복에서 제외합니다.
@@ -437,38 +527,22 @@ create or replace function public.ts_is_display_name_available(
   p_ignore_account_id uuid default null
 )
 returns boolean
-language plpgsql
+language sql
 stable
 security definer
 set search_path = public
 as $$
-declare
-  v_server_id uuid;
-begin
-  -- 호출자의 server_id를 직접 조회 (auth_user_server_id() 와 동일 로직, RLS 우회)
-  select p.server_id into v_server_id
-  from public.user_profiles p
-  where p.account_id = auth.uid()
-    and p.account_id is not null
-  limit 1;
-
-  if v_server_id is null then
-    return false; -- 프로필 없음 → 설정 불가 상태이므로 불가로 반환
-  end if;
-
-  return not exists (
+  select not exists (
     select 1
     from public.display_names
-    where server_id = v_server_id
-      and lower(trim(display_name)) = lower(trim(p_display_name))
+    where lower(trim(display_name)) = lower(trim(p_display_name))
       and trim(display_name) <> ''
       and (p_ignore_account_id is null or account_id <> p_ignore_account_id)
   );
-end;
 $$;
 
 comment on function public.ts_is_display_name_available(text, uuid) is
-  '닉네임 사용 가능 여부 확인. SECURITY DEFINER로 RLS 우회, 호출자 서버 기준으로 대소문자 무시 비교.';
+  '닉네임 사용 가능 여부(전역 고유). SECURITY DEFINER로 RLS 우회, 대소문자 무시 비교.';
 
 grant execute on function public.ts_is_display_name_available(text, uuid) to authenticated;
 
