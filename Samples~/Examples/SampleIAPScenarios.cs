@@ -9,7 +9,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 /// SupabaseRuntime이 씬에 있어야 하며, 로그인(수동 또는 세션 복원) 후 IAP를 자동 초기화합니다.
 ///
 /// 키보드 단축키 (Play Mode):
-///   B — 아이템 구매 (IAP 초기화 완료 후 동작)
+///   M — 아이템 구매 (IAP 초기화 완료 후 동작)
 ///
 /// 사전 준비:
 ///   1. Window > Package Manager > com.unity.purchasing 설치 (최신 권장, 최소 4.0.0)
@@ -53,7 +53,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
             _ = InitializeIAPAsync();
         }
 
-        if (Input.GetKeyDown(KeyCode.B)) StartPurchase();
+        if (Input.GetKeyDown(KeyCode.M)) StartPurchase();
     }
 
     // ─── 초기화 ──────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
 
     // ─── 구매 ────────────────────────────────────────────────────────────────
 
-    /// <summary>B — 결제창을 표시합니다.</summary>
+    /// <summary>M — 결제창을 표시합니다.</summary>
     private void StartPurchase()
     {
         if (_iapFacade == null)
