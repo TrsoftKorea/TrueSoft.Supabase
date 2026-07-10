@@ -182,18 +182,20 @@ namespace TrueBase.Editor
                             + "\njsonb 컬럼은 CSV에서 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
                             MessageType.Warning);
 
-                    // 해석 불가 타입(오타·네임스페이스 누락)이 있으면 오류 + 생성 차단.
+                    // 해석 불가 타입은 에디터가 찾지 못한 것일 수 있으므로 경고만 하고 생성은 막지 않는다.
+                    // 실제 오타면 컴파일러가 잡고, 유효한 타입(중첩·제네릭 등)이면 그대로 생성된다.
                     var unresolvedNames = CollectUnresolvedColumnNames();
                     if (unresolvedNames.Count > 0)
                         EditorGUILayout.HelpBox(
-                            "타입 해석 실패 필드: " + string.Join(", ", unresolvedNames)
-                            + "\nCSV의 타입 철자·네임스페이스를 확인하세요. 다른 네임스페이스의 타입은 정규화 이름(예: MyGame.HeroName)으로 쓰세요.",
-                            MessageType.Error);
+                            "에디터에서 찾지 못한 타입: " + string.Join(", ", unresolvedNames)
+                            + "\n철자가 맞다면 그대로 생성해도 됩니다. 오타라면 컴파일 시 에러가 납니다."
+                            + " 다른 네임스페이스의 타입은 정규화 이름으로 쓰세요.",
+                            MessageType.Warning);
 
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0 || unresolvedNames.Count > 0))
+                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0))
                         {
                             if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
                                 BuildPreviewFromColumns();
@@ -300,13 +302,13 @@ namespace TrueBase.Editor
                             EditorApplication.delayCall += PickRcCsvPath;
                     }
 
-                    // 해석 불가 타입이 있으면 오류 + 생성 차단.
+                    // 해석 불가 타입은 경고만 하고 생성은 막지 않는다(컴파일러가 최종 확인).
                     var rcUnresolved = CollectUnresolvedRcFieldPaths();
                     if (rcUnresolved.Count > 0)
                         EditorGUILayout.HelpBox(
-                            "타입 해석 실패 필드: " + string.Join(", ", rcUnresolved)
-                            + "\nCSV의 타입 철자·네임스페이스를 확인하세요.",
-                            MessageType.Error);
+                            "에디터에서 찾지 못한 타입: " + string.Join(", ", rcUnresolved)
+                            + "\n철자가 맞다면 그대로 생성해도 됩니다. 오타라면 컴파일 시 에러가 납니다.",
+                            MessageType.Warning);
 
                     EditorGUILayout.Space(4);
                     EditorGUI.BeginChangeCheck();
@@ -317,7 +319,7 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcClassName) || rcUnresolved.Count > 0))
+                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcClassName)))
                         {
                             if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
                                 BuildRcPreview();
@@ -485,7 +487,7 @@ namespace TrueBase.Editor
                             using (new EditorGUI.DisabledScope(true))
                                 EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
 
-                            var typeTooltip = error ? resolvedType + " — 타입을 찾을 수 없습니다. CSV에서 수정하세요."
+                            var typeTooltip = error ? resolvedType + " — 에디터가 찾지 못한 타입. 철자가 맞다면 생성 가능."
                                             : warn  ? resolvedType + " — 타입 추정이 불확실합니다. CSV에서 확인하세요."
                                             : resolvedType;
                             EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.ExpandWidth(true));
@@ -674,7 +676,7 @@ namespace TrueBase.Editor
                         using (new EditorGUI.DisabledScope(true))
                             EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
 
-                        var typeTooltip = error ? resolvedType + " — 타입을 찾을 수 없습니다. CSV에서 수정하세요."
+                        var typeTooltip = error ? resolvedType + " — 에디터가 찾지 못한 타입. 철자가 맞다면 생성 가능."
                                         : warn  ? resolvedType + " — 타입 미지정. CSV에서 지정하세요."
                                         : resolvedType;
                         EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.ExpandWidth(true));
@@ -829,15 +831,6 @@ namespace TrueBase.Editor
                 EditorUtility.DisplayDialog(DialogTitle,
                     "타입 미지정 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unspecified)
                     + "\n\nCSV에서 타입을 지정한 뒤 다시 시도하세요.", "확인");
-                return;
-            }
-
-            var unresolvedOneClick = CollectUnresolvedColumnNames();
-            if (unresolvedOneClick.Count > 0)
-            {
-                EditorUtility.DisplayDialog(DialogTitle,
-                    "타입 해석에 실패한 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unresolvedOneClick)
-                    + "\n\nCSV의 철자·네임스페이스를 확인한 뒤 다시 시도하세요.", "확인");
                 return;
             }
 
@@ -1165,10 +1158,10 @@ namespace TrueBase.Editor
             if (unresolved.Count > 0)
             {
                 var shown = unresolved.Take(10).ToArray();
-                sb.Append($"\n\n타입 해석 실패({unresolved.Count}) — 철자·네임스페이스 확인 필요: ")
+                sb.Append($"\n\n에디터에서 찾지 못한 타입({unresolved.Count}): ")
                   .Append(string.Join(", ", shown))
                   .Append(unresolved.Count > shown.Length ? " …" : "")
-                  .Append("\n해결 전까지 소스 생성이 차단됩니다.");
+                  .Append("\n철자가 맞다면 그대로 생성해도 됩니다. 오타라면 컴파일 시 에러가 납니다.");
             }
             EditorUtility.DisplayDialog(dialogTitle, sb.ToString(), "확인");
         }
@@ -1357,30 +1350,53 @@ namespace TrueBase.Editor
         }
 
         /// <summary>
-        /// 로드된 어셈블리에서 타입 이름(정규화 이름 또는 네임스페이스 없는 단순 이름)으로 타입을 찾습니다.
+        /// 로드된 어셈블리에서 타입 이름으로 타입을 찾습니다. 정규화 이름, 중첩 타입, 단순 이름을 모두 시도합니다.
+        /// C# 소스는 중첩 타입을 <c>Outer.Inner</c>로 쓰지만 리플렉션은 <c>Outer+Inner</c>를 요구하므로,
+        /// 뒤쪽 <c>.</c>부터 차례로 <c>+</c>로 바꿔가며 재시도합니다.
         /// CSV 임포트 시에만 호출되는 검증 경로라 전체 스캔 비용은 허용됩니다.
         /// </summary>
         private static Type FindTypeByName(string name)
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
-            foreach (var asm in assemblies)
-            {
-                var found = asm.GetType(name, false);
-                if (found != null) return found;
-            }
+            // 정규화 이름 + 중첩 타입(Outer.Inner → Outer+Inner) 후보들을 각 어셈블리에서 시도
+            foreach (var candidate in NestedNameCandidates(name))
+                foreach (var asm in assemblies)
+                {
+                    var found = asm.GetType(candidate, false);
+                    if (found != null) return found;
+                }
 
-            // 네임스페이스 없는 단순 이름: 이름 일치로 전체 탐색
+            // 네임스페이스 없는 단순 이름: 마지막 세그먼트로 전체 탐색
+            var simple = name;
+            var lastDot = simple.LastIndexOf('.');
+            if (lastDot >= 0) simple = simple.Substring(lastDot + 1);
             foreach (var asm in assemblies)
             {
                 Type[] types;
                 try { types = asm.GetTypes(); }
                 catch { continue; }
                 foreach (var t in types)
-                    if (t.Name == name)
+                    if (t.Name == simple)
                         return t;
             }
             return null;
+        }
+
+        /// <summary>
+        /// <c>A.B.C</c>에 대해 뒤쪽 <c>.</c>부터 <c>+</c>로 바꾼 후보들을 순서대로 반환합니다:
+        /// <c>A.B.C</c> → <c>A.B+C</c> → <c>A+B+C</c>. 어느 세그먼트 경계가 네임스페이스/중첩인지 모르므로 전부 시도합니다.
+        /// </summary>
+        private static IEnumerable<string> NestedNameCandidates(string name)
+        {
+            yield return name;
+            var chars = name.ToCharArray();
+            for (var i = chars.Length - 1; i >= 0; i--)
+            {
+                if (chars[i] != '.') continue;
+                chars[i] = '+';
+                yield return new string(chars);
+            }
         }
 
         private static void BuildPreviewFromColumns()
@@ -1405,16 +1421,6 @@ namespace TrueBase.Editor
                 EditorUtility.DisplayDialog(DialogTitle,
                     "다음 필드의 타입이 미지정 상태입니다(jsonb). CSV에서 Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
                     + string.Join("\n• ", unspecified), "확인");
-                return;
-            }
-
-            // 해석 불가 타입이 있으면 생성 차단 — 컴파일 에러를 CSV 단계에서 미리 잡는다.
-            var unresolvedCols = CollectUnresolvedColumnNames();
-            if (unresolvedCols.Count > 0)
-            {
-                EditorUtility.DisplayDialog(DialogTitle,
-                    "다음 필드의 타입을 찾을 수 없습니다. CSV의 철자·네임스페이스를 확인하세요:\n\n• "
-                    + string.Join("\n• ", unresolvedCols), "확인");
                 return;
             }
 
