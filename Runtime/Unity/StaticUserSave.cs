@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using TrueBase.Core.Data;
 using UnityEngine;
 
@@ -105,7 +106,7 @@ namespace TrueBase.Unity
             if (_isRegistered) return;
             Supabase.RegisterUserSaveStaticSync(
                 _syncKey, HasDirty, FlushDirtyAsync, ResetLocalState,
-                async () => (await TryLoadAsync()).Success,
+                async () => (await LoadAsync()).IsSuccess,
                 GetDirtyCooldown);
             _isRegistered = true;
         }
@@ -184,7 +185,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <see cref="TryLoadAsync"/> 성공 후 발행됩니다.
+        /// <see cref="LoadAsync"/> 성공 후 발행됩니다.
         /// 로드 완료 후 게임 데이터를 적용하거나 UI를 갱신할 때 사용합니다.
         /// </summary>
         public event Action OnLoaded;
@@ -297,7 +298,7 @@ namespace TrueBase.Unity
         string INanooSaveSyncable.NanooGetLastLoadedJson()
             => _nanooLastLoaded != null ? NanooSerializeJson(_nanooLastLoaded) : null;
 
-        async Task<bool> INanooSaveSyncable.TryLoadAsync() => (await TryLoadAsync()).Success;
+        async Task<bool> INanooSaveSyncable.TryLoadAsync() => (await LoadAsync()).IsSuccess;
 
         string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
 
@@ -335,24 +336,24 @@ namespace TrueBase.Unity
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 전송 완료를 기다리지 않습니다(fire-and-forget).
         /// 이미 전송 중이면 완료 후 1회 재전송이 예약됩니다.
         /// </summary>
-        public SupabaseCallResult TryRequestImmediateSave()
+        public SupabaseResult RequestImmediateSave()
         {
             EnsureRegistered();
             return Supabase.RequestImmediateUserSaveStaticFlush(_syncKey)
-                ? SupabaseCallResult.Ok
-                : SupabaseCallResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                ? SupabaseResult.Ok
+                : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
         }
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송한 뒤 완료까지 대기합니다. 앱 종료 등 중요한 시점에 사용하세요.
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
-        public async Task<SupabaseCallResult> TryFlushNowAsync(int timeoutMs = 5000)
+        public async Task<SupabaseResult> FlushNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
             return await Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
-                ? SupabaseCallResult.Ok
-                : SupabaseCallResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                ? SupabaseResult.Ok
+                : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
         }
 
         /// <summary>
@@ -371,13 +372,13 @@ namespace TrueBase.Unity
         /// <summary>
         /// DB에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
         /// </summary>
-        public async Task<SupabaseCallResult> TryEnsureRowAsync()
+        public async Task<SupabaseResult> EnsureRowAsync()
         {
             EnsureRegistered();
             var r = await Supabase.EnsureMyRowAsync<TRow>();
             return r != null && r.IsSuccess
-                ? SupabaseCallResult.Ok
-                : SupabaseCallResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
+                ? SupabaseResult.Ok
+                : SupabaseResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
         }
 
         /// <summary>
@@ -385,13 +386,13 @@ namespace TrueBase.Unity
         /// 성공 시 <see cref="OnLoaded"/>가 발행됩니다.
         /// </summary>
         /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
-        public async Task<SupabaseCallResult> TryLoadAsync(bool includeUpdatedAt = true)
+        public async Task<SupabaseResult> LoadAsync(bool includeUpdatedAt = true)
         {
             EnsureRegistered();
             var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
-            if (!success) return SupabaseCallResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+            if (!success) return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
             if (!hasRow)
             {
@@ -399,18 +400,18 @@ namespace TrueBase.Unity
                 if (ensured == null || !ensured.IsSuccess)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorMessage ?? "null"}");
-                    return SupabaseCallResult.Fail(ensured?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseResult.Fail(ensured?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
                 }
 
                 bool hasRow2;
                 (success, hasRow2, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                     defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
-                if (!success) return SupabaseCallResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                if (!success) return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
                 if (!hasRow2)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: 행 생성 후 재로드에서도 행을 찾을 수 없음.");
-                    return SupabaseCallResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
                 }
             }
 
@@ -419,13 +420,13 @@ namespace TrueBase.Unity
             _lastSynced = DataSchema.CloneRow(row);
             _isDirty    = false;
             OnLoaded?.Invoke();
-            return SupabaseCallResult.Ok;
+            return SupabaseResult.Ok;
         }
 
         /// <summary>
         /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다. 변경이 없으면 네트워크 요청 없이 성공을 반환합니다.
         /// </summary>
-        public async Task<SupabaseCallResult> TrySaveIfChangedAsync()
+        public async Task<SupabaseResult> SaveIfChangedAsync()
         {
             EnsureRegistered();
 
@@ -439,14 +440,14 @@ namespace TrueBase.Unity
             catch (Exception e)
             {
                 Debug.LogWarning($"{LogTag} BuildPatch 실패 — {e.Message}");
-                return SupabaseCallResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                return SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
             }
 
             if (patch == null || patch.Count == 0)
             {
                 _lastSynced = DataSchema.CloneRow(Current);
                 _isDirty    = false;
-                return SupabaseCallResult.Ok;
+                return SupabaseResult.Ok;
             }
 
             var result = await SupabaseSDK.PatchUserDataAsync(
@@ -455,12 +456,12 @@ namespace TrueBase.Unity
             if (!result.IsSuccess)
             {
                 Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorMessage}");
-                return SupabaseCallResult.Fail(result.ErrorMessage ?? SupabaseFailReason.UserSaveFlushFailed);
+                return SupabaseResult.Fail(result.ErrorMessage ?? SupabaseFailReason.UserSaveFlushFailed);
             }
 
             _lastSynced = DataSchema.CloneRow(Current);
             _isDirty    = false;
-            return SupabaseCallResult.Ok;
+            return SupabaseResult.Ok;
         }
 
 

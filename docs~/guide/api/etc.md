@@ -4,7 +4,7 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`TryGetServerUtcNowAsync`](/guide/server-time) | 서버 기준 UTC 시각 조회 |
+| [`GetServerUtcNowAsync`](/guide/server-time) | 서버 기준 UTC 시각 조회 |
 
 ## 우편함
 

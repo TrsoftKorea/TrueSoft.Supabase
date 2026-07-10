@@ -1,7 +1,7 @@
 # 서버 이주
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryTransferMyServerAsync(string targetServerCode, string reason = null)
+Task<SupabaseResult> Supabase.TransferMyServerAsync(string targetServerCode, string reason = null)
 ```
 
 현재 계정을 지정한 서버로 이주합니다. 서버별로 닉네임 고유성이 관리되므로, 대상 서버에 같은 닉네임이 이미 존재하면 실패합니다.

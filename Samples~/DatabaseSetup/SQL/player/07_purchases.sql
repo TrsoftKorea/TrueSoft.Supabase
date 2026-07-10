@@ -20,7 +20,6 @@ create table if not exists public.purchases (
   purchase_token  text        not null unique,  -- Google: purchaseToken / Apple: transaction_id
   order_id        text,                         -- Google: orderId / Apple: transaction_id
   package_name    text        not null,         -- Google: packageName / Apple: bundleId
-  purchase_state  int,                          -- 0=purchased, 1=cancelled(Google), 2=pending(Google)
   store           text        not null default 'google_play',  -- 'google_play' | 'apple_app_store'
   verified_at     timestamptz not null default now()
 );
@@ -31,6 +30,9 @@ alter table public.purchases
   add column if not exists price_amount     bigint,     -- 결제 금액(micros = 주 단위 ×1,000,000, price_currency 기준). 내부용
   add column if not exists price_currency   text,       -- ISO 4217 통화 코드 (예: "KRW", "USD")
   add column if not exists price_amount_krw bigint;     -- KRW 환산 금액(원, 정수). 매출 확인용 — 구매 시점 환율 적용
+
+-- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
+alter table public.purchases drop column if exists purchase_state;
 
 alter table public.purchases enable row level security;
 

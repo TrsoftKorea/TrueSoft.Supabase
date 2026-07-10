@@ -7,7 +7,7 @@ namespace TrueBase.Editor
 {
     /// <summary>
     /// iOS 빌드 시 Xcode 프로젝트에 "Sign in with Apple" Capability(entitlement)를 자동으로 추가합니다.
-    /// 네이티브 Apple 로그인(<c>Supabase.TrySignInWithAppleAsync</c>)에 필요합니다.
+    /// 네이티브 Apple 로그인(<c>Supabase.SignInWithAppleAsync</c>)에 필요합니다.
     /// </summary>
     public static class AppleSignInBuildPostProcessor
     {

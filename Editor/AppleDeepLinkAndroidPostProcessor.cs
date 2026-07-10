@@ -3,6 +3,7 @@ using System.IO;
 using System.Xml;
 using UnityEditor;
 using UnityEditor.Android;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace TrueBase.Editor
@@ -10,7 +11,7 @@ namespace TrueBase.Editor
     /// <summary>
     /// Android 빌드 시, 런처 액티비티에 딥링크 intent-filter(스킴 = 앱 패키지 이름)를 자동으로 추가하고
     /// <c>launchMode=singleTop</c>으로 설정합니다. Android Apple 로그인
-    /// (<c>Supabase.TrySignInWithAppleAsync</c>)의 콜백 딥링크 수신에 필요합니다.
+    /// (<c>Supabase.SignInWithAppleAsync</c>)의 콜백 딥링크 수신에 필요합니다.
     /// 스킴이 패키지 이름이라 전역 고유하고, <c>singleTop</c>은 기존 동작을 거의 바꾸지 않아 항상 적용합니다.
     /// </summary>
     public sealed class AppleDeepLinkAndroidPostProcessor : IPostGenerateGradleAndroidProject
@@ -25,7 +26,7 @@ namespace TrueBase.Editor
         public void OnPostGenerateGradleAndroidProject(string path)
         {
             // 딥링크 스킴 = 앱 패키지 이름(전역 고유). 런타임도 Application.identifier로 같은 값을 사용합니다.
-            var scheme = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android);
+            var scheme = PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android);
             if (string.IsNullOrEmpty(scheme))
                 return;
 

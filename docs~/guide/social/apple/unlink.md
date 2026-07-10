@@ -1,7 +1,7 @@
 # 연동 해제
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryUnlinkAppleAsync()
+Task<SupabaseResult> Supabase.UnlinkAppleAsync()
 ```
 
 현재 계정에서 Apple 연동을 해제합니다. 해제 후 `Supabase.IsLinkedWithApple`이 `false`가 됩니다.
@@ -16,8 +16,8 @@ Task<SupabaseCallResult> Supabase.TryUnlinkAppleAsync()
 | `SupabaseFailReason.UnlinkFailed` | 연동 해제에 실패했습니다. |
 
 ```csharp
-var r = await Supabase.TryUnlinkAppleAsync();
-if (!r && r.Reason == SupabaseFailReason.CannotUnlinkLastIdentity)
+var r = await Supabase.UnlinkAppleAsync();
+if (!r && r.ErrorMessage == SupabaseFailReason.CannotUnlinkLastIdentity)
     ShowToast("최소 하나의 로그인 수단은 남겨야 합니다.");
 ```
 

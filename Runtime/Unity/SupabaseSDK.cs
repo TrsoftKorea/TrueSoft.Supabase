@@ -67,16 +67,16 @@ namespace TrueBase.Unity
         internal static INanooSaveSyncable _nanooSaveBridge;
 
         // 브릿지가 씬에 있을 때만 설정됩니다. null이면 기본 SDK 흐름으로 동작합니다.
-        internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptSignInAnonymously;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSignInWithGoogleIdToken;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSignInWithAppleIdToken;
-        internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptSignOutFully;
-        internal static Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         _interceptRequestMyWithdrawal;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkGoogleWithIdToken;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptLinkAppleWithIdToken;
-        internal static Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> _interceptSetMyDisplayName;
+        internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptSignInAnonymously;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSignInWithGoogleIdToken;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSignInWithAppleIdToken;
+        internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptSignOutFully;
+        internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptRequestMyWithdrawal;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkGoogleToCurrentAnonymousWithIdToken;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkAppleToCurrentAnonymousWithIdToken;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkGoogleWithIdToken;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkAppleWithIdToken;
+        internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSetMyDisplayName;
 
         /// <summary>PlayNANOO Apple 로그인 인터셉터가 등록되어 있는지 여부. 브라우저 기반 Apple 로그인 가드에 사용합니다.</summary>
         internal static bool IsPlayNanooAppleInterceptionActive => _interceptSignInWithAppleIdToken != null;
@@ -97,16 +97,16 @@ namespace TrueBase.Unity
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
         internal static void RegisterPlayNanooInterceptors(
-            Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         signInAnonymously,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> signInWithGoogleIdToken,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> signInWithAppleIdToken,
-            Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         signOutFully,
-            Func<Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>>         requestMyWithdrawal,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> setMyDisplayName                       = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkGoogleWithIdToken                  = null,
-            Func<string, Func<Task<SupabaseCallResult>>, Task<SupabaseCallResult>> linkAppleWithIdToken                   = null)
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signInAnonymously,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithGoogleIdToken,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithAppleIdToken,
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signOutFully,
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         requestMyWithdrawal,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyDisplayName                       = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleWithIdToken                  = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null)
         {
             _interceptSignInAnonymously                       = signInAnonymously;
             _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
@@ -544,7 +544,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithGoogleIdTokenAsync(idToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "google_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "google_signin_failed");
         }
 
         /// <summary>
@@ -572,7 +572,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.GoogleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.GoogleLinkFailed);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
@@ -598,18 +598,18 @@ namespace TrueBase.Unity
             var ok = await TryLinkGoogleWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "google_link_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "google_link_failed");
         }
 
         /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInWithGoogleAsync()
+        public static async Task<SupabaseResult> TrySignInWithGoogleAsync()
         {
             var r = await SignInWithGoogleAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
         }
 
         /// <summary><see cref="SignInWithGoogleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInWithGoogleIdTokenAsync(string idToken)
+        public static async Task<SupabaseResult> TrySignInWithGoogleIdTokenAsync(string idToken)
         {
             if (_interceptSignInWithGoogleIdToken != null)
                 return await _interceptSignInWithGoogleIdToken(idToken, async () => {
@@ -621,14 +621,14 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="LinkGoogleToCurrentAnonymousAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousAsync()
+        public static async Task<SupabaseResult> TryLinkGoogleToCurrentAnonymousAsync()
         {
             var r = await LinkGoogleToCurrentAnonymousAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
         }
 
         /// <summary><see cref="LinkGoogleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(
+        public static async Task<SupabaseResult> TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
             string googleAccessToken = null)
         {
@@ -642,7 +642,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="LinkGoogleWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkGoogleWithIdTokenAsync(
+        public static async Task<SupabaseResult> TryLinkGoogleWithIdTokenAsync(
             string idToken,
             string googleAccessToken = null)
         {
@@ -656,7 +656,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="LinkGoogleNativeAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkGoogleNativeAsync()
+        public static async Task<SupabaseResult> TryLinkGoogleNativeAsync()
         {
             var r = await LinkGoogleNativeAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSettings, r);
@@ -716,14 +716,14 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<bool>> UnlinkAppleAsync() => UnlinkProviderAsync("apple");
 
         /// <summary><see cref="UnlinkGoogleAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryUnlinkGoogleAsync()
+        public static async Task<SupabaseResult> TryUnlinkGoogleAsync()
         {
             var r = await UnlinkGoogleAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleUnlink, r);
         }
 
         /// <summary><see cref="UnlinkAppleAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryUnlinkAppleAsync()
+        public static async Task<SupabaseResult> TryUnlinkAppleAsync()
         {
             var r = await UnlinkAppleAsync();
             return LogAndReturn(ApiLogTags.AuthAppleUnlink, r);
@@ -859,7 +859,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="SignInWithAppleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInWithAppleIdTokenAsync(
+        public static async Task<SupabaseResult> TrySignInWithAppleIdTokenAsync(
             string idToken,
             string rawNonce = null)
         {
@@ -873,7 +873,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="LinkAppleToCurrentAnonymousWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
+        public static async Task<SupabaseResult> TryLinkAppleToCurrentAnonymousWithIdTokenAsync(
             string idToken,
             string rawNonce = null)
         {
@@ -887,7 +887,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="LinkAppleWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkAppleWithIdTokenAsync(
+        public static async Task<SupabaseResult> TryLinkAppleWithIdTokenAsync(
             string idToken,
             string rawNonce = null)
         {
@@ -928,7 +928,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? "apple_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "apple_signin_failed");
         }
 
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -951,7 +951,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleToCurrentAnonymousWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.AppleLinkFailed);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -974,14 +974,14 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.Reason ?? SupabaseFailReason.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.AppleLinkFailed);
         }
 
         /// <summary>
         /// 플랫폼에 맞는 Apple 로그인을 자동으로 수행합니다.
         /// iOS는 네이티브 Sign in with Apple, Android는 브라우저 기반 OAuth(설정의 딥링크 스킴 사용)로 분기합니다.
         /// </summary>
-        public static async Task<SupabaseCallResult> TrySignInWithAppleAsync()
+        public static async Task<SupabaseResult> TrySignInWithAppleAsync()
         {
 #if UNITY_IOS && !UNITY_EDITOR
             var r = await SignInWithAppleAsync();
@@ -990,8 +990,9 @@ namespace TrueBase.Unity
             // 딥링크 스킴은 앱 패키지 이름을 그대로 사용합니다(전역 고유 → 충돌 없음). 매니페스트도 같은 값으로 자동 주입됩니다.
             return await AppleWebLogin.TrySignInAsync(Application.identifier, AppleAndroidRedirectHost);
 #else
+            await Task.CompletedTask;
             LogApiResult(ApiLogTags.AuthAppleIdToken, false, SupabaseFailReason.AppleSignInUnsupportedPlatform);
-            return SupabaseCallResult.Fail(SupabaseFailReason.AppleSignInUnsupportedPlatform);
+            return SupabaseResult.Fail(SupabaseFailReason.AppleSignInUnsupportedPlatform);
 #endif
         }
 
@@ -999,14 +1000,14 @@ namespace TrueBase.Unity
         public const string AppleAndroidRedirectHost = "login-callback";
 
         /// <summary><see cref="LinkAppleToCurrentAnonymousAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkAppleToCurrentAnonymousAsync()
+        public static async Task<SupabaseResult> TryLinkAppleToCurrentAnonymousAsync()
         {
             var r = await LinkAppleToCurrentAnonymousAsync();
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
         }
 
         /// <summary><see cref="LinkAppleNativeAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryLinkAppleNativeAsync()
+        public static async Task<SupabaseResult> TryLinkAppleNativeAsync()
         {
             var r = await LinkAppleNativeAsync();
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
@@ -1139,7 +1140,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="CompleteOAuthRedirectAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryCompleteOAuthRedirectAsync(string redirectUrl)
+        public static async Task<SupabaseResult> TryCompleteOAuthRedirectAsync(string redirectUrl)
         {
             var r = await CompleteOAuthRedirectAsync(redirectUrl);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
@@ -1173,7 +1174,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="SignInAnonymouslyAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignInAnonymouslyAsync()
+        public static async Task<SupabaseResult> TrySignInAnonymouslyAsync()
         {
             if (_interceptSignInAnonymously != null)
                 return await _interceptSignInAnonymously(async () => {
@@ -1199,21 +1200,21 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="RevokeGoogleAccessAsync"/>
-        public static async Task<SupabaseCallResult> TryRevokeGoogleAccessAsync()
+        public static async Task<SupabaseResult> TryRevokeGoogleAccessAsync()
         {
             var r = await RevokeGoogleAccessAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleRevoke, r);
         }
 
         /// <summary><see cref="SignOutFromGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignOutFromGoogleAsync()
+        public static async Task<SupabaseResult> TrySignOutFromGoogleAsync()
         {
             var r = await SignOutFromGoogleAsync();
             return LogAndReturn(ApiLogTags.AuthGoogleSignOut, r);
         }
 
         /// <summary><see cref="RefreshSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryRefreshSessionAsync(string refreshToken)
+        public static async Task<SupabaseResult> TryRefreshSessionAsync(string refreshToken)
         {
             var r = await RefreshSessionAsync(refreshToken);
             return LogAndReturn(ApiLogTags.AuthRefreshSession, r);
@@ -1295,7 +1296,7 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="PatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
-        public static async Task<SupabaseCallResult> TryPatchUserDataDiffAsync<T>(
+        public static async Task<SupabaseResult> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRowFirst = true,
@@ -1306,7 +1307,7 @@ namespace TrueBase.Unity
             if (r is { IsSuccess: true, Data: false })
             {
                 LogApiResult(ApiLogTags.UserDataPatchDiff, true, "NoChanges");
-                return SupabaseCallResult.Ok;
+                return SupabaseResult.Ok;
             }
             return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
         }
@@ -1391,26 +1392,26 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="RestoreSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TryRestoreSessionAsync()
+        public static async Task<SupabaseResult> TryRestoreSessionAsync()
         {
             var ok = await RestoreSessionAsync();
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "restore_session_failed", errorOnFail: false);
-            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail(SupabaseFailReason.RestoreSessionFailed);
+            return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseFailReason.RestoreSessionFailed);
         }
 
         /// <summary>
         /// 앱 시작 자동 로그인 정책을 적용해 자동 로그인을 시도합니다.
         /// 로그아웃으로 자동 로그인이 차단되었거나, 저장된 이전 계정 정보(refresh token)가 없으면 아무 동작도 하지 않습니다.
         /// </summary>
-        public static async Task<SupabaseCallResult> TryAutoLoginOnStartAsync()
+        public static async Task<SupabaseResult> TryAutoLoginOnStartAsync()
         {
             if (IsAutoLoginBlocked() || HasStoredRefreshToken() == false)
-                return SupabaseCallResult.Fail(SupabaseFailReason.AutoLoginNoToken);
+                return SupabaseResult.Fail(SupabaseFailReason.AutoLoginNoToken);
 
             var ok = await RestoreSessionAsync();
 
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
-            return ok ? SupabaseCallResult.Ok : SupabaseCallResult.Fail(SupabaseFailReason.AutoLoginFailed);
+            return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseFailReason.AutoLoginFailed);
         }
 
         /// <summary>
@@ -1429,19 +1430,19 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="GetServerUtcNowAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<DateTime> TryGetServerUtcNowAsync(DateTime defaultValue = default)
+        public static async Task<SupabaseResult<DateTime>> TryGetServerUtcNowAsync()
         {
             var r = await GetServerUtcNowAsync();
-            return LogAndReturnData(ApiLogTags.ServerTime, r, defaultValue);
+            return LogAndReturnResult(ApiLogTags.ServerTime, r);
         }
 
-        /// <summary><see cref="SupabaseResult{T}"/>를 성공/실패 로그로 남기고 <see cref="SupabaseCallResult"/>로 변환합니다(BanInfo 전달 포함).</summary>
-        private static SupabaseCallResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
+        /// <summary><see cref="SupabaseResult{T}"/>를 성공/실패 로그로 남기고 <see cref="SupabaseResult"/>로 변환합니다(BanInfo 전달 포함).</summary>
+        private static SupabaseResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
             LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
-            return ok ? SupabaseCallResult.Ok
-                      : SupabaseCallResult.Fail(result?.ErrorMessage, result?.BanInfo);
+            return ok ? SupabaseResult.Ok
+                      : SupabaseResult.Fail(result?.ErrorMessage, result?.BanInfo);
         }
 
         /// <summary>결과를 성공/실패 로그로 남기고, 성공이면 <c>Data</c>를, 실패면 <paramref name="defaultValue"/>를 반환합니다.</summary>
@@ -1450,6 +1451,14 @@ namespace TrueBase.Unity
             var ok = result != null && result.IsSuccess;
             LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
             return ok ? result.Data : defaultValue;
+        }
+
+        /// <summary>결과를 성공/실패 로그로 남기고, 그 결과(<see cref="SupabaseResult{T}"/>)를 값으로 벗기지 않고 그대로 반환합니다.</summary>
+        private static SupabaseResult<T> LogAndReturnResult<T>(string logTag, SupabaseResult<T> result)
+        {
+            var ok = result != null && result.IsSuccess;
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
+            return result ?? SupabaseResult<T>.Fail("null_result");
         }
 
         /// <summary>Try* API 결과를 <c>[logTag]</c> 접두어로 로그에 남깁니다. <see cref="_enableApiResultLogs"/>가 꺼져 있으면 무시합니다.</summary>
@@ -1842,67 +1851,60 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetMyMailsAsync"/>
-        public static async Task<IReadOnlyList<Mail>> TryGetMyMailsAsync(int limit = 50, int offset = 0)
+        public static async Task<SupabaseResult<IReadOnlyList<Mail>>> TryGetMyMailsAsync(int limit = 50, int offset = 0)
         {
             var r = await GetMyMailsAsync(limit, offset);
-            LogApiResult(ApiLogTags.MailboxList, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : null;
+            return LogAndReturnResult(ApiLogTags.MailboxList, r);
         }
 
         /// <inheritdoc cref="GetMailDetailAsync"/>
-        public static async Task<Mail> TryGetMailDetailAsync(string mailId)
+        public static async Task<SupabaseResult<Mail>> TryGetMailDetailAsync(string mailId)
         {
             var r = await GetMailDetailAsync(mailId);
-            LogApiResult(ApiLogTags.MailboxDetail, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : null;
+            return LogAndReturnResult(ApiLogTags.MailboxDetail, r);
         }
 
         /// <inheritdoc cref="ClaimMailItemsAsync"/>
-        public static async Task<IReadOnlyList<ClaimResult>> TryClaimMailItemsAsync(string mailId)
+        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> TryClaimMailItemsAsync(string mailId)
         {
             var r = await ClaimMailItemsAsync(mailId);
-            LogApiResult(ApiLogTags.MailboxClaimOne, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : null;
+            return LogAndReturnResult(ApiLogTags.MailboxClaimOne, r);
         }
 
         /// <inheritdoc cref="ClaimAllMailItemsAsync"/>
-        public static async Task<IReadOnlyList<ClaimResult>> TryClaimAllMailItemsAsync()
+        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> TryClaimAllMailItemsAsync()
         {
             var r = await ClaimAllMailItemsAsync();
-            LogApiResult(ApiLogTags.MailboxClaimAll, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : null;
+            return LogAndReturnResult(ApiLogTags.MailboxClaimAll, r);
         }
 
         /// <inheritdoc cref="DeleteMailAsync"/>
-        public static async Task<SupabaseCallResult> TryDeleteMailAsync(string mailId)
+        public static async Task<SupabaseResult> TryDeleteMailAsync(string mailId)
         {
             var r = await DeleteMailAsync(mailId);
             LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? SupabaseCallResult.Ok : SupabaseCallResult.Fail(r.ErrorMessage);
+            return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorMessage);
         }
 
         /// <inheritdoc cref="DeleteReadMailsAsync"/>
-        public static async Task<int?> TryDeleteReadMailsAsync()
+        public static async Task<SupabaseResult<int>> TryDeleteReadMailsAsync()
         {
             var r = await DeleteReadMailsAsync();
-            LogApiResult(ApiLogTags.MailboxDeleteReadBulk, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : (int?)null;
+            return LogAndReturnResult(ApiLogTags.MailboxDeleteReadBulk, r);
         }
 
         /// <inheritdoc cref="GetUnreadMailCountAsync"/>
-        public static async Task<int?> TryGetUnreadMailCountAsync(string userId = null)
+        public static async Task<SupabaseResult<int>> TryGetUnreadMailCountAsync(string userId = null)
         {
             var r = await GetUnreadMailCountAsync(userId);
-            LogApiResult(ApiLogTags.MailboxUnreadCount, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : (int?)null;
+            return LogAndReturnResult(ApiLogTags.MailboxUnreadCount, r);
         }
 
         /// <inheritdoc cref="GetUnclaimedItemMailCountAsync"/>
-        public static async Task<int?> TryGetUnclaimedItemMailCountAsync(string userId = null)
+        public static async Task<SupabaseResult<int>> TryGetUnclaimedItemMailCountAsync(string userId = null)
         {
             var r = await GetUnclaimedItemMailCountAsync(userId);
-            LogApiResult(ApiLogTags.MailboxUnclaimedCount, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? r.Data : (int?)null;
+            return LogAndReturnResult(ApiLogTags.MailboxUnclaimedCount, r);
         }
 
         /// <summary>
@@ -2040,14 +2042,14 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetPublicDisplayNameAsync"/>
-        public static async Task<string> TryGetPublicDisplayNameAsync(string userId, string defaultValue = "")
+        public static async Task<SupabaseResult<string>> TryGetPublicDisplayNameAsync(string userId)
         {
             var r = await GetPublicDisplayNameAsync(userId);
-            return LogAndReturnData(ApiLogTags.ProfilePublicDisplayNameGet, r, defaultValue);
+            return LogAndReturnResult(ApiLogTags.ProfilePublicDisplayNameGet, r);
         }
 
         /// <inheritdoc cref="SetMyDisplayNameAsync"/>
-        public static async Task<SupabaseCallResult> TrySetMyDisplayNameAsync(string displayName)
+        public static async Task<SupabaseResult> TrySetMyDisplayNameAsync(string displayName)
         {
             if (_interceptSetMyDisplayName != null)
                 return await _interceptSetMyDisplayName(displayName, () => TrySetMyDisplayNameSdkOnlyAsync(displayName));
@@ -2055,7 +2057,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="SetMyDisplayNameAsync"/>의 인터셉터 미경유 본체. 변경/no_change를 구분해 로그를 남깁니다.</summary>
-        private static async Task<SupabaseCallResult> TrySetMyDisplayNameSdkOnlyAsync(string displayName)
+        private static async Task<SupabaseResult> TrySetMyDisplayNameSdkOnlyAsync(string displayName)
         {
             var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
             var r = await SetMyDisplayNameAsync(displayName);
@@ -2063,7 +2065,7 @@ namespace TrueBase.Unity
             {
                 if (_enableApiResultLogs)
                     Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] Failed: {FormatLogDetail(r.ErrorMessage?.Trim() ?? "unknown_error")}");
-                return SupabaseCallResult.Fail(r.ErrorMessage);
+                return SupabaseResult.Fail(r.ErrorMessage);
             }
             if (_enableApiResultLogs)
             {
@@ -2074,7 +2076,7 @@ namespace TrueBase.Unity
                 else
                     Debug.Log($"[{ApiLogTags.ProfileMyDisplayNameSet}] No Change: \"{norm}\"");
             }
-            return SupabaseCallResult.Ok;
+            return SupabaseResult.Ok;
         }
 
         /// <summary>displayName이 사용 가능한지 조회합니다(유니크 체크). 로그인 중이면 현재 계정이 이미 쓰는 이름은 사용 가능으로 처리합니다.</summary>
@@ -2091,32 +2093,32 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="IsDisplayNameAvailableAsync"/>
-        public static async Task<SupabaseCallResult> TryIsDisplayNameAvailableAsync(string displayName)
+        public static async Task<SupabaseResult> TryIsDisplayNameAvailableAsync(string displayName)
         {
             var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
 
             // 현재 닉네임과 동일하면 API 생략 — Set 단계에서 no_change 처리되므로 로그도 생략
             var current = _currentSession?.User?.DisplayName;
             if (!string.IsNullOrEmpty(current) && string.Equals(current, norm, StringComparison.OrdinalIgnoreCase))
-                return SupabaseCallResult.Ok;
+                return SupabaseResult.Ok;
 
             var r = await IsDisplayNameAvailableAsync(displayName);
             if (r == null || !r.IsSuccess)
             {
                 LogApiResult(ApiLogTags.ProfileDisplayNameAvailable, false, r?.ErrorMessage ?? "unknown");
-                return SupabaseCallResult.Fail(r?.ErrorMessage ?? "unknown");
+                return SupabaseResult.Fail(r?.ErrorMessage ?? "unknown");
             }
 
             if (!r.Data)
             {
                 if (_enableApiResultLogs)
                     Debug.LogWarning($"[{ApiLogTags.ProfileDisplayNameAvailable}] Taken: \"{norm}\"");
-                return SupabaseCallResult.Fail(SupabaseFailReason.DisplayNameTaken);
+                return SupabaseResult.Fail(SupabaseFailReason.DisplayNameTaken);
             }
 
             if (_enableApiResultLogs)
                 Debug.Log($"[{ApiLogTags.ProfileDisplayNameAvailable}] Available: \"{norm}\"");
-            return SupabaseCallResult.Ok;
+            return SupabaseResult.Ok;
         }
 
         /// <summary>로컬에 선택된 서버 코드를 저장합니다(예: GLOBAL, KR1). 다음 로그인/복구 흐름에서 사용됩니다.</summary>
@@ -2155,17 +2157,10 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetMyServerInfoAsync"/>
-        public static async Task<MyServerInfo> TryGetMyServerInfoAsync(MyServerInfo defaultValue = default)
+        public static async Task<SupabaseResult<MyServerInfo>> TryGetMyServerInfoAsync()
         {
             var r = await GetMyServerInfoAsync();
-            if (r == null || !r.IsSuccess)
-            {
-                LogApiResult(ApiLogTags.ProfileMyServerGet, false, r?.ErrorMessage ?? "unknown");
-                return defaultValue;
-            }
-
-            LogApiResult(ApiLogTags.ProfileMyServerGet, true, null);
-            return r.Data;
+            return LogAndReturnResult(ApiLogTags.ProfileMyServerGet, r);
         }
 
         /// <summary>현재 로그인 계정을 지정 서버 코드로 이주시킵니다.</summary>
@@ -2186,7 +2181,7 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="TransferMyServerAsync"/>
-        public static async Task<SupabaseCallResult> TryTransferMyServerAsync(string targetServerCode, string reason = null)
+        public static async Task<SupabaseResult> TryTransferMyServerAsync(string targetServerCode, string reason = null)
         {
             var r = await TransferMyServerAsync(targetServerCode, reason);
             return LogAndReturn(ApiLogTags.ProfileServerTransfer, r);
@@ -2203,17 +2198,10 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetPublicProfileAsync"/>
-        public static async Task<PublicProfileSnapshot> TryGetPublicProfileAsync(string userId)
+        public static async Task<SupabaseResult<PublicProfileSnapshot>> TryGetPublicProfileAsync(string userId)
         {
             var r = await GetPublicProfileAsync(userId);
-            if (r == null || !r.IsSuccess)
-            {
-                LogApiResult(ApiLogTags.ProfileSnapshotGet, false, r?.ErrorMessage ?? "unknown");
-                return null;
-            }
-
-            LogApiResult(ApiLogTags.ProfileSnapshotGet, true, null);
-            return r.Data;
+            return LogAndReturnResult(ApiLogTags.ProfileSnapshotGet, r);
         }
 
         /// <summary>본인 <c>withdrawn_at</c>을 ISO 8601로 설정합니다(soft 탈퇴 표시).</summary>
@@ -2290,14 +2278,14 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="MarkMyWithdrawnAsync"/>
-        public static async Task<SupabaseCallResult> TryMarkMyWithdrawnAsync()
+        public static async Task<SupabaseResult> TryMarkMyWithdrawnAsync()
         {
             var r = await MarkMyWithdrawnAsync();
             return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
         }
 
         /// <inheritdoc cref="RequestMyWithdrawalAsync"/>
-        public static async Task<SupabaseCallResult> TryRequestMyWithdrawalAsync()
+        public static async Task<SupabaseResult> TryRequestMyWithdrawalAsync()
         {
             if (_interceptRequestMyWithdrawal != null)
                 return await _interceptRequestMyWithdrawal(async () => {
@@ -2309,14 +2297,14 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="ClearMyWithdrawalAsync"/>
-        public static async Task<SupabaseCallResult> TryClearMyWithdrawalAsync()
+        public static async Task<SupabaseResult> TryClearMyWithdrawalAsync()
         {
             var r = await ClearMyWithdrawalAsync();
             return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
         }
 
         /// <inheritdoc cref="SetMyWithdrawnAtAsync"/>
-        public static async Task<SupabaseCallResult> TrySetMyWithdrawnAtAsync(string withdrawnAtIsoUtc)
+        public static async Task<SupabaseResult> TrySetMyWithdrawnAtAsync(string withdrawnAtIsoUtc)
         {
             var r = await SetMyWithdrawnAtAsync(withdrawnAtIsoUtc);
             return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
@@ -2325,7 +2313,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 본인의 <c>profiles.last_activity_at</c>을 현재 시각으로 갱신합니다. Retool 운영 대시보드 모니터링용.
         /// </summary>
-        public static async Task<SupabaseCallResult> TryUpdateLastActivityAtAsync()
+        public static async Task<SupabaseResult> TryUpdateLastActivityAtAsync()
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
@@ -2354,10 +2342,10 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetMyWithdrawalStatusAsync"/>
-        public static async Task<MyWithdrawalStatus> TryGetMyWithdrawalStatusAsync()
+        public static async Task<SupabaseResult<MyWithdrawalStatus>> TryGetMyWithdrawalStatusAsync()
         {
             var r = await GetMyWithdrawalStatusAsync();
-            return LogAndReturnData(ApiLogTags.ProfileWithdrawalStatus, r, default(MyWithdrawalStatus));
+            return LogAndReturnResult(ApiLogTags.ProfileWithdrawalStatus, r);
         }
 
         /// <summary>
@@ -2381,10 +2369,10 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="RequestWithdrawalCancelTokenAsync"/>
-        public static async Task<string> TryRequestWithdrawalCancelTokenAsync(string defaultValue = null)
+        public static async Task<SupabaseResult<string>> TryRequestWithdrawalCancelTokenAsync()
         {
             var r = await RequestWithdrawalCancelTokenAsync();
-            return LogAndReturnData(ApiLogTags.ProfileWithdrawalCancelIssue, r, defaultValue);
+            return LogAndReturnResult(ApiLogTags.ProfileWithdrawalCancelIssue, r);
         }
 
         /// <summary>
@@ -2428,7 +2416,7 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="RedeemWithdrawalCancelAsync"/>
-        public static async Task<SupabaseCallResult> TryRedeemWithdrawalCancelAsync(string cancelToken = null)
+        public static async Task<SupabaseResult> TryRedeemWithdrawalCancelAsync(string cancelToken = null)
         {
             var r = await RedeemWithdrawalCancelAsync(cancelToken);
             return LogAndReturn(ApiLogTags.ProfileWithdrawalCancelRedeem, r);
@@ -2761,17 +2749,17 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="SignOutFullyAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseCallResult> TrySignOutFullyAsync()
+        public static async Task<SupabaseResult> TrySignOutFullyAsync()
         {
             if (_interceptSignOutFully != null)
                 return await _interceptSignOutFully(async () => {
                     await SignOutFullyAsync();
                     LogApiResult(ApiLogTags.AuthSignOut, true, null);
-                    return SupabaseCallResult.Ok;
+                    return SupabaseResult.Ok;
                 });
             await SignOutFullyAsync();
             LogApiResult(ApiLogTags.AuthSignOut, true, null);
-            return SupabaseCallResult.Ok;
+            return SupabaseResult.Ok;
         }
 
         /// <summary>로그아웃 시 호출. clearStorage가 true면 PlayerPrefs에 저장된 refresh_token도 삭제합니다.</summary>
@@ -3324,11 +3312,11 @@ namespace TrueBase.Unity
         /// <summary>
         /// 차단된 계정의 차단 정보를 조회합니다. 차단 상태가 아니거나 조회 실패 시 <see langword="null"/> 반환.
         /// </summary>
-        public static async Task<SupabaseBanInfo> TryGetBanInfoAsync(string accountId)
+        public static async Task<SupabaseResult<SupabaseBanInfo>> TryGetBanInfoAsync(string accountId)
         {
             if (!await EnsureInitializedAsync())
-                return null;
-            return await FetchBanInfoAsync(accountId);
+                return SupabaseResult<SupabaseBanInfo>.Fail(SupabaseFailReason.NotInitialized);
+            return SupabaseResult<SupabaseBanInfo>.Success(await FetchBanInfoAsync(accountId));
         }
 
         [Serializable]

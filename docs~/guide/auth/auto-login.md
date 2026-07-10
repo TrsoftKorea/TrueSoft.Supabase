@@ -9,7 +9,7 @@
 
 ```csharp
 var result = await SupabaseRuntime.TriggerAutoLoginAsync();
-if (result.Success)
+if (result.IsSuccess)
 {
     // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
     InitGame();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using TrueBase.Unity;
 using TrueBase.Unity.Auth.Google;
 using UnityEngine;
@@ -105,22 +106,22 @@ namespace TrueBase.Unity.Config
         /// 저장된 세션으로 로그인을 시도합니다.
         /// 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
         /// </summary>
-        public static Task<SupabaseCallResult> TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
+        public static Task<SupabaseResult> TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
 
         /// <summary>
         /// 자동 로그인 → <see cref="OnAfterAutoLoginAsync"/> 훅 → 전체 UserSave 로드를 순서대로 수행합니다.
         /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리하고 UserSave 로드를 생략합니다.
         /// </summary>
-        private static async Task<SupabaseCallResult> AutoLoginAndMaybeLoadAsync()
+        private static async Task<SupabaseResult> AutoLoginAndMaybeLoadAsync()
         {
             var ok = await Supabase.TryAutoLoginOnStartAsync();
 
             if (ok && _instance != null)
                 if (!await _instance.OnAfterAutoLoginAsync(ok))
-                    ok = SupabaseCallResult.Fail("after_auto_login_failed");
+                    ok = SupabaseResult.Fail("after_auto_login_failed");
 
             if (ok)
-                await Supabase.TryLoadAllUserSavesAsync();
+                await Supabase.LoadAllUserSavesAsync();
 
             return ok;
         }

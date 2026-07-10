@@ -1,7 +1,7 @@
 # Google 게스트 연동 · Android
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousAsync()
+Task<SupabaseResult> Supabase.LinkGoogleToCurrentAnonymousAsync()
 ```
 
 익명 세션에 Android Play Services Google 계정을 연동합니다. 기존 익명 계정의 데이터가 그대로 이어집니다.

@@ -1,7 +1,7 @@
 # 탈퇴 예약 취소
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryClearMyWithdrawalAsync()
+Task<SupabaseResult> Supabase.ClearMyWithdrawalAsync()
 ```
 
 탈퇴 예약을 취소합니다.

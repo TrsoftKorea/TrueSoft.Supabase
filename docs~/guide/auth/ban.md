@@ -7,9 +7,9 @@
 Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
-var result = await Supabase.TrySignInAnonymouslyAsync();
+var result = await Supabase.SignInAnonymouslyAsync();
 
-if (!result.Success && result.BanInfo != null)
+if (!result.IsSuccess && result.BanInfo != null)
 {
     var info = result.BanInfo;
 
@@ -23,15 +23,27 @@ if (!result.Success && result.BanInfo != null)
 }
 ```
 
-`SupabaseCallResult.Reason == SupabaseFailReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
+`SupabaseResult.ErrorMessage == SupabaseFailReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
 
 ## 수동 조회 {#manual-lookup}
 
 ```csharp
-Task<SupabaseBanInfo> Supabase.TryGetBanInfoAsync(string accountId)
+Task<SupabaseResult<SupabaseBanInfo>> Supabase.GetBanInfoAsync(string accountId)
 ```
 
-특정 계정의 차단 정보를 조회합니다. 차단 상태가 아니거나 조회 실패 시 `null`을 반환합니다.
+특정 계정의 차단 정보를 조회합니다. 조회에 성공하면 `.Data`에 차단 정보가 담기며, 차단 상태가 아니면 `.Data == null`입니다. 조회 자체가 실패하면 `!result.IsSuccess`입니다.
+
+```csharp
+var ban = await Supabase.GetBanInfoAsync(id);
+if (!ban)
+    Debug.Log("조회 실패");
+else if (ban.Data == null)
+    Debug.Log("정상 (차단 없음)");
+else if (ban.Data.IsPermanentBan)
+    Debug.Log("영구 차단");
+else
+    Debug.Log($"차단 해제: {ban.Data.BannedUntil:yyyy-MM-dd HH:mm}");
+```
 
 **파라미터**
 
@@ -41,8 +53,10 @@ Task<SupabaseBanInfo> Supabase.TryGetBanInfoAsync(string accountId)
 
 **반환**
 
+`.Data`는 차단 정보(`SupabaseBanInfo`)입니다. 차단 상태가 아니면 `null`입니다.
+
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.IsPermanentBan` | `bool` | 영구 차단 여부 |
-| `.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 의미 없음 |
-| `.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |
+| `.Data.IsPermanentBan` | `bool` | 영구 차단 여부 |
+| `.Data.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 의미 없음 |
+| `.Data.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |

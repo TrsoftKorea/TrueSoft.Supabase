@@ -1,7 +1,7 @@
 # Google 게스트 연동 · iOS
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
+Task<SupabaseResult> Supabase.LinkGoogleToCurrentAnonymousWithIdTokenAsync(string idToken, string googleAccessToken = null)
 ```
 
 익명 세션에 Google 계정을 연동합니다. 외부 SDK로 발급받은 ID 토큰을 직접 전달하며, 기존 익명 계정의 데이터가 그대로 이어집니다.

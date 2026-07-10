@@ -1,8 +1,8 @@
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// <see cref="SupabaseCallResult.Reason"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
-    /// 목록에 없는 값은 실제 <see cref="SupabaseCallResult.Reason"/> 문자열과 직접 비교할 수 있습니다.
+    /// <see cref="TrueBase.Core.Common.SupabaseResult.ErrorMessage"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
+    /// 목록에 없는 값은 실제 <see cref="TrueBase.Core.Common.SupabaseResult.ErrorMessage"/> 문자열과 직접 비교할 수 있습니다.
     /// </summary>
     public static class SupabaseFailReason
     {
@@ -15,13 +15,13 @@ namespace TrueBase.Unity
         /// <summary>로그인 세션이 필요합니다.</summary>
         public const string SessionRequired = "session_required";
 
-        /// <summary>비익명 계정으로 로그인 중입니다. 먼저 <c>TrySignOutFullyAsync</c>를 호출하세요.</summary>
+        /// <summary>비익명 계정으로 로그인 중입니다. 먼저 <c>SignOutFullyAsync</c>를 호출하세요.</summary>
         public const string SignedInNonAnonymous = "signed_in_non_anonymous_sign_out_first";
 
         /// <summary>사용자가 Google 로그인 화면을 직접 취소했습니다.</summary>
         public const string GoogleSignInCancelled = "google_signin_cancelled";
 
-        /// <summary>계정이 차단되었습니다. <see cref="SupabaseCallResult.BanInfo"/>에서 상세 정보를 확인하세요.</summary>
+        /// <summary>계정이 차단되었습니다. <see cref="TrueBase.Core.Common.SupabaseResult.BanInfo"/>에서 상세 정보를 확인하세요.</summary>
         public const string UserBanned = "user_banned";
 
         /// <summary>다른 기기에서 동일 계정으로 로그인해 현재 세션이 무효화되었습니다.</summary>
@@ -30,7 +30,7 @@ namespace TrueBase.Unity
         /// <summary>익명(게스트) 세션이 필요한 작업입니다.</summary>
         public const string AnonymousRequired = "anonymous_session_required";
 
-        /// <summary>익명 세션에서는 <c>TryLink*</c> 메서드를 사용해야 합니다.</summary>
+        /// <summary>익명 세션에서는 <c>Link*</c> 메서드를 사용해야 합니다.</summary>
         public const string AnonymousRequiresLink = "anonymous_session_requires_explicit_link";
 
         /// <summary>해제하려는 provider가 현재 계정에 연동되어 있지 않습니다.</summary>
@@ -102,7 +102,7 @@ namespace TrueBase.Unity
         /// <summary>이미 진행 중인 웹 OAuth 로그인이 있습니다.</summary>
         public const string OAuthLoginInProgress = "oauth_login_already_in_progress";
 
-        /// <summary>PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. PlayNANOO WebView로 받은 토큰을 <c>TrySignInWithAppleIdTokenAsync</c>에 전달하세요.</summary>
+        /// <summary>PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. PlayNANOO WebView로 받은 토큰을 <c>SignInWithAppleIdTokenAsync</c>에 전달하세요.</summary>
         public const string PlayNanooBrowserAppleUnsupported = "playnanoo_active_browser_apple_unsupported";
 
         /// <summary>Supabase Apple identity 연동에 실패했습니다.</summary>

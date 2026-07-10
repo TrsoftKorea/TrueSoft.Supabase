@@ -106,7 +106,6 @@ serve(async (req: Request) => {
     return jsonResponse({
       ok:               false,
       already_verified: false,
-      purchase_state:   -1,
       reason:           `apple_status_${verifyData.status}`,
     });
   }
@@ -156,7 +155,6 @@ serve(async (req: Request) => {
     already_verified: alreadyVerified,
     transaction_id:   transactionId,
     product_id,
-    purchase_state:   0,
     reason:           null,
   });
 });

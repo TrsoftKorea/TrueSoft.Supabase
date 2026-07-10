@@ -255,14 +255,15 @@ begin
     v_country := null;
   end;
 
-  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform)
-  values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''))
+  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform, last_activity_at)
+  values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''), now())
   on conflict (account_id) do update set
-    user_id      = excluded.user_id,
-    withdrawn_at = excluded.withdrawn_at,
-    server_id    = coalesce(user_profiles.server_id, excluded.server_id),
-    country_code = coalesce(user_profiles.country_code, excluded.country_code),
-    platform     = excluded.platform;  -- 매 로그인마다 최신 값으로 갱신
+    user_id          = excluded.user_id,
+    withdrawn_at     = excluded.withdrawn_at,
+    server_id        = coalesce(user_profiles.server_id, excluded.server_id),
+    country_code     = coalesce(user_profiles.country_code, excluded.country_code),
+    platform         = excluded.platform,
+    last_activity_at = now();  -- 로그인 시각도 활동으로 기록(데이터 저장 트리거와 별개)
 end;
 $$;
 

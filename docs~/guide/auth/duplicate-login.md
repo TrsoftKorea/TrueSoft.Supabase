@@ -12,6 +12,6 @@ void OnDestroy() => Supabase.OnDuplicateLoginDetected -= OnDuplicateLogin;
 void OnDuplicateLogin()
 {
     // 강제 로그아웃 후 로그인 화면으로 이동
-    _ = Supabase.TrySignOutFullyAsync();
+    _ = Supabase.SignOutFullyAsync();
 }
 ```

@@ -22,7 +22,8 @@
       "Bash(dotnet --version)",
       "Bash(dotnet --list-sdks)",
       "Bash(dotnet build *)",
-      "mcp__retool__retool_publish_react_app"
+      "mcp__retool__retool_publish_react_app",
+      "mcp__605db488-cfc3-4373-857d-df02212ae103__retool_read_react_app_files"
     ]
   }
 }

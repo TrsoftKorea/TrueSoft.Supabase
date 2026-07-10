@@ -1,7 +1,7 @@
 # Apple 게스트 연동
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryLinkAppleToCurrentAnonymousAsync()
+Task<SupabaseResult> Supabase.LinkAppleToCurrentAnonymousAsync()
 ```
 
 익명(게스트) 계정에 Apple 계정을 연동합니다(iOS). 기존 계정의 데이터는 그대로 이어집니다. [대시보드 설정](./setup)을 먼저 완료하세요.

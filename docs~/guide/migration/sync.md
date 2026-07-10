@@ -7,7 +7,7 @@
 ```
 SDK 행 없음 (신규 유저)
   └─ 플레이나누 데이터 있음 → SDK에 이관 후 ApplyRow
-  └─ 플레이나누 데이터 없음 → TryLoadAsync (빈 행 생성)
+  └─ 플레이나누 데이터 없음 → LoadAsync (빈 행 생성)
 
 SDK 행 있음 (기존 유저)
   └─ 플레이나누에 updated_at 없음 (이관 전 순수 플레이나누 데이터) → 플레이나누 우선 → SDK 갱신 후 ApplyRow

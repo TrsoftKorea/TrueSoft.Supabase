@@ -1,7 +1,7 @@
 # Google 신규 로그인 · iOS
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TrySignInWithGoogleIdTokenAsync(string idToken)
+Task<SupabaseResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
 ```
 
 iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다.

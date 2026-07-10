@@ -6,9 +6,9 @@
 
 | 멤버 | 설명 |
 |------|------|
-| [`PlayerSave.TryLoadAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
-| [`Supabase.TryLoadAllUserSavesAsync`](/guide/user-data/load) | 등록된 모든 세이브 로드 |
-| [`Supabase.TrySaveAllAsync`](/guide/user-data/immediate-save) | 변경된 세이브 즉시 저장 |
+| [`PlayerSave.LoadAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
+| [`Supabase.LoadAllUserSavesAsync`](/guide/user-data/load) | 등록된 모든 세이브 로드 |
+| [`Supabase.SaveAllAsync`](/guide/user-data/immediate-save) | 변경된 세이브 즉시 저장 |
 
 ::: tip
 프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/how-it-works)를 참고하세요.

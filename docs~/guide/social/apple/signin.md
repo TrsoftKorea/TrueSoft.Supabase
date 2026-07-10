@@ -1,7 +1,7 @@
 # Apple 신규 로그인
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TrySignInWithAppleAsync()
+Task<SupabaseResult> Supabase.SignInWithAppleAsync()
 ```
 
 iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방식이 자동으로 선택됩니다. [대시보드 설정](./setup)을 먼저 완료하세요.

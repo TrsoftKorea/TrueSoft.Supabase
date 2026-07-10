@@ -12,7 +12,6 @@ type VerifyResponse = {
   already_verified?: boolean;
   transaction_id?: string;
   product_id?: string;
-  purchase_state?: number;
   reason?: string;
 };
 
@@ -145,7 +144,6 @@ Deno.serve(async (req) => {
       purchase_token: transactionId,
       order_id: transactionId,
       package_name: bundle_id || jwsData.bundleId || "unknown",
-      purchase_state: 0,
       store: "apple_app_store",
       price_amount: priceAmount,
       price_currency: priceCurrency,
@@ -156,7 +154,7 @@ Deno.serve(async (req) => {
     if (insertError.code === "23505") {
       return json({
         ok: true, already_verified: true,
-        transaction_id: transactionId, product_id, purchase_state: 0,
+        transaction_id: transactionId, product_id,
       } satisfies VerifyResponse);
     }
     return json({ ok: false, reason: insertError.message } satisfies VerifyResponse, 500);
@@ -164,6 +162,6 @@ Deno.serve(async (req) => {
 
   return json({
     ok: true, already_verified: false,
-    transaction_id: transactionId, product_id, purchase_state: 0,
+    transaction_id: transactionId, product_id,
   } satisfies VerifyResponse);
 });

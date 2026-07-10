@@ -1,7 +1,7 @@
 # 닉네임 설정
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TrySetMyDisplayNameAsync(string displayName)
+Task<SupabaseResult> Supabase.SetMyDisplayNameAsync(string displayName)
 ```
 
 내 닉네임을 설정합니다. 현재 닉네임과 동일하면 네트워크 요청 없이 성공 처리됩니다.

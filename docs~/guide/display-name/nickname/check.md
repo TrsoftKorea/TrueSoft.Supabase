@@ -1,10 +1,10 @@
 # 닉네임 중복 확인
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryIsDisplayNameAvailableAsync(string displayName)
+Task<SupabaseResult> Supabase.IsDisplayNameAvailableAsync(string displayName)
 ```
 
-닉네임 사용 가능 여부를 확인합니다. `result.Success`가 `true`면 사용 가능, `false`면 이미 사용 중입니다. 현재 계정이 이미 사용 중인 닉네임은 사용 가능으로 처리합니다.
+닉네임 사용 가능 여부를 확인합니다. `result.IsSuccess`가 `true`면 사용 가능, `false`면 이미 사용 중입니다. 현재 계정이 이미 사용 중인 닉네임은 사용 가능으로 처리합니다.
 
 **파라미터**
 

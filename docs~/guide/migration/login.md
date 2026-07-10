@@ -28,4 +28,4 @@ playNanooRuntime.StartAppleSignInAndroid();
 
 플레이나누 복원이 실패하면 Supabase 세션도 롤백한 뒤 `false`를 반환합니다. 두 세션이 항상 동시에 유효하도록 보장합니다.
 
-`TrySignOutFullyAsync()`는 Supabase와 플레이나누 액세스 토큰을 모두 삭제합니다. 플레이나누 액세스 토큰 유효기간은 24시간이라, 그 이후에는 자동 로그인이 만료되어 플레이어가 직접 로그인합니다.
+`SignOutFullyAsync()`는 Supabase와 플레이나누 액세스 토큰을 모두 삭제합니다. 플레이나누 액세스 토큰 유효기간은 24시간이라, 그 이후에는 자동 로그인이 만료되어 플레이어가 직접 로그인합니다.

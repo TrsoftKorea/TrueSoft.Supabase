@@ -40,7 +40,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
 
     // ─── 자동 초기화 ─────────────────────────────────────────────────────────
     // Update에서 로그인 상태를 감지해 초기화합니다.
-    // - 수동 로그인:  TrySignInAnonymouslyAsync() 완료 → 다음 프레임에서 감지
+    // - 수동 로그인:  SignInAnonymouslyAsync() 완료 → 다음 프레임에서 감지
     // - 세션 복원:    SupabaseRuntime이 Awake에서 복원 → Start 이후 프레임에서 감지
     // 실제 게임에서는 로그인 완료 콜백(OnLoginComplete 등) 안에서 직접 호출하는 것이 더 명확합니다.
 

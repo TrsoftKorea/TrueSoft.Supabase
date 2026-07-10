@@ -62,13 +62,15 @@ The SDK has three layers:
 
 ### SupabaseResult\<T\> and Try API Pattern
 
-Every data API comes in two forms:
-- `SupabaseSDK.LoadUserDataAttributedAsync<T>()` → returns `SupabaseResult<T>` (check `.IsSuccess`, `.Data`, `.ErrorMessage`)
-- `Supabase.TryLoadUserDataAttributedAsync<T>()` → returns `T`, logs internally with a fixed tag like `[Supabase.UserData.LoadAttributed]`
+게임에 공개하는 API는 `Supabase` 파사드의 **접두어 없는 메서드**(`Supabase.GetMyMailsAsync()` 등)이며, **항상 result 타입을 반환**한다:
+- **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`·`.ErrorMessage`로 분기)
+- **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
-게임 코드는 `Supabase` 파사드의 `Try*`만 쓴다. non-Try(Result 반환) 변형은 `SupabaseSDK`에 `internal`로만 존재하며 SDK 내부 분기·로깅 전용이다. `Supabase` 파사드에는 게임에서 직접 결과 분기가 필요한 일부(예: `EnsureMyRowAsync`)를 제외하고 non-Try를 노출하지 않는다.
+**bare value(`Task<string>`·`T`·리스트 원본 등)를 직접 반환하지 않는다. 공개 메서드에 `Try` 접두어를 쓰지 않는다.** 호출자가 성공/실패와 "결과 0개 vs 조회 실패"를 항상 구분할 수 있어야 한다.
 
-**반환 타입 규칙:** 성공/실패만 알리는 `Try*` API는 **반드시 `SupabaseCallResult`를 반환**한다. 단순 `bool`을 반환하지 않는다(`SupabaseCallResult`는 암묵적 `bool` 변환을 제공하므로 `if (await Try*())` 패턴은 그대로 동작). 값을 돌려주는 `Try*`(예: `Task<string>`·상태 객체·`T`)는 그 값을 반환하고 실패 시 `defaultValue`로 폴백한다. 실패 사유는 `SupabaseFailReason` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드(`TryLoadAsync`·`TryFlushNowAsync`·`TrySaveIfChangedAsync` 등)와 생성기가 emit하는 래퍼에도 적용된다.
+`SupabaseResult`(액션)와 `SupabaseResult<T>`(데이터)는 하나의 타입 계층이다 — `SupabaseResult<T>`가 `SupabaseResult`를 상속하며, `SupabaseCallResult` 같은 별도 타입은 없다.
+
+구현·로깅은 `SupabaseSDK`의 내부 계층이 담당한다: `SupabaseSDK.TryXxxAsync()`가 실제 호출 + 고정 태그(`[Supabase.UserData.LoadAttributed]` 등) 로깅 후 `SupabaseResult`/`SupabaseResult<T>`를 반환하고, 파사드 `Supabase.XxxAsync()`는 그 결과를 그대로 돌려준다. 실패 사유는 `SupabaseFailReason` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드와 생성기가 emit하는 래퍼에도 동일 적용된다.
 
 ### account_id vs user_id
 
@@ -80,10 +82,9 @@ Every data API comes in two forms:
 ### User Saves (Diff Patching)
 
 - Decorate C# fields with `[DataColumn("db_column_name")]` to map to PostgREST columns. Omit the argument to use the member name as the column name.
-- `Supabase.TryLoadUserDataAttributedAsync<T>()` — loads only mapped columns.
-- `Supabase.TryLoadUserDataAttributedWithRowStateAsync<T>()` — additionally returns `hasRow` to distinguish new user (empty array) from auth failure.
-- `Supabase.TryPatchUserDataDiffAsync(previous, current)` — sends only changed fields; skips network if nothing changed.
-- `StaticUserSave<TRow>` — recommended pattern; auto-syncs on dirty with cooldown. Use `TryRequestImmediateSave()` or `TryFlushNowAsync()` for critical moments.
+- Game-facing user-save API is `StaticUserSave<TRow>` and the generated wrapper class — not raw facade calls. Public methods: `LoadAsync()`, `SaveIfChangedAsync()`, `EnsureRowAsync()`, `RequestImmediateSave()`, `FlushNowAsync()` (all return `SupabaseResult`, no `Try` prefix), plus `MarkDirty()`.
+- Auto-syncs on dirty with cooldown. Use `RequestImmediateSave()` or `FlushNowAsync()` for critical moments (scene change, logout, app quit).
+- The attributed-load / diff-patch building blocks (`LoadUserDataAttributedAsync`, `LoadUserDataAttributedWithRowStateAsync`, `PatchUserDataDiffAsync`) are `internal` in `SupabaseSDK`/facade — `StaticUserSave` uses them internally to send only changed fields and skip the network when nothing changed.
 - **Newtonsoft.Json:** SDK uses Newtonsoft.Json for deserialization. `[DataColumn("other_name")]` changes the select/PATCH key but does NOT change deserialization. If DB column name ≠ C# field name, also add `[JsonProperty("db_column_name")]`.
 
 ### Remote Config (Cold Start Pattern)
@@ -308,7 +309,7 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 |----------|------|
 | `name` | 설명. optional이면 `(기본값: x)` 표기 |
 
-**반환**  ← `SupabaseCallResult`/`bool`(성공·실패만)이면 생략. 값을 돌려주면(`Task<string>`·상태 객체·`T` 등) **반드시 기술** — 프로퍼티가 여럿이면 표로, 단일 값이면 한 줄로
+**반환**  ← `SupabaseResult`(성공·실패만)이면 생략. 값을 돌려주면(`Task<string>`·상태 객체·`T` 등) **반드시 기술** — 프로퍼티가 여럿이면 표로, 단일 값이면 한 줄로
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|

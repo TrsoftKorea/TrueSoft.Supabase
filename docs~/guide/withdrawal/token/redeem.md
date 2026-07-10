@@ -1,7 +1,7 @@
 # 취소 토큰 사용
 
 ```csharp
-Task<SupabaseCallResult> Supabase.TryRedeemWithdrawalCancelAsync(string cancelToken = null)
+Task<SupabaseResult> Supabase.RedeemWithdrawalCancelAsync(string cancelToken = null)
 ```
 
 탈퇴 취소 토큰을 사용해 탈퇴를 취소합니다.

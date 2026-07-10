@@ -9,13 +9,13 @@
 //    (StaticUserSave 인스턴스는 자동 연결됩니다)
 //
 // [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
-//   await Supabase.TrySignInAnonymouslyAsync()
-//   await Supabase.TrySignInWithGoogleAsync()
-//   await Supabase.TrySignInWithAppleIdTokenAsync(token)
-//   await Supabase.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(token)   // 익명 → Google 연동
-//   await Supabase.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(token)    // 익명 → Apple 연동
-//   await Supabase.TrySignOutFullyAsync()
-//   await Supabase.TryRequestMyWithdrawalAsync()
+//   await Supabase.SignInAnonymouslyAsync()
+//   await Supabase.SignInWithGoogleAsync()
+//   await Supabase.SignInWithAppleIdTokenAsync(token)
+//   await Supabase.LinkGoogleToCurrentAnonymousWithIdTokenAsync(token)   // 익명 → Google 연동
+//   await Supabase.LinkAppleToCurrentAnonymousWithIdTokenAsync(token)    // 익명 → Apple 연동
+//   await Supabase.SignOutFullyAsync()
+//   await Supabase.RequestMyWithdrawalAsync()
 //
 // [PlayNANOO 제거 후]
 // 1. 이 파일과 PlayNanooRuntime.cs / PlayNanooLegacyRuntime.cs 삭제
@@ -186,27 +186,27 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 인터셉터 구현 ─────────────────────────────────────────────────────────
 
-    private async Task<SupabaseCallResult> InterceptSignInAnonymously(Func<Task<SupabaseCallResult>> sdkSignIn)
+    private async Task<SupabaseResult> InterceptSignInAnonymously(Func<Task<SupabaseResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooGuestSignIn(async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "guest"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_guest_signin_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_guest_signin_failed"));
                 return;
             }
             var result = await sdkSignIn();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptSignInWithGoogleIdToken(string token, Func<Task<SupabaseCallResult>> sdkSignIn)
+    private async Task<SupabaseResult> InterceptSignInWithGoogleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "google"))
@@ -215,32 +215,32 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 if (values != null && values.TryGetValue("ErrorCode", out var ecObjG) && ecObjG?.ToString() == "30007")
                 {
                     await sdkSignIn();
-                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed"));
+                    tcs.SetResult(SupabaseResult.Fail("playnanoo_google_signin_failed"));
                     return;
                 }
                 // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
                 var sdkResult = await sdkSignIn();
-                if (!sdkResult.Success) { tcs.SetResult(sdkResult); return; }
+                if (!sdkResult.IsSuccess) { tcs.SetResult(sdkResult); return; }
                 if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google"))
                 {
-                    await Supabase.TrySignOutFullyAsync();
-                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_signin_failed"));
+                    await Supabase.SignOutFullyAsync();
+                    tcs.SetResult(SupabaseResult.Fail("playnanoo_google_signin_failed"));
                     return;
                 }
                 tcs.SetResult(sdkResult);
                 return;
             }
             var result = await sdkSignIn();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptSignInWithAppleIdToken(string token, Func<Task<SupabaseCallResult>> sdkSignIn)
+    private async Task<SupabaseResult> InterceptSignInWithAppleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "apple"))
@@ -249,23 +249,23 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 if (values != null && values.TryGetValue("ErrorCode", out var ecObjA) && ecObjA?.ToString() == "30007")
                 {
                     await sdkSignIn();
-                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed"));
+                    tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_signin_failed"));
                     return;
                 }
                 // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
                 var sdkResult = await sdkSignIn();
-                if (!sdkResult.Success) { tcs.SetResult(sdkResult); return; }
+                if (!sdkResult.IsSuccess) { tcs.SetResult(sdkResult); return; }
                 if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple"))
                 {
-                    await Supabase.TrySignOutFullyAsync();
-                    tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_signin_failed"));
+                    await Supabase.SignOutFullyAsync();
+                    tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_signin_failed"));
                     return;
                 }
                 tcs.SetResult(sdkResult);
                 return;
             }
             var result = await sdkSignIn();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -291,12 +291,12 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptSignOutFully(Func<Task<SupabaseCallResult>> sdkSignOut)
+    private async Task<SupabaseResult> InterceptSignOutFully(Func<Task<SupabaseResult>> sdkSignOut)
     {
         if (string.IsNullOrEmpty(_nanooAccessToken))
             return await sdkSignOut();
 
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooTokenSignOut(_nanooAccessToken, async () =>
         {
             _nanooAccessToken = null;
@@ -304,29 +304,29 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             UserId = null;
             OpenId = null;
             var result = await sdkSignOut();
-            if (!result.Success)
+            if (!result.IsSuccess)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 로그아웃 실패. PlayNANOO 로그아웃은 완료됨.");
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptRequestMyWithdrawal(Func<Task<SupabaseCallResult>> sdkWithdrawal)
+    private async Task<SupabaseResult> InterceptRequestMyWithdrawal(Func<Task<SupabaseResult>> sdkWithdrawal)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
         NanooWithDrawal(15, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS)
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_withdrawal_request_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_withdrawal_request_failed"));
                 return;
             }
             var result = await sdkWithdrawal();
-            if (!result.Success)
+            if (!result.IsSuccess)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨.");
             if (isGoogle)
-                await Supabase.TryRevokeGoogleAccessAsync();
+                await Supabase.RevokeGoogleAccessAsync();
             tcs.SetResult(result);
         });
         return await tcs.Task;
@@ -334,18 +334,18 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 닉네임 변경 인터셉터 ──────────────────────────────────────────────────────
 
-    private Task<SupabaseCallResult> InterceptSetMyDisplayName(string nickname, Func<Task<SupabaseCallResult>> sdkSet)
+    private Task<SupabaseResult> InterceptSetMyDisplayName(string nickname, Func<Task<SupabaseResult>> sdkSet)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSetNickname(nickname, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS)
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_set_nickname_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_set_nickname_failed"));
                 return;
             }
             var result = await sdkSet();
-            if (!result.Success)
+            if (!result.IsSuccess)
             {
                 var prev = _nanooNickname;
                 if (!string.IsNullOrEmpty(prev))
@@ -361,36 +361,36 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
 
-    private async Task<SupabaseCallResult> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "google"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_link_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_google_link_failed"));
                 return;
             }
             var result = await sdkLink();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "apple"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_link_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_link_failed"));
                 return;
             }
             var result = await sdkLink();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -399,36 +399,36 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 소셜 → 소셜 추가 연동 인터셉터 ───────────────────────────────────────────
 
-    private async Task<SupabaseCallResult> InterceptLinkGoogleWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkGoogleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "google"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_google_link_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_google_link_failed"));
                 return;
             }
             var result = await sdkLink();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseCallResult> InterceptLinkAppleWithIdToken(string token, Func<Task<SupabaseCallResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkAppleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
-        var tcs = new TaskCompletionSource<SupabaseCallResult>();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
         {
             if (!HandleNanooCallback(status, values, "apple"))
             {
-                tcs.SetResult(SupabaseCallResult.Fail("playnanoo_apple_link_failed"));
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_link_failed"));
                 return;
             }
             var result = await sdkLink();
-            if (!result.Success) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -489,10 +489,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────
 
-    /// <summary>애플 로그인 (Android). PlayNANOO 내장 WebView로 토큰 획득 후 Supabase.TrySignInWithAppleIdTokenAsync 자동 호출.</summary>
+    /// <summary>애플 로그인 (Android). PlayNANOO 내장 WebView로 토큰 획득 후 Supabase.SignInWithAppleIdTokenAsync 자동 호출.</summary>
     public void StartAppleSignInAndroid() =>
         _plugin.OpenAppleID(
-            async token => await Supabase.TrySignInWithAppleIdTokenAsync(token));
+            async token => await Supabase.SignInWithAppleIdTokenAsync(token));
 
     // ── 탈퇴 취소 ────────────────────────────────────────────────────────────
 
@@ -508,14 +508,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             if (status != Configure.PN_API_STATE_SUCCESS) return;
             if (_pendingLoginType == "guest")
             {
-                var result = await Supabase.TrySignInAnonymouslyAsync();
-                if (!result.Success) { OnWithdrawalRestoreLoginFailed?.Invoke(); }
-                else                 { await Supabase.TryClearMyWithdrawalAsync(); }
+                var result = await Supabase.SignInAnonymouslyAsync();
+                if (!result.IsSuccess) { OnWithdrawalRestoreLoginFailed?.Invoke(); }
+                else                 { await Supabase.ClearMyWithdrawalAsync(); }
             }
             else
             {
-                var redeemResult = await Supabase.TryRedeemWithdrawalCancelAsync();
-                if (redeemResult.Success)
+                var redeemResult = await Supabase.RedeemWithdrawalCancelAsync();
+                if (redeemResult.IsSuccess)
                     OnWithdrawalRestored?.Invoke();
                 else
                     OnWithdrawalRestoreLoginFailed?.Invoke();
@@ -561,7 +561,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         var nanooOk = await RestoreNanooSessionAsync(storedToken);
         if (!nanooOk)
-            await Supabase.TrySignOutFullyAsync();
+            await Supabase.SignOutFullyAsync();
         return nanooOk;
     }
 

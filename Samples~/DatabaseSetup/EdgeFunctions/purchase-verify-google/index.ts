@@ -12,7 +12,6 @@ type VerifyResponse = {
   ok: boolean;
   already_verified?: boolean;
   order_id?: string;
-  purchase_state?: number;
   reason?: string;
 };
 
@@ -178,11 +177,10 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: `google_api_exception: ${e}` } satisfies VerifyResponse, 502);
   }
 
-  // 구매 상태 확인 (0 = purchased)
+  // 구매 상태 확인 (0 = purchased) — 완료 건만 기록, 취소·대기는 저장하지 않음
   if (googlePurchase.purchaseState !== 0) {
     return json({
       ok: false,
-      purchase_state: googlePurchase.purchaseState ?? -1,
       reason: "not_purchased",
     } satisfies VerifyResponse);
   }
@@ -216,7 +214,6 @@ Deno.serve(async (req) => {
       purchase_token,
       order_id: googlePurchase.orderId ?? null,
       package_name,
-      purchase_state: googlePurchase.purchaseState,
       price_amount: (price_amount && price_amount > 0) ? price_amount : null,
       price_currency: price_currency || null,
       price_amount_krw: priceAmountKrw,
@@ -229,7 +226,6 @@ Deno.serve(async (req) => {
         ok: true,
         already_verified: true,
         order_id: googlePurchase.orderId,
-        purchase_state: googlePurchase.purchaseState,
       } satisfies VerifyResponse);
     }
     return json({ ok: false, reason: insertError.message } satisfies VerifyResponse, 500);
@@ -239,6 +235,5 @@ Deno.serve(async (req) => {
     ok: true,
     already_verified: false,
     order_id: googlePurchase.orderId,
-    purchase_state: googlePurchase.purchaseState,
   } satisfies VerifyResponse);
 });

@@ -225,7 +225,7 @@ namespace TrueBase.Editor
             sb.AppendLine(indent + "    public static readonly " + className + " Instance = new();");
             sb.AppendLine(indent + "    private " + className + "() : base() { }");
             sb.AppendLine();
-            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Unity.SupabaseCallResult> TryLoadAsync() => ((StaticUserSave<Row>)Instance).TryLoadAsync();");
+            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();");
             sb.AppendLine();
             sb.AppendLine(indent + "    // 필드는 internal — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근하세요.");
             sb.AppendLine(indent + "    // [JsonObject(Fields)]로 Newtonsoft가 internal 필드를 직렬화/역직렬화합니다.");

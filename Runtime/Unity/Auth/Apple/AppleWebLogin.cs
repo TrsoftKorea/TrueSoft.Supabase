@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using UnityEngine;
 
 namespace TrueBase.Unity.Auth.Apple
@@ -17,7 +18,7 @@ namespace TrueBase.Unity.Auth.Apple
     /// </summary>
     internal static class AppleWebLogin
     {
-        private static TaskCompletionSource<SupabaseCallResult> _pending;
+        private static TaskCompletionSource<SupabaseResult> _pending;
         private static string _expectedScheme;
 
         /// <summary>
@@ -25,29 +26,29 @@ namespace TrueBase.Unity.Auth.Apple
         /// </summary>
         /// <param name="redirectScheme">앱 딥링크 스킴(예: <c>mygame</c>). AndroidManifest에 등록된 값과 같아야 합니다.</param>
         /// <param name="redirectHost">딥링크 호스트(기본값: <c>login-callback</c>). Supabase Redirect URL 허용목록과 일치해야 합니다.</param>
-        public static Task<SupabaseCallResult> TrySignInAsync(string redirectScheme, string redirectHost = "login-callback")
+        public static Task<SupabaseResult> TrySignInAsync(string redirectScheme, string redirectHost = "login-callback")
         {
             if (string.IsNullOrWhiteSpace(redirectScheme))
-                return Task.FromResult(SupabaseCallResult.Fail(SupabaseFailReason.OAuthRedirectSchemeEmpty));
+                return Task.FromResult(SupabaseResult.Fail(SupabaseFailReason.OAuthRedirectSchemeEmpty));
 
             // PlayNANOO 연동 중에는 브라우저 흐름이 PlayNANOO를 태우지 못합니다(Apple id_token이 앱에 없음).
             // 데이터 분기를 막기 위해 조용히 진행하지 않고 실패시킵니다. PlayNANOO WebView 토큰을 TrySignInWithAppleIdTokenAsync에 전달하세요.
             if (SupabaseSDK.IsPlayNanooAppleInterceptionActive)
             {
                 Debug.LogError("[Supabase.Auth.Apple] PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. " +
-                               "PlayNANOO WebView로 받은 Apple id_token을 Supabase.TrySignInWithAppleIdTokenAsync에 전달하세요.");
-                return Task.FromResult(SupabaseCallResult.Fail(SupabaseFailReason.PlayNanooBrowserAppleUnsupported));
+                               "PlayNANOO WebView로 받은 Apple id_token을 Supabase.SignInWithAppleIdTokenAsync에 전달하세요.");
+                return Task.FromResult(SupabaseResult.Fail(SupabaseFailReason.PlayNanooBrowserAppleUnsupported));
             }
 
             // 진행 중이던 흐름이 있으면(사용자가 브라우저에서 취소 후 재시도 등) 교체합니다.
             if (_pending != null && !_pending.Task.IsCompleted)
             {
                 Application.deepLinkActivated -= OnDeepLink;
-                _pending.TrySetResult(SupabaseCallResult.Fail(SupabaseFailReason.OAuthLoginInProgress));
+                _pending.TrySetResult(SupabaseResult.Fail(SupabaseFailReason.OAuthLoginInProgress));
             }
 
             _expectedScheme = redirectScheme.Trim();
-            _pending = new TaskCompletionSource<SupabaseCallResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending = new TaskCompletionSource<SupabaseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var redirectTo = $"{_expectedScheme}://{redirectHost}";
             var url = Supabase.BuildOAuthAuthorizeUrl("apple", redirectTo);
