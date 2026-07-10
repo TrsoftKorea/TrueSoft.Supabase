@@ -139,8 +139,7 @@ namespace TrueBase.Editor
             if (_foldout)
             {
                 EditorGUILayout.HelpBox(
-                    "DB에서 유저 데이터 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.\n"
-                    + "목록은 확인용(읽기 전용)이며, 편집은 CSV로 합니다: CSV 내보내기 → 엑셀 등에서 편집 → CSV 불러오기.",
+                    "DB에서 유저 데이터 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.",
                     MessageType.Info);
 
                 EditorGUILayout.Space(4);
@@ -245,8 +244,7 @@ namespace TrueBase.Editor
             if (_rcFoldout)
             {
                 EditorGUILayout.HelpBox(
-                    "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.\n"
-                    + "필드 목록은 확인용(읽기 전용)이며, 편집은 CSV로 합니다: CSV 내보내기 → 편집 → CSV 불러오기.",
+                    "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.",
                     MessageType.Info);
 
                 EditorGUILayout.Space(4);
@@ -442,7 +440,6 @@ namespace TrueBase.Editor
                 ? (string.IsNullOrWhiteSpace(f.CustomType) ? "string" : f.CustomType.Trim())
                 : GeneratorTypeCatalog.TypeOptions[f.TypeIndex];
 
-        // RC 필드 목록도 읽기 전용 확인 화면입니다. 편집은 CSV(내보내기 → 편집 → 불러오기)로만 합니다.
         private static void DrawRcFieldList()
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -461,7 +458,7 @@ namespace TrueBase.Editor
                 foreach (var f in _rcFields)
                 {
                     using (new EditorGUILayout.HorizontalScope())
-                    using (new EditorGUI.DisabledScope(!f.Include))   // 제외 필드는 흐리게
+                    using (new EditorGUI.DisabledScope(!f.Include))
                     {
                         // 깊이만큼 들여쓰기
                         if (f.Depth > 0) GUILayout.Space(f.Depth * 12f);
@@ -620,8 +617,6 @@ namespace TrueBase.Editor
         }
 
 
-        // 컬럼 목록은 읽기 전용 확인 화면입니다. 편집은 CSV(내보내기 → 편집 → 불러오기)로만 합니다.
-        // 상태 색: 노랑=타입 미지정(jsonb 정제 필요), 빨강=타입 해석 실패(오타·네임스페이스 누락).
         private static void DrawColumnList()
         {
             // 검색 필터 — 표시만 거릅니다(생성 대상엔 영향 없음).
@@ -662,7 +657,7 @@ namespace TrueBase.Editor
                 foreach (var col in visible)
                 {
                     using (new EditorGUILayout.HorizontalScope())
-                    using (new EditorGUI.DisabledScope(!col.Include))   // 제외 컬럼은 흐리게
+                    using (new EditorGUI.DisabledScope(!col.Include))
                     {
                         var resolvedType = ResolveColumnClrType(col);
                         var error = col.TypeUnresolved;
