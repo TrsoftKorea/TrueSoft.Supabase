@@ -31,21 +31,6 @@ namespace TrueBase.Editor
         /// <summary>Dictionary / List&lt;T&gt; / T[] 등 TypeOptions에 없는 타입을 내부적으로 표현하는 sentinel 인덱스.</summary>
         internal const int CustomTypeIndex = 12;
 
-        /// <summary>카테고리에서 허용하는 TypeOptions 인덱스 배열을 반환합니다.</summary>
-        public static int[] GetAllowedTypeIndices(FieldTypeCategory cat)
-        {
-            switch (cat)
-            {
-                case FieldTypeCategory.Boolean: return new[] { 0 };                       // bool
-                case FieldTypeCategory.Integer: return new[] { 1, 2, 3, 4 };             // int/short/long/ulong
-                case FieldTypeCategory.Float:   return new[] { 5, 6 };                    // float/double
-                case FieldTypeCategory.String:  return new[] { 7, 8, 9, 10, 11 };        // string + 날짜 타입
-                case FieldTypeCategory.Json:    return new int[0];                         // 전부 별도 팝업 처리 (Dictionary/List). string은 text 전용
-                case FieldTypeCategory.Array:   return new int[0];                         // 별도 팝업 처리 (DrawTypePopup 참조)
-                default:                        return new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
-            }
-        }
-
         /// <summary>TypeOptions에서 타입명의 인덱스를 찾습니다. 없으면 "string"(7)로 폴백.</summary>
         internal static int IndexOf(string type)
         {

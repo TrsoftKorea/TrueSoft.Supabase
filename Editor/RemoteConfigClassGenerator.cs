@@ -417,6 +417,8 @@ namespace TrueBase.Editor
         public int              TypeIndex;
         public bool             IsAmbiguous;
         public string           CustomType = "";          // TypeIndex == CustomTypeIndex 일 때
+        /// <summary>커스텀 타입 해석 실패(오타·네임스페이스 누락). true면 빨강 표시 + 소스 생성 차단.</summary>
+        public bool             TypeUnresolved;
         public FieldTypeCategory JsonCategory = FieldTypeCategory.Unknown;
     }
 

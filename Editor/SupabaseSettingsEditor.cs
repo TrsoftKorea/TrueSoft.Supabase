@@ -25,6 +25,7 @@ namespace TrueBase.Editor
         private const string PrefsKeyCsvPath           = "TrueBase.PlayerSave.CsvPath";                         // CSV 내보내기/불러오기 파일 경로
         private const string PrefsKeyLastSaveDir       = "TrueBase.PlayerSave.LastSaveDir";                     // 마지막 클래스 저장 폴더
         private const string PrefsKeyRcClassName       = "TrueBase.RemoteConfig.ClassName";                     // RemoteConfig 생성 클래스명
+        private const string PrefsKeyRcCsvPath         = "TrueBase.RemoteConfig.CsvPath";                       // RC 필드 CSV 파일 경로
         private const string ClassName   = "PlayerSave";
         private const string SkipColumns = "id,user_id,account_id,server_id,updated_at";
         private const string DialogTitle = "유저 데이터 클래스";
@@ -69,6 +70,27 @@ namespace TrueBase.Editor
                         }
                     };
                 return _ambiguousStyle;
+            }
+        }
+
+        private static GUIStyle _errorStyle;
+
+        // 해석 불가 타입(오타·네임스페이스 누락) 표시용 — 생성 차단 대상.
+        private static GUIStyle ErrorStyle
+        {
+            get
+            {
+                if (_errorStyle == null)
+                    _errorStyle = new GUIStyle(EditorStyles.label)
+                    {
+                        normal =
+                        {
+                            textColor = EditorGUIUtility.isProSkin
+                                ? new Color(1f, 0.4f, 0.4f)    // 다크 테마: 밝은 빨강
+                                : new Color(0.75f, 0.1f, 0.1f) // 라이트 테마: 진한 빨강
+                        }
+                    };
+                return _errorStyle;
             }
         }
 
@@ -117,7 +139,8 @@ namespace TrueBase.Editor
             if (_foldout)
             {
                 EditorGUILayout.HelpBox(
-                    "DB에서 유저 데이터 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.",
+                    "DB에서 유저 데이터 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.\n"
+                    + "목록은 확인용(읽기 전용)이며, 편집은 CSV로 합니다: CSV 내보내기 → 엑셀 등에서 편집 → CSV 불러오기.",
                     MessageType.Info);
 
                 EditorGUILayout.Space(4);
@@ -144,6 +167,8 @@ namespace TrueBase.Editor
                         // 깨뜨리므로(EndLayoutGroup 오류), delayCall로 OnInspectorGUI 밖에서 실행한다.
                         if (GUILayout.Button(new GUIContent("CSV 내보내기", "컬럼 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ExportColumnsCsv;
+                        if (GUILayout.Button(new GUIContent("CSV 열기", "기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보냅니다."), GUILayout.Height(22)))
+                            EditorApplication.delayCall += OpenColumnsCsv;
                         if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 반영"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ImportColumnsCsv;
                         if (GUILayout.Button(new GUIContent("위치…", "CSV 파일 위치 지정/변경. 지정하면 이후 내보내기·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(22), GUILayout.Width(52)))
@@ -155,13 +180,21 @@ namespace TrueBase.Editor
                     if (unspecifiedNames.Count > 0)
                         EditorGUILayout.HelpBox(
                             "타입 미지정 필드: " + string.Join(", ", unspecifiedNames)
-                            + "\njsonb 컬럼은 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
+                            + "\njsonb 컬럼은 CSV에서 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
                             MessageType.Warning);
+
+                    // 해석 불가 타입(오타·네임스페이스 누락)이 있으면 오류 + 생성 차단.
+                    var unresolvedNames = CollectUnresolvedColumnNames();
+                    if (unresolvedNames.Count > 0)
+                        EditorGUILayout.HelpBox(
+                            "타입 해석 실패 필드: " + string.Join(", ", unresolvedNames)
+                            + "\nCSV의 타입 철자·네임스페이스를 확인하세요. 다른 네임스페이스의 타입은 정규화 이름(예: MyGame.HeroName)으로 쓰세요.",
+                            MessageType.Error);
 
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0))
+                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0 || unresolvedNames.Count > 0))
                         {
                             if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
                                 BuildPreviewFromColumns();
@@ -212,7 +245,8 @@ namespace TrueBase.Editor
             if (_rcFoldout)
             {
                 EditorGUILayout.HelpBox(
-                    "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.",
+                    "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.\n"
+                    + "필드 목록은 확인용(읽기 전용)이며, 편집은 CSV로 합니다: CSV 내보내기 → 편집 → CSV 불러오기.",
                     MessageType.Info);
 
                 EditorGUILayout.Space(4);
@@ -254,6 +288,28 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(6);
                     DrawRcFieldList();
 
+                    EditorGUILayout.Space(2);
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        // 파일 다이얼로그는 delayCall로 OnInspectorGUI 밖에서 실행(IMGUI 그룹 스택 보호).
+                        if (GUILayout.Button(new GUIContent("CSV 내보내기", "필드 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                            EditorApplication.delayCall += ExportRcFieldsCsv;
+                        if (GUILayout.Button(new GUIContent("CSV 열기", "기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보냅니다."), GUILayout.Height(22)))
+                            EditorApplication.delayCall += OpenRcCsv;
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 필드 경로 기준으로 반영"), GUILayout.Height(22)))
+                            EditorApplication.delayCall += ImportRcFieldsCsv;
+                        if (GUILayout.Button(new GUIContent("위치…", "CSV 파일 위치 지정/변경."), GUILayout.Height(22), GUILayout.Width(52)))
+                            EditorApplication.delayCall += PickRcCsvPath;
+                    }
+
+                    // 해석 불가 타입이 있으면 오류 + 생성 차단.
+                    var rcUnresolved = CollectUnresolvedRcFieldPaths();
+                    if (rcUnresolved.Count > 0)
+                        EditorGUILayout.HelpBox(
+                            "타입 해석 실패 필드: " + string.Join(", ", rcUnresolved)
+                            + "\nCSV의 타입 철자·네임스페이스를 확인하세요.",
+                            MessageType.Error);
+
                     EditorGUILayout.Space(4);
                     EditorGUI.BeginChangeCheck();
                     _rcClassName = EditorGUILayout.TextField("클래스명", _rcClassName);
@@ -263,7 +319,7 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcClassName)))
+                        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_rcClassName) || rcUnresolved.Count > 0))
                         {
                             if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
                                 BuildRcPreview();
@@ -306,132 +362,10 @@ namespace TrueBase.Editor
             }
         }
 
-        // Json 카테고리 전용 드롭다운 옵션 (jsonb 컬럼). string은 jsonb↔C# string 타입 불일치라 제외(text 컬럼 전용).
-        // 배열(T[])도 생성 시 AutoList로 치환돼 List와 결과가 같으므로 제외 — jsonb는 Dictionary/List 중 선택.
-        private static readonly string[] s_jsonTypeOptions =
-            { "Dictionary<K, V>", "List<T>" };
-
-        // Array 카테고리 전용 드롭다운 옵션 (컬렉션 종류) — RemoteConfig 필드 등에서 사용
-        private static readonly string[] s_arrayTypeOptions = { "List<T>", "T[]" };
-
-        // DataSavePriority 드롭다운 옵션 (label → int 매핑)
+        // DataSavePriority 라벨 (label → int 매핑) — CSV 표기·목록 표시에 사용
         // Normal=1(보통/5초), Urgent=0(짧게/1초), Lazy=2(길게/30초)
         private static readonly string[] s_priorityOptions = { "보통", "짧게", "길게" };
         private static readonly int[]    s_priorityValues  = {  1,      0,      2     };
-
-        // Dictionary key 타입 선택지
-        private static readonly string[] s_dictKeyOptions = { "string", "int" };
-
-        // 컬렉션 요소 값 타입 12종 — AutoList/AutoDict 변환 대상(= 기본값 지정 가능 타입).
-        // GeneratorTypeCatalog의 AutoList leaf 집합과 동일. 기본값을 못 박는 타입(struct·tuple·커스텀 클래스)은
-        // 자동 확장 컬렉션에서 무의미하므로 노출하지 않습니다.
-        private static readonly string[] s_valueTypeOptions =
-        {
-            "int", "long", "short", "ulong", "uint", "byte", "sbyte",
-            "float", "double", "decimal", "bool", "string"
-        };
-
-        // List/배열 요소 드롭다운: 값 타입 + "2차원"(→ List<값타입>, 생성 시 AutoList2D로 치환·셀 기본값 지정 가능).
-        private const string ElementTwoDimLabel = "2차원(List)";
-        private static readonly string[] s_listElementOptions = AppendOne(s_valueTypeOptions, ElementTwoDimLabel);
-
-        // Dictionary value 드롭다운: 값 타입(→ AutoDict) + "미지정"(value=object).
-        // object는 정상 타입이 아니라 "아직 타입을 안 정한 jsonb" 센티넬 — 경고로 표시하고 소스 생성을 막습니다.
-        private const string DictValueRawLabel = "⚠ 미지정(타입 선택)";
-        private static readonly string[] s_dictValueOptions = AppendOne(s_valueTypeOptions, DictValueRawLabel);
-
-        private static string[] AppendOne(string[] src, string tail)
-        {
-            var arr = new string[src.Length + 1];
-            Array.Copy(src, arr, src.Length);
-            arr[src.Length] = tail;
-            return arr;
-        }
-
-        /// <summary>
-        /// 카테고리에 속하는 타입만 표시하는 Popup을 그립니다.
-        /// Json 카테고리(유저 세이브 jsonb 등)는 Dictionary / List 선택지를 제공합니다(string은 text 컬럼 전용, 배열은 List로 통일).
-        /// Array 카테고리(RemoteConfig 필드 등)는 List&lt;T&gt; / T[] 두 선택지를 제공하며 요소 타입은 별도 컨트롤로 편집합니다.
-        /// 현재 TypeIndex가 카테고리에 없으면 전체 목록을 표시합니다.
-        /// </summary>
-        private static int DrawTypePopup(int currentTypeIndex, FieldTypeCategory category, float width,
-            ref string customType)
-        {
-            // Json 카테고리 전용 처리 (jsonb 컬럼: Dictionary / List<T>). string은 text 전용이라 제외, 배열은 List로 통일.
-            if (category == FieldTypeCategory.Json)
-            {
-                int selIdx;
-                if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex && TryParseListType(customType, out _))
-                {
-                    selIdx = 1; // List
-                }
-                else if (currentTypeIndex == GeneratorTypeCatalog.CustomTypeIndex && TryParseArrayType(customType, out var arrElem))
-                {
-                    customType = "List<" + arrElem + ">"; // 기존 배열 → List로 정규화
-                    selIdx = 1;
-                }
-                else
-                {
-                    selIdx = 0; // Dictionary (미정 jsonb의 기본 — 모든 JSON 객체를 담을 수 있음)
-                }
-
-                var picked = EditorGUILayout.Popup(selIdx, s_jsonTypeOptions, GUILayout.Width(width));
-                if (picked == 0)
-                {
-                    if (!TryParseDictionaryTypes(customType, out _, out _))
-                        customType = "Dictionary<string, object>";
-                    return GeneratorTypeCatalog.CustomTypeIndex;
-                }
-                // picked == 1: List<T> (jsonb의 리스트/배열은 모두 List로, 생성 시 AutoList로 치환됨)
-                if (!TryParseListType(customType, out _))
-                    customType = "List<int>";
-                return GeneratorTypeCatalog.CustomTypeIndex;
-            }
-
-            // Array 카테고리 전용 처리 (RemoteConfig 필드 등). 유저 세이브 jsonb 컬럼은 Json 카테고리를 사용합니다.
-            if (category == FieldTypeCategory.Array)
-            {
-                var isList  = TryParseListType(customType, out _);
-                var isArray = !isList && TryParseArrayType(customType, out _);
-
-                // 둘 다 아니면 List<T>를 기본으로
-                var selIdx = (isArray) ? 1 : 0;
-                var picked = EditorGUILayout.Popup(selIdx, s_arrayTypeOptions, GUILayout.Width(width));
-
-                if (picked == 0 && !isList)
-                {
-                    // T[] → List<T> 전환: 요소 타입 유지
-                    TryParseArrayType(customType, out var elem);
-                    customType = "List<" + (string.IsNullOrEmpty(elem) ? "int" : elem) + ">";
-                }
-                else if (picked == 1 && !isArray)
-                {
-                    // List<T> → T[] 전환: 요소 타입 유지
-                    TryParseListType(customType, out var elem);
-                    customType = (string.IsNullOrEmpty(elem) ? "int" : elem) + "[]";
-                }
-                else if (currentTypeIndex != GeneratorTypeCatalog.CustomTypeIndex)
-                {
-                    // 다른 카테고리에서 Array로 처음 진입할 때 기본값 설정
-                    customType = picked == 0 ? "List<int>" : "int[]";
-                }
-                return GeneratorTypeCatalog.CustomTypeIndex;
-            }
-
-            var allowed = GeneratorTypeCatalog.GetAllowedTypeIndices(category);
-
-            // 기존 파일 복원 등으로 카테고리에 맞지 않는 타입이 들어있으면 전체 표시
-            if (Array.IndexOf(allowed, currentTypeIndex) < 0)
-                allowed = GeneratorTypeCatalog.GetAllowedTypeIndices(FieldTypeCategory.Unknown);
-
-            var options = new string[allowed.Length];
-            for (var j = 0; j < allowed.Length; j++)
-                options[j] = GeneratorTypeCatalog.TypeOptions[allowed[j]];
-
-            var selIdx2    = Math.Max(0, Array.IndexOf(allowed, currentTypeIndex));
-            var newSelIdx2 = EditorGUILayout.Popup(selIdx2, options, GUILayout.Width(width));
-            return allowed[newSelIdx2];
-        }
 
         /// <summary>명확한 ClrType 문자열에서 FieldTypeCategory를 결정합니다 (isAmbiguous=false인 경우만 호출).</summary>
         private static FieldTypeCategory ResolveTypeCategory(string rawClrType)
@@ -502,86 +436,20 @@ namespace TrueBase.Editor
             return !string.IsNullOrEmpty(elementType);
         }
 
-        /// <summary>
-        /// List&lt;T&gt;·배열 요소 타입을 선택합니다 — 값 타입 12종 또는 "2차원"(→ List&lt;값타입&gt;, 생성 시 AutoList2D).
-        /// 모두 기본값 지정이 가능한 타입만 노출합니다. 인식 못 하는 기존 타입은 첫 값 타입(int)으로 정규화됩니다.
-        /// </summary>
-        private static string DrawListElementPopup(string current, float width)
-        {
-            var cur       = (current ?? string.Empty).Trim();
-            var twoDimIdx = s_listElementOptions.Length - 1; // "2차원(List)"
+        /// <summary>RC 필드의 최종 CLR 타입을 해석합니다(커스텀이면 CustomType, 아니면 TypeOptions).</summary>
+        private static string ResolveRcClrType(RcEditableField f)
+            => f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
+                ? (string.IsNullOrWhiteSpace(f.CustomType) ? "string" : f.CustomType.Trim())
+                : GeneratorTypeCatalog.TypeOptions[f.TypeIndex];
 
-            var isTwoDim = TryParseListType(cur, out var inner); // 현재가 List<X>면 2차원
-            var selIdx   = isTwoDim ? twoDimIdx : Math.Max(0, Array.IndexOf(s_valueTypeOptions, cur));
-
-            var picked = EditorGUILayout.Popup(selIdx, s_listElementOptions, GUILayout.Width(width));
-            if (picked != twoDimIdx)
-                return s_valueTypeOptions[picked]; // 값 타입(1D)
-
-            // 2차원: 안쪽 값 타입 드롭다운 → List<값타입> 반환(AutoList2D로 치환됨)
-            var innerSel = Math.Max(0, Array.IndexOf(s_valueTypeOptions, isTwoDim ? inner : "int"));
-            var newInner = EditorGUILayout.Popup(innerSel, s_valueTypeOptions, GUILayout.Width(width));
-            return "List<" + s_valueTypeOptions[newInner] + ">";
-        }
-
-        /// <summary>값 타입 12종 드롭다운. 인식 못 하는 값은 int로 정규화.</summary>
-        private static string DrawValueTypePopup(string current, float width)
-        {
-            var vi     = Math.Max(0, Array.IndexOf(s_valueTypeOptions, (current ?? string.Empty).Trim()));
-            var picked = EditorGUILayout.Popup(vi, s_valueTypeOptions, GUILayout.Width(width));
-            return s_valueTypeOptions[picked];
-        }
-
-        /// <summary>Dictionary value 타입 드롭다운 — 값 타입(→ AutoDict) 또는 object(원시 JSON 컨테이너 유지).</summary>
-        private static string DrawDictValuePopup(string current, float width)
-        {
-            var rawIdx = s_dictValueOptions.Length - 1; // "object(원시 JSON)"
-            var vi     = Array.IndexOf(s_valueTypeOptions, (current ?? string.Empty).Trim());
-            var selIdx = vi >= 0 ? vi : rawIdx; // 값 타입이 아니면(object 등) 원시 JSON
-            var picked = EditorGUILayout.Popup(selIdx, s_dictValueOptions, GUILayout.Width(width));
-            return picked == rawIdx ? "object" : s_valueTypeOptions[picked];
-        }
-
-        /// <summary>List&lt;T&gt; 요소 타입 선택(값 타입 / 2차원).</summary>
-        private static void DrawListTypeControls(ref string customType)
-        {
-            TryParseListType(customType, out var elem);
-            customType = "List<" + DrawListElementPopup(elem, 90) + ">";
-        }
-
-        /// <summary>T[] 요소 타입 선택(값 타입). 예: int → int[].</summary>
-        private static void DrawArrayTypeControls(ref string customType)
-        {
-            TryParseArrayType(customType, out var elem);
-            customType = DrawValueTypePopup(elem, 90) + "[]";
-        }
-
-        /// <summary>Dictionary 타입의 key / value 타입을 인라인으로 편집합니다.</summary>
-        private static void DrawDictionaryTypeControls(ref string customType)
-        {
-            TryParseDictionaryTypes(customType, out var keyType, out var valueType);
-
-            // Key 타입 popup (string / int)
-            var keyIdx    = Math.Max(0, Array.IndexOf(s_dictKeyOptions, keyType));
-            var newKeyIdx = EditorGUILayout.Popup(keyIdx, s_dictKeyOptions, GUILayout.Width(50));
-            var newKey    = s_dictKeyOptions[newKeyIdx];
-
-            EditorGUILayout.LabelField(",", GUILayout.Width(8));
-
-            // Value 타입 선택(값 타입 / object)
-            var newValue = DrawDictValuePopup(valueType, 90);
-
-            customType = "Dictionary<" + newKey + ", " + newValue + ">";
-        }
-
-
+        // RC 필드 목록도 읽기 전용 확인 화면입니다. 편집은 CSV(내보내기 → 편집 → 불러오기)로만 합니다.
         private static void DrawRcFieldList()
         {
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(120));
-                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.Width(80));
                 EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
+                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel); // 가변 폭 — 맨 끝
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
@@ -593,35 +461,37 @@ namespace TrueBase.Editor
                 foreach (var f in _rcFields)
                 {
                     using (new EditorGUILayout.HorizontalScope())
+                    using (new EditorGUI.DisabledScope(!f.Include))   // 제외 필드는 흐리게
                     {
                         // 깊이만큼 들여쓰기
                         if (f.Depth > 0) GUILayout.Space(f.Depth * 12f);
 
                         if (f.IsObjectNode)
                         {
-                            // 중첩 객체 헤더 행 — 타입 팝업 없음
                             var nodeLabel = f.JsonKey + " → " + f.NestedClassName;
-                            EditorGUILayout.LabelField(nodeLabel, EditorStyles.boldLabel, GUILayout.ExpandWidth(true));
-                            f.Include = EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
+                            EditorGUILayout.LabelField(new GUIContent(nodeLabel, f.FullPath),
+                                EditorStyles.boldLabel, GUILayout.MinWidth(120));
+                            using (new EditorGUI.DisabledScope(true))
+                                EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
+                            EditorGUILayout.LabelField("중첩 객체", EditorStyles.miniLabel, GUILayout.ExpandWidth(true));
                         }
                         else
                         {
-                            var fieldLabel = f.IsAmbiguous ? "⚠ " + f.JsonKey : f.JsonKey;
-                            EditorGUILayout.LabelField(fieldLabel,
-                                f.IsAmbiguous ? AmbiguousStyle : EditorStyles.label,
-                                GUILayout.MinWidth(f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex ? 60 : 120));
+                            var resolvedType = ResolveRcClrType(f);
+                            var error = f.TypeUnresolved;
+                            var warn  = !error && f.IsAmbiguous;
+                            var style = error ? ErrorStyle : warn ? AmbiguousStyle : EditorStyles.label;
 
-                            f.TypeIndex = DrawTypePopup(f.TypeIndex, f.JsonCategory, 80f, ref f.CustomType);
+                            var fieldLabel = error ? "✕ " + f.JsonKey : warn ? "⚠ " + f.JsonKey : f.JsonKey;
+                            EditorGUILayout.LabelField(new GUIContent(fieldLabel, f.FullPath), style, GUILayout.MinWidth(120));
 
-                            if (f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
-                            {
-                                if      (TryParseDictionaryTypes(f.CustomType, out _, out _)) DrawDictionaryTypeControls(ref f.CustomType);
-                                else if (TryParseListType(f.CustomType, out _))                DrawListTypeControls(ref f.CustomType);
-                                else if (TryParseArrayType(f.CustomType, out _))               DrawArrayTypeControls(ref f.CustomType);
-                                else EditorGUILayout.LabelField(f.CustomType, GUILayout.ExpandWidth(true));
-                            }
+                            using (new EditorGUI.DisabledScope(true))
+                                EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
 
-                            f.Include = EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
+                            var typeTooltip = error ? resolvedType + " — 타입을 찾을 수 없습니다. CSV에서 수정하세요."
+                                            : warn  ? resolvedType + " — 타입 추정이 불확실합니다. CSV에서 확인하세요."
+                                            : resolvedType;
+                            EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.ExpandWidth(true));
                         }
                     }
                 }
@@ -711,6 +581,7 @@ namespace TrueBase.Editor
                 }
             }
 
+            ValidateRcFieldTypes();
             _rcFieldsParsed = true;
         }
 
@@ -749,6 +620,8 @@ namespace TrueBase.Editor
         }
 
 
+        // 컬럼 목록은 읽기 전용 확인 화면입니다. 편집은 CSV(내보내기 → 편집 → 불러오기)로만 합니다.
+        // 상태 색: 노랑=타입 미지정(jsonb 정제 필요), 빨강=타입 해석 실패(오타·네임스페이스 누락).
         private static void DrawColumnList()
         {
             // 검색 필터 — 표시만 거릅니다(생성 대상엔 영향 없음).
@@ -773,12 +646,11 @@ namespace TrueBase.Editor
             {
                 EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(92));
                 EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(110));
-                EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.Width(80));
                 EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
                 EditorGUILayout.LabelField(new GUIContent("기본값", "새 유저 시작값. 스칼라는 = 초기화, Auto 컬렉션은 [AutoDefault]로 생성됩니다."),
                     EditorStyles.miniLabel, GUILayout.Width(84));
                 EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
-                EditorGUILayout.LabelField("요소 타입", EditorStyles.miniLabel); // 커스텀 타입일 때만(가변 폭)
+                EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel); // 가변 폭 — 맨 끝
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
@@ -789,43 +661,28 @@ namespace TrueBase.Editor
                 _columnScroll = sv.scrollPosition;
                 foreach (var col in visible)
                 {
-                    // 모든 칼럼은 고정 폭 → 행마다 정렬. 가변 폭 요소 컨트롤은 맨 끝에 둬서 어떤 칼럼도 밀지 않는다.
                     using (new EditorGUILayout.HorizontalScope())
+                    using (new EditorGUI.DisabledScope(!col.Include))   // 제외 컬럼은 흐리게
                     {
-                        var warn  = col.IsAmbiguous || IsUnspecifiedType(ResolveColumnClrType(col));
-                        var label = warn ? "⚠ " + col.Name : col.Name;
-                        // 컬럼명: DB 식별자(읽기 전용). 전체 이름은 툴팁으로 노출.
-                        EditorGUILayout.LabelField(new GUIContent(label, col.Name),
-                            warn ? AmbiguousStyle : EditorStyles.label,
-                            GUILayout.Width(92));
-                        // 필드명: C# 식별자(편집 가능, 기본=컬럼명). 컬럼명과 다르면 생성기가 [JsonProperty]로 직렬화를 보존.
-                        col.FieldName = EditorGUILayout.TextField(col.FieldName, GUILayout.Width(110));
-                        col.TypeIndex = DrawTypePopup(col.TypeIndex, col.TypeCategory, 80f, ref col.CustomType);
+                        var resolvedType = ResolveColumnClrType(col);
+                        var error = col.TypeUnresolved;
+                        var warn  = !error && (col.IsAmbiguous || IsUnspecifiedType(resolvedType));
+                        var style = error ? ErrorStyle : warn ? AmbiguousStyle : EditorStyles.label;
 
-                        var prioLabelIdx    = Array.IndexOf(s_priorityValues, col.Priority);
-                        if (prioLabelIdx < 0) prioLabelIdx = 0;
-                        var newPrioLabelIdx = EditorGUILayout.Popup(prioLabelIdx, s_priorityOptions, GUILayout.Width(58));
-                        col.Priority = s_priorityValues[newPrioLabelIdx];
+                        var label = error ? "✕ " + col.Name : warn ? "⚠ " + col.Name : col.Name;
+                        EditorGUILayout.LabelField(new GUIContent(label, col.Name), style, GUILayout.Width(92));
 
-                        // 기본값: 스칼라·Auto 컬렉션에만 적용 가능. 그 외(plain List/Dictionary 등)는 비활성.
-                        using (new EditorGUI.DisabledScope(!DefaultValueApplicable(col)))
-                            col.DefaultValue = EditorGUILayout.TextField(col.DefaultValue ?? "", GUILayout.Width(84));
+                        EditorGUILayout.LabelField(new GUIContent(col.FieldName, col.FieldName), GUILayout.Width(110));
+                        EditorGUILayout.LabelField(PriorityLabel(col.Priority), GUILayout.Width(58));
+                        EditorGUILayout.LabelField(new GUIContent(col.DefaultValue ?? "", col.DefaultValue), GUILayout.Width(84));
 
-                        col.Include = EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
+                        using (new EditorGUI.DisabledScope(true))
+                            EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
 
-                        // 요소 타입 컨트롤(List·Dictionary 등): 행 맨 끝. 뒤에 아무것도 없어 다른 칼럼을 밀지 않는다.
-                        if (col.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex)
-                        {
-                            GUILayout.Space(8);
-                            if (TryParseDictionaryTypes(col.CustomType, out _, out _))
-                                DrawDictionaryTypeControls(ref col.CustomType);
-                            else if (TryParseListType(col.CustomType, out _))
-                                DrawListTypeControls(ref col.CustomType);
-                            else if (TryParseArrayType(col.CustomType, out _))
-                                DrawArrayTypeControls(ref col.CustomType);
-                            else
-                                EditorGUILayout.LabelField(col.CustomType);
-                        }
+                        var typeTooltip = error ? resolvedType + " — 타입을 찾을 수 없습니다. CSV에서 수정하세요."
+                                        : warn  ? resolvedType + " — 타입 미지정. CSV에서 지정하세요."
+                                        : resolvedType;
+                        EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.ExpandWidth(true));
                     }
                 }
             }
@@ -868,7 +725,7 @@ namespace TrueBase.Editor
                 {
                     var isAmbiguous = col.ClrType.Contains("/*");
                     var typeIdx = isAmbiguous
-                        ? stringIdx
+                        ? GeneratorTypeCatalog.CustomTypeIndex
                         : Array.IndexOf(GeneratorTypeCatalog.TypeOptions, col.ClrType);
                     if (typeIdx < 0) typeIdx = stringIdx;
 
@@ -879,8 +736,10 @@ namespace TrueBase.Editor
                         Comment      = col.Comment,
                         DefaultValue = col.DefaultValue ?? "", // DB 기본값 프리필 (아래에서 사용자 설정으로 덮어씀)
                         TypeIndex    = typeIdx,
+                        // 복잡한 타입(jsonb, array, $ref 등)은 "미지정" 센티널로 시작 — CSV에서 타입을 지정할 때까지 생성 차단.
+                        // CSV에도 이 값이 그대로 내보내져 어떤 컬럼을 정해야 하는지 드러난다.
+                        CustomType   = isAmbiguous ? "Dictionary<string, object>" : "",
                         IsAmbiguous  = isAmbiguous,
-                        // isAmbiguous(/* 포함) = 복잡한 타입(jsonb, array, $ref 등) → Json 카테고리 (Dictionary 프리셋 포함)
                         TypeCategory = isAmbiguous ? FieldTypeCategory.Json : ResolveTypeCategory(col.ClrType)
                     });
                 }
@@ -952,6 +811,9 @@ namespace TrueBase.Editor
                     if (existingDefaults.TryGetValue(col.Name, out var dv) && !string.IsNullOrWhiteSpace(dv))
                         col.DefaultValue = dv;
 
+                // 복원된 커스텀 타입(EditorPrefs·기존 파일)이 여전히 해석 가능한지 검사
+                ValidateColumnTypes();
+
                 _columnsFetched = true;
             }
             catch (Exception e)
@@ -971,7 +833,16 @@ namespace TrueBase.Editor
             {
                 EditorUtility.DisplayDialog(DialogTitle,
                     "타입 미지정 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unspecified)
-                    + "\n\n인스펙터에서 타입을 지정한 뒤 다시 시도하세요.", "확인");
+                    + "\n\nCSV에서 타입을 지정한 뒤 다시 시도하세요.", "확인");
+                return;
+            }
+
+            var unresolvedOneClick = CollectUnresolvedColumnNames();
+            if (unresolvedOneClick.Count > 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "타입 해석에 실패한 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unresolvedOneClick)
+                    + "\n\nCSV의 철자·네임스페이스를 확인한 뒤 다시 시도하세요.", "확인");
                 return;
             }
 
@@ -1007,17 +878,6 @@ namespace TrueBase.Editor
             => ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
                 ? (string.IsNullOrWhiteSpace(ec.CustomType) ? "string" : ec.CustomType.Trim())
                 : GeneratorTypeCatalog.TypeOptions[ec.TypeIndex];
-
-        /// <summary>
-        /// 기본값 입력이 적용 가능한 타입인지 — 스칼라(TypeOptions)이거나 Auto 컬렉션으로 치환될 컬렉션이면 true.
-        /// (UI 타입은 List/Dictionary 형태이므로 생성기와 동일하게 MapToAutoType을 거쳐 판정)
-        /// </summary>
-        private static bool DefaultValueApplicable(EditableColumn ec)
-        {
-            var resolved = ResolveColumnClrType(ec);
-            if (GeneratorTypeCatalog.IsScalarTypeName(resolved)) return true;
-            return GeneratorTypeCatalog.IsAutoDefaultableType(GeneratorTypeCatalog.MapToAutoType(resolved), out _);
-        }
 
         // 컬럼이 많을 때 인스펙터 행 편집 대신 스프레드시트에서 일괄 편집하기 위한 왕복.
         // 헤더: column,field,type,priority,default,include  (column=DB명, 매칭 키)
@@ -1116,17 +976,11 @@ namespace TrueBase.Editor
                 applied++;
             }
 
+            ValidateColumnTypes();
             _previewText = ""; // 변경됐으니 재생성 필요
 
             Debug.Log($"[Supabase] CSV 불러오기 완료: {applied}개 컬럼 적용 ← {path}");
-            // 일치하는 컬럼이 없는 행이 있으면(오타·스키마 불일치) 팝업으로 알린다.
-            if (unknown.Count > 0)
-            {
-                var shown = unknown.Take(10).ToArray();
-                EditorUtility.DisplayDialog(DialogTitle,
-                    $"{applied}개 컬럼에 적용했습니다.\n\n일치하는 컬럼이 없어 건너뜀({unknown.Count}): "
-                    + string.Join(", ", shown) + (unknown.Count > shown.Length ? " …" : ""), "확인");
-            }
+            ReportImportIssues(DialogTitle, applied, unknown, CollectUnresolvedColumnNames());
         }
 
         /// <summary>CSV 파일 위치(내보내기·불러오기 공용)를 지정/변경합니다.</summary>
@@ -1139,6 +993,189 @@ namespace TrueBase.Editor
             if (string.IsNullOrEmpty(path)) return;
             EditorPrefs.SetString(PrefsKeyCsvPath, path);
             Debug.Log($"[Supabase] CSV 위치 설정: {path}");
+        }
+
+        /// <summary>
+        /// 기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보낸 뒤 엽니다.
+        /// 이미 있는 파일은 덮어쓰지 않습니다(사용자 편집 보존).
+        /// </summary>
+        private static void OpenColumnsCsv()
+        {
+            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                ExportColumnsCsv();
+                path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            }
+            EditorUtility.OpenWithDefaultApp(path);
+        }
+
+        // ─── RC 필드 CSV 왕복 ────────────────────────────────────────────────────
+        // 헤더: field,type,include  (field=FullPath, 매칭 키. 중첩 객체 행의 type은 "(중첩 객체)" — 수정 불가)
+
+        private static void ExportRcFieldsCsv()
+        {
+            if (_rcFields.Count == 0)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 파싱'으로 필드를 불러오세요.", "확인");
+                return;
+            }
+
+            var path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+            if (string.IsNullOrEmpty(path))
+            {
+                path = EditorUtility.SaveFilePanel("RC 필드 설정 CSV 내보내기", "", "remote_config_fields.csv", "csv");
+                if (string.IsNullOrEmpty(path)) return;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("field,type,include\n");
+            foreach (var f in _rcFields)
+            {
+                sb.Append(CsvEscape(f.FullPath)).Append(',')
+                  .Append(CsvEscape(f.IsObjectNode ? "(중첩 객체)" : ResolveRcClrType(f))).Append(',')
+                  .Append(f.Include ? "1" : "0")
+                  .Append('\n');
+            }
+
+            try
+            {
+                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
+                EditorPrefs.SetString(PrefsKeyRcCsvPath, path);
+                Debug.Log($"[Supabase] RC CSV 내보내기 완료: {_rcFields.Count}개 필드 → {path}");
+            }
+            catch (Exception e)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, "내보내기 실패:\n" + e.Message, "확인");
+            }
+        }
+
+        private static void ImportRcFieldsCsv()
+        {
+            if (_rcFields.Count == 0)
+            {
+                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 파싱'으로 필드를 불러오세요. CSV는 필드 경로로 매칭합니다.", "확인");
+                return;
+            }
+
+            var path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                path = EditorUtility.OpenFilePanel("RC 필드 설정 CSV 불러오기", "", "csv");
+                if (string.IsNullOrEmpty(path)) return;
+            }
+            EditorPrefs.SetString(PrefsKeyRcCsvPath, path);
+
+            string[] lines;
+            try { lines = File.ReadAllLines(path); }
+            catch (Exception e) { EditorUtility.DisplayDialog(RcDialogTitle, "읽기 실패:\n" + e.Message, "확인"); return; }
+
+            var byPath = new Dictionary<string, RcEditableField>(StringComparer.Ordinal);
+            foreach (var f in _rcFields) byPath[f.FullPath] = f;
+
+            int applied = 0;
+            var unknown = new List<string>();
+            bool firstRow = true;
+
+            foreach (var raw in lines)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var cells = ParseCsvLine(raw);
+                if (cells.Count == 0) continue;
+
+                if (firstRow)
+                {
+                    firstRow = false;
+                    if (cells[0].Trim().Equals("field", StringComparison.OrdinalIgnoreCase)) continue;
+                }
+
+                var fieldPath = cells[0].Trim();
+                if (string.IsNullOrEmpty(fieldPath)) continue;
+                if (!byPath.TryGetValue(fieldPath, out var f)) { unknown.Add(fieldPath); continue; }
+
+                if (!f.IsObjectNode && cells.Count > 1 && !string.IsNullOrWhiteSpace(cells[1])
+                    && cells[1].Trim() != "(중첩 객체)")
+                    ApplyClrTypeToRcField(f, cells[1].Trim());
+                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2])) f.Include = ParseBool(cells[2].Trim(), f.Include);
+                applied++;
+            }
+
+            ValidateRcFieldTypes();
+            _rcPreviewText = ""; // 변경됐으니 재생성 필요
+
+            Debug.Log($"[Supabase] RC CSV 불러오기 완료: {applied}개 필드 적용 ← {path}");
+            ReportImportIssues(RcDialogTitle, applied, unknown, CollectUnresolvedRcFieldPaths());
+        }
+
+        /// <summary>기억된 RC CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보낸 뒤 엽니다.</summary>
+        private static void OpenRcCsv()
+        {
+            var path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                ExportRcFieldsCsv();
+                path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            }
+            EditorUtility.OpenWithDefaultApp(path);
+        }
+
+        /// <summary>RC CSV 파일 위치를 지정/변경합니다.</summary>
+        private static void PickRcCsvPath()
+        {
+            var remembered = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+            var dir  = string.IsNullOrEmpty(remembered) ? "" : (Path.GetDirectoryName(remembered) ?? "");
+            var name = string.IsNullOrEmpty(remembered) ? "remote_config_fields.csv" : Path.GetFileName(remembered);
+            var path = EditorUtility.SaveFilePanel("RC CSV 파일 위치 지정", dir, name, "csv");
+            if (string.IsNullOrEmpty(path)) return;
+            EditorPrefs.SetString(PrefsKeyRcCsvPath, path);
+            Debug.Log($"[Supabase] RC CSV 위치 설정: {path}");
+        }
+
+        /// <summary>CLR 타입 문자열을 RC 필드에 적용합니다(컬럼 적용과 같은 규칙).</summary>
+        private static void ApplyClrTypeToRcField(RcEditableField f, string type)
+        {
+            var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, type);
+            if (idx >= 0)
+            {
+                f.TypeIndex = idx;
+            }
+            else
+            {
+                f.TypeIndex  = GeneratorTypeCatalog.CustomTypeIndex;
+                f.CustomType = type;
+                if (TryParseDictionaryTypes(type, out _, out _))
+                    f.JsonCategory = FieldTypeCategory.Json;
+                else if (TryParseListType(type, out _) || TryParseArrayType(type, out _))
+                    f.JsonCategory = FieldTypeCategory.Array;
+            }
+            f.IsAmbiguous = false;
+        }
+
+        /// <summary>CSV 임포트 결과(미매칭 행·타입 해석 실패)를 한 팝업으로 알립니다. 문제가 없으면 조용히 넘어갑니다.</summary>
+        private static void ReportImportIssues(string dialogTitle, int applied, List<string> unknown, List<string> unresolved)
+        {
+            if (unknown.Count == 0 && unresolved.Count == 0) return;
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"{applied}개 행을 적용했습니다.");
+            if (unknown.Count > 0)
+            {
+                var shown = unknown.Take(10).ToArray();
+                sb.Append($"\n\n일치하는 항목이 없어 건너뜀({unknown.Count}): ")
+                  .Append(string.Join(", ", shown))
+                  .Append(unknown.Count > shown.Length ? " …" : "");
+            }
+            if (unresolved.Count > 0)
+            {
+                var shown = unresolved.Take(10).ToArray();
+                sb.Append($"\n\n타입 해석 실패({unresolved.Count}) — 철자·네임스페이스 확인 필요: ")
+                  .Append(string.Join(", ", shown))
+                  .Append(unresolved.Count > shown.Length ? " …" : "")
+                  .Append("\n해결 전까지 소스 생성이 차단됩니다.");
+            }
+            EditorUtility.DisplayDialog(dialogTitle, sb.ToString(), "확인");
         }
 
         /// <summary>CLR 타입 문자열을 컬럼에 적용합니다(<see cref="FetchColumns"/>의 기존 타입 복원과 같은 규칙).</summary>
@@ -1255,6 +1292,102 @@ namespace TrueBase.Editor
             return names;
         }
 
+        /// <summary>포함(Include)된 컬럼 중 타입 해석에 실패한 것들의 이름 목록. 이 상태로는 소스 생성을 막습니다.</summary>
+        private static List<string> CollectUnresolvedColumnNames()
+        {
+            var names = new List<string>();
+            foreach (var ec in _editableColumns)
+                if (ec.Include && ec.TypeUnresolved)
+                    names.Add(ec.Name);
+            return names;
+        }
+
+        /// <summary>포함(Include)된 RC 필드 중 타입 해석에 실패한 것들의 경로 목록.</summary>
+        private static List<string> CollectUnresolvedRcFieldPaths()
+        {
+            var names = new List<string>();
+            foreach (var f in _rcFields)
+                if (f.Include && !f.IsObjectNode && f.TypeUnresolved)
+                    names.Add(f.FullPath);
+            return names;
+        }
+
+        /// <summary>모든 컬럼의 커스텀 타입 해석 가능 여부를 재검사해 <c>TypeUnresolved</c>를 갱신합니다.</summary>
+        private static void ValidateColumnTypes()
+        {
+            var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (var ec in _editableColumns)
+                ec.TypeUnresolved = ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
+                                    && !IsResolvableClrType(ec.CustomType, cache);
+        }
+
+        /// <summary>모든 RC 필드의 커스텀 타입 해석 가능 여부를 재검사해 <c>TypeUnresolved</c>를 갱신합니다.</summary>
+        private static void ValidateRcFieldTypes()
+        {
+            var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
+            foreach (var f in _rcFields)
+                f.TypeUnresolved = !f.IsObjectNode
+                                   && f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
+                                   && !IsResolvableClrType(f.CustomType, cache);
+        }
+
+        /// <summary>
+        /// CLR 타입 문자열이 컴파일 시 해석 가능한지 검사합니다.
+        /// 카탈로그 타입은 통과, 컬렉션(List/배열/Dictionary)은 요소 타입으로 재귀,
+        /// 그 외 식별자(enum·커스텀 클래스)는 로드된 어셈블리에서 이름으로 찾습니다.
+        /// <c>object</c>는 "미지정" 센티널로 별도 경고가 처리하므로 여기서는 통과시킵니다.
+        /// </summary>
+        private static bool IsResolvableClrType(string clrType, Dictionary<string, bool> cache)
+        {
+            if (string.IsNullOrWhiteSpace(clrType)) return false;
+            var t = clrType.Trim();
+            if (cache.TryGetValue(t, out var cached)) return cached;
+
+            bool ok;
+            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0)
+                ok = false; // 미해결 플레이스홀더
+            else if (t == "object" || Array.IndexOf(GeneratorTypeCatalog.TypeOptions, t) >= 0)
+                ok = true;
+            else if (t.EndsWith("[]", StringComparison.Ordinal))
+                ok = IsResolvableClrType(t.Substring(0, t.Length - 2), cache);
+            else if (TryParseListType(t, out var elem))
+                ok = IsResolvableClrType(elem, cache);
+            else if (TryParseDictionaryTypes(t, out var k, out var v))
+                ok = IsResolvableClrType(k, cache) && IsResolvableClrType(v, cache);
+            else
+                ok = FindTypeByName(t) != null;
+
+            cache[t] = ok;
+            return ok;
+        }
+
+        /// <summary>
+        /// 로드된 어셈블리에서 타입 이름(정규화 이름 또는 네임스페이스 없는 단순 이름)으로 타입을 찾습니다.
+        /// CSV 임포트 시에만 호출되는 검증 경로라 전체 스캔 비용은 허용됩니다.
+        /// </summary>
+        private static Type FindTypeByName(string name)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            foreach (var asm in assemblies)
+            {
+                var found = asm.GetType(name, false);
+                if (found != null) return found;
+            }
+
+            // 네임스페이스 없는 단순 이름: 이름 일치로 전체 탐색
+            foreach (var asm in assemblies)
+            {
+                Type[] types;
+                try { types = asm.GetTypes(); }
+                catch { continue; }
+                foreach (var t in types)
+                    if (t.Name == name)
+                        return t;
+            }
+            return null;
+        }
+
         private static void BuildPreviewFromColumns()
         {
             var cols = new List<OpenApiColumn>();
@@ -1275,8 +1408,18 @@ namespace TrueBase.Editor
             if (unspecified.Count > 0)
             {
                 EditorUtility.DisplayDialog(DialogTitle,
-                    "다음 필드의 타입이 미지정 상태입니다(jsonb). Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
+                    "다음 필드의 타입이 미지정 상태입니다(jsonb). CSV에서 Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
                     + string.Join("\n• ", unspecified), "확인");
+                return;
+            }
+
+            // 해석 불가 타입이 있으면 생성 차단 — 컴파일 에러를 CSV 단계에서 미리 잡는다.
+            var unresolvedCols = CollectUnresolvedColumnNames();
+            if (unresolvedCols.Count > 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "다음 필드의 타입을 찾을 수 없습니다. CSV의 철자·네임스페이스를 확인하세요:\n\n• "
+                    + string.Join("\n• ", unresolvedCols), "확인");
                 return;
             }
 
@@ -1528,6 +1671,8 @@ namespace TrueBase.Editor
             public int               TypeIndex;
             public bool              IsAmbiguous;
             public string            CustomType   = "";  // TypeIndex == GeneratorTypeCatalog.CustomTypeIndex 일 때 사용
+            /// <summary>커스텀 타입 해석 실패(오타·네임스페이스 누락). true면 빨강 표시 + 소스 생성 차단.</summary>
+            public bool              TypeUnresolved;
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
             /// <summary>저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</summary>
             public int               Priority     = 1;
