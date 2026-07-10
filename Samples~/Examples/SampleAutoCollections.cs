@@ -11,6 +11,7 @@ using UnityEngine;
 ///   1 — AutoList2D 데모   (스테이지 × 웨이브 최고점수)
 ///   2 — AutoDict2D 데모   (지역 × 몬스터 처치수)
 ///   3 — 저장 → 로드 왕복  (직렬화 + 로드 후 기본값 주입)
+///   4 — 클래스 값 기본값  (슬롯마다 독립 인스턴스, 참조 공유 없음)
 ///
 /// 핵심: 읽기는 비파괴(없는 행/키는 기본값, 데이터를 만들지 않음), 쓰기만 그 시점에 생성·저장.
 /// <c>grid[i]</c>는 List처럼(Add·Sort·FindAll·LINQ), <c>dict[k1]</c>는 Dictionary처럼 씁니다.
@@ -23,12 +24,28 @@ public sealed class SampleAutoCollections : MonoBehaviour
     private readonly AutoList2D<int> _bestScore = new AutoList2D<int> { DefaultValue = 0 };
     // [region][monsterId] = 처치 수, 미기록 = 0
     private readonly AutoDict2D<string, int, int> _kills = new AutoDict2D<string, int, int> { DefaultValue = 0 };
+    // [heroId] = 영웅 스탯(클래스 값). 미기록 슬롯은 읽을 때마다 새 인스턴스를 반환 — 값 타입과 달리 참조를 공유하지 않습니다.
+    private readonly AutoDict<int, HeroStat> _heroStats = new AutoDict<int, HeroStat>();
+
+    private void Awake()
+    {
+        // 실제 세이브에선 생성기가 CSV 기본값으로 [AutoDefault(1)]을 자동 생성해 이 호출을 대신합니다.
+        // 여기서는 그 과정을 직접 재현합니다.
+        ((IAutoDefaultable)_heroStats).SetDefaultValue(new object[] { 1 });
+    }
+
+    private sealed class HeroStat
+    {
+        public int level;
+        public HeroStat(int level) => this.level = level;
+    }
 
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.Alpha1)) DemoList2D();
         if (Input.GetKeyDown(KeyCode.Alpha2)) DemoDict2D();
         if (Input.GetKeyDown(KeyCode.Alpha3)) DemoSaveLoad();
+        if (Input.GetKeyDown(KeyCode.Alpha4)) DemoClassValueDefault();
     }
 
     /// <summary>1 — 2D 리스트: 읽기 비파괴, 쓰기 자동 확장, grid[i]를 List처럼.</summary>
@@ -88,5 +105,20 @@ public sealed class SampleAutoCollections : MonoBehaviour
         // 여기서는 그 과정을 직접 재현합니다.
         ((IAutoDefaultable)loadedScore).SetDefaultValue(new object[] { 0 });
         Debug.Log($"{Tag} 로드 후 스테이지0[1]={loadedScore[0][1]}, 미기록[42][42]={loadedScore[42][42]}(기본값)");
+    }
+
+    /// <summary>4 — 클래스 값 기본값: 미기록 슬롯을 읽을 때마다 새 인스턴스를 반환합니다(참조 공유 없음).</summary>
+    private void DemoClassValueDefault()
+    {
+        var a = _heroStats[100];   // 없는 키 → 새 HeroStat(level=1)
+        var b = _heroStats[200];   // 없는 키 → 또 다른 새 HeroStat(level=1)
+        Debug.Log($"{Tag} a==b(참조)? {ReferenceEquals(a, b)} (false여야 정상 — 슬롯마다 독립 인스턴스)");
+
+        a.level = 99;   // a만 수정
+        var bAgain = _heroStats[200];
+        Debug.Log($"{Tag} a.level=99로 바꾼 뒤 b.level={bAgain.level} (1이어야 정상 — a의 수정이 안 새야 함)");
+
+        var aAgain = _heroStats[100];
+        Debug.Log($"{Tag} a==aAgain(참조)? {ReferenceEquals(a, aAgain)} (false여야 정상 — 캐시된 인스턴스를 돌려쓰지 않고 매번 새로 만듦)");
     }
 }

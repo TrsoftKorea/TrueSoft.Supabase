@@ -14,23 +14,31 @@ namespace TrueBase.Core.Data
     public class AutoDict<TKey, TValue> : Dictionary<TKey, TValue>, IAutoDefaultable
     {
         [JsonIgnore] private TValue _default;
+        // null이 아니면 TValue가 참조 타입([AutoDefault]로 주입됨) → 읽을 때마다 이 인자로 새 인스턴스를 생성(aliasing 방지).
+        [JsonIgnore] private object[] _refCtorArgs;
 
         public AutoDict() { }
 
-        /// <summary>없는 키를 읽을 때 반환할 기본값.</summary>
+        /// <summary>없는 키를 읽을 때 반환할 기본값. 참조 타입을 [AutoDefault]로 주입한 경우 읽을 때마다 새 인스턴스를 반환합니다.</summary>
         [JsonIgnore]
         public TValue DefaultValue
         {
-            get => _default;
-            set => _default = value;
+            get => FreshDefault();
+            set { _default = value; _refCtorArgs = null; }
         }
+
+        private TValue FreshDefault() => _refCtorArgs != null ? AutoDefaultConvert.To<TValue>(_refCtorArgs) : _default;
 
         public new TValue this[TKey key]
         {
-            get => TryGetValue(key, out var v) ? v : _default;
+            get => TryGetValue(key, out var v) ? v : FreshDefault();
             set => base[key] = value;
         }
 
-        void IAutoDefaultable.SetDefaultValue(object[] values) => _default = AutoDefaultConvert.To<TValue>(values);
+        void IAutoDefaultable.SetDefaultValue(object[] values)
+        {
+            if (AutoDefaultConvert.IsReferenceKind(typeof(TValue))) { _refCtorArgs = values; _default = default; }
+            else { _default = AutoDefaultConvert.To<TValue>(values); _refCtorArgs = null; }
+        }
     }
 }

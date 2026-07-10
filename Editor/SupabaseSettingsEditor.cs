@@ -1306,7 +1306,7 @@ namespace TrueBase.Editor
             var cache = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var ec in _editableColumns)
                 ec.TypeUnresolved = ec.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
-                                    && !IsResolvableClrType(ec.CustomType, cache);
+                                    && !GeneratorTypeCatalog.IsResolvableClrType(ec.CustomType, cache);
         }
 
         /// <summary>모든 RC 필드의 커스텀 타입 해석 가능 여부를 재검사해 <c>TypeUnresolved</c>를 갱신합니다.</summary>
@@ -1316,87 +1316,7 @@ namespace TrueBase.Editor
             foreach (var f in _rcFields)
                 f.TypeUnresolved = !f.IsObjectNode
                                    && f.TypeIndex == GeneratorTypeCatalog.CustomTypeIndex
-                                   && !IsResolvableClrType(f.CustomType, cache);
-        }
-
-        /// <summary>
-        /// CLR 타입 문자열이 컴파일 시 해석 가능한지 검사합니다.
-        /// 카탈로그 타입은 통과, 컬렉션(List/배열/Dictionary)은 요소 타입으로 재귀,
-        /// 그 외 식별자(enum·커스텀 클래스)는 로드된 어셈블리에서 이름으로 찾습니다.
-        /// <c>object</c>는 "미지정" 센티널로 별도 경고가 처리하므로 여기서는 통과시킵니다.
-        /// </summary>
-        private static bool IsResolvableClrType(string clrType, Dictionary<string, bool> cache)
-        {
-            if (string.IsNullOrWhiteSpace(clrType)) return false;
-            var t = clrType.Trim();
-            if (cache.TryGetValue(t, out var cached)) return cached;
-
-            bool ok;
-            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0)
-                ok = false; // 미해결 플레이스홀더
-            else if (t == "object" || Array.IndexOf(GeneratorTypeCatalog.TypeOptions, t) >= 0)
-                ok = true;
-            else if (t.EndsWith("[]", StringComparison.Ordinal))
-                ok = IsResolvableClrType(t.Substring(0, t.Length - 2), cache);
-            else if (TryParseListType(t, out var elem))
-                ok = IsResolvableClrType(elem, cache);
-            else if (TryParseDictionaryTypes(t, out var k, out var v))
-                ok = IsResolvableClrType(k, cache) && IsResolvableClrType(v, cache);
-            else
-                ok = FindTypeByName(t) != null;
-
-            cache[t] = ok;
-            return ok;
-        }
-
-        /// <summary>
-        /// 로드된 어셈블리에서 타입 이름으로 타입을 찾습니다. 정규화 이름, 중첩 타입, 단순 이름을 모두 시도합니다.
-        /// C# 소스는 중첩 타입을 <c>Outer.Inner</c>로 쓰지만 리플렉션은 <c>Outer+Inner</c>를 요구하므로,
-        /// 뒤쪽 <c>.</c>부터 차례로 <c>+</c>로 바꿔가며 재시도합니다.
-        /// CSV 임포트 시에만 호출되는 검증 경로라 전체 스캔 비용은 허용됩니다.
-        /// </summary>
-        private static Type FindTypeByName(string name)
-        {
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-            // 정규화 이름 + 중첩 타입(Outer.Inner → Outer+Inner) 후보들을 각 어셈블리에서 시도
-            foreach (var candidate in NestedNameCandidates(name))
-                foreach (var asm in assemblies)
-                {
-                    var found = asm.GetType(candidate, false);
-                    if (found != null) return found;
-                }
-
-            // 네임스페이스 없는 단순 이름: 마지막 세그먼트로 전체 탐색
-            var simple = name;
-            var lastDot = simple.LastIndexOf('.');
-            if (lastDot >= 0) simple = simple.Substring(lastDot + 1);
-            foreach (var asm in assemblies)
-            {
-                Type[] types;
-                try { types = asm.GetTypes(); }
-                catch { continue; }
-                foreach (var t in types)
-                    if (t.Name == simple)
-                        return t;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// <c>A.B.C</c>에 대해 뒤쪽 <c>.</c>부터 <c>+</c>로 바꾼 후보들을 순서대로 반환합니다:
-        /// <c>A.B.C</c> → <c>A.B+C</c> → <c>A+B+C</c>. 어느 세그먼트 경계가 네임스페이스/중첩인지 모르므로 전부 시도합니다.
-        /// </summary>
-        private static IEnumerable<string> NestedNameCandidates(string name)
-        {
-            yield return name;
-            var chars = name.ToCharArray();
-            for (var i = chars.Length - 1; i >= 0; i--)
-            {
-                if (chars[i] != '.') continue;
-                chars[i] = '+';
-                yield return new string(chars);
-            }
+                                   && !GeneratorTypeCatalog.IsResolvableClrType(f.CustomType, cache);
         }
 
         private static void BuildPreviewFromColumns()

@@ -130,6 +130,145 @@ namespace TrueBase.Editor
             return key.Length > 0 && val.Length > 0;
         }
 
+        // 커스텀 타입 해석 (CSV 검증 · 클래스 값 Auto 승격 공용)
+
+        /// <summary>
+        /// CLR 타입 문자열이 컴파일 시 해석 가능한지 검사합니다.
+        /// 카탈로그 타입은 통과, 컬렉션(List/배열/Dictionary, 이중 포함)은 요소 타입으로 재귀,
+        /// 그 외 식별자(enum·커스텀 클래스)는 로드된 어셈블리에서 이름으로 찾습니다.
+        /// <c>object</c>는 "미지정" 센티널로 별도 경고가 처리하므로 여기서는 통과시킵니다.
+        /// </summary>
+        internal static bool IsResolvableClrType(string clrType, Dictionary<string, bool> cache)
+        {
+            if (string.IsNullOrWhiteSpace(clrType)) return false;
+            var t = clrType.Trim();
+            if (cache.TryGetValue(t, out var cached)) return cached;
+
+            bool ok;
+            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0)
+                ok = false; // 미해결 플레이스홀더
+            else if (t == "object" || Array.IndexOf(TypeOptions, t) >= 0)
+                ok = true;
+            else if (t.EndsWith("[]", StringComparison.Ordinal))
+                ok = IsResolvableClrType(t.Substring(0, t.Length - 2), cache);
+            else if (TryUnwrapList(t, out var elem))
+                ok = IsResolvableClrType(elem, cache);
+            else if (TryUnwrapDict(t, out var k, out var v))
+                ok = IsResolvableClrType(k, cache) && IsResolvableClrType(v, cache);
+            else
+                ok = FindTypeByName(t) != null;
+
+            cache[t] = ok;
+            return ok;
+        }
+
+        /// <summary>
+        /// 로드된 어셈블리에서 타입 이름으로 타입을 찾습니다. 정규화 이름, 중첩 타입, 단순 이름을 모두 시도합니다.
+        /// C# 소스는 중첩 타입을 <c>Outer.Inner</c>로 쓰지만 리플렉션은 <c>Outer+Inner</c>를 요구하므로,
+        /// 뒤쪽 <c>.</c>부터 차례로 <c>+</c>로 바꿔가며 재시도합니다.
+        /// 정규화 이름 없는 단순 이름은 전체 어셈블리에서 이름만으로 찾되, 후보가 둘 이상(서로 다른 타입)이면
+        /// 모호하므로 null을 반환합니다 — 이 결과가 CSV 검증뿐 아니라 클래스 값 Auto 승격의 실제 생성 코드에도
+        /// 쓰이므로, 잘못된 타입을 조용히 골라 엉뚱한 코드를 내보내는 것보다 미해석 처리해 안전한 폴백으로
+        /// 넘기는 편이 낫습니다. 호출 빈도가 낮은 검증·생성 경로라 전체 스캔 비용은 허용됩니다.
+        /// </summary>
+        internal static Type FindTypeByName(string name)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            // 정규화 이름 + 중첩 타입(Outer.Inner → Outer+Inner) 후보들을 각 어셈블리에서 시도 — 유일 매칭이라 모호성 없음
+            foreach (var candidate in NestedNameCandidates(name))
+                foreach (var asm in assemblies)
+                {
+                    var found = asm.GetType(candidate, false);
+                    if (found != null) return found;
+                }
+
+            // 네임스페이스 없는 단순 이름: 마지막 세그먼트로 전체 탐색. 서로 다른 타입이 둘 이상 매칭되면 모호 → null.
+            var simple = name;
+            var lastDot = simple.LastIndexOf('.');
+            if (lastDot >= 0) simple = simple.Substring(lastDot + 1);
+
+            Type match = null;
+            foreach (var asm in assemblies)
+            {
+                Type[] types;
+                try { types = asm.GetTypes(); }
+                catch { continue; }
+                foreach (var t in types)
+                {
+                    if (t.Name != simple) continue;
+                    if (match != null && match != t) return null;
+                    match = t;
+                }
+            }
+            return match;
+        }
+
+        /// <summary>
+        /// <c>A.B.C</c>에 대해 뒤쪽 <c>.</c>부터 <c>+</c>로 바꾼 후보들을 순서대로 반환합니다:
+        /// <c>A.B.C</c> → <c>A.B+C</c> → <c>A+B+C</c>. 어느 세그먼트 경계가 네임스페이스/중첩인지 모르므로 전부 시도합니다.
+        /// </summary>
+        internal static IEnumerable<string> NestedNameCandidates(string name)
+        {
+            yield return name;
+            var chars = name.ToCharArray();
+            for (var i = chars.Length - 1; i >= 0; i--)
+            {
+                if (chars[i] != '.') continue;
+                chars[i] = '+';
+                yield return new string(chars);
+            }
+        }
+
+        /// <summary>
+        /// CSV 기본값이 지정된 컬럼에서, 요소·값이 단순 값은 아니지만(클래스 등) 실제로 해석 가능한
+        /// List/Dictionary(이중 포함)를 Auto 컬렉션 타입으로 치환합니다. 해석된 조각은 완전히 정규화된
+        /// 이름으로 바꿔 써서, CSV에 네임스페이스를 안 적어도 생성 코드가 컴파일되게 합니다.
+        /// 이미 스칼라 요소(MapToAutoType가 처리)이거나, 해석 불가·모호하면 false — 호출부는 SeedDefault_* 폴백으로 넘어갑니다.
+        /// </summary>
+        internal static bool TryUpgradeClassElementCollection(string clrType, out string upgradedType)
+        {
+            upgradedType = null;
+            if (string.IsNullOrWhiteSpace(clrType)) return false;
+            var t = clrType.Trim();
+            if (t.IndexOf("/*", StringComparison.Ordinal) >= 0) return false;
+
+            if (TryUnwrapList(t, out var li) && TryUnwrapList(li, out var l2) && !IsAutoValueLeaf(l2) && TryQualify(l2, out var ql2))
+            { upgradedType = "AutoList2D<" + ql2 + ">"; return true; }
+            if (TryUnwrapArray(t, out var ai) && TryUnwrapArray(ai, out var a2) && !IsAutoValueLeaf(a2) && TryQualify(a2, out var qa2))
+            { upgradedType = "AutoList2D<" + qa2 + ">"; return true; }
+
+            if (TryUnwrapList(t, out var l1) && !IsAutoValueLeaf(l1) && TryQualify(l1, out var ql1))
+            { upgradedType = "AutoList<" + ql1 + ">"; return true; }
+            if (TryUnwrapArray(t, out var a1) && !IsAutoValueLeaf(a1) && TryQualify(a1, out var qa1))
+            { upgradedType = "AutoList<" + qa1 + ">"; return true; }
+
+            if (TryUnwrapDict(t, out var k1, out var v1) && TryUnwrapDict(v1, out var k2, out var dv) && !IsAutoValueLeaf(dv)
+                && TryQualify(k1, out var qk1) && TryQualify(k2, out var qk2) && TryQualify(dv, out var qdv))
+            { upgradedType = "AutoDict2D<" + qk1 + ", " + qk2 + ", " + qdv + ">"; return true; }
+
+            if (TryUnwrapDict(t, out var k, out var v) && !IsAutoValueLeaf(v)
+                && TryQualify(k, out var qk) && TryQualify(v, out var qv))
+            { upgradedType = "AutoDict<" + qk + ", " + qv + ">"; return true; }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 스칼라 리프면 그대로 통과, 아니면 리플렉션으로 찾아 완전히 정규화된 이름(중첩 타입의 <c>+</c>는 <c>.</c>로)으로
+        /// 치환합니다. 못 찾거나 모호하면 실패.
+        /// </summary>
+        private static bool TryQualify(string typeName, out string qualified)
+        {
+            var name = typeName.Trim();
+            if (IsAutoValueLeaf(name) || Array.IndexOf(TypeOptions, name) >= 0) { qualified = name; return true; }
+
+            var found = FindTypeByName(name);
+            if (found == null) { qualified = null; return false; }
+            qualified = found.FullName.Replace('+', '.');
+            return true;
+        }
+
         // 기존 생성 파일에서 어트리뷰트별 (키 → 타입) 추출 (재생성 시 타입 보존용)
         /// <summary>
         /// 생성된 .cs 소스에서 <c>[attributeName("key")] public/internal TYPE field;</c> 패턴을 읽어

@@ -19,6 +19,8 @@ namespace TrueBase.Core.Data
     public class AutoList2D<T> : List<AutoList<T>>, IAutoDefaultable
     {
         [JsonIgnore] private T _default;
+        // null이 아니면 T가 참조 타입([AutoDefault]로 주입됨) → 각 행이 슬롯마다 독립적으로 재구성(aliasing 방지, 그리드 전체 공유 방지).
+        [JsonIgnore] private object[] _refCtorArgs;
 
         public AutoList2D() { }
 
@@ -26,14 +28,31 @@ namespace TrueBase.Core.Data
         [JsonIgnore]
         public T DefaultValue
         {
-            get => _default;
-            set { _default = value; PropagateDefault(); }
+            get => FreshDefault();
+            set { _default = value; _refCtorArgs = null; PropagateDefault(); }
         }
+
+        private T FreshDefault() => _refCtorArgs != null ? AutoDefaultConvert.To<T>(_refCtorArgs) : _default;
 
         private void PropagateDefault()
         {
             for (int i = 0; i < Count; i++)
-                if (base[i] != null) base[i].DefaultValue = _default;
+                if (base[i] != null) ApplyDefaultTo(base[i]);
+        }
+
+        // 행 하나에 현재 기본값 레시피를 적용합니다. 참조 타입이면 원본 생성자 인자를 그대로 넘겨
+        // 그 행이 슬롯마다 독립적으로 재구성하게 하고, 값 타입/수동 대입이면 인스턴스를 그대로 공유합니다.
+        private void ApplyDefaultTo(AutoList<T> row)
+        {
+            if (_refCtorArgs != null) ((IAutoDefaultable)row).SetDefaultValue(_refCtorArgs);
+            else row.DefaultValue = _default;
+        }
+
+        private AutoList<T> CreateDefaultRow()
+        {
+            var row = new AutoList<T>();
+            ApplyDefaultTo(row);
+            return row;
         }
 
         // AutoRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용)
@@ -41,8 +60,8 @@ namespace TrueBase.Core.Data
 
         internal AutoList<T> EnsureRow(int i)
         {
-            while (Count <= i) Add(new AutoList<T> { DefaultValue = _default });
-            if (base[i] == null) base[i] = new AutoList<T> { DefaultValue = _default };
+            while (Count <= i) Add(CreateDefaultRow());
+            if (base[i] == null) base[i] = CreateDefaultRow();
             return base[i];
         }
 
@@ -52,21 +71,21 @@ namespace TrueBase.Core.Data
         /// <summary>행·열을 모두 자동 확장하는 인덱서(한 번의 호출). 읽기는 비파괴(없으면 기본값).</summary>
         public T this[int i, int j]
         {
-            get { var r = RawRowOrNull(i); return r != null ? r[j] : _default; }
+            get { var r = RawRowOrNull(i); return r != null ? r[j] : FreshDefault(); }
             set => EnsureRow(i)[j] = value;
         }
 
 
         /// <summary>행 <paramref name="i"/>의 실제 저장된 <see cref="AutoList{T}"/>를 반환합니다. 없으면 빈 리스트(저장 안 함·비파괴).</summary>
         public AutoList<T> Row(int i)
-            => RawRowOrNull(i) ?? new AutoList<T> { DefaultValue = _default };
+            => RawRowOrNull(i) ?? CreateDefaultRow();
 
         /// <summary>행 <paramref name="i"/>의 값을 통째로 교체합니다(없으면 그 행까지 확장).</summary>
         public void SetRow(int i, AutoList<T> row)
         {
-            while (Count <= i) Add(new AutoList<T> { DefaultValue = _default });
-            if (row != null) row.DefaultValue = _default;
-            base[i] = row ?? new AutoList<T> { DefaultValue = _default };
+            while (Count <= i) Add(CreateDefaultRow());
+            if (row != null) ApplyDefaultTo(row);
+            base[i] = row ?? CreateDefaultRow();
         }
 
         /// <summary>모든 셀을 행 순서로 평탄화해 열거합니다(실제 저장된 값만).</summary>
@@ -90,7 +109,8 @@ namespace TrueBase.Core.Data
 
         void IAutoDefaultable.SetDefaultValue(object[] values)
         {
-            _default = AutoDefaultConvert.To<T>(values);
+            if (AutoDefaultConvert.IsReferenceKind(typeof(T))) { _refCtorArgs = values; _default = default; }
+            else { _default = AutoDefaultConvert.To<T>(values); _refCtorArgs = null; }
             PropagateDefault();
         }
     }

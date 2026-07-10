@@ -19,23 +19,28 @@ namespace TrueBase.Core.Data
     public class AutoList<T> : List<T>, IAutoDefaultable
     {
         [JsonIgnore] private T _default;
+        // null이 아니면 T가 참조 타입([AutoDefault]로 주입됨) → 슬롯마다 이 인자로 새 인스턴스를 생성(aliasing 방지).
+        // 값 타입/수동 DefaultValue 대입은 _default를 그대로 공유해도 안전하므로 기존 방식 유지.
+        [JsonIgnore] private object[] _refCtorArgs;
 
         public AutoList() { }
 
-        /// <summary>범위 밖 읽기 및 확장 시 채울 기본값.</summary>
+        /// <summary>범위 밖 읽기 및 확장 시 채울 기본값. 참조 타입을 [AutoDefault]로 주입한 경우 읽을 때마다 새 인스턴스를 반환합니다.</summary>
         [JsonIgnore]
         public T DefaultValue
         {
-            get => _default;
-            set => _default = value;
+            get => FreshDefault();
+            set { _default = value; _refCtorArgs = null; }
         }
+
+        private T FreshDefault() => _refCtorArgs != null ? AutoDefaultConvert.To<T>(_refCtorArgs) : _default;
 
         public new T this[int index]
         {
-            get => (index >= 0 && index < Count) ? base[index] : _default;
+            get => (index >= 0 && index < Count) ? base[index] : FreshDefault();
             set
             {
-                while (Count <= index) Add(_default); // 해당 위치까지 기본값으로 확장 (음수면 루프 미실행 → base가 예외)
+                while (Count <= index) Add(FreshDefault()); // 해당 위치까지 기본값으로 확장 (음수면 루프 미실행 → base가 예외)
                 base[index] = value;
             }
         }
@@ -47,7 +52,7 @@ namespace TrueBase.Core.Data
         /// <summary><paramref name="count"/>개가 되도록 <see cref="DefaultValue"/>로 채웁니다(이미 크거나 같으면 그대로). <c>Count</c>를 논리 크기에 맞출 때 사용.</summary>
         public void EnsureCount(int count)
         {
-            while (Count < count) Add(_default);
+            while (Count < count) Add(FreshDefault());
         }
 
         // AutoList의 인덱스는 슬롯 의미(예: stageId)라, 원소를 밀거나 재정렬하면 이후 인덱스↔의미 매핑이 깨집니다.
@@ -65,6 +70,10 @@ namespace TrueBase.Core.Data
         [Obsolete(ShiftWarning)] public new void Sort(Comparison<T> comparison) => base.Sort(comparison);
         [Obsolete(ShiftWarning)] public new void Sort(IComparer<T> comparer) => base.Sort(comparer);
 
-        void IAutoDefaultable.SetDefaultValue(object[] values) => _default = AutoDefaultConvert.To<T>(values);
+        void IAutoDefaultable.SetDefaultValue(object[] values)
+        {
+            if (AutoDefaultConvert.IsReferenceKind(typeof(T))) { _refCtorArgs = values; _default = default; }
+            else { _default = AutoDefaultConvert.To<T>(values); _refCtorArgs = null; }
+        }
     }
 }

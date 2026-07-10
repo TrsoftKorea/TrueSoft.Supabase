@@ -15,7 +15,7 @@
 | **컬럼** | DB 컬럼명. `[DataColumn]` 매핑 키로 그대로 쓰입니다. |
 | **필드명** | 생성될 C# 필드·프로퍼티 이름. 기본값은 컬럼명. 컬럼명과 다르면 직렬화 보존을 위해 `[JsonProperty("컬럼명")]`이 자동으로 붙습니다. |
 | **저장 주기** | 자동 저장 배치 우선순위 — 보통(기본) · 짧게 · 길게. |
-| **기본값** | 새 유저 시작값. DB 컬럼에 기본값이 있으면 가져올 때 자동으로 채워집니다. 스칼라 필드는 `= 값` 초기화로, Auto 컬렉션은 `[AutoDefault]`로 생성됩니다. |
+| **기본값** | 새 유저 시작값. DB 컬럼에 기본값이 있으면 가져올 때 자동으로 채워집니다. 스칼라 필드는 `= 값` 초기화로, Auto 컬렉션은 `[AutoDefault]`로 생성됩니다. 요소가 클래스라도 마찬가지입니다. |
 | **포함** | 해제하면 그 컬럼은 생성에서 제외됩니다. |
 | **타입** | 생성될 C# 타입. 단순 값 컬렉션은 생성 시 `AutoList` / `AutoDict`로 변환됩니다. [데이터 타입](../data-types/auto-collections)을 참고하세요. |
 
@@ -40,7 +40,7 @@
 불러오기 시 `type` 열의 타입을 에디터가 찾을 수 있는지 확인합니다. 못 찾으면 빨간 ✕로 표시하지만 생성은 막지 않습니다 — 철자가 맞으면 그대로 생성되고, 오타라면 컴파일 시 에러로 드러납니다. 중첩 타입이나 다른 네임스페이스의 타입은 정규화 이름으로 씁니다.
 
 ::: tip 커스텀 타입 지정
-`type` 열에는 스칼라·컬렉션 외에 `Dictionary<HeroName, HeroData>`처럼 enum 키나 커스텀 클래스 값도 쓸 수 있습니다. 생성 클래스와 다른 네임스페이스의 타입은 `MyGame.HeroName`처럼 정규화 이름으로 쓰세요. enum 키는 멤버 **이름**이 DB에 저장되므로, 이름 변경·삭제는 저장 데이터 마이그레이션이 필요합니다.
+`type` 열에는 스칼라·컬렉션 외에 `Dictionary<HeroName, HeroData>`처럼 enum 키나 커스텀 클래스 값도 쓸 수 있습니다. `default` 값을 함께 지정하면 이 컬럼은 `AutoDict`로 자동 승격되고, 이름이 유일하게 식별되는 한 **네임스페이스 없이 써도 생성기가 완전한 이름을 채워 넣습니다.** 이름이 여러 네임스페이스에 겹치거나 기본값을 지정하지 않는 경우에는 `MyGame.HeroName`처럼 정규화 이름을 직접 쓰세요. enum 키는 멤버 **이름**이 DB에 저장되므로, 이름 변경·삭제는 저장 데이터 마이그레이션이 필요합니다.
 :::
 
 ::: tip
@@ -63,6 +63,31 @@ public static int PlayerId { get => Instance.Current.playerId; set { Instance.Cu
 [DataColumn("nickname")] internal string nickname = "Guest";
 [DataColumn("scores")] [AutoDefault(-1)] internal AutoList<int> scores = new AutoList<int>();  // Auto 컬렉션 → 요소 기본값
 ```
+
+요소가 클래스라도 마찬가지입니다. CSV엔 네임스페이스 없이 `type=Dictionary<HeroName, HeroData>` · `default=1`만 넣으면, 생성기가 이름을 찾아 `AutoDict`로 승격하고 완전한 이름으로 채워 넣습니다.
+
+```csharp
+[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<Quantum.HeroName, Game.Data.HeroData> heroData = new AutoDict<Quantum.HeroName, Game.Data.HeroData>();
+```
+
+요소 타입에는 기본값 인자와 맞는 생성자가 있어야 합니다. 이름이 여러 네임스페이스에 겹치거나 아직 찾을 수 없는 타입이면 승격 대신 `SeedDefault_필드명` partial 메서드가 선언됩니다. 별도 partial 파일에 구현하면 로드될 때마다 자동 호출됩니다.
+
+```csharp
+// PlayerSave.HeroDefaults.cs — 직접 작성하는 별도 파일
+public sealed partial class PlayerSave
+{
+    static partial void SeedDefault_HeroData(Row row)
+    {
+        foreach (var name in Enum.GetValues<HeroName>())
+            if (!row.hero_data.ContainsKey(name))
+                row.hero_data[name] = new HeroData { level = 1 };
+    }
+}
+```
+
+::: tip
+구현하지 않고 남겨둬도 됩니다 — 컴파일러가 미구현 partial 메서드 호출을 자동으로 제거합니다. `ContainsKey`로 방어하면 새 유저뿐 아니라 열거형에 값이 추가된 뒤 기존 유저가 재로그인할 때도 누락분만 채워집니다.
+:::
 
 ::: warning 타입을 정해야 생성됩니다
 jsonb 컬럼은 가져올 때 미지정 상태를 뜻하는 `Dictionary<string, object>`로 시작하며 ⚠ 로 표시되고, 그 상태로는 **소스 생성이 막힙니다**. CSV의 `type` 열에서 `Dictionary<string, int>`처럼 타입을 좁히면 풀립니다.

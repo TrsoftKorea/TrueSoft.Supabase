@@ -19,6 +19,8 @@ namespace TrueBase.Core.Data
     public class AutoDict2D<TKey1, TKey2, TValue> : Dictionary<TKey1, AutoDict<TKey2, TValue>>, IAutoDefaultable
     {
         [JsonIgnore] private TValue _default;
+        // null이 아니면 TValue가 참조 타입([AutoDefault]로 주입됨) → 각 안쪽 딕셔너리가 슬롯마다 독립적으로 재구성(aliasing 방지).
+        [JsonIgnore] private object[] _refCtorArgs;
 
         public AutoDict2D() { }
 
@@ -26,14 +28,31 @@ namespace TrueBase.Core.Data
         [JsonIgnore]
         public TValue DefaultValue
         {
-            get => _default;
-            set { _default = value; PropagateDefault(); }
+            get => FreshDefault();
+            set { _default = value; _refCtorArgs = null; PropagateDefault(); }
         }
+
+        private TValue FreshDefault() => _refCtorArgs != null ? AutoDefaultConvert.To<TValue>(_refCtorArgs) : _default;
 
         private void PropagateDefault()
         {
             foreach (var inner in Values)
-                if (inner != null) inner.DefaultValue = _default;
+                if (inner != null) ApplyDefaultTo(inner);
+        }
+
+        // 안쪽 딕셔너리 하나에 현재 기본값 레시피를 적용합니다. 참조 타입이면 원본 생성자 인자를 그대로 넘겨
+        // 그 딕셔너리가 슬롯마다 독립적으로 재구성하게 하고, 값 타입/수동 대입이면 인스턴스를 그대로 공유합니다.
+        private void ApplyDefaultTo(AutoDict<TKey2, TValue> inner)
+        {
+            if (_refCtorArgs != null) ((IAutoDefaultable)inner).SetDefaultValue(_refCtorArgs);
+            else inner.DefaultValue = _default;
+        }
+
+        private AutoDict<TKey2, TValue> CreateDefaultInner()
+        {
+            var inner = new AutoDict<TKey2, TValue>();
+            ApplyDefaultTo(inner);
+            return inner;
         }
 
         // AutoDictRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용)
@@ -44,7 +63,7 @@ namespace TrueBase.Core.Data
         {
             if (!TryGetValue(key1, out var inner) || inner == null)
             {
-                inner = new AutoDict<TKey2, TValue> { DefaultValue = _default };
+                inner = CreateDefaultInner();
                 base[key1] = inner;
             }
             return inner;
@@ -56,25 +75,26 @@ namespace TrueBase.Core.Data
         /// <summary>바깥·안쪽 키를 모두 자동 생성하는 인덱서(한 번의 호출). 읽기는 비파괴(없으면 기본값).</summary>
         public TValue this[TKey1 key1, TKey2 key2]
         {
-            get { var inner = InnerOrNull(key1); return inner != null ? inner[key2] : _default; }
+            get { var inner = InnerOrNull(key1); return inner != null ? inner[key2] : FreshDefault(); }
             set => EnsureInner(key1)[key2] = value;
         }
 
 
         /// <summary>키 <paramref name="key1"/>의 실제 안쪽 <see cref="AutoDict{TKey,TValue}"/>를 반환합니다. 없으면 빈 딕셔너리(저장 안 함·비파괴).</summary>
         public AutoDict<TKey2, TValue> Inner(TKey1 key1)
-            => InnerOrNull(key1) ?? new AutoDict<TKey2, TValue> { DefaultValue = _default };
+            => InnerOrNull(key1) ?? CreateDefaultInner();
 
         /// <summary>키 <paramref name="key1"/>의 안쪽 딕셔너리를 통째로 교체/설정합니다.</summary>
         public void SetInner(TKey1 key1, AutoDict<TKey2, TValue> inner)
         {
-            if (inner != null) inner.DefaultValue = _default;
-            base[key1] = inner ?? new AutoDict<TKey2, TValue> { DefaultValue = _default };
+            if (inner != null) ApplyDefaultTo(inner);
+            base[key1] = inner ?? CreateDefaultInner();
         }
 
         void IAutoDefaultable.SetDefaultValue(object[] values)
         {
-            _default = AutoDefaultConvert.To<TValue>(values);
+            if (AutoDefaultConvert.IsReferenceKind(typeof(TValue))) { _refCtorArgs = values; _default = default; }
+            else { _default = AutoDefaultConvert.To<TValue>(values); _refCtorArgs = null; }
             PropagateDefault();
         }
     }

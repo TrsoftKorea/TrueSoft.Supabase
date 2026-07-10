@@ -56,5 +56,8 @@ namespace TrueBase.Core.Data
             // 복합 값 타입(struct·튜플 등): 인자로 생성자 호출
             return (T)Activator.CreateInstance(target, values);
         }
+
+        /// <summary>참조 타입(문자열 제외) 여부 — 자동 확장 기본값을 매번 새 인스턴스로 만들지 판단합니다.</summary>
+        internal static bool IsReferenceKind(Type t) => !t.IsValueType && t != typeof(string);
     }
 }

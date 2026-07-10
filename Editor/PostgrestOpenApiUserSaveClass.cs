@@ -235,6 +235,7 @@ namespace TrueBase.Editor
             sb.AppendLine(indent + "    {");
             // 필드는 리플렉션(Newtonsoft 역직렬화) / 정적 프로퍼티로만 접근 → '미사용/미할당' 경고 억제
             sb.AppendLine(indent + "#pragma warning disable CS0169, CS0649");
+            var seedHookColumns = new List<OpenApiColumn>();
             foreach (var c in columns)
             {
                 var fieldName     = LegalFieldName(MemberSourceOf(c));
@@ -243,6 +244,7 @@ namespace TrueBase.Editor
                     sb.AppendLine(indent + "        /// <summary>" + EscapeXml(c.Comment.Trim()) + "</summary>");
 
                 // 기본값: 스칼라면 필드 초기화식(= 리터럴), Auto 컬렉션이면 [AutoDefault(...)]로 분기.
+                // 둘 다 아니면(요소 타입을 해석할 수 없어 위에서 Auto로 승격되지 못한 경우) SeedDefault_* 훅으로 넘긴다.
                 var autoDefaultAttr = string.Empty;
                 string scalarInit = null;
                 if (!string.IsNullOrWhiteSpace(c.DefaultValue))
@@ -252,6 +254,8 @@ namespace TrueBase.Editor
                     else if (GeneratorTypeCatalog.IsScalarTypeName(c.ClrType)
                              && GeneratorTypeCatalog.TryFormatScalarLiteral(c.ClrType, c.DefaultValue, out var lit))
                         scalarInit = " = " + lit;
+                    else
+                        seedHookColumns.Add(c);
                 }
 
                 // 컬렉션(List·배열·Dictionary 등)은 null 방지를 위해 빈 인스턴스로 초기화(읽기만 해도 변경으로 오인되지 않게).
@@ -301,7 +305,38 @@ namespace TrueBase.Editor
                 sb.AppendLine(indent + "    }");
             }
 
+            AppendSeedDefaultHooks(sb, indent, className, seedHookColumns);
+
             sb.AppendLine(indent + "}");
+        }
+
+        /// <summary>
+        /// [AutoDefault]나 스칼라 초기화식으로 표현할 수 없는 기본값(요소 타입을 해석하지 못한 컬렉션 등)을 위한 훅.
+        /// 로드 시마다 호출되는 partial 메서드를 선언만 하고, 구현은 별도 partial 파일에 맡깁니다.
+        /// 구현하지 않으면 컴파일러가 선언·호출을 통째로 제거하므로 항상 안전합니다(호출 여부를 신경 쓸 필요 없음).
+        /// </summary>
+        private static void AppendSeedDefaultHooks(StringBuilder sb, string indent, string className, List<OpenApiColumn> seedHookColumns)
+        {
+            if (seedHookColumns.Count == 0) return;
+
+            sb.AppendLine();
+            sb.AppendLine(indent + "    // 아래 필드는 기본값을 [AutoDefault]/초기화식으로 표현할 수 없어 코드로 채워야 합니다.");
+            sb.AppendLine(indent + "    // 별도 partial 파일에 SeedDefault_* 메서드를 구현하세요. 이미 값이 있으면 덮어쓰지 않도록 방어하세요(예: ContainsKey 확인).");
+            sb.AppendLine(indent + "    static " + className + "()");
+            sb.AppendLine(indent + "    {");
+            sb.AppendLine(indent + "        Instance.OnLoaded += () =>");
+            sb.AppendLine(indent + "        {");
+            foreach (var c in seedHookColumns)
+                sb.AppendLine(indent + "            SeedDefault_" + ToPascalCase(MemberSourceOf(c)) + "(Instance.Current);");
+            sb.AppendLine(indent + "        };");
+            sb.AppendLine(indent + "    }");
+            sb.AppendLine();
+            foreach (var c in seedHookColumns)
+            {
+                var propName = ToPascalCase(MemberSourceOf(c));
+                sb.AppendLine(indent + "    /// <summary>`" + EscapeXml(c.Name) + "` 기본값 시딩. 미구현이어도 컴파일됩니다(호출이 자동 제거됨).</summary>");
+                sb.AppendLine(indent + "    static partial void SeedDefault_" + propName + "(Row row);");
+            }
         }
 
         private static JToken FindTableSchemaToken(JObject root, string tableName)
@@ -568,10 +603,22 @@ namespace TrueBase.Editor
             foreach (var c in columns)
             {
                 var clr = GeneratorTypeCatalog.MapToAutoType(c.ClrType);
+                // 스칼라 요소는 위에서 이미 Auto 치환됨. 그게 아니고 기본값이 지정된 컬럼이면
+                // 클래스 등 비-리프 요소도 해석 가능한지 한 번 더 시도(해석되면 완전정규화 이름으로 승격).
+                if (!IsAlreadyAutoType(clr) && !string.IsNullOrWhiteSpace(c.DefaultValue)
+                    && GeneratorTypeCatalog.TryUpgradeClassElementCollection(c.ClrType, out var upgraded))
+                    clr = upgraded;
                 clr = FallbackUnrefinedJsonType(clr);
                 list.Add(new OpenApiColumn(c.Name, clr, c.Comment, c.Priority, c.FieldName, c.DefaultValue));
             }
             return list;
+        }
+
+        private static bool IsAlreadyAutoType(string clrType)
+        {
+            var t = clrType?.Trim() ?? string.Empty;
+            return t.StartsWith("AutoList2D<", StringComparison.Ordinal) || t.StartsWith("AutoList<", StringComparison.Ordinal)
+                || t.StartsWith("AutoDict2D<", StringComparison.Ordinal) || t.StartsWith("AutoDict<", StringComparison.Ordinal);
         }
 
         /// <summary>

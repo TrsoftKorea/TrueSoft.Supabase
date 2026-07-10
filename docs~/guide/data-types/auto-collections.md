@@ -1,7 +1,7 @@
 # 자동 확장 컬렉션
 
 ::: tip 실행 가능한 예제
-`Examples` 샘플의 `SampleAutoCollections` 컴포넌트를 빈 GameObject에 붙이고 Play 후 **1·2·3** 키를 누르면 2D 컬렉션 동작이 Console에 출력됩니다(로그인·네트워크 불필요).
+`Examples` 샘플의 `SampleAutoCollections` 컴포넌트를 빈 GameObject에 붙이고 Play 후 **1·2·3·4** 키를 누르면 컬렉션 동작이 Console에 출력됩니다. 로그인·네트워크가 필요 없습니다.
 :::
 
 ## 기본 사용법
@@ -14,7 +14,7 @@
 `List<T>` / `Dictionary<TKey,TValue>`와 사용법·직렬화(일반 배열/객체)가 동일합니다.
 
 ::: tip 생성기 자동 적용
-유저 데이터 클래스 생성기는 **단순 값 요소**(`int`·`float`·`bool`·`string` 등)의 리스트·배열·딕셔너리 컬럼을 자동으로 `AutoList`/`AutoDict`(중첩은 `AutoList2D`/`AutoDict2D`)로 생성합니다. 튜플·struct·클래스 요소 컬렉션은 `List`/`Dictionary`로 둡니다. 커스텀 기본값이 필요하면 생성된 필드에 `[AutoDefault(...)]`만 추가하면 되고, **재생성 시 컬럼 기준으로 자동 보존**됩니다.
+유저 데이터 클래스 생성기는 **단순 값 요소**(`int`·`float`·`bool`·`string` 등)의 리스트·배열·딕셔너리 컬럼을 자동으로 `AutoList`/`AutoDict`(중첩은 `AutoList2D`/`AutoDict2D`)로 생성합니다. 요소가 struct·클래스라도 CSV `default` 값을 지정하면 같은 방식으로 자동 승격되며, 타입 이름에 네임스페이스를 안 써도 생성기가 완전한 이름을 채워 넣습니다. 기본값을 지정하지 않았거나 타입을 찾지 못하면 `List`/`Dictionary`로 남습니다. 생성된 필드에 `[AutoDefault(...)]`를 직접 추가해도 되며, **재생성 시 컬럼 기준으로 자동 보존**됩니다.
 :::
 
 ```csharp
@@ -36,7 +36,7 @@ int s = PlayerSave.StageClears[4];    // 범위 밖이면 기본값 반환, 확�
 ```
 
 - **단순 값 1개**는 그 값으로 변환됩니다(`int`·`long`·`float`·`bool`·`string`·`enum` 등).
-- **복합 값 타입(struct·튜플)**은 상수 여러 개를 넘기면 **생성자로 조립**됩니다. struct 인스턴스 자체는 어트리뷰트에 못 넣지만, 그 재료(상수)를 넘기면 SDK가 만들어 줍니다:
+- **복합 값 타입(struct·튜플·클래스)**은 상수 여러 개를 넘기면 **생성자로 조립**됩니다. 인스턴스 자체는 어트리뷰트에 못 넣지만, 그 재료(상수)를 넘기면 SDK가 만들어 줍니다:
 
 ```csharp
 public struct Stage { public int score, stars; public Stage(int s, int st) { score = s; stars = st; } }
@@ -44,7 +44,14 @@ public struct Stage { public int score, stars; public Stage(int s, int st) { sco
 [DataColumn("stages")] [AutoDefault(-1, 0)] internal AutoList<Stage> stages = new();   // 빈 칸 = new Stage(-1, 0)
 // 튜플도 동일: [AutoDefault(-1, 0)] internal AutoList<(int,int)> ...  → (-1, 0)
 ```
-요소 타입에 인자와 맞는 생성자가 있어야 합니다(struct·튜플은 값 타입이라 자동 확장에도 안전).
+
+```csharp
+public class HeroData { public int level; public HeroData(int level) { this.level = level; } }
+
+[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<HeroName, HeroData> heroData = new();   // 빈 칸 = new HeroData(1)
+```
+
+요소 타입에 인자와 맞는 생성자가 있어야 합니다. 슬롯마다 매번 새 인스턴스를 만들기 때문에 struct·튜플뿐 아니라 클래스 값도 자동 확장에 안전합니다 — 한 슬롯을 수정해도 다른 슬롯이 같이 바뀌지 않습니다.
 
 기본값은 JSON 데이터에 저장되지 않고 SDK가 **로드 직후 인스턴스에 주입**하므로, 재로드·동기화에도 안전합니다.
 
