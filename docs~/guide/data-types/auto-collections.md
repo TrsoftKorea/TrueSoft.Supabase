@@ -55,6 +55,22 @@ public class HeroData { public int level; public HeroData(int level) { this.leve
 
 기본값은 JSON 데이터에 저장되지 않고 SDK가 **로드 직후 인스턴스에 주입**하므로, 재로드·동기화에도 안전합니다.
 
+### 클래스 값은 처음 읽을 때 저장됩니다 {#class-value-materializes-on-read}
+
+`AutoDict`/`AutoDict2D`에 참조 타입을 `[AutoDefault(...)]`로 지정하면, 없는 키를 읽는 순간 그 자리에 저장됩니다. 그래서 별도 대입 없이 필드만 바로 고쳐도 반영됩니다.
+
+```csharp
+PlayerSave.HeroData[hero].Count = 1;   // hero가 처음 등장해도 그 자리에 저장된 뒤 반영됨
+```
+
+같은 키를 다시 읽으면 방금 저장된 그 객체를 그대로 돌려주고, 서로 다른 키는 여전히 독립 인스턴스라 한쪽을 고쳐도 다른 쪽엔 영향이 없습니다. 값이 기본값 그대로인 항목은 저장 대상 비교에서 없는 것과 동일하게 취급되므로, 단순 조회만으로 불필요한 저장이 나가지는 않습니다.
+
+::: warning 키 존재를 "보유 여부"로 쓰지 마세요
+`ContainsKey`나 `foreach` 순회는 값을 한 번도 안 바꾼 항목도 존재로 보여줄 수 있습니다. 어떤 항목을 실제로 보유·해금했는지는 값 클래스 안에 `bool owned` 같은 별도 필드로 명시적으로 관리하세요.
+:::
+
+이 동작은 `AutoDict`/`AutoDict2D`의 참조 타입 `[AutoDefault]` 값에만 적용됩니다. `AutoList`/`AutoList2D`는 인덱스가 슬롯 순서를 나타내므로 항상 비파괴로 남아 있고, 스칼라·struct 값이나 `DefaultValue = ...`로 직접 대입한 경우도 기존처럼 비파괴입니다.
+
 ::: warning 필드·프로퍼티 타입을 모두 바꾸세요
 자동 확장 인덱서는 정적 타입이 `AutoList`/`AutoDict`일 때만 동작합니다. 생성 클래스의 **Row 필드와 정적 프로퍼티를 모두** `AutoList<T>`(또는 `AutoDict<TKey,TValue>`)로 선언하세요. `List<T>`로 캐스팅하면 기본 인덱서가 쓰입니다.
 :::

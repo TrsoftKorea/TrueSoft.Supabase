@@ -55,9 +55,18 @@ namespace TrueBase.Core.Data
             return inner;
         }
 
-        // AutoDictRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용)
+        // AutoDictRow가 쓰는 내부 헬퍼 (같은 어셈블리 전용) — Count·Keys·ContainsKey 등 순수 조회용, 항상 비파괴.
         internal AutoDict<TKey2, TValue> InnerOrNull(TKey1 key1)
             => TryGetValue(key1, out var inner) ? inner : null;
+
+        // this[key1, key2] 계열 getter 전용. 참조 타입 기본값이면 바깥 키까지 그 시점에 생성·저장해
+        // "이미 있는 것처럼" 안쪽 딕셔너리를 돌려줍니다(안쪽 키 자체의 생성 여부는 그 딕셔너리의 getter가 다시 판단).
+        // 값 타입/수동 대입이면 InnerOrNull과 동일하게 비파괴로 남습니다.
+        internal AutoDict<TKey2, TValue> InnerOrMaterialize(TKey1 key1)
+        {
+            if (TryGetValue(key1, out var inner) && inner != null) return inner;
+            return _refCtorArgs != null ? EnsureInner(key1) : null;
+        }
 
         internal AutoDict<TKey2, TValue> EnsureInner(TKey1 key1)
         {
@@ -72,10 +81,11 @@ namespace TrueBase.Core.Data
         /// <summary>바깥 키 <paramref name="key1"/>에 대한 안전 접근자(지연 프록시). 읽기는 비파괴, 쓰기 시 안쪽 딕셔너리를 생성·저장합니다.</summary>
         public new AutoDictRow<TKey1, TKey2, TValue> this[TKey1 key1] => new AutoDictRow<TKey1, TKey2, TValue>(this, key1);
 
-        /// <summary>바깥·안쪽 키를 모두 자동 생성하는 인덱서(한 번의 호출). 읽기는 비파괴(없으면 기본값).</summary>
+        /// <summary>바깥·안쪽 키를 모두 자동 확장하는 인덱서(한 번의 호출). 값이 참조 타입이고 [AutoDefault]로 주입됐다면
+        /// 없는 조합도 이 시점에 생성·저장됩니다(슬롯별 독립 인스턴스). 그 외에는 비파괴(없으면 기본값).</summary>
         public TValue this[TKey1 key1, TKey2 key2]
         {
-            get { var inner = InnerOrNull(key1); return inner != null ? inner[key2] : FreshDefault(); }
+            get { var inner = InnerOrMaterialize(key1); return inner != null ? inner[key2] : FreshDefault(); }
             set => EnsureInner(key1)[key2] = value;
         }
 
@@ -97,6 +107,8 @@ namespace TrueBase.Core.Data
             else { _default = AutoDefaultConvert.To<TValue>(values); _refCtorArgs = null; }
             PropagateDefault();
         }
+
+        object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
     }
 
     /// <summary>
@@ -116,10 +128,11 @@ namespace TrueBase.Core.Data
 
         public int Count => D?.Count ?? 0;
 
-        /// <summary>안쪽 키 <paramref name="key2"/> 접근. 읽기는 비파괴(없으면 기본값), 쓰기는 안쪽 딕셔너리를 생성·저장.</summary>
+        /// <summary>안쪽 키 <paramref name="key2"/> 접근. 값이 참조 타입이고 [AutoDefault]로 주입됐다면 없는 조합도
+        /// 이 시점에 생성·저장됩니다. 그 외에는 비파괴(없으면 기본값). 쓰기는 항상 안쪽 딕셔너리를 생성·저장.</summary>
         public TValue this[TKey2 key2]
         {
-            get { var d = D; return d != null ? d[key2] : _owner.DefaultValue; }
+            get { var d = _owner.InnerOrMaterialize(_k1); return d != null ? d[key2] : _owner.DefaultValue; }
             set => _owner.EnsureInner(_k1)[key2] = value;
         }
 

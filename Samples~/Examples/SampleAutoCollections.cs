@@ -11,7 +11,7 @@ using UnityEngine;
 ///   1 — AutoList2D 데모   (스테이지 × 웨이브 최고점수)
 ///   2 — AutoDict2D 데모   (지역 × 몬스터 처치수)
 ///   3 — 저장 → 로드 왕복  (직렬화 + 로드 후 기본값 주입)
-///   4 — 클래스 값 기본값  (슬롯마다 독립 인스턴스, 참조 공유 없음)
+///   4 — 클래스 값 자동 생성·저장 (키마다 독립 인스턴스, 처음 읽은 순간 저장됨)
 ///
 /// 핵심: 읽기는 비파괴(없는 행/키는 기본값, 데이터를 만들지 않음), 쓰기만 그 시점에 생성·저장.
 /// <c>grid[i]</c>는 List처럼(Add·Sort·FindAll·LINQ), <c>dict[k1]</c>는 Dictionary처럼 씁니다.
@@ -24,7 +24,8 @@ public sealed class SampleAutoCollections : MonoBehaviour
     private readonly AutoList2D<int> _bestScore = new AutoList2D<int> { DefaultValue = 0 };
     // [region][monsterId] = 처치 수, 미기록 = 0
     private readonly AutoDict2D<string, int, int> _kills = new AutoDict2D<string, int, int> { DefaultValue = 0 };
-    // [heroId] = 영웅 스탯(클래스 값). 미기록 슬롯은 읽을 때마다 새 인스턴스를 반환 — 값 타입과 달리 참조를 공유하지 않습니다.
+    // [heroId] = 영웅 스탯(클래스 값). 없는 키를 읽으면 그 자리에 새 인스턴스를 저장하고 반환합니다 —
+    // 서로 다른 키는 독립 인스턴스라 참조를 공유하지 않지만, 같은 키는 처음 읽은 그 객체를 계속 돌려줍니다.
     private readonly AutoDict<int, HeroStat> _heroStats = new AutoDict<int, HeroStat>();
 
     private void Awake()
@@ -107,18 +108,23 @@ public sealed class SampleAutoCollections : MonoBehaviour
         Debug.Log($"{Tag} 로드 후 스테이지0[1]={loadedScore[0][1]}, 미기록[42][42]={loadedScore[42][42]}(기본값)");
     }
 
-    /// <summary>4 — 클래스 값 기본값: 미기록 슬롯을 읽을 때마다 새 인스턴스를 반환합니다(참조 공유 없음).</summary>
+    /// <summary>4 — 클래스 값 자동 생성·저장: 처음 읽은 키는 그 자리에 저장되어 필드를 바로 고칠 수 있고,
+    /// 서로 다른 키는 여전히 독립 인스턴스입니다.</summary>
     private void DemoClassValueDefault()
     {
-        var a = _heroStats[100];   // 없는 키 → 새 HeroStat(level=1)
-        var b = _heroStats[200];   // 없는 키 → 또 다른 새 HeroStat(level=1)
-        Debug.Log($"{Tag} a==b(참조)? {ReferenceEquals(a, b)} (false여야 정상 — 슬롯마다 독립 인스턴스)");
+        var a = _heroStats[100];   // 없는 키 → 새 HeroStat(level=1)을 그 자리에 저장하고 반환
+        var b = _heroStats[200];   // 다른 키 → 별도의 새 HeroStat(level=1), a와 공유하지 않음
+        Debug.Log($"{Tag} a==b(참조)? {ReferenceEquals(a, b)} (false여야 정상 — 서로 다른 키는 독립 인스턴스)");
 
-        a.level = 99;   // a만 수정
-        var bAgain = _heroStats[200];
-        Debug.Log($"{Tag} a.level=99로 바꾼 뒤 b.level={bAgain.level} (1이어야 정상 — a의 수정이 안 새야 함)");
-
+        a.level = 99;   // 이미 저장된 객체를 직접 수정 — 별도 대입 없이 그대로 반영됨
         var aAgain = _heroStats[100];
-        Debug.Log($"{Tag} a==aAgain(참조)? {ReferenceEquals(a, aAgain)} (false여야 정상 — 캐시된 인스턴스를 돌려쓰지 않고 매번 새로 만듦)");
+        Debug.Log($"{Tag} a==aAgain(참조)? {ReferenceEquals(a, aAgain)}, aAgain.level={aAgain.level} " +
+                  "(둘 다 true/99여야 정상 — 처음 읽을 때 저장된 그 객체를 다시 돌려줌)");
+
+        var bAgain = _heroStats[200];
+        Debug.Log($"{Tag} a를 고친 뒤 b.level={bAgain.level} (1이어야 정상 — a 수정이 b로 안 새야 함)");
+
+        Debug.Log($"{Tag} ContainsKey(100)={_heroStats.ContainsKey(100)} — 조회만 해도 키가 존재하게 되므로, " +
+                  "키 존재 여부를 '보유 여부' 같은 의미로 쓰면 안 됩니다.");
     }
 }

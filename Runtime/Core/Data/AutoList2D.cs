@@ -113,6 +113,8 @@ namespace TrueBase.Core.Data
             else { _default = AutoDefaultConvert.To<T>(values); _refCtorArgs = null; }
             PropagateDefault();
         }
+
+        object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
     }
 
     /// <summary>

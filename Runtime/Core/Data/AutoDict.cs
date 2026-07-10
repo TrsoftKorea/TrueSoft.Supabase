@@ -31,7 +31,17 @@ namespace TrueBase.Core.Data
 
         public new TValue this[TKey key]
         {
-            get => TryGetValue(key, out var v) ? v : FreshDefault();
+            get
+            {
+                if (TryGetValue(key, out var v)) return v;
+                var fresh = FreshDefault();
+                // 참조 타입을 [AutoDefault]로 주입한 경우에만 조회 시점에 실제로 저장합니다.
+                // 슬롯마다 독립 인스턴스라 aliasing 걱정 없이 "이미 있는 것처럼" 즉시 대입·수정할 수 있고,
+                // DataSchema.EqualsValues가 기본값과 같은 항목은 변경 없음으로 취급하므로 조회만으로는 저장을 유발하지 않습니다.
+                // 값 타입/수동 DefaultValue 대입은 지금처럼 비파괴로 남겨 둡니다.
+                if (_refCtorArgs != null) base[key] = fresh;
+                return fresh;
+            }
             set => base[key] = value;
         }
 
@@ -40,5 +50,7 @@ namespace TrueBase.Core.Data
             if (AutoDefaultConvert.IsReferenceKind(typeof(TValue))) { _refCtorArgs = values; _default = default; }
             else { _default = AutoDefaultConvert.To<TValue>(values); _refCtorArgs = null; }
         }
+
+        object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
     }
 }

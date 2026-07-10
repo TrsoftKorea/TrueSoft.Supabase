@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -196,10 +197,75 @@ namespace TrueBase.Core.Data
             if (ReferenceEquals(a, b))
                 return false;
 
+            // AutoDict/AutoDict2D(참조 타입 값)는 "기본값과 같은 항목=없는 것"으로 정규화한 뒤 비교합니다.
+            // 조회만으로 자동 생성된, 아직 손대지 않은 항목이 변경으로 잡혀 불필요한 저장을 유발하지 않게 하기 위함입니다.
+            // AutoList 계열·값 타입 등 대상이 아니면 false를 반환해 아래 전체 JSON 비교로 폴백합니다.
+            if (a is IAutoDefaultable && TryNormalizeAutoDictForCompare(a, out var normA) && TryNormalizeAutoDictForCompare(b, out var normB))
+            {
+                try { return JsonConvert.SerializeObject(normA) == JsonConvert.SerializeObject(normB); }
+                catch { return false; }
+            }
+
             // 독립 인스턴스 → 전송될 JSON 기준으로 구조적 값 비교.
             // 같으면 실제 변경 없음 → PATCH에서 제외(불필요한 전송 방지).
             try { return JsonConvert.SerializeObject(a) == JsonConvert.SerializeObject(b); }
             catch { return false; }
+        }
+
+        /// <summary>
+        /// <paramref name="obj"/>가 <see cref="AutoDict{TKey,TValue}"/>/<see cref="AutoDict2D{TKey1,TKey2,TValue}"/>이고
+        /// 값이 참조 타입이면, 값이 현재 기본값과 구조적으로 같은 항목을 제외한 정규화된 표현(키→JSON 맵)을 만듭니다.
+        /// AutoDict2D는 안쪽 딕셔너리를 재귀적으로 정규화하고, 정규화 후 빈 안쪽 딕셔너리는 바깥 키째로 제외합니다
+        /// (딕셔너리는 항목 순서에 의미가 없어 제외해도 안전 — AutoList 계열은 슬롯 순서가 의미 있어 대상에서 뺍니다).
+        /// 대상이 아니면(AutoList 계열, 값 타입 값 등) false — 호출부는 전체 JSON 비교로 폴백합니다.
+        /// </summary>
+        private static bool TryNormalizeAutoDictForCompare(object obj, out object normalized)
+        {
+            normalized = null;
+            if (obj is not IAutoDefaultable autoDefaultable || obj is not IDictionary dict)
+                return false;
+
+            var type = obj.GetType();
+            if (!type.IsGenericType) return false;
+            var genericDef = type.GetGenericTypeDefinition();
+
+            if (genericDef == typeof(AutoDict<,>))
+            {
+                var valueType = type.GetGenericArguments()[1];
+                if (!AutoDefaultConvert.IsReferenceKind(valueType)) return false;
+
+                var freshDefault = autoDefaultable.GetDefaultValueBoxed();
+                var defaultJson  = freshDefault != null ? JsonConvert.SerializeObject(freshDefault) : "null";
+
+                var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                foreach (DictionaryEntry entry in dict)
+                {
+                    var entryJson = JsonConvert.SerializeObject(entry.Value);
+                    if (entryJson == defaultJson) continue; // 기본값과 동일 → 없는 것과 동일 취급
+                    result[JsonConvert.SerializeObject(entry.Key)] = entryJson;
+                }
+                normalized = result;
+                return true;
+            }
+
+            if (genericDef == typeof(AutoDict2D<,,>))
+            {
+                var valueType = type.GetGenericArguments()[2];
+                if (!AutoDefaultConvert.IsReferenceKind(valueType)) return false;
+
+                var result = new SortedDictionary<string, object>(StringComparer.Ordinal);
+                foreach (DictionaryEntry entry in dict)
+                {
+                    if (entry.Value == null) continue;
+                    if (!TryNormalizeAutoDictForCompare(entry.Value, out var innerNorm)) continue;
+                    if (((IDictionary)innerNorm).Count == 0) continue; // 안쪽이 전부 기본값 → 바깥 키도 없는 것과 동일 취급
+                    result[JsonConvert.SerializeObject(entry.Key)] = innerNorm;
+                }
+                normalized = result;
+                return true;
+            }
+
+            return false;
         }
 
         private static IEnumerable<MemberInfo> GetMappedMembers(Type t)

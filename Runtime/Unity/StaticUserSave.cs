@@ -156,6 +156,7 @@ namespace TrueBase.Unity
             // 이렇게 하면 네트워크 대기 중 게임 코드가 새 값을 쓰고 MarkDirty()를 호출해도
             // dirty 플래그가 올바르게 유지됩니다.
             var snapshot = DataSchema.CloneRow(Current);
+            DataSchema.ApplyAutoDefaults(snapshot); // 클론은 [AutoDefault]가 다시 안 걸려 있음 — diff·다음 _lastSynced 기준으로 쓰이기 전에 재주입
             _isDirty = false;
 
             var ok = await Supabase.TryPatchUserDataDiffAsync(
@@ -181,6 +182,7 @@ namespace TrueBase.Unity
             DataSchema.CopyInto(Current, new TRow());
             DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = new TRow();
+            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
         }
 
@@ -365,6 +367,7 @@ namespace TrueBase.Unity
             DataSchema.CopyInto(Current, row);
             DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (CopyInto가 새 인스턴스를 만들므로 매번 필요)
             _lastSynced = DataSchema.CloneRow(row);
+            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
             OnLoaded?.Invoke();
         }
@@ -418,6 +421,7 @@ namespace TrueBase.Unity
             DataSchema.CopyInto(Current, row);
             DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = DataSchema.CloneRow(row);
+            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
             OnLoaded?.Invoke();
             return SupabaseResult.Ok;
@@ -446,6 +450,7 @@ namespace TrueBase.Unity
             if (patch == null || patch.Count == 0)
             {
                 _lastSynced = DataSchema.CloneRow(Current);
+                DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
                 _isDirty    = false;
                 return SupabaseResult.Ok;
             }
@@ -460,6 +465,7 @@ namespace TrueBase.Unity
             }
 
             _lastSynced = DataSchema.CloneRow(Current);
+            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
             return SupabaseResult.Ok;
         }

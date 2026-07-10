@@ -28,6 +28,10 @@ namespace TrueBase.Core.Data
     {
         /// <summary>상수 배열을 대상 타입으로 변환/조립해 기본값으로 설정합니다.</summary>
         void SetDefaultValue(object[] values);
+
+        /// <summary>현재 기본값 레시피로 새로 만든 값을 박싱해 반환합니다(참조 타입이면 매번 새 인스턴스).
+        /// 비교·직렬화처럼 타입 파라미터 없이 다뤄야 하는 코드에서 씁니다.</summary>
+        object GetDefaultValueBoxed();
     }
 
     internal static class AutoDefaultConvert

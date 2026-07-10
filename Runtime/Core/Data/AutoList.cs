@@ -75,5 +75,7 @@ namespace TrueBase.Core.Data
             if (AutoDefaultConvert.IsReferenceKind(typeof(T))) { _refCtorArgs = values; _default = default; }
             else { _default = AutoDefaultConvert.To<T>(values); _refCtorArgs = null; }
         }
+
+        object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
     }
 }

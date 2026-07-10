@@ -72,6 +72,8 @@ public static int PlayerId { get => Instance.Current.playerId; set { Instance.Cu
 
 요소 타입에는 기본값 인자와 맞는 생성자가 있어야 합니다. 이름이 여러 네임스페이스에 겹치거나 아직 찾을 수 없는 타입이면 승격 대신 `SeedDefault_필드명` partial 메서드가 선언됩니다. 별도 partial 파일에 구현하면 로드될 때마다 자동 호출됩니다.
 
+`AutoDict`/`AutoDict2D`로 승격된 필드는 [처음 읽는 순간 그 자리에 저장](../data-types/auto-collections#class-value-materializes-on-read)되므로, `PlayerSave.HeroData[hero].Count = 1;`처럼 대입 없이 필드만 바로 고쳐도 됩니다.
+
 ```csharp
 // PlayerSave.HeroDefaults.cs — 직접 작성하는 별도 파일
 public sealed partial class PlayerSave
