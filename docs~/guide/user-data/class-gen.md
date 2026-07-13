@@ -74,6 +74,16 @@ public static int PlayerId { get => Instance.Current.playerId; set { Instance.Cu
 
 `AutoDict`/`AutoDict2D`로 승격된 필드는 [처음 읽는 순간 그 자리에 저장](../data-types/auto-collections#class-value-materializes-on-read)되므로, `PlayerSave.HeroData[hero].Count = 1;`처럼 대입 없이 필드만 바로 고쳐도 됩니다.
 
+값이 enum이면 타입 해석·네임스페이스 자동완성은 클래스와 동일하게 동작하지만, `default`엔 멤버 이름 대신 **정수값**을 씁니다.
+
+```csharp
+[DataColumn("hero_grade")] [AutoDefault(0)] internal AutoDict<HeroName, HeroGrade> heroGrade = new();   // 빈 칸 = (HeroGrade)0
+```
+
+::: warning enum 멤버 이름 대신 정수를 쓰세요
+`default`가 enum이면 생성기가 서식 변환 없이 CSV 셀 값을 그대로 어트리뷰트에 넣습니다. 생성 파일엔 커스텀 네임스페이스 `using`이 없어서 `Rare`처럼 짧게 쓰면 컴파일 에러가 나고, `MyGame.HeroGrade.Rare`처럼 완전한 이름을 써야 컴파일됩니다. 정수값(`0`·`1`…)을 쓰면 이 문제가 없고 런타임에서 동일한 값으로 변환됩니다.
+:::
+
 ```csharp
 // PlayerSave.HeroDefaults.cs — 직접 작성하는 별도 파일
 public sealed partial class PlayerSave
