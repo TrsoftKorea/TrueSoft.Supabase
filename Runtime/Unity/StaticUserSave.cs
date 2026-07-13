@@ -96,6 +96,10 @@ namespace TrueBase.Unity
             LogTag      = $"[StaticUserSave<{typeof(TRow).Name}>]";
             Current     = new TRow();
             _lastSynced = new TRow();
+            // 로드 전에도 [AutoDefault]가 주입돼 있도록 생성 즉시 기본값 적용
+            // (안 하면 로드 전 AutoDict 클래스 값 접근이 null을 반환해 NRE).
+            DataSchema.ApplyAutoDefaults(Current);
+            DataSchema.ApplyAutoDefaults(_lastSynced);
             _hasReferenceColumns = DataSchema.HasReferenceColumns<TRow>();
 
             EnsureRegistered();
