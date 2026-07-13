@@ -19,6 +19,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `R` | 유저 데이터 전체 로드 |
 | `V` | 유저 데이터 즉시 저장 |
 | `F` | 레벨 +1 (자동 저장 시연) |
+| `X` | 세이브 삭제 (기본값 리셋 + 재로드) |
 | `T` | RemoteConfig Reader 호출 |
 | `U` | RemoteConfig Binding 값 출력 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
@@ -96,4 +97,28 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 
 ::: tip
 `alreadyVerified` 처리는 [중복 지급 방지](/guide/iap/advanced#duplicate-grant)를 참고하세요.
+:::
+
+## SampleMailbox
+
+`SupabaseRuntime`이 있는 씬에 `SampleMailbox` 컴포넌트를 붙이면 우편함 조회·수령·삭제를 [분류](/guide/mailbox/#분류)별로 테스트할 수 있습니다.
+
+**사전 준비:**
+1. [Database Setup](/guide/start/database-setup) 완료
+2. Inspector에서 `Demo Category`·`Demo Item Key` 확인(기본값 `event`·`gold`)
+3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 테스트 메일 발송 — 발송은 어드민(Retool)/SQL Editor에서만 가능하며, 발송 시 `category`·`items[].key`를 위 Inspector 값과 맞춥니다
+
+| 키 | 동작 |
+|----|------|
+| `1` | 익명 로그인 + 발송 대상 `UserId` 출력 |
+| `2` | 전체 목록 조회 |
+| `3` | `Demo Category` 분류만 조회 |
+| `4` | 분류별 현황(`ByCategory`) 출력 |
+| `5` | 첫 미수령 메일 보상 수령 |
+| `6` | `Demo Category` 분류 일괄 수령 |
+| `7` | `Demo Category` 읽은 우편 일괄 삭제 |
+| `8` | 첫 삭제 가능 메일 삭제 |
+
+::: tip
+키 `5`·`6`의 보상 수령은 `Demo Item Key`와 일치하는 [아이템 핸들러](/guide/mailbox/item-handler)가 등록돼 있을 때만 성공합니다. 샘플은 `Awake`에서 로그만 남기는 데모 핸들러를 자동 등록합니다.
 :::

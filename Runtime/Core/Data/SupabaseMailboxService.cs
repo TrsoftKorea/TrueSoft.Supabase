@@ -15,7 +15,7 @@ namespace TrueBase.Core.Data
     public sealed class SupabaseMailboxService
     {
         private const string MailSelectColumns =
-            "id,account_id,user_id,sender_type,sender_name,title,content,is_read,expires_at,created_at,items,items_claimed_at";
+            "id,account_id,user_id,sender_type,sender_name,title,content,is_read,expires_at,created_at,items,items_claimed_at,category";
 
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
@@ -38,10 +38,12 @@ namespace TrueBase.Core.Data
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰.</param>
         /// <param name="limit">반환할 메일 개수. 범위: 1~200 (기본값: 50).</param>
         /// <param name="offset">건너뛸 메일 개수. 0 이상. (기본값: 0).</param>
+        /// <param name="category">조회할 분류. null·공백이면 전체 분류. (기본값: null).</param>
         public async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(
             string accessToken,
             int limit = 50,
-            int offset = 0)
+            int offset = 0,
+            string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail("access_token_empty");
@@ -55,6 +57,9 @@ namespace TrueBase.Core.Data
                 $"&order=created_at.desc" +
                 $"&limit={limit}" +
                 $"&offset={offset}";
+
+            if (!string.IsNullOrWhiteSpace(category))
+                url += $"&category=eq.{Uri.EscapeDataString(category.Trim())}";
 
             return await FetchMailListAsync(accessToken, url);
         }
@@ -140,16 +145,21 @@ namespace TrueBase.Core.Data
 
         /// <summary>수령 가능한 모든 메일의 보상을 한 번에 수령 처리합니다. RPC <c>ts_claim_all_mail_items</c>. 메일별 보상 묶음 목록을 반환합니다.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        public async Task<SupabaseResult<IReadOnlyList<MailClaimBundle>>> ClaimAllMailItemsRpcAsync(string accessToken)
+        /// <param name="category">수령 대상 분류. null·공백이면 전체 분류. (기본값: null).</param>
+        public async Task<SupabaseResult<IReadOnlyList<MailClaimBundle>>> ClaimAllMailItemsRpcAsync(
+            string accessToken,
+            string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail("access_token_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_all_mail_items";
+            var bodyJson = JsonConvert.SerializeObject(
+                new { p_category = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
-                jsonBody: "{}",
+                jsonBody: bodyJson,
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
@@ -193,16 +203,21 @@ namespace TrueBase.Core.Data
 
         /// <summary>읽음·삭제 가능한 메일만 일괄 소프트 삭제합니다. RPC <c>ts_delete_read_mails_for_user</c>. 반환값은 처리한 행 수.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        public async Task<SupabaseResult<int>> DeleteReadMailsForUserRpcAsync(string accessToken)
+        /// <param name="category">삭제 대상 분류. null·공백이면 전체 분류. (기본값: null).</param>
+        public async Task<SupabaseResult<int>> DeleteReadMailsForUserRpcAsync(
+            string accessToken,
+            string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<int>.Fail("access_token_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_read_mails_for_user";
+            var bodyJson = JsonConvert.SerializeObject(
+                new { p_category = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
-                jsonBody: "{}",
+                jsonBody: bodyJson,
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
@@ -381,7 +396,8 @@ namespace TrueBase.Core.Data
                 ExpiresAt = r.ExpiresAt,
                 CreatedAt = r.CreatedAt,
                 ItemsClaimedAt = r.ItemsClaimedAt,
-                Items = items
+                Items = items,
+                Category = r.Category ?? "default"
             };
         }
 
@@ -463,6 +479,9 @@ namespace TrueBase.Core.Data
 
             [JsonProperty("items")]
             public JToken Items { get; set; }
+
+            [JsonProperty("category")]
+            public string Category { get; set; }
         }
 
         private sealed class MailClaimLineDto

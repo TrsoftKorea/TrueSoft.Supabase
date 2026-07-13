@@ -224,6 +224,10 @@ namespace TrueBase.Unity
             bool setUpdatedAtIsoUtc = true) =>
             SupabaseSDK.TryPatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
 
+        /// <inheritdoc cref="SupabaseSDK.TryDeleteUserDataAsync{T}()"/>
+        internal static Task<SupabaseResult> DeleteUserDataAsync<T>() =>
+            SupabaseSDK.TryDeleteUserDataAsync<T>();
+
         /// <summary>정적 세이브 자동 동기화 쿨타임(초)을 설정합니다.</summary>
         internal static void ConfigureUserSaveAutoSyncCooldown(float seconds) =>
             SupabaseSDK.ConfigureUserSaveAutoSyncCooldown(seconds);
@@ -443,8 +447,8 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> RestoreSessionAsync() => SupabaseSDK.TryRestoreSessionAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryGetMyMailsAsync"/>
-        public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0) =>
-            SupabaseSDK.TryGetMyMailsAsync(limit, offset);
+        public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0, string category = null) =>
+            SupabaseSDK.TryGetMyMailsAsync(limit, offset, category);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetMailDetailAsync"/>
         public static Task<SupabaseResult<Mail>> GetMailDetailAsync(string mailId) =>
@@ -455,24 +459,28 @@ namespace TrueBase.Unity
             SupabaseSDK.TryClaimMailItemsAsync(mailId);
 
         /// <inheritdoc cref="SupabaseSDK.TryClaimAllMailItemsAsync"/>
-        public static Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync() =>
-            SupabaseSDK.TryClaimAllMailItemsAsync();
+        public static Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync(string category = null) =>
+            SupabaseSDK.TryClaimAllMailItemsAsync(category);
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMailAsync"/>
         public static Task<SupabaseResult> DeleteMailAsync(string mailId) =>
             SupabaseSDK.TryDeleteMailAsync(mailId);
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteReadMailsAsync"/>
-        public static Task<SupabaseResult<int>> DeleteReadMailsAsync() =>
-            SupabaseSDK.TryDeleteReadMailsAsync();
+        public static Task<SupabaseResult<int>> DeleteReadMailsAsync(string category = null) =>
+            SupabaseSDK.TryDeleteReadMailsAsync(category);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetMailInboxCountsAsync"/>
+        public static Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync() =>
+            SupabaseSDK.TryGetMailInboxCountsAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryGetUnreadMailCountAsync"/>
-        public static Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null) =>
-            SupabaseSDK.TryGetUnreadMailCountAsync(userId);
+        public static Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null, string category = null) =>
+            SupabaseSDK.TryGetUnreadMailCountAsync(userId, category);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedItemMailCountAsync"/>
-        public static Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null) =>
-            SupabaseSDK.TryGetUnclaimedItemMailCountAsync(userId);
+        public static Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null, string category = null) =>
+            SupabaseSDK.TryGetUnclaimedItemMailCountAsync(userId, category);
 
         /// <summary>우편함 파사드(<c>SupabaseSDK.Mailbox</c>와 동일 인스턴스).</summary>
         internal static MailboxFacade Mailbox => SupabaseSDK.Mailbox;

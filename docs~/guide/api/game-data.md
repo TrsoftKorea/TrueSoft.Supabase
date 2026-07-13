@@ -7,6 +7,7 @@
 | 멤버 | 설명 |
 |------|------|
 | [`PlayerSave.LoadAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
+| [`PlayerSave.DeleteAsync`](/guide/user-data/delete) | 세이브 삭제(기본값 리셋) |
 | [`Supabase.LoadAllUserSavesAsync`](/guide/user-data/load) | 등록된 모든 세이브 로드 |
 | [`Supabase.SaveAllAsync`](/guide/user-data/immediate-save) | 변경된 세이브 즉시 저장 |
 

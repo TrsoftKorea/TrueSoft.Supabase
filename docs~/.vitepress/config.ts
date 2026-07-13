@@ -144,6 +144,7 @@ export default defineConfig({
               { text: '로드', link: '/guide/user-data/load' },
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
               { text: '즉시 저장', link: '/guide/user-data/immediate-save' },
+              { text: '세이브 삭제', link: '/guide/user-data/delete' },
               { text: '컬럼 추가', link: '/guide/user-data/add-column' }
             ]
           },
@@ -185,6 +186,23 @@ export default defineConfig({
               { text: '알아둘 점', link: '/guide/iap/notes' },
               { text: '더 알아보기', link: '/guide/iap/advanced' },
               { text: '버전별 차이', link: '/guide/iap/versions' }
+            ]
+          },
+          {
+            text: '우편함',
+            link: '/guide/mailbox/',
+            collapsed: true,
+            items: [
+              { text: '목록 조회', link: '/guide/mailbox/list' },
+              { text: '상세 조회', link: '/guide/mailbox/detail' },
+              { text: '아이템 핸들러 등록', link: '/guide/mailbox/item-handler' },
+              { text: '보상 수령', link: '/guide/mailbox/claim' },
+              { text: '전체 수령', link: '/guide/mailbox/claim-all' },
+              { text: '삭제', link: '/guide/mailbox/delete' },
+              { text: '읽은 우편 일괄 삭제', link: '/guide/mailbox/delete-read' },
+              { text: '미읽음 수', link: '/guide/mailbox/counts-unread' },
+              { text: '미수령 보상 수', link: '/guide/mailbox/counts-unclaimed' },
+              { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' }
             ]
           },
           { text: '서버 시간', link: '/guide/server-time' }
@@ -232,6 +250,7 @@ export default defineConfig({
           { text: '계정', link: '/guide/api/account' },
           { text: '게임 데이터', link: '/guide/api/game-data' },
           { text: '인앱 결제', link: '/guide/api/iap' },
+          { text: '우편함', link: '/guide/api/mailbox' },
           { text: '기타', link: '/guide/api/etc' }
         ]
       },

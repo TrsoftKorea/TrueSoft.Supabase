@@ -24,7 +24,8 @@ create table if not exists public.mails (
   created_at timestamptz not null default now(),
   items jsonb null,
   items_claimed_at timestamptz null,
-  deleted_at timestamptz null
+  deleted_at timestamptz null,
+  category text not null default 'default'
 );
 
 alter table public.mails add column if not exists account_id uuid;
@@ -39,6 +40,7 @@ alter table public.mails add column if not exists created_at timestamptz;
 alter table public.mails add column if not exists items jsonb;
 alter table public.mails add column if not exists items_claimed_at timestamptz;
 alter table public.mails add column if not exists deleted_at timestamptz;
+alter table public.mails add column if not exists category text not null default 'default';
 
 do $$
 begin
@@ -57,6 +59,8 @@ end $$;
 comment on table public.mails is '시스템 우편. RLS는 account_id + profiles.server_id 조인.';
 comment on column public.mails.items is '보상 배열 [{key,count}, ...]. NULL/[] 는 텍스트 전용.';
 comment on column public.mails.deleted_at is '플레이어 소프트 삭제(숨김).';
+comment on column public.mails.category is
+  '분류 파티션 키(자유 텍스트, 기본값 default). RPC p_category 파라미터로 필터링. 카탈로그 테이블 없음.';
 
 create index if not exists mails_account_id_created_idx on public.mails (account_id, created_at desc)
   where account_id is not null and deleted_at is null;
@@ -64,6 +68,8 @@ create index if not exists mails_account_id_expires_idx on public.mails (account
   where account_id is not null;
 create index if not exists mails_user_id_created_idx on public.mails (user_id, created_at desc);
 create index if not exists mails_expires_at_idx on public.mails (expires_at);
+create index if not exists mails_account_id_category_created_idx on public.mails (account_id, category, created_at desc)
+  where account_id is not null and deleted_at is null;
 
 alter table public.mails enable row level security;
 
@@ -246,7 +252,9 @@ grant execute on function public.ts_claim_mail_items(uuid) to authenticated;
 -- ---------------------------------------------------------------------------
 -- RPC: 우편함 전체 일괄 수령 — 반환 [{mail_id, items:[{index,key,count},...]}, ...]
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_claim_all_mail_items()
+drop function if exists public.ts_claim_all_mail_items();
+
+create or replace function public.ts_claim_all_mail_items(p_category text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -258,10 +266,13 @@ declare
   items_out jsonb;
   acc jsonb := '[]'::jsonb;
   one_mail jsonb;
+  v_category text;
 begin
   if auth.uid() is null then
     raise exception 'not_authenticated';
   end if;
+
+  v_category := nullif(btrim(p_category), '');
 
   -- 한 루프에서 검증·갱신·결과 누적(행 잠금 유지)
   for r in
@@ -274,6 +285,7 @@ begin
       and m.items is not null
       and jsonb_typeof(m.items) = 'array'
       and jsonb_array_length(m.items) > 0
+      and (v_category is null or m.category = v_category)
       and exists (
         select 1 from public.user_profiles p
         where p.account_id = auth.uid()
@@ -326,11 +338,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_claim_all_mail_items() is
-  '미수령 보상 메일 전부 일괄 수령(수령 시 각 메일 읽음 처리). SECURITY DEFINER.';
+comment on function public.ts_claim_all_mail_items(text) is
+  '미수령 보상 메일 전부 일괄 수령(수령 시 각 메일 읽음 처리). p_category=null이면 전체 분류. SECURITY DEFINER.';
 
-revoke all on function public.ts_claim_all_mail_items() from public;
-grant execute on function public.ts_claim_all_mail_items() to authenticated;
+revoke all on function public.ts_claim_all_mail_items(text) from public;
+grant execute on function public.ts_claim_all_mail_items(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC: 플레이어 소프트 삭제 (미수령 보상 있으면 거부)
@@ -394,7 +406,9 @@ grant execute on function public.ts_delete_mail_for_user(uuid) to authenticated;
 -- ---------------------------------------------------------------------------
 -- RPC: 읽음 처리된 우편 일괄 소프트 삭제 (미수령 보상이 있는 메일은 제외)
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_delete_read_mails_for_user()
+drop function if exists public.ts_delete_read_mails_for_user();
+
+create or replace function public.ts_delete_read_mails_for_user(p_category text default null)
 returns int
 language plpgsql
 security definer
@@ -402,10 +416,13 @@ set search_path = public
 as $$
 declare
   n int;
+  v_category text;
 begin
   if auth.uid() is null then
     raise exception 'not_authenticated';
   end if;
+
+  v_category := nullif(btrim(p_category), '');
 
   with victims as (
     select m.id
@@ -413,6 +430,7 @@ begin
     where m.account_id = auth.uid()
       and m.deleted_at is null
       and m.is_read = true
+      and (v_category is null or m.category = v_category)
       and exists (
         select 1 from public.user_profiles p
         where p.account_id = auth.uid()
@@ -437,11 +455,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_delete_read_mails_for_user() is
-  'is_read 이고 삭제 가능한(미수령 보상 없음) 메일만 일괄 숨김. 반환: 처리 행 수. SECURITY DEFINER.';
+comment on function public.ts_delete_read_mails_for_user(text) is
+  'is_read 이고 삭제 가능한(미수령 보상 없음) 메일만 일괄 숨김. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
 
-revoke all on function public.ts_delete_read_mails_for_user() from public;
-grant execute on function public.ts_delete_read_mails_for_user() to authenticated;
+revoke all on function public.ts_delete_read_mails_for_user(text) from public;
+grant execute on function public.ts_delete_read_mails_for_user(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 만료 메일 하드 삭제 (서비스 롤·cron 전용)
@@ -486,56 +504,67 @@ grant execute on function public.ts_cleanup_expired_mails(int) to service_role;
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_mail_inbox_counts()
 returns jsonb
-language sql
+language plpgsql
+stable
 security definer
 set search_path = public
 as $$
-  select case
-    when auth.uid() is null then null
-    else jsonb_build_object(
-      'unread',
-      coalesce((
-        select count(*)::int
-        from public.mails m
-        where m.account_id = auth.uid()
-          and m.deleted_at is null
-          and m.is_read = false
-          and m.expires_at > now()
-          and exists (
-            select 1
-            from public.user_profiles p
-            where p.account_id = auth.uid()
-              and p.user_id = m.user_id
-              and p.server_id is not null
-              and p.server_id = public.auth_user_server_id()
-          )
-      ), 0),
-      'unclaimed_mails',
-      coalesce((
-        select count(*)::int
-        from public.mails m
-        where m.account_id = auth.uid()
-          and m.deleted_at is null
-          and m.items_claimed_at is null
-          and m.expires_at > now()
-          and m.items is not null
-          and jsonb_typeof(m.items) = 'array'
-          and jsonb_array_length(m.items) > 0
-          and exists (
-            select 1
-            from public.user_profiles p
-            where p.account_id = auth.uid()
-              and p.user_id = m.user_id
-              and p.server_id is not null
-              and p.server_id = public.auth_user_server_id()
-          )
-      ), 0)
+declare
+  v_unread int;
+  v_unclaimed int;
+  v_by_category jsonb;
+begin
+  if auth.uid() is null then
+    return null;
+  end if;
+
+  with my_mails as (
+    select m.category, m.is_read, m.items_claimed_at, m.items
+    from public.mails m
+    where m.account_id = auth.uid()
+      and m.deleted_at is null
+      and m.expires_at > now()
+      and exists (
+        select 1
+        from public.user_profiles p
+        where p.account_id = auth.uid()
+          and p.user_id = m.user_id
+          and p.server_id is not null
+          and p.server_id = public.auth_user_server_id()
+      )
+  ),
+  per_category as (
+    select category,
+           count(*) filter (where is_read = false)::int as unread,
+           count(*) filter (
+             where items_claimed_at is null
+               and items is not null
+               and jsonb_typeof(items) = 'array'
+               and jsonb_array_length(items) > 0
+           )::int as unclaimed_mails
+    from my_mails
+    group by category
+  )
+  select
+    coalesce(sum(unread), 0)::int,
+    coalesce(sum(unclaimed_mails), 0)::int,
+    coalesce(
+      jsonb_object_agg(category, jsonb_build_object('unread', unread, 'unclaimed_mails', unclaimed_mails)),
+      '{}'::jsonb
     )
-  end;
+  into v_unread, v_unclaimed, v_by_category
+  from per_category;
+
+  return jsonb_build_object(
+    'unread', v_unread,
+    'unclaimed_mails', v_unclaimed,
+    'by_category', v_by_category
+  );
+end;
 $$;
 
 comment on function public.ts_mail_inbox_counts() is
-  '미읽음·미수령 보상 메일 개수. SECURITY DEFINER.';
+  '미읽음·미수령 보상 메일 개수(전체 집계) + by_category 분류별 세부 내역. SECURITY DEFINER.';
 
 revoke all on function public.ts_mail_inbox_counts() from public;
 grant execute on function public.ts_mail_inbox_counts() to authenticated;

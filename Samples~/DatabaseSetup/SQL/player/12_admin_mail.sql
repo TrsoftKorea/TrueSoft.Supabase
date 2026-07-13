@@ -14,23 +14,18 @@
 create table if not exists public.game_items (
   key          text primary key,
   display_name text not null default '',
-  description  text null,
-  category     text null,
-  sort_order   int  not null default 0,
-  is_active    boolean not null default true,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  created_at   timestamptz not null default now()
 );
 alter table public.game_items add column if not exists display_name text not null default '';
-alter table public.game_items add column if not exists description  text;
-alter table public.game_items add column if not exists category     text;
-alter table public.game_items add column if not exists sort_order   int not null default 0;
-alter table public.game_items add column if not exists is_active    boolean not null default true;
 alter table public.game_items add column if not exists created_at   timestamptz not null default now();
-alter table public.game_items add column if not exists updated_at   timestamptz not null default now();
+alter table public.game_items drop column if exists description;
+alter table public.game_items drop column if exists category;
+alter table public.game_items drop column if exists sort_order;
+alter table public.game_items drop column if exists is_active;
+alter table public.game_items drop column if exists updated_at;
 
-create index if not exists game_items_category_sort_idx on public.game_items (category, sort_order);
-create index if not exists game_items_active_idx on public.game_items (is_active);
+drop index if exists public.game_items_category_sort_idx;
+drop index if exists public.game_items_active_idx;
 
 comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 실제 지급은 게임 IMailItemHandler.';
 
@@ -57,7 +52,8 @@ create table if not exists public.mail_batches (
   expires_at      timestamptz not null,
   recipient_count int not null default 0,
   created_by      text null,
-  created_at      timestamptz not null default now()
+  created_at      timestamptz not null default now(),
+  category        text not null default 'default'
 );
 alter table public.mail_batches add column if not exists target_mode     text;
 alter table public.mail_batches add column if not exists server_id       uuid;
@@ -69,10 +65,12 @@ alter table public.mail_batches add column if not exists expires_at      timesta
 alter table public.mail_batches add column if not exists recipient_count int not null default 0;
 alter table public.mail_batches add column if not exists created_by      text;
 alter table public.mail_batches add column if not exists created_at      timestamptz not null default now();
+alter table public.mail_batches add column if not exists category        text not null default 'default';
 
 create index if not exists mail_batches_created_idx on public.mail_batches (created_at desc);
 
 comment on table public.mail_batches is '어드민 우편 발송 캠페인 그룹. recipient_count는 발송 시점 스냅샷(권위값).';
+comment on column public.mail_batches.category is '발송 캠페인 분류(자유 텍스트, 기본값 default). 수신자 mails.category와 동일 값.';
 
 alter table public.mail_batches enable row level security;
 revoke all on table public.mail_batches from anon, authenticated;
@@ -108,6 +106,8 @@ revoke select, insert, update, delete on table public.mails from service_role;
 --   p_items       : 보상 배열 [{key,count}]. game_items 검증(우회 = p_skip_item_validation)
 -- 반환: {batch_id, recipient_count}
 -- ---------------------------------------------------------------------------
+drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean);
+
 create or replace function public.ts_admin_send_mail(
   p_target_mode          text,
   p_title                text,
@@ -118,7 +118,8 @@ create or replace function public.ts_admin_send_mail(
   p_sender_name          text    default '',
   p_items                jsonb   default null,
   p_created_by           text    default null,
-  p_skip_item_validation boolean default false
+  p_skip_item_validation boolean default false,
+  p_category             text    default 'default'
 )
 returns jsonb
 language plpgsql
@@ -131,6 +132,7 @@ declare
   v_item        jsonb;
   v_key         text;
   v_account_ids uuid[];
+  v_category    text;
 begin
   if p_target_mode not in ('all','server','players') then
     raise exception 'invalid_target_mode: %', p_target_mode;
@@ -144,6 +146,8 @@ begin
   if p_target_mode = 'server' and p_server_id is null then
     raise exception 'server_id_required';
   end if;
+
+  v_category := coalesce(nullif(btrim(p_category), ''), 'default');
 
   if p_account_ids is not null and jsonb_typeof(p_account_ids) = 'array' then
     select array_agg((value)::uuid) into v_account_ids
@@ -177,19 +181,19 @@ begin
   end if;
 
   insert into public.mail_batches
-    (target_mode, server_id, title, content, sender_name, items, expires_at, created_by)
+    (target_mode, server_id, title, content, sender_name, items, expires_at, created_by, category)
   values
     (p_target_mode,
      case when p_target_mode = 'server' then p_server_id else null end,
      p_title, coalesce(p_content, ''), coalesce(p_sender_name, ''),
-     p_items, p_expires_at, p_created_by)
+     p_items, p_expires_at, p_created_by, v_category)
   returning id into v_batch_id;
 
   insert into public.mails
     (account_id, user_id, sender_type, sender_name, title, content,
-     is_read, expires_at, created_at, items, batch_id)
+     is_read, expires_at, created_at, items, batch_id, category)
   select p.account_id, p.user_id, 'system', coalesce(p_sender_name, ''),
-         p_title, coalesce(p_content, ''), false, p_expires_at, now(), p_items, v_batch_id
+         p_title, coalesce(p_content, ''), false, p_expires_at, now(), p_items, v_batch_id, v_category
   from public.user_profiles p
   where p.account_id is not null
     and p.withdrawn_at is null
@@ -206,18 +210,17 @@ begin
 end;
 $$;
 
-comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean) is
-  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그).';
+comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) is
+  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default.';
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
 -- ---------------------------------------------------------------------------
+drop function if exists public.ts_admin_upsert_game_item(text,text,text,text,int);
+
 create or replace function public.ts_admin_upsert_game_item(
   p_key          text,
-  p_display_name text,
-  p_description  text default null,
-  p_category     text default null,
-  p_sort_order   int  default 0
+  p_display_name text
 )
 returns void
 language plpgsql
@@ -228,18 +231,14 @@ begin
   if p_key is null or btrim(p_key) = '' then
     raise exception 'key_empty';
   end if;
-  insert into public.game_items (key, display_name, description, category, sort_order, updated_at)
-  values (btrim(p_key), coalesce(p_display_name, ''), p_description, p_category, coalesce(p_sort_order, 0), now())
+  insert into public.game_items (key, display_name)
+  values (btrim(p_key), coalesce(p_display_name, ''))
   on conflict (key) do update set
-    display_name = excluded.display_name,
-    description  = excluded.description,
-    category     = excluded.category,
-    sort_order   = excluded.sort_order,
-    updated_at   = now();
+    display_name = excluded.display_name;
 end;
 $$;
 
-comment on function public.ts_admin_upsert_game_item(text,text,text,text,int) is
+comment on function public.ts_admin_upsert_game_item(text,text) is
   '아이템 카탈로그 upsert(어드민). 발송된 mails.items 에는 영향 없음.';
 
 create or replace function public.ts_admin_delete_game_item(p_key text)
@@ -280,10 +279,10 @@ comment on function public.ts_admin_count_recipients(text,uuid) is
 -- ---------------------------------------------------------------------------
 -- 어드민 RPC EXECUTE — service_role 전용(클라이언트 금지)
 -- ---------------------------------------------------------------------------
-revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean) from public, anon, authenticated;
-grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean) to service_role;
-revoke all on function public.ts_admin_upsert_game_item(text,text,text,text,int) from public, anon, authenticated;
-grant execute on function public.ts_admin_upsert_game_item(text,text,text,text,int) to service_role;
+revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) from public, anon, authenticated;
+grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) to service_role;
+revoke all on function public.ts_admin_upsert_game_item(text,text) from public, anon, authenticated;
+grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;
 grant execute on function public.ts_admin_delete_game_item(text) to service_role;
 revoke all on function public.ts_admin_count_recipients(text,uuid) from public, anon, authenticated;

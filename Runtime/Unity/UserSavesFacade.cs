@@ -248,5 +248,34 @@ namespace TrueBase.Unity
                 ensureRowFirst: ensureRowFirst,
                 setUpdatedAtIsoUtc: setUpdatedAtIsoUtc);
         }
+
+        /// <summary>본인 세이브 행을 삭제합니다. 테이블은 <typeparamref name="T"/>에서 해석합니다.</summary>
+        public Task<SupabaseResult<bool>> DeleteMyRowAsync<T>()
+        {
+            var session = _sessionGetter?.Invoke();
+            return DeleteMyRowAsync<T>(session);
+        }
+
+        /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
+        public async Task<SupabaseResult<bool>> DeleteMyRowAsync<T>(SupabaseSession session)
+        {
+            if (session == null)
+                return SupabaseResult<bool>.Fail("session_null");
+
+            var accessToken = session.AccessToken;
+            var userId = session.User?.Id;
+
+            if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(userId))
+                return SupabaseResult<bool>.Fail("auth_not_signed_in");
+
+            string tableName;
+            try { tableName = DataSchema.ResolveTableName<T>(); }
+            catch (Exception e) { return SupabaseResult<bool>.Fail("resolve_table_failed:" + e.Message); }
+
+            return await _userDataService.DeleteMyRowAsync(
+                accessToken: accessToken,
+                accountId: userId,
+                tableName: tableName);
+        }
     }
 }

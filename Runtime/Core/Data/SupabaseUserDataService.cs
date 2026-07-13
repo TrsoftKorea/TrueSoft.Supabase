@@ -143,6 +143,47 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
+        /// 본인 세이브 행을 삭제합니다(<c>DELETE ... account_id=eq.</c>). RLS <c>delete_own_authenticated</c> 정책으로 허용됩니다.
+        /// 매칭 행이 없어도(이미 없음) 성공으로 간주합니다(멱등). 다음 로드 시 <c>ts_ensure_my_row</c>가 기본 행을 재생성합니다.
+        /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). DELETE 필터(<c>account_id=eq.</c>)에 사용. 필수.</param>
+        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
+        public async Task<SupabaseResult<bool>> DeleteMyRowAsync(
+            string accessToken,
+            string accountId,
+            string tableName)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<bool>.Fail("access_token_empty");
+
+            if (string.IsNullOrWhiteSpace(accountId))
+                return SupabaseResult<bool>.Fail("account_id_empty");
+
+            if (string.IsNullOrWhiteSpace(tableName))
+                return SupabaseResult<bool>.Fail("table_name_empty");
+
+            var url =
+                $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, tableName)}" +
+                $"?account_id=eq.{Uri.EscapeDataString(accountId.Trim())}";
+
+            var response = await _httpClient.SendAsync(
+                method: "DELETE",
+                url: url,
+                jsonBody: null,
+                headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
+
+            if (response == null)
+                return SupabaseResult<bool>.Fail("http_response_null");
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "delete_failed");
+
+            // 매칭 행이 없어도(빈 배열) 삭제 목적은 달성 — 멱등 성공.
+            return SupabaseResult<bool>.Success(true);
+        }
+
+        /// <summary>
         /// 명시 컬럼만 select해 본인 행을 로드합니다. 행이 없으면 <c>new T()</c>를 반환합니다(행 존재 여부가 필요하면 <see cref="LoadColumnsWithRowStateAsync{T}"/>).
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>

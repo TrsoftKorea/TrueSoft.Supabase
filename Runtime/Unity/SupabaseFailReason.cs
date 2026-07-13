@@ -149,5 +149,8 @@ namespace TrueBase.Unity
 
         /// <summary>유저 세이브 로드에 실패했습니다.</summary>
         public const string UserSaveLoadFailed = "user_save_load_failed";
+
+        /// <summary>유저 세이브 삭제에 실패했습니다.</summary>
+        public const string UserSaveDeleteFailed = "user_save_delete_failed";
     }
 }

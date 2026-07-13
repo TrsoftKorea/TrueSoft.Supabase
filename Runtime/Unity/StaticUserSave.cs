@@ -428,6 +428,27 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// 본인 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋).
+        /// 다음 <see cref="LoadAsync"/> 시 <c>ts_ensure_my_row</c>가 기본 행을 재생성하므로 실질적으로 "기본값 리셋"입니다.
+        /// 계정 탈퇴가 아니라 세이브 데이터만 비웁니다.
+        /// <para>먼저 로컬을 기본값으로 리셋한 뒤 서버를 삭제하므로, 삭제 도중 자동 저장이 옛 데이터를 되쓰지 않습니다.
+        /// 저장이 활발한 순간(전투 중 등)보다 설정 화면 등 조용한 시점에 호출하세요.
+        /// 실패 시 로컬은 기본값이지만 서버 데이터는 유지되므로 <see cref="LoadAsync"/>로 재동기화하세요.</para>
+        /// </summary>
+        public async Task<SupabaseResult> DeleteAsync()
+        {
+            EnsureRegistered();
+
+            // 로컬을 먼저 리셋 — 삭제 await 도중 자동 저장이 돌아도 diff가 비어 PATCH가 안 나감(옛 데이터 되쓰기 방지).
+            ResetLocalState();
+
+            var r = await Supabase.DeleteUserDataAsync<TRow>();
+            return r != null && r.IsSuccess
+                ? SupabaseResult.Ok
+                : SupabaseResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveDeleteFailed);
+        }
+
+        /// <summary>
         /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다. 변경이 없으면 네트워크 요청 없이 성공을 반환합니다.
         /// </summary>
         public async Task<SupabaseResult> SaveIfChangedAsync()

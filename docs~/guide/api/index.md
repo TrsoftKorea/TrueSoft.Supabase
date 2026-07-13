@@ -45,6 +45,7 @@ if (result.ErrorMessage == SupabaseFailReason.UserBanned)
 - [**계정**<br><small>닉네임 · 프로필 · 탈퇴 · 서버 이주</small>](/guide/api/account)
 - [**게임 데이터**<br><small>유저 데이터 · 원격 설정</small>](/guide/api/game-data)
 - [**인앱 결제**<br><small>IAP 생성 · 검증</small>](/guide/api/iap)
-- [**기타**<br><small>서버 시간 · 우편함</small>](/guide/api/etc)
+- [**우편함**<br><small>목록 · 수령 · 삭제 · 분류</small>](/guide/api/mailbox)
+- [**기타**<br><small>서버 시간</small>](/guide/api/etc)
 
 </div>

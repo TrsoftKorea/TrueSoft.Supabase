@@ -21,6 +21,7 @@ using SupabaseClient = global::TrueBase.Unity.Supabase;
 ///   W — 로그아웃           O — 세션 복원
 ///
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
+///   X — 세이브 삭제 (기본값 리셋 + 재로드)
 ///
 ///   T — RC Reader         U — RC Binding          E — RC Listener 토글
 ///
@@ -214,6 +215,24 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         Debug.Log($"[Supabase] Level = {SamplePlayerSave.Level} (dirty — 쿨타임 후 자동 저장)");
     }
 
+    /// <summary>
+    /// X — 세이브를 삭제합니다(서버 행 DELETE + 로컬 기본값 리셋). 탈퇴가 아니라 세이브만 비웁니다.
+    /// 삭제 후 로컬이 기본값인지 확인하고, 재로드 시 기본 행이 재생성되는지 확인합니다.
+    /// </summary>
+    private async Task DeletePlayerDataAsync()
+    {
+        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+
+        var ok = await SamplePlayerSave.DeleteAsync();
+        if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorMessage}"); return; }
+        Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
+
+        var loaded = await SamplePlayerSave.LoadAsync();
+        Debug.Log(loaded
+            ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}"
+            : "[Supabase] 재로드 실패.");
+    }
+
     // ─── RemoteConfig ─────────────────────────────────────────────────────────
     // ① Reader (T): 처음 호출 시 생성, 캐시 만료 시 서버 응답 대기 후 반환
     // ② Binding (U): 60초 주기 폴링으로 자동 갱신, .Value로 즉시 읽기
@@ -396,6 +415,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.R)) _ = LoadPlayerDataAsync();
         if (Input.GetKeyDown(KeyCode.V)) _ = SavePlayerDataAsync();
         if (Input.GetKeyDown(KeyCode.F)) IncrementLevel();
+        if (Input.GetKeyDown(KeyCode.X)) _ = DeletePlayerDataAsync();
 
         if (Input.GetKeyDown(KeyCode.T)) _ = TestRemoteConfigReaderAsync();
         if (Input.GetKeyDown(KeyCode.U)) TestRemoteConfigBinding();

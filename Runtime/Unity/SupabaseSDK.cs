@@ -213,6 +213,7 @@ namespace TrueBase.Unity
             public const string UserDataLoadAttributedRowState = "Supabase.UserData.LoadAttributed.RowState";
             public const string UserDataLoadColumnsRowState = "Supabase.UserData.LoadColumns.RowState";
             public const string UserDataPatchDiff = "Supabase.UserData.PatchDiff";
+            public const string UserDataDelete = "Supabase.UserData.Delete";
             public const string EdgeFunctionInvoke = "Supabase.EdgeFunction.Invoke";
             public const string RemoteConfigGet = "Supabase.RemoteConfig.Get";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
@@ -236,6 +237,7 @@ namespace TrueBase.Unity
             public const string MailboxDeleteReadBulk = "Supabase.Mailbox.Delete.ReadBulk";
             public const string MailboxUnreadCount = "Supabase.Mailbox.UnreadCount";
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
+            public const string MailboxCountsDetail = "Supabase.Mailbox.Counts.Detail";
         }
 
         /// <summary>
@@ -1312,6 +1314,23 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
         }
 
+        /// <summary>본인 세이브 행을 삭제합니다. 테이블은 <typeparamref name="T"/>에서 해석합니다.</summary>
+        public static async Task<SupabaseResult<bool>> DeleteUserDataAsync<T>()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+
+            return await UserSaves.DeleteMyRowAsync<T>();
+        }
+
+        /// <inheritdoc cref="DeleteUserDataAsync{T}()"/>
+        public static async Task<SupabaseResult> TryDeleteUserDataAsync<T>()
+        {
+            var r = await DeleteUserDataAsync<T>();
+            return LogAndReturn(ApiLogTags.UserDataDelete, r);
+        }
+
         /// <summary>정적 세이브 자동 동기화 쿨타임(초)을 설정합니다.</summary>
         public static void ConfigureUserSaveAutoSyncCooldown(float seconds)
         {
@@ -1770,14 +1789,14 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버).</summary>
-        public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0)
+        /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await Mailbox.GetMyMailsAsync(limit, offset);
+            return await Mailbox.GetMyMailsAsync(limit, offset, category);
         }
 
         /// <summary>우편함 메일 한 건(<c>ts_view_mail_for_user</c>: 보상 items 없으면 조회 시 읽음).</summary>
@@ -1800,14 +1819,14 @@ namespace TrueBase.Unity
             return await Mailbox.ClaimMailItemsAsync(mailId);
         }
 
-        /// <summary><c>ts_claim_all_mail_items</c>(DB에서 수령과 동시에 각 메일 읽음 처리) 후 메일·원소 순서대로 핸들러 실행.</summary>
-        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync()
+        /// <summary><c>ts_claim_all_mail_items</c>(DB에서 수령과 동시에 각 메일 읽음 처리) 후 메일·원소 순서대로 핸들러 실행. <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync(string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await Mailbox.ClaimAllMailItemsAsync();
+            return await Mailbox.ClaimAllMailItemsAsync(category);
         }
 
         /// <summary><c>ts_delete_mail_for_user</c> 소프트 삭제(미수령 보상 있으면 서버 거부).</summary>
@@ -1820,40 +1839,50 @@ namespace TrueBase.Unity
             return await Mailbox.DeleteMailAsync(mailId);
         }
 
-        /// <summary><c>ts_delete_read_mails_for_user</c> — 읽음·삭제 가능한 메일만 일괄 숨김. 성공 시 데이터는 삭제한 행 수.</summary>
-        public static async Task<SupabaseResult<int>> DeleteReadMailsAsync()
+        /// <summary><c>ts_delete_read_mails_for_user</c> — 읽음·삭제 가능한 메일만 일괄 숨김. 성공 시 데이터는 삭제한 행 수. <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<int>> DeleteReadMailsAsync(string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await Mailbox.DeleteReadMailsAsync();
+            return await Mailbox.DeleteReadMailsAsync(category);
         }
 
-        /// <summary><c>ts_mail_inbox_counts</c>의 미읽음 수. <paramref name="userId"/>는 호환용(무시).</summary>
-        public static async Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null)
+        /// <summary><c>ts_mail_inbox_counts</c> 전체 응답(전체 집계 + 분류별 세부 내역).</summary>
+        public static async Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync()
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<MailInboxCounts>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await Mailbox.GetUnreadCountAsync(userId);
+            return await Mailbox.GetInboxCountsAsync();
         }
 
-        /// <summary><c>ts_mail_inbox_counts</c>의 미수령 보상 메일 수. <paramref name="userId"/>는 호환용(무시).</summary>
-        public static async Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null)
+        /// <summary><c>ts_mail_inbox_counts</c>의 미읽음 수. <paramref name="userId"/>는 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null, string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
 
-            return await Mailbox.GetUnclaimedItemMailCountAsync(userId);
+            return await Mailbox.GetUnreadCountAsync(userId, category);
+        }
+
+        /// <summary><c>ts_mail_inbox_counts</c>의 미수령 보상 메일 수. <paramref name="userId"/>는 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null, string category = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+
+            return await Mailbox.GetUnclaimedItemMailCountAsync(userId, category);
         }
 
         /// <inheritdoc cref="GetMyMailsAsync"/>
-        public static async Task<SupabaseResult<IReadOnlyList<Mail>>> TryGetMyMailsAsync(int limit = 50, int offset = 0)
+        public static async Task<SupabaseResult<IReadOnlyList<Mail>>> TryGetMyMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
-            var r = await GetMyMailsAsync(limit, offset);
+            var r = await GetMyMailsAsync(limit, offset, category);
             return LogAndReturnResult(ApiLogTags.MailboxList, r);
         }
 
@@ -1872,9 +1901,9 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="ClaimAllMailItemsAsync"/>
-        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> TryClaimAllMailItemsAsync()
+        public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> TryClaimAllMailItemsAsync(string category = null)
         {
-            var r = await ClaimAllMailItemsAsync();
+            var r = await ClaimAllMailItemsAsync(category);
             return LogAndReturnResult(ApiLogTags.MailboxClaimAll, r);
         }
 
@@ -1887,23 +1916,30 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="DeleteReadMailsAsync"/>
-        public static async Task<SupabaseResult<int>> TryDeleteReadMailsAsync()
+        public static async Task<SupabaseResult<int>> TryDeleteReadMailsAsync(string category = null)
         {
-            var r = await DeleteReadMailsAsync();
+            var r = await DeleteReadMailsAsync(category);
             return LogAndReturnResult(ApiLogTags.MailboxDeleteReadBulk, r);
         }
 
-        /// <inheritdoc cref="GetUnreadMailCountAsync"/>
-        public static async Task<SupabaseResult<int>> TryGetUnreadMailCountAsync(string userId = null)
+        /// <inheritdoc cref="GetMailInboxCountsAsync"/>
+        public static async Task<SupabaseResult<MailInboxCounts>> TryGetMailInboxCountsAsync()
         {
-            var r = await GetUnreadMailCountAsync(userId);
+            var r = await GetMailInboxCountsAsync();
+            return LogAndReturnResult(ApiLogTags.MailboxCountsDetail, r);
+        }
+
+        /// <inheritdoc cref="GetUnreadMailCountAsync"/>
+        public static async Task<SupabaseResult<int>> TryGetUnreadMailCountAsync(string userId = null, string category = null)
+        {
+            var r = await GetUnreadMailCountAsync(userId, category);
             return LogAndReturnResult(ApiLogTags.MailboxUnreadCount, r);
         }
 
         /// <inheritdoc cref="GetUnclaimedItemMailCountAsync"/>
-        public static async Task<SupabaseResult<int>> TryGetUnclaimedItemMailCountAsync(string userId = null)
+        public static async Task<SupabaseResult<int>> TryGetUnclaimedItemMailCountAsync(string userId = null, string category = null)
         {
-            var r = await GetUnclaimedItemMailCountAsync(userId);
+            var r = await GetUnclaimedItemMailCountAsync(userId, category);
             return LogAndReturnResult(ApiLogTags.MailboxUnclaimedCount, r);
         }
 

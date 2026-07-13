@@ -35,6 +35,9 @@ namespace TrueBase.Core.Data
         public DateTime? ItemsClaimedAt { get; set; }
         public IReadOnlyList<MailItemPayload> Items { get; set; }
 
+        /// <summary>분류(파티션 키). 지정 없이 발송된 메일은 <c>default</c>.</summary>
+        public string Category { get; set; }
+
         public bool IsExpired => DateTime.UtcNow > ExpiresAt;
 
         public bool HasUnclaimedItems =>
@@ -76,7 +79,17 @@ namespace TrueBase.Core.Data
             int count);
     }
 
-    /// <summary><c>ts_mail_inbox_counts</c> 응답.</summary>
+    /// <summary>한 분류의 미읽음·미수령 보상 메일 개수. <see cref="MailInboxCounts.ByCategory"/> 값.</summary>
+    public sealed class MailCategoryCounts
+    {
+        [JsonProperty("unread")]
+        public int Unread { get; set; }
+
+        [JsonProperty("unclaimed_mails")]
+        public int UnclaimedMails { get; set; }
+    }
+
+    /// <summary><c>ts_mail_inbox_counts</c> 응답. 최상위는 전체 집계, <see cref="ByCategory"/>는 분류별 세부.</summary>
     public sealed class MailInboxCounts
     {
         [JsonProperty("unread")]
@@ -84,6 +97,11 @@ namespace TrueBase.Core.Data
 
         [JsonProperty("unclaimed_mails")]
         public int UnclaimedMails { get; set; }
+
+        /// <summary>분류별 세부 개수. 활성 메일이 있는 분류만 키로 존재.</summary>
+        [JsonProperty("by_category")]
+        public Dictionary<string, MailCategoryCounts> ByCategory { get; set; } =
+            new Dictionary<string, MailCategoryCounts>();
     }
 
     /// <summary><c>ts_claim_all_mail_items</c> 한 메일 분.</summary>
