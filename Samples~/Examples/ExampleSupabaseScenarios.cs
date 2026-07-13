@@ -223,11 +223,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SamplePlayerSave.DeleteAsync();
+        var ok = await SamplePlayerSave.Instance.DeleteAsync();
         if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorMessage}"); return; }
         Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
 
-        var loaded = await SamplePlayerSave.LoadAsync();
+        var loaded = await SamplePlayerSave.Instance.LoadAsync();
         Debug.Log(loaded
             ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}"
             : "[Supabase] 재로드 실패.");
