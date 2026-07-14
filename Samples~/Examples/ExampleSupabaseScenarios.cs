@@ -224,11 +224,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SamplePlayerSave.Instance.DeleteAsync();
+        var ok = await SamplePlayerSave.DeleteAsync();
         if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorMessage}"); return; }
         Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}");
 
-        var loaded = await SamplePlayerSave.Instance.LoadAsync();
+        var loaded = await SamplePlayerSave.LoadAsync();
         Debug.Log(loaded
             ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}"
             : "[Supabase] 재로드 실패.");
@@ -443,6 +443,10 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
 {
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
+
+    // 생성된 PlayerSave처럼 정적으로 호출하기 위한 래퍼. (생성기는 이 래퍼를 자동으로 emit합니다.)
+    public static Task<TrueBase.Core.Common.SupabaseResult> LoadAsync() => Instance.LoadAsync();
+    public static Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => Instance.DeleteAsync();
 
     // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
     [Serializable]
