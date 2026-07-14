@@ -39,15 +39,30 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private void Awake()
     {
         SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
+
+        // 신규 유저(DB 행 없던 최초 로드)에게만 시작 코인 100을 지급. 로그인/로드 전(Awake)에 구독해야 합니다.
+        // coins는 [DataColumn]이라 여기서 넣은 값이 서버에 저장됩니다.
+        // (이 샘플의 heroes는 [DataColumn]이 없는 로컬 전용이라, 실제 지급 데모로는 coins를 씁니다.
+        //  게임에서 영웅이 서버 저장 컬럼이면 PlayerSave.Heroes[A1].Count = 1도 동일하게 저장됩니다.)
+        SamplePlayerSave.OnFirstLoad += () =>
+        {
+            SamplePlayerSave.Coins = 100;
+            Debug.Log("[Supabase] 신규 유저 초기값 설정: Coins = 100");
+        };
     }
 
     private async void Start()
     {
         var result = await Supabase.TriggerAutoLoginAsync();
-        if (result)
-            Debug.Log($"[Supabase] 자동 로그인 성공. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
-        else
+        if (!result)
+        {
             Debug.Log("[Supabase] 저장된 세션 없음 — 익명 로그인(Q) 또는 소셜 로그인(I)을 시도하세요.");
+            return;
+        }
+
+        // 자동 로그인과 데이터 로드는 별개 단계입니다 — 로그인 성공 후 직접 로드합니다(수동 로그인과 동일).
+        await Supabase.LoadAllUserSavesAsync();
+        Debug.Log($"[Supabase] 자동 로그인 + 로드 완료. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
     }
 
     private void OnDestroy()
@@ -448,6 +463,8 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     // 생성된 PlayerSave처럼 정적으로 호출하기 위한 래퍼. (생성기는 이 래퍼를 자동으로 emit합니다.)
     public static Task<TrueBase.Core.Common.SupabaseResult> LoadAsync() => Instance.LoadAsync();
     public static Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => Instance.DeleteAsync();
+    public static event Action OnLoaded { add => Instance.OnLoaded += value; remove => Instance.OnLoaded -= value; }
+    public static event Action OnFirstLoad { add => Instance.OnFirstLoad += value; remove => Instance.OnFirstLoad -= value; }
 
     // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
     [Serializable]

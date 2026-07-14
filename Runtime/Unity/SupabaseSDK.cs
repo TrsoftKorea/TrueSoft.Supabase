@@ -1434,14 +1434,15 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 자동 로그인 성공 후 UserSave 로드 전에 호출되는 후처리 훅입니다.
+        /// 자동 로그인 성공 후 호출되는 후처리 훅입니다.
         /// <see cref="TrueBase.Unity.Config.SupabaseRuntime"/>가 자신의 인스턴스 훅(<c>OnAfterAutoLoginAsync</c>)을 등록합니다(서브클래스 확장점).
         /// </summary>
         internal static System.Func<bool, Task<bool>> AfterAutoLoginHook;
 
         /// <summary>
-        /// 저장된 세션으로 자동 로그인 → 등록된 후처리 훅 → 전체 UserSave 로드를 순서대로 수행합니다.
-        /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리하고 UserSave 로드를 생략합니다.
+        /// 저장된 세션으로 자동 로그인 → 등록된 후처리 훅을 수행합니다. <b>UserSave 로드는 포함하지 않습니다</b>
+        /// — 성공 후 <see cref="TryLoadAllUserSavesAsync"/>나 각 세이브의 LoadAsync를 직접 호출하세요(수동 로그인과 동일한 2단계).
+        /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리합니다.
         /// </summary>
         public static async Task<SupabaseResult> TryTriggerAutoLoginAsync()
         {
@@ -1451,9 +1452,6 @@ namespace TrueBase.Unity
             if (ok && hook != null)
                 if (!await hook(ok))
                     ok = SupabaseResult.Fail(SupabaseFailReason.AfterAutoLoginFailed);
-
-            if (ok)
-                _ = await TryLoadAllUserSavesAsync();
 
             return ok;
         }

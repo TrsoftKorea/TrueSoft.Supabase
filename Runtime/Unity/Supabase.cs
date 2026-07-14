@@ -441,8 +441,9 @@ namespace TrueBase.Unity
         internal static Task<SupabaseResult> TryAutoLoginOnStartAsync() => SupabaseSDK.TryAutoLoginOnStartAsync();
 
         /// <summary>
-        /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅과 전체 UserSave 로드까지 수행합니다.
-        /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
+        /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅을 수행합니다.
+        /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <see cref="LoadAllUserSavesAsync"/>(또는 각 세이브의 LoadAsync)를 직접 호출하세요.
+        /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출합니다.
         /// </summary>
         public static Task<SupabaseResult> TriggerAutoLoginAsync() => SupabaseSDK.TryTriggerAutoLoginAsync();
 

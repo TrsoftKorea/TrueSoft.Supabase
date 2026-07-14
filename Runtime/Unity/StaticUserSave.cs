@@ -196,6 +196,13 @@ namespace TrueBase.Unity
         /// </summary>
         public event Action OnLoaded;
 
+        /// <summary>
+        /// 신규 유저(로드 시 DB에 본인 행이 없던 경우)의 <b>최초 로드</b>에서, 기본값이 적용된 직후·최초 저장 직전에 발행됩니다.
+        /// 여기서 초기값을 설정하면(예: <c>PlayerSave.Heroes[HeroName.A1].Count = 1</c>) 그 값이 서버에 저장됩니다.
+        /// <para>기존 유저 로드나 재로그인 시에는 발행되지 않습니다. 로그인 전에 한 번 구독하세요.</para>
+        /// </summary>
+        public event Action OnFirstLoad;
+
 
         /// <summary>
         /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
@@ -401,6 +408,9 @@ namespace TrueBase.Unity
 
             if (!success) return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
+            // DB에 본인 행이 없던 신규 유저면 아래에서 OnFirstLoad로 초기값 세팅 기회를 준다.
+            var isNewUser = !hasRow;
+
             if (!hasRow)
             {
                 var ensured = await Supabase.EnsureMyRowAsync<TRow>();
@@ -427,6 +437,17 @@ namespace TrueBase.Unity
             _lastSynced = DataSchema.CloneRow(row);
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
+
+            // 신규 유저: 개발자가 초기값을 세팅(OnFirstLoad)한 뒤 그 변경분을 즉시 서버에 저장.
+            // _lastSynced는 기본값 기준이므로 SaveIfChangedAsync가 변경분(예: A1 count=1)만 PATCH한다.
+            if (isNewUser && OnFirstLoad != null)
+            {
+                OnFirstLoad.Invoke();
+                var initSave = await SaveIfChangedAsync();
+                if (!initSave.IsSuccess)
+                    Debug.LogWarning($"{LogTag} 신규 유저 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 로드에서 재시도됩니다.");
+            }
+
             OnLoaded?.Invoke();
             return SupabaseResult.Ok;
         }

@@ -84,7 +84,7 @@ The SDK has three layers:
 ### User Saves (Diff Patching)
 
 - Decorate C# fields with `[DataColumn("db_column_name")]` to map to PostgREST columns. Omit the argument to use the member name as the column name.
-- Game-facing user-save API is `StaticUserSave<TRow>` and the generated wrapper class — not raw facade calls. Public methods: `LoadAsync()`, `SaveIfChangedAsync()`, `EnsureRowAsync()`, `RequestImmediateSave()`, `FlushNowAsync()` (all return `SupabaseResult`, no `Try` prefix), plus `MarkDirty()`.
+- Game-facing user-save API is `StaticUserSave<TRow>` and the generated wrapper class — not raw facade calls. Public methods: `LoadAsync()`, `SaveIfChangedAsync()`, `EnsureRowAsync()`, `RequestImmediateSave()`, `FlushNowAsync()` (all return `SupabaseResult`, no `Try` prefix), plus `MarkDirty()`. Events: `OnLoaded`(로드 성공 후), `OnFirstLoad`(신규 유저=DB 행 없던 최초 로드 시, 기본값 적용 후·첫 저장 전 — 여기서 초기값 세팅 시 diff가 서버에 저장됨).
 - Auto-syncs on dirty with cooldown. Use `RequestImmediateSave()` or `FlushNowAsync()` for critical moments (scene change, logout, app quit).
 - The attributed-load / diff-patch building blocks (`LoadUserDataAttributedAsync`, `LoadUserDataAttributedWithRowStateAsync`, `PatchUserDataDiffAsync`) are `internal` in `SupabaseSDK`/facade — `StaticUserSave` uses them internally to send only changed fields and skip the network when nothing changed.
 - **Newtonsoft.Json:** SDK uses Newtonsoft.Json for deserialization. `[DataColumn("other_name")]` changes the select/PATCH key but does NOT change deserialization. If DB column name ≠ C# field name, also add `[JsonProperty("db_column_name")]`.
@@ -106,7 +106,7 @@ The SDK has three layers:
 - Apple OAuth (ID token): `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)` — 외부 SDK 없이 토큰 직접 전달
 - Guest → Google linking: `TryLinkGoogleToCurrentAnonymousAsync()` or `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync()`. Must use these — calling plain `TrySignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.
 - Guest → Apple linking: `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
-- Session restore (수동): `Supabase.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출 (내부 orchestration은 `SupabaseSDK.TryTriggerAutoLoginAsync`, `SupabaseRuntime`이 `OnAfterAutoLoginAsync` 훅 등록)
+- Session restore (수동): `Supabase.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출. **세션 복원만 하고 UserSave 로드는 안 함**(수동 로그인과 동일하게 성공 후 `LoadAllUserSavesAsync`/`LoadAsync` 직접 호출). 내부 orchestration은 `SupabaseSDK.TryTriggerAutoLoginAsync`(로그인+`OnAfterAutoLoginAsync` 훅), `SupabaseRuntime`이 훅 등록
 - Sign-out: `TrySignOutFullyAsync()` (handles Android Google native logout + Supabase signout + anonymous recovery upsert).
 
 ### Table Names

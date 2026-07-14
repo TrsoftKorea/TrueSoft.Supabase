@@ -11,7 +11,8 @@
 var result = await Supabase.TriggerAutoLoginAsync();
 if (result.IsSuccess)
 {
-    // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
+    // 자동 로그인 성공 — 데이터 로드는 별개 단계입니다.
+    await Supabase.LoadAllUserSavesAsync();   // 또는 PlayerSave.LoadAsync()
     InitGame();
 }
 else
@@ -20,6 +21,10 @@ else
     ShowLoginScreen();
 }
 ```
+
+::: info 로그인과 로드는 별개 단계
+`TriggerAutoLoginAsync()`는 세션만 복원하고 유저 데이터는 로드하지 않습니다. 수동 로그인과 동일하게 성공 후 [로드](/guide/user-data/load)를 직접 호출하세요.
+:::
 
 ## 로그인 후 사용 가능한 값 {#after-login-values}
 

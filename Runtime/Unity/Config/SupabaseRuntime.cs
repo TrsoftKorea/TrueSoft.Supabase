@@ -102,7 +102,7 @@ namespace TrueBase.Unity.Config
         }
 
         /// <summary>
-        /// Supabase 자동 로그인 성공 후, UserSave 로드 전에 <see cref="Supabase.TriggerAutoLoginAsync"/> 내부에서 호출됩니다.
+        /// Supabase 자동 로그인 성공 후 <see cref="Supabase.TriggerAutoLoginAsync"/> 내부에서 호출됩니다(UserSave 로드는 이 이후 개발자가 직접 수행).
         /// 서브클래스에서 추가 세션 복원 로직을 구현하세요. false 반환 시 자동 로그인 실패로 처리됩니다.
         /// </summary>
         protected virtual Task<bool> OnAfterAutoLoginAsync(bool success) => Task.FromResult(success);

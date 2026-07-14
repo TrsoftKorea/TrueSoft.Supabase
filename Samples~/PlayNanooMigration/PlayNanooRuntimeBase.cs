@@ -184,92 +184,119 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
     }
 
+    // ── PlayNANOO 로그인 Task 래퍼 (병렬 실행용) ──────────────────────────────
+
+    /// <summary>PlayNANOO 로그인 결과. Ok=성공, ErrorCode=실패 시 PlayNANOO ErrorCode(예: 탈퇴 신청 중 "30007").</summary>
+    private readonly struct NanooSignInResult
+    {
+        public readonly bool Ok;
+        public readonly string ErrorCode;
+        public NanooSignInResult(bool ok, string errorCode) { Ok = ok; ErrorCode = errorCode; }
+    }
+
+    private static string ExtractNanooErrorCode(Dictionary<string, object> values)
+        => values != null && values.TryGetValue("ErrorCode", out var ec) ? ec?.ToString() : null;
+
+    /// <summary>콜백 기반 게스트 로그인을 await 가능하게 감쌉니다. HandleNanooCallback으로 PlayNANOO 상태를 세팅합니다.</summary>
+    private Task<NanooSignInResult> NanooGuestSignInAsync()
+    {
+        var tcs = new TaskCompletionSource<NanooSignInResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        NanooGuestSignIn((status, values) =>
+        {
+            var ok = HandleNanooCallback(status, values, "guest");
+            tcs.SetResult(new NanooSignInResult(ok, ExtractNanooErrorCode(values)));
+            return Task.CompletedTask;
+        });
+        return tcs.Task;
+    }
+
+    /// <summary>콜백 기반 소셜 로그인을 await 가능하게 감쌉니다.</summary>
+    private Task<NanooSignInResult> NanooSocialSignInAsync(string token, string accountType, string loginType)
+    {
+        var tcs = new TaskCompletionSource<NanooSignInResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        NanooSocialSignIn(token, accountType, (status, values) =>
+        {
+            var ok = HandleNanooCallback(status, values, loginType);
+            tcs.SetResult(new NanooSignInResult(ok, ExtractNanooErrorCode(values)));
+            return Task.CompletedTask;
+        });
+        return tcs.Task;
+    }
+
     // ── 인터셉터 구현 ─────────────────────────────────────────────────────────
 
     private async Task<SupabaseResult> InterceptSignInAnonymously(Func<Task<SupabaseResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooGuestSignIn(async (status, values) =>
+        // PlayNANOO·Supabase 로그인은 서로 독립적(입력 토큰만 공유, 결과 의존 없음)이라 동시에 실행해 지연을 줄입니다.
+        var nanooTask = NanooGuestSignInAsync();
+        var sdkTask   = sdkSignIn();
+        await Task.WhenAll(nanooTask, sdkTask);
+        var nanoo     = nanooTask.Result;
+        var sdkResult = sdkTask.Result;
+
+        if (nanoo.Ok && sdkResult.IsSuccess)
         {
-            if (!HandleNanooCallback(status, values, "guest"))
-            {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_guest_signin_failed"));
-                return;
-            }
-            var result = await sdkSignIn();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
+            return sdkResult;
+        }
+
+        // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
+        if (nanoo.Ok)
+        {
+            await RollbackNanooLoginAsync();
+            return sdkResult;
+        }
+
+        // PlayNANOO 실패 → 병렬로 이미 생성된 Supabase 세션이 있으면 정리
+        if (sdkResult.IsSuccess)
+            await Supabase.SignOutFullyAsync();
+        return SupabaseResult.Fail("playnanoo_guest_signin_failed");
     }
 
-    private async Task<SupabaseResult> InterceptSignInWithGoogleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
-    {
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
-        {
-            if (!HandleNanooCallback(status, values, "google"))
-            {
-                // 30007: 탈퇴 신청 중 — Supabase도 호출해 취소 토큰을 발급·저장해 둠(세션은 게이트가 정리)
-                if (values != null && values.TryGetValue("ErrorCode", out var ecObjG) && ecObjG?.ToString() == "30007")
-                {
-                    await sdkSignIn();
-                    tcs.SetResult(SupabaseResult.Fail("playnanoo_google_signin_failed"));
-                    return;
-                }
-                // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
-                var sdkResult = await sdkSignIn();
-                if (!sdkResult.IsSuccess) { tcs.SetResult(sdkResult); return; }
-                if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google"))
-                {
-                    await Supabase.SignOutFullyAsync();
-                    tcs.SetResult(SupabaseResult.Fail("playnanoo_google_signin_failed"));
-                    return;
-                }
-                tcs.SetResult(sdkResult);
-                return;
-            }
-            var result = await sdkSignIn();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
-            await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
-    }
+    private Task<SupabaseResult> InterceptSignInWithGoogleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
+        => InterceptSocialSignInAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google", "playnanoo_google_signin_failed", sdkSignIn);
 
-    private async Task<SupabaseResult> InterceptSignInWithAppleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
+    private Task<SupabaseResult> InterceptSignInWithAppleIdToken(string token, Func<Task<SupabaseResult>> sdkSignIn)
+        => InterceptSocialSignInAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple", "playnanoo_apple_signin_failed", sdkSignIn);
+
+    /// <summary>구글·애플 공통 소셜 로그인 인터셉터. PlayNANOO·Supabase 로그인을 동시에 실행한 뒤 결과를 재조정합니다.</summary>
+    private async Task<SupabaseResult> InterceptSocialSignInAsync(
+        string token, string accountType, string loginType, string failReason,
+        Func<Task<SupabaseResult>> sdkSignIn)
     {
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
+        // 둘 다 같은 id token만 입력으로 쓰고 서로의 결과에 의존하지 않으므로 동시에 실행합니다(둘 다 성공 시 max(두 왕복)).
+        var nanooTask = NanooSocialSignInAsync(token, accountType, loginType);
+        var sdkTask   = sdkSignIn();
+        await Task.WhenAll(nanooTask, sdkTask);
+        var nanoo     = nanooTask.Result;
+        var sdkResult = sdkTask.Result;
+
+        if (nanoo.Ok && sdkResult.IsSuccess)
         {
-            if (!HandleNanooCallback(status, values, "apple"))
-            {
-                // 30007: 탈퇴 신청 중 — Supabase도 호출해 취소 토큰을 발급·저장해 둠(세션은 게이트가 정리)
-                if (values != null && values.TryGetValue("ErrorCode", out var ecObjA) && ecObjA?.ToString() == "30007")
-                {
-                    await sdkSignIn();
-                    tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_signin_failed"));
-                    return;
-                }
-                // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase로 재가입 흐름 진행
-                var sdkResult = await sdkSignIn();
-                if (!sdkResult.IsSuccess) { tcs.SetResult(sdkResult); return; }
-                if (!await RetryNanooSignInAfterRecreateAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple"))
-                {
-                    await Supabase.SignOutFullyAsync();
-                    tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_signin_failed"));
-                    return;
-                }
-                tcs.SetResult(sdkResult);
-                return;
-            }
-            var result = await sdkSignIn();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
+            return sdkResult;
+        }
+
+        // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
+        if (nanoo.Ok)
+        {
+            await RollbackNanooLoginAsync();
+            return sdkResult;
+        }
+
+        // 30007: 탈퇴 신청 중 — Supabase 호출(취소 토큰 발급)은 이미 병렬로 됨. 세션은 게이트가 정리.
+        if (nanoo.ErrorCode == "30007")
+            return SupabaseResult.Fail(failReason);
+
+        // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase 재가입(이미 병렬 실행) → PlayNANOO 재로그인
+        if (!sdkResult.IsSuccess)
+            return sdkResult;
+        if (!await RetryNanooSignInAfterRecreateAsync(token, accountType, loginType))
+        {
+            await Supabase.SignOutFullyAsync();
+            return SupabaseResult.Fail(failReason);
+        }
+        return sdkResult;
     }
 
     private Task<bool> RetryNanooSignInAfterRecreateAsync(string token, string accountType, string loginType)
