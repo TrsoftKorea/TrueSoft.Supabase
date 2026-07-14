@@ -208,11 +208,12 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else     Debug.Log("[Supabase] 데이터 저장 완료.");
     }
 
-    /// <summary>F — 레벨을 1 올립니다. MarkDirty 자동 호출 → 쿨타임 후 자동 저장됩니다.</summary>
+    /// <summary>F — 레벨 +1, 그리고 영웅 1번 레벨 +1(AutoDict 자동 확장 시연). 변경은 자동 저장에 반영됩니다.</summary>
     private void IncrementLevel()
     {
         SamplePlayerSave.Level += 1;
-        Debug.Log($"[Supabase] Level = {SamplePlayerSave.Level} (dirty — 쿨타임 후 자동 저장)");
+        SamplePlayerSave.Heroes[1].level += 1;   // 없는 키 → new SampleHero(1, 0) 자동 생성 후 그 자리에서 수정
+        Debug.Log($"[Supabase] Level={SamplePlayerSave.Level}, Hero[1].level={SamplePlayerSave.Heroes[1].level} (자동 저장 예약)");
     }
 
     /// <summary>
@@ -225,11 +226,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         var ok = await SamplePlayerSave.Instance.DeleteAsync();
         if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorMessage}"); return; }
-        Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
+        Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}");
 
         var loaded = await SamplePlayerSave.Instance.LoadAsync();
         Debug.Log(loaded
-            ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}"
+            ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}"
             : "[Supabase] 재로드 실패.");
     }
 
@@ -450,6 +451,21 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     {
         [DataColumn("level")] internal int level;
         [DataColumn("coins")] internal int coins;
+
+        // AutoDict 클래스 값 데모 — 없는 키를 읽으면 [AutoDefault(1, 0)]로 new SampleHero(1, 0)이 그 자리에 생성됩니다.
+        // [DataColumn]이 없어 DB에 저장/조회되지 않는 로컬 전용 필드입니다(컬럼 없이도 샘플이 동작).
+        // 실제로 서버에 저장하려면 [DataColumn("컬럼명")] [JsonProperty("컬럼명")]을 붙이고 user_data에 그 jsonb 컬럼을 추가하세요.
+        [AutoDefault(1, 0)]
+        internal AutoDict<int, SampleHero> heroes = new AutoDict<int, SampleHero>();
+    }
+
+    /// <summary>AutoDict 값으로 쓰는 커스텀 클래스. 파라미터 없는 생성자(역직렬화용)와 [AutoDefault] 인자용 생성자를 둡니다.</summary>
+    public sealed class SampleHero
+    {
+        public int count;
+        public int level;
+        public SampleHero() { }
+        public SampleHero(int count, int level) { this.count = count; this.level = level; }
     }
 
     public static int Level
@@ -462,5 +478,12 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     {
         get => Instance.Current.coins;
         set { if (Instance.Current.coins == value) return; Instance.Current.coins = value; Instance.MarkDirty(); }
+    }
+
+    /// <summary>영웅별 클래스 값 세이브. <c>Heroes[id].level += 1</c>처럼 없는 키도 바로 쓸 수 있습니다.</summary>
+    public static AutoDict<int, SampleHero> Heroes
+    {
+        get => Instance.Current.heroes;
+        set { Instance.Current.heroes = value ?? new AutoDict<int, SampleHero>(); Instance.MarkDirty(); }
     }
 }

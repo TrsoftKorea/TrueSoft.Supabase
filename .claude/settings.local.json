@@ -25,7 +25,8 @@
       "mcp__retool__retool_publish_react_app",
       "mcp__605db488-cfc3-4373-857d-df02212ae103__retool_read_react_app_files",
       "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__list_projects",
-      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__apply_migration"
+      "mcp__93b0ff91-a5f3-4881-b3ec-683468f0c460__apply_migration",
+      "Bash(node -e ' *)"
     ]
   }
 }
