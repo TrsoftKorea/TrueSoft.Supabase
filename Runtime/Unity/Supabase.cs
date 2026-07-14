@@ -186,7 +186,7 @@ namespace TrueBase.Unity
             var r = await PatchUserDataAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorMessage);
+                : SupabaseResult.Fail(r?.ErrorCode);
         }
 
         /// <inheritdoc cref="SupabaseSDK.LoadUserDataColumnsAsync{T}(string, string)"/>
@@ -437,11 +437,14 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFullyAsync"/>
         public static Task<SupabaseResult> SignOutFullyAsync() => SupabaseSDK.TrySignOutFullyAsync();
 
-        /// <summary>현재 세션을 기기에 저장. 앱 재시작 후 RestoreSessionAsync로 복원 가능.</summary>
-        public static void SaveSessionToStorage() => SupabaseSDK.SaveSessionToStorage();
-
         /// <summary>앱 시작 자동 로그인 정책(로그아웃/이전 계정 정보 여부)을 적용해 자동 로그인을 시도합니다(내부 API).</summary>
         internal static Task<SupabaseResult> TryAutoLoginOnStartAsync() => SupabaseSDK.TryAutoLoginOnStartAsync();
+
+        /// <summary>
+        /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅과 전체 UserSave 로드까지 수행합니다.
+        /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
+        /// </summary>
+        public static Task<SupabaseResult> TriggerAutoLoginAsync() => SupabaseSDK.TryTriggerAutoLoginAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryRestoreSessionAsync"/>
         public static Task<SupabaseResult> RestoreSessionAsync() => SupabaseSDK.TryRestoreSessionAsync();
@@ -481,6 +484,27 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedItemMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null, string category = null) =>
             SupabaseSDK.TryGetUnclaimedItemMailCountAsync(userId, category);
+
+        /// <summary>
+        /// 우편 보상 아이템(<c>items[].key</c>)을 게임에 지급하는 핸들러를 등록합니다. 앱 시작 시 키마다 1회 등록하세요.
+        /// 수령 RPC 성공 후 등록된 핸들러가 순서대로 호출됩니다.
+        /// </summary>
+        public static SupabaseResult RegisterMailItemHandler(IMailItemHandler handler)
+        {
+            if (handler == null || string.IsNullOrWhiteSpace(handler.ItemKey))
+                return SupabaseResult.Fail(SupabaseFailReason.MailItemHandlerInvalid);
+            MailItemHandlerRegistry.Register(handler);
+            return SupabaseResult.Ok;
+        }
+
+        /// <summary>등록된 우편 아이템 핸들러를 해제합니다.</summary>
+        public static SupabaseResult UnregisterMailItemHandler(string itemKey)
+        {
+            if (string.IsNullOrWhiteSpace(itemKey))
+                return SupabaseResult.Fail(SupabaseFailReason.MailItemHandlerInvalid);
+            MailItemHandlerRegistry.Unregister(itemKey);
+            return SupabaseResult.Ok;
+        }
 
         /// <summary>우편함 파사드(<c>SupabaseSDK.Mailbox</c>와 동일 인스턴스).</summary>
         internal static MailboxFacade Mailbox => SupabaseSDK.Mailbox;

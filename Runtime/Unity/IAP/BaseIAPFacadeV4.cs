@@ -1,6 +1,7 @@
 #if !UNITY_IAP_V5
 using System;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using UnityEngine;
 using UnityEngine.Purchasing;
 
@@ -48,18 +49,18 @@ namespace TrueBase.Unity
         /// </summary>
         /// <param name="productIds">등록할 소모품(Consumable) 상품 ID 목록.</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
-        public async Task<bool> InitializeAsync(string[] productIds, int timeoutMs = 10_000)
+        public async Task<SupabaseResult> InitializeAsync(string[] productIds, int timeoutMs = 10_000)
         {
             if (_disposed)
             {
                 Debug.LogWarning($"{LogTag} Disposed 상태에서 InitializeAsync를 호출했습니다.");
-                return false;
+                return SupabaseResult.Fail(SupabaseFailReason.IapDisposed);
             }
 
             if (productIds == null || productIds.Length == 0)
             {
                 Debug.LogWarning($"{LogTag} productIds가 비어 있습니다.");
-                return false;
+                return SupabaseResult.Fail(SupabaseFailReason.IapProductIdsEmpty);
             }
 
             _isInitialized = false;
@@ -77,10 +78,12 @@ namespace TrueBase.Unity
             if (completedTask == timeoutTask)
             {
                 Debug.LogWarning($"{LogTag} 초기화 타임아웃.");
-                return false;
+                return SupabaseResult.Fail(SupabaseFailReason.IapInitTimeout);
             }
 
-            return await _initTcs.Task;
+            return await _initTcs.Task
+                ? SupabaseResult.Ok
+                : SupabaseResult.Fail(SupabaseFailReason.IapInitFailed);
         }
 
         /// <summary>

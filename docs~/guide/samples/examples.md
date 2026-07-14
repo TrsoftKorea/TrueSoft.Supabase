@@ -77,11 +77,13 @@ await Supabase.SaveAllAsync(timeoutMs: 5000);           // 즉시 저장
 
 ```csharp
 // 1. 로그인 후 IAP 초기화
-_iapFacade = await SupabaseIAP.CreateIAPAsync(
+var result = await SupabaseIAP.CreateIAPAsync(
     productIds: new[] { productId },
     onGrant:    OnGrantItemAsync,
     onFailed:   OnPurchaseFailed,
     timeoutMs:  10_000);
+if (!result.IsSuccess) return;
+_iapFacade = result.Data;
 
 // 2. 구매 시작
 _iapFacade.Purchase(productId);

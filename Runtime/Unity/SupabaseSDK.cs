@@ -157,15 +157,15 @@ namespace TrueBase.Unity
 
         private readonly struct AnonymousRecoveryResult
         {
-            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string errorMessage = null, SupabaseBanInfo banInfo = null)
+            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string reason = null, SupabaseBanInfo banInfo = null)
             {
                 Kind = kind;
-                ErrorMessage = errorMessage;
+                Reason = reason;
                 BanInfo = banInfo;
             }
 
             public AnonymousRecoveryKind Kind { get; }
-            public string ErrorMessage { get; }
+            public string Reason { get; }
             public SupabaseBanInfo BanInfo { get; }
         }
 
@@ -483,7 +483,7 @@ namespace TrueBase.Unity
                 nonce: null,
                 oauthAccessToken: googleAccessToken);
             if (linked == null || !linked.IsSuccess || linked.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "google_link_failed");
+                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorCode ?? "google_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleLinkNotCleared);
@@ -536,7 +536,7 @@ namespace TrueBase.Unity
             var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
             var loginResult = await RequestGoogleLoginResultAsync(provider);
             if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
 
             if (string.IsNullOrWhiteSpace(loginResult.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.GoogleIdTokenEmpty);
@@ -546,7 +546,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithGoogleIdTokenAsync(idToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "google_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_signin_failed");
         }
 
         /// <summary>
@@ -568,13 +568,13 @@ namespace TrueBase.Unity
             var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
             var loginResult = await RequestGoogleLoginResultAsync(provider);
             if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
 
             var google = loginResult.Data;
             var ok = await TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.GoogleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseFailReason.GoogleLinkFailed);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
@@ -594,13 +594,13 @@ namespace TrueBase.Unity
             var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
             var loginResult = await RequestGoogleLoginResultAsync(provider);
             if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorMessage ?? "google_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
 
             var google = loginResult.Data;
             var ok = await TryLinkGoogleWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "google_link_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_link_failed");
         }
 
         /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -682,7 +682,7 @@ namespace TrueBase.Unity
 
             var r = await Auth.UnlinkIdentityByProviderAsync(s.AccessToken, provider);
             if (r == null || !r.IsSuccess)
-                return SupabaseResult<bool>.Fail(r?.ErrorMessage ?? SupabaseFailReason.UnlinkFailed);
+                return SupabaseResult<bool>.Fail(r?.ErrorCode ?? SupabaseFailReason.UnlinkFailed);
 
             // identity 변경을 세션(linked_providers)에 반영하기 위해 갱신합니다.
             if (!string.IsNullOrWhiteSpace(s.RefreshToken))
@@ -832,7 +832,7 @@ namespace TrueBase.Unity
         {
             var linked = await Auth.LinkIdentityWithIdTokenAsync(session.AccessToken, "apple", idToken.Trim(), rawNonce, null);
             if (linked == null || !linked.IsSuccess || linked.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorMessage ?? "apple_link_failed");
+                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorCode ?? "apple_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleLinkNotCleared);
@@ -922,7 +922,7 @@ namespace TrueBase.Unity
             var rawNonce = GenerateRawNonce();
             var login = await RequestAppleLoginResultAsync(rawNonce);
             if (login == null || !login.IsSuccess || login.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorCode ?? "apple_signin_failed");
 
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
@@ -930,7 +930,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? "apple_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "apple_signin_failed");
         }
 
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -945,7 +945,7 @@ namespace TrueBase.Unity
             var rawNonce = GenerateRawNonce();
             var login = await RequestAppleLoginResultAsync(rawNonce);
             if (login == null || !login.IsSuccess || login.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorCode ?? "apple_signin_failed");
 
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
@@ -953,7 +953,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleToCurrentAnonymousWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseFailReason.AppleLinkFailed);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -968,7 +968,7 @@ namespace TrueBase.Unity
             var rawNonce = GenerateRawNonce();
             var login = await RequestAppleLoginResultAsync(rawNonce);
             if (login == null || !login.IsSuccess || login.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorMessage ?? "apple_signin_failed");
+                return SupabaseResult<SupabaseSession>.Fail(login?.ErrorCode ?? "apple_signin_failed");
 
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.AppleIdTokenEmpty);
@@ -976,7 +976,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorMessage ?? SupabaseFailReason.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseFailReason.AppleLinkFailed);
         }
 
         /// <summary>
@@ -1238,7 +1238,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.LoadAttributedWithRowStateAsync<T>(includeUpdatedAt);
         }
@@ -1252,7 +1252,7 @@ namespace TrueBase.Unity
         {
             var r = await LoadUserDataAttributedWithRowStateAsync<T>(includeUpdatedAt);
             var ok = r != null && r.IsSuccess;
-            LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorMessage);
+            LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorCode);
             if (!ok)
             {
                 var d = defaultWhenFailed ?? new T();
@@ -1271,7 +1271,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseFailReason.SelectColumnsEmpty);
@@ -1287,7 +1287,7 @@ namespace TrueBase.Unity
         {
             var r = await LoadUserDataColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
             var ok = r != null && r.IsSuccess;
-            LogApiResult(ApiLogTags.UserDataLoadColumnsRowState, ok, ok ? null : r?.ErrorMessage);
+            LogApiResult(ApiLogTags.UserDataLoadColumnsRowState, ok, ok ? null : r?.ErrorCode);
             if (!ok)
             {
                 var d = defaultWhenFailed ?? new T();
@@ -1319,7 +1319,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.DeleteMyRowAsync<T>();
         }
@@ -1406,7 +1406,7 @@ namespace TrueBase.Unity
         {
             var r = await GetRemoteConfigAsync<T>(key, maxStale);
             var ok = r.IsSuccess;
-            LogApiResult(ApiLogTags.RemoteConfigGet, ok, ok ? null : r.ErrorMessage ?? "remote_config_get_failed");
+            LogApiResult(ApiLogTags.RemoteConfigGet, ok, ok ? null : r.ErrorCode ?? "remote_config_get_failed");
             return (ok, ok ? r.Data : null);
         }
 
@@ -1431,6 +1431,31 @@ namespace TrueBase.Unity
 
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
             return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseFailReason.AutoLoginFailed);
+        }
+
+        /// <summary>
+        /// 자동 로그인 성공 후 UserSave 로드 전에 호출되는 후처리 훅입니다.
+        /// <see cref="TrueBase.Unity.Config.SupabaseRuntime"/>가 자신의 인스턴스 훅(<c>OnAfterAutoLoginAsync</c>)을 등록합니다(서브클래스 확장점).
+        /// </summary>
+        internal static System.Func<bool, Task<bool>> AfterAutoLoginHook;
+
+        /// <summary>
+        /// 저장된 세션으로 자동 로그인 → 등록된 후처리 훅 → 전체 UserSave 로드를 순서대로 수행합니다.
+        /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리하고 UserSave 로드를 생략합니다.
+        /// </summary>
+        public static async Task<SupabaseResult> TryTriggerAutoLoginAsync()
+        {
+            var ok = await TryAutoLoginOnStartAsync();
+
+            var hook = AfterAutoLoginHook;
+            if (ok && hook != null)
+                if (!await hook(ok))
+                    ok = SupabaseResult.Fail(SupabaseFailReason.AfterAutoLoginFailed);
+
+            if (ok)
+                _ = await TryLoadAllUserSavesAsync();
+
+            return ok;
         }
 
         /// <summary>
@@ -1459,16 +1484,16 @@ namespace TrueBase.Unity
         private static SupabaseResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
             return ok ? SupabaseResult.Ok
-                      : SupabaseResult.Fail(result?.ErrorMessage, result?.BanInfo);
+                      : SupabaseResult.Fail(result?.ErrorCode, result?.BanInfo);
         }
 
         /// <summary>결과를 성공/실패 로그로 남기고, 성공이면 <c>Data</c>를, 실패면 <paramref name="defaultValue"/>를 반환합니다.</summary>
         private static T LogAndReturnData<T>(string logTag, SupabaseResult<T> result, T defaultValue)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
             return ok ? result.Data : defaultValue;
         }
 
@@ -1476,7 +1501,7 @@ namespace TrueBase.Unity
         private static SupabaseResult<T> LogAndReturnResult<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorMessage);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
             return result ?? SupabaseResult<T>.Fail("null_result");
         }
 
@@ -1597,7 +1622,7 @@ namespace TrueBase.Unity
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.WithdrawalGateBlocked);
                 if (recovery.Kind == AnonymousRecoveryKind.GuardFailed)
                     return SupabaseResult<SupabaseSession>.Fail(
-                        string.IsNullOrWhiteSpace(recovery.ErrorMessage) ? "withdrawal_guard_failed" : recovery.ErrorMessage);
+                        string.IsNullOrWhiteSpace(recovery.ErrorCode) ? "withdrawal_guard_failed" : recovery.ErrorCode);
                 if (recovery.Kind == AnonymousRecoveryKind.Banned)
                     return SupabaseResult<SupabaseSession>.Fail("user_banned", recovery.BanInfo);
                 if (recovery.Kind == AnonymousRecoveryKind.Restored && IsLoggedIn)
@@ -1794,7 +1819,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.GetMyMailsAsync(limit, offset, category);
         }
@@ -1804,7 +1829,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<Mail>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<Mail>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.GetMailDetailAsync(mailId);
         }
@@ -1814,7 +1839,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.ClaimMailItemsAsync(mailId);
         }
@@ -1824,7 +1849,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.ClaimAllMailItemsAsync(category);
         }
@@ -1834,7 +1859,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.DeleteMailAsync(mailId);
         }
@@ -1844,7 +1869,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.DeleteReadMailsAsync(category);
         }
@@ -1854,7 +1879,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<MailInboxCounts>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<MailInboxCounts>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.GetInboxCountsAsync();
         }
@@ -1864,7 +1889,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.GetUnreadCountAsync(userId, category);
         }
@@ -1874,7 +1899,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<int>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await Mailbox.GetUnclaimedItemMailCountAsync(userId, category);
         }
@@ -1911,8 +1936,8 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryDeleteMailAsync(string mailId)
         {
             var r = await DeleteMailAsync(mailId);
-            LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorMessage);
-            return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorMessage);
+            LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorCode);
+            return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
         /// <inheritdoc cref="DeleteReadMailsAsync"/>
@@ -1951,7 +1976,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.EnsureMyRowAsync<T>();
         }
@@ -1967,7 +1992,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.PatchAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
         }
@@ -1981,7 +2006,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<T>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<T>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
                 return SupabaseResult<T>.Fail(SupabaseFailReason.SelectColumnsEmpty);
@@ -1996,7 +2021,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<T>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<T>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.LoadAttributedAsync<T>(includeUpdatedAt);
         }
@@ -2012,7 +2037,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.PatchDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
         }
@@ -2025,7 +2050,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<string>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await _bootstrap.PublicProfileService.GetDisplayNameAsync(_currentSession?.AccessToken ?? "", userId);
         }
@@ -2035,7 +2060,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.EdgeFunctionsService == null)
                 return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
@@ -2061,7 +2086,7 @@ namespace TrueBase.Unity
 
             if (result == null || !result.IsSuccess || result.Data == null)
                 return SupabaseResult<bool>.Fail(
-                    ExtractEdgeFunctionReason(result?.ErrorMessage) ?? result?.ErrorMessage ?? "display_name_set_failed");
+                    ExtractEdgeFunctionReason(result?.ErrorCode) ?? result?.ErrorCode ?? "display_name_set_failed");
 
             if (!result.Data.ok)
                 return SupabaseResult<bool>.Fail(string.IsNullOrWhiteSpace(result.Data.reason) ? "display_name_set_failed" : result.Data.reason);
@@ -2100,8 +2125,8 @@ namespace TrueBase.Unity
             if (!r.IsSuccess)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] Failed: {FormatLogDetail(r.ErrorMessage?.Trim() ?? "unknown_error")}");
-                return SupabaseResult.Fail(r.ErrorMessage);
+                    Debug.LogError($"[{ApiLogTags.ProfileMyDisplayNameSet}] Failed: {FormatLogDetail(r.ErrorCode?.Trim() ?? "unknown_error")}");
+                return SupabaseResult.Fail(r.ErrorCode);
             }
             if (_enableApiResultLogs)
             {
@@ -2120,7 +2145,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             var selfAccountId = _currentSession?.User?.Id;
             var accessToken = _currentSession?.AccessToken ?? "";
@@ -2141,8 +2166,8 @@ namespace TrueBase.Unity
             var r = await IsDisplayNameAvailableAsync(displayName);
             if (r == null || !r.IsSuccess)
             {
-                LogApiResult(ApiLogTags.ProfileDisplayNameAvailable, false, r?.ErrorMessage ?? "unknown");
-                return SupabaseResult.Fail(r?.ErrorMessage ?? "unknown");
+                LogApiResult(ApiLogTags.ProfileDisplayNameAvailable, false, r?.ErrorCode ?? "unknown");
+                return SupabaseResult.Fail(r?.ErrorCode ?? "unknown");
             }
 
             if (!r.Data)
@@ -2183,7 +2208,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<MyServerInfo>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<MyServerInfo>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             var svc = _bootstrap?.PublicProfileService;
             if (svc == null)
@@ -2204,7 +2229,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             var svc = _bootstrap?.PublicProfileService;
             if (svc == null)
@@ -2228,7 +2253,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<PublicProfileSnapshot>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<PublicProfileSnapshot>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await _bootstrap.PublicProfileService.GetProfileAsync(_currentSession.AccessToken, userId);
         }
@@ -2245,7 +2270,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
@@ -2264,7 +2289,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
@@ -2290,7 +2315,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
@@ -2302,7 +2327,7 @@ namespace TrueBase.Unity
                 delayInt);
 
             if (request == null || !request.IsSuccess)
-                return SupabaseResult<bool>.Fail(request?.ErrorMessage ?? "withdrawal_request_failed");
+                return SupabaseResult<bool>.Fail(request?.ErrorCode ?? "withdrawal_request_failed");
 
             // 로컬 refresh_token을 지우기 전에 서버에 복구용 refresh를 남겨, 다음 익명 로그인 시 동일 auth 계정으로 복구되게 합니다.
             await TryUpsertAnonymousRecoveryTokenAsync(_currentSession);
@@ -2369,7 +2394,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<MyWithdrawalStatus>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<MyWithdrawalStatus>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<MyWithdrawalStatus>.Fail(SupabaseFailReason.NotInitialized);
@@ -2392,14 +2417,14 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<string>.Fail(ready.ErrorMessage ?? "auth_not_signed_in");
+                return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             if (_bootstrap?.EdgeFunctionsService == null)
                 return SupabaseResult<string>.Fail(SupabaseFailReason.NotInitialized);
 
             var issue = await RequestWithdrawalCancelTokenCoreAsync(_currentSession.AccessToken);
             if (issue == null || !issue.IsSuccess || issue.Data == null)
-                return SupabaseResult<string>.Fail(issue?.ErrorMessage ?? "withdrawal_cancel_issue_failed");
+                return SupabaseResult<string>.Fail(issue?.ErrorCode ?? "withdrawal_cancel_issue_failed");
 
             return SupabaseResult<string>.Success(issue.Data.CancelToken);
         }
@@ -2436,11 +2461,11 @@ namespace TrueBase.Unity
 
             if (result == null || !result.IsSuccess || result.Data == null)
             {
-                var err = result?.ErrorMessage ?? "withdrawal_cancel_redeem_failed";
+                var err = result?.ErrorCode ?? "withdrawal_cancel_redeem_failed";
                 if (err.IndexOf("Missing authorization header", StringComparison.OrdinalIgnoreCase) >= 0)
                     return SupabaseResult<bool>.Fail(SupabaseFailReason.WithdrawalCancelJwtVerifyMustBeOff);
 
-                return SupabaseResult<bool>.Fail(result?.ErrorMessage ?? "withdrawal_cancel_redeem_failed");
+                return SupabaseResult<bool>.Fail(result?.ErrorCode ?? "withdrawal_cancel_redeem_failed");
             }
 
             if (!result.Data.ok)
@@ -2651,7 +2676,7 @@ namespace TrueBase.Unity
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                    Debug.LogWarning($"{tag} {result.ErrorCode}");
                 return (false, default);
             }
             return (true, result.Data);
@@ -2688,7 +2713,7 @@ namespace TrueBase.Unity
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                    Debug.LogWarning($"{tag} {result.ErrorCode}");
                 return (false, default);
             }
             return (true, result.Data);
@@ -2729,7 +2754,7 @@ namespace TrueBase.Unity
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
-                    Debug.LogWarning($"{tag} {result.ErrorMessage}");
+                    Debug.LogWarning($"{tag} {result.ErrorCode}");
                 return (false, default);
             }
             return (true, result.Data);
@@ -2873,8 +2898,8 @@ namespace TrueBase.Unity
             OnDuplicateLoginDetected?.Invoke();
         }
 
-        /// <summary>현재 세션의 refresh_token을 PlayerPrefs에 저장. 앱 재시작 후 RestoreSessionAsync로 복원할 수 있습니다.</summary>
-        public static void SaveSessionToStorage()
+        /// <summary>내부: 현재 세션의 refresh_token을 PlayerPrefs에 저장. 로그인/연동/세션 갱신 성공 시 SDK가 자동 호출합니다.</summary>
+        internal static void SaveSessionToStorage()
         {
             if (_currentSession == null || string.IsNullOrWhiteSpace(_currentSession.RefreshToken))
                 return;
@@ -3069,7 +3094,7 @@ namespace TrueBase.Unity
                 new WithdrawalCancelIssueRequest { trigger = trigger });
 
             if (result == null || !result.IsSuccess || result.Data == null)
-                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(result?.ErrorMessage ?? "withdrawal_cancel_issue_failed");
+                return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(result?.ErrorCode ?? "withdrawal_cancel_issue_failed");
 
             if (!result.Data.ok)
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(
@@ -3252,7 +3277,7 @@ namespace TrueBase.Unity
 
             if (result == null || !result.IsSuccess)
             {
-                Debug.LogWarning("[Supabase] withdrawal guard 호출 실패: " + (result?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] withdrawal guard 호출 실패: " + (result?.ErrorCode ?? "unknown"));
                 return false;
             }
 
@@ -3287,7 +3312,7 @@ namespace TrueBase.Unity
             var refreshResult = await RefreshSessionAsync(tokenResult.Data);
             if (refreshResult == null || refreshResult.IsSuccess == false || refreshResult.Data == null)
             {
-                if (refreshResult?.ErrorMessage?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (refreshResult?.ErrorCode?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     var accountId = PlayerPrefs.GetString(AccountIdPlayerPrefsKey, null);
                     var banInfo = string.IsNullOrWhiteSpace(accountId) ? null : await FetchBanInfoAsync(accountId);
@@ -3305,7 +3330,7 @@ namespace TrueBase.Unity
             if (guarded != null)
             {
                 if (!guarded.IsSuccess)
-                    return new AnonymousRecoveryResult(AnonymousRecoveryKind.GuardFailed, guarded.ErrorMessage);
+                    return new AnonymousRecoveryResult(AnonymousRecoveryKind.GuardFailed, guarded.ErrorCode);
                 // 재생성 등으로 세션이 바뀐 경우에도 복구 경로는 완료된 것으로 본다.
             }
 
@@ -3445,7 +3470,7 @@ namespace TrueBase.Unity
                 var r = await svc.EnsureMyProfileRowAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
                 if (r == null || !r.IsSuccess)
                 {
-                    Debug.LogWarning("[Supabase] 프로필 행 생성 실패: " + (r?.ErrorMessage ?? "unknown"));
+                    Debug.LogWarning("[Supabase] 프로필 행 생성 실패: " + (r?.ErrorCode ?? "unknown"));
                     return;
                 }
 
@@ -3469,7 +3494,7 @@ namespace TrueBase.Unity
 
                 var moved = await svc.TransferMyServerAsync(s.AccessToken, selectedCode, "sdk_signin_server_sync");
                 if (moved == null || !moved.IsSuccess)
-                    Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorMessage ?? "unknown"));
+                    Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorCode ?? "unknown"));
                 else
                     _myProfile = new PublicProfileSnapshot(
                         _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
@@ -3518,14 +3543,14 @@ namespace TrueBase.Unity
             var upd = await Auth.UpdateUserMetadataDisplayNameAsync(s.AccessToken, def);
             if (upd == null || !upd.IsSuccess)
             {
-                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 메타데이터 초기화 실패: " + (upd?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 메타데이터 초기화 실패: " + (upd?.ErrorCode ?? "unknown"));
                 return;
             }
 
             var refr = await Auth.RefreshSessionAsync(s.RefreshToken);
             if (refr == null || !refr.IsSuccess || refr.Data == null)
             {
-                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 업데이트 후 세션 갱신 실패: " + (refr?.ErrorMessage ?? "unknown"));
+                Debug.LogWarning("[Supabase] Google 신규 유저: 닉네임 업데이트 후 세션 갱신 실패: " + (refr?.ErrorCode ?? "unknown"));
                 return;
             }
 

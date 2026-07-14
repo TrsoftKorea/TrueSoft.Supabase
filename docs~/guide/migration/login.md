@@ -20,7 +20,7 @@ playNanooRuntime.StartAppleSignInAndroid();
 
 ## 자동 로그인
 
-`SupabaseRuntime.TriggerAutoLoginAsync()`는 플레이나누 런타임이 있을 때 두 세션을 모두 복원합니다.
+`Supabase.TriggerAutoLoginAsync()`는 플레이나누 런타임이 있을 때 두 세션을 모두 복원합니다.
 
 1. Supabase 리프레시 토큰으로 세션 복원
 2. 저장된 플레이나누 액세스 토큰으로 `TokenSignIn` 호출

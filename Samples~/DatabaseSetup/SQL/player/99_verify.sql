@@ -39,6 +39,7 @@ from (
       ('mails'),
       ('mail_batches'),
       ('mail_schedules'),
+      ('mail_categories'),
       ('game_items'),
       ('purchases'),
       ('withdrawal_delete_queue'),

@@ -60,15 +60,20 @@ public sealed class SampleIAPScenarios : MonoBehaviour
 
     private async Task InitializeIAPAsync()
     {
-        _iapFacade = await SupabaseIAP.CreateIAPAsync(
+        var result = await SupabaseIAP.CreateIAPAsync(
             productIds: new[] { productId },
             onGrant:    OnGrantItemAsync,
             onFailed:   OnPurchaseFailed);
 
-        if (_iapFacade == null)
-            Debug.LogWarning("[Supabase.IAP] 초기화 실패. 네트워크 상태를 확인하세요.");
-        else
-            Debug.Log("[Supabase.IAP] 초기화 완료.");
+        if (!result.IsSuccess)
+        {
+            _iapFacade = null;
+            Debug.LogWarning($"[Supabase.IAP] 초기화 실패: {result.ErrorCode}. 네트워크 상태를 확인하세요.");
+            return;
+        }
+
+        _iapFacade = result.Data;
+        Debug.Log("[Supabase.IAP] 초기화 완료.");
     }
 
     // ─── 구매 ────────────────────────────────────────────────────────────────

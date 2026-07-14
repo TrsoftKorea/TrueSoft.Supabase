@@ -119,7 +119,8 @@ create or replace function public.ts_admin_send_mail(
   p_items                jsonb   default null,
   p_created_by           text    default null,
   p_skip_item_validation boolean default false,
-  p_category             text    default 'default'
+  p_category             text    default 'default',
+  p_localized            jsonb   default null
 )
 returns jsonb
 language plpgsql
@@ -181,19 +182,19 @@ begin
   end if;
 
   insert into public.mail_batches
-    (target_mode, server_id, title, content, sender_name, items, expires_at, created_by, category)
+    (target_mode, server_id, title, content, sender_name, items, expires_at, created_by, category, localized)
   values
     (p_target_mode,
      case when p_target_mode = 'server' then p_server_id else null end,
      p_title, coalesce(p_content, ''), coalesce(p_sender_name, ''),
-     p_items, p_expires_at, p_created_by, v_category)
+     p_items, p_expires_at, p_created_by, v_category, p_localized)
   returning id into v_batch_id;
 
   insert into public.mails
     (account_id, user_id, sender_type, sender_name, title, content,
-     is_read, expires_at, created_at, items, batch_id, category)
+     is_read, expires_at, created_at, items, batch_id, category, localized)
   select p.account_id, p.user_id, 'system', coalesce(p_sender_name, ''),
-         p_title, coalesce(p_content, ''), false, p_expires_at, now(), p_items, v_batch_id, v_category
+         p_title, coalesce(p_content, ''), false, p_expires_at, now(), p_items, v_batch_id, v_category, p_localized
   from public.user_profiles p
   where p.account_id is not null
     and p.withdrawn_at is null
@@ -210,8 +211,8 @@ begin
 end;
 $$;
 
-comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) is
-  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default.';
+comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text,jsonb) is
+  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback).';
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
@@ -279,8 +280,8 @@ comment on function public.ts_admin_count_recipients(text,uuid) is
 -- ---------------------------------------------------------------------------
 -- 어드민 RPC EXECUTE — service_role 전용(클라이언트 금지)
 -- ---------------------------------------------------------------------------
-revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) from public, anon, authenticated;
-grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text) to service_role;
+revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text,jsonb) from public, anon, authenticated;
+grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text,jsonb) to service_role;
 revoke all on function public.ts_admin_upsert_game_item(text,text) from public, anon, authenticated;
 grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;

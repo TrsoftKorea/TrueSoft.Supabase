@@ -1,7 +1,7 @@
 # 익명 계정 복구
 
 앱을 삭제했다가 재설치하거나 로그아웃 후 다시 익명 로그인을 하면, 기기 고유 지문을 이용해 이전 익명 계정을 자동으로 복구합니다.  
-`SignInAnonymouslyAsync()` 또는 `TriggerAutoLoginAsync()` 호출 시 내부적으로 수행됩니다.
+`SignInAnonymouslyAsync()` 또는 `Supabase.TriggerAutoLoginAsync()` 호출 시 내부적으로 수행됩니다.
 
 **복구 조건:**
 - 같은 기기에서 재설치한 경우 복구됩니다.

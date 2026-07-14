@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using TrueBase.Core.Models;
 
 namespace TrueBase.Unity
@@ -47,8 +48,8 @@ namespace TrueBase.Unity
         /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming, alreadyVerified) → true면 소모품 소비.</param>
         /// <param name="onFailed">구매 실패 콜백 (선택).</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
-        /// <returns>초기화 성공이면 <see cref="IAPFacade"/> 인스턴스, 실패이면 null.</returns>
-        public static async Task<IAPFacade> CreateIAPAsync(
+        /// <returns>초기화 성공이면 <c>.Data</c>에 <see cref="IAPFacade"/> 인스턴스, 실패이면 실패 사유.</returns>
+        public static async Task<SupabaseResult<IAPFacade>> CreateIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
             Action<IAPPurchaseFailedInfo>         onFailed  = null,
@@ -57,9 +58,9 @@ namespace TrueBase.Unity
             var facade = CreateIAP();
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
-            var ok = await facade.InitializeAsync(productIds, timeoutMs);
-            if (!ok) { facade.Dispose(); return null; }
-            return facade;
+            var init = await facade.InitializeAsync(productIds, timeoutMs);
+            if (!init) { facade.Dispose(); return SupabaseResult<IAPFacade>.Fail(init.ErrorCode); }
+            return SupabaseResult<IAPFacade>.Success(facade);
         }
 
         /// <summary>
@@ -69,8 +70,8 @@ namespace TrueBase.Unity
         /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming, alreadyVerified) → true면 소모품 소비.</param>
         /// <param name="onFailed">구매 실패 콜백 (선택).</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
-        /// <returns>초기화 성공이면 <see cref="GooglePlayIAPFacade"/> 인스턴스, 실패이면 null.</returns>
-        public static async Task<GooglePlayIAPFacade> CreateGooglePlayIAPAsync(
+        /// <returns>초기화 성공이면 <c>.Data</c>에 <see cref="GooglePlayIAPFacade"/> 인스턴스, 실패이면 실패 사유.</returns>
+        public static async Task<SupabaseResult<GooglePlayIAPFacade>> CreateGooglePlayIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
             Action<IAPPurchaseFailedInfo>         onFailed  = null,
@@ -79,9 +80,9 @@ namespace TrueBase.Unity
             var facade = CreateGooglePlayIAP();
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
-            var ok = await facade.InitializeAsync(productIds, timeoutMs);
-            if (!ok) { facade.Dispose(); return null; }
-            return facade;
+            var init = await facade.InitializeAsync(productIds, timeoutMs);
+            if (!init) { facade.Dispose(); return SupabaseResult<GooglePlayIAPFacade>.Fail(init.ErrorCode); }
+            return SupabaseResult<GooglePlayIAPFacade>.Success(facade);
         }
 
         /// <summary>
@@ -91,8 +92,8 @@ namespace TrueBase.Unity
         /// <param name="onGrant">아이템 지급 콜백. (productId, isResuming, alreadyVerified) → true면 소모품 소비.</param>
         /// <param name="onFailed">구매 실패 콜백 (선택).</param>
         /// <param name="timeoutMs">초기화 완료 대기 최대 시간(ms). 기본 10초.</param>
-        /// <returns>초기화 성공이면 <see cref="AppleIAPFacade"/> 인스턴스, 실패이면 null.</returns>
-        public static async Task<AppleIAPFacade> CreateAppleIAPAsync(
+        /// <returns>초기화 성공이면 <c>.Data</c>에 <see cref="AppleIAPFacade"/> 인스턴스, 실패이면 실패 사유.</returns>
+        public static async Task<SupabaseResult<AppleIAPFacade>> CreateAppleIAPAsync(
             string[]                             productIds,
             Func<string, bool, bool, Task<bool>> onGrant,
             Action<IAPPurchaseFailedInfo>         onFailed  = null,
@@ -101,9 +102,9 @@ namespace TrueBase.Unity
             var facade = CreateAppleIAP();
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
-            var ok = await facade.InitializeAsync(productIds, timeoutMs);
-            if (!ok) { facade.Dispose(); return null; }
-            return facade;
+            var init = await facade.InitializeAsync(productIds, timeoutMs);
+            if (!init) { facade.Dispose(); return SupabaseResult<AppleIAPFacade>.Fail(init.ErrorCode); }
+            return SupabaseResult<AppleIAPFacade>.Success(facade);
         }
 
         // 내부 검증 헬퍼 (IAPFacade 전용)

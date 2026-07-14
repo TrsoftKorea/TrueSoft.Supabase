@@ -11,4 +11,4 @@ await PlayerSave.LoadAsync();              // 2. 데이터 로드
 
 여러 세이브 클래스를 한 번에 로드하려면 `Supabase.LoadAllUserSavesAsync()`를 사용합니다.
 
-`SupabaseRuntime.TriggerAutoLoginAsync()`(자동 로그인)는 이 로드를 내부에서 함께 처리하므로, 수동 로그인에서만 위 2단계를 직접 호출하면 됩니다.
+`Supabase.TriggerAutoLoginAsync()`(자동 로그인)는 이 로드를 내부에서 함께 처리하므로, 수동 로그인에서만 위 2단계를 직접 호출하면 됩니다.

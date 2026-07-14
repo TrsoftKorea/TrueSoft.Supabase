@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Threading.Tasks;
-using TrueBase.Core.Common;
 using TrueBase.Unity;
 using TrueBase.Unity.Auth.Google;
 using UnityEngine;
@@ -14,7 +12,7 @@ namespace TrueBase.Unity.Config
     /// - RemoteConfig: Cold Start(시작 시 fetch 없음), 키 단위 백그라운드 폴링
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
     ///
-    /// 로그인은 자동 실행되지 않습니다. 원하는 타이밍에 <see cref="TriggerAutoLoginAsync"/>를 직접 호출하세요.
+    /// 로그인은 자동 실행되지 않습니다. 원하는 타이밍에 <see cref="Supabase.TriggerAutoLoginAsync"/>를 직접 호출하세요.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     [AddComponentMenu("TrueSoft/Supabase/SupabaseRuntime")]
@@ -39,6 +37,9 @@ namespace TrueBase.Unity.Config
             }
 
             _instance = this;
+
+            // 자동 로그인 후처리 훅 등록(서브클래스가 OnAfterAutoLoginAsync를 override) → Supabase.TriggerAutoLoginAsync가 호출.
+            SupabaseSDK.AfterAutoLoginHook = OnAfterAutoLoginAsync;
 
             if (settings == null)
             {
@@ -70,7 +71,11 @@ namespace TrueBase.Unity.Config
         private void OnDestroy()
         {
             if (_instance == this)
+            {
                 _instance = null;
+                if (SupabaseSDK.AfterAutoLoginHook == (Func<bool, Task<bool>>)OnAfterAutoLoginAsync)
+                    SupabaseSDK.AfterAutoLoginHook = null;
+            }
         }
 
         protected virtual void Update()
@@ -96,38 +101,8 @@ namespace TrueBase.Unity.Config
             Supabase.RequestImmediateUserSaveStaticFlushAll();
         }
 
-        private IEnumerator RunLifecycle()
-        {
-            var task = AutoLoginAndMaybeLoadAsync();
-            yield return new WaitUntil(() => task.IsCompleted);
-        }
-
         /// <summary>
-        /// 저장된 세션으로 로그인을 시도합니다.
-        /// 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출하세요.
-        /// </summary>
-        public static Task<SupabaseResult> TriggerAutoLoginAsync() => AutoLoginAndMaybeLoadAsync();
-
-        /// <summary>
-        /// 자동 로그인 → <see cref="OnAfterAutoLoginAsync"/> 훅 → 전체 UserSave 로드를 순서대로 수행합니다.
-        /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리하고 UserSave 로드를 생략합니다.
-        /// </summary>
-        private static async Task<SupabaseResult> AutoLoginAndMaybeLoadAsync()
-        {
-            var ok = await Supabase.TryAutoLoginOnStartAsync();
-
-            if (ok && _instance != null)
-                if (!await _instance.OnAfterAutoLoginAsync(ok))
-                    ok = SupabaseResult.Fail("after_auto_login_failed");
-
-            if (ok)
-                await Supabase.LoadAllUserSavesAsync();
-
-            return ok;
-        }
-
-        /// <summary>
-        /// Supabase 자동 로그인 성공 후, UserSave 로드 전에 호출됩니다.
+        /// Supabase 자동 로그인 성공 후, UserSave 로드 전에 <see cref="Supabase.TriggerAutoLoginAsync"/> 내부에서 호출됩니다.
         /// 서브클래스에서 추가 세션 복원 로직을 구현하세요. false 반환 시 자동 로그인 실패로 처리됩니다.
         /// </summary>
         protected virtual Task<bool> OnAfterAutoLoginAsync(bool success) => Task.FromResult(success);

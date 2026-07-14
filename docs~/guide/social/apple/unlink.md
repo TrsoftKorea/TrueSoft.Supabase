@@ -17,7 +17,7 @@ Task<SupabaseResult> Supabase.UnlinkAppleAsync()
 
 ```csharp
 var r = await Supabase.UnlinkAppleAsync();
-if (!r && r.ErrorMessage == SupabaseFailReason.CannotUnlinkLastIdentity)
+if (!r && r.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
     ShowToast("최소 하나의 로그인 수단은 남겨야 합니다.");
 ```
 

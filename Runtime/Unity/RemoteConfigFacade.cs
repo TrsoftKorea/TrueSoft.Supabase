@@ -143,7 +143,7 @@ namespace TrueBase.Unity
         /// 폴링이 없는 키는 Stale-While-Revalidate: <paramref name="maxStale"/> 초과 시 백그라운드 갱신을 트리거합니다(기본 300초).
         /// 폴링 설정은 <see cref="SetKeyPollIntervalOverride"/>를 사용합니다.
         /// fetch 실패·키 없음·역직렬화 실패 시 <see cref="SupabaseResult{T}.Fail"/>를 반환합니다.
-        /// 실패 시 <see cref="SupabaseResult{T}.ErrorMessage"/> 예:
+        /// 실패 시 <see cref="SupabaseResult{T}.ErrorCode"/> 예:
         /// <c>remote_config_key_not_in_database</c>(테이블/RLS에 행 없음),
         /// <c>remote_config_key_disabled</c>, <c>remote_config_key_requires_auth</c>,
         /// <c>remote_config_value_must_be_object_json</c>(뒤에 <c>:</c>로 이유·접두 미리보기가 붙을 수 있음).
@@ -306,7 +306,7 @@ namespace TrueBase.Unity
             var accessToken = _accessTokenGetter?.Invoke();
             var result = await _service.GetByKeysAsync(keys, accessToken).ConfigureAwait(true);
             if (result.IsSuccess == false)
-                return new FetchOutcome(false, result.ErrorMessage ?? "remote_config_fetch_failed");
+                return new FetchOutcome(false, result.ErrorCode ?? "remote_config_fetch_failed");
 
             if (result.Data != null)
                 ApplyRows(result.Data);
@@ -524,7 +524,7 @@ namespace TrueBase.Unity
             return trimmed.StartsWith("{", StringComparison.Ordinal);
         }
 
-        /// <summary><c>value_json</c>이 객체 루트가 아닐 때 <see cref="SupabaseResult{T}.ErrorMessage"/> 접미사로만 사용합니다.</summary>
+        /// <summary><c>value_json</c>이 객체 루트가 아닐 때 <see cref="SupabaseResult{T}.ErrorCode"/> 접미사로만 사용합니다.</summary>
         private static string BuildValueJsonShapeHint(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw))

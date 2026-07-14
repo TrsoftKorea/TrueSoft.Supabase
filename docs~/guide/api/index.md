@@ -13,28 +13,28 @@ if (await Supabase.SignInAnonymouslyAsync())
     StartGame();
 ```
 
-**실패 원인 분기** — 결과를 변수로 받아 `ErrorMessage`를 봅니다.
+**실패 원인 분기** — 결과를 변수로 받아 `Reason`(enum)으로 분기합니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
 if (!result.IsSuccess)
 {
-    if (result.ErrorMessage == SupabaseFailReason.NetworkError) ShowRetry();
-    else ShowError(result.ErrorMessage);
+    if (result.Reason == SupabaseFailCode.NetworkError) ShowRetry();
+    else ShowError(result.ErrorCode);   // ErrorCode: 원문 문자열(동적 사유 포함)
 }
 ```
 
-`result.ErrorMessage` 값은 각 함수 가이드의 **실패 원인** 표에 나오는 값입니다.
+각 함수 가이드의 **실패 원인** 표에 나오는 이름은 동일 이름의 `SupabaseFailCode` enum 멤버와 1:1 대응합니다(예: `SupabaseFailReason.UserBanned` ↔ `SupabaseFailCode.UserBanned`). 카탈로그에 없는 동적 사유는 `Reason == SupabaseFailCode.Unknown`이며, 원문은 `ErrorCode` 문자열에서 확인합니다.
 
 **부가 정보** — 일부 실패는 추가 데이터를 함께 줍니다.
 
 ```csharp
-if (result.ErrorMessage == SupabaseFailReason.UserBanned)
+if (result.Reason == SupabaseFailCode.UserBanned)
     ShowBanScreen(result.BanInfo);   // 차단일 때만 채워짐
 ```
 
 ::: tip 왜 이렇게 설계했나
-실패(네트워크·차단·중복 등)는 게임에서 흔한 정상 결과라 예외를 던지지 않습니다. `SupabaseResult`는 `bool`로 암묵 변환되어 기존 `if (await ...())` 코드와 그대로 호환되면서, 필요할 때만 `ErrorMessage`·`BanInfo`로 원인을 꺼낼 수 있습니다.
+실패(네트워크·차단·중복 등)는 게임에서 흔한 정상 결과라 예외를 던지지 않습니다. `SupabaseResult`는 `bool`로 암묵 변환되어 기존 `if (await ...())` 코드와 그대로 호환되면서, 필요할 때만 `Reason`(타입 안전 분기)·`ErrorCode`(원문)·`BanInfo`로 원인을 꺼낼 수 있습니다.
 :::
 
 ## 분류

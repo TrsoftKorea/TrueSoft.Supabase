@@ -106,7 +106,7 @@ namespace TrueBase.Core.Data
             {
                 var ensured = await EnsureMyRowAsync(accessToken, tableName, playerUserId);
                 if (ensured == null || !ensured.IsSuccess)
-                    return SupabaseResult<bool>.Fail(ensured?.ErrorMessage ?? "ensure_row_failed");
+                    return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
             }
 
             var url =
@@ -198,7 +198,7 @@ namespace TrueBase.Core.Data
         {
             var r = await LoadColumnsWithRowStateAsync<T>(accessToken, accountId, tableName, selectColumnsCsv);
             if (!r.IsSuccess)
-                return SupabaseResult<T>.Fail(r.ErrorMessage ?? "load_failed");
+                return SupabaseResult<T>.Fail(r.ErrorCode ?? "load_failed");
             return SupabaseResult<T>.Success(r.Data.Row);
         }
 

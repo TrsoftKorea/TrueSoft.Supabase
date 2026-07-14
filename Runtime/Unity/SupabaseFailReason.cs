@@ -1,8 +1,13 @@
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// <see cref="TrueBase.Core.Common.SupabaseResult.ErrorMessage"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
-    /// 목록에 없는 값은 실제 <see cref="TrueBase.Core.Common.SupabaseResult.ErrorMessage"/> 문자열과 직접 비교할 수 있습니다.
+    /// <see cref="TrueBase.Core.Common.SupabaseResult.ErrorCode"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
+    /// 목록에 없는 값은 실제 <see cref="TrueBase.Core.Common.SupabaseResult.ErrorCode"/> 문자열과 직접 비교할 수 있습니다.
+    /// <para>
+    /// 대개는 이 문자열 대신 <see cref="TrueBase.Core.Common.SupabaseResult.Reason"/>(<see cref="TrueBase.Core.Common.SupabaseFailCode"/> enum)으로
+    /// 타입 안전하게 분기하는 것을 권장합니다
+    /// (예: <c>result.Reason == SupabaseFailCode.UserBanned</c>). 각 상수는 같은 이름의 enum 멤버와 1:1 대응합니다.
+    /// </para>
     /// </summary>
     public static class SupabaseFailReason
     {
@@ -53,6 +58,9 @@ namespace TrueBase.Unity
 
         /// <summary>앱 시작 자동 로그인에 실패했습니다.</summary>
         public const string AutoLoginFailed = "auto_login_on_start_failed";
+
+        /// <summary>자동 로그인 후처리 훅이 실패를 반환했습니다.</summary>
+        public const string AfterAutoLoginFailed = "after_auto_login_failed";
 
         /// <summary>액세스 토큰이 비어있습니다.</summary>
         public const string AccessTokenEmpty = "access_token_empty";
@@ -152,5 +160,23 @@ namespace TrueBase.Unity
 
         /// <summary>유저 세이브 삭제에 실패했습니다.</summary>
         public const string UserSaveDeleteFailed = "user_save_delete_failed";
+
+        /// <summary>우편 아이템 핸들러가 null이거나 <c>ItemKey</c>가 비어 있습니다.</summary>
+        public const string MailItemHandlerInvalid = "mail_item_handler_invalid";
+
+        /// <summary>IAP 초기화에 전달된 상품 ID 목록이 비어 있습니다.</summary>
+        public const string IapProductIdsEmpty = "iap_product_ids_empty";
+
+        /// <summary>이미 Dispose된 IAP 파사드입니다.</summary>
+        public const string IapDisposed = "iap_disposed";
+
+        /// <summary>Unity Services 초기화에 실패했습니다(IAP).</summary>
+        public const string IapServicesInitFailed = "iap_services_init_failed";
+
+        /// <summary>IAP 초기화가 제한 시간 내에 완료되지 않았습니다.</summary>
+        public const string IapInitTimeout = "iap_init_timeout";
+
+        /// <summary>IAP 초기화에 실패했습니다(스토어 연결·상품 조회 실패).</summary>
+        public const string IapInitFailed = "iap_init_failed";
     }
 }

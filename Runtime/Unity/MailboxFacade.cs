@@ -96,7 +96,7 @@ namespace TrueBase.Unity
 
             var r = await _mailbox.GetInboxCountsAsync(token);
             if (!r.IsSuccess)
-                return SupabaseResult<int>.Fail(r.ErrorMessage ?? "inbox_counts_failed");
+                return SupabaseResult<int>.Fail(r.ErrorCode ?? "inbox_counts_failed");
 
             if (string.IsNullOrWhiteSpace(category))
                 return SupabaseResult<int>.Success(totalSelector(r.Data));
@@ -125,7 +125,7 @@ namespace TrueBase.Unity
 
             var detail = await _mailbox.GetMailByIdAsync(token, mailId);
             if (!detail.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(detail.ErrorMessage ?? "mail_load_failed");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(detail.ErrorCode ?? "mail_load_failed");
 
             var mail = detail.Data;
             if (mail == null)
@@ -143,7 +143,7 @@ namespace TrueBase.Unity
 
             var rpc = await _mailbox.ClaimMailItemsRpcAsync(token, mailId);
             if (!rpc.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorMessage ?? "claim_rpc_failed");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_rpc_failed");
 
             return await RunHandlersAsync(mailId, rpc.Data);
         }
@@ -165,7 +165,7 @@ namespace TrueBase.Unity
 
             var list = await _mailbox.GetMailsAsync(token, limit: 200, offset: 0, category: category);
             if (!list.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(list.ErrorMessage ?? "mail_list_failed");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(list.ErrorCode ?? "mail_list_failed");
 
             foreach (var m in list.Data ?? Array.Empty<Mail>())
             {
@@ -179,7 +179,7 @@ namespace TrueBase.Unity
 
             var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category);
             if (!rpc.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorMessage ?? "claim_all_rpc_failed");
+                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_all_rpc_failed");
 
             var aggregated = new List<ClaimResult>();
             foreach (var bundle in rpc.Data ?? Array.Empty<MailClaimBundle>())
@@ -282,7 +282,7 @@ namespace TrueBase.Unity
 
                 var r = await handler.HandleAsync(mailId, line.Index, line.Key, line.Count);
                 if (!r.IsSuccess)
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(r.ErrorMessage ?? "mail_handler_failed");
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(r.ErrorCode ?? "mail_handler_failed");
 
                 if (r.Data != null)
                     results.Add(r.Data);

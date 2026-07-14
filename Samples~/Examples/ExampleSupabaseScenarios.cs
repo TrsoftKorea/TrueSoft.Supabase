@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using TrueBase.Core.Common;
 using TrueBase.Core.Data;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
@@ -42,7 +43,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     private async void Start()
     {
-        var result = await SupabaseRuntime.TriggerAutoLoginAsync();
+        var result = await Supabase.TriggerAutoLoginAsync();
         if (result)
             Debug.Log($"[Supabase] 자동 로그인 성공. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
         else
@@ -69,7 +70,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignInAnonymouslyAsync()
     {
         var ok = await SupabaseClient.SignInAnonymouslyAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 익명 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
 
@@ -77,7 +78,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignInWithGoogleAsync()
     {
         var ok = await SupabaseClient.SignInWithGoogleAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Google 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
 
@@ -91,7 +92,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
 
         var ok = await SupabaseClient.LinkGoogleToCurrentAnonymousAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Google 연동 성공.");
     }
 
@@ -99,7 +100,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignInWithAppleAsync()
     {
         var ok = await SupabaseClient.SignInWithAppleAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] Apple 로그인 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] Apple 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Apple 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
 
@@ -113,7 +114,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
 
         var ok = await SupabaseClient.LinkAppleToCurrentAnonymousAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] Apple 연동 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] Apple 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Apple 연동 성공.");
     }
 
@@ -129,10 +130,10 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var ok = await SupabaseClient.UnlinkGoogleAsync();
         if (!ok)
         {
-            if (ok.ErrorMessage == SupabaseFailReason.CannotUnlinkLastIdentity)
+            if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
                 Debug.LogWarning("[Supabase] Google 연동 해제 실패: 마지막 남은 연동은 해제할 수 없습니다. 다른 연동을 먼저 추가하세요.");
             else
-                Debug.LogWarning($"[Supabase] Google 연동 해제 실패: {ok.ErrorMessage}");
+                Debug.LogWarning($"[Supabase] Google 연동 해제 실패: {ok.ErrorCode}");
         }
         else
         {
@@ -152,10 +153,10 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var ok = await SupabaseClient.UnlinkAppleAsync();
         if (!ok)
         {
-            if (ok.ErrorMessage == SupabaseFailReason.CannotUnlinkLastIdentity)
+            if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
                 Debug.LogWarning("[Supabase] Apple 연동 해제 실패: 마지막 남은 연동은 해제할 수 없습니다. 다른 연동을 먼저 추가하세요.");
             else
-                Debug.LogWarning($"[Supabase] Apple 연동 해제 실패: {ok.ErrorMessage}");
+                Debug.LogWarning($"[Supabase] Apple 연동 해제 실패: {ok.ErrorCode}");
         }
         else
         {
@@ -167,7 +168,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task SignOutAsync()
     {
         var ok = await SupabaseClient.SignOutFullyAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 로그아웃 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] 로그아웃 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 로그아웃 완료.");
     }
 
@@ -175,7 +176,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private async Task RestoreSessionAsync()
     {
         var ok = await SupabaseClient.RestoreSessionAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 세션 복원 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] 세션 복원 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 세션 복원 성공.");
     }
 
@@ -225,7 +226,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var ok = await SamplePlayerSave.DeleteAsync();
-        if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorMessage}"); return; }
+        if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorCode}"); return; }
         Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}");
 
         var loaded = await SamplePlayerSave.LoadAsync();
@@ -300,7 +301,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var available = await SupabaseClient.IsDisplayNameAvailableAsync(nickname);
         if (!available)
         {
-            Debug.LogWarning($"[Supabase] 닉네임 '{nickname}' 이미 사용 중 또는 확인 실패: {available.ErrorMessage}");
+            Debug.LogWarning($"[Supabase] 닉네임 '{nickname}' 이미 사용 중 또는 확인 실패: {available.ErrorCode}");
             return;
         }
         Debug.Log($"[Supabase] 닉네임 '{nickname}' 사용 가능.");
@@ -308,7 +309,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var setOk = await SupabaseClient.SetMyDisplayNameAsync(nickname);
         if (!setOk)
         {
-            Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorMessage}");
+            Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorCode}");
             return;
         }
         Debug.Log($"[Supabase] 닉네임 설정 완료: {nickname}");
@@ -356,7 +357,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var accountId = SupabaseClient.UserId;
         var banInfo = await SupabaseClient.GetBanInfoAsync(accountId);
         if (!banInfo)
-            Debug.LogWarning($"[Supabase] 차단 정보 조회 실패: {banInfo.ErrorMessage}");
+            Debug.LogWarning($"[Supabase] 차단 정보 조회 실패: {banInfo.ErrorCode}");
         else if (banInfo.Data == null)
             Debug.Log("[Supabase] 차단 정보 없음 (정상 계정).");
         else
@@ -371,7 +372,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var ok = await SupabaseClient.RequestMyWithdrawalAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
     }
 
@@ -382,7 +383,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         var status = await SupabaseClient.GetMyWithdrawalStatusAsync();
         if (!status)
-            Debug.LogWarning($"[Supabase] 탈퇴 상태 조회 실패: {status.ErrorMessage}");
+            Debug.LogWarning($"[Supabase] 탈퇴 상태 조회 실패: {status.ErrorCode}");
         else if (status.Data == null || !status.Data.IsScheduled)
             Debug.Log("[Supabase] 탈퇴 예약 없음.");
         else
@@ -395,7 +396,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var ok = await SupabaseClient.ClearMyWithdrawalAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.ErrorMessage}");
+        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
     }
 

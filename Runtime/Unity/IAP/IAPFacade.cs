@@ -15,7 +15,7 @@ namespace TrueBase.Unity
     /// <remarks>
     /// 사용 방법:
     /// <code>
-    /// var iap = await SupabaseIAP.CreateIAPAsync(
+    /// var result = await SupabaseIAP.CreateIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
     ///     onGrant: async (productId, isResuming, alreadyVerified) =>
     ///     {
@@ -23,6 +23,8 @@ namespace TrueBase.Unity
     ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
     ///                      // false → Pending 유지 → 다음 InitializeAsync에서 재처리
     ///     });
+    /// if (!result.IsSuccess) return;
+    /// var iap = result.Data; // 이후 구매: iap.Purchase(productId)
     /// </code>
     /// 씬 언로드 시 반드시 <see cref="BaseIAPFacade.Dispose"/>를 호출하세요.
     /// </remarks>

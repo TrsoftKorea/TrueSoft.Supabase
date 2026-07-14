@@ -19,6 +19,16 @@ namespace TrueBase.Core.Data
         public int Index { get; set; }
     }
 
+    /// <summary>메일 <c>localized</c> jsonb의 언어별 제목·본문.</summary>
+    public sealed class MailLocalizedText
+    {
+        [JsonProperty("title")]
+        public string Title { get; set; }
+
+        [JsonProperty("content")]
+        public string Content { get; set; }
+    }
+
     /// <summary>플레이어 우편함에 표시할 메일 모델.</summary>
     public sealed class Mail
     {
@@ -37,6 +47,34 @@ namespace TrueBase.Core.Data
 
         /// <summary>분류(파티션 키). 지정 없이 발송된 메일은 <c>default</c>.</summary>
         public string Category { get; set; }
+
+        /// <summary>
+        /// 언어별 제목·본문 오버라이드(언어코드 → 텍스트). 발송 시 지정된 언어만 채워지며,
+        /// 없는 언어는 <see cref="Title"/>·<see cref="Content"/>로 fallback. null일 수 있음.
+        /// </summary>
+        public IReadOnlyDictionary<string, MailLocalizedText> Localized { get; set; }
+
+        /// <summary>지정한 언어의 제목을 반환합니다. 해당 언어가 없으면 기본 <see cref="Title"/>.</summary>
+        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"en"</c>). 게임이 명시적으로 지정합니다.</param>
+        public string TitleFor(string lang)
+        {
+            if (!string.IsNullOrEmpty(lang) && Localized != null
+                && Localized.TryGetValue(lang, out var t)
+                && t != null && !string.IsNullOrEmpty(t.Title))
+                return t.Title;
+            return Title;
+        }
+
+        /// <summary>지정한 언어의 본문을 반환합니다. 해당 언어가 없으면 기본 <see cref="Content"/>.</summary>
+        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"en"</c>). 게임이 명시적으로 지정합니다.</param>
+        public string ContentFor(string lang)
+        {
+            if (!string.IsNullOrEmpty(lang) && Localized != null
+                && Localized.TryGetValue(lang, out var t)
+                && t != null && !string.IsNullOrEmpty(t.Content))
+                return t.Content;
+            return Content;
+        }
 
         public bool IsExpired => DateTime.UtcNow > ExpiresAt;
 

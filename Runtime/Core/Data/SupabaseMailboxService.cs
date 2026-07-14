@@ -15,7 +15,7 @@ namespace TrueBase.Core.Data
     public sealed class SupabaseMailboxService
     {
         private const string MailSelectColumns =
-            "id,account_id,user_id,sender_type,sender_name,title,content,is_read,expires_at,created_at,items,items_claimed_at,category";
+            "id,account_id,user_id,sender_type,sender_name,title,content,is_read,expires_at,created_at,items,items_claimed_at,category,localized";
 
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
@@ -397,7 +397,8 @@ namespace TrueBase.Core.Data
                 CreatedAt = r.CreatedAt,
                 ItemsClaimedAt = r.ItemsClaimedAt,
                 Items = items,
-                Category = r.Category ?? "default"
+                Category = r.Category ?? "default",
+                Localized = r.Localized
             };
         }
 
@@ -482,6 +483,9 @@ namespace TrueBase.Core.Data
 
             [JsonProperty("category")]
             public string Category { get; set; }
+
+            [JsonProperty("localized")]
+            public Dictionary<string, MailLocalizedText> Localized { get; set; }
         }
 
         private sealed class MailClaimLineDto

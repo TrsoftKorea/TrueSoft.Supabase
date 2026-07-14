@@ -24,14 +24,43 @@ Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMyMailsAsync(
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 | `.Category` | `string` | 분류 |
-| `.Title` | `string` | 제목 |
-| `.Content` | `string` | 본문 |
+| `.Title` | `string` | 제목(기본 언어) |
+| `.Content` | `string` | 본문(기본 언어) |
 | `.IsRead` | `bool` | 읽음 여부 |
 | `.Items` | `IReadOnlyList<MailItemPayload>` | 첨부 보상 |
 | `.HasUnclaimedItems` | `bool` | 미수령 보상 여부 |
+| `.Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
 **실패 원인**
 
 | Reason | 설명 |
 |--------|------|
 | `auth_not_signed_in` | 로그인 상태가 아닙니다 |
+
+## 다국어 메시지
+
+```csharp
+string mail.TitleFor(string lang)
+string mail.ContentFor(string lang)
+```
+
+어드민이 언어별로 발송한 우편은 `TitleFor`·`ContentFor`로 원하는 언어의 텍스트를 얻습니다. 언어는 게임이 직접 지정하며, 해당 언어가 없으면 기본 `Title`·`Content`로 fallback합니다.
+
+```csharp
+var result = await Supabase.GetMyMailsAsync();
+if (result.IsSuccess)
+{
+    var lang = "ja"; // 게임의 현재 언어 설정값
+    foreach (var mail in result.Data)
+    {
+        titleLabel.text = mail.TitleFor(lang);   // ja 없으면 기본 제목
+        bodyLabel.text  = mail.ContentFor(lang);
+    }
+}
+```
+
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `lang` | 언어코드(예: `"ja"`, `"en"`). 해당 언어가 없으면 기본값 반환 |

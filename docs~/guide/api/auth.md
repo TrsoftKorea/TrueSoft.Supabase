@@ -11,7 +11,7 @@
 | [`SignInWithGoogleIdTokenAsync`](/guide/social/google/signin-ios) | Google 로그인 (iOS·커스텀 ID 토큰) |
 | [`SignInWithAppleAsync`](/guide/social/apple/signin) | Apple 로그인 (플랫폼 자동) |
 | [`SignInWithAppleIdTokenAsync`](/guide/social/apple/signin-token) | Apple 로그인 (커스텀 ID 토큰) |
-| [`SupabaseRuntime.TriggerAutoLoginAsync`](/guide/auth/auto-login) | 저장된 세션으로 자동 로그인 |
+| [`Supabase.TriggerAutoLoginAsync`](/guide/auth/auto-login) | 저장된 세션으로 자동 로그인 |
 
 ## 계정 연동
 

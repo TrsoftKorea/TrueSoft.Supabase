@@ -12,17 +12,25 @@ namespace TrueBase.Core.Common
         public bool IsSuccess { get; }
 
         /// <summary>
-        /// 실패 사유(성공 시 null). <c>SupabaseFailReason</c> 상수를 우선 사용한다.
+        /// 실패 사유의 enum 코드(성공 시 <see cref="SupabaseFailCode.None"/>).
+        /// <c>if (result.Reason == SupabaseFailCode.UserBanned)</c>처럼 타입 안전하게 분기한다.
+        /// 카탈로그에 없는 동적 사유는 <see cref="SupabaseFailCode.Unknown"/>이며, 원문은 <see cref="ErrorCode"/>에서 확인한다.
         /// </summary>
-        public string ErrorMessage { get; }
+        public SupabaseFailCode Reason => SupabaseFailCodeMap.FromErrorCode(ErrorCode);
+
+        /// <summary>
+        /// 실패 사유 원문 문자열(성공 시 null). 동적 사유(예외 메시지·서버 RPC reason 등)를 포함한 전체 문자열이다.
+        /// 타입 안전한 분기는 <see cref="Reason"/>을, 원인 표시·로깅은 이 문자열을 사용한다.
+        /// </summary>
+        public string ErrorCode { get; }
 
         /// <summary>차단(<c>user_banned</c>) 실패 시 차단 정보. 그 외에는 null.</summary>
         public SupabaseBanInfo BanInfo { get; }
 
-        protected SupabaseResult(bool isSuccess, string errorMessage, SupabaseBanInfo banInfo)
+        protected SupabaseResult(bool isSuccess, string errorCode, SupabaseBanInfo banInfo)
         {
             IsSuccess = isSuccess;
-            ErrorMessage = errorMessage;
+            ErrorCode = errorCode;
             BanInfo = banInfo;
         }
 
@@ -30,8 +38,8 @@ namespace TrueBase.Core.Common
         public static readonly SupabaseResult Ok = new SupabaseResult(true, null, null);
 
         /// <summary>실패 결과를 만듭니다.</summary>
-        public static SupabaseResult Fail(string errorMessage, SupabaseBanInfo banInfo = null)
-            => new SupabaseResult(false, errorMessage, banInfo);
+        public static SupabaseResult Fail(string errorCode, SupabaseBanInfo banInfo = null)
+            => new SupabaseResult(false, errorCode, banInfo);
 
         /// <summary><see cref="IsSuccess"/>로의 암묵적 변환.</summary>
         public static implicit operator bool(SupabaseResult r) => r != null && r.IsSuccess;
@@ -45,8 +53,8 @@ namespace TrueBase.Core.Common
         /// <summary>성공 시 결과 값. 실패면 <c>default</c>.</summary>
         public T Data { get; }
 
-        private SupabaseResult(bool isSuccess, T data, string errorMessage, SupabaseBanInfo banInfo)
-            : base(isSuccess, errorMessage, banInfo)
+        private SupabaseResult(bool isSuccess, T data, string errorCode, SupabaseBanInfo banInfo)
+            : base(isSuccess, errorCode, banInfo)
         {
             Data = data;
         }
@@ -56,10 +64,10 @@ namespace TrueBase.Core.Common
             => new SupabaseResult<T>(true, data, null, null);
 
         /// <summary>실패 결과를 만듭니다.</summary>
-        /// <param name="errorMessage">실패 사유.</param>
+        /// <param name="errorCode">실패 사유 원문 문자열.</param>
         /// <param name="banInfo">차단(<c>user_banned</c>) 실패인 경우의 차단 정보.</param>
-        public static new SupabaseResult<T> Fail(string errorMessage, SupabaseBanInfo banInfo = null)
-            => new SupabaseResult<T>(false, default, errorMessage, banInfo);
+        public static new SupabaseResult<T> Fail(string errorCode, SupabaseBanInfo banInfo = null)
+            => new SupabaseResult<T>(false, default, errorCode, banInfo);
 
         /// <summary><see cref="SupabaseResult.IsSuccess"/>로의 암묵적 변환.</summary>
         public static implicit operator bool(SupabaseResult<T> r) => r != null && r.IsSuccess;

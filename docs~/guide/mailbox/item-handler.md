@@ -18,7 +18,7 @@ public sealed class GoldMailItemHandler : IMailItemHandler
     }
 }
 
-MailItemHandlerRegistry.Register(new GoldMailItemHandler());
+Supabase.RegisterMailItemHandler(new GoldMailItemHandler());
 ```
 
 `ItemKey`가 `items[].key`와 일치하는 핸들러가 [보상 수령](/guide/mailbox/claim) 성공 직후 `itemIndex` 오름차순으로 호출됩니다.

@@ -40,7 +40,7 @@ The SDK has three layers:
 - `Supabase.cs` — static entry point, all public-facing API
 - `SupabaseSDK.cs` — MonoBehaviour singleton, all implementation
 - `Config/SupabaseSettings.cs` — ScriptableObject for static values (URL, keys, table names). Must be saved to `Assets/Resources/SupabaseSettings.asset`.
-- `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: RemoteConfig per-key polling, UserSave auto-sync. **로그인은 자동 실행되지 않음** — 개발자가 `SupabaseRuntime.TriggerAutoLoginAsync()` 또는 직접 로그인 API를 원하는 타이밍에 호출. `public class` (non-sealed), `protected virtual Awake()` — 상속 가능. Optional but recommended.
+- `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: RemoteConfig per-key polling, UserSave auto-sync. **로그인은 자동 실행되지 않음** — 개발자가 `Supabase.TriggerAutoLoginAsync()` 또는 직접 로그인 API를 원하는 타이밍에 호출. `public class` (non-sealed), `protected virtual Awake()` — 상속 가능. Optional but recommended.
 - `Config/SupabaseUnityBootstrap.cs` — Auto-bootstraps from `Resources/SupabaseSettings` if no scene-placed runtime is present. Async APIs internally await initialization.
 - Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `ChatChannelFacade`, `ServerFunctionsFacade`) — high-level auto-sync wrappers
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
@@ -63,8 +63,10 @@ The SDK has three layers:
 ### SupabaseResult\<T\> and Try API Pattern
 
 게임에 공개하는 API는 `Supabase` 파사드의 **접두어 없는 메서드**(`Supabase.GetMyMailsAsync()` 등)이며, **항상 result 타입을 반환**한다:
-- **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`·`.ErrorMessage`로 분기)
+- **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`로 분기)
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
+
+실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseFailCode` enum, `Runtime/Core/Models/SupabaseFailCode.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseFailCodeMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 새 사유 추가 시 `SupabaseFailReason` 상수·`SupabaseFailCode` enum·`FromErrorCode` 스위치 **세 곳을 함께** 갱신한다(enum·map은 Core, 상수는 Unity — Core는 Unity를 참조 못 하므로 문자열이 양쪽에 존재).
 
 **bare value(`Task<string>`·`T`·리스트 원본 등)를 직접 반환하지 않는다. 공개 메서드에 `Try` 접두어를 쓰지 않는다.** 호출자가 성공/실패와 "결과 0개 vs 조회 실패"를 항상 구분할 수 있어야 한다.
 
@@ -104,7 +106,7 @@ The SDK has three layers:
 - Apple OAuth (ID token): `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)` — 외부 SDK 없이 토큰 직접 전달
 - Guest → Google linking: `TryLinkGoogleToCurrentAnonymousAsync()` or `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync()`. Must use these — calling plain `TrySignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.
 - Guest → Apple linking: `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
-- Session restore (수동): `SupabaseRuntime.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출
+- Session restore (수동): `Supabase.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출 (내부 orchestration은 `SupabaseSDK.TryTriggerAutoLoginAsync`, `SupabaseRuntime`이 `OnAfterAutoLoginAsync` 훅 등록)
 - Sign-out: `TrySignOutFullyAsync()` (handles Android Google native logout + Supabase signout + anonymous recovery upsert).
 
 ### Table Names
@@ -279,7 +281,7 @@ If the information matters, state it as a separate sentence or callout box. If i
 함수 페이지는 **항상 시그니처로 시작**한다(Rule 11, 코드 우선). 시그니처는 `반환타입 Supabase.메서드(...)` 형태로 쓰고 `public`/`static`/`async` 등 수식어는 뺀다. 파라미터가 여러 줄이면 정렬해 가독성을 높인다.
 
 ```csharp
-Task<IAPFacade> SupabaseIAP.CreateIAPAsync(
+Task<SupabaseResult<IAPFacade>> SupabaseIAP.CreateIAPAsync(
     string[]                              productIds,
     Func<string, bool, bool, Task<bool>>  onGrant,
     Action<IAPPurchaseFailedInfo>          onFailed  = null,
@@ -327,7 +329,7 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 | 시그니처 | `Supabase.`(또는 `SupabaseIAP.`) 접두어 사용. 항상 포함, 수식어(`public`/`static`/`async`) 제외 |
 | 파라미터 표 | 타입 열 없이 2열. `(기본값: x)` 표기 포함 |
 | 반환 표 | `isSuccess` / `Success` 생략. 직접 반환 타입이나 `.Data` 프로퍼티만 기술 |
-| 실패 원인 | `SupabaseFailReason` 상수 우선, 없으면 raw 문자열 |
+| 실패 원인 | `SupabaseFailReason` 상수 우선, 없으면 raw 문자열. 게임은 동일 이름의 `SupabaseFailCode` enum(`.Reason`)으로 분기 |
 
 ### 10. H1 아래 본문에는 반드시 H2를 붙인다
 

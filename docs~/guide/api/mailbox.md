@@ -11,6 +11,7 @@
 | [`GetUnreadMailCountAsync`](/guide/mailbox/counts-unread) | 미읽음 수 |
 | [`GetUnclaimedItemMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 보상 메일 수 |
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미읽음·미수령 + 분류별 세부 내역 |
+| [`RegisterMailItemHandler`](/guide/mailbox/item-handler) | 보상 지급 핸들러 등록 |
 
 ::: tip
 보상이 첨부된 우편을 수령하려면 [아이템 핸들러 등록](/guide/mailbox/item-handler)이 필요합니다.

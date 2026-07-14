@@ -385,7 +385,7 @@ namespace TrueBase.Unity
             var r = await Supabase.EnsureMyRowAsync<TRow>();
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
+                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
         }
 
         /// <summary>
@@ -406,8 +406,8 @@ namespace TrueBase.Unity
                 var ensured = await Supabase.EnsureMyRowAsync<TRow>();
                 if (ensured == null || !ensured.IsSuccess)
                 {
-                    Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorMessage ?? "null"}");
-                    return SupabaseResult.Fail(ensured?.ErrorMessage ?? SupabaseFailReason.UserSaveLoadFailed);
+                    Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorCode ?? "null"}");
+                    return SupabaseResult.Fail(ensured?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
                 }
 
                 bool hasRow2;
@@ -449,7 +449,7 @@ namespace TrueBase.Unity
             var r = await Supabase.DeleteUserDataAsync<TRow>();
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorMessage ?? SupabaseFailReason.UserSaveDeleteFailed);
+                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseFailReason.UserSaveDeleteFailed);
         }
 
         /// <summary>
@@ -485,8 +485,8 @@ namespace TrueBase.Unity
 
             if (!result.IsSuccess)
             {
-                Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorMessage}");
-                return SupabaseResult.Fail(result.ErrorMessage ?? SupabaseFailReason.UserSaveFlushFailed);
+                Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorCode}");
+                return SupabaseResult.Fail(result.ErrorCode ?? SupabaseFailReason.UserSaveFlushFailed);
             }
 
             _lastSynced = DataSchema.CloneRow(Current);

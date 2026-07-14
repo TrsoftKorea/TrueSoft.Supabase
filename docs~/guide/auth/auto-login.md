@@ -8,7 +8,7 @@
 로그인은 자동 실행되지 않으므로 원하는 타이밍에 직접 호출합니다.
 
 ```csharp
-var result = await SupabaseRuntime.TriggerAutoLoginAsync();
+var result = await Supabase.TriggerAutoLoginAsync();
 if (result.IsSuccess)
 {
     // 자동 로그인 성공 → 유저 세이브 로드도 완료된 상태
