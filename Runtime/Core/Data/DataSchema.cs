@@ -395,8 +395,38 @@ namespace TrueBase.Core.Data
             {
                 var attr = m.GetCustomAttribute<AutoDefaultAttribute>();
                 if (attr == null) continue;
-                if (GetValue(m, row) is IAutoDefaultable target)
+
+                var value = GetValue(m, row);
+                if (value == null)
+                {
+                    // DB 컬럼이 null이면 로드/역직렬화 시 이 멤버가 null이 된다 — 빈 인스턴스로 복구한다.
+                    // (복구하지 않으면 이후 AutoList/AutoDict 접근이 NullReferenceException으로 터진다.)
+                    var memberType = MemberValueType(m);
+                    if (memberType != null && typeof(IAutoDefaultable).IsAssignableFrom(memberType))
+                    {
+                        value = Activator.CreateInstance(memberType);
+                        TrySetValue(m, row, value);
+                    }
+                }
+
+                if (value is IAutoDefaultable target)
                     target.SetDefaultValue(attr.Values);
+            }
+        }
+
+        private static Type MemberValueType(MemberInfo m) => m switch
+        {
+            FieldInfo f => f.FieldType,
+            PropertyInfo p => p.PropertyType,
+            _ => null
+        };
+
+        private static void TrySetValue(MemberInfo m, object instance, object value)
+        {
+            switch (m)
+            {
+                case FieldInfo f: f.SetValue(instance, value); break;
+                case PropertyInfo p when p.CanWrite: p.SetValue(instance, value); break;
             }
         }
 
