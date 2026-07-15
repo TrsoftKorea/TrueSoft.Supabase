@@ -88,6 +88,22 @@ namespace TrueBase.Core.Data
             base[i] = row ?? CreateDefaultRow();
         }
 
+        /// <summary>행이 <paramref name="rows"/>개가 되도록 기본값 행으로 채웁니다(이미 크거나 같으면 그대로).</summary>
+        public void EnsureRows(int rows)
+        {
+            while (Count < rows) Add(CreateDefaultRow());
+        }
+
+        /// <summary>
+        /// <paramref name="rows"/>행 × <paramref name="cols"/>열이 되도록 기본값으로 채웁니다(<see cref="AutoList{T}.EnsureCount"/>의 2차원 판).
+        /// 행 수를 먼저 확보한 뒤, 존재하는 모든 행의 열을 <paramref name="cols"/>개로 확보합니다(이미 크면 그대로).
+        /// </summary>
+        public void EnsureSize(int rows, int cols)
+        {
+            EnsureRows(rows);
+            for (int i = 0; i < Count; i++) EnsureRow(i).EnsureCount(cols);
+        }
+
         /// <summary>모든 셀을 행 순서로 평탄화해 열거합니다(실제 저장된 값만).</summary>
         public IEnumerable<T> Cells()
         {
@@ -157,6 +173,9 @@ namespace TrueBase.Core.Data
             get { var r = _owner.RawRowOrNull(_i); return r != null ? r[j] : _owner.DefaultValue; }
             set => _owner.EnsureRow(_i)[j] = value;
         }
+
+        /// <summary>이 행의 열이 <paramref name="count"/>개가 되도록 기본값으로 채웁니다(행이 없으면 생성·저장).</summary>
+        public void EnsureCount(int count) => _owner.EnsureRow(_i).EnsureCount(count);
 
         // 추가/삽입 (쓰기 → 그 시점에 행 생성·저장)
         public void Add(T item) => _owner.EnsureRow(_i).Add(item);

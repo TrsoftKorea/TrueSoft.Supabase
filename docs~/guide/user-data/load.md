@@ -40,6 +40,8 @@ PlayerSave.Stages[3] = firstStageState; // 늘어난 슬롯의 초기값
 await PlayerSave.LoadAsync();            // 서버에 실제 값이 든 슬롯은 유지, 없거나 기본값인 슬롯만 채워짐
 ```
 
+이중 리스트(`AutoList2D`)는 `PlayerSave.Grid.EnsureSize(rows, cols)`로 같은 방식의 크기를 확보합니다. 특정 행만 열을 확보하려면 `PlayerSave.Grid[i].EnsureCount(cols)`를 씁니다.
+
 ::: warning 컬렉션 전용
 로드 전 초기값은 **컬렉션/참조 타입 컬럼(jsonb)에서만** 동작합니다. 스칼라(`int`·`bool` 등)는 서버의 "없음"과 "기본값"을 구분할 수 없어 항상 서버값이 우선되므로, 스칼라 초기값은 DB 컬럼 DEFAULT로 지정하세요.
 

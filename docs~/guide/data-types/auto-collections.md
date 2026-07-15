@@ -143,7 +143,9 @@ bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 | 메서드 | 대상 | 설명 |
 |--------|------|------|
 | `GetOrDefault(i)` | `AutoList` | 범위 밖이면 기본값 반환(확장 안 함) |
-| `EnsureCount(n)` | `AutoList` | `n`칸까지 기본값으로 확장 — `Count`를 논리 크기에 맞출 때 |
+| `EnsureCount(n)` | `AutoList`·`grid[i]` | `n`칸까지 기본값으로 확장 — `Count`를 논리 크기에 맞출 때 |
+| `EnsureRows(n)` | `AutoList2D` | 행이 `n`개가 되도록 기본값 행으로 확장 |
+| `EnsureSize(r, c)` | `AutoList2D` | `r`행 × `c`열을 기본값으로 확보 — `EnsureCount`의 2차원 판 |
 | `Row(i)` | `AutoList2D` | 행 반환, 없으면 빈 리스트(비파괴) — 행 단위 조회·LINQ |
 | `Cells()` | `AutoList2D` | 모든 셀을 행 순서로 평탄화 열거 |
 
@@ -151,4 +153,6 @@ bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 if (PlayerSave.Scores.Row(0).Count > 0) { /* ... */ }   // 예외 없이 행 조회
 int total = PlayerSave.Scores.Cells().Sum();            // 모든 셀 합
 PlayerSave.StageClears.EnsureCount(10);                 // 10칸 확보
+PlayerSave.Scores.EnsureSize(5, 3);                     // 5행 × 3열 확보
+PlayerSave.Scores[2].EnsureCount(3);                    // 특정 행만 3열 확보
 ```
