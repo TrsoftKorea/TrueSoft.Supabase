@@ -1,10 +1,24 @@
 # Apple 신규 로그인 · 커스텀
 
 ```csharp
-Task<SupabaseResult> Supabase.SignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
+Task<SupabaseSignInResult> Supabase.SignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
 ```
 
-이미 가진 Apple ID 토큰으로 로그인합니다. 토큰을 직접 넘겨야 할 때만 쓰고, 일반적으로는 [Apple 신규 로그인](./signin)을 쓰세요.
+이미 가진 Apple ID 토큰으로 로그인합니다. 토큰을 직접 넘겨야 할 때만 쓰고, 일반적으로는 [Apple 신규 로그인](./signin)을 쓰세요. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+
+```csharp
+var result = await Supabase.SignInWithAppleIdTokenAsync(idToken, rawNonce);
+if (result.IsSuccess)
+{
+    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드는 별개 단계
+    InitGame();
+}
+else
+{
+    ShowLoginError(result.Reason);
+}
+```
 
 **파라미터**
 

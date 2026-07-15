@@ -8,6 +8,15 @@ Task<SupabaseResult<int>> Supabase.GetUnreadMailCountAsync(
 
 읽지 않은 우편 개수를 조회합니다. 우편함 배지 표시에 사용합니다.
 
+```csharp
+var result = await Supabase.GetUnreadMailCountAsync();
+if (result.IsSuccess)
+{
+    int count = result.Data;
+    mailBadge.SetCount(count);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

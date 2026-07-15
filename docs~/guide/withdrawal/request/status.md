@@ -6,6 +6,16 @@ Task<SupabaseResult<MyWithdrawalStatus>> Supabase.GetMyWithdrawalStatusAsync()
 
 현재 탈퇴 예약 상태를 조회합니다.
 
+```csharp
+var result = await Supabase.GetMyWithdrawalStatusAsync();
+if (result.IsSuccess)
+{
+    var status = result.Data;
+    if (status.IsScheduled)
+        ShowWithdrawalBanner(status.SecondsRemaining);   // 탈퇴까지 남은 초
+}
+```
+
 **반환**
 
 `.Data` — 탈퇴 예약 상태 객체. 조회 실패 시 없음.

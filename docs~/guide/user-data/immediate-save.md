@@ -6,6 +6,18 @@ Task<SupabaseResult> Supabase.SaveAllAsync(int timeoutMs = 5000)
 
 변경된 모든 세이브 데이터를 즉시 서버에 업로드합니다. 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
 
+```csharp
+var result = await Supabase.SaveAllAsync();
+if (result.IsSuccess)
+{
+    // 저장 완료
+}
+else
+{
+    // 실패 처리
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

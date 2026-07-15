@@ -6,6 +6,15 @@ Task<SupabaseResult<int>> Supabase.DeleteReadMailsAsync(string category = null)
 
 읽음 처리됐고 미수령 보상이 없는 우편만 일괄로 숨깁니다.
 
+```csharp
+var result = await Supabase.DeleteReadMailsAsync();
+if (result.IsSuccess)
+{
+    int deleted = result.Data;   // 삭제된 우편 개수
+    RefreshMailbox();
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

@@ -6,6 +6,14 @@ Task<SupabaseResult> Supabase.DeleteMailAsync(string mailId)
 
 우편 1건을 우편함에서 숨깁니다(소프트 삭제). 미수령 보상이 남아 있으면 서버가 거부합니다.
 
+```csharp
+var result = await Supabase.DeleteMailAsync(mailId);
+if (result.IsSuccess)
+{
+    RemoveMailFromUI(mailId);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

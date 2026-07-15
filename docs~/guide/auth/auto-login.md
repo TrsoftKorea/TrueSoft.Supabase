@@ -11,6 +11,7 @@
 var result = await Supabase.TriggerAutoLoginAsync();
 if (result.IsSuccess)
 {
+    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
     // 자동 로그인 성공 — 데이터 로드는 별개 단계입니다.
     await PlayerSave.LoadAsync();
     InitGame();
@@ -32,11 +33,10 @@ else
 
 | 프로퍼티 | 설명 |
 |---------|------|
-| `Supabase.MyProfile.DisplayName` | 닉네임. 설정 전에는 빈 문자열 |
-| `Supabase.MyProfile.ServerCode` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
-| `Supabase.MyProfile.IsWithdrawn` | 탈퇴 예약 여부 |
 | `Supabase.IsLoggedIn` | 현재 로그인 여부 |
 | `Supabase.UserId` | 현재 로그인 계정 ID (`auth.users.id`) |
 | `Supabase.IsAnonymous` | 익명 로그인 여부 |
 | `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
 | `Supabase.IsLinkedWithApple` | Apple 연동 여부 |
+
+내 프로필(닉네임·서버 코드·탈퇴 상태)은 로그인 결과(`SupabaseSignInResult`)의 `.Profile`에 담겨 옵니다. [내 프로필](/guide/display-name/profile#my-profile) 참고.

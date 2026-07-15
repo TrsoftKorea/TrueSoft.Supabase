@@ -9,6 +9,15 @@ Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMyMailsAsync(
 
 내 우편함 목록을 최신순으로 조회합니다. 삭제됐거나 만료된 우편, 다른 서버의 우편은 제외됩니다.
 
+```csharp
+var result = await Supabase.GetMyMailsAsync();
+if (result.IsSuccess)
+{
+    foreach (var mail in result.Data)
+        AddMailRow(mail.Title, mail.IsRead);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

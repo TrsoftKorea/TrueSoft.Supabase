@@ -1,10 +1,24 @@
 # Google 신규 로그인 · Android
 
 ```csharp
-Task<SupabaseResult> Supabase.SignInWithGoogleAsync()
+Task<SupabaseSignInResult> Supabase.SignInWithGoogleAsync()
 ```
 
-Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. [대시보드 설정](./setup)의 Android 항목이 선행되어야 합니다.
+Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. [대시보드 설정](./setup)의 Android 항목이 선행되어야 합니다. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+
+```csharp
+var result = await Supabase.SignInWithGoogleAsync();
+if (result.IsSuccess)
+{
+    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드
+    InitGame();
+}
+else
+{
+    ShowLoginError(result.Reason);
+}
+```
 
 **실패 원인**
 

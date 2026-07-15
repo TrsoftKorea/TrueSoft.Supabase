@@ -6,6 +6,19 @@ Task<SupabaseResult> Supabase.LinkAppleToCurrentAnonymousAsync()
 
 익명(게스트) 계정에 Apple 계정을 연동합니다(iOS). 기존 계정의 데이터는 그대로 이어집니다. [대시보드 설정](./setup)을 먼저 완료하세요.
 
+```csharp
+var result = await Supabase.LinkAppleToCurrentAnonymousAsync();
+if (result.IsSuccess)
+{
+    // 연동 완료 — 기존 게스트 데이터 그대로 유지
+    ShowLinkedBadge();
+}
+else
+{
+    ShowLinkError(result.Reason);
+}
+```
+
 ::: warning
 익명 세션에서만 호출하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
 :::

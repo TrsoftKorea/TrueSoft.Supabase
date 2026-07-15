@@ -31,5 +31,8 @@ namespace TrueBase.Core.Common
         /// <param name="banInfo">차단(<c>user_banned</c>) 실패인 경우의 차단 정보.</param>
         public static new SupabaseLoadResult Fail(string errorCode, SupabaseBanInfo banInfo = null)
             => new SupabaseLoadResult(false, false, errorCode, banInfo);
+
+        /// <summary><see cref="SupabaseResult.IsSuccess"/>로의 암묵적 변환.</summary>
+        public static implicit operator bool(SupabaseLoadResult r) => r != null && r.IsSuccess;
     }
 }

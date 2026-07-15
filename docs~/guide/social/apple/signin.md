@@ -1,10 +1,24 @@
 # Apple 신규 로그인
 
 ```csharp
-Task<SupabaseResult> Supabase.SignInWithAppleAsync()
+Task<SupabaseSignInResult> Supabase.SignInWithAppleAsync()
 ```
 
-iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방식이 자동으로 선택됩니다. [대시보드 설정](./setup)을 먼저 완료하세요.
+iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방식이 자동으로 선택됩니다. [대시보드 설정](./setup)을 먼저 완료하세요. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+
+```csharp
+var result = await Supabase.SignInWithAppleAsync();
+if (result.IsSuccess)
+{
+    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드는 별개 단계
+    InitGame();
+}
+else
+{
+    ShowLoginError(result.Reason);
+}
+```
 
 ::: tip Android 사용 시
 Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs에 `{패키지이름}://login-callback`만 등록하면 되고, 나머지는 자동 처리됩니다. 자세히는 [대시보드 설정](./setup)을 참고하세요.

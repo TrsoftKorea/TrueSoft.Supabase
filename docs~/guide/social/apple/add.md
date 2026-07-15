@@ -6,6 +6,19 @@ Task<SupabaseResult> Supabase.LinkAppleNativeAsync()
 
 이미 로그인된 계정(익명 포함)에 Apple 계정을 추가로 연동합니다(iOS). [대시보드 설정](./setup)을 먼저 완료하세요.
 
+```csharp
+var result = await Supabase.LinkAppleNativeAsync();
+if (result.IsSuccess)
+{
+    // 연동 완료 — 현재 계정에 Apple 계정 추가
+    ShowLinkedBadge();
+}
+else
+{
+    ShowLinkError(result.Reason);
+}
+```
+
 **실패 원인**
 
 | Reason | 설명 |

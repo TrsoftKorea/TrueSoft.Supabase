@@ -1,10 +1,24 @@
 # Google 신규 로그인 · iOS
 
 ```csharp
-Task<SupabaseResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
+Task<SupabaseSignInResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
 ```
 
-iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다.
+iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+
+```csharp
+var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
+if (result.IsSuccess)
+{
+    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드
+    InitGame();
+}
+else
+{
+    ShowLoginError(result.Reason);
+}
+```
 
 **파라미터**
 

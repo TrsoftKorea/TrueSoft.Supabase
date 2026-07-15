@@ -6,6 +6,15 @@ Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimAllMailItemsAsync
 
 미수령 보상이 있는 모든 우편의 보상을 한 번에 수령합니다. 각 우편은 수령과 동시에 읽음 처리됩니다.
 
+```csharp
+var result = await Supabase.ClaimAllMailItemsAsync();
+if (result.IsSuccess)
+{
+    foreach (var reward in result.Data)   // 지급된 보상 목록
+        GrantItem(reward.ItemKey, reward.Count);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

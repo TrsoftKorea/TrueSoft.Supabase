@@ -6,6 +6,18 @@ Task<SupabaseResult> Supabase.RedeemWithdrawalCancelAsync(string cancelToken = n
 
 탈퇴 취소 토큰을 사용해 탈퇴를 취소합니다.
 
+```csharp
+var result = await Supabase.RedeemWithdrawalCancelAsync(cancelToken);
+if (result.IsSuccess)
+{
+    ShowMessage("탈퇴가 취소되었습니다.");
+}
+else
+{
+    ShowError(result.Reason);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

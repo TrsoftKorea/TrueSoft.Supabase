@@ -9,6 +9,15 @@ RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T> onChange, float
 값이 변경될 때 콜백을 호출하는 리스너를 생성합니다.  
 사용이 끝나면 반드시 `Dispose()`를 호출하세요.
 
+```csharp
+var listener = RemoteConfig<GameplayConfig>.CreateListener(cfg =>
+{
+    maxStamina = cfg.maxStamina;   // 값이 바뀔 때마다 호출됨
+});
+// ...
+listener.Dispose();
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

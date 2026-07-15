@@ -60,6 +60,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             Debug.Log("[Supabase] 저장된 세션 없음 — 익명 로그인(Q) 또는 소셜 로그인(I)을 시도하세요.");
             return;
         }
+        _lastProfile = result.Profile;   // 로그인 결과에 담긴 내 프로필 보관
 
         // 자동 로그인과 데이터 로드는 별개 단계입니다 — 로그인 성공 후 직접 로드합니다(수동 로그인과 동일).
         // 신규 유저 여부는 LoadAsync 결과의 IsNewUser로 확인합니다.
@@ -89,7 +90,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         var ok = await Supabase.SignInAnonymouslyAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] 익명 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+        else
+        {
+            _lastProfile = ok.Profile;   // 로그인 결과에 담긴 내 프로필 보관
+            Debug.Log($"[Supabase] 익명 로그인 성공 — {ok.Profile.DisplayName}. 이제 데이터 로드(R)를 호출하세요.");
+        }
     }
 
     /// <summary>I — Google 로그인 (Android 네이티브). 로그인 후 데이터 로드(R)를 호출합니다.</summary>
@@ -97,7 +102,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         var ok = await Supabase.SignInWithGoogleAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] Google 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+        else
+        {
+            _lastProfile = ok.Profile;
+            Debug.Log("[Supabase] Google 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+        }
     }
 
     /// <summary>P — 익명 계정에 Google 연동. 익명 세션이 아니면 실패.</summary>
@@ -119,7 +128,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         var ok = await Supabase.SignInWithAppleAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Apple 로그인 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] Apple 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+        else
+        {
+            _lastProfile = ok.Profile;
+            Debug.Log("[Supabase] Apple 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
+        }
     }
 
     /// <summary>H — 익명 계정에 Apple 연동 (iOS 네이티브 Sign in with Apple). 익명 세션이 아니면 실패.</summary>
@@ -195,7 +208,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         var ok = await Supabase.RestoreSessionAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 세션 복원 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] 세션 복원 성공.");
+        else
+        {
+            _lastProfile = ok.Profile;
+            Debug.Log("[Supabase] 세션 복원 성공.");
+        }
     }
 
     // ─── 유저 데이터 ─────────────────────────────────────────────────────────
@@ -266,6 +283,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private RemoteConfigBinding<TestConfig>  _rcBinding;
     private RemoteConfigListener<TestConfig> _rcListener;
 
+    // 로그인 결과의 프로필을 보관해 상태 출력(A) 등에서 사용합니다. (로그인 result에만 담기므로 게임이 직접 저장)
+    private PublicProfileSnapshot _lastProfile;
+
     /// <summary>T — RemoteConfig Reader. 캐시 만료 시 서버에서 최신 값을 가져옵니다.</summary>
     private async Task TestRemoteConfigReaderAsync()
     {
@@ -329,7 +349,8 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorCode}");
             return;
         }
-        Debug.Log($"[Supabase] 닉네임 설정 완료: {nickname}");
+        _lastProfile = setOk.Data;   // 변경된 닉네임이 반영된 프로필로 교체
+        Debug.Log($"[Supabase] 닉네임 설정 완료: {setOk.Data.DisplayName}");
 
         var myId = Supabase.UserId;
         var profile = await Supabase.GetPublicProfileAsync(myId);
@@ -347,7 +368,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             Debug.Log("[Supabase] 로그인되지 않은 상태.");
             return;
         }
-        var profile    = Supabase.MyProfile;
+        var profile    = _lastProfile;   // 로그인 시 보관해 둔 내 프로필
         var serverInfo = (await Supabase.GetMyServerInfoAsync()).Data;
         Debug.Log($"[Supabase] 상태\n" +
                   $"  IsAnonymous = {Supabase.IsAnonymous}\n" +

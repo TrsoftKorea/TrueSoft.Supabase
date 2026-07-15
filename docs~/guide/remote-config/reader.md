@@ -8,6 +8,15 @@ Func<Task<T>> RemoteConfig<T>.CreateReader(int maxStale = 0)
 
 값을 읽는 함수를 반환합니다. 반환된 함수를 호출할 때마다 캐시된 값 또는 서버 최신 값을 반환합니다.
 
+```csharp
+var reader = RemoteConfig<GameplayConfig>.CreateReader();
+var cfg = await reader();
+if (cfg != null)
+{
+    maxStamina = cfg.maxStamina;
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

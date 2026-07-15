@@ -6,6 +6,15 @@ Task<SupabaseResult<string>> Supabase.GetPublicDisplayNameAsync(string userId)
 
 다른 플레이어의 닉네임을 조회합니다.
 
+```csharp
+var result = await Supabase.GetPublicDisplayNameAsync(userId);
+if (result.IsSuccess)
+{
+    var displayName = result.Data;   // 조회한 닉네임
+    ShowPlayerName(displayName);
+}
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |

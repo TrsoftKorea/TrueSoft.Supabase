@@ -6,6 +6,16 @@ Task<SupabaseResult<MailInboxCounts>> Supabase.GetMailInboxCountsAsync()
 
 미읽음·미수령 개수를 전체 집계와 분류별 세부 내역으로 한 번에 조회합니다. 분류 탭마다 배지를 붙일 때 호출을 여러 번 나누지 않고 이 한 번으로 끝납니다.
 
+```csharp
+var result = await Supabase.GetMailInboxCountsAsync();
+if (result.IsSuccess)
+{
+    var counts = result.Data;
+    mailBadge.SetCount(counts.Unread);
+    rewardBadge.SetCount(counts.UnclaimedMails);
+}
+```
+
 **반환**
 
 `.Data`는 `MailInboxCounts`입니다.

@@ -40,12 +40,14 @@ namespace TrueBase.Unity
         /// <summary>현재 계정에 Apple이 연동되어 있으면 true.</summary>
         public static bool IsLinkedWithApple => SupabaseSDK.IsLinkedWithApple;
 
-        /// <summary>
-        /// 로그인 직후 자동으로 조회·캐시된 내 프로필.
-        /// 닉네임·탈퇴 상태 등 로그인 시 1회 조회로 충분한 정보를 담습니다.
-        /// 로그아웃 후 또는 조회 전에는 <see cref="PublicProfileSnapshot.Empty"/>를 반환합니다.
-        /// </summary>
-        public static PublicProfileSnapshot MyProfile => SupabaseSDK.MyProfile;
+        /// <summary>로그인 결과(<see cref="SupabaseResult"/>)에 로그인 시 조회된 내 프로필을 실어 <see cref="SupabaseSignInResult"/>로 변환합니다.</summary>
+        private static async Task<SupabaseSignInResult> ToSignInResultAsync(Task<SupabaseResult> loginTask)
+        {
+            var r = await loginTask;
+            return r.IsSuccess
+                ? SupabaseSignInResult.Success(SupabaseSDK.CurrentMyProfile)
+                : SupabaseSignInResult.Fail(r.ErrorCode, r.BanInfo);
+        }
 
         /// <summary>
         /// 씬의 SupabaseRuntime 초기화를 잠시 대기한 뒤, 필요 시 Resources의 SupabaseSettings로 부트스트랩합니다.
@@ -56,21 +58,21 @@ namespace TrueBase.Unity
             SupabaseSDK.EnsureInitializedAsync(timeoutMs);
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync"/>
-        public static Task<SupabaseResult> SignInWithGoogleAsync() =>
-            SupabaseSDK.TrySignInWithGoogleAsync();
+        public static Task<SupabaseSignInResult> SignInWithGoogleAsync() =>
+            ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleIdTokenAsync(string)"/>
-        public static Task<SupabaseResult> SignInWithGoogleIdTokenAsync(string idToken) =>
-            SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken);
+        public static Task<SupabaseSignInResult> SignInWithGoogleIdTokenAsync(string idToken) =>
+            ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string)"/>
-        public static Task<SupabaseResult> SignInWithAppleIdTokenAsync(
+        public static Task<SupabaseSignInResult> SignInWithAppleIdTokenAsync(
             string idToken, string rawNonce = null) =>
-            SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce);
+            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleAsync"/>
-        public static Task<SupabaseResult> SignInWithAppleAsync() =>
-            SupabaseSDK.TrySignInWithAppleAsync();
+        public static Task<SupabaseSignInResult> SignInWithAppleAsync() =>
+            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousAsync"/>
         public static Task<SupabaseResult> LinkAppleToCurrentAnonymousAsync() =>
@@ -118,8 +120,8 @@ namespace TrueBase.Unity
             SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync"/>
-        public static Task<SupabaseResult> SignInAnonymouslyAsync() =>
-            SupabaseSDK.TrySignInAnonymouslyAsync();
+        public static Task<SupabaseSignInResult> SignInAnonymouslyAsync() =>
+            ToSignInResultAsync(SupabaseSDK.TrySignInAnonymouslyAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFromGoogleAsync"/>
         internal static Task<SupabaseResult> TrySignOutFromGoogleAsync() =>
@@ -275,7 +277,7 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetPublicDisplayNameAsync(userId);
 
         /// <inheritdoc cref="SupabaseSDK.TrySetMyDisplayNameAsync"/>
-        public static Task<SupabaseResult> SetMyDisplayNameAsync(string displayName) =>
+        public static Task<SupabaseResult<PublicProfileSnapshot>> SetMyDisplayNameAsync(string displayName) =>
             SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
 
         /// <inheritdoc cref="SupabaseSDK.TryIsDisplayNameAvailableAsync"/>
@@ -438,10 +440,12 @@ namespace TrueBase.Unity
         /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <c>PlayerSave.LoadAsync()</c>를 직접 호출하세요.
         /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출합니다.
         /// </summary>
-        public static Task<SupabaseResult> TriggerAutoLoginAsync() => SupabaseSDK.TryTriggerAutoLoginAsync();
+        public static Task<SupabaseSignInResult> TriggerAutoLoginAsync() =>
+            ToSignInResultAsync(SupabaseSDK.TryTriggerAutoLoginAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryRestoreSessionAsync"/>
-        public static Task<SupabaseResult> RestoreSessionAsync() => SupabaseSDK.TryRestoreSessionAsync();
+        public static Task<SupabaseSignInResult> RestoreSessionAsync() =>
+            ToSignInResultAsync(SupabaseSDK.TryRestoreSessionAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryGetMyMailsAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0, string category = null) =>

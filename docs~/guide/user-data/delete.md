@@ -6,6 +6,18 @@ Task<SupabaseResult> PlayerSave.DeleteAsync()
 
 본인 세이브를 삭제합니다. 서버의 세이브 행을 지우고 로컬 상태를 기본값으로 되돌립니다. 다음 [로드](./load.md) 시 기본값 행이 자동 재생성되므로 실질적으로 **기본값으로 리셋**됩니다.
 
+```csharp
+var result = await PlayerSave.DeleteAsync();
+if (result.IsSuccess)
+{
+    // 삭제 완료 — 로컬이 기본값으로 리셋됨
+}
+else
+{
+    // 실패 처리
+}
+```
+
 **실패 원인**
 
 | Reason | 설명 |
