@@ -147,11 +147,6 @@ namespace TrueBase.Editor
                 {
                     if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
                         FetchColumns((SupabaseSettings)target);
-                    if (GUILayout.Button(new GUIContent("한 번에 업데이트", "가져오기 → 소스 생성 → 저장을 한 번에. 기존 클래스가 있으면 그 파일에 바로 저장합니다."), GUILayout.Height(22)))
-                    {
-                        var s = (SupabaseSettings)target;
-                        EditorApplication.delayCall += () => UpdateOneClick(s);
-                    }
                 }
 
                 if (_columnsFetched && _editableColumns.Count > 0)
@@ -178,6 +173,8 @@ namespace TrueBase.Editor
                             EditorStyles.miniLabel);
                         if (GUILayout.Button(new GUIContent("위치 변경", "CSV 파일 위치를 지정/변경합니다. 지정하면 이후 저장·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(18), GUILayout.Width(70)))
                             EditorApplication.delayCall += PickCsvPath;
+                        if (GUILayout.Button(new GUIContent("열기", "저장된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 저장한 뒤 엽니다."), GUILayout.Height(18), GUILayout.Width(48)))
+                            EditorApplication.delayCall += OpenColumnsCsv;
                     }
 
                     // 미지정(정제 안 된 jsonb) 필드가 있으면 경고 + 생성 차단.
@@ -312,6 +309,8 @@ namespace TrueBase.Editor
                             EditorStyles.miniLabel);
                         if (GUILayout.Button(new GUIContent("위치 변경", "CSV 파일 위치를 지정/변경합니다. 지정하면 이후 저장·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(18), GUILayout.Width(70)))
                             EditorApplication.delayCall += PickRcCsvPath;
+                        if (GUILayout.Button(new GUIContent("열기", "저장된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 저장한 뒤 엽니다."), GUILayout.Height(18), GUILayout.Width(48)))
+                            EditorApplication.delayCall += OpenRcCsv;
                     }
 
                     // 해석 불가 타입은 경고만 하고 생성은 막지 않는다(컴파일러가 최종 확인).
@@ -832,27 +831,6 @@ namespace TrueBase.Editor
         }
 
         /// <summary>가져오기 → 소스 생성 → 저장을 한 번에. 기존 클래스가 있으면 그 경로에 바로 저장합니다.</summary>
-        private static void UpdateOneClick(SupabaseSettings settings)
-        {
-            FetchColumns(settings);
-            if (!_columnsFetched) return;   // 실패 시 FetchColumns가 이미 알림
-
-            var unspecified = CollectUnspecifiedColumnNames();
-            if (unspecified.Count > 0)
-            {
-                EditorUtility.DisplayDialog(DialogTitle,
-                    "타입 미지정 필드가 있어 업데이트를 멈췄습니다:\n" + string.Join(", ", unspecified)
-                    + "\n\nCSV에서 타입을 지정한 뒤 다시 시도하세요.", "확인");
-                return;
-            }
-
-            BuildPreviewFromColumns();
-            if (string.IsNullOrWhiteSpace(_previewText)) return;
-
-            SaveToProject();
-            Debug.Log($"[Supabase] 유저 데이터 클래스 업데이트 완료 ({_editableColumns.Count}개 컬럼).");
-        }
-
         /// <summary>
         /// 프로젝트에서 PlayerSave.cs를 찾아 [DataColumn] 필드의 컬럼명→타입 매핑을 반환합니다.
         /// 파일이 없거나 파싱 실패 시 빈 딕셔너리를 반환합니다.
@@ -995,6 +973,22 @@ namespace TrueBase.Editor
             Debug.Log($"[Supabase] CSV 위치 설정: {path}");
         }
 
+        /// <summary>
+        /// 저장된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 저장한 뒤 엽니다.
+        /// 이미 있는 파일은 덮어쓰지 않습니다(사용자 편집 보존).
+        /// </summary>
+        private static void OpenColumnsCsv()
+        {
+            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                ExportColumnsCsv();
+                path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            }
+            EditorUtility.OpenWithDefaultApp(path);
+        }
+
         // ─── RC 필드 CSV 왕복 ────────────────────────────────────────────────────
         // 헤더: field,type,include  (field=FullPath, 매칭 키. 중첩 객체 행의 type은 "(중첩 객체)" — 수정 불가)
 
@@ -1103,6 +1097,19 @@ namespace TrueBase.Editor
             if (string.IsNullOrEmpty(path)) return;
             EditorPrefs.SetString(PrefsKeyRcCsvPath, path);
             Debug.Log($"[Supabase] RC CSV 위치 설정: {path}");
+        }
+
+        /// <summary>저장된 RC CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 저장한 뒤 엽니다.</summary>
+        private static void OpenRcCsv()
+        {
+            var path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                ExportRcFieldsCsv();
+                path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            }
+            EditorUtility.OpenWithDefaultApp(path);
         }
 
         /// <summary>CLR 타입 문자열을 RC 필드에 적용합니다(컬럼 적용과 같은 규칙).</summary>
