@@ -6,7 +6,6 @@ using TrueBase.Core.Data;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
 using UnityEngine;
-using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// Supabase SDK 기능 예제 컴포넌트.
@@ -38,7 +37,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     private void Awake()
     {
-        SupabaseClient.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
+        Supabase.OnDuplicateLoginDetected += HandleDuplicateLoginDetected;
         // 신규 유저 초기값 지급은 로드 후 LoadAsync 결과의 IsNewUser로 처리합니다(아래 GiftNewUserIfNeeded).
     }
 
@@ -71,7 +70,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     private void OnDestroy()
     {
-        SupabaseClient.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
+        Supabase.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
         _rcListener?.Dispose();
         _rcBinding?.Dispose();
     }
@@ -88,7 +87,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>Q — 익명 로그인. 로그인과 데이터 로드는 별개 단계 — 로그인 후 데이터 로드(R)를 호출합니다.</summary>
     private async Task SignInAnonymouslyAsync()
     {
-        var ok = await SupabaseClient.SignInAnonymouslyAsync();
+        var ok = await Supabase.SignInAnonymouslyAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 익명 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 익명 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
@@ -96,7 +95,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>I — Google 로그인 (Android 네이티브). 로그인 후 데이터 로드(R)를 호출합니다.</summary>
     private async Task SignInWithGoogleAsync()
     {
-        var ok = await SupabaseClient.SignInWithGoogleAsync();
+        var ok = await Supabase.SignInWithGoogleAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Google 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
@@ -104,13 +103,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>P — 익명 계정에 Google 연동. 익명 세션이 아니면 실패.</summary>
     private async Task LinkGoogleAsync()
     {
-        if (!SupabaseClient.IsLoggedIn || !SupabaseClient.IsAnonymous)
+        if (!Supabase.IsLoggedIn || !Supabase.IsAnonymous)
         {
             Debug.LogWarning("[Supabase] Google 연동 실패: 익명 세션이 아닙니다.");
             return;
         }
 
-        var ok = await SupabaseClient.LinkGoogleToCurrentAnonymousAsync();
+        var ok = await Supabase.LinkGoogleToCurrentAnonymousAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Google 연동 성공.");
     }
@@ -118,7 +117,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>B — Apple 로그인 (iOS 네이티브 Sign in with Apple). 익명 세션이면 실패 — 연동은 H를 쓰세요.</summary>
     private async Task SignInWithAppleAsync()
     {
-        var ok = await SupabaseClient.SignInWithAppleAsync();
+        var ok = await Supabase.SignInWithAppleAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Apple 로그인 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Apple 로그인 성공. 이제 데이터 로드(R)를 호출하세요.");
     }
@@ -126,13 +125,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>H — 익명 계정에 Apple 연동 (iOS 네이티브 Sign in with Apple). 익명 세션이 아니면 실패.</summary>
     private async Task LinkAppleAsync()
     {
-        if (!SupabaseClient.IsLoggedIn || !SupabaseClient.IsAnonymous)
+        if (!Supabase.IsLoggedIn || !Supabase.IsAnonymous)
         {
             Debug.LogWarning("[Supabase] Apple 연동 실패: 익명 세션이 아닙니다.");
             return;
         }
 
-        var ok = await SupabaseClient.LinkAppleToCurrentAnonymousAsync();
+        var ok = await Supabase.LinkAppleToCurrentAnonymousAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Apple 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Apple 연동 성공.");
     }
@@ -140,13 +139,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>K — 현재 계정에서 Google 연동 해제. 마지막 남은 연동이면 실패하며, 성공 시 다음 연동 때 계정 선택창이 다시 뜹니다.</summary>
     private async Task UnlinkGoogleAsync()
     {
-        if (!SupabaseClient.IsLoggedIn)
+        if (!Supabase.IsLoggedIn)
         {
             Debug.LogWarning("[Supabase] Google 연동 해제 실패: 로그인 상태가 아닙니다.");
             return;
         }
 
-        var ok = await SupabaseClient.UnlinkGoogleAsync();
+        var ok = await Supabase.UnlinkGoogleAsync();
         if (!ok)
         {
             if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
@@ -163,13 +162,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>L — 현재 계정에서 Apple 연동 해제. 마지막 남은 연동이면 실패합니다.</summary>
     private async Task UnlinkAppleAsync()
     {
-        if (!SupabaseClient.IsLoggedIn)
+        if (!Supabase.IsLoggedIn)
         {
             Debug.LogWarning("[Supabase] Apple 연동 해제 실패: 로그인 상태가 아닙니다.");
             return;
         }
 
-        var ok = await SupabaseClient.UnlinkAppleAsync();
+        var ok = await Supabase.UnlinkAppleAsync();
         if (!ok)
         {
             if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
@@ -186,7 +185,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>W — 로그아웃. Google 네이티브 로그아웃 포함, 로그아웃 전 자동 flush.</summary>
     private async Task SignOutAsync()
     {
-        var ok = await SupabaseClient.SignOutFullyAsync();
+        var ok = await Supabase.SignOutFullyAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 로그아웃 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 로그아웃 완료.");
     }
@@ -194,7 +193,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>O — 로컬 저장 세션으로 로그인 복원.</summary>
     private async Task RestoreSessionAsync()
     {
-        var ok = await SupabaseClient.RestoreSessionAsync();
+        var ok = await Supabase.RestoreSessionAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 세션 복원 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 세션 복원 성공.");
     }
@@ -204,7 +203,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>R — 세이브를 서버에서 불러옵니다.</summary>
     private async Task LoadPlayerDataAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var loaded = await SamplePlayerSave.LoadAsync();
         if (!loaded) { Debug.LogWarning("[Supabase] 데이터 로드 실패."); return; }
@@ -219,9 +218,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// </summary>
     private async Task SavePlayerDataAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SupabaseClient.SaveAllAsync();
+        var ok = await Supabase.SaveAllAsync();
         if (!ok) Debug.LogWarning("[Supabase] 데이터 저장 실패.");
         else     Debug.Log("[Supabase] 데이터 저장 완료.");
     }
@@ -240,7 +239,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// </summary>
     private async Task DeletePlayerDataAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var ok = await SamplePlayerSave.DeleteAsync();
         if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorCode}"); return; }
@@ -312,11 +311,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// </summary>
     private async Task TestPublicProfileAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         const string nickname = "TestPlayer";
 
-        var available = await SupabaseClient.IsDisplayNameAvailableAsync(nickname);
+        var available = await Supabase.IsDisplayNameAvailableAsync(nickname);
         if (!available)
         {
             Debug.LogWarning($"[Supabase] 닉네임 '{nickname}' 이미 사용 중 또는 확인 실패: {available.ErrorCode}");
@@ -324,7 +323,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
         Debug.Log($"[Supabase] 닉네임 '{nickname}' 사용 가능.");
 
-        var setOk = await SupabaseClient.SetMyDisplayNameAsync(nickname);
+        var setOk = await Supabase.SetMyDisplayNameAsync(nickname);
         if (!setOk)
         {
             Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorCode}");
@@ -332,8 +331,8 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
         Debug.Log($"[Supabase] 닉네임 설정 완료: {nickname}");
 
-        var myId = SupabaseClient.UserId;
-        var profile = await SupabaseClient.GetPublicProfileAsync(myId);
+        var myId = Supabase.UserId;
+        var profile = await Supabase.GetPublicProfileAsync(myId);
         if (profile) Debug.Log($"[Supabase] 프로필 — 닉네임: {profile.Data.DisplayName}, 서버: {profile.Data.ServerCode}");
         else         Debug.LogWarning("[Supabase] 프로필 조회 실패.");
     }
@@ -343,16 +342,16 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>A — 현재 세션 상태 및 서버 정보를 Console에 출력합니다.</summary>
     private async Task PrintStatusAsync()
     {
-        if (!SupabaseClient.IsLoggedIn)
+        if (!Supabase.IsLoggedIn)
         {
             Debug.Log("[Supabase] 로그인되지 않은 상태.");
             return;
         }
-        var profile    = SupabaseClient.MyProfile;
-        var serverInfo = (await SupabaseClient.GetMyServerInfoAsync()).Data;
+        var profile    = Supabase.MyProfile;
+        var serverInfo = (await Supabase.GetMyServerInfoAsync()).Data;
         Debug.Log($"[Supabase] 상태\n" +
-                  $"  IsAnonymous = {SupabaseClient.IsAnonymous}\n" +
-                  $"  UserId      = {SupabaseClient.UserId}\n" +
+                  $"  IsAnonymous = {Supabase.IsAnonymous}\n" +
+                  $"  UserId      = {Supabase.UserId}\n" +
                   $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
                   $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
                   $"  IsWithdrawn = {profile?.IsWithdrawn}\n" +
@@ -362,7 +361,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>J — 서버 시간을 조회합니다.</summary>
     private async Task GetServerTimeAsync()
     {
-        var time = await SupabaseClient.GetServerUtcNowAsync();
+        var time = await Supabase.GetServerUtcNowAsync();
         if (!time) Debug.LogWarning("[Supabase] 서버 시간 조회 실패.");
         else       Debug.Log($"[Supabase] 서버 시간: {time.Data:yyyy-MM-dd HH:mm:ss} UTC");
     }
@@ -370,10 +369,10 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>G — 현재 계정의 차단 정보를 조회합니다.</summary>
     private async Task GetBanInfoAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var accountId = SupabaseClient.UserId;
-        var banInfo = await SupabaseClient.GetBanInfoAsync(accountId);
+        var accountId = Supabase.UserId;
+        var banInfo = await Supabase.GetBanInfoAsync(accountId);
         if (!banInfo)
             Debug.LogWarning($"[Supabase] 차단 정보 조회 실패: {banInfo.ErrorCode}");
         else if (banInfo.Data == null)
@@ -387,9 +386,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>D — 탈퇴 신청 (15일 유예). 실제 테스트 시 주의.</summary>
     private async Task RequestWithdrawalAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SupabaseClient.RequestMyWithdrawalAsync();
+        var ok = await Supabase.RequestMyWithdrawalAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
     }
@@ -397,9 +396,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>S — 탈퇴 예약 상태를 조회합니다.</summary>
     private async Task GetWithdrawalStatusAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var status = await SupabaseClient.GetMyWithdrawalStatusAsync();
+        var status = await Supabase.GetMyWithdrawalStatusAsync();
         if (!status)
             Debug.LogWarning($"[Supabase] 탈퇴 상태 조회 실패: {status.ErrorCode}");
         else if (status.Data == null || !status.Data.IsScheduled)
@@ -411,9 +410,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>C — 탈퇴 취소. 탈퇴 예약 상태여야 합니다.</summary>
     private async Task ClearWithdrawalAsync()
     {
-        if (!SupabaseClient.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
+        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SupabaseClient.ClearMyWithdrawalAsync();
+        var ok = await Supabase.ClearMyWithdrawalAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
     }

@@ -3,8 +3,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using TrueBase.Core.Common;
 using TrueBase.Core.Data;
+using TrueBase.Unity;
 using UnityEngine;
-using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// 우편함 분류(category) 예제 컴포넌트. SupabaseRuntime이 씬에 있어야 합니다.
@@ -54,21 +54,21 @@ public sealed class SampleMailbox : MonoBehaviour
     /// <summary>1 — 익명 로그인 후 발송 대상 식별자를 출력합니다.</summary>
     private async Task SignInAndPrintIdAsync()
     {
-        if (!SupabaseClient.IsLoggedIn)
+        if (!Supabase.IsLoggedIn)
         {
-            var ok = await SupabaseClient.SignInAnonymouslyAsync();
+            var ok = await Supabase.SignInAnonymouslyAsync();
             if (!ok) { Debug.LogWarning($"{Tag} 로그인 실패: {ok.ErrorCode}"); return; }
         }
 
         Debug.Log($"{Tag} 로그인됨. 이 account_id로 테스트 메일을 발송하세요(Retool/SQL Editor).\n" +
-                  $"  UserId = {SupabaseClient.UserId}\n" +
+                  $"  UserId = {Supabase.UserId}\n" +
                   $"  발송 시 category='{demoCategory}', items[].key='{demoItemKey}'로 맞추면 데모가 동작합니다.");
     }
 
     /// <summary>2·3 — 목록 조회. category=null이면 전체.</summary>
     private async Task ListAsync(string category)
     {
-        var r = await SupabaseClient.GetMyMailsAsync(category: category);
+        var r = await Supabase.GetMyMailsAsync(category: category);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 목록 조회 실패: {r.ErrorCode}"); return; }
 
         _lastList = r.Data;
@@ -81,7 +81,7 @@ public sealed class SampleMailbox : MonoBehaviour
     /// <summary>4 — 미읽음·미수령 전체 집계 + 분류별 세부.</summary>
     private async Task DumpCountsAsync()
     {
-        var r = await SupabaseClient.GetMailInboxCountsAsync();
+        var r = await Supabase.GetMailInboxCountsAsync();
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 현황 조회 실패: {r.ErrorCode}"); return; }
 
         var c = r.Data;
@@ -96,7 +96,7 @@ public sealed class SampleMailbox : MonoBehaviour
         var target = _lastList?.FirstOrDefault(m => m.HasUnclaimedItems);
         if (target == null) { Debug.Log($"{Tag} 수령할 메일이 없습니다. 먼저 2·3으로 목록을 조회하세요."); return; }
 
-        var r = await SupabaseClient.ClaimMailItemsAsync(target.Id);
+        var r = await Supabase.ClaimMailItemsAsync(target.Id);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 수령 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 수령 완료 — {string.Join(", ", r.Data.Select(x => $"{x.ItemKey}x{x.Count}"))}");
@@ -105,7 +105,7 @@ public sealed class SampleMailbox : MonoBehaviour
     /// <summary>6 — Demo Category 분류의 보상을 일괄 수령합니다.</summary>
     private async Task ClaimAllInCategoryAsync()
     {
-        var r = await SupabaseClient.ClaimAllMailItemsAsync(demoCategory);
+        var r = await Supabase.ClaimAllMailItemsAsync(demoCategory);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 일괄 수령 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 분류 '{demoCategory}' 일괄 수령 — 총 {r.Data.Count}건 지급");
@@ -114,7 +114,7 @@ public sealed class SampleMailbox : MonoBehaviour
     /// <summary>7 — Demo Category 분류의 읽은 우편을 일괄 삭제합니다.</summary>
     private async Task DeleteReadInCategoryAsync()
     {
-        var r = await SupabaseClient.DeleteReadMailsAsync(demoCategory);
+        var r = await Supabase.DeleteReadMailsAsync(demoCategory);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 일괄 삭제 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 분류 '{demoCategory}' 읽은 우편 {r.Data}건 삭제");
@@ -126,7 +126,7 @@ public sealed class SampleMailbox : MonoBehaviour
         var target = _lastList?.FirstOrDefault(m => m.CanDeleteFromInbox);
         if (target == null) { Debug.Log($"{Tag} 삭제할 메일이 없습니다. 먼저 2·3으로 목록을 조회하세요."); return; }
 
-        var r = await SupabaseClient.DeleteMailAsync(target.Id);
+        var r = await Supabase.DeleteMailAsync(target.Id);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 삭제 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 삭제 완료 — {target.Title}");

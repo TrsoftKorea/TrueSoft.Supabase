@@ -2,7 +2,6 @@
 using System.Threading.Tasks;
 using TrueBase.Unity;
 using UnityEngine;
-using SupabaseClient = global::TrueBase.Unity.Supabase;
 
 /// <summary>
 /// Supabase IAP 서버 검증 예제 컴포넌트.
@@ -47,7 +46,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
     private void Update()
     {
         // 로그인 감지 → IAP 자동 초기화 (중복 방지)
-        if (!_initializationAttempted && SupabaseClient.IsLoggedIn)
+        if (!_initializationAttempted && Supabase.IsLoggedIn)
         {
             _initializationAttempted = true;
             _ = InitializeIAPAsync();
