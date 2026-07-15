@@ -154,16 +154,17 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(6);
                     DrawColumnList();
 
-                    EditorGUILayout.Space(2);
+                    EditorGUILayout.Space(8);
                     // 파일 다이얼로그·DisplayDialog는 layout 스코프 도중 열면 IMGUI 그룹 스택을
                     // 깨뜨리므로(EndLayoutGroup 오류), delayCall로 OnInspectorGUI 밖에서 실행한다.
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 컬럼 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 컬럼 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(24)))
                             EditorApplication.delayCall += ExportColumnsCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 설정에 반영"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 설정에 반영"), GUILayout.Height(24)))
                             EditorApplication.delayCall += ImportColumnsCsv;
                     }
+                    EditorGUILayout.Space(2);
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         var csvPath = EditorPrefs.GetString(PrefsKeyCsvPath, "");
@@ -231,7 +232,7 @@ namespace TrueBase.Editor
                 {
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("미리보기", EditorStyles.boldLabel);
-                    using (var sv = new EditorGUILayout.ScrollViewScope(_previewScroll, GUILayout.Height(220)))
+                    using (var sv = new EditorGUILayout.ScrollViewScope(_previewScroll, GUILayout.Height(260)))
                     {
                         _previewScroll = sv.scrollPosition;
                         var w = EditorGUIUtility.currentViewWidth - 32f;
@@ -291,15 +292,16 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(6);
                     DrawRcFieldList();
 
-                    EditorGUILayout.Space(2);
+                    EditorGUILayout.Space(8);
                     // 파일 다이얼로그는 delayCall로 OnInspectorGUI 밖에서 실행(IMGUI 그룹 스택 보호).
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 필드 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 필드 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(24)))
                             EditorApplication.delayCall += ExportRcFieldsCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 필드 경로 기준으로 설정에 반영"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 필드 경로 기준으로 설정에 반영"), GUILayout.Height(24)))
                             EditorApplication.delayCall += ImportRcFieldsCsv;
                     }
+                    EditorGUILayout.Space(2);
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         var rcCsvPath = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
@@ -347,7 +349,7 @@ namespace TrueBase.Editor
                 {
                     EditorGUILayout.Space(4);
                     EditorGUILayout.LabelField("미리보기", EditorStyles.boldLabel);
-                    using (var sv = new EditorGUILayout.ScrollViewScope(_rcPreviewScroll, GUILayout.Height(220)))
+                    using (var sv = new EditorGUILayout.ScrollViewScope(_rcPreviewScroll, GUILayout.Height(260)))
                     {
                         _rcPreviewScroll = sv.scrollPosition;
                         var w = EditorGUIUtility.currentViewWidth - 32f;
@@ -455,15 +457,18 @@ namespace TrueBase.Editor
 
         private static void DrawRcFieldList()
         {
+            // 필드 열을 사용 가능한 폭에 맞춰 넓힙니다(타입은 나머지를 채움).
+            float rcField = Mathf.Max(160f, (EditorGUIUtility.currentViewWidth - 42f) * 0.45f);
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(120));
-                EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(30));
-                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel); // 가변 폭 — 맨 끝
+                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(rcField));
+                EditorGUILayout.LabelField("포함", EditorStyles.miniLabel, GUILayout.Width(34));
+                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
-            var listHeight = Mathf.Min(_rcFields.Count * rowHeight + 4f, 220f);
+            var listHeight = Mathf.Min(_rcFields.Count * rowHeight + 4f, 280f);
 
             using (var sv = new EditorGUILayout.ScrollViewScope(_rcFieldScroll, GUILayout.Height(listHeight)))
             {
@@ -480,7 +485,7 @@ namespace TrueBase.Editor
                         {
                             var nodeLabel = f.JsonKey + " → " + f.NestedClassName;
                             EditorGUILayout.LabelField(new GUIContent(nodeLabel, f.FullPath),
-                                EditorStyles.boldLabel, GUILayout.MinWidth(120));
+                                EditorStyles.boldLabel, GUILayout.MinWidth(rcField));
                             using (new EditorGUI.DisabledScope(true))
                                 EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
                             EditorGUILayout.LabelField("중첩 객체", EditorStyles.miniLabel, GUILayout.ExpandWidth(true));
@@ -493,7 +498,7 @@ namespace TrueBase.Editor
                             var style = error ? ErrorStyle : warn ? AmbiguousStyle : EditorStyles.label;
 
                             var fieldLabel = error ? "✕ " + f.JsonKey : warn ? "⚠ " + f.JsonKey : f.JsonKey;
-                            EditorGUILayout.LabelField(new GUIContent(fieldLabel, f.FullPath), style, GUILayout.MinWidth(120));
+                            EditorGUILayout.LabelField(new GUIContent(fieldLabel, f.FullPath), style, GUILayout.MinWidth(rcField));
 
                             using (new EditorGUI.DisabledScope(true))
                                 EditorGUILayout.Toggle(f.Include, GUILayout.Width(20));
@@ -650,19 +655,29 @@ namespace TrueBase.Editor
                 EditorGUILayout.LabelField($"필터 표시: {visible.Count} / {_editableColumns.Count}", EditorStyles.miniLabel);
             }
 
+            // 사용 가능한 폭에 맞춰 열 너비를 배분합니다 — 좁으면 줄고, 인스펙터를 넓히면 그만큼 퍼집니다.
+            float avail    = Mathf.Max(360f, EditorGUIUtility.currentViewWidth - 42f);
+            float wCycle   = 64f;   // 저장 주기(고정)
+            float wInclude = 34f;   // 포함(고정)
+            float flex     = avail - wCycle - wInclude;
+            float wName    = Mathf.Round(flex * 0.22f);   // 컬럼
+            float wField   = Mathf.Round(flex * 0.26f);   // 필드명
+            float wDefault = Mathf.Round(flex * 0.20f);   // 기본값
+            // 타입은 나머지 폭을 전부 차지(ExpandWidth) — 헤더·행 모두 동일하게 확장돼 정렬이 맞습니다.
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(92));
-                EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(110));
-                EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(58));
+                EditorGUILayout.LabelField("컬럼",     EditorStyles.miniLabel, GUILayout.Width(wName));
+                EditorGUILayout.LabelField("필드명",   EditorStyles.miniLabel, GUILayout.Width(wField));
+                EditorGUILayout.LabelField("저장 주기", EditorStyles.miniLabel, GUILayout.Width(wCycle));
                 EditorGUILayout.LabelField(new GUIContent("기본값", "새 유저 시작값. 스칼라는 = 초기화, Auto 컬렉션은 [AutoDefault]로 생성됩니다."),
-                    EditorStyles.miniLabel, GUILayout.Width(84));
-                EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(30));
-                EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel); // 가변 폭 — 맨 끝
+                    EditorStyles.miniLabel, GUILayout.Width(wDefault));
+                EditorGUILayout.LabelField("포함",     EditorStyles.miniLabel, GUILayout.Width(wInclude));
+                EditorGUILayout.LabelField("타입",     EditorStyles.miniLabel, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
             }
 
             var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
-            var listHeight = Mathf.Min(Mathf.Max(1, visible.Count) * rowHeight + 4f, 240f);
+            var listHeight = Mathf.Min(Mathf.Max(1, visible.Count) * rowHeight + 4f, 300f);
 
             using (var sv = new EditorGUILayout.ScrollViewScope(_columnScroll, GUILayout.Height(listHeight)))
             {
@@ -678,19 +693,19 @@ namespace TrueBase.Editor
                         var style = error ? ErrorStyle : warn ? AmbiguousStyle : EditorStyles.label;
 
                         var label = error ? "✕ " + col.Name : warn ? "⚠ " + col.Name : col.Name;
-                        EditorGUILayout.LabelField(new GUIContent(label, col.Name), style, GUILayout.Width(92));
+                        EditorGUILayout.LabelField(new GUIContent(label, col.Name), style, GUILayout.Width(wName));
 
-                        EditorGUILayout.LabelField(new GUIContent(col.FieldName, col.FieldName), GUILayout.Width(110));
-                        EditorGUILayout.LabelField(PriorityLabel(col.Priority), GUILayout.Width(58));
-                        EditorGUILayout.LabelField(new GUIContent(col.DefaultValue ?? "", col.DefaultValue), GUILayout.Width(84));
+                        EditorGUILayout.LabelField(new GUIContent(col.FieldName, col.FieldName), GUILayout.Width(wField));
+                        EditorGUILayout.LabelField(PriorityLabel(col.Priority), GUILayout.Width(wCycle));
+                        EditorGUILayout.LabelField(new GUIContent(col.DefaultValue ?? "", col.DefaultValue), GUILayout.Width(wDefault));
 
                         using (new EditorGUI.DisabledScope(true))
-                            EditorGUILayout.Toggle(col.Include, GUILayout.Width(20));
+                            EditorGUILayout.Toggle(col.Include, GUILayout.Width(wInclude));
 
                         var typeTooltip = error ? resolvedType + " — 에디터가 찾지 못한 타입. 철자가 맞다면 생성 가능."
                                         : warn  ? resolvedType + " — 타입 미지정. CSV에서 지정하세요."
                                         : resolvedType;
-                        EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.ExpandWidth(true));
+                        EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
                     }
                 }
             }
