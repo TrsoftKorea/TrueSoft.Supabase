@@ -245,9 +245,8 @@ namespace TrueBase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null,
             Func<float> getDirtyCooldown = null) =>
-            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, loadAsync, getDirtyCooldown);
+            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown);
 
         /// <summary>정적 세이브 값이 바뀌었음을 알립니다(쿨타임 스케줄).</summary>
         internal static void MarkUserSaveStaticDirty(string key) =>
@@ -260,12 +259,6 @@ namespace TrueBase.Unity
         /// <summary>특정 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
         internal static Task<bool> TryFlushUserSaveImmediateAsync(string key, int timeoutMs = 5000) =>
             SupabaseSDK.TryFlushUserSaveImmediateAsync(key, timeoutMs);
-
-        /// <summary>등록된 모든 정적 세이브를 로드합니다. 하나라도 실패하면 실패를 반환합니다.</summary>
-        public static async Task<SupabaseResult> LoadAllUserSavesAsync() =>
-            await SupabaseSDK.TryLoadAllUserSavesAsync()
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
         /// <summary>등록된 모든 정적 세이브에 즉시 전송을 요청합니다.</summary>
         internal static void RequestImmediateUserSaveStaticFlushAll() =>
@@ -442,7 +435,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅을 수행합니다.
-        /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <see cref="LoadAllUserSavesAsync"/>(또는 각 세이브의 LoadAsync)를 직접 호출하세요.
+        /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <c>PlayerSave.LoadAsync()</c>를 직접 호출하세요.
         /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출합니다.
         /// </summary>
         public static Task<SupabaseResult> TriggerAutoLoginAsync() => SupabaseSDK.TryTriggerAutoLoginAsync();

@@ -76,6 +76,9 @@ namespace TrueBase.Unity
         private readonly   bool   _hasReferenceColumns;  // 컬렉션·클래스 컬럼 보유 여부(값 비교 감지용)
         private            float  _lastDeepCheckTime = float.MinValue;  // 값 비교 throttle 타임스탬프
         private            bool   _lastDeepResult;                      // 캐시된 값 비교 결과
+        private            bool   _hasLoadedOnce;                       // 최초 로드 완료 여부(로드 전 auto-flush 차단용)
+        private            TRow   _loadFallback;                        // 로드 전에 세팅한 초기값 스냅샷(1회 캡처)
+        private            bool   _fallbackCaptured;                    // _loadFallback 캡처 여부
         protected readonly string _syncKey;
         protected readonly string LogTag;
 
@@ -110,7 +113,6 @@ namespace TrueBase.Unity
             if (_isRegistered) return;
             Supabase.RegisterUserSaveStaticSync(
                 _syncKey, HasDirty, FlushDirtyAsync, ResetLocalState,
-                async () => (await LoadAsync()).IsSuccess,
                 GetDirtyCooldown);
             _isRegistered = true;
         }
@@ -136,6 +138,9 @@ namespace TrueBase.Unity
         // 즉시 저장(앱 종료 등)은 FlushDirtyAsync가 throttle을 무시하고 신선하게 검사하므로 정확성은 보장됩니다.
         private bool HasDirty()
         {
+            // 최초 로드 완료 전에는 저장하지 않는다. 로드 전에 지정한 초기값(fallback)이
+            // 서버 데이터를 확인하기도 전에 auto-flush로 조기 저장되는 것을 막는다.
+            if (!_hasLoadedOnce) return false;
             if (_isDirty) return true;
             if (!_hasReferenceColumns) return false;
 
@@ -187,16 +192,11 @@ namespace TrueBase.Unity
             DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = new TRow();
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
-            _isDirty    = false;
+            _isDirty       = false;
+            _hasLoadedOnce = false;  // 재로그인 시 다시 로드 완료 전까지 auto-flush 차단
+            // _loadFallback/_fallbackCaptured는 유지 — fallback은 앱 수명 설정이라
+            // 로그아웃 후 재로그인에도 동일 적용(Current가 리셋돼도 스냅샷으로 재적용).
         }
-
-        /// <summary>
-        /// 신규 유저(로드 시 DB에 본인 행이 없던 경우)의 <b>최초 로드</b>에서, 기본값이 적용된 직후·최초 저장 직전에 발행됩니다.
-        /// 여기서 초기값을 설정하면(예: <c>PlayerSave.Heroes[HeroName.A1].Count = 1</c>) 그 값이 서버에 저장됩니다.
-        /// <para>기존 유저 로드나 재로그인 시에는 발행되지 않습니다. 로그인 전에 한 번 구독하세요.</para>
-        /// </summary>
-        public event Action OnFirstLoad;
-
 
         /// <summary>
         /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
@@ -366,11 +366,15 @@ namespace TrueBase.Unity
         /// <summary>
         /// 로드한 Row를 Current와 _lastSynced에 적용하는 공유 헬퍼입니다.
         /// <see cref="LoadAsync"/>(서버 조회)와 PlayNANOO 이관 인터셉터(DB 재조회 없는 주입)가 함께 사용합니다.
+        /// <para>
+        /// 참조 타입 컬럼이 <paramref name="row"/>에서 null(SQL NULL)이고 로드 전 초기값(<c>_loadFallback</c>)이
+        /// 캡처돼 있으면 그 값을 유지합니다. fallback이 없으면 <see cref="DataSchema.CopyInto{T}"/>와 동일하게 동작합니다.
+        /// </para>
         /// </summary>
         private void ApplyRow(TRow row)
         {
-            DataSchema.CopyInto(Current, row);
-            DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (CopyInto가 새 인스턴스를 만들므로 매번 필요)
+            DataSchema.MergeServerOverFallback(Current, row, _loadFallback);
+            DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (병합이 새 인스턴스를 만들므로 매번 필요)
             _lastSynced = DataSchema.CloneRow(row);
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
@@ -397,18 +401,28 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// DB에서 세이브를 로드해 <see cref="CurrentRow"/>에 적용합니다. 행이 없으면 생성 후 재로드합니다.
-        /// 반환(<see cref="SupabaseResult"/>) 시점에 적용이 끝나 있으므로, 로드 후 처리는 <c>await</c> 다음에 이어서 작성합니다.
+        /// 반환값(<see cref="SupabaseLoadResult"/>)의 <see cref="SupabaseLoadResult.IsNewUser"/>로 신규 유저 여부를 확인하고,
+        /// 반환 시점에 적용이 끝나 있으므로 로드 후 처리는 <c>await</c> 다음에 이어서 작성합니다.
         /// </summary>
         /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
-        public async Task<SupabaseResult> LoadAsync(bool includeUpdatedAt = true)
+        public async Task<SupabaseLoadResult> LoadAsync(bool includeUpdatedAt = true)
         {
             EnsureRegistered();
+
+            // 서버 조회 전에, 로드 전 개발자가 지정한 초기값(fallback)을 1회 스냅샷해 얼려둔다.
+            // 이후 로드는 이 스냅샷 기준으로 병합하므로, 재로그인 시 이전 플레이 데이터가 부활하지 않는다.
+            if (!_fallbackCaptured)
+            {
+                _loadFallback = DataSchema.CloneRow(Current);
+                _fallbackCaptured = true;
+            }
+
             var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
-            if (!success) return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+            if (!success) return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
-            // DB에 본인 행이 없던 신규 유저면 아래에서 OnFirstLoad로 초기값 세팅 기회를 준다.
+            // DB에 본인 행이 없던 신규 유저 여부. 반환값 IsNewUser로 노출한다.
             var isNewUser = !hasRow;
 
             if (!hasRow)
@@ -417,34 +431,32 @@ namespace TrueBase.Unity
                 if (ensured == null || !ensured.IsSuccess)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorCode ?? "null"}");
-                    return SupabaseResult.Fail(ensured?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseLoadResult.Fail(ensured?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
                 }
 
                 bool hasRow2;
                 (success, hasRow2, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                     defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
-                if (!success) return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                if (!success) return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
 
                 if (!hasRow2)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: 행 생성 후 재로드에서도 행을 찾을 수 없음.");
-                    return SupabaseResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
                 }
             }
 
             ApplyRow(row);
 
-            // 신규 유저: 개발자가 초기값을 세팅(OnFirstLoad)한 뒤 그 변경분을 즉시 서버에 저장.
-            // _lastSynced는 기본값 기준이므로 SaveIfChangedAsync가 변경분(예: A1 count=1)만 PATCH한다.
-            if (isNewUser && OnFirstLoad != null)
-            {
-                OnFirstLoad.Invoke();
-                var initSave = await SaveIfChangedAsync();
-                if (!initSave.IsSuccess)
-                    Debug.LogWarning($"{LogTag} 신규 유저 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 로드에서 재시도됩니다.");
-            }
+            // 서버에 없던(SQL NULL) 컬렉션 컬럼에 로드 전 초기값(fallback)이 유지됐다면,
+            // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
+            // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
+            var initSave = await SaveIfChangedAsync();
+            if (!initSave.IsSuccess)
+                Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
-            return SupabaseResult.Ok;
+            _hasLoadedOnce = true;
+            return SupabaseLoadResult.Success(isNewUser);
         }
 
         /// <summary>

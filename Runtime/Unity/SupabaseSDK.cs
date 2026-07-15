@@ -1352,10 +1352,9 @@ namespace TrueBase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null,
             Func<float> getDirtyCooldown = null)
         {
-            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, loadAsync, getDirtyCooldown);
+            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown);
         }
 
         /// <summary>정적 세이브에 변경이 생겼음을 알립니다(쿨타임 스케줄).</summary>
@@ -1375,10 +1374,6 @@ namespace TrueBase.Unity
         {
             return UserSaveStaticSyncRegistry.RequestImmediateFlushAsync(key, timeoutMs);
         }
-
-        /// <summary>등록된 모든 정적 세이브를 로드합니다. 하나라도 실패하면 false를 반환합니다.</summary>
-        public static Task<bool> TryLoadAllUserSavesAsync() =>
-            UserSaveStaticSyncRegistry.LoadAllAsync();
 
         /// <summary>등록된 모든 정적 세이브에 즉시 전송을 요청합니다.</summary>
         public static void RequestImmediateUserSaveStaticFlushAll()
@@ -1441,7 +1436,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 저장된 세션으로 자동 로그인 → 등록된 후처리 훅을 수행합니다. <b>UserSave 로드는 포함하지 않습니다</b>
-        /// — 성공 후 <see cref="TryLoadAllUserSavesAsync"/>나 각 세이브의 LoadAsync를 직접 호출하세요(수동 로그인과 동일한 2단계).
+        /// — 성공 후 <c>PlayerSave.LoadAsync()</c>를 직접 호출하세요(수동 로그인과 동일한 2단계).
         /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리합니다.
         /// </summary>
         public static async Task<SupabaseResult> TryTriggerAutoLoginAsync()

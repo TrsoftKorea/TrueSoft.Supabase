@@ -153,6 +153,40 @@ namespace TrueBase.Core.Data
             CopyColumnsInto(dst, src ?? new T());
         }
 
+        /// <summary>
+        /// 서버 Row를 <paramref name="dst"/>에 적용하되, <b>참조 타입 컬럼</b>이 서버에서 null(SQL NULL)이면
+        /// <paramref name="fallback"/>의 값을 유지합니다. 값 타입 컬럼은 항상 <paramref name="serverRow"/>가 우선합니다
+        /// (서버의 "없음"과 "기본값"을 구분할 수 없으므로).
+        /// <para>
+        /// <paramref name="fallback"/>이 null이거나 해당 멤버가 null이면 결과는 <see cref="CopyInto{T}"/>와 동일합니다
+        /// (참조 null→null, 값 타입 그대로). 즉 fallback이 없으면 기존 복사 동작의 엄격한 상위집합입니다.
+        /// </para>
+        /// 로드 전에 개발자가 지정한 컬렉션 초기값을, 서버에 아직 값이 없을 때만 살리는 데 사용합니다.
+        /// </summary>
+        public static void MergeServerOverFallback<T>(T dst, T serverRow, T fallback) where T : class, new()
+        {
+            if (dst == null) return;
+            var server = serverRow ?? new T();
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var mt = MemberValueType(m);
+                object chosen;
+                if (mt != null && mt.IsValueType)
+                {
+                    // 값 타입: 항상 서버 우선.
+                    chosen = GetValue(m, server);
+                }
+                else
+                {
+                    // 참조 타입: 서버에 값이 있으면 서버, 없으면(null) fallback을 유지.
+                    var serverVal = GetValue(m, server);
+                    chosen = serverVal ?? GetValue(m, fallback);
+                }
+                // dst가 fallback 스냅샷과 참조를 공유하지 않도록 깊은 복사(값 타입·string은 그대로).
+                TrySetValue(m, dst, DeepCloneIfReference(chosen));
+            }
+        }
+
         private static void CopyColumnsInto<T>(T dst, T src)
         {
             foreach (var m in GetMappedMembers(typeof(T)))

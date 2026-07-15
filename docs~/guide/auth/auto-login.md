@@ -12,7 +12,7 @@ var result = await Supabase.TriggerAutoLoginAsync();
 if (result.IsSuccess)
 {
     // 자동 로그인 성공 — 데이터 로드는 별개 단계입니다.
-    await Supabase.LoadAllUserSavesAsync();   // 또는 PlayerSave.LoadAsync()
+    await PlayerSave.LoadAsync();
     InitGame();
 }
 else

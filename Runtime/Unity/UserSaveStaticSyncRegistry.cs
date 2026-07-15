@@ -16,7 +16,6 @@ namespace TrueBase.Unity
             public string Key;
             public Func<bool> HasDirty;
             public Func<Task<bool>> FlushAsync;
-            public Func<Task<bool>> LoadAsync;
             public Action ResetLocalState;
             public bool IsInFlight;
             public bool RequestImmediateAfterInFlight;
@@ -70,14 +69,12 @@ namespace TrueBase.Unity
         /// <param name="hasDirty">전송할 변경이 있는지 검사. null이면 등록 자체가 무시됩니다.</param>
         /// <param name="flushAsync">변경분 전송. null이면 등록 자체가 무시됩니다.</param>
         /// <param name="resetLocalState"><see cref="ResetAll"/> 시 로컬 상태 초기화. null 허용.</param>
-        /// <param name="loadAsync"><see cref="LoadAllAsync"/>에서 호출할 로드. null이면 로드 대상에서 제외됩니다.</param>
         /// <param name="getDirtyCooldown">dirty 우선순위별 쿨다운(초) 반환. null이면 전역 단일 쿨다운을 사용합니다.</param>
         public static void Register(
             string key,
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<Task<bool>> loadAsync = null,
             Func<float> getDirtyCooldown = null)
         {
             if (string.IsNullOrWhiteSpace(key) || hasDirty == null || flushAsync == null)
@@ -89,7 +86,6 @@ namespace TrueBase.Unity
                 existing.HasDirty = hasDirty;
                 existing.FlushAsync = flushAsync;
                 existing.ResetLocalState = resetLocalState;
-                existing.LoadAsync = loadAsync;
                 existing.GetDirtyCooldown = getDirtyCooldown;
                 return;
             }
@@ -100,7 +96,6 @@ namespace TrueBase.Unity
                 HasDirty = hasDirty,
                 FlushAsync = flushAsync,
                 ResetLocalState = resetLocalState,
-                LoadAsync = loadAsync,
                 GetDirtyCooldown = getDirtyCooldown,
                 NextAllowedAtRealtime = 0f
             };
@@ -217,37 +212,6 @@ namespace TrueBase.Unity
                     continue;
 
                 _ = StartFlushAsync(entry, immediate: false);
-            }
-        }
-
-        /// <summary>
-        /// <c>loadAsync</c>가 등록된 모든 항목을 병렬로 로드합니다. 하나라도 실패하면 false.
-        /// 로드 대상이 없으면 true를 반환합니다.
-        /// </summary>
-        public static async Task<bool> LoadAllAsync()
-        {
-            var tasks = new List<Task<bool>>(Entries.Count);
-            foreach (var entry in Entries.Values)
-            {
-                if (entry.LoadAsync != null)
-                    tasks.Add(SafeLoadAsync(entry));
-            }
-
-            if (tasks.Count == 0) return true;
-
-            var results = await Task.WhenAll(tasks);
-            foreach (var r in results)
-                if (!r) return false;
-            return true;
-        }
-
-        private static async Task<bool> SafeLoadAsync(Entry entry)
-        {
-            try { return await entry.LoadAsync(); }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[Supabase] user save load failed: " + e.Message);
-                return false;
             }
         }
 
