@@ -9,7 +9,7 @@ await Supabase.SignInAnonymouslyAsync();   // 1. 로그인
 await PlayerSave.LoadAsync();              // 2. 데이터 로드
 ```
 
-`LoadAsync`는 서버에서 유저 데이터를 가져와 `Current`에 채웁니다. 신규 유저는 이때 DB 행이 초기값(컬럼 DEFAULT)으로 자동 생성됩니다. 로드가 끝난 뒤 실행할 코드가 있으면 `PlayerSave.OnLoaded`를 구독하세요.
+`LoadAsync`는 서버에서 유저 데이터를 가져와 `Current`에 채웁니다. 신규 유저는 이때 DB 행이 초기값(컬럼 DEFAULT)으로 자동 생성됩니다. `await` 반환 시점에 적용이 끝나 있으므로, 로드 후 실행할 코드는 `await LoadAsync()` 다음 줄에 이어서 작성합니다.
 
 여러 세이브 클래스를 한 번에 로드하려면 `Supabase.LoadAllUserSavesAsync()`를 사용합니다.
 
@@ -30,5 +30,5 @@ PlayerSave.OnFirstLoad += () =>
 기존 유저 로드나 재로그인 시에는 발행되지 않으므로, 초기 지급이 중복되지 않습니다.
 
 ::: tip
-`OnFirstLoad`에서 설정한 값은 기본값과의 **차이(diff)만** 서버에 PATCH됩니다. `PlayerSave.OnLoaded`는 이 초기 저장까지 끝난 뒤 발행됩니다.
+`OnFirstLoad`에서 설정한 값은 기본값과의 **차이(diff)만** 서버에 PATCH됩니다. 이 초기 저장까지 끝난 뒤 `await LoadAsync()`가 반환됩니다.
 :::

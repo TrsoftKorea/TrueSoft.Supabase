@@ -157,15 +157,15 @@ namespace TrueBase.Unity
 
         private readonly struct AnonymousRecoveryResult
         {
-            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string reason = null, SupabaseBanInfo banInfo = null)
+            public AnonymousRecoveryResult(AnonymousRecoveryKind kind, string errorCode = null, SupabaseBanInfo banInfo = null)
             {
                 Kind = kind;
-                Reason = reason;
+                ErrorCode = errorCode;
                 BanInfo = banInfo;
             }
 
             public AnonymousRecoveryKind Kind { get; }
-            public string Reason { get; }
+            public string ErrorCode { get; }
             public SupabaseBanInfo BanInfo { get; }
         }
 

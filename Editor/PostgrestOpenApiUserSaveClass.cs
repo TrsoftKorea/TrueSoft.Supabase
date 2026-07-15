@@ -229,8 +229,6 @@ namespace TrueBase.Editor
             sb.AppendLine(indent + "    /// <summary>본인 세이브 삭제(서버 행 DELETE + 로컬 기본값 리셋). 탈퇴 아님. 다음 LoadAsync에서 기본 행 재생성.</summary>");
             sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => ((StaticUserSave<Row>)Instance).DeleteAsync();");
             sb.AppendLine();
-            sb.AppendLine(indent + "    /// <summary>로드 성공 후 발행됩니다. (인스턴스 이벤트 Instance.OnLoaded로 위임)</summary>");
-            sb.AppendLine(indent + "    public static event System.Action OnLoaded { add => Instance.OnLoaded += value; remove => Instance.OnLoaded -= value; }");
             sb.AppendLine(indent + "    /// <summary>신규 유저(DB 행 없던 최초 로드) 시 발행됩니다. 여기서 초기값을 설정하면 서버에 저장됩니다. 로그인 전에 구독하세요.</summary>");
             sb.AppendLine(indent + "    public static event System.Action OnFirstLoad { add => Instance.OnFirstLoad += value; remove => Instance.OnFirstLoad -= value; }");
             sb.AppendLine();
@@ -329,13 +327,11 @@ namespace TrueBase.Editor
             sb.AppendLine();
             sb.AppendLine(indent + "    // 아래 필드는 기본값을 [AutoDefault]/초기화식으로 표현할 수 없어 코드로 채워야 합니다.");
             sb.AppendLine(indent + "    // 별도 partial 파일에 SeedDefault_* 메서드를 구현하세요. 이미 값이 있으면 덮어쓰지 않도록 방어하세요(예: ContainsKey 확인).");
-            sb.AppendLine(indent + "    static " + className + "()");
+            sb.AppendLine(indent + "    // Current에 Row가 적용될 때마다(로드·PlayNANOO 주입) 호출됩니다.");
+            sb.AppendLine(indent + "    protected override void OnCurrentApplied()");
             sb.AppendLine(indent + "    {");
-            sb.AppendLine(indent + "        Instance.OnLoaded += () =>");
-            sb.AppendLine(indent + "        {");
             foreach (var c in seedHookColumns)
-                sb.AppendLine(indent + "            SeedDefault_" + ToPascalCase(MemberSourceOf(c)) + "(Instance.Current);");
-            sb.AppendLine(indent + "        };");
+                sb.AppendLine(indent + "        SeedDefault_" + ToPascalCase(MemberSourceOf(c)) + "(Current);");
             sb.AppendLine(indent + "    }");
             sb.AppendLine();
             foreach (var c in seedHookColumns)

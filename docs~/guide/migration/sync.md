@@ -6,13 +6,13 @@
 
 ```
 SDK 행 없음 (신규 유저)
-  └─ 플레이나누 데이터 있음 → SDK에 이관 후 ApplyRow
+  └─ 플레이나누 데이터 있음 → SDK에 이관 후 로컬 반영 (재조회 없이)
   └─ 플레이나누 데이터 없음 → LoadAsync (빈 행 생성)
 
 SDK 행 있음 (기존 유저)
-  └─ 플레이나누에 updated_at 없음 (이관 전 순수 플레이나누 데이터) → 플레이나누 우선 → SDK 갱신 후 ApplyRow
-  └─ 플레이나누 updated_at > DB updated_at → 플레이나누 최신 → SDK 갱신 후 ApplyRow
-  └─ DB updated_at ≥ 플레이나누 updated_at → SDK 최신 → ApplyRow 후 플레이나누 갱신
+  └─ 플레이나누에 updated_at 없음 (이관 전 순수 플레이나누 데이터) → 플레이나누 우선 → SDK 갱신 후 로컬 반영
+  └─ 플레이나누 updated_at > DB updated_at → 플레이나누 최신 → SDK 갱신 후 로컬 반영
+  └─ DB updated_at ≥ 플레이나누 updated_at → SDK 최신 → 로컬 반영 후 플레이나누 갱신
 ```
 
 SDK 저장 이후 플레이나누에도 자동으로 반영됩니다.

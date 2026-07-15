@@ -75,7 +75,7 @@ namespace TrueBase.Core.Data
         {
             var raw = await InvokeRawAsync(functionName, accessToken, requestBody);
             if (raw.IsSuccess == false)
-                return SupabaseResult<TResponse>.Fail(raw.ErrorMessage ?? "function_invoke_failed");
+                return SupabaseResult<TResponse>.Fail(raw.ErrorCode ?? "function_invoke_failed");
 
             if (raw.Data == null || string.IsNullOrWhiteSpace(raw.Data.Body))
                 return SupabaseResult<TResponse>.Fail("function_response_empty");

@@ -191,12 +191,6 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <see cref="LoadAsync"/> 성공 후 발행됩니다.
-        /// 로드 완료 후 게임 데이터를 적용하거나 UI를 갱신할 때 사용합니다.
-        /// </summary>
-        public event Action OnLoaded;
-
-        /// <summary>
         /// 신규 유저(로드 시 DB에 본인 행이 없던 경우)의 <b>최초 로드</b>에서, 기본값이 적용된 직후·최초 저장 직전에 발행됩니다.
         /// 여기서 초기값을 설정하면(예: <c>PlayerSave.Heroes[HeroName.A1].Count = 1</c>) 그 값이 서버에 저장됩니다.
         /// <para>기존 유저 로드나 재로그인 시에는 발행되지 않습니다. 로그인 전에 한 번 구독하세요.</para>
@@ -370,18 +364,24 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 외부에서 로드한 Row를 Current와 _lastSynced에 적용합니다.
-        /// PlayNANOO 이관 등 DB 재조회 없이 데이터를 주입할 때 사용합니다.
+        /// 로드한 Row를 Current와 _lastSynced에 적용하는 공유 헬퍼입니다.
+        /// <see cref="LoadAsync"/>(서버 조회)와 PlayNANOO 이관 인터셉터(DB 재조회 없는 주입)가 함께 사용합니다.
         /// </summary>
-        public void ApplyRow(TRow row)
+        private void ApplyRow(TRow row)
         {
             DataSchema.CopyInto(Current, row);
             DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (CopyInto가 새 인스턴스를 만들므로 매번 필요)
             _lastSynced = DataSchema.CloneRow(row);
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
-            OnLoaded?.Invoke();
+            OnCurrentApplied();
         }
+
+        /// <summary>
+        /// Current에 Row가 적용될 때마다(로드·PlayNANOO 주입) 호출되는 확장점입니다.
+        /// 생성기가 컬럼 기본값 시딩(<c>SeedDefault_*</c>)을 배선하는 데 사용합니다. 게임 코드는 재정의할 필요가 없습니다.
+        /// </summary>
+        protected virtual void OnCurrentApplied() { }
 
         /// <summary>
         /// DB에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
@@ -397,7 +397,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// DB에서 세이브를 로드해 <see cref="CurrentRow"/>에 적용합니다. 행이 없으면 생성 후 재로드합니다.
-        /// 성공 시 <see cref="OnLoaded"/>가 발행됩니다.
+        /// 반환(<see cref="SupabaseResult"/>) 시점에 적용이 끝나 있으므로, 로드 후 처리는 <c>await</c> 다음에 이어서 작성합니다.
         /// </summary>
         /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
         public async Task<SupabaseResult> LoadAsync(bool includeUpdatedAt = true)
@@ -432,11 +432,7 @@ namespace TrueBase.Unity
                 }
             }
 
-            DataSchema.CopyInto(Current, row);
-            DataSchema.ApplyAutoDefaults(Current);
-            _lastSynced = DataSchema.CloneRow(row);
-            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
-            _isDirty    = false;
+            ApplyRow(row);
 
             // 신규 유저: 개발자가 초기값을 세팅(OnFirstLoad)한 뒤 그 변경분을 즉시 서버에 저장.
             // _lastSynced는 기본값 기준이므로 SaveIfChangedAsync가 변경분(예: A1 count=1)만 PATCH한다.
@@ -448,7 +444,6 @@ namespace TrueBase.Unity
                     Debug.LogWarning($"{LogTag} 신규 유저 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 로드에서 재시도됩니다.");
             }
 
-            OnLoaded?.Invoke();
             return SupabaseResult.Ok;
         }
 
