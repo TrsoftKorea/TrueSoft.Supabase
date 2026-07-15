@@ -109,6 +109,19 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 서버에 없는 바깥 키는 안쪽 딕셔너리 통째로 추가하고, 있는 바깥 키는 안쪽의 없는 키만 fallback에서 채운다.
+        void IAutoDefaultable.FillMissingFrom(object other)
+        {
+            if (!(other is AutoDict2D<TKey1, TKey2, TValue> o)) return;
+            foreach (var kv in o)
+            {
+                if (TryGetValue(kv.Key, out var myInner) && myInner != null)
+                    ((IAutoDefaultable)myInner).FillMissingFrom(kv.Value);
+                else
+                    base[kv.Key] = kv.Value;
+            }
+        }
     }
 
     /// <summary>

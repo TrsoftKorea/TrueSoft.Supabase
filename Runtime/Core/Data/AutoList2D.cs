@@ -115,6 +115,22 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 기존 행은 없는 열(뒤쪽 슬롯)만 fallback 행에서 이어 붙이고, 서버에 없는 행은 통째로 추가한다.
+        void IAutoDefaultable.FillMissingFrom(object other)
+        {
+            if (!(other is AutoList2D<T> o)) return;
+            int shared = Count < o.Count ? Count : o.Count;
+            for (int i = 0; i < shared; i++)
+            {
+                var oRow = o.RawRowOrNull(i);
+                if (oRow == null) continue;
+                if (base[i] != null) ((IAutoDefaultable)base[i]).FillMissingFrom(oRow);
+                else                 base[i] = oRow;
+            }
+            for (int i = Count; i < o.Count; i++)
+                Add(o.RawRowOrNull(i));
+        }
     }
 
     /// <summary>

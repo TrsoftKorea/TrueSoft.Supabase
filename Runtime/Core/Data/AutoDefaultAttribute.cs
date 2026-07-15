@@ -32,6 +32,13 @@ namespace TrueBase.Core.Data
         /// <summary>현재 기본값 레시피로 새로 만든 값을 박싱해 반환합니다(참조 타입이면 매번 새 인스턴스).
         /// 비교·직렬화처럼 타입 파라미터 없이 다뤄야 하는 코드에서 씁니다.</summary>
         object GetDefaultValueBoxed();
+
+        /// <summary>
+        /// 이 컬렉션에 <b>없는 슬롯·키만</b> <paramref name="other"/>에서 채웁니다(기존 값은 유지, 크기가 크면 자르지 않음).
+        /// 로드 전 초기값(fallback) 병합에서, 서버에 이미 있는 데이터는 두고 새로 늘어난 부분만 fallback으로 메우는 데 씁니다.
+        /// <paramref name="other"/>는 소모용 복제본이라 원소를 그대로 옮겨도 됩니다.
+        /// </summary>
+        void FillMissingFrom(object other);
     }
 
     internal static class AutoDefaultConvert

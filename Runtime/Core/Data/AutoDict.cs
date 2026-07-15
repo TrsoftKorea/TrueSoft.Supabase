@@ -52,5 +52,17 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 서버에 없거나 값이 기본값인 키를 fallback에서 채운다. 서버의 "비기본값"은 유지한다.
+        void IAutoDefaultable.FillMissingFrom(object other)
+        {
+            if (!(other is AutoDict<TKey, TValue> o)) return;
+            var cmp = EqualityComparer<TValue>.Default;
+            foreach (var kv in o)
+            {
+                if (TryGetValue(kv.Key, out var sv) && !cmp.Equals(sv, FreshDefault())) continue;
+                base[kv.Key] = kv.Value;
+            }
+        }
     }
 }

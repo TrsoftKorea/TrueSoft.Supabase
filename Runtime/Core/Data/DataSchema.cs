@@ -170,20 +170,37 @@ namespace TrueBase.Core.Data
             foreach (var m in GetMappedMembers(typeof(T)))
             {
                 var mt = MemberValueType(m);
-                object chosen;
                 if (mt != null && mt.IsValueType)
                 {
                     // 값 타입: 항상 서버 우선.
-                    chosen = GetValue(m, server);
+                    TrySetValue(m, dst, GetValue(m, server));
+                    continue;
                 }
-                else
+
+                var serverVal   = GetValue(m, server);
+                var fallbackVal = GetValue(m, fallback);
+
+                // Auto* 컬렉션(AutoList·AutoDict·2D): 서버 데이터는 유지하고 fallback으로 "빈 슬롯·키"만 채운다.
+                // 빈 = 서버에 슬롯/키가 없거나 값이 기본값. 게임 업데이트로 커지거나 키가 추가돼도 기존(비기본) 값 보존.
+                if (serverVal is IAutoDefaultable && fallbackVal is IAutoDefaultable)
                 {
-                    // 참조 타입: 서버에 값이 있으면 서버, 없으면(null) fallback을 유지.
-                    var serverVal = GetValue(m, server);
-                    chosen = serverVal ?? GetValue(m, fallback);
+                    // dst가 서버 row·fallback 스냅샷과 참조를 공유하지 않도록 둘 다 복제.
+                    var mergedClone = (IAutoDefaultable)DeepCloneIfReference(serverVal);
+                    var fbClone     = (IAutoDefaultable)DeepCloneIfReference(fallbackVal);
+                    // JSON 복제로 소실된 기본값 레시피를 [AutoDefault]에서 복원 — FillMissingFrom이 "서버값=기본값"을 판정하는 데 필요.
+                    var autoDef = m.GetCustomAttribute<AutoDefaultAttribute>();
+                    if (autoDef != null)
+                    {
+                        mergedClone.SetDefaultValue(autoDef.Values);
+                        fbClone.SetDefaultValue(autoDef.Values);
+                    }
+                    mergedClone.FillMissingFrom(fbClone);
+                    TrySetValue(m, dst, mergedClone);
+                    continue;
                 }
-                // dst가 fallback 스냅샷과 참조를 공유하지 않도록 깊은 복사(값 타입·string은 그대로).
-                TrySetValue(m, dst, DeepCloneIfReference(chosen));
+
+                // 그 외 참조 타입: 서버에 값이 있으면 서버, 없으면(null) fallback을 유지(컬럼 단위).
+                TrySetValue(m, dst, DeepCloneIfReference(serverVal ?? fallbackVal));
             }
         }
 

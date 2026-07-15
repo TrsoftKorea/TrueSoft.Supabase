@@ -160,17 +160,23 @@ namespace TrueBase.Editor
                     DrawColumnList();
 
                     EditorGUILayout.Space(2);
+                    // 파일 다이얼로그·DisplayDialog는 layout 스코프 도중 열면 IMGUI 그룹 스택을
+                    // 깨뜨리므로(EndLayoutGroup 오류), delayCall로 OnInspectorGUI 밖에서 실행한다.
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        // 파일 다이얼로그·DisplayDialog는 layout 스코프 도중 열면 IMGUI 그룹 스택을
-                        // 깨뜨리므로(EndLayoutGroup 오류), delayCall로 OnInspectorGUI 밖에서 실행한다.
-                        if (GUILayout.Button(new GUIContent("CSV 내보내기", "컬럼 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 컬럼 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ExportColumnsCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 열기", "기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보냅니다."), GUILayout.Height(22)))
-                            EditorApplication.delayCall += OpenColumnsCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 반영"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 컬럼명 기준으로 설정에 반영"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ImportColumnsCsv;
-                        if (GUILayout.Button(new GUIContent("위치…", "CSV 파일 위치 지정/변경. 지정하면 이후 내보내기·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(22), GUILayout.Width(52)))
+                    }
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        var csvPath = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+                        EditorGUILayout.LabelField(
+                            "CSV 위치",
+                            string.IsNullOrEmpty(csvPath) ? "미지정 (저장 시 폴더 선택)" : csvPath,
+                            EditorStyles.miniLabel);
+                        if (GUILayout.Button(new GUIContent("위치 변경", "CSV 파일 위치를 지정/변경합니다. 지정하면 이후 저장·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(18), GUILayout.Width(70)))
                             EditorApplication.delayCall += PickCsvPath;
                     }
 
@@ -289,16 +295,22 @@ namespace TrueBase.Editor
                     DrawRcFieldList();
 
                     EditorGUILayout.Space(2);
+                    // 파일 다이얼로그는 delayCall로 OnInspectorGUI 밖에서 실행(IMGUI 그룹 스택 보호).
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        // 파일 다이얼로그는 delayCall로 OnInspectorGUI 밖에서 실행(IMGUI 그룹 스택 보호).
-                        if (GUILayout.Button(new GUIContent("CSV 내보내기", "필드 설정을 CSV로 저장 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV로 저장하기", "현재 필드 설정을 CSV로 씁니다 → 엑셀에서 일괄 편집"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ExportRcFieldsCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 열기", "기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보냅니다."), GUILayout.Height(22)))
-                            EditorApplication.delayCall += OpenRcCsv;
-                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 필드 경로 기준으로 반영"), GUILayout.Height(22)))
+                        if (GUILayout.Button(new GUIContent("CSV 불러오기", "편집한 CSV를 필드 경로 기준으로 설정에 반영"), GUILayout.Height(22)))
                             EditorApplication.delayCall += ImportRcFieldsCsv;
-                        if (GUILayout.Button(new GUIContent("위치…", "CSV 파일 위치 지정/변경."), GUILayout.Height(22), GUILayout.Width(52)))
+                    }
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        var rcCsvPath = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
+                        EditorGUILayout.LabelField(
+                            "CSV 위치",
+                            string.IsNullOrEmpty(rcCsvPath) ? "미지정 (저장 시 폴더 선택)" : rcCsvPath,
+                            EditorStyles.miniLabel);
+                        if (GUILayout.Button(new GUIContent("위치 변경", "CSV 파일 위치를 지정/변경합니다. 지정하면 이후 저장·불러오기가 다이얼로그 없이 그 파일을 씁니다."), GUILayout.Height(18), GUILayout.Width(70)))
                             EditorApplication.delayCall += PickRcCsvPath;
                     }
 
@@ -983,22 +995,6 @@ namespace TrueBase.Editor
             Debug.Log($"[Supabase] CSV 위치 설정: {path}");
         }
 
-        /// <summary>
-        /// 기억된 CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보낸 뒤 엽니다.
-        /// 이미 있는 파일은 덮어쓰지 않습니다(사용자 편집 보존).
-        /// </summary>
-        private static void OpenColumnsCsv()
-        {
-            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            {
-                ExportColumnsCsv();
-                path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
-                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-            }
-            EditorUtility.OpenWithDefaultApp(path);
-        }
-
         // ─── RC 필드 CSV 왕복 ────────────────────────────────────────────────────
         // 헤더: field,type,include  (field=FullPath, 매칭 키. 중첩 객체 행의 type은 "(중첩 객체)" — 수정 불가)
 
@@ -1097,18 +1093,6 @@ namespace TrueBase.Editor
         }
 
         /// <summary>기억된 RC CSV 파일을 기본 편집기로 엽니다. 파일이 없으면 먼저 내보낸 뒤 엽니다.</summary>
-        private static void OpenRcCsv()
-        {
-            var path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            {
-                ExportRcFieldsCsv();
-                path = EditorPrefs.GetString(PrefsKeyRcCsvPath, "");
-                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-            }
-            EditorUtility.OpenWithDefaultApp(path);
-        }
-
         /// <summary>RC CSV 파일 위치를 지정/변경합니다.</summary>
         private static void PickRcCsvPath()
         {

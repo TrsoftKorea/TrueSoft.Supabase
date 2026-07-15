@@ -77,5 +77,19 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 서버에 없거나 값이 기본값인 슬롯을 fallback에서 채운다. 서버의 "비기본값"은 유지, 서버가 더 길면 안 자른다.
+        void IAutoDefaultable.FillMissingFrom(object other)
+        {
+            if (!(other is AutoList<T> o)) return;
+            var cmp = EqualityComparer<T>.Default;
+            for (int i = 0; i < o.Count; i++)
+            {
+                // 서버가 이 인덱스를 갖고 값이 기본값이 아니면 그대로 둔다.
+                if (i < Count && !cmp.Equals(base[i], FreshDefault())) continue;
+                // 없거나 기본값이면 fallback 값으로 채운다(인덱서가 필요한 만큼 확장).
+                this[i] = o[i];
+            }
+        }
     }
 }
