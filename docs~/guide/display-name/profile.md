@@ -30,3 +30,9 @@ if (result.IsSuccess)
 | `.Data.DisplayName` | `string` | 닉네임 |
 | `.Data.ServerCode` | `string` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
 | `.Data.IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
+
+**실패 원인**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |

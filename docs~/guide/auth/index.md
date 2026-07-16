@@ -8,6 +8,7 @@
 
 - [**익명 로그인**<br><small>게스트 시작</small>](/guide/auth/anonymous)
 - [**자동 로그인**<br><small>저장된 세션 복원</small>](/guide/auth/auto-login)
+- [**로그인 후 상태**<br><small>로그인 여부·연동 상태</small>](/guide/auth/session-state)
 - [**로그아웃**<br><small>전체 로그아웃</small>](/guide/auth/logout)
 - [**익명 계정 복구**<br><small>기기 지문 기반 복구</small>](/guide/auth/recovery)
 - [**중복 로그인 감지**<br><small>다른 기기 로그인 감지</small>](/guide/auth/duplicate-login)

@@ -1,10 +1,10 @@
-# 즉시 저장
+# 전체 즉시 저장
 
 ```csharp
 Task<SupabaseResult> Supabase.SaveAllAsync(int timeoutMs = 5000)
 ```
 
-변경된 모든 세이브 데이터를 즉시 서버에 업로드합니다. 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
+변경된 모든 세이브 데이터를 즉시 서버에 업로드합니다. 특정 세이브만 다루려면 [즉시 저장 후 대기](./flush-now)·[즉시 저장 요청](./request-immediate-save)를 씁니다. 씬 전환·결제 완료·앱 종료처럼 지금 당장 저장해야 할 때 사용합니다.
 
 ```csharp
 var result = await Supabase.SaveAllAsync();

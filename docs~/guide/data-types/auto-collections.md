@@ -1,7 +1,7 @@
 # 자동 확장 컬렉션
 
 ::: tip 실행 가능한 예제
-`Examples` 샘플의 `SampleAutoCollections` 컴포넌트를 빈 GameObject에 붙이고 Play 후 **1·2·3·4** 키를 누르면 컬렉션 동작이 Console에 출력됩니다. 로그인·네트워크가 필요 없습니다.
+`Examples` 샘플의 `SampleAutoCollections` 컴포넌트를 빈 GameObject에 붙이고 Play 후 **1~6** 키를 누르면 컬렉션 동작이 Console에 출력됩니다(1·2 2D 컬렉션, 3 저장·로드, 4 클래스 값, 5 크기 지정 `EnsureSize`, 6 폴백 병합). 로그인·네트워크가 필요 없습니다.
 :::
 
 ## 기본 사용법

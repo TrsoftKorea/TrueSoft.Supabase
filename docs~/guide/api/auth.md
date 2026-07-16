@@ -1,6 +1,6 @@
 # 인증 API
 
-로그인 상태·프로필 등 값은 [로그인 후 사용 가능한 값](/guide/auth/auto-login#after-login-values)을 참고하세요.
+로그인 상태·프로필 등 값은 [로그인 후 상태](/guide/auth/session-state)를 참고하세요.
 
 ## 로그인
 

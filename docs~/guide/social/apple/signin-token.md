@@ -29,7 +29,7 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile) 참고.
+`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
 **실패 원인**
 

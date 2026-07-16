@@ -49,6 +49,7 @@ export default defineConfig({
             items: [
               { text: '익명 로그인', link: '/guide/auth/anonymous' },
               { text: '자동 로그인', link: '/guide/auth/auto-login' },
+              { text: '로그인 후 상태', link: '/guide/auth/session-state' },
               { text: '로그아웃', link: '/guide/auth/logout' },
               { text: '익명 계정 복구', link: '/guide/auth/recovery' },
               { text: '중복 로그인 감지', link: '/guide/auth/duplicate-login' },
@@ -143,7 +144,7 @@ export default defineConfig({
               { text: '클래스 생성', link: '/guide/user-data/class-gen' },
               { text: '로드', link: '/guide/user-data/load' },
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
-              { text: '즉시 저장', link: '/guide/user-data/immediate-save' },
+              { text: '전체 즉시 저장', link: '/guide/user-data/immediate-save' },
               { text: '즉시 저장 후 대기', link: '/guide/user-data/flush-now' },
               { text: '즉시 저장 요청', link: '/guide/user-data/request-immediate-save' },
               { text: '변경분 저장', link: '/guide/user-data/save-if-changed' },
