@@ -487,7 +487,7 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     private SamplePlayerSave() : base() { }
 
     // 생성된 PlayerSave처럼 정적으로 호출하기 위한 래퍼. (생성기는 이 래퍼를 자동으로 emit합니다.)
-    public static Task<TrueBase.Core.Common.SupabaseLoadResult> LoadAsync() => Instance.LoadAsync();
+    public static Task<TrueBase.Core.Common.SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();
     public static Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => Instance.DeleteAsync();
 
     // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
