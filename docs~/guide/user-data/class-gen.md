@@ -118,7 +118,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
     public static readonly PlayerSave Instance = new();
     private PlayerSave() : base() { }
 
-    public static Task<SupabaseLoadResult> LoadAsync() => Instance.LoadAsync();
+    public static Task<SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();
 
     // 필드는 internal — 데이터는 아래 정적 프로퍼티로 접근합니다.
     [Serializable]
