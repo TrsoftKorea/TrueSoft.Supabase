@@ -349,8 +349,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorCode}");
             return;
         }
-        _lastProfile = setOk.Data;   // 변경된 닉네임이 반영된 프로필로 교체
-        Debug.Log($"[Supabase] 닉네임 설정 완료: {setOk.Data.DisplayName}");
+        // setOk.Data 는 적용된 닉네임 문자열. 게임이 보관 중인 프로필의 이름만 로컬에서 교체한다.
+        _lastProfile = new PublicProfileSnapshot(
+            _lastProfile.ProfileRowId, _lastProfile.UserId, setOk.Data,
+            _lastProfile.WithdrawnAtIso, _lastProfile.ServerCode);
+        Debug.Log($"[Supabase] 닉네임 설정 완료: {setOk.Data}");
 
         var myId = Supabase.UserId;
         var profile = await Supabase.GetPublicProfileAsync(myId);

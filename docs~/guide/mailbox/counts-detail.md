@@ -32,4 +32,4 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `auth_not_signed_in` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |

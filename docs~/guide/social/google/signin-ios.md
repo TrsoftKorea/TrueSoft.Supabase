@@ -26,6 +26,10 @@ else
 |----------|------|
 | `idToken` | Google OAuth에서 발급받은 ID 토큰 |
 
+**반환**
+
+`.Profile` — 로그인한 내 프로필(`PublicProfileSnapshot` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile#my-profile) 참고.
+
 **실패 원인**
 
 | Reason | 설명 |

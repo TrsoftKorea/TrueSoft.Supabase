@@ -103,7 +103,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 
 ## SampleMailbox
 
-`SupabaseRuntime`이 있는 씬에 `SampleMailbox` 컴포넌트를 붙이면 우편함 조회·수령·삭제를 [분류](/guide/mailbox/#분류)별로 테스트할 수 있습니다.
+`SupabaseRuntime`이 있는 씬에 `SampleMailbox` 컴포넌트를 붙이면 우편함 조회·수령·삭제를 [분류](/guide/mailbox/#category)별로 테스트할 수 있습니다.
 
 **사전 준비:**
 1. [Database Setup](/guide/start/database-setup) 완료

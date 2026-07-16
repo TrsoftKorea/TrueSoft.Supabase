@@ -44,8 +44,10 @@ namespace TrueBase.Unity
         private static async Task<SupabaseSignInResult> ToSignInResultAsync(Task<SupabaseResult> loginTask)
         {
             var r = await loginTask;
+            // 성공/실패 무관하게 전달 슬롯을 1회 소비해 다음 로그인으로 잔여 값이 새지 않게 한다.
+            var profile = SupabaseSDK.ConsumePendingSignInProfile();
             return r.IsSuccess
-                ? SupabaseSignInResult.Success(SupabaseSDK.CurrentMyProfile)
+                ? SupabaseSignInResult.Success(profile)
                 : SupabaseSignInResult.Fail(r.ErrorCode, r.BanInfo);
         }
 
@@ -277,7 +279,7 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetPublicDisplayNameAsync(userId);
 
         /// <inheritdoc cref="SupabaseSDK.TrySetMyDisplayNameAsync"/>
-        public static Task<SupabaseResult<PublicProfileSnapshot>> SetMyDisplayNameAsync(string displayName) =>
+        public static Task<SupabaseResult<string>> SetMyDisplayNameAsync(string displayName) =>
             SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
 
         /// <inheritdoc cref="SupabaseSDK.TryIsDisplayNameAvailableAsync"/>

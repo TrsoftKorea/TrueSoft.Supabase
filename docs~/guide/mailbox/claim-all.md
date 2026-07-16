@@ -30,4 +30,4 @@ if (result.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `mail_item_handler_missing:<key>` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler) 미등록 key가 있으면 수령 전 실패합니다 |
-| `auth_not_signed_in` | 로그인 상태가 아닙니다 |
+| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |

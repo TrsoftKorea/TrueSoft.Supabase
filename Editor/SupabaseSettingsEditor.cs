@@ -186,6 +186,14 @@ namespace TrueBase.Editor
                             + "\njsonb 컬럼은 CSV에서 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
                             MessageType.Warning);
 
+                    // 모든 필드에 기본값을 반드시 지정하도록 강제 — 없으면 생성 차단.
+                    var defaultMissing = CollectDefaultMissingColumnNames();
+                    if (defaultMissing.Count > 0)
+                        EditorGUILayout.HelpBox(
+                            "기본값 미지정 필드: " + string.Join(", ", defaultMissing)
+                            + "\n모든 컬럼은 CSV의 default 열에 기본값을 지정해야 소스를 생성할 수 있습니다.",
+                            MessageType.Warning);
+
                     // 해석 불가 타입은 에디터가 찾지 못한 것일 수 있으므로 경고만 하고 생성은 막지 않는다.
                     // 실제 오타면 컴파일러가 잡고, 유효한 타입(중첩·제네릭 등)이면 그대로 생성된다.
                     var unresolvedNames = CollectUnresolvedColumnNames();
@@ -199,7 +207,7 @@ namespace TrueBase.Editor
                     EditorGUILayout.Space(4);
                     using (new EditorGUILayout.HorizontalScope())
                     {
-                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0))
+                        using (new EditorGUI.DisabledScope(unspecifiedNames.Count > 0 || defaultMissing.Count > 0))
                         {
                             if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
                                 BuildPreviewFromColumns();
@@ -697,7 +705,15 @@ namespace TrueBase.Editor
 
                         EditorGUILayout.LabelField(new GUIContent(col.FieldName, col.FieldName), GUILayout.Width(wField));
                         EditorGUILayout.LabelField(PriorityLabel(col.Priority), GUILayout.Width(wCycle));
-                        EditorGUILayout.LabelField(new GUIContent(col.DefaultValue ?? "", col.DefaultValue), GUILayout.Width(wDefault));
+
+                        // 기본값이 비어 있으면 그 칸을 경고로 표시(모든 필드 필수 — 생성 차단 대상).
+                        var needsDefault = string.IsNullOrWhiteSpace(col.DefaultValue);
+                        if (needsDefault)
+                            EditorGUILayout.LabelField(
+                                new GUIContent("⚠ 필요", "모든 필드는 기본값이 필요합니다. CSV의 default 열에 지정하세요."),
+                                AmbiguousStyle, GUILayout.Width(wDefault));
+                        else
+                            EditorGUILayout.LabelField(new GUIContent(col.DefaultValue ?? "", col.DefaultValue), GUILayout.Width(wDefault));
 
                         using (new EditorGUI.DisabledScope(true))
                             EditorGUILayout.Toggle(col.Include, GUILayout.Width(wInclude));
@@ -1286,6 +1302,20 @@ namespace TrueBase.Editor
             return names;
         }
 
+        /// <summary>
+        /// 포함(Include)된 컬럼 중 기본값(default)이 비어 있는 것들의 이름 목록.
+        /// 모든 필드에 기본값을 반드시 지정하도록 강제하며, 이 상태로는 소스 생성을 막습니다.
+        /// (시스템 컬럼 account_id·user_id·updated_at 등은 SkipColumns로 이미 목록에서 제외됩니다.)
+        /// </summary>
+        private static List<string> CollectDefaultMissingColumnNames()
+        {
+            var names = new List<string>();
+            foreach (var ec in _editableColumns)
+                if (ec.Include && string.IsNullOrWhiteSpace(ec.DefaultValue))
+                    names.Add(ec.Name);
+            return names;
+        }
+
         /// <summary>포함(Include)된 컬럼 중 타입 해석에 실패한 것들의 이름 목록. 이 상태로는 소스 생성을 막습니다.</summary>
         private static List<string> CollectUnresolvedColumnNames()
         {
@@ -1347,6 +1377,16 @@ namespace TrueBase.Editor
                 EditorUtility.DisplayDialog(DialogTitle,
                     "다음 필드의 타입이 미지정 상태입니다(jsonb). CSV에서 Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
                     + string.Join("\n• ", unspecified), "확인");
+                return;
+            }
+
+            // 모든 필드에 기본값을 반드시 지정하도록 강제 — 없으면 생성 차단.
+            var defaultMissing = CollectDefaultMissingColumnNames();
+            if (defaultMissing.Count > 0)
+            {
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "다음 컬럼에 기본값이 없습니다. CSV의 default 열에 기본값을 지정한 뒤 다시 생성하세요:\n\n• "
+                    + string.Join("\n• ", defaultMissing), "확인");
                 return;
             }
 

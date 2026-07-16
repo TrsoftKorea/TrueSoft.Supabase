@@ -60,7 +60,9 @@ namespace TrueBase.Core.Data
             var cmp = EqualityComparer<TValue>.Default;
             foreach (var kv in o)
             {
-                if (TryGetValue(kv.Key, out var sv) && !cmp.Equals(sv, FreshDefault())) continue;
+                // 서버가 이 키를 갖고, 값이 null이 아니며 기본값도 아니면 그대로 둔다.
+                // null은 "데이터 없음"의 확실한 신호라, [AutoDefault]로 기본값이 non-null인 참조 타입이어도 빈 값으로 본다.
+                if (TryGetValue(kv.Key, out var sv) && sv != null && !cmp.Equals(sv, FreshDefault())) continue;
                 base[kv.Key] = kv.Value;
             }
         }

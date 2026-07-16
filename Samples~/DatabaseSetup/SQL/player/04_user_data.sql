@@ -247,7 +247,7 @@ begin
   if coltype is null then
     raise exception 'Column type is required';
   end if;
-  if colname !~ '^[a-z_][a-z0-9_]*$' then
+  if colname !~ '^[A-Za-z_][A-Za-z0-9_]*$' then
     raise exception 'Invalid column name: %', colname;
   end if;
   if colname in ('id','user_id','account_id','server_id','updated_at') then
@@ -299,7 +299,7 @@ begin
   if colname is null then
     raise exception 'Column name is required';
   end if;
-  if colname !~ '^[a-z_][a-z0-9_]*$' then
+  if colname !~ '^[A-Za-z_][A-Za-z0-9_]*$' then
     raise exception 'Invalid column name: %', colname;
   end if;
   if colname in ('id','user_id','account_id','server_id','created_at','updated_at') then
@@ -352,7 +352,7 @@ begin
   if colname is null then
     raise exception 'Column name is required';
   end if;
-  if colname !~ '^[a-z_][a-z0-9_]*$' then
+  if colname !~ '^[A-Za-z_][A-Za-z0-9_]*$' then
     raise exception 'Invalid column name: %', colname;
   end if;
   if colname in ('id','user_id','account_id','server_id','created_at','updated_at') then

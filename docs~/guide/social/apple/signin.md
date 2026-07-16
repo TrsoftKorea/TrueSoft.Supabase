@@ -24,6 +24,10 @@ else
 Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs에 `{패키지이름}://login-callback`만 등록하면 되고, 나머지는 자동 처리됩니다. 자세히는 [대시보드 설정](./setup)을 참고하세요.
 :::
 
+**반환**
+
+`.Profile` — 로그인한 내 프로필(`PublicProfileSnapshot` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile#my-profile) 참고.
+
 **실패 원인**
 
 | Reason | 설명 |

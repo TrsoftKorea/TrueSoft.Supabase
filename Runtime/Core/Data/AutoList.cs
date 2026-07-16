@@ -85,9 +85,10 @@ namespace TrueBase.Core.Data
             var cmp = EqualityComparer<T>.Default;
             for (int i = 0; i < o.Count; i++)
             {
-                // 서버가 이 인덱스를 갖고 값이 기본값이 아니면 그대로 둔다.
-                if (i < Count && !cmp.Equals(base[i], FreshDefault())) continue;
-                // 없거나 기본값이면 fallback 값으로 채운다(인덱서가 필요한 만큼 확장).
+                // 서버가 이 인덱스를 갖고, 값이 null이 아니며 기본값도 아니면 그대로 둔다.
+                // null은 "데이터 없음"의 확실한 신호라, [AutoDefault]로 기본값이 non-null인 참조 타입이어도 빈 슬롯으로 본다.
+                if (i < Count && base[i] != null && !cmp.Equals(base[i], FreshDefault())) continue;
+                // 없거나 null·기본값이면 fallback 값으로 채운다(인덱서가 필요한 만큼 확장).
                 this[i] = o[i];
             }
         }

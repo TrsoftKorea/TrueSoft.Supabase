@@ -25,7 +25,7 @@ PlayerSave.StageClears[4] = 1;        // 크기가 3이어도 자동 확장 후 
 int s = PlayerSave.StageClears[4];    // 범위 밖이면 기본값 반환, 확장하지 않음
 ```
 
-## 기본값 지정 · `[AutoDefault]`
+## 기본값 지정
 
 기본값이 `0`/`false`/`null`이 아니어야 하면 **필드에 `[AutoDefault(...)]` 한 줄**을 붙입니다.
 
@@ -55,7 +55,7 @@ public class HeroData { public int level; public HeroData(int level) { this.leve
 
 기본값은 JSON 데이터에 저장되지 않고 SDK가 **로드 직후 인스턴스에 주입**하므로, 재로드·동기화에도 안전합니다.
 
-### 클래스 값은 처음 읽을 때 저장됩니다 {#class-value-materializes-on-read}
+### 클래스 값 자동 저장 {#class-value-materializes-on-read}
 
 `AutoDict`/`AutoDict2D`에 참조 타입을 `[AutoDefault(...)]`로 지정하면, 없는 키를 읽는 순간 그 자리에 저장됩니다. 그래서 별도 대입 없이 필드만 바로 고쳐도 반영됩니다.
 
@@ -75,7 +75,7 @@ PlayerSave.HeroData[hero].Count = 1;   // hero가 처음 등장해도 그 자리
 자동 확장 인덱서는 정적 타입이 `AutoList`/`AutoDict`일 때만 동작합니다. 생성 클래스의 **Row 필드와 정적 프로퍼티를 모두** `AutoList<T>`(또는 `AutoDict<TKey,TValue>`)로 선언하세요. `List<T>`로 캐스팅하면 기본 인덱서가 쓰입니다.
 :::
 
-## 이중 리스트 · `AutoList2D<T>`
+## 이중 리스트
 
 행·열이 모두 가변인 이중 리스트입니다. `grid[i]`가 **지연 프록시**를 돌려줘서 `[i][j]`·`[i, j]` 모두 **모든 경우 안전**합니다 — 읽기는 비파괴(없는 행/열이면 기본값, 아무것도 안 만듦), 쓰기는 그 시점에 행·열을 생성·저장합니다.
 
@@ -108,7 +108,7 @@ int sum = PlayerSave.Scores[5].Where(n => n > 0).Sum();  // LINQ
 - **행/안쪽 반복** → `var row = grid[i]`로 한 번만 받아 재사용, 또는 `Row(i)`·`Inner(k1)`(기존 행/키는 저장된 객체를 그대로 반환 → 무할당)
 :::
 
-## 이중 딕셔너리 · `AutoDict2D<TKey1, TKey2, TValue>`
+## 이중 딕셔너리
 
 2단계 딕셔너리입니다. `dict[k1]`이 **지연 프록시**를 돌려줘서 `[k1][k2]`·`[k1, k2]` 모두 **모든 경우 안전**합니다(`AutoList2D`와 동일). 읽기는 비파괴(없는 키면 기본값), 쓰기는 그 시점에 안쪽 딕셔너리를 생성·저장합니다.
 

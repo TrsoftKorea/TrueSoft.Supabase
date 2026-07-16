@@ -43,7 +43,8 @@ namespace TrueBase.Unity
 
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;
-        private static PublicProfileSnapshot _myProfile = PublicProfileSnapshot.Empty;
+        // 로그인이 조회한 내 프로필의 일회성 전달 슬롯. 세션 지속 캐시가 아니라 로그인→결과 구성 사이에만 값이 있고 ConsumePendingSignInProfile()가 소비 시 비운다.
+        private static PublicProfileSnapshot _pendingSignInProfile = PublicProfileSnapshot.Empty;
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
         private static RemoteConfigFacade _remoteConfig;
@@ -288,8 +289,13 @@ namespace TrueBase.Unity
         /// <summary>현재 로그인된 세션. 로그인 후 SetSession으로 설정하세요.</summary>
         public static SupabaseSession Session => _currentSession;
 
-        /// <summary>로그인 시 조회된 내 프로필 캐시. 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/>로 반환할 때 읽습니다.</summary>
-        internal static PublicProfileSnapshot CurrentMyProfile => _myProfile;
+        /// <summary>직전 로그인이 조회한 내 프로필을 1회 반환하고 즉시 비웁니다(세션 지속 캐시 아님). 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/> 구성 시 소비합니다.</summary>
+        internal static PublicProfileSnapshot ConsumePendingSignInProfile()
+        {
+            var p = _pendingSignInProfile;
+            _pendingSignInProfile = PublicProfileSnapshot.Empty;
+            return p;
+        }
 
         /// <summary>현재 로그인 계정의 ID(<c>auth.users.id</c>). 비로그인 시 빈 문자열.</summary>
         public static string UserId => _currentSession?.User?.Id ?? string.Empty;
@@ -2092,11 +2098,6 @@ namespace TrueBase.Unity
                 _currentSession.User.user_metadata.displayName = norm;
             }
 
-            // 내 프로필 캐시도 새 닉네임으로 갱신 — TrySetMyDisplayNameAsync가 갱신된 프로필을 반환한다.
-            _myProfile = new PublicProfileSnapshot(
-                _myProfile.ProfileRowId, _myProfile.UserId, norm,
-                _myProfile.WithdrawnAtIso, _myProfile.ServerCode);
-
             return SupabaseResult<bool>.Success(true); // true = 실제 변경됨
         }
 
@@ -2108,16 +2109,17 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="SetMyDisplayNameAsync"/>
-        public static async Task<SupabaseResult<PublicProfileSnapshot>> TrySetMyDisplayNameAsync(string displayName)
+        public static async Task<SupabaseResult<string>> TrySetMyDisplayNameAsync(string displayName)
         {
             var r = _interceptSetMyDisplayName != null
                 ? await _interceptSetMyDisplayName(displayName, () => TrySetMyDisplayNameSdkOnlyAsync(displayName))
                 : await TrySetMyDisplayNameSdkOnlyAsync(displayName);
 
-            // 성공 시 새 닉네임이 반영된 내 프로필을 실어 반환한다(게임이 보관 프로필을 교체).
+            // 성공 시 적용된(정규화) 닉네임을 실어 반환한다(게임이 보관 프로필의 이름을 교체).
+            var norm = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
             return r.IsSuccess
-                ? SupabaseResult<PublicProfileSnapshot>.Success(_myProfile)
-                : SupabaseResult<PublicProfileSnapshot>.Fail(r.ErrorCode, r.BanInfo);
+                ? SupabaseResult<string>.Success(norm)
+                : SupabaseResult<string>.Fail(r.ErrorCode, r.BanInfo);
         }
 
         /// <summary><see cref="SetMyDisplayNameAsync"/>의 인터셉터 미경유 본체. 변경/no_change를 구분해 로그를 남깁니다.</summary>
@@ -2843,7 +2845,7 @@ namespace TrueBase.Unity
 
             _currentSession = null;
             _remoteConfig   = null;
-            _myProfile      = PublicProfileSnapshot.Empty;
+            _pendingSignInProfile      = PublicProfileSnapshot.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
@@ -3452,7 +3454,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 로그인 직후 <c>profiles</c> 본인 행을 보장하고 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/>로 반환할 내 프로필 캐시를 채웁니다.
+        /// 로그인 직후 <c>profiles</c> 본인 행을 보장하고 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/>로 반환할 프로필을 일회성 전달 슬롯(<c>_pendingSignInProfile</c>)에 채웁니다.
         /// DB 서버 코드가 로컬 선택 서버와 다르면 자동 이주까지 수행합니다(best-effort, 실패는 경고 로그만).
         /// </summary>
         private static async Task TryEnsureProfileRowAfterSignInAsync()
@@ -3479,16 +3481,16 @@ namespace TrueBase.Unity
 
                 var profileResult = await svc.GetProfileAsync(s.AccessToken, s.User.PlayerUserId);
                 if (profileResult?.IsSuccess == true)
-                    _myProfile = profileResult.Data;
+                    _pendingSignInProfile = profileResult.Data;
 
                 var mine = await svc.GetMyServerIdAsync(s.AccessToken);
                 if (mine == null || !mine.IsSuccess || mine.Data.ServerCode.Length == 0)
                     return;
 
-                // _myProfile에 DB 서버 코드 반영
-                _myProfile = new PublicProfileSnapshot(
-                    _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
-                    _myProfile.WithdrawnAtIso, mine.Data.ServerCode);
+                // _pendingSignInProfile에 DB 서버 코드 반영
+                _pendingSignInProfile = new PublicProfileSnapshot(
+                    _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.UserId, _pendingSignInProfile.DisplayName,
+                    _pendingSignInProfile.WithdrawnAtIso, mine.Data.ServerCode);
 
                 var selectedCode = GetCurrentServerCode();
                 if (string.IsNullOrWhiteSpace(selectedCode) ||
@@ -3499,9 +3501,9 @@ namespace TrueBase.Unity
                 if (moved == null || !moved.IsSuccess)
                     Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorCode ?? "unknown"));
                 else
-                    _myProfile = new PublicProfileSnapshot(
-                        _myProfile.ProfileRowId, _myProfile.UserId, _myProfile.DisplayName,
-                        _myProfile.WithdrawnAtIso, selectedCode);
+                    _pendingSignInProfile = new PublicProfileSnapshot(
+                        _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.UserId, _pendingSignInProfile.DisplayName,
+                        _pendingSignInProfile.WithdrawnAtIso, selectedCode);
             }
             catch (Exception e)
             {
