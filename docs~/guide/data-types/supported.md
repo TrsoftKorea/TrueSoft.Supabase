@@ -4,11 +4,11 @@
 
 | C# 타입 | DB 컬럼 타입 | 비고 |
 |---|---|---|
-| `bool` `int` `long` `float` `double` | `bool` `int4` `int8` `float4` `float8` | |
+| `bool` `int` `long` `short` `float` `double` | `bool` `int4` `int8` `int2` `float4` `float8` | |
 | `decimal` | `numeric` | 정밀 금액 |
 | `string` | `text` | |
 | `DateTime` / `DateTimeOffset` | `timestamptz` | ISO8601 자동 파싱 |
-| `int?` `long?` 등 nullable | 같은 타입(NULL 허용) | null/0 구분 시 |
+| `DateOnly` / `TimeOnly` | `date` / `time` | 날짜·시각만 |
 | `List<T>` | `jsonb` | |
 | `T[]` | `jsonb` | |
 | `Dictionary<K,V>` | `jsonb` | |

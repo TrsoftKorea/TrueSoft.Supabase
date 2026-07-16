@@ -26,7 +26,7 @@ Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfileSnapshot` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile#my-profile) 참고.
+`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile) 참고.
 
 **실패 원인**
 

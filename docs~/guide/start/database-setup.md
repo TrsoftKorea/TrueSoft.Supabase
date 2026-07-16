@@ -28,9 +28,12 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | 9 | `09_cron_jobs.sql` | 자동화 크론 잡 |
 | 10 | `10_bans.sql` | 계정 차단 메시지 |
 | 11 | `11_user_data_logs.sql` | 유저 데이터 변경 로그 |
+| 12 | `12_admin_mail.sql` | 어드민 우편 발송 (Retool 사용 시) |
+| 13 | `13_mail_schedules.sql` | 어드민 우편 예약·반복 발송 (Retool 사용 시) |
+| 14 | `14_mail_categories.sql` | 어드민 우편 분류 목록 (Retool 사용 시) |
 
 ::: tip
-`99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다.
+`99_verify.sql`을 마지막에 실행하면 스키마 설치 여부를 확인할 수 있습니다. 12~14는 Retool 어드민으로 우편을 발송할 때만 필요합니다.
 :::
 
 ## 3. 엣지 함수 배포 {#edge-function-deploy}
@@ -46,6 +49,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 |-----------|----------|
 | `displayname-get` | 공개 프로필 — 닉네임 조회 |
 | `displayname-set` | 공개 프로필 — 닉네임 설정 |
+| `admin-displayname-set` | 어드민 — 닉네임 강제 변경 (Retool 사용 시) |
 | `withdrawal-cancel-issue` | 공개 프로필 — 탈퇴 취소 토큰 발급 |
 | `withdrawal-cancel-redeem` | 공개 프로필 — 탈퇴 취소 토큰 사용 |
 | `withdrawal-guard` | 공개 프로필 — 탈퇴 계정 자동 처리 |

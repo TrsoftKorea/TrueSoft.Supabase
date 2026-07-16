@@ -28,7 +28,7 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfileSnapshot` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile#my-profile) 참고.
+`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [내 프로필](/guide/display-name/profile) 참고.
 
 ::: info 로그인과 로드는 별개 단계
 `TriggerAutoLoginAsync()`는 세션만 복원하고 유저 데이터는 로드하지 않습니다. 수동 로그인과 동일하게 성공 후 [로드](/guide/user-data/load)를 직접 호출하세요.
@@ -46,4 +46,4 @@ else
 | `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
 | `Supabase.IsLinkedWithApple` | Apple 연동 여부 |
 
-내 프로필(닉네임·서버 코드·탈퇴 상태)은 로그인 결과(`SupabaseSignInResult`)의 `.Profile`에 담겨 옵니다. [내 프로필](/guide/display-name/profile#my-profile) 참고.
+내 프로필(닉네임·서버 코드·탈퇴 상태)은 로그인 결과(`SupabaseSignInResult`)의 `.Profile`에 담겨 옵니다. [내 프로필](/guide/display-name/profile) 참고.

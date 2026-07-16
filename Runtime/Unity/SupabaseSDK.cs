@@ -44,7 +44,7 @@ namespace TrueBase.Unity
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;
         // 로그인이 조회한 내 프로필의 일회성 전달 슬롯. 세션 지속 캐시가 아니라 로그인→결과 구성 사이에만 값이 있고 ConsumePendingSignInProfile()가 소비 시 비운다.
-        private static PublicProfileSnapshot _pendingSignInProfile = PublicProfileSnapshot.Empty;
+        private static PublicProfile _pendingSignInProfile = PublicProfile.Empty;
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
         private static RemoteConfigFacade _remoteConfig;
@@ -290,10 +290,10 @@ namespace TrueBase.Unity
         public static SupabaseSession Session => _currentSession;
 
         /// <summary>직전 로그인이 조회한 내 프로필을 1회 반환하고 즉시 비웁니다(세션 지속 캐시 아님). 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/> 구성 시 소비합니다.</summary>
-        internal static PublicProfileSnapshot ConsumePendingSignInProfile()
+        internal static PublicProfile ConsumePendingSignInProfile()
         {
             var p = _pendingSignInProfile;
-            _pendingSignInProfile = PublicProfileSnapshot.Empty;
+            _pendingSignInProfile = PublicProfile.Empty;
             return p;
         }
 
@@ -2254,17 +2254,17 @@ namespace TrueBase.Unity
         }
 
         /// <summary>공개 프로필(닉네임·탈퇴 시각)을 한 번에 조회합니다. <paramref name="userId"/>는 <c>profiles.user_id</c>(안정 플레이어 id)입니다.</summary>
-        public static async Task<SupabaseResult<PublicProfileSnapshot>> GetPublicProfileAsync(string userId)
+        public static async Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<PublicProfileSnapshot>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+                return SupabaseResult<PublicProfile>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await _bootstrap.PublicProfileService.GetProfileAsync(_currentSession.AccessToken, userId);
         }
 
         /// <inheritdoc cref="GetPublicProfileAsync"/>
-        public static async Task<SupabaseResult<PublicProfileSnapshot>> TryGetPublicProfileAsync(string userId)
+        public static async Task<SupabaseResult<PublicProfile>> TryGetPublicProfileAsync(string userId)
         {
             var r = await GetPublicProfileAsync(userId);
             return LogAndReturnResult(ApiLogTags.ProfileSnapshotGet, r);
@@ -2845,7 +2845,7 @@ namespace TrueBase.Unity
 
             _currentSession = null;
             _remoteConfig   = null;
-            _pendingSignInProfile      = PublicProfileSnapshot.Empty;
+            _pendingSignInProfile      = PublicProfile.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
@@ -3488,8 +3488,8 @@ namespace TrueBase.Unity
                     return;
 
                 // _pendingSignInProfile에 DB 서버 코드 반영
-                _pendingSignInProfile = new PublicProfileSnapshot(
-                    _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.UserId, _pendingSignInProfile.DisplayName,
+                _pendingSignInProfile = new PublicProfile(
+                    _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, _pendingSignInProfile.DisplayName,
                     _pendingSignInProfile.WithdrawnAtIso, mine.Data.ServerCode);
 
                 var selectedCode = GetCurrentServerCode();
@@ -3501,8 +3501,8 @@ namespace TrueBase.Unity
                 if (moved == null || !moved.IsSuccess)
                     Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorCode ?? "unknown"));
                 else
-                    _pendingSignInProfile = new PublicProfileSnapshot(
-                        _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.UserId, _pendingSignInProfile.DisplayName,
+                    _pendingSignInProfile = new PublicProfile(
+                        _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, _pendingSignInProfile.DisplayName,
                         _pendingSignInProfile.WithdrawnAtIso, selectedCode);
             }
             catch (Exception e)

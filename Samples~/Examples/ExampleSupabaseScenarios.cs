@@ -284,7 +284,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     private RemoteConfigListener<TestConfig> _rcListener;
 
     // 로그인 결과의 프로필을 보관해 상태 출력(A) 등에서 사용합니다. (로그인 result에만 담기므로 게임이 직접 저장)
-    private PublicProfileSnapshot _lastProfile;
+    private PublicProfile _lastProfile;
 
     /// <summary>T — RemoteConfig Reader. 캐시 만료 시 서버에서 최신 값을 가져옵니다.</summary>
     private async Task TestRemoteConfigReaderAsync()
@@ -350,8 +350,8 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             return;
         }
         // setOk.Data 는 적용된 닉네임 문자열. 게임이 보관 중인 프로필의 이름만 로컬에서 교체한다.
-        _lastProfile = new PublicProfileSnapshot(
-            _lastProfile.ProfileRowId, _lastProfile.UserId, setOk.Data,
+        _lastProfile = new PublicProfile(
+            _lastProfile.ProfileRowId, _lastProfile.PlayerUserId, setOk.Data,
             _lastProfile.WithdrawnAtIso, _lastProfile.ServerCode);
         Debug.Log($"[Supabase] 닉네임 설정 완료: {setOk.Data}");
 

@@ -201,13 +201,13 @@ namespace TrueBase.Core.Data
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="playerUserId">조회 대상의 안정 플레이어 id(<c>profiles.user_id</c>). 필수.</param>
-        public async Task<SupabaseResult<PublicProfileSnapshot>> GetProfileAsync(string accessToken, string playerUserId)
+        public async Task<SupabaseResult<PublicProfile>> GetProfileAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<PublicProfileSnapshot>.Fail("access_token_empty");
+                return SupabaseResult<PublicProfile>.Fail("access_token_empty");
 
             if (string.IsNullOrWhiteSpace(playerUserId))
-                return SupabaseResult<PublicProfileSnapshot>.Fail("player_user_id_empty");
+                return SupabaseResult<PublicProfile>.Fail("player_user_id_empty");
 
             var id = playerUserId.Trim();
             var url =
@@ -224,10 +224,10 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<PublicProfileSnapshot>.Fail("http_response_null");
+                return SupabaseResult<PublicProfile>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<PublicProfileSnapshot>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
+                return SupabaseResult<PublicProfile>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
 
             try
             {
@@ -258,12 +258,12 @@ namespace TrueBase.Core.Data
                     ? (displayNameResult.Data ?? string.Empty)
                     : string.Empty;
 
-                return SupabaseResult<PublicProfileSnapshot>.Success(
-                    new PublicProfileSnapshot(rowId, userIdForDisplayName, displayName, withdrawnAt));
+                return SupabaseResult<PublicProfile>.Success(
+                    new PublicProfile(rowId, userIdForDisplayName, displayName, withdrawnAt));
             }
             catch (Exception e)
             {
-                return SupabaseResult<PublicProfileSnapshot>.Fail("public_profile_parse_failed:" + e.Message);
+                return SupabaseResult<PublicProfile>.Fail("public_profile_parse_failed:" + e.Message);
             }
         }
 

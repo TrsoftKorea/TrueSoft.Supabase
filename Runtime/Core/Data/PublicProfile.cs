@@ -4,15 +4,15 @@
     /// 공개 프로필 조회 결과. <c>profiles</c>의 <c>id</c>(행 PK), <c>user_id</c>(안정 플레이어 id), <c>withdrawn_at</c>를 반영합니다.
     /// 표시 이름은 Auth user metadata(<c>displayName</c>)를 사용합니다.
     /// </summary>
-    public sealed class PublicProfileSnapshot
+    public sealed class PublicProfile
     {
         /// <summary>로그인 전 또는 프로필 조회 실패 시 반환되는 빈 인스턴스.</summary>
-        public static readonly PublicProfileSnapshot Empty = new PublicProfileSnapshot(string.Empty, string.Empty, string.Empty, null, string.Empty);
+        public static readonly PublicProfile Empty = new PublicProfile(string.Empty, string.Empty, string.Empty, null, string.Empty);
 
-        public PublicProfileSnapshot(string profileRowId, string playerUserId, string displayName, string withdrawnAtIso, string serverCode = "")
+        public PublicProfile(string profileRowId, string playerUserId, string displayName, string withdrawnAtIso, string serverCode = "")
         {
             ProfileRowId = profileRowId ?? string.Empty;
-            UserId = playerUserId ?? string.Empty;
+            PlayerUserId = playerUserId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             WithdrawnAtIso = withdrawnAtIso;
             ServerCode = serverCode ?? string.Empty;
@@ -21,8 +21,8 @@
         /// <summary>테이블 PK (<c>profiles.id</c>).</summary>
         public string ProfileRowId { get; }
 
-        /// <summary>플레이어 안정 id (<c>profiles.user_id</c>, OAuth <c>sub</c> 등).</summary>
-        public string UserId { get; }
+        /// <summary>영속 플레이어 id (<c>profiles.user_id</c>, OAuth <c>sub</c> 등). 재인증에도 유지되며, 세션 신원인 <c>Supabase.UserId</c>(account_id)와는 다른 값입니다.</summary>
+        public string PlayerUserId { get; }
 
         public string DisplayName { get; }
 

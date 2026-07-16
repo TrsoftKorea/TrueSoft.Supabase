@@ -4,7 +4,7 @@
 Task<SupabaseResult<string>> Supabase.SetMyDisplayNameAsync(string displayName)
 ```
 
-내 닉네임을 설정합니다. 현재 닉네임과 동일하면 네트워크 요청 없이 성공 처리됩니다. 성공 시 `result.Data`에 적용된(정규화된) 닉네임 문자열이 담기므로, [로그인 시 보관해 둔 프로필](/guide/display-name/profile#my-profile)의 이름을 이 값으로 교체하세요.
+내 닉네임을 설정합니다. 현재 닉네임과 동일하면 네트워크 요청 없이 성공 처리됩니다. 성공 시 `result.Data`에 적용된(정규화된) 닉네임 문자열이 담기므로, 로그인 시 보관해 둔 프로필의 이름을 이 값으로 교체하세요.
 
 ```csharp
 var result = await Supabase.SetMyDisplayNameAsync(displayName);

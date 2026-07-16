@@ -13,9 +13,9 @@ namespace TrueBase.Core.Common
     public sealed class SupabaseSignInResult : SupabaseResult
     {
         /// <summary>로그인 시 조회된 내 프로필. 실패 시 null.</summary>
-        public PublicProfileSnapshot Profile { get; }
+        public PublicProfile Profile { get; }
 
-        private SupabaseSignInResult(bool isSuccess, PublicProfileSnapshot profile, string errorCode, SupabaseBanInfo banInfo)
+        private SupabaseSignInResult(bool isSuccess, PublicProfile profile, string errorCode, SupabaseBanInfo banInfo)
             : base(isSuccess, errorCode, banInfo)
         {
             Profile = profile;
@@ -23,7 +23,7 @@ namespace TrueBase.Core.Common
 
         /// <summary>성공 결과를 만듭니다.</summary>
         /// <param name="profile">로그인 시 조회된 내 프로필.</param>
-        public static SupabaseSignInResult Success(PublicProfileSnapshot profile)
+        public static SupabaseSignInResult Success(PublicProfile profile)
             => new SupabaseSignInResult(true, profile, null, null);
 
         /// <summary>실패 결과를 만듭니다.</summary>

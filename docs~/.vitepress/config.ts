@@ -107,7 +107,7 @@ export default defineConfig({
               { text: '다른 플레이어 조회', link: '/guide/display-name/nickname/get-other' }
             ]
           },
-          { text: '프로필', link: '/guide/display-name/profile' },
+          { text: '공개 프로필', link: '/guide/display-name/profile' },
           {
             text: '탈퇴 처리',
             link: '/guide/withdrawal/request/',
@@ -144,6 +144,10 @@ export default defineConfig({
               { text: '로드', link: '/guide/user-data/load' },
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
               { text: '즉시 저장', link: '/guide/user-data/immediate-save' },
+              { text: '즉시 저장 후 대기', link: '/guide/user-data/flush-now' },
+              { text: '즉시 저장 요청', link: '/guide/user-data/request-immediate-save' },
+              { text: '변경분 저장', link: '/guide/user-data/save-if-changed' },
+              { text: '세이브 행 보장', link: '/guide/user-data/ensure-row' },
               { text: '세이브 삭제', link: '/guide/user-data/delete' },
               { text: '컬럼 추가', link: '/guide/user-data/add-column' }
             ]
@@ -194,6 +198,7 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '목록 조회', link: '/guide/mailbox/list' },
+              { text: '다국어 메시지', link: '/guide/mailbox/localized' },
               { text: '상세 조회', link: '/guide/mailbox/detail' },
               { text: '아이템 핸들러 등록', link: '/guide/mailbox/item-handler' },
               { text: '보상 수령', link: '/guide/mailbox/claim' },

@@ -303,7 +303,7 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetMyServerInfoAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicProfileAsync"/>
-        public static Task<SupabaseResult<PublicProfileSnapshot>> GetPublicProfileAsync(string userId) =>
+        public static Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId) =>
             SupabaseSDK.TryGetPublicProfileAsync(userId);
 
         /// <inheritdoc cref="SupabaseSDK.TryMarkMyWithdrawnAsync"/>

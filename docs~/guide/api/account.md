@@ -12,7 +12,7 @@
 
 | 멤버 | 설명 |
 |------|------|
-| [내 프로필](/guide/display-name/profile#my-profile) | 로그인 결과 `SupabaseSignInResult.Profile`로 획득 |
+| [내 프로필](/guide/display-name/profile) | 로그인 결과 `SupabaseSignInResult.Profile`로 획득 |
 | [`GetPublicProfileAsync`](/guide/display-name/profile) | 다른 플레이어 공개 프로필 조회 |
 
 ## 탈퇴
