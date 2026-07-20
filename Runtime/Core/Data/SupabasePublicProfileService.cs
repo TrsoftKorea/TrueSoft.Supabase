@@ -312,17 +312,6 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
-        private static string ExtractFirstUuidFromJson(string body)
-        {
-            if (string.IsNullOrWhiteSpace(body))
-                return null;
-
-            var m = Regex.Match(
-                body.Trim(),
-                @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-            return m.Success ? m.Value : null;
-        }
-
         /// <summary>현재 로그인 계정의 서버 식별자를 조회합니다. RPC <c>ts_my_server_id</c>.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<ServerInfo>> GetMyServerIdAsync(string accessToken)
@@ -611,12 +600,6 @@ namespace TrueBase.Core.Data
         }
 
         [Serializable]
-        private sealed class AccountIdRow
-        {
-            public string account_id;
-        }
-
-        [Serializable]
         private sealed class UpsertNameRow
         {
             public string account_id;
@@ -674,11 +657,6 @@ namespace TrueBase.Core.Data
         {
             public string p_user_id;
             public string p_platform;
-        }
-
-        private sealed class GameServerIdRow
-        {
-            public string id;
         }
 
         [Serializable]

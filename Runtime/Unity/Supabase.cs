@@ -140,10 +140,6 @@ namespace TrueBase.Unity
         public static Task<SupabaseSignInResult> SignInAnonymouslyAsync() =>
             ToSignInResultAsync(SupabaseSDK.TrySignInAnonymouslyAsync());
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignOutFromGoogleAsync"/>
-        internal static Task<SupabaseResult> TrySignOutFromGoogleAsync() =>
-            SupabaseSDK.TrySignOutFromGoogleAsync();
-
         /// <inheritdoc cref="SupabaseSDK.TryRevokeGoogleAccessAsync"/>
         public static Task<SupabaseResult> RevokeGoogleAccessAsync() =>
             SupabaseSDK.TryRevokeGoogleAccessAsync();
@@ -165,17 +161,6 @@ namespace TrueBase.Unity
         /// </remarks>
         public static Task<SupabaseResult<SupabaseBanInfo>> GetBanInfoAsync(string accountId) =>
             SupabaseSDK.TryGetBanInfoAsync(accountId);
-
-        /// <inheritdoc cref="SupabaseSDK.TryRefreshSessionAsync"/>
-        internal static Task<SupabaseResult> TryRefreshSessionAsync(string refreshToken) =>
-            SupabaseSDK.TryRefreshSessionAsync(refreshToken);
-
-        /// <summary>
-        /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 → (선택) 자동 로그인.
-        /// </summary>
-        internal static Task<bool> StartAsync(bool restoreSessionFirst = true) =>
-            SupabaseSDK.StartAsync(restoreSessionFirst);
 
         /// <summary>로그인 직후 <typeparamref name="T"/>의 테이블에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다.</summary>
         internal static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>
@@ -247,10 +232,6 @@ namespace TrueBase.Unity
         internal static Task<SupabaseResult> DeleteUserDataAsync<T>() =>
             SupabaseSDK.TryDeleteUserDataAsync<T>();
 
-        /// <summary>정적 세이브 자동 동기화 쿨타임(초)을 설정합니다.</summary>
-        internal static void ConfigureUserSaveAutoSyncCooldown(float seconds) =>
-            SupabaseSDK.ConfigureUserSaveAutoSyncCooldown(seconds);
-
         /// <summary>
         /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
         /// 인스턴스별 <c>ConfigureCooldown</c> 오버라이드가 있으면 그 값이 우선합니다.
@@ -301,18 +282,6 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> IsNameAvailableAsync(string displayName) =>
             SupabaseSDK.TryIsNameAvailableAsync(displayName);
 
-        /// <inheritdoc cref="SupabaseSDK.TryTransferServerAsync"/>
-        public static Task<SupabaseResult> TransferServerAsync(string targetServerCode, string reason = null) =>
-            SupabaseSDK.TryTransferServerAsync(targetServerCode, reason);
-
-        /// <summary>로컬에 선택한 서버 코드를 저장합니다.</summary>
-        internal static void SetCurrentServerCode(string serverCode) =>
-            SupabaseSDK.SetCurrentServerCode(serverCode);
-
-        /// <summary>로컬에 저장된 현재 서버 코드를 반환합니다.</summary>
-        internal static string GetCurrentServerCode() =>
-            SupabaseSDK.GetCurrentServerCode();
-
         /// <inheritdoc cref="SupabaseSDK.TryGetServerInfoAsync"/>
         public static Task<SupabaseResult<ServerInfo>> GetServerInfoAsync() =>
             SupabaseSDK.TryGetServerInfoAsync();
@@ -320,10 +289,6 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicProfileAsync"/>
         public static Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId) =>
             SupabaseSDK.TryGetPublicProfileAsync(userId);
-
-        /// <inheritdoc cref="SupabaseSDK.TryMarkWithdrawnAsync"/>
-        public static Task<SupabaseResult> MarkWithdrawnAsync() =>
-            SupabaseSDK.TryMarkWithdrawnAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryRequestWithdrawalAsync"/>
         public static Task<SupabaseResult> RequestWithdrawalAsync() =>
@@ -337,25 +302,9 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync() =>
             SupabaseSDK.TryGetWithdrawalStatusAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryRequestWithdrawalCancelTokenAsync"/>
-        public static Task<SupabaseResult<string>> RequestWithdrawalCancelTokenAsync() =>
-            SupabaseSDK.TryRequestWithdrawalCancelTokenAsync();
-
         /// <inheritdoc cref="SupabaseSDK.TryRedeemWithdrawalCancelAsync(string)"/>
         public static Task<SupabaseResult> RedeemWithdrawalCancelAsync(string cancelToken = null) =>
             SupabaseSDK.TryRedeemWithdrawalCancelAsync(cancelToken);
-
-        /// <summary>로컬에 저장된 탈퇴 게이트 상태를 반환합니다(로그아웃 안내 UI용).</summary>
-        internal static WithdrawalStatus GetStoredWithdrawalGateStatus() =>
-            SupabaseSDK.GetStoredWithdrawalGateStatus();
-
-        /// <inheritdoc cref="SupabaseSDK.TrySetMyWithdrawnAtAsync"/>
-        internal static Task<SupabaseResult> TrySetMyWithdrawnAtAsync(string withdrawnAtIsoUtc) =>
-            SupabaseSDK.TrySetMyWithdrawnAtAsync(withdrawnAtIsoUtc);
-
-        /// <inheritdoc cref="SupabaseSDK.TryUpdateLastActivityAtAsync"/>
-        internal static Task<SupabaseResult> TryUpdateLastActivityAtAsync() =>
-            SupabaseSDK.TryUpdateLastActivityAtAsync();
 
         /// <summary>특정 key가 갱신될 때마다 콜백을 호출합니다. 콜백 인자는 해당 key의 원본 JSON 문자열입니다.</summary>
         /// <param name="key">remote_config 테이블의 key.</param>
@@ -367,14 +316,6 @@ namespace TrueBase.Unity
         /// <summary><see cref="SubscribeRemoteConfig"/>로 등록한 콜백을 해지합니다. 등록 시와 동일한 델리게이트 인스턴스를 넘겨야 합니다.</summary>
         internal static void UnsubscribeRemoteConfig(string key, Action<string> onValueChanged) =>
             SupabaseSDK.UnsubscribeRemoteConfig(key, onValueChanged);
-
-        /// <summary>네트워크 없이 인메모리 캐시에서 동기 조회합니다. 캐시에 없거나 역직렬화에 실패하면 <paramref name="defaultValue"/>를 반환합니다.</summary>
-        internal static T GetRemoteConfig<T>(string key, T defaultValue = default) =>
-            SupabaseSDK.GetRemoteConfig(key, defaultValue);
-
-        /// <inheritdoc cref="SupabaseSDK.TryGetRemoteConfigAsync{T}(string, int)"/>
-        internal static Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new() =>
-            SupabaseSDK.TryGetRemoteConfigAsync<T>(key, maxStale);
 
         /// <summary>키의 값을 비동기로 1회 읽는 함수를 만듭니다.</summary>
         /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 DB의 <c>max_stale_seconds</c> 설정을 따릅니다.</param>
@@ -394,10 +335,6 @@ namespace TrueBase.Unity
             string key, float pollInterval, Action<T> onChange, bool invokeIfCached = true)
             where T : class, new() =>
             SupabaseSDK.CreateRemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
-
-        /// <summary>인메모리 캐시에서 원본 JSON 문자열을 조회합니다. 캐시에 없으면 false를 반환하고 <paramref name="valueJson"/>은 null입니다.</summary>
-        internal static bool TryGetRemoteConfigRaw(string key, out string valueJson) =>
-            SupabaseSDK.TryGetRemoteConfigRaw(key, out valueJson);
 
         /// <inheritdoc cref="SupabaseSDK.TryVerifyGooglePlayPurchaseAsync"/>
         internal static Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
@@ -422,9 +359,6 @@ namespace TrueBase.Unity
             string bundleId = null) =>
             SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
 
-        /// <summary>로그인 성공 시 세션을 SDK에 설정. 이후 Patch/LoadColumns API는 세션 인자 없이 사용 가능.</summary>
-        internal static void SetSession(SupabaseSession session) => SupabaseSDK.SetSession(session);
-
         /// <inheritdoc cref="SupabaseSDK.SetSession(SupabaseSession, SupabaseSessionChangeKind)"/>
         internal static void SetSession(SupabaseSession session, SupabaseSessionChangeKind kind) =>
             SupabaseSDK.SetSession(session, kind);
@@ -443,14 +377,8 @@ namespace TrueBase.Unity
         internal static void ClearSession(bool clearStorage, bool deleteUserSessionRow) =>
             SupabaseSDK.ClearSession(clearStorage, deleteUserSessionRow);
 
-        /// <inheritdoc cref="SupabaseSDK.ClearLocalStorage"/>
-        internal static void ClearLocalStorage() => SupabaseSDK.ClearLocalStorage();
-
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFullyAsync"/>
         public static Task<SupabaseResult> SignOutFullyAsync() => SupabaseSDK.TrySignOutFullyAsync();
-
-        /// <summary>앱 시작 자동 로그인 정책(로그아웃/이전 계정 정보 여부)을 적용해 자동 로그인을 시도합니다(내부 API).</summary>
-        internal static Task<SupabaseResult> TryAutoLoginOnStartAsync() => SupabaseSDK.TryAutoLoginOnStartAsync();
 
         /// <summary>
         /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅을 수행합니다.

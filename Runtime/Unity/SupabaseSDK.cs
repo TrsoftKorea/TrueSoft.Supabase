@@ -206,16 +206,12 @@ namespace TrueBase.Unity
             public const string AuthGoogleRevoke  = "Supabase.Auth.Google.Revoke";
             public const string AuthGoogleUnlink  = "Supabase.Auth.Google.Unlink";
             public const string AuthAppleUnlink   = "Supabase.Auth.Apple.Unlink";
-            public const string BootStart = "Supabase.Boot.Start";
             public const string AuthRefreshSession = "Supabase.Auth.RefreshSession";
-            public const string UserDataSave = "Supabase.UserData.Save";
-            public const string UserDataLoad = "Supabase.UserData.Load";
             public const string UserDataLoadAttributed = "Supabase.UserData.LoadAttributed";
             public const string UserDataLoadAttributedRowState = "Supabase.UserData.LoadAttributed.RowState";
             public const string UserDataLoadColumnsRowState = "Supabase.UserData.LoadColumns.RowState";
             public const string UserDataPatchDiff = "Supabase.UserData.PatchDiff";
             public const string UserDataDelete = "Supabase.UserData.Delete";
-            public const string EdgeFunctionInvoke = "Supabase.EdgeFunction.Invoke";
             public const string RemoteConfigGet = "Supabase.RemoteConfig.Get";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
             public const string ProfilePublicNameGet = "Supabase.Profile.Name.Get";
@@ -1214,13 +1210,6 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthGoogleRevoke, r);
         }
 
-        /// <summary><see cref="SignOutFromGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseResult> TrySignOutFromGoogleAsync()
-        {
-            var r = await SignOutFromGoogleAsync();
-            return LogAndReturn(ApiLogTags.AuthGoogleSignOut, r);
-        }
-
         /// <summary><see cref="RefreshSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
         public static async Task<SupabaseResult> TryRefreshSessionAsync(string refreshToken)
         {
@@ -1337,12 +1326,6 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.UserDataDelete, r);
         }
 
-        /// <summary>정적 세이브 자동 동기화 쿨타임(초)을 설정합니다.</summary>
-        public static void ConfigureUserSaveAutoSyncCooldown(float seconds)
-        {
-            UserSaveStaticSyncRegistry.ConfigureCooldown(seconds);
-        }
-
         /// <summary>
         /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
         /// <see cref="SupabaseSettings"/>에서 읽은 값을 <see cref="Config.SupabaseRuntime"/>이 자동으로 적용합니다.
@@ -1397,18 +1380,6 @@ namespace TrueBase.Unity
         internal static void TickUserSaveAutoSync(float realtimeNow)
         {
             UserSaveStaticSyncRegistry.Tick(realtimeNow);
-        }
-
-        /// <summary>
-        /// <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출하고 성공 여부를 로그로 남깁니다.
-        /// 실패 시 <c>value</c>는 null입니다.
-        /// </summary>
-        public static async Task<(bool success, T value)> TryGetRemoteConfigAsync<T>(string key, int maxStale = 0) where T : class, new()
-        {
-            var r = await GetRemoteConfigAsync<T>(key, maxStale);
-            var ok = r.IsSuccess;
-            LogApiResult(ApiLogTags.RemoteConfigGet, ok, ok ? null : r.ErrorCode ?? "remote_config_get_failed");
-            return (ok, ok ? r.Data : null);
         }
 
         /// <summary><see cref="RestoreSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -1748,21 +1719,6 @@ namespace TrueBase.Unity
             }
 
             return SupabaseResult<SupabaseSession>.Fail(SupabaseFailReason.NotSignedIn);
-        }
-
-        /// <summary>
-        /// 앱 시작 시 자주 필요한 준비를 한 번에 수행합니다.
-        /// 초기화 → (선택) 자동 로그인.
-        /// </summary>
-        public static async Task<bool> StartAsync(bool restoreSessionFirst = true)
-        {
-            if (!await EnsureInitializedAsync())
-                return false;
-
-            if (restoreSessionFirst && !IsLoggedIn)
-                _ = await TryAutoLoginOnStartAsync();
-
-            return true;
         }
 
         /// <summary>refresh_token 문자열로 세션을 갱신하고 SDK에 반영합니다(직접 보유한 토큰용).</summary>
@@ -2229,30 +2185,6 @@ namespace TrueBase.Unity
             return LogAndReturnResult(ApiLogTags.ProfileMyServerGet, r);
         }
 
-        /// <summary>현재 로그인 계정을 지정 서버 코드로 이주시킵니다.</summary>
-        public static async Task<SupabaseResult<bool>> TransferServerAsync(string targetServerCode, string reason = null)
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            var svc = _bootstrap?.PublicProfileService;
-            if (svc == null)
-                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
-
-            var r = await svc.TransferServerAsync(_currentSession.AccessToken, targetServerCode, reason);
-            if (r != null && r.IsSuccess && string.IsNullOrWhiteSpace(targetServerCode) == false)
-                SetCurrentServerCode(targetServerCode);
-            return r;
-        }
-
-        /// <inheritdoc cref="TransferServerAsync"/>
-        public static async Task<SupabaseResult> TryTransferServerAsync(string targetServerCode, string reason = null)
-        {
-            var r = await TransferServerAsync(targetServerCode, reason);
-            return LogAndReturn(ApiLogTags.ProfileServerTransfer, r);
-        }
-
         /// <summary>공개 프로필(닉네임·탈퇴 시각)을 한 번에 조회합니다. <paramref name="userId"/>는 <c>profiles.user_id</c>(안정 플레이어 id)입니다.</summary>
         public static async Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId)
         {
@@ -2270,25 +2202,6 @@ namespace TrueBase.Unity
             return LogAndReturnResult(ApiLogTags.ProfileSnapshotGet, r);
         }
 
-        /// <summary>본인 <c>withdrawn_at</c>을 ISO 8601로 설정합니다(soft 탈퇴 표시).</summary>
-        public static async Task<SupabaseResult<bool>> SetMyWithdrawnAtAsync(string withdrawnAtIsoUtc)
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized);
-
-            if (string.IsNullOrWhiteSpace(withdrawnAtIsoUtc))
-                return SupabaseResult<bool>.Fail(SupabaseFailReason.WithdrawnAtEmpty);
-
-            return await _bootstrap.PublicProfileService.PatchMyWithdrawnAtAsync(
-                _currentSession.AccessToken,
-                _currentSession.User.Id,
-                withdrawnAtIsoUtc);
-        }
-
         /// <summary>본인 <c>withdrawn_at</c>을 비웁니다(SQL NULL).</summary>
         public static async Task<SupabaseResult<bool>> ClearWithdrawalAsync()
         {
@@ -2304,10 +2217,6 @@ namespace TrueBase.Unity
                 _currentSession.User.Id,
                 withdrawnAtIso: null);
         }
-
-        /// <summary>현재 시각(UTC)으로 soft 탈퇴 시각을 기록합니다.</summary>
-        public static Task<SupabaseResult<bool>> MarkWithdrawnAsync() =>
-            SetMyWithdrawnAtAsync(DateTime.UtcNow.ToString("o"));
 
         /// <summary>
         /// 설정(<see cref="WithdrawalRequestDelayDays"/>)에 정의된 유예 기간(일)으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
@@ -2343,13 +2252,6 @@ namespace TrueBase.Unity
             return SupabaseResult<bool>.Success(true);
         }
 
-        /// <inheritdoc cref="MarkWithdrawnAsync"/>
-        public static async Task<SupabaseResult> TryMarkWithdrawnAsync()
-        {
-            var r = await MarkWithdrawnAsync();
-            return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
-        }
-
         /// <inheritdoc cref="RequestWithdrawalAsync"/>
         public static async Task<SupabaseResult> TryRequestWithdrawalAsync()
         {
@@ -2367,29 +2269,6 @@ namespace TrueBase.Unity
         {
             var r = await ClearWithdrawalAsync();
             return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
-        }
-
-        /// <inheritdoc cref="SetMyWithdrawnAtAsync"/>
-        public static async Task<SupabaseResult> TrySetMyWithdrawnAtAsync(string withdrawnAtIsoUtc)
-        {
-            var r = await SetMyWithdrawnAtAsync(withdrawnAtIsoUtc);
-            return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
-        }
-
-        /// <summary>
-        /// 본인의 <c>profiles.last_activity_at</c>을 현재 시각으로 갱신합니다. Retool 운영 대시보드 모니터링용.
-        /// </summary>
-        public static async Task<SupabaseResult> TryUpdateLastActivityAtAsync()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return LogAndReturn("Supabase.Profile.LastActivityAt", ready);
-
-            if (_bootstrap?.PublicProfileService == null)
-                return LogAndReturn("Supabase.Profile.LastActivityAt", SupabaseResult<bool>.Fail(SupabaseFailReason.NotInitialized));
-
-            var r = await _bootstrap.PublicProfileService.PatchMyLastActivityAtAsync(_currentSession.AccessToken, _currentSession.User.Id);
-            return LogAndReturn("Supabase.Profile.LastActivityAt", r);
         }
 
         /// <summary>
@@ -2412,33 +2291,6 @@ namespace TrueBase.Unity
         {
             var r = await GetWithdrawalStatusAsync();
             return LogAndReturnResult(ApiLogTags.ProfileWithdrawalStatus, r);
-        }
-
-        /// <summary>
-        /// 철회 전용 토큰 발급을 요청합니다. 로그인 세션(access token)이 필요합니다.
-        /// 발급 성공 시 토큰과 만료 시각을 로컬에 저장합니다.
-        /// </summary>
-        public static async Task<SupabaseResult<string>> RequestWithdrawalCancelTokenAsync()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (_bootstrap?.EdgeFunctionsService == null)
-                return SupabaseResult<string>.Fail(SupabaseFailReason.NotInitialized);
-
-            var issue = await RequestWithdrawalCancelTokenCoreAsync(_currentSession.AccessToken);
-            if (issue == null || !issue.IsSuccess || issue.Data == null)
-                return SupabaseResult<string>.Fail(issue?.ErrorCode ?? "withdrawal_cancel_issue_failed");
-
-            return SupabaseResult<string>.Success(issue.Data.CancelToken);
-        }
-
-        /// <inheritdoc cref="RequestWithdrawalCancelTokenAsync"/>
-        public static async Task<SupabaseResult<string>> TryRequestWithdrawalCancelTokenAsync()
-        {
-            var r = await RequestWithdrawalCancelTokenAsync();
-            return LogAndReturnResult(ApiLogTags.ProfileWithdrawalCancelIssue, r);
         }
 
         /// <summary>
@@ -2522,15 +2374,6 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>로컬 캐시에서 key에 해당하는 값을 읽습니다(네트워크 호출 없음).</summary>
-        /// <remarks>
-        /// 최신 값이 필요하면 <see cref="GetRemoteConfigAsync{T}(string, float)"/>를 호출합니다.
-        /// </remarks>
-        public static T GetRemoteConfig<T>(string key, T defaultValue = default)
-        {
-            return RemoteConfig.Get(key, defaultValue);
-        }
-
         /// <summary>
         /// Remote Config를 서버와 맞춘 뒤 역직렬화합니다.
         /// 폴링이 활성화된 키는 폴링이 갱신을 담당하며, 그 외 키는 <paramref name="maxStale"/> 초과 시 읽기 시점에 백그라운드 갱신이 트리거됩니다(기본 300초).
@@ -2602,12 +2445,6 @@ namespace TrueBase.Unity
         {
             if (IsInitialized)
                 RemoteConfig.SetKeyPollIntervalOverride(key, interval);
-        }
-
-        /// <summary>로컬 캐시에서 key의 원본 JSON 문자열을 읽습니다(네트워크 호출 없음). 캐시에 없으면 false.</summary>
-        public static bool TryGetRemoteConfigRaw(string key, out string valueJson)
-        {
-            return RemoteConfig.TryGetRaw(key, out valueJson);
         }
 
         /// <summary>특정 key 값이 바뀔 때마다 콜백을 호출합니다(캐시에 객체 루트 JSON이 있을 때).</summary>
@@ -2765,12 +2602,6 @@ namespace TrueBase.Unity
             return (true, result.Data);
         }
 
-        /// <summary>로그인 성공 시 세션을 SDK에 설정하세요. 이후 PatchAsync/LoadColumnsAsync/Events는 세션 없이 호출 가능.</summary>
-        public static void SetSession(SupabaseSession session)
-        {
-            SetSession(session, SupabaseSessionChangeKind.RestoredOrRefreshed);
-        }
-
         /// <summary>
         /// 세션을 설정합니다. <paramref name="kind"/>가 <see cref="SupabaseSessionChangeKind.NewSignIn"/>이면 서버에 새 세션 토큰을 등록합니다(중복 로그인 감지).
         /// </summary>
@@ -2863,37 +2694,6 @@ namespace TrueBase.Unity
                 if (svc != null)
                     _ = svc.DeleteMySessionRowAsync(accessToken, accountId);
             }
-        }
-
-        /// <summary>
-        /// SDK가 소유한 모든 PlayerPrefs 키를 삭제합니다.
-        /// 테스트·QA 목적으로 기기 로컬 상태를 완전히 초기화할 때 사용하세요.
-        /// </summary>
-        /// <remarks>
-        /// 이 메서드는 세션 해제(<see cref="ClearSession"/>)를 포함해 SDK가 관리하는
-        /// 모든 로컬 스토리지를 지웁니다. 게임 자체의 PlayerPrefs는 건드리지 않습니다.
-        ///
-        /// SDK 내부 키 목록이 변경되더라도 이 메서드 하나만 유지하면 됩니다.
-        /// 게임 코드에서 SDK의 키 이름을 직접 참조하지 마세요.
-        /// </remarks>
-        public static void ClearLocalStorage()
-        {
-            // 세션 해제 (RefreshTokenKey + SessionTokenKey for current account)
-            ClearSession(clearStorage: true, deleteUserSessionRow: false);
-
-            // SDK가 관리하는 나머지 모든 키 삭제
-            PlayerPrefs.DeleteKey(AccountIdPlayerPrefsKey);
-            PlayerPrefs.DeleteKey(LastSignInMethodKey);
-            PlayerPrefs.DeleteKey(CurrentServerCodeKey);
-            PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
-            PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
-            PlayerPrefs.DeleteKey(WithdrawalGateNameKey);
-            PlayerPrefs.DeleteKey(WithdrawalGateWithdrawnAtKey);
-            PlayerPrefs.DeleteKey(WithdrawalGateServerNowKey);
-            PlayerPrefs.DeleteKey(WithdrawalGateSecondsRemainingKey);
-            // AutoLoginBlockedKey는 ClearSession()이 SetAutoLoginBlocked(true)로 처리함
-
-            PlayerPrefs.Save();
         }
 
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>

@@ -503,9 +503,6 @@ namespace TrueBase.Core.Data
         /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
         public static string ResolveTableName<T>() => UserDataTableName;
 
-        /// <summary>유저 세이브 테이블명 <c>"user_data"</c>를 반환합니다.</summary>
-        public static string ResolveTableName(Type t) => UserDataTableName;
-
         private static object GetValue(MemberInfo m, object instance)
         {
             if (instance == null)

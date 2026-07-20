@@ -54,15 +54,6 @@ namespace TrueBase.Unity
         };
 
         /// <summary>
-        /// 우선순위 구분 없는 단일 전역 쿨다운(초)을 설정합니다.
-        /// <see cref="Entry.GetDirtyCooldown"/>이 없는 항목의 flush 후 대기 시간에만 사용됩니다. 음수는 0으로 보정됩니다.
-        /// </summary>
-        public static void ConfigureCooldown(float seconds)
-        {
-            _cooldownSeconds = Mathf.Max(0f, seconds);
-        }
-
-        /// <summary>
         /// 세이브 항목을 등록합니다. 같은 key로 재등록하면 콜백만 교체되고 타이머 상태는 유지됩니다.
         /// </summary>
         /// <param name="key">항목 식별 key. 공백이면 무시됩니다(앞뒤 공백은 trim).</param>
