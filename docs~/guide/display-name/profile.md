@@ -31,8 +31,8 @@ if (result.IsSuccess)
 | `.Data.ServerCode` | `string` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
 | `.Data.IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

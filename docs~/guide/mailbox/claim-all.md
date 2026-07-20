@@ -25,9 +25,9 @@ if (result.IsSuccess)
 
 `.Data`에 지급된 모든 보상(`ClaimResult`)이 우편·순서대로 담깁니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
 | `mail_item_handler_missing:<key>` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler) 미등록 key가 있으면 수령 전 실패합니다 |
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

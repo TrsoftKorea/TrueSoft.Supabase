@@ -10,8 +10,8 @@ DB에 본인 세이브 행이 존재하도록 보장합니다. 행이 없으면 
 await PlayerSave.EnsureRowAsync();
 ```
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.UserSaveLoadFailed` | 행 생성·확인 실패 |
+| `SupabaseErrorCode.UserSaveLoadFailed` | 행 생성·확인 실패 |

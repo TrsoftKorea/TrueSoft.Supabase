@@ -52,7 +52,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<string>> GetNameAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<string>.Fail("access_token_empty");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(playerUserId))
                 return SupabaseResult<string>.Fail("player_user_id_empty");
@@ -68,7 +68,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<string>.Fail("http_response_null");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
@@ -99,13 +99,13 @@ namespace TrueBase.Core.Data
             string ignoreAccountIdForSelf = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var norm = NormalizeName(displayName);
             if (norm.Length == 0)
                 return SupabaseResult<bool>.Fail("display_name_empty");
             if (norm.Length > NameMaxLength)
-                return SupabaseResult<bool>.Fail("display_name_too_long");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NameTooLong);
 
             // SECURITY DEFINER RPC 사용: RLS 우회, DB 내부에서 server_id 직접 조회
             // → REST + RLS 방식의 server_id 불일치 문제 원천 차단
@@ -121,7 +121,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");
@@ -146,7 +146,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<PublicProfile>> GetProfileAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<PublicProfile>.Fail("access_token_empty");
+                return SupabaseResult<PublicProfile>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(playerUserId))
                 return SupabaseResult<PublicProfile>.Fail("player_user_id_empty");
@@ -166,7 +166,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<PublicProfile>.Fail("http_response_null");
+                return SupabaseResult<PublicProfile>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<PublicProfile>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
@@ -224,7 +224,7 @@ namespace TrueBase.Core.Data
             string platform = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -241,7 +241,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
             {
@@ -259,7 +259,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<ServerInfo>> GetMyServerIdAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<ServerInfo>.Fail("access_token_empty");
+                return SupabaseResult<ServerInfo>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_my_server_id";
             var response = await _httpClient.SendAsync(
@@ -269,7 +269,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<ServerInfo>.Fail("http_response_null");
+                return SupabaseResult<ServerInfo>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<ServerInfo>.Fail(response.ErrorMessage ?? response.Body ?? "my_server_fetch_failed");
@@ -297,7 +297,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<bool>> TransferServerAsync(string accessToken, string targetServerCode, string reason = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
             if (string.IsNullOrWhiteSpace(targetServerCode))
                 return SupabaseResult<bool>.Fail("target_server_code_empty");
 
@@ -315,7 +315,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "server_transfer_failed");
 
@@ -346,7 +346,7 @@ namespace TrueBase.Core.Data
             string withdrawnAtIso)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -368,7 +368,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, "return=minimal"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawn_at_patch_failed");
@@ -387,7 +387,7 @@ namespace TrueBase.Core.Data
             int delayDays)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<string>.Fail("access_token_empty");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (delayDays < 0)
                 delayDays = 0;
@@ -405,7 +405,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<string>.Fail("http_response_null");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_request_failed");
@@ -432,7 +432,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<WithdrawalStatus>.Fail("access_token_empty");
+                return SupabaseResult<WithdrawalStatus>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_my_withdrawal_status";
 
@@ -443,7 +443,7 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<WithdrawalStatus>.Fail("http_response_null");
+                return SupabaseResult<WithdrawalStatus>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<WithdrawalStatus>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_status_failed");

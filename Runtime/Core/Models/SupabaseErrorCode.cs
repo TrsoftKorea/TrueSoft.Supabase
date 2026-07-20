@@ -1,7 +1,7 @@
-namespace TrueBase.Unity
+namespace TrueBase.Core.Common
 {
     /// <summary>
-    /// <see cref="TrueBase.Core.Common.SupabaseResult.ErrorCode"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
+    /// <see cref="SupabaseResult.ErrorCode"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
     /// 목록에 없는 값은 실제 <see cref="TrueBase.Core.Common.SupabaseResult.ErrorCode"/> 문자열과 직접 비교할 수 있습니다.
     /// <para>
     /// 대개는 이 문자열 대신 <see cref="TrueBase.Core.Common.SupabaseResult.Reason"/>(<see cref="TrueBase.Core.Common.SupabaseFailCode"/> enum)으로
@@ -9,7 +9,7 @@ namespace TrueBase.Unity
     /// (예: <c>result.Reason == SupabaseFailCode.UserBanned</c>). 각 상수는 같은 이름의 enum 멤버와 1:1 대응합니다.
     /// </para>
     /// </summary>
-    public static class SupabaseFailReason
+    public static class SupabaseErrorCode
     {
         /// <summary>SDK가 초기화되지 않았습니다.</summary>
         public const string NotInitialized = "sdk_not_initialized";
@@ -145,9 +145,6 @@ namespace TrueBase.Unity
 
         /// <summary>탈퇴 계정 재가입에 실패했습니다.</summary>
         public const string WithdrawalDeletedRecreateFailed = "withdrawal_deleted_recreate_failed";
-
-        /// <summary>탈퇴 시각 값이 비어있습니다.</summary>
-        public const string WithdrawnAtEmpty = "withdrawn_at_empty";
 
         /// <summary>지원하지 않는 로그인 방식입니다(내부 오류).</summary>
         public const string InvalidSignInMethod = "invalid_signin_method";

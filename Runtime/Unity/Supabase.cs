@@ -241,7 +241,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000) =>
             await SupabaseSDK.TrySaveAllAsync(timeoutMs)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicNameAsync(string)"/>
         public static Task<SupabaseResult<string>> GetPublicNameAsync(string userId) =>
@@ -408,7 +408,7 @@ namespace TrueBase.Unity
         public static SupabaseResult RegisterMailItemHandler(IMailItemHandler handler)
         {
             if (handler == null || string.IsNullOrWhiteSpace(handler.ItemKey))
-                return SupabaseResult.Fail(SupabaseFailReason.MailItemHandlerInvalid);
+                return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
             MailItemHandlerRegistry.Register(handler);
             return SupabaseResult.Ok;
         }
@@ -417,7 +417,7 @@ namespace TrueBase.Unity
         public static SupabaseResult UnregisterMailItemHandler(string itemKey)
         {
             if (string.IsNullOrWhiteSpace(itemKey))
-                return SupabaseResult.Fail(SupabaseFailReason.MailItemHandlerInvalid);
+                return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
             MailItemHandlerRegistry.Unregister(itemKey);
             return SupabaseResult.Ok;
         }

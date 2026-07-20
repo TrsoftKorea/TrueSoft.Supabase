@@ -13,7 +13,7 @@ if (await Supabase.SignInAnonymouslyAsync())
     StartGame();
 ```
 
-**실패 원인 분기** — 결과를 변수로 받아 `Reason`(enum)으로 분기합니다.
+**에러 코드 분기** — 결과를 변수로 받아 `Reason`(enum)으로 분기합니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
@@ -24,7 +24,7 @@ if (!result.IsSuccess)
 }
 ```
 
-각 함수 가이드의 **실패 원인** 표에 나오는 이름은 동일 이름의 `SupabaseFailCode` enum 멤버와 1:1 대응합니다(예: `SupabaseFailReason.UserBanned` ↔ `SupabaseFailCode.UserBanned`). 카탈로그에 없는 동적 사유는 `Reason == SupabaseFailCode.Unknown`이며, 원문은 `ErrorCode` 문자열에서 확인합니다.
+각 함수 가이드의 **에러 코드** 표에 나오는 이름은 동일 이름의 `SupabaseFailCode` enum 멤버와 1:1 대응합니다(예: `SupabaseErrorCode.UserBanned` ↔ `SupabaseFailCode.UserBanned`). 카탈로그에 없는 동적 사유는 `Reason == SupabaseFailCode.Unknown`이며, 원문은 `ErrorCode` 문자열에서 확인합니다.
 
 **부가 정보** — 일부 실패는 추가 데이터를 함께 줍니다.
 
@@ -42,10 +42,11 @@ if (result.Reason == SupabaseFailCode.UserBanned)
 <div class="tb-cards">
 
 - [**인증**<br><small>로그인 · 연동 · 세션</small>](/guide/api/auth)
-- [**계정**<br><small>닉네임 · 프로필 · 탈퇴 · 서버 이주</small>](/guide/api/account)
+- [**계정**<br><small>닉네임 · 프로필 · 탈퇴 · 서버 정보</small>](/guide/api/account)
 - [**게임 데이터**<br><small>유저 데이터 · 원격 설정</small>](/guide/api/game-data)
 - [**인앱 결제**<br><small>IAP 생성 · 검증</small>](/guide/api/iap)
 - [**우편함**<br><small>목록 · 수령 · 삭제 · 분류</small>](/guide/api/mailbox)
 - [**기타**<br><small>서버 시간</small>](/guide/api/etc)
+- [**에러 코드 전체**<br><small>SupabaseFailCode 카탈로그</small>](/guide/api/fail-reasons)
 
 </div>

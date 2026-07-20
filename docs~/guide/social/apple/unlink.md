@@ -6,14 +6,14 @@ Task<SupabaseResult> Supabase.UnlinkAppleAsync()
 
 현재 계정에서 Apple 연동을 해제합니다. 해제 후 `Supabase.IsLinkedWithApple`이 `false`가 됩니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다. |
-| `SupabaseFailReason.IdentityNotLinked` | Apple이 현재 계정에 연동되어 있지 않습니다. |
-| `SupabaseFailReason.CannotUnlinkLastIdentity` | 마지막 남은 연동이라 해제할 수 없습니다. |
-| `SupabaseFailReason.UnlinkFailed` | 연동 해제에 실패했습니다. |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다. |
+| `SupabaseErrorCode.IdentityNotLinked` | Apple이 현재 계정에 연동되어 있지 않습니다. |
+| `SupabaseErrorCode.CannotUnlinkLastIdentity` | 마지막 남은 연동이라 해제할 수 없습니다. |
+| `SupabaseErrorCode.UnlinkFailed` | 연동 해제에 실패했습니다. |
 
 ```csharp
 var r = await Supabase.UnlinkAppleAsync();

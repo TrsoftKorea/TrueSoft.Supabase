@@ -28,8 +28,8 @@ if (result.IsSuccess)
 
 `.Data`에 미수령 보상 우편 개수(`int`)가 담깁니다. 지정한 분류에 해당 우편이 없으면 `0`입니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

@@ -16,8 +16,8 @@ await PlayerSave.FlushNowAsync();   // 전송 완료까지 대기
 |----------|------|
 | `timeoutMs` | 전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패 (기본값: 5000) |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.UserSaveFlushFailed` | 전송 실패 또는 타임아웃 |
+| `SupabaseErrorCode.UserSaveFlushFailed` | 전송 실패 또는 타임아웃 |

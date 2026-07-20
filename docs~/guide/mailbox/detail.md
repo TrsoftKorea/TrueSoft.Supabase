@@ -26,9 +26,9 @@ if (result.IsSuccess)
 
 `.Data`에 `Mail` 한 건이 담깁니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
 | `mail_not_found` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

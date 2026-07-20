@@ -42,7 +42,7 @@ namespace TrueBase.Core.Data
             string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(tableName))
                 return SupabaseResult<bool>.Fail("table_name_empty");
@@ -63,7 +63,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.Body ?? response.ErrorMessage ?? "ensure_row_failed");
@@ -91,7 +91,7 @@ namespace TrueBase.Core.Data
             bool setUpdatedAtIsoUtc = true)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -129,7 +129,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "patch_failed");
@@ -155,7 +155,7 @@ namespace TrueBase.Core.Data
             string tableName)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -174,7 +174,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "delete_failed");
@@ -197,7 +197,7 @@ namespace TrueBase.Core.Data
             string selectColumnsCsv) where T : class, new()
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("access_token_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail("account_id_empty");
@@ -206,7 +206,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail("table_name_empty");
 
             if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("select_columns_empty");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseErrorCode.SelectColumnsEmpty);
 
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, tableName)}" +
@@ -221,7 +221,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail("http_response_null");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail(response.ErrorMessage ?? response.Body ?? "load_failed");

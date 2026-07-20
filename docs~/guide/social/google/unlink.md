@@ -6,14 +6,14 @@ Task<SupabaseResult> Supabase.UnlinkGoogleAsync()
 
 현재 계정에서 Google 연동을 해제합니다. 성공하면 세션이 갱신되어 `Supabase.IsLinkedWithGoogle`이 `false`가 되고, 네이티브 Google credential 상태도 함께 정리되어 **다음 Google 연동 때 계정 선택창이 다시 나타납니다**. 플랫폼 구분 없이 동일하게 호출합니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다. |
-| `SupabaseFailReason.IdentityNotLinked` | Google이 현재 계정에 연동되어 있지 않습니다. |
-| `SupabaseFailReason.CannotUnlinkLastIdentity` | 마지막 남은 연동이라 해제할 수 없습니다. |
-| `SupabaseFailReason.UnlinkFailed` | 연동 해제에 실패했습니다. |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다. |
+| `SupabaseErrorCode.IdentityNotLinked` | Google이 현재 계정에 연동되어 있지 않습니다. |
+| `SupabaseErrorCode.CannotUnlinkLastIdentity` | 마지막 남은 연동이라 해제할 수 없습니다. |
+| `SupabaseErrorCode.UnlinkFailed` | 연동 해제에 실패했습니다. |
 
 ```csharp
 var r = await Supabase.UnlinkGoogleAsync();

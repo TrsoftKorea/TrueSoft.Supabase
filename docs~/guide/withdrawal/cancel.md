@@ -25,10 +25,10 @@ if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
 |----------|------|
 | `cancelToken` | 취소 토큰. 로그인 결과의 `.WithdrawalCancelToken`. 비우면 게이트가 저장한 토큰 사용 (기본값: `null`) |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
-| `SupabaseFailReason.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
+| `SupabaseErrorCode.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

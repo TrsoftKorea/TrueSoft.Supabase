@@ -51,7 +51,7 @@ namespace TrueBase.Core.Common
         /// <param name="banInfo">차단(<c>user_banned</c>) 실패인 경우의 차단 정보.</param>
         /// <param name="withdrawnAt">탈퇴 게이트 차단 시 삭제 예정 시각. 그 외에는 null.</param>
         /// <param name="cancelToken">탈퇴 게이트 차단 시 비로그인 취소 토큰. 그 외에는 null.</param>
-        public static new SupabaseSignInResult Fail(
+        public static SupabaseSignInResult Fail(
             string errorCode,
             SupabaseBanInfo banInfo = null,
             DateTimeOffset? withdrawnAt = null,

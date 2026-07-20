@@ -30,14 +30,14 @@ else
 | `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
 | `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
-| `SupabaseFailReason.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
-| `SupabaseFailReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `SupabaseFailReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
-| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.AnonymousRequired` | 익명 세션이 아닌 상태 |
+| `SupabaseErrorCode.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseErrorCode.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseErrorCode.AppleLinkFailed` | Apple 연동에 실패했습니다 |
+| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

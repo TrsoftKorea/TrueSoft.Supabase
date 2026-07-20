@@ -25,8 +25,8 @@ if (result.IsSuccess)
 
 `.Data`에 삭제된 우편 개수(`int`)가 담깁니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

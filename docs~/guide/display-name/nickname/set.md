@@ -28,11 +28,11 @@ else
 
 `.Data` — 적용된(정규화된) 닉네임 문자열. 실패 시 없음.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NameTaken` | 이미 사용 중인 닉네임 |
-| `SupabaseFailReason.NameTooLong` | 허용 길이 초과 |
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.NameTaken` | 이미 사용 중인 닉네임 |
+| `SupabaseErrorCode.NameTooLong` | 허용 길이 초과 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

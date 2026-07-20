@@ -1,0 +1,7 @@
+# dotnet 실행 산출물 — 커밋 대상 아님
+bin/
+obj/
+
+# 루트 .gitignore가 *.csproj를 무시하지만(Unity 자동 생성분 제외 목적),
+# 이 도구의 csproj는 수동 관리 파일이므로 추적한다.
+!FailReasonCheck.csproj

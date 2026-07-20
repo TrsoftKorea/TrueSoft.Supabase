@@ -50,7 +50,7 @@ namespace TrueBase.Core.Data
                 headers: CreateHeaders(accessToken));
 
             if (response == null)
-                return SupabaseResult<SupabaseFunctionResponse>.Fail("http_response_null");
+                return SupabaseResult<SupabaseFunctionResponse>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<SupabaseFunctionResponse>.Fail(FormatHttpError(response, "function_invoke_failed"));

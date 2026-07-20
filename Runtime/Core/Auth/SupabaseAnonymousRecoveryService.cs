@@ -53,7 +53,7 @@ namespace TrueBase.Core.Auth
                 headers: CreateHeaders(prefer: null));
 
             if (response == null)
-                return SupabaseResult<string>.Fail("http_response_null");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_get_failed");
@@ -105,7 +105,7 @@ namespace TrueBase.Core.Auth
                 headers: CreateHeaders(prefer: "return=minimal"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_upsert_failed");
@@ -137,7 +137,7 @@ namespace TrueBase.Core.Auth
                 headers: CreateHeaders(prefer: "return=minimal"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_delete_failed");

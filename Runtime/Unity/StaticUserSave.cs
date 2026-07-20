@@ -348,7 +348,7 @@ namespace TrueBase.Unity
             EnsureRegistered();
             return Supabase.RequestImmediateUserSaveStaticFlush(_syncKey)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
         }
 
         /// <summary>
@@ -360,7 +360,7 @@ namespace TrueBase.Unity
             EnsureRegistered();
             return await Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
         }
 
         /// <summary>
@@ -396,7 +396,7 @@ namespace TrueBase.Unity
             var r = await Supabase.EnsureMyRowAsync<TRow>();
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
+                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
         }
 
         /// <summary>
@@ -420,7 +420,7 @@ namespace TrueBase.Unity
             var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
-            if (!success) return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+            if (!success) return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
             // DB에 본인 행이 없던 신규 유저 여부. 반환값 IsNewUser로 노출한다.
             var isNewUser = !hasRow;
@@ -431,18 +431,18 @@ namespace TrueBase.Unity
                 if (ensured == null || !ensured.IsSuccess)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorCode ?? "null"}");
-                    return SupabaseLoadResult.Fail(ensured?.ErrorCode ?? SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseLoadResult.Fail(ensured?.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
                 }
 
                 bool hasRow2;
                 (success, hasRow2, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                     defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
-                if (!success) return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                if (!success) return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
                 if (!hasRow2)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: 행 생성 후 재로드에서도 행을 찾을 수 없음.");
-                    return SupabaseLoadResult.Fail(SupabaseFailReason.UserSaveLoadFailed);
+                    return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
                 }
             }
 
@@ -477,7 +477,7 @@ namespace TrueBase.Unity
             var r = await Supabase.DeleteUserDataAsync<TRow>();
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseFailReason.UserSaveDeleteFailed);
+                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveDeleteFailed);
         }
 
         /// <summary>
@@ -497,7 +497,7 @@ namespace TrueBase.Unity
             catch (Exception e)
             {
                 Debug.LogWarning($"{LogTag} BuildPatch 실패 — {e.Message}");
-                return SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
             }
 
             if (patch == null || patch.Count == 0)
@@ -514,7 +514,7 @@ namespace TrueBase.Unity
             if (!result.IsSuccess)
             {
                 Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorCode}");
-                return SupabaseResult.Fail(result.ErrorCode ?? SupabaseFailReason.UserSaveFlushFailed);
+                return SupabaseResult.Fail(result.ErrorCode ?? SupabaseErrorCode.UserSaveFlushFailed);
             }
 
             _lastSynced = DataSchema.CloneRow(Current);

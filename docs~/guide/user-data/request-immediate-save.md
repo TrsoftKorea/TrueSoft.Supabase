@@ -10,8 +10,8 @@ SupabaseResult PlayerSave.RequestImmediateSave()
 PlayerSave.RequestImmediateSave();   // 완료를 기다리지 않음
 ```
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.UserSaveFlushFailed` | 전송 요청 실패 |
+| `SupabaseErrorCode.UserSaveFlushFailed` | 전송 요청 실패 |

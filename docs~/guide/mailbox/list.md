@@ -40,10 +40,10 @@ if (result.IsSuccess)
 | `.HasUnclaimedItems` | `bool` | 미수령 보상 여부 |
 | `.Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 언어별 제목·본문(다국어 우편)은 [다국어 메시지](./localized)로 읽습니다.

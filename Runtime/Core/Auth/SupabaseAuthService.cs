@@ -102,7 +102,7 @@ namespace TrueBase.Core.Auth
             string oauthAccessToken = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<SupabaseSession>.Fail("access_token_empty");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(provider))
                 return SupabaseResult<SupabaseSession>.Fail("provider_empty");
@@ -161,7 +161,7 @@ namespace TrueBase.Core.Auth
         public async Task<SupabaseResult<bool>> UnlinkIdentityByProviderAsync(string accessToken, string provider)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(provider))
                 return SupabaseResult<bool>.Fail("provider_empty");
@@ -181,7 +181,7 @@ namespace TrueBase.Core.Auth
                 headers: headers);
 
             if (userResponse == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (userResponse.IsSuccess == false)
             {
@@ -196,7 +196,7 @@ namespace TrueBase.Core.Auth
             {
                 var jo = JObject.Parse(userResponse.Body);
                 if (jo["identities"] is not JArray identities)
-                    return SupabaseResult<bool>.Fail("identity_not_linked");
+                    return SupabaseResult<bool>.Fail(SupabaseErrorCode.IdentityNotLinked);
 
                 identityCount = identities.Count;
                 identityId = null;
@@ -216,10 +216,10 @@ namespace TrueBase.Core.Auth
             }
 
             if (string.IsNullOrWhiteSpace(identityId))
-                return SupabaseResult<bool>.Fail("identity_not_linked");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.IdentityNotLinked);
 
             if (identityCount <= 1)
-                return SupabaseResult<bool>.Fail("cannot_unlink_last_identity");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.CannotUnlinkLastIdentity);
 
             // 2) identity 해제.
             var deleteResponse = await _httpClient.SendAsync(
@@ -229,7 +229,7 @@ namespace TrueBase.Core.Auth
                 headers: headers);
 
             if (deleteResponse == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (deleteResponse.IsSuccess == false)
             {
@@ -304,7 +304,7 @@ namespace TrueBase.Core.Auth
         private SupabaseResult<SupabaseSession> HandleSessionResponse(SupabaseHttpResponse response, string defaultError)
         {
             if (response == null)
-                return SupabaseResult<SupabaseSession>.Fail("http_response_null");
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
             {
@@ -326,7 +326,7 @@ namespace TrueBase.Core.Auth
                     return SupabaseResult<SupabaseSession>.Fail("session_null");
 
                 if (string.IsNullOrWhiteSpace(session.access_token))
-                    return SupabaseResult<SupabaseSession>.Fail("access_token_empty");
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
                 // profiles.user_id / user_saves.user_id에 넣을 안정 id를 session에 반영합니다.
                 ApplyStablePlayerUserId(session, response.Body);
@@ -473,7 +473,7 @@ namespace TrueBase.Core.Auth
         public async Task<SupabaseResult<bool>> UpdateUserMetadataNameAsync(string accessToken, string displayName)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(displayName))
                 return SupabaseResult<bool>.Fail("display_name_empty");
@@ -505,7 +505,7 @@ namespace TrueBase.Core.Auth
                 headers: headers);
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
             {

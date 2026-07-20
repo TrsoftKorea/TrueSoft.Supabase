@@ -24,13 +24,13 @@ else
 
 `.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
-| `SupabaseFailReason.GoogleSignInFailed` | Play Services 오류 |
-| `SupabaseFailReason.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
-| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
+| `SupabaseErrorCode.GoogleSignInFailed` | Play Services 오류 |
+| `SupabaseErrorCode.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
+| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

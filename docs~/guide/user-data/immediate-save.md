@@ -24,11 +24,11 @@ else
 |----------|------|
 | `timeoutMs` | 최대 대기 시간 ms (기본값: `5000`) |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
+| `SupabaseErrorCode.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
 
 ::: info
 `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.

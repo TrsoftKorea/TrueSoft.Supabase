@@ -29,14 +29,14 @@ else
 | `idToken` | Google OAuth에서 발급받은 ID 토큰 |
 | `googleAccessToken` | Google Access Token (기본값: `null`) |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
-| `SupabaseFailReason.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
-| `SupabaseFailReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `SupabaseFailReason.GoogleLinkFailed` | Supabase identity 연동 실패 |
-| `SupabaseFailReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseFailReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
+| `SupabaseErrorCode.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseErrorCode.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseErrorCode.GoogleLinkFailed` | Supabase identity 연동 실패 |
+| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

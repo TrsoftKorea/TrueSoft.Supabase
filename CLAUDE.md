@@ -24,6 +24,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 - **Never create `.meta` files manually.** Unity auto-generates them for every asset. Adding them by hand causes conflicts.
 - No build commands exist in this repo. Unity compiles C# source directly when the package is imported into a Unity project.
 - The SDK has no test runner. Validation is done via `Samples~/Examples/ExampleSupabaseScenarios.cs` (keyboard-shortcut-driven test flows in Play Mode).
+- **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
 
 ## Architecture
 
@@ -66,13 +67,13 @@ The SDK has three layers:
 - **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`로 분기)
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
-실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseFailCode` enum, `Runtime/Core/Models/SupabaseFailCode.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseFailCodeMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 새 사유 추가 시 `SupabaseFailReason` 상수·`SupabaseFailCode` enum·`FromErrorCode` 스위치 **세 곳을 함께** 갱신한다(enum·map은 Core, 상수는 Unity — Core는 Unity를 참조 못 하므로 문자열이 양쪽에 존재).
+실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseFailCode` enum, `Runtime/Core/Models/SupabaseFailCode.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseFailCodeMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseFailCode` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseFailCode` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseFailCode.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
 
 **bare value(`Task<string>`·`T`·리스트 원본 등)를 직접 반환하지 않는다. 공개 메서드에 `Try` 접두어를 쓰지 않는다.** 호출자가 성공/실패와 "결과 0개 vs 조회 실패"를 항상 구분할 수 있어야 한다.
 
 `SupabaseResult`(액션)와 `SupabaseResult<T>`(데이터)는 하나의 타입 계층이다 — `SupabaseResult<T>`가 `SupabaseResult`를 상속하며, `SupabaseCallResult` 같은 별도 타입은 없다.
 
-구현·로깅은 `SupabaseSDK`의 내부 계층이 담당한다: `SupabaseSDK.TryXxxAsync()`가 실제 호출 + 고정 태그(`[Supabase.UserData.LoadAttributed]` 등) 로깅 후 `SupabaseResult`/`SupabaseResult<T>`를 반환하고, 파사드 `Supabase.XxxAsync()`는 그 결과를 그대로 돌려준다. 실패 사유는 `SupabaseFailReason` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드와 생성기가 emit하는 래퍼에도 동일 적용된다.
+구현·로깅은 `SupabaseSDK`의 내부 계층이 담당한다: `SupabaseSDK.TryXxxAsync()`가 실제 호출 + 고정 태그(`[Supabase.UserData.LoadAttributed]` 등) 로깅 후 `SupabaseResult`/`SupabaseResult<T>`를 반환하고, 파사드 `Supabase.XxxAsync()`는 그 결과를 그대로 돌려준다. 실패 사유는 `SupabaseErrorCode` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드와 생성기가 emit하는 래퍼에도 동일 적용된다.
 
 ### account_id vs user_id
 
@@ -321,11 +322,11 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 
-**실패 원인**  ← 의미 있는 실패 원인이 없으면 생략
+**에러 코드**  ← 의미 있는 에러 코드가 없으면 생략
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.상수명` | 설명 (상수가 있으면 우선 사용, 없으면 raw 문자열) |
+| `SupabaseErrorCode.상수명` | 설명 (상수가 있으면 우선 사용, 없으면 raw 문자열) |
 ```
 
 | 항목 | 규칙 |
@@ -334,7 +335,7 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 | 시그니처 | `Supabase.`(또는 `SupabaseIAP.`) 접두어 사용. 항상 포함, 수식어(`public`/`static`/`async`) 제외 |
 | 파라미터 표 | 타입 열 없이 2열. `(기본값: x)` 표기 포함 |
 | 반환 표 | `isSuccess` / `Success` 생략. 직접 반환 타입이나 `.Data` 프로퍼티만 기술 |
-| 실패 원인 | `SupabaseFailReason` 상수 우선, 없으면 raw 문자열. 게임은 동일 이름의 `SupabaseFailCode` enum(`.Reason`)으로 분기 |
+| 에러 코드 | `SupabaseErrorCode` 상수 우선, 없으면 raw 문자열. 게임은 동일 이름의 `SupabaseFailCode` enum(`.Reason`)으로 분기 |
 
 ### 10. H1 아래 본문에는 반드시 H2를 붙인다
 
@@ -351,10 +352,10 @@ H1과 첫 `## ` 사이에 **코드블록 / 표 / 2단락 이상**이 있으면, 
 
 API 색인이 링크하는 기능 페이지들은 **어느 페이지를 열어도 같은 구조**여야 한다. 핵심: 헤딩 바로 다음에 코드 시그니처가 와서 **코드가 눈에 띄어야** 한다 — **헤딩과 코드 사이에 설명 문장을 넣지 않는다**(설명이 길면 코드가 묻힘).
 
-1. **함수 블록 순서** (Rule 9): 헤딩 → ```csharp 시그니처(`반환타입 메서드(...)`, `public`/`static`/`async` 등 수식어 제외) → **한 줄 설명(코드 아래)** → 파라미터 표 → 반환 → 실패 원인. 코드 앞에 도입문/설명을 두지 않는다.
+1. **함수 블록 순서** (Rule 9): 헤딩 → ```csharp 시그니처(`반환타입 메서드(...)`, `public`/`static`/`async` 등 수식어 제외) → **한 줄 설명(코드 아래)** → 파라미터 표 → 반환 → 에러 코드. 코드 앞에 도입문/설명을 두지 않는다.
 2. **단일 함수 페이지**: `# 기능명` 직후 바로 시그니처. 부가 맥락(왜 쓰는지·주의사항)은 코드 아래 설명에 합치거나 `:::` 콜아웃으로 페이지 끝에 둔다.
 3. **다중 함수 페이지**: 함수가 여러 개라 코드가 많아지면 **폴더로 쪼갠다** — `<기능>/index.md`(개요 + 메서드 나열 표·결정 표로 각 페이지에 링크) + **메서드마다 별도 페이지(코드 블록 1개)**. 한 페이지에 시그니처를 2개 이상 두지 않는다. 예: `social/google/{index,setup,signin-android,signin-ios,link-android,...}`. 사이드바는 `기능`을 접이식 그룹으로 만들고 하위에 각 메서드 페이지를 둔다.
-4. 한 페이지 안에서 함수마다 같은 요소(파라미터/반환/실패 원인)는 **있으면 모두, 없으면 모두** 일관되게.
+4. 한 페이지 안에서 함수마다 같은 요소(파라미터/반환/에러 코드)는 **있으면 모두, 없으면 모두** 일관되게.
 5. **본문에 장식용 수평선(`---`)을 쓰지 않는다** — H1 도입문과 본문 사이, `##` 섹션들 사이 모두. `##`와 여백이 구분 역할을 한다. (예외: 이미지가 많은 단계별 절차 페이지의 단계 구분 `---`은 허용.)
 
 ### 12. 표 칸이 세로로 줄바꿈되지 않게 한다

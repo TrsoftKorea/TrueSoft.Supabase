@@ -24,10 +24,10 @@ else
 |----------|------|
 | `displayName` | 확인할 닉네임. 최대 64자 |
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NameTaken` | 이미 사용 중인 닉네임 |
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseFailReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseErrorCode.NameTaken` | 이미 사용 중인 닉네임 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |

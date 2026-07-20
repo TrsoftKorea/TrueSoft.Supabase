@@ -28,8 +28,8 @@ if (result.IsSuccess)
 
 `MailCategoryCounts`는 `.Unread`·`.UnclaimedMails` 두 값을 가집니다.
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

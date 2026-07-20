@@ -248,7 +248,8 @@ export default defineConfig({
           { text: '게임 데이터', link: '/guide/api/game-data' },
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '우편함', link: '/guide/api/mailbox' },
-          { text: '기타', link: '/guide/api/etc' }
+          { text: '기타', link: '/guide/api/etc' },
+          { text: '에러 코드 전체', link: '/guide/api/fail-reasons' }
         ]
       },
       {

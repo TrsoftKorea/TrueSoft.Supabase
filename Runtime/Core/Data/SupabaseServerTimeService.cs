@@ -42,7 +42,7 @@ namespace TrueBase.Core.Data
                 headers: CreatePublishableKeyHeaders());
 
             if (response == null)
-                return SupabaseResult<DateTimeOffset>.Fail("http_response_null");
+                return SupabaseResult<DateTimeOffset>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<DateTimeOffset>.Fail(response.ErrorMessage ?? response.Body ?? "server_time_fetch_failed");

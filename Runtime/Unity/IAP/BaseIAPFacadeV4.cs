@@ -54,13 +54,13 @@ namespace TrueBase.Unity
             if (_disposed)
             {
                 Debug.LogWarning($"{LogTag} Disposed 상태에서 InitializeAsync를 호출했습니다.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapDisposed);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapDisposed);
             }
 
             if (productIds == null || productIds.Length == 0)
             {
                 Debug.LogWarning($"{LogTag} productIds가 비어 있습니다.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapProductIdsEmpty);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapProductIdsEmpty);
             }
 
             _isInitialized = false;
@@ -78,12 +78,12 @@ namespace TrueBase.Unity
             if (completedTask == timeoutTask)
             {
                 Debug.LogWarning($"{LogTag} 초기화 타임아웃.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapInitTimeout);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapInitTimeout);
             }
 
             return await _initTcs.Task
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseFailReason.IapInitFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.IapInitFailed);
         }
 
         /// <summary>

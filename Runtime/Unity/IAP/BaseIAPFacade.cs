@@ -58,13 +58,13 @@ namespace TrueBase.Unity
             if (_disposed)
             {
                 Debug.LogWarning($"{LogTag} Disposed 상태에서 InitializeAsync를 호출했습니다.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapDisposed);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapDisposed);
             }
 
             if (productIds == null || productIds.Length == 0)
             {
                 Debug.LogWarning($"{LogTag} productIds가 비어 있습니다.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapProductIdsEmpty);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapProductIdsEmpty);
             }
 
             if (UnityServices.State != ServicesInitializationState.Initialized)
@@ -76,7 +76,7 @@ namespace TrueBase.Unity
                 catch (Exception e)
                 {
                     Debug.LogWarning($"{LogTag} Unity Services 초기화 실패: {e.Message}");
-                    return SupabaseResult.Fail(SupabaseFailReason.IapServicesInitFailed);
+                    return SupabaseResult.Fail(SupabaseErrorCode.IapServicesInitFailed);
                 }
             }
 
@@ -110,7 +110,7 @@ namespace TrueBase.Unity
             if (!_isInitialized)
             {
                 Debug.LogWarning($"{LogTag} 초기화 타임아웃.");
-                return SupabaseResult.Fail(SupabaseFailReason.IapInitTimeout);
+                return SupabaseResult.Fail(SupabaseErrorCode.IapInitTimeout);
             }
 
             return SupabaseResult.Ok;

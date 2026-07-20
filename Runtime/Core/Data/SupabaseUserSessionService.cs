@@ -37,7 +37,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<string>> GetSessionTokenAsync(string accessToken, string accountId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<string>.Fail("access_token_empty");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<string>.Fail("account_id_empty");
@@ -55,7 +55,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<string>.Fail("http_response_null");
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_get_failed");
@@ -84,7 +84,7 @@ namespace TrueBase.Core.Data
             string sessionToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -111,7 +111,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, "resolution=merge-duplicates,return=minimal"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_upsert_failed");
@@ -125,7 +125,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<bool>> DeleteMySessionRowAsync(string accessToken, string accountId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult<bool>.Fail("account_id_empty");
@@ -141,7 +141,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, "return=minimal"));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_delete_failed");

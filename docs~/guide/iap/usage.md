@@ -29,13 +29,13 @@ if (!result.IsSuccess) return;
 var iap = result.Data;
 ```
 
-**실패 원인**
+**에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseFailReason.IapProductIdsEmpty` | `productIds`가 비어 있음 |
-| `SupabaseFailReason.IapServicesInitFailed` | Unity Services 초기화 실패 |
-| `SupabaseFailReason.IapInitTimeout` | 제한 시간 내 초기화 미완료 |
-| `SupabaseFailReason.IapInitFailed` | 스토어 연결·상품 조회 실패 |
+| `SupabaseErrorCode.IapProductIdsEmpty` | `productIds`가 비어 있음 |
+| `SupabaseErrorCode.IapServicesInitFailed` | Unity Services 초기화 실패 |
+| `SupabaseErrorCode.IapInitTimeout` | 제한 시간 내 초기화 미완료 |
+| `SupabaseErrorCode.IapInitFailed` | 스토어 연결·상품 조회 실패 |
 
 `onGrant`의 `isResuming` · `alreadyVerified` 파라미터는 [중복 지급 방지](/guide/iap/advanced#duplicate-grant)를 참고하세요.

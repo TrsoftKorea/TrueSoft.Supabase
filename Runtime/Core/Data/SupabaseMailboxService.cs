@@ -46,7 +46,7 @@ namespace TrueBase.Core.Data
             string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<IReadOnlyList<Mail>>.Fail("access_token_empty");
+                return SupabaseResult<IReadOnlyList<Mail>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             limit = Math.Clamp(limit, 1, 200);
             offset = Math.Max(0, offset);
@@ -70,7 +70,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<Mail>> GetMailByIdAsync(string accessToken, string mailId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<Mail>.Fail("access_token_empty");
+                return SupabaseResult<Mail>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(mailId))
                 return SupabaseResult<Mail>.Fail("mail_id_empty");
@@ -85,7 +85,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<Mail>.Fail("http_response_null");
+                return SupabaseResult<Mail>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<Mail>.Fail(response.ErrorMessage ?? response.Body ?? "mail_view_failed");
@@ -119,7 +119,7 @@ namespace TrueBase.Core.Data
             string mailId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail("access_token_empty");
+                return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(mailId))
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail("mail_id_empty");
@@ -134,7 +134,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail("http_response_null");
+                return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(
@@ -151,7 +151,7 @@ namespace TrueBase.Core.Data
             string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail("access_token_empty");
+                return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_all_mail_items";
             var bodyJson = JsonConvert.SerializeObject(
@@ -163,7 +163,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail("http_response_null");
+                return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(
@@ -178,7 +178,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<bool>> DeleteMailForUserRpcAsync(string accessToken, string mailId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail("access_token_empty");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             if (string.IsNullOrWhiteSpace(mailId))
                 return SupabaseResult<bool>.Fail("mail_id_empty");
@@ -193,7 +193,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<bool>.Fail("http_response_null");
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "delete_mail_failed");
@@ -209,7 +209,7 @@ namespace TrueBase.Core.Data
             string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<int>.Fail("access_token_empty");
+                return SupabaseResult<int>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_read_mails_for_user";
             var bodyJson = JsonConvert.SerializeObject(
@@ -221,7 +221,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<int>.Fail("http_response_null");
+                return SupabaseResult<int>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<int>.Fail(response.ErrorMessage ?? response.Body ?? "delete_read_mails_failed");
@@ -246,7 +246,7 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<MailInboxCounts>> GetInboxCountsAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<MailInboxCounts>.Fail("access_token_empty");
+                return SupabaseResult<MailInboxCounts>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_mail_inbox_counts";
             var response = await _httpClient.SendAsync(
@@ -256,7 +256,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<MailInboxCounts>.Fail("http_response_null");
+                return SupabaseResult<MailInboxCounts>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<MailInboxCounts>.Fail(
@@ -289,7 +289,7 @@ namespace TrueBase.Core.Data
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<IReadOnlyList<Mail>>.Fail("http_response_null");
+                return SupabaseResult<IReadOnlyList<Mail>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(response.ErrorMessage ?? response.Body ?? "mail_list_failed");

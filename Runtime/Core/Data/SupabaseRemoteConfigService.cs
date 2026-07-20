@@ -86,7 +86,7 @@ namespace TrueBase.Core.Data
         private SupabaseResult<RemoteConfigRow[]> ParseRows(SupabaseHttpResponse response)
         {
             if (response == null)
-                return SupabaseResult<RemoteConfigRow[]>.Fail("http_response_null");
+                return SupabaseResult<RemoteConfigRow[]>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<RemoteConfigRow[]>.Fail(response.ErrorMessage ?? response.Body ?? "remote_config_fetch_failed");
