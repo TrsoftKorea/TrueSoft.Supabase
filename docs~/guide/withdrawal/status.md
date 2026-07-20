@@ -4,10 +4,10 @@
 
 ```csharp
 var login = await Supabase.TriggerAutoLoginAsync();
-if (login.Reason == SupabaseReason.WithdrawalGateBlocked && login.WithdrawnAt.HasValue)
+if (login.Reason == SupabaseReason.WithdrawalGateBlocked)
 {
     var now = (await Supabase.GetServerNowAsync()).Data;   // 서버 시각
-    var remaining = login.WithdrawnAt.Value - now;   // 남은 시간
+    var remaining = login.WithdrawnAt - now;   // 남은 시간
     ShowWithdrawalBanner(remaining);
 }
 ```
@@ -16,7 +16,7 @@ if (login.Reason == SupabaseReason.WithdrawalGateBlocked && login.WithdrawnAt.Ha
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.WithdrawnAt` | `DateTimeOffset?` | 삭제 예정 시각. 게이트 차단이 아니면 null |
+| `.WithdrawnAt` | `DateTimeOffset` | 삭제 예정 시각. 게이트 차단이 아니면 `DateTimeOffset.MinValue` |
 | `.WithdrawalCancelToken` | `string` | 비로그인 취소 토큰. [탈퇴 취소](./cancel)에서 사용 |
 
 ::: info

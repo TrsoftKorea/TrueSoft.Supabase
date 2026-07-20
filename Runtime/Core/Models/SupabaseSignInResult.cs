@@ -19,10 +19,10 @@ namespace TrueBase.Core.Common
         public PublicProfile Profile { get; }
 
         /// <summary>
-        /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseReason.WithdrawalGateBlocked"/>)의 삭제 예정 시각. 그 외에는 null.
+        /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseReason.WithdrawalGateBlocked"/>)의 삭제 예정 시각. 그 외에는 <see cref="DateTimeOffset.MinValue"/>.
         /// 남은 시간은 <c>Supabase.GetServerNowAsync()</c>의 서버 시각과 비교해 계산한다.
         /// </summary>
-        public DateTimeOffset? WithdrawnAt { get; }
+        public DateTimeOffset WithdrawnAt { get; }
 
         /// <summary>탈퇴 예약으로 로그인이 막힌 경우, 비로그인 상태에서 예약을 취소할 때 쓰는 토큰. 그 외에는 null.</summary>
         public string WithdrawalCancelToken { get; }
@@ -37,7 +37,7 @@ namespace TrueBase.Core.Common
             : base(isSuccess, errorCode, banInfo)
         {
             Profile = profile;
-            WithdrawnAt = withdrawnAt;
+            WithdrawnAt = withdrawnAt ?? DateTimeOffset.MinValue;
             WithdrawalCancelToken = cancelToken;
         }
 
