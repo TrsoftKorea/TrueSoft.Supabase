@@ -29,8 +29,8 @@ namespace TrueBase.Core.Data
             _jsonSerializer = jsonSerializer ?? throw new ArgumentNullException(nameof(jsonSerializer));
         }
 
-        /// <summary>서버 시각을 UTC <see cref="DateTime"/>으로 반환합니다.</summary>
-        public async Task<SupabaseResult<DateTime>> GetServerUtcNowAsync()
+        /// <summary>서버 시각을 <see cref="DateTimeOffset"/>(UTC)으로 반환합니다.</summary>
+        public async Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync()
         {
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_server_now";
             const string bodyJson = "{}";
@@ -42,36 +42,36 @@ namespace TrueBase.Core.Data
                 headers: CreatePublishableKeyHeaders());
 
             if (response == null)
-                return SupabaseResult<DateTime>.Fail("http_response_null");
+                return SupabaseResult<DateTimeOffset>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<DateTime>.Fail(response.ErrorMessage ?? response.Body ?? "server_time_fetch_failed");
+                return SupabaseResult<DateTimeOffset>.Fail(response.ErrorMessage ?? response.Body ?? "server_time_fetch_failed");
 
             try
             {
                 var rows = _jsonSerializer.FromJsonArray<ServerTimeRow>(response.Body);
                 if (rows == null || rows.Length == 0 || rows[0] == null)
-                    return SupabaseResult<DateTime>.Fail("server_time_empty");
+                    return SupabaseResult<DateTimeOffset>.Fail("server_time_empty");
 
                 var raw = rows[0].server_time;
                 if (string.IsNullOrWhiteSpace(raw))
-                    return SupabaseResult<DateTime>.Fail("server_time_parse_empty");
+                    return SupabaseResult<DateTimeOffset>.Fail("server_time_parse_empty");
 
                 if (DateTimeOffset.TryParse(
                         raw.Trim(),
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                         out var dto))
-                    return SupabaseResult<DateTime>.Success(dto.UtcDateTime);
+                    return SupabaseResult<DateTimeOffset>.Success(dto);
 
                 if (DateTime.TryParse(raw.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
-                    return SupabaseResult<DateTime>.Success(DateTime.SpecifyKind(dt.ToUniversalTime(), DateTimeKind.Utc));
+                    return SupabaseResult<DateTimeOffset>.Success(new DateTimeOffset(dt.ToUniversalTime()));
 
-                return SupabaseResult<DateTime>.Fail("server_time_parse_failed");
+                return SupabaseResult<DateTimeOffset>.Fail("server_time_parse_failed");
             }
             catch (Exception e)
             {
-                return SupabaseResult<DateTime>.Fail("server_time_parse_failed:" + e.Message);
+                return SupabaseResult<DateTimeOffset>.Fail("server_time_parse_failed:" + e.Message);
             }
         }
 

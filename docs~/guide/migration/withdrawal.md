@@ -6,5 +6,5 @@
 
 | 로그인 유형 | 취소 후 동작 |
 |-------------|------------|
-| 게스트 | `SignInAnonymouslyAsync()` 자동 재호출 → 성공 시 `ClearMyWithdrawalAsync()` 자동 호출 |
-| Google / Apple | `OnWithdrawalCancelled` 이벤트 발행 → 개발자가 재인증 UI 표시 후 `ClearMyWithdrawalAsync()` 직접 호출 |
+| 게스트 | `SignInAnonymouslyAsync()` 자동 재호출 → 성공 시 `ClearWithdrawalAsync()` 자동 호출 |
+| Google / Apple | `OnWithdrawalCancelled` 이벤트 발행 → 개발자가 재인증 UI 표시 후 `ClearWithdrawalAsync()` 직접 호출 |

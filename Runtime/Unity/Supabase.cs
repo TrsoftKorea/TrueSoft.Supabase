@@ -46,9 +46,24 @@ namespace TrueBase.Unity
             var r = await loginTask;
             // 성공/실패 무관하게 전달 슬롯을 1회 소비해 다음 로그인으로 잔여 값이 새지 않게 한다.
             var profile = SupabaseSDK.ConsumePendingSignInProfile();
-            return r.IsSuccess
-                ? SupabaseSignInResult.Success(profile)
-                : SupabaseSignInResult.Fail(r.ErrorCode, r.BanInfo);
+            if (r.IsSuccess)
+                return SupabaseSignInResult.Success(profile);
+
+            // 탈퇴 예약 게이트로 막힌 경우, 게이트가 저장해 둔 삭제 예정 시각·취소 토큰을 결과에 실어준다.
+            if (r.Reason == SupabaseFailCode.WithdrawalGateBlocked)
+            {
+                DateTimeOffset? withdrawnAt = null;
+                var gate = SupabaseSDK.GetStoredWithdrawalGateStatus();
+                if (gate != null && !string.IsNullOrWhiteSpace(gate.WithdrawnAtIso)
+                    && DateTimeOffset.TryParse(gate.WithdrawnAtIso, System.Globalization.CultureInfo.InvariantCulture,
+                                               System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+                    withdrawnAt = parsed;
+
+                return SupabaseSignInResult.Fail(
+                    r.ErrorCode, r.BanInfo, withdrawnAt, SupabaseSDK.ReadStoredWithdrawalCancelToken());
+            }
+
+            return SupabaseSignInResult.Fail(r.ErrorCode, r.BanInfo);
         }
 
         /// <summary>
@@ -76,9 +91,9 @@ namespace TrueBase.Unity
         public static Task<SupabaseSignInResult> SignInWithAppleAsync() =>
             ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleAsync());
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousAsync"/>
-        public static Task<SupabaseResult> LinkAppleToCurrentAnonymousAsync() =>
-            SupabaseSDK.TryLinkAppleToCurrentAnonymousAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestAsync"/>
+        public static Task<SupabaseResult> LinkAppleToGuestAsync() =>
+            SupabaseSDK.TryLinkAppleToGuestAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleNativeAsync"/>
         public static Task<SupabaseResult> LinkAppleNativeAsync() =>
@@ -92,10 +107,10 @@ namespace TrueBase.Unity
         internal static Task<SupabaseResult> TryCompleteOAuthRedirectAsync(string redirectUrl) =>
             SupabaseSDK.TryCompleteOAuthRedirectAsync(redirectUrl);
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(string, string)"/>
-        public static Task<SupabaseResult> LinkAppleToCurrentAnonymousWithIdTokenAsync(
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(string, string)"/>
+        public static Task<SupabaseResult> LinkAppleToGuestWithIdTokenAsync(
             string idToken, string rawNonce = null) =>
-            SupabaseSDK.TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce);
+            SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce);
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseResult> LinkGoogleWithIdTokenAsync(
@@ -111,15 +126,15 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> LinkGoogleNativeAsync() =>
             SupabaseSDK.TryLinkGoogleNativeAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync"/>
-        public static Task<SupabaseResult> LinkGoogleToCurrentAnonymousAsync() =>
-            SupabaseSDK.TryLinkGoogleToCurrentAnonymousAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToGuestAsync"/>
+        public static Task<SupabaseResult> LinkGoogleToGuestAsync() =>
+            SupabaseSDK.TryLinkGoogleToGuestAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(string, string)"/>
-        public static Task<SupabaseResult> LinkGoogleToCurrentAnonymousWithIdTokenAsync(
+        /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToGuestWithIdTokenAsync(string, string)"/>
+        public static Task<SupabaseResult> LinkGoogleToGuestWithIdTokenAsync(
             string idToken,
             string googleAccessToken = null) =>
-            SupabaseSDK.TryLinkGoogleToCurrentAnonymousWithIdTokenAsync(idToken, googleAccessToken);
+            SupabaseSDK.TryLinkGoogleToGuestWithIdTokenAsync(idToken, googleAccessToken);
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync"/>
         public static Task<SupabaseSignInResult> SignInAnonymouslyAsync() =>
@@ -274,21 +289,21 @@ namespace TrueBase.Unity
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseFailReason.UserSaveFlushFailed);
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetPublicDisplayNameAsync(string)"/>
-        public static Task<SupabaseResult<string>> GetPublicDisplayNameAsync(string userId) =>
-            SupabaseSDK.TryGetPublicDisplayNameAsync(userId);
+        /// <inheritdoc cref="SupabaseSDK.TryGetPublicNameAsync(string)"/>
+        public static Task<SupabaseResult<string>> GetPublicNameAsync(string userId) =>
+            SupabaseSDK.TryGetPublicNameAsync(userId);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySetMyDisplayNameAsync"/>
-        public static Task<SupabaseResult<string>> SetMyDisplayNameAsync(string displayName) =>
-            SupabaseSDK.TrySetMyDisplayNameAsync(displayName);
+        /// <inheritdoc cref="SupabaseSDK.TrySetNameAsync"/>
+        public static Task<SupabaseResult<string>> SetNameAsync(string displayName) =>
+            SupabaseSDK.TrySetNameAsync(displayName);
 
-        /// <inheritdoc cref="SupabaseSDK.TryIsDisplayNameAvailableAsync"/>
-        public static Task<SupabaseResult> IsDisplayNameAvailableAsync(string displayName) =>
-            SupabaseSDK.TryIsDisplayNameAvailableAsync(displayName);
+        /// <inheritdoc cref="SupabaseSDK.TryIsNameAvailableAsync"/>
+        public static Task<SupabaseResult> IsNameAvailableAsync(string displayName) =>
+            SupabaseSDK.TryIsNameAvailableAsync(displayName);
 
-        /// <inheritdoc cref="SupabaseSDK.TryTransferMyServerAsync"/>
-        public static Task<SupabaseResult> TransferMyServerAsync(string targetServerCode, string reason = null) =>
-            SupabaseSDK.TryTransferMyServerAsync(targetServerCode, reason);
+        /// <inheritdoc cref="SupabaseSDK.TryTransferServerAsync"/>
+        public static Task<SupabaseResult> TransferServerAsync(string targetServerCode, string reason = null) =>
+            SupabaseSDK.TryTransferServerAsync(targetServerCode, reason);
 
         /// <summary>로컬에 선택한 서버 코드를 저장합니다.</summary>
         internal static void SetCurrentServerCode(string serverCode) =>
@@ -298,29 +313,29 @@ namespace TrueBase.Unity
         internal static string GetCurrentServerCode() =>
             SupabaseSDK.GetCurrentServerCode();
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetMyServerInfoAsync"/>
-        public static Task<SupabaseResult<MyServerInfo>> GetMyServerInfoAsync() =>
-            SupabaseSDK.TryGetMyServerInfoAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryGetServerInfoAsync"/>
+        public static Task<SupabaseResult<ServerInfo>> GetServerInfoAsync() =>
+            SupabaseSDK.TryGetServerInfoAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicProfileAsync"/>
         public static Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId) =>
             SupabaseSDK.TryGetPublicProfileAsync(userId);
 
-        /// <inheritdoc cref="SupabaseSDK.TryMarkMyWithdrawnAsync"/>
-        public static Task<SupabaseResult> MarkMyWithdrawnAsync() =>
-            SupabaseSDK.TryMarkMyWithdrawnAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryMarkWithdrawnAsync"/>
+        public static Task<SupabaseResult> MarkWithdrawnAsync() =>
+            SupabaseSDK.TryMarkWithdrawnAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryRequestMyWithdrawalAsync"/>
-        public static Task<SupabaseResult> RequestMyWithdrawalAsync() =>
-            SupabaseSDK.TryRequestMyWithdrawalAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryRequestWithdrawalAsync"/>
+        public static Task<SupabaseResult> RequestWithdrawalAsync() =>
+            SupabaseSDK.TryRequestWithdrawalAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryClearMyWithdrawalAsync"/>
-        public static Task<SupabaseResult> ClearMyWithdrawalAsync() =>
-            SupabaseSDK.TryClearMyWithdrawalAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryClearWithdrawalAsync"/>
+        public static Task<SupabaseResult> ClearWithdrawalAsync() =>
+            SupabaseSDK.TryClearWithdrawalAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetMyWithdrawalStatusAsync"/>
-        public static Task<SupabaseResult<MyWithdrawalStatus>> GetMyWithdrawalStatusAsync() =>
-            SupabaseSDK.TryGetMyWithdrawalStatusAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryGetWithdrawalStatusAsync"/>
+        public static Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync() =>
+            SupabaseSDK.TryGetWithdrawalStatusAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryRequestWithdrawalCancelTokenAsync"/>
         public static Task<SupabaseResult<string>> RequestWithdrawalCancelTokenAsync() =>
@@ -331,7 +346,7 @@ namespace TrueBase.Unity
             SupabaseSDK.TryRedeemWithdrawalCancelAsync(cancelToken);
 
         /// <summary>로컬에 저장된 탈퇴 게이트 상태를 반환합니다(로그아웃 안내 UI용).</summary>
-        internal static MyWithdrawalStatus GetStoredWithdrawalGateStatus() =>
+        internal static WithdrawalStatus GetStoredWithdrawalGateStatus() =>
             SupabaseSDK.GetStoredWithdrawalGateStatus();
 
         /// <inheritdoc cref="SupabaseSDK.TrySetMyWithdrawnAtAsync"/>
@@ -449,13 +464,13 @@ namespace TrueBase.Unity
         public static Task<SupabaseSignInResult> RestoreSessionAsync() =>
             ToSignInResultAsync(SupabaseSDK.TryRestoreSessionAsync());
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetMyMailsAsync"/>
-        public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0, string category = null) =>
-            SupabaseSDK.TryGetMyMailsAsync(limit, offset, category);
+        /// <inheritdoc cref="SupabaseSDK.TryGetMailsAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null) =>
+            SupabaseSDK.TryGetMailsAsync(limit, offset, category);
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetMailDetailAsync"/>
-        public static Task<SupabaseResult<Mail>> GetMailDetailAsync(string mailId) =>
-            SupabaseSDK.TryGetMailDetailAsync(mailId);
+        /// <inheritdoc cref="SupabaseSDK.TryGetMailAsync"/>
+        public static Task<SupabaseResult<Mail>> GetMailAsync(string mailId) =>
+            SupabaseSDK.TryGetMailAsync(mailId);
 
         /// <inheritdoc cref="SupabaseSDK.TryClaimMailItemsAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimMailItemsAsync(string mailId) =>
@@ -481,9 +496,9 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null, string category = null) =>
             SupabaseSDK.TryGetUnreadMailCountAsync(userId, category);
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedItemMailCountAsync"/>
-        public static Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null, string category = null) =>
-            SupabaseSDK.TryGetUnclaimedItemMailCountAsync(userId, category);
+        /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
+        public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
+            SupabaseSDK.TryGetUnclaimedMailCountAsync(userId, category);
 
         /// <summary>
         /// 우편 보상 아이템(<c>items[].key</c>)을 게임에 지급하는 핸들러를 등록합니다. 앱 시작 시 키마다 1회 등록하세요.
@@ -509,9 +524,9 @@ namespace TrueBase.Unity
         /// <summary>우편함 파사드(<c>SupabaseSDK.Mailbox</c>와 동일 인스턴스).</summary>
         internal static MailboxFacade Mailbox => SupabaseSDK.Mailbox;
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetServerUtcNowAsync"/>
-        public static Task<SupabaseResult<DateTime>> GetServerUtcNowAsync() =>
-            SupabaseSDK.TryGetServerUtcNowAsync();
+        /// <inheritdoc cref="SupabaseSDK.TryGetServerNowAsync"/>
+        public static Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync() =>
+            SupabaseSDK.TryGetServerNowAsync();
 
         // PlayNANOO 이관 브릿지 전용
         // 게임 코드에서 직접 호출하지 마세요. PlayNanooRuntime이 내부적으로 사용합니다.
@@ -523,16 +538,16 @@ namespace TrueBase.Unity
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithAppleIdToken,
             Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signOutFully,
             Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         requestMyWithdrawal,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleToCurrentAnonymousWithIdToken = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleToCurrentAnonymousWithIdToken  = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyDisplayName                       = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleToGuestWithIdToken = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleToGuestWithIdToken  = null,
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyName                       = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleWithIdToken                  = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null) =>
             SupabaseSDK.RegisterPlayNanooInterceptors(
                 signInAnonymously, signInWithGoogleIdToken, signInWithAppleIdToken,
                 signOutFully, requestMyWithdrawal,
-                linkGoogleToCurrentAnonymousWithIdToken, linkAppleToCurrentAnonymousWithIdToken,
-                setMyDisplayName, linkGoogleWithIdToken, linkAppleWithIdToken);
+                linkGoogleToGuestWithIdToken, linkAppleToGuestWithIdToken,
+                setMyName, linkGoogleWithIdToken, linkAppleWithIdToken);
 
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>

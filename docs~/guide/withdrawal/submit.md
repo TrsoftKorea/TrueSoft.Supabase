@@ -1,13 +1,13 @@
 # 탈퇴 신청
 
 ```csharp
-Task<SupabaseResult> Supabase.RequestMyWithdrawalAsync()
+Task<SupabaseResult> Supabase.RequestWithdrawalAsync()
 ```
 
 탈퇴를 예약합니다. 요청이 성공하면 즉시 로그아웃 처리됩니다.
 
 ```csharp
-var result = await Supabase.RequestMyWithdrawalAsync();
+var result = await Supabase.RequestWithdrawalAsync();
 if (result.IsSuccess)
 {
     ReturnToTitle();   // 신청 성공 — 이미 로그아웃됨

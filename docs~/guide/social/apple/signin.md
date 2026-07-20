@@ -10,7 +10,7 @@ iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방�
 var result = await Supabase.SignInWithAppleAsync();
 if (result.IsSuccess)
 {
-    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드는 별개 단계
     InitGame();
 }

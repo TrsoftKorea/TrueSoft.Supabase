@@ -10,7 +10,7 @@ Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supab
 var result = await Supabase.SignInWithGoogleAsync();
 if (result.IsSuccess)
 {
-    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드
     InitGame();
 }

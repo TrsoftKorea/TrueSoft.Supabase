@@ -77,7 +77,7 @@ namespace TrueBase.Core.Auth
             string.IsNullOrWhiteSpace(player_user_id) ? id : player_user_id.Trim();
 
         /// <summary>현재 세션에 캐시된 표시 이름. 닉네임 설정 성공 후 SDK가 자동 갱신합니다.</summary>
-        public string DisplayName =>
+        public string Name =>
             string.IsNullOrWhiteSpace(user_metadata?.displayName) ? string.Empty : user_metadata.displayName.Trim();
 
         /// <summary>Google 계정이 연동되어 있으면 true.</summary>

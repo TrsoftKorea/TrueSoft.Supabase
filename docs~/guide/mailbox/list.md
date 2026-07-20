@@ -1,7 +1,7 @@
 # 우편함 목록 조회
 
 ```csharp
-Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMyMailsAsync(
+Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMailsAsync(
     int    limit    = 50,
     int    offset   = 0,
     string category = null)
@@ -10,7 +10,7 @@ Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMyMailsAsync(
 내 우편함 목록을 최신순으로 조회합니다. 삭제됐거나 만료된 우편, 다른 서버의 우편은 제외됩니다.
 
 ```csharp
-var result = await Supabase.GetMyMailsAsync();
+var result = await Supabase.GetMailsAsync();
 if (result.IsSuccess)
 {
     foreach (var mail in result.Data)

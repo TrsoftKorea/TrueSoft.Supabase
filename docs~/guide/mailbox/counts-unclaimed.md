@@ -1,7 +1,7 @@
 # 미수령 보상 메일 수
 
 ```csharp
-Task<SupabaseResult<int>> Supabase.GetUnclaimedItemMailCountAsync(
+Task<SupabaseResult<int>> Supabase.GetUnclaimedMailCountAsync(
     string userId   = null,
     string category = null)
 ```
@@ -9,7 +9,7 @@ Task<SupabaseResult<int>> Supabase.GetUnclaimedItemMailCountAsync(
 아직 보상을 수령하지 않은 우편 개수를 조회합니다.
 
 ```csharp
-var result = await Supabase.GetUnclaimedItemMailCountAsync();
+var result = await Supabase.GetUnclaimedMailCountAsync();
 if (result.IsSuccess)
 {
     int count = result.Data;

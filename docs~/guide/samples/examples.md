@@ -24,7 +24,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `U` | RemoteConfig Binding 값 출력 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
 | `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
-| `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, DisplayName 등) |
+| `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, Name 등) |
 | `J` | 서버 시간 조회 |
 | `G` | 차단 정보 조회 |
 | `D` | 탈퇴 신청 |

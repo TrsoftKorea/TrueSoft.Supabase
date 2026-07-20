@@ -68,7 +68,7 @@ public sealed class SampleMailbox : MonoBehaviour
     /// <summary>2·3 — 목록 조회. category=null이면 전체.</summary>
     private async Task ListAsync(string category)
     {
-        var r = await Supabase.GetMyMailsAsync(category: category);
+        var r = await Supabase.GetMailsAsync(category: category);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 목록 조회 실패: {r.ErrorCode}"); return; }
 
         _lastList = r.Data;

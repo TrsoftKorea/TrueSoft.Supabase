@@ -62,7 +62,7 @@ The SDK has three layers:
 
 ### SupabaseResult\<T\> and Try API Pattern
 
-게임에 공개하는 API는 `Supabase` 파사드의 **접두어 없는 메서드**(`Supabase.GetMyMailsAsync()` 등)이며, **항상 result 타입을 반환**한다:
+게임에 공개하는 API는 `Supabase` 파사드의 **접두어 없는 메서드**(`Supabase.GetMailsAsync()` 등)이며, **항상 result 타입을 반환**한다:
 - **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`로 분기)
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
@@ -104,8 +104,8 @@ The SDK has three layers:
 - Google OAuth (Android): `TrySignInWithGoogleAsync()` via native Play Services (`GoogleLoginBridge`)
 - Google OAuth (iOS/custom): `TrySignInWithGoogleIdTokenAsync(idToken)`
 - Apple OAuth (ID token): `TrySignInWithAppleIdTokenAsync(idToken, rawNonce)` — 외부 SDK 없이 토큰 직접 전달
-- Guest → Google linking: `TryLinkGoogleToCurrentAnonymousAsync()` or `TryLinkGoogleToCurrentAnonymousWithIdTokenAsync()`. Must use these — calling plain `TrySignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.
-- Guest → Apple linking: `TryLinkAppleToCurrentAnonymousWithIdTokenAsync(idToken, rawNonce)`
+- Guest → Google linking: `TryLinkGoogleToGuestAsync()` or `TryLinkGoogleToGuestWithIdTokenAsync()`. Must use these — calling plain `TrySignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.
+- Guest → Apple linking: `TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce)`
 - Session restore (수동): `Supabase.TriggerAutoLoginAsync()` — 자동 실행 없음, 원하는 타이밍에 직접 호출. **세션 복원만 하고 UserSave 로드는 안 함**(수동 로그인과 동일하게 성공 후 `PlayerSave.LoadAsync()` 직접 호출). 내부 orchestration은 `SupabaseSDK.TryTriggerAutoLoginAsync`(로그인+`OnAfterAutoLoginAsync` 훅), `SupabaseRuntime`이 훅 등록
 - Sign-out: `TrySignOutFullyAsync()` (handles Android Google native logout + Supabase signout + anonymous recovery upsert).
 
@@ -135,7 +135,7 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToCurrentAnonymousWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소(`OnWithdrawalPending`·`OnWithdrawalCancelled` 이벤트, `CancelWithdrawal(withdrawalKey)`), `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
+`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소(`OnWithdrawalPending`·`OnWithdrawalCancelled` 이벤트, `CancelWithdrawal(withdrawalKey)`), `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
 ## IAP 코딩 규칙
 

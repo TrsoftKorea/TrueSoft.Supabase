@@ -10,7 +10,7 @@ Task<SupabaseSignInResult> Supabase.SignInWithAppleIdTokenAsync(string idToken, 
 var result = await Supabase.SignInWithAppleIdTokenAsync(idToken, rawNonce);
 if (result.IsSuccess)
 {
-    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드는 별개 단계
     InitGame();
 }

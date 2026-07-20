@@ -470,13 +470,13 @@ namespace TrueBase.Core.Data
             public bool IsRead { get; set; }
 
             [JsonProperty("expires_at")]
-            public DateTime ExpiresAt { get; set; }
+            public DateTimeOffset ExpiresAt { get; set; }
 
             [JsonProperty("created_at")]
-            public DateTime CreatedAt { get; set; }
+            public DateTimeOffset CreatedAt { get; set; }
 
             [JsonProperty("items_claimed_at")]
-            public DateTime? ItemsClaimedAt { get; set; }
+            public DateTimeOffset? ItemsClaimedAt { get; set; }
 
             [JsonProperty("items")]
             public JToken Items { get; set; }

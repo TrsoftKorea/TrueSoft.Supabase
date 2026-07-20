@@ -93,7 +93,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else
         {
             _lastProfile = ok.Profile;   // 로그인 결과에 담긴 내 프로필 보관
-            Debug.Log($"[Supabase] 익명 로그인 성공 — {ok.Profile.DisplayName}. 이제 데이터 로드(R)를 호출하세요.");
+            Debug.Log($"[Supabase] 익명 로그인 성공 — {ok.Profile.Name}. 이제 데이터 로드(R)를 호출하세요.");
         }
     }
 
@@ -118,7 +118,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             return;
         }
 
-        var ok = await Supabase.LinkGoogleToCurrentAnonymousAsync();
+        var ok = await Supabase.LinkGoogleToGuestAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Google 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Google 연동 성공.");
     }
@@ -144,7 +144,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             return;
         }
 
-        var ok = await Supabase.LinkAppleToCurrentAnonymousAsync();
+        var ok = await Supabase.LinkAppleToGuestAsync();
         if (!ok) Debug.LogWarning($"[Supabase] Apple 연동 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] Apple 연동 성공.");
     }
@@ -335,7 +335,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         const string nickname = "TestPlayer";
 
-        var available = await Supabase.IsDisplayNameAvailableAsync(nickname);
+        var available = await Supabase.IsNameAvailableAsync(nickname);
         if (!available)
         {
             Debug.LogWarning($"[Supabase] 닉네임 '{nickname}' 이미 사용 중 또는 확인 실패: {available.ErrorCode}");
@@ -343,7 +343,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         }
         Debug.Log($"[Supabase] 닉네임 '{nickname}' 사용 가능.");
 
-        var setOk = await Supabase.SetMyDisplayNameAsync(nickname);
+        var setOk = await Supabase.SetNameAsync(nickname);
         if (!setOk)
         {
             Debug.LogWarning($"[Supabase] 닉네임 설정 실패: {setOk.ErrorCode}");
@@ -357,7 +357,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         var myId = Supabase.UserId;
         var profile = await Supabase.GetPublicProfileAsync(myId);
-        if (profile) Debug.Log($"[Supabase] 프로필 — 닉네임: {profile.Data.DisplayName}, 서버: {profile.Data.ServerCode}");
+        if (profile) Debug.Log($"[Supabase] 프로필 — 닉네임: {profile.Data.Name}, 서버: {profile.Data.ServerCode}");
         else         Debug.LogWarning("[Supabase] 프로필 조회 실패.");
     }
 
@@ -372,11 +372,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
             return;
         }
         var profile    = _lastProfile;   // 로그인 시 보관해 둔 내 프로필
-        var serverInfo = (await Supabase.GetMyServerInfoAsync()).Data;
+        var serverInfo = (await Supabase.GetServerInfoAsync()).Data;
         Debug.Log($"[Supabase] 상태\n" +
                   $"  IsAnonymous = {Supabase.IsAnonymous}\n" +
                   $"  UserId      = {Supabase.UserId}\n" +
-                  $"  DisplayName = {profile?.DisplayName ?? "(없음)"}\n" +
+                  $"  Name = {profile?.Name ?? "(없음)"}\n" +
                   $"  ServerCode  = {profile?.ServerCode ?? "(없음)"}\n" +
                   $"  IsWithdrawn = {profile?.IsWithdrawn}\n" +
                   $"  ServerId    = {serverInfo.ServerId}, ServerCode = {serverInfo.ServerCode}");
@@ -385,7 +385,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     /// <summary>J — 서버 시간을 조회합니다.</summary>
     private async Task GetServerTimeAsync()
     {
-        var time = await Supabase.GetServerUtcNowAsync();
+        var time = await Supabase.GetServerNowAsync();
         if (!time) Debug.LogWarning("[Supabase] 서버 시간 조회 실패.");
         else       Debug.Log($"[Supabase] 서버 시간: {time.Data:yyyy-MM-dd HH:mm:ss} UTC");
     }
@@ -412,7 +412,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await Supabase.RequestMyWithdrawalAsync();
+        var ok = await Supabase.RequestWithdrawalAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
     }
@@ -422,7 +422,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var status = await Supabase.GetMyWithdrawalStatusAsync();
+        var status = await Supabase.GetWithdrawalStatusAsync();
         if (!status)
             Debug.LogWarning($"[Supabase] 탈퇴 상태 조회 실패: {status.ErrorCode}");
         else if (status.Data == null || !status.Data.IsScheduled)
@@ -436,7 +436,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await Supabase.ClearMyWithdrawalAsync();
+        var ok = await Supabase.ClearWithdrawalAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.ErrorCode}");
         else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
     }

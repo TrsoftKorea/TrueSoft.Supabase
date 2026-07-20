@@ -4,14 +4,14 @@
 Task<SupabaseResult> Supabase.RedeemWithdrawalCancelAsync(string cancelToken = null)
 ```
 
-탈퇴 예약을 취소합니다. 예약된 계정으로 로그인하면 게이트가 로그인을 `WithdrawalGateBlocked`로 막고 취소 토큰을 로컬에 저장하므로, 그 실패를 감지한 뒤 이 메서드를 **인자 없이** 호출하면 저장된 토큰으로 취소됩니다.
+탈퇴 예약을 취소합니다. 예약된 계정으로 로그인하면 `WithdrawalGateBlocked`로 막히며, 로그인 결과의 `WithdrawalCancelToken`을 넘겨 비로그인 상태로 취소합니다. 토큰을 비우면 SDK가 게이트에서 저장해둔 토큰을 사용합니다.
 
 ```csharp
 var login = await Supabase.TriggerAutoLoginAsync();
-if (!login.IsSuccess && login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
+if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
 {
     // 남은 유예 시간 등을 보여주고, 사용자가 취소를 선택하면
-    var cancel = await Supabase.RedeemWithdrawalCancelAsync();
+    var cancel = await Supabase.RedeemWithdrawalCancelAsync(login.WithdrawalCancelToken);
     if (cancel.IsSuccess)
         ShowMessage("탈퇴가 취소되었습니다. 다시 로그인해 주세요.");
     else
@@ -23,7 +23,7 @@ if (!login.IsSuccess && login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `cancelToken` | 취소 토큰. 비우면 게이트가 저장한 토큰을 사용 (기본값: `null`) |
+| `cancelToken` | 취소 토큰. 로그인 결과의 `.WithdrawalCancelToken`. 비우면 게이트가 저장한 토큰 사용 (기본값: `null`) |
 
 **실패 원인**
 

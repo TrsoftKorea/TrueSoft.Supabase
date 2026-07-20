@@ -13,7 +13,7 @@
         {
             ProfileRowId = profileRowId ?? string.Empty;
             PlayerUserId = playerUserId ?? string.Empty;
-            DisplayName = displayName ?? string.Empty;
+            Name = displayName ?? string.Empty;
             WithdrawnAtIso = withdrawnAtIso;
             ServerCode = serverCode ?? string.Empty;
         }
@@ -24,7 +24,7 @@
         /// <summary>영속 플레이어 id (<c>profiles.user_id</c>, OAuth <c>sub</c> 등). 재인증에도 유지되며, 세션 신원인 <c>Supabase.UserId</c>(account_id)와는 다른 값입니다.</summary>
         public string PlayerUserId { get; }
 
-        public string DisplayName { get; }
+        public string Name { get; }
 
         /// <summary>ISO 8601 문자열. null이거나 빈 문자열이면 탈퇴(비활성) 처리 전제가 아님.</summary>
         public string WithdrawnAtIso { get; }

@@ -1,13 +1,13 @@
 # 우편 상세 조회
 
 ```csharp
-Task<SupabaseResult<Mail>> Supabase.GetMailDetailAsync(string mailId)
+Task<SupabaseResult<Mail>> Supabase.GetMailAsync(string mailId)
 ```
 
 우편 한 건의 상세 내용을 조회합니다. 첨부 보상이 없는 우편은 조회하는 순간 읽음 처리됩니다.
 
 ```csharp
-var result = await Supabase.GetMailDetailAsync(mailId);
+var result = await Supabase.GetMailAsync(mailId);
 if (result.IsSuccess)
 {
     Mail mail = result.Data;

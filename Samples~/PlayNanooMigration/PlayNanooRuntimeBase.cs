@@ -12,10 +12,10 @@
 //   await Supabase.SignInAnonymouslyAsync()
 //   await Supabase.SignInWithGoogleAsync()
 //   await Supabase.SignInWithAppleIdTokenAsync(token)
-//   await Supabase.LinkGoogleToCurrentAnonymousWithIdTokenAsync(token)   // 익명 → Google 연동
-//   await Supabase.LinkAppleToCurrentAnonymousWithIdTokenAsync(token)    // 익명 → Apple 연동
+//   await Supabase.LinkGoogleToGuestWithIdTokenAsync(token)   // 익명 → Google 연동
+//   await Supabase.LinkAppleToGuestWithIdTokenAsync(token)    // 익명 → Apple 연동
 //   await Supabase.SignOutFullyAsync()
-//   await Supabase.RequestMyWithdrawalAsync()
+//   await Supabase.RequestWithdrawalAsync()
 //
 // [PlayNANOO 제거 후]
 // 1. 이 파일과 PlayNanooRuntime.cs / PlayNanooLegacyRuntime.cs 삭제
@@ -132,10 +132,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             signInWithGoogleIdToken:                 InterceptSignInWithGoogleIdToken,
             signInWithAppleIdToken:                  InterceptSignInWithAppleIdToken,
             signOutFully:                            InterceptSignOutFully,
-            requestMyWithdrawal:                     InterceptRequestMyWithdrawal,
-            linkGoogleToCurrentAnonymousWithIdToken: InterceptLinkGoogleToCurrentAnonymousWithIdToken,
-            linkAppleToCurrentAnonymousWithIdToken:  InterceptLinkAppleToCurrentAnonymousWithIdToken,
-            setMyDisplayName:                        InterceptSetMyDisplayName,
+            requestMyWithdrawal:                     InterceptRequestWithdrawal,
+            linkGoogleToGuestWithIdToken: InterceptLinkGoogleToGuestWithIdToken,
+            linkAppleToGuestWithIdToken:  InterceptLinkAppleToGuestWithIdToken,
+            setMyName:                        InterceptSetName,
             linkGoogleWithIdToken:                   InterceptLinkGoogleWithIdToken,
             linkAppleWithIdToken:                    InterceptLinkAppleWithIdToken
         );
@@ -338,7 +338,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return await tcs.Task;
     }
 
-    private async Task<SupabaseResult> InterceptRequestMyWithdrawal(Func<Task<SupabaseResult>> sdkWithdrawal)
+    private async Task<SupabaseResult> InterceptRequestWithdrawal(Func<Task<SupabaseResult>> sdkWithdrawal)
     {
         var tcs = new TaskCompletionSource<SupabaseResult>();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
@@ -361,7 +361,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 닉네임 변경 인터셉터 ──────────────────────────────────────────────────────
 
-    private Task<SupabaseResult> InterceptSetMyDisplayName(string nickname, Func<Task<SupabaseResult>> sdkSet)
+    private Task<SupabaseResult> InterceptSetName(string nickname, Func<Task<SupabaseResult>> sdkSet)
     {
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSetNickname(nickname, async status =>
@@ -388,7 +388,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
 
-    private async Task<SupabaseResult> InterceptLinkGoogleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkGoogleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
@@ -406,7 +406,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return await tcs.Task;
     }
 
-    private async Task<SupabaseResult> InterceptLinkAppleToCurrentAnonymousWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+    private async Task<SupabaseResult> InterceptLinkAppleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
@@ -537,7 +537,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             {
                 var result = await Supabase.SignInAnonymouslyAsync();
                 if (!result.IsSuccess) { OnWithdrawalCancelLoginFailed?.Invoke(); }
-                else                 { await Supabase.ClearMyWithdrawalAsync(); }
+                else                 { await Supabase.ClearWithdrawalAsync(); }
             }
             else
             {

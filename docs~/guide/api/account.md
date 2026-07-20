@@ -4,9 +4,9 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`IsDisplayNameAvailableAsync`](/guide/display-name/nickname/check) | 닉네임 사용 가능 여부 확인 |
-| [`SetMyDisplayNameAsync`](/guide/display-name/nickname/set) | 내 닉네임 설정 |
-| [`GetPublicDisplayNameAsync`](/guide/display-name/nickname/get-other) | 다른 플레이어 닉네임 조회 |
+| [`IsNameAvailableAsync`](/guide/display-name/nickname/check) | 닉네임 사용 가능 여부 확인 |
+| [`SetNameAsync`](/guide/display-name/nickname/set) | 내 닉네임 설정 |
+| [`GetPublicNameAsync`](/guide/display-name/nickname/get-other) | 다른 플레이어 닉네임 조회 |
 
 ## 프로필
 
@@ -19,13 +19,12 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`RequestMyWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 (유예 기간) |
-| [`GetMyWithdrawalStatusAsync`](/guide/withdrawal/status) | 탈퇴 예약 상태 조회 |
+| [`RequestWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 (유예 기간) |
 | [`RedeemWithdrawalCancelAsync`](/guide/withdrawal/cancel) | 탈퇴 취소 |
 
 ## 서버 이주
 
 | 메서드 | 설명 |
 |--------|------|
-| [`TransferMyServerAsync`](/guide/withdrawal/server-transfer) | 다른 서버로 이주 |
-| [`GetMyServerInfoAsync`](/guide/withdrawal/server-transfer) | 내 서버 정보 조회 |
+| [`TransferServerAsync`](/guide/withdrawal/server-transfer) | 다른 서버로 이주 |
+| [`GetServerInfoAsync`](/guide/withdrawal/server-transfer) | 내 서버 정보 조회 |

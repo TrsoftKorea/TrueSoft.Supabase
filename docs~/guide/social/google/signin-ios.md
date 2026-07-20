@@ -10,7 +10,7 @@ iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토
 var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
 if (result.IsSuccess)
 {
-    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드
     InitGame();
 }

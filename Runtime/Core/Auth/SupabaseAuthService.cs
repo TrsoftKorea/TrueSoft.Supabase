@@ -454,7 +454,7 @@ namespace TrueBase.Core.Auth
         /// <summary>
         /// <c>auth.users.id</c>(UUID)로부터 규칙에 맞는 익명 기본 displayName을 만듭니다 (<c>Player_</c> + UUID 앞 8자, 소문자).
         /// </summary>
-        public static string BuildAnonymousDefaultDisplayNameFromAuthUserId(string authUserId)
+        public static string BuildAnonymousDefaultNameFromAuthUserId(string authUserId)
         {
             if (string.IsNullOrWhiteSpace(authUserId))
                 return "Player_unknown";
@@ -470,7 +470,7 @@ namespace TrueBase.Core.Auth
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 access token. 필수.</param>
         /// <param name="displayName">설정할 표시 이름. 필수 — 앞뒤 공백은 제거되어 전송됩니다.</param>
-        public async Task<SupabaseResult<bool>> UpdateUserMetadataDisplayNameAsync(string accessToken, string displayName)
+        public async Task<SupabaseResult<bool>> UpdateUserMetadataNameAsync(string accessToken, string displayName)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -483,7 +483,7 @@ namespace TrueBase.Core.Auth
             // Google 등은 full_name/name을 쓰고 Studio도 그걸 표시하는 경우가 있어 displayName과 같이 맞춥니다.
             var bodyJson = _jsonSerializer.ToJson(new UpdateUserMetadataBody
             {
-                data = new UserMetadataDisplayNamePatch
+                data = new UserMetadataNamePatch
                 {
                     displayName = d,
                     full_name = d,
@@ -598,11 +598,11 @@ namespace TrueBase.Core.Auth
         [Serializable]
         private sealed class UpdateUserMetadataBody
         {
-            public UserMetadataDisplayNamePatch data;
+            public UserMetadataNamePatch data;
         }
 
         [Serializable]
-        private sealed class UserMetadataDisplayNamePatch
+        private sealed class UserMetadataNamePatch
         {
             public string displayName;
             public string full_name;

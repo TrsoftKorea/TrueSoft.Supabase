@@ -13,7 +13,7 @@ namespace TrueBase.Unity.Auth.Google
         /// <summary>Google 계정 고유 ID.</summary>
         public string GoogleUserId;
         /// <summary>표시 이름.</summary>
-        public string DisplayName;
+        public string Name;
         /// <summary>이름.</summary>
         public string GivenName;
         /// <summary>성.</summary>

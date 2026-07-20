@@ -17,10 +17,10 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`LinkGoogleToCurrentAnonymousAsync`](/guide/social/google/link-android) | 익명 → Google 연동 (Android) |
-| [`LinkGoogleToCurrentAnonymousWithIdTokenAsync`](/guide/social/google/link-ios) | 익명 → Google 연동 (ID 토큰) |
-| [`LinkAppleToCurrentAnonymousAsync`](/guide/social/apple/link) | 익명 → Apple 연동 (iOS 네이티브) |
-| [`LinkAppleToCurrentAnonymousWithIdTokenAsync`](/guide/social/apple/link-token) | 익명 → Apple 연동 (커스텀 ID 토큰) |
+| [`LinkGoogleToGuestAsync`](/guide/social/google/link-android) | 익명 → Google 연동 (Android) |
+| [`LinkGoogleToGuestWithIdTokenAsync`](/guide/social/google/link-ios) | 익명 → Google 연동 (ID 토큰) |
+| [`LinkAppleToGuestAsync`](/guide/social/apple/link) | 익명 → Apple 연동 (iOS 네이티브) |
+| [`LinkAppleToGuestWithIdTokenAsync`](/guide/social/apple/link-token) | 익명 → Apple 연동 (커스텀 ID 토큰) |
 | [`LinkGoogleNativeAsync`](/guide/social/google/add-android) | 로그인된 계정에 Google 추가 연동 (Android) |
 | [`LinkGoogleWithIdTokenAsync`](/guide/social/google/add-ios) | 로그인된 계정에 Google 추가 연동 (ID 토큰) |
 | [`LinkAppleNativeAsync`](/guide/social/apple/add) | 로그인된 계정에 Apple 추가 연동 (iOS 네이티브) |

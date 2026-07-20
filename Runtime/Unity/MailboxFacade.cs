@@ -28,10 +28,10 @@ namespace TrueBase.Unity
         /// <param name="limit">한 번에 가져올 최대 개수. (기본값: 50)</param>
         /// <param name="offset">건너뛸 개수. 페이지네이션에 사용합니다.</param>
         /// <param name="category">조회할 분류. null이면 전체 분류. (기본값: null)</param>
-        public Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(int limit = 50, int offset = 0, string category = null) =>
-            GetMyMailsAsync(_sessionGetter?.Invoke(), limit, offset, category);
+        public Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null) =>
+            GetMailsAsync(_sessionGetter?.Invoke(), limit, offset, category);
 
-        public async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMyMailsAsync(
+        public async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(
             SupabaseSession session,
             int limit = 50,
             int offset = 0,
@@ -45,10 +45,10 @@ namespace TrueBase.Unity
         }
 
         /// <summary>우편 1건의 상세 내용을 조회합니다.</summary>
-        public Task<SupabaseResult<Mail>> GetMailDetailAsync(string mailId) =>
-            GetMailDetailAsync(_sessionGetter?.Invoke(), mailId);
+        public Task<SupabaseResult<Mail>> GetMailAsync(string mailId) =>
+            GetMailAsync(_sessionGetter?.Invoke(), mailId);
 
-        public async Task<SupabaseResult<Mail>> GetMailDetailAsync(SupabaseSession session, string mailId)
+        public async Task<SupabaseResult<Mail>> GetMailAsync(SupabaseSession session, string mailId)
         {
             var token = RequireToken(session);
             if (token == null)
@@ -78,10 +78,10 @@ namespace TrueBase.Unity
             GetInboxCountValueAsync(session, category, c => c.Unread, c => c.Unread);
 
         /// <summary>미수령 보상이 있는 메일 개수. <paramref name="userId"/>는 계약 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
-        public Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(string userId = null, string category = null) =>
+        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
             GetInboxCountValueAsync(_sessionGetter?.Invoke(), category, c => c.UnclaimedMails, c => c.UnclaimedMails);
 
-        public Task<SupabaseResult<int>> GetUnclaimedItemMailCountAsync(SupabaseSession session, string userId = null, string category = null) =>
+        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(SupabaseSession session, string userId = null, string category = null) =>
             GetInboxCountValueAsync(session, category, c => c.UnclaimedMails, c => c.UnclaimedMails);
 
         private async Task<SupabaseResult<int>> GetInboxCountValueAsync(

@@ -16,7 +16,7 @@ namespace TrueBase.Core.Data
     /// </summary>
     public sealed class SupabasePublicProfileService
     {
-        private const int DisplayNameMaxLength = 64;
+        private const int NameMaxLength = 64;
 
         /// <summary>PostgREST <c>IS NOT NULL</c> — 활성 행만 (<c>account_id</c>가 있는 프로필).</summary>
         private const string ActiveProfileFilter = "account_id=is.not_null";
@@ -52,7 +52,7 @@ namespace TrueBase.Core.Data
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="playerUserId">조회 대상의 안정 플레이어 id(<c>profiles.user_id</c>). 필수 — 본인 외 다른 플레이어도 조회 가능합니다.</param>
-        public async Task<SupabaseResult<string>> GetDisplayNameAsync(string accessToken, string playerUserId)
+        public async Task<SupabaseResult<string>> GetNameAsync(string accessToken, string playerUserId)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<string>.Fail("access_token_empty");
@@ -62,7 +62,7 @@ namespace TrueBase.Core.Data
 
             var id = playerUserId.Trim();
             var url = $"{_supabaseUrl}/functions/v1/displayname-get";
-            var bodyJson = _jsonSerializer.ToJson(new DisplayNameGetRequest { user_id = id });
+            var bodyJson = _jsonSerializer.ToJson(new NameGetRequest { user_id = id });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -78,7 +78,7 @@ namespace TrueBase.Core.Data
 
             try
             {
-                var parsed = _jsonSerializer.FromJson<DisplayNameGetResponse>(response.Body);
+                var parsed = _jsonSerializer.FromJson<NameGetResponse>(response.Body);
                 if (parsed == null || !parsed.ok)
                     return SupabaseResult<string>.Fail(string.IsNullOrWhiteSpace(parsed?.reason) ? "display_name_get_failed" : parsed.reason);
 
@@ -96,7 +96,7 @@ namespace TrueBase.Core.Data
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="displayName">검사할 표시 이름. 앞뒤 공백 제거 후 최대 64자.</param>
         /// <param name="ignoreAccountIdForSelf">본인이 이미 같은 이름을 쓰는 경우(수정 화면 등) 현재 <c>auth.uid()</c>를 넘기면 그 계정의 기존 이름은 사용 가능으로 처리됩니다(기본값: null).</param>
-        public async Task<SupabaseResult<bool>> IsDisplayNameAvailableAsync(
+        public async Task<SupabaseResult<bool>> IsNameAvailableAsync(
             string accessToken,
             string displayName,
             string ignoreAccountIdForSelf = null)
@@ -104,17 +104,17 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
 
-            var norm = NormalizeDisplayName(displayName);
+            var norm = NormalizeName(displayName);
             if (norm.Length == 0)
                 return SupabaseResult<bool>.Fail("display_name_empty");
-            if (norm.Length > DisplayNameMaxLength)
+            if (norm.Length > NameMaxLength)
                 return SupabaseResult<bool>.Fail("display_name_too_long");
 
             // SECURITY DEFINER RPC 사용: RLS 우회, DB 내부에서 server_id 직접 조회
             // → REST + RLS 방식의 server_id 불일치 문제 원천 차단
             // JsonUtility 직렬화(IL2CPP private 중첩 클래스 → {} 반환 가능)에 의존하지 않고 직접 JSON 구성
             var ignoreUuid = string.IsNullOrWhiteSpace(ignoreAccountIdForSelf) ? null : ignoreAccountIdForSelf.Trim();
-            var bodyJson = BuildIsDisplayNameAvailableBody(norm, ignoreUuid);
+            var bodyJson = BuildIsNameAvailableBody(norm, ignoreUuid);
 
             var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_is_display_name_available";
             var response = await _httpClient.SendAsync(
@@ -149,7 +149,7 @@ namespace TrueBase.Core.Data
         /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). upsert 충돌 키. 필수.</param>
         /// <param name="playerUserId">안정 플레이어 id. null·공백이면 <paramref name="accountId"/>를 대신 사용합니다.</param>
         /// <param name="displayName">등록할 표시 이름. 앞뒤 공백 제거 후 최대 64자.</param>
-        public async Task<SupabaseResult<bool>> UpsertMyDisplayNameClaimAsync(
+        public async Task<SupabaseResult<bool>> UpsertMyNameClaimAsync(
             string accessToken,
             string accountId,
             string playerUserId,
@@ -162,15 +162,15 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail("account_id_empty");
 
             var stable = string.IsNullOrWhiteSpace(playerUserId) ? accountId.Trim() : playerUserId.Trim();
-            var norm = NormalizeDisplayName(displayName);
+            var norm = NormalizeName(displayName);
             if (norm.Length == 0)
                 return SupabaseResult<bool>.Fail("display_name_empty");
 
-            if (norm.Length > DisplayNameMaxLength)
+            if (norm.Length > NameMaxLength)
                 return SupabaseResult<bool>.Fail("display_name_too_long");
 
             var url = $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, _displayNamesTable)}?on_conflict=account_id";
-            var body = new UpsertDisplayNameRow
+            var body = new UpsertNameRow
             {
                 account_id = accountId.Trim(),
                 user_id = stable,
@@ -233,14 +233,14 @@ namespace TrueBase.Core.Data
             {
                 var rows = _jsonSerializer.FromJsonArray<ProfileRowFull>(response.Body);
                 string rowId;
-                string userIdForDisplayName;
+                string userIdForName;
                 string withdrawnAt;
 
                 if (rows == null || rows.Length == 0 || rows[0] == null)
                 {
                     // 프로필 행 없음: id만 사용
                     rowId = string.Empty;
-                    userIdForDisplayName = id;
+                    userIdForName = id;
                     withdrawnAt = null;
                 }
                 else
@@ -248,18 +248,18 @@ namespace TrueBase.Core.Data
                     // 프로필 행 존재
                     var row = rows[0];
                     rowId = string.IsNullOrWhiteSpace(row.id) ? string.Empty : row.id.Trim();
-                    userIdForDisplayName = string.IsNullOrWhiteSpace(row.user_id) ? id : row.user_id.Trim();
+                    userIdForName = string.IsNullOrWhiteSpace(row.user_id) ? id : row.user_id.Trim();
                     withdrawnAt = string.IsNullOrWhiteSpace(row.withdrawn_at) ? null : row.withdrawn_at;
                 }
 
                 // displayName을 한 번만 조회
-                var displayNameResult = await GetDisplayNameAsync(accessToken, userIdForDisplayName);
+                var displayNameResult = await GetNameAsync(accessToken, userIdForName);
                 var displayName = (displayNameResult != null && displayNameResult.IsSuccess)
                     ? (displayNameResult.Data ?? string.Empty)
                     : string.Empty;
 
                 return SupabaseResult<PublicProfile>.Success(
-                    new PublicProfile(rowId, userIdForDisplayName, displayName, withdrawnAt));
+                    new PublicProfile(rowId, userIdForName, displayName, withdrawnAt));
             }
             catch (Exception e)
             {
@@ -325,10 +325,10 @@ namespace TrueBase.Core.Data
 
         /// <summary>현재 로그인 계정의 서버 식별자를 조회합니다. RPC <c>ts_my_server_id</c>.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        public async Task<SupabaseResult<MyServerInfo>> GetMyServerIdAsync(string accessToken)
+        public async Task<SupabaseResult<ServerInfo>> GetMyServerIdAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<MyServerInfo>.Fail("access_token_empty");
+                return SupabaseResult<ServerInfo>.Fail("access_token_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_my_server_id";
             var response = await _httpClient.SendAsync(
@@ -338,24 +338,24 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<MyServerInfo>.Fail("http_response_null");
+                return SupabaseResult<ServerInfo>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<MyServerInfo>.Fail(response.ErrorMessage ?? response.Body ?? "my_server_fetch_failed");
+                return SupabaseResult<ServerInfo>.Fail(response.ErrorMessage ?? response.Body ?? "my_server_fetch_failed");
 
             try
             {
-                var rows = _jsonSerializer.FromJsonArray<MyServerInfoRow>(response.Body);
+                var rows = _jsonSerializer.FromJsonArray<ServerInfoRow>(response.Body);
                 if (rows == null || rows.Length == 0 || rows[0] == null || string.IsNullOrWhiteSpace(rows[0].server_id))
-                    return SupabaseResult<MyServerInfo>.Fail("my_server_not_found");
+                    return SupabaseResult<ServerInfo>.Fail("my_server_not_found");
 
-                return SupabaseResult<MyServerInfo>.Success(new MyServerInfo(
+                return SupabaseResult<ServerInfo>.Success(new ServerInfo(
                     rows[0].server_id.Trim(),
                     string.IsNullOrWhiteSpace(rows[0].server_code) ? _defaultServerCode : rows[0].server_code.Trim()));
             }
             catch (Exception e)
             {
-                return SupabaseResult<MyServerInfo>.Fail("my_server_parse_failed:" + e.Message);
+                return SupabaseResult<ServerInfo>.Fail("my_server_parse_failed:" + e.Message);
             }
         }
 
@@ -363,7 +363,7 @@ namespace TrueBase.Core.Data
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="targetServerCode">이동할 서버 코드(예: <c>KR1</c>). 필수.</param>
         /// <param name="reason">이주 사유(감사 로그용). null·공백이면 전달하지 않습니다(기본값: null).</param>
-        public async Task<SupabaseResult<bool>> TransferMyServerAsync(string accessToken, string targetServerCode, string reason = null)
+        public async Task<SupabaseResult<bool>> TransferServerAsync(string accessToken, string targetServerCode, string reason = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail("access_token_empty");
@@ -487,7 +487,7 @@ namespace TrueBase.Core.Data
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="delayDays">탈퇴까지 유예 일수. 음수는 0으로 보정됩니다.</param>
-        public async Task<SupabaseResult<string>> RequestMyWithdrawalByDelayDaysAsync(
+        public async Task<SupabaseResult<string>> RequestWithdrawalByDelayDaysAsync(
             string accessToken,
             int delayDays)
         {
@@ -534,10 +534,10 @@ namespace TrueBase.Core.Data
         /// RPC: <c>ts_my_withdrawal_status</c>.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        public async Task<SupabaseResult<MyWithdrawalStatus>> GetMyWithdrawalStatusAsync(string accessToken)
+        public async Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<MyWithdrawalStatus>.Fail("access_token_empty");
+                return SupabaseResult<WithdrawalStatus>.Fail("access_token_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_my_withdrawal_status";
 
@@ -548,30 +548,30 @@ namespace TrueBase.Core.Data
                 headers: CreateUserHeaders(accessToken, prefer: null));
 
             if (response == null)
-                return SupabaseResult<MyWithdrawalStatus>.Fail("http_response_null");
+                return SupabaseResult<WithdrawalStatus>.Fail("http_response_null");
 
             if (response.IsSuccess == false)
-                return SupabaseResult<MyWithdrawalStatus>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_status_failed");
+                return SupabaseResult<WithdrawalStatus>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_status_failed");
 
             try
             {
                 var rows = _jsonSerializer.FromJsonArray<WithdrawalStatusRow>(response.Body);
                 if (rows == null || rows.Length == 0 || rows[0] == null)
-                    return SupabaseResult<MyWithdrawalStatus>.Success(new MyWithdrawalStatus(string.Empty, null, null, false, 0));
+                    return SupabaseResult<WithdrawalStatus>.Success(new WithdrawalStatus(string.Empty, null, null, false, 0));
 
                 var row = rows[0];
-                var status = new MyWithdrawalStatus(
+                var status = new WithdrawalStatus(
                     row.display_name ?? string.Empty,
                     string.IsNullOrWhiteSpace(row.withdrawn_at) ? null : row.withdrawn_at.Trim(),
                     string.IsNullOrWhiteSpace(row.server_now) ? null : row.server_now.Trim(),
                     row.is_scheduled,
                     row.seconds_remaining);
 
-                return SupabaseResult<MyWithdrawalStatus>.Success(status);
+                return SupabaseResult<WithdrawalStatus>.Success(status);
             }
             catch (Exception e)
             {
-                return SupabaseResult<MyWithdrawalStatus>.Fail("withdrawal_status_parse_failed:" + e.Message);
+                return SupabaseResult<WithdrawalStatus>.Fail("withdrawal_status_parse_failed:" + e.Message);
             }
         }
 
@@ -579,7 +579,7 @@ namespace TrueBase.Core.Data
         /// <c>ts_is_display_name_available</c> RPC 호출용 JSON 바디를 직접 구성합니다.
         /// IL2CPP 빌드에서 <c>JsonUtility</c>가 private 중첩 클래스를 <c>{}</c>로 직렬화하는 문제를 우회합니다.
         /// </summary>
-        private static string BuildIsDisplayNameAvailableBody(string displayName, string ignoreAccountId)
+        private static string BuildIsNameAvailableBody(string displayName, string ignoreAccountId)
         {
             var escapedName = SupabaseCoreHelper.EscapeJson(displayName);
             if (ignoreAccountId == null)
@@ -590,7 +590,7 @@ namespace TrueBase.Core.Data
             return "{\"p_display_name\":\"" + escapedName + "\",\"p_ignore_account_id\":\"" + escapedId + "\"}";
         }
 
-        private static string NormalizeDisplayName(string displayName)
+        private static string NormalizeName(string displayName)
         {
             return displayName == null ? string.Empty : displayName.Trim();
         }
@@ -617,7 +617,7 @@ namespace TrueBase.Core.Data
         }
 
         [Serializable]
-        private sealed class UpsertDisplayNameRow
+        private sealed class UpsertNameRow
         {
             public string account_id;
             public string user_id;
@@ -634,13 +634,13 @@ namespace TrueBase.Core.Data
         }
 
         [Serializable]
-        private sealed class DisplayNameGetRequest
+        private sealed class NameGetRequest
         {
             public string user_id;
         }
 
         [Serializable]
-        private sealed class MyServerInfoRow
+        private sealed class ServerInfoRow
         {
             public string server_id;
             public string server_code;
@@ -662,7 +662,7 @@ namespace TrueBase.Core.Data
         }
 
         [Serializable]
-        private sealed class DisplayNameGetResponse
+        private sealed class NameGetResponse
         {
             public bool ok;
             public string display_name;

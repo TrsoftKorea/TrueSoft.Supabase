@@ -1,9 +1,9 @@
 ﻿namespace TrueBase.Core.Data
 {
     /// <summary>현재 로그인 계정이 속한 게임 서버 식별 정보. RPC <c>ts_my_server_id</c> 응답입니다.</summary>
-    public readonly struct MyServerInfo
+    public readonly struct ServerInfo
     {
-        public MyServerInfo(string serverId, string serverCode)
+        public ServerInfo(string serverId, string serverCode)
         {
             ServerId = serverId ?? string.Empty;
             ServerCode = serverCode ?? string.Empty;

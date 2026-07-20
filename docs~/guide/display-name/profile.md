@@ -11,7 +11,7 @@ var result = await Supabase.GetPublicProfileAsync(userId);
 if (result.IsSuccess)
 {
     var profile = result.Data;
-    ShowProfile(profile.DisplayName, profile.ServerCode);
+    ShowProfile(profile.Name, profile.ServerCode);
 }
 ```
 
@@ -27,7 +27,7 @@ if (result.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Data.DisplayName` | `string` | 닉네임 |
+| `.Data.Name` | `string` | 닉네임 |
 | `.Data.ServerCode` | `string` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
 | `.Data.IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
 

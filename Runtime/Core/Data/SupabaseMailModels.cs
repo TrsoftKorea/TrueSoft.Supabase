@@ -40,9 +40,9 @@ namespace TrueBase.Core.Data
         public string Title { get; set; }
         public string Content { get; set; }
         public bool IsRead { get; set; }
-        public DateTime ExpiresAt { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? ItemsClaimedAt { get; set; }
+        public DateTimeOffset ExpiresAt { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset? ItemsClaimedAt { get; set; }
         public IReadOnlyList<MailItemPayload> Items { get; set; }
 
         /// <summary>분류(파티션 키). 지정 없이 발송된 메일은 <c>default</c>.</summary>
@@ -76,7 +76,7 @@ namespace TrueBase.Core.Data
             return Content;
         }
 
-        public bool IsExpired => DateTime.UtcNow > ExpiresAt;
+        public bool IsExpired => DateTimeOffset.UtcNow > ExpiresAt;
 
         public bool HasUnclaimedItems =>
             ItemsClaimedAt == null

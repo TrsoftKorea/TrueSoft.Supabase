@@ -10,7 +10,7 @@ Task<SupabaseSignInResult> Supabase.SignInAnonymouslyAsync()
 var result = await Supabase.SignInAnonymouslyAsync();
 if (result.IsSuccess)
 {
-    ShowNickname(result.Profile.DisplayName);   // 로그인 결과에 담긴 내 프로필
+    ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     await PlayerSave.LoadAsync();               // 데이터 로드는 별개 단계
     InitGame();
 }

@@ -1,13 +1,13 @@
 # 다른 플레이어 닉네임 조회
 
 ```csharp
-Task<SupabaseResult<string>> Supabase.GetPublicDisplayNameAsync(string userId)
+Task<SupabaseResult<string>> Supabase.GetPublicNameAsync(string userId)
 ```
 
 다른 플레이어의 닉네임을 조회합니다.
 
 ```csharp
-var result = await Supabase.GetPublicDisplayNameAsync(userId);
+var result = await Supabase.GetPublicNameAsync(userId);
 if (result.IsSuccess)
 {
     var displayName = result.Data;   // 조회한 닉네임

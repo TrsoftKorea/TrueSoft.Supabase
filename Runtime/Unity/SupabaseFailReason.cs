@@ -126,10 +126,10 @@ namespace TrueBase.Unity
         public const string SelectColumnsEmpty = "select_columns_empty";
 
         /// <summary>이미 사용 중인 닉네임입니다.</summary>
-        public const string DisplayNameTaken = "display_name_taken";
+        public const string NameTaken = "display_name_taken";
 
         /// <summary>닉네임이 허용 길이를 초과합니다.</summary>
-        public const string DisplayNameTooLong = "display_name_too_long";
+        public const string NameTooLong = "display_name_too_long";
 
         /// <summary>탈퇴 예약 게이트에 의해 로그인이 차단되었습니다.</summary>
         public const string WithdrawalGateBlocked = "withdrawal_scheduled_gate_blocked";

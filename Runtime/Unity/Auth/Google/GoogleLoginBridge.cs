@@ -117,7 +117,7 @@ namespace TrueBase.Unity.Auth.Google
 
         // 아래 OnGoogle* 메서드는 Android AAR이 UnityPlayer.UnitySendMessage(...)로 호출하는 콜백입니다. 직접 호출하지 마세요.
 
-        /// <summary>네이티브 로그인 성공 콜백. payload는 <c>|||</c> 구분 필드(IdToken|GoogleUserId|DisplayName|GivenName|FamilyName|ProfileImageUrl|AccessToken).</summary>
+        /// <summary>네이티브 로그인 성공 콜백. payload는 <c>|||</c> 구분 필드(IdToken|GoogleUserId|Name|GivenName|FamilyName|ProfileImageUrl|AccessToken).</summary>
         public void OnGoogleLoginSuccess(string payload)
         {
             try
@@ -128,7 +128,7 @@ namespace TrueBase.Unity.Auth.Google
                 {
                     IdToken = Unescape(parts, 0),
                     GoogleUserId = Unescape(parts, 1),
-                    DisplayName = Unescape(parts, 2),
+                    Name = Unescape(parts, 2),
                     GivenName = Unescape(parts, 3),
                     FamilyName = Unescape(parts, 4),
                     ProfileImageUrl = Unescape(parts, 5),

@@ -4,16 +4,16 @@
     /// 로그인 사용자 본인 기준 탈퇴 예약 상태 스냅샷.
     /// RPC <c>ts_my_withdrawal_status</c> 응답을 SDK에서 다루기 쉬운 형태로 담습니다.
     /// </summary>
-    public sealed class MyWithdrawalStatus
+    public sealed class WithdrawalStatus
     {
-        public MyWithdrawalStatus(
+        public WithdrawalStatus(
             string displayName,
             string withdrawnAtIso,
             string serverNowIso,
             bool isScheduled,
             long secondsRemaining)
         {
-            DisplayName = displayName ?? string.Empty;
+            Name = displayName ?? string.Empty;
             WithdrawnAtIso = withdrawnAtIso;
             ServerNowIso = serverNowIso;
             IsScheduled = isScheduled;
@@ -21,7 +21,7 @@
         }
 
         /// <summary>현재 표시 이름. 없으면 빈 문자열.</summary>
-        public string DisplayName { get; }
+        public string Name { get; }
 
         /// <summary>예약된 탈퇴 시각(ISO 8601). 예약이 없으면 null.</summary>
         public string WithdrawnAtIso { get; }
