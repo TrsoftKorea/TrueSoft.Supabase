@@ -26,9 +26,9 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
+| `SupabaseReason.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
 
 ::: info
 `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.

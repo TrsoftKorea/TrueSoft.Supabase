@@ -1,6 +1,6 @@
 # 에러 코드
 
-`SupabaseResult.Reason`이 가질 수 있는 모든 `SupabaseFailCode` 값을 분류별로 모았습니다. 각 함수 가이드의 **에러 코드** 표는 그 호출이 반환할 수 있는 사유만 추린 것이고, 이 페이지는 카탈로그 전체 레퍼런스입니다.
+`SupabaseResult.Reason`이 가질 수 있는 모든 `SupabaseReason` 값을 분류별로 모았습니다. 각 함수 가이드의 **에러 코드** 표는 그 호출이 반환할 수 있는 사유만 추린 것이고, 이 페이지는 카탈로그 전체 레퍼런스입니다.
 
 ## 분기 방법
 
@@ -10,12 +10,12 @@
 var result = await Supabase.SignInAnonymouslyAsync();
 if (!result.IsSuccess)
 {
-    if (result.Reason == SupabaseFailCode.NetworkError) ShowRetry();
+    if (result.Reason == SupabaseReason.NetworkError) ShowRetry();
     else ShowError(result.ErrorCode);
 }
 ```
 
-아래 표의 `ErrorCode`는 `SupabaseErrorCode` 상수·`SupabaseFailCode` enum 멤버와 이름이 1:1로 같습니다(`SupabaseErrorCode.UserBanned` ↔ `SupabaseFailCode.UserBanned`).
+아래 `Reason` 열은 `SupabaseReason` enum 멤버입니다. `result.Reason`과 비교해 분기하세요(예: `result.Reason == SupabaseReason.UserBanned`). 실패 원문 문자열이 필요하면 `result.ErrorCode`를 읽습니다.
 
 ::: info None과 Unknown
 `None`은 성공했거나 실패 사유가 없는 경우(`ErrorCode`가 비어 있음)이고, `Unknown`은 사유는 있으나 카탈로그에 없는 동적·서버·네이티브 문자열입니다. 이때 원문은 `ErrorCode`에서 확인하세요.
@@ -23,7 +23,7 @@ if (!result.IsSuccess)
 
 ## 공통 · 세션
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `NotInitialized` | SDK가 초기화되지 않았습니다 |
 | `NotSignedIn` | 로그인 상태가 아닙니다 |
@@ -33,7 +33,7 @@ if (!result.IsSuccess)
 
 ## 로그인 · 세션 복원
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `UserBanned` | 계정이 차단되었습니다. `BanInfo`에서 상세 확인 |
 | `DuplicateLogin` | 다른 기기에서 동일 계정 로그인으로 현재 세션이 무효화됨 |
@@ -49,7 +49,7 @@ if (!result.IsSuccess)
 
 ## 연동 해제
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `IdentityNotLinked` | 해제하려는 provider가 현재 계정에 연동되어 있지 않습니다 |
 | `CannotUnlinkLastIdentity` | 마지막 남은 연동은 해제할 수 없습니다 |
@@ -57,7 +57,7 @@ if (!result.IsSuccess)
 
 ## Google 로그인
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `GoogleSignInCancelled` | 사용자가 Google 로그인 화면을 직접 취소했습니다 |
 | `GoogleWebClientIdEmpty` | `SupabaseSettings.googleWebClientId`가 설정되지 않았습니다 |
@@ -70,7 +70,7 @@ if (!result.IsSuccess)
 
 ## Apple 로그인
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `AppleIdTokenEmpty` | 전달된 Apple ID 토큰이 비어있습니다 |
 | `AppleSignInCancelled` | 사용자가 Apple 로그인 화면을 직접 취소했습니다 |
@@ -82,7 +82,7 @@ if (!result.IsSuccess)
 
 ## 웹 OAuth
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 refresh_token이 없습니다 |
 | `OAuthRedirectSchemeEmpty` | OAuth 리다이렉트 스킴이 비어있습니다 |
@@ -90,14 +90,14 @@ if (!result.IsSuccess)
 
 ## 닉네임
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `NameTaken` | 이미 사용 중인 닉네임입니다 |
 | `NameTooLong` | 닉네임이 허용 길이를 초과합니다 |
 
 ## 탈퇴
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `WithdrawalDeleted` | 계정이 탈퇴 처리되어 재로그인이 필요합니다 |
 | `WithdrawalGateBlocked` | 탈퇴 예약 게이트에 의해 로그인이 차단되었습니다 |
@@ -108,7 +108,7 @@ if (!result.IsSuccess)
 
 ## 유저 데이터
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `SelectColumnsEmpty` | SELECT 컬럼이 지정되지 않았습니다 |
 | `UserSaveFlushFailed` | 유저 세이브 저장에 실패했습니다 |
@@ -117,13 +117,13 @@ if (!result.IsSuccess)
 
 ## 우편함
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `MailItemHandlerInvalid` | 우편 아이템 핸들러가 null이거나 `ItemKey`가 비어 있습니다 |
 
 ## IAP
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
 | `IapProductIdsEmpty` | IAP 초기화에 전달된 상품 ID 목록이 비어 있습니다 |
 | `IapDisposed` | 이미 Dispose된 IAP 파사드입니다 |

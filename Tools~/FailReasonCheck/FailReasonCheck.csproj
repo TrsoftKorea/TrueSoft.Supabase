@@ -2,7 +2,7 @@
 
   <!--
     에러코드 카탈로그 무결성 검사 (Unity 없이).
-    SupabaseFailCode(enum + FromErrorCode map)와 SupabaseErrorCode(문자열 상수)는 둘 다 Core에 있고
+    SupabaseReason(enum + FromErrorCode map)와 SupabaseErrorCode(문자열 상수)는 둘 다 Core에 있고
     UnityEngine 의존이 0이라 dotnet으로 함께 컴파일해 리플렉션으로 검증할 수 있다.
 
     검사 항목:
@@ -32,7 +32,7 @@
 
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="../../Runtime/Core/Models/SupabaseFailCode.cs" />
+    <Compile Include="../../Runtime/Core/Models/SupabaseReason.cs" />
     <Compile Include="../../Runtime/Core/Models/SupabaseErrorCode.cs" />
   </ItemGroup>
 

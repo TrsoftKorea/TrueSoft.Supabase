@@ -23,7 +23,7 @@ if (!result.IsSuccess && result.BanInfo != null)
 }
 ```
 
-`SupabaseResult.Reason == SupabaseFailCode.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
+`SupabaseResult.Reason == SupabaseReason.UserBanned`일 때만 `BanInfo`가 유효하며, 그 외에는 항상 `null`입니다.
 
 ## 수동 조회 {#manual-lookup}
 

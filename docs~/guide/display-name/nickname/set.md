@@ -30,9 +30,9 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.NameTaken` | 이미 사용 중인 닉네임 |
-| `SupabaseErrorCode.NameTooLong` | 허용 길이 초과 |
-| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.NameTaken` | 이미 사용 중인 닉네임 |
+| `SupabaseReason.NameTooLong` | 허용 길이 초과 |
+| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

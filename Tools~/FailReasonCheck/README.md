@@ -1,10 +1,10 @@
 # 에러코드 카탈로그 무결성 검사
 
-`SupabaseFailCode`(enum + `FromErrorCode` map)와 `SupabaseErrorCode`(문자열 상수)이 서로 어긋나지 않는지 Unity 없이 검증하는 도구입니다. 둘 다 Core(`Runtime/Core/Models/`)에 있습니다.
+`SupabaseReason`(enum + `FromErrorCode` map)와 `SupabaseErrorCode`(문자열 상수)이 서로 어긋나지 않는지 Unity 없이 검증하는 도구입니다. 둘 다 Core(`Runtime/Core/Models/`)에 있습니다.
 
 ## 왜 필요한가
 
-에러코드 사유는 **`SupabaseFailCode` enum + `SupabaseErrorCode` 상수** 두 곳을 손으로 맞춰야 합니다(`FromErrorCode` 스위치는 상수를 직접 참조하므로 문자열은 상수에만 존재). 이름이 어긋나거나 map이 잘못 참조되면 런타임에 조용히 `Unknown`으로 처리되거나 분기가 틀립니다. 이 검사가 그 드리프트를 자동으로 잡습니다.
+에러코드 사유는 **`SupabaseReason` enum + `SupabaseErrorCode` 상수** 두 곳을 손으로 맞춰야 합니다(`FromErrorCode` 스위치는 상수를 직접 참조하므로 문자열은 상수에만 존재). 이름이 어긋나거나 map이 잘못 참조되면 런타임에 조용히 `Unknown`으로 처리되거나 분기가 틀립니다. 이 검사가 그 드리프트를 자동으로 잡습니다.
 
 두 파일 모두 UnityEngine 의존이 0이라 `dotnet`으로 함께 컴파일해 리플렉션으로 검증할 수 있습니다.
 

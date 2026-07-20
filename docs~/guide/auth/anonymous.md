@@ -27,10 +27,10 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 소셜 로그인은 [소셜 로그인](/guide/social/google/)을, 로그인 후 데이터 로드는 [데이터 로드](/guide/user-data/load)를 참고하세요. 자동 로그인도 로그인만 수행하므로 로드는 별도로 호출합니다.

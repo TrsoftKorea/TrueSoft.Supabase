@@ -12,6 +12,6 @@ await PlayerSave.EnsureRowAsync();
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.UserSaveLoadFailed` | 행 생성·확인 실패 |
+| `SupabaseReason.UserSaveLoadFailed` | 행 생성·확인 실패 |

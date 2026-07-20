@@ -42,8 +42,8 @@ if (result.IsSuccess)
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 언어별 제목·본문(다국어 우편)은 [다국어 메시지](./localized)로 읽습니다.

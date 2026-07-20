@@ -20,7 +20,7 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

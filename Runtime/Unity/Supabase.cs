@@ -50,7 +50,7 @@ namespace TrueBase.Unity
                 return SupabaseSignInResult.Success(profile);
 
             // 탈퇴 예약 게이트로 막힌 경우, 게이트가 저장해 둔 삭제 예정 시각·취소 토큰을 결과에 실어준다.
-            if (r.Reason == SupabaseFailCode.WithdrawalGateBlocked)
+            if (r.Reason == SupabaseReason.WithdrawalGateBlocked)
             {
                 DateTimeOffset? withdrawnAt = null;
                 var gate = SupabaseSDK.GetStoredWithdrawalGateStatus();

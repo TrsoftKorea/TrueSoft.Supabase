@@ -19,17 +19,17 @@ if (await Supabase.SignInAnonymouslyAsync())
 var result = await Supabase.SignInAnonymouslyAsync();
 if (!result.IsSuccess)
 {
-    if (result.Reason == SupabaseFailCode.NetworkError) ShowRetry();
+    if (result.Reason == SupabaseReason.NetworkError) ShowRetry();
     else ShowError(result.ErrorCode);   // ErrorCode: 원문 문자열(동적 사유 포함)
 }
 ```
 
-각 함수 가이드의 **에러 코드** 표에 나오는 이름은 동일 이름의 `SupabaseFailCode` enum 멤버와 1:1 대응합니다(예: `SupabaseErrorCode.UserBanned` ↔ `SupabaseFailCode.UserBanned`). 카탈로그에 없는 동적 사유는 `Reason == SupabaseFailCode.Unknown`이며, 원문은 `ErrorCode` 문자열에서 확인합니다.
+각 함수 가이드의 **에러 코드** 표에 나오는 값은 `SupabaseReason` enum 멤버입니다. `result.Reason`으로 분기하세요. 카탈로그에 없는 동적 사유는 `Reason == SupabaseReason.Unknown`이며, 원문은 `ErrorCode` 문자열에서 확인합니다.
 
 **부가 정보** — 일부 실패는 추가 데이터를 함께 줍니다.
 
 ```csharp
-if (result.Reason == SupabaseFailCode.UserBanned)
+if (result.Reason == SupabaseReason.UserBanned)
     ShowBanScreen(result.BanInfo);   // 차단일 때만 채워짐
 ```
 
@@ -47,6 +47,6 @@ if (result.Reason == SupabaseFailCode.UserBanned)
 - [**인앱 결제**<br><small>IAP 생성 · 검증</small>](/guide/api/iap)
 - [**우편함**<br><small>목록 · 수령 · 삭제 · 분류</small>](/guide/api/mailbox)
 - [**기타**<br><small>서버 시간</small>](/guide/api/etc)
-- [**에러 코드**<br><small>SupabaseFailCode 카탈로그</small>](/guide/api/fail-reasons)
+- [**에러 코드**<br><small>SupabaseReason 카탈로그</small>](/guide/api/fail-reasons)
 
 </div>

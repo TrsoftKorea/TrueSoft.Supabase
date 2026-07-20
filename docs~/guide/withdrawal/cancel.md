@@ -8,7 +8,7 @@ Task<SupabaseResult> Supabase.RedeemWithdrawalCancelAsync(string cancelToken = n
 
 ```csharp
 var login = await Supabase.TriggerAutoLoginAsync();
-if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
+if (login.Reason == SupabaseReason.WithdrawalGateBlocked)
 {
     // 남은 유예 시간 등을 보여주고, 사용자가 취소를 선택하면
     var cancel = await Supabase.RedeemWithdrawalCancelAsync(login.WithdrawalCancelToken);
@@ -27,8 +27,8 @@ if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
-| `SupabaseErrorCode.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
+| `SupabaseReason.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

@@ -25,14 +25,14 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
-| `SupabaseErrorCode.AppleSignInIosOnly` | iOS가 아닌 환경(에디터·Android) |
-| `SupabaseErrorCode.AnonymousRequired` | 익명 세션이 아닌 상태 |
-| `SupabaseErrorCode.AppleLinkFailed` | Apple 연동에 실패했습니다 |
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
+| `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경(에디터·Android) |
+| `SupabaseReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
+| `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 게스트 연동 · 커스텀](./link-token)을 사용하세요.

@@ -32,8 +32,8 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

@@ -32,12 +32,12 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.AnonymousRequired` | 익명 세션이 아닌 상태 |
-| `SupabaseErrorCode.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
-| `SupabaseErrorCode.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `SupabaseErrorCode.AppleLinkFailed` | Apple 연동에 실패했습니다 |
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
+| `SupabaseReason.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

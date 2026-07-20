@@ -4,7 +4,7 @@
 
 ```csharp
 var login = await Supabase.TriggerAutoLoginAsync();
-if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked && login.WithdrawnAt.HasValue)
+if (login.Reason == SupabaseReason.WithdrawalGateBlocked && login.WithdrawnAt.HasValue)
 {
     var now = (await Supabase.GetServerNowAsync()).Data;   // 서버 시각
     var remaining = login.WithdrawnAt.Value - now;   // 남은 시간

@@ -7,7 +7,7 @@ namespace TrueBase.Core.Common
     /// <summary>
     /// 로그인 결과. <see cref="SupabaseResult"/>를 상속하므로 성공 분기(암묵적 <c>bool</c>·<see cref="SupabaseResult.IsSuccess"/>)는
     /// 동일하고, 추가로 로그인 시 조회된 내 프로필을 <see cref="Profile"/>로 제공한다.
-    /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseFailCode.WithdrawalGateBlocked"/>)에는
+    /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseReason.WithdrawalGateBlocked"/>)에는
     /// 삭제 예정 시각(<see cref="WithdrawnAt"/>)과 비로그인 취소 토큰(<see cref="WithdrawalCancelToken"/>)이 채워진다.
     /// <para>
     /// <c>var r = await Supabase.SignInAnonymouslyAsync(); if (r.IsSuccess) { var name = r.Profile.Name; }</c> 형태로 사용한다.
@@ -19,7 +19,7 @@ namespace TrueBase.Core.Common
         public PublicProfile Profile { get; }
 
         /// <summary>
-        /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseFailCode.WithdrawalGateBlocked"/>)의 삭제 예정 시각. 그 외에는 null.
+        /// 탈퇴 예약으로 로그인이 막힌 경우(<see cref="SupabaseReason.WithdrawalGateBlocked"/>)의 삭제 예정 시각. 그 외에는 null.
         /// 남은 시간은 <c>Supabase.GetServerNowAsync()</c>의 서버 시각과 비교해 계산한다.
         /// </summary>
         public DateTimeOffset? WithdrawnAt { get; }

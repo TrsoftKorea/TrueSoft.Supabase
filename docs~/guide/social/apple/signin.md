@@ -30,13 +30,13 @@ Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
-| `SupabaseErrorCode.AppleSignInUnsupportedPlatform` | 에디터 등 미지원 환경 (iOS·Android 실기기 빌드에서 동작) |
-| `SupabaseErrorCode.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link)을 사용 |
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
+| `SupabaseReason.AppleSignInUnsupportedPlatform` | 에디터 등 미지원 환경 (iOS·Android 실기기 빌드에서 동작) |
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link)을 사용 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 신규 로그인 · 커스텀](./signin-token)을 사용하세요.

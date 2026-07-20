@@ -26,11 +26,11 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
-| `SupabaseErrorCode.GoogleSignInFailed` | Play Services 오류 |
-| `SupabaseErrorCode.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
+| `SupabaseReason.GoogleSignInFailed` | Play Services 오류 |
+| `SupabaseReason.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

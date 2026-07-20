@@ -20,9 +20,9 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.UserSaveDeleteFailed` | 삭제 실패 (네트워크 오류 등) |
+| `SupabaseReason.UserSaveDeleteFailed` | 삭제 실패 (네트워크 오류 등) |
 
 ::: warning 탈퇴가 아닙니다
 계정은 그대로 두고 세이브 데이터만 비웁니다. 계정 자체를 없애려면 [탈퇴 신청](/guide/withdrawal/submit)을 사용하세요.

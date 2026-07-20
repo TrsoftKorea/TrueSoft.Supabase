@@ -12,11 +12,11 @@ namespace TrueBase.Core.Common
         public bool IsSuccess { get; }
 
         /// <summary>
-        /// 실패 사유의 enum 코드(성공 시 <see cref="SupabaseFailCode.None"/>).
-        /// <c>if (result.Reason == SupabaseFailCode.UserBanned)</c>처럼 타입 안전하게 분기한다.
-        /// 카탈로그에 없는 동적 사유는 <see cref="SupabaseFailCode.Unknown"/>이며, 원문은 <see cref="ErrorCode"/>에서 확인한다.
+        /// 실패 사유의 enum 코드(성공 시 <see cref="SupabaseReason.None"/>).
+        /// <c>if (result.Reason == SupabaseReason.UserBanned)</c>처럼 타입 안전하게 분기한다.
+        /// 카탈로그에 없는 동적 사유는 <see cref="SupabaseReason.Unknown"/>이며, 원문은 <see cref="ErrorCode"/>에서 확인한다.
         /// </summary>
-        public SupabaseFailCode Reason => SupabaseFailCodeMap.FromErrorCode(ErrorCode);
+        public SupabaseReason Reason => SupabaseReasonMap.FromErrorCode(ErrorCode);
 
         /// <summary>
         /// 실패 사유 원문 문자열(성공 시 null). 동적 사유(예외 메시지·서버 RPC reason 등)를 포함한 전체 문자열이다.

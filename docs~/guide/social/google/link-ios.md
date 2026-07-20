@@ -31,12 +31,12 @@ else
 
 **에러 코드**
 
-| ErrorCode | 설명 |
+| Reason | 설명 |
 |--------|------|
-| `SupabaseErrorCode.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
-| `SupabaseErrorCode.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
-| `SupabaseErrorCode.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `SupabaseErrorCode.GoogleLinkFailed` | Supabase identity 연동 실패 |
-| `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 |
-| `SupabaseErrorCode.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
+| `SupabaseReason.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
+| `SupabaseReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
+| `SupabaseReason.GoogleLinkFailed` | Supabase identity 연동 실패 |
+| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

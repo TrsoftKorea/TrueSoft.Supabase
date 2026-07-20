@@ -161,7 +161,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var ok = await Supabase.UnlinkGoogleAsync();
         if (!ok)
         {
-            if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
+            if (ok.Reason == SupabaseReason.CannotUnlinkLastIdentity)
                 Debug.LogWarning("[Supabase] Google 연동 해제 실패: 마지막 남은 연동은 해제할 수 없습니다. 다른 연동을 먼저 추가하세요.");
             else
                 Debug.LogWarning($"[Supabase] Google 연동 해제 실패: {ok.ErrorCode}");
@@ -184,7 +184,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         var ok = await Supabase.UnlinkAppleAsync();
         if (!ok)
         {
-            if (ok.Reason == SupabaseFailCode.CannotUnlinkLastIdentity)
+            if (ok.Reason == SupabaseReason.CannotUnlinkLastIdentity)
                 Debug.LogWarning("[Supabase] Apple 연동 해제 실패: 마지막 남은 연동은 해제할 수 없습니다. 다른 연동을 먼저 추가하세요.");
             else
                 Debug.LogWarning($"[Supabase] Apple 연동 해제 실패: {ok.ErrorCode}");

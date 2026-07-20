@@ -1,15 +1,21 @@
+using System.Runtime.CompilerServices;
+
+// Core 내부 심볼(SupabaseErrorCode 등)을 SDK Unity 계층에만 노출한다. 게임 어셈블리에는 비공개.
+[assembly: InternalsVisibleTo("TrueBase.Unity")]
+[assembly: InternalsVisibleTo("TrueBase.Unity.IAP")]
+
 namespace TrueBase.Core.Common
 {
     /// <summary>
-    /// <see cref="SupabaseResult.ErrorCode"/>에서 자주 분기하는 케이스의 문자열 상수 모음.
-    /// 목록에 없는 값은 실제 <see cref="TrueBase.Core.Common.SupabaseResult.ErrorCode"/> 문자열과 직접 비교할 수 있습니다.
+    /// 에러 코드 문자열 카탈로그. <b>SDK 내부 전용</b>(<c>internal</c>) — SDK가 <c>.Fail(...)</c> 방출과
+    /// <see cref="SupabaseReasonMap.FromErrorCode"/> 매핑에 사용합니다.
     /// <para>
-    /// 대개는 이 문자열 대신 <see cref="TrueBase.Core.Common.SupabaseResult.Reason"/>(<see cref="TrueBase.Core.Common.SupabaseFailCode"/> enum)으로
-    /// 타입 안전하게 분기하는 것을 권장합니다
-    /// (예: <c>result.Reason == SupabaseFailCode.UserBanned</c>). 각 상수는 같은 이름의 enum 멤버와 1:1 대응합니다.
+    /// 게임 코드는 이 문자열 대신 <see cref="SupabaseResult.Reason"/>(<see cref="SupabaseReason"/> enum)으로
+    /// 분기하세요(예: <c>result.Reason == SupabaseReason.UserBanned</c>). 각 상수는 같은 이름의 enum 멤버와 1:1 대응합니다.
+    /// 실패 원문이 필요하면 <see cref="SupabaseResult.ErrorCode"/> 문자열을 읽습니다.
     /// </para>
     /// </summary>
-    public static class SupabaseErrorCode
+    internal static class SupabaseErrorCode
     {
         /// <summary>SDK가 초기화되지 않았습니다.</summary>
         public const string NotInitialized = "sdk_not_initialized";

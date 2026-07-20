@@ -67,7 +67,7 @@ The SDK has three layers:
 - **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`로 분기)
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
-실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseFailCode` enum, `Runtime/Core/Models/SupabaseFailCode.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseFailCodeMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseFailCode` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseFailCode` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseFailCode.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
+실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseReason` enum, `Runtime/Core/Models/SupabaseReason.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseReasonMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseReason` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). **`SupabaseErrorCode` 상수는 `internal`(SDK 전용)** — 게임은 `SupabaseReason` enum(`.Reason`)으로만 분기하고, 실패 원문은 `.ErrorCode` 문자열로 읽는다. Core 밖 SDK 계층(TrueBase.Unity·TrueBase.Unity.IAP)은 `InternalsVisibleTo`로 `SupabaseErrorCode`에 접근한다(`Runtime/Core/Models/SupabaseErrorCode.cs` 상단). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseReason` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseReason.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
 
 **bare value(`Task<string>`·`T`·리스트 원본 등)를 직접 반환하지 않는다. 공개 메서드에 `Try` 접두어를 쓰지 않는다.** 호출자가 성공/실패와 "결과 0개 vs 조회 실패"를 항상 구분할 수 있어야 한다.
 
@@ -324,9 +324,9 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 
 **에러 코드**  ← 의미 있는 에러 코드가 없으면 생략
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
-| `SupabaseErrorCode.상수명` | 설명 (상수가 있으면 우선 사용, 없으면 raw 문자열) |
+| `SupabaseReason.멤버명` | 설명 |
 ```
 
 | 항목 | 규칙 |
@@ -335,7 +335,7 @@ When a signature changes, update **all** matching examples in `docs~/guide/`.
 | 시그니처 | `Supabase.`(또는 `SupabaseIAP.`) 접두어 사용. 항상 포함, 수식어(`public`/`static`/`async`) 제외 |
 | 파라미터 표 | 타입 열 없이 2열. `(기본값: x)` 표기 포함 |
 | 반환 표 | `isSuccess` / `Success` 생략. 직접 반환 타입이나 `.Data` 프로퍼티만 기술 |
-| 에러 코드 | `SupabaseErrorCode` 상수 우선, 없으면 raw 문자열. 게임은 동일 이름의 `SupabaseFailCode` enum(`.Reason`)으로 분기 |
+| 에러 코드 | 표에 `SupabaseReason` enum 멤버를 나열(게임은 `.Reason`으로 분기). 문자열 카탈로그 `SupabaseErrorCode`는 internal이라 게임 문서에 노출하지 않는다 |
 
 ### 10. H1 아래 본문에는 반드시 H2를 붙인다
 
