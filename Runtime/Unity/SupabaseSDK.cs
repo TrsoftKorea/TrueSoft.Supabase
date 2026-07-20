@@ -202,28 +202,22 @@ namespace TrueBase.Unity
             public const string AuthAppleIdToken = "Supabase.Auth.Apple.IdToken";
             public const string AuthAnonymous = "Supabase.Auth.Anonymous";
             public const string AuthSignOut = "Supabase.Auth.SignOut";
-            public const string AuthGoogleSignOut = "Supabase.Auth.Google.SignOut";
             public const string AuthGoogleRevoke  = "Supabase.Auth.Google.Revoke";
             public const string AuthGoogleUnlink  = "Supabase.Auth.Google.Unlink";
             public const string AuthAppleUnlink   = "Supabase.Auth.Apple.Unlink";
             public const string AuthRefreshSession = "Supabase.Auth.RefreshSession";
-            public const string UserDataLoadAttributed = "Supabase.UserData.LoadAttributed";
             public const string UserDataLoadAttributedRowState = "Supabase.UserData.LoadAttributed.RowState";
-            public const string UserDataLoadColumnsRowState = "Supabase.UserData.LoadColumns.RowState";
             public const string UserDataPatchDiff = "Supabase.UserData.PatchDiff";
             public const string UserDataDelete = "Supabase.UserData.Delete";
-            public const string RemoteConfigGet = "Supabase.RemoteConfig.Get";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
             public const string ProfilePublicNameGet = "Supabase.Profile.Name.Get";
             public const string ProfileMyNameSet = "Supabase.Profile.Name.Set";
             public const string ProfileNameAvailable = "Supabase.Profile.Name.Available";
             public const string ProfileMyServerGet = "Supabase.Profile.Server.Get";
-            public const string ProfileServerTransfer = "Supabase.Profile.Server.Transfer";
             public const string ProfileSnapshotGet = "Supabase.Profile.Snapshot.Get";
             public const string ProfileWithdrawnAt = "Supabase.Profile.WithdrawnAt";
             public const string ProfileWithdrawnRequest = "Supabase.Profile.Withdrawn.Request";
             public const string ProfileWithdrawalStatus = "Supabase.Profile.Withdrawal.Status";
-            public const string ProfileWithdrawalCancelIssue = "Supabase.Profile.Withdrawal.Cancel.Issue";
             public const string ProfileWithdrawalCancelRedeem = "Supabase.Profile.Withdrawal.Cancel.Redeem";
             public const string ServerTime = "Supabase.Server.Time";
             public const string MailboxList = "Supabase.Mailbox.List";
@@ -1217,13 +1211,6 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthRefreshSession, r);
         }
 
-        /// <inheritdoc cref="LoadUserDataAttributedAsync{T}(bool)"/>
-        public static async Task<T> TryLoadUserDataAttributedAsync<T>(T defaultValue = default, bool includeUpdatedAt = true) where T : class, new()
-        {
-            var r = await LoadUserDataAttributedAsync<T>(includeUpdatedAt);
-            return LogAndReturnData(ApiLogTags.UserDataLoadAttributed, r, defaultValue);
-        }
-
         /// <summary>
         /// <see cref="DataColumnAttribute"/> 기반 로드 결과에 <b>본인 행 존재 여부</b>(HTTP 200·빈 배열이면 <c>HasRow == false</c>)를 포함합니다.
         /// 인증/HTTP/파싱 실패는 <see cref="SupabaseResult{T}.IsSuccess"/>가 <c>false</c>입니다.
@@ -1248,41 +1235,6 @@ namespace TrueBase.Unity
             var r = await LoadUserDataAttributedWithRowStateAsync<T>(includeUpdatedAt);
             var ok = r != null && r.IsSuccess;
             LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorCode);
-            if (!ok)
-            {
-                var d = defaultWhenFailed ?? new T();
-                return (false, false, d);
-            }
-
-            return (true, r.Data.HasRow, r.Data.Row);
-        }
-
-        /// <summary>
-        /// 명시 <c>select</c> 컬럼 로드에 행 존재 여부를 포함합니다.
-        /// </summary>
-        public static async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataColumnsWithRowStateAsync<T>(
-            string tableName,
-            string selectColumnsCsv) where T : class, new()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseFailReason.SelectColumnsEmpty);
-
-            return await UserSaves.LoadColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
-        }
-
-        /// <inheritdoc cref="LoadUserDataColumnsWithRowStateAsync{T}(string, string)"/>
-        public static async Task<(bool success, bool hasRow, T row)> TryLoadUserDataColumnsWithRowStateAsync<T>(
-            string tableName,
-            string selectColumnsCsv,
-            T defaultWhenFailed = default) where T : class, new()
-        {
-            var r = await LoadUserDataColumnsWithRowStateAsync<T>(tableName, selectColumnsCsv);
-            var ok = r != null && r.IsSuccess;
-            LogApiResult(ApiLogTags.UserDataLoadColumnsRowState, ok, ok ? null : r?.ErrorCode);
             if (!ok)
             {
                 var d = defaultWhenFailed ?? new T();
@@ -1950,35 +1902,6 @@ namespace TrueBase.Unity
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
             return await UserSaves.PatchAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
-        }
-
-        /// <summary>
-        /// 프로젝트별 명시 컬럼을 select로 지정해 유저 데이터를 로드합니다.
-        /// </summary>
-        public static async Task<SupabaseResult<T>> LoadUserDataColumnsAsync<T>(
-            string tableName,
-            string selectColumnsCsv) where T : class, new()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<T>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (string.IsNullOrWhiteSpace(selectColumnsCsv))
-                return SupabaseResult<T>.Fail(SupabaseFailReason.SelectColumnsEmpty);
-
-            return await UserSaves.LoadColumnsAsync<T>(tableName, selectColumnsCsv);
-        }
-
-        /// <summary>
-        /// <see cref="DataColumnAttribute"/>가 붙은 멤버로 <c>select</c> 목록을 만들고 로드합니다.
-        /// </summary>
-        public static async Task<SupabaseResult<T>> LoadUserDataAttributedAsync<T>(bool includeUpdatedAt = true) where T : class, new()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<T>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            return await UserSaves.LoadAttributedAsync<T>(includeUpdatedAt);
         }
 
         /// <summary>

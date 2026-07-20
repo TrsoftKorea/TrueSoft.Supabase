@@ -30,10 +30,6 @@ namespace TrueBase.Core.Data
             return string.Join(",", names);
         }
 
-        /// <summary>컬럼명 목록(중복 제거, 정렬).</summary>
-        public static IReadOnlyList<string> GetColumnNames<T>(bool includeUpdatedAt = true) =>
-            GetColumnNames(typeof(T), includeUpdatedAt);
-
         private static List<string> GetColumnNames(Type t, bool includeUpdatedAt)
         {
             var set = new HashSet<string>(StringComparer.Ordinal);

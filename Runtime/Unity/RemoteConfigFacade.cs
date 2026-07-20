@@ -114,30 +114,6 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 네트워크 없이 캐시에서 동기 조회 후 역직렬화합니다.
-        /// 캐시에 없거나 객체 루트 JSON이 아니거나 역직렬화에 실패하면 <paramref name="defaultValue"/>를 반환합니다.
-        /// </summary>
-        public T Get<T>(string key, T defaultValue = default)
-        {
-            if (string.IsNullOrWhiteSpace(key) ||
-                _cache.TryGetValue(key.Trim(), out var json) == false ||
-                string.IsNullOrWhiteSpace(json))
-                return defaultValue;
-
-            try
-            {
-                if (IsObjectRootJson(json) == false)
-                    return defaultValue;
-
-                return JsonConvert.DeserializeObject<T>(json);
-            }
-            catch
-            {
-                return defaultValue;
-            }
-        }
-
-        /// <summary>
         /// Cold Start 패턴: 캐시에 없으면 키 단위로 fetch합니다.
         /// 폴링이 활성화된 키는 읽기 시 stale 체크를 건너뜁니다(폴링이 갱신 담당).
         /// 폴링이 없는 키는 Stale-While-Revalidate: <paramref name="maxStale"/> 초과 시 백그라운드 갱신을 트리거합니다(기본 300초).

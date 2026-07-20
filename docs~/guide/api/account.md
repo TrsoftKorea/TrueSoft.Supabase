@@ -22,9 +22,8 @@
 | [`RequestWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 (유예 기간) |
 | [`RedeemWithdrawalCancelAsync`](/guide/withdrawal/cancel) | 탈퇴 취소 |
 
-## 서버 이주
+## 서버 정보
 
 | 메서드 | 설명 |
 |--------|------|
-| [`TransferServerAsync`](/guide/withdrawal/server-transfer) | 다른 서버로 이주 |
-| [`GetServerInfoAsync`](/guide/withdrawal/server-transfer) | 내 서버 정보 조회 |
+| [`GetServerInfoAsync`](/guide/withdrawal/server-info) | 내 서버 정보 조회 |

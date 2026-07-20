@@ -184,25 +184,6 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 명시 컬럼만 select해 본인 행을 로드합니다. 행이 없으면 <c>new T()</c>를 반환합니다(행 존재 여부가 필요하면 <see cref="LoadColumnsWithRowStateAsync{T}"/>).
-        /// </summary>
-        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 행 필터에 사용. 필수.</param>
-        /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
-        /// <param name="selectColumnsCsv">조회할 컬럼 CSV(예: <c>"gold,level,updated_at"</c>). 필수.</param>
-        public async Task<SupabaseResult<T>> LoadColumnsAsync<T>(
-            string accessToken,
-            string accountId,
-            string tableName,
-            string selectColumnsCsv) where T : class, new()
-        {
-            var r = await LoadColumnsWithRowStateAsync<T>(accessToken, accountId, tableName, selectColumnsCsv);
-            if (!r.IsSuccess)
-                return SupabaseResult<T>.Fail(r.ErrorCode ?? "load_failed");
-            return SupabaseResult<T>.Success(r.Data.Row);
-        }
-
-        /// <summary>
         /// 본인 행 존재 여부(<see cref="DataColumnsLoadResult{T}.HasRow"/>)와 함께 로드합니다. 신규 유저(행 없음)와 인증 실패를 구분할 수 있습니다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
@@ -261,32 +242,6 @@ namespace TrueBase.Core.Data
             {
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail("load_parse_failed:" + e.Message);
             }
-        }
-
-        /// <summary>
-        /// <see cref="DataColumnAttribute"/>로 표시한 컬럼만 모아 <c>select</c> 후 로드합니다. 테이블명은 <see cref="DataSchema.ResolveTableName{T}"/>로 결정됩니다.
-        /// </summary>
-        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
-        /// <param name="includeUpdatedAt"><c>updated_at</c> 컬럼을 select에 포함할지(기본값: true).</param>
-        public async Task<SupabaseResult<T>> LoadAttributedAsync<T>(
-            string accessToken,
-            string accountId,
-            bool includeUpdatedAt = true) where T : class, new()
-        {
-            string tableName;
-            string csv;
-            try
-            {
-                tableName = DataSchema.ResolveTableName<T>();
-                csv = DataSchema.GetSelectColumnsCsv<T>(includeUpdatedAt);
-            }
-            catch (Exception e)
-            {
-                return SupabaseResult<T>.Fail("data_schema_invalid:" + e.Message);
-            }
-
-            return await LoadColumnsAsync<T>(accessToken, accountId, tableName, csv);
         }
 
         /// <inheritdoc cref="LoadColumnsWithRowStateAsync{T}(string, string, string, string)"/>

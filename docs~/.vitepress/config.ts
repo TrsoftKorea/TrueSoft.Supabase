@@ -119,7 +119,7 @@ export default defineConfig({
               { text: '탈퇴 취소', link: '/guide/withdrawal/cancel' }
             ]
           },
-          { text: '서버 이주', link: '/guide/withdrawal/server-transfer' }
+          { text: '서버 정보', link: '/guide/withdrawal/server-info' }
         ]
       },
       {

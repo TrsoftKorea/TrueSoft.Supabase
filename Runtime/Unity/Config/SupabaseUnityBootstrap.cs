@@ -89,7 +89,6 @@ namespace TrueBase.Unity.Config
                 http,
                 json,
                 "user_profiles",
-                displayNamesTable: "display_names",
                 defaultServerCode: options.DefaultServerCode);
 
             EdgeFunctionsService = new SupabaseEdgeFunctionsService(
