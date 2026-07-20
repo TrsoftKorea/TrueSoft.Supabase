@@ -249,7 +249,7 @@ export default defineConfig({
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '우편함', link: '/guide/api/mailbox' },
           { text: '기타', link: '/guide/api/etc' },
-          { text: '에러 코드 전체', link: '/guide/api/fail-reasons' }
+          { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]
       },
       {
