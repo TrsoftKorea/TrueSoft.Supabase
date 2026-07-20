@@ -253,7 +253,7 @@ If the target heading contains Korean, add an explicit anchor ID to the heading 
 
 `package.json`의 `samples[].displayName`은 영어만 사용한다. 한글 단독 또는 한영 혼용 이름은 금지. 예: `"PlayNANOO Migration"` (O), `"PlayNANOO 이관"` (X).
 
-### 7. No parenthetical asides in headings, tables, or steps
+### 7. No parenthetical asides in headings, tables, steps, or prose
 
 Do **not** append parenthetical clarifications to headings, table cells, or numbered steps.
 
@@ -262,7 +262,12 @@ Do **not** append parenthetical clarifications to headings, table cells, or numb
 
 If the information matters, state it as a separate sentence or callout box. If it doesn't, omit it.
 
-예외: 파라미터 표의 `(기본값: x)`처럼 **값을 정의하는 표준 표기**는 아사이드가 아니므로 허용한다(Rule 8·9).
+**산문 본문에서도 쓸데없는 부연 괄호를 쓰지 않는다.** 값·타입·이유를 괄호로 덧붙이지 말고, 인라인으로 풀거나 중요하면 별도 문장으로 쓴다.
+
+- ❌ `삭제 예정 시각(DateTimeOffset)`, `탈퇴가 완료(계정 삭제)되면`, `로그인 없이 호출됩니다(publishable 키)`, `삭제 예정 시각(WithdrawnAt)`
+- ✅ `삭제 예정 시각`, `탈퇴가 완료되어 계정이 삭제되면`, `로그인 없이 호출됩니다`, `삭제 예정 시각 WithdrawnAt`
+
+예외: 코드 식·마크다운 링크(`(./cancel)`)·파라미터 표의 `(기본값: x)`처럼 **문법·표준 표기**는 아사이드가 아니므로 허용한다(Rule 8·9).
 
 하위 유형을 구분할 땐 **괄호도 em-dash(`—`)도 쓰지 않고 가운뎃점(`·`)**을 쓴다. 헤딩·사이드바 항목·표 라벨 모두 동일.
 

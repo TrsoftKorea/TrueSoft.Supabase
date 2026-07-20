@@ -6,7 +6,7 @@
 var login = await Supabase.TriggerAutoLoginAsync();
 if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked && login.WithdrawnAt.HasValue)
 {
-    var now = (await Supabase.GetServerNowAsync()).Data;   // 서버 시각(DateTimeOffset)
+    var now = (await Supabase.GetServerNowAsync()).Data;   // 서버 시각
     var remaining = login.WithdrawnAt.Value - now;   // 남은 시간
     ShowWithdrawalBanner(remaining);
 }
@@ -20,5 +20,5 @@ if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked && login.WithdrawnAt.
 | `.WithdrawalCancelToken` | `string` | 비로그인 취소 토큰. [탈퇴 취소](./cancel)에서 사용 |
 
 ::: info
-남은 시간은 기기 시계가 아니라 **서버 시각 기준**으로 계산해야 정확합니다. `GetServerNowAsync()`는 로그인 없이도 호출됩니다(publishable 키).
+남은 시간은 기기 시계가 아니라 **서버 시각 기준**으로 계산해야 정확합니다. `GetServerNowAsync()`는 로그인 없이도 호출됩니다.
 :::

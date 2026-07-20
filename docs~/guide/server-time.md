@@ -16,4 +16,4 @@ if (t.Data < eventEndUtc)
 
 **반환**
 
-`.Data`에 서버 기준 `DateTimeOffset`(UTC)이 담깁니다. 조회 실패 시 `.IsSuccess`가 `false`입니다.
+`.Data`에 서버 기준 UTC 시각이 `DateTimeOffset`으로 담깁니다. 조회 실패 시 `.IsSuccess`가 `false`입니다.
