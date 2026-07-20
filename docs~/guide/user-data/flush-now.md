@@ -18,6 +18,6 @@ await PlayerSave.FlushNowAsync();   // 전송 완료까지 대기
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.UserSaveFlushFailed` | 전송 실패 또는 타임아웃 |

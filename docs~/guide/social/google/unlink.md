@@ -8,7 +8,7 @@ Task<SupabaseResult> Supabase.UnlinkGoogleAsync()
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다. |
 | `SupabaseErrorCode.IdentityNotLinked` | Google이 현재 계정에 연동되어 있지 않습니다. |

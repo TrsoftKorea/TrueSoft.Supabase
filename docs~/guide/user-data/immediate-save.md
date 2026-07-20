@@ -26,7 +26,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
 

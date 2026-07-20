@@ -15,7 +15,7 @@ DB에 기록된 내 서버(`profiles.server_id`)에 대응하는 서버 코드�
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseErrorCode.NotInitialized` | SDK가 초기화되지 않았습니다 |

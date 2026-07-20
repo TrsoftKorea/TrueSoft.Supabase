@@ -31,7 +31,7 @@ var iap = result.Data;
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.IapProductIdsEmpty` | `productIds`가 비어 있음 |
 | `SupabaseErrorCode.IapServicesInitFailed` | Unity Services 초기화 실패 |

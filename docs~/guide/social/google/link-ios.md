@@ -31,7 +31,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
 | `SupabaseErrorCode.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |

@@ -24,7 +24,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 |
 | `SupabaseErrorCode.GoogleSignInFailed` | Play Services 오류 |

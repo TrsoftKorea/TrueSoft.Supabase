@@ -30,7 +30,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.NameTaken` | 이미 사용 중인 닉네임 |
 | `SupabaseErrorCode.NameTooLong` | 허용 길이 초과 |

@@ -27,7 +27,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseErrorCode.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |

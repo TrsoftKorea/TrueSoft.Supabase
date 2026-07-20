@@ -12,6 +12,6 @@ PlayerSave.RequestImmediateSave();   // 완료를 기다리지 않음
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.UserSaveFlushFailed` | 전송 요청 실패 |

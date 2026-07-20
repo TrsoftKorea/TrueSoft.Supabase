@@ -25,7 +25,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
 | `SupabaseErrorCode.AppleSignInIosOnly` | iOS가 아닌 환경(에디터·Android) |

@@ -30,6 +30,6 @@ if (result.IsSuccess)
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.NotSignedIn` | 로그인 상태가 아닙니다 |

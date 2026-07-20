@@ -20,7 +20,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.UserSaveDeleteFailed` | 삭제 실패 (네트워크 오류 등) |
 

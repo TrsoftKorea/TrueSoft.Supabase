@@ -32,7 +32,7 @@ else
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.AnonymousRequired` | 익명 세션이 아닌 상태 |
 | `SupabaseErrorCode.AppleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |

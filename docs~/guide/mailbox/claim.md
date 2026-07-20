@@ -33,7 +33,7 @@ if (result.IsSuccess)
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `mail_item_handler_missing:<key>` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 처리 전 검증되어 서버 상태는 바뀌지 않습니다 |
 | `mail_expired` | 만료된 우편입니다 |

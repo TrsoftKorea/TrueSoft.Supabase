@@ -27,7 +27,7 @@ if (login.Reason == SupabaseFailCode.WithdrawalGateBlocked)
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
 | `SupabaseErrorCode.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |

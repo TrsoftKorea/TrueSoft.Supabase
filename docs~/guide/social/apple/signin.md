@@ -30,7 +30,7 @@ Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs
 
 **에러 코드**
 
-| Reason | 설명 |
+| ErrorCode | 설명 |
 |--------|------|
 | `SupabaseErrorCode.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
 | `SupabaseErrorCode.AppleSignInUnsupportedPlatform` | 에디터 등 미지원 환경 (iOS·Android 실기기 빌드에서 동작) |
