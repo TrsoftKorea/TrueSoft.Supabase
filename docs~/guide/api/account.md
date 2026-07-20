@@ -19,11 +19,9 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`RequestMyWithdrawalAsync`](/guide/withdrawal/request/submit) | 탈퇴 예약 (유예 기간) |
-| [`GetMyWithdrawalStatusAsync`](/guide/withdrawal/request/status) | 탈퇴 예약 상태 조회 |
-| [`ClearMyWithdrawalAsync`](/guide/withdrawal/request/cancel) | 탈퇴 예약 취소 |
-| [`RequestWithdrawalCancelTokenAsync`](/guide/withdrawal/token/issue) | 탈퇴 취소 토큰 발급 |
-| [`RedeemWithdrawalCancelAsync`](/guide/withdrawal/token/redeem) | 토큰으로 탈퇴 취소 |
+| [`RequestMyWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 (유예 기간) |
+| [`GetMyWithdrawalStatusAsync`](/guide/withdrawal/status) | 탈퇴 예약 상태 조회 |
+| [`RedeemWithdrawalCancelAsync`](/guide/withdrawal/cancel) | 탈퇴 취소 |
 
 ## 서버 이주
 

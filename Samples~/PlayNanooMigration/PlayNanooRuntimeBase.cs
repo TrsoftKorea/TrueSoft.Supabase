@@ -63,14 +63,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 이벤트 ───────────────────────────────────────────────────────────────
 
-    /// <summary>로그인 시 탈퇴 신청 계정이 감지됨. withdrawalKey를 받아 복구 여부를 결정하세요.</summary>
+    /// <summary>로그인 시 탈퇴 예약 계정이 감지됨. withdrawalKey를 받아 예약 취소 여부를 결정하세요.</summary>
     public event Action<string> OnWithdrawalPending;
 
     /// <summary>탈퇴 취소 완료. Google·Apple은 재인증 UI를 표시하고 로그인을 다시 호출하세요.</summary>
-    public event Action OnWithdrawalRestored;
+    public event Action OnWithdrawalCancelled;
 
     /// <summary>탈퇴 취소는 성공했지만 Supabase 재로그인에 실패. 개발자가 직접 재로그인 호출.</summary>
-    public event Action OnWithdrawalRestoreLoginFailed;
+    public event Action OnWithdrawalCancelLoginFailed;
 
     // ── 추상 메서드 (PlayNANOO SDK 버전별 구현) ────────────────────────────────
 
@@ -525,10 +525,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>
     /// 탈퇴 취소. OnWithdrawalPending에서 받은 withdrawalKey를 사용합니다.
-    /// 게스트: 자동 재로그인 후 Supabase withdrawn_at도 해제 / Google·Apple: OnWithdrawalRestored 이벤트 후 개발자가 재인증 UI 표시.
-    /// 게스트 재로그인 실패 시 OnWithdrawalRestoreLoginFailed가 발행됩니다.
+    /// 게스트: 자동 재로그인 후 Supabase withdrawn_at도 해제 / Google·Apple: OnWithdrawalCancelled 이벤트 후 개발자가 재인증 UI 표시.
+    /// 게스트 재로그인 실패 시 OnWithdrawalCancelLoginFailed가 발행됩니다.
     /// </summary>
-    public void RestoreWithdrawal(string withdrawalKey)
+    public void CancelWithdrawal(string withdrawalKey)
     {
         NanooWithDrawalRestore(withdrawalKey, async status =>
         {
@@ -536,16 +536,16 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             if (_pendingLoginType == "guest")
             {
                 var result = await Supabase.SignInAnonymouslyAsync();
-                if (!result.IsSuccess) { OnWithdrawalRestoreLoginFailed?.Invoke(); }
+                if (!result.IsSuccess) { OnWithdrawalCancelLoginFailed?.Invoke(); }
                 else                 { await Supabase.ClearMyWithdrawalAsync(); }
             }
             else
             {
                 var redeemResult = await Supabase.RedeemWithdrawalCancelAsync();
                 if (redeemResult.IsSuccess)
-                    OnWithdrawalRestored?.Invoke();
+                    OnWithdrawalCancelled?.Invoke();
                 else
-                    OnWithdrawalRestoreLoginFailed?.Invoke();
+                    OnWithdrawalCancelLoginFailed?.Invoke();
             }
             _pendingLoginType = null;
         });
@@ -584,9 +584,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         if (!success) return false;
         var storedToken = PlayerPrefs.GetString(NanooAccessTokenKey, null);
-        if (string.IsNullOrEmpty(storedToken)) return true;
 
-        var nanooOk = await RestoreNanooSessionAsync(storedToken);
+        // PlayNANOO 세션을 복원할 수 없으면(토큰 없음 또는 복원 실패) UserId/OpenId가 비어,
+        // 이 상태로 자동 로그인을 성공 처리하면 게임이 빈 정체성으로 초기화에 진입합니다.
+        // 두 세션을 lockstep으로 유지하기 위해 Supabase 세션까지 정리하고 실패를 반환 →
+        // 게임은 자동 로그인 실패로 받아 명시 로그인(게스트/소셜)으로 유도합니다.
+        var nanooOk = !string.IsNullOrEmpty(storedToken)
+                      && await RestoreNanooSessionAsync(storedToken);
+
         if (!nanooOk)
             await Supabase.SignOutFullyAsync();
         return nanooOk;

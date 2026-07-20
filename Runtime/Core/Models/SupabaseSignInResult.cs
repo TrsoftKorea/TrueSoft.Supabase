@@ -12,7 +12,7 @@ namespace TrueBase.Core.Common
     /// </summary>
     public sealed class SupabaseSignInResult : SupabaseResult
     {
-        /// <summary>로그인 시 조회된 내 프로필. 실패 시 null.</summary>
+        /// <summary>로그인 시 조회된 내 프로필. 실패 시에는 빈 프로필(<see cref="PublicProfile.Empty"/>)이라 null이 아니며, 안전하게 접근할 수 있다.</summary>
         public PublicProfile Profile { get; }
 
         private SupabaseSignInResult(bool isSuccess, PublicProfile profile, string errorCode, SupabaseBanInfo banInfo)
@@ -30,7 +30,7 @@ namespace TrueBase.Core.Common
         /// <param name="errorCode">실패 사유 원문 문자열.</param>
         /// <param name="banInfo">차단(<c>user_banned</c>) 실패인 경우의 차단 정보.</param>
         public static new SupabaseSignInResult Fail(string errorCode, SupabaseBanInfo banInfo = null)
-            => new SupabaseSignInResult(false, null, errorCode, banInfo);
+            => new SupabaseSignInResult(false, PublicProfile.Empty, errorCode, banInfo);
 
         /// <summary><see cref="SupabaseResult.IsSuccess"/>로의 암묵적 변환.</summary>
         public static implicit operator bool(SupabaseSignInResult r) => r != null && r.IsSuccess;

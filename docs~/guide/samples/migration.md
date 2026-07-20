@@ -7,7 +7,7 @@
 - 게스트·Google·Apple 로그인
 - 익명 계정 → Google·Apple 연동
 - 로그아웃, 탈퇴 예약
-- 탈퇴 복구 (`OnWithdrawalPending` · `OnWithdrawalRestored` 이벤트)
+- 탈퇴 예약 취소 (`OnWithdrawalPending` · `OnWithdrawalCancelled` 이벤트)
 - `updated_at` 기반 PlayNANOO ↔ SDK 데이터 동기화
 
 자세한 사용법은 [이관 개요](/guide/migration/how-it-works)를 참고하세요.

@@ -111,21 +111,12 @@ export default defineConfig({
           { text: '공개 프로필', link: '/guide/display-name/profile' },
           {
             text: '탈퇴 처리',
-            link: '/guide/withdrawal/request/',
+            link: '/guide/withdrawal/',
             collapsed: true,
             items: [
-              { text: '탈퇴 신청', link: '/guide/withdrawal/request/submit' },
-              { text: '예약 상태 확인', link: '/guide/withdrawal/request/status' },
-              { text: '예약 취소', link: '/guide/withdrawal/request/cancel' }
-            ]
-          },
-          {
-            text: '탈퇴 취소 · 토큰',
-            link: '/guide/withdrawal/token/',
-            collapsed: true,
-            items: [
-              { text: '취소 토큰 발급', link: '/guide/withdrawal/token/issue' },
-              { text: '취소 토큰 사용', link: '/guide/withdrawal/token/redeem' }
+              { text: '탈퇴 신청', link: '/guide/withdrawal/submit' },
+              { text: '예약 상태 확인', link: '/guide/withdrawal/status' },
+              { text: '탈퇴 취소', link: '/guide/withdrawal/cancel' }
             ]
           },
           { text: '서버 이주', link: '/guide/withdrawal/server-transfer' }
@@ -240,7 +231,7 @@ export default defineConfig({
               { text: '설치', link: '/guide/migration/install' },
               { text: '로그인', link: '/guide/migration/login' },
               { text: '로그아웃', link: '/guide/migration/logout' },
-              { text: '탈퇴 / 복구', link: '/guide/migration/withdrawal' },
+              { text: '탈퇴 예약 · 취소', link: '/guide/migration/withdrawal' },
               { text: '인앱 결제', link: '/guide/migration/iap' },
               { text: '데이터 동기화', link: '/guide/migration/sync' },
               { text: '플레이나누 제거 후', link: '/guide/migration/after' }
