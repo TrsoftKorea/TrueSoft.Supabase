@@ -17,8 +17,8 @@ type CancelTokenPayload = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
-const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY = secretKeys.default;
 const CANCEL_TOKEN_SECRET = Deno.env.get("CANCEL_TOKEN_SECRET")!;
 
 if (!CANCEL_TOKEN_SECRET) {
@@ -107,14 +107,16 @@ Deno.serve(async (req) => {
     );
   }
 
-  // ✅ 변경: service_role 제거, 사용자 JWT로 새 RPC 호출
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: authHeader } },
+  // 취소는 비로그인 상태에서 이뤄지므로 사용자 JWT가 없다.
+  // 토큰의 HMAC 서명이 이미 본인 인증을 대신하므로, 서명에서 얻은 sub(account_id)를
+  // secret key(RLS 우회)로 RPC에 넘겨 해당 계정의 탈퇴 예약을 해제한다.
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // ✅ 새 RPC: ts_withdrawal_cancel_redeem (JWT 기반, auth.uid() 사용)
-  const { data, error } = await supabase.rpc("ts_withdrawal_cancel_redeem");
+  const { data, error } = await adminClient.rpc("ts_withdrawal_cancel_redeem", {
+    p_account_id: payload.sub,
+  });
 
   if (error) {
     return new Response(

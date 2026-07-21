@@ -1404,7 +1404,7 @@ namespace TrueBase.Unity
         private static SupabaseResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
             return ok ? SupabaseResult.Ok
                       : SupabaseResult.Fail(result?.ErrorCode, result?.BanInfo);
         }
@@ -1413,7 +1413,7 @@ namespace TrueBase.Unity
         private static T LogAndReturnData<T>(string logTag, SupabaseResult<T> result, T defaultValue)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
             return ok ? result.Data : defaultValue;
         }
 
@@ -1421,8 +1421,18 @@ namespace TrueBase.Unity
         private static SupabaseResult<T> LogAndReturnResult<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode);
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
             return result ?? SupabaseResult<T>.Fail("null_result");
+        }
+
+        /// <summary>
+        /// 탈퇴 라이프사이클의 정상 결과인지 판별합니다(예약 게이트 차단·탈퇴 완료로 재로그인 필요).
+        /// 코드 오류가 아니라 기대된 분기이므로 <see cref="Debug.LogError"/> 대신 일반 로그로 남깁니다.
+        /// </summary>
+        private static bool IsExpectedWithdrawalReason(string errorCode)
+        {
+            return errorCode == SupabaseErrorCode.WithdrawalGateBlocked
+                || errorCode == SupabaseErrorCode.WithdrawalDeleted;
         }
 
         /// <summary>Try* API 결과를 <c>[logTag]</c> 접두어로 로그에 남깁니다. <see cref="_enableApiResultLogs"/>가 꺼져 있으면 무시합니다.</summary>
@@ -2176,7 +2186,6 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<bool>> RedeemWithdrawalCancelAsync(string cancelToken = null)
         {
-            Debug.LogWarning($"[WithdrawalTokenDebug] REDEEM 호출됨 (인자 토큰 있음={!string.IsNullOrWhiteSpace(cancelToken)})\n{System.Environment.StackTrace}");
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
 
@@ -2771,7 +2780,6 @@ namespace TrueBase.Unity
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var trigger = string.IsNullOrWhiteSpace(issueTrigger) ? "withdrawal_gate" : issueTrigger.Trim();
-            Debug.Log($"[WithdrawalTokenDebug] ISSUE 요청 (trigger={trigger})");
             var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<WithdrawalCancelIssueResponse>(
                 WithdrawalCancelIssueFunctionName,
                 accessToken,
@@ -2779,20 +2787,17 @@ namespace TrueBase.Unity
 
             if (result == null || !result.IsSuccess || result.Data == null)
             {
-                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패 (HTTP/응답 이상): errorCode={result?.ErrorCode}");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(result?.ErrorCode ?? "withdrawal_cancel_issue_failed");
             }
 
             if (!result.Data.ok)
             {
-                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패 (ok=false): reason={result.Data.reason}");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(
                     string.IsNullOrWhiteSpace(result.Data.reason) ? "withdrawal_cancel_issue_failed" : result.Data.reason);
             }
 
             if (string.IsNullOrWhiteSpace(result.Data.cancel_token))
             {
-                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패: 응답 cancel_token 비어있음");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseErrorCode.WithdrawalCancelTokenEmpty);
             }
 
@@ -2878,7 +2883,6 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(token))
                 return;
 
-            Debug.Log($"[WithdrawalTokenDebug] SAVE (len={token.Trim().Length})");
             PlayerPrefs.SetString(WithdrawalCancelTokenKey, token.Trim());
             if (string.IsNullOrWhiteSpace(expiresAtIso))
                 PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
@@ -2890,13 +2894,11 @@ namespace TrueBase.Unity
         internal static string ReadStoredWithdrawalCancelToken()
         {
             var token = PlayerPrefs.GetString(WithdrawalCancelTokenKey, null);
-            Debug.Log($"[WithdrawalTokenDebug] READ (empty={string.IsNullOrWhiteSpace(token)}, len={token?.Length ?? 0})");
             return string.IsNullOrWhiteSpace(token) ? null : token.Trim();
         }
 
         private static void ClearStoredWithdrawalCancelToken()
         {
-            Debug.LogWarning($"[WithdrawalTokenDebug] CLEAR — 누가 지웠는지 호출 스택:\n{System.Environment.StackTrace}");
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
             PlayerPrefs.Save();

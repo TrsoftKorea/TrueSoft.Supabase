@@ -274,30 +274,34 @@ alter table public.account_closures enable row level security;
 -- ---------------------------------------------------------------------------
 -- ts_withdrawal_cancel_redeem — 탈퇴 취소 RPC
 -- ---------------------------------------------------------------------------
--- withdrawal-cancel-redeem Edge Function이 사용자 JWT로 이 RPC를 호출합니다.
--- Edge Function이 cancel_token을 검증한 뒤 이 RPC를 호출하므로
--- RPC 자체는 auth.uid() 기반으로 탈퇴 예약만 취소합니다.
+-- 탈퇴 취소는 로그인하지 않은 상태에서 이뤄집니다(게이트가 세션을 이미 정리함).
+-- withdrawal-cancel-redeem Edge Function이 cancel_token의 HMAC 서명을 검증해
+-- 본인 인증을 대신하고, 서명에서 얻은 account_id를 secret key로 이 RPC에 넘깁니다.
+-- 따라서 auth.uid()에 의존하지 않고 파라미터로 대상 계정을 받습니다.
+-- 서명 검증은 Edge Function이 이미 수행하므로 이 함수는 service_role에게만 노출합니다.
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_withdrawal_cancel_redeem()
+drop function if exists public.ts_withdrawal_cancel_redeem();
+create or replace function public.ts_withdrawal_cancel_redeem(p_account_id uuid)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid          uuid;
   v_withdrawn_at timestamptz;
+  v_exists       boolean;
 begin
-  v_uid := auth.uid();
-  if v_uid is null then
-    return jsonb_build_object('ok', false, 'reason', 'not_authenticated');
+  if p_account_id is null then
+    return jsonb_build_object('ok', false, 'reason', 'account_id_null');
   end if;
 
-  select withdrawn_at into v_withdrawn_at
+  -- account_id 하나에 프로필 행이 여러 개(서버별 등)일 수 있으므로 집계로 단일 값을 구한다.
+  select max(withdrawn_at), bool_or(true)
+  into   v_withdrawn_at, v_exists
   from public.user_profiles
-  where account_id = v_uid;
+  where account_id = p_account_id;
 
-  if not found then
+  if not coalesce(v_exists, false) then
     return jsonb_build_object('ok', false, 'reason', 'profile_not_found');
   end if;
 
@@ -306,19 +310,24 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'withdrawal_not_scheduled');
   end if;
 
-  -- 탈퇴 예약 취소
+  -- 탈퇴 예약 취소(해당 계정의 모든 프로필 행)
   update public.user_profiles
   set withdrawn_at = null
-  where account_id = v_uid;
+  where account_id = p_account_id;
 
   return jsonb_build_object('ok', true);
 end;
 $$;
 
-comment on function public.ts_withdrawal_cancel_redeem() is
-  '탈퇴 취소 RPC. withdrawal-cancel-redeem Edge Function에서 사용자 JWT로 호출. withdrawn_at을 초기화합니다.';
+comment on function public.ts_withdrawal_cancel_redeem(uuid) is
+  '탈퇴 취소 RPC. withdrawal-cancel-redeem Edge Function이 cancel_token 서명 검증 후 account_id를 넘겨 secret key로 호출. withdrawn_at을 초기화합니다.';
 
-grant execute on function public.ts_withdrawal_cancel_redeem() to authenticated;
+-- 서명 검증을 Edge Function이 담당하므로 일반 사용자에게 노출하지 않는다.
+-- (authenticated에게 열면 임의 account_id로 남의 탈퇴 예약을 취소할 수 있음)
+revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from public;
+revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from anon;
+revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from authenticated;
+grant execute on function public.ts_withdrawal_cancel_redeem(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- ts_request_withdrawal — 탈퇴 예약

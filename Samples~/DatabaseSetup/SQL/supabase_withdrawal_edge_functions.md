@@ -53,7 +53,7 @@ CANCEL_TOKEN_TTL_SECONDS=900
 |------|----------|----------|
 | `cleanup-expired-mails` | **삭제** → `pg_cron` 직접 RPC | 불필요 |
 | `withdrawal-cleanup` | **삭제** → `pg_cron` 직접 RPC | 불필요 |
-| `withdrawal-cancel-redeem` | `service_role` 제거, 새 RPC 사용 | `SUPABASE_ANON_KEY`만 |
+| `withdrawal-cancel-redeem` | 비로그인 취소 → 토큰 sub로 `SECRET_KEY` 호출 | `SECRET_KEY` |
 | `withdrawal-cancel-issue` | `service_role` 제거 | `SUPABASE_ANON_KEY`만 |
 | `withdrawal-guard` | `service_role` → `SECRET_KEY` | `SECRET_KEY` |
 | `displayname-set` | `service_role` → `SECRET_KEY` | `SECRET_KEY` |
@@ -126,8 +126,8 @@ supabase functions deploy displayname-set
 
 ### SQL RPC 테스트
 ```sql
--- 탈퇴 취소 RPC (JWT 인증된 상태에서)
-SELECT ts_withdrawal_cancel_redeem();
+-- 탈퇴 취소 RPC (Edge Function이 토큰 sub를 넘겨 service_role로 호출)
+SELECT ts_withdrawal_cancel_redeem('00000000-0000-0000-0000-000000000000');
 
 -- 탈퇴 정리 RPC (pg_cron 내부용)
 SELECT ts_withdrawal_cleanup_batch(10);
@@ -154,9 +154,10 @@ curl -X POST https://<project>.supabase.co/functions/v1/withdrawal-guard \
 - Dashboard에서 Secret Key가 생성되었는지 확인
 - `supabase secrets list`로 설정 확인
 
-### "not_authenticated" 오류 (ts_withdrawal_cancel_redeem)
-- JWT가 유효한지 확인
-- `auth.uid()`가 null이면 인증되지 않은 상태
+### "profile_not_found" / "withdrawal_not_scheduled" 오류 (ts_withdrawal_cancel_redeem)
+- 취소는 비로그인 상태에서 토큰의 `sub`(account_id)로 처리됨 → JWT 불필요
+- 토큰 발급 이후 이미 취소됐거나 예약이 만료되지 않았는지 확인
+- `SUPABASE_SECRET_KEYS` 시크릿이 설정돼 있는지 확인(service_role 대체)
 
 ### Cron job 미실행
 - `SELECT * FROM cron.job;`으로 등록 확인
