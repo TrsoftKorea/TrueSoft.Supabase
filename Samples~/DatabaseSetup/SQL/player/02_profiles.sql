@@ -426,6 +426,10 @@ execute function public.ts_display_names_coalesce_server_id();
 
 grant select, insert, update on public.display_names to authenticated;
 
+-- displayname-get·displayname-set Edge Function은 service_role(secret key)로 RLS를 우회해
+-- 남의 닉네임까지 조회·설정한다. 플랫폼 기본 권한이 누락된 프로젝트에서도 동작하도록 명시적으로 부여한다.
+grant select, insert, update on public.display_names to service_role;
+
 -- user_profiles 생성 시 display_names 자동 seeding: user_metadata.displayName, 없으면 Player_<account8>.
 -- 익명(metadata 빈 경우) metadata도 같은 값으로 채워 본인화면=조회=집계를 일치시킨다.
 create or replace function public.ts_seed_display_name_for_profile()
