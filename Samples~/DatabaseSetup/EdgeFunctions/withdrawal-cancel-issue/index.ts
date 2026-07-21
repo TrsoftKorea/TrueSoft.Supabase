@@ -79,10 +79,15 @@ Deno.serve(async (req) => {
   }
 
   // user_profiles는 SELECT가 공개(프로필 표시용)이므로 account_id로 본인 행을 명시 필터
+  // account_id 하나에 프로필 행이 여러 개(서버별 등)일 수 있으므로 예약된 행으로 좁혀 단일 행을 보장한다.
+  // (필터 없이 maybeSingle 하면 여러 행에서 PGRST116 "multiple rows returned" 500)
   const profileRes = await userClient
     .from("user_profiles")
     .select("withdrawn_at")
     .eq("account_id", user.id)
+    .not("withdrawn_at", "is", null)
+    .order("withdrawn_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (profileRes.error) {

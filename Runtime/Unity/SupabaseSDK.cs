@@ -1539,7 +1539,7 @@ namespace TrueBase.Unity
             {
                 var recovery = await TryRestoreSessionFromAnonymousRecoveryAsync();
                 if (recovery.Kind == AnonymousRecoveryKind.GateBlocked)
-                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.WithdrawalGateBlocked);
+                    return SupabaseResult<SupabaseSession>.Fail(recovery.ErrorCode ?? SupabaseErrorCode.WithdrawalGateBlocked);
                 if (recovery.Kind == AnonymousRecoveryKind.GuardFailed)
                     return SupabaseResult<SupabaseSession>.Fail(
                         string.IsNullOrWhiteSpace(recovery.ErrorCode) ? "withdrawal_guard_failed" : recovery.ErrorCode);
@@ -3032,7 +3032,9 @@ namespace TrueBase.Unity
 
             var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
             if (reserved != null)
-                return new AnonymousRecoveryResult(AnonymousRecoveryKind.GateBlocked);
+                // 게이트의 실제 사유(WithdrawalGateBlocked·WithdrawalCancelIssueFailed 등)를 보존한다.
+                // 무조건 GateBlocked로 덮으면 발급 실패가 "게이트 차단"으로 위장돼 원인 추적이 막힌다.
+                return new AnonymousRecoveryResult(AnonymousRecoveryKind.GateBlocked, reserved.ErrorCode);
 
             return new AnonymousRecoveryResult(AnonymousRecoveryKind.Restored);
         }
