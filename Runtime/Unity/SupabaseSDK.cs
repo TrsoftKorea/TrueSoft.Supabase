@@ -73,6 +73,7 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSignInWithAppleIdToken;
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptSignOutFully;
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptRequestWithdrawal;
+        internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptRedeemWithdrawalCancel;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkGoogleToGuestWithIdToken;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkAppleToGuestWithIdToken;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkGoogleWithIdToken;
@@ -107,13 +108,15 @@ namespace TrueBase.Unity
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleToGuestWithIdToken  = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyName                       = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleWithIdToken                  = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null)
+            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null,
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         redeemWithdrawalCancel                 = null)
         {
             _interceptSignInAnonymously                       = signInAnonymously;
             _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
             _interceptSignInWithAppleIdToken                  = signInWithAppleIdToken;
             _interceptSignOutFully                            = signOutFully;
             _interceptRequestWithdrawal                     = requestMyWithdrawal;
+            _interceptRedeemWithdrawalCancel                = redeemWithdrawalCancel;
             _interceptLinkGoogleToGuestWithIdToken = linkGoogleToGuestWithIdToken;
             _interceptLinkAppleToGuestWithIdToken  = linkAppleToGuestWithIdToken;
             _interceptSetName                        = setMyName;
@@ -129,6 +132,7 @@ namespace TrueBase.Unity
             _interceptSignInWithAppleIdToken                  = null;
             _interceptSignOutFully                            = null;
             _interceptRequestWithdrawal                     = null;
+            _interceptRedeemWithdrawalCancel                = null;
             _interceptLinkGoogleToGuestWithIdToken = null;
             _interceptLinkAppleToGuestWithIdToken  = null;
             _interceptSetName                        = null;
@@ -2223,8 +2227,13 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="RedeemWithdrawalCancelAsync"/>
         public static async Task<SupabaseResult> TryRedeemWithdrawalCancelAsync(string cancelToken = null)
         {
-            var r = await RedeemWithdrawalCancelAsync(cancelToken);
-            return LogAndReturn(ApiLogTags.ProfileWithdrawalCancelRedeem, r);
+            if (_interceptRedeemWithdrawalCancel != null)
+                return await _interceptRedeemWithdrawalCancel(async () => {
+                    var r = await RedeemWithdrawalCancelAsync(cancelToken);
+                    return LogAndReturn(ApiLogTags.ProfileWithdrawalCancelRedeem, r);
+                });
+            var r2 = await RedeemWithdrawalCancelAsync(cancelToken);
+            return LogAndReturn(ApiLogTags.ProfileWithdrawalCancelRedeem, r2);
         }
 
         /// <summary>

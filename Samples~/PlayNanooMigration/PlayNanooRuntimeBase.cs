@@ -62,14 +62,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 이벤트 ───────────────────────────────────────────────────────────────
 
-    /// <summary>로그인 시 탈퇴 예약 계정이 감지됨. withdrawalKey를 받아 예약 취소 여부를 결정하세요.</summary>
-    public event Action<string> OnWithdrawalPending;
+    /// <summary>
+    /// 로그인 시 탈퇴 예약 계정이 감지됨. 취소 UI를 띄우고 <see cref="Supabase.RedeemWithdrawalCancelAsync"/>를 호출하세요.
+    /// 표준 SDK 취소 API가 인터셉터로 나누 복구까지 함께 처리하므로 별도 취소 메서드가 필요 없습니다.
+    /// </summary>
+    public event Action OnWithdrawalPending;
 
-    /// <summary>탈퇴 취소 완료. Google·Apple은 재인증 UI를 표시하고 로그인을 다시 호출하세요.</summary>
-    public event Action OnWithdrawalCancelled;
-
-    /// <summary>탈퇴 취소는 성공했지만 Supabase 재로그인에 실패. 개발자가 직접 재로그인 호출.</summary>
-    public event Action OnWithdrawalCancelLoginFailed;
+    // 로그인 시 감지한 나누 탈퇴 복구 키. RedeemWithdrawalCancel 인터셉터가 내부적으로 사용합니다.
+    private string _pendingWithdrawalKey;
 
     // ── 추상 메서드 (PlayNANOO SDK 버전별 구현) ────────────────────────────────
 
@@ -136,7 +136,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             linkAppleToGuestWithIdToken:  InterceptLinkAppleToGuestWithIdToken,
             setMyName:                        InterceptSetName,
             linkGoogleWithIdToken:                   InterceptLinkGoogleWithIdToken,
-            linkAppleWithIdToken:                    InterceptLinkAppleWithIdToken
+            linkAppleWithIdToken:                    InterceptLinkAppleWithIdToken,
+            redeemWithdrawalCancel:                  InterceptRedeemWithdrawalCancel
         );
 
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
@@ -495,10 +496,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             errorCode = ecObj?.ToString();
         if (errorCode == "30007")
         {
-            string wk = null;
+            _pendingWithdrawalKey = null;
             if (values != null && values.TryGetValue("WithdrawalKey", out var wkObj))
-                wk = wkObj?.ToString();
-            OnWithdrawalPending?.Invoke(wk);
+                _pendingWithdrawalKey = wkObj?.ToString();
+            OnWithdrawalPending?.Invoke();
         }
         else
         {
@@ -530,25 +531,32 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         _plugin.OpenAppleID(
             async token => await Supabase.SignInWithAppleIdTokenAsync(token));
 
-    // ── 탈퇴 취소 ────────────────────────────────────────────────────────────
+    // ── 탈퇴 취소 인터셉터 ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// 탈퇴 취소. OnWithdrawalPending에서 받은 withdrawalKey를 사용합니다.
-    /// 게스트·Google·Apple 모두 게이트가 저장해둔 취소 토큰으로 Supabase 예약을 철회합니다.
-    /// 성공 시 OnWithdrawalCancelled, 실패 시 OnWithdrawalCancelLoginFailed가 발행됩니다.
+    /// Supabase.RedeemWithdrawalCancelAsync 인터셉터. 나누 탈퇴 복구를 먼저 수행하고,
+    /// 성공하면 Supabase 예약 철회(sdkRedeem)를 이어 실행해 양쪽을 함께 취소합니다.
+    /// 나누 복구 키가 없으면(예약 미감지 등) Supabase만 취소합니다.
     /// </summary>
-    public void CancelWithdrawal(string withdrawalKey)
+    private async Task<SupabaseResult> InterceptRedeemWithdrawalCancel(Func<Task<SupabaseResult>> sdkRedeem)
     {
-        NanooWithDrawalRestore(withdrawalKey, async status =>
-        {
-            if (status != Configure.PN_API_STATE_SUCCESS) return;
+        var key = _pendingWithdrawalKey;
+        if (string.IsNullOrEmpty(key))
+            return await sdkRedeem();
 
-            var redeemResult = await Supabase.RedeemWithdrawalCancelAsync();
-            if (redeemResult.IsSuccess)
-                OnWithdrawalCancelled?.Invoke();
-            else
-                OnWithdrawalCancelLoginFailed?.Invoke();
-        });
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        NanooWithDrawalRestore(key, status => { tcs.TrySetResult(status); return Task.CompletedTask; });
+        var nanooStatus = await tcs.Task;
+
+        // 나누 복구가 실패하면 Supabase 예약은 건드리지 않는다(양쪽 lockstep 유지).
+        if (nanooStatus != Configure.PN_API_STATE_SUCCESS)
+        {
+            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 탈퇴 취소(WithDrawalRestore) 실패 — status: {nanooStatus}");
+            return SupabaseResult.Fail("playnanoo_withdrawal_restore_failed");
+        }
+
+        _pendingWithdrawalKey = null;
+        return await sdkRedeem();
     }
 
     // ── PlayNANOO 토큰 독립 갱신 (24시간 주기) ───────────────────────────────────
