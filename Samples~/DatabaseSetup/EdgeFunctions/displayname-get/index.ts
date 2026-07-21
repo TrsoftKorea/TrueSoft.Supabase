@@ -13,6 +13,8 @@ type GetResponse = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY = secretKeys.default;
 
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -41,11 +43,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  const client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-
-  const me = await client.auth.getUser(jwt);
+  const me = await userClient.auth.getUser(jwt);
   if (!me.data.user?.id) {
     return new Response(
       JSON.stringify({ ok: false, reason: "user_not_found" } satisfies GetResponse),
@@ -53,8 +54,12 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 닉네임은 전역 고유이므로 user_id로만 조회한다(서버 스코프 없음 — 어느 서버 플레이어든 조회 가능).
-  const res = await client
+  // display_name 만 노출: service_role로 조회해 display_names 직접 REST 노출을 막는다.
+  // (전역 유니크 닉네임이므로 user_id로만 조회. RLS SELECT는 본인 행만 허용하므로 남의 닉네임은 이 경로로만 노출)
+  const admin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const res = await admin
     .from("display_names")
     .select("display_name")
     .eq("user_id", userId)

@@ -36,11 +36,18 @@ alter table public.purchases drop column if exists purchase_state;
 
 alter table public.purchases enable row level security;
 
--- 본인 구매 내역 조회만 허용 (INSERT는 Edge Function이 service_role로 처리)
+-- 본인 구매 내역 조회 허용
 drop policy if exists "users_read_own_purchases" on public.purchases;
 create policy "users_read_own_purchases"
   on public.purchases for select
   using (account_id = auth.uid());
+
+-- 본인 구매 기록 INSERT 허용. purchase-verify Edge Function이 영수증 검증 후 사용자 JWT로 기록한다.
+-- (account_id = auth.uid() 로 본인 행만 허용)
+drop policy if exists "users_insert_own_purchases" on public.purchases;
+create policy "users_insert_own_purchases"
+  on public.purchases for insert
+  with check (account_id = auth.uid());
 
 -- =============================================================================
 -- 결제 완료 시 user_profiles.total_paid_krw 원자적 증분 트리거
