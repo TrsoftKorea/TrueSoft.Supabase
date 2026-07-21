@@ -191,37 +191,27 @@ export default defineConfig({
         ]
       },
       {
-        text: '설정 가이드',
+        text: '서비스 계정 JSON 발급',
+        link: '/guide/google-service-account/',
+        collapsed: true,
         items: [
-          {
-            text: '서비스 계정 JSON 발급',
-            link: '/guide/google-service-account/',
-            collapsed: true,
-            items: [
-              { text: '발급 절차', link: '/guide/google-service-account/issue' },
-              { text: '콘솔 등록', link: '/guide/google-service-account/console' }
-            ]
-          }
+          { text: '발급 절차', link: '/guide/google-service-account/issue' },
+          { text: '콘솔 등록', link: '/guide/google-service-account/console' }
         ]
       },
       {
-        text: '이관',
+        text: '플레이나누 이관',
+        link: '/guide/migration/',
+        collapsed: true,
         items: [
-          {
-            text: '플레이나누 이관',
-            link: '/guide/migration/',
-            collapsed: true,
-            items: [
-              { text: '개요', link: '/guide/migration/how-it-works' },
-              { text: '설치', link: '/guide/migration/install' },
-              { text: '로그인', link: '/guide/migration/login' },
-              { text: '로그아웃', link: '/guide/migration/logout' },
-              { text: '탈퇴 예약 · 취소', link: '/guide/migration/withdrawal' },
-              { text: '인앱 결제', link: '/guide/migration/iap' },
-              { text: '데이터 동기화', link: '/guide/migration/sync' },
-              { text: '플레이나누 제거 후', link: '/guide/migration/after' }
-            ]
-          }
+          { text: '개요', link: '/guide/migration/how-it-works' },
+          { text: '설치', link: '/guide/migration/install' },
+          { text: '로그인', link: '/guide/migration/login' },
+          { text: '로그아웃', link: '/guide/migration/logout' },
+          { text: '탈퇴 예약 · 취소', link: '/guide/migration/withdrawal' },
+          { text: '인앱 결제', link: '/guide/migration/iap' },
+          { text: '데이터 동기화', link: '/guide/migration/sync' },
+          { text: '플레이나누 제거 후', link: '/guide/migration/after' }
         ]
       },
       {
@@ -238,13 +228,13 @@ export default defineConfig({
         ]
       },
       {
-        text: '상세 정보',
+        text: '부록',
         collapsed: true,
         items: [
-          { text: 'Apple 설정', link: '/guide/social/apple/setup-details' }
+          { text: '예제', link: '/guide/samples/examples' },
+          { text: 'Apple 설정 상세', link: '/guide/social/apple/setup-details' }
         ]
-      },
-      { text: '예제', link: '/guide/samples/examples' }
+      }
     ],
 
     outline: { level: [2, 3], label: '이 페이지' },
