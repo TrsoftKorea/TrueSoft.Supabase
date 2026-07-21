@@ -1,4 +1,4 @@
-# Database Setup
+# 데이터베이스 설정
 
 Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import합니다.
 
@@ -10,4 +10,4 @@ Unity Package Manager의 **Samples** 탭에서 필요한 샘플만 골라 Import
 
 초기 DB 스키마와 Edge Function 소스를 담은 파일 묶음입니다.
 
-사용 방법은 [빠른 시작의 Database Setup 절차](/guide/start/database-setup)를 참고하세요.
+사용 방법은 [빠른 시작의 데이터베이스 설정 절차](/guide/start/database-setup)를 참고하세요.

@@ -1,4 +1,4 @@
-# Database Setup
+# 데이터베이스 설정
 
 DB 스키마와 Edge Function은 **Database Setup** 샘플에 포함된 파일로 설정합니다.
 

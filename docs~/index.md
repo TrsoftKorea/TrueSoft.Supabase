@@ -14,7 +14,7 @@ hero:
 
 features:
   - title: 시작하기
-    details: 설치 · 프로젝트 생성 · 초기 설정 · Database Setup · 샘플
+    details: 설치 · 프로젝트 생성 · 초기 설정 · 데이터베이스 설정 · 샘플
     link: /guide/start/
   - title: 인증
     details: 익명·Google·Apple 로그인, 자동 로그인, 익명 복구, 중복·차단 처리

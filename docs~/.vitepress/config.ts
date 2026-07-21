@@ -22,9 +22,9 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: '설치', link: '/guide/start/install' },
-              { text: 'Supabase 프로젝트 생성', link: '/guide/start/project' },
+              { text: '프로젝트 생성', link: '/guide/start/project' },
               { text: '초기 설정', link: '/guide/start/init-setup' },
-              { text: 'Database Setup', link: '/guide/start/database-setup' },
+              { text: '데이터베이스 설정', link: '/guide/start/database-setup' },
               { text: '다음 단계', link: '/guide/start/next' }
             ]
           },
@@ -32,7 +32,7 @@ export default defineConfig({
             text: '샘플',
             collapsed: true,
             items: [
-              { text: 'Database Setup', link: '/guide/samples/database-setup' },
+              { text: '데이터베이스 설정', link: '/guide/samples/database-setup' },
               { text: 'Examples', link: '/guide/samples/examples' },
               { text: '플레이나누 이관', link: '/guide/samples/migration' }
             ]
