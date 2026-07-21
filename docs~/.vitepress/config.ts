@@ -207,8 +207,7 @@ export default defineConfig({
           { text: '개요', link: '/guide/migration/how-it-works' },
           { text: '설치', link: '/guide/migration/install' },
           { text: '로그인', link: '/guide/migration/login' },
-          { text: '로그아웃', link: '/guide/migration/logout' },
-          { text: '탈퇴 예약 · 취소', link: '/guide/migration/withdrawal' },
+          { text: '탈퇴 취소', link: '/guide/migration/withdrawal' },
           { text: '인앱 결제', link: '/guide/migration/iap' },
           { text: '데이터 동기화', link: '/guide/migration/sync' },
           { text: '플레이나누 제거 후', link: '/guide/migration/after' }
