@@ -246,6 +246,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return sdkResult;
         }
 
+        // 탈퇴 예약 게이트로 막힌 경우(WithdrawalGateBlocked) 그 사유·취소 토큰을 그대로 전달한다. OnWithdrawalPending은 이미 발행됨.
+        if (sdkResult.Reason == SupabaseReason.WithdrawalGateBlocked)
+            return sdkResult;
+
         // PlayNANOO 실패 → 병렬로 이미 생성된 Supabase 세션이 있으면 정리
         if (sdkResult.IsSuccess)
             await Supabase.SignOutFullyAsync();
@@ -283,9 +287,16 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return sdkResult;
         }
 
-        // 30007: 탈퇴 신청 중 — Supabase 호출(취소 토큰 발급)은 이미 병렬로 됨. 세션은 게이트가 정리.
+        // 30007: 탈퇴 신청 중 — Supabase도 게이트로 막혔으면 그 사유(WithdrawalGateBlocked)·취소 토큰을 그대로 전달한다.
+        // 취소 토큰은 이미 병렬로 발급됐고 세션은 게이트가 정리한다. OnWithdrawalPending은 이미 발행됨.
         if (nanoo.ErrorCode == "30007")
+        {
+            if (sdkResult.Reason == SupabaseReason.WithdrawalGateBlocked)
+                return sdkResult;
+            if (sdkResult.IsSuccess)
+                await Supabase.SignOutFullyAsync();
             return SupabaseResult.Fail(failReason);
+        }
 
         // 그 외 실패(탈퇴 완료 후 계정 삭제 등): Supabase 재가입(이미 병렬 실행) → PlayNANOO 재로그인
         if (!sdkResult.IsSuccess)
