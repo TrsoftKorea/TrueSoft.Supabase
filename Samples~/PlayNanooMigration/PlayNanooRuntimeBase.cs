@@ -43,7 +43,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     protected Plugin _plugin;
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
     private string   _nanooNickname;       // 닉네임 변경 롤백용
-    private string   _pendingLoginType;    // "guest"|"google"|"apple" — 탈퇴 취소 후 재로그인에 사용
 
     private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
     private float    _lastNanooRefreshCheckTime   = float.MinValue;
@@ -485,7 +484,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             errorCode = ecObj?.ToString();
         if (errorCode == "30007")
         {
-            _pendingLoginType = loginType;
             string wk = null;
             if (values != null && values.TryGetValue("WithdrawalKey", out var wkObj))
                 wk = wkObj?.ToString();
@@ -525,29 +523,20 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>
     /// 탈퇴 취소. OnWithdrawalPending에서 받은 withdrawalKey를 사용합니다.
-    /// 게스트: 자동 재로그인 후 Supabase withdrawn_at도 해제 / Google·Apple: OnWithdrawalCancelled 이벤트 후 개발자가 재인증 UI 표시.
-    /// 게스트 재로그인 실패 시 OnWithdrawalCancelLoginFailed가 발행됩니다.
+    /// 게스트·Google·Apple 모두 게이트가 저장해둔 취소 토큰으로 Supabase 예약을 철회합니다.
+    /// 성공 시 OnWithdrawalCancelled, 실패 시 OnWithdrawalCancelLoginFailed가 발행됩니다.
     /// </summary>
     public void CancelWithdrawal(string withdrawalKey)
     {
         NanooWithDrawalRestore(withdrawalKey, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS) return;
-            if (_pendingLoginType == "guest")
-            {
-                var result = await Supabase.SignInAnonymouslyAsync();
-                if (!result.IsSuccess) { OnWithdrawalCancelLoginFailed?.Invoke(); }
-                else                 { await Supabase.ClearWithdrawalAsync(); }
-            }
+
+            var redeemResult = await Supabase.RedeemWithdrawalCancelAsync();
+            if (redeemResult.IsSuccess)
+                OnWithdrawalCancelled?.Invoke();
             else
-            {
-                var redeemResult = await Supabase.RedeemWithdrawalCancelAsync();
-                if (redeemResult.IsSuccess)
-                    OnWithdrawalCancelled?.Invoke();
-                else
-                    OnWithdrawalCancelLoginFailed?.Invoke();
-            }
-            _pendingLoginType = null;
+                OnWithdrawalCancelLoginFailed?.Invoke();
         });
     }
 

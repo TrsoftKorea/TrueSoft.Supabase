@@ -417,30 +417,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
     }
 
-    /// <summary>S — 탈퇴 예약 상태를 조회합니다.</summary>
-    private async Task GetWithdrawalStatusAsync()
-    {
-        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
-
-        var status = await Supabase.GetWithdrawalStatusAsync();
-        if (!status)
-            Debug.LogWarning($"[Supabase] 탈퇴 상태 조회 실패: {status.ErrorCode}");
-        else if (status.Data == null || !status.Data.IsScheduled)
-            Debug.Log("[Supabase] 탈퇴 예약 없음.");
-        else
-            Debug.Log($"[Supabase] 탈퇴 예약 — IsScheduled: {status.Data.IsScheduled}, 남은 시간: {status.Data.SecondsRemaining}초, 예약일: {status.Data.WithdrawnAtIso}");
-    }
-
-    /// <summary>C — 탈퇴 취소. 탈퇴 예약 상태여야 합니다.</summary>
-    private async Task ClearWithdrawalAsync()
-    {
-        if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
-
-        var ok = await Supabase.ClearWithdrawalAsync();
-        if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 취소 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] 탈퇴 취소 완료.");
-    }
-
     // ─── Update ──────────────────────────────────────────────────────────────
 
     private void Update()
@@ -471,8 +447,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.G)) _ = GetBanInfoAsync();
 
         if (Input.GetKeyDown(KeyCode.D)) _ = RequestWithdrawalAsync();
-        if (Input.GetKeyDown(KeyCode.S)) _ = GetWithdrawalStatusAsync();
-        if (Input.GetKeyDown(KeyCode.C)) _ = ClearWithdrawalAsync();
     }
 }
 

@@ -215,9 +215,7 @@ namespace TrueBase.Unity
             public const string ProfileNameAvailable = "Supabase.Profile.Name.Available";
             public const string ProfileMyServerGet = "Supabase.Profile.Server.Get";
             public const string ProfileSnapshotGet = "Supabase.Profile.Snapshot.Get";
-            public const string ProfileWithdrawnAt = "Supabase.Profile.WithdrawnAt";
             public const string ProfileWithdrawnRequest = "Supabase.Profile.Withdrawn.Request";
-            public const string ProfileWithdrawalStatus = "Supabase.Profile.Withdrawal.Status";
             public const string ProfileWithdrawalCancelRedeem = "Supabase.Profile.Withdrawal.Cancel.Redeem";
             public const string ServerTime = "Supabase.Server.Time";
             public const string MailboxList = "Supabase.Mailbox.List";
@@ -2125,22 +2123,6 @@ namespace TrueBase.Unity
             return LogAndReturnResult(ApiLogTags.ProfileSnapshotGet, r);
         }
 
-        /// <summary>본인 <c>withdrawn_at</c>을 비웁니다(SQL NULL).</summary>
-        public static async Task<SupabaseResult<bool>> ClearWithdrawalAsync()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
-
-            return await _bootstrap.PublicProfileService.PatchMyWithdrawnAtAsync(
-                _currentSession.AccessToken,
-                _currentSession.User.Id,
-                withdrawnAtIso: null);
-        }
-
         /// <summary>
         /// 설정(<see cref="WithdrawalRequestDelayDays"/>)에 정의된 유예 기간(일)으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
         /// 요청이 성공하면 앱에서도 즉시 로그아웃 상태로 전환합니다(자동 로그인 방지).
@@ -2187,34 +2169,6 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.ProfileWithdrawnRequest, r2);
         }
 
-        /// <inheritdoc cref="ClearWithdrawalAsync"/>
-        public static async Task<SupabaseResult> TryClearWithdrawalAsync()
-        {
-            var r = await ClearWithdrawalAsync();
-            return LogAndReturn(ApiLogTags.ProfileWithdrawnAt, r);
-        }
-
-        /// <summary>
-        /// 로그인한 본인의 탈퇴 예약 게이트 상태(닉네임/예약 시각/남은 시간)를 조회합니다.
-        /// </summary>
-        public static async Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync()
-        {
-            var ready = await EnsureReadySessionAsync();
-            if (!ready.IsSuccess)
-                return SupabaseResult<WithdrawalStatus>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
-
-            if (_bootstrap?.PublicProfileService == null)
-                return SupabaseResult<WithdrawalStatus>.Fail(SupabaseErrorCode.NotInitialized);
-
-            return await _bootstrap.PublicProfileService.GetWithdrawalStatusAsync(_currentSession.AccessToken);
-        }
-
-        /// <inheritdoc cref="GetWithdrawalStatusAsync"/>
-        public static async Task<SupabaseResult<WithdrawalStatus>> TryGetWithdrawalStatusAsync()
-        {
-            var r = await GetWithdrawalStatusAsync();
-            return LogAndReturnResult(ApiLogTags.ProfileWithdrawalStatus, r);
-        }
 
         /// <summary>
         /// 철회 전용 토큰으로 탈퇴 예약을 해제합니다.

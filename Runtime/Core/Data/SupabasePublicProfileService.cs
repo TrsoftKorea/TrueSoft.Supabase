@@ -335,48 +335,6 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 본인 행의 <c>withdrawn_at</c>만 갱신합니다.
-        /// </summary>
-        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터에 사용. 필수.</param>
-        /// <param name="withdrawnAtIso">탈퇴 예약 시각(ISO 8601). null·빈 문자열이면 SQL NULL로 지웁니다(탈퇴 표시 해제).</param>
-        public async Task<SupabaseResult<bool>> PatchMyWithdrawnAtAsync(
-            string accessToken,
-            string accountId,
-            string withdrawnAtIso)
-        {
-            if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
-
-            if (string.IsNullOrWhiteSpace(accountId))
-                return SupabaseResult<bool>.Fail("account_id_empty");
-
-            var url =
-                $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, _profilesTable)}" +
-                $"?account_id=eq.{Uri.EscapeDataString(accountId.Trim())}";
-
-            string jsonBody;
-            if (string.IsNullOrWhiteSpace(withdrawnAtIso))
-                jsonBody = "{\"withdrawn_at\":null}";
-            else
-                jsonBody = _jsonSerializer.ToJson(new WithdrawnPatchBody { withdrawn_at = withdrawnAtIso.Trim() });
-
-            var response = await _httpClient.SendAsync(
-                method: "PATCH",
-                url: url,
-                jsonBody: jsonBody,
-                headers: CreateUserHeaders(accessToken, "return=minimal"));
-
-            if (response == null)
-                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
-
-            if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawn_at_patch_failed");
-
-            return SupabaseResult<bool>.Success(true);
-        }
-
-        /// <summary>
         /// 서버에서 현재 시각 기준으로 유예 기간(일) 뒤의 <c>withdrawn_at</c>을 계산해 예약합니다.
         /// RPC: <c>ts_request_withdrawal</c>. 성공 시 예약된 시각(ISO 8601)을 반환합니다.
         /// </summary>
@@ -554,12 +512,6 @@ namespace TrueBase.Core.Data
         {
             public string p_user_id;
             public string p_platform;
-        }
-
-        [Serializable]
-        private sealed class WithdrawnPatchBody
-        {
-            public string withdrawn_at;
         }
 
         [Serializable]

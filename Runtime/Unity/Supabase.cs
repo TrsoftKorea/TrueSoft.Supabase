@@ -166,27 +166,6 @@ namespace TrueBase.Unity
         internal static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>
             SupabaseSDK.EnsureMyRowAsync<T>();
 
-        /// <summary>변경된 컬럼만 부분 저장(PATCH) (내부 Result API).</summary>
-        internal static Task<SupabaseResult<bool>> PatchUserDataAsync(
-            string tableName,
-            System.Collections.Generic.Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
-            bool setUpdatedAtIsoUtc = true) =>
-            SupabaseSDK.PatchUserDataAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
-
-        /// <inheritdoc cref="SupabaseSDK.PatchUserDataAsync"/>
-        internal static async Task<SupabaseResult> TryPatchUserDataAsync(
-            string tableName,
-            System.Collections.Generic.Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
-            bool setUpdatedAtIsoUtc = true)
-        {
-            var r = await PatchUserDataAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
-            return r != null && r.IsSuccess
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorCode);
-        }
-
         /// <inheritdoc cref="SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync{T}(T, bool)"/>
         internal static Task<(bool success, bool hasRow, T row)> TryLoadUserDataAttributedWithRowStateAsync<T>(
             T defaultWhenFailed = default,
@@ -266,14 +245,6 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryRequestWithdrawalAsync"/>
         public static Task<SupabaseResult> RequestWithdrawalAsync() =>
             SupabaseSDK.TryRequestWithdrawalAsync();
-
-        /// <inheritdoc cref="SupabaseSDK.TryClearWithdrawalAsync"/>
-        public static Task<SupabaseResult> ClearWithdrawalAsync() =>
-            SupabaseSDK.TryClearWithdrawalAsync();
-
-        /// <inheritdoc cref="SupabaseSDK.TryGetWithdrawalStatusAsync"/>
-        public static Task<SupabaseResult<WithdrawalStatus>> GetWithdrawalStatusAsync() =>
-            SupabaseSDK.TryGetWithdrawalStatusAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryRedeemWithdrawalCancelAsync(string)"/>
         public static Task<SupabaseResult> RedeemWithdrawalCancelAsync(string cancelToken = null) =>
