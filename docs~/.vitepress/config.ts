@@ -17,26 +17,11 @@ export default defineConfig({
         text: '시작하기',
         link: '/guide/start/',
         items: [
-          {
-            text: '빠른 시작',
-            collapsed: false,
-            items: [
-              { text: '설치', link: '/guide/start/install' },
-              { text: '프로젝트 생성', link: '/guide/start/project' },
-              { text: '초기 설정', link: '/guide/start/init-setup' },
-              { text: '데이터베이스 설정', link: '/guide/start/database-setup' },
-              { text: '다음 단계', link: '/guide/start/next' }
-            ]
-          },
-          {
-            text: '샘플',
-            collapsed: true,
-            items: [
-              { text: '데이터베이스 설정', link: '/guide/samples/database-setup' },
-              { text: 'Examples', link: '/guide/samples/examples' },
-              { text: '플레이나누 이관', link: '/guide/samples/migration' }
-            ]
-          }
+          { text: '설치', link: '/guide/start/install' },
+          { text: '프로젝트 생성', link: '/guide/start/project' },
+          { text: '초기 설정', link: '/guide/start/init-setup' },
+          { text: '데이터베이스 설정', link: '/guide/start/database-setup' },
+          { text: '다음 단계', link: '/guide/start/next' }
         ]
       },
       {
@@ -258,7 +243,8 @@ export default defineConfig({
         items: [
           { text: 'Apple 설정', link: '/guide/social/apple/setup-details' }
         ]
-      }
+      },
+      { text: '예제', link: '/guide/samples/examples' }
     ],
 
     outline: { level: [2, 3], label: '이 페이지' },
