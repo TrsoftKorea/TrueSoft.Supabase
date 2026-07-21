@@ -2771,20 +2771,30 @@ namespace TrueBase.Unity
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var trigger = string.IsNullOrWhiteSpace(issueTrigger) ? "withdrawal_gate" : issueTrigger.Trim();
+            Debug.Log($"[WithdrawalTokenDebug] ISSUE 요청 (trigger={trigger})");
             var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<WithdrawalCancelIssueResponse>(
                 WithdrawalCancelIssueFunctionName,
                 accessToken,
                 new WithdrawalCancelIssueRequest { trigger = trigger });
 
             if (result == null || !result.IsSuccess || result.Data == null)
+            {
+                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패 (HTTP/응답 이상): errorCode={result?.ErrorCode}");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(result?.ErrorCode ?? "withdrawal_cancel_issue_failed");
+            }
 
             if (!result.Data.ok)
+            {
+                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패 (ok=false): reason={result.Data.reason}");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(
                     string.IsNullOrWhiteSpace(result.Data.reason) ? "withdrawal_cancel_issue_failed" : result.Data.reason);
+            }
 
             if (string.IsNullOrWhiteSpace(result.Data.cancel_token))
+            {
+                Debug.LogWarning($"[WithdrawalTokenDebug] ISSUE 실패: 응답 cancel_token 비어있음");
                 return SupabaseResult<WithdrawalCancelIssueInfo>.Fail(SupabaseErrorCode.WithdrawalCancelTokenEmpty);
+            }
 
             var info = new WithdrawalCancelIssueInfo(
                 result.Data.cancel_token.Trim(),
