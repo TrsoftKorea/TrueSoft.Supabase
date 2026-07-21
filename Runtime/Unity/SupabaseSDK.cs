@@ -2176,6 +2176,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<bool>> RedeemWithdrawalCancelAsync(string cancelToken = null)
         {
+            Debug.LogWarning($"[WithdrawalTokenDebug] REDEEM 호출됨 (인자 토큰 있음={!string.IsNullOrWhiteSpace(cancelToken)})\n{System.Environment.StackTrace}");
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
 
@@ -2867,6 +2868,7 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(token))
                 return;
 
+            Debug.Log($"[WithdrawalTokenDebug] SAVE (len={token.Trim().Length})");
             PlayerPrefs.SetString(WithdrawalCancelTokenKey, token.Trim());
             if (string.IsNullOrWhiteSpace(expiresAtIso))
                 PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
@@ -2878,11 +2880,13 @@ namespace TrueBase.Unity
         internal static string ReadStoredWithdrawalCancelToken()
         {
             var token = PlayerPrefs.GetString(WithdrawalCancelTokenKey, null);
+            Debug.Log($"[WithdrawalTokenDebug] READ (empty={string.IsNullOrWhiteSpace(token)}, len={token?.Length ?? 0})");
             return string.IsNullOrWhiteSpace(token) ? null : token.Trim();
         }
 
         private static void ClearStoredWithdrawalCancelToken()
         {
+            Debug.LogWarning($"[WithdrawalTokenDebug] CLEAR — 누가 지웠는지 호출 스택:\n{System.Environment.StackTrace}");
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
             PlayerPrefs.Save();

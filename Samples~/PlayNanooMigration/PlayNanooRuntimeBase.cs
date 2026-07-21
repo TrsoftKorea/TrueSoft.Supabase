@@ -539,6 +539,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// </summary>
     public void CancelWithdrawal(string withdrawalKey)
     {
+        Debug.LogWarning($"[WithdrawalTokenDebug] CancelWithdrawal 호출됨 (key len={withdrawalKey?.Length ?? 0})\n{System.Environment.StackTrace}");
         NanooWithDrawalRestore(withdrawalKey, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS) return;
