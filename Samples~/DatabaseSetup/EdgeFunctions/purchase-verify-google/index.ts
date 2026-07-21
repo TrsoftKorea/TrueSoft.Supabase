@@ -26,6 +26,8 @@ type GoogleProductPurchase = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY = secretKeys.default;
 const GOOGLE_SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")!;
 
 if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
@@ -204,8 +206,13 @@ Deno.serve(async (req) => {
     ? await convertToKrw(price_amount, price_currency || "KRW")
     : null;
 
-  // 구매 기록 INSERT (purchase_token UNIQUE — 충돌 시 중복 요청으로 처리)
-  const { error: insertError } = await userClient
+  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
+  // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
+  // purchase_token UNIQUE — 충돌 시 중복 요청으로 처리
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error: insertError } = await adminClient
     .from("purchases")
     .insert({
       account_id: user.id,

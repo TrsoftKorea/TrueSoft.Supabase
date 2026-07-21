@@ -128,9 +128,16 @@ serve(async (req: Request) => {
   const transactionId = match.transaction_id;
 
   // ── 중복 검증 체크 + 기록 삽입 ────────────────────────────────────────────
+  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
+  // (유저 직접 INSERT를 막아 가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
   // purchases 테이블에 transaction_id UNIQUE 제약 조건이 있어야 합니다.
   // INSERT 성공 → 새 검증 / 23505(unique_violation) → 이미 검증됨
-  const { error: insertError } = await supabase
+  const adminClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  const { error: insertError } = await adminClient
     .from("purchases")
     .insert({
       account_id:     user.id,
