@@ -1609,25 +1609,24 @@ namespace TrueBase.Unity
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
-                await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
                 SaveSessionToStorage();
-
-                await TryUpsertAnonymousRecoveryTokenAsync(result.Data);
                 RememberLastSignInMethod(SignInMethodKind.Anonymous);
+
+                // 익명 복구 토큰 정리·저장(best-effort, 기기 지문 기반)은 프로필 보장과 독립적이라
+                // 크리티컬 패스에서 순차 대기하지 않고 병렬로 실행한 뒤 반환 전에 함께 완료를 기다린다.
+                var recoveryTask = RunAnonymousRecoveryWritesAsync(result.Data);
+
                 if (!_isRecreatingAfterWithdrawalDelete)
                 {
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        SignInMethodKind.Anonymous,
-                        allowRecreateOnDeletion: true);
-                    if (guarded != null)
-                        return guarded;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
+                    // 방금 생성한 신규 익명 계정은 탈퇴 예약·삭제 대상일 수 없다(계정 복구·세션 복원은 이 지점 이전에 처리됨).
+                    // 따라서 withdrawal-guard(Edge Function)·예약 게이트(RPC) 호출은 항상 no-op이므로 생략해 로그인 지연을 줄인다.
+                    // 단, 게이트가 not-scheduled일 때 수행하던 로컬 정리(직전 세션의 탈퇴 게이트 상태·취소 토큰 제거)는 그대로 수행한다.
+                    ClearStoredWithdrawalGateStatus();
+                    ClearStoredWithdrawalCancelToken();
                 }
 
                 await TryEnsureProfileRowAfterSignInAsync();
+                await recoveryTask;
             }
 
             return result;
@@ -3157,6 +3156,13 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>익명 복구 토큰 정리(삭제)→저장(upsert)을 순서대로 수행합니다. 로그인 크리티컬 패스와 병렬 실행하도록 별도 Task로 분리했습니다(best-effort, 실패 무시).</summary>
+        private static async Task RunAnonymousRecoveryWritesAsync(SupabaseSession session)
+        {
+            await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+            await TryUpsertAnonymousRecoveryTokenAsync(session);
+        }
+
         /// <summary>
         /// 로그인 직후 <c>profiles</c> 본인 행을 보장하고 로그인 파사드가 <see cref="Common.SupabaseSignInResult.Profile"/>로 반환할 프로필을 일회성 전달 슬롯(<c>_pendingSignInProfile</c>)에 채웁니다.
         /// DB 서버 코드가 로컬 선택 서버와 다르면 자동 이주까지 수행합니다(best-effort, 실패는 경고 로그만).
@@ -3183,11 +3189,17 @@ namespace TrueBase.Unity
                     return;
                 }
 
-                var profileResult = await svc.GetProfileAsync(s.AccessToken, s.User.PlayerUserId);
+                // 프로필 조회(내부에 displayname-get Edge Function 포함)와 서버 코드 조회는
+                // 같은 세션의 독립적인 읽기라 병렬로 실행해 왕복 지연을 줄인다.
+                var profileTask = svc.GetProfileAsync(s.AccessToken, s.User.PlayerUserId);
+                var serverTask  = svc.GetMyServerIdAsync(s.AccessToken);
+                await Task.WhenAll(profileTask, serverTask);
+
+                var profileResult = profileTask.Result;
                 if (profileResult?.IsSuccess == true)
                     _pendingSignInProfile = profileResult.Data;
 
-                var mine = await svc.GetMyServerIdAsync(s.AccessToken);
+                var mine = serverTask.Result;
                 if (mine == null || !mine.IsSuccess || mine.Data.ServerCode.Length == 0)
                     return;
 
