@@ -356,17 +356,13 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> DeleteMailAsync(string mailId) =>
             SupabaseSDK.TryDeleteMailAsync(mailId);
 
-        /// <inheritdoc cref="SupabaseSDK.TryDeleteReadMailsAsync"/>
-        public static Task<SupabaseResult<int>> DeleteReadMailsAsync(string category = null) =>
-            SupabaseSDK.TryDeleteReadMailsAsync(category);
+        /// <inheritdoc cref="SupabaseSDK.TryDeleteClaimedMailsAsync"/>
+        public static Task<SupabaseResult<int>> DeleteClaimedMailsAsync(string category = null) =>
+            SupabaseSDK.TryDeleteClaimedMailsAsync(category);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetMailInboxCountsAsync"/>
         public static Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync() =>
             SupabaseSDK.TryGetMailInboxCountsAsync();
-
-        /// <inheritdoc cref="SupabaseSDK.TryGetUnreadMailCountAsync"/>
-        public static Task<SupabaseResult<int>> GetUnreadMailCountAsync(string userId = null, string category = null) =>
-            SupabaseSDK.TryGetUnreadMailCountAsync(userId, category);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>

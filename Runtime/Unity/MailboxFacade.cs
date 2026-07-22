@@ -57,7 +57,7 @@ namespace TrueBase.Unity
             return await _mailbox.GetMailByIdAsync(token, mailId);
         }
 
-        /// <summary>미읽음·미수령 개수와 분류별 세부 내역을 함께 반환합니다.</summary>
+        /// <summary>미수령 개수와 분류별 세부 내역을 함께 반환합니다.</summary>
         public Task<SupabaseResult<MailInboxCounts>> GetInboxCountsAsync() =>
             GetInboxCountsAsync(_sessionGetter?.Invoke());
 
@@ -70,19 +70,12 @@ namespace TrueBase.Unity
             return await _mailbox.GetInboxCountsAsync(token);
         }
 
-        /// <summary>미읽음 수. <paramref name="userId"/>는 계약 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
-        public Task<SupabaseResult<int>> GetUnreadCountAsync(string userId = null, string category = null) =>
-            GetInboxCountValueAsync(_sessionGetter?.Invoke(), category, c => c.Unread, c => c.Unread);
-
-        public Task<SupabaseResult<int>> GetUnreadCountAsync(SupabaseSession session, string userId = null, string category = null) =>
-            GetInboxCountValueAsync(session, category, c => c.Unread, c => c.Unread);
-
-        /// <summary>미수령 보상이 있는 메일 개수. <paramref name="userId"/>는 계약 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
+        /// <summary>미수령 메일 개수. <paramref name="userId"/>는 계약 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
         public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
-            GetInboxCountValueAsync(_sessionGetter?.Invoke(), category, c => c.UnclaimedMails, c => c.UnclaimedMails);
+            GetInboxCountValueAsync(_sessionGetter?.Invoke(), category, c => c.Unclaimed, c => c.Unclaimed);
 
         public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(SupabaseSession session, string userId = null, string category = null) =>
-            GetInboxCountValueAsync(session, category, c => c.UnclaimedMails, c => c.UnclaimedMails);
+            GetInboxCountValueAsync(session, category, c => c.Unclaimed, c => c.Unclaimed);
 
         private async Task<SupabaseResult<int>> GetInboxCountValueAsync(
             SupabaseSession session,
@@ -211,18 +204,18 @@ namespace TrueBase.Unity
             return await _mailbox.DeleteMailForUserRpcAsync(token, mailId);
         }
 
-        /// <summary>읽은 우편을 일괄 삭제합니다. 성공 시 삭제된 개수를 반환합니다.</summary>
+        /// <summary>수령한 우편을 일괄 삭제합니다. 성공 시 삭제된 개수를 반환합니다.</summary>
         /// <param name="category">삭제 대상 분류. null이면 전체 분류. (기본값: null)</param>
-        public Task<SupabaseResult<int>> DeleteReadMailsAsync(string category = null) =>
-            DeleteReadMailsAsync(_sessionGetter?.Invoke(), category);
+        public Task<SupabaseResult<int>> DeleteClaimedMailsAsync(string category = null) =>
+            DeleteClaimedMailsAsync(_sessionGetter?.Invoke(), category);
 
-        public async Task<SupabaseResult<int>> DeleteReadMailsAsync(SupabaseSession session, string category = null)
+        public async Task<SupabaseResult<int>> DeleteClaimedMailsAsync(SupabaseSession session, string category = null)
         {
             var token = RequireToken(session);
             if (token == null)
                 return SupabaseResult<int>.Fail("auth_not_signed_in");
 
-            return await _mailbox.DeleteReadMailsForUserRpcAsync(token, category);
+            return await _mailbox.DeleteClaimedMailsForUserRpcAsync(token, category);
         }
 
         /// <summary>세션에서 액세스 토큰을 추출합니다. 세션이 null이거나 토큰이 비어 있으면 null.</summary>

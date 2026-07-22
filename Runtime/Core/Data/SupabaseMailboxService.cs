@@ -10,12 +10,12 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// 우편함 REST + RPC. 상세 <c>ts_view_mail_for_user</c>, 수령 <c>ts_claim_*</c>, 삭제 <c>ts_delete_mail_for_user</c>·<c>ts_delete_read_mails_for_user</c>, 카운트 <c>ts_mail_inbox_counts</c>.
+    /// 우편함 REST + RPC. 상세 <c>ts_view_mail_for_user</c>, 수령 <c>ts_claim_*</c>, 삭제 <c>ts_delete_mail_for_user</c>·<c>ts_delete_claimed_mails_for_user</c>, 카운트 <c>ts_mail_inbox_counts</c>.
     /// </summary>
     public sealed class SupabaseMailboxService
     {
         private const string MailSelectColumns =
-            "id,account_id,user_id,sender_type,sender_name,title,content,is_read,expires_at,created_at,items,items_claimed_at,category,localized";
+            "id,account_id,user_id,sender_type,sender_name,title,content,expires_at,created_at,items,items_claimed_at,category,localized";
 
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
@@ -201,17 +201,17 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
-        /// <summary>읽음·삭제 가능한 메일만 일괄 소프트 삭제합니다. RPC <c>ts_delete_read_mails_for_user</c>. 반환값은 처리한 행 수.</summary>
+        /// <summary>수령한 메일만 일괄 소프트 삭제합니다. RPC <c>ts_delete_claimed_mails_for_user</c>. 반환값은 처리한 행 수.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="category">삭제 대상 분류. null·공백이면 전체 분류. (기본값: null).</param>
-        public async Task<SupabaseResult<int>> DeleteReadMailsForUserRpcAsync(
+        public async Task<SupabaseResult<int>> DeleteClaimedMailsForUserRpcAsync(
             string accessToken,
             string category = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<int>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
-            var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_read_mails_for_user";
+            var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_claimed_mails_for_user";
             var bodyJson = JsonConvert.SerializeObject(
                 new { p_category = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
             var response = await _httpClient.SendAsync(
@@ -224,11 +224,11 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<int>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<int>.Fail(response.ErrorMessage ?? response.Body ?? "delete_read_mails_failed");
+                return SupabaseResult<int>.Fail(response.ErrorMessage ?? response.Body ?? "delete_claimed_mails_failed");
 
             var body = response.Body?.Trim();
             if (string.IsNullOrEmpty(body))
-                return SupabaseResult<int>.Fail("delete_read_mails_empty_body");
+                return SupabaseResult<int>.Fail("delete_claimed_mails_empty_body");
 
             try
             {
@@ -237,11 +237,11 @@ namespace TrueBase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<int>.Fail("delete_read_mails_parse:" + e.Message);
+                return SupabaseResult<int>.Fail("delete_claimed_mails_parse:" + e.Message);
             }
         }
 
-        /// <summary>미읽음·미수령 보상 메일 개수를 조회합니다(JWT <c>auth.uid()</c> + 현재 프로필 서버 기준). RPC <c>ts_mail_inbox_counts</c>.</summary>
+        /// <summary>미수령 메일 개수를 조회합니다(JWT <c>auth.uid()</c> + 현재 프로필 서버 기준). RPC <c>ts_mail_inbox_counts</c>.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<MailInboxCounts>> GetInboxCountsAsync(string accessToken)
         {
@@ -392,7 +392,6 @@ namespace TrueBase.Core.Data
                 SenderName = r.SenderName ?? string.Empty,
                 Title = r.Title ?? string.Empty,
                 Content = r.Content ?? string.Empty,
-                IsRead = r.IsRead,
                 ExpiresAt = r.ExpiresAt,
                 CreatedAt = r.CreatedAt,
                 ItemsClaimedAt = r.ItemsClaimedAt,
@@ -465,9 +464,6 @@ namespace TrueBase.Core.Data
 
             [JsonProperty("content")]
             public string Content { get; set; }
-
-            [JsonProperty("is_read")]
-            public bool IsRead { get; set; }
 
             [JsonProperty("expires_at")]
             public DateTimeOffset ExpiresAt { get; set; }

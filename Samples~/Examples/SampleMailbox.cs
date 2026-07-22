@@ -20,7 +20,7 @@ using UnityEngine;
 ///   4 — 분류별 현황(ByCategory 덤프)
 ///   5 — 첫 미수령 메일 보상 수령
 ///   6 — 분류 일괄 수령(Demo Category)
-///   7 — 읽은 우편 일괄 삭제(Demo Category)
+///   7 — 수령한 우편 일괄 삭제(Demo Category)
 ///   8 — 첫 삭제 가능 메일 삭제
 /// </summary>
 public sealed class SampleMailbox : MonoBehaviour
@@ -47,7 +47,7 @@ public sealed class SampleMailbox : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha4)) _ = DumpCountsAsync();
         if (Input.GetKeyDown(KeyCode.Alpha5)) _ = ClaimFirstUnclaimedAsync();
         if (Input.GetKeyDown(KeyCode.Alpha6)) _ = ClaimAllInCategoryAsync();
-        if (Input.GetKeyDown(KeyCode.Alpha7)) _ = DeleteReadInCategoryAsync();
+        if (Input.GetKeyDown(KeyCode.Alpha7)) _ = DeleteClaimedInCategoryAsync();
         if (Input.GetKeyDown(KeyCode.Alpha8)) _ = DeleteFirstDeletableAsync();
     }
 
@@ -75,19 +75,19 @@ public sealed class SampleMailbox : MonoBehaviour
         var label = string.IsNullOrEmpty(category) ? "전체" : $"분류 '{category}'";
         Debug.Log($"{Tag} {label} {_lastList.Count}건");
         foreach (var m in _lastList)
-            Debug.Log($"{Tag}  [{m.Category}] {m.Title} — 읽음={m.IsRead}, 미수령보상={m.HasUnclaimedItems}");
+            Debug.Log($"{Tag}  [{m.Category}] {m.Title} — 수령={m.IsClaimed}, 미수령보상={m.HasUnclaimedItems}");
     }
 
-    /// <summary>4 — 미읽음·미수령 전체 집계 + 분류별 세부.</summary>
+    /// <summary>4 — 미수령 전체 집계 + 분류별 세부.</summary>
     private async Task DumpCountsAsync()
     {
         var r = await Supabase.GetMailInboxCountsAsync();
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 현황 조회 실패: {r.ErrorCode}"); return; }
 
         var c = r.Data;
-        Debug.Log($"{Tag} 전체 — 미읽음 {c.Unread}, 미수령 {c.UnclaimedMails}");
+        Debug.Log($"{Tag} 전체 — 미수령 {c.Unclaimed}");
         foreach (var kv in c.ByCategory)
-            Debug.Log($"{Tag}  분류 '{kv.Key}' — 미읽음 {kv.Value.Unread}, 미수령 {kv.Value.UnclaimedMails}");
+            Debug.Log($"{Tag}  분류 '{kv.Key}' — 미수령 {kv.Value.Unclaimed}");
     }
 
     /// <summary>5 — 마지막 조회 목록에서 미수령 보상이 있는 첫 메일을 수령합니다.</summary>
@@ -111,13 +111,13 @@ public sealed class SampleMailbox : MonoBehaviour
         Debug.Log($"{Tag} 분류 '{demoCategory}' 일괄 수령 — 총 {r.Data.Count}건 지급");
     }
 
-    /// <summary>7 — Demo Category 분류의 읽은 우편을 일괄 삭제합니다.</summary>
-    private async Task DeleteReadInCategoryAsync()
+    /// <summary>7 — Demo Category 분류의 수령한 우편을 일괄 삭제합니다.</summary>
+    private async Task DeleteClaimedInCategoryAsync()
     {
-        var r = await Supabase.DeleteReadMailsAsync(demoCategory);
+        var r = await Supabase.DeleteClaimedMailsAsync(demoCategory);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 일괄 삭제 실패: {r.ErrorCode}"); return; }
 
-        Debug.Log($"{Tag} 분류 '{demoCategory}' 읽은 우편 {r.Data}건 삭제");
+        Debug.Log($"{Tag} 분류 '{demoCategory}' 수령한 우편 {r.Data}건 삭제");
     }
 
     /// <summary>8 — 마지막 조회 목록에서 삭제 가능한 첫 메일을 삭제합니다.</summary>

@@ -192,9 +192,9 @@ begin
 
   insert into public.mails
     (account_id, user_id, sender_type, sender_name, title, content,
-     is_read, expires_at, created_at, items, batch_id, category, localized)
+     expires_at, created_at, items, batch_id, category, localized)
   select p.account_id, p.user_id, 'system', coalesce(p_sender_name, ''),
-         p_title, coalesce(p_content, ''), false, p_expires_at, now(), p_items, v_batch_id, v_category, p_localized
+         p_title, coalesce(p_content, ''), p_expires_at, now(), p_items, v_batch_id, v_category, p_localized
   from public.user_profiles p
   where p.account_id is not null
     and p.withdrawn_at is null

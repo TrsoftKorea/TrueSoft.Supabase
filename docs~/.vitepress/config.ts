@@ -181,9 +181,8 @@ export default defineConfig({
               { text: '보상 수령', link: '/guide/mailbox/claim' },
               { text: '전체 수령', link: '/guide/mailbox/claim-all' },
               { text: '삭제', link: '/guide/mailbox/delete' },
-              { text: '읽은 우편 일괄 삭제', link: '/guide/mailbox/delete-read' },
-              { text: '미읽음 수', link: '/guide/mailbox/counts-unread' },
-              { text: '미수령 보상 수', link: '/guide/mailbox/counts-unclaimed' },
+              { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' },
+              { text: '미수령 수', link: '/guide/mailbox/counts-unclaimed' },
               { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' }
             ]
           },

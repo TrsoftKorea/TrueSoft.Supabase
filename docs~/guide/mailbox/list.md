@@ -14,7 +14,7 @@ var result = await Supabase.GetMailsAsync();
 if (result.IsSuccess)
 {
     foreach (var mail in result.Data)
-        AddMailRow(mail.Title, mail.IsRead);
+        AddMailRow(mail.Title, mail.IsClaimed);
 }
 ```
 
@@ -35,7 +35,7 @@ if (result.IsSuccess)
 | `.Category` | `string` | 분류 |
 | `.Title` | `string` | 제목(기본 언어) |
 | `.Content` | `string` | 본문(기본 언어) |
-| `.IsRead` | `bool` | 읽음 여부 |
+| `.IsClaimed` | `bool` | 수령 여부. 텍스트 우편은 열람, 보상 우편은 수령 시 `true` |
 | `.Items` | `IReadOnlyList<MailItemPayload>` | 첨부 보상 |
 | `.HasUnclaimedItems` | `bool` | 미수령 보상 여부 |
 | `.Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |

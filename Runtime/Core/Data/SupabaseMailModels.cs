@@ -39,7 +39,6 @@ namespace TrueBase.Core.Data
         public string SenderName { get; set; }
         public string Title { get; set; }
         public string Content { get; set; }
-        public bool IsRead { get; set; }
         public DateTimeOffset ExpiresAt { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? ItemsClaimedAt { get; set; }
@@ -77,6 +76,9 @@ namespace TrueBase.Core.Data
         }
 
         public bool IsExpired => DateTimeOffset.UtcNow > ExpiresAt;
+
+        /// <summary>수령(첨부 없는 텍스트는 열람, 보상은 수령) 완료 여부. <c>items_claimed_at</c>이 채워졌으면 true.</summary>
+        public bool IsClaimed => ItemsClaimedAt != null;
 
         public bool HasUnclaimedItems =>
             ItemsClaimedAt == null
@@ -117,24 +119,19 @@ namespace TrueBase.Core.Data
             int count);
     }
 
-    /// <summary>한 분류의 미읽음·미수령 보상 메일 개수. <see cref="MailInboxCounts.ByCategory"/> 값.</summary>
+    /// <summary>한 분류의 미수령 메일 개수. <see cref="MailInboxCounts.ByCategory"/> 값.</summary>
     public sealed class MailCategoryCounts
     {
-        [JsonProperty("unread")]
-        public int Unread { get; set; }
-
-        [JsonProperty("unclaimed_mails")]
-        public int UnclaimedMails { get; set; }
+        [JsonProperty("unclaimed")]
+        public int Unclaimed { get; set; }
     }
 
     /// <summary><c>ts_mail_inbox_counts</c> 응답. 최상위는 전체 집계, <see cref="ByCategory"/>는 분류별 세부.</summary>
     public sealed class MailInboxCounts
     {
-        [JsonProperty("unread")]
-        public int Unread { get; set; }
-
-        [JsonProperty("unclaimed_mails")]
-        public int UnclaimedMails { get; set; }
+        /// <summary>미수령 메일 수(items_claimed_at 미설정 — 미열람 텍스트 + 미수령 보상).</summary>
+        [JsonProperty("unclaimed")]
+        public int Unclaimed { get; set; }
 
         /// <summary>분류별 세부 개수. 활성 메일이 있는 분류만 키로 존재.</summary>
         [JsonProperty("by_category")]

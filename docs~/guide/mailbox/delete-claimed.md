@@ -1,13 +1,13 @@
-# 읽은 우편 일괄 삭제
+# 수령한 우편 일괄 삭제
 
 ```csharp
-Task<SupabaseResult<int>> Supabase.DeleteReadMailsAsync(string category = null)
+Task<SupabaseResult<int>> Supabase.DeleteClaimedMailsAsync(string category = null)
 ```
 
-읽음 처리됐고 미수령 보상이 없는 우편만 일괄로 숨깁니다.
+수령한 우편만 일괄로 숨깁니다. 미수령 우편은 남습니다.
 
 ```csharp
-var result = await Supabase.DeleteReadMailsAsync();
+var result = await Supabase.DeleteClaimedMailsAsync();
 if (result.IsSuccess)
 {
     int deleted = result.Data;   // 삭제된 우편 개수

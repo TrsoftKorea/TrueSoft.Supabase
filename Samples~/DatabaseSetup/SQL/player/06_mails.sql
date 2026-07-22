@@ -19,7 +19,6 @@ create table if not exists public.mails (
   sender_name text not null default '',
   title text not null default '',
   content text not null default '',
-  is_read boolean not null default false,
   expires_at timestamptz not null,
   created_at timestamptz not null default now(),
   items jsonb null,
@@ -34,13 +33,26 @@ alter table public.mails add column if not exists sender_type text;
 alter table public.mails add column if not exists sender_name text;
 alter table public.mails add column if not exists title text;
 alter table public.mails add column if not exists content text;
-alter table public.mails add column if not exists is_read boolean;
 alter table public.mails add column if not exists expires_at timestamptz;
 alter table public.mails add column if not exists created_at timestamptz;
 alter table public.mails add column if not exists items jsonb;
 alter table public.mails add column if not exists items_claimed_at timestamptz;
 alter table public.mails add column if not exists deleted_at timestamptz;
 alter table public.mails add column if not exists category text not null default 'default';
+
+-- is_read 폐지: items_claimed_at 단일 축(수령/미수령)으로 통일합니다.
+-- 기존에 열람됐던 텍스트 메일을 수령 상태로 보존한 뒤 컬럼을 제거합니다(재실행 안전).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'mails' and column_name = 'is_read'
+  ) then
+    update public.mails set items_claimed_at = now()
+      where items_claimed_at is null and is_read is true;
+    alter table public.mails drop column is_read;
+  end if;
+end $$;
 
 do $$
 begin
@@ -138,8 +150,9 @@ begin
     or jsonb_typeof(m.items) <> 'array'
     or jsonb_array_length(m.items) = 0;
 
-  if no_attachment then
-    update public.mails set is_read = true where id = p_mail_id;
+  -- 첨부 없는 텍스트 메일은 열람 시 수령 처리(items_claimed_at). 보상 메일은 수령 시에만 처리.
+  if no_attachment and m.items_claimed_at is null then
+    update public.mails set items_claimed_at = now() where id = p_mail_id;
   end if;
 
   return (select to_jsonb(t) from public.mails t where t.id = p_mail_id);
@@ -147,7 +160,7 @@ end;
 $$;
 
 comment on function public.ts_view_mail_for_user(uuid) is
-  '본인·프로필 서버 일치 메일 1건 JSON. 보상 items 없으면 is_read 갱신. SECURITY DEFINER.';
+  '본인·프로필 서버 일치 메일 1건 JSON. 보상 items 없으면 열람 시 items_claimed_at(수령) 처리. SECURITY DEFINER.';
 
 revoke all on function public.ts_view_mail_for_user(uuid) from public;
 grant execute on function public.ts_view_mail_for_user(uuid) to authenticated;
@@ -221,8 +234,7 @@ begin
   end loop;
 
   update public.mails
-  set items_claimed_at = now(),
-      is_read = true
+  set items_claimed_at = now()
   where id = p_mail_id;
 
   select coalesce(
@@ -244,7 +256,7 @@ end;
 $$;
 
 comment on function public.ts_claim_mail_items(uuid) is
-  '본인·프로필 서버 일치 메일 보상 전부 수령(수령 시 읽음 처리). items 비면 [] 반환(no-op). SECURITY DEFINER.';
+  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). items 비면 [] 반환(no-op). SECURITY DEFINER.';
 
 revoke all on function public.ts_claim_mail_items(uuid) from public;
 grant execute on function public.ts_claim_mail_items(uuid) to authenticated;
@@ -312,8 +324,7 @@ begin
     end loop;
 
     update public.mails
-    set items_claimed_at = now(),
-        is_read = true
+    set items_claimed_at = now()
     where id = r.id;
 
     select coalesce(
@@ -339,7 +350,7 @@ end;
 $$;
 
 comment on function public.ts_claim_all_mail_items(text) is
-  '미수령 보상 메일 전부 일괄 수령(수령 시 각 메일 읽음 처리). p_category=null이면 전체 분류. SECURITY DEFINER.';
+  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. SECURITY DEFINER.';
 
 revoke all on function public.ts_claim_all_mail_items(text) from public;
 grant execute on function public.ts_claim_all_mail_items(text) to authenticated;
@@ -404,11 +415,13 @@ revoke all on function public.ts_delete_mail_for_user(uuid) from public;
 grant execute on function public.ts_delete_mail_for_user(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- RPC: 읽음 처리된 우편 일괄 소프트 삭제 (미수령 보상이 있는 메일은 제외)
+-- RPC: 수령한 우편 일괄 소프트 삭제 (미수령 = items_claimed_at is null 은 제외)
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_delete_read_mails_for_user();
+drop function if exists public.ts_delete_read_mails_for_user(text);
+drop function if exists public.ts_delete_claimed_mails_for_user();
 
-create or replace function public.ts_delete_read_mails_for_user(p_category text default null)
+create or replace function public.ts_delete_claimed_mails_for_user(p_category text default null)
 returns int
 language plpgsql
 security definer
@@ -429,7 +442,7 @@ begin
     from public.mails m
     where m.account_id = auth.uid()
       and m.deleted_at is null
-      and m.is_read = true
+      and m.items_claimed_at is not null
       and (v_category is null or m.category = v_category)
       and exists (
         select 1 from public.user_profiles p
@@ -437,12 +450,6 @@ begin
           and p.user_id = m.user_id
           and p.server_id is not null
           and p.server_id = public.auth_user_server_id()
-      )
-      and not (
-        m.items is not null
-        and jsonb_typeof(m.items) = 'array'
-        and jsonb_array_length(m.items) > 0
-        and m.items_claimed_at is null
       )
   )
   update public.mails u
@@ -455,11 +462,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_delete_read_mails_for_user(text) is
-  'is_read 이고 삭제 가능한(미수령 보상 없음) 메일만 일괄 숨김. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
+comment on function public.ts_delete_claimed_mails_for_user(text) is
+  '수령한(items_claimed_at) 메일만 일괄 숨김. 미수령은 제외. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
 
-revoke all on function public.ts_delete_read_mails_for_user(text) from public;
-grant execute on function public.ts_delete_read_mails_for_user(text) to authenticated;
+revoke all on function public.ts_delete_claimed_mails_for_user(text) from public;
+grant execute on function public.ts_delete_claimed_mails_for_user(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 만료 메일 하드 삭제 (서비스 롤·cron 전용)
@@ -500,7 +507,7 @@ revoke all on function public.ts_cleanup_expired_mails(int) from public;
 grant execute on function public.ts_cleanup_expired_mails(int) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 우편함 배지: 미읽음 수 · 미수령 보상 메일 수
+-- 우편함 배지: 미수령 메일 수 (items_claimed_at is null — 미열람 텍스트 + 미수령 보상)
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_mail_inbox_counts()
 returns jsonb
@@ -510,7 +517,6 @@ security definer
 set search_path = public
 as $$
 declare
-  v_unread int;
   v_unclaimed int;
   v_by_category jsonb;
 begin
@@ -519,7 +525,7 @@ begin
   end if;
 
   with my_mails as (
-    select m.category, m.is_read, m.items_claimed_at, m.items
+    select m.category, m.items_claimed_at
     from public.mails m
     where m.account_id = auth.uid()
       and m.deleted_at is null
@@ -535,36 +541,28 @@ begin
   ),
   per_category as (
     select category,
-           count(*) filter (where is_read = false)::int as unread,
-           count(*) filter (
-             where items_claimed_at is null
-               and items is not null
-               and jsonb_typeof(items) = 'array'
-               and jsonb_array_length(items) > 0
-           )::int as unclaimed_mails
+           count(*) filter (where items_claimed_at is null)::int as unclaimed
     from my_mails
     group by category
   )
   select
-    coalesce(sum(unread), 0)::int,
-    coalesce(sum(unclaimed_mails), 0)::int,
+    coalesce(sum(unclaimed), 0)::int,
     coalesce(
-      jsonb_object_agg(category, jsonb_build_object('unread', unread, 'unclaimed_mails', unclaimed_mails)),
+      jsonb_object_agg(category, jsonb_build_object('unclaimed', unclaimed)),
       '{}'::jsonb
     )
-  into v_unread, v_unclaimed, v_by_category
+  into v_unclaimed, v_by_category
   from per_category;
 
   return jsonb_build_object(
-    'unread', v_unread,
-    'unclaimed_mails', v_unclaimed,
+    'unclaimed', v_unclaimed,
     'by_category', v_by_category
   );
 end;
 $$;
 
 comment on function public.ts_mail_inbox_counts() is
-  '미읽음·미수령 보상 메일 개수(전체 집계) + by_category 분류별 세부 내역. SECURITY DEFINER.';
+  '미수령 메일 개수(items_claimed_at is null, 전체 집계) + by_category 분류별 세부 내역. SECURITY DEFINER.';
 
 revoke all on function public.ts_mail_inbox_counts() from public;
 grant execute on function public.ts_mail_inbox_counts() to authenticated;
