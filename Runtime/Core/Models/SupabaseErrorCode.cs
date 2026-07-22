@@ -181,5 +181,20 @@ namespace TrueBase.Core.Common
 
         /// <summary>IAP 초기화에 실패했습니다(스토어 연결·상품 조회 실패).</summary>
         public const string IapInitFailed = "iap_init_failed";
+
+        /// <summary>해당 코드의 리더보드가 없습니다.</summary>
+        public const string LeaderboardTableNotFound = "leaderboard_table_not_found";
+
+        /// <summary>리더보드가 종료되었거나 비활성이라 기록할 수 없습니다. 순위 조회는 계속 가능합니다.</summary>
+        public const string LeaderboardEnded = "leaderboard_ended";
+
+        /// <summary>존재하지 않는 회차입니다.</summary>
+        public const string LeaderboardRotationNotFound = "leaderboard_rotation_not_found";
+
+        /// <summary>해당 회차에 이 플레이어의 리더보드 기록이 없습니다.</summary>
+        public const string LeaderboardScoreNotFound = "leaderboard_score_not_found";
+
+        /// <summary>이 리더보드에 등록되지 않은 플레이어 데이터 컬럼입니다.</summary>
+        public const string LeaderboardColumnNotAllowed = "leaderboard_column_not_allowed";
     }
 }

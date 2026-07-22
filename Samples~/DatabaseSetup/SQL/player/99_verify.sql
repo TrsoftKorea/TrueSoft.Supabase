@@ -55,7 +55,10 @@ from (
       ('game_items'),
       ('purchases'),
       ('withdrawal_delete_queue'),
-      ('user_ban_messages')
+      ('user_ban_messages'),
+      ('leaderboard_tables'),
+      ('leaderboard_scores'),
+      ('leaderboard_table_columns')
   ) as exp(name)
   left join lateral (
     select c.oid, c.relrowsecurity
@@ -114,7 +117,28 @@ from (
       ('ts_request_withdrawal'),
       ('ts_my_withdrawal_status'),
       ('ts_withdrawal_cancel_redeem'),
-      ('ts_withdrawal_cleanup_batch')
+      ('ts_withdrawal_cleanup_batch'),
+      ('ts_leaderboard_next_rotation_at'),
+      ('ts_leaderboard_columns_of'),
+      ('ts_leaderboard_tables'),
+      ('ts_leaderboard_table'),
+      ('ts_leaderboard_submit_score'),
+      ('ts_leaderboard_range'),
+      ('ts_leaderboard_player'),
+      ('ts_leaderboard_set_player_data'),
+      ('ts_leaderboard_delete_my_score'),
+      ('ts_leaderboard_rotate_due'),
+      ('ts_admin_leaderboard_upsert_table'),
+      ('ts_admin_leaderboard_delete_table'),
+      ('ts_admin_leaderboard_rotate'),
+      ('ts_admin_leaderboard_set_score'),
+      ('ts_admin_leaderboard_set_player_data'),
+      ('ts_admin_leaderboard_delete_score'),
+      ('ts_admin_leaderboard_add_column'),
+      ('ts_admin_leaderboard_update_column'),
+      ('ts_admin_leaderboard_drop_column'),
+      ('ts_admin_leaderboard_attach_column'),
+      ('ts_admin_leaderboard_detach_column')
   ) as exp(name)
   left join lateral (
     select p.oid
@@ -165,6 +189,8 @@ from (
       ('mails',               'authenticated', 'SELECT'),
       ('purchases',           'authenticated', 'SELECT'),
       ('ts_protected_fields', 'authenticated', 'SELECT'),
+      -- 스키마 노출 전용(RLS 정책 0개라 행 반환 없음). 클래스 생성기가 컬럼 타입을 읽는 데 필요
+      ('leaderboard_scores',  'authenticated', 'SELECT'),
       ('display_names', 'authenticated', 'INSERT,SELECT,UPDATE'),
       ('user_profiles', 'authenticated', 'INSERT,SELECT,UPDATE'),
       ('user_sessions', 'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
@@ -200,7 +226,8 @@ from (
           ('game_items','authenticated'), ('mails','authenticated'),
           ('purchases','authenticated'), ('ts_protected_fields','authenticated'),
           ('display_names','authenticated'), ('user_profiles','authenticated'),
-          ('user_sessions','authenticated'), ('user_data','authenticated')
+          ('user_sessions','authenticated'), ('user_data','authenticated'),
+          ('leaderboard_scores','authenticated')
       ) as v(tbl, grantee)
     )
   group by g.table_name, g.grantee
@@ -243,7 +270,15 @@ from (
       ('ts_claim_all_mail_items',         'auth'),
       ('ts_delete_mail_for_user',         'auth'),
       ('ts_delete_claimed_mails_for_user','auth'),
-      ('ts_mail_inbox_counts',            'auth')
+      ('ts_mail_inbox_counts',            'auth'),
+      -- 리더보드
+      ('ts_leaderboard_tables',           'auth'),
+      ('ts_leaderboard_table',            'auth'),
+      ('ts_leaderboard_submit_score',     'auth'),
+      ('ts_leaderboard_range',            'auth'),
+      ('ts_leaderboard_player',           'auth'),
+      ('ts_leaderboard_set_player_data',  'auth'),
+      ('ts_leaderboard_delete_my_score',  'auth')
   ) as exp(fn, roles)
   left join lateral (
     select p.oid
@@ -289,7 +324,10 @@ from (
       'ts_my_withdrawal_status', 'ts_request_withdrawal', 'ts_transfer_my_server',
       'ts_delete_my_anon_recovery_tokens', 'ts_view_mail_for_user', 'ts_claim_mail_items',
       'ts_claim_all_mail_items', 'ts_delete_mail_for_user',
-      'ts_delete_claimed_mails_for_user', 'ts_mail_inbox_counts'
+      'ts_delete_claimed_mails_for_user', 'ts_mail_inbox_counts',
+      'ts_leaderboard_tables', 'ts_leaderboard_table', 'ts_leaderboard_submit_score',
+      'ts_leaderboard_range', 'ts_leaderboard_player', 'ts_leaderboard_set_player_data',
+      'ts_leaderboard_delete_my_score'
     )
 
   union all

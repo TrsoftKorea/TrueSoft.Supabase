@@ -111,7 +111,15 @@ namespace TrueBase.Editor
         /// </summary>
         /// <param name="tableName">테이블 이름. <c>schema.table</c> 형식이면 짧은 이름과 <c>_</c> 치환형 둘 다 시도합니다.</param>
         /// <param name="skipColumns">생성에서 제외할 컬럼명 집합(id·user_id 등 인프라 컬럼). null 허용.</param>
-        public static ParseTableResult ParseTableColumns(string openApiJson, string tableName, HashSet<string> skipColumns)
+        /// <param name="onlyColumns">
+        /// 지정하면 이 집합에 있는 컬럼만 생성합니다. 리더보드처럼 여러 용도가 물리 테이블 하나를 공유할 때,
+        /// 해당 리더보드에 등록된 컬럼만 뽑아 별도 클래스를 만들기 위해 사용합니다. null이면 전체 대상.
+        /// </param>
+        public static ParseTableResult ParseTableColumns(
+            string openApiJson,
+            string tableName,
+            HashSet<string> skipColumns,
+            HashSet<string> onlyColumns = null)
         {
             var warnings = new List<string>();
             var root = JObject.Parse(openApiJson);
@@ -136,6 +144,9 @@ namespace TrueBase.Editor
             {
                 var colName = p.Name;
                 if (skipColumns != null && skipColumns.Contains(colName))
+                    continue;
+
+                if (onlyColumns != null && onlyColumns.Contains(colName) == false)
                     continue;
 
                 if (IsValidCSharpIdentifierChars(colName) == false)

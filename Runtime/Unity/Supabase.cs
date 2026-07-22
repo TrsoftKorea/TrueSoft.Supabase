@@ -364,6 +364,38 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync() =>
             SupabaseSDK.TryGetMailInboxCountsAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardTablesAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> GetLeaderboardTablesAsync() =>
+            SupabaseSDK.TryGetLeaderboardTablesAsync();
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardTableAsync"/>
+        public static Task<SupabaseResult<LeaderboardTable>> GetLeaderboardTableAsync(string code) =>
+            SupabaseSDK.TryGetLeaderboardTableAsync(code);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySubmitLeaderboardScoreAsync"/>
+        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
+            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null) =>
+            SupabaseSDK.TrySubmitLeaderboardScoreAsync(code, score, extraData, data);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardRangeAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
+            string code, int start = 1, int end = 100, int? rotationCount = null) =>
+            SupabaseSDK.TryGetLeaderboardRangeAsync(code, start, end, rotationCount);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardPlayerAsync"/>
+        public static Task<SupabaseResult<LeaderboardPlayerEntry>> GetLeaderboardPlayerAsync(
+            string code, string accountId = null, int? rotationCount = null) =>
+            SupabaseSDK.TryGetLeaderboardPlayerAsync(code, accountId, rotationCount);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySetLeaderboardPlayerDataAsync"/>
+        public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
+            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null) =>
+            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(code, extraData, data, rotationCount);
+
+        /// <inheritdoc cref="SupabaseSDK.TryDeleteMyLeaderboardScoreAsync"/>
+        public static Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null) =>
+            SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(code, rotationCount);
+
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
             SupabaseSDK.TryGetUnclaimedMailCountAsync(userId, category);

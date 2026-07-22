@@ -186,6 +186,21 @@ export default defineConfig({
               { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' }
             ]
           },
+          {
+            text: '리더보드',
+            link: '/guide/leaderboard/',
+            collapsed: true,
+            items: [
+              { text: '목록 조회', link: '/guide/leaderboard/tables' },
+              { text: '리더보드 조회', link: '/guide/leaderboard/table' },
+              { text: '점수 기록', link: '/guide/leaderboard/submit' },
+              { text: '순위 조회', link: '/guide/leaderboard/range' },
+              { text: '플레이어 순위 조회', link: '/guide/leaderboard/player' },
+              { text: '추가 데이터 수정', link: '/guide/leaderboard/set-player-data' },
+              { text: '본인 기록 삭제', link: '/guide/leaderboard/delete-my-score' },
+              { text: '플레이어 데이터 컬럼', link: '/guide/leaderboard/columns' }
+            ]
+          },
           { text: '서버 시간', link: '/guide/server-time' }
         ]
       },
@@ -221,6 +236,7 @@ export default defineConfig({
           { text: '게임 데이터', link: '/guide/api/game-data' },
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '우편함', link: '/guide/api/mailbox' },
+          { text: '리더보드', link: '/guide/api/leaderboard' },
           { text: '기타', link: '/guide/api/etc' },
           { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]

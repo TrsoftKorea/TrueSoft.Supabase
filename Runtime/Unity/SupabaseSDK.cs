@@ -47,6 +47,7 @@ namespace TrueBase.Unity
         private static PublicProfile _pendingSignInProfile = PublicProfile.Empty;
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
+        private static LeaderboardFacade _leaderboard;
         private static RemoteConfigFacade _remoteConfig;
         private static ServerFunctionsFacade _functions;
         private static string _initializedProjectUrl;
@@ -230,6 +231,13 @@ namespace TrueBase.Unity
             public const string MailboxDeleteClaimedBulk = "Supabase.Mailbox.Delete.ClaimedBulk";
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
             public const string MailboxCountsDetail = "Supabase.Mailbox.Counts.Detail";
+            public const string LeaderboardTables = "Supabase.Leaderboard.Tables";
+            public const string LeaderboardTable = "Supabase.Leaderboard.Table";
+            public const string LeaderboardSubmit = "Supabase.Leaderboard.Submit";
+            public const string LeaderboardRange = "Supabase.Leaderboard.Range";
+            public const string LeaderboardPlayer = "Supabase.Leaderboard.Player";
+            public const string LeaderboardSetPlayerData = "Supabase.Leaderboard.SetPlayerData";
+            public const string LeaderboardDeleteMyScore = "Supabase.Leaderboard.DeleteMyScore";
         }
 
         /// <summary>
@@ -1731,6 +1739,19 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>리더보드(순위 조회·점수 기록 RPC). 리더보드 정의·컬럼 관리는 운영 전용입니다.</summary>
+        public static LeaderboardFacade Leaderboard
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _leaderboard ??= new LeaderboardFacade(_bootstrap.LeaderboardService, () => _currentSession);
+            }
+        }
+
         /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
@@ -1859,6 +1880,135 @@ namespace TrueBase.Unity
         {
             var r = await GetMailInboxCountsAsync();
             return LogAndReturnResult(ApiLogTags.MailboxCountsDetail, r);
+        }
+
+        /// <summary><c>ts_leaderboard_tables</c> — 사용 가능한 리더보드 목록(비활성·종료 제외).</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> GetLeaderboardTablesAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<LeaderboardTable>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.GetTablesAsync();
+        }
+
+        /// <summary><c>ts_leaderboard_table</c> — 리더보드 정의·현재 회차 상태.</summary>
+        public static async Task<SupabaseResult<LeaderboardTable>> GetLeaderboardTableAsync(string code)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<LeaderboardTable>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.GetTableAsync(code);
+        }
+
+        /// <summary><c>ts_leaderboard_submit_score</c> — 본인 점수 기록. 기록 방식은 서버 설정을 따릅니다.</summary>
+        public static async Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
+            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<LeaderboardSubmitResult>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.SubmitScoreAsync(code, score, extraData, data);
+        }
+
+        /// <summary><c>ts_leaderboard_range</c> — 순위 범위 조회(최대 100건). <paramref name="rotationCount"/>=null이면 현재 회차.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
+            string code, int start = 1, int end = 100, int? rotationCount = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<LeaderboardEntry>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.GetRangeAsync(code, start, end, rotationCount);
+        }
+
+        /// <summary><c>ts_leaderboard_player</c> — 플레이어 순위. <paramref name="accountId"/>=null이면 본인.</summary>
+        public static async Task<SupabaseResult<LeaderboardPlayerEntry>> GetLeaderboardPlayerAsync(
+            string code, string accountId = null, int? rotationCount = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<LeaderboardPlayerEntry>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.GetPlayerAsync(code, accountId, rotationCount);
+        }
+
+        /// <summary><c>ts_leaderboard_set_player_data</c> — 본인 추가 데이터·등록 컬럼 수정. 점수는 그대로.</summary>
+        public static async Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
+            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.SetPlayerDataAsync(code, extraData, data, rotationCount);
+        }
+
+        /// <summary><c>ts_leaderboard_delete_my_score</c> — 본인 기록 삭제. 없으면 no-op.</summary>
+        public static async Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Leaderboard.DeleteMyScoreAsync(code, rotationCount);
+        }
+
+        /// <inheritdoc cref="GetLeaderboardTablesAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> TryGetLeaderboardTablesAsync()
+        {
+            var r = await GetLeaderboardTablesAsync();
+            return LogAndReturnResult(ApiLogTags.LeaderboardTables, r);
+        }
+
+        /// <inheritdoc cref="GetLeaderboardTableAsync"/>
+        public static async Task<SupabaseResult<LeaderboardTable>> TryGetLeaderboardTableAsync(string code)
+        {
+            var r = await GetLeaderboardTableAsync(code);
+            return LogAndReturnResult(ApiLogTags.LeaderboardTable, r);
+        }
+
+        /// <inheritdoc cref="SubmitLeaderboardScoreAsync"/>
+        public static async Task<SupabaseResult<LeaderboardSubmitResult>> TrySubmitLeaderboardScoreAsync(
+            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null)
+        {
+            var r = await SubmitLeaderboardScoreAsync(code, score, extraData, data);
+            return LogAndReturnResult(ApiLogTags.LeaderboardSubmit, r);
+        }
+
+        /// <inheritdoc cref="GetLeaderboardRangeAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> TryGetLeaderboardRangeAsync(
+            string code, int start = 1, int end = 100, int? rotationCount = null)
+        {
+            var r = await GetLeaderboardRangeAsync(code, start, end, rotationCount);
+            return LogAndReturnResult(ApiLogTags.LeaderboardRange, r);
+        }
+
+        /// <inheritdoc cref="GetLeaderboardPlayerAsync"/>
+        public static async Task<SupabaseResult<LeaderboardPlayerEntry>> TryGetLeaderboardPlayerAsync(
+            string code, string accountId = null, int? rotationCount = null)
+        {
+            var r = await GetLeaderboardPlayerAsync(code, accountId, rotationCount);
+            return LogAndReturnResult(ApiLogTags.LeaderboardPlayer, r);
+        }
+
+        /// <inheritdoc cref="SetLeaderboardPlayerDataAsync"/>
+        public static async Task<SupabaseResult> TrySetLeaderboardPlayerDataAsync(
+            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+        {
+            var r = await SetLeaderboardPlayerDataAsync(code, extraData, data, rotationCount);
+            LogApiResult(ApiLogTags.LeaderboardSetPlayerData, r.IsSuccess, r.ErrorCode);
+            return r;
+        }
+
+        /// <inheritdoc cref="DeleteMyLeaderboardScoreAsync"/>
+        public static async Task<SupabaseResult> TryDeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null)
+        {
+            var r = await DeleteMyLeaderboardScoreAsync(code, rotationCount);
+            LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode);
+            return r;
         }
 
         /// <inheritdoc cref="GetUnclaimedMailCountAsync"/>

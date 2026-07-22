@@ -38,6 +38,10 @@ grant select on table public.mails               to authenticated;
 grant select on table public.purchases           to authenticated;
 grant select on table public.ts_protected_fields to authenticated;
 
+-- 스키마 노출 전용(데이터 접근 아님) — RLS 정책 0개라 행은 반환되지 않는다.
+-- 클래스 생성기가 OpenAPI 에서 리더보드 플레이어 데이터 컬럼의 타입을 읽는 데 필요하다.
+grant select on table public.leaderboard_scores to authenticated;
+
 -- 본인 행 읽기·쓰기 — RLS 정책이 account_id = auth.uid() 로 제한
 grant select, insert, update         on table public.display_names to authenticated;
 grant select, insert, update         on table public.user_profiles to authenticated;
@@ -89,12 +93,24 @@ grant execute on function public.ts_delete_mail_for_user(uuid)             to au
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;
 grant execute on function public.ts_mail_inbox_counts()                    to authenticated;
 
+-- 리더보드 (16_leaderboard.sql)
+grant execute on function public.ts_leaderboard_tables()                              to authenticated;
+grant execute on function public.ts_leaderboard_table(text)                           to authenticated;
+grant execute on function public.ts_leaderboard_submit_score(text, numeric, text, jsonb) to authenticated;
+grant execute on function public.ts_leaderboard_range(text, int, int, int)            to authenticated;
+grant execute on function public.ts_leaderboard_player(text, uuid, int)               to authenticated;
+grant execute on function public.ts_leaderboard_set_player_data(text, text, jsonb, int) to authenticated;
+grant execute on function public.ts_leaderboard_delete_my_score(text, int)            to authenticated;
+
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
 --                                            열려 있으면 플레이어가 재화 최소값 보호를 해제할 수 있다.
 --   ts_run_due_mail_schedules / ts_withdrawal_cleanup_batch / ts_cleanup_expired_mails
---   ts_admin_* (우편 발송·카탈로그), rls_auto_enable, ts_mail_schedule_next_run
+--   ts_admin_* (우편 발송·카탈로그·리더보드), rls_auto_enable, ts_mail_schedule_next_run
+--   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
+--   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
+--                             리더보드를 지우거나 점수를 조작할 수 있다.
 
 -- ---------------------------------------------------------------------------
 -- 검증

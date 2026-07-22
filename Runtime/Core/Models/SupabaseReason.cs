@@ -76,6 +76,11 @@ namespace TrueBase.Core.Common
         IapServicesInitFailed,
         IapInitTimeout,
         IapInitFailed,
+        LeaderboardTableNotFound,
+        LeaderboardEnded,
+        LeaderboardRotationNotFound,
+        LeaderboardScoreNotFound,
+        LeaderboardColumnNotAllowed,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -145,6 +150,11 @@ namespace TrueBase.Core.Common
             SupabaseErrorCode.IapServicesInitFailed => SupabaseReason.IapServicesInitFailed,
             SupabaseErrorCode.IapInitTimeout => SupabaseReason.IapInitTimeout,
             SupabaseErrorCode.IapInitFailed => SupabaseReason.IapInitFailed,
+            SupabaseErrorCode.LeaderboardTableNotFound => SupabaseReason.LeaderboardTableNotFound,
+            SupabaseErrorCode.LeaderboardEnded => SupabaseReason.LeaderboardEnded,
+            SupabaseErrorCode.LeaderboardRotationNotFound => SupabaseReason.LeaderboardRotationNotFound,
+            SupabaseErrorCode.LeaderboardScoreNotFound => SupabaseReason.LeaderboardScoreNotFound,
+            SupabaseErrorCode.LeaderboardColumnNotAllowed => SupabaseReason.LeaderboardColumnNotAllowed,
             _ => SupabaseReason.Unknown,
         };
     }

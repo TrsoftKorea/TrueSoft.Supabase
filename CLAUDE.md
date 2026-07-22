@@ -133,6 +133,7 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 13. `13_mail_schedules.sql` — mail_schedules + cron 기반 예약·반복 발송
 14. `14_mail_categories.sql` — mail_categories 카탈로그
 15. `15_grants_hardening.sql` — anon·authenticated 테이블·함수 권한 최소화
+16. `16_leaderboard.sql` — 리더보드 정의·기록·컬럼 등록 + 순위 RPC
 
 `99_verify.sql` — validation script.
 

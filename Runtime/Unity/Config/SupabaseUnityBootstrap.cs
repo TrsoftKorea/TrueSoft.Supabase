@@ -26,6 +26,7 @@ namespace TrueBase.Unity.Config
         public SupabaseAnonymousRecoveryService AnonymousRecoveryService { get; private set; }
         public SupabaseServerTimeService ServerTimeService { get; private set; }
         public SupabaseMailboxService MailboxService { get; private set; }
+        public SupabaseLeaderboardService LeaderboardService { get; private set; }
         /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public float DuplicateSessionPollSeconds { get; private set; }
 
@@ -121,6 +122,11 @@ namespace TrueBase.Unity.Config
                 options.PublishableKey,
                 http,
                 "mails");
+
+            LeaderboardService = new SupabaseLeaderboardService(
+                options.ProjectURL,
+                options.PublishableKey,
+                http);
 
             DuplicateSessionPollSeconds = settings.duplicateSessionPollSeconds;
             DuplicateSessionActionCheckCooldownSeconds = options.DuplicateSessionActionCheckCooldownSeconds;
