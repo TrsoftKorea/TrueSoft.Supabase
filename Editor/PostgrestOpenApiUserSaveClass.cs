@@ -407,7 +407,8 @@ namespace TrueBase.Editor
 
         /// <summary>
         /// OpenAPI 속성의 <c>default</c>를 UI 기본값 원본 문자열로 변환합니다.
-        /// 스칼라 컬럼의 리터럴만 반환하고, 함수·캐스트(<c>now()</c>·<c>gen_random_uuid()</c>·<c>'…'::type</c>)·jsonb·컬렉션 기본값은 null.
+        /// 스칼라 컬럼의 리터럴만 반환합니다. 캐스트(<c>::type</c>)는 벗겨 리터럴을 추출하고(<c>'guest'::text</c>→<c>guest</c>, <c>100::numeric(10,2)</c>→<c>100</c>),
+        /// 함수(<c>now()</c>·<c>gen_random_uuid()</c>·<c>nextval(...)</c>)·<c>NULL</c>·jsonb·컬렉션 기본값은 null.
         /// PostgREST는 숫자/bool을 네이티브 JSON, 문자열/날짜를 문자열로 노출합니다.
         /// </summary>
         private static string ExtractDbDefaultRaw(JObject prop, string clrType)
@@ -427,8 +428,22 @@ namespace TrueBase.Editor
                 {
                     var s = token.Value<string>()?.Trim();
                     if (string.IsNullOrEmpty(s)) return null;
-                    // 함수/표현식 기본값 제외 — 괄호나 캐스트가 있으면 리터럴이 아님.
-                    if (s.IndexOf('(') >= 0 || s.IndexOf("::", StringComparison.Ordinal) >= 0) return null;
+
+                    // 캐스트(::type) 제거 — Postgres는 스칼라 리터럴도 캐스트를 붙여 노출한다('guest'::text, 100::numeric(10,2)).
+                    // 첫 '::' 앞부분이 리터럴이고, 뒤의 타입명·모디파이어(괄호 포함)는 버린다.
+                    var castIdx = s.IndexOf("::", StringComparison.Ordinal);
+                    if (castIdx >= 0) s = s.Substring(0, castIdx).Trim();
+                    if (string.IsNullOrEmpty(s)) return null;
+
+                    // 문자열 리터럴('...')은 따옴표를 벗겨 원문만 반환한다(이스케이프된 '' → ' 복원).
+                    // 값 안에 괄호가 있어도 리터럴이므로 허용한다.
+                    if (s.Length >= 2 && s[0] == '\'' && s[s.Length - 1] == '\'')
+                        return s.Substring(1, s.Length - 2).Replace("''", "'");
+
+                    // 따옴표 없는 값: 함수·표현식(now()·gen_random_uuid()·nextval(...))은 리터럴이 아니므로 제외.
+                    if (s.IndexOf('(') >= 0) return null;
+                    // NULL 기본값은 값 없음으로 취급.
+                    if (string.Equals(s, "NULL", StringComparison.OrdinalIgnoreCase)) return null;
                     return s;
                 }
                 default:

@@ -840,15 +840,25 @@ namespace TrueBase.Editor
                     if (existingFieldNames.TryGetValue(col.Name, out var fn) && !string.IsNullOrWhiteSpace(fn))
                         col.FieldName = fn;
 
-                // 기본값 복원 — 기존 파일 폴백, EditorPrefs 우선
-                var existingDefaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                // 기본값 복원 우선순위: CSV 등록값 > DB 기본값 > 캐시(EditorPrefs·기존 파일).
+                // - CSV에 명시된 값이 있으면 최우선(사용자가 의도적으로 지정한 오버라이드).
+                // - CSV가 없으면 방금 가져온 DB 기본값을 그대로 사용(위 프리필 유지).
+                // - CSV도 DB 기본값도 없는 컬럼만 캐시로 채운다.
+                // (이전엔 캐시된 옛 DB 기본값이 새 DB 기본값을 덮어써 "불러온 기본값 ≠ DB 기본값"이 나던 문제가 있었음)
+                var csvDefaults = LoadColumnDefaultsFromCsv();
+                var fallbackDefaults = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var kv in TryLoadExistingDefaults())
-                    existingDefaults[kv.Key] = kv.Value;
+                    fallbackDefaults[kv.Key] = kv.Value;
                 foreach (var kv in LoadColumnDefaultsFromPrefs())
-                    existingDefaults[kv.Key] = kv.Value;
+                    fallbackDefaults[kv.Key] = kv.Value;
                 foreach (var col in _editableColumns)
-                    if (existingDefaults.TryGetValue(col.Name, out var dv) && !string.IsNullOrWhiteSpace(dv))
-                        col.DefaultValue = dv;
+                {
+                    if (csvDefaults.TryGetValue(col.Name, out var cv) && !string.IsNullOrWhiteSpace(cv))
+                        col.DefaultValue = cv;
+                    else if (string.IsNullOrWhiteSpace(col.DefaultValue)
+                             && fallbackDefaults.TryGetValue(col.Name, out var fv) && !string.IsNullOrWhiteSpace(fv))
+                        col.DefaultValue = fv;
+                }
 
                 // 복원된 커스텀 타입(EditorPrefs·기존 파일)이 여전히 해석 가능한지 검사
                 ValidateColumnTypes();
@@ -1507,6 +1517,43 @@ namespace TrueBase.Editor
                        ?? new Dictionary<string, string>();
             }
             catch { return new Dictionary<string, string>(); }
+        }
+
+        /// <summary>
+        /// 지정된 CSV 파일에서 컬럼명→기본값 매핑을 로드합니다(비어있지 않은 기본값만).
+        /// 파일이 없거나 읽기 실패면 빈 딕셔너리. "필드 목록 가져오기" 시 DB 기본값보다 우선 적용됩니다.
+        /// </summary>
+        private static Dictionary<string, string> LoadColumnDefaultsFromCsv()
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var path = EditorPrefs.GetString(PrefsKeyCsvPath, "");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return result;
+
+            string[] lines;
+            try { lines = File.ReadAllLines(path); }
+            catch { return result; }
+
+            var firstRow = true;
+            foreach (var raw in lines)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var cells = ParseCsvLine(raw);
+                if (cells.Count == 0) continue;
+
+                // 헤더 행 스킵(첫 셀이 "column")
+                if (firstRow)
+                {
+                    firstRow = false;
+                    if (cells[0].Trim().Equals("column", StringComparison.OrdinalIgnoreCase)) continue;
+                }
+
+                var name = cells[0].Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                // default 열(index 4)이 비어있지 않을 때만 "등록된 값"으로 취급
+                if (cells.Count > 4 && !string.IsNullOrWhiteSpace(cells[4]))
+                    result[name] = cells[4];
+            }
+            return result;
         }
 
         /// <summary>프로젝트의 기존 생성 파일에서 컬럼명→기본값을 복원합니다. 없으면 빈 딕셔너리.</summary>
