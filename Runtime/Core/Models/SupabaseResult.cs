@@ -15,6 +15,9 @@ namespace TrueBase.Core.Common
         /// 실패 사유의 enum 코드(성공 시 <see cref="SupabaseReason.None"/>).
         /// <c>if (result.Reason == SupabaseReason.UserBanned)</c>처럼 타입 안전하게 분기한다.
         /// 카탈로그에 없는 동적 사유는 <see cref="SupabaseReason.Unknown"/>이며, 원문은 <see cref="ErrorCode"/>에서 확인한다.
+        /// <para>사유가 있는 결과는 항상 <see cref="IsSuccess"/>가 false다. 오류가 아닌 상황
+        /// (예: 변경분이 없어 전송을 건너뜀 → <see cref="SupabaseReason.UserSaveNoChanges"/>)도
+        /// 호출자가 사유를 확인할 수 있도록 실패로 반환한다.</para>
         /// </summary>
         public SupabaseReason Reason => SupabaseReasonMap.FromErrorCode(ErrorCode);
 

@@ -197,8 +197,9 @@ namespace TrueBase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<float> getDirtyCooldown = null) =>
-            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown);
+            Func<float> getDirtyCooldown = null,
+            Func<bool> hasFreshDirty = null) =>
+            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown, hasFreshDirty);
 
         /// <summary>정적 세이브 값이 바뀌었음을 알립니다(쿨타임 스케줄).</summary>
         internal static void MarkUserSaveStaticDirty(string key) =>
@@ -217,10 +218,15 @@ namespace TrueBase.Unity
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
         /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        public static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000) =>
-            await SupabaseSDK.TrySaveAllAsync(timeoutMs)
+        public static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000)
+        {
+            if (!SupabaseSDK.HasPendingUserSaveFlush())
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
+
+            return await SupabaseSDK.TrySaveAllAsync(timeoutMs)
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+        }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicNameAsync(string)"/>
         public static Task<SupabaseResult<string>> GetPublicNameAsync(string userId) =>

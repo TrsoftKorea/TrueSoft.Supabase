@@ -21,6 +21,10 @@ if (!result.IsSuccess)
 `None`은 성공했거나 실패 사유가 없는 경우(`ErrorCode`가 비어 있음)이고, `Unknown`은 사유는 있으나 카탈로그에 없는 동적·서버·네이티브 문자열입니다. 이때 원문은 `ErrorCode`에서 확인하세요.
 :::
 
+::: info 오류가 아닌 사유도 실패로 옵니다
+사유가 있는 결과는 항상 `IsSuccess`가 false입니다. 그래야 호출자가 `Reason`을 확인할 수 있기 때문입니다. 예를 들어 저장할 변경분이 없어 전송을 건너뛴 경우도 `UserSaveNoChanges` 사유의 실패로 돌아옵니다. 실패라고 해서 모두 오류인 것은 아니므로, 이런 사유는 `Reason`으로 걸러 정상 흐름으로 처리하세요.
+:::
+
 ## 공통 · 세션
 
 | Reason | 설명 |
@@ -114,6 +118,7 @@ if (!result.IsSuccess)
 | `UserSaveFlushFailed` | 유저 세이브 저장에 실패했습니다 |
 | `UserSaveLoadFailed` | 유저 세이브 로드에 실패했습니다 |
 | `UserSaveDeleteFailed` | 유저 세이브 삭제에 실패했습니다 |
+| `UserSaveNoChanges` | 변경된 값이 없어 전송을 건너뛰었습니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다 |
 
 ## 우편함
 

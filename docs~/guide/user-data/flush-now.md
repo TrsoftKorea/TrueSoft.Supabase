@@ -10,6 +10,14 @@ Task<SupabaseResult> PlayerSave.FlushNowAsync(int timeoutMs = 5000)
 await PlayerSave.FlushNowAsync();   // 전송 완료까지 대기
 ```
 
+보낼 변경분이 없으면 네트워크 요청 없이 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻이므로, 저장 실패를 처리할 때 이 사유는 걸러내세요.
+
+```csharp
+var result = await PlayerSave.FlushNowAsync();
+if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
+    ShowSaveError(result.ErrorCode);
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |
@@ -21,3 +29,4 @@ await PlayerSave.FlushNowAsync();   // 전송 완료까지 대기
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.UserSaveFlushFailed` | 전송 실패 또는 타임아웃 |
+| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뜀. 오류 아님 |

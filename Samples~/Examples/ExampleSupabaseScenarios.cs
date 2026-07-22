@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using TrueBase.Core.Common;
 using TrueBase.Core.Data;
+using TrueBase.Core.Models;
 using TrueBase.Unity;
 using TrueBase.Unity.Config;
 using UnityEngine;
@@ -237,9 +238,13 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await Supabase.SaveAllAsync();
-        if (!ok) Debug.LogWarning("[Supabase] 데이터 저장 실패.");
-        else     Debug.Log("[Supabase] 데이터 저장 완료.");
+        var result = await Supabase.SaveAllAsync();
+        if (result.IsSuccess)
+            Debug.Log("[Supabase] 데이터 저장 완료.");
+        else if (result.Reason == SupabaseReason.UserSaveNoChanges)
+            Debug.Log("[Supabase] 변경분이 없어 전송하지 않았습니다.");
+        else
+            Debug.LogWarning($"[Supabase] 데이터 저장 실패 — {result.ErrorCode}");
     }
 
     /// <summary>F — 레벨 +1, 그리고 영웅 1번 레벨 +1(AutoDict 자동 확장 시연). 변경은 자동 저장에 반영됩니다.</summary>

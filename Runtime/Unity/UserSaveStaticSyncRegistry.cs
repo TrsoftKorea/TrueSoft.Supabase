@@ -15,6 +15,8 @@ namespace TrueBase.Unity
         {
             public string Key;
             public Func<bool> HasDirty;
+            /// <summary>throttle 캐시를 무시한 정확한 dirty 검사. null이면 <see cref="HasDirty"/>로 대체.</summary>
+            public Func<bool> HasFreshDirty;
             public Func<Task<bool>> FlushAsync;
             public Action ResetLocalState;
             public bool IsInFlight;
@@ -61,12 +63,14 @@ namespace TrueBase.Unity
         /// <param name="flushAsync">변경분 전송. null이면 등록 자체가 무시됩니다.</param>
         /// <param name="resetLocalState"><see cref="ResetAll"/> 시 로컬 상태 초기화. null 허용.</param>
         /// <param name="getDirtyCooldown">dirty 우선순위별 쿨다운(초) 반환. null이면 전역 단일 쿨다운을 사용합니다.</param>
+        /// <param name="hasFreshDirty">throttle 캐시를 무시한 정확한 dirty 검사. null이면 <paramref name="hasDirty"/>를 사용합니다.</param>
         public static void Register(
             string key,
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<float> getDirtyCooldown = null)
+            Func<float> getDirtyCooldown = null,
+            Func<bool> hasFreshDirty = null)
         {
             if (string.IsNullOrWhiteSpace(key) || hasDirty == null || flushAsync == null)
                 return;
@@ -75,6 +79,7 @@ namespace TrueBase.Unity
             if (Entries.TryGetValue(id, out var existing))
             {
                 existing.HasDirty = hasDirty;
+                existing.HasFreshDirty = hasFreshDirty;
                 existing.FlushAsync = flushAsync;
                 existing.ResetLocalState = resetLocalState;
                 existing.GetDirtyCooldown = getDirtyCooldown;
@@ -85,11 +90,31 @@ namespace TrueBase.Unity
             {
                 Key = id,
                 HasDirty = hasDirty,
+                HasFreshDirty = hasFreshDirty,
                 FlushAsync = flushAsync,
                 ResetLocalState = resetLocalState,
                 GetDirtyCooldown = getDirtyCooldown,
                 NextAllowedAtRealtime = 0f
             };
+        }
+
+        /// <summary>
+        /// 등록된 항목 중 전송할 변경분이 있거나 전송 중인 것이 하나라도 있는지 반환합니다.
+        /// throttle 캐시를 무시하고 신선하게 검사하므로 즉시 저장 직전 판정에 사용할 수 있습니다.
+        /// </summary>
+        public static bool HasPendingFlush()
+        {
+            foreach (var entry in Entries.Values)
+            {
+                if (entry.IsInFlight)
+                    return true;
+
+                var check = entry.HasFreshDirty ?? entry.HasDirty;
+                try { if (check != null && check.Invoke()) return true; }
+                catch { return true; }  // 검사 실패 시 보수적으로 "보낼 것이 있다"로 판단
+            }
+
+            return false;
         }
 
         /// <summary>

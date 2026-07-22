@@ -1302,10 +1302,14 @@ namespace TrueBase.Unity
             Func<bool> hasDirty,
             Func<Task<bool>> flushAsync,
             Action resetLocalState = null,
-            Func<float> getDirtyCooldown = null)
+            Func<float> getDirtyCooldown = null,
+            Func<bool> hasFreshDirty = null)
         {
-            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown);
+            UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown, hasFreshDirty);
         }
+
+        /// <summary>등록된 정적 세이브 중 전송할 변경분이 있거나 전송 중인 것이 있는지 반환합니다.</summary>
+        internal static bool HasPendingUserSaveFlush() => UserSaveStaticSyncRegistry.HasPendingFlush();
 
         /// <summary>정적 세이브에 변경이 생겼음을 알립니다(쿨타임 스케줄).</summary>
         public static void MarkUserSaveStaticDirty(string key)

@@ -10,8 +10,11 @@ SupabaseResult PlayerSave.RequestImmediateSave()
 PlayerSave.RequestImmediateSave();   // 완료를 기다리지 않음
 ```
 
+보낼 변경분이 없으면 요청 자체를 하지 않고 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다.
+
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.UserSaveFlushFailed` | 전송 요청 실패 |
+| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 요청하지 않음. 오류 아님 |

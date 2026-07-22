@@ -12,11 +12,13 @@ if (result.IsSuccess)
 {
     // 저장 완료
 }
-else
+else if (result.Reason != SupabaseReason.UserSaveNoChanges)
 {
     // 실패 처리
 }
 ```
+
+보낼 변경분이 없으면 전송하지 않고 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻이므로 위 예제처럼 걸러냅니다.
 
 **파라미터**
 
@@ -29,6 +31,7 @@ else
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.UserSaveFlushFailed` | 저장 실패 (네트워크 오류 또는 타임아웃) |
+| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뜀. 오류 아님 |
 
 ::: info
 `SupabaseRuntime`을 씬에 배치하면 `OnApplicationPause` / `OnApplicationQuit` 시 자동으로 플러시합니다.

@@ -164,6 +164,9 @@ namespace TrueBase.Core.Common
         /// <summary>유저 세이브 삭제에 실패했습니다.</summary>
         public const string UserSaveDeleteFailed = "user_save_delete_failed";
 
+        /// <summary>변경된 값이 없어 저장을 건너뛰었습니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</summary>
+        public const string UserSaveNoChanges = "user_save_no_changes";
+
         /// <summary>우편 아이템 핸들러가 null이거나 <c>ItemKey</c>가 비어 있습니다.</summary>
         public const string MailItemHandlerInvalid = "mail_item_handler_invalid";
 

@@ -69,6 +69,8 @@ The SDK has three layers:
 
 실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseReason` enum, `Runtime/Core/Models/SupabaseReason.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseReasonMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseReason` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). **`SupabaseErrorCode` 상수는 `internal`(SDK 전용)** — 게임은 `SupabaseReason` enum(`.Reason`)으로만 분기하고, 실패 원문은 `.ErrorCode` 문자열로 읽는다. Core 밖 SDK 계층(TrueBase.Unity·TrueBase.Unity.IAP)은 `InternalsVisibleTo`로 `SupabaseErrorCode`에 접근한다(`Runtime/Core/Models/SupabaseErrorCode.cs` 상단). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseReason` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseReason.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
 
+**사유가 있으면 반드시 `IsSuccess = false`로 반환한다.** 호출자가 `Reason`을 확인할 수 있어야 하기 때문이다. 오류가 아닌 상황도 예외 없이 실패로 내보낸다 — 유저 세이브 저장 4종(`SaveIfChangedAsync`·`FlushNowAsync`·`RequestImmediateSave`·`Supabase.SaveAllAsync`)은 보낼 변경분이 없으면 `UserSaveNoChanges` 실패를 반환한다. 이런 사유를 내부에서 다시 소비하는 코드(예: `LoadAsync`의 로드 후 초기 저장)는 `Reason`으로 걸러 경고 로그를 내지 않는다. 사유 없는 성공은 `SupabaseResult.Ok`뿐이다.
+
 **bare value(`Task<string>`·`T`·리스트 원본 등)를 직접 반환하지 않는다. 공개 메서드에 `Try` 접두어를 쓰지 않는다.** 호출자가 성공/실패와 "결과 0개 vs 조회 실패"를 항상 구분할 수 있어야 한다.
 
 `SupabaseResult`(액션)와 `SupabaseResult<T>`(데이터)는 하나의 타입 계층이다 — `SupabaseResult<T>`가 `SupabaseResult`를 상속하며, `SupabaseCallResult` 같은 별도 타입은 없다.

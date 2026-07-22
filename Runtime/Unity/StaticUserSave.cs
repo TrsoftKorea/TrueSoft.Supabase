@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using TrueBase.Core.Common;
 using TrueBase.Core.Data;
+using TrueBase.Core.Models;
 using UnityEngine;
 
 namespace TrueBase.Unity
@@ -113,7 +114,7 @@ namespace TrueBase.Unity
             if (_isRegistered) return;
             Supabase.RegisterUserSaveStaticSync(
                 _syncKey, HasDirty, FlushDirtyAsync, ResetLocalState,
-                GetDirtyCooldown);
+                GetDirtyCooldown, HasFreshDirty);
             _isRegistered = true;
         }
 
@@ -340,12 +341,27 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// throttle 캐시를 무시하고 지금 시점의 변경 여부를 신선하게 검사합니다.
+        /// 즉시 저장 경로가 "보낼 것이 있는지"를 판정할 때 사용합니다.
+        /// </summary>
+        private bool HasFreshDirty()
+        {
+            _lastDeepCheckTime = float.MinValue;
+            return HasDirty();
+        }
+
+        /// <summary>
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 전송 완료를 기다리지 않습니다(fire-and-forget).
         /// 이미 전송 중이면 완료 후 1회 재전송이 예약됩니다.
+        /// <para>보낼 변경분이 없으면 요청하지 않고 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
         public SupabaseResult RequestImmediateSave()
         {
             EnsureRegistered();
+
+            if (!HasFreshDirty())
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
+
             return Supabase.RequestImmediateUserSaveStaticFlush(_syncKey)
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
@@ -353,11 +369,16 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송한 뒤 완료까지 대기합니다. 앱 종료 등 중요한 시점에 사용하세요.
+        /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
         public async Task<SupabaseResult> FlushNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
+
+            if (!HasFreshDirty())
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
+
             return await Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
@@ -451,8 +472,9 @@ namespace TrueBase.Unity
             // 서버에 없던(SQL NULL) 컬렉션 컬럼에 로드 전 초기값(fallback)이 유지됐다면,
             // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
             // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
+            // 변경분이 없으면(일반 로드) UserSaveNoChanges로 돌아오며, 이는 오류가 아니라 정상 경로다.
             var initSave = await SaveIfChangedAsync();
-            if (!initSave.IsSuccess)
+            if (!initSave.IsSuccess && initSave.Reason != SupabaseReason.UserSaveNoChanges)
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
             _hasLoadedOnce = true;
@@ -481,7 +503,8 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다. 변경이 없으면 네트워크 요청 없이 성공을 반환합니다.
+        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
+        /// <para>변경이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
         public async Task<SupabaseResult> SaveIfChangedAsync()
         {
@@ -505,7 +528,7 @@ namespace TrueBase.Unity
                 _lastSynced = DataSchema.CloneRow(Current);
                 DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
                 _isDirty    = false;
-                return SupabaseResult.Ok;
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
             }
 
             var result = await SupabaseSDK.PatchUserDataAsync(
