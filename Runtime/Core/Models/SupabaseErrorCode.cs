@@ -155,8 +155,17 @@ namespace TrueBase.Core.Common
         /// <summary>지원하지 않는 로그인 방식입니다(내부 오류).</summary>
         public const string InvalidSignInMethod = "invalid_signin_method";
 
-        /// <summary>유저 세이브 저장(플러시)에 실패했습니다(네트워크 오류 또는 타임아웃).</summary>
+        /// <summary>유저 세이브 전송에 실패했습니다. 서버가 거부했거나 네트워크 오류입니다.</summary>
         public const string UserSaveFlushFailed = "user_save_flush_failed";
+
+        /// <summary>세이브 클래스가 아직 초기화되지 않았습니다. 로그인·로드 전에 호출했을 때 발생합니다.</summary>
+        public const string UserSaveNotReady = "user_save_not_ready";
+
+        /// <summary>전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다.</summary>
+        public const string UserSaveTimeout = "user_save_timeout";
+
+        /// <summary>세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞였을 때 발생합니다.</summary>
+        public const string UserSaveSerializeFailed = "user_save_serialize_failed";
 
         /// <summary>유저 세이브 로드에 실패했습니다.</summary>
         public const string UserSaveLoadFailed = "user_save_load_failed";

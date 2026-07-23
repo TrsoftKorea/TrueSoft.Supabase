@@ -231,7 +231,7 @@ namespace TrueBase.Unity
         public static Task<SupabaseLoadResult> LoadUserSaveAsync(bool includeUpdatedAt = true) =>
             UserSave != null
                 ? UserSave.LoadAsync(includeUpdatedAt)
-                : Task.FromResult(SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed));
+                : Task.FromResult(SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>
         /// 쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 대기합니다.
@@ -241,7 +241,7 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000) =>
             UserSave != null
                 ? UserSave.SaveNowAsync(timeoutMs)
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed));
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 완료를 기다리지 않습니다(fire-and-forget).
@@ -251,7 +251,7 @@ namespace TrueBase.Unity
         public static SupabaseResult RequestSave() =>
             UserSave != null
                 ? UserSave.RequestSave()
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
         /// <summary>
         /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
@@ -260,7 +260,7 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> SaveIfChangedAsync() =>
             UserSave != null
                 ? UserSave.SaveIfChangedAsync()
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed));
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>
         /// 유저 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋). 계정 탈퇴가 아닙니다.
@@ -269,13 +269,13 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> DeleteUserSaveAsync() =>
             UserSave != null
                 ? UserSave.DeleteAsync()
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveDeleteFailed));
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>DB에 본인 세이브 행이 존재하도록 보장합니다. 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).</summary>
         public static Task<SupabaseResult> EnsureUserSaveRowAsync() =>
             UserSave != null
                 ? UserSave.EnsureRowAsync()
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveLoadFailed));
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>
         /// 등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.
@@ -289,7 +289,7 @@ namespace TrueBase.Unity
 
             return await SupabaseSDK.TrySaveAllAsync(timeoutMs)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
         }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicNameAsync(string)"/>

@@ -28,5 +28,7 @@ if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveFlushFailed` | 전송 실패 또는 타임아웃 |
 | `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뜀. 오류 아님 |
+| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않음 |
+| `SupabaseReason.UserSaveFlushFailed` | 서버 거부 또는 네트워크 오류 |
+| `SupabaseReason.UserSaveTimeout` | `timeoutMs` 초과. 전송은 계속 진행될 수 있음 |

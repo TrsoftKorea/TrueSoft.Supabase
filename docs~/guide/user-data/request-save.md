@@ -18,5 +18,5 @@ Supabase.RequestSave();   // 완료를 기다리지 않음
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveFlushFailed` | 세이브가 아직 초기화되지 않아 요청을 접수하지 못함 |
 | `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 요청하지 않음. 오류 아님 |
+| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않음 |

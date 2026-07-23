@@ -115,10 +115,13 @@ if (!result.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SelectColumnsEmpty` | SELECT 컬럼이 지정되지 않았습니다 |
-| `UserSaveFlushFailed` | 유저 세이브 저장에 실패했습니다 |
+| `UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않았습니다. 로그인·로드 전에 호출한 경우 |
+| `UserSaveNoChanges` | 변경된 값이 없어 전송을 건너뛰었습니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다 |
+| `UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞인 경우 |
+| `UserSaveFlushFailed` | 서버가 전송을 거부했거나 네트워크 오류입니다. 원문은 `ErrorCode` 참조 |
+| `UserSaveTimeout` | 전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다 |
 | `UserSaveLoadFailed` | 유저 세이브 로드에 실패했습니다 |
 | `UserSaveDeleteFailed` | 유저 세이브 삭제에 실패했습니다 |
-| `UserSaveNoChanges` | 변경된 값이 없어 전송을 건너뛰었습니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다 |
 
 ## 우편함
 

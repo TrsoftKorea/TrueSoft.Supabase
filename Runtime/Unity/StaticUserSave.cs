@@ -353,8 +353,8 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 전송 완료를 기다리지 않습니다(fire-and-forget).
-        /// <para>여러 번 호출해도 안전합니다. 이미 전송 중이면 완료 후 1회 재전송이 예약되고 성공을 반환하므로,
-        /// 매 프레임 호출해도 중복 전송이 쌓이지 않습니다.</para>
+        /// <para>반복 호출해도 안전합니다. 이미 전송 중이면 완료 후 1회 재전송이 예약되고 성공을 반환하므로
+        /// 중복 전송이 쌓이지 않습니다. 다만 호출할 때마다 값 비교를 새로 하므로 매 프레임 호출은 피하세요.</para>
         /// <para>보낼 변경분이 없으면 요청하지 않고 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
         public SupabaseResult RequestSave()
@@ -366,14 +366,14 @@ namespace TrueBase.Unity
 
             return Supabase.RequestImmediateUserSaveStaticFlush(_syncKey)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
         }
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송한 뒤 완료까지 대기합니다. 앱 종료 등 중요한 시점에 사용하세요.
         /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
-        /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
+        /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 <see cref="SupabaseReason.UserSaveTimeout"/>.</param>
         public async Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
@@ -383,7 +383,7 @@ namespace TrueBase.Unity
 
             return await Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
                 ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
         }
 
         /// <summary>
@@ -521,8 +521,8 @@ namespace TrueBase.Unity
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"{LogTag} BuildPatch 실패 — {e.Message}");
-                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                Debug.LogWarning($"{LogTag} 전송 형식 변환 실패 — {e.Message}");
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveSerializeFailed);
             }
 
             if (patch == null || patch.Count == 0)
