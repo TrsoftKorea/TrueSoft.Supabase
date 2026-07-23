@@ -271,8 +271,12 @@ namespace TrueBase.Unity
                 ? UserSave.DeleteAsync()
                 : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
-        /// <summary>DB에 본인 세이브 행이 존재하도록 보장합니다. 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).</summary>
-        public static Task<SupabaseResult> EnsureUserSaveRowAsync() =>
+        /// <summary>
+        /// DB에 본인 세이브 행이 존재하도록 보장합니다. 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
+        /// <para>게임 코드에서 부를 일이 없어 <c>internal</c>입니다 — <see cref="LoadUserSaveAsync"/>는 행이 없으면 만들고 재로드하며,
+        /// 저장 경로도 PATCH 직전에 행 존재를 보장합니다.</para>
+        /// </summary>
+        internal static Task<SupabaseResult> EnsureUserSaveRowAsync() =>
             UserSave != null
                 ? UserSave.EnsureRowAsync()
                 : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));

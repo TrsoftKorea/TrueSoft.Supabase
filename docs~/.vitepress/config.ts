@@ -123,7 +123,6 @@ export default defineConfig({
               { text: '즉시 저장 후 대기', link: '/guide/user-data/save-now' },
               { text: '즉시 저장 요청', link: '/guide/user-data/request-save' },
               { text: '변경분 저장', link: '/guide/user-data/save-if-changed' },
-              { text: '세이브 행 보장', link: '/guide/user-data/ensure-row' },
               { text: '세이브 삭제', link: '/guide/user-data/delete' },
               { text: '컬럼 추가', link: '/guide/user-data/add-column' }
             ]

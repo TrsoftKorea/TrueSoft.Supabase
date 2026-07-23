@@ -234,7 +234,7 @@ namespace TrueBase.Unity
                 return false;
             }
             var ok = await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
-            if (ok) ApplyRow(nanooRow);
+            if (ok) await ReloadFromServerAsync();
             return ok;
         }
 
@@ -249,8 +249,31 @@ namespace TrueBase.Unity
             }
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await Supabase.TryPatchUserDataDiffAsync(prev, nanooRow);
-            if (ok) ApplyRow(nanooRow);
+            if (ok) await ReloadFromServerAsync();
             return ok;
+        }
+
+        /// <summary>
+        /// PlayNANOO 데이터를 서버에 반영한 뒤, 서버 정본을 다시 읽어 로컬에 적용합니다.
+        /// <para>
+        /// PlayNANOO JSON을 그대로 <see cref="ApplyRow"/>하면 그 JSON에 없는 컬럼이 C# 타입 기본값(0·false·null)으로
+        /// 덮여, DB 컬럼 DEFAULT로 채워진 값이 로컬에서 사라집니다. PATCH 이후의 서버 행이 정본이므로 그것을 읽어 적용합니다.
+        /// </para>
+        /// </summary>
+        private async Task ReloadFromServerAsync()
+        {
+            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+                defaultWhenFailed: null);
+
+            if (!success || !hasRow || row == null)
+            {
+                Debug.LogWarning($"{LogTag} 플레이나누 반영 후 재조회에 실패했습니다. 다음 로드에서 다시 맞춰집니다.");
+                return;
+            }
+
+            _nanooLastLoaded = row;
+            ApplyRow(row);
+            _hasLoadedOnce = true;   // 로컬이 서버 정본과 일치 — 이 시점부터 자동 저장 허용
         }
 
         // 플레이나누 필드 변환 (선택적 편의)
@@ -301,7 +324,9 @@ namespace TrueBase.Unity
 
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {
-            if (_nanooLastLoaded != null) ApplyRow(_nanooLastLoaded);
+            if (_nanooLastLoaded == null) return;
+            ApplyRow(_nanooLastLoaded);
+            _hasLoadedOnce = true;   // 서버에서 읽은 행을 그대로 적용 — 이 시점부터 자동 저장 허용
         }
 
         string INanooSaveSyncable.NanooGetLastLoadedJson()
@@ -490,6 +515,8 @@ namespace TrueBase.Unity
         /// <para>먼저 로컬을 기본값으로 리셋한 뒤 서버를 삭제하므로, 삭제 도중 자동 저장이 옛 데이터를 되쓰지 않습니다.
         /// 저장이 활발한 순간(전투 중 등)보다 설정 화면 등 조용한 시점에 호출하세요.
         /// 실패 시 로컬은 기본값이지만 서버 데이터는 유지되므로 <see cref="LoadAsync"/>로 재동기화하세요.</para>
+        /// <para>로드 전 초기값(fallback) 스냅샷도 함께 버립니다. 삭제 후 다시 초기값을 넣고 싶으면
+        /// <see cref="LoadAsync"/> 전에 새로 세팅하세요.</para>
         /// </summary>
         public async Task<SupabaseResult> DeleteAsync()
         {
@@ -497,6 +524,13 @@ namespace TrueBase.Unity
 
             // 로컬을 먼저 리셋 — 삭제 await 도중 자동 저장이 돌아도 diff가 비어 PATCH가 안 나감(옛 데이터 되쓰기 방지).
             ResetLocalState();
+
+            // 로드 전 초기값 스냅샷도 함께 버린다.
+            // 남겨두면 다음 LoadAsync에서 재생성된 기본 행(컬렉션 컬럼은 SQL NULL) 위에
+            // 옛 초기값이 그대로 병합돼, 삭제했는데 기본값이 아닌 값으로 되살아난다.
+            // 로그아웃(ResetLocalState)과 달리 삭제는 "기본값으로 되돌리기"이므로 여기서만 비운다.
+            _loadFallback     = null;
+            _fallbackCaptured = false;
 
             var r = await Supabase.DeleteUserDataAsync<TRow>();
             return r != null && r.IsSuccess
