@@ -83,6 +83,10 @@ create index if not exists mails_expires_at_idx on public.mails (expires_at);
 create index if not exists mails_account_id_category_created_idx on public.mails (account_id, category, created_at desc)
   where account_id is not null and deleted_at is null;
 
+-- 위 인덱스는 전부 부분 인덱스(account_id is not null, deleted_at is null)라 게임 클라이언트 조회 전용이다.
+-- 어드민 우편 내역은 계정으로 좁히지 않고 삭제된 우편도 보므로 그 인덱스들을 탈 수 없어, 전체 정렬용을 따로 둔다.
+create index if not exists mails_created_at_idx on public.mails (created_at desc);
+
 alter table public.mails enable row level security;
 
 drop policy if exists "mails_select_own" on public.mails;

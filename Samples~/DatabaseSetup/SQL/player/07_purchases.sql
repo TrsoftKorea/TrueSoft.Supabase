@@ -34,6 +34,14 @@ alter table public.purchases
 -- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
 alter table public.purchases drop column if exists purchase_state;
 
+-- 어드민 영수증 검증 화면은 verified_at 내림차순 정렬 + 기간 필터가 기본이고,
+-- 계정·주문번호로 검색한다. 결제 기록은 삭제되지 않고 계속 쌓이므로 인덱스가 없으면 갈수록 느려진다.
+create index if not exists purchases_verified_at_idx on public.purchases (verified_at desc);
+create index if not exists purchases_account_id_idx  on public.purchases (account_id) where account_id is not null;
+create index if not exists purchases_order_id_idx    on public.purchases (order_id)   where order_id is not null;
+-- 어드민 화면의 상점 목록(DISTINCT store)이 힙 대신 인덱스만 읽도록.
+create index if not exists purchases_store_idx       on public.purchases (store);
+
 alter table public.purchases enable row level security;
 
 -- 본인 구매 내역 조회만 허용. INSERT는 purchase-verify Edge Function이 service_role로만 처리한다.

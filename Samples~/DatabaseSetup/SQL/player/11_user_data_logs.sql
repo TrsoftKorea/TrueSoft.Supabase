@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS public.user_data_logs (
 CREATE INDEX IF NOT EXISTS user_data_logs_account_id_created_idx
   ON public.user_data_logs (account_id, created_at DESC);
 
+-- 어드민 저장 로그 화면의 필드 필터(jsonb_exists(diff, '컬럼명'))용.
+-- 없으면 계정별 로그를 전부 훑는다.
+CREATE INDEX IF NOT EXISTS user_data_logs_diff_gin
+  ON public.user_data_logs USING gin (diff jsonb_path_ops);
+
 ALTER TABLE public.user_data_logs ENABLE ROW LEVEL SECURITY;
 -- 플레이어 직접 접근 없음 (서비스 롤 + 어드민 전용)
 

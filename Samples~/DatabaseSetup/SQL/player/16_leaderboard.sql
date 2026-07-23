@@ -1073,6 +1073,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
+set lock_timeout = '3s'   -- DDL은 ACCESS EXCLUSIVE 락. 오래 잡히면 게임 전체가 멈추므로 빨리 포기한다.
 as $$
 declare
   colname        text := nullif(btrim(p_colname), '');
@@ -1129,6 +1130,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
+set lock_timeout = '3s'   -- DDL은 ACCESS EXCLUSIVE 락. 오래 잡히면 게임 전체가 멈추므로 빨리 포기한다.
 as $$
 declare
   colname     text := nullif(btrim(p_colname), '');
@@ -1182,6 +1184,7 @@ returns void
 language plpgsql
 security definer
 set search_path = public, pg_temp
+set lock_timeout = '3s'   -- DDL은 ACCESS EXCLUSIVE 락. 오래 잡히면 게임 전체가 멈추므로 빨리 포기한다.
 as $$
 declare
   colname    text := nullif(btrim(p_colname), '');
