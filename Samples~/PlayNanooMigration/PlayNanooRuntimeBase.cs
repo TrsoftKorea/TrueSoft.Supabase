@@ -664,20 +664,35 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         var nanooJson = await LoadRawFromNanoo();
 
+        // 임시 디버깅 — 어느 분기를 탔는지 기록. 문제 재현이 끝나면 지웁니다.
+        Debug.Log($"[PlayNanooRuntime][SYNC] hasRow={hasRow} sdkTime={sdkTime:o}"
+                + $" nanooJson={(nanooJson == null ? "(null)" : $"{nanooJson.Length}자")}");
+
         if (!hasRow)
         {
             if (nanooJson != null)
+            {
+                Debug.Log("[PlayNanooRuntime][SYNC] 분기 = 빈 서버 + PlayNANOO 데이터 → NanooPatchFromEmptyAsync");
                 await save.NanooPatchFromEmptyAsync(nanooJson);
+            }
             else
+            {
+                Debug.Log("[PlayNanooRuntime][SYNC] 분기 = 빈 서버 + PlayNANOO 없음 → TryLoadAsync");
                 await save.TryLoadAsync();
+            }
             return;
         }
 
         var nanooTime = ParseNanooTimestamp(nanooJson);
+        Debug.Log($"[PlayNanooRuntime][SYNC] nanooTime={nanooTime:o} vs sdkTime={sdkTime:o}");
         if (nanooTime > sdkTime)
+        {
+            Debug.Log("[PlayNanooRuntime][SYNC] 분기 = PlayNANOO 우선 → NanooPatchFromLastLoadedAsync");
             await save.NanooPatchFromLastLoadedAsync(nanooJson);
+        }
         else
         {
+            Debug.Log("[PlayNanooRuntime][SYNC] 분기 = Supabase 우선 → NanooApplyLastLoaded");
             save.NanooApplyLastLoaded();
             SaveToNanoo(save.NanooGetLastLoadedJson());
         }
