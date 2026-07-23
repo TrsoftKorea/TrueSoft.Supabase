@@ -75,6 +75,8 @@ The SDK has three layers:
 
 `SupabaseResult`(액션)와 `SupabaseResult<T>`(데이터)는 하나의 타입 계층이다 — `SupabaseResult<T>`가 `SupabaseResult`를 상속하며, `SupabaseCallResult` 같은 별도 타입은 없다.
 
+**`Supabase` 파사드에는 게임에 공개하는 API만 둔다(`internal` 멤버 금지).** SDK 내부끼리 주고받는 호출은 `SupabaseSDK`를 직접 참조한다 — 파사드에 내부 배선을 섞으면 게임이 볼 공개 표면이 흐려진다.
+
 구현·로깅은 `SupabaseSDK`의 내부 계층이 담당한다: `SupabaseSDK.TryXxxAsync()`가 실제 호출 + 고정 태그(`[Supabase.UserData.LoadAttributed]` 등) 로깅 후 `SupabaseResult`/`SupabaseResult<T>`를 반환하고, 파사드 `Supabase.XxxAsync()`는 그 결과를 그대로 돌려준다. 실패 사유는 `SupabaseErrorCode` 상수를 우선 사용하고, 없으면 추가한다. 이 규칙은 `Supabase.*`뿐 아니라 `StaticUserSave<TRow>`의 공개 메서드와 생성기가 emit하는 래퍼에도 동일 적용된다.
 
 ### account_id vs user_id

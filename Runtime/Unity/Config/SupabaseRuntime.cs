@@ -58,7 +58,7 @@ namespace TrueBase.Unity.Config
             bootstrap.Initialize(settings);
 
             // SupabaseSettings의 우선순위별 저장 주기를 전역에 적용
-            Supabase.ConfigureUserSavePriorityCooldowns(
+            SupabaseSDK.ConfigureUserSavePriorityCooldowns(
                 settings.urgentSaveCooldownSeconds,
                 settings.normalSaveCooldownSeconds,
                 settings.lazySaveCooldownSeconds);
@@ -80,7 +80,7 @@ namespace TrueBase.Unity.Config
 
         protected virtual void Update()
         {
-            if (!Supabase.IsInitialized)
+            if (!SupabaseSDK.IsInitialized)
                 return;
 
             SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
@@ -93,12 +93,12 @@ namespace TrueBase.Unity.Config
             if (!pause)
                 return;
 
-            Supabase.RequestImmediateUserSaveStaticFlushAll();
+            SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
         }
 
         private void OnApplicationQuit()
         {
-            Supabase.RequestImmediateUserSaveStaticFlushAll();
+            SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
         }
 
         /// <summary>

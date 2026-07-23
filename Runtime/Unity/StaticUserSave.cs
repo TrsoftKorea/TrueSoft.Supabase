@@ -113,7 +113,7 @@ namespace TrueBase.Unity
         private void EnsureRegistered()
         {
             if (_isRegistered) return;
-            Supabase.RegisterUserSaveStaticSync(
+            SupabaseSDK.RegisterUserSaveStaticSync(
                 _syncKey, HasDirty, FlushDirtyAsync, ResetLocalState,
                 GetDirtyCooldown, HasFreshDirty);
             _isRegistered = true;
@@ -170,7 +170,7 @@ namespace TrueBase.Unity
             DataSchema.ApplyAutoDefaults(snapshot); // 클론은 [AutoDefault]가 다시 안 걸려 있음 — diff·다음 _lastSynced 기준으로 쓰이기 전에 재주입
             _isDirty = false;
 
-            var ok = await Supabase.TryPatchUserDataDiffAsync(
+            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
                 _lastSynced, snapshot,
                 ensureRowFirst: true, setUpdatedAtIsoUtc: true);
 
@@ -196,7 +196,6 @@ namespace TrueBase.Unity
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty       = false;
             _hasLoadedOnce = false;  // 재로그인 시 다시 로드 완료 전까지 auto-flush 차단
-            DebugSync("resetLocalState");
             // _loadFallback/_fallbackCaptured는 유지 — fallback은 앱 수명 설정이라
             // 로그아웃 후 재로그인에도 동일 적용(Current가 리셋돼도 스냅샷으로 재적용).
         }
@@ -210,59 +209,21 @@ namespace TrueBase.Unity
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
 
-        // ── 동기화 추적 로그 (임시 디버깅용) ──────────────────────────────────
-        //
-        // 값이 어느 단계에서 바뀌는지 추적합니다. 문제 재현이 끝나면 호출부와 함께 지웁니다.
-        //   PlayerSave.DebugSyncColumns = new[] { "charLevel" };
-        // 컬럼을 지정하지 않으면 로그가 나오지 않습니다(전체 덤프는 컬럼이 많아 쓸모없음).
-
-        /// <summary>추적할 DB 컬럼명. 비어 있으면 로그를 남기지 않습니다.</summary>
-        public static string[] DebugSyncColumns;
-
-        private static bool DebugSyncOn => DebugSyncColumns != null && DebugSyncColumns.Length > 0;
-
-        /// <summary>지정한 컬럼만 뽑아 <c>key=value</c> 문자열로 만듭니다.</summary>
-        private static string DebugPick(object row)
-        {
-            if (row == null) return "(null)";
-            try
-            {
-                var jo = Newtonsoft.Json.Linq.JObject.FromObject(row);
-                var parts = new List<string>();
-                foreach (var col in DebugSyncColumns)
-                    parts.Add($"{col}={(jo.TryGetValue(col, out var v) ? v.ToString(Newtonsoft.Json.Formatting.None) : "(없음)")}");
-                return string.Join(", ", parts);
-            }
-            catch (Exception e) { return $"(직렬화 실패: {e.Message})"; }
-        }
-
-        private void DebugSync(string stage, object row = null, string extra = null)
-        {
-            if (!DebugSyncOn) return;
-            var rowPart = row == null ? "" : $" row[{DebugPick(row)}]";
-            var curPart = $" current[{DebugPick(Current)}]";
-            Debug.Log($"{LogTag}[SYNC] {stage}{rowPart}{curPart}"
-                    + $" loadedOnce={_hasLoadedOnce} fallbackCaptured={_fallbackCaptured}"
-                    + (extra == null ? "" : $" {extra}"));
-        }
-
         // INanooSaveSyncable 구현 (PlayNanooRuntime 전용)
 
         async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
         {
-            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
+            var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
             if (!success) return (false, false, DateTime.MinValue);
             _nanooLastLoaded = row;
             if (!hasRow || row == null)
             {
-                DebugSync("nanoo:loadState", null, "hasRow=false");
                 return (true, false, DateTime.MinValue);
             }
             var val = typeof(TRow)
                 .GetField("updated_at", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                 ?.GetValue(row)?.ToString();
             var updatedAt = DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
-            DebugSync("nanoo:loadState", row, $"hasRow=true updatedAt={updatedAt:o}");
             return (true, true, updatedAt);
         }
 
@@ -275,9 +236,7 @@ namespace TrueBase.Unity
                 Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 (NanooPatchFromEmptyAsync): {e.Message}");
                 return false;
             }
-            DebugSync("nanoo:patchFromEmpty(입력)", nanooRow);
-            var ok = await Supabase.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
-            DebugSync("nanoo:patchFromEmpty(전송)", null, $"ok={ok}");
+            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
             if (ok) await ReloadFromServerAsync();
             return ok;
         }
@@ -292,9 +251,7 @@ namespace TrueBase.Unity
                 return false;
             }
             var prev = _nanooLastLoaded ?? new TRow();
-            DebugSync("nanoo:patchFromLastLoaded(입력)", nanooRow);
-            var ok = await Supabase.TryPatchUserDataDiffAsync(prev, nanooRow);
-            DebugSync("nanoo:patchFromLastLoaded(전송)", null, $"ok={ok}");
+            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow);
             if (ok) await ReloadFromServerAsync();
             return ok;
         }
@@ -308,7 +265,7 @@ namespace TrueBase.Unity
         /// </summary>
         private async Task ReloadFromServerAsync()
         {
-            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+            var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null);
 
             if (!success || !hasRow || row == null)
@@ -318,10 +275,8 @@ namespace TrueBase.Unity
             }
 
             _nanooLastLoaded = row;
-            DebugSync("nanoo:reload(서버)", row);
             ApplyRow(row);
             _hasLoadedOnce = true;   // 로컬이 서버 정본과 일치 — 이 시점부터 자동 저장 허용
-            DebugSync("nanoo:reload(적용 후)");
         }
 
         // 플레이나누 필드 변환 (선택적 편의)
@@ -370,13 +325,37 @@ namespace TrueBase.Unity
             return map != null ? map.Serialize(row) : Newtonsoft.Json.JsonConvert.SerializeObject(row);
         }
 
+        /// <summary>
+        /// PlayNANOO 스토리지에 기록할 "초기값" JSON을 만듭니다. 세이브 삭제 시 사용합니다.
+        /// <para>
+        /// <c>updated_at</c>을 반드시 채웁니다. 이 키가 없으면 동기화가 그 데이터를 "이관 전 순수 PlayNANOO 데이터"로 보고
+        /// PlayNANOO를 영구히 우선시켜, 이후 쌓이는 진행도를 계속 초기값으로 덮어씁니다.
+        /// </para>
+        /// </summary>
+        private string BuildDefaultsJsonForNanoo()
+        {
+            var row = new TRow();
+            DataSchema.ApplyAutoDefaults(row);   // [AutoDefault] 컬렉션 초기값까지 반영
+            var json = NanooSerializeJson(row);
+
+            try
+            {
+                var jo = Newtonsoft.Json.Linq.JObject.Parse(json);
+                jo["updated_at"] = DateTime.UtcNow.ToString("o");
+                return jo.ToString(Newtonsoft.Json.Formatting.None);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"{LogTag} 초기값 JSON에 updated_at을 넣지 못했습니다 — {e.Message}");
+                return json;
+            }
+        }
+
         void INanooSaveSyncable.NanooApplyLastLoaded()
         {
             if (_nanooLastLoaded == null) return;
-            DebugSync("nanoo:applyLastLoaded(입력)", _nanooLastLoaded);
             ApplyRow(_nanooLastLoaded);
             _hasLoadedOnce = true;   // 서버에서 읽은 행을 그대로 적용 — 이 시점부터 자동 저장 허용
-            DebugSync("nanoo:applyLastLoaded(적용 후)");
         }
 
         string INanooSaveSyncable.NanooGetLastLoadedJson()
@@ -404,7 +383,7 @@ namespace TrueBase.Unity
             if (priority == null)
             {
                 // 모든 우선순위를 동일하게 설정
-                Supabase.ConfigureUserSavePriorityCooldowns(s, s, s);
+                SupabaseSDK.ConfigureUserSavePriorityCooldowns(s, s, s);
             }
             else
             {
@@ -412,7 +391,7 @@ namespace TrueBase.Unity
                 var urgent = priority.Value == DataSavePriority.Urgent ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(0);
                 var normal = priority.Value == DataSavePriority.Normal ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(1);
                 var lazy   = priority.Value == DataSavePriority.Lazy   ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(2);
-                Supabase.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
+                SupabaseSDK.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
             }
         }
 
@@ -439,7 +418,7 @@ namespace TrueBase.Unity
             if (!HasFreshDirty())
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
-            return Supabase.RequestImmediateUserSaveStaticFlush(_syncKey)
+            return SupabaseSDK.RequestImmediateUserSaveStaticFlush(_syncKey)
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
         }
@@ -456,7 +435,7 @@ namespace TrueBase.Unity
             if (!HasFreshDirty())
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
-            return await Supabase.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
+            return await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
         }
@@ -471,13 +450,11 @@ namespace TrueBase.Unity
         /// </summary>
         private void ApplyRow(TRow row)
         {
-            DebugSync("applyRow(직전)", row, $"fallback[{DebugPick(_loadFallback)}]");
             DataSchema.MergeServerOverFallback(Current, row, _loadFallback);
             DataSchema.ApplyAutoDefaults(Current);   // AutoList/AutoDict [AutoDefault] 주입 (병합이 새 인스턴스를 만들므로 매번 필요)
             _lastSynced = DataSchema.CloneRow(row);
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
-            DebugSync("applyRow(직후)");
             OnCurrentApplied();
         }
 
@@ -493,7 +470,7 @@ namespace TrueBase.Unity
         public async Task<SupabaseResult> EnsureRowAsync()
         {
             EnsureRegistered();
-            var r = await Supabase.EnsureMyRowAsync<TRow>();
+            var r = await SupabaseSDK.EnsureMyRowAsync<TRow>();
             return r != null && r.IsSuccess
                 ? SupabaseResult.Ok
                 : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
@@ -511,28 +488,25 @@ namespace TrueBase.Unity
 
             // 서버 조회 전에, 로드 전 개발자가 지정한 초기값(fallback)을 1회 스냅샷해 얼려둔다.
             // 이후 로드는 이 스냅샷 기준으로 병합하므로, 재로그인 시 이전 플레이 데이터가 부활하지 않는다.
-            DebugSync("load:진입");
 
             if (!_fallbackCaptured)
             {
                 _loadFallback = DataSchema.CloneRow(Current);
                 _fallbackCaptured = true;
-                DebugSync("load:fallback 캡처", _loadFallback);
             }
 
-            var (success, hasRow, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+            var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
             if (!success) return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
-            DebugSync("load:1차 조회", row, $"hasRow={hasRow}");
 
             // DB에 본인 행이 없던 신규 유저 여부. 반환값 IsNewUser로 노출한다.
             var isNewUser = !hasRow;
 
             if (!hasRow)
             {
-                var ensured = await Supabase.EnsureMyRowAsync<TRow>();
+                var ensured = await SupabaseSDK.EnsureMyRowAsync<TRow>();
                 if (ensured == null || !ensured.IsSuccess)
                 {
                     Debug.LogWarning($"{LogTag} TryLoadAsync: EnsureMyRowAsync 실패 — {ensured?.ErrorCode ?? "null"}");
@@ -540,7 +514,7 @@ namespace TrueBase.Unity
                 }
 
                 bool hasRow2;
-                (success, hasRow2, row) = await Supabase.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
+                (success, hasRow2, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                     defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
                 if (!success) return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
@@ -562,7 +536,6 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
             _hasLoadedOnce = true;
-            DebugSync("load:완료", null, $"isNewUser={isNewUser}");
             return SupabaseLoadResult.Success(isNewUser);
         }
 
@@ -590,10 +563,24 @@ namespace TrueBase.Unity
             _loadFallback     = null;
             _fallbackCaptured = false;
 
-            var r = await Supabase.DeleteUserDataAsync<TRow>();
-            return r != null && r.IsSuccess
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveDeleteFailed);
+            var r = await SupabaseSDK.DeleteUserDataAsync<TRow>();
+            if (r == null || !r.IsSuccess)
+                return SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveDeleteFailed);
+
+            // PlayNANOO 병행 운영 중이면 그쪽 스토리지도 초기값으로 되돌린다.
+            // 안 되돌리면 다음 로그인의 동기화가 옛 데이터를 그대로 다시 밀어 넣어 삭제가 무효가 된다.
+            var resetNanoo = SupabaseSDK._nanooResetStorage;
+            if (resetNanoo != null)
+            {
+                try { await resetNanoo(BuildDefaultsJsonForNanoo()); }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"{LogTag} 플레이나누 스토리지 초기화 실패 — {e.Message}. "
+                                   + "다음 로그인에서 옛 데이터가 복원될 수 있습니다.");
+                }
+            }
+
+            return SupabaseResult.Ok;
         }
 
         /// <summary>
@@ -615,12 +602,6 @@ namespace TrueBase.Unity
             {
                 Debug.LogWarning($"{LogTag} 전송 형식 변환 실패 — {e.Message}");
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveSerializeFailed);
-            }
-
-            if (DebugSyncOn)
-            {
-                var keys = patch == null ? "(null)" : string.Join(",", patch.Keys);
-                Debug.Log($"{LogTag}[SYNC] save:patch 대상=[{keys}] current[{DebugPick(Current)}] lastSynced[{DebugPick(_lastSynced)}]");
             }
 
             if (patch == null || patch.Count == 0)
@@ -655,7 +636,7 @@ namespace TrueBase.Unity
         {
             EnsureRegistered();
             _isDirty = true;
-            Supabase.MarkUserSaveStaticDirty(_syncKey);
+            SupabaseSDK.MarkUserSaveStaticDirty(_syncKey);
         }
     }
 

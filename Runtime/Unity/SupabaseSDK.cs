@@ -84,6 +84,12 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkAppleWithIdToken;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSetName;
 
+        /// <summary>
+        /// 유저 세이브 삭제 시 PlayNANOO 스토리지를 초기값으로 되돌리는 훅. PlayNanooRuntime이 등록합니다.
+        /// 인자는 저장할 JSON(초기값 + <c>updated_at</c>). null이면(병행 운영 아님) 아무 일도 하지 않습니다.
+        /// </summary>
+        internal static Func<string, Task> _nanooResetStorage;
+
         /// <summary>PlayNANOO Apple 로그인 인터셉터가 등록되어 있는지 여부. 브라우저 기반 Apple 로그인 가드에 사용합니다.</summary>
         internal static bool IsPlayNanooAppleInterceptionActive => _interceptSignInWithAppleIdToken != null;
 
@@ -144,6 +150,18 @@ namespace TrueBase.Unity
             _interceptLinkAppleWithIdToken                    = null;
             _interceptIAPApple  = null;
             _interceptIAPGoogle = null;
+            _nanooResetStorage  = null;
+        }
+
+        /// <summary>
+        /// 유저 세이브 삭제 시 PlayNANOO 스토리지를 초기값으로 되돌리도록 훅을 등록합니다. PlayNANOO 이관 브릿지 전용.
+        /// <para>등록하지 않으면 <c>Supabase.DeleteUserSaveAsync()</c>가 Supabase 행만 지우므로,
+        /// 다음 로그인에서 PlayNANOO 데이터가 그대로 다시 밀려 들어옵니다.</para>
+        /// </summary>
+        /// <param name="reset">저장할 JSON을 받아 PlayNANOO 스토리지에 기록합니다.</param>
+        public static void RegisterNanooStorageReset(Func<string, Task> reset)
+        {
+            _nanooResetStorage = reset;
         }
 
         private enum SignInMethodKind

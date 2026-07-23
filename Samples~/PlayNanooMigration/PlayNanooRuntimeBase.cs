@@ -140,6 +140,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             redeemWithdrawalCancel:                  InterceptRedeemWithdrawalCancel
         );
 
+        // 세이브 삭제 시 PlayNANOO 스토리지도 초기값으로 되돌립니다.
+        // 안 그러면 다음 로그인의 동기화가 옛 데이터를 다시 밀어 넣어 삭제가 무효가 됩니다.
+        Supabase.RegisterNanooStorageReset(ResetNanooStorageAsync);
+
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
 #if UNITY_IAP_V5_1 && UNITY_IOS
         UnityEngine.Purchasing.StoreKitSelector.forceStoreKit1 = true;
@@ -664,38 +668,36 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         var nanooJson = await LoadRawFromNanoo();
 
-        // 임시 디버깅 — 어느 분기를 탔는지 기록. 문제 재현이 끝나면 지웁니다.
-        Debug.Log($"[PlayNanooRuntime][SYNC] hasRow={hasRow} sdkTime={sdkTime:o}"
-                + $" nanooJson={(nanooJson == null ? "(null)" : $"{nanooJson.Length}자")}");
-
         if (!hasRow)
         {
             if (nanooJson != null)
-            {
-                Debug.Log("[PlayNanooRuntime][SYNC] 분기 = 빈 서버 + PlayNANOO 데이터 → NanooPatchFromEmptyAsync");
                 await save.NanooPatchFromEmptyAsync(nanooJson);
-            }
             else
-            {
-                Debug.Log("[PlayNanooRuntime][SYNC] 분기 = 빈 서버 + PlayNANOO 없음 → TryLoadAsync");
                 await save.TryLoadAsync();
-            }
             return;
         }
 
         var nanooTime = ParseNanooTimestamp(nanooJson);
-        Debug.Log($"[PlayNanooRuntime][SYNC] nanooTime={nanooTime:o} vs sdkTime={sdkTime:o}");
         if (nanooTime > sdkTime)
-        {
-            Debug.Log("[PlayNanooRuntime][SYNC] 분기 = PlayNANOO 우선 → NanooPatchFromLastLoadedAsync");
             await save.NanooPatchFromLastLoadedAsync(nanooJson);
-        }
         else
         {
-            Debug.Log("[PlayNanooRuntime][SYNC] 분기 = Supabase 우선 → NanooApplyLastLoaded");
             save.NanooApplyLastLoaded();
             SaveToNanoo(save.NanooGetLastLoadedJson());
         }
+    }
+
+    /// <summary>
+    /// PlayNANOO 스토리지를 세이브 클래스의 초기값으로 되돌립니다. <c>Supabase.DeleteUserSaveAsync()</c>가 호출합니다.
+    /// <para>PlayNANOO Storage에는 삭제 API가 없어 초기값 JSON을 덮어씁니다.
+    /// SDK가 만들어 넘겨주므로 여기서는 저장만 합니다.</para>
+    /// </summary>
+    /// <param name="defaultsJson">세이브 클래스 초기값 + <c>updated_at</c>이 담긴 JSON.</param>
+    protected virtual Task ResetNanooStorageAsync(string defaultsJson)
+    {
+        SaveToNanoo(defaultsJson);
+        Debug.Log("[PlayNanooRuntime] 세이브 삭제 — PlayNANOO 스토리지를 초기값으로 되돌렸습니다.");
+        return Task.CompletedTask;
     }
 
     // ── PlayNANOO 저장/로드 ───────────────────────────────────────────────────

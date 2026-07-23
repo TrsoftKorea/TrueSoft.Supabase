@@ -25,18 +25,18 @@ namespace TrueBase.Unity
         /// <summary>Google Play IAP 파사드를 생성합니다.</summary>
         internal static GooglePlayIAPFacade CreateGooglePlayIAP()
             => new GooglePlayIAPFacade((token, productId, priceAmount, priceCurrency) =>
-                Supabase.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency));
+                SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency));
 
         /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
         internal static AppleIAPFacade CreateAppleIAP()
         {
 #if UNITY_IAP_V5
             return new AppleIAPFacade(
-                (jws, productId)     => Supabase.TryVerifyApplePurchaseAsync(jws, productId),
-                (receipt, productId) => Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
+                (jws, productId)     => SupabaseSDK.TryVerifyApplePurchaseAsync(jws, productId),
+                (receipt, productId) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
 #else
             return new AppleIAPFacade(
-                (receipt, productId) => Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
+                (receipt, productId) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
 #endif
         }
 
@@ -121,7 +121,7 @@ namespace TrueBase.Unity
             string token, string productId, long priceAmount = 0, string priceCurrency = null)
         {
 #if UNITY_ANDROID
-            var (ok, r) = await Supabase.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
+            var (ok, r) = await SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -133,7 +133,7 @@ namespace TrueBase.Unity
             });
 #elif UNITY_IOS
             // SK2 (JWS) 경로
-            var (ok, r) = await Supabase.TryVerifyApplePurchaseAsync(token, productId);
+            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseAsync(token, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -158,7 +158,7 @@ namespace TrueBase.Unity
         private static async Task<(bool, IAPPurchaseResponse)> VerifyReceiptForIAPFacadeAsync(
             string receipt, string productId)
         {
-            var (ok, r) = await Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
+            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -182,7 +182,7 @@ namespace TrueBase.Unity
         private static async Task<(bool, IAPPurchaseResponse)> VerifyGoogleForIAPFacadeV4Async(
             string token, string productId, long priceAmount = 0, string priceCurrency = null)
         {
-            var (ok, r) = await Supabase.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
+            var (ok, r) = await SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -202,7 +202,7 @@ namespace TrueBase.Unity
         private static async Task<(bool, IAPPurchaseResponse)> VerifyAppleForIAPFacadeV4Async(
             string receipt, string productId)
         {
-            var (ok, r) = await Supabase.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
+            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,

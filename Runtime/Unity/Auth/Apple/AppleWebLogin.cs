@@ -11,7 +11,7 @@ namespace TrueBase.Unity.Auth.Apple
     ///
     /// 흐름: 시스템 브라우저로 Supabase authorize URL을 열고 → Apple 로그인 →
     /// Supabase가 앱 딥링크(<c>{scheme}://login-callback</c>)로 세션을 붙여 돌려보내면 →
-    /// <see cref="Supabase.TryCompleteOAuthRedirectAsync"/>로 로그인을 완료합니다.
+    /// <see cref="SupabaseSDK.TryCompleteOAuthRedirectAsync"/>로 로그인을 완료합니다.
     ///
     /// 사전 준비: Supabase 대시보드 Apple provider 설정, Redirect URL 허용목록에 딥링크 등록,
     /// AndroidManifest에 해당 스킴의 deep link intent-filter 추가.
@@ -51,7 +51,7 @@ namespace TrueBase.Unity.Auth.Apple
             _pending = new TaskCompletionSource<SupabaseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var redirectTo = $"{_expectedScheme}://{redirectHost}";
-            var url = Supabase.BuildOAuthAuthorizeUrl("apple", redirectTo);
+            var url = SupabaseSDK.BuildOAuthAuthorizeUrl("apple", redirectTo);
 
             Application.deepLinkActivated += OnDeepLink;
             Application.OpenURL(url);
@@ -78,7 +78,7 @@ namespace TrueBase.Unity.Auth.Apple
             if (tcs == null)
                 return;
 
-            var result = await Supabase.TryCompleteOAuthRedirectAsync(url);
+            var result = await SupabaseSDK.TryCompleteOAuthRedirectAsync(url);
             tcs.TrySetResult(result);
         }
     }

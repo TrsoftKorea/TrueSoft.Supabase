@@ -10,6 +10,11 @@ namespace TrueBase.Unity
 {
     /// <summary>
     /// 게임 코드에서 쓰기 위한 정적 진입점입니다. 실제 구현은 <see cref="SupabaseSDK"/>에 있습니다.
+    /// <para>
+    /// <b>이 클래스에는 게임에 공개하는 API만 둡니다.</b> SDK 내부끼리 주고받는 호출은
+    /// <see cref="SupabaseSDK"/>를 직접 쓰세요. 여기에 <c>internal</c> 멤버를 추가하면
+    /// 게임이 볼 API와 내부 배선이 한 파일에 섞여 공개 표면이 흐려집니다.
+    /// </para>
     /// </summary>
     /// <remarks>
     /// 공개 비동기 메서드는 이름에 <c>Try</c>를 붙이지 않으며 항상 <see cref="SupabaseResult"/>(액션) 또는
@@ -19,12 +24,6 @@ namespace TrueBase.Unity
     /// </remarks>
     public static class Supabase
     {
-        /// <summary>SDK가 초기화되었는지 여부.</summary>
-        internal static bool IsInitialized => SupabaseSDK.IsInitialized;
-
-        /// <summary>현재 로그인된 세션.</summary>
-        internal static SupabaseSession Session => SupabaseSDK.Session;
-
         /// <summary>현재 로그인 여부.</summary>
         public static bool IsLoggedIn => SupabaseSDK.IsLoggedIn;
 
@@ -66,14 +65,6 @@ namespace TrueBase.Unity
             return SupabaseSignInResult.Fail(r.ErrorCode, r.BanInfo);
         }
 
-        /// <summary>
-        /// 씬의 SupabaseRuntime 초기화를 잠시 대기한 뒤, 필요 시 Resources의 SupabaseSettings로 부트스트랩합니다.
-        /// 대부분의 API가 내부에서 호출하므로, 게임 코드에서는 생략해도 됩니다.
-        /// </summary>
-        /// <param name="timeoutMs">초기화 완료를 기다리는 최대 시간(밀리초). 초과 시 false를 반환합니다.</param>
-        internal static Task<bool> EnsureInitializedAsync(int timeoutMs = SupabaseSDK.DefaultEnsureInitTimeoutMs) =>
-            SupabaseSDK.EnsureInitializedAsync(timeoutMs);
-
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync"/>
         public static Task<SupabaseSignInResult> SignInWithGoogleAsync() =>
             ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleAsync());
@@ -98,14 +89,6 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleNativeAsync"/>
         public static Task<SupabaseResult> LinkAppleNativeAsync() =>
             SupabaseSDK.TryLinkAppleNativeAsync();
-
-        /// <inheritdoc cref="SupabaseSDK.BuildOAuthAuthorizeUrl"/>
-        internal static string BuildOAuthAuthorizeUrl(string provider, string redirectTo) =>
-            SupabaseSDK.BuildOAuthAuthorizeUrl(provider, redirectTo);
-
-        /// <inheritdoc cref="SupabaseSDK.TryCompleteOAuthRedirectAsync"/>
-        internal static Task<SupabaseResult> TryCompleteOAuthRedirectAsync(string redirectUrl) =>
-            SupabaseSDK.TryCompleteOAuthRedirectAsync(redirectUrl);
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseResult> LinkAppleToGuestWithIdTokenAsync(
@@ -162,61 +145,6 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<SupabaseBanInfo>> GetBanInfoAsync(string accountId) =>
             SupabaseSDK.TryGetBanInfoAsync(accountId);
 
-        /// <summary>로그인 직후 <typeparamref name="T"/>의 테이블에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다.</summary>
-        internal static Task<SupabaseResult<bool>> EnsureMyRowAsync<T>() =>
-            SupabaseSDK.EnsureMyRowAsync<T>();
-
-        /// <inheritdoc cref="SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync{T}(T, bool)"/>
-        internal static Task<(bool success, bool hasRow, T row)> TryLoadUserDataAttributedWithRowStateAsync<T>(
-            T defaultWhenFailed = default,
-            bool includeUpdatedAt = true) where T : class, new() =>
-            SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync(defaultWhenFailed, includeUpdatedAt);
-
-        /// <inheritdoc cref="SupabaseSDK.TryPatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
-        internal static Task<SupabaseResult> TryPatchUserDataDiffAsync<T>(
-            T previous,
-            T current,
-            bool ensureRowFirst = true,
-            bool setUpdatedAtIsoUtc = true) =>
-            SupabaseSDK.TryPatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
-
-        /// <inheritdoc cref="SupabaseSDK.TryDeleteUserDataAsync{T}()"/>
-        internal static Task<SupabaseResult> DeleteUserDataAsync<T>() =>
-            SupabaseSDK.TryDeleteUserDataAsync<T>();
-
-        /// <summary>
-        /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
-        /// 인스턴스별 <c>ConfigureCooldown</c> 오버라이드가 있으면 그 값이 우선합니다.
-        /// </summary>
-        internal static void ConfigureUserSavePriorityCooldowns(float urgent, float normal, float lazy) =>
-            SupabaseSDK.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
-
-        /// <summary>생성된 정적 세이브 타입을 자동 동기화 레지스트리에 등록합니다.</summary>
-        internal static void RegisterUserSaveStaticSync(
-            string key,
-            Func<bool> hasDirty,
-            Func<Task<bool>> flushAsync,
-            Action resetLocalState = null,
-            Func<float> getDirtyCooldown = null,
-            Func<bool> hasFreshDirty = null) =>
-            SupabaseSDK.RegisterUserSaveStaticSync(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown, hasFreshDirty);
-
-        /// <summary>정적 세이브 값이 바뀌었음을 알립니다(쿨타임 스케줄).</summary>
-        internal static void MarkUserSaveStaticDirty(string key) =>
-            SupabaseSDK.MarkUserSaveStaticDirty(key);
-
-        /// <summary>특정 정적 세이브의 즉시 전송을 요청합니다. 전송 중이면 완료 후 1회 재시도됩니다.</summary>
-        internal static bool RequestImmediateUserSaveStaticFlush(string key) =>
-            SupabaseSDK.RequestImmediateUserSaveStaticFlush(key);
-
-        /// <summary>특정 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        internal static Task<bool> TryFlushUserSaveImmediateAsync(string key, int timeoutMs = 5000) =>
-            SupabaseSDK.TryFlushUserSaveImmediateAsync(key, timeoutMs);
-
-        /// <summary>등록된 모든 정적 세이브에 즉시 전송을 요청합니다.</summary>
-        internal static void RequestImmediateUserSaveStaticFlushAll() =>
-            SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
-
         /// <summary>
         /// 등록된 유저 세이브. 생성된 세이브 클래스가 아직 초기화되지 않았으면 null입니다.
         /// <c>StaticUserSave</c> 서브클래스는 프로젝트당 하나이므로 대상이 모호하지 않습니다.
@@ -271,31 +199,6 @@ namespace TrueBase.Unity
                 ? UserSave.DeleteAsync()
                 : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
-        /// <summary>
-        /// DB에 본인 세이브 행이 존재하도록 보장합니다. 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
-        /// <para>게임 코드에서 부를 일이 없어 <c>internal</c>입니다 — <see cref="LoadUserSaveAsync"/>는 행이 없으면 만들고 재로드하며,
-        /// 저장 경로도 PATCH 직전에 행 존재를 보장합니다.</para>
-        /// </summary>
-        internal static Task<SupabaseResult> EnsureUserSaveRowAsync() =>
-            UserSave != null
-                ? UserSave.EnsureRowAsync()
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
-
-        /// <summary>
-        /// 등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.
-        /// <para>세이브 타입을 모르는 SDK 내부 코드(로그아웃·앱 종료 훅) 전용입니다.
-        /// 게임 코드는 <see cref="SaveNowAsync"/>를 쓰세요.</para>
-        /// </summary>
-        internal static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000)
-        {
-            if (!SupabaseSDK.HasPendingUserSaveFlush())
-                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
-
-            return await SupabaseSDK.TrySaveAllAsync(timeoutMs)
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
-        }
-
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicNameAsync(string)"/>
         public static Task<SupabaseResult<string>> GetPublicNameAsync(string userId) =>
             SupabaseSDK.TryGetPublicNameAsync(userId);
@@ -324,76 +227,12 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> RedeemWithdrawalCancelAsync(string cancelToken = null) =>
             SupabaseSDK.TryRedeemWithdrawalCancelAsync(cancelToken);
 
-        /// <summary>특정 key가 갱신될 때마다 콜백을 호출합니다. 콜백 인자는 해당 key의 원본 JSON 문자열입니다.</summary>
-        /// <param name="key">remote_config 테이블의 key.</param>
-        /// <param name="onValueChanged">갱신 시 호출되는 콜백. 해지하려면 같은 델리게이트로 <see cref="UnsubscribeRemoteConfig"/>를 호출해야 합니다.</param>
-        /// <param name="invokeIfCached">true면 구독 시점에 캐시된 값이 있을 때 즉시 1회 호출합니다.</param>
-        internal static void SubscribeRemoteConfig(string key, Action<string> onValueChanged, bool invokeIfCached = true) =>
-            SupabaseSDK.SubscribeRemoteConfig(key, onValueChanged, invokeIfCached);
-
-        /// <summary><see cref="SubscribeRemoteConfig"/>로 등록한 콜백을 해지합니다. 등록 시와 동일한 델리게이트 인스턴스를 넘겨야 합니다.</summary>
-        internal static void UnsubscribeRemoteConfig(string key, Action<string> onValueChanged) =>
-            SupabaseSDK.UnsubscribeRemoteConfig(key, onValueChanged);
-
-        /// <summary>키의 값을 비동기로 1회 읽는 함수를 만듭니다.</summary>
-        /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 DB의 <c>max_stale_seconds</c> 설정을 따릅니다.</param>
-        internal static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigReader<T>(key, maxStale);
-
-        /// <summary>폴링으로 값을 자동 갱신하는 바인딩을 만듭니다.</summary>
-        /// <param name="pollInterval">갱신 확인 주기(초). 0 이하이면 자동 폴링 없음.</param>
-        internal static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollInterval)
-            where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigBinding<T>(key, pollInterval);
-
-        /// <summary>값이 갱신될 때마다 <paramref name="onChange"/>를 호출하는 리스너를 만듭니다.</summary>
-        /// <param name="pollInterval">갱신 확인 주기(초). 0 이하이면 자동 폴링 없음.</param>
-        /// <param name="invokeIfCached">true면 생성 시점에 캐시된 값이 있을 때 즉시 1회 호출합니다.</param>
-        internal static RemoteConfigListener<T> CreateRemoteConfigListener<T>(
-            string key, float pollInterval, Action<T> onChange, bool invokeIfCached = true)
-            where T : class, new() =>
-            SupabaseSDK.CreateRemoteConfigListener<T>(key, pollInterval, onChange, invokeIfCached);
-
-        /// <inheritdoc cref="SupabaseSDK.TryVerifyGooglePlayPurchaseAsync"/>
-        internal static Task<(bool success, GooglePlayPurchaseResponse value)> TryVerifyGooglePlayPurchaseAsync(
-            string purchaseToken,
-            string productId,
-            string packageName   = null,
-            long   priceAmount   = 0,
-            string priceCurrency = null) =>
-            SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency);
-
-        /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseAsync"/>
-        internal static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseAsync(
-            string jwsToken,
-            string productId,
-            string bundleId = null) =>
-            SupabaseSDK.TryVerifyApplePurchaseAsync(jwsToken, productId, bundleId);
-
-        /// <inheritdoc cref="SupabaseSDK.TryVerifyApplePurchaseLegacyAsync"/>
-        internal static Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseLegacyAsync(
-            string receipt,
-            string productId,
-            string bundleId = null) =>
-            SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
-
-        /// <inheritdoc cref="SupabaseSDK.SetSession(SupabaseSession, SupabaseSessionChangeKind)"/>
-        internal static void SetSession(SupabaseSession session, SupabaseSessionChangeKind kind) =>
-            SupabaseSDK.SetSession(session, kind);
-
         /// <summary>다른 기기에서 같은 계정으로 로그인해 이 기기 세션이 무효화된 경우(이미 로그아웃 처리 후). UI 팝업에 구독하세요.</summary>
         public static event Action OnDuplicateLoginDetected
         {
             add => SupabaseSDK.OnDuplicateLoginDetected += value;
             remove => SupabaseSDK.OnDuplicateLoginDetected -= value;
         }
-
-        /// <summary>로그아웃 시 호출. clearStorage가 true면 저장된 refresh_token도 삭제.</summary>
-        internal static void ClearSession(bool clearStorage = true) => SupabaseSDK.ClearSession(clearStorage);
-
-        /// <inheritdoc cref="SupabaseSDK.ClearSession(bool, bool)"/>
-        internal static void ClearSession(bool clearStorage, bool deleteUserSessionRow) =>
-            SupabaseSDK.ClearSession(clearStorage, deleteUserSessionRow);
 
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFullyAsync"/>
         public static Task<SupabaseResult> SignOutFullyAsync() => SupabaseSDK.TrySignOutFullyAsync();
@@ -495,9 +334,6 @@ namespace TrueBase.Unity
             return SupabaseResult.Ok;
         }
 
-        /// <summary>우편함 파사드(<c>SupabaseSDK.Mailbox</c>와 동일 인스턴스).</summary>
-        internal static MailboxFacade Mailbox => SupabaseSDK.Mailbox;
-
         /// <inheritdoc cref="SupabaseSDK.TryGetServerNowAsync"/>
         public static Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync() =>
             SupabaseSDK.TryGetServerNowAsync();
@@ -528,6 +364,10 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
         public static void UnregisterPlayNanooInterceptors() =>
             SupabaseSDK.UnregisterPlayNanooInterceptors();
+
+        /// <inheritdoc cref="SupabaseSDK.RegisterNanooStorageReset"/>
+        public static void RegisterNanooStorageReset(Func<string, Task> reset) =>
+            SupabaseSDK.RegisterNanooStorageReset(reset);
 
         /// <inheritdoc cref="SupabaseSDK.RegisterIAPAppleInterceptor"/>
         public static void RegisterIAPAppleInterceptor(
