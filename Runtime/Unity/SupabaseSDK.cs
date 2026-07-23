@@ -68,6 +68,9 @@ namespace TrueBase.Unity
         // StaticUserSave<TRow> 생성 시 자동 등록됩니다. PlayNanooRuntime이 세이브 동기화에 사용합니다.
         internal static INanooSaveSyncable _nanooSaveBridge;
 
+        /// <summary>등록된 유일한 <see cref="StaticUserSave{TRow}"/> 인스턴스. 생성자에서 스스로 등록합니다.</summary>
+        internal static IUserSaveOperations _userSave;
+
         // 브릿지가 씬에 있을 때만 설정됩니다. null이면 기본 SDK 흐름으로 동작합니다.
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptSignInAnonymously;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSignInWithGoogleIdToken;
@@ -1378,7 +1381,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 저장된 세션으로 자동 로그인 → 등록된 후처리 훅을 수행합니다. <b>UserSave 로드는 포함하지 않습니다</b>
-        /// — 성공 후 <c>PlayerSave.LoadAsync()</c>를 직접 호출하세요(수동 로그인과 동일한 2단계).
+        /// — 성공 후 <c>Supabase.LoadUserSaveAsync()</c>를 직접 호출하세요(수동 로그인과 동일한 2단계).
         /// 훅이 false를 반환하면 <c>after_auto_login_failed</c>로 실패 처리합니다.
         /// </summary>
         public static async Task<SupabaseResult> TryTriggerAutoLoginAsync()

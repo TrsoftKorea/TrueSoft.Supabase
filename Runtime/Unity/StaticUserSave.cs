@@ -41,7 +41,7 @@ namespace TrueBase.Unity
     /// 모든 게임 데이터는 하나의 <c>Row</c> 클래스 안에 <c>[DataColumn]</c> 필드로 선언하세요.
     /// </para>
     /// </summary>
-    public abstract class StaticUserSave<TRow> : INanooSaveSyncable where TRow : class, new()
+    public abstract class StaticUserSave<TRow> : INanooSaveSyncable, IUserSaveOperations where TRow : class, new()
     {
         private static class SingletonGuard
         {
@@ -92,6 +92,7 @@ namespace TrueBase.Unity
             SingletonGuard.Assert(GetType());
             _sharedInstance = this;
             SupabaseSDK._nanooSaveBridge = this;
+            SupabaseSDK._userSave = this;   // Supabase 파사드가 Row 타입 없이 위임할 수 있도록 등록
 
             if (string.IsNullOrWhiteSpace(syncKey))
                 throw new ArgumentException("syncKey must not be empty.", nameof(syncKey));

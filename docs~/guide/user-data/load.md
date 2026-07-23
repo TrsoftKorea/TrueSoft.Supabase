@@ -3,14 +3,14 @@
 ## 로드 호출
 
 ```csharp
-Task<SupabaseLoadResult> PlayerSave.LoadAsync()
+Task<SupabaseLoadResult> Supabase.LoadUserSaveAsync()
 ```
 
 로그인과 데이터 로드는 별개 단계입니다. **로그인 완료 후 한 번** 데이터를 로드합니다.
 
 ```csharp
 await Supabase.SignInAnonymouslyAsync();   // 1. 로그인
-await PlayerSave.LoadAsync();              // 2. 데이터 로드
+await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 ```
 
 `LoadAsync`는 서버에서 유저 데이터를 가져와 `Current`에 채웁니다. 신규 유저는 이때 DB 행이 초기값(컬럼 DEFAULT)으로 자동 생성됩니다. `await` 반환 시점에 적용이 끝나 있으므로, 로드 후 실행할 코드는 `await LoadAsync()` 다음 줄에 이어서 작성합니다.
@@ -28,7 +28,7 @@ await PlayerSave.LoadAsync();              // 2. 데이터 로드
 `LoadAsync()`는 `SupabaseLoadResult`를 반환합니다. 그 `IsNewUser`로 신규 유저를 분기합니다. **DB에 본인 행이 없던 신규 유저의 최초 로드**에서만 `true`이고, 기존 유저 로드나 재로그인 시에는 `false`입니다. 값이 호출에 묶여 불변이므로, 이후 재로드해도 이 결과의 `IsNewUser`는 바뀌지 않습니다.
 
 ```csharp
-var result = await PlayerSave.LoadAsync();
+var result = await Supabase.LoadUserSaveAsync();
 if (result.IsNewUser)
 {
     // 신규 유저 전용 로직: 튜토리얼 시작, 웰컴 보너스 지급 등
@@ -47,7 +47,7 @@ if (result.IsNewUser)
 PlayerSave.Stages.EnsureCount(4);       // 새 버전의 크기 확보
 PlayerSave.Stages[3] = firstStageState; // 늘어난 슬롯의 초기값
 
-await PlayerSave.LoadAsync();            // 서버에 실제 값이 든 슬롯은 유지, 없거나 기본값인 슬롯만 채워짐
+await Supabase.LoadUserSaveAsync();            // 서버에 실제 값이 든 슬롯은 유지, 없거나 기본값인 슬롯만 채워짐
 ```
 
 이중 리스트(`AutoList2D`)는 `PlayerSave.Grid.EnsureSize(rows, cols)`로 같은 방식의 크기를 확보합니다. 특정 행만 열을 확보하려면 `PlayerSave.Grid[i].EnsureCount(cols)`를 씁니다.

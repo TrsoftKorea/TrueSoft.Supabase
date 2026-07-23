@@ -65,7 +65,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
         // 자동 로그인과 데이터 로드는 별개 단계입니다 — 로그인 성공 후 직접 로드합니다(수동 로그인과 동일).
         // 신규 유저 여부는 LoadAsync 결과의 IsNewUser로 확인합니다.
-        var loadResult = await SamplePlayerSave.LoadAsync();
+        var loadResult = await Supabase.LoadUserSaveAsync();
         GiftNewUserIfNeeded(loadResult.IsNewUser);
         Debug.Log($"[Supabase] 자동 로그인 + 로드 완료. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
     }
@@ -223,7 +223,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var loaded = await SamplePlayerSave.LoadAsync();
+        var loaded = await Supabase.LoadUserSaveAsync();
         if (!loaded) { Debug.LogWarning("[Supabase] 데이터 로드 실패."); return; }
         GiftNewUserIfNeeded(loaded.IsNewUser);
         Debug.Log($"[Supabase] 데이터 로드 완료. Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}");
@@ -238,7 +238,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var result = await SamplePlayerSave.SaveNowAsync();
+        var result = await Supabase.SaveNowAsync();
         if (result.IsSuccess)
             Debug.Log("[Supabase] 데이터 저장 완료.");
         else if (result.Reason == SupabaseReason.UserSaveNoChanges)
@@ -263,11 +263,11 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var ok = await SamplePlayerSave.DeleteAsync();
+        var ok = await Supabase.DeleteUserSaveAsync();
         if (!ok) { Debug.LogWarning($"[Supabase] 세이브 삭제 실패: {ok.ErrorCode}"); return; }
         Debug.Log($"[Supabase] 세이브 삭제 완료. 로컬 기본값 — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}");
 
-        var loaded = await SamplePlayerSave.LoadAsync();
+        var loaded = await Supabase.LoadUserSaveAsync();
         if (loaded) GiftNewUserIfNeeded(loaded.IsNewUser);
         Debug.Log(loaded
             ? $"[Supabase] 재로드 완료(기본 행 재생성) — Level={SamplePlayerSave.Level}, Coins={SamplePlayerSave.Coins}, Hero[1].level={SamplePlayerSave.Heroes[1].level}"
@@ -465,11 +465,8 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     public static readonly SamplePlayerSave Instance = new();
     private SamplePlayerSave() : base() { }
 
-    // 생성된 PlayerSave처럼 정적으로 호출하기 위한 래퍼. (생성기는 이 래퍼를 자동으로 emit합니다.)
-    public static Task<TrueBase.Core.Common.SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();
-    public static Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => ((StaticUserSave<Row>)Instance).DeleteAsync();
-    public static Task<TrueBase.Core.Common.SupabaseResult> SaveNowAsync(int timeoutMs = 5000) => ((StaticUserSave<Row>)Instance).SaveNowAsync(timeoutMs);
-    public static TrueBase.Core.Common.SupabaseResult RequestSave() => ((StaticUserSave<Row>)Instance).RequestSave();
+    // 로드·저장·삭제는 Supabase 파사드에 있습니다 — Supabase.LoadUserSaveAsync() / SaveNowAsync() / RequestSave() 등.
+    // 생성기도 이 클래스에는 컬럼 접근만 emit합니다.
 
     // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
     [Serializable]

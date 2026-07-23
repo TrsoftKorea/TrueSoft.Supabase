@@ -1,13 +1,13 @@
 # 즉시 저장 요청
 
 ```csharp
-SupabaseResult PlayerSave.RequestSave()
+SupabaseResult Supabase.RequestSave()
 ```
 
 쿨다운을 무시하고 즉시 전송을 요청하되 완료를 기다리지 않습니다(fire-and-forget). 완료를 확인해야 하면 [즉시 저장 후 대기](./save-now)를 씁니다.
 
 ```csharp
-PlayerSave.RequestSave();   // 완료를 기다리지 않음
+Supabase.RequestSave();   // 완료를 기다리지 않음
 ```
 
 보낼 변경분이 없으면 요청 자체를 하지 않고 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다.

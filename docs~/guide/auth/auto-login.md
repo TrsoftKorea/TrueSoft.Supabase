@@ -16,7 +16,7 @@ if (result.IsSuccess)
 {
     ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
     // 자동 로그인 성공 — 데이터 로드는 별개 단계입니다.
-    await PlayerSave.LoadAsync();
+    await Supabase.LoadUserSaveAsync();
     InitGame();
 }
 else

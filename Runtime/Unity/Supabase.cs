@@ -218,9 +218,69 @@ namespace TrueBase.Unity
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
         /// <summary>
+        /// 등록된 유저 세이브. 생성된 세이브 클래스가 아직 초기화되지 않았으면 null입니다.
+        /// <c>StaticUserSave</c> 서브클래스는 프로젝트당 하나이므로 대상이 모호하지 않습니다.
+        /// </summary>
+        private static IUserSaveOperations UserSave => SupabaseSDK._userSave;
+
+        /// <summary>
+        /// DB에서 유저 세이브를 로드해 생성된 세이브 클래스에 적용합니다. 행이 없으면 생성 후 재로드합니다.
+        /// 반환값의 <see cref="SupabaseLoadResult.IsNewUser"/>로 신규 유저 여부를 확인합니다.
+        /// </summary>
+        /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
+        public static Task<SupabaseLoadResult> LoadUserSaveAsync(bool includeUpdatedAt = true) =>
+            UserSave != null
+                ? UserSave.LoadAsync(includeUpdatedAt)
+                : Task.FromResult(SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed));
+
+        /// <summary>
+        /// 쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 대기합니다.
+        /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다.</para>
+        /// </summary>
+        /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
+        public static Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000) =>
+            UserSave != null
+                ? UserSave.SaveNowAsync(timeoutMs)
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed));
+
+        /// <summary>
+        /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 완료를 기다리지 않습니다(fire-and-forget).
+        /// 여러 번 호출해도 안전하며, 전송 중이면 완료 후 1회 재전송이 예약됩니다.
+        /// <para>보낼 변경분이 없으면 요청하지 않고 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다.</para>
+        /// </summary>
+        public static SupabaseResult RequestSave() =>
+            UserSave != null
+                ? UserSave.RequestSave()
+                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+
+        /// <summary>
+        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
+        /// <para>변경이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다.</para>
+        /// </summary>
+        public static Task<SupabaseResult> SaveIfChangedAsync() =>
+            UserSave != null
+                ? UserSave.SaveIfChangedAsync()
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed));
+
+        /// <summary>
+        /// 유저 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋). 계정 탈퇴가 아닙니다.
+        /// 다음 <see cref="LoadUserSaveAsync"/> 시 기본 행이 재생성되므로 실질적으로 "기본값 리셋"입니다.
+        /// </summary>
+        public static Task<SupabaseResult> DeleteUserSaveAsync() =>
+            UserSave != null
+                ? UserSave.DeleteAsync()
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveDeleteFailed));
+
+        /// <summary>DB에 본인 세이브 행이 존재하도록 보장합니다. 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).</summary>
+        public static Task<SupabaseResult> EnsureUserSaveRowAsync() =>
+            UserSave != null
+                ? UserSave.EnsureRowAsync()
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveLoadFailed));
+
+        /// <summary>
         /// 등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.
         /// <para>세이브 타입을 모르는 SDK 내부 코드(로그아웃·앱 종료 훅) 전용입니다.
-        /// 게임 코드는 세이브를 명시하는 <c>PlayerSave.SaveNowAsync()</c>를 쓰세요.</para>
+        /// 게임 코드는 <see cref="SaveNowAsync"/>를 쓰세요.</para>
         /// </summary>
         internal static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000)
         {
@@ -336,7 +396,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 저장된 세션으로 자동 로그인을 시도하고, 성공 시 <c>SupabaseRuntime</c> 후처리 훅을 수행합니다.
-        /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <c>PlayerSave.LoadAsync()</c>를 직접 호출하세요.
+        /// <b>UserSave 로드는 포함하지 않으므로</b>, 수동 로그인과 동일하게 성공 후 <c>Supabase.LoadUserSaveAsync()</c>를 직접 호출하세요.
         /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출합니다.
         /// </summary>
         public static Task<SupabaseSignInResult> TriggerAutoLoginAsync() =>

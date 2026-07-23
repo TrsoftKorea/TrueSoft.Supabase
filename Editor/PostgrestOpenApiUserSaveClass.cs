@@ -236,16 +236,8 @@ namespace TrueBase.Editor
             sb.AppendLine(indent + "    public static readonly " + className + " Instance = new();");
             sb.AppendLine(indent + "    private " + className + "() : base() { }");
             sb.AppendLine();
-            sb.AppendLine(indent + "    /// <summary>세이브 로드. 반환값의 IsNewUser로 신규 유저(DB 행 없던 최초 로드) 여부를 확인하세요.</summary>");
-            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();");
-            sb.AppendLine(indent + "    /// <summary>본인 세이브 삭제(서버 행 DELETE + 로컬 기본값 리셋). 탈퇴 아님. 다음 LoadAsync에서 기본 행 재생성.</summary>");
-            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => ((StaticUserSave<Row>)Instance).DeleteAsync();");
-            sb.AppendLine(indent + "    /// <summary>변경분을 즉시 전송하고 완료까지 대기. 변경분이 없으면 UserSaveNoChanges 사유의 실패를 반환합니다.</summary>");
-            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseResult> SaveNowAsync(int timeoutMs = 5000) => ((StaticUserSave<Row>)Instance).SaveNowAsync(timeoutMs);");
-            sb.AppendLine(indent + "    /// <summary>즉시 전송을 요청하되 완료를 기다리지 않음. 변경분이 없으면 UserSaveNoChanges 사유의 실패를 반환합니다.</summary>");
-            sb.AppendLine(indent + "    public static TrueBase.Core.Common.SupabaseResult RequestSave() => ((StaticUserSave<Row>)Instance).RequestSave();");
-            sb.AppendLine(indent + "    /// <summary>변경분만 즉시 PATCH. 변경분이 없으면 UserSaveNoChanges 사유의 실패를 반환합니다.</summary>");
-            sb.AppendLine(indent + "    public static System.Threading.Tasks.Task<TrueBase.Core.Common.SupabaseResult> SaveIfChangedAsync() => ((StaticUserSave<Row>)Instance).SaveIfChangedAsync();");
+            sb.AppendLine(indent + "    // 로드·저장·삭제는 Supabase 파사드에 있습니다 — Supabase.LoadUserSaveAsync() / SaveNowAsync() / RequestSave() 등.");
+            sb.AppendLine(indent + "    // 이 파일에는 컬럼 접근만 두어, DB 컬럼이 바뀔 때만 다시 생성하면 되도록 합니다.");
             sb.AppendLine();
             sb.AppendLine(indent + "    // 필드는 internal — 반드시 아래 정적 프로퍼티(MarkDirty 포함)로만 접근하세요.");
             sb.AppendLine(indent + "    // [JsonObject(Fields)]로 Newtonsoft가 internal 필드를 직렬화/역직렬화합니다.");

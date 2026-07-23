@@ -118,7 +118,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
     public static readonly PlayerSave Instance = new();
     private PlayerSave() : base() { }
 
-    public static Task<SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();
+    // 로드·저장·삭제는 Supabase 파사드에 있습니다 — 이 파일에는 컬럼 접근만 들어갑니다.
 
     // 필드는 internal — 데이터는 아래 정적 프로퍼티로 접근합니다.
     [Serializable]
@@ -154,3 +154,7 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 ```
 
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
+
+::: info 다시 생성해야 하는 시점
+생성 파일에는 컬럼 접근만 들어갑니다. 로드·저장·삭제는 [`Supabase` 파사드](/guide/api/game-data)에 있으므로, SDK를 올려도 이 파일은 그대로 두면 됩니다. **DB 컬럼이 바뀔 때만** 다시 생성하세요.
+:::

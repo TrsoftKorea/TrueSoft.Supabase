@@ -215,7 +215,8 @@ namespace TrueBase.Editor
             }
 
             sb.AppendLine(ind + "/// <summary>리더보드 '" + leaderboardCode + "' 의 플레이어 데이터 컬럼.</summary>");
-            sb.AppendLine(ind + "public sealed class " + className);
+            // partial — 게임이 별도 파일에서 공통 인터페이스를 붙일 수 있게 합니다(생성 파일은 건드리지 않음).
+            sb.AppendLine(ind + "public sealed partial class " + className);
             sb.AppendLine(ind + "{");
             sb.AppendLine(ind + "    /// <summary>이 클래스가 대응하는 리더보드 코드.</summary>");
             sb.AppendLine(ind + "    public const string LeaderboardCode = \"" + leaderboardCode + "\";");

@@ -2,15 +2,16 @@
 
 ## 유저 데이터
 
-유저 세이브는 생성된 `StaticUserSave<T>` 클래스(예: `PlayerSave`)를 통해 다루는 것이 기본입니다.
+데이터 읽기·쓰기는 생성된 세이브 클래스의 정적 프로퍼티(`PlayerSave.Level` 등)로, 로드·저장·삭제는 아래 파사드 API로 합니다.
 
 | 멤버 | 설명 |
 |------|------|
-| [`PlayerSave.LoadAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
-| [`PlayerSave.DeleteAsync`](/guide/user-data/delete) | 세이브 삭제(기본값 리셋) |
-| [`PlayerSave.SaveNowAsync`](/guide/user-data/save-now) | 변경분 즉시 전송 후 완료 대기 |
-| [`PlayerSave.RequestSave`](/guide/user-data/request-save) | 대기 없이 즉시 전송 요청 |
-| [`PlayerSave.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |
+| [`Supabase.LoadUserSaveAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
+| [`Supabase.DeleteUserSaveAsync`](/guide/user-data/delete) | 세이브 삭제(기본값 리셋) |
+| [`Supabase.SaveNowAsync`](/guide/user-data/save-now) | 변경분 즉시 전송 후 완료 대기 |
+| [`Supabase.RequestSave`](/guide/user-data/request-save) | 대기 없이 즉시 전송 요청 |
+| [`Supabase.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |
+| [`Supabase.EnsureUserSaveRowAsync`](/guide/user-data/ensure-row) | DB 본인 행 생성 보장 |
 
 ::: tip
 프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/how-it-works)를 참고하세요.

@@ -11,7 +11,7 @@ var result = await Supabase.SignInWithGoogleAsync();
 if (result.IsSuccess)
 {
     ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
-    await PlayerSave.LoadAsync();   // 로그인 성공 — 데이터 로드
+    await Supabase.LoadUserSaveAsync();   // 로그인 성공 — 데이터 로드
     InitGame();
 }
 else
