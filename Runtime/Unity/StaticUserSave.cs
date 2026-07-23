@@ -352,10 +352,11 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 전송 완료를 기다리지 않습니다(fire-and-forget).
-        /// 이미 전송 중이면 완료 후 1회 재전송이 예약됩니다.
+        /// <para>여러 번 호출해도 안전합니다. 이미 전송 중이면 완료 후 1회 재전송이 예약되고 성공을 반환하므로,
+        /// 매 프레임 호출해도 중복 전송이 쌓이지 않습니다.</para>
         /// <para>보낼 변경분이 없으면 요청하지 않고 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
-        public SupabaseResult RequestImmediateSave()
+        public SupabaseResult RequestSave()
         {
             EnsureRegistered();
 
@@ -372,7 +373,7 @@ namespace TrueBase.Unity
         /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
-        public async Task<SupabaseResult> FlushNowAsync(int timeoutMs = 5000)
+        public async Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
 

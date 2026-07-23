@@ -217,8 +217,12 @@ namespace TrueBase.Unity
         internal static void RequestImmediateUserSaveStaticFlushAll() =>
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
 
-        /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
-        public static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000)
+        /// <summary>
+        /// 등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.
+        /// <para>세이브 타입을 모르는 SDK 내부 코드(로그아웃·앱 종료 훅) 전용입니다.
+        /// 게임 코드는 세이브를 명시하는 <c>PlayerSave.SaveNowAsync()</c>를 쓰세요.</para>
+        /// </summary>
+        internal static async Task<SupabaseResult> SaveAllAsync(int timeoutMs = 5000)
         {
             if (!SupabaseSDK.HasPendingUserSaveFlush())
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);

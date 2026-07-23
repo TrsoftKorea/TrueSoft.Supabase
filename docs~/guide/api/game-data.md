@@ -8,7 +8,9 @@
 |------|------|
 | [`PlayerSave.LoadAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
 | [`PlayerSave.DeleteAsync`](/guide/user-data/delete) | 세이브 삭제(기본값 리셋) |
-| [`Supabase.SaveAllAsync`](/guide/user-data/immediate-save) | 변경된 세이브 즉시 저장 |
+| [`PlayerSave.SaveNowAsync`](/guide/user-data/save-now) | 변경분 즉시 전송 후 완료 대기 |
+| [`PlayerSave.RequestSave`](/guide/user-data/request-save) | 대기 없이 즉시 전송 요청 |
+| [`PlayerSave.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |
 
 ::: tip
 프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/how-it-works)를 참고하세요.

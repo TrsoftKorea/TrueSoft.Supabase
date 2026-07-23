@@ -106,12 +106,8 @@ namespace TrueBase.Unity
         {
             foreach (var entry in Entries.Values)
             {
-                if (entry.IsInFlight)
+                if (entry.IsInFlight || SafeHasFreshDirty(entry))
                     return true;
-
-                var check = entry.HasFreshDirty ?? entry.HasDirty;
-                try { if (check != null && check.Invoke()) return true; }
-                catch { return true; }  // 검사 실패 시 보수적으로 "보낼 것이 있다"로 판단
             }
 
             return false;
@@ -147,7 +143,8 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 flush를 시작합니다(완료 대기 없음).
-        /// 이미 전송 중이면 완료 후 1회 재전송을 예약하고 false를 반환합니다.
+        /// <para>요청이 접수되면 true입니다. 이미 전송 중이면 완료 후 1회 재전송을 예약하고 true를 반환하므로,
+        /// 같은 프레임에 여러 번 호출해도 안전합니다. 등록되지 않은 key만 false입니다.</para>
         /// </summary>
         public static bool RequestImmediateFlush(string key)
         {
@@ -157,7 +154,7 @@ namespace TrueBase.Unity
             if (entry.IsInFlight)
             {
                 entry.RequestImmediateAfterInFlight = true;
-                return false;
+                return true;
             }
 
             return TryStartFlush(entry, immediate: true);
@@ -325,7 +322,9 @@ namespace TrueBase.Unity
             if (entry.RequestImmediateAfterInFlight)
             {
                 entry.RequestImmediateAfterInFlight = false;
-                if (SafeHasDirty(entry))
+                // 예약된 재전송은 throttle 캐시를 믿지 않고 신선하게 검사한다.
+                // (전송 중에 컬렉션이 제자리 수정된 경우 캐시가 false라 재전송이 취소될 수 있음)
+                if (SafeHasFreshDirty(entry))
                     _ = StartFlushAsync(entry, immediate: true);
                 return;
             }
@@ -339,6 +338,23 @@ namespace TrueBase.Unity
             try
             {
                 return entry.HasDirty != null && entry.HasDirty();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Supabase] user save dirty check failed: " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>throttle 캐시를 무시한 정확한 dirty 검사. 등록되지 않았으면 <see cref="SafeHasDirty"/>로 대체합니다.</summary>
+        private static bool SafeHasFreshDirty(Entry entry)
+        {
+            if (entry.HasFreshDirty == null)
+                return SafeHasDirty(entry);
+
+            try
+            {
+                return entry.HasFreshDirty();
             }
             catch (Exception e)
             {

@@ -238,7 +238,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
-        var result = await Supabase.SaveAllAsync();
+        var result = await SamplePlayerSave.SaveNowAsync();
         if (result.IsSuccess)
             Debug.Log("[Supabase] 데이터 저장 완료.");
         else if (result.Reason == SupabaseReason.UserSaveNoChanges)
@@ -468,6 +468,8 @@ public sealed class SamplePlayerSave : StaticUserSave<SamplePlayerSave.Row>
     // 생성된 PlayerSave처럼 정적으로 호출하기 위한 래퍼. (생성기는 이 래퍼를 자동으로 emit합니다.)
     public static Task<TrueBase.Core.Common.SupabaseLoadResult> LoadAsync() => ((StaticUserSave<Row>)Instance).LoadAsync();
     public static Task<TrueBase.Core.Common.SupabaseResult> DeleteAsync() => ((StaticUserSave<Row>)Instance).DeleteAsync();
+    public static Task<TrueBase.Core.Common.SupabaseResult> SaveNowAsync(int timeoutMs = 5000) => ((StaticUserSave<Row>)Instance).SaveNowAsync(timeoutMs);
+    public static TrueBase.Core.Common.SupabaseResult RequestSave() => ((StaticUserSave<Row>)Instance).RequestSave();
 
     // 필드는 internal — 정적 프로퍼티(MarkDirty 포함)로 접근합니다. (private는 중첩 클래스라 바깥에서 접근 불가)
     [Serializable]
