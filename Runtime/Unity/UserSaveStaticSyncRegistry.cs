@@ -21,6 +21,8 @@ namespace TrueBase.Unity
             public Action ResetLocalState;
             public bool IsInFlight;
             public bool RequestImmediateAfterInFlight;
+            /// <summary>flush가 완료될 때마다 1 증가. "내가 요청한 전송이 끝났는가" 판정에 사용.</summary>
+            public long FlushCompletedCount;
             public float NextAllowedAtRealtime;
             /// <summary>null이면 전역 <see cref="_cooldownSeconds"/> 사용. non-null이면 dirty 우선순위별 쿨다운 반환.</summary>
             public Func<float> GetDirtyCooldown;
@@ -160,15 +162,16 @@ namespace TrueBase.Unity
             return TryStartFlush(entry, immediate: true);
         }
 
-        /// <summary>즉시 flush를 시작하고 전송·dirty가 모두 정리될 때까지 대기합니다.</summary>
+        /// <summary>즉시 flush를 시작하고 그 전송이 끝날 때까지 대기합니다.</summary>
         /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
         public static async Task<bool> RequestImmediateFlushAsync(string key, int timeoutMs = 5000)
         {
             if (!TryGetEntry(key, out var entry))
                 return false;
 
+            var startCount = entry.FlushCompletedCount;
             _ = RequestImmediateFlush(key);
-            return await WaitForSettledAsync(entry, timeoutMs);
+            return await WaitForSettledAsync(entry, startCount, timeoutMs);
         }
 
         /// <summary>등록된 모든 항목에 즉시 flush를 요청합니다(완료 대기 없음).</summary>
@@ -178,10 +181,17 @@ namespace TrueBase.Unity
                 _ = RequestImmediateFlush(pair.Key);
         }
 
-        /// <summary>등록된 모든 항목에 즉시 flush를 요청하고, 전부 정리될 때까지 대기합니다.</summary>
+        /// <summary>
+        /// 등록된 모든 항목에 즉시 flush를 요청하고, 요청한 전송이 전부 끝날 때까지 대기합니다.
+        /// <para>단건 대기와 같은 기준입니다 — 대기 중 새로 생긴 변경분까지 기다리지 않습니다.</para>
+        /// </summary>
         /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
         public static async Task<bool> RequestImmediateFlushAllAsync(int timeoutMs = 5000)
         {
+            var startCounts = new Dictionary<string, long>(StringComparer.Ordinal);
+            foreach (var pair in Entries)
+                startCounts[pair.Key] = pair.Value.FlushCompletedCount;
+
             foreach (var pair in Entries)
                 _ = RequestImmediateFlush(pair.Key);
 
@@ -189,9 +199,17 @@ namespace TrueBase.Unity
             while (DateTime.UtcNow < deadline)
             {
                 var allSettled = true;
-                foreach (var entry in Entries.Values)
+                foreach (var pair in Entries)
                 {
-                    if (entry.IsInFlight || SafeHasDirty(entry))
+                    var entry = pair.Value;
+                    if (entry.IsInFlight)
+                    {
+                        allSettled = false;
+                        break;
+                    }
+
+                    var startCount = startCounts.TryGetValue(pair.Key, out var c) ? c : 0L;
+                    if (entry.FlushCompletedCount <= startCount && SafeHasFreshDirty(entry))
                     {
                         allSettled = false;
                         break;
@@ -317,6 +335,7 @@ namespace TrueBase.Unity
                 }
 
                 entry.IsInFlight = false;
+                entry.FlushCompletedCount++;
             }
 
             if (entry.RequestImmediateAfterInFlight)
@@ -363,16 +382,31 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>전송 중이 아니고 dirty도 없는 상태가 될 때까지 16ms 간격으로 대기합니다.</summary>
+        /// <summary>
+        /// 요청한 전송이 끝날 때까지 16ms 간격으로 대기합니다.
+        /// <para>
+        /// "dirty가 하나도 없는 상태"가 아니라 <b>호출 시점 이후 flush가 한 번 완료됐는지</b>를 봅니다.
+        /// 대기하는 동안 게임이 값을 계속 바꾸면 dirty는 영영 사라지지 않으므로, 그 기준으로는
+        /// 전송이 성공해도 타임아웃이 납니다. 대기 중 생긴 새 변경분은 다음 자동 저장이 처리합니다.
+        /// </para>
+        /// </summary>
+        /// <param name="startCount">요청 직전의 <see cref="Entry.FlushCompletedCount"/>.</param>
         /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정됩니다.</param>
-        private static async Task<bool> WaitForSettledAsync(Entry entry, int timeoutMs)
+        private static async Task<bool> WaitForSettledAsync(Entry entry, long startCount, int timeoutMs)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var limitMs = Math.Max(250, timeoutMs);
             while (sw.ElapsedMilliseconds < limitMs)
             {
-                if (!entry.IsInFlight && !SafeHasDirty(entry))
-                    return true;
+                if (!entry.IsInFlight)
+                {
+                    // 요청 이후 전송이 한 번이라도 끝났으면 완료.
+                    if (entry.FlushCompletedCount > startCount)
+                        return true;
+                    // 보낼 것이 없어 전송이 시작조차 안 된 경우도 완료로 본다.
+                    if (!SafeHasFreshDirty(entry))
+                        return true;
+                }
                 await Task.Delay(16).ConfigureAwait(true);
             }
 
