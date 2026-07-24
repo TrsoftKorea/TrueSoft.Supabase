@@ -45,7 +45,7 @@ namespace TrueBase.Editor
             public ColMeta(string name, string clrType) { Name = name; ClrType = clrType; }
         }
 
-        [MenuItem("TrueSoft/Supabase/리더보드 클래스 생성")]
+        [MenuItem("TrueSoft/Supabase/클래스 생성/리더보드")]
         private static void Open()
         {
             var win = GetWindow<LeaderboardRowClassGeneratorWindow>(true, DialogTitle, true);

@@ -8,7 +8,7 @@
 |------|-----------|--------|
 | **Project URL** | 프로젝트 오버뷰 URL 옆 **Copy** 드롭다운 | `SupabaseSettings.projectUrl` |
 | **Publishable key** | **Settings > API Keys** → Publishable key 섹션 복사 버튼 | `SupabaseSettings.publishableKey` |
-| **Secret key** | **Settings > API Keys** → Secret keys 섹션 복사 버튼 | Inspector의 유저 데이터 클래스 생성 도구 전용. EditorPrefs 저장, 빌드 미포함 |
+| **Secret key** | **Settings > API Keys** → Secret keys 섹션 복사 버튼 | 클래스 생성기(유저 데이터·Remote Config) 전용. EditorPrefs 저장, 빌드 미포함 |
 
 ## 2. 설정 에셋 생성
 
