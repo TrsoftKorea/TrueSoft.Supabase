@@ -87,7 +87,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(demoColumnName))
             data = new Dictionary<string, object> { [demoColumnName.Trim()] = Random.Range(1, 100) };
 
-        var r = await Supabase.SubmitLeaderboardScoreAsync(leaderboardCode, score, $"제출 {score}", data);
+        var r = await Supabase.SubmitLeaderboardScoreAsync(leaderboardCode, score, data);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 기록 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} {score} 제출 → 반영된 점수 {r.Data.Score} (회차 {r.Data.RotationCount})");
@@ -146,7 +146,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(demoColumnName))
             data = new Dictionary<string, object> { [demoColumnName.Trim()] = Random.Range(1, 100) };
 
-        var r = await Supabase.SetLeaderboardPlayerDataAsync(leaderboardCode, $"수정 {Time.frameCount}", data);
+        var r = await Supabase.SetLeaderboardPlayerDataAsync(leaderboardCode, data, rotationCount: null);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 데이터 수정 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 추가 데이터를 수정했습니다. 5번으로 확인하세요.");

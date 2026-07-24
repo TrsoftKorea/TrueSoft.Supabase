@@ -1929,13 +1929,13 @@ namespace TrueBase.Unity
 
         /// <summary><c>ts_leaderboard_submit_score</c> — 본인 점수 기록. 기록 방식은 서버 설정을 따릅니다.</summary>
         public static async Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
-            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null)
+            string code, double score, IReadOnlyDictionary<string, object> data = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<LeaderboardSubmitResult>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await Leaderboard.SubmitScoreAsync(code, score, extraData, data);
+            return await Leaderboard.SubmitScoreAsync(code, score, data);
         }
 
         /// <summary><c>ts_leaderboard_range</c> — 순위 범위 조회(최대 100건). <paramref name="rotationCount"/>=null이면 현재 회차.</summary>
@@ -1960,15 +1960,15 @@ namespace TrueBase.Unity
             return await Leaderboard.GetPlayerAsync(code, accountId, rotationCount);
         }
 
-        /// <summary><c>ts_leaderboard_set_player_data</c> — 본인 추가 데이터·등록 컬럼 수정. 점수는 그대로.</summary>
+        /// <summary><c>ts_leaderboard_set_player_data</c> — 본인 등록 컬럼 수정. 점수는 그대로.</summary>
         public static async Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await Leaderboard.SetPlayerDataAsync(code, extraData, data, rotationCount);
+            return await Leaderboard.SetPlayerDataAsync(code, data, rotationCount);
         }
 
         /// <summary><c>ts_leaderboard_delete_my_score</c> — 본인 기록 삭제. 없으면 no-op.</summary>
@@ -1997,9 +1997,9 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SubmitLeaderboardScoreAsync"/>
         public static async Task<SupabaseResult<LeaderboardSubmitResult>> TrySubmitLeaderboardScoreAsync(
-            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null)
+            string code, double score, IReadOnlyDictionary<string, object> data = null)
         {
-            var r = await SubmitLeaderboardScoreAsync(code, score, extraData, data);
+            var r = await SubmitLeaderboardScoreAsync(code, score, data);
             return LogAndReturnResult(ApiLogTags.LeaderboardSubmit, r);
         }
 
@@ -2021,9 +2021,9 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SetLeaderboardPlayerDataAsync"/>
         public static async Task<SupabaseResult> TrySetLeaderboardPlayerDataAsync(
-            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
         {
-            var r = await SetLeaderboardPlayerDataAsync(code, extraData, data, rotationCount);
+            var r = await SetLeaderboardPlayerDataAsync(code, data, rotationCount);
             LogApiResult(ApiLogTags.LeaderboardSetPlayerData, r.IsSuccess, r.ErrorCode);
             return r;
         }

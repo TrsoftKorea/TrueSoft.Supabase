@@ -96,10 +96,10 @@ grant execute on function public.ts_mail_inbox_counts()                    to au
 -- 리더보드 (16_leaderboard.sql)
 grant execute on function public.ts_leaderboard_tables()                              to authenticated;
 grant execute on function public.ts_leaderboard_table(text)                           to authenticated;
-grant execute on function public.ts_leaderboard_submit_score(text, numeric, text, jsonb) to authenticated;
+grant execute on function public.ts_leaderboard_submit_score(text, numeric, jsonb)     to authenticated;
 grant execute on function public.ts_leaderboard_range(text, int, int, int)            to authenticated;
 grant execute on function public.ts_leaderboard_player(text, uuid, int)               to authenticated;
-grant execute on function public.ts_leaderboard_set_player_data(text, text, jsonb, int) to authenticated;
+grant execute on function public.ts_leaderboard_set_player_data(text, jsonb, int)     to authenticated;
 grant execute on function public.ts_leaderboard_delete_my_score(text, int)            to authenticated;
 -- 클래스 생성기 전용(무인증). 등록 컬럼의 이름+타입만 노출(민감정보 아님) → anon 도 허용.
 grant execute on function public.ts_leaderboard_columns_meta(text)                    to anon, authenticated;

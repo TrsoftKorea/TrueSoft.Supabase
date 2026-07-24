@@ -82,7 +82,6 @@ namespace TrueBase.Core.Data
             string accessToken,
             string code,
             double score,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null)
         {
             if (string.IsNullOrWhiteSpace(code))
@@ -92,7 +91,6 @@ namespace TrueBase.Core.Data
             {
                 p_code = code.Trim(),
                 p_score = score,
-                p_extra_data = extraData,
                 p_data = data
             });
 
@@ -186,11 +184,10 @@ namespace TrueBase.Core.Data
             }
         }
 
-        /// <summary>본인 기록의 추가 데이터·등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
+        /// <summary>본인 기록의 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
         public async Task<SupabaseResult> SetPlayerDataAsync(
             string accessToken,
             string code,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null,
             int? rotationCount = null)
         {
@@ -200,7 +197,6 @@ namespace TrueBase.Core.Data
             var body = JsonConvert.SerializeObject(new
             {
                 p_code = code.Trim(),
-                p_extra_data = extraData,
                 p_data = data,
                 p_rotation_count = rotationCount
             });

@@ -78,7 +78,6 @@ create table if not exists public.leaderboard_scores (
   user_id           text        not null default '',
   server_id         uuid        references public.game_servers (id) on delete set null,
   score             numeric     not null default 0,
-  extra_data        text,
   score_achieved_at timestamptz not null default now(),
   first_recorded_at timestamptz not null default now(),
   score_count       int         not null default 1,
@@ -418,7 +417,6 @@ grant execute on function public.ts_leaderboard_table(text) to authenticated;
 create or replace function public.ts_leaderboard_submit_score(
   p_code       text,
   p_score      numeric,
-  p_extra_data text  default null,
   p_data       jsonb default null
 )
 returns jsonb
@@ -473,10 +471,10 @@ begin
 
   v_sql := format($f$
     insert into public.leaderboard_scores
-      (table_code, rotation_count, account_id, user_id, server_id, score, extra_data,
+      (table_code, rotation_count, account_id, user_id, server_id, score,
        score_achieved_at, first_recorded_at, score_count, updated_at %s)
-    select $1, $2, $3, $4, $5, $6, $7, now(), now(), 1, now() %s
-    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($8, '{}'::jsonb)) d
+    select $1, $2, $3, $4, $5, $6, now(), now(), 1, now() %s
+    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($7, '{}'::jsonb)) d
     on conflict (table_code, rotation_count, account_id) do update set
       score = case %L
                 when 'highest' then greatest(leaderboard_scores.score, excluded.score)
@@ -492,7 +490,6 @@ begin
                 else excluded.score
               end) is distinct from leaderboard_scores.score
         then now() else leaderboard_scores.score_achieved_at end,
-      extra_data  = coalesce(excluded.extra_data, leaderboard_scores.extra_data),
       server_id   = excluded.server_id,
       user_id     = excluded.user_id,
       score_count = leaderboard_scores.score_count + 1,
@@ -502,17 +499,17 @@ begin
 
   execute v_sql
     into v_new
-    using t.code, t.rotation_count, v_uid, v_user, v_srv, p_score, p_extra_data, p_data;
+    using t.code, t.rotation_count, v_uid, v_user, v_srv, p_score, p_data;
 
   return jsonb_build_object('score', v_new, 'rotation_count', t.rotation_count);
 end;
 $$;
 
-comment on function public.ts_leaderboard_submit_score(text,numeric,text,jsonb) is
+comment on function public.ts_leaderboard_submit_score(text,numeric,jsonb) is
   '본인 점수 기록. record_type(최고/최저/최신/누적) 적용, 점수가 바뀔 때만 score_achieved_at 갱신. SECURITY DEFINER.';
 
-revoke all on function public.ts_leaderboard_submit_score(text,numeric,text,jsonb) from public, anon;
-grant execute on function public.ts_leaderboard_submit_score(text,numeric,text,jsonb) to authenticated;
+revoke all on function public.ts_leaderboard_submit_score(text,numeric,jsonb) from public, anon;
+grant execute on function public.ts_leaderboard_submit_score(text,numeric,jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- ts_leaderboard_range — 순위 범위 조회
@@ -579,11 +576,10 @@ begin
              'user_id',        r.user_id,
              'display_name',   r.display_name,
              'score',          r.score,
-             'extra_data',     r.extra_data,
              'rotation_count', r.rotation_count,
              'data',           %s) order by r.rnk), '[]'::jsonb)
     from (
-      select s.account_id, s.user_id, s.score, s.extra_data, s.rotation_count,
+      select s.account_id, s.user_id, s.score, s.rotation_count,
              dn.display_name %s,
              rank() over (order by (case when $4 then -s.score else s.score end) asc,
                                    s.score_achieved_at asc) as rnk
@@ -699,7 +695,6 @@ begin
     'user_id',        s.user_id,
     'display_name',   v_name,
     'score',          s.score,
-    'extra_data',     s.extra_data,
     'rotation_count', s.rotation_count,
     'data',           v_data);
 end;
@@ -716,7 +711,6 @@ grant execute on function public.ts_leaderboard_player(text,uuid,int) to authent
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_leaderboard_set_player_data(
   p_code           text,
-  p_extra_data     text  default null,
   p_data           jsonb default null,
   p_rotation_count int   default null
 )
@@ -757,12 +751,11 @@ begin
 
   execute format($f$
     update public.leaderboard_scores s
-    set extra_data = coalesce($1, s.extra_data),
-        updated_at = now() %s
-    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($2, '{}'::jsonb)) d
-    where s.table_code = $3 and s.rotation_count = $4 and s.account_id = $5
+    set updated_at = now() %s
+    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($1, '{}'::jsonb)) d
+    where s.table_code = $2 and s.rotation_count = $3 and s.account_id = $4
   $f$, v_set)
-  using p_extra_data, p_data, t.code, v_rot, v_uid;
+  using p_data, t.code, v_rot, v_uid;
 
   get diagnostics v_n = row_count;
   if v_n = 0 then
@@ -771,11 +764,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_leaderboard_set_player_data(text,text,jsonb,int) is
-  '본인 추가 데이터·등록 컬럼 수정. 점수는 바꾸지 않는다. SECURITY DEFINER.';
+comment on function public.ts_leaderboard_set_player_data(text,jsonb,int) is
+  '본인 등록 컬럼 수정. 점수는 바꾸지 않는다. SECURITY DEFINER.';
 
-revoke all on function public.ts_leaderboard_set_player_data(text,text,jsonb,int) from public, anon;
-grant execute on function public.ts_leaderboard_set_player_data(text,text,jsonb,int) to authenticated;
+revoke all on function public.ts_leaderboard_set_player_data(text,jsonb,int) from public, anon;
+grant execute on function public.ts_leaderboard_set_player_data(text,jsonb,int) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- ts_leaderboard_delete_my_score — 본인 기록 삭제
@@ -1024,7 +1017,6 @@ comment on function public.ts_admin_leaderboard_set_score(text,uuid,numeric,int)
 create or replace function public.ts_admin_leaderboard_set_player_data(
   p_code           text,
   p_account_id     uuid,
-  p_extra_data     text  default null,
   p_data           jsonb default null,
   p_rotation_count int   default null
 )
@@ -1060,12 +1052,11 @@ begin
 
   execute format($f$
     update public.leaderboard_scores s
-    set extra_data = coalesce($1, s.extra_data),
-        updated_at = now() %s
-    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($2, '{}'::jsonb)) d
-    where s.table_code = $3 and s.rotation_count = $4 and s.account_id = $5
+    set updated_at = now() %s
+    from jsonb_populate_record(null::public.leaderboard_scores, coalesce($1, '{}'::jsonb)) d
+    where s.table_code = $2 and s.rotation_count = $3 and s.account_id = $4
   $f$, v_set)
-  using p_extra_data, p_data, t.code, v_rot, p_account_id;
+  using p_data, t.code, v_rot, p_account_id;
 
   get diagnostics v_n = row_count;
   if v_n = 0 then
@@ -1074,8 +1065,8 @@ begin
 end;
 $$;
 
-comment on function public.ts_admin_leaderboard_set_player_data(text,uuid,text,jsonb,int) is
-  '운영이 특정 플레이어의 추가 데이터·등록 컬럼을 수정(어드민).';
+comment on function public.ts_admin_leaderboard_set_player_data(text,uuid,jsonb,int) is
+  '운영이 특정 플레이어의 등록 컬럼을 수정(어드민).';
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_leaderboard_delete_score — 운영이 플레이어 기록 삭제
@@ -1137,7 +1128,7 @@ declare
   notnull_sql    text;
   default_clause text;
   v_reserved     text[] := array['id','table_code','rotation_count','account_id','user_id','server_id',
-                                 'score','extra_data','score_achieved_at','first_recorded_at',
+                                 'score','score_achieved_at','first_recorded_at',
                                  'score_count','updated_at'];
 begin
   if colname is null then
@@ -1191,7 +1182,7 @@ declare
   colname     text := nullif(btrim(p_colname), '');
   default_sql text := nullif(btrim(p_default_sql), '');
   v_reserved  text[] := array['id','table_code','rotation_count','account_id','user_id','server_id',
-                              'score','extra_data','score_achieved_at','first_recorded_at',
+                              'score','score_achieved_at','first_recorded_at',
                               'score_count','updated_at'];
 begin
   if colname is null then
@@ -1245,7 +1236,7 @@ declare
   colname    text := nullif(btrim(p_colname), '');
   v_used     text;
   v_reserved text[] := array['id','table_code','rotation_count','account_id','user_id','server_id',
-                             'score','extra_data','score_achieved_at','first_recorded_at',
+                             'score','score_achieved_at','first_recorded_at',
                              'score_count','updated_at'];
 begin
   if colname is null then
@@ -1343,7 +1334,7 @@ revoke all on function public.ts_admin_leaderboard_upsert_table(text,text,text,t
 revoke all on function public.ts_admin_leaderboard_delete_table(text) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_rotate(text) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_set_score(text,uuid,numeric,int) from public, anon, authenticated;
-revoke all on function public.ts_admin_leaderboard_set_player_data(text,uuid,text,jsonb,int) from public, anon, authenticated;
+revoke all on function public.ts_admin_leaderboard_set_player_data(text,uuid,jsonb,int) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_delete_score(text,uuid,int) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_add_column(text,text,boolean,text) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_update_column(text,boolean,text) from public, anon, authenticated;

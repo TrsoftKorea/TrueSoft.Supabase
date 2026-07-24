@@ -287,8 +287,13 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.TrySubmitLeaderboardScoreAsync"/>
         public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
-            string code, double score, string extraData = null, IReadOnlyDictionary<string, object> data = null) =>
-            SupabaseSDK.TrySubmitLeaderboardScoreAsync(code, score, extraData, data);
+            string code, double score, IReadOnlyDictionary<string, object> data = null) =>
+            SupabaseSDK.TrySubmitLeaderboardScoreAsync(code, score, data);
+
+        /// <summary>생성한 리더보드 행 타입으로 점수를 기록합니다. 리더보드 코드·데이터는 행에서 읽습니다.</summary>
+        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
+            double score, ILeaderboardRow row) =>
+            SupabaseSDK.TrySubmitLeaderboardScoreAsync(row.LeaderboardCode, score, row.ToData());
 
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardRangeAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
@@ -302,8 +307,13 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.TrySetLeaderboardPlayerDataAsync"/>
         public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            string code, string extraData = null, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null) =>
-            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(code, extraData, data, rotationCount);
+            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null) =>
+            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(code, data, rotationCount);
+
+        /// <summary>생성한 리더보드 행 타입으로 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
+        public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
+            ILeaderboardRow row, int? rotationCount = null) =>
+            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(row.LeaderboardCode, row.ToData(), rotationCount);
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMyLeaderboardScoreAsync"/>
         public static Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null) =>

@@ -39,9 +39,9 @@ foreach (var entry in result.Data)
 메뉴에서 **TrueSoft > Supabase > 클래스 생성 > 리더보드**를 열고 드롭다운에서 리더보드를 고르면, 그 리더보드에 등록된 필드를 자동으로 불러와 클래스를 만듭니다. 코드나 필드 이름을 직접 입력할 필요가 없습니다.
 
 ```csharp
-// 생성된 ArenaLeaderboardRow 사용
+// 생성된 ArenaLeaderboardRow 사용 — 행을 그대로 넘기면 코드·데이터를 SDK가 읽습니다
 var row = new ArenaLeaderboardRow { CharacterLevel = 42, GuildName = "붉은검" };
-await Supabase.SubmitLeaderboardScoreAsync("arena", 1250, data: row.ToData());
+await Supabase.SubmitLeaderboardScoreAsync(1250, row);
 
 // 조회 결과에서 복원
 var parsed = ArenaLeaderboardRow.FromData(entry.Data);

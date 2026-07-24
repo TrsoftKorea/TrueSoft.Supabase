@@ -137,9 +137,6 @@ namespace TrueBase.Core.Data
         [JsonProperty("score")]
         public double Score { get; set; }
 
-        [JsonProperty("extra_data")]
-        public string ExtraData { get; set; }
-
         [JsonProperty("rotation_count")]
         public int RotationCount { get; set; }
 
@@ -169,9 +166,6 @@ namespace TrueBase.Core.Data
 
         [JsonProperty("score")]
         public double Score { get; set; }
-
-        [JsonProperty("extra_data")]
-        public string ExtraData { get; set; }
 
         [JsonProperty("rotation_count")]
         public int RotationCount { get; set; }

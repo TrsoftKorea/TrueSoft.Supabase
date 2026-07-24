@@ -57,27 +57,24 @@ namespace TrueBase.Unity
         /// </summary>
         /// <param name="code">리더보드 코드.</param>
         /// <param name="score">제출할 점수.</param>
-        /// <param name="extraData">자유 형식 추가 문자열. (기본값: null)</param>
         /// <param name="data">플레이어 데이터 컬럼 값. 이 리더보드에 등록된 컬럼만 허용됩니다. (기본값: null)</param>
         public Task<SupabaseResult<LeaderboardSubmitResult>> SubmitScoreAsync(
             string code,
             double score,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null) =>
-            SubmitScoreAsync(_sessionGetter?.Invoke(), code, score, extraData, data);
+            SubmitScoreAsync(_sessionGetter?.Invoke(), code, score, data);
 
         public async Task<SupabaseResult<LeaderboardSubmitResult>> SubmitScoreAsync(
             SupabaseSession session,
             string code,
             double score,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null)
         {
             var token = RequireToken(session);
             if (token == null)
                 return SupabaseResult<LeaderboardSubmitResult>.Fail("auth_not_signed_in");
 
-            return await _leaderboard.SubmitScoreAsync(token, code, score, extraData, data);
+            return await _leaderboard.SubmitScoreAsync(token, code, score, data);
         }
 
         /// <summary>순위 범위를 조회합니다. 한 번에 최대 100건까지 반환됩니다.</summary>
@@ -130,18 +127,16 @@ namespace TrueBase.Unity
             return await _leaderboard.GetPlayerAsync(token, code, accountId, rotationCount);
         }
 
-        /// <summary>본인 기록의 추가 데이터·등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
+        /// <summary>본인 기록의 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
         public Task<SupabaseResult> SetPlayerDataAsync(
             string code,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null,
             int? rotationCount = null) =>
-            SetPlayerDataAsync(_sessionGetter?.Invoke(), code, extraData, data, rotationCount);
+            SetPlayerDataAsync(_sessionGetter?.Invoke(), code, data, rotationCount);
 
         public async Task<SupabaseResult> SetPlayerDataAsync(
             SupabaseSession session,
             string code,
-            string extraData = null,
             IReadOnlyDictionary<string, object> data = null,
             int? rotationCount = null)
         {
@@ -149,7 +144,7 @@ namespace TrueBase.Unity
             if (token == null)
                 return SupabaseResult.Fail("auth_not_signed_in");
 
-            return await _leaderboard.SetPlayerDataAsync(token, code, extraData, data, rotationCount);
+            return await _leaderboard.SetPlayerDataAsync(token, code, data, rotationCount);
         }
 
         /// <summary>본인 기록을 삭제합니다. 기록이 없으면 아무것도 하지 않고 성공합니다.</summary>

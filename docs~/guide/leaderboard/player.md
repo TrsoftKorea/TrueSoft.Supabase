@@ -38,7 +38,6 @@ if (result.IsSuccess)
 | `.AccountId` | `string` | 계정 ID |
 | `.DisplayName` | `string` | 현재 닉네임 |
 | `.Score` | `double` | 점수 |
-| `.ExtraData` | `string` | 자유 형식 문자열 |
 | `.RotationCount` | `int` | 회차 |
 | `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값 |
 
