@@ -9,8 +9,8 @@ using UnityEngine;
 ///
 /// 리더보드 생성은 운영(Retool) 전용입니다 — Retool의 리더보드 페이지에서 먼저 리더보드를 만들고,
 /// Inspector의 Leaderboard Code를 그 코드와 맞춘 뒤 Play Mode에서 키를 눌러 확인하세요.
-/// 순위에 함께 표시할 컬럼을 쓰려면 Retool 리더보드 &gt; 컬럼 탭에서 등록하고
-/// Demo Column Name 도 그 컬럼명으로 맞춰야 합니다.
+/// 순위에 함께 표시할 값을 쓰려면 Retool 리더보드 &gt; 필드 탭에서 필드를 등록하고
+/// Demo Field Name 도 그 필드명으로 맞춰야 합니다.
 ///
 /// 키보드 단축키 (Play Mode):
 ///   1 — 익명 로그인
@@ -29,7 +29,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
 
     [SerializeField] private string leaderboardCode = "arena";
 
-    [Tooltip("Retool 리더보드 > 컬럼 탭에 등록한 컬럼명. 비우면 컬럼 없이 기록합니다.")]
+    [Tooltip("Retool 리더보드 > 필드 탭에 등록한 필드명. 비우면 필드 없이 기록합니다.")]
     [SerializeField] private string demoColumnName = "";
 
     private void Update()
@@ -65,7 +65,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
             Debug.Log($"{Tag}  {t.Code} — {t.DisplayName} / {t.RecordType} / {t.SortType} / 회차 {t.RotationCount}");
     }
 
-    /// <summary>3 — 리더보드 상세. 남은 시간·참여자 수·등록 컬럼을 확인합니다.</summary>
+    /// <summary>3 — 리더보드 상세. 남은 시간·참여자 수·등록 필드를 확인합니다.</summary>
     private async Task ShowTableAsync()
     {
         var r = await Supabase.GetLeaderboardTableAsync(leaderboardCode);
@@ -75,7 +75,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
         var left = t.RotationTimeLeft.HasValue ? $"{t.RotationTimeLeft.Value}초 남음" : "주기 없음";
         var cols = t.Columns == null || t.Columns.Count == 0 ? "(없음)" : string.Join(", ", t.Columns);
         Debug.Log($"{Tag} {t.DisplayName} — 회차 {t.RotationCount}, {left}, 참여 {t.TotalIds}명, 종료={t.IsEnded}");
-        Debug.Log($"{Tag}  등록 컬럼: {cols}");
+        Debug.Log($"{Tag}  등록 필드: {cols}");
     }
 
     /// <summary>4 — 랜덤 점수를 기록합니다. 최고·최저·최신·누적 중 어떻게 반영될지는 서버 설정을 따릅니다.</summary>
