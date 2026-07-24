@@ -43,8 +43,8 @@ namespace TrueBase.Editor
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             EditorGUILayout.HelpBox(
                 "클래스 생성기는 상단 메뉴 TrueSoft > Supabase > 클래스 생성 에서 엽니다.\n" +
-                "· 유저 데이터  · 리더보드  · Remote Config\n" +
-                "Secret 키가 필요한 생성기(유저 데이터·Remote Config)는 위 Secret 키를 씁니다.",
+                "· 유저 데이터  · 리더보드  · 원격 설정\n" +
+                "Secret 키가 필요한 생성기(유저 데이터·원격 설정)는 위 Secret 키를 씁니다.",
                 MessageType.Info);
         }
 

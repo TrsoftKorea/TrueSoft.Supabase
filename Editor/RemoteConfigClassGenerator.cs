@@ -271,7 +271,7 @@ namespace TrueBase.Editor
             {
                 var descPart = string.IsNullOrWhiteSpace(description) ? "" : " — " + EscapeXml(description.Trim());
                 sb.AppendLine(ind + "/// <summary>");
-                sb.AppendLine(ind + "/// Remote Config 키 <c>\"" + EscapeCSharpString(keyName) + "\"</c>" + descPart + " 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
+                sb.AppendLine(ind + "/// 원격 설정 키 <c>\"" + EscapeCSharpString(keyName) + "\"</c>" + descPart + " 의 JSON 구조에 대응하는 데이터 클래스입니다.<br/>");
                 sb.AppendLine(ind + "/// <c>RemoteConfig&lt;" + className + "&gt;.CreateListener/Binding/Reader()</c> 로 사용하세요.");
                 sb.AppendLine(ind + "/// <para><b>이 파일은 자동 생성됩니다. 직접 수정하지 마세요.</b></para>");
                 sb.AppendLine(ind + "/// </summary>");

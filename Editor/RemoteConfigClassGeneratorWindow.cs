@@ -15,7 +15,7 @@ namespace TrueBase.Editor
     /// </summary>
     internal sealed class RemoteConfigClassGeneratorWindow : EditorWindow
     {
-        private const string RcDialogTitle    = "Remote Config 클래스";
+        private const string RcDialogTitle    = "원격 설정 클래스";
         private const string PrefsKeyRcClassName = "TrueBase.RemoteConfig.ClassName";
         private const string PrefsKeyRcCsvPath   = "TrueBase.RemoteConfig.CsvPath";
 
@@ -29,10 +29,10 @@ namespace TrueBase.Editor
         private static Vector2 _rcFieldScroll;
         private static Vector2 _rcPreviewScroll;
 
-        [MenuItem("TrueSoft/Supabase/클래스 생성/Remote Config")]
+        [MenuItem("TrueSoft/Supabase/클래스 생성/원격 설정")]
         private static void Open()
         {
-            var win = GetWindow<RemoteConfigClassGeneratorWindow>(true, "Remote Config 클래스 생성", true);
+            var win = GetWindow<RemoteConfigClassGeneratorWindow>(true, "원격 설정 클래스 생성", true);
             win.minSize = new Vector2(560, 480);
             win.Show();
         }
@@ -86,7 +86,7 @@ namespace TrueBase.Editor
                     }
 
                     EditorGUILayout.Space(2);
-                    if (GUILayout.Button("필드 파싱", GUILayout.Height(24)))
+                    if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(24)))
                         ParseRcFields();
                 }
                 else
@@ -324,7 +324,7 @@ namespace TrueBase.Editor
 
         private static void SaveRcToProject()
         {
-            var path = EditorUtility.SaveFilePanelInProject("Remote Config 클래스 저장", _rcClassName + ".cs", "cs", "");
+            var path = EditorUtility.SaveFilePanelInProject("원격 설정 클래스 저장", _rcClassName + ".cs", "cs", "");
             if (string.IsNullOrEmpty(path)) return;
             try
             {
@@ -343,7 +343,7 @@ namespace TrueBase.Editor
         {
             if (_rcFields.Count == 0)
             {
-                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 파싱'으로 필드를 불러오세요.", "확인");
+                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 목록 가져오기'으로 필드를 불러오세요.", "확인");
                 return;
             }
 
@@ -376,7 +376,7 @@ namespace TrueBase.Editor
         {
             if (_rcFields.Count == 0)
             {
-                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 파싱'으로 필드를 불러오세요. CSV는 필드 경로로 매칭합니다.", "확인");
+                EditorUtility.DisplayDialog(RcDialogTitle, "먼저 '필드 목록 가져오기'으로 필드를 불러오세요. CSV는 필드 경로로 매칭합니다.", "확인");
                 return;
             }
 

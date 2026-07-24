@@ -75,9 +75,9 @@ int   maxSt  = cfg?.stamina?.max ?? 100;
 
 JSON 구조를 보고 C# 클래스를 직접 작성하는 대신 자동으로 생성할 수 있습니다.
 
-1. 메뉴 **TrueSoft > Supabase > 클래스 생성 > Remote Config** 열기 (Secret 키는 `SupabaseSettings.asset` 인스펙터에서 먼저 입력)
+1. 메뉴 **TrueSoft > Supabase > 클래스 생성 > 원격 설정** 열기 (Secret 키는 `SupabaseSettings.asset` 인스펙터에서 먼저 입력)
 2. **키 목록 가져오기** — `remote_config` 테이블의 키 목록이 드롭다운으로 표시됩니다
-3. 키 선택 후 **필드 파싱** — DB의 JSON 구조가 필드 목록으로 표시됩니다
+3. 키 선택 후 **필드 목록 가져오기** — DB의 JSON 구조가 필드 목록으로 표시됩니다
 4. 타입을 바꾸려면 **CSV로 저장하기 → 편집 → CSV 불러오기**로 반영합니다. `int`를 `long`으로, `string`을 `List<string>`으로 바꾸는 식입니다
 5. 클래스명 확인 (키 이름에서 자동 유도, 수정 가능)
 6. **소스 생성** → **저장**으로 `.cs` 파일을 프로젝트에 저장합니다
