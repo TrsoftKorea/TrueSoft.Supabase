@@ -275,6 +275,31 @@ comment on function public.ts_leaderboard_columns_meta(text) is
 revoke all on function public.ts_leaderboard_columns_meta(text) from public;
 grant execute on function public.ts_leaderboard_columns_meta(text) to anon, authenticated;
 
+-- ---------------------------------------------------------------------------
+-- ts_leaderboard_list_meta — 전체 리더보드 코드+이름 (Unity 클래스 생성기 전용)
+--   생성기 드롭다운 채우기용. ts_leaderboard_tables 와 달리 비활성·종료된 것도 포함하고
+--   무인증(anon)으로 열어, 아직 켜지 않은 리더보드의 클래스도 미리 만들 수 있게 한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_leaderboard_list_meta()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(
+           jsonb_build_object('code', code, 'display_name', display_name)
+           order by code
+         ), '[]'::jsonb)
+  from public.leaderboard_tables;
+$$;
+
+comment on function public.ts_leaderboard_list_meta() is
+  '전체 리더보드 코드+이름(비활성 포함). Unity 클래스 생성기 드롭다운 전용. 무인증(anon) 허용.';
+
+revoke all on function public.ts_leaderboard_list_meta() from public;
+grant execute on function public.ts_leaderboard_list_meta() to anon, authenticated;
+
 
 -- =============================================================================
 -- 게임 클라이언트 RPC

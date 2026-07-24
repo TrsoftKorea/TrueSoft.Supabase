@@ -103,6 +103,7 @@ grant execute on function public.ts_leaderboard_set_player_data(text, text, json
 grant execute on function public.ts_leaderboard_delete_my_score(text, int)            to authenticated;
 -- 클래스 생성기 전용(무인증). 등록 컬럼의 이름+타입만 노출(민감정보 아님) → anon 도 허용.
 grant execute on function public.ts_leaderboard_columns_meta(text)                    to anon, authenticated;
+grant execute on function public.ts_leaderboard_list_meta()                           to anon, authenticated;
 
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column

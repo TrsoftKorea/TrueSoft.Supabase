@@ -121,6 +121,7 @@ from (
       ('ts_leaderboard_next_rotation_at'),
       ('ts_leaderboard_columns_of'),
       ('ts_leaderboard_columns_meta'),
+      ('ts_leaderboard_list_meta'),
       ('ts_leaderboard_tables'),
       ('ts_leaderboard_table'),
       ('ts_leaderboard_submit_score'),
@@ -280,7 +281,8 @@ from (
       ('ts_leaderboard_player',           'auth'),
       ('ts_leaderboard_set_player_data',  'auth'),
       ('ts_leaderboard_delete_my_score',  'auth'),
-      ('ts_leaderboard_columns_meta',      'anon+auth')
+      ('ts_leaderboard_columns_meta',      'anon+auth'),
+      ('ts_leaderboard_list_meta',         'anon+auth')
   ) as exp(fn, roles)
   left join lateral (
     select p.oid

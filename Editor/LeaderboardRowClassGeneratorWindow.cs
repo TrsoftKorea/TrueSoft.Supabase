@@ -27,10 +27,15 @@ namespace TrueBase.Editor
         private const string DialogTitle = "리더보드 클래스 생성";
         private const string PrefsKeyLastPath = "TrueBase.Leaderboard.LastSavePath";
 
-        private string _leaderboardCode = "";
         private string _className = "";
         private string _preview = "";
         private Vector2 _scroll;
+
+        private string[] _codes = Array.Empty<string>();     // 드롭다운 항목 코드
+        private string[] _labels = Array.Empty<string>();    // 드롭다운 표시명 ("이름 (코드)")
+        private int _selected = -1;
+        private bool _listLoaded;
+        private string _listError;
 
         /// <summary>조회한 등록 필드 하나의 이름과 C# 타입.</summary>
         private readonly struct ColMeta
@@ -48,18 +53,43 @@ namespace TrueBase.Editor
             win.Show();
         }
 
+        private void OnEnable() => ReloadList();
+
         private void OnGUI()
         {
             EditorGUILayout.HelpBox(
-                "Retool 리더보드 > 필드 탭에서 이 리더보드에 등록(사용 켬)한 필드를 자동으로 불러옵니다.\n" +
-                "리더보드 코드만 입력하고 아래 버튼을 누르세요.",
+                "리더보드를 선택하면 Retool 필드 탭에서 등록(사용 켬)한 필드를 자동으로 불러옵니다.",
                 MessageType.Info);
 
             EditorGUILayout.Space(4);
-            _leaderboardCode = EditorGUILayout.TextField("리더보드 코드", _leaderboardCode);
 
-            if (string.IsNullOrWhiteSpace(_className) && string.IsNullOrWhiteSpace(_leaderboardCode) == false)
-                _className = ToPascalCase(_leaderboardCode) + "LeaderboardRow";
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (_listLoaded && _codes.Length > 0)
+                {
+                    var newSel = EditorGUILayout.Popup("리더보드", _selected, _labels);
+                    if (newSel != _selected)
+                    {
+                        _selected = newSel;
+                        _className = ToPascalCase(_codes[_selected]) + "LeaderboardRow";
+                        _preview = "";
+                    }
+                }
+                else
+                {
+                    using (new EditorGUI.DisabledScope(true))
+                        EditorGUILayout.Popup("리더보드",
+                            0, new[] { _listError ?? "불러오는 중…" });
+                }
+
+                if (GUILayout.Button("새로고침", GUILayout.Width(72)))
+                    ReloadList();
+            }
+
+            if (_listLoaded && _codes.Length == 0 && _listError == null)
+                EditorGUILayout.HelpBox("등록된 리더보드가 없습니다. Retool에서 먼저 만드세요.", MessageType.Warning);
+            if (_listError != null)
+                EditorGUILayout.HelpBox(_listError, MessageType.Error);
 
             _className = EditorGUILayout.TextField("클래스 이름", _className);
 
@@ -86,24 +116,54 @@ namespace TrueBase.Editor
         }
 
         private bool CanGenerate() =>
-            string.IsNullOrWhiteSpace(_leaderboardCode) == false
+            _selected >= 0 && _selected < _codes.Length
             && string.IsNullOrWhiteSpace(_className) == false;
+
+        /// <summary>리더보드 목록을 조회해 드롭다운을 채웁니다.</summary>
+        private void ReloadList()
+        {
+            _listLoaded = false;
+            _listError = null;
+            var settings = LoadSettings();
+            if (settings == null)
+            {
+                _listError = "SupabaseSettings.asset 을 찾지 못했습니다. TrueSoft > Supabase > 설정 에셋 만들기 로 먼저 생성하세요.";
+                _listLoaded = true;
+                return;
+            }
+
+            try
+            {
+                var list = FetchLeaderboardList(settings);
+                _codes = list.Select(x => x.code).ToArray();
+                _labels = list.Select(x =>
+                    (string.IsNullOrWhiteSpace(x.name) ? x.code : x.name) + " (" + x.code + ")").ToArray();
+                _selected = _codes.Length > 0 ? 0 : -1;
+                if (_selected >= 0 && string.IsNullOrWhiteSpace(_className))
+                    _className = ToPascalCase(_codes[0]) + "LeaderboardRow";
+            }
+            catch (Exception e)
+            {
+                _listError = "리더보드 목록을 불러오지 못했습니다.\n" + e.Message;
+                _codes = Array.Empty<string>();
+                _labels = Array.Empty<string>();
+                _selected = -1;
+            }
+            _listLoaded = true;
+            Repaint();
+        }
 
         private void Generate()
         {
             var settings = LoadSettings();
-            if (settings == null)
-            {
-                EditorUtility.DisplayDialog(DialogTitle,
-                    "Assets/Resources/SupabaseSettings.asset 을 찾지 못했습니다.\n" +
-                    "TrueSoft > Supabase > 설정 에셋 만들기 로 먼저 생성하세요.", "확인");
+            if (settings == null || _selected < 0)
                 return;
-            }
 
+            var code = _codes[_selected];
             List<ColMeta> cols;
             try
             {
-                cols = FetchRegisteredColumns(settings, _leaderboardCode.Trim());
+                cols = FetchRegisteredColumns(settings, code);
             }
             catch (Exception e)
             {
@@ -121,7 +181,7 @@ namespace TrueBase.Editor
             }
 
             var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
-            _preview = BuildSource(cols, _className.Trim(), ns, _leaderboardCode.Trim());
+            _preview = BuildSource(cols, _className.Trim(), ns, code);
             Repaint();
         }
 
@@ -143,19 +203,19 @@ namespace TrueBase.Editor
             Resources.Load<SupabaseSettings>("SupabaseSettings");
 
         /// <summary>
-        /// <c>ts_leaderboard_columns_meta(code)</c> RPC로 등록 필드의 이름·타입을 조회합니다.
-        /// 에디터에는 로그인 세션이 없어 publishable(anon) 키로 호출하며, 이 함수는 무인증 허용입니다.
-        /// 에디터 UI에서 쓰는 동기 호출이라 완료까지 블로킹합니다.
+        /// RPC를 publishable(anon) 키로 POST 호출하고 JSON 배열 응답을 반환합니다.
+        /// 에디터에는 로그인 세션이 없어 anon 키를 쓰며, 대상 함수(<c>ts_leaderboard_*_meta</c>)는 무인증 허용입니다.
+        /// 에디터 UI 전용 동기 호출이라 완료까지 블로킹합니다.
         /// </summary>
-        private static List<ColMeta> FetchRegisteredColumns(SupabaseSettings settings, string code)
+        private static JArray CallRpcArray(SupabaseSettings settings, string fn, JObject args)
         {
             var restRoot = PostgrestOpenApiUserSaveClass.BuildRestRootUrl(settings.projectUrl);
             var apiKey = PostgrestOpenApiUserSaveClass.NormalizeApiKey(settings.publishableKey);
             if (string.IsNullOrWhiteSpace(apiKey))
                 throw new ArgumentException("SupabaseSettings 의 publishableKey 가 비어 있습니다.");
 
-            var url = restRoot + "rpc/ts_leaderboard_columns_meta";
-            var body = new JObject { ["p_code"] = code }.ToString(Newtonsoft.Json.Formatting.None);
+            var url = restRoot + "rpc/" + fn;
+            var body = (args ?? new JObject()).ToString(Newtonsoft.Json.Formatting.None);
 
             using var req = new UnityWebRequest(url, "POST")
             {
@@ -185,15 +245,35 @@ namespace TrueBase.Editor
                 throw new IOException($"{req.error} (HTTP {req.responseCode})\n{snippet}");
             }
 
-            var arr = JArray.Parse(string.IsNullOrWhiteSpace(text) ? "[]" : text);
+            return JArray.Parse(string.IsNullOrWhiteSpace(text) ? "[]" : text);
+        }
+
+        /// <summary><c>ts_leaderboard_list_meta()</c>로 전체 리더보드 코드+이름을 조회합니다(비활성 포함).</summary>
+        private static List<(string code, string name)> FetchLeaderboardList(SupabaseSettings settings)
+        {
+            var arr = CallRpcArray(settings, "ts_leaderboard_list_meta", null);
+            var list = new List<(string, string)>(arr.Count);
+            foreach (var item in arr)
+            {
+                var code = item["code"]?.Value<string>();
+                if (string.IsNullOrWhiteSpace(code))
+                    continue;
+                list.Add((code, item["display_name"]?.Value<string>()));
+            }
+            return list;
+        }
+
+        /// <summary><c>ts_leaderboard_columns_meta(code)</c>로 등록 필드의 이름·타입을 조회합니다.</summary>
+        private static List<ColMeta> FetchRegisteredColumns(SupabaseSettings settings, string code)
+        {
+            var arr = CallRpcArray(settings, "ts_leaderboard_columns_meta", new JObject { ["p_code"] = code });
             var list = new List<ColMeta>(arr.Count);
             foreach (var item in arr)
             {
                 var name = item["name"]?.Value<string>();
-                var pgType = item["type"]?.Value<string>();
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
-                list.Add(new ColMeta(name, MapPgTypeToClr(pgType)));
+                list.Add(new ColMeta(name, MapPgTypeToClr(item["type"]?.Value<string>())));
             }
             return list;
         }
