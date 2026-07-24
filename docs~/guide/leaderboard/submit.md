@@ -26,7 +26,7 @@ if (result.IsSuccess)
 | `code` | 리더보드 코드 |
 | `score` | 이번에 획득한 점수 |
 | `extraData` | 자유 형식 문자열 (기본값: `null`) |
-| `data` | 플레이어 데이터 컬럼 값. 이 리더보드에 등록된 컬럼만 허용 (기본값: `null`) |
+| `data` | 플레이어 데이터 필드 값. 이 리더보드에 등록된 필드만 허용 (기본값: `null`) |
 
 **반환**
 
@@ -46,4 +46,4 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 컬럼을 보냈습니다 |
 
-플레이어 데이터 컬럼을 함께 보내려면 [플레이어 데이터 컬럼](./columns)을 참고하세요.
+플레이어 데이터 필드를 함께 보내려면 [플레이어 데이터 필드](./columns)를 참고하세요.

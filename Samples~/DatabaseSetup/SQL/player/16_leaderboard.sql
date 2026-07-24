@@ -245,6 +245,36 @@ $$;
 comment on function public.ts_leaderboard_columns_of(text) is
   '리더보드에 등록된 플레이어 데이터 컬럼 목록. 물리 컬럼이 실제 존재하는 것만 반환.';
 
+-- ---------------------------------------------------------------------------
+-- ts_leaderboard_columns_meta — 등록 컬럼의 이름 + 타입 (Unity 클래스 생성기 전용)
+--   에디터 생성기가 publishable(anon) 키로 호출한다. 로그인 세션이 없어 auth 체크를 두지 않는다.
+--   반환은 컬럼 스키마 메타(이름·타입)뿐이라 민감정보가 아니다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_leaderboard_columns_meta(p_code text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(
+           jsonb_build_object('name', c.column_name, 'type', c.data_type)
+           order by lc.sort_order, c.column_name
+         ), '[]'::jsonb)
+  from public.leaderboard_table_columns lc
+  join information_schema.columns c
+    on c.table_schema = 'public'
+   and c.table_name   = 'leaderboard_scores'
+   and c.column_name  = lc.column_name
+  where lc.table_code = p_code;
+$$;
+
+comment on function public.ts_leaderboard_columns_meta(text) is
+  '리더보드 등록 컬럼의 이름+타입(information_schema.data_type). Unity 클래스 생성기 전용. 무인증(anon) 허용.';
+
+revoke all on function public.ts_leaderboard_columns_meta(text) from public;
+grant execute on function public.ts_leaderboard_columns_meta(text) to anon, authenticated;
+
 
 -- =============================================================================
 -- 게임 클라이언트 RPC

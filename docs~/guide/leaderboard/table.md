@@ -39,7 +39,7 @@ if (result.IsSuccess)
 | `.EndsAt` | `DateTimeOffset?` | 종료 예약 시각. 없으면 `null` |
 | `.IsEnded` | `bool` | 종료·비활성 여부 |
 | `.TotalIds` | `int` | 현재 회차 참여자 수 |
-| `.Columns` | `IReadOnlyList<string>` | 등록된 플레이어 데이터 컬럼 이름 |
+| `.Columns` | `IReadOnlyList<string>` | 등록된 플레이어 데이터 필드 이름 |
 
 **에러 코드**
 

@@ -40,7 +40,7 @@ if (result.IsSuccess)
 | `.Score` | `double` | 점수 |
 | `.ExtraData` | `string` | 자유 형식 문자열 |
 | `.RotationCount` | `int` | 회차 |
-| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 컬럼 값 |
+| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값 |
 
 **에러 코드**
 

@@ -22,7 +22,7 @@ await Supabase.SetLeaderboardPlayerDataAsync(
 |----------|------|
 | `code` | 리더보드 코드 |
 | `extraData` | 자유 형식 문자열. `null`이면 기존 값 유지 (기본값: `null`) |
-| `data` | 수정할 플레이어 데이터 컬럼 값 (기본값: `null`) |
+| `data` | 수정할 플레이어 데이터 필드 값 (기본값: `null`) |
 | `rotationCount` | 수정할 회차. `null`이면 현재 회차 (기본값: `null`) |
 
 **에러 코드**

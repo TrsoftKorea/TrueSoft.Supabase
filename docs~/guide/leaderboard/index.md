@@ -48,7 +48,7 @@
 | [`SetLeaderboardPlayerDataAsync`](/guide/leaderboard/set-player-data) | 본인 추가 데이터 수정 |
 | [`DeleteMyLeaderboardScoreAsync`](/guide/leaderboard/delete-my-score) | 본인 기록 삭제 |
 
-플레이어 데이터 컬럼을 쓰려면 [플레이어 데이터 컬럼](/guide/leaderboard/columns)을 먼저 읽으세요.
+플레이어 데이터 필드를 쓰려면 [플레이어 데이터 필드](/guide/leaderboard/columns)를 먼저 읽으세요.
 
 ::: warning 점수는 클라이언트가 제출합니다
 게임이 자기 점수를 직접 서버에 올리는 구조입니다. 변조된 점수를 막으려면 게임 서버나 Edge Function에서 검증한 뒤 기록하도록 별도 설계가 필요합니다.

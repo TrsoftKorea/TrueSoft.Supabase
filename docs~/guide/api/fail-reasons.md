@@ -147,4 +147,4 @@ if (!result.IsSuccess)
 | `LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다. 순위 조회는 계속 가능합니다 |
 | `LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
 | `LeaderboardScoreNotFound` | 그 회차에 해당 플레이어의 기록이 없습니다 |
-| `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 컬럼입니다 |
+| `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |

@@ -13,5 +13,5 @@
 리더보드 생성·수정·삭제와 컬럼 관리는 어드민(Retool) 전용이라 SDK에 없습니다.
 
 ::: tip
-순위에 함께 표시할 값은 [플레이어 데이터 컬럼](/guide/leaderboard/columns)으로 주고받습니다.
+순위에 함께 표시할 값은 [플레이어 데이터 필드](/guide/leaderboard/columns)으로 주고받습니다.
 :::
