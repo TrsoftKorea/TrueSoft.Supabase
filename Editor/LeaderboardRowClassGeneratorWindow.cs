@@ -24,7 +24,7 @@ namespace TrueBase.Editor
     /// </summary>
     internal sealed class LeaderboardRowClassGeneratorWindow : EditorWindow
     {
-        private const string DialogTitle = "리더보드 클래스 생성";
+        private const string DialogTitle = "리더보드 클래스";
         private const string PrefsKeyLastPath = "TrueBase.Leaderboard.LastSavePath";
 
         private string _className = "";
@@ -48,8 +48,8 @@ namespace TrueBase.Editor
         [MenuItem("TrueSoft/Supabase/클래스 생성/리더보드")]
         private static void Open()
         {
-            var win = GetWindow<LeaderboardRowClassGeneratorWindow>(true, DialogTitle, true);
-            win.minSize = new Vector2(520, 460);
+            var win = GetWindow<LeaderboardRowClassGeneratorWindow>(true, "리더보드 클래스 생성", true);
+            win.minSize = new Vector2(560, 480);
             win.Show();
         }
 
@@ -91,28 +91,36 @@ namespace TrueBase.Editor
             if (_listError != null)
                 EditorGUILayout.HelpBox(_listError, MessageType.Error);
 
-            _className = EditorGUILayout.TextField("클래스 이름", _className);
+            _className = EditorGUILayout.TextField("클래스명", _className);
 
-            EditorGUILayout.Space(6);
-
-            using (new EditorGUI.DisabledScope(CanGenerate() == false))
+            EditorGUILayout.Space(4);
+            using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("등록 필드 불러와 미리보기", GUILayout.Height(26)))
-                    Generate();
+                using (new EditorGUI.DisabledScope(CanGenerate() == false))
+                {
+                    if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
+                        Generate();
+                }
+                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_preview)))
+                {
+                    if (GUILayout.Button("저장", GUILayout.Height(26)))
+                        Save();
+                }
             }
 
-            EditorGUILayout.Space(6);
-
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_preview)))
+            if (!string.IsNullOrEmpty(_preview))
             {
-                if (GUILayout.Button("C# 파일로 저장", GUILayout.Height(26)))
-                    Save();
+                EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("미리보기", EditorStyles.boldLabel);
+                using (var sv = new EditorGUILayout.ScrollViewScope(_scroll, GUILayout.ExpandHeight(true)))
+                {
+                    _scroll = sv.scrollPosition;
+                    var w = EditorGUIUtility.currentViewWidth - 32f;
+                    var h = EditorStyles.textArea.CalcHeight(new GUIContent(_preview), w);
+                    EditorGUILayout.SelectableLabel(_preview, EditorStyles.textArea,
+                        GUILayout.Width(w), GUILayout.Height(Mathf.Max(h, 48f)));
+                }
             }
-
-            EditorGUILayout.Space(6);
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
-            EditorGUILayout.TextArea(_preview ?? "", GUILayout.ExpandHeight(true));
-            EditorGUILayout.EndScrollView();
         }
 
         private bool CanGenerate() =>
@@ -335,7 +343,7 @@ namespace TrueBase.Editor
             sb.AppendLine("// ts_leaderboard_columns_meta → 리더보드 행 클래스");
             sb.AppendLine("// Leaderboard: " + leaderboardCode);
             sb.AppendLine("// Generated (UTC): " + DateTime.UtcNow.ToString("O"));
-            sb.AppendLine("// Menu: TrueSoft/Supabase/리더보드 클래스 생성");
+            sb.AppendLine("// Menu: TrueSoft/Supabase/클래스 생성/리더보드");
             sb.AppendLine("// </auto-generated>");
             sb.AppendLine();
             sb.AppendLine("using System.Collections.Generic;");
