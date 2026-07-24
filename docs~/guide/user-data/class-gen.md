@@ -27,7 +27,7 @@
    | `column` | DB 컬럼명 — **매칭 키이므로 수정 금지** |
    | `field` | C# 필드명 |
    | `type` | `int`·`List<bool>`·`Dictionary<string, int>` 등 |
-   | `priority` | `보통`·`짧게`·`길게` |
+   | `priority` | `Normal`·`Urgent`·`Lazy` (또는 `1`·`0`·`2`). 구버전 한글 `보통`·`짧게`·`길게`도 인식 |
    | `default` | 기본값. **모든 컬럼 필수** — 빈 칸이면 소스 생성이 막힙니다 |
    | `include` | `1`(포함) / `0`(제외) |
 

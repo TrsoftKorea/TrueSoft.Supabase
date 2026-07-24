@@ -449,7 +449,7 @@ namespace TrueBase.Core.Data
         /// 변경된 필드 중 가장 높은(Urgent에 가까운) <see cref="DataSavePriority"/>를 반환합니다.
         /// 변경된 필드가 없으면 <c>null</c>을 반환합니다.
         /// </summary>
-        public static DataSavePriority? GetHighestDirtyPriority<T>(T previous, T current)
+        public static DataSavePriority? GetHighestDirtyPriority<T>(T previous, T current, bool referenceOnly = false)
         {
             if (current == null) return null;
 
@@ -457,6 +457,13 @@ namespace TrueBase.Core.Data
 
             foreach (var m in GetMappedMembers(typeof(T)))
             {
+                if (referenceOnly)
+                {
+                    // 스칼라(값 타입·string)는 setter의 MarkDirty(우선순위)로 증분 추적하므로 여기선 건너뜁니다.
+                    var mt = MemberValueType(m);
+                    if (mt == null || mt.IsValueType || mt == typeof(string)) continue;
+                }
+
                 var col = ResolveColumnName(m);
                 if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
                     continue;

@@ -305,7 +305,7 @@ namespace TrueBase.Editor
                     sb.AppendLine(indent + "    public static " + c.ClrType + " " + propName);
                     sb.AppendLine(indent + "    {");
                     sb.AppendLine(indent + "        get => Instance.Current." + fieldName + ";");
-                    sb.AppendLine(indent + "        set { Instance.Current." + fieldName + " = value ?? " + propInitExpr + "; Instance.MarkDirty(); }");
+                    sb.AppendLine(indent + "        set { Instance.Current." + fieldName + " = value ?? " + propInitExpr + "; Instance.MarkDirty(DataSavePriority." + PriorityName(c.Priority) + "); }");
                     sb.AppendLine(indent + "    }");
                     continue;
                 }
@@ -313,7 +313,7 @@ namespace TrueBase.Editor
                 sb.AppendLine(indent + "    public static " + c.ClrType + " " + propName);
                 sb.AppendLine(indent + "    {");
                 sb.AppendLine(indent + "        get => Instance.Current." + fieldName + ";");
-                sb.AppendLine(indent + "        set { Instance.Current." + fieldName + " = value; Instance.MarkDirty(); }");
+                sb.AppendLine(indent + "        set { if (EqualityComparer<" + c.ClrType + ">.Default.Equals(Instance.Current." + fieldName + ", value)) return; Instance.Current." + fieldName + " = value; Instance.MarkDirty(DataSavePriority." + PriorityName(c.Priority) + "); }");
                 sb.AppendLine(indent + "    }");
             }
 

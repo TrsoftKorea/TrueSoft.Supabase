@@ -394,7 +394,7 @@ namespace TrueBase.Editor
                 sb.Append(GC.CsvEscape(c.Name)).Append(',')
                   .Append(GC.CsvEscape(c.FieldName)).Append(',')
                   .Append(GC.CsvEscape(ResolveColumnClrType(c))).Append(',')
-                  .Append(GC.CsvEscape(GC.PriorityLabel(c.Priority))).Append(',')
+                  .Append(GC.CsvEscape(GC.PriorityCsvToken(c.Priority))).Append(',')
                   .Append(GC.CsvEscape(c.DefaultValue ?? "")).Append(',')
                   .Append(c.Include ? "1" : "0").Append('\n');
             }

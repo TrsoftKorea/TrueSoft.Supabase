@@ -54,20 +54,39 @@ namespace TrueBase.Editor
 
         // ── 저장 우선순위 (Normal=1, Urgent=0, Lazy=2) ────────────────────────
 
-        private static readonly string[] s_priorityOptions = { "보통", "짧게", "길게" };
+        private static readonly string[] s_priorityOptions = { "보통", "짧게", "길게" }; // UI 표시(한글)
         private static readonly int[]    s_priorityValues  = {  1,      0,      2     };
 
+        /// <summary>UI 표시용 한글 라벨.</summary>
         public static string PriorityLabel(int p)
         {
             var i = Array.IndexOf(s_priorityValues, p);
             return i >= 0 ? s_priorityOptions[i] : s_priorityOptions[0];
         }
 
+        /// <summary>
+        /// CSV 저장용 안정 토큰(Urgent/Normal/Lazy). DataSavePriority enum 이름과 일치하며
+        /// 한글·로케일·인코딩 영향이 없어 엑셀 등에서 안전하게 편집할 수 있습니다.
+        /// </summary>
+        public static string PriorityCsvToken(int p) => p switch
+        {
+            0 => "Urgent",
+            2 => "Lazy",
+            _ => "Normal",
+        };
+
+        /// <summary>CSV의 우선순위 셀을 파싱합니다. 안정 토큰(Urgent/Normal/Lazy)·숫자·구 한글 라벨을 모두 인식합니다.</summary>
         public static int ParsePriority(string s, int fallback)
         {
-            var i = Array.IndexOf(s_priorityOptions, s);
+            var t = (s ?? string.Empty).Trim();
+            if (t.Equals("Urgent", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (t.Equals("Normal", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (t.Equals("Lazy",   StringComparison.OrdinalIgnoreCase)) return 2;
+
+            var i = Array.IndexOf(s_priorityOptions, t); // 구 CSV(한글) 호환
             if (i >= 0) return s_priorityValues[i];
-            if (int.TryParse(s, out var n) && Array.IndexOf(s_priorityValues, n) >= 0) return n;
+
+            if (int.TryParse(t, out var n) && (n == 0 || n == 1 || n == 2)) return n;
             return fallback;
         }
 

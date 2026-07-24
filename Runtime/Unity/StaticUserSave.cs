@@ -119,15 +119,37 @@ namespace TrueBase.Unity
             _isRegistered = true;
         }
 
+        // 우선순위 추적 — GetHighestDirtyPriority(전체 행 diff)를 매 set마다 부르는 렉의 근본 원인 제거:
+        //  · 스칼라 필드는 setter가 MarkDirty(우선순위)로 넘겨 가장 높은(작은 int) 우선순위를 O(1)로 누적.
+        //  · 참조 컬럼(컬렉션·클래스)의 제자리 수정은 setter가 없어, 참조 컬럼만 throttle된 diff로 판정
+        //    (참조 컬럼이 있는 Row에서만, 0.25초 간격).
+        private const int   PriNone = int.MaxValue;    // dirty 스칼라 없음 표식
+        private int   _scalarDirtyPri  = PriNone;      // 가장 높은(작은) 스칼라 우선순위
+        private int   _refDirtyPri      = PriNone;     // 참조 컬럼 diff로 얻은 우선순위(캐시)
+        private float _refPriCheckedAt  = float.MinValue;
+        private const float RefPriorityRecomputeInterval = 0.25f;
+
         /// <summary>
         /// dirty 필드 중 가장 높은 우선순위(Urgent에 가까운)의 쿨다운(초)을 반환합니다.
-        /// <see cref="SupabaseSettings"/>의 유저 세이브 저장 주기 설정값을 사용합니다.
+        /// 스칼라는 O(1) 증분 추적, 참조 컬럼만 throttle된 diff로 판정합니다.
         /// </summary>
         private float GetDirtyCooldown()
         {
-            // DataSchema는 Core.Data.DataSavePriority를 반환하므로 int 경유로 변환합니다.
-            var coreP = DataSchema.GetHighestDirtyPriority(_lastSynced, Current);
-            var p     = coreP.HasValue ? (int)coreP.Value : 1; // 기본 Normal(1)
+            var p = _scalarDirtyPri;
+
+            if (_hasReferenceColumns)
+            {
+                var now = Time.realtimeSinceStartup;
+                if (now - _refPriCheckedAt >= RefPriorityRecomputeInterval)
+                {
+                    _refPriCheckedAt = now;
+                    var refP = DataSchema.GetHighestDirtyPriority(_lastSynced, Current, referenceOnly: true);
+                    _refDirtyPri = refP.HasValue ? (int)refP.Value : PriNone;
+                }
+                if (_refDirtyPri < p) p = _refDirtyPri;
+            }
+
+            if (p == PriNone) p = 1; // 아무 것도 dirty가 아니면 Normal(1)
             return UserSaveStaticSyncRegistry.GetPriorityCooldown(p);
         }
 
@@ -169,6 +191,8 @@ namespace TrueBase.Unity
             var snapshot = DataSchema.CloneRow(Current);
             DataSchema.ApplyAutoDefaults(snapshot); // 클론은 [AutoDefault]가 다시 안 걸려 있음 — diff·다음 _lastSynced 기준으로 쓰이기 전에 재주입
             _isDirty = false;
+            _scalarDirtyPri = PriNone; // 스냅샷 이후의 스칼라 변경은 await 중 MarkDirty가 다시 채운다
+            _refPriCheckedAt = float.MinValue; // 참조 우선순위도 새 스냅샷 기준으로 재평가
 
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
                 _lastSynced, snapshot,
@@ -182,9 +206,11 @@ namespace TrueBase.Unity
             }
 
             _lastSynced = snapshot;
-            // 방금 동기화했으므로 값 비교 캐시를 초기화(새 _lastSynced 기준으로 재평가)
+            // 방금 동기화했으므로 값 비교·참조 우선순위 캐시를 초기화(새 _lastSynced 기준으로 재평가)
             _lastDeepResult = false;
             _lastDeepCheckTime = float.MinValue;
+            _refDirtyPri = PriNone;
+            _refPriCheckedAt = float.MinValue;
             return true;
         }
 
@@ -455,6 +481,9 @@ namespace TrueBase.Unity
             _lastSynced = DataSchema.CloneRow(row);
             DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
             _isDirty    = false;
+            _scalarDirtyPri = PriNone;
+            _refDirtyPri = PriNone;
+            _refPriCheckedAt = float.MinValue;
             OnCurrentApplied();
         }
 
@@ -629,15 +658,22 @@ namespace TrueBase.Unity
 
 
         /// <summary>
-        /// 값이 변경되었음을 알립니다. 우선순위별 쿨다운이 지나면 자동으로 전송됩니다.
-        /// 스칼라 필드 setter에서 값이 실제로 바뀔 때 호출하세요(컬렉션·클래스 필드는 값 비교로 자동 감지).
+        /// 값이 변경되었음을 컬럼 우선순위와 함께 알립니다. 우선순위별 쿨다운이 지나면 자동 전송됩니다.
+        /// 생성기가 스칼라 필드 setter에서 이 오버로드를 호출하도록 배선합니다 — 전체 행 diff 없이 O(1)입니다.
         /// </summary>
-        protected void MarkDirty()
+        protected void MarkDirty(DataSavePriority priority)
         {
             EnsureRegistered();
             _isDirty = true;
+            if ((int)priority < _scalarDirtyPri) _scalarDirtyPri = (int)priority;
             SupabaseSDK.MarkUserSaveStaticDirty(_syncKey);
         }
+
+        /// <summary>
+        /// 우선순위 없이 변경을 알립니다. Normal로 간주합니다.
+        /// 구버전 생성 파일·수동 호출 호환용입니다(생성기는 <see cref="MarkDirty(DataSavePriority)"/>를 emit).
+        /// </summary>
+        protected void MarkDirty() => MarkDirty(DataSavePriority.Normal);
     }
 
     // StaticUserSave<T> 서브클래스를 씬 로드 전에 자동으로 초기화합니다.
