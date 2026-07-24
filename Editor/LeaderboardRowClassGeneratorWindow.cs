@@ -8,6 +8,7 @@ using TrueBase.Unity;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Networking;
+using GC = TrueBase.Editor.GeneratorEditorCommon;
 
 namespace TrueBase.Editor
 {
@@ -30,12 +31,15 @@ namespace TrueBase.Editor
         private string _className = "";
         private string _preview = "";
         private Vector2 _scroll;
+        private Vector2 _fieldScroll;
 
         private string[] _codes = Array.Empty<string>();     // 드롭다운 항목 코드
         private string[] _labels = Array.Empty<string>();    // 드롭다운 표시명 ("이름 (코드)")
         private int _selected = -1;
         private bool _listLoaded;
         private string _listError;
+
+        private List<ColMeta> _cols = new List<ColMeta>();   // 선택한 리더보드의 등록 필드
 
         /// <summary>조회한 등록 필드 하나의 이름과 C# 타입.</summary>
         private readonly struct ColMeta
@@ -58,7 +62,7 @@ namespace TrueBase.Editor
         private void OnGUI()
         {
             EditorGUILayout.HelpBox(
-                "리더보드를 선택하면 Retool 필드 탭에서 등록(사용 켬)한 필드를 자동으로 불러옵니다.",
+                "리더보드를 선택하고 '필드 목록 가져오기'를 누르면 Retool 필드 탭에서 등록한 필드를 불러옵니다.",
                 MessageType.Info);
 
             EditorGUILayout.Space(4);
@@ -72,6 +76,7 @@ namespace TrueBase.Editor
                     {
                         _selected = newSel;
                         _className = ToPascalCase(_codes[_selected]) + "LeaderboardRow";
+                        _cols.Clear();
                         _preview = "";
                     }
                 }
@@ -91,20 +96,34 @@ namespace TrueBase.Editor
             if (_listError != null)
                 EditorGUILayout.HelpBox(_listError, MessageType.Error);
 
-            _className = EditorGUILayout.TextField("클래스명", _className);
-
             EditorGUILayout.Space(4);
-            using (new EditorGUILayout.HorizontalScope())
+            using (new EditorGUI.DisabledScope(_selected < 0 || _selected >= _codes.Length))
             {
-                using (new EditorGUI.DisabledScope(CanGenerate() == false))
+                if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
+                    FetchFields();
+            }
+
+            if (_cols.Count > 0)
+            {
+                EditorGUILayout.Space(6);
+                DrawFieldList();
+
+                EditorGUILayout.Space(4);
+                _className = EditorGUILayout.TextField("클래스명", _className);
+
+                EditorGUILayout.Space(4);
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
-                        Generate();
-                }
-                using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_preview)))
-                {
-                    if (GUILayout.Button("저장", GUILayout.Height(26)))
-                        Save();
+                    using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_className)))
+                    {
+                        if (GUILayout.Button("소스 생성", GUILayout.Height(26)))
+                            Generate();
+                    }
+                    using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_preview)))
+                    {
+                        if (GUILayout.Button("저장", GUILayout.Height(26)))
+                            Save();
+                    }
                 }
             }
 
@@ -123,15 +142,49 @@ namespace TrueBase.Editor
             }
         }
 
-        private bool CanGenerate() =>
-            _selected >= 0 && _selected < _codes.Length
-            && string.IsNullOrWhiteSpace(_className) == false;
+        /// <summary>선택 리더보드에 등록된 필드를 읽기전용 목록으로 그립니다.</summary>
+        private void DrawFieldList()
+        {
+            float wName = Mathf.Max(160f, (EditorGUIUtility.currentViewWidth - 42f) * 0.45f);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("필드", EditorStyles.miniLabel, GUILayout.MinWidth(wName));
+                EditorGUILayout.LabelField("타입", EditorStyles.miniLabel, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
+            }
+
+            var rowHeight  = EditorGUIUtility.singleLineHeight + 2f;
+            var listHeight = Mathf.Min(_cols.Count * rowHeight + 4f, 280f);
+
+            using (var sv = new EditorGUILayout.ScrollViewScope(_fieldScroll, GUILayout.Height(listHeight)))
+            {
+                _fieldScroll = sv.scrollPosition;
+                foreach (var c in _cols)
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        var commented = c.ClrType.IndexOf("/*", StringComparison.Ordinal) >= 0;
+                        var style = commented ? GC.AmbiguousStyle : EditorStyles.label;
+
+                        EditorGUILayout.LabelField(new GUIContent(c.Name, c.Name), style, GUILayout.MinWidth(wName));
+
+                        var shown   = commented ? StripComment(c.ClrType) + "  ⚠" : c.ClrType;
+                        var tooltip = commented
+                            ? c.ClrType + " — 스칼라로 매핑하지 못한 타입입니다. 문자열로 받아 게임에서 파싱하세요."
+                            : c.ClrType;
+                        EditorGUILayout.LabelField(new GUIContent(shown, tooltip), style, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
+                    }
+                }
+            }
+        }
 
         /// <summary>리더보드 목록을 조회해 드롭다운을 채웁니다.</summary>
         private void ReloadList()
         {
             _listLoaded = false;
             _listError = null;
+            _cols.Clear();
+            _preview = "";
             var settings = LoadSettings();
             if (settings == null)
             {
@@ -161,17 +214,20 @@ namespace TrueBase.Editor
             Repaint();
         }
 
-        private void Generate()
+        /// <summary>선택 리더보드의 등록 필드를 조회해 목록에 채웁니다(소스는 아직 생성하지 않음).</summary>
+        private void FetchFields()
         {
+            _cols.Clear();
+            _preview = "";
+
             var settings = LoadSettings();
-            if (settings == null || _selected < 0)
+            if (settings == null || _selected < 0 || _selected >= _codes.Length)
                 return;
 
             var code = _codes[_selected];
-            List<ColMeta> cols;
             try
             {
-                cols = FetchRegisteredColumns(settings, code);
+                _cols = FetchRegisteredColumns(settings, code);
             }
             catch (Exception e)
             {
@@ -179,17 +235,23 @@ namespace TrueBase.Editor
                 return;
             }
 
-            if (cols.Count == 0)
-            {
+            if (_cols.Count == 0)
                 EditorUtility.DisplayDialog(DialogTitle,
                     "이 리더보드에 등록된 필드가 없습니다.\n" +
-                    "Retool 리더보드 > 필드 탭에서 사용할 필드를 먼저 켜세요.\n" +
-                    "(코드가 정확한지도 확인하세요.)", "확인");
-                return;
-            }
+                    "Retool 리더보드 > 필드 탭에서 사용할 필드를 먼저 켜세요.", "확인");
 
-            var ns = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
-            _preview = BuildSource(cols, _className.Trim(), ns, code);
+            Repaint();
+        }
+
+        /// <summary>이미 불러온 등록 필드로 소스를 생성합니다.</summary>
+        private void Generate()
+        {
+            if (_cols.Count == 0 || _selected < 0 || _selected >= _codes.Length)
+                return;
+
+            var code = _codes[_selected];
+            var ns   = EditorSettings.projectGenerationRootNamespace?.Trim() ?? "";
+            _preview = BuildSource(_cols, _className.Trim(), ns, code);
             Repaint();
         }
 
