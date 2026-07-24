@@ -65,23 +65,26 @@ namespace TrueBase.Editor
         }
 
         /// <summary>
-        /// CSV 저장용 안정 토큰(Urgent/Normal/Lazy). DataSavePriority enum 이름과 일치하며
+        /// CSV 저장용 안정 토큰. 저장이 얼마나 빨리 되는지를 뜻하는 쉬운 단어를 씁니다:
+        /// <c>fast</c>(빠르게 저장) · <c>Normal</c> · <c>slow</c>(느리게 저장).
         /// 한글·로케일·인코딩 영향이 없어 엑셀 등에서 안전하게 편집할 수 있습니다.
         /// </summary>
         public static string PriorityCsvToken(int p) => p switch
         {
-            0 => "Urgent",
-            2 => "Lazy",
+            0 => "fast",   // Urgent — 빠르게 저장
+            2 => "slow",   // Lazy   — 느리게 저장
             _ => "Normal",
         };
 
-        /// <summary>CSV의 우선순위 셀을 파싱합니다. 안정 토큰(Urgent/Normal/Lazy)·숫자·구 한글 라벨을 모두 인식합니다.</summary>
+        /// <summary>CSV의 우선순위 셀을 파싱합니다. 새 토큰(fast/Normal/slow)·구 토큰(Urgent/Lazy)·숫자·구 한글 라벨을 모두 인식합니다.</summary>
         public static int ParsePriority(string s, int fallback)
         {
             var t = (s ?? string.Empty).Trim();
-            if (t.Equals("Urgent", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (t.Equals("fast", StringComparison.OrdinalIgnoreCase) ||
+                t.Equals("Urgent", StringComparison.OrdinalIgnoreCase)) return 0;
             if (t.Equals("Normal", StringComparison.OrdinalIgnoreCase)) return 1;
-            if (t.Equals("Lazy",   StringComparison.OrdinalIgnoreCase)) return 2;
+            if (t.Equals("slow", StringComparison.OrdinalIgnoreCase) ||
+                t.Equals("Lazy", StringComparison.OrdinalIgnoreCase)) return 2;
 
             var i = Array.IndexOf(s_priorityOptions, t); // 구 CSV(한글) 호환
             if (i >= 0) return s_priorityValues[i];
