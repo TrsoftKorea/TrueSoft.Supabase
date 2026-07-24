@@ -375,6 +375,28 @@ namespace TrueBase.Core.Data
             return arr;
         }
 
+        private static readonly Dictionary<Type, MemberInfo[]> _referenceMembersCache = new();
+
+        // 참조 타입(컬렉션·클래스) 매핑 멤버만 골라 캐시합니다. referenceOnly 우선순위 검사에서
+        // 매 호출 값타입 여부를 재판별하지 않도록 미리 걸러 둡니다.
+        private static MemberInfo[] GetReferenceMembers(Type t)
+        {
+            if (_referenceMembersCache.TryGetValue(t, out var cached))
+                return cached;
+
+            var list = new List<MemberInfo>();
+            foreach (var m in GetMappedMembers(t))
+            {
+                var mt = MemberValueType(m);
+                if (mt != null && !mt.IsValueType && mt != typeof(string))
+                    list.Add(m);
+            }
+
+            var arr = list.ToArray();
+            _referenceMembersCache[t] = arr;
+            return arr;
+        }
+
         /// <summary>
         /// Core 또는 Unity 어셈블리의 DataColumnAttribute 여부를 확인합니다.
         /// 타입 동등성 대신 이름 비교를 사용해 어셈블리와 무관하게 동작합니다.
@@ -423,7 +445,19 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>멤버에 붙은 DataColumnAttribute의 <see cref="DataSavePriority"/>를 반환합니다. 어트리뷰트가 없거나 Priority를 읽을 수 없으면 <see cref="DataSavePriority.Normal"/>.</summary>
+        private static readonly Dictionary<MemberInfo, DataSavePriority> _columnPriorityCache = new();
+
+        // 우선순위 조회도 어트리뷰트 읽기라 멤버별로 캐시합니다(GetHighestDirtyPriority 경로에서 반복 호출).
         private static DataSavePriority ResolveColumnPriority(MemberInfo m)
+        {
+            if (_columnPriorityCache.TryGetValue(m, out var cached))
+                return cached;
+            var p = ResolveColumnPriorityCore(m);
+            _columnPriorityCache[m] = p;
+            return p;
+        }
+
+        private static DataSavePriority ResolveColumnPriorityCore(MemberInfo m)
         {
             // Core 어트리뷰트 (타입 안전)
             var attr = m.GetCustomAttribute<DataColumnAttribute>();
@@ -455,15 +489,10 @@ namespace TrueBase.Core.Data
 
             DataSavePriority? highest = null;
 
-            foreach (var m in GetMappedMembers(typeof(T)))
+            // referenceOnly면 참조 컬럼만 담긴 캐시 배열을 순회(스칼라는 setter가 증분 추적하므로 제외).
+            var members = referenceOnly ? GetReferenceMembers(typeof(T)) : GetMappedMembers(typeof(T));
+            foreach (var m in members)
             {
-                if (referenceOnly)
-                {
-                    // 스칼라(값 타입·string)는 setter의 MarkDirty(우선순위)로 증분 추적하므로 여기선 건너뜁니다.
-                    var mt = MemberValueType(m);
-                    if (mt == null || mt.IsValueType || mt == typeof(string)) continue;
-                }
-
                 var col = ResolveColumnName(m);
                 if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
                     continue;
