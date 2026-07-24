@@ -138,6 +138,7 @@ SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabas
 14. `14_mail_categories.sql` — mail_categories 카탈로그
 15. `15_grants_hardening.sql` — anon·authenticated 테이블·함수 권한 최소화
 16. `16_leaderboard.sql` — 리더보드 정의·기록·컬럼 등록 + 순위 RPC
+17. `17_admin_schema_versions.sql` — 운영자 스키마 변경 버전관리(스테이징 → 게시 → 롤백). service_role 전용, 클라이언트 grant 없음
 
 `99_verify.sql` — validation script.
 

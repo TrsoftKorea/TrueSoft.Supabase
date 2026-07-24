@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace TrueBase.Core.Data
@@ -249,14 +251,41 @@ namespace TrueBase.Core.Data
             // AutoList 계열·값 타입 등 대상이 아니면 false를 반환해 아래 전체 JSON 비교로 폴백합니다.
             if (a is IAutoDefaultable && TryNormalizeAutoDictForCompare(a, out var normA) && TryNormalizeAutoDictForCompare(b, out var normB))
             {
-                try { return JsonConvert.SerializeObject(normA) == JsonConvert.SerializeObject(normB); }
+                try { return JsonValueEquals(normA, normB); }
                 catch { return false; }
             }
 
+            // 컬렉션은 개수가 다르면 내용 비교 없이 즉시 변경으로 판정(직렬화 생략).
+            if (a is ICollection ca && b is ICollection cb && ca.Count != cb.Count)
+                return false;
+
             // 독립 인스턴스 → 전송될 JSON 기준으로 구조적 값 비교.
             // 같으면 실제 변경 없음 → PATCH에서 제외(불필요한 전송 방지).
-            try { return JsonConvert.SerializeObject(a) == JsonConvert.SerializeObject(b); }
+            try { return JsonValueEquals(a, b); }
             catch { return false; }
+        }
+
+        [ThreadStatic] private static StringBuilder _cmpSbA;
+        [ThreadStatic] private static StringBuilder _cmpSbB;
+
+        // JsonConvert.SerializeObject(a) == SerializeObject(b) 와 동일한 판정이지만,
+        // 결과 문자열 2개를 새로 할당하지 않고 재사용 StringBuilder에 직렬화해 비교합니다.
+        // HasChanges가 빈번히 호출될 때 큰 JSON 문자열 할당으로 인한 GC 스파이크를 없앱니다.
+        private static bool JsonValueEquals(object a, object b)
+        {
+            var sbA = _cmpSbA ??= new StringBuilder(128);
+            var sbB = _cmpSbB ??= new StringBuilder(128);
+            sbA.Length = 0;
+            sbB.Length = 0;
+
+            var serializer = JsonSerializer.CreateDefault();
+            using (var w = new StringWriter(sbA)) serializer.Serialize(w, a);
+            using (var w = new StringWriter(sbB)) serializer.Serialize(w, b);
+
+            if (sbA.Length != sbB.Length) return false;
+            for (int i = 0; i < sbA.Length; i++)
+                if (sbA[i] != sbB[i]) return false;
+            return true;
         }
 
         /// <summary>
@@ -315,28 +344,35 @@ namespace TrueBase.Core.Data
             return false;
         }
 
-        private static IEnumerable<MemberInfo> GetMappedMembers(Type t)
+        private static readonly Dictionary<Type, MemberInfo[]> _mappedMembersCache = new();
+
+        // [DataColumn] 매핑 멤버(프로퍼티→필드 순)를 타입별로 한 번만 리플렉션해 캐시합니다.
+        // HasChanges 등 매 프레임·저장 요청마다 도는 경로에서 리플렉션 재열거 할당을 없앱니다.
+        private static MemberInfo[] GetMappedMembers(Type t)
         {
+            if (_mappedMembersCache.TryGetValue(t, out var cached))
+                return cached;
+
             // private 필드도 매핑 — 생성 클래스가 [DataColumn] 필드를 private으로 두고
             // 정적 프로퍼티(MarkDirty setter)로만 접근하도록 강제하기 위함.
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var list = new List<MemberInfo>();
             foreach (var p in t.GetProperties(flags))
             {
-                if (p.GetIndexParameters().Length > 0)
-                    continue;
-                if (!HasDataColumnAttribute(p))
-                    continue;
-                if (p.CanRead == false)
-                    continue;
-                yield return p;
+                if (p.GetIndexParameters().Length > 0) continue;
+                if (!HasDataColumnAttribute(p)) continue;
+                if (p.CanRead == false) continue;
+                list.Add(p);
             }
-
             foreach (var f in t.GetFields(flags))
             {
-                if (!HasDataColumnAttribute(f))
-                    continue;
-                yield return f;
+                if (!HasDataColumnAttribute(f)) continue;
+                list.Add(f);
             }
+
+            var arr = list.ToArray();
+            _mappedMembersCache[t] = arr;
+            return arr;
         }
 
         /// <summary>
@@ -355,7 +391,19 @@ namespace TrueBase.Core.Data
             return false;
         }
 
+        private static readonly Dictionary<MemberInfo, string> _columnNameCache = new();
+
+        // 컬럼명 조회는 어트리뷰트 읽기라 매 호출 비용이 있으므로 멤버별로 캐시합니다.
         private static string ResolveColumnName(MemberInfo m)
+        {
+            if (_columnNameCache.TryGetValue(m, out var c))
+                return c;
+            c = ResolveColumnNameCore(m);
+            _columnNameCache[m] = c;
+            return c;
+        }
+
+        private static string ResolveColumnNameCore(MemberInfo m)
         {
             // Core 어트리뷰트 (타입 안전)
             var attr = m.GetCustomAttribute<DataColumnAttribute>();
