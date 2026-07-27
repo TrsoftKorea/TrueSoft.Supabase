@@ -388,20 +388,21 @@ namespace TrueBase.Editor
             }
 
             var sb = new System.Text.StringBuilder();
-            sb.Append("column,field,type,priority,default,include\n");
+            sb.Append("컬럼,필드명,타입,저장주기,기본값,포함\n");
             foreach (var c in _editableColumns)
             {
                 sb.Append(GC.CsvEscape(c.Name)).Append(',')
                   .Append(GC.CsvEscape(c.FieldName)).Append(',')
                   .Append(GC.CsvEscape(ResolveColumnClrType(c))).Append(',')
-                  .Append(GC.CsvEscape(GC.PriorityCsvToken(c.Priority))).Append(',')
+                  .Append(c.Priority).Append(',')
                   .Append(GC.CsvEscape(c.DefaultValue ?? "")).Append(',')
                   .Append(c.Include ? "1" : "0").Append('\n');
             }
 
             try
             {
-                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
+                // 한글 헤더가 엑셀에서 깨지지 않도록 BOM 포함 UTF-8로 저장
+                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(true));
                 EditorPrefs.SetString(PrefsKeyCsvPath, path);
                 Debug.Log($"[Supabase] CSV 내보내기 완료: {_editableColumns.Count}개 컬럼 → {path}");
             }
@@ -434,6 +435,7 @@ namespace TrueBase.Editor
             int applied = 0;
             var unknown = new List<string>();
             bool firstRow = true;
+            bool legacyConverted = false; // 옛 형식(영문 헤더·문구 저장주기)을 만나 최신 형식으로 변환했는지
 
             foreach (var raw in lines)
             {
@@ -444,7 +446,11 @@ namespace TrueBase.Editor
                 if (firstRow)
                 {
                     firstRow = false;
-                    if (cells[0].Trim().Equals("column", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (GC.IsUserSaveHeaderRow(cells[0]))
+                    {
+                        if (GC.IsLegacyHeaderRow(cells[0])) legacyConverted = true;
+                        continue;
+                    }
                 }
 
                 var name = cells[0].Trim();
@@ -453,7 +459,11 @@ namespace TrueBase.Editor
 
                 if (cells.Count > 1 && !string.IsNullOrWhiteSpace(cells[1])) col.FieldName = cells[1].Trim();
                 if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2])) ApplyClrTypeToColumn(col, cells[2].Trim());
-                if (cells.Count > 3 && !string.IsNullOrWhiteSpace(cells[3])) col.Priority = GC.ParsePriority(cells[3].Trim(), col.Priority);
+                if (cells.Count > 3 && !string.IsNullOrWhiteSpace(cells[3]))
+                {
+                    col.Priority = GC.ParsePriority(cells[3].Trim(), out var legacyPri);
+                    if (legacyPri) legacyConverted = true;
+                }
                 if (cells.Count > 4) col.DefaultValue = cells[4];
                 if (cells.Count > 5 && !string.IsNullOrWhiteSpace(cells[5])) col.Include = GC.ParseBool(cells[5].Trim(), col.Include);
                 applied++;
@@ -464,6 +474,12 @@ namespace TrueBase.Editor
 
             Debug.Log($"[Supabase] CSV 불러오기 완료: {applied}개 컬럼 적용 ← {path}");
             GC.ReportImportIssues(DialogTitle, applied, unknown, CollectUnresolvedColumnNames());
+
+            if (legacyConverted)
+                EditorUtility.DisplayDialog(DialogTitle,
+                    "예전 형식의 CSV를 인식해 최신 형식으로 변환해 불러왔습니다.\n" +
+                    "'CSV로 저장하기'로 다시 저장하면 파일이 최신 형식(한글 헤더·숫자 저장주기)으로 갱신됩니다.",
+                    "확인");
         }
 
         private static void PickCsvPath()
@@ -684,7 +700,7 @@ namespace TrueBase.Editor
                 if (firstRow)
                 {
                     firstRow = false;
-                    if (cells[0].Trim().Equals("column", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (GC.IsUserSaveHeaderRow(cells[0])) continue;
                 }
 
                 var name = cells[0].Trim();

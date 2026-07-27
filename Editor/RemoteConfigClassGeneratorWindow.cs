@@ -355,7 +355,7 @@ namespace TrueBase.Editor
             }
 
             var sb = new System.Text.StringBuilder();
-            sb.Append("field,type,include\n");
+            sb.Append("필드,타입,포함\n");
             foreach (var f in _rcFields)
             {
                 sb.Append(GC.CsvEscape(f.FullPath)).Append(',')
@@ -365,7 +365,8 @@ namespace TrueBase.Editor
 
             try
             {
-                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false));
+                // 한글 헤더가 엑셀에서 깨지지 않도록 BOM 포함 UTF-8로 저장
+                File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(true));
                 EditorPrefs.SetString(PrefsKeyRcCsvPath, path);
                 Debug.Log($"[Supabase] RC CSV 내보내기 완료: {_rcFields.Count}개 필드 → {path}");
             }
@@ -408,7 +409,7 @@ namespace TrueBase.Editor
                 if (firstRow)
                 {
                     firstRow = false;
-                    if (cells[0].Trim().Equals("field", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (GC.IsRcHeaderRow(cells[0])) continue;
                 }
 
                 var fieldPath = cells[0].Trim();

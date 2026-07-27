@@ -64,34 +64,35 @@ namespace TrueBase.Editor
             return i >= 0 ? s_priorityOptions[i] : s_priorityOptions[0];
         }
 
-        /// <summary>
-        /// CSV 저장용 안정 토큰. 저장이 얼마나 빨리 되는지를 뜻하는 쉬운 단어를 씁니다:
-        /// <c>fast</c>(빠르게 저장) · <c>Normal</c> · <c>slow</c>(느리게 저장).
-        /// 한글·로케일·인코딩 영향이 없어 엑셀 등에서 안전하게 편집할 수 있습니다.
-        /// </summary>
-        public static string PriorityCsvToken(int p) => p switch
+        // 저장주기 숫자화 이전에 쓰던 문구 → 숫자. 옛 CSV를 열 때 최신 형식(숫자)으로 변환합니다.
+        private static readonly Dictionary<string, int> s_legacyPriorityTokens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            0 => "fast",   // Urgent — 빠르게 저장
-            2 => "slow",   // Lazy   — 느리게 저장
-            _ => "Normal",
+            { "보통", 1 }, { "Normal", 1 },
+            { "짧게", 0 }, { "fast",   0 },
+            { "길게", 2 }, { "slow",   2 },
         };
 
-        /// <summary>CSV의 우선순위 셀을 파싱합니다. 새 토큰(fast/Normal/slow)·구 토큰(Urgent/Lazy)·숫자·구 한글 라벨을 모두 인식합니다.</summary>
-        public static int ParsePriority(string s, int fallback)
+        /// <summary>
+        /// CSV의 저장주기 셀을 파싱합니다. 표준은 숫자(0=짧게·1=보통·2=길게)이며, 옛 형식 문구(보통/짧게/길게·Normal/fast/slow)는
+        /// 최신 숫자로 변환해 인식합니다. 어느 쪽도 아니면 보통(1). 옛 형식 문구를 만나면 <paramref name="legacyConverted"/>=true.
+        /// </summary>
+        public static int ParsePriority(string s, out bool legacyConverted)
         {
+            legacyConverted = false;
             var t = (s ?? string.Empty).Trim();
-            if (t.Equals("fast", StringComparison.OrdinalIgnoreCase) ||
-                t.Equals("Urgent", StringComparison.OrdinalIgnoreCase)) return 0;
-            if (t.Equals("Normal", StringComparison.OrdinalIgnoreCase)) return 1;
-            if (t.Equals("slow", StringComparison.OrdinalIgnoreCase) ||
-                t.Equals("Lazy", StringComparison.OrdinalIgnoreCase)) return 2;
-
-            var i = Array.IndexOf(s_priorityOptions, t); // 구 CSV(한글) 호환
-            if (i >= 0) return s_priorityValues[i];
-
             if (int.TryParse(t, out var n) && (n == 0 || n == 1 || n == 2)) return n;
-            return fallback;
+            if (s_legacyPriorityTokens.TryGetValue(t, out var v)) { legacyConverted = true; return v; }
+            return 1; // 알 수 없는 값 → 보통
         }
+
+        // 헤더 한글화 이전에 쓰던 영문 헤더 문구(두 생성기 공용, RC는 이 중 field·type·include 사용).
+        private static readonly HashSet<string> s_legacyEnglishHeaderTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "column", "field", "type", "priority", "default", "include",
+        };
+
+        /// <summary>첫 셀이 헤더 한글화 이전의 영문 헤더 문구면 true — 옛 CSV 여부 판별용.</summary>
+        public static bool IsLegacyHeaderRow(string firstCell) => s_legacyEnglishHeaderTokens.Contains((firstCell ?? "").Trim());
 
         // ── 타입 파싱 ─────────────────────────────────────────────────────────
 
@@ -176,6 +177,25 @@ namespace TrueBase.Editor
         }
 
         // ── CSV ───────────────────────────────────────────────────────────────
+
+        // 헤더 행 판별용 토큰(현재 한글 + 헤더 한글화 전 영문). CSV는 열 순서로 매칭하므로
+        // 어느 언어의 헤더든 첫 셀이 여기 포함되면 헤더 행으로 보고 건너뜁니다.
+        private static readonly HashSet<string> s_userSaveHeaderTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "컬럼", "필드명", "타입", "저장주기", "기본값", "포함",       // 현재(한글)
+            "column", "field", "type", "priority", "default", "include", // 이전(영문)
+        };
+        private static readonly HashSet<string> s_rcHeaderTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "필드", "타입", "포함",       // 현재(한글)
+            "field", "type", "include",   // 이전(영문)
+        };
+
+        /// <summary>유저 데이터 CSV의 첫 행이 헤더인지 — 한글 또는 이전 영문 헤더 문구면 true.</summary>
+        public static bool IsUserSaveHeaderRow(string firstCell) => s_userSaveHeaderTokens.Contains((firstCell ?? "").Trim());
+
+        /// <summary>Remote Config CSV의 첫 행이 헤더인지 — 한글 또는 이전 영문 헤더 문구면 true.</summary>
+        public static bool IsRcHeaderRow(string firstCell) => s_rcHeaderTokens.Contains((firstCell ?? "").Trim());
 
         public static bool ParseBool(string s, bool fallback)
         {
