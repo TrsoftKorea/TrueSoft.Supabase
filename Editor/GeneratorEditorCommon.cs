@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TrueBase.Unity;
 using UnityEditor;
 using UnityEngine;
 
@@ -268,6 +269,116 @@ namespace TrueBase.Editor
                   .Append("\n철자가 맞다면 그대로 생성해도 됩니다. 오타라면 컴파일 시 에러가 납니다.");
             }
             EditorUtility.DisplayDialog(dialogTitle, sb.ToString(), "확인");
+        }
+
+        // ── 생성기 연결 설정 UI ─────────────────────────────────────────────────
+
+        private static string _secretKeyDraft;
+        private static bool _secretWarned;
+
+        /// <summary>
+        /// 가져오기 실패 예외를 사람이 읽기 쉬운 안내로 바꿉니다. 흔한 원인(키·URL·네트워크)을 짚어주고,
+        /// 원문 메시지는 뒤에 덧붙여 디버깅에도 쓸 수 있게 합니다.
+        /// </summary>
+        public static string DescribeFetchError(Exception e)
+        {
+            var raw = string.IsNullOrWhiteSpace(e?.Message) ? "알 수 없는 오류" : e.Message.Trim();
+            var s = raw.ToLowerInvariant();
+
+            string hint = null;
+            if (s.Contains("http 401") || s.Contains("http 403") || s.Contains("jwt") || s.Contains("apikey") || s.Contains("api 키가 비어"))
+                hint = "Secret 키가 올바른지 확인하세요. 창 상단에서 다시 입력할 수 있습니다.";
+            else if (s.Contains("http 404"))
+                hint = "요청한 테이블·RPC가 프로젝트에 있는지, 프로젝트 URL이 맞는지 확인하세요.";
+            else if (s.Contains("http 5"))
+                hint = "서버가 오류를 반환했습니다. 잠시 후 다시 시도하세요.";
+            else if (s.Contains("timeout") || s.Contains("timed out") || s.Contains("시간 초과"))
+                hint = "요청이 시간 초과됐습니다. 네트워크와 프로젝트 URL을 확인하세요.";
+            else if (s.Contains("resolve") || s.Contains("unknown host") || s.Contains("cannot connect")
+                     || s.Contains("connection") || s.Contains("curl error") || s.Contains("네트워크"))
+                hint = "서버에 연결하지 못했습니다. 프로젝트 URL과 네트워크 연결을 확인하세요.";
+            else if (s.Contains("url이 비어") || s.Contains("프로젝트 url"))
+                hint = "프로젝트 URL이 비어 있습니다. '설정 열기'에서 입력하세요.";
+
+            return hint == null ? raw : hint + "\n\n원문: " + raw;
+        }
+
+        /// <summary>
+        /// 생성기 창 상단의 공통 연결 설정 바. 설정 에셋을 창 안에서 만들거나 선택하고,
+        /// Secret 키를 쓰는 생성기는 여기서 바로 입력·수정할 수 있습니다.
+        /// 필드 목록을 가져올 준비(설정 에셋 존재 + URL + 필요 시 Secret 키)가 됐으면 true.
+        /// </summary>
+        /// <param name="needsSecret">Secret 키로 인증하는 생성기(유저 데이터·원격 설정)면 true. 리더보드는 publishable 키를 써서 false.</param>
+        public static bool DrawConnectionSetup(SupabaseSettings settings, bool needsSecret)
+        {
+            if (settings == null)
+            {
+                EditorGUILayout.HelpBox("SupabaseSettings 에셋이 없습니다. 먼저 만들어야 필드 목록을 가져올 수 있습니다.", MessageType.Warning);
+                if (GUILayout.Button("설정 에셋 만들기", GUILayout.Height(24)))
+                    SupabaseSetupMenu.CreateSettingsAsset();
+                return false;
+            }
+
+            var ready = true;
+
+            if (needsSecret)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (_secretKeyDraft == null) _secretKeyDraft = GetSecretKey();
+                    EditorGUI.BeginChangeCheck();
+                    _secretKeyDraft = EditorGUILayout.PasswordField("Secret 키", _secretKeyDraft);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        EditorPrefs.SetString(PrefsKeySecret, _secretKeyDraft ?? "");
+                        if (!string.IsNullOrWhiteSpace(_secretKeyDraft) && !_secretWarned)
+                        {
+                            _secretWarned = true; // 입력 중 글자마다 로그가 찍히지 않도록 세션당 한 번만
+                            Debug.LogWarning("[Supabase] Secret 키가 EditorPrefs에 저장됩니다. 공유 PC 환경에서는 주의하세요.");
+                        }
+                    }
+                    if (GUILayout.Button(new GUIContent("설정 열기", "SupabaseSettings 에셋을 선택합니다 — URL·타임아웃 등을 고칠 때"), GUILayout.Width(70)))
+                        PingSettings(settings);
+                }
+                if (string.IsNullOrWhiteSpace(GetSecretKey()))
+                {
+                    EditorGUILayout.HelpBox("Secret 키를 입력해야 필드 목록을 가져올 수 있습니다.", MessageType.Info);
+                    ready = false;
+                }
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField("설정 에셋", AssetDatabase.GetAssetPath(settings), EditorStyles.miniLabel);
+                    if (GUILayout.Button(new GUIContent("설정 열기", "SupabaseSettings 에셋을 선택합니다 — URL·publishable 키 등을 고칠 때"), GUILayout.Width(70)))
+                        PingSettings(settings);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.projectUrl))
+            {
+                EditorGUILayout.HelpBox("프로젝트 URL이 비어 있습니다. '설정 열기'에서 입력하세요.", MessageType.Warning);
+                ready = false;
+            }
+
+            return ready;
+        }
+
+        /// <summary>가져오기 실패 메시지를 창 안에 보여주고 '다시 시도' 버튼을 제공합니다. 메시지가 없으면 아무것도 그리지 않습니다.</summary>
+        public static void DrawFetchError(string error, Action retry)
+        {
+            if (string.IsNullOrEmpty(error)) return;
+            EditorGUILayout.Space(4);
+            EditorGUILayout.HelpBox(error, MessageType.Error);
+            if (retry != null && GUILayout.Button("다시 시도", GUILayout.Height(22)))
+                retry();
+        }
+
+        private static void PingSettings(SupabaseSettings settings)
+        {
+            Selection.activeObject = settings;
+            EditorGUIUtility.PingObject(settings);
         }
     }
 }

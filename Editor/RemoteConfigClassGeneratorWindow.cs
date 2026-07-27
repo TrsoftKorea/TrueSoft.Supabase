@@ -22,6 +22,7 @@ namespace TrueBase.Editor
         private static List<RcKeyRow> _rcKeyList = new List<RcKeyRow>();
         private static int _rcKeyIndex;
         private static bool _rcKeysFetched;
+        private static string _rcFetchError = "";
         private static List<RcEditableField> _rcFields = new List<RcEditableField>();
         private static bool _rcFieldsParsed;
         private static string _rcClassName = "";
@@ -42,6 +43,7 @@ namespace TrueBase.Editor
             _rcClassName    = EditorPrefs.GetString(PrefsKeyRcClassName, "");
             _rcKeyList.Clear();
             _rcKeysFetched  = false;
+            _rcFetchError   = "";
             _rcFields.Clear();
             _rcFieldsParsed = false;
             _rcPreviewText  = "";
@@ -50,24 +52,20 @@ namespace TrueBase.Editor
         private void OnGUI()
         {
             EditorGUILayout.HelpBox(
-                "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.\n" +
-                "Secret 키는 SupabaseSettings 인스펙터에서 입력합니다.",
+                "remote_config 테이블에서 키·JSON을 읽어 Config 클래스를 생성합니다.",
                 MessageType.Info);
 
-            var secret = GC.GetSecretKey();
-            if (string.IsNullOrWhiteSpace(secret))
-                EditorGUILayout.HelpBox("Secret 키가 설정되지 않았습니다. SupabaseSettings.asset 인스펙터에서 먼저 입력하세요.", MessageType.Warning);
+            var settings = LoadSettings();
+            var ready = GC.DrawConnectionSetup(settings, needsSecret: true);
 
             EditorGUILayout.Space(4);
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(secret)))
+            using (new EditorGUI.DisabledScope(!ready))
             {
                 if (GUILayout.Button("키 목록 가져오기", GUILayout.Height(26)))
-                {
-                    var settings = LoadSettings();
-                    if (settings != null) FetchRcKeys(settings);
-                    else EditorUtility.DisplayDialog(RcDialogTitle, "SupabaseSettings.asset 을 찾지 못했습니다.", "확인");
-                }
+                    FetchRcKeys(settings);
             }
+
+            GC.DrawFetchError(_rcFetchError, () => { var s = LoadSettings(); if (s != null) FetchRcKeys(s); });
 
             if (_rcKeysFetched)
             {
@@ -230,19 +228,25 @@ namespace TrueBase.Editor
         {
             _rcKeyList.Clear();
             _rcKeysFetched  = false;
+            _rcFetchError   = "";
             _rcFields.Clear();
             _rcFieldsParsed = false;
             _rcPreviewText  = "";
 
             try
             {
+                EditorUtility.DisplayProgressBar(RcDialogTitle, "remote_config 키 목록을 가져오는 중…", 0.4f);
                 _rcKeyList     = RemoteConfigClassGenerator.FetchConfigRows(settings.projectUrl, GC.GetSecretKey(), settings.timeoutSeconds);
                 _rcKeyIndex    = 0;
                 _rcKeysFetched = true;
             }
             catch (Exception e)
             {
-                EditorUtility.DisplayDialog(RcDialogTitle, "가져오기에 실패했습니다.\n" + e.Message, "확인");
+                _rcFetchError = GC.DescribeFetchError(e);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
             }
         }
 

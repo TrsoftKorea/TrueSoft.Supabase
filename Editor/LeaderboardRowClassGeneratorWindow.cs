@@ -40,6 +40,8 @@ namespace TrueBase.Editor
         private string _listError;
 
         private List<ColMeta> _cols = new List<ColMeta>();   // 선택한 리더보드의 등록 필드
+        private string _fieldError;                          // 등록 필드 가져오기 실패 메시지
+        private bool _fieldEmpty;                            // 등록 필드가 0개로 조회됨
 
         /// <summary>조회한 등록 필드 하나의 이름과 C# 타입.</summary>
         private readonly struct ColMeta
@@ -64,6 +66,8 @@ namespace TrueBase.Editor
             EditorGUILayout.HelpBox(
                 "리더보드를 선택하고 '필드 목록 가져오기'를 누르면 Retool 필드 탭에서 등록한 필드를 불러옵니다.",
                 MessageType.Info);
+
+            GC.DrawConnectionSetup(LoadSettings(), needsSecret: false);
 
             EditorGUILayout.Space(4);
 
@@ -102,6 +106,12 @@ namespace TrueBase.Editor
                 if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
                     FetchFields();
             }
+
+            GC.DrawFetchError(_fieldError, FetchFields);
+            if (_fieldEmpty && _fieldError == null)
+                EditorGUILayout.HelpBox(
+                    "이 리더보드에 등록된 필드가 없습니다.\n" +
+                    "Retool 리더보드 > 필드 탭에서 사용할 필드를 먼저 켜세요.", MessageType.Warning);
 
             if (_cols.Count > 0)
             {
@@ -195,6 +205,7 @@ namespace TrueBase.Editor
 
             try
             {
+                EditorUtility.DisplayProgressBar(DialogTitle, "리더보드 목록을 가져오는 중…", 0.4f);
                 var list = FetchLeaderboardList(settings);
                 _codes = list.Select(x => x.code).ToArray();
                 _labels = list.Select(x =>
@@ -205,10 +216,14 @@ namespace TrueBase.Editor
             }
             catch (Exception e)
             {
-                _listError = "리더보드 목록을 불러오지 못했습니다.\n" + e.Message;
+                _listError = GC.DescribeFetchError(e);
                 _codes = Array.Empty<string>();
                 _labels = Array.Empty<string>();
                 _selected = -1;
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
             }
             _listLoaded = true;
             Repaint();
@@ -219,6 +234,8 @@ namespace TrueBase.Editor
         {
             _cols.Clear();
             _preview = "";
+            _fieldError = null;
+            _fieldEmpty = false;
 
             var settings = LoadSettings();
             if (settings == null || _selected < 0 || _selected >= _codes.Length)
@@ -227,19 +244,21 @@ namespace TrueBase.Editor
             var code = _codes[_selected];
             try
             {
+                EditorUtility.DisplayProgressBar(DialogTitle, "등록 필드를 가져오는 중…", 0.4f);
                 _cols = FetchRegisteredColumns(settings, code);
             }
             catch (Exception e)
             {
-                EditorUtility.DisplayDialog(DialogTitle, "등록 필드를 불러오지 못했습니다.\n\n" + e.Message, "확인");
+                _fieldError = GC.DescribeFetchError(e);
+                Repaint();
                 return;
             }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
 
-            if (_cols.Count == 0)
-                EditorUtility.DisplayDialog(DialogTitle,
-                    "이 리더보드에 등록된 필드가 없습니다.\n" +
-                    "Retool 리더보드 > 필드 탭에서 사용할 필드를 먼저 켜세요.", "확인");
-
+            _fieldEmpty = _cols.Count == 0;
             Repaint();
         }
 

@@ -28,6 +28,7 @@ namespace TrueBase.Editor
 
         private static List<EditableColumn> _editableColumns = new List<EditableColumn>();
         private static bool _columnsFetched;
+        private static string _fetchError = "";
         private static List<string> _warnings = new List<string>();
         private static Vector2 _columnScroll;
         private static string _columnFilter = "";
@@ -46,6 +47,7 @@ namespace TrueBase.Editor
         {
             _editableColumns.Clear();
             _columnsFetched = false;
+            _fetchError = "";
             _warnings.Clear();
             _previewText = "";
         }
@@ -53,24 +55,20 @@ namespace TrueBase.Editor
         private void OnGUI()
         {
             EditorGUILayout.HelpBox(
-                "DB에서 user_data 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.\n" +
-                "Secret 키는 SupabaseSettings 인스펙터에서 입력합니다.",
+                "DB에서 user_data 필드 목록을 읽어 PlayerSave 클래스를 생성합니다.",
                 MessageType.Info);
 
-            var secret = GC.GetSecretKey();
-            if (string.IsNullOrWhiteSpace(secret))
-                EditorGUILayout.HelpBox("Secret 키가 설정되지 않았습니다. SupabaseSettings.asset 인스펙터에서 먼저 입력하세요.", MessageType.Warning);
+            var settings = LoadSettings();
+            var ready = GC.DrawConnectionSetup(settings, needsSecret: true);
 
             EditorGUILayout.Space(4);
-            using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(secret)))
+            using (new EditorGUI.DisabledScope(!ready))
             {
                 if (GUILayout.Button("필드 목록 가져오기", GUILayout.Height(26)))
-                {
-                    var settings = LoadSettings();
-                    if (settings != null) FetchColumns(settings);
-                    else EditorUtility.DisplayDialog(DialogTitle, "SupabaseSettings.asset 을 찾지 못했습니다.", "확인");
-                }
+                    FetchColumns(settings);
             }
+
+            GC.DrawFetchError(_fetchError, () => { var s = LoadSettings(); if (s != null) FetchColumns(s); });
 
             if (_columnsFetched && _editableColumns.Count > 0)
             {
@@ -248,11 +246,14 @@ namespace TrueBase.Editor
         {
             _editableColumns.Clear();
             _columnsFetched = false;
+            _fetchError = "";
             _warnings.Clear();
             _previewText = "";
 
             try
             {
+                EditorUtility.DisplayProgressBar(DialogTitle, "user_data 필드 목록을 가져오는 중…", 0.4f);
+
                 var url = PostgrestOpenApiUserSaveClass.BuildRestRootUrl(settings.projectUrl);
                 var json = PostgrestOpenApiUserSaveClass.FetchOpenApiJson(url, GC.GetSecretKey(), settings.timeoutSeconds);
 
@@ -260,7 +261,7 @@ namespace TrueBase.Editor
                 var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(json, "user_data", skip);
                 if (!parsed.IsSuccess)
                 {
-                    EditorUtility.DisplayDialog(DialogTitle, parsed.ErrorMessage, "확인");
+                    _fetchError = parsed.ErrorMessage;
                     return;
                 }
 
@@ -268,7 +269,7 @@ namespace TrueBase.Editor
 
                 if (parsed.Columns == null || parsed.Columns.Count == 0)
                 {
-                    EditorUtility.DisplayDialog(DialogTitle, "가져온 필드가 없습니다. 제외 목록을 확인하세요.", "확인");
+                    _fetchError = "가져온 필드가 없습니다. 제외 목록을 확인하세요.";
                     return;
                 }
 
@@ -355,7 +356,11 @@ namespace TrueBase.Editor
             }
             catch (Exception e)
             {
-                EditorUtility.DisplayDialog(DialogTitle, "가져오기에 실패했습니다.\n" + e.Message, "확인");
+                _fetchError = GC.DescribeFetchError(e);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
             }
         }
 
