@@ -31,6 +31,7 @@ if (!result.IsSuccess)
 |--------|------|
 | `NotInitialized` | SDK가 초기화되지 않았습니다 |
 | `NotSignedIn` | 로그인 상태가 아닙니다 |
+| `NotAuthenticated` | 서버가 인증 토큰을 거부했습니다. 토큰이 만료·무효일 때로, 재로그인이 필요합니다 |
 | `SessionRequired` | 로그인 세션이 필요합니다 |
 | `AccessTokenEmpty` | 액세스 토큰이 비어있습니다 |
 | `NetworkError` | 네트워크 오류 또는 타임아웃 |
@@ -148,3 +149,4 @@ if (!result.IsSuccess)
 | `LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
 | `LeaderboardScoreNotFound` | 그 회차에 해당 플레이어의 기록이 없습니다 |
 | `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |
+| `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |

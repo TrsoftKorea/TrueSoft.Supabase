@@ -20,8 +20,11 @@ namespace TrueBase.Core.Common
         /// <summary>SDK가 초기화되지 않았습니다.</summary>
         public const string NotInitialized = "sdk_not_initialized";
 
-        /// <summary>로그인 상태가 아닙니다.</summary>
+        /// <summary>로그인 상태가 아닙니다. 클라이언트 선검사에서 세션이 없을 때 발생합니다.</summary>
         public const string NotSignedIn = "auth_not_signed_in";
+
+        /// <summary>서버가 인증 토큰을 거부했습니다(토큰 없음·만료·무효). 세션이 있다고 판단해 호출했으나 서버가 반려한 경우로, 재로그인이 필요합니다.</summary>
+        public const string NotAuthenticated = "not_authenticated";
 
         /// <summary>로그인 세션이 필요합니다.</summary>
         public const string SessionRequired = "session_required";
@@ -208,5 +211,8 @@ namespace TrueBase.Core.Common
 
         /// <summary>이 리더보드에 등록되지 않은 플레이어 데이터 컬럼입니다.</summary>
         public const string LeaderboardColumnNotAllowed = "leaderboard_column_not_allowed";
+
+        /// <summary>리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다.</summary>
+        public const string LeaderboardRowRequired = "leaderboard_row_required";
     }
 }

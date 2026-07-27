@@ -23,6 +23,7 @@ namespace TrueBase.Core.Common
 
         NotInitialized,
         NotSignedIn,
+        NotAuthenticated,
         SessionRequired,
         SignedInNonAnonymous,
         GoogleSignInCancelled,
@@ -85,6 +86,7 @@ namespace TrueBase.Core.Common
         LeaderboardRotationNotFound,
         LeaderboardScoreNotFound,
         LeaderboardColumnNotAllowed,
+        LeaderboardRowRequired,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -101,6 +103,7 @@ namespace TrueBase.Core.Common
             null or "" => SupabaseReason.None,
             SupabaseErrorCode.NotInitialized => SupabaseReason.NotInitialized,
             SupabaseErrorCode.NotSignedIn => SupabaseReason.NotSignedIn,
+            SupabaseErrorCode.NotAuthenticated => SupabaseReason.NotAuthenticated,
             SupabaseErrorCode.SessionRequired => SupabaseReason.SessionRequired,
             SupabaseErrorCode.SignedInNonAnonymous => SupabaseReason.SignedInNonAnonymous,
             SupabaseErrorCode.GoogleSignInCancelled => SupabaseReason.GoogleSignInCancelled,
@@ -163,6 +166,7 @@ namespace TrueBase.Core.Common
             SupabaseErrorCode.LeaderboardRotationNotFound => SupabaseReason.LeaderboardRotationNotFound,
             SupabaseErrorCode.LeaderboardScoreNotFound => SupabaseReason.LeaderboardScoreNotFound,
             SupabaseErrorCode.LeaderboardColumnNotAllowed => SupabaseReason.LeaderboardColumnNotAllowed,
+            SupabaseErrorCode.LeaderboardRowRequired => SupabaseReason.LeaderboardRowRequired,
             _ => SupabaseReason.Unknown,
         };
     }

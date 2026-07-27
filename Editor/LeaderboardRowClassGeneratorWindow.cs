@@ -450,7 +450,6 @@ namespace TrueBase.Editor
 
             foreach (var c in columns)
             {
-                sb.AppendLine(ind + "    [DataColumn(\"" + c.Name + "\")]");
                 sb.AppendLine(ind + "    public " + c.ClrType + " " + ToPascalCase(c.Name) + " { get; set; }");
                 sb.AppendLine();
             }

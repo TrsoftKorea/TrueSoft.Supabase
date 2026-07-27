@@ -292,8 +292,12 @@ namespace TrueBase.Unity
 
         /// <summary>생성한 리더보드 행 타입으로 점수를 기록합니다. 리더보드 코드·데이터는 행에서 읽습니다.</summary>
         public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
-            double score, ILeaderboardRow row) =>
-            SupabaseSDK.TrySubmitLeaderboardScoreAsync(row.LeaderboardCode, score, row.ToData());
+            double score, ILeaderboardRow row)
+        {
+            if (row == null)
+                return Task.FromResult(SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardRowRequired));
+            return SupabaseSDK.TrySubmitLeaderboardScoreAsync(row.LeaderboardCode, score, row.ToData());
+        }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardRangeAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
@@ -312,8 +316,12 @@ namespace TrueBase.Unity
 
         /// <summary>생성한 리더보드 행 타입으로 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
         public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            ILeaderboardRow row, int? rotationCount = null) =>
-            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(row.LeaderboardCode, row.ToData(), rotationCount);
+            ILeaderboardRow row, int? rotationCount = null)
+        {
+            if (row == null)
+                return Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.LeaderboardRowRequired));
+            return SupabaseSDK.TrySetLeaderboardPlayerDataAsync(row.LeaderboardCode, row.ToData(), rotationCount);
+        }
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMyLeaderboardScoreAsync"/>
         public static Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null) =>
