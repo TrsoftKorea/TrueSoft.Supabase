@@ -32,17 +32,4 @@ await Supabase.SetLeaderboardPlayerDataAsync(
 | `SupabaseReason.LeaderboardScoreNotFound` | 그 회차에 본인 기록이 없습니다 |
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 필드를 보냈습니다 |
 
-## 생성한 클래스로 수정
-
-```csharp
-Task<SupabaseResult> Supabase.SetLeaderboardPlayerDataAsync(
-    ILeaderboardRow row,
-    int?            rotationCount = null)
-```
-
-[클래스 생성기](./columns#generate)로 만든 리더보드 행 타입을 그대로 넘기면 리더보드 코드와 필드 값을 행에서 읽어 씁니다.
-
-```csharp
-var row = new ArenaLeaderboardRow { GuildName = "새 길드" };
-await Supabase.SetLeaderboardPlayerDataAsync(row);
-```
+생성기로 만든 행 타입을 그대로 넘기는 방식은 [추가 데이터 수정 · 생성 클래스](./set-player-data-row)를 참고하세요.

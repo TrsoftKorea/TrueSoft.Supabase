@@ -93,7 +93,7 @@ public sealed class SampleLeaderboard : MonoBehaviour
         Debug.Log($"{Tag} {score} 제출 → 반영된 점수 {r.Data.Score} (회차 {r.Data.RotationCount})");
     }
 
-    /// <summary>5·7 — 상위 10위 조회. rotationCount가 null이면 현재 회차.</summary>
+    /// <summary>상위 10위 조회. rotationCount가 null이면 현재 회차.</summary>
     private async Task ShowRangeAsync(int? rotationCount)
     {
         var r = await Supabase.GetLeaderboardRangeAsync(leaderboardCode, 1, 10, rotationCount);

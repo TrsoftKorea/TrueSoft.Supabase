@@ -90,7 +90,7 @@ namespace TrueBase.Core.Data
 
         /// <summary>이 리더보드에 등록된 플레이어 데이터 컬럼 이름.</summary>
         [JsonProperty("columns")]
-        public IReadOnlyList<string> Columns { get; set; }
+        public IReadOnlyList<string> Columns { get; set; } = System.Array.Empty<string>();
 
         public LeaderboardRecordType RecordType => ParseRecordType(RecordTypeRaw);
         public LeaderboardSortType   SortType   => ParseSortType(SortTypeRaw);

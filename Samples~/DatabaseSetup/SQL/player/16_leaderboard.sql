@@ -123,11 +123,10 @@ revoke all on table public.leaderboard_tables        from anon, authenticated;
 revoke all on table public.leaderboard_scores        from anon, authenticated;
 revoke all on table public.leaderboard_table_columns from anon, authenticated;
 
--- leaderboard_scores 만 SELECT 를 남긴다. 데이터 접근용이 아니라 **스키마 노출용**이다.
---   · 클래스 생성기가 PostgREST OpenAPI 에서 컬럼·타입을 읽으려면 테이블이 노출돼야 한다.
---   · RLS 가 켜져 있고 SELECT 정책이 0개라 실제 행은 한 건도 반환되지 않는다(검증 완료).
---   · 순위·기록 조회는 전부 SECURITY DEFINER RPC 를 통한다.
-grant select on table public.leaderboard_scores to authenticated;
+-- leaderboard_scores 에는 클라이언트 grant 를 주지 않는다.
+--   · 순위·기록 조회는 전부 SECURITY DEFINER RPC(ts_leaderboard_*)를 통한다.
+--   · 리더보드 클래스 생성기도 OpenAPI 가 아니라 ts_leaderboard_columns_meta RPC 로 컬럼을 읽는다.
+--   · 직접 테이블 접근 경로가 없으므로 SELECT 노출이 필요 없다.
 
 
 -- =============================================================================

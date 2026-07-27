@@ -38,9 +38,8 @@ grant select on table public.mails               to authenticated;
 grant select on table public.purchases           to authenticated;
 grant select on table public.ts_protected_fields to authenticated;
 
--- 스키마 노출 전용(데이터 접근 아님) — RLS 정책 0개라 행은 반환되지 않는다.
--- 클래스 생성기가 OpenAPI 에서 리더보드 플레이어 데이터 컬럼의 타입을 읽는 데 필요하다.
-grant select on table public.leaderboard_scores to authenticated;
+-- leaderboard_scores 는 클라이언트 grant 없음 — 접근은 전부 SECURITY DEFINER RPC(ts_leaderboard_*)를 통한다.
+-- (생성기도 ts_leaderboard_columns_meta RPC 로 컬럼을 읽으므로 OpenAPI 노출이 필요 없다.)
 
 -- 본인 행 읽기·쓰기 — RLS 정책이 account_id = auth.uid() 로 제한
 grant select, insert, update         on table public.display_names to authenticated;
