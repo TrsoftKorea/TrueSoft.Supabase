@@ -201,7 +201,8 @@ namespace TrueBase.Core.Data
                 p_rotation_count = rotationCount
             });
 
-            var r = await CallRpcAsync(accessToken, "ts_leaderboard_set_player_data", body);
+            // returns void — 성공해도 본문이 비어 온다.
+            var r = await CallRpcAsync(accessToken, "ts_leaderboard_set_player_data", body, allowEmptyBody: true);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
@@ -220,7 +221,8 @@ namespace TrueBase.Core.Data
                 p_rotation_count = rotationCount
             });
 
-            var r = await CallRpcAsync(accessToken, "ts_leaderboard_delete_my_score", body);
+            // returns void — 성공해도 본문이 비어 온다.
+            var r = await CallRpcAsync(accessToken, "ts_leaderboard_delete_my_score", body, allowEmptyBody: true);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
@@ -228,8 +230,15 @@ namespace TrueBase.Core.Data
         // 공통 RPC 호출
         // -------------------------------------------------------------------
 
-        /// <summary>RPC를 호출하고 응답 본문을 문자열로 반환합니다. 실패 시 서버가 던진 사유를 ErrorCode로 담습니다.</summary>
-        private async Task<SupabaseResult<string>> CallRpcAsync(string accessToken, string rpcName, string bodyJson)
+        /// <summary>
+        /// RPC를 호출하고 응답 본문을 문자열로 반환합니다. 실패 시 서버가 던진 사유를 ErrorCode로 담습니다.
+        /// </summary>
+        /// <param name="allowEmptyBody">
+        /// <c>returns void</c> RPC용. 성공해도 본문이 비어 오므로 빈 본문을 실패로 보지 않습니다
+        /// (<c>ts_leaderboard_set_player_data</c>·<c>ts_leaderboard_delete_my_score</c>).
+        /// </param>
+        private async Task<SupabaseResult<string>> CallRpcAsync(
+            string accessToken, string rpcName, string bodyJson, bool allowEmptyBody = false)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -247,9 +256,12 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(ExtractErrorCode(response.Body, response.ErrorMessage, rpcName));
 
             var body = response.Body?.Trim();
-            return string.IsNullOrEmpty(body)
-                ? SupabaseResult<string>.Fail(rpcName + "_empty_body")
-                : SupabaseResult<string>.Success(body);
+            if (!string.IsNullOrEmpty(body))
+                return SupabaseResult<string>.Success(body);
+
+            return allowEmptyBody
+                ? SupabaseResult<string>.Success(string.Empty)
+                : SupabaseResult<string>.Fail(rpcName + "_empty_body");
         }
 
         /// <summary>
