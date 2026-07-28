@@ -277,55 +277,86 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync() =>
             SupabaseSDK.TryGetMailInboxCountsAsync();
 
+        // ── 리더보드 ──────────────────────────────────────────────────────────
+        // 대상은 코드 문자열이 아니라 생성 클래스 타입으로 지정합니다:
+        //   Supabase.SubmitScoreAsync<ArenaLeaderboard>(1250)
+        //   Supabase.SubmitScoreAsync(1250, new GuildLeaderboard.Row { ... })
+        // 생성은 TrueSoft > Supabase > 클래스 생성 > 리더보드.
+
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardTablesAsync"/>
-        public static Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> GetLeaderboardTablesAsync() =>
+        public static Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> GetLeaderboardsAsync() =>
             SupabaseSDK.TryGetLeaderboardTablesAsync();
 
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardTableAsync"/>
-        public static Task<SupabaseResult<LeaderboardTable>> GetLeaderboardTableAsync(string code) =>
-            SupabaseSDK.TryGetLeaderboardTableAsync(code);
+        public static Task<SupabaseResult<LeaderboardTable>> GetLeaderboardAsync<TLeaderboard>()
+            where TLeaderboard : class, ILeaderboard =>
+            SupabaseSDK.TryGetLeaderboardTableAsync(LeaderboardMeta.CodeOf(typeof(TLeaderboard)));
 
         /// <inheritdoc cref="SupabaseSDK.TrySubmitLeaderboardScoreAsync"/>
-        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
-            string code, double score, IReadOnlyDictionary<string, object> data = null) =>
-            SupabaseSDK.TrySubmitLeaderboardScoreAsync(code, score, data);
+        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitScoreAsync<TLeaderboard>(double score)
+            where TLeaderboard : class, ILeaderboard =>
+            SupabaseSDK.TrySubmitLeaderboardScoreAsync(LeaderboardMeta.CodeOf(typeof(TLeaderboard)), score);
 
-        /// <summary>생성한 리더보드 행 타입으로 점수를 기록합니다. 리더보드 코드·데이터는 행에서 읽습니다.</summary>
-        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitLeaderboardScoreAsync(
-            double score, ILeaderboardRow row)
+        /// <summary>
+        /// 생성 클래스의 행과 함께 점수를 기록합니다. 어느 리더보드인지는 행 타입에서 읽습니다.
+        /// </summary>
+        public static Task<SupabaseResult<LeaderboardSubmitResult>> SubmitScoreAsync<TRow>(double score, TRow row)
+            where TRow : class, new()
         {
             if (row == null)
                 return Task.FromResult(SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardRowRequired));
-            return SupabaseSDK.TrySubmitLeaderboardScoreAsync(row.LeaderboardCode, score, row.ToData());
+            return SupabaseSDK.TrySubmitLeaderboardScoreAsync(
+                LeaderboardMeta.CodeOfRow(typeof(TRow)), score, DataSchema.BuildRow(row));
         }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardRangeAsync"/>
-        public static Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
-            string code, int start = 1, int end = 100, int? rotationCount = null) =>
-            SupabaseSDK.TryGetLeaderboardRangeAsync(code, start, end, rotationCount);
+        public static Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetRanksAsync<TLeaderboard>(
+            int start = 1, int end = 100, int? rotationCount = null)
+            where TLeaderboard : class, ILeaderboard =>
+            SupabaseSDK.TryGetLeaderboardRangeAsync(
+                LeaderboardMeta.CodeOf(typeof(TLeaderboard)), start, end, rotationCount);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetLeaderboardPlayerAsync"/>
-        public static Task<SupabaseResult<LeaderboardPlayerEntry>> GetLeaderboardPlayerAsync(
-            string code, string accountId = null, int? rotationCount = null) =>
-            SupabaseSDK.TryGetLeaderboardPlayerAsync(code, accountId, rotationCount);
+        public static Task<SupabaseResult<LeaderboardPlayerEntry>> GetRankAsync<TLeaderboard>(
+            string accountId = null, int? rotationCount = null)
+            where TLeaderboard : class, ILeaderboard =>
+            SupabaseSDK.TryGetLeaderboardPlayerAsync(
+                LeaderboardMeta.CodeOf(typeof(TLeaderboard)), accountId, rotationCount);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySetLeaderboardPlayerDataAsync"/>
-        public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null) =>
-            SupabaseSDK.TrySetLeaderboardPlayerDataAsync(code, data, rotationCount);
-
-        /// <summary>생성한 리더보드 행 타입으로 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
-        public static Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            ILeaderboardRow row, int? rotationCount = null)
+        /// <summary>
+        /// 이미 기록된 본인 항목의 등록 필드를 수정합니다. 점수는 바뀌지 않습니다.
+        /// 어느 리더보드인지는 행 타입에서 읽습니다.
+        /// </summary>
+        public static Task<SupabaseResult> SetRowAsync<TRow>(TRow row, int? rotationCount = null)
+            where TRow : class, new()
         {
             if (row == null)
                 return Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.LeaderboardRowRequired));
-            return SupabaseSDK.TrySetLeaderboardPlayerDataAsync(row.LeaderboardCode, row.ToData(), rotationCount);
+            return SupabaseSDK.TrySetLeaderboardPlayerDataAsync(
+                LeaderboardMeta.CodeOfRow(typeof(TRow)), DataSchema.BuildRow(row), rotationCount);
         }
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMyLeaderboardScoreAsync"/>
-        public static Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null) =>
-            SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(code, rotationCount);
+        public static Task<SupabaseResult> DeleteMyScoreAsync<TLeaderboard>(int? rotationCount = null)
+            where TLeaderboard : class, ILeaderboard =>
+            SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(
+                LeaderboardMeta.CodeOf(typeof(TLeaderboard)), rotationCount);
+
+        /// <summary>순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.</summary>
+        public static TRow ToRow<TRow>(LeaderboardEntry entry) where TRow : class, new()
+        {
+            var row = new TRow();
+            DataSchema.FillRow(row, entry?.Data);
+            return row;
+        }
+
+        /// <summary>플레이어 순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.</summary>
+        public static TRow ToRow<TRow>(LeaderboardPlayerEntry entry) where TRow : class, new()
+        {
+            var row = new TRow();
+            DataSchema.FillRow(row, entry?.Data);
+            return row;
+        }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>

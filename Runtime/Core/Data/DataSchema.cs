@@ -152,6 +152,66 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
+        /// <see cref="DataColumnAttribute"/> 멤버 <b>전부</b>를 컬럼명 → 값 사전으로 만듭니다.
+        /// <see cref="BuildPatch{T}"/>가 변경분만 담는 것과 달리, 기본값인 멤버도 포함합니다
+        /// (리더보드 제출처럼 "지금 이 값들로 채워라"를 보낼 때 씁니다).
+        /// </summary>
+        public static Dictionary<string, object> BuildRow<T>(T row)
+        {
+            var data = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (row == null) return data;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var col = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
+                    continue;
+
+                data[col] = GetValue(m, row);
+            }
+
+            return data;
+        }
+
+        /// <summary>
+        /// 컬럼명 → 값 사전을 <see cref="DataColumnAttribute"/> 멤버에 채웁니다(<see cref="BuildRow{T}"/>의 역방향).
+        /// 사전에 없는 컬럼은 건드리지 않고, 타입이 다르면 <see cref="Convert.ChangeType(object, Type)"/>로 맞춥니다.
+        /// </summary>
+        public static void FillRow<T>(T row, IReadOnlyDictionary<string, object> data)
+        {
+            if (row == null || data == null) return;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var col = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(col)) continue;
+                if (!data.TryGetValue(col, out var raw)) continue;
+
+                var target = m is FieldInfo f ? f.FieldType : ((PropertyInfo)m).PropertyType;
+                var value = ConvertTo(raw, target);
+
+                if (m is FieldInfo fi) fi.SetValue(row, value);
+                else if (m is PropertyInfo pi && pi.CanWrite) pi.SetValue(row, value);
+            }
+        }
+
+        /// <summary>JSON 역직렬화 결과(long·double·string 등)를 대상 멤버 타입으로 맞춥니다.</summary>
+        private static object ConvertTo(object raw, Type target)
+        {
+            if (raw == null)
+                return target.IsValueType ? Activator.CreateInstance(target) : null;
+
+            var t = Nullable.GetUnderlyingType(target) ?? target;
+            if (t.IsInstanceOfType(raw)) return raw;
+
+            if (t.IsEnum)
+                return raw is string s ? Enum.Parse(t, s, true) : Enum.ToObject(t, raw);
+
+            try { return Convert.ChangeType(raw, t); }
+            catch { return target.IsValueType ? Activator.CreateInstance(target) : null; }
+        }
+
+        /// <summary>
         /// 서버 Row를 <paramref name="dst"/>에 적용하되, <b>참조 타입 컬럼</b>이 서버에서 null(SQL NULL)이면
         /// <paramref name="fallback"/>의 값을 유지합니다. 값 타입 컬럼은 항상 <paramref name="serverRow"/>가 우선합니다
         /// (서버의 "없음"과 "기본값"을 구분할 수 없으므로).

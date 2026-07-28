@@ -1,16 +1,14 @@
 # 점수 기록 · 생성 클래스
 
 ```csharp
-Task<SupabaseResult<LeaderboardSubmitResult>> Supabase.SubmitLeaderboardScoreAsync(
-    double          score,
-    ILeaderboardRow row)
+Task<SupabaseResult<LeaderboardSubmitResult>> Supabase.SubmitScoreAsync<TRow>(double score, TRow row)
 ```
 
-[클래스 생성기](./columns#generate)로 만든 리더보드 행 타입을 그대로 넘기면 리더보드 코드와 필드 값을 행에서 읽어 씁니다. 사전을 직접 만들 필요가 없습니다. 사전으로 직접 보내는 방식은 [점수 기록](./submit)을 참고하세요.
+순위와 함께 표시할 값을 점수와 같이 보냅니다. 어느 리더보드인지는 행 타입에서 읽으므로 타입 파라미터를 적을 필요가 없습니다.
 
 ```csharp
-var row = new ArenaLeaderboardRow { CharacterLevel = 42, GuildName = "붉은검" };
-await Supabase.SubmitLeaderboardScoreAsync(1250, row);
+var row = new ArenaLeaderboard.Row { CharacterLevel = 42, GuildName = "붉은검" };
+await Supabase.SubmitScoreAsync(1250, row);
 ```
 
 **파라미터**
@@ -18,7 +16,7 @@ await Supabase.SubmitLeaderboardScoreAsync(1250, row);
 | 파라미터 | 설명 |
 |----------|------|
 | `score` | 이번에 획득한 점수 |
-| `row` | 생성기로 만든 리더보드 행 인스턴스. 리더보드 코드·필드 값을 여기서 읽습니다 |
+| `row` | [클래스 생성기](./columns#generate)가 만든 중첩 `Row` 인스턴스 |
 
 **반환**
 
@@ -33,3 +31,7 @@ await Supabase.SubmitLeaderboardScoreAsync(1250, row);
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 필드를 보냈습니다 |
+
+::: info 행에 담긴 값은 전부 전송됩니다
+`Row`의 필드는 값을 바꾸지 않은 것까지 모두 보내집니다. 특정 필드만 갱신하는 개념이 아니라 "지금 이 값들로 채워라"에 가깝습니다.
+:::

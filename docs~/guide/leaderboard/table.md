@@ -1,13 +1,13 @@
 # 리더보드 조회
 
 ```csharp
-Task<SupabaseResult<LeaderboardTable>> Supabase.GetLeaderboardTableAsync(string code)
+Task<SupabaseResult<LeaderboardTable>> Supabase.GetLeaderboardAsync<TLeaderboard>()
 ```
 
 리더보드 1건의 설정과 현재 회차 상태를 조회합니다. 남은 시간 카운트다운이나 참여자 수 표시에 사용합니다.
 
 ```csharp
-var result = await Supabase.GetLeaderboardTableAsync("arena");
+var result = await Supabase.GetLeaderboardAsync<ArenaLeaderboard>();
 if (result.IsSuccess)
 {
     var t = result.Data;
@@ -17,11 +17,11 @@ if (result.IsSuccess)
 }
 ```
 
-**파라미터**
+**타입 파라미터**
 
 | 파라미터 | 설명 |
 |----------|------|
-| `code` | 리더보드 코드 |
+| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
 
 **반환**
 

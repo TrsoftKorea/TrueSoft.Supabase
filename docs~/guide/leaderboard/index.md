@@ -40,15 +40,16 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`GetLeaderboardTablesAsync`](/guide/leaderboard/tables) | 사용 가능한 리더보드 목록 |
-| [`GetLeaderboardTableAsync`](/guide/leaderboard/table) | 리더보드 1건의 설정·회차 상태 |
-| [`SubmitLeaderboardScoreAsync`](/guide/leaderboard/submit) | 점수 기록 |
-| [`GetLeaderboardRangeAsync`](/guide/leaderboard/range) | 순위 범위 조회 |
-| [`GetLeaderboardPlayerAsync`](/guide/leaderboard/player) | 플레이어 1명의 순위 |
-| [`SetLeaderboardPlayerDataAsync`](/guide/leaderboard/set-player-data) | 본인 추가 데이터 수정 |
-| [`DeleteMyLeaderboardScoreAsync`](/guide/leaderboard/delete-my-score) | 본인 기록 삭제 |
+| [`GetLeaderboardsAsync`](/guide/leaderboard/tables) | 사용 가능한 리더보드 목록 |
+| [`GetLeaderboardAsync<T>`](/guide/leaderboard/table) | 리더보드 1건의 설정·회차 상태 |
+| [`SubmitScoreAsync<T>`](/guide/leaderboard/submit) | 점수 기록 |
+| [`SubmitScoreAsync`](/guide/leaderboard/submit-row) | 점수 기록 · 생성 클래스 |
+| [`GetRanksAsync<T>`](/guide/leaderboard/range) | 순위 범위 조회 |
+| [`GetRankAsync<T>`](/guide/leaderboard/player) | 플레이어 1명의 순위 |
+| [`SetRowAsync`](/guide/leaderboard/set-player-data) | 본인 추가 데이터 수정 |
+| [`DeleteMyScoreAsync<T>`](/guide/leaderboard/delete-my-score) | 본인 기록 삭제 |
 
-플레이어 데이터 필드를 쓰려면 [플레이어 데이터 필드](/guide/leaderboard/columns)를 먼저 읽으세요.
+리더보드는 코드 문자열이 아니라 생성한 타입으로 지정합니다. [리더보드 클래스와 필드](/guide/leaderboard/columns)를 먼저 읽으세요.
 
 ::: warning 점수는 클라이언트가 제출합니다
 게임이 자기 점수를 직접 서버에 올리는 구조입니다. 변조된 점수를 막으려면 게임 서버나 Edge Function에서 검증한 뒤 기록하도록 별도 설계가 필요합니다.

@@ -1,17 +1,16 @@
 # 순위 조회
 
 ```csharp
-Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> Supabase.GetLeaderboardRangeAsync(
-    string code,
-    int    start         = 1,
-    int    end           = 100,
-    int?   rotationCount = null)
+Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> Supabase.GetRanksAsync<TLeaderboard>(
+    int  start         = 1,
+    int  end           = 100,
+    int? rotationCount = null)
 ```
 
 순위를 범위로 조회합니다. 한 번에 최대 100건까지 반환되며, 더 필요하면 `start`를 옮겨 다음 구간을 요청합니다.
 
 ```csharp
-var result = await Supabase.GetLeaderboardRangeAsync("arena", 1, 50);
+var result = await Supabase.GetRanksAsync<ArenaLeaderboard>(1, 50);
 if (result.IsSuccess)
 {
     foreach (var entry in result.Data)
@@ -23,7 +22,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `code` | 리더보드 코드 |
+| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
 | `start` | 시작 순위. 1부터 (기본값: 1) |
 | `end` | 끝 순위. `start + 99`를 넘으면 잘립니다 (기본값: 100) |
 | `rotationCount` | 조회할 회차. `null`이면 현재 회차 (기본값: `null`) |
@@ -39,7 +38,7 @@ if (result.IsSuccess)
 | `.DisplayName` | `string` | 현재 닉네임. 없으면 `null` |
 | `.Score` | `double` | 점수 |
 | `.RotationCount` | `int` | 회차 |
-| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값 |
+| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](./columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
 
 **에러 코드**
 

@@ -1,15 +1,13 @@
 # 본인 기록 삭제
 
 ```csharp
-Task<SupabaseResult> Supabase.DeleteMyLeaderboardScoreAsync(
-    string code,
-    int?   rotationCount = null)
+Task<SupabaseResult> Supabase.DeleteMyScoreAsync<TLeaderboard>(int? rotationCount = null)
 ```
 
 본인 기록을 리더보드에서 지웁니다. 기록이 없으면 아무것도 하지 않고 성공합니다.
 
 ```csharp
-var result = await Supabase.DeleteMyLeaderboardScoreAsync("arena");
+var result = await Supabase.DeleteMyScoreAsync<ArenaLeaderboard>();
 if (result.IsSuccess)
     RefreshLeaderboard();
 ```
@@ -18,7 +16,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `code` | 리더보드 코드 |
+| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
 | `rotationCount` | 삭제할 회차. `null`이면 현재 회차 (기본값: `null`) |
 
 **에러 코드**

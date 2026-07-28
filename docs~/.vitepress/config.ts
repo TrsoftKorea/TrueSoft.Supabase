@@ -195,9 +195,8 @@ export default defineConfig({
               { text: '순위 조회', link: '/guide/leaderboard/range' },
               { text: '플레이어 순위 조회', link: '/guide/leaderboard/player' },
               { text: '추가 데이터 수정', link: '/guide/leaderboard/set-player-data' },
-              { text: '추가 데이터 수정 · 생성 클래스', link: '/guide/leaderboard/set-player-data-row' },
               { text: '본인 기록 삭제', link: '/guide/leaderboard/delete-my-score' },
-              { text: '플레이어 데이터 필드', link: '/guide/leaderboard/columns' }
+              { text: '리더보드 클래스와 필드', link: '/guide/leaderboard/columns' }
             ]
           },
           { text: '서버 시간', link: '/guide/server-time' }

@@ -1,13 +1,13 @@
 # 리더보드 목록 조회
 
 ```csharp
-Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> Supabase.GetLeaderboardTablesAsync()
+Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> Supabase.GetLeaderboardsAsync()
 ```
 
 사용 가능한 리더보드 목록을 조회합니다. 비활성이거나 종료된 리더보드는 빠집니다.
 
 ```csharp
-var result = await Supabase.GetLeaderboardTablesAsync();
+var result = await Supabase.GetLeaderboardsAsync();
 if (result.IsSuccess)
 {
     foreach (var t in result.Data)

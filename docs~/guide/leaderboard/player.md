@@ -1,8 +1,7 @@
 # 플레이어 순위 조회
 
 ```csharp
-Task<SupabaseResult<LeaderboardPlayerEntry>> Supabase.GetLeaderboardPlayerAsync(
-    string code,
+Task<SupabaseResult<LeaderboardPlayerEntry>> Supabase.GetRankAsync<TLeaderboard>(
     string accountId     = null,
     int?   rotationCount = null)
 ```
@@ -10,7 +9,7 @@ Task<SupabaseResult<LeaderboardPlayerEntry>> Supabase.GetLeaderboardPlayerAsync(
 플레이어 1명의 순위를 조회합니다. 아직 기록이 없어도 실패가 아니라 `Registered`가 `false`인 결과로 성공합니다.
 
 ```csharp
-var result = await Supabase.GetLeaderboardPlayerAsync("arena");
+var result = await Supabase.GetRankAsync<ArenaLeaderboard>();
 if (result.IsSuccess)
 {
     myRankLabel.text = result.Data.Registered
@@ -23,7 +22,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `code` | 리더보드 코드 |
+| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
 | `accountId` | 조회할 계정. `null`이면 본인 (기본값: `null`) |
 | `rotationCount` | 조회할 회차. `null`이면 현재 회차 (기본값: `null`) |
 
@@ -39,7 +38,7 @@ if (result.IsSuccess)
 | `.DisplayName` | `string` | 현재 닉네임 |
 | `.Score` | `double` | 점수 |
 | `.RotationCount` | `int` | 회차 |
-| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값 |
+| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](./columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
 
 **에러 코드**
 
