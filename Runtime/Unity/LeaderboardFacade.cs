@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TrueBase.Core.Auth;
@@ -130,37 +130,34 @@ namespace TrueBase.Unity
         /// <summary>본인 기록의 등록 컬럼을 수정합니다. 점수는 바뀌지 않습니다.</summary>
         public Task<SupabaseResult> SetPlayerDataAsync(
             string code,
-            IReadOnlyDictionary<string, object> data = null,
-            int? rotationCount = null) =>
-            SetPlayerDataAsync(_sessionGetter?.Invoke(), code, data, rotationCount);
+            IReadOnlyDictionary<string, object> data = null) =>
+            SetPlayerDataAsync(_sessionGetter?.Invoke(), code, data);
 
         public async Task<SupabaseResult> SetPlayerDataAsync(
             SupabaseSession session,
             string code,
-            IReadOnlyDictionary<string, object> data = null,
-            int? rotationCount = null)
+            IReadOnlyDictionary<string, object> data = null)
         {
             var token = RequireToken(session);
             if (token == null)
                 return SupabaseResult.Fail("auth_not_signed_in");
 
-            return await _leaderboard.SetPlayerDataAsync(token, code, data, rotationCount);
+            return await _leaderboard.SetPlayerDataAsync(token, code, data);
         }
 
         /// <summary>본인 기록을 삭제합니다. 기록이 없으면 아무것도 하지 않고 성공합니다.</summary>
-        public Task<SupabaseResult> DeleteMyScoreAsync(string code, int? rotationCount = null) =>
-            DeleteMyScoreAsync(_sessionGetter?.Invoke(), code, rotationCount);
+        public Task<SupabaseResult> DeleteMyScoreAsync(string code) =>
+            DeleteMyScoreAsync(_sessionGetter?.Invoke(), code);
 
         public async Task<SupabaseResult> DeleteMyScoreAsync(
             SupabaseSession session,
-            string code,
-            int? rotationCount = null)
+            string code)
         {
             var token = RequireToken(session);
             if (token == null)
                 return SupabaseResult.Fail("auth_not_signed_in");
 
-            return await _leaderboard.DeleteMyScoreAsync(token, code, rotationCount);
+            return await _leaderboard.DeleteMyScoreAsync(token, code);
         }
 
         /// <summary>세션에서 액세스 토큰을 추출합니다. 세션이 null이거나 토큰이 비어 있으면 null.</summary>

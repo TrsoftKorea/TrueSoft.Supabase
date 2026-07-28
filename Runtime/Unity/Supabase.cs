@@ -325,22 +325,21 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 이미 기록된 본인 항목의 등록 필드를 수정합니다. 점수는 바뀌지 않습니다.
-        /// 어느 리더보드인지는 행 타입에서 읽습니다.
+        /// 어느 리더보드인지는 행 타입에서 읽습니다. 현재 회차에만 적용됩니다.
         /// </summary>
-        public static Task<SupabaseResult> SetRowAsync<TRow>(TRow row, int? rotationCount = null)
+        public static Task<SupabaseResult> SetRowAsync<TRow>(TRow row)
             where TRow : class, new()
         {
             if (row == null)
                 return Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.LeaderboardRowRequired));
             return SupabaseSDK.TrySetLeaderboardPlayerDataAsync(
-                LeaderboardMeta.CodeOfRow(typeof(TRow)), DataSchema.BuildRow(row), rotationCount);
+                LeaderboardMeta.CodeOfRow(typeof(TRow)), DataSchema.BuildRow(row));
         }
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMyLeaderboardScoreAsync"/>
-        public static Task<SupabaseResult> DeleteMyScoreAsync<TLeaderboard>(int? rotationCount = null)
+        public static Task<SupabaseResult> DeleteMyScoreAsync<TLeaderboard>()
             where TLeaderboard : class, ILeaderboard =>
-            SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(
-                LeaderboardMeta.CodeOf(typeof(TLeaderboard)), rotationCount);
+            SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(LeaderboardMeta.CodeOf(typeof(TLeaderboard)));
 
         /// <summary>순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.</summary>
         public static TRow ToRow<TRow>(LeaderboardEntry entry) where TRow : class, new()

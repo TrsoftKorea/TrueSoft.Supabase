@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -188,17 +188,16 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult> SetPlayerDataAsync(
             string accessToken,
             string code,
-            IReadOnlyDictionary<string, object> data = null,
-            int? rotationCount = null)
+            IReadOnlyDictionary<string, object> data = null)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
+            // 현재 회차에만 적용 — p_rotation_count를 보내지 않으면 서버가 현재 회차를 씁니다.
             var body = JsonConvert.SerializeObject(new
             {
                 p_code = code.Trim(),
-                p_data = data,
-                p_rotation_count = rotationCount
+                p_data = data
             });
 
             // returns void — 성공해도 본문이 비어 온다.
@@ -209,16 +208,15 @@ namespace TrueBase.Core.Data
         /// <summary>본인 기록을 삭제합니다. 기록이 없으면 아무것도 하지 않고 성공합니다.</summary>
         public async Task<SupabaseResult> DeleteMyScoreAsync(
             string accessToken,
-            string code,
-            int? rotationCount = null)
+            string code)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
+            // 현재 회차에만 적용 — p_rotation_count를 보내지 않으면 서버가 현재 회차를 씁니다.
             var body = JsonConvert.SerializeObject(new
             {
-                p_code = code.Trim(),
-                p_rotation_count = rotationCount
+                p_code = code.Trim()
             });
 
             // returns void — 성공해도 본문이 비어 온다.

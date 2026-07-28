@@ -1962,23 +1962,23 @@ namespace TrueBase.Unity
 
         /// <summary><c>ts_leaderboard_set_player_data</c> — 본인 등록 컬럼 수정. 점수는 그대로.</summary>
         public static async Task<SupabaseResult> SetLeaderboardPlayerDataAsync(
-            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+            string code, IReadOnlyDictionary<string, object> data = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await Leaderboard.SetPlayerDataAsync(code, data, rotationCount);
+            return await Leaderboard.SetPlayerDataAsync(code, data);
         }
 
         /// <summary><c>ts_leaderboard_delete_my_score</c> — 본인 기록 삭제. 없으면 no-op.</summary>
-        public static async Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null)
+        public static async Task<SupabaseResult> DeleteMyLeaderboardScoreAsync(string code)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await Leaderboard.DeleteMyScoreAsync(code, rotationCount);
+            return await Leaderboard.DeleteMyScoreAsync(code);
         }
 
         /// <inheritdoc cref="GetLeaderboardTablesAsync"/>
@@ -2021,17 +2021,17 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SetLeaderboardPlayerDataAsync"/>
         public static async Task<SupabaseResult> TrySetLeaderboardPlayerDataAsync(
-            string code, IReadOnlyDictionary<string, object> data = null, int? rotationCount = null)
+            string code, IReadOnlyDictionary<string, object> data = null)
         {
-            var r = await SetLeaderboardPlayerDataAsync(code, data, rotationCount);
+            var r = await SetLeaderboardPlayerDataAsync(code, data);
             LogApiResult(ApiLogTags.LeaderboardSetPlayerData, r.IsSuccess, r.ErrorCode);
             return r;
         }
 
         /// <inheritdoc cref="DeleteMyLeaderboardScoreAsync"/>
-        public static async Task<SupabaseResult> TryDeleteMyLeaderboardScoreAsync(string code, int? rotationCount = null)
+        public static async Task<SupabaseResult> TryDeleteMyLeaderboardScoreAsync(string code)
         {
-            var r = await DeleteMyLeaderboardScoreAsync(code, rotationCount);
+            var r = await DeleteMyLeaderboardScoreAsync(code);
             LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode);
             return r;
         }
