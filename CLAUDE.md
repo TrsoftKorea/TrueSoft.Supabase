@@ -120,31 +120,34 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 ## Database Schema
 
-SQL files are in `Sql/player/` (not directly in `Sql/`). Run in order in Supabase SQL Editor:
+스키마 전체가 `Samples~/DatabaseSetup/SQL/player/install.sql` 한 파일에 있습니다. Supabase SQL Editor에 붙여넣고 한 번 실행하면 설치가 끝납니다. `verify.sql`은 설치 검증용입니다.
 
-1. `01_servers.sql` — game_servers + ts_default_server_id + ts_server_now
-2. `02_profiles.sql` — user_profiles + display_names + user_sessions
-3. `03_anonymous_recovery.sql` — anonymous recovery tokens + auth triggers
-4. `04_user_data.sql` — save infra (set_updated_at, ts_ensure_my_row) + user_data table + field protection
-5. `05_account_management.sql` — server transfer RPCs + withdrawal RPCs
-6. `06_mails.sql` — mails table + RPCs (hardening included)
-7. `07_purchases.sql` — IAP receipt verification records
-8. `08_remote_config.sql` — remote_config table
-9. `09_cron_jobs.sql` — withdrawal_delete_queue + cron jobs (pg_cron required)
-10. `10_bans.sql` — user_ban_messages + ban RPCs
-11. `11_user_data_logs.sql` — user_data_logs + change-diff trigger
-12. `12_admin_mail.sql` — game_items + mail_batches + admin send RPCs
-13. `13_mail_schedules.sql` — mail_schedules + cron 기반 예약·반복 발송
-14. `14_mail_categories.sql` — mail_categories 카탈로그
-15. `15_grants_hardening.sql` — anon·authenticated 테이블·함수 권한 최소화
-16. `16_leaderboard.sql` — 리더보드 정의·기록·컬럼 등록 + 순위 RPC
-17. `17_admin_schema_versions.sql` — 운영자 스키마 변경 버전관리(스테이징 → 게시 → 롤백). service_role 전용, 클라이언트 grant 없음
+절 구성은 다음과 같습니다. 1~17은 기능별 스키마이고 **18은 반드시 마지막**입니다.
 
-`99_verify.sql` — validation script.
+1. 게임 서버 — game_servers + ts_default_server_id + ts_server_now
+2. 플레이어 프로필 — user_profiles + display_names + user_sessions
+3. 익명 계정 복구 — recovery tokens + auth triggers
+4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
+5. 계정 관리 — server transfer RPCs + withdrawal RPCs
+6. 우편함 — mails + RPCs
+7. 인앱 결제 — purchases
+8. 원격 설정 — remote_config
+9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
+10. 계정 차단 — user_ban_messages + ban RPCs
+11. 유저 데이터 로그 — user_data_logs + change-diff trigger
+12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail
+13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송
+14. 우편 분류 — mail_categories
+15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
+16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음
+17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem
+18. 클라이언트 권한 최소화 — anon·authenticated 테이블·함수 권한 회수 후 허용 목록만 부여
 
-`15_grants_hardening.sql`은 모든 테이블이 만들어진 뒤 마지막에 실행합니다. Supabase 기본 권한은 새 테이블마다 anon·authenticated에 ALL(TRUNCATE 포함)을 부여하고 TRUNCATE는 RLS를 우회하므로, 이 파일이 `ALTER DEFAULT PRIVILEGES`로 **기본 권한 자체를 차단**합니다. 따라서 이후 테이블을 추가해도 재실행할 필요가 없습니다.
+**18절은 앞 절에서 만든 함수를 이름으로 grant 하므로 순서를 바꾸면 "함수가 없다"며 실패합니다.** 또 Supabase 기본 권한은 새 테이블마다 anon·authenticated에 ALL(TRUNCATE 포함)을 부여하고 TRUNCATE는 RLS를 우회하므로, 이 절이 `ALTER DEFAULT PRIVILEGES`로 **기본 권한 자체를 차단**합니다.
 
-**새 테이블·함수를 추가할 때**는 권한이 없는 상태로 생성되므로, 클라이언트 접근이 필요하면 해당 SQL 파일에서 `grant select ... to authenticated` / `grant execute on function ... to authenticated`처럼 필요한 권한만 명시합니다. RLS 정책만 만들고 grant를 빠뜨리면 PostgREST가 권한 오류를 냅니다.
+**새 테이블·함수를 추가할 때**는 권한이 없는 상태로 생성되므로, 클라이언트 접근이 필요하면 해당 절에서 `grant select ... to authenticated` / `grant execute on function ... to authenticated`처럼 필요한 권한만 명시합니다. RLS 정책만 만들고 grant를 빠뜨리면 PostgREST가 권한 오류를 냅니다. 클라이언트에 여는 함수라면 18절의 허용 목록에도 추가하세요.
+
+**DB를 고칠 때는 MCP 적용과 `install.sql` 수정을 항상 한 세트로** 합니다. 파일을 "최초 설치 전용"으로 취급해 갱신을 미루면 파일과 라이브 DB가 갈라지고, 그 차이는 다음 신규 프로젝트에서야 드러납니다(실제로 `mails.localized`·`ts_coupon_redeem`에서 두 번 발생).
 
 ::: warning revoke 대상에 anon·authenticated를 반드시 포함
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.

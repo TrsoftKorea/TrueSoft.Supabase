@@ -11,7 +11,7 @@ namespace TrueBase.Core.Data
 {
     /// <summary>
     /// Supabase remote_config 테이블을 통해 원격 설정을 조회합니다.
-    /// 스키마: <c>Samples~/DatabaseSetup/SQL/player/08_remote_config.sql</c> (key, value_json, updated_at, version, 메타데이터 컬럼).
+    /// 스키마: <c>Samples~/DatabaseSetup/SQL/player/install.sql</c> 의 원격 설정 절 (key, value_json, updated_at, version, 메타데이터 컬럼).
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
     /// </summary>
     public sealed class SupabaseRemoteConfigService

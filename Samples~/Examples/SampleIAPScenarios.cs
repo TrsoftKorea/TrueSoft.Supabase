@@ -14,7 +14,7 @@ using UnityEngine;
 ///   1. Window > Package Manager > com.unity.purchasing 설치 (최신 권장, 최소 4.0.0)
 ///   2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
 ///   3. supabase functions deploy purchase-verify-google (또는 purchase-verify-apple)
-///   4. Sql/player/07_purchases.sql 실행
+///   4. SQL/player/install.sql 실행 (인앱 결제 절 포함)
 ///   5. Inspector에서 productId 입력
 /// </summary>
 public sealed class SampleIAPScenarios : MonoBehaviour

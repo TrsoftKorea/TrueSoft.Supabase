@@ -5,23 +5,13 @@
 
 ---
 
-## SQL 실행 순서
+## SQL 실행
 
-Supabase SQL Editor에서 `SQL/player/` 폴더의 파일을 **번호 순서대로** 실행합니다.
+Supabase SQL Editor에 `SQL/player/install.sql` 전체를 붙여넣고 한 번 실행합니다. 게임 서버·프로필·유저 데이터·우편함·인앱 결제·원격 설정·리더보드·쿠폰과 운영 도구용 테이블이 모두 만들어집니다.
 
-| 파일 | 내용 |
-|------|------|
-| 01_servers.sql | 게임 서버 마스터 |
-| 02_profiles.sql | 공개 프로필 |
-| 03_anonymous_recovery.sql | 익명 계정 복구 |
-| 04_user_data.sql | 유저 데이터 |
-| 05_account_management.sql | 계정 관리 |
-| 06_mails.sql | 우편함 |
-| 07_purchases.sql | 인앱 결제 |
-| 08_remote_config.sql | Remote Config |
-| 09_cron_jobs.sql | 자동화 작업 |
+`verify.sql`은 설치 완료 후 정상 여부를 확인하는 쿼리입니다.
 
-`99_verify.sql`은 설치 완료 후 정상 여부를 확인하는 쿼리입니다.
+파일 안의 절 순서를 바꾸거나 일부만 실행하지 마세요. 마지막 절이 모든 테이블·함수 권한을 회수한 뒤 필요한 것만 되돌려 주는데, 앞 절에서 만든 함수를 이름으로 지정하기 때문입니다. 모든 구문이 멱등이라 다시 실행해도 안전합니다.
 
 ---
 
