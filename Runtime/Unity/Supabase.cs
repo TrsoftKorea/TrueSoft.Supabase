@@ -378,6 +378,15 @@ namespace TrueBase.Unity
             return row;
         }
 
+        // ── 쿠폰 ──────────────────────────────────────────────────────────────
+        //
+        // 쿠폰 정의·발급은 운영(Retool) 전용입니다. 게임은 코드를 보내 사용하는 것만 합니다.
+        // 보상은 응답으로 오지 않고 우편으로 지급되므로, 사용 후 우편함을 새로 조회하세요.
+
+        /// <inheritdoc cref="SupabaseSDK.TryRedeemCouponAsync"/>
+        public static Task<SupabaseResult> RedeemCouponAsync(string code) =>
+            SupabaseSDK.TryRedeemCouponAsync(code);
+
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
             SupabaseSDK.TryGetUnclaimedMailCountAsync(userId, category);

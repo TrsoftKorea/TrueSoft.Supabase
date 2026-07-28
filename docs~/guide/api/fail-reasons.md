@@ -151,3 +151,13 @@ if (!result.IsSuccess)
 | `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |
 | `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |
 | `LeaderboardRowNotLoaded` | 조회에서 만들지 않은 행입니다. `Supabase.ToRow`로 현재 값을 받아 고쳐서 넘기세요 |
+
+## 쿠폰
+
+| Reason | 설명 |
+|--------|------|
+| `CouponNotFound` | 존재하지 않는 쿠폰 코드입니다 |
+| `CouponInactive` | 운영이 사용을 중지한 쿠폰입니다 |
+| `CouponExpired` | 사용 기한이 지난 쿠폰입니다 |
+| `CouponAlreadyUsed` | 일반 쿠폰은 그 코드가 이미 쓰였고, 키워드 쿠폰은 본인이 이미 썼습니다 |
+| `CouponExhausted` | 키워드 쿠폰의 최대 사용 횟수가 소진되었습니다 |

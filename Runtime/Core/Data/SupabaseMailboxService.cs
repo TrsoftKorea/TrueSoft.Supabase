@@ -15,7 +15,7 @@ namespace TrueBase.Core.Data
     public sealed class SupabaseMailboxService
     {
         private const string MailSelectColumns =
-            "id,account_id,user_id,sender_type,sender_name,title,content,expires_at,created_at,items,items_claimed_at,category,localized";
+            "id,account_id,user_id,sender_type,title,content,expires_at,created_at,items,items_claimed_at,category,localized";
 
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
@@ -389,7 +389,6 @@ namespace TrueBase.Core.Data
                 AccountId = r.AccountId,
                 UserId = r.UserId,
                 SenderType = r.SenderType ?? string.Empty,
-                SenderName = r.SenderName ?? string.Empty,
                 Title = r.Title ?? string.Empty,
                 Content = r.Content ?? string.Empty,
                 ExpiresAt = r.ExpiresAt,
@@ -455,9 +454,6 @@ namespace TrueBase.Core.Data
 
             [JsonProperty("sender_type")]
             public string SenderType { get; set; }
-
-            [JsonProperty("sender_name")]
-            public string SenderName { get; set; }
 
             [JsonProperty("title")]
             public string Title { get; set; }

@@ -48,6 +48,7 @@ namespace TrueBase.Unity
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
         private static LeaderboardFacade _leaderboard;
+        private static CouponFacade _coupon;
         private static RemoteConfigFacade _remoteConfig;
         private static ServerFunctionsFacade _functions;
         private static string _initializedProjectUrl;
@@ -259,6 +260,7 @@ namespace TrueBase.Unity
             public const string LeaderboardPlayer = "Supabase.Leaderboard.Player";
             public const string LeaderboardSetPlayerData = "Supabase.Leaderboard.SetPlayerData";
             public const string LeaderboardDeleteMyScore = "Supabase.Leaderboard.DeleteMyScore";
+            public const string CouponRedeem = "Supabase.Coupon.Redeem";
         }
 
         /// <summary>
@@ -1777,6 +1779,19 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>쿠폰(코드 사용 RPC). 쿠폰 정의·발급은 운영 전용입니다.</summary>
+        public static CouponFacade Coupon
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _coupon ??= new CouponFacade(_bootstrap.CouponService, () => _currentSession);
+            }
+        }
+
         /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
@@ -2033,6 +2048,24 @@ namespace TrueBase.Unity
         {
             var r = await DeleteMyLeaderboardScoreAsync(code);
             LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode);
+            return r;
+        }
+
+        /// <summary><c>ts_coupon_redeem</c> — 쿠폰 사용. 보상은 우편으로 지급됩니다.</summary>
+        public static async Task<SupabaseResult> RedeemCouponAsync(string code)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Coupon.RedeemAsync(code);
+        }
+
+        /// <inheritdoc cref="RedeemCouponAsync"/>
+        public static async Task<SupabaseResult> TryRedeemCouponAsync(string code)
+        {
+            var r = await RedeemCouponAsync(code);
+            LogApiResult(ApiLogTags.CouponRedeem, r.IsSuccess, r.ErrorCode);
             return r;
         }
 
@@ -2850,6 +2883,8 @@ namespace TrueBase.Unity
 
             _userSaves = null;
             _mailbox = null;
+            _leaderboard = null;
+            _coupon = null;
             _remoteConfig = null;
             _functions = null;
 

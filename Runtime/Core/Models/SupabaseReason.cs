@@ -88,6 +88,11 @@
         LeaderboardColumnNotAllowed,
         LeaderboardRowRequired,
         LeaderboardRowNotLoaded,
+        CouponNotFound,
+        CouponInactive,
+        CouponExpired,
+        CouponAlreadyUsed,
+        CouponExhausted,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -169,6 +174,11 @@
             SupabaseErrorCode.LeaderboardColumnNotAllowed => SupabaseReason.LeaderboardColumnNotAllowed,
             SupabaseErrorCode.LeaderboardRowRequired => SupabaseReason.LeaderboardRowRequired,
             SupabaseErrorCode.LeaderboardRowNotLoaded => SupabaseReason.LeaderboardRowNotLoaded,
+            SupabaseErrorCode.CouponNotFound => SupabaseReason.CouponNotFound,
+            SupabaseErrorCode.CouponInactive => SupabaseReason.CouponInactive,
+            SupabaseErrorCode.CouponExpired => SupabaseReason.CouponExpired,
+            SupabaseErrorCode.CouponAlreadyUsed => SupabaseReason.CouponAlreadyUsed,
+            SupabaseErrorCode.CouponExhausted => SupabaseReason.CouponExhausted,
             _ => SupabaseReason.Unknown,
         };
     }

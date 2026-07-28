@@ -16,7 +16,6 @@ create table if not exists public.mails (
   account_id uuid references auth.users (id) on delete set null,
   user_id text not null,
   sender_type text not null default 'system',
-  sender_name text not null default '',
   title text not null default '',
   content text not null default '',
   expires_at timestamptz not null,
@@ -30,7 +29,6 @@ create table if not exists public.mails (
 alter table public.mails add column if not exists account_id uuid;
 alter table public.mails add column if not exists user_id text;
 alter table public.mails add column if not exists sender_type text;
-alter table public.mails add column if not exists sender_name text;
 alter table public.mails add column if not exists title text;
 alter table public.mails add column if not exists content text;
 alter table public.mails add column if not exists expires_at timestamptz;

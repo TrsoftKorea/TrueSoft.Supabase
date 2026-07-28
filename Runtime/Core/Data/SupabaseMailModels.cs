@@ -36,7 +36,6 @@ namespace TrueBase.Core.Data
         public string AccountId { get; set; }
         public string UserId { get; set; }
         public string SenderType { get; set; }
-        public string SenderName { get; set; }
         public string Title { get; set; }
         public string Content { get; set; }
         public DateTimeOffset ExpiresAt { get; set; }

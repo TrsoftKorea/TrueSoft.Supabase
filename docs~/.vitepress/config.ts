@@ -199,6 +199,14 @@ export default defineConfig({
               { text: '리더보드 클래스와 필드', link: '/guide/leaderboard/columns' }
             ]
           },
+          {
+            text: '쿠폰',
+            link: '/guide/coupon/',
+            collapsed: true,
+            items: [
+              { text: '쿠폰 사용', link: '/guide/coupon/redeem' }
+            ]
+          },
           { text: '서버 시간', link: '/guide/server-time' }
         ]
       },
@@ -235,6 +243,7 @@ export default defineConfig({
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '우편함', link: '/guide/api/mailbox' },
           { text: '리더보드', link: '/guide/api/leaderboard' },
+          { text: '쿠폰', link: '/guide/api/coupon' },
           { text: '기타', link: '/guide/api/etc' },
           { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]

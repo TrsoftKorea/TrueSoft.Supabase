@@ -220,5 +220,20 @@ namespace TrueBase.Core.Common
         /// 기본값으로 덮어써지므로, <c>Supabase.ToRow</c>로 현재 값을 받아 고쳐서 넘겨야 합니다.
         /// </summary>
         public const string LeaderboardRowNotLoaded = "leaderboard_row_not_loaded";
+
+        /// <summary>없는 쿠폰 코드입니다.</summary>
+        public const string CouponNotFound = "coupon_not_found";
+
+        /// <summary>운영이 사용을 중지한 쿠폰입니다.</summary>
+        public const string CouponInactive = "coupon_inactive";
+
+        /// <summary>사용 기한이 지난 쿠폰입니다.</summary>
+        public const string CouponExpired = "coupon_expired";
+
+        /// <summary>이미 사용한 쿠폰입니다. 일반 쿠폰은 코드가 소진된 경우, 키워드 쿠폰은 본인이 이미 쓴 경우입니다.</summary>
+        public const string CouponAlreadyUsed = "coupon_already_used";
+
+        /// <summary>키워드 쿠폰의 최대 사용 횟수가 모두 소진되었습니다.</summary>
+        public const string CouponExhausted = "coupon_exhausted";
     }
 }
