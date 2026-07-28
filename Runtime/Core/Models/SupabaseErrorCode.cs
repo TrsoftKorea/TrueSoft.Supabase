@@ -214,5 +214,11 @@ namespace TrueBase.Core.Common
 
         /// <summary>리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다.</summary>
         public const string LeaderboardRowRequired = "leaderboard_row_required";
+
+        /// <summary>
+        /// 조회 결과에서 만들지 않은 행입니다. 직접 <c>new</c>한 행을 수정에 쓰면 값을 넣지 않은 필드가
+        /// 기본값으로 덮어써지므로, <c>Supabase.ToRow</c>로 현재 값을 받아 고쳐서 넘겨야 합니다.
+        /// </summary>
+        public const string LeaderboardRowNotLoaded = "leaderboard_row_not_loaded";
     }
 }

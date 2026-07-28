@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using TrueBase.Core.Auth;
 using TrueBase.Core.Common;
@@ -323,15 +324,27 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetLeaderboardPlayerAsync(
                 LeaderboardMeta.CodeOf(typeof(TLeaderboard)), accountId, rotationCount);
 
+        // ToRow가 만든 행만 기억한다. 행에 값을 넣지 않은 필드는 기본값으로 전송되므로,
+        // 조회로 현재 값을 채운 행이 아니면 다른 필드가 조용히 덮어써진다 — 그래서 아예 막는다.
+        // 약참조라 게임이 행을 버리면 함께 정리된다.
+        private static readonly ConditionalWeakTable<object, object> _loadedRows = new ConditionalWeakTable<object, object>();
+
         /// <summary>
         /// 이미 기록된 본인 항목의 등록 필드를 수정합니다. 점수는 바뀌지 않습니다.
-        /// 어느 리더보드인지는 행 타입에서 읽습니다. 현재 회차에만 적용됩니다.
+        /// 어느 리더보드인지는 행 타입에서 읽으며, 현재 회차에만 적용됩니다.
+        /// <para>
+        /// 넘기는 행은 <see cref="ToRow{TRow}(LeaderboardEntry)"/>로 만든 것이어야 합니다.
+        /// 직접 만든 행은 값을 넣지 않은 필드가 기본값으로 덮어써지므로 거부됩니다.
+        /// </para>
         /// </summary>
         public static Task<SupabaseResult> SetRowAsync<TRow>(TRow row)
             where TRow : class, new()
         {
             if (row == null)
                 return Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.LeaderboardRowRequired));
+            if (!_loadedRows.TryGetValue(row, out _))
+                return Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.LeaderboardRowNotLoaded));
+
             return SupabaseSDK.TrySetLeaderboardPlayerDataAsync(
                 LeaderboardMeta.CodeOfRow(typeof(TRow)), DataSchema.BuildRow(row));
         }
@@ -341,19 +354,27 @@ namespace TrueBase.Unity
             where TLeaderboard : class, ILeaderboard =>
             SupabaseSDK.TryDeleteMyLeaderboardScoreAsync(LeaderboardMeta.CodeOf(typeof(TLeaderboard)));
 
-        /// <summary>순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.</summary>
+        /// <summary>
+        /// 순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.
+        /// 이렇게 만든 행만 <see cref="SetRowAsync{TRow}"/>에 넘길 수 있습니다.
+        /// </summary>
         public static TRow ToRow<TRow>(LeaderboardEntry entry) where TRow : class, new()
         {
             var row = new TRow();
             DataSchema.FillRow(row, entry?.Data);
+            _loadedRows.Add(row, null);
             return row;
         }
 
-        /// <summary>플레이어 순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.</summary>
+        /// <summary>
+        /// 플레이어 순위 조회 결과의 추가 데이터를 생성 클래스의 행으로 변환합니다. 네트워크 호출이 없습니다.
+        /// 이렇게 만든 행만 <see cref="SetRowAsync{TRow}"/>에 넘길 수 있습니다.
+        /// </summary>
         public static TRow ToRow<TRow>(LeaderboardPlayerEntry entry) where TRow : class, new()
         {
             var row = new TRow();
             DataSchema.FillRow(row, entry?.Data);
+            _loadedRows.Add(row, null);
             return row;
         }
 

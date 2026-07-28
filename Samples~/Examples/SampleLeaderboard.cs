@@ -147,7 +147,20 @@ public sealed class SampleLeaderboard : MonoBehaviour
             return;
         }
 
-        var r = await Supabase.SetRowAsync(new ArenaLeaderboard.Row { CharLevel = Random.Range(1, 100) });
+        // 수정에 넘길 행은 반드시 조회 결과에서 만듭니다.
+        // 직접 new한 행은 값을 넣지 않은 필드가 기본값으로 덮어써지므로 SDK가 거부합니다.
+        var me = await Supabase.GetRankAsync<ArenaLeaderboard>();
+        if (!me.IsSuccess) { Debug.LogWarning($"{Tag} 내 순위 조회 실패: {me.ErrorCode}"); return; }
+        if (!me.Data.Registered)
+        {
+            Debug.Log($"{Tag} 아직 기록이 없습니다. 4번으로 점수를 먼저 올리세요.");
+            return;
+        }
+
+        var row = Supabase.ToRow<ArenaLeaderboard.Row>(me.Data);   // 서버 현재값으로 채워짐
+        row.CharLevel = Random.Range(1, 100);                       // 바꿀 필드만 수정
+
+        var r = await Supabase.SetRowAsync(row);
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 데이터 수정 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 추가 데이터를 수정했습니다. 5번으로 확인하세요.");

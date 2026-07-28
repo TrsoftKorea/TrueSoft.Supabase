@@ -1,4 +1,4 @@
-namespace TrueBase.Core.Common
+﻿namespace TrueBase.Core.Common
 {
     /// <summary>
     /// <see cref="SupabaseResult.Reason"/>의 실패 사유 코드(enum). <see cref="SupabaseResult.ErrorCode"/> 문자열에서 매핑됩니다.
@@ -87,6 +87,7 @@ namespace TrueBase.Core.Common
         LeaderboardScoreNotFound,
         LeaderboardColumnNotAllowed,
         LeaderboardRowRequired,
+        LeaderboardRowNotLoaded,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -167,6 +168,7 @@ namespace TrueBase.Core.Common
             SupabaseErrorCode.LeaderboardScoreNotFound => SupabaseReason.LeaderboardScoreNotFound,
             SupabaseErrorCode.LeaderboardColumnNotAllowed => SupabaseReason.LeaderboardColumnNotAllowed,
             SupabaseErrorCode.LeaderboardRowRequired => SupabaseReason.LeaderboardRowRequired,
+            SupabaseErrorCode.LeaderboardRowNotLoaded => SupabaseReason.LeaderboardRowNotLoaded,
             _ => SupabaseReason.Unknown,
         };
     }

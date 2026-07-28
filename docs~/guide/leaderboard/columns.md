@@ -59,6 +59,8 @@ TRow Supabase.ToRow<TRow>(LeaderboardPlayerEntry entry)
 
 순위·플레이어 조회 결과의 `.Data`를 생성 타입의 행으로 되돌립니다. 네트워크 호출이 없습니다.
 
+[추가 데이터 수정](./set-player-data)에 넘길 수 있는 행은 이 메서드로 만든 것뿐입니다.
+
 ```csharp
 var result = await Supabase.GetRanksAsync<GuildLeaderboard>(1, 50);
 foreach (var entry in result.Data)

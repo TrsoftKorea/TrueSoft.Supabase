@@ -150,3 +150,4 @@ if (!result.IsSuccess)
 | `LeaderboardScoreNotFound` | 그 회차에 해당 플레이어의 기록이 없습니다 |
 | `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |
 | `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |
+| `LeaderboardRowNotLoaded` | 조회에서 만들지 않은 행입니다. `Supabase.ToRow`로 현재 값을 받아 고쳐서 넘기세요 |
