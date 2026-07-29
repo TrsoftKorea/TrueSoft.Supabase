@@ -6215,7 +6215,481 @@ notify pgrst, 'reload schema';
 
 
 -- #############################################################################
--- 18. 클라이언트 권한 최소화
+-- 18. 채팅
+-- #############################################################################
+
+-- 게임 내 채팅을 제공합니다.
+-- 채널 정의(chat_channels) + 메시지(chat_messages) + 뮤트(chat_mutes) 구조입니다.
+--
+-- 채널은 종류(kind)와 범위(scope_key) 두 축으로 갈립니다. 채널 행은 "정의"일 뿐이고,
+-- 실제로 대화가 갈라지는 단위는 메시지의 scope_key 입니다.
+--   global : scope_key = ''                  누구나 같은 방
+--   server : scope_key = 서버 id             같은 서버끼리
+--   group  : scope_key = 게임이 정한 키       길드·파티 (미구현)
+--   direct : scope_key = 정렬된 계정쌍         귓속말 (미구현)
+-- 서버가 늘어도 채널 행을 추가할 필요가 없습니다.
+--
+-- =============================================================================
+-- 채팅 — chat_channels + chat_messages + chat_mutes + RPC
+-- 선행: 01(game_servers, auth_user_server_id), 02(user_profiles, display_names)
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- chat_channels — 채널 정의. 운영자가 Retool 에서 만들고 설정을 바꾼다.
+--   slow_mode_seconds = 0 이면 도배 제한 없음. 값을 넣으면 그때부터 적용된다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.chat_channels (
+  id                uuid        primary key default gen_random_uuid(),
+  kind              text        not null default 'global',
+  code              text        not null default '',
+  display_name      text        not null default '',
+  is_active         boolean     not null default true,
+  slow_mode_seconds int         not null default 0,
+  max_length        int         not null default 200,
+  retention_days    int         not null default 7,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+alter table public.chat_channels add column if not exists kind              text        not null default 'global';
+alter table public.chat_channels add column if not exists code              text        not null default '';
+alter table public.chat_channels add column if not exists display_name      text        not null default '';
+alter table public.chat_channels add column if not exists is_active         boolean     not null default true;
+alter table public.chat_channels add column if not exists slow_mode_seconds int         not null default 0;
+alter table public.chat_channels add column if not exists max_length        int         not null default 200;
+alter table public.chat_channels add column if not exists retention_days    int         not null default 7;
+alter table public.chat_channels add column if not exists created_at        timestamptz not null default now();
+alter table public.chat_channels add column if not exists updated_at        timestamptz not null default now();
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'chat_channels_kind_chk') then
+    alter table public.chat_channels
+      add constraint chat_channels_kind_chk check (kind in ('global','server','group','direct'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chat_channels_slow_chk') then
+    alter table public.chat_channels
+      add constraint chat_channels_slow_chk check (slow_mode_seconds >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chat_channels_len_chk') then
+    alter table public.chat_channels
+      add constraint chat_channels_len_chk check (max_length between 1 and 4000);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chat_channels_retention_chk') then
+    alter table public.chat_channels
+      add constraint chat_channels_retention_chk check (retention_days > 0);
+  end if;
+end $$;
+
+create unique index if not exists chat_channels_code_uidx on public.chat_channels (code);
+
+comment on table  public.chat_channels is
+  '채팅 채널 정의. 대화가 실제로 갈라지는 단위는 chat_messages.scope_key 다. 서버별 채널을 따로 만들 필요가 없다.';
+comment on column public.chat_channels.slow_mode_seconds is '같은 사람의 연속 발화 최소 간격(초). 0 이면 제한 없음.';
+comment on column public.chat_channels.retention_days    is '메시지 보관 기간(일). 지난 메시지는 크론이 지운다.';
+
+-- ---------------------------------------------------------------------------
+-- chat_messages — 메시지. id 가 조회 커서다.
+--   시각이 아니라 bigserial 을 커서로 쓰는 이유: 같은 시각의 메시지가 겹치면
+--   경계에서 빠뜨리거나 중복해서 받는다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.chat_messages (
+  id         bigserial   primary key,
+  channel_id uuid        not null references public.chat_channels(id) on delete cascade,
+  scope_key  text        not null default '',
+  account_id uuid        not null,
+  user_id    text        not null default '',
+  content    text        not null,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  deleted_by text
+);
+
+alter table public.chat_messages add column if not exists scope_key  text not null default '';
+alter table public.chat_messages add column if not exists user_id    text not null default '';
+alter table public.chat_messages add column if not exists deleted_at timestamptz;
+alter table public.chat_messages add column if not exists deleted_by text;
+
+-- 커서 조회 전용 인덱스. 조회는 항상 (채널, 범위, id > 커서) 형태다.
+create index if not exists chat_messages_cursor_idx  on public.chat_messages (channel_id, scope_key, id);
+create index if not exists chat_messages_account_idx on public.chat_messages (account_id, id desc);
+create index if not exists chat_messages_created_idx on public.chat_messages (created_at);
+
+comment on table public.chat_messages is
+  '채팅 메시지. id 가 조회 커서. scope_key 로 전체·서버·길드·귓속말이 갈린다.';
+comment on column public.chat_messages.scope_key is
+  'global='''' · server=서버 id · group=게임이 정한 키 · direct=정렬된 계정쌍.';
+
+-- ---------------------------------------------------------------------------
+-- chat_mutes — 발화 차단. channel_id 가 null 이면 전 채널.
+--   도배 제한(slow_mode)을 끈 상태에서 악용을 막는 실질적인 수단이다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.chat_mutes (
+  id         bigserial   primary key,
+  account_id uuid        not null,
+  channel_id uuid        references public.chat_channels(id) on delete cascade,
+  until      timestamptz not null,
+  reason     text        not null default '',
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists chat_mutes_lookup_idx on public.chat_mutes (account_id, until desc);
+
+comment on table public.chat_mutes is '채팅 발화 차단. channel_id 가 null 이면 모든 채널에 적용된다.';
+
+-- ---------------------------------------------------------------------------
+-- 권한 — 클라이언트 직접 접근 없음. 발송·조회는 RPC 로만.
+--   메시지를 테이블로 직접 열면 삭제된 메시지·다른 서버 대화가 새어 나간다.
+-- ---------------------------------------------------------------------------
+alter table public.chat_channels enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_mutes    enable row level security;
+
+revoke all on table public.chat_channels from anon, authenticated;
+revoke all on table public.chat_messages from anon, authenticated;
+revoke all on table public.chat_mutes    from anon, authenticated;
+
+
+-- =============================================================================
+-- 내부 헬퍼
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_scope_key — 채널 종류에 맞는 내 범위 키를 만든다.
+--   호출자가 범위를 지정하지 못하게 서버에서 계산한다. 클라이언트가 넘기면
+--   다른 서버 대화에 끼어들 수 있다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_chat_scope_key(p_kind text, p_uid uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_server uuid;
+begin
+  if p_kind = 'global' then
+    return '';
+  elsif p_kind = 'server' then
+    select server_id into v_server from public.user_profiles where account_id = p_uid;
+    if v_server is null then
+      raise exception 'chat_scope_unavailable';
+    end if;
+    return v_server::text;
+  end if;
+
+  -- group·direct 는 아직 구현하지 않았다. 채널 종류를 바꾸면 여기부터 손댄다.
+  raise exception 'chat_kind_unsupported: %', p_kind;
+end;
+$$;
+
+comment on function public.ts_chat_scope_key(text, uuid) is
+  '채널 종류별 범위 키. 클라이언트가 지정하지 못하도록 서버에서 계산한다.';
+
+revoke all on function public.ts_chat_scope_key(text, uuid) from public, anon, authenticated;
+
+
+-- =============================================================================
+-- 클라이언트 RPC
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_send — 메시지 발송.
+--   실패 사유: chat_channel_not_found · chat_channel_inactive · chat_muted
+--              chat_message_empty · chat_message_too_long · chat_too_fast
+-- ---------------------------------------------------------------------------
+drop function if exists public.ts_chat_send(text, text);
+
+create or replace function public.ts_chat_send(p_code text, p_content text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_user   text;
+  c        public.chat_channels%rowtype;
+  v_scope  text;
+  v_text   text;
+  v_last   timestamptz;
+  v_id     bigint;
+  v_at     timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into c from public.chat_channels where code = btrim(coalesce(p_code, ''));
+  if not found then
+    raise exception 'chat_channel_not_found';
+  end if;
+  if not c.is_active then
+    raise exception 'chat_channel_inactive';
+  end if;
+
+  v_text := btrim(coalesce(p_content, ''));
+  if v_text = '' then
+    raise exception 'chat_message_empty';
+  end if;
+  if char_length(v_text) > c.max_length then
+    raise exception 'chat_message_too_long';
+  end if;
+
+  if exists (
+    select 1 from public.chat_mutes m
+     where m.account_id = v_uid
+       and m.until > now()
+       and (m.channel_id is null or m.channel_id = c.id)
+  ) then
+    raise exception 'chat_muted';
+  end if;
+
+  v_scope := public.ts_chat_scope_key(c.kind, v_uid);
+
+  -- 도배 제한은 값이 설정된 채널에서만 동작한다. 기본값 0 = 제한 없음.
+  if c.slow_mode_seconds > 0 then
+    select max(created_at) into v_last
+      from public.chat_messages
+     where channel_id = c.id and scope_key = v_scope and account_id = v_uid;
+    if v_last is not null and v_last > now() - make_interval(secs => c.slow_mode_seconds) then
+      raise exception 'chat_too_fast';
+    end if;
+  end if;
+
+  select user_id into v_user from public.user_profiles where account_id = v_uid;
+
+  insert into public.chat_messages (channel_id, scope_key, account_id, user_id, content)
+  values (c.id, v_scope, v_uid, coalesce(v_user, v_uid::text), v_text)
+  returning id, created_at into v_id, v_at;
+
+  return jsonb_build_object('id', v_id, 'created_at', v_at);
+end;
+$$;
+
+comment on function public.ts_chat_send(text, text) is
+  '채팅 발송. 채널 상태·길이·뮤트·도배를 검사한 뒤 저장한다. 범위는 서버가 계산한다.';
+
+revoke all on function public.ts_chat_send(text, text) from public, anon;
+grant execute on function public.ts_chat_send(text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_fetch — 커서 이후 메시지를 오래된 순으로 돌려준다.
+--   p_after_id = 0 이면 최근 p_limit 개를 준다(첫 진입).
+--   삭제된 메시지는 내용 없이 deleted 로 표시해 내려보낸다 — 클라이언트가
+--   이미 표시 중인 말풍선을 지울 수 있어야 하기 때문이다.
+-- ---------------------------------------------------------------------------
+drop function if exists public.ts_chat_fetch(text, bigint, int);
+
+create or replace function public.ts_chat_fetch(p_code text, p_after_id bigint default 0, p_limit int default 50)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  c       public.chat_channels%rowtype;
+  v_scope text;
+  v_limit int;
+  v_rows  jsonb;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into c from public.chat_channels where code = btrim(coalesce(p_code, ''));
+  if not found then
+    raise exception 'chat_channel_not_found';
+  end if;
+
+  v_scope := public.ts_chat_scope_key(c.kind, v_uid);
+  v_limit := least(greatest(coalesce(p_limit, 50), 1), 200);
+
+  if coalesce(p_after_id, 0) <= 0 then
+    -- 첫 진입: 최근 것부터 잘라 온 뒤 오래된 순으로 되돌린다.
+    select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
+    from (
+      select m.id, m.account_id, m.user_id, dn.display_name,
+             case when m.deleted_at is null then m.content else null end as content,
+             (m.deleted_at is not null) as deleted, m.created_at
+        from public.chat_messages m
+        left join public.display_names dn on dn.account_id = m.account_id
+       where m.channel_id = c.id and m.scope_key = v_scope
+       order by m.id desc
+       limit v_limit
+    ) t;
+  else
+    select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
+    from (
+      select m.id, m.account_id, m.user_id, dn.display_name,
+             case when m.deleted_at is null then m.content else null end as content,
+             (m.deleted_at is not null) as deleted, m.created_at
+        from public.chat_messages m
+        left join public.display_names dn on dn.account_id = m.account_id
+       where m.channel_id = c.id and m.scope_key = v_scope and m.id > p_after_id
+       order by m.id
+       limit v_limit
+    ) t;
+  end if;
+
+  return jsonb_build_object('messages', v_rows, 'max_length', c.max_length, 'is_active', c.is_active);
+end;
+$$;
+
+comment on function public.ts_chat_fetch(text, bigint, int) is
+  '커서 이후 채팅을 오래된 순으로 반환. after_id=0 이면 최근 limit 개. 삭제분은 내용 없이 표시만.';
+
+revoke all on function public.ts_chat_fetch(text, bigint, int) from public, anon;
+grant execute on function public.ts_chat_fetch(text, bigint, int) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_channels — 내가 쓸 수 있는 채널 목록.
+-- ---------------------------------------------------------------------------
+drop function if exists public.ts_chat_channels();
+
+create or replace function public.ts_chat_channels()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'code', code, 'kind', kind, 'display_name', display_name,
+             'max_length', max_length, 'slow_mode_seconds', slow_mode_seconds)
+           order by code)
+      from public.chat_channels
+     where is_active and kind in ('global','server')
+  ), '[]'::jsonb);
+end;
+$$;
+
+comment on function public.ts_chat_channels() is '사용 가능한 채팅 채널 목록. 비활성 채널은 제외.';
+
+revoke all on function public.ts_chat_channels() from public, anon;
+grant execute on function public.ts_chat_channels() to authenticated;
+
+
+-- =============================================================================
+-- 운영자 RPC (service_role 전용)
+-- =============================================================================
+
+drop function if exists public.ts_admin_chat_delete_message(bigint, text);
+
+create or replace function public.ts_admin_chat_delete_message(p_id bigint, p_by text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.chat_messages
+     set deleted_at = now(), deleted_by = p_by
+   where id = p_id and deleted_at is null;
+  if not found then
+    raise exception 'chat_message_not_found';
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_chat_delete_message(bigint, text) is
+  '메시지 숨김(어드민). 행은 남기고 표시만 지운다 — 신고 처리 이력을 위해서다.';
+
+revoke all on function public.ts_admin_chat_delete_message(bigint, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_chat_delete_message(bigint, text) to service_role;
+
+drop function if exists public.ts_admin_chat_mute(uuid, uuid, int, text, text);
+
+create or replace function public.ts_admin_chat_mute(
+  p_account_id uuid,
+  p_channel_id uuid default null,
+  p_minutes    int  default 60,
+  p_reason     text default '',
+  p_by         text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(p_minutes, 0) <= 0 then
+    raise exception 'invalid_mute_minutes';
+  end if;
+
+  insert into public.chat_mutes (account_id, channel_id, until, reason, created_by)
+  values (p_account_id, p_channel_id, now() + make_interval(mins => p_minutes), coalesce(p_reason, ''), p_by);
+end;
+$$;
+
+comment on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) is
+  '채팅 발화 차단(어드민). channel_id 가 null 이면 전 채널.';
+
+revoke all on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_cleanup — 보존 기간이 지난 메시지 삭제. 크론이 부른다.
+-- ---------------------------------------------------------------------------
+drop function if exists public.ts_chat_cleanup();
+
+create or replace function public.ts_chat_cleanup()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_n int := 0; v_d int;
+begin
+  for v_d in select distinct retention_days from public.chat_channels loop
+    with x as (
+      delete from public.chat_messages m
+       using public.chat_channels c
+       where c.id = m.channel_id
+         and c.retention_days = v_d
+         and m.created_at < now() - make_interval(days => v_d)
+      returning 1
+    )
+    select v_n + count(*) into v_n from x;
+  end loop;
+  return v_n;
+end;
+$$;
+
+comment on function public.ts_chat_cleanup() is '보존 기간이 지난 채팅 메시지 삭제. cron 이 호출한다.';
+
+revoke all on function public.ts_chat_cleanup() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('ts_chat_cleanup') where exists (select 1 from cron.job where jobname = 'ts_chat_cleanup');
+    perform cron.schedule('ts_chat_cleanup', '17 4 * * *', $cron$ select public.ts_chat_cleanup(); $cron$);
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 기본 채널 — 없을 때만 만든다. 운영자가 Retool 에서 이름·설정을 바꾼다.
+-- ---------------------------------------------------------------------------
+insert into public.chat_channels (kind, code, display_name, max_length, retention_days)
+values ('global', 'shout',  '외치기',   100, 3),
+       ('server', 'server', '서버 채팅', 200, 7)
+on conflict (code) do nothing;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 19. 클라이언트 권한 최소화
 -- #############################################################################
 
 -- 클라이언트 롤(anon·authenticated)의 테이블·함수 권한을 실제로 필요한 범위까지 좁힙니다.
@@ -6323,6 +6797,11 @@ grant execute on function public.ts_leaderboard_delete_my_score(text, int)      
 -- 클래스 생성기 전용(무인증). 등록 컬럼의 이름+타입만 노출(민감정보 아님) → anon 도 허용.
 grant execute on function public.ts_leaderboard_columns_meta(text)                    to anon, authenticated;
 grant execute on function public.ts_leaderboard_list_meta()                           to anon, authenticated;
+
+-- 채팅
+grant execute on function public.ts_chat_send(text, text)                             to authenticated;
+grant execute on function public.ts_chat_fetch(text, bigint, int)                     to authenticated;
+grant execute on function public.ts_chat_channels()                                   to authenticated;
 
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
