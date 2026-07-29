@@ -48,6 +48,7 @@ if (result.Reason == SupabaseReason.UserBanned)
 - [**우편함**<br><small>목록 · 수령 · 삭제 · 분류</small>](/guide/api/mailbox)
 - [**리더보드**<br><small>순위 조회 · 점수 기록 · 회차</small>](/guide/api/leaderboard)
 - [**쿠폰**<br><small>코드 사용 · 우편 보상</small>](/guide/api/coupon)
+- [**채팅**<br><small>채널 구독 · 발송</small>](/guide/api/chat)
 - [**기타**<br><small>서버 시간</small>](/guide/api/etc)
 - [**에러 코드**<br><small>SupabaseReason 카탈로그</small>](/guide/api/fail-reasons)
 

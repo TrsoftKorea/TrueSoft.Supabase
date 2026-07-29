@@ -12,6 +12,9 @@ using UnityEngine;
 /// 리더보드는 코드 문자열이 아니라 <b>타입</b>으로 지정합니다:
 /// <c>Supabase.SubmitScoreAsync&lt;ArenaLeaderboard&gt;(1250)</c>
 ///
+/// 샘플을 여러 개 함께 쓰면 단축키가 겹칩니다. 그때는 <b>Tab</b> 으로 키를 받을 샘플을 고르세요.
+/// 씬에 샘플이 하나뿐이면 그냥 눌러도 됩니다.
+///
 /// 키보드 단축키 (Play Mode):
 ///   1 — 익명 로그인
 ///   2 — 리더보드 목록 조회
@@ -32,6 +35,9 @@ public sealed class SampleLeaderboard : MonoBehaviour
 
     private void Update()
     {
+        // 여러 샘플을 한 씬에 놓으면 단축키가 겹친다. Tab 으로 고른 대상만 키를 읽는다.
+        if (!SampleFocus.IsActive(this)) return;
+
         if (Input.GetKeyDown(KeyCode.Alpha1)) _ = SignInAsync();
         if (Input.GetKeyDown(KeyCode.Alpha2)) _ = ListLeaderboardsAsync();
         if (Input.GetKeyDown(KeyCode.Alpha3)) _ = ShowLeaderboardAsync();

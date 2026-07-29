@@ -15,6 +15,9 @@ using UnityEngine;
 /// 씬 시작 시 저장된 세션으로 자동 로그인을 시도합니다 (Start → TriggerAutoLoginAsync).
 /// 로그인 성공 여부는 HandleAutoLoginCompleted 콜백으로 전달됩니다.
 ///
+/// 샘플을 여러 개 함께 쓰면 단축키가 겹칩니다. 그때는 <b>Tab</b> 으로 키를 받을 샘플을 고르세요.
+/// 씬에 샘플이 하나뿐이면 그냥 눌러도 됩니다.
+///
 /// 키보드 단축키 (Play Mode):
 ///   Q — 익명 로그인
 ///   I — Google 로그인      P — Google 연동        K — Google 연동 해제
@@ -426,6 +429,9 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     private void Update()
     {
+        // 여러 샘플을 한 씬에 놓으면 단축키가 겹친다. Tab 으로 고른 대상만 키를 읽는다.
+        if (!SampleFocus.IsActive(this)) return;
+
         if (Input.GetKeyDown(KeyCode.Q)) _ = SignInAnonymouslyAsync();
         if (Input.GetKeyDown(KeyCode.I)) _ = SignInWithGoogleAsync();
         if (Input.GetKeyDown(KeyCode.P)) _ = LinkGoogleAsync();

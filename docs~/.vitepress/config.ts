@@ -207,6 +207,16 @@ export default defineConfig({
               { text: '쿠폰 사용', link: '/guide/coupon/redeem' }
             ]
           },
+          {
+            text: '채팅',
+            link: '/guide/chat/',
+            collapsed: true,
+            items: [
+              { text: '채널 목록 조회', link: '/guide/chat/channels' },
+              { text: '채널 구독', link: '/guide/chat/subscribe' },
+              { text: '메시지 발송', link: '/guide/chat/send' }
+            ]
+          },
           { text: '서버 시간', link: '/guide/server-time' }
         ]
       },
@@ -244,6 +254,7 @@ export default defineConfig({
           { text: '우편함', link: '/guide/api/mailbox' },
           { text: '리더보드', link: '/guide/api/leaderboard' },
           { text: '쿠폰', link: '/guide/api/coupon' },
+          { text: '채팅', link: '/guide/api/chat' },
           { text: '기타', link: '/guide/api/etc' },
           { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]

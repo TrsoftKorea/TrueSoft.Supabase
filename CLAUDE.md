@@ -34,7 +34,7 @@ The SDK has three layers:
 - `Abstractions/` — `ISupabaseHttpClient`, `ISupabaseJsonSerializer` interfaces
 - `Auth/` — `SupabaseAuthService`, `SupabaseAnonymousRecoveryService`, `SupabaseSessionChangeKind`
 - `Config/` — `SupabaseOptions` (project URL, keys, table names, defaults)
-- `Data/` — individual REST services (`SupabaseUserDataService`, `SupabaseRemoteConfigService`, `SupabaseChatService`, `SupabaseMailboxService`, `SupabaseEdgeFunctionsService`, `SupabasePublicProfileService`, `SupabaseServerTimeService`, `SupabaseUserSessionService`)
+- `Data/` — individual REST services (`SupabaseUserDataService`, `SupabaseRemoteConfigService`, `SupabaseMailboxService`, `SupabaseLeaderboardService`, `SupabaseCouponService`, `SupabaseChatService`, `SupabaseEdgeFunctionsService`, `SupabasePublicProfileService`, `SupabaseServerTimeService`, `SupabaseUserSessionService`)
 - `Models/` — `SupabaseSession`, `SupabaseUser`, `SupabaseResult<T>`
 
 **Unity** (`Runtime/Unity/`) — Unity-specific wrappers:
@@ -43,7 +43,7 @@ The SDK has three layers:
 - `Config/SupabaseSettings.cs` — ScriptableObject for static values (URL, keys, table names). Must be saved to `Assets/Resources/SupabaseSettings.asset`.
 - `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: RemoteConfig per-key polling, UserSave auto-sync. **로그인은 자동 실행되지 않음** — 개발자가 `Supabase.TriggerAutoLoginAsync()` 또는 직접 로그인 API를 원하는 타이밍에 호출. `public class` (non-sealed), `protected virtual Awake()` — 상속 가능. Optional but recommended.
 - `Config/SupabaseUnityBootstrap.cs` — Auto-bootstraps from `Resources/SupabaseSettings` if no scene-placed runtime is present. Async APIs internally await initialization.
-- Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `ChatChannelFacade`, `ServerFunctionsFacade`) — high-level auto-sync wrappers
+- Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `LeaderboardFacade`, `CouponFacade`, `ChatFacade`, `ServerFunctionsFacade`) — high-level wrappers. `ChatFacade`는 구독 폴링(`ChatSubscription`)까지 들고 있다
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
 - `Auth/Google/` — `GoogleLoginBridge`, `AndroidGoogleLoginProvider` for Play Services OAuth
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
@@ -122,7 +122,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 스키마 전체가 `Samples~/DatabaseSetup/SQL/player/install.sql` 한 파일에 있습니다. Supabase SQL Editor에 붙여넣고 한 번 실행하면 설치가 끝납니다. `verify.sql`은 설치 검증용입니다.
 
-절 구성은 다음과 같습니다. 1~17은 기능별 스키마이고 **18은 반드시 마지막**입니다.
+절 구성은 다음과 같습니다. 1~18은 기능별 스키마이고 **19는 반드시 마지막**입니다.
 
 1. 게임 서버 — game_servers + ts_default_server_id + ts_server_now
 2. 플레이어 프로필 — user_profiles + display_names + user_sessions
@@ -141,11 +141,12 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
 16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음
 17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem
-18. 클라이언트 권한 최소화 — anon·authenticated 테이블·함수 권한 회수 후 허용 목록만 부여
+18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many
+19. 클라이언트 권한 최소화 — anon·authenticated 테이블·함수 권한 회수 후 허용 목록만 부여
 
-**18절은 앞 절에서 만든 함수를 이름으로 grant 하므로 순서를 바꾸면 "함수가 없다"며 실패합니다.** 또 Supabase 기본 권한은 새 테이블마다 anon·authenticated에 ALL(TRUNCATE 포함)을 부여하고 TRUNCATE는 RLS를 우회하므로, 이 절이 `ALTER DEFAULT PRIVILEGES`로 **기본 권한 자체를 차단**합니다.
+**19절은 앞 절에서 만든 함수를 이름으로 grant 하므로 순서를 바꾸면 "함수가 없다"며 실패합니다.** 또 Supabase 기본 권한은 새 테이블마다 anon·authenticated에 ALL(TRUNCATE 포함)을 부여하고 TRUNCATE는 RLS를 우회하므로, 이 절이 `ALTER DEFAULT PRIVILEGES`로 **기본 권한 자체를 차단**합니다.
 
-**새 테이블·함수를 추가할 때**는 권한이 없는 상태로 생성되므로, 클라이언트 접근이 필요하면 해당 절에서 `grant select ... to authenticated` / `grant execute on function ... to authenticated`처럼 필요한 권한만 명시합니다. RLS 정책만 만들고 grant를 빠뜨리면 PostgREST가 권한 오류를 냅니다. 클라이언트에 여는 함수라면 18절의 허용 목록에도 추가하세요.
+**새 테이블·함수를 추가할 때**는 권한이 없는 상태로 생성되므로, 클라이언트 접근이 필요하면 해당 절에서 `grant select ... to authenticated` / `grant execute on function ... to authenticated`처럼 필요한 권한만 명시합니다. RLS 정책만 만들고 grant를 빠뜨리면 PostgREST가 권한 오류를 냅니다. 클라이언트에 여는 함수라면 19절의 허용 목록에도 추가하세요.
 
 **DB를 고칠 때는 MCP 적용과 `install.sql` 수정을 항상 한 세트로** 합니다. 파일을 "최초 설치 전용"으로 취급해 갱신을 미루면 파일과 라이브 DB가 갈라지고, 그 차이는 다음 신규 프로젝트에서야 드러납니다(실제로 `mails.localized`·`ts_coupon_redeem`에서 두 번 발생).
 

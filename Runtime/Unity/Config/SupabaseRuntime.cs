@@ -85,6 +85,7 @@ namespace TrueBase.Unity.Config
 
             SupabaseSDK.TickUserSaveAutoSync(Time.realtimeSinceStartup);
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
+            SupabaseSDK.TickChatPolls(Time.realtimeSinceStartup);
             SupabaseSDK.TickSessionRefresh(Time.realtimeSinceStartup);
         }
 

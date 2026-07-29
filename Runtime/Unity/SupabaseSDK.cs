@@ -49,6 +49,8 @@ namespace TrueBase.Unity
         private static MailboxFacade _mailbox;
         private static LeaderboardFacade _leaderboard;
         private static CouponFacade _coupon;
+        private static ChatFacade _chat;
+        private static Task _chatTickTask;
         private static RemoteConfigFacade _remoteConfig;
         private static ServerFunctionsFacade _functions;
         private static string _initializedProjectUrl;
@@ -261,6 +263,8 @@ namespace TrueBase.Unity
             public const string LeaderboardSetPlayerData = "Supabase.Leaderboard.SetPlayerData";
             public const string LeaderboardDeleteMyScore = "Supabase.Leaderboard.DeleteMyScore";
             public const string CouponRedeem = "Supabase.Coupon.Redeem";
+            public const string ChatChannels = "Supabase.Chat.Channels";
+            public const string ChatSend = "Supabase.Chat.Send";
         }
 
         /// <summary>
@@ -275,6 +279,21 @@ namespace TrueBase.Unity
                 return;
 
             _remoteConfigKeyPollTickTask = RemoteConfig.TickKeyPollsAsync(realtimeSinceStartup);
+        }
+
+        /// <summary>
+        /// 만기된 채팅 구독만 조회합니다. <see cref="SupabaseRuntime.Update"/> 등에서 호출하세요.
+        /// 구독이 없으면 아무 일도 하지 않습니다.
+        /// </summary>
+        public static void TickChatPolls(float realtimeSinceStartup)
+        {
+            if (!IsInitialized || _chat == null)
+                return;
+
+            if (_chatTickTask != null && !_chatTickTask.IsCompleted)
+                return;
+
+            _chatTickTask = _chat.TickAsync(realtimeSinceStartup);
         }
 
         private static bool  _isRefreshingSession;
@@ -1792,6 +1811,19 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>채팅(발송·구독 RPC). 채널 관리와 메시지 숨김·차단은 운영 전용입니다.</summary>
+        public static ChatFacade Chat
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _chat ??= new ChatFacade(_bootstrap.ChatService, () => _currentSession);
+            }
+        }
+
         /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
@@ -2067,6 +2099,40 @@ namespace TrueBase.Unity
             var r = await RedeemCouponAsync(code);
             LogApiResult(ApiLogTags.CouponRedeem, r.IsSuccess, r.ErrorCode);
             return r;
+        }
+
+        /// <summary><c>ts_chat_channels</c> — 사용 가능한 채팅 채널. 기본은 캐시에서 돌려줍니다.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatChannelInfo>>> GetChatChannelsAsync(bool forceRefresh = false)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<ChatChannelInfo>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.GetChannelsAsync(forceRefresh);
+        }
+
+        /// <summary><c>ts_chat_send</c> — 메시지 발송. 길이·차단·연속 발화는 서버가 검사합니다.</summary>
+        public static async Task<SupabaseResult<ChatSendResult>> SendChatAsync(string channelCode, string content)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<ChatSendResult>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.SendAsync(channelCode, content);
+        }
+
+        /// <inheritdoc cref="GetChatChannelsAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatChannelInfo>>> TryGetChatChannelsAsync(bool forceRefresh = false)
+        {
+            var r = await GetChatChannelsAsync(forceRefresh);
+            return LogAndReturnResult(ApiLogTags.ChatChannels, r);
+        }
+
+        /// <inheritdoc cref="SendChatAsync"/>
+        public static async Task<SupabaseResult<ChatSendResult>> TrySendChatAsync(string channelCode, string content)
+        {
+            var r = await SendChatAsync(channelCode, content);
+            return LogAndReturnResult(ApiLogTags.ChatSend, r);
         }
 
         /// <inheritdoc cref="GetUnclaimedMailCountAsync"/>
@@ -2885,6 +2951,8 @@ namespace TrueBase.Unity
             _mailbox = null;
             _leaderboard = null;
             _coupon = null;
+            _chat?.Reset();
+            _chat = null;
             _remoteConfig = null;
             _functions = null;
 

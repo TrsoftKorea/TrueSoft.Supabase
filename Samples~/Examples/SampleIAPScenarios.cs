@@ -7,6 +7,9 @@ using UnityEngine;
 /// Supabase IAP 서버 검증 예제 컴포넌트.
 /// SupabaseRuntime이 씬에 있어야 하며, 로그인(수동 또는 세션 복원) 후 IAP를 자동 초기화합니다.
 ///
+/// 샘플을 여러 개 함께 쓰면 단축키가 겹칩니다. 그때는 <b>Tab</b> 으로 키를 받을 샘플을 고르세요.
+/// 씬에 샘플이 하나뿐이면 그냥 눌러도 됩니다.
+///
 /// 키보드 단축키 (Play Mode):
 ///   M — 아이템 구매 (IAP 초기화 완료 후 동작)
 ///
@@ -51,6 +54,10 @@ public sealed class SampleIAPScenarios : MonoBehaviour
             _initializationAttempted = true;
             _ = InitializeIAPAsync();
         }
+
+        // 자동 초기화는 위에서 이미 끝냈다. 키 입력만 포커스 대상일 때 받는다.
+        // 여러 샘플을 한 씬에 놓으면 단축키가 겹치기 때문이다.
+        if (!SampleFocus.IsActive(this)) return;
 
         if (Input.GetKeyDown(KeyCode.M)) StartPurchase();
     }

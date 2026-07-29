@@ -14,6 +14,9 @@ using UnityEngine;
 /// 키 2~8로 조회·수령·삭제를 확인하세요. Inspector의 Demo Category·Demo Item Key를 발송한
 /// 값과 맞춰야 분류 필터·수령 데모가 의미 있게 동작합니다.
 ///
+/// 샘플을 여러 개 함께 쓰면 단축키가 겹칩니다. 그때는 <b>Tab</b> 으로 키를 받을 샘플을 고르세요.
+/// 씬에 샘플이 하나뿐이면 그냥 눌러도 됩니다.
+///
 /// 키보드 단축키 (Play Mode):
 ///   1 — 익명 로그인 + account_id/user_id 출력(발송 대상 확인)
 ///   2 — 전체 목록 조회        3 — 분류 필터 조회(Demo Category)
@@ -41,6 +44,9 @@ public sealed class SampleMailbox : MonoBehaviour
 
     private void Update()
     {
+        // 여러 샘플을 한 씬에 놓으면 단축키가 겹친다. Tab 으로 고른 대상만 키를 읽는다.
+        if (!SampleFocus.IsActive(this)) return;
+
         if (Input.GetKeyDown(KeyCode.Alpha1)) _ = SignInAndPrintIdAsync();
         if (Input.GetKeyDown(KeyCode.Alpha2)) _ = ListAsync(null);
         if (Input.GetKeyDown(KeyCode.Alpha3)) _ = ListAsync(demoCategory);

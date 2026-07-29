@@ -7,6 +7,9 @@ using UnityEngine;
 /// 자동 확장 2D 컬렉션(<see cref="AutoList2D{T}"/> / <see cref="AutoDict2D{TKey1,TKey2,TValue}"/>) 사용 예제.
 /// 네트워크·로그인·설정 불필요 — 빈 GameObject에 이 컴포넌트만 붙이고 Play 후 키를 누르면 Console에 결과가 찍힙니다.
 ///
+/// 샘플을 여러 개 함께 쓰면 단축키가 겹칩니다. 그때는 <b>Tab</b> 으로 키를 받을 샘플을 고르세요.
+/// 씬에 샘플이 하나뿐이면 그냥 눌러도 됩니다.
+///
 /// 키보드 단축키 (Play Mode):
 ///   1 — AutoList2D 데모   (스테이지 × 웨이브 최고점수)
 ///   2 — AutoDict2D 데모   (지역 × 몬스터 처치수)
@@ -45,6 +48,9 @@ public sealed class SampleAutoCollections : MonoBehaviour
 
     private void Update()
     {
+        // 여러 샘플을 한 씬에 놓으면 단축키가 겹친다. Tab 으로 고른 대상만 키를 읽는다.
+        if (!SampleFocus.IsActive(this)) return;
+
         if (Input.GetKeyDown(KeyCode.Alpha1)) DemoList2D();
         if (Input.GetKeyDown(KeyCode.Alpha2)) DemoDict2D();
         if (Input.GetKeyDown(KeyCode.Alpha3)) DemoSaveLoad();

@@ -6297,28 +6297,32 @@ create table if not exists public.chat_messages (
   id         bigserial   primary key,
   channel_id uuid        not null references public.chat_channels(id) on delete cascade,
   scope_key  text        not null default '',
-  account_id uuid        not null,
-  user_id    text        not null default '',
-  content    text        not null,
-  created_at timestamptz not null default now(),
-  deleted_at timestamptz,
-  deleted_by text
+  account_id   uuid        not null,
+  user_id      text        not null default '',
+  display_name text        not null default '',
+  content      text        not null,
+  created_at   timestamptz not null default now(),
+  deleted_at   timestamptz,
+  deleted_by   text
 );
 
-alter table public.chat_messages add column if not exists scope_key  text not null default '';
-alter table public.chat_messages add column if not exists user_id    text not null default '';
-alter table public.chat_messages add column if not exists deleted_at timestamptz;
-alter table public.chat_messages add column if not exists deleted_by text;
+alter table public.chat_messages add column if not exists scope_key    text not null default '';
+alter table public.chat_messages add column if not exists user_id      text not null default '';
+alter table public.chat_messages add column if not exists display_name text not null default '';
+alter table public.chat_messages add column if not exists deleted_at   timestamptz;
+alter table public.chat_messages add column if not exists deleted_by   text;
 
--- 커서 조회 전용 인덱스. 조회는 항상 (채널, 범위, id > 커서) 형태다.
+-- 쓰기가 잦은 테이블이라 인덱스를 최소로 둔다.
+--   커서 조회는 항상 (채널, 범위, id > 커서) 형태고, 정리 작업은 채널별 created_at 범위다.
 create index if not exists chat_messages_cursor_idx  on public.chat_messages (channel_id, scope_key, id);
-create index if not exists chat_messages_account_idx on public.chat_messages (account_id, id desc);
-create index if not exists chat_messages_created_idx on public.chat_messages (created_at);
+create index if not exists chat_messages_cleanup_idx on public.chat_messages (channel_id, created_at);
 
 comment on table public.chat_messages is
   '채팅 메시지. id 가 조회 커서. scope_key 로 전체·서버·길드·귓속말이 갈린다.';
 comment on column public.chat_messages.scope_key is
   'global='''' · server=서버 id · group=게임이 정한 키 · direct=정렬된 계정쌍.';
+comment on column public.chat_messages.display_name is
+  '발화 시점의 닉네임 스냅샷. 개명해도 과거 대화는 그때 이름으로 남는다. 조회에서 조인을 없애려는 목적도 있다.';
 
 -- ---------------------------------------------------------------------------
 -- chat_mutes — 발화 차단. channel_id 가 null 이면 전 채널.
@@ -6410,6 +6414,7 @@ as $$
 declare
   v_uid    uuid := auth.uid();
   v_user   text;
+  v_name   text;
   c        public.chat_channels%rowtype;
   v_scope  text;
   v_text   text;
@@ -6458,10 +6463,11 @@ begin
     end if;
   end if;
 
-  select user_id into v_user from public.user_profiles where account_id = v_uid;
+  select user_id into v_user from public.user_profiles  where account_id = v_uid;
+  select display_name into v_name from public.display_names where account_id = v_uid;
 
-  insert into public.chat_messages (channel_id, scope_key, account_id, user_id, content)
-  values (c.id, v_scope, v_uid, coalesce(v_user, v_uid::text), v_text)
+  insert into public.chat_messages (channel_id, scope_key, account_id, user_id, display_name, content)
+  values (c.id, v_scope, v_uid, coalesce(v_user, v_uid::text), coalesce(v_name, ''), v_text)
   returning id, created_at into v_id, v_at;
 
   return jsonb_build_object('id', v_id, 'created_at', v_at);
@@ -6475,14 +6481,18 @@ revoke all on function public.ts_chat_send(text, text) from public, anon;
 grant execute on function public.ts_chat_send(text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_chat_fetch — 커서 이후 메시지를 오래된 순으로 돌려준다.
---   p_after_id = 0 이면 최근 p_limit 개를 준다(첫 진입).
+-- ts_chat_fetch_many — 여러 채널을 한 번에 커서 조회.
+--   {"shout": 120, "server": 87} 를 받아 {"shout": [...], "server": [...]} 로 돌려준다.
+--   채널마다 따로 부르면 폴링 요청이 채널 수만큼 늘어나므로 한 번에 묶는다.
+--   after_id 가 0 이면 그 채널의 최근 p_limit 개를 준다(첫 진입).
+--   채널 설정(max_length 등)은 싣지 않는다 — 정적인 값이라 ts_chat_channels 로 한 번만 받는다.
 --   삭제된 메시지는 내용 없이 deleted 로 표시해 내려보낸다 — 클라이언트가
 --   이미 표시 중인 말풍선을 지울 수 있어야 하기 때문이다.
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_chat_fetch(text, bigint, int);
+drop function if exists public.ts_chat_fetch_many(jsonb, int);
 
-create or replace function public.ts_chat_fetch(p_code text, p_after_id bigint default 0, p_limit int default 50)
+create or replace function public.ts_chat_fetch_many(p_cursors jsonb, p_limit int default 50)
 returns jsonb
 language plpgsql
 stable
@@ -6490,60 +6500,84 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid   uuid := auth.uid();
-  c       public.chat_channels%rowtype;
-  v_scope text;
-  v_limit int;
-  v_rows  jsonb;
+  v_uid        uuid := auth.uid();
+  v_limit      int;
+  v_server     uuid;
+  v_server_got boolean := false;
+  v_out        jsonb := '{}'::jsonb;
+  v_code       text;
+  v_after      bigint;
+  c            public.chat_channels%rowtype;
+  v_scope      text;
+  v_rows       jsonb;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
   end if;
-
-  select * into c from public.chat_channels where code = btrim(coalesce(p_code, ''));
-  if not found then
-    raise exception 'chat_channel_not_found';
+  if p_cursors is null or jsonb_typeof(p_cursors) <> 'object' then
+    raise exception 'chat_cursors_invalid';
   end if;
 
-  v_scope := public.ts_chat_scope_key(c.kind, v_uid);
   v_limit := least(greatest(coalesce(p_limit, 50), 1), 200);
 
-  if coalesce(p_after_id, 0) <= 0 then
-    -- 첫 진입: 최근 것부터 잘라 온 뒤 오래된 순으로 되돌린다.
-    select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
-    from (
-      select m.id, m.account_id, m.user_id, dn.display_name,
-             case when m.deleted_at is null then m.content else null end as content,
-             (m.deleted_at is not null) as deleted, m.created_at
-        from public.chat_messages m
-        left join public.display_names dn on dn.account_id = m.account_id
-       where m.channel_id = c.id and m.scope_key = v_scope
-       order by m.id desc
-       limit v_limit
-    ) t;
-  else
-    select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
-    from (
-      select m.id, m.account_id, m.user_id, dn.display_name,
-             case when m.deleted_at is null then m.content else null end as content,
-             (m.deleted_at is not null) as deleted, m.created_at
-        from public.chat_messages m
-        left join public.display_names dn on dn.account_id = m.account_id
-       where m.channel_id = c.id and m.scope_key = v_scope and m.id > p_after_id
-       order by m.id
-       limit v_limit
-    ) t;
-  end if;
+  for v_code, v_after in
+    select key, coalesce((value #>> '{}')::bigint, 0) from jsonb_each(p_cursors)
+  loop
+    select * into c from public.chat_channels where code = v_code;
+    if not found then
+      raise exception 'chat_channel_not_found: %', v_code;
+    end if;
 
-  return jsonb_build_object('messages', v_rows, 'max_length', c.max_length, 'is_active', c.is_active);
+    -- 서버 범위는 한 번만 읽어 모든 서버 채널에 재사용한다.
+    if c.kind = 'server' then
+      if not v_server_got then
+        select server_id into v_server from public.user_profiles where account_id = v_uid;
+        v_server_got := true;
+      end if;
+      if v_server is null then
+        raise exception 'chat_scope_unavailable';
+      end if;
+      v_scope := v_server::text;
+    elsif c.kind = 'global' then
+      v_scope := '';
+    else
+      raise exception 'chat_kind_unsupported: %', c.kind;
+    end if;
+
+    if v_after <= 0 then
+      select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
+      from (
+        select m.id, m.account_id, m.user_id, m.display_name,
+               case when m.deleted_at is null then m.content else null end as content,
+               (m.deleted_at is not null) as deleted, m.created_at
+          from public.chat_messages m
+         where m.channel_id = c.id and m.scope_key = v_scope
+         order by m.id desc limit v_limit
+      ) t;
+    else
+      select coalesce(jsonb_agg(t order by t.id), '[]'::jsonb) into v_rows
+      from (
+        select m.id, m.account_id, m.user_id, m.display_name,
+               case when m.deleted_at is null then m.content else null end as content,
+               (m.deleted_at is not null) as deleted, m.created_at
+          from public.chat_messages m
+         where m.channel_id = c.id and m.scope_key = v_scope and m.id > v_after
+         order by m.id limit v_limit
+      ) t;
+    end if;
+
+    v_out := v_out || jsonb_build_object(v_code, v_rows);
+  end loop;
+
+  return v_out;
 end;
 $$;
 
-comment on function public.ts_chat_fetch(text, bigint, int) is
-  '커서 이후 채팅을 오래된 순으로 반환. after_id=0 이면 최근 limit 개. 삭제분은 내용 없이 표시만.';
+comment on function public.ts_chat_fetch_many(jsonb, int) is
+  '여러 채널을 한 번에 커서 조회. {"code": after_id} 를 받아 {"code": [메시지]} 로 반환.';
 
-revoke all on function public.ts_chat_fetch(text, bigint, int) from public, anon;
-grant execute on function public.ts_chat_fetch(text, bigint, int) to authenticated;
+revoke all on function public.ts_chat_fetch_many(jsonb, int) from public, anon;
+grant execute on function public.ts_chat_fetch_many(jsonb, int) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- ts_chat_channels — 내가 쓸 수 있는 채널 목록.
@@ -6641,39 +6675,55 @@ grant execute on function public.ts_admin_chat_mute(uuid, uuid, int, text, text)
 -- ts_chat_cleanup — 보존 기간이 지난 메시지 삭제. 크론이 부른다.
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_chat_cleanup();
+drop function if exists public.ts_chat_cleanup(int, int);
 
-create or replace function public.ts_chat_cleanup()
+create or replace function public.ts_chat_cleanup(p_batch int default 5000, p_max_batches int default 50)
 returns int
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare v_n int := 0; v_d int;
+declare
+  c       record;
+  v_total int := 0;
+  v_n     int;
+  v_runs  int := 0;
 begin
-  for v_d in select distinct retention_days from public.chat_channels loop
-    with x as (
-      delete from public.chat_messages m
-       using public.chat_channels c
-       where c.id = m.channel_id
-         and c.retention_days = v_d
-         and m.created_at < now() - make_interval(days => v_d)
-      returning 1
-    )
-    select v_n + count(*) into v_n from x;
+  -- 한 번에 다 지우면 대량일 때 긴 트랜잭션이 되어 락을 오래 잡고 WAL 이 튄다.
+  -- 배치로 끊어 지우고, 한 실행에서 처리할 최대치를 둔다. 남은 것은 다음 실행이 가져간다.
+  for c in select id, retention_days from public.chat_channels loop
+    loop
+      exit when v_runs >= p_max_batches;
+
+      delete from public.chat_messages
+       where ctid in (
+         select ctid from public.chat_messages
+          where channel_id = c.id
+            and created_at < now() - make_interval(days => c.retention_days)
+          limit p_batch
+       );
+      get diagnostics v_n = row_count;
+
+      v_total := v_total + v_n;
+      v_runs  := v_runs + 1;
+      exit when v_n = 0;
+    end loop;
   end loop;
-  return v_n;
+
+  return v_total;
 end;
 $$;
 
-comment on function public.ts_chat_cleanup() is '보존 기간이 지난 채팅 메시지 삭제. cron 이 호출한다.';
+comment on function public.ts_chat_cleanup(int, int) is
+  '보존 기간이 지난 채팅 메시지를 배치로 삭제. 한 실행의 상한은 p_batch * p_max_batches 건. cron 이 매시간 호출한다.';
 
-revoke all on function public.ts_chat_cleanup() from public, anon, authenticated;
+revoke all on function public.ts_chat_cleanup(int, int) from public, anon, authenticated;
 
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
     perform cron.unschedule('ts_chat_cleanup') where exists (select 1 from cron.job where jobname = 'ts_chat_cleanup');
-    perform cron.schedule('ts_chat_cleanup', '17 4 * * *', $cron$ select public.ts_chat_cleanup(); $cron$);
+    perform cron.schedule('ts_chat_cleanup', '17 * * * *', $cron$ select public.ts_chat_cleanup(); $cron$);
   end if;
 end $$;
 
@@ -6800,7 +6850,7 @@ grant execute on function public.ts_leaderboard_list_meta()                     
 
 -- 채팅
 grant execute on function public.ts_chat_send(text, text)                             to authenticated;
-grant execute on function public.ts_chat_fetch(text, bigint, int)                     to authenticated;
+grant execute on function public.ts_chat_fetch_many(jsonb, int)                        to authenticated;
 grant execute on function public.ts_chat_channels()                                   to authenticated;
 
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:

@@ -235,5 +235,29 @@ namespace TrueBase.Core.Common
 
         /// <summary>키워드 쿠폰의 최대 사용 횟수가 모두 소진되었습니다.</summary>
         public const string CouponExhausted = "coupon_exhausted";
+
+        /// <summary>없는 채팅 채널 코드입니다.</summary>
+        public const string ChatChannelNotFound = "chat_channel_not_found";
+
+        /// <summary>운영이 발언을 중지한 채널입니다. 읽기는 계속 가능합니다.</summary>
+        public const string ChatChannelInactive = "chat_channel_inactive";
+
+        /// <summary>보낼 내용이 비어 있습니다.</summary>
+        public const string ChatMessageEmpty = "chat_message_empty";
+
+        /// <summary>채널에 설정된 최대 길이를 넘었습니다.</summary>
+        public const string ChatMessageTooLong = "chat_message_too_long";
+
+        /// <summary>채팅이 차단된 계정입니다.</summary>
+        public const string ChatMuted = "chat_muted";
+
+        /// <summary>채널에 설정된 연속 발화 간격을 지키지 않았습니다.</summary>
+        public const string ChatTooFast = "chat_too_fast";
+
+        /// <summary>서버 채팅을 쓸 수 없는 상태입니다. 프로필에 서버가 지정되지 않았습니다.</summary>
+        public const string ChatScopeUnavailable = "chat_scope_unavailable";
+
+        /// <summary>구독 채널 목록이 비어 있습니다.</summary>
+        public const string ChatChannelsEmpty = "chat_channels_empty";
     }
 }

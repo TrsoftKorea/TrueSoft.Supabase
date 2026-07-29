@@ -93,6 +93,14 @@
         CouponExpired,
         CouponAlreadyUsed,
         CouponExhausted,
+        ChatChannelNotFound,
+        ChatChannelInactive,
+        ChatMessageEmpty,
+        ChatMessageTooLong,
+        ChatMuted,
+        ChatTooFast,
+        ChatScopeUnavailable,
+        ChatChannelsEmpty,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -179,6 +187,14 @@
             SupabaseErrorCode.CouponExpired => SupabaseReason.CouponExpired,
             SupabaseErrorCode.CouponAlreadyUsed => SupabaseReason.CouponAlreadyUsed,
             SupabaseErrorCode.CouponExhausted => SupabaseReason.CouponExhausted,
+            SupabaseErrorCode.ChatChannelNotFound => SupabaseReason.ChatChannelNotFound,
+            SupabaseErrorCode.ChatChannelInactive => SupabaseReason.ChatChannelInactive,
+            SupabaseErrorCode.ChatMessageEmpty => SupabaseReason.ChatMessageEmpty,
+            SupabaseErrorCode.ChatMessageTooLong => SupabaseReason.ChatMessageTooLong,
+            SupabaseErrorCode.ChatMuted => SupabaseReason.ChatMuted,
+            SupabaseErrorCode.ChatTooFast => SupabaseReason.ChatTooFast,
+            SupabaseErrorCode.ChatScopeUnavailable => SupabaseReason.ChatScopeUnavailable,
+            SupabaseErrorCode.ChatChannelsEmpty => SupabaseReason.ChatChannelsEmpty,
             _ => SupabaseReason.Unknown,
         };
     }

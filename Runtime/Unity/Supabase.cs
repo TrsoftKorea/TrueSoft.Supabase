@@ -387,6 +387,34 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> RedeemCouponAsync(string code) =>
             SupabaseSDK.TryRedeemCouponAsync(code);
 
+        // ── 채팅 ──────────────────────────────────────────────────────────────
+        //
+        // 채널 생성·설정과 메시지 숨김·발언 차단은 운영(Retool) 전용입니다.
+        // 새 메시지는 구독해서 받습니다 — 채팅창을 열 때 Subscribe, 닫을 때 Dispose.
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetChatChannelsAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<ChatChannelInfo>>> GetChatChannelsAsync(bool forceRefresh = false) =>
+            SupabaseSDK.TryGetChatChannelsAsync(forceRefresh);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySendChatAsync"/>
+        public static Task<SupabaseResult<ChatSendResult>> SendChatAsync(string channelCode, string content) =>
+            SupabaseSDK.TrySendChatAsync(channelCode, content);
+
+        /// <summary>
+        /// 채널들을 구독해 새 메시지를 콜백으로 받습니다. 채팅창을 닫을 때 반환된 구독을 Dispose 하세요.
+        /// 대화가 없으면 조회 간격이 <paramref name="maxIntervalSeconds"/>까지 늘어납니다.
+        /// </summary>
+        /// <param name="channelCodes">구독할 채널 코드. 여러 개를 넘겨도 조회는 한 번에 묶여 나갑니다.</param>
+        /// <param name="onMessages">채널 코드와 새로 도착한 메시지를 받습니다. 오래된 순입니다.</param>
+        /// <param name="minIntervalSeconds">대화가 오갈 때의 조회 간격. (기본값: 2)</param>
+        /// <param name="maxIntervalSeconds">조용할 때 늘어나는 상한. (기본값: 10)</param>
+        public static SupabaseResult<ChatSubscription> SubscribeChat(
+            IEnumerable<string> channelCodes,
+            Action<string, IReadOnlyList<ChatMessage>> onMessages,
+            float minIntervalSeconds = 2f,
+            float maxIntervalSeconds = 10f) =>
+            SupabaseSDK.Chat.Subscribe(channelCodes, onMessages, minIntervalSeconds, maxIntervalSeconds);
+
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
             SupabaseSDK.TryGetUnclaimedMailCountAsync(userId, category);
