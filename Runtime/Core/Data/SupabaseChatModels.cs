@@ -20,7 +20,7 @@ namespace TrueBase.Core.Data
         [JsonProperty("max_length")]
         public int MaxLength { get; set; }
 
-        /// <summary>같은 사람의 연속 발화 최소 간격(초). 0이면 제한 없음.</summary>
+        /// <summary>같은 사람의 연속 채팅 최소 간격(초). 0이면 제한 없음.</summary>
         [JsonProperty("slow_mode_seconds")]
         public int SlowModeSeconds { get; set; }
     }
@@ -38,7 +38,7 @@ namespace TrueBase.Core.Data
         [JsonProperty("user_id")]
         public string UserId { get; set; }
 
-        /// <summary>발화 시점의 닉네임. 이후 개명해도 바뀌지 않습니다.</summary>
+        /// <summary>보낸 시점의 닉네임. 이후 개명해도 바뀌지 않습니다.</summary>
         [JsonProperty("display_name")]
         public string DisplayName { get; set; }
 

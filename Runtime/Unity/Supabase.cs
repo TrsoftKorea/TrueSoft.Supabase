@@ -389,7 +389,7 @@ namespace TrueBase.Unity
 
         // ── 채팅 ──────────────────────────────────────────────────────────────
         //
-        // 채널 생성·설정과 메시지 숨김·발언 차단은 운영(Retool) 전용입니다.
+        // 채널 생성·설정과 메시지 숨김·채팅 차단은 운영(Retool) 전용입니다.
         // 새 메시지는 구독해서 받습니다 — 채팅창을 열 때 Subscribe, 닫을 때 Dispose.
 
         /// <inheritdoc cref="SupabaseSDK.TryGetChatChannelsAsync"/>

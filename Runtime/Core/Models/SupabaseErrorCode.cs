@@ -239,7 +239,7 @@ namespace TrueBase.Core.Common
         /// <summary>없는 채팅 채널 코드입니다.</summary>
         public const string ChatChannelNotFound = "chat_channel_not_found";
 
-        /// <summary>운영이 발언을 중지한 채널입니다. 읽기는 계속 가능합니다.</summary>
+        /// <summary>운영이 채팅을 중지한 채널입니다. 읽기는 계속 가능합니다.</summary>
         public const string ChatChannelInactive = "chat_channel_inactive";
 
         /// <summary>보낼 내용이 비어 있습니다.</summary>
@@ -251,7 +251,7 @@ namespace TrueBase.Core.Common
         /// <summary>채팅이 차단된 계정입니다.</summary>
         public const string ChatMuted = "chat_muted";
 
-        /// <summary>채널에 설정된 연속 발화 간격을 지키지 않았습니다.</summary>
+        /// <summary>채널에 설정된 연속 채팅 간격을 지키지 않았습니다.</summary>
         public const string ChatTooFast = "chat_too_fast";
 
         /// <summary>서버 채팅을 쓸 수 없는 상태입니다. 프로필에 서버가 지정되지 않았습니다.</summary>

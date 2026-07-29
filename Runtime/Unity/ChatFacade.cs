@@ -130,7 +130,7 @@ namespace TrueBase.Unity
 
     /// <summary>
     /// 로그인 세션을 사용하는 채팅 API.
-    /// 채널 생성·삭제, 메시지 숨김, 발언 차단은 운영(Retool) 전용이라 여기에 없습니다.
+    /// 채널 생성·삭제, 메시지 숨김, 채팅 차단은 운영(Retool) 전용이라 여기에 없습니다.
     /// </summary>
     public sealed class ChatFacade
     {

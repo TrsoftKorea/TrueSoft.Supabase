@@ -28,7 +28,7 @@ foreach (var ch in r.Data)
 | `Kind` | string | `global`이면 전체, `server`면 같은 서버끼리 |
 | `DisplayName` | string | 채팅 탭에 표시할 이름 |
 | `MaxLength` | int | 보낼 수 있는 최대 글자 수. 입력창 제한에 그대로 쓰세요 |
-| `SlowModeSeconds` | int | 같은 사람의 연속 발화 최소 간격. 0이면 제한 없음 |
+| `SlowModeSeconds` | int | 같은 사람의 연속 채팅 최소 간격. 0이면 제한 없음 |
 
 **에러 코드**
 

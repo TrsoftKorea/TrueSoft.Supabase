@@ -6285,7 +6285,7 @@ create unique index if not exists chat_channels_code_uidx on public.chat_channel
 
 comment on table  public.chat_channels is
   '채팅 채널 정의. 대화가 실제로 갈라지는 단위는 chat_messages.scope_key 다. 서버별 채널을 따로 만들 필요가 없다.';
-comment on column public.chat_channels.slow_mode_seconds is '같은 사람의 연속 발화 최소 간격(초). 0 이면 제한 없음.';
+comment on column public.chat_channels.slow_mode_seconds is '같은 사람의 연속 채팅 최소 간격(초). 0 이면 제한 없음.';
 comment on column public.chat_channels.retention_days    is '메시지 보관 기간(일). 지난 메시지는 크론이 지운다.';
 
 -- ---------------------------------------------------------------------------
@@ -6322,10 +6322,10 @@ comment on table public.chat_messages is
 comment on column public.chat_messages.scope_key is
   'global='''' · server=서버 id · group=게임이 정한 키 · direct=정렬된 계정쌍.';
 comment on column public.chat_messages.display_name is
-  '발화 시점의 닉네임 스냅샷. 개명해도 과거 대화는 그때 이름으로 남는다. 조회에서 조인을 없애려는 목적도 있다.';
+  '보낸 시점의 닉네임 스냅샷. 개명해도 과거 대화는 그때 이름으로 남는다. 조회에서 조인을 없애려는 목적도 있다.';
 
 -- ---------------------------------------------------------------------------
--- chat_mutes — 발화 차단. channel_id 가 null 이면 전 채널.
+-- chat_mutes — 채팅 차단. channel_id 가 null 이면 전 채널.
 --   도배 제한(slow_mode)을 끈 상태에서 악용을 막는 실질적인 수단이다.
 -- ---------------------------------------------------------------------------
 create table if not exists public.chat_mutes (
@@ -6340,7 +6340,7 @@ create table if not exists public.chat_mutes (
 
 create index if not exists chat_mutes_lookup_idx on public.chat_mutes (account_id, until desc);
 
-comment on table public.chat_mutes is '채팅 발화 차단. channel_id 가 null 이면 모든 채널에 적용된다.';
+comment on table public.chat_mutes is '채팅 차단. channel_id 가 null 이면 모든 채널에 적용된다.';
 
 -- ---------------------------------------------------------------------------
 -- 권한 — 클라이언트 직접 접근 없음. 발송·조회는 RPC 로만.
@@ -6666,7 +6666,7 @@ end;
 $$;
 
 comment on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) is
-  '채팅 발화 차단(어드민). channel_id 가 null 이면 전 채널.';
+  '채팅 차단(어드민). channel_id 가 null 이면 전 채널.';
 
 revoke all on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) to service_role;

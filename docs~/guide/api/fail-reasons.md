@@ -167,10 +167,10 @@ if (!result.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `ChatChannelNotFound` | 존재하지 않는 채널 코드입니다 |
-| `ChatChannelInactive` | 운영이 발언을 중지한 채널입니다. 읽기는 계속 가능합니다 |
+| `ChatChannelInactive` | 운영이 채팅을 중지한 채널입니다. 읽기는 계속 가능합니다 |
 | `ChatMessageEmpty` | 보낼 내용이 비어 있습니다 |
 | `ChatMessageTooLong` | 채널에 설정된 최대 글자 수를 넘었습니다 |
-| `ChatMuted` | 발언이 차단된 계정입니다 |
-| `ChatTooFast` | 채널에 설정된 연속 발화 간격을 지키지 않았습니다 |
+| `ChatMuted` | 채팅이 차단된 계정입니다 |
+| `ChatTooFast` | 채널에 설정된 연속 채팅 간격을 지키지 않았습니다 |
 | `ChatScopeUnavailable` | 프로필에 서버가 없어 서버 채팅을 쓸 수 없습니다 |
 | `ChatChannelsEmpty` | 구독할 채널 코드가 하나도 없습니다 |

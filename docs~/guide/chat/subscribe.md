@@ -61,14 +61,14 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 | `Id` | long | 조회 커서. 채널 안에서 시간순으로 증가합니다 |
 | `AccountId` | string | 보낸 사람의 계정 |
 | `UserId` | string | 보낸 사람의 플레이어 ID |
-| `DisplayName` | string | 발화 시점의 닉네임 |
+| `DisplayName` | string | 보낸 시점의 닉네임 |
 | `Content` | string | 본문. `Deleted`가 true면 null |
-| `Deleted` | bool | 운영자가 지운 발언입니다 |
-| `CreatedAt` | DateTimeOffset | 발화 시각 |
+| `Deleted` | bool | 운영자가 지운 채팅입니다 |
+| `CreatedAt` | DateTimeOffset | 보낸 시각 |
 
 내가 보낸 메시지도 이 콜백으로 되돌아옵니다. 발송 직후 화면에 직접 넣지 말고 콜백에서 한 번만 그리세요. 그러지 않으면 같은 말이 두 번 보입니다.
 
-::: info 닉네임은 발화 시점 기준입니다
+::: info 닉네임은 보낸 시점 기준입니다
 `DisplayName`은 그때 쓰던 이름이 그대로 남습니다. 개명해도 지난 대화의 이름은 바뀌지 않습니다.
 :::
 

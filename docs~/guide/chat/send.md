@@ -4,7 +4,7 @@
 Task<SupabaseResult<ChatSendResult>> Supabase.SendChatAsync(string channelCode, string content)
 ```
 
-채널에 메시지를 보냅니다. 길이·발언 차단·연속 발화 검사는 모두 서버가 합니다.
+채널에 메시지를 보냅니다. 길이·채팅 차단·연속 채팅 검사는 모두 서버가 합니다.
 
 ```csharp
 var r = await Supabase.SendChatAsync("shout", input.text);
@@ -32,7 +32,7 @@ ShowToast(r.Reason switch
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 | `Id` | long | 방금 보낸 메시지의 커서 |
-| `CreatedAt` | DateTimeOffset | 서버가 기록한 발화 시각 |
+| `CreatedAt` | DateTimeOffset | 서버가 기록한 보낸 시각 |
 
 **에러 코드**
 
@@ -40,9 +40,9 @@ ShowToast(r.Reason switch
 |--------|------|
 | `SupabaseReason.ChatMessageEmpty` | 보낼 내용이 비어 있습니다 |
 | `SupabaseReason.ChatMessageTooLong` | 채널의 최대 글자 수를 넘었습니다 |
-| `SupabaseReason.ChatMuted` | 발언이 차단된 계정입니다 |
-| `SupabaseReason.ChatTooFast` | 채널에 설정된 발언 간격을 지키지 않았습니다 |
-| `SupabaseReason.ChatChannelInactive` | 운영이 발언을 중지한 채널입니다 |
+| `SupabaseReason.ChatMuted` | 채팅이 차단된 계정입니다 |
+| `SupabaseReason.ChatTooFast` | 채널에 설정된 채팅 간격을 지키지 않았습니다 |
+| `SupabaseReason.ChatChannelInactive` | 운영이 채팅을 중지한 채널입니다 |
 | `SupabaseReason.ChatChannelNotFound` | 존재하지 않는 채널입니다 |
 | `SupabaseReason.ChatScopeUnavailable` | 서버가 정해지지 않아 서버 채팅을 쓸 수 없습니다 |
 | `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

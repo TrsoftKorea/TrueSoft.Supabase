@@ -48,7 +48,7 @@ namespace TrueBase.Core.Data
             }
         }
 
-        /// <summary>메시지를 보냅니다. 길이·차단·연속 발화 검사는 서버가 합니다.</summary>
+        /// <summary>메시지를 보냅니다. 길이·차단·연속 채팅 검사는 서버가 합니다.</summary>
         public async Task<SupabaseResult<ChatSendResult>> SendAsync(string accessToken, string channelCode, string content)
         {
             if (string.IsNullOrWhiteSpace(channelCode))

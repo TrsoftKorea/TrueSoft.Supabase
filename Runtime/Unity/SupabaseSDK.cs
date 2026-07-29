@@ -2111,7 +2111,7 @@ namespace TrueBase.Unity
             return await Chat.GetChannelsAsync(forceRefresh);
         }
 
-        /// <summary><c>ts_chat_send</c> — 메시지 발송. 길이·차단·연속 발화는 서버가 검사합니다.</summary>
+        /// <summary><c>ts_chat_send</c> — 메시지 발송. 길이·차단·연속 채팅는 서버가 검사합니다.</summary>
         public static async Task<SupabaseResult<ChatSendResult>> SendChatAsync(string channelCode, string content)
         {
             var ready = await EnsureReadySessionAsync();
