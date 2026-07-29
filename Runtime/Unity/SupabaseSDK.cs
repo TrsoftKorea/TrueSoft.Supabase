@@ -1461,7 +1461,7 @@ namespace TrueBase.Unity
         private static SupabaseResult LogAndReturn<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedFailureReason(result?.ErrorCode));
             return ok ? SupabaseResult.Ok
                       : SupabaseResult.Fail(result?.ErrorCode, result?.BanInfo);
         }
@@ -1470,7 +1470,7 @@ namespace TrueBase.Unity
         private static T LogAndReturnData<T>(string logTag, SupabaseResult<T> result, T defaultValue)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedFailureReason(result?.ErrorCode));
             return ok ? result.Data : defaultValue;
         }
 
@@ -1478,18 +1478,41 @@ namespace TrueBase.Unity
         private static SupabaseResult<T> LogAndReturnResult<T>(string logTag, SupabaseResult<T> result)
         {
             var ok = result != null && result.IsSuccess;
-            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedWithdrawalReason(result?.ErrorCode));
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedFailureReason(result?.ErrorCode));
             return result ?? SupabaseResult<T>.Fail("null_result");
         }
 
         /// <summary>
-        /// 탈퇴 라이프사이클의 정상 결과인지 판별합니다(예약 게이트 차단·탈퇴 완료로 재로그인 필요).
-        /// 코드 오류가 아니라 기대된 분기이므로 <see cref="Debug.LogError"/> 대신 일반 로그로 남깁니다.
+        /// 코드 오류가 아니라 기대된 분기인지 판별합니다. 서버가 유저 입력이나 상태를 보고 정상적으로
+        /// 거절한 경우가 여기 해당하며, <see cref="Debug.LogError"/> 대신 일반 로그로 남깁니다.
+        /// 게임이 문구로 안내할 사유를 콘솔에 빨갛게 띄우면 진짜 오류가 묻힙니다.
         /// </summary>
-        private static bool IsExpectedWithdrawalReason(string errorCode)
+        private static bool IsExpectedFailureReason(string errorCode)
         {
-            return errorCode == SupabaseErrorCode.WithdrawalGateBlocked
-                || errorCode == SupabaseErrorCode.WithdrawalDeleted;
+            switch (errorCode)
+            {
+                // 탈퇴 라이프사이클 — 예약 게이트 차단·탈퇴 완료로 재로그인 필요
+                case SupabaseErrorCode.WithdrawalGateBlocked:
+                case SupabaseErrorCode.WithdrawalDeleted:
+
+                // 채팅 — 유저가 입력·상태 때문에 거절당한 경우
+                case SupabaseErrorCode.ChatMessageEmpty:
+                case SupabaseErrorCode.ChatMessageTooLong:
+                case SupabaseErrorCode.ChatTooFast:
+                case SupabaseErrorCode.ChatMuted:
+                case SupabaseErrorCode.ChatChannelInactive:
+
+                // 쿠폰 — 코드가 틀렸거나 이미 썼거나 기한이 지난 경우
+                case SupabaseErrorCode.CouponNotFound:
+                case SupabaseErrorCode.CouponInactive:
+                case SupabaseErrorCode.CouponExpired:
+                case SupabaseErrorCode.CouponAlreadyUsed:
+                case SupabaseErrorCode.CouponExhausted:
+                    return true;
+
+                default:
+                    return false;
+            }
         }
 
         /// <summary>Try* API 결과를 <c>[logTag]</c> 접두어로 로그에 남깁니다. <see cref="_enableApiResultLogs"/>가 꺼져 있으면 무시합니다.</summary>
@@ -2097,7 +2120,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryRedeemCouponAsync(string code)
         {
             var r = await RedeemCouponAsync(code);
-            LogApiResult(ApiLogTags.CouponRedeem, r.IsSuccess, r.ErrorCode);
+            LogApiResult(ApiLogTags.CouponRedeem, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r;
         }
 
