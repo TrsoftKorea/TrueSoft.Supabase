@@ -15,7 +15,8 @@ namespace TrueBase.Unity
     {
         private readonly ChatFacade _owner;
         private readonly Dictionary<string, long> _cursors;
-        private readonly Action<string, IReadOnlyList<ChatMessage>> _onMessages;
+        private readonly Action<IReadOnlyList<ChatMessage>> _onMessages;
+        private readonly List<ChatMessage> _batch = new List<ChatMessage>();
 
         private readonly float _minInterval;
         private readonly float _maxInterval;
@@ -26,7 +27,7 @@ namespace TrueBase.Unity
         internal ChatSubscription(
             ChatFacade owner,
             IEnumerable<string> channelCodes,
-            Action<string, IReadOnlyList<ChatMessage>> onMessages,
+            Action<IReadOnlyList<ChatMessage>> onMessages,
             float minIntervalSeconds,
             float maxIntervalSeconds)
         {
@@ -84,11 +85,12 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 조회 결과를 반영하고 다음 조회 시각을 정합니다.
+        /// 채널이 여럿이어도 한 번만, 시간순으로 합쳐 넘깁니다 — 게임이 다시 정렬할 일이 없도록.
         /// 새 메시지가 없으면 간격을 늘려 빈 응답 폴링을 줄이고, 오면 최소 간격으로 되돌립니다.
         /// </summary>
         internal void Apply(float now, IReadOnlyDictionary<string, IReadOnlyList<ChatMessage>> byChannel)
         {
-            var got = false;
+            _batch.Clear();
 
             if (byChannel != null)
             {
@@ -98,25 +100,31 @@ namespace TrueBase.Unity
                     if (list == null || list.Count == 0)
                         continue;
 
-                    got = true;
-
                     // 서버가 오래된 순으로 주므로 마지막 것이 가장 큰 id다.
                     var last = list[list.Count - 1].Id;
                     if (_cursors.TryGetValue(pair.Key, out var prev) && last > prev)
                         _cursors[pair.Key] = last;
 
-                    try
-                    {
-                        _onMessages?.Invoke(pair.Key, list);
-                    }
-                    catch (Exception e)
-                    {
-                        UnityEngine.Debug.LogError($"[Supabase.Chat] 메시지 콜백에서 예외: {e}");
-                    }
+                    _batch.AddRange(list);
                 }
             }
 
-            _interval = got ? _minInterval : Math.Min(_maxInterval, _interval * 1.5f);
+            if (_batch.Count > 0)
+            {
+                // id 는 테이블 전체에서 하나뿐인 일련번호라, 채널이 달라도 이 순서가 곧 시간순이다.
+                _batch.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+                try
+                {
+                    _onMessages?.Invoke(_batch);
+                }
+                catch (Exception e)
+                {
+                    UnityEngine.Debug.LogError($"[Supabase.Chat] 메시지 콜백에서 예외: {e}");
+                }
+            }
+
+            _interval = _batch.Count > 0 ? _minInterval : Math.Min(_maxInterval, _interval * 1.5f);
             _nextDueTime = now + _interval;
         }
 
@@ -184,7 +192,7 @@ namespace TrueBase.Unity
         /// </summary>
         public SupabaseResult<ChatSubscription> Subscribe(
             IEnumerable<string> channelCodes,
-            Action<string, IReadOnlyList<ChatMessage>> onMessages,
+            Action<IReadOnlyList<ChatMessage>> onMessages,
             float minIntervalSeconds = 2f,
             float maxIntervalSeconds = 10f)
         {

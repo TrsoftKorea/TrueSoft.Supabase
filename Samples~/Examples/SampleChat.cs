@@ -130,18 +130,22 @@ public sealed class SampleChat : MonoBehaviour
         Debug.Log($"{Tag} 구독 해제. 폴링이 멈춥니다. 이제 새 메시지를 보내도 도착하지 않아야 정상입니다.");
     }
 
-    /// <summary>새 메시지 도착. 오래된 순으로 옵니다.</summary>
-    private void OnMessages(string channelCode, IReadOnlyList<ChatMessage> messages)
+    /// <summary>
+    /// 새 메시지 도착. 채널이 여럿이어도 SDK가 시간순으로 합쳐 한 번에 넘깁니다.
+    /// 채널별로 나눠야 하면 <see cref="ChatMessage.ChannelCode"/>로 가릅니다.
+    /// </summary>
+    private void OnMessages(IReadOnlyList<ChatMessage> messages)
     {
-        _receivedByChannel.TryGetValue(channelCode, out var n);
-        _receivedByChannel[channelCode] = n + messages.Count;
         _lastReceivedTime = Time.realtimeSinceStartup;
 
         foreach (var m in messages)
         {
+            _receivedByChannel.TryGetValue(m.ChannelCode, out var n);
+            _receivedByChannel[m.ChannelCode] = n + 1;
+
             var body = m.Deleted ? "(삭제된 메시지)" : m.Content;
             var name = string.IsNullOrEmpty(m.DisplayName) ? "이름 없음" : m.DisplayName;
-            _lastReceivedText = $"[{channelCode}] {name}: {body}";
+            _lastReceivedText = $"[{m.ChannelCode}] {name}: {body}";
             Debug.Log($"{Tag} {_lastReceivedText}");
         }
     }

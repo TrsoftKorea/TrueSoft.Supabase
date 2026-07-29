@@ -28,9 +28,16 @@ namespace TrueBase.Core.Data
     /// <summary>채팅 메시지 한 건.</summary>
     public sealed class ChatMessage
     {
-        /// <summary>조회 커서. 채널 안에서 시간순으로 증가합니다.</summary>
+        /// <summary>
+        /// 조회 커서. 채널을 가리지 않고 시간순으로 증가하므로,
+        /// 여러 채널을 한 목록에 합칠 때 이 값으로 정렬하면 시간순이 됩니다.
+        /// </summary>
         [JsonProperty("id")]
         public long Id { get; set; }
+
+        /// <summary>어느 채널의 메시지인지. 서버 응답에는 없고 SDK가 채웁니다.</summary>
+        [JsonIgnore]
+        public string ChannelCode { get; set; }
 
         [JsonProperty("account_id")]
         public string AccountId { get; set; }

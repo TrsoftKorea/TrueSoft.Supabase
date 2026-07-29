@@ -405,12 +405,15 @@ namespace TrueBase.Unity
         /// 대화가 없으면 조회 간격이 <paramref name="maxIntervalSeconds"/>까지 늘어납니다.
         /// </summary>
         /// <param name="channelCodes">구독할 채널 코드. 여러 개를 넘겨도 조회는 한 번에 묶여 나갑니다.</param>
-        /// <param name="onMessages">채널 코드와 새로 도착한 메시지를 받습니다. 오래된 순입니다.</param>
+        /// <param name="onMessages">
+        /// 새로 도착한 메시지를 받습니다. 채널이 여럿이어도 <b>시간순으로 합쳐</b> 한 번만 호출되며,
+        /// 각 메시지의 <see cref="ChatMessage.ChannelCode"/>로 어느 채널인지 구분합니다.
+        /// </param>
         /// <param name="minIntervalSeconds">대화가 오갈 때의 조회 간격. (기본값: 2)</param>
         /// <param name="maxIntervalSeconds">조용할 때 늘어나는 상한. (기본값: 10)</param>
         public static SupabaseResult<ChatSubscription> SubscribeChat(
             IEnumerable<string> channelCodes,
-            Action<string, IReadOnlyList<ChatMessage>> onMessages,
+            Action<IReadOnlyList<ChatMessage>> onMessages,
             float minIntervalSeconds = 2f,
             float maxIntervalSeconds = 10f) =>
             SupabaseSDK.Chat.Subscribe(channelCodes, onMessages, minIntervalSeconds, maxIntervalSeconds);

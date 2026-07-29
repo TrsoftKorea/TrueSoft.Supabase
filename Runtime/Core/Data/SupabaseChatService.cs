@@ -102,7 +102,14 @@ namespace TrueBase.Core.Data
 
                 var map = new Dictionary<string, IReadOnlyList<ChatMessage>>(raw.Count);
                 foreach (var pair in raw)
-                    map[pair.Key] = pair.Value ?? new List<ChatMessage>();
+                {
+                    var list = pair.Value ?? new List<ChatMessage>();
+                    // 응답이 채널 코드로 키잉되어 있어 메시지 자체에는 채널이 없다. 여기서 채워 준다.
+                    foreach (var m in list)
+                        m.ChannelCode = pair.Key;
+
+                    map[pair.Key] = list;
+                }
 
                 return SupabaseResult<IReadOnlyDictionary<string, IReadOnlyList<ChatMessage>>>.Success(map);
             }
