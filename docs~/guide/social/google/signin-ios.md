@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
 ```
 
-iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
@@ -28,7 +28,7 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
 **에러 코드**
 

@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInWithAppleAsync()
 ```
 
-iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방식이 자동으로 선택됩니다. [대시보드 설정](./setup)을 먼저 완료하세요. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+iOS·Android에서 Apple 로그인을 수행합니다. 플랫폼에 맞는 방식이 자동으로 선택됩니다. [대시보드 설정](./setup)을 먼저 완료하세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithAppleAsync();
@@ -26,7 +26,7 @@ Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
 **에러 코드**
 

@@ -19,7 +19,7 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`RequestWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 (유예 기간) |
+| [`RequestWithdrawalAsync`](/guide/withdrawal/submit) | 탈퇴 예약 · 유예 기간 |
 | [`RedeemWithdrawalCancelAsync`](/guide/withdrawal/cancel) | 탈퇴 취소 |
 
 ## 서버 정보

@@ -3189,8 +3189,11 @@ CREATE TABLE IF NOT EXISTS public.user_data_logs (
   id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   account_id uuid   NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   diff       jsonb  NOT NULL,   -- 변경된 필드의 OLD 값만 포함
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  source     text            -- 변경 주체. 세션 변수 app.log_source 값을 그대로 기록
 );
+
+ALTER TABLE public.user_data_logs ADD COLUMN IF NOT EXISTS source text;
 
 CREATE INDEX IF NOT EXISTS user_data_logs_account_id_created_idx
   ON public.user_data_logs (account_id, created_at DESC);
@@ -3213,6 +3216,8 @@ DECLARE
   v_key  text;
   -- 시스템 컬럼은 diff 제외
   v_skip text[] := ARRAY['id','account_id','user_id','server_id','created_at','updated_at'];
+  -- 변경 주체. 호출자가 set_config('app.log_source', ...)로 지정하지 않으면 NULL
+  v_source text := nullif(current_setting('app.log_source', true), '');
 BEGIN
   FOR v_key IN SELECT jsonb_object_keys(v_new)
   LOOP
@@ -3223,8 +3228,8 @@ BEGIN
   END LOOP;
 
   IF v_diff != '{}'::jsonb THEN
-    INSERT INTO public.user_data_logs (account_id, diff)
-    VALUES (NEW.account_id, v_diff);
+    INSERT INTO public.user_data_logs (account_id, diff, source)
+    VALUES (NEW.account_id, v_diff, v_source);
   END IF;
   RETURN NEW;
 END;

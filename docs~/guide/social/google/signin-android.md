@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInWithGoogleAsync()
 ```
 
-Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. [대시보드 설정](./setup)의 Android 항목이 선행되어야 합니다. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. [대시보드 설정](./setup)의 Android 항목이 선행되어야 합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithGoogleAsync();
@@ -22,7 +22,7 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
 **에러 코드**
 

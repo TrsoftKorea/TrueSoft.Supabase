@@ -7,7 +7,7 @@
 | 멤버 | 설명 |
 |------|------|
 | [`Supabase.LoadUserSaveAsync`](/guide/user-data/load) | 생성된 세이브 클래스 로드 |
-| [`Supabase.DeleteUserSaveAsync`](/guide/user-data/delete) | 세이브 삭제(기본값 리셋) |
+| [`Supabase.DeleteUserSaveAsync`](/guide/user-data/delete) | 세이브 삭제 · 기본값 리셋 |
 | [`Supabase.SaveNowAsync`](/guide/user-data/save-now) | 변경분 즉시 전송 후 완료 대기 |
 | [`Supabase.RequestSave`](/guide/user-data/request-save) | 대기 없이 즉시 전송 요청 |
 | [`Supabase.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |

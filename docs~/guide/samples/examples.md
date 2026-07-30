@@ -14,22 +14,22 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | 키 | 동작 |
 |----|------|
 | `Q` | 익명 로그인 |
-| `I` | Google 로그인 (Android 네이티브) |
+| `I` | Google 로그인 · Android 네이티브 |
 | `P` | 익명 계정에 Google 연동 |
 | `K` | Google 연동 해제 |
-| `B` | Apple 로그인 (플랫폼 자동) |
-| `H` | 익명 계정에 Apple 연동 (iOS 네이티브) |
+| `B` | Apple 로그인 · 플랫폼 자동 |
+| `H` | 익명 계정에 Apple 연동 · iOS 네이티브 |
 | `L` | Apple 연동 해제 |
 | `W` | 로그아웃 |
 | `O` | 세션 복원 |
 | `R` | 유저 데이터 전체 로드 |
 | `V` | 유저 데이터 즉시 저장 |
-| `F` | 레벨 +1 (자동 저장 시연) |
-| `X` | 세이브 삭제 (기본값 리셋 + 재로드) |
+| `F` | 레벨 +1 · 자동 저장 시연 |
+| `X` | 세이브 삭제 · 기본값 리셋 + 재로드 |
 | `T` | RemoteConfig 값 읽기 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
-| `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
-| `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, Name 등) |
+| `N` | 닉네임 설정 후 내 프로필 조회 · displayname Edge Function 배포 필요 |
+| `A` | 현재 세션 상태 출력 · IsAnonymous, UserId, Name 등 |
 | `J` | 서버 시간 조회 |
 | `G` | 차단 정보 조회 |
 | `D` | 탈퇴 신청 |

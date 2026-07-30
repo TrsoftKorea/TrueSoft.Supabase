@@ -10,4 +10,4 @@
 | `Supabase.IsLinkedWithGoogle` | Google 연동 여부 |
 | `Supabase.IsLinkedWithApple` | Apple 연동 여부 |
 
-내 프로필(닉네임·서버 코드·탈퇴 상태)은 이 프로퍼티들과 별개로, 로그인 결과(`SupabaseSignInResult`)의 `.Profile`에 담겨 옵니다.
+내 프로필은 이 프로퍼티들과 별개로 로그인 결과의 `.Profile`에 담겨 옵니다. 닉네임·서버 코드·탈퇴 상태가 여기 들어 있습니다.

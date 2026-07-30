@@ -6,7 +6,7 @@
 | [`GetLeaderboardAsync<T>`](/guide/leaderboard/table) | 리더보드 1건의 설정·회차 상태 |
 | [`SubmitScoreAsync<T>`](/guide/leaderboard/submit) | 점수 기록 |
 | [`SubmitScoreAsync`](/guide/leaderboard/submit-row) | 점수 기록 · 생성 클래스 |
-| [`GetRanksAsync<T>`](/guide/leaderboard/range) | 순위 범위 조회(최대 100건) |
+| [`GetRanksAsync<T>`](/guide/leaderboard/range) | 순위 범위 조회 · 최대 100건 |
 | [`GetRankAsync<T>`](/guide/leaderboard/player) | 플레이어 1명의 순위 |
 | [`SetRowAsync`](/guide/leaderboard/set-player-data) | 본인 추가 데이터 수정 |
 | [`DeleteMyScoreAsync<T>`](/guide/leaderboard/delete-my-score) | 본인 기록 삭제 |

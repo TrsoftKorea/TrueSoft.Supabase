@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInAnonymouslyAsync()
 ```
 
-별도 회원가입 없이 게스트 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다. 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성합니다. 로그인하면 세션이 기기에 자동 저장되어 다음 실행 시 `Supabase.TriggerAutoLoginAsync()`로 복원할 수 있습니다. 성공 시 `result.Profile`에 내 프로필(닉네임·서버 코드 등)이 담깁니다.
+별도 회원가입 없이 게스트 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다. 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성합니다. 로그인하면 세션이 기기에 자동 저장되어 다음 실행 시 `Supabase.TriggerAutoLoginAsync()`로 복원할 수 있습니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
@@ -23,7 +23,7 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필(`PublicProfile` — 닉네임·서버 코드 등). 자세한 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
 
 **에러 코드**
 
