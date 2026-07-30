@@ -75,6 +75,14 @@ namespace SdkAudit
                     var ret = method.ReturnType.ToString();
                     if (!IsResultType(ret) && !NonFailingMembers.Contains(name))
                         ctx.Report.Error($"[R1 반환타입] {owner}.{name} 이 result 타입이 아닌 {ret} 을 돌려줍니다. 실패할 수 없는 멤버라면 검사기의 NonFailingMembers 에 근거와 함께 넣으세요. ({where})");
+
+                    // ── R11 게임 대면 절대 시각은 DateTimeOffset ── DateTime 은 오프셋 정보가 없어 기기 시간대에 휘둘린다.
+                    if (Regex.IsMatch(ret, @"(?<!\w)DateTime(?!Offset)\b"))
+                        ctx.Report.Error($"[R11 시각타입] {owner}.{name} 이 DateTime 을 돌려줍니다. 게임 대면 절대 시각은 DateTimeOffset 을 씁니다. ({where})");
+
+                    foreach (var p in method.ParameterList.Parameters)
+                        if (Regex.IsMatch(p.Type?.ToString() ?? "", @"(?<!\w)DateTime(?!Offset)\b"))
+                            ctx.Report.Error($"[R11 시각타입] {owner}.{name} 의 파라미터 {p.Identifier.ValueText} 가 DateTime 입니다. DateTimeOffset 을 씁니다. ({where})");
                 }
             }
 
@@ -195,6 +203,11 @@ namespace SdkAudit
                 var lines = src.Text.Replace("\r\n", "\n").Split('\n');
                 for (var i = 0; i < lines.Length; i++)
                 {
+                    // ── R11 진입점에 별칭을 두지 않는다 ── 문서·공개 API가 전부 Supabase.Xxx() 라 별칭을 섞으면 배우는 사람이 혼란스럽다.
+                    var alias = Regex.Match(lines[i], @"^\s*using\s+(\w+)\s*=\s*[\w.:]*\b(Supabase|SupabaseIAP|SupabaseBridge)\s*;");
+                    if (alias.Success)
+                        ctx.Report.Error($"[R11 별칭] 진입점 {alias.Groups[2].Value} 에 별칭 {alias.Groups[1].Value} 를 두지 않습니다. 직접 호출하세요. ({ctx.Rel(src.Path)}:{i + 1})");
+
                     // 로그 태그 "[Supabase.Chat]" 는 멤버 참조가 아니다.
                     // 샘플은 어셈블리 밖이라 타입과 멤버가 **둘 다** public 이어야 부를 수 있다.
                     foreach (Match hit in Regex.Matches(lines[i], @"(?<![\w.\[])([A-Z]\w*)\.([A-Z]\w*)"))

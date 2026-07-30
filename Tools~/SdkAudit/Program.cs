@@ -34,7 +34,7 @@ if (warnings.Count > 0)
 
 if (errors.Count == 0)
 {
-    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 통과.");
+    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 통과.");
     Console.WriteLine();
     Console.WriteLine(warnings.Count == 0 ? "결과: OK" : $"결과: OK (경고 {warnings.Count}건)");
     return 0;

@@ -133,6 +133,8 @@ namespace TrueBase.Core.Common
 
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
+
+        /// <summary>서버 코드가 비어 있습니다.</summary>
         public const string ServerCodeEmpty = "server_code_empty";
 
         /// <summary>이미 사용 중인 닉네임입니다.</summary>
@@ -168,6 +170,9 @@ namespace TrueBase.Core.Common
         /// <summary>전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다.</summary>
         public const string UserSaveTimeout = "user_save_timeout";
 
+        /// <summary>유저 데이터 테이블 이름이 지정되지 않았습니다.</summary>
+        public const string TableNameEmpty = "table_name_empty";
+
         /// <summary>세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞였을 때 발생합니다.</summary>
         public const string UserSaveSerializeFailed = "user_save_serialize_failed";
 
@@ -182,6 +187,30 @@ namespace TrueBase.Core.Common
 
         /// <summary>우편 아이템 핸들러가 null이거나 <c>ItemKey</c>가 비어 있습니다.</summary>
         public const string MailItemHandlerInvalid = "mail_item_handler_invalid";
+
+        /// <summary>해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다.</summary>
+        public const string MailNotFound = "mail_not_found";
+
+        /// <summary>내 우편이 아닙니다.</summary>
+        public const string Forbidden = "forbidden";
+
+        /// <summary>지금 접속한 서버의 우편이 아닙니다.</summary>
+        public const string ForbiddenServer = "forbidden_server";
+
+        /// <summary>이미 삭제한 우편입니다.</summary>
+        public const string MailDeleted = "mail_deleted";
+
+        /// <summary>수령 기간이 지난 우편입니다.</summary>
+        public const string MailExpired = "mail_expired";
+
+        /// <summary>이미 보상을 수령한 우편입니다.</summary>
+        public const string AlreadyClaimed = "already_claimed";
+
+        /// <summary>우편의 보상 아이템 형식이 올바르지 않습니다.</summary>
+        public const string InvalidItemsPayload = "invalid_items_payload";
+
+        /// <summary>보상을 수령하지 않은 우편은 삭제할 수 없습니다.</summary>
+        public const string CannotDeleteUnclaimed = "cannot_delete_unclaimed";
 
         /// <summary>IAP 초기화에 전달된 상품 ID 목록이 비어 있습니다.</summary>
         public const string IapProductIdsEmpty = "iap_product_ids_empty";
@@ -212,6 +241,9 @@ namespace TrueBase.Core.Common
 
         /// <summary>이 리더보드에 등록되지 않은 플레이어 데이터 컬럼입니다.</summary>
         public const string LeaderboardColumnNotAllowed = "leaderboard_column_not_allowed";
+
+        /// <summary>기록할 점수가 전달되지 않았습니다.</summary>
+        public const string LeaderboardScoreRequired = "leaderboard_score_required";
 
         /// <summary>리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다.</summary>
         public const string LeaderboardRowRequired = "leaderboard_row_required";
@@ -257,6 +289,12 @@ namespace TrueBase.Core.Common
 
         /// <summary>서버 채팅을 쓸 수 없는 상태입니다. 프로필에 서버가 지정되지 않았습니다.</summary>
         public const string ChatScopeUnavailable = "chat_scope_unavailable";
+
+        /// <summary>조회 커서 형식이 올바르지 않습니다.</summary>
+        public const string ChatCursorsInvalid = "chat_cursors_invalid";
+
+        /// <summary>지원하지 않는 채널 종류입니다.</summary>
+        public const string ChatKindUnsupported = "chat_kind_unsupported";
 
         /// <summary>구독 채널 목록이 비어 있습니다.</summary>
         public const string ChatChannelsEmpty = "chat_channels_empty";

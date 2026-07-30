@@ -33,14 +33,39 @@ namespace SdkAudit
                 .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
 
             foreach (var md in Directory.EnumerateFiles(guideDir, "*.md", SearchOption.AllDirectories))
-                CheckFile(ctx, md, codeMethods);
+                CheckFile(ctx, md, codeMethods, isGuide: true);
 
             foreach (var kv in ctx.PublicApi.OrderBy(x => x.Key, StringComparer.Ordinal))
                 if (!ctx.DocApiNames.Contains(kv.Key))
                     ctx.Report.Warn($"[R3 미문서화] {kv.Value}.{kv.Key} 이 docs~/guide 어디에도 없습니다.");
+
+            // 규칙 파일도 코드를 가리킨다. 게임 문서가 아니라 **내가 읽고 그대로 고치는** 파일이라
+            // 여기가 틀리면 잘못된 수정으로 이어진다(실제로 컴파일을 깨뜨린 적이 있다).
+            // 형식 규칙(R5·R10)은 VitePress 페이지가 아니므로 적용하지 않는다.
+            foreach (var md in EnumerateRuleFiles(ctx.Root))
+                CheckFile(ctx, md, codeMethods, isGuide: false);
         }
 
-        private static void CheckFile(AuditContext ctx, string path, Dictionary<string, List<MethodDeclarationSyntax>> codeMethods)
+        /// <summary>코드를 가리키는 규칙 파일 — 프로젝트 CLAUDE.md 와 스킬.</summary>
+        private static IEnumerable<string> EnumerateRuleFiles(string root)
+        {
+            var claudeMd = Path.Combine(root, "CLAUDE.md");
+            if (File.Exists(claudeMd))
+                yield return claudeMd;
+
+            var skills = Path.Combine(root, ".claude", "skills");
+            if (!Directory.Exists(skills))
+                yield break;
+
+            foreach (var md in Directory.EnumerateFiles(skills, "*.md", SearchOption.AllDirectories))
+                yield return md;
+        }
+
+        /// <param name="isGuide">
+        /// true 면 게임 가이드로 보고 형식 규칙(R5·R10)과 커버리지 집계까지 적용한다.
+        /// false 면 규칙 파일이라 코드 참조 정합성(R3·R4·R8 사유)만 본다.
+        /// </param>
+        private static void CheckFile(AuditContext ctx, string path, Dictionary<string, List<MethodDeclarationSyntax>> codeMethods, bool isGuide)
         {
             var rel = ctx.Rel(path);
             var lines = File.ReadAllLines(path);
@@ -82,17 +107,28 @@ namespace SdkAudit
                 foreach (Match hit in Regex.Matches(line, @"(?<![\w.\[])Supabase(?:IAP)?\.([A-Z]\w*)"))
                 {
                     var name = hit.Groups[1].Value;
-                    ctx.DocApiNames.Add(name);
+                    if (IsPlaceholderName(name))
+                        continue;
+
+                    if (isGuide)
+                        ctx.DocApiNames.Add(name); // 커버리지 집계는 게임 가이드만. 규칙 파일 언급으로 가려지면 안 된다.
                     if (!ctx.PublicApi.ContainsKey(name))
                         ctx.Report.Error($"[R3 없는API] 문서가 Supabase.{name} 을 가리키지만 공개 멤버에 없습니다. ({at})");
                 }
 
-                // ── R8 문서에 노출된 사유 표기 ──
-                foreach (Match hit in Regex.Matches(line, @"\bSupabaseReason\.(\w+)"))
-                    if (!ctx.ReasonMembers.Contains(hit.Groups[1].Value))
-                        ctx.Report.Error($"[R8 없는사유] 문서가 SupabaseReason.{hit.Groups[1].Value} 을 가리키지만 enum 에 없습니다. ({at})");
+                // ── R8 문서에 노출된 사유 표기 ── 대문자로 시작하는 멤버만. SupabaseReason.cs 같은 파일명은 제외.
+                foreach (Match hit in Regex.Matches(line, @"\bSupabaseReason\.([A-Z]\w*)"))
+                {
+                    var reason = hit.Groups[1].Value;
+                    if (IsPlaceholderName(reason))
+                        continue;
 
-                if (Regex.IsMatch(line, @"\bSupabaseErrorCode\b"))
+                    if (!ctx.ReasonMembers.Contains(reason))
+                        ctx.Report.Error($"[R8 없는사유] 문서가 SupabaseReason.{reason} 을 가리키지만 enum 에 없습니다. ({at})");
+                }
+
+                // 규칙 파일은 SDK 내부 카탈로그를 설명하는 자리라 SupabaseErrorCode 를 써도 된다.
+                if (isGuide && Regex.IsMatch(line, @"\bSupabaseErrorCode\b"))
                     ctx.Report.Error($"[R8 internal노출] SupabaseErrorCode 는 SDK 전용(internal)이라 게임 문서에 노출하지 않습니다. 게임은 SupabaseReason 으로 분기합니다. ({at})");
 
                 if (inFence)
@@ -101,7 +137,8 @@ namespace SdkAudit
                         continue;
 
                     // ── R5 시그니처에 수식어를 쓰지 않는다 ── 파사드 시그니처만 본다(예제 코드의 구현체 선언은 제외).
-                    if (Regex.IsMatch(trimmed, @"^(public|internal|private|protected|static|async)\b")
+                    if (isGuide
+                        && Regex.IsMatch(trimmed, @"^(public|internal|private|protected|static|async)\b")
                         && Regex.IsMatch(line, @"(?<![\w.\[])Supabase(?:IAP)?\.[A-Z]\w*\s*\("))
                         ctx.Report.Error($"[R5 시그니처수식어] 시그니처에서 public·static·async 등 수식어를 뺍니다. ({at})");
 
@@ -115,8 +152,8 @@ namespace SdkAudit
                     continue;
                 }
 
-                // ── 이하 펜스 밖 ──
-                if (i < frontmatterEnd)
+                // ── 이하 펜스 밖 ── 여기부터는 VitePress 페이지 형식 규칙이라 규칙 파일에는 적용하지 않는다.
+                if (!isGuide || i < frontmatterEnd)
                     continue;
 
                 // ── R5 GitHub 알림 문법 금지 ──
@@ -148,24 +185,25 @@ namespace SdkAudit
             }
 
             // ── R5 H1 아래 본문에는 ## 를 붙인다 ──
-            if (h1Line >= 0 && firstH2Line > h1Line)
+            if (isGuide && h1Line >= 0 && firstH2Line > h1Line)
                 CheckOutlineGap(ctx, rel, lines, h1Line, firstH2Line);
 
-            // ── R11 한 페이지에 시그니처 2개 이상 ──
-            if (signatures.Count > 1)
+            // ── R5 한 페이지에 시그니처 2개 이상 ──
+            if (isGuide && signatures.Count > 1)
                 ctx.Report.Warn($"[R5 시그니처다수] {rel} 에 시그니처가 {signatures.Count}개 있습니다({string.Join(", ", signatures.Select(s => s.Name))}). 메서드마다 페이지를 나눕니다.");
 
             // ── R10 헤딩 바로 다음에 시그니처가 와야 한다(코드 우선) ──
-            foreach (var sig in signatures)
-            {
-                var prev = PreviousContentLine(lines, sig.FenceLine);
-                if (prev >= 0 && !lines[prev].TrimStart().StartsWith("#", StringComparison.Ordinal))
-                    ctx.Report.Error($"[R10 코드우선] 헤딩과 시그니처 사이에 설명이 있습니다. 설명은 코드 아래로 옮기세요. ({rel}:{sig.FenceLine + 1})");
-            }
+            if (isGuide)
+                foreach (var sig in signatures)
+                {
+                    var prev = PreviousContentLine(lines, sig.FenceLine);
+                    if (prev >= 0 && !lines[prev].TrimStart().StartsWith("#", StringComparison.Ordinal))
+                        ctx.Report.Error($"[R10 코드우선] 헤딩과 시그니처 사이에 설명이 있습니다. 설명은 코드 아래로 옮기세요. ({rel}:{sig.FenceLine + 1})");
+                }
 
             // ── R10 파라미터 표는 타입 열 없이 2열 ──
             // 첫 칸이 정확히 "파라미터"이고 다음 줄이 구분행인 **헤더 행**만 본다(셀 안의 단어에 걸리지 않도록).
-            for (var i = 0; i < lines.Length - 1; i++)
+            for (var i = 0; isGuide && i < lines.Length - 1; i++)
             {
                 var t = lines[i].TrimStart();
                 if (!t.StartsWith("|", StringComparison.Ordinal))
@@ -195,7 +233,8 @@ namespace SdkAudit
                     continue;
                 }
 
-                if (signatures.Count == 1 && overloads.Count == 1)
+                // 파라미터 표 대조는 함수 페이지 형식을 전제한다. 규칙 파일의 예시 표에는 적용하지 않는다.
+                if (isGuide && signatures.Count == 1 && overloads.Count == 1)
                     CheckParamTable(ctx, rel, lines, overloads[0], sig);
             }
         }
@@ -378,6 +417,13 @@ namespace SdkAudit
                     return false;
             return true;
         }
+
+        /// <summary>
+        /// 규칙 문서가 형식을 설명할 때 쓰는 자리표시자(<c>Supabase.Xxx()</c>·<c>SupabaseReason.멤버명</c>·<c>Supabase.Try*</c>).
+        /// 실제 멤버 이름이 아니므로 실존 검사에서 뺀다.
+        /// </summary>
+        private static bool IsPlaceholderName(string name) =>
+            name == "Try" || Regex.IsMatch(name, @"^Xx*(Async)?$");
 
         private static bool IsStatementKeyword(string token) =>
             token is "await" or "var" or "return" or "if" or "else" or "using" or "new" or "yield";

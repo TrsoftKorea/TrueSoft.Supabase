@@ -1633,6 +1633,14 @@ namespace TrueBase.Unity
                 // 서버 시각을 아직 한 번도 받지 못한 경우 — 다음 호출부터 성공한다
                 case SupabaseErrorCode.ServerTimeNotSynced:
 
+                // 우편 — 목록이 낡아 이미 없거나·받았거나·기간이 지난 우편을 건드린 경우
+                case SupabaseErrorCode.MailNotFound:
+                case SupabaseErrorCode.MailDeleted:
+                case SupabaseErrorCode.MailExpired:
+                case SupabaseErrorCode.AlreadyClaimed:
+                case SupabaseErrorCode.CannotDeleteUnclaimed:
+                case SupabaseErrorCode.ForbiddenServer:
+
                 // 탈퇴 라이프사이클 — 예약 게이트 차단·탈퇴 완료로 재로그인 필요
                 case SupabaseErrorCode.WithdrawalGateBlocked:
                 case SupabaseErrorCode.WithdrawalDeleted:

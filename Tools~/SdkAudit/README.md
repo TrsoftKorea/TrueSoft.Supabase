@@ -43,7 +43,7 @@ dotnet run --project Tools~/SdkAudit
 | R2 | 하드 오류 | `Reset()`을 가진 파사드는 리셋 블록에서 호출됨 |
 | R2 | 하드 오류 | 아무도 부르지 않는 `Reset()` 없음 |
 | R2 | 경고 | 파사드를 일부만 정리하는 메서드 |
-| R3 | 하드 오류 | 문서가 가리키는 `Supabase.*`가 실제 공개 멤버로 존재 |
+| R3 | 하드 오류 | 문서·`CLAUDE.md`·스킬이 가리키는 `Supabase.*`가 실제 공개 멤버로 존재 |
 | R3 | 경고 | 공개 멤버가 문서에 등장 |
 | R4 | 하드 오류 | 문서 시그니처의 파라미터 이름이 코드와 일치 |
 | R5 | 하드 오류 | GitHub 알림 문법(`> [!NOTE]`) 없음 |
@@ -64,6 +64,21 @@ dotnet run --project Tools~/SdkAudit
 | R9 | 경고 | `public.` 참조 대상이 `install.sql`에 정의됨 |
 | R10 | 하드 오류 | 헤딩 바로 다음에 시그니처가 옴 (코드 우선) |
 | R10 | 하드 오류 | 파라미터 표가 타입 열 없이 2열 |
+| R11 | 하드 오류 | 게임 대면 절대 시각이 `DateTimeOffset` (`DateTime` 금지) |
+| R11 | 하드 오류 | 샘플이 진입점에 `using` 별칭을 두지 않음 |
+
+## 검사 대상 파일
+
+| 대상 | 적용 규칙 |
+|------|-----------|
+| `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11 |
+| `docs~/guide/**/*.md` | R3·R4·R5·R8·R10 |
+| `CLAUDE.md`·`.claude/skills/**/*.md` | **R3·R4·R8(사유)만** |
+| `install.sql` | R9 |
+
+규칙 파일을 보는 이유는 게임 문서보다 위험하기 때문입니다. **문서가 틀리면 게임 개발자가 고생하지만, `CLAUDE.md`가 틀리면 Claude가 읽고 그대로 코드를 고칩니다.** 실제로 "SupabaseSDK는 MonoBehaviour singleton"이라는 한 줄 때문에 샘플 컴파일이 깨진 적이 있습니다.
+
+형식 규칙(R5·R10)은 VitePress 페이지 전제라 규칙 파일에 적용하지 않습니다. `SupabaseErrorCode` 노출 금지도 마찬가지입니다 — 규칙 파일은 SDK 내부 카탈로그를 설명하는 자리입니다.
 
 ## 예외 처리
 
@@ -78,6 +93,8 @@ dotnet run --project Tools~/SdkAudit
 | `alter table if exists` | 신규 설치에서 no-op인 마이그레이션 구문이라 선행 정의가 필요 없습니다 |
 | `$$ … $$` 함수 본문 | 설치 시점에 해석되지 않아 순서와 무관합니다 |
 | 다른 스키마(`auth.`·`cron.`) | `public`만 검사합니다 |
+| `Supabase.Xxx()`·`SupabaseReason.멤버명`·`Supabase.Try*` | 규칙 문서가 형식을 설명할 때 쓰는 자리표시자입니다 |
+| `SupabaseReason.cs` | 파일명입니다. 사유 표기는 대문자로 시작하는 것만 봅니다 |
 
 ## 정기 점검 체크리스트
 

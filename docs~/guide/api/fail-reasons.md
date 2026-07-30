@@ -126,6 +126,7 @@ if (!result.IsSuccess)
 | `UserSaveNoChanges` | 변경된 값이 없어 전송을 건너뛰었습니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다 |
 | `UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞인 경우 |
 | `UserSaveFlushFailed` | 서버가 전송을 거부했거나 네트워크 오류입니다. 원문은 `ErrorCode` 참조 |
+| `TableNameEmpty` | 유저 데이터 테이블 이름이 지정되지 않았습니다 |
 | `UserSaveTimeout` | 전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다 |
 | `UserSaveLoadFailed` | 유저 세이브 로드에 실패했습니다 |
 | `UserSaveDeleteFailed` | 유저 세이브 삭제에 실패했습니다 |
@@ -135,6 +136,14 @@ if (!result.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `MailItemHandlerInvalid` | 우편 아이템 핸들러가 null이거나 `ItemKey`가 비어 있습니다 |
+| `MailNotFound` | 해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다 |
+| `MailDeleted` | 이미 삭제한 우편입니다 |
+| `MailExpired` | 수령 기간이 지난 우편입니다 |
+| `AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
+| `CannotDeleteUnclaimed` | 보상을 수령하지 않은 우편은 삭제할 수 없습니다 |
+| `Forbidden` | 내 우편이 아닙니다 |
+| `ForbiddenServer` | 지금 접속한 서버의 우편이 아닙니다 |
+| `InvalidItemsPayload` | 우편의 보상 아이템 형식이 올바르지 않습니다 |
 
 ## IAP
 
@@ -154,6 +163,7 @@ if (!result.IsSuccess)
 | `LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다. 순위 조회는 계속 가능합니다 |
 | `LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
 | `LeaderboardScoreNotFound` | 그 회차에 해당 플레이어의 기록이 없습니다 |
+| `LeaderboardScoreRequired` | 기록할 점수가 전달되지 않았습니다 |
 | `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |
 | `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |
 | `LeaderboardRowNotLoaded` | 조회에서 만들지 않은 행입니다. `Supabase.ToRow`로 현재 값을 받아 고쳐서 넘기세요 |
@@ -180,3 +190,5 @@ if (!result.IsSuccess)
 | `ChatTooFast` | 채널에 설정된 연속 채팅 간격을 지키지 않았습니다 |
 | `ChatScopeUnavailable` | 프로필에 서버가 없어 서버 채팅을 쓸 수 없습니다 |
 | `ChatChannelsEmpty` | 구독할 채널 코드가 하나도 없습니다 |
+| `ChatCursorsInvalid` | 조회 커서 형식이 올바르지 않습니다 |
+| `ChatKindUnsupported` | 지원하지 않는 채널 종류입니다 |
