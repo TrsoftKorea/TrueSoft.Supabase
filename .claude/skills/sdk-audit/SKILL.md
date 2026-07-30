@@ -20,6 +20,7 @@ description: TrueBase SDK 점검. 규칙 위반·미사용 코드·중복·비�
 
 ```bash
 dotnet run --project Tools~/SdkAudit
+dotnet run --project Tools~/SdkAudit -- --selftest
 ```
 
 2. **지난 회차 진행 상태를 확인한다.** 메모리의 `project_sdk_audit_progress.md`에 끝난 축·남은 축·결정 대기 항목이 있다.
@@ -132,10 +133,19 @@ install.sql → Core 서비스 → Facade → Supabase 파사드 → 문서 → 
 
 반대로 검사기가 **놓친 것**을 발견하면 규칙을 추가한다.
 
+**검사기를 고쳤으면 자체 테스트를 돌린다.**
+
+```bash
+dotnet run --project Tools~/SdkAudit -- --selftest
+```
+
+새 규칙을 추가하면 `SelfTest.ExpectedTags`에 태그를 넣고 픽스처에 위반 사례를 추가한다. **"통과"가 곧 "동작한다"는 뜻은 아니다** — R12를 붙였을 때 경로 필터가 너무 넓어 아무것도 잡지 못했는데 통과로 보였다.
+
 ## 끝낼 때
 
 ```bash
 dotnet run --project Tools~/SdkAudit
+dotnet run --project Tools~/SdkAudit -- --selftest
 dotnet run --project Tools~/FailReasonCheck
 dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj
 ```

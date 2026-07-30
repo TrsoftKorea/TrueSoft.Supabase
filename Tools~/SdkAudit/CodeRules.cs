@@ -227,6 +227,67 @@ namespace SdkAudit
             }
         }
 
+        // ── R12 소비 게임 대조 ─────────────────────────────────────────────
+        // 게임은 SDK 를 UPM 으로 참조한다. 공개 API 를 지우거나 시그니처를 바꾸면 게임이 깨지는데,
+        // 이쪽 리포지토리만 봐서는 드러나지 않는다. consumers.txt 에 적힌 프로젝트를 함께 본다.
+        public static void Consumers(AuditContext ctx)
+        {
+            var listPath = Path.Combine(ctx.Root, "Tools~", "SdkAudit", "consumers.txt");
+            if (!File.Exists(listPath))
+                return;
+
+            foreach (var raw in File.ReadAllLines(listPath))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+                    continue;
+
+                var dir = Path.IsPathRooted(line) ? line : Path.GetFullPath(Path.Combine(ctx.Root, line));
+                var scripts = Path.Combine(dir, "Assets", "Scripts");
+                if (!Directory.Exists(scripts))
+                {
+                    ctx.Report.Warn($"[R12] 소비 프로젝트 경로를 찾지 못해 건너뜁니다: {line}");
+                    continue;
+                }
+
+                var name = new DirectoryInfo(dir).Name;
+                foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+                {
+                    // 워크트리는 보지 않는다. Library·Temp 는 Assets 밖이라 여기 걸릴 일이 없다.
+                    if (file.Replace('\\', '/').Contains("/.claude/"))
+                        continue;
+
+                    var lines = File.ReadAllText(file).Replace("\r\n", "\n").Split('\n');
+                    for (var i = 0; i < lines.Length; i++)
+                        CheckConsumerLine(ctx, name, Path.GetFileName(file), lines[i], i + 1);
+                }
+            }
+        }
+
+        private static void CheckConsumerLine(AuditContext ctx, string project, string file, string line, int lineNo)
+        {
+            foreach (Match hit in Regex.Matches(line, @"(?<![\w.\[])([A-Z]\w*)\.([A-Z]\w*)"))
+            {
+                var type = hit.Groups[1].Value;
+                var member = hit.Groups[2].Value;
+
+                if (type == "SupabaseReason")
+                {
+                    if (!ctx.ReasonMembers.Contains(member))
+                        ctx.Report.Error($"[R12 소비게임] {project}/{file}:{lineNo} 가 SupabaseReason.{member} 을 쓰지만 enum 에 없습니다.");
+                    continue;
+                }
+
+                if (!ctx.TypeMembers.TryGetValue(type, out var surface))
+                    continue; // SDK 가 선언한 타입이 아니다
+
+                if (!surface.IsPublicType)
+                    ctx.Report.Error($"[R12 소비게임] {project}/{file}:{lineNo} 가 {type}.{member} 을 쓰지만 {type} 이 internal 이라 게임에서 보이지 않습니다.");
+                else if (!surface.PublicMembers.Contains(member))
+                    ctx.Report.Error($"[R12 소비게임] {project}/{file}:{lineNo} 가 {type}.{member} 을 쓰지만 공개 멤버가 아닙니다.");
+            }
+        }
+
         // ── R7 미사용 공개 API ─────────────────────────────────────────────
         // 문서·샘플·SDK 어디에서도 참조되지 않는 공개 멤버는 죽은 API 후보다.
         // DocApiNames 가 채워진 뒤에 돌려야 하므로 문서 규칙 다음에 호출한다.

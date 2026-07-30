@@ -5,6 +5,10 @@ using SdkAudit;
 
 Console.OutputEncoding = Encoding.UTF8;
 
+// 검사기 자신의 회귀 테스트. 규칙을 고친 뒤 다른 규칙의 탐지가 깨지지 않았는지 본다.
+if (args.Length > 0 && args[0] == "--selftest")
+    return SelfTest.Run();
+
 var root = FindRepoRoot();
 if (root == null)
 {
@@ -19,6 +23,7 @@ var ctx = new AuditContext(root);
 CodeRules.Run(ctx);
 DocRules.Run(ctx);
 CodeRules.UnusedPublicApi(ctx);
+CodeRules.Consumers(ctx);
 SqlRules.Run(ctx);
 
 var errors = ctx.Report.Errors;
@@ -34,7 +39,7 @@ if (warnings.Count > 0)
 
 if (errors.Count == 0)
 {
-    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 통과.");
+    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 · R12 소비 게임 통과.");
     Console.WriteLine();
     Console.WriteLine(warnings.Count == 0 ? "결과: OK" : $"결과: OK (경고 {warnings.Count}건)");
     return 0;

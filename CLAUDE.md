@@ -234,6 +234,21 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 All user-facing docs live in `docs~/guide/`. Apply these rules on every code change — do not wait to be asked.
 
+**어느 규칙이 자동 검사되는지 알고 쓴다.** 검사되는 규칙은 어겨도 `SdkAudit`이 잡지만, 수동 규칙은 지키지 않으면 아무 일도 일어나지 않는다.
+
+| 규칙 | 검사 |
+|------|------|
+| 2 죽은 링크 | `npx vitepress build` |
+| 3 콜아웃 문법 | R5 |
+| 7 헤딩 괄호 | R5 (헤딩만. 표 칸·산문은 수동) |
+| 8 시그니처 형식·기본값 | R4·R8 |
+| 9 파라미터 표·에러 코드 표기 | R8·R10 |
+| 10 H1 아래 H2 | R5 |
+| 11 코드 우선·페이지당 시그니처 1개 | R10·R5 |
+| 1·4·5·6·12 | **수동** |
+
+수동 규칙은 정기 점검의 문서 축에서 사람이 훑는다.
+
 ### 1. Update docs alongside code
 
 When adding, changing, or removing a feature, update the corresponding `docs~/guide/*.md` in the **same task**:
