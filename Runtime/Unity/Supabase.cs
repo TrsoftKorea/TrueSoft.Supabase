@@ -215,6 +215,15 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<ServerInfo>> GetServerInfoAsync() =>
             SupabaseSDK.TryGetServerInfoAsync();
 
+        /// <summary>
+        /// 이 기기에서 접속할 서버 코드. 설정한 적이 없으면 <c>SupabaseSettings</c>의 기본 서버 코드입니다.
+        /// </summary>
+        public static string ServerCode => SupabaseSDK.GetCurrentServerCode();
+
+        /// <inheritdoc cref="SupabaseSDK.TrySetServerCode"/>
+        public static SupabaseResult SetServerCode(string serverCode) =>
+            SupabaseSDK.TrySetServerCode(serverCode);
+
         /// <inheritdoc cref="SupabaseSDK.TryGetPublicProfileAsync"/>
         public static Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId) =>
             SupabaseSDK.TryGetPublicProfileAsync(userId);

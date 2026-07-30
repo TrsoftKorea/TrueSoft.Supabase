@@ -26,4 +26,5 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`GetServerInfoAsync`](/guide/withdrawal/server-info) | 내 서버 정보 조회 |
+| [`GetServerInfoAsync`](/guide/server/info) | 배정된 서버 조회 |
+| [`SetServerCode`](/guide/server/select) | 접속할 서버 선택 |

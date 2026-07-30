@@ -133,6 +133,7 @@ namespace TrueBase.Core.Common
 
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
+        public const string ServerCodeEmpty = "server_code_empty";
 
         /// <summary>이미 사용 중인 닉네임입니다.</summary>
         public const string NameTaken = "display_name_taken";

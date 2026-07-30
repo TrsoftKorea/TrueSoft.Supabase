@@ -249,6 +249,7 @@ namespace TrueBase.Unity
             public const string ProfileMyNameSet = "Supabase.Profile.Name.Set";
             public const string ProfileNameAvailable = "Supabase.Profile.Name.Available";
             public const string ProfileMyServerGet = "Supabase.Profile.Server.Get";
+            public const string ProfileServerSelect = "Supabase.Profile.Server.Select";
             public const string ProfileSnapshotGet = "Supabase.Profile.Snapshot.Get";
             public const string ProfileWithdrawnRequest = "Supabase.Profile.Withdrawn.Request";
             public const string ProfileWithdrawalCancelRedeem = "Supabase.Profile.Withdrawal.Cancel.Redeem";
@@ -1356,9 +1357,6 @@ namespace TrueBase.Unity
             UserSaveStaticSyncRegistry.Register(key, hasDirty, flushAsync, resetLocalState, getDirtyCooldown, hasFreshDirty);
         }
 
-        /// <summary>등록된 정적 세이브 중 전송할 변경분이 있거나 전송 중인 것이 있는지 반환합니다.</summary>
-        internal static bool HasPendingUserSaveFlush() => UserSaveStaticSyncRegistry.HasPendingFlush();
-
         /// <summary>정적 세이브에 변경이 생겼음을 알립니다(쿨타임 스케줄).</summary>
         public static void MarkUserSaveStaticDirty(string key)
         {
@@ -2463,8 +2461,25 @@ namespace TrueBase.Unity
             return SupabaseResult.Ok;
         }
 
+        /// <summary>
+        /// 이 기기에서 접속할 서버 코드를 저장합니다. 로그인 시 DB 서버가 이 코드와 다르면 SDK가 이주시킵니다.
+        /// 이미 로그인한 상태에서 바꾸면 다음 로그인부터 적용됩니다.
+        /// </summary>
+        public static SupabaseResult TrySetServerCode(string serverCode)
+        {
+            if (string.IsNullOrWhiteSpace(serverCode))
+            {
+                LogApiResult(ApiLogTags.ProfileServerSelect, false, SupabaseErrorCode.ServerCodeEmpty);
+                return SupabaseResult.Fail(SupabaseErrorCode.ServerCodeEmpty);
+            }
+
+            SetCurrentServerCode(serverCode);
+            LogApiResult(ApiLogTags.ProfileServerSelect, true, serverCode.Trim());
+            return SupabaseResult.Ok;
+        }
+
         /// <summary>로컬에 선택된 서버 코드를 저장합니다(예: GLOBAL, KR1). 다음 로그인/복구 흐름에서 사용됩니다.</summary>
-        public static void SetCurrentServerCode(string serverCode)
+        private static void SetCurrentServerCode(string serverCode)
         {
             if (string.IsNullOrWhiteSpace(serverCode))
                 return;

@@ -101,21 +101,6 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 등록된 항목 중 전송할 변경분이 있거나 전송 중인 것이 하나라도 있는지 반환합니다.
-        /// throttle 캐시를 무시하고 신선하게 검사하므로 즉시 저장 직전 판정에 사용할 수 있습니다.
-        /// </summary>
-        public static bool HasPendingFlush()
-        {
-            foreach (var entry in Entries.Values)
-            {
-                if (entry.IsInFlight || SafeHasFreshDirty(entry))
-                    return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// 값 변경을 알리고 쿨다운 타이머를 재계산합니다. 타이머는 더 짧아지는 방향으로만 갱신됩니다
         /// (긴 쿨다운의 dirty가 이미 예약된 짧은 타이머를 늘리지 않도록).
         /// </summary>

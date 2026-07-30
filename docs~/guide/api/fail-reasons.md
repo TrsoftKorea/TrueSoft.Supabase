@@ -100,6 +100,12 @@ if (!result.IsSuccess)
 | `NameTaken` | 이미 사용 중인 닉네임입니다 |
 | `NameTooLong` | 닉네임이 허용 길이를 초과합니다 |
 
+## 서버
+
+| Reason | 설명 |
+|--------|------|
+| `ServerCodeEmpty` | 서버 코드가 비어 있습니다 |
+
 ## 탈퇴
 
 | Reason | 설명 |

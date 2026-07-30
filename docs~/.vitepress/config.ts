@@ -105,7 +105,15 @@ export default defineConfig({
               { text: '탈퇴 취소', link: '/guide/withdrawal/cancel' }
             ]
           },
-          { text: '서버 정보', link: '/guide/withdrawal/server-info' }
+          {
+            text: '서버',
+            link: '/guide/server/',
+            collapsed: true,
+            items: [
+              { text: '서버 선택', link: '/guide/server/select' },
+              { text: '서버 정보 조회', link: '/guide/server/info' }
+            ]
+          }
         ]
       },
       {
