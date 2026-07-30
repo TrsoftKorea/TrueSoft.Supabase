@@ -16,7 +16,7 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 |----------|------|
 | `productIds` | 등록할 소모품 ID 목록 |
 | `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, isResuming, alreadyVerified)` — `true` 반환 시 SDK가 소비(Confirm) 처리 |
-| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` |
+| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` (기본값: `null`) |
 | `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) |
 
 **반환**

@@ -2,6 +2,8 @@
 
 탈퇴 예약 중에는 로그인이 `WithdrawalGateBlocked`로 막히고, **로그인 결과에 삭제 예정 시각이 실려 옵니다.** 별도 조회 없이 그 값으로 남은 시간을 계산해 안내 UI를 띄웁니다.
 
+## 게이트 차단 감지
+
 ```csharp
 var login = await Supabase.TriggerAutoLoginAsync();
 if (login.Reason == SupabaseReason.WithdrawalGateBlocked)

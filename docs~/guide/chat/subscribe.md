@@ -1,5 +1,7 @@
 # 채널 구독
 
+## 구독 호출
+
 ```csharp
 SupabaseResult<ChatSubscription> Supabase.SubscribeChat(
     IEnumerable<string>                    channelCodes,

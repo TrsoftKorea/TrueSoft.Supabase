@@ -21,7 +21,7 @@ public sealed class GoldMailItemHandler : IMailItemHandler
 Supabase.RegisterMailItemHandler(new GoldMailItemHandler());
 ```
 
-`ItemKey`가 `items[].key`와 일치하는 핸들러가 [보상 수령](/guide/mailbox/claim) 성공 직후 `itemIndex` 오름차순으로 호출됩니다.
+`ItemKey`가 `items[].key`와 일치하는 핸들러가 [보상 수령](/guide/mailbox/claim) 성공 직후 `itemIndex` 오름차순으로 호출됩니다. 등록을 되돌리려면 같은 `ItemKey`로 `Supabase.UnregisterMailItemHandler("gold")`를 호출합니다.
 
 ::: warning
 수령 RPC를 호출하기 **전에** 대상 우편의 모든 아이템 key에 핸들러가 등록됐는지 검증합니다. 하나라도 없으면 `mail_item_handler_missing:<key>`로 즉시 실패하고 서버 상태는 바뀌지 않습니다 — 핸들러 누락으로 수령 처리만 되고 아이템이 유실되는 상황을 막기 위한 설계입니다.

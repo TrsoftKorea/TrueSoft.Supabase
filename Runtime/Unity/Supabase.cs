@@ -156,10 +156,9 @@ namespace TrueBase.Unity
         /// DB에서 유저 세이브를 로드해 생성된 세이브 클래스에 적용합니다. 행이 없으면 생성 후 재로드합니다.
         /// 반환값의 <see cref="SupabaseLoadResult.IsNewUser"/>로 신규 유저 여부를 확인합니다.
         /// </summary>
-        /// <param name="includeUpdatedAt">true면 select에 <c>updated_at</c> 컬럼을 포함합니다.</param>
-        public static Task<SupabaseLoadResult> LoadUserSaveAsync(bool includeUpdatedAt = true) =>
+        public static Task<SupabaseLoadResult> LoadUserSaveAsync() =>
             UserSave != null
-                ? UserSave.LoadAsync(includeUpdatedAt)
+                ? UserSave.LoadAsync(includeUpdatedAt: true)
                 : Task.FromResult(SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>

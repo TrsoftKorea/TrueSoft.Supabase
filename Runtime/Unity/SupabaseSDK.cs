@@ -2951,6 +2951,9 @@ namespace TrueBase.Unity
 
             _currentSession = null;
             _remoteConfig   = null;
+            // 구독·커서·채널 캐시는 계정에 묶인 상태다. 남겨두면 다음 계정이 물려받는다.
+            _chat?.Reset();
+            _chat           = null;
             _pendingSignInProfile      = PublicProfile.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)

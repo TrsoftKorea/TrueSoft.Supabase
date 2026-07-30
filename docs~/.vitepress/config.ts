@@ -34,6 +34,7 @@ export default defineConfig({
             items: [
               { text: '익명 로그인', link: '/guide/auth/anonymous' },
               { text: '자동 로그인', link: '/guide/auth/auto-login' },
+              { text: '세션 복원', link: '/guide/auth/restore-session' },
               { text: '로그인 후 상태', link: '/guide/auth/session-state' },
               { text: '로그아웃', link: '/guide/auth/logout' },
               { text: '익명 계정 복구', link: '/guide/auth/recovery' },
@@ -217,7 +218,15 @@ export default defineConfig({
               { text: '메시지 발송', link: '/guide/chat/send' }
             ]
           },
-          { text: '서버 시간', link: '/guide/server-time' }
+          {
+            text: '서버 시간',
+            link: '/guide/server-time/',
+            collapsed: true,
+            items: [
+              { text: '서버 시각 조회', link: '/guide/server-time/now' },
+              { text: '기다리지 않고 읽기', link: '/guide/server-time/now-sync' }
+            ]
+          }
         ]
       },
       {

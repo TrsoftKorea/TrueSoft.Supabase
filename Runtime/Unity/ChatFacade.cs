@@ -242,6 +242,11 @@ namespace TrueBase.Unity
         /// <summary>로그아웃·계정 전환 시 구독과 캐시를 비웁니다.</summary>
         internal void Reset()
         {
+            // 목록만 비우면 게임이 들고 있는 구독 객체는 살아 있는 것처럼 보인다(IsDisposed=false).
+            // Dispose 가 Remove 로 목록을 건드리므로 복사본을 돈다.
+            foreach (var sub in _subscriptions.ToArray())
+                sub.Dispose();
+
             _subscriptions.Clear();
             _channelCache = null;
         }
