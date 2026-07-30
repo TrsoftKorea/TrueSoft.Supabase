@@ -248,8 +248,8 @@ namespace TrueBase.Unity
         {
             try
             {
-                var accessToken = _accessTokenGetter?.Invoke();
-                await PollKeyAsync(key, accessToken).ConfigureAwait(true);
+                // 첫 로드와 같은 in-flight 맵을 지나므로, 같은 키를 동시에 여러 곳에서 읽어도 갱신 요청은 한 번만 나간다.
+                await EnsureKeysFetchedWithOutcomeAsync(new[] { key }).ConfigureAwait(true);
             }
             catch (Exception e)
             {
@@ -269,16 +269,61 @@ namespace TrueBase.Unity
             }
         }
 
+        // 같은 키 조합을 동시에 처음 읽는 경로가 여러 곳일 수 있다(서로 다른 시스템의 초기화 등).
+        // 진행 중인 조회를 공유해 요청이 겹치지 않게 한다.
+        private readonly Dictionary<string, Task<FetchOutcome>> _inFlightFetches =
+            new Dictionary<string, Task<FetchOutcome>>();
+
         /// <summary>
         /// 키들을 서버에서 조회해 캐시에 반영하고, 반영 후에도 캐시에 없는 키가 있으면
         /// <see cref="DiagnoseKeyNotCached"/>로 좁힌 사유를 실패로 반환합니다.
+        /// 같은 키 조합의 조회가 진행 중이면 그것을 함께 기다립니다.
         /// </summary>
         /// <param name="keys">조회할 키 목록. null/빈 배열이면 성공으로 간주합니다.</param>
-        private async Task<FetchOutcome> EnsureKeysFetchedWithOutcomeAsync(string[] keys)
+        private Task<FetchOutcome> EnsureKeysFetchedWithOutcomeAsync(string[] keys)
         {
             if (keys == null || keys.Length == 0)
-                return new FetchOutcome(true, null);
+                return Task.FromResult(new FetchOutcome(true, null));
 
+            var id = BuildFetchId(keys);
+            if (_inFlightFetches.TryGetValue(id, out var running) && running.IsCompleted == false)
+                return running;
+
+            var task = FetchKeysAsync(keys, id);
+            _inFlightFetches[id] = task;
+            return task;
+        }
+
+        /// <summary>키 조합을 순서와 무관하게 같은 값으로 식별합니다.</summary>
+        private static string BuildFetchId(string[] keys)
+        {
+            var normalized = new List<string>(keys.Length);
+            foreach (var raw in keys)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                    continue;
+
+                normalized.Add(raw.Trim());
+            }
+
+            normalized.Sort(StringComparer.Ordinal);
+            return string.Join("\n", normalized);
+        }
+
+        private async Task<FetchOutcome> FetchKeysAsync(string[] keys, string id)
+        {
+            try
+            {
+                return await FetchKeysCoreAsync(keys).ConfigureAwait(true);
+            }
+            finally
+            {
+                _inFlightFetches.Remove(id);
+            }
+        }
+
+        private async Task<FetchOutcome> FetchKeysCoreAsync(string[] keys)
+        {
             var accessToken = _accessTokenGetter?.Invoke();
             var result = await _service.GetByKeysAsync(keys, accessToken).ConfigureAwait(true);
             if (result.IsSuccess == false)

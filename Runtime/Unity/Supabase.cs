@@ -447,6 +447,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync() =>
             SupabaseSDK.TryGetServerNowAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.GetServerNow"/>
+        public static SupabaseResult<DateTimeOffset> GetServerNow() =>
+            SupabaseSDK.GetServerNow();
+
         // PlayNANOO 이관 브릿지 전용
         // 게임 코드에서 직접 호출하지 마세요. PlayNanooRuntime이 내부적으로 사용합니다.
 

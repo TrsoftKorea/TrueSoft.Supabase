@@ -101,6 +101,7 @@
         ChatTooFast,
         ChatScopeUnavailable,
         ChatChannelsEmpty,
+        ServerTimeNotSynced,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -195,6 +196,7 @@
             SupabaseErrorCode.ChatTooFast => SupabaseReason.ChatTooFast,
             SupabaseErrorCode.ChatScopeUnavailable => SupabaseReason.ChatScopeUnavailable,
             SupabaseErrorCode.ChatChannelsEmpty => SupabaseReason.ChatChannelsEmpty,
+            SupabaseErrorCode.ServerTimeNotSynced => SupabaseReason.ServerTimeNotSynced,
             _ => SupabaseReason.Unknown,
         };
     }

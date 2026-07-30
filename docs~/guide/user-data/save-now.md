@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.SaveNowAsync(int timeoutMs = 5000)
 ```
 
-쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 기다립니다. 씬 전환·로그아웃·앱 종료 등 데이터 유실이 치명적인 순간에 사용하세요. 완료를 기다리지 않아도 되면 [즉시 저장 요청](./request-save)을 씁니다.
+쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 기다립니다. 완료를 기다리지 않아도 되면 [즉시 저장 요청](./request-save)을 씁니다.
 
 ```csharp
 await Supabase.SaveNowAsync();   // 전송 완료까지 대기

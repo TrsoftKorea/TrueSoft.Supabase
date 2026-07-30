@@ -92,7 +92,11 @@ namespace TrueBase.Unity.Config
         private void OnApplicationPause(bool pause)
         {
             if (!pause)
+            {
+                // 절전 중에는 단조 시계가 멈출 수 있어 캐시된 서버 시각이 뒤처진다. 다음 조회에서 다시 맞춘다.
+                SupabaseSDK.InvalidateServerTimeCache();
                 return;
+            }
 
             SupabaseSDK.RequestImmediateUserSaveStaticFlushAll();
         }

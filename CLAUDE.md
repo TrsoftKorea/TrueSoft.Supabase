@@ -25,6 +25,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 - No build commands exist in this repo. Unity compiles C# source directly when the package is imported into a Unity project.
 - The SDK has no test runner. Validation is done via `Samples~/Examples/ExampleSupabaseScenarios.cs` (keyboard-shortcut-driven test flows in Play Mode).
 - **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
+- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서-코드 정합성(없는 API·시그니처 불일치)을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서를 손댄 뒤 실행한다.
 
 ## Architecture
 
@@ -68,6 +69,16 @@ The SDK has three layers:
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
 실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseReason` enum, `Runtime/Core/Models/SupabaseReason.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseReasonMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseReason` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). **`SupabaseErrorCode` 상수는 `internal`(SDK 전용)** — 게임은 `SupabaseReason` enum(`.Reason`)으로만 분기하고, 실패 원문은 `.ErrorCode` 문자열로 읽는다. Core 밖 SDK 계층(TrueBase.Unity·TrueBase.Unity.IAP)은 `InternalsVisibleTo`로 `SupabaseErrorCode`에 접근한다(`Runtime/Core/Models/SupabaseErrorCode.cs` 상단). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseReason` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseReason.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
+
+**실패의 로그 레벨은 "누구 탓인가"로 정한다.** `SupabaseSDK.IsExpectedFailureReason`에 등록된 사유는 `Debug.Log`(일반)로, 나머지는 `Debug.LogError`로 나간다. 게임이 문구로 안내할 사유를 콘솔에 빨갛게 띄우면 진짜 오류가 묻히기 때문이다.
+
+| 분류 | 예 | 로그 |
+|------|-----|------|
+| 유저가 입력·상태 때문에 정상 거절됨 | 글자 수 초과, 채팅 차단 중, 쿨타임, 쿠폰 코드 틀림·이미 사용 | 일반 |
+| 게임·설정이 잘못됨 | 없는 채널 코드, 프로필에 서버 없음, 등록 안 된 리더보드 필드 | Error |
+| 인프라 문제 | 네트워크, 파싱 실패 | Error |
+
+**새 사유를 추가할 때 이 분류를 함께 판단한다.** 유저 탓이면 `IsExpectedFailureReason`의 switch에 추가한다. `LogAndReturnResult`를 거치는 API는 자동 적용되지만, `LogApiResult`를 직접 부르는 곳은 `errorOnFail: !IsExpectedFailureReason(...)`을 명시해야 한다.
 
 **사유가 있으면 반드시 `IsSuccess = false`로 반환한다.** 호출자가 `Reason`을 확인할 수 있어야 하기 때문이다. 오류가 아닌 상황도 예외 없이 실패로 내보낸다 — 유저 세이브 저장 3종(`SaveIfChangedAsync`·`SaveNowAsync`·`RequestSave`)은 보낼 변경분이 없으면 `UserSaveNoChanges` 실패를 반환한다. 이런 사유를 내부에서 다시 소비하는 코드(예: `LoadAsync`의 로드 후 초기 저장)는 `Reason`으로 걸러 경고 로그를 내지 않는다. 사유 없는 성공은 `SupabaseResult.Ok`뿐이다.
 

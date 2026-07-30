@@ -1438,7 +1438,23 @@ namespace TrueBase.Unity
         /// <summary>
         /// Postgres RPC <c>ts_server_now</c>로 서버 시각(UTC)을 가져옵니다. 로그인 세션 없이 Publishable 키로 호출합니다.
         /// </summary>
-        public static async Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync()
+        public static Task<SupabaseResult<DateTimeOffset>> GetServerNowAsync()
+        {
+            if (TryReadCachedServerNow(out var cached))
+                return Task.FromResult(SupabaseResult<DateTimeOffset>.Success(cached));
+
+            // 진행 중인 동기화가 있으면 그것을 함께 기다린다. 동기 조회가 시작한 요청이든
+            // 다른 호출자가 시작한 요청이든 하나만 나가야 한다.
+            if (_serverTimeSyncTask == null || _serverTimeSyncTask.IsCompleted)
+                _serverTimeSyncTask = SyncServerTimeAsync();
+
+            return _serverTimeSyncTask;
+        }
+
+        private static Task<SupabaseResult<DateTimeOffset>> _serverTimeSyncTask;
+
+        /// <summary>서버에 실제로 물어 기준점을 갱신합니다. 중복 방지는 <see cref="GetServerNowAsync"/>가 합니다.</summary>
+        private static async Task<SupabaseResult<DateTimeOffset>> SyncServerTimeAsync()
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<DateTimeOffset>.Fail(SupabaseErrorCode.NotInitialized);
@@ -1447,7 +1463,29 @@ namespace TrueBase.Unity
             if (svc == null)
                 return SupabaseResult<DateTimeOffset>.Fail(SupabaseErrorCode.NotInitialized);
 
-            return await svc.GetServerNowAsync();
+            // 왕복 지연을 보정한다. 응답에 담긴 시각은 요청과 응답 사이 어딘가의 값이므로
+            // 왕복의 절반을 더해 "응답을 받은 지금"에 해당하는 시각으로 맞춘다.
+            var sentAt = _serverTimeClock.Elapsed;
+            var r = await svc.GetServerNowAsync();
+            var receivedAt = _serverTimeClock.Elapsed;
+
+            if (!r.IsSuccess)
+            {
+                // 갱신에 실패해도 한 번이라도 맞춰 둔 값이 있으면 그걸로 답한다.
+                // 기준점이 단조 시계라 오프라인에서도 계속 정확하다.
+                if (TryReadCachedServerNow(out var stale, ignoreAge: true))
+                    return SupabaseResult<DateTimeOffset>.Success(stale);
+
+                return r;
+            }
+
+            var half = TimeSpan.FromTicks((receivedAt - sentAt).Ticks / 2);
+            _serverTimeAnchor = r.Data + half;
+            _serverTimeAnchorAt = receivedAt;
+            _hasServerTimeAnchor = true;
+            _serverTimeStale = false;
+
+            return SupabaseResult<DateTimeOffset>.Success(_serverTimeAnchor);
         }
 
         /// <summary><see cref="GetServerNowAsync"/>를 값 기반으로 호출합니다.</summary>
@@ -1455,6 +1493,69 @@ namespace TrueBase.Unity
         {
             var r = await GetServerNowAsync();
             return LogAndReturnResult(ApiLogTags.ServerTime, r);
+        }
+
+        /// <summary>
+        /// 캐시된 기준점으로 서버 시각을 즉시 계산합니다. 네트워크를 타지 않아 <c>Update</c>에서 매 프레임 불러도 됩니다.
+        /// 아직 맞추지 못했으면 기기 시계를 대신 주지 않고 <c>ServerTimeNotSynced</c>로 실패하며,
+        /// 그때 백그라운드 동기화를 시작하므로 잠시 뒤부터 성공합니다.
+        /// </summary>
+        /// <remarks>매 프레임 호출되므로 로그를 남기지 않습니다. 실패가 반복되면 콘솔이 묻힙니다.</remarks>
+        public static SupabaseResult<DateTimeOffset> GetServerNow()
+        {
+            if (TryReadCachedServerNow(out var now))
+                return SupabaseResult<DateTimeOffset>.Success(now);
+
+            // 중복 방지는 GetServerNowAsync 가 한다. 매 프레임 불러도 요청은 하나만 나간다.
+            _ = GetServerNowAsync();
+            return SupabaseResult<DateTimeOffset>.Fail(SupabaseErrorCode.ServerTimeNotSynced);
+        }
+
+        // ── 서버 시각 캐시 ────────────────────────────────────────────────────
+        //
+        // 기기 시계(DateTime.UtcNow)가 아니라 단조 시계(Stopwatch)를 기준으로 흐르게 한다.
+        // 기기 시계를 기준으로 잡으면 유저가 시간을 바꾸는 순간 캐시가 그대로 어긋난다.
+
+        private static readonly System.Diagnostics.Stopwatch _serverTimeClock = System.Diagnostics.Stopwatch.StartNew();
+        private static DateTimeOffset _serverTimeAnchor;
+        private static TimeSpan _serverTimeAnchorAt;
+        private static bool _hasServerTimeAnchor;
+        private static bool _serverTimeStale;
+
+        /// <summary>이 시간이 지나면 다음 호출에서 서버에 다시 물어 오차 누적을 끊습니다.</summary>
+        private const double ServerTimeCacheSeconds = 1800d;
+
+        /// <param name="ignoreAge">갱신 실패 시 오래된 기준점이라도 쓰기 위한 우회.</param>
+        private static bool TryReadCachedServerNow(out DateTimeOffset now, bool ignoreAge = false)
+        {
+            now = default;
+            if (!_hasServerTimeAnchor)
+                return false;
+
+            var elapsed = _serverTimeClock.Elapsed - _serverTimeAnchorAt;
+            if (!ignoreAge && (_serverTimeStale || elapsed.TotalSeconds > ServerTimeCacheSeconds))
+                return false;
+
+            now = _serverTimeAnchor + elapsed;
+            return true;
+        }
+
+        /// <summary>프로젝트가 바뀌면 기준점을 버립니다. 같은 프로젝트 재초기화에서는 유지합니다.</summary>
+        private static void ResetServerTimeCache()
+        {
+            _hasServerTimeAnchor = false;
+            _serverTimeStale = false;
+        }
+
+        /// <summary>
+        /// 앱이 백그라운드에서 돌아왔을 때 호출합니다. 플랫폼에 따라 절전 중 단조 시계가 멈춰
+        /// 캐시된 시각이 실제보다 뒤처질 수 있으므로, 다음 호출에서 다시 맞추게 표시합니다.
+        /// 기준점 자체는 버리지 않습니다 — 재동기화가 네트워크 오류로 실패하면 그 값으로 답해야 합니다.
+        /// </summary>
+        public static void InvalidateServerTimeCache()
+        {
+            if (_hasServerTimeAnchor)
+                _serverTimeStale = true;
         }
 
         /// <summary><see cref="SupabaseResult{T}"/>를 성공/실패 로그로 남기고 <see cref="SupabaseResult"/>로 변환합니다(BanInfo 전달 포함).</summary>
@@ -2957,6 +3058,11 @@ namespace TrueBase.Unity
 
             // 동일 프로젝트 재초기화(예: Resources 부트스트랩 후 Runtime Awake)면 로그인 세션을 유지합니다.
             var preserveSession = sameProject && IsLoggedIn;
+
+            // 프로젝트가 바뀌면 서버 시각 기준점을 버린다. 같은 프로젝트 재초기화에서는 유지해
+            // Resources 부트스트랩 뒤 Runtime Awake 로 이어질 때 불필요한 재조회를 하지 않는다.
+            if (!sameProject)
+                ResetServerTimeCache();
 
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;

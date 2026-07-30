@@ -259,5 +259,8 @@ namespace TrueBase.Core.Common
 
         /// <summary>구독 채널 목록이 비어 있습니다.</summary>
         public const string ChatChannelsEmpty = "chat_channels_empty";
+
+        /// <summary>서버 시각을 아직 한 번도 맞추지 못했습니다. 동기 조회에서만 나오며, 곧 맞춰집니다.</summary>
+        public const string ServerTimeNotSynced = "server_time_not_synced";
     }
 }
