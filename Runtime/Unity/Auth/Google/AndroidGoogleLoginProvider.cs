@@ -6,7 +6,7 @@ namespace TrueBase.Unity.Auth.Google
     /// <see cref="GoogleLoginBridge"/>에 웹 클라이언트 ID를 고정해 두고 호출을 위임하는 래퍼입니다.
     /// 호출부에서 매번 클라이언트 ID를 넘기지 않아도 됩니다.
     /// </summary>
-    public sealed class AndroidGoogleLoginProvider
+    internal sealed class AndroidGoogleLoginProvider
     {
         private readonly GoogleLoginBridge _bridge;
         private readonly string _webClientId;

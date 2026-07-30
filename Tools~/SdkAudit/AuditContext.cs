@@ -50,6 +50,9 @@ namespace SdkAudit
         /// <summary>파사드 공개 메서드 선언(오버로드 포함).</summary>
         public List<MethodDeclarationSyntax> PublicMethods { get; } = new List<MethodDeclarationSyntax>();
 
+        /// <summary>SupabaseSDK 의 공개 멤버. 샘플·SDK 배선이 여기를 직접 참조한다.</summary>
+        public HashSet<string> SdkPublicApi { get; } = new HashSet<string>(StringComparer.Ordinal);
+
         /// <summary>SupabaseReason enum 멤버 이름.</summary>
         public HashSet<string> ReasonMembers { get; } = new HashSet<string>(StringComparer.Ordinal);
 

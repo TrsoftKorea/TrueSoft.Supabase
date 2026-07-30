@@ -11,7 +11,7 @@ namespace TrueBase.Unity.Config
     /// <see cref="SupabaseSettings"/>로부터 Core 계층 서비스들을 생성해 <see cref="SupabaseSDK"/>에 주입하는 부트스트랩입니다.
     /// <see cref="SupabaseRuntime"/> 또는 자동 부트스트랩이 사용합니다.
     /// </summary>
-    public sealed class SupabaseUnityBootstrap
+    internal sealed class SupabaseUnityBootstrap
     {
         /// <summary>현재 부트스트랩이 사용 중인 프로젝트 URL (동일 URL로 재초기화될 때 기존 로그인 세션 유지에 사용).</summary>
         public string ProjectUrl { get; private set; }

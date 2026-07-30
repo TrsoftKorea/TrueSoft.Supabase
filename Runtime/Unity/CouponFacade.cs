@@ -10,7 +10,7 @@ namespace TrueBase.Unity
     /// 로그인 세션을 사용하는 쿠폰 API.
     /// 쿠폰 정의·발급은 운영(Retool) 전용이라 여기에 없습니다.
     /// </summary>
-    public sealed class CouponFacade
+    internal sealed class CouponFacade
     {
         private readonly SupabaseCouponService _coupon;
         private readonly Func<SupabaseSession> _sessionGetter;

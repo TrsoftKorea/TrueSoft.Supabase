@@ -10,7 +10,7 @@ namespace TrueBase.Core.Http
     /// <see cref="ISupabaseHttpClient"/>의 <c>UnityWebRequest</c> 구현입니다.
     /// 네트워크 오류와 일시적 서버 오류(429·5xx)에 대해 지수 백오프로 최대 2회 재시도합니다.
     /// </summary>
-    public sealed class UnitySupabaseHttpClient : ISupabaseHttpClient
+    internal sealed class UnitySupabaseHttpClient : ISupabaseHttpClient
     {
         private const int MaxRetries = 2;
         private readonly int _timeoutSeconds;

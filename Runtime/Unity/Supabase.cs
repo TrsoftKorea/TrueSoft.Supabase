@@ -449,52 +449,5 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.GetServerNow"/>
         public static SupabaseResult<DateTimeOffset> GetServerNow() =>
             SupabaseSDK.GetServerNow();
-
-        // PlayNANOO 이관 브릿지 전용
-        // 게임 코드에서 직접 호출하지 마세요. PlayNanooRuntime이 내부적으로 사용합니다.
-
-        /// <inheritdoc cref="SupabaseSDK.RegisterPlayNanooInterceptors"/>
-        public static void RegisterPlayNanooInterceptors(
-            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signInAnonymously,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithGoogleIdToken,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithAppleIdToken,
-            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signOutFully,
-            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         requestMyWithdrawal,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleToGuestWithIdToken = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleToGuestWithIdToken  = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyName                       = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleWithIdToken                  = null,
-            Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null,
-            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         redeemWithdrawalCancel                 = null) =>
-            SupabaseSDK.RegisterPlayNanooInterceptors(
-                signInAnonymously, signInWithGoogleIdToken, signInWithAppleIdToken,
-                signOutFully, requestMyWithdrawal,
-                linkGoogleToGuestWithIdToken, linkAppleToGuestWithIdToken,
-                setMyName, linkGoogleWithIdToken, linkAppleWithIdToken,
-                redeemWithdrawalCancel);
-
-        /// <inheritdoc cref="SupabaseSDK.UnregisterPlayNanooInterceptors"/>
-        public static void UnregisterPlayNanooInterceptors() =>
-            SupabaseSDK.UnregisterPlayNanooInterceptors();
-
-        /// <inheritdoc cref="SupabaseSDK.RegisterNanooStorageReset"/>
-        public static void RegisterNanooStorageReset(Func<string, Task> reset) =>
-            SupabaseSDK.RegisterNanooStorageReset(reset);
-
-        /// <inheritdoc cref="SupabaseSDK.RegisterIAPAppleInterceptor"/>
-        public static void RegisterIAPAppleInterceptor(
-            Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor) =>
-            SupabaseSDK.RegisterIAPAppleInterceptor(interceptor);
-
-        /// <inheritdoc cref="SupabaseSDK.RegisterIAPGoogleInterceptor"/>
-        public static void RegisterIAPGoogleInterceptor(
-            Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor) =>
-            SupabaseSDK.RegisterIAPGoogleInterceptor(interceptor);
-
-        /// <summary>
-        /// PlayNanooRuntime 전용. 현재 등록된 StaticUserSave 인스턴스를 반환합니다.
-        /// StaticUserSave&lt;TRow&gt; 생성 시 자동 등록되므로 게임 코드에서 직접 호출할 필요가 없습니다.
-        /// </summary>
-        public static INanooSaveSyncable GetNanooSaveBridge() => SupabaseSDK._nanooSaveBridge;
     }
 }

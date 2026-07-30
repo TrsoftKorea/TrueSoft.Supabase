@@ -44,7 +44,8 @@ The SDK has three layers:
 - `Config/SupabaseSettings.cs` — ScriptableObject for static values (URL, keys, table names). Must be saved to `Assets/Resources/SupabaseSettings.asset`.
 - `Config/SupabaseRuntime.cs` — MonoBehaviour for scene lifecycle: RemoteConfig per-key polling, UserSave auto-sync. **로그인은 자동 실행되지 않음** — 개발자가 `Supabase.TriggerAutoLoginAsync()` 또는 직접 로그인 API를 원하는 타이밍에 호출. `public class` (non-sealed), `protected virtual Awake()` — 상속 가능. Optional but recommended.
 - `Config/SupabaseUnityBootstrap.cs` — Auto-bootstraps from `Resources/SupabaseSettings` if no scene-placed runtime is present. Async APIs internally await initialization.
-- Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `LeaderboardFacade`, `CouponFacade`, `ChatFacade`, `ServerFunctionsFacade`) — high-level wrappers. `ChatFacade`는 구독 폴링(`ChatSubscription`)까지 들고 있다
+- Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `LeaderboardFacade`, `CouponFacade`, `ChatFacade`, `ServerFunctionsFacade`) — high-level wrappers. **전부 `internal`**이며 `SupabaseSDK`의 `internal` 프로퍼티로만 접근한다 — 게임은 `Supabase` 파사드만 본다. `ChatFacade`는 구독 폴링(`ChatSubscription`)까지 들고 있다
+- **게임이 직접 쓰지 않는 타입은 `internal`로 둔다.** HTTP·JSON 구현, 부트스트랩, 로그인 브리지, 로그인 결과 DTO가 여기 해당한다. 게임에 남는 공개 타입은 게임이 **직접 인스턴스를 들고 있는 것**(`ChatSubscription`·`RemoteConfigBinding`·IAP 파사드·`StaticUserSave`·`SupabaseSettings` 등)뿐이다
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
 - `Auth/Google/` — `GoogleLoginBridge`, `AndroidGoogleLoginProvider` for Play Services OAuth
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
@@ -171,7 +172,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `Supabase.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
+`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `SupabaseSDK.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. **인터셉터·브리지 등록은 `Supabase` 파사드가 아니라 `SupabaseSDK`를 직접 부른다** — 게임에 공개하는 API가 아니기 때문이다. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
 ## IAP 코딩 규칙
 

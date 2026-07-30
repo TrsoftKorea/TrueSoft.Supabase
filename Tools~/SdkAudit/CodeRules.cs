@@ -80,6 +80,15 @@ namespace SdkAudit
 
             if (ctx.PublicApi.Count == 0)
                 ctx.Report.Error("[R1] 파사드에서 공개 멤버를 찾지 못했습니다. 검사기가 파일 구조를 못 읽고 있습니다.");
+
+            var sdk = ctx.Classes.FirstOrDefault(c => c.Node.Identifier.ValueText == "SupabaseSDK");
+            if (sdk.Node != null)
+                foreach (var m in sdk.Node.Members.Where(m => Has(m, SyntaxKind.PublicKeyword)))
+                {
+                    var name = MemberName(m);
+                    if (name != null)
+                        ctx.SdkPublicApi.Add(name);
+                }
         }
 
         // ── R2 ─────────────────────────────────────────────────────────────
@@ -185,6 +194,14 @@ namespace SdkAudit
                         var name = hit.Groups[1].Value;
                         if (!ctx.PublicApi.ContainsKey(name))
                             ctx.Report.Error($"[R6 샘플] 샘플이 Supabase.{name} 을 부르지만 공개 멤버에 없습니다. ({ctx.Rel(src.Path)}:{i + 1})");
+                    }
+
+                    // 샘플의 SDK 배선(PlayNANOO 등)은 SupabaseSDK 를 직접 참조한다.
+                    foreach (Match hit in Regex.Matches(lines[i], @"(?<![\w.\[])SupabaseSDK\.([A-Z]\w*)"))
+                    {
+                        var name = hit.Groups[1].Value;
+                        if (!ctx.SdkPublicApi.Contains(name))
+                            ctx.Report.Error($"[R6 샘플] 샘플이 SupabaseSDK.{name} 을 부르지만 공개 멤버가 아닙니다. ({ctx.Rel(src.Path)}:{i + 1})");
                     }
                 }
             }

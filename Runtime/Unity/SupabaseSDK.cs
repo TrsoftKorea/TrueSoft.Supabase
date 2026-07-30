@@ -71,6 +71,12 @@ namespace TrueBase.Unity
         // StaticUserSave<TRow> 생성 시 자동 등록됩니다. PlayNanooRuntime이 세이브 동기화에 사용합니다.
         internal static INanooSaveSyncable _nanooSaveBridge;
 
+        /// <summary>
+        /// PlayNanooRuntime 전용. 현재 등록된 <see cref="StaticUserSave{TRow}"/> 인스턴스를 반환합니다.
+        /// 생성 시 자동 등록되므로 게임 코드에서 호출할 일이 없습니다.
+        /// </summary>
+        public static INanooSaveSyncable GetNanooSaveBridge() => _nanooSaveBridge;
+
         /// <summary>등록된 유일한 <see cref="StaticUserSave{TRow}"/> 인스턴스. 생성자에서 스스로 등록합니다.</summary>
         internal static IUserSaveOperations _userSave;
 
@@ -111,7 +117,7 @@ namespace TrueBase.Unity
             => _interceptIAPGoogle = interceptor;
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
-        internal static void RegisterPlayNanooInterceptors(
+        public static void RegisterPlayNanooInterceptors(
             Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         signInAnonymously,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithGoogleIdToken,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> signInWithAppleIdToken,
@@ -138,7 +144,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
-        internal static void UnregisterPlayNanooInterceptors()
+        public static void UnregisterPlayNanooInterceptors()
         {
             _interceptSignInAnonymously                       = null;
             _interceptSignInWithGoogleIdToken                 = null;
@@ -1884,7 +1890,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>유저 세이브/로드 퍼사드. 초기화 후에만 사용하세요.</summary>
-        public static UserSavesFacade UserSaves
+        internal static UserSavesFacade UserSaves
         {
             get
             {
@@ -1897,7 +1903,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>우편함(<c>mails</c> + 수령·삭제 RPC).</summary>
-        public static MailboxFacade Mailbox
+        internal static MailboxFacade Mailbox
         {
             get
             {
@@ -1910,7 +1916,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>리더보드(순위 조회·점수 기록 RPC). 리더보드 정의·컬럼 관리는 운영 전용입니다.</summary>
-        public static LeaderboardFacade Leaderboard
+        internal static LeaderboardFacade Leaderboard
         {
             get
             {
@@ -1923,7 +1929,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>쿠폰(코드 사용 RPC). 쿠폰 정의·발급은 운영 전용입니다.</summary>
-        public static CouponFacade Coupon
+        internal static CouponFacade Coupon
         {
             get
             {
@@ -1936,7 +1942,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>채팅(발송·구독 RPC). 채널 관리와 메시지 숨김·차단은 운영 전용입니다.</summary>
-        public static ChatFacade Chat
+        internal static ChatFacade Chat
         {
             get
             {
@@ -2635,7 +2641,7 @@ namespace TrueBase.Unity
         /// <remarks>
         /// 서버 요청 시 액세스 토큰이 있으면 전달됩니다(정책에 따라 익명/로그인 모두 가능한 경우가 많음).
         /// </remarks>
-        public static RemoteConfigFacade RemoteConfig
+        internal static RemoteConfigFacade RemoteConfig
         {
             get
             {
@@ -2735,7 +2741,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>Supabase Edge Functions 호출 퍼사드(로그인 세션의 액세스 토큰 사용).</summary>
-        public static ServerFunctionsFacade Functions
+        internal static ServerFunctionsFacade Functions
         {
             get
             {
@@ -3049,7 +3055,7 @@ namespace TrueBase.Unity
         /// <remarks>
         /// 동일 프로젝트 URL로 재초기화되고 이미 로그인 중이면 세션을 유지합니다(Resources 부트스트랩 후 Runtime Awake 등).
         /// </remarks>
-        public static void Initialize(SupabaseUnityBootstrap bootstrap)
+        internal static void Initialize(SupabaseUnityBootstrap bootstrap)
         {
             _ = bootstrap ?? throw new ArgumentNullException(nameof(bootstrap));
 

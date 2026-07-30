@@ -5,7 +5,7 @@ namespace TrueBase.Unity
     /// <summary>
     /// 씬/샘플에서 SDK가 초기화되지 않을 때 동일한 점검 안내를 출력하기 위한 헬퍼입니다.
     /// </summary>
-    public static class SupabaseUnitySetupHelp
+    internal static class SupabaseUnitySetupHelp
     {
         /// <summary>콘솔에 그대로 붙여 넣을 수 있는 최소 체크리스트(한국어).</summary>
         public const string InitializationChecklistKo =

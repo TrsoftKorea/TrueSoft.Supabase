@@ -11,7 +11,7 @@ namespace TrueBase.Unity
     /// <summary>
     /// 로그인 세션 + <see cref="MailItemHandlerRegistry"/>를 사용하는 우편함 API.
     /// </summary>
-    public sealed class MailboxFacade
+    internal sealed class MailboxFacade
     {
         private readonly SupabaseMailboxService _mailbox;
         private readonly Func<SupabaseSession> _sessionGetter;

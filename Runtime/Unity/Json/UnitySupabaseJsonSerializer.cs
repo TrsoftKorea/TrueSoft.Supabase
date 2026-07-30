@@ -7,7 +7,7 @@ namespace TrueBase.Unity
     /// <see cref="ISupabaseJsonSerializer"/>의 Newtonsoft.Json 구현입니다.
     /// 역직렬화 입력이 null/공백이면 예외 대신 <c>default</c>(배열은 빈 배열)를 반환합니다.
     /// </summary>
-    public sealed class UnitySupabaseJsonSerializer : ISupabaseJsonSerializer
+    internal sealed class UnitySupabaseJsonSerializer : ISupabaseJsonSerializer
     {
         public string ToJson<T>(T value)
         {

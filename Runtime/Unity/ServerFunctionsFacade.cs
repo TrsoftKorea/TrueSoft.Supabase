@@ -10,7 +10,7 @@ namespace TrueBase.Unity
     /// Edge Function 호출 퍼사드.
     /// requireAuth=true면 현재 세션(access_token)이 필요합니다.
     /// </summary>
-    public sealed class ServerFunctionsFacade
+    internal sealed class ServerFunctionsFacade
     {
         private readonly SupabaseEdgeFunctionsService _functionsService;
         private readonly Func<SupabaseSession> _sessionGetter;

@@ -4,7 +4,7 @@ namespace TrueBase.Unity.Auth.Apple
 {
     /// <summary>iOS 네이티브 Sign in with Apple 성공 시 반환되는 계정 정보.</summary>
     [Serializable]
-    public sealed class AppleLoginResult
+    internal sealed class AppleLoginResult
     {
         /// <summary>Supabase 로그인에 사용하는 Apple identityToken(JWT).</summary>
         public string IdToken;

@@ -12,7 +12,7 @@ namespace TrueBase.Unity
     /// 각 API는 세션 없는 오버로드(생성자에 전달한 <c>sessionGetter</c>에서 현재 세션을 가져옴)와
     /// 세션을 직접 지정하는 오버로드를 함께 제공합니다.
     /// </summary>
-    public sealed class UserSavesFacade
+    internal sealed class UserSavesFacade
     {
         private readonly SupabaseUserDataService _userDataService;
         private readonly Func<SupabaseSession> _sessionGetter;

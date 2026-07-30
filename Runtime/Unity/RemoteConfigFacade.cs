@@ -12,7 +12,7 @@ namespace TrueBase.Unity
     /// RemoteConfig 캐시 + 조회 API. Cold Start(시작 시 fetch 없음), 키 단위 폴링, Stale-While-Revalidate 조회를 지원합니다.
     /// 설계: 1키 = 1설정묶음(JSON) = 1폴링주기 (category 없음)
     /// </summary>
-    public sealed class RemoteConfigFacade
+    internal sealed class RemoteConfigFacade
     {
         private readonly SupabaseRemoteConfigService _service;
         private readonly Func<string> _accessTokenGetter;

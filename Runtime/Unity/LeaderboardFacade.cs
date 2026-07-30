@@ -11,7 +11,7 @@ namespace TrueBase.Unity
     /// 로그인 세션을 사용하는 리더보드 API.
     /// 리더보드 정의·컬럼 관리는 운영(Retool) 전용이라 여기에 없습니다.
     /// </summary>
-    public sealed class LeaderboardFacade
+    internal sealed class LeaderboardFacade
     {
         private readonly SupabaseLeaderboardService _leaderboard;
         private readonly Func<SupabaseSession> _sessionGetter;

@@ -11,7 +11,7 @@ namespace TrueBase.Unity.Auth.Apple
     /// SHA256 해시된 nonce를 네이티브에 전달하고, 결과(identityToken 등)를 콜백으로 받습니다.
     /// raw nonce 생성·해시는 <see cref="SupabaseSDK"/>에서 처리합니다.
     /// </summary>
-    public sealed class AppleLoginBridge : MonoBehaviour
+    internal sealed class AppleLoginBridge : MonoBehaviour
     {
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")]

@@ -4,7 +4,7 @@ namespace TrueBase.Unity.Auth.Google
 {
     /// <summary>Android 네이티브 Google 로그인 성공 시 반환되는 계정 정보.</summary>
     [Serializable]
-    public sealed class GoogleLoginResult
+    internal sealed class GoogleLoginResult
     {
         /// <summary>Supabase 로그인에 사용하는 Google ID 토큰.</summary>
         public string IdToken;

@@ -8,7 +8,7 @@ namespace TrueBase.Unity.Auth.Google
     /// 네이티브 호출 결과는 <c>UnitySendMessage</c>로 이 컴포넌트의 <c>OnGoogle*</c> 콜백에 전달되므로
     /// 씬에 배치된 GameObject에 붙어 있어야 합니다. Android 외 플랫폼에서는 즉시 onError를 호출합니다.
     /// </summary>
-    public sealed class GoogleLoginBridge : MonoBehaviour
+    internal sealed class GoogleLoginBridge : MonoBehaviour
     {
         private const string PluginClass = "com.truesoft.googleloginplugin.GoogleLoginPlugin";
 
