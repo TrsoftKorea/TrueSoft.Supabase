@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using TrueBase.Core.Common;
 
 var errors = new List<string>();
@@ -76,6 +77,63 @@ else
     }
 }
 
+// 6) SQL 대조 — 클라이언트에 열린 RPC가 던지는 사유가 카탈로그에 있는가.
+//    없으면 게임에서 SupabaseReason.Unknown 으로 떨어져 분기할 수 없다.
+if (root != null)
+{
+    var sqlPath = Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql");
+    if (!File.Exists(sqlPath))
+    {
+        warnings.Add("install.sql 을 찾지 못해 SQL 사유 대조를 건너뜁니다.");
+    }
+    else
+    {
+        var sql = File.ReadAllText(sqlPath);
+        var values = new HashSet<string>(consts.Values, StringComparer.Ordinal);
+
+        // 클라이언트(anon·authenticated)에 grant 된 함수만 대상. 관리 함수는 service_role 전용이라 SDK 가 보지 않는다.
+        var clientFuncs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match g in Regex.Matches(sql,
+                     @"grant\s+execute\s+on\s+function\s+(?:public\.)?(\w+)\s*\([^)]*\)\s*to\s+([^;]+);",
+                     RegexOptions.IgnoreCase))
+        {
+            var roles = g.Groups[2].Value;
+            if (roles.IndexOf("authenticated", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                roles.IndexOf("anon", StringComparison.OrdinalIgnoreCase) >= 0)
+                clientFuncs.Add(g.Groups[1].Value);
+        }
+
+        if (clientFuncs.Count == 0)
+        {
+            warnings.Add("install.sql 에서 클라이언트 grant 를 찾지 못해 SQL 사유 대조를 건너뜁니다.");
+        }
+        else
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (name, body) in EnumerateFunctionBodies(sql))
+            {
+                if (!clientFuncs.Contains(name))
+                    continue;
+
+                foreach (Match r in Regex.Matches(body, @"raise\s+exception\s+'([^']+)'", RegexOptions.IgnoreCase))
+                {
+                    // 클라이언트는 ExtractRpcErrorCode 로 첫 ':' 앞만 취한다.
+                    var raw = r.Groups[1].Value;
+                    var colon = raw.IndexOf(':');
+                    var code = (colon > 0 ? raw.Substring(0, colon) : raw).Trim();
+
+                    // snake_case 식별자만 사유 코드다. 사람이 읽는 문장은 관리 함수용이라 제외.
+                    if (!Regex.IsMatch(code, @"^[a-z][a-z0-9_]*$"))
+                        continue;
+
+                    if (!values.Contains(code) && seen.Add(code))
+                        errors.Add($"[SQL→카탈로그] public.{name} 이 던지는 \"{code}\" 가 SupabaseErrorCode 에 없습니다. 게임에서 SupabaseReason.Unknown 으로 떨어집니다.");
+                }
+            }
+        }
+    }
+}
+
 // 리포트
 Console.WriteLine($"에러코드 카탈로그 검증 — enum {enumNames.Count}개 · 상수 {consts.Count}개");
 Console.WriteLine();
@@ -93,6 +151,30 @@ foreach (var e in errors)
 Console.WriteLine();
 Console.WriteLine($"결과: 실패 — 오류 {errors.Count}건");
 return 1;
+
+/// <summary>
+/// install.sql 에서 (함수 이름, 본문) 쌍을 뽑는다. 본문은 달러 인용 구간이라
+/// 여는 태그($$ 또는 $tag$)와 같은 태그가 다시 나올 때까지가 한 함수다.
+/// </summary>
+static IEnumerable<(string Name, string Body)> EnumerateFunctionBodies(string sql)
+{
+    foreach (Match m in Regex.Matches(sql,
+                 @"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(\w+)\s*\(",
+                 RegexOptions.IgnoreCase))
+    {
+        var open = Regex.Match(sql.Substring(m.Index), @"\$(\w*)\$");
+        if (!open.Success)
+            continue;
+
+        var tag = open.Value;
+        var bodyStart = m.Index + open.Index + tag.Length;
+        var end = sql.IndexOf(tag, bodyStart, StringComparison.Ordinal);
+        if (end < 0)
+            continue;
+
+        yield return (m.Groups[1].Value, sql.Substring(bodyStart, end - bodyStart));
+    }
+}
 
 static string FindRepoRoot()
 {

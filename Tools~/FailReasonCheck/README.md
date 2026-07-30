@@ -25,7 +25,22 @@ dotnet run --project Tools~/FailReasonCheck
 | 하드 오류 | `FromErrorCode(상수값)` == 동명 enum 멤버 (map 정합성) |
 | 하드 오류 | 에러코드 문자열 중복 없음 |
 | 하드 오류 | `null`·빈문자열 → `None`, 미정의 문자열 → `Unknown` |
+| 하드 오류 | **클라이언트에 열린 RPC가 던지는 사유가 카탈로그에 있음** |
 | 경고 | `Runtime`·`Editor` 어디에서도 방출/참조되지 않는 죽은 사유 |
+
+## SQL 대조
+
+서버가 `raise exception '코드: 상세'`로 던지는 사유는 C# 어디에도 안 적혀 있어도 게임까지 흘러옵니다. 카탈로그에 없으면 **`SupabaseReason.Unknown`으로 떨어져 게임이 분기할 수 없습니다.**
+
+`install.sql`을 파싱해 이렇게 대조합니다.
+
+1. 19절의 `grant execute on function ... to anon/authenticated`로 **클라이언트에 열린 함수 목록**을 만든다
+2. 각 함수의 달러 인용 본문에서 `raise exception '...'`를 뽑는다
+3. 클라이언트가 하는 것과 같이 첫 `:` 앞부분만 취한다
+4. `^[a-z][a-z0-9_]*$` 형태만 사유 코드로 본다
+5. `SupabaseErrorCode` 값과 대조한다
+
+관리 함수(`admin_*`·`ts_admin_*`)는 service_role 전용이라 SDK가 볼 일이 없어 제외합니다. 그 함수들의 `raise exception`은 사람이 읽는 문장(`Column already exists: %`)이라 4번에서도 걸러집니다.
 
 ## 한계
 
