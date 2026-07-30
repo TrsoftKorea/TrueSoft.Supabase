@@ -63,7 +63,7 @@ public class GameplayConfig
 
 설정 클래스(중첩 포함)는 매개변수 없는 생성자로 역직렬화됩니다. 생성자를 직접 정의했다면 기본 생성자도 함께 두면 됩니다. 생성기로 만들면 자동으로 처리됩니다.
 
-중첩 객체는 `?.`로 접근합니다. JSON에 해당 키가 없으면 `null`이므로 null 체크를 함께 합니다.
+중첩 객체는 `?.`로 접근합니다. JSON에 해당 키가 없으면 `null`이므로 null 체크를 함께 합니다. 아래 `cfg`는 읽어 온 설정 객체입니다.
 
 ```csharp
 float dmg    = cfg?.battle?.playerDmg ?? 1f;
@@ -87,9 +87,8 @@ CSV의 열은 `필드` · `타입` · `포함`입니다. `필드`는 필드 경�
 생성된 클래스는 `[RemoteConfigKey]` 어트리뷰트가 포함되어 있어 바로 사용할 수 있습니다.
 
 ```csharp
-// 생성된 클래스는 세 패턴 모두 그대로 사용 가능
-var reader  = RemoteConfig<GameplayV1Config>.CreateReader();
-var binding = RemoteConfig<GameplayV1Config>.CreateBinding(pollInterval: 60f);
+// 생성된 클래스는 두 패턴 모두 그대로 사용 가능
+var result   = await RemoteConfig<GameplayV1Config>.GetAsync();
 var listener = RemoteConfig<GameplayV1Config>.CreateListener(cfg => Apply(cfg), pollInterval: 60f);
 ```
 

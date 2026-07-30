@@ -144,9 +144,8 @@ export default defineConfig({
             items: [
               { text: '개요', link: '/guide/remote-config/how-it-works' },
               { text: '빠른 시작', link: '/guide/remote-config/quickstart' },
-              { text: 'Reader', link: '/guide/remote-config/reader' },
-              { text: 'Binding', link: '/guide/remote-config/binding' },
-              { text: 'Listener', link: '/guide/remote-config/listener' },
+              { text: '값 읽기', link: '/guide/remote-config/get' },
+              { text: '변경 구독', link: '/guide/remote-config/listener' },
               { text: '더 알아보기', link: '/guide/remote-config/advanced' }
             ]
           }

@@ -58,7 +58,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <summary>PlayNANOO 로그인 성공 시 반환된 openid. SDK가 반환하지 않으면 null.</summary>
     public static string OpenId { get; private set; }
 
-    private INanooSaveSyncable Save => SupabaseSDK.GetNanooSaveBridge();
+    private INanooSaveSyncable Save => SupabaseBridge.GetNanooSaveBridge();
 
     // ── 이벤트 ───────────────────────────────────────────────────────────────
 
@@ -126,7 +126,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         base.Awake();
         _plugin = Plugin.GetInstance();
 
-        SupabaseSDK.RegisterPlayNanooInterceptors(
+        SupabaseBridge.RegisterPlayNanooInterceptors(
             signInAnonymously:                       InterceptSignInAnonymously,
             signInWithGoogleIdToken:                 InterceptSignInWithGoogleIdToken,
             signInWithAppleIdToken:                  InterceptSignInWithAppleIdToken,
@@ -142,7 +142,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         // 세이브 삭제 시 PlayNANOO 스토리지도 초기값으로 되돌립니다.
         // 안 그러면 다음 로그인의 동기화가 옛 데이터를 다시 밀어 넣어 삭제가 무효가 됩니다.
-        SupabaseSDK.RegisterNanooStorageReset(ResetNanooStorageAsync);
+        SupabaseBridge.RegisterNanooStorageReset(ResetNanooStorageAsync);
 
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
 #if UNITY_IAP_V5_1 && UNITY_IOS
@@ -151,7 +151,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         Debug.LogError("[PlayNanooRuntime] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
 #endif
 
-        SupabaseSDK.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>
+        SupabaseBridge.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>
         {
             var tcs = new TaskCompletionSource<SupabaseResult<AppleIAPPurchaseResponse>>();
             NanooIAPIOS(receipt, productId, string.Empty, 0d, async status =>
@@ -166,7 +166,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return await tcs.Task;
         });
 
-        SupabaseSDK.RegisterIAPGoogleInterceptor(async (purchaseToken, productId, priceAmount, priceCurrency, sdkVerify) =>
+        SupabaseBridge.RegisterIAPGoogleInterceptor(async (purchaseToken, productId, priceAmount, priceCurrency, sdkVerify) =>
         {
             var tcs = new TaskCompletionSource<SupabaseResult<GooglePlayPurchaseResponse>>();
             NanooIAPAndroid(purchaseToken, async status =>
@@ -184,7 +184,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private void OnDestroy()
     {
-        SupabaseSDK.UnregisterPlayNanooInterceptors();
+        SupabaseBridge.UnregisterPlayNanooInterceptors();
         // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
     }
 

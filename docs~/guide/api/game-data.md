@@ -20,6 +20,5 @@
 
 | 멤버 | 설명 |
 |------|------|
-| [`RemoteConfig<T>.CreateReader`](/guide/remote-config/reader) | 요청 시 값을 읽는 Reader 생성 |
-| [`RemoteConfig<T>.CreateBinding`](/guide/remote-config/binding) | 자동 갱신 Binding 생성 |
+| [`RemoteConfig<T>.GetAsync`](/guide/remote-config/get) | 설정 값 한 번 읽기 |
 | [`RemoteConfig<T>.CreateListener`](/guide/remote-config/listener) | 값 변경 콜백 Listener 생성 |

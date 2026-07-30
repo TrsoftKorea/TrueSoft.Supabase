@@ -81,14 +81,21 @@ namespace SdkAudit
             if (ctx.PublicApi.Count == 0)
                 ctx.Report.Error("[R1] 파사드에서 공개 멤버를 찾지 못했습니다. 검사기가 파일 구조를 못 읽고 있습니다.");
 
-            var sdk = ctx.Classes.FirstOrDefault(c => c.Node.Identifier.ValueText == "SupabaseSDK");
-            if (sdk.Node != null)
-                foreach (var m in sdk.Node.Members.Where(m => Has(m, SyntaxKind.PublicKeyword)))
+            // 샘플이 부르는 정적 클래스는 파사드만이 아니다(SupabaseBridge 등). 타입별 공개 멤버를 모아 둔다.
+            foreach (var (_, cls) in ctx.Classes)
+            {
+                var reachable = Has(cls, SyntaxKind.PublicKeyword);
+                if (!ctx.TypeMembers.TryGetValue(cls.Identifier.ValueText, out var members))
+                    ctx.TypeMembers[cls.Identifier.ValueText] = members = new TypeSurface();
+
+                members.IsPublicType |= reachable;
+                foreach (var m in cls.Members.Where(m => Has(m, SyntaxKind.PublicKeyword)))
                 {
                     var name = MemberName(m);
                     if (name != null)
-                        ctx.SdkPublicApi.Add(name);
+                        members.PublicMembers.Add(name);
                 }
+            }
         }
 
         // ── R2 ─────────────────────────────────────────────────────────────
@@ -189,19 +196,19 @@ namespace SdkAudit
                 for (var i = 0; i < lines.Length; i++)
                 {
                     // 로그 태그 "[Supabase.Chat]" 는 멤버 참조가 아니다.
-                    foreach (Match hit in Regex.Matches(lines[i], @"(?<![\w.\[])Supabase(?:IAP)?\.([A-Z]\w*)"))
+                    // 샘플은 어셈블리 밖이라 타입과 멤버가 **둘 다** public 이어야 부를 수 있다.
+                    foreach (Match hit in Regex.Matches(lines[i], @"(?<![\w.\[])([A-Z]\w*)\.([A-Z]\w*)"))
                     {
-                        var name = hit.Groups[1].Value;
-                        if (!ctx.PublicApi.ContainsKey(name))
-                            ctx.Report.Error($"[R6 샘플] 샘플이 Supabase.{name} 을 부르지만 공개 멤버에 없습니다. ({ctx.Rel(src.Path)}:{i + 1})");
-                    }
+                        var type = hit.Groups[1].Value;
+                        var name = hit.Groups[2].Value;
+                        if (!ctx.TypeMembers.TryGetValue(type, out var surface))
+                            continue; // SDK 가 선언한 타입이 아니다
 
-                    // 샘플의 SDK 배선(PlayNANOO 등)은 SupabaseSDK 를 직접 참조한다.
-                    foreach (Match hit in Regex.Matches(lines[i], @"(?<![\w.\[])SupabaseSDK\.([A-Z]\w*)"))
-                    {
-                        var name = hit.Groups[1].Value;
-                        if (!ctx.SdkPublicApi.Contains(name))
-                            ctx.Report.Error($"[R6 샘플] 샘플이 SupabaseSDK.{name} 을 부르지만 공개 멤버가 아닙니다. ({ctx.Rel(src.Path)}:{i + 1})");
+                        var at = $"{ctx.Rel(src.Path)}:{i + 1}";
+                        if (!surface.IsPublicType)
+                            ctx.Report.Error($"[R6 샘플] 샘플이 {type}.{name} 을 부르지만 {type} 이 internal 이라 어셈블리 밖에서 보이지 않습니다. ({at})");
+                        else if (!surface.PublicMembers.Contains(name))
+                            ctx.Report.Error($"[R6 샘플] 샘플이 {type}.{name} 을 부르지만 공개 멤버가 아닙니다. ({at})");
                     }
                 }
             }

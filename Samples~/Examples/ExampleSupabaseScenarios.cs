@@ -27,7 +27,7 @@ using UnityEngine;
 ///   R — 데이터 로드       V — 즉시 저장           F — 레벨 +1 (변경 시연)
 ///   X — 세이브 삭제 (기본값 리셋 + 재로드)
 ///
-///   T — RC Reader         U — RC Binding          E — RC Listener 토글
+///   T — RC 값 읽기       E — RC Listener 토글
 ///
 ///   N — 닉네임 가용성 확인 + 설정 + 프로필 조회
 ///   A — 내 상태 출력       J — 서버 시간 조회      G — 차단 정보 조회
@@ -77,7 +77,6 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     {
         Supabase.OnDuplicateLoginDetected -= HandleDuplicateLoginDetected;
         _rcListener?.Dispose();
-        _rcBinding?.Dispose();
     }
 
 
@@ -287,31 +286,19 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
     [RemoteConfigKey("test")]
     private sealed class TestConfig { public string a; public int b; public bool c; }
 
-    private Func<Task<TestConfig>>           _rcReader;
-    private RemoteConfigBinding<TestConfig>  _rcBinding;
     private RemoteConfigListener<TestConfig> _rcListener;
 
     // 로그인 결과의 프로필을 보관해 상태 출력(A) 등에서 사용합니다. (로그인 result에만 담기므로 게임이 직접 저장)
     private PublicProfile _lastProfile;
 
-    /// <summary>T — RemoteConfig Reader. 캐시 만료 시 서버에서 최신 값을 가져옵니다.</summary>
-    private async Task TestRemoteConfigReaderAsync()
+    /// <summary>T — RemoteConfig 단발 읽기. 캐시 만료 시 서버에서 최신 값을 가져옵니다.</summary>
+    private async Task TestRemoteConfigReadAsync()
     {
-        _rcReader ??= RemoteConfig<TestConfig>.CreateReader();
+        var r = await RemoteConfig<TestConfig>.GetAsync();
+        if (!r) { Debug.LogWarning($"[RC ①] 읽기 실패: {r.ErrorCode}"); return; }
 
-        var val = await _rcReader();
-        if (val != null) Debug.Log($"[RC ①] Reader: a={val.a}, b={val.b}, c={val.c}");
-        else             Debug.LogWarning("[RC ①] Reader: null (키 없음 또는 역직렬화 실패)");
-    }
-
-    /// <summary>U — RemoteConfig Binding. 60초 폴링, .Value로 즉시 읽기.</summary>
-    private void TestRemoteConfigBinding()
-    {
-        _rcBinding ??= RemoteConfig<TestConfig>.CreateBinding(pollInterval: 60f);
-
-        var val = _rcBinding.Value;
-        if (val != null) Debug.Log($"[RC ②] Binding: a={val.a}, b={val.b}, c={val.c}");
-        else             Debug.LogWarning("[RC ②] Binding: 아직 null (첫 fetch 전이거나 키 없음)");
+        var val = r.Data;
+        Debug.Log($"[RC ①] a={val.a}, b={val.b}, c={val.c}");
     }
 
     /// <summary>E — RemoteConfig Listener 시작/종료 토글. 값 변경 시 콜백 호출.</summary>
@@ -321,14 +308,14 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         {
             _rcListener.Dispose();
             _rcListener = null;
-            Debug.Log("[RC ③] Listener 종료.");
+            Debug.Log("[RC ②] Listener 종료.");
             return;
         }
 
         _rcListener = RemoteConfig<TestConfig>.CreateListener(
-            val => Debug.Log($"[RC ③] Listener 콜백: a={val.a}, b={val.b}, c={val.c}"),
+            val => Debug.Log($"[RC ②] Listener 콜백: a={val.a}, b={val.b}, c={val.c}"),
             pollInterval: 60f);
-        Debug.Log("[RC ③] Listener 시작.");
+        Debug.Log("[RC ②] Listener 시작.");
     }
 
     // ─── 공개 프로필 ──────────────────────────────────────────────────────────
@@ -447,8 +434,7 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F)) IncrementLevel();
         if (Input.GetKeyDown(KeyCode.X)) _ = DeletePlayerDataAsync();
 
-        if (Input.GetKeyDown(KeyCode.T)) _ = TestRemoteConfigReaderAsync();
-        if (Input.GetKeyDown(KeyCode.U)) TestRemoteConfigBinding();
+        if (Input.GetKeyDown(KeyCode.T)) _ = TestRemoteConfigReadAsync();
         if (Input.GetKeyDown(KeyCode.E)) ToggleRemoteConfigListener();
 
         if (Input.GetKeyDown(KeyCode.N)) _ = TestPublicProfileAsync();

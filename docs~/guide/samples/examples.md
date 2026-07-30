@@ -26,8 +26,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `V` | 유저 데이터 즉시 저장 |
 | `F` | 레벨 +1 (자동 저장 시연) |
 | `X` | 세이브 삭제 (기본값 리셋 + 재로드) |
-| `T` | RemoteConfig Reader 호출 |
-| `U` | RemoteConfig Binding 값 출력 |
+| `T` | RemoteConfig 값 읽기 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
 | `N` | 닉네임 설정 후 내 프로필 조회 (displayname Edge Function 배포 필요) |
 | `A` | 현재 세션 상태 출력 (IsAnonymous, UserId, Name 등) |

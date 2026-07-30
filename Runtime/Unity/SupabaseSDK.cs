@@ -2680,32 +2680,6 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// RemoteConfig 읽기 함수를 생성합니다. 반환된 함수를 호출하면 캐시가 신선하면 즉시, 만료됐으면 서버 조회 후 값을 반환합니다.
-        /// </summary>
-        /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="maxStale">캐시 유효 시간(초). 0이면 기본값(300초).</param>
-        public static Func<Task<T>> CreateRemoteConfigReader<T>(string key, int maxStale = 0) where T : class, new()
-        {
-            _ = GetRemoteConfigAsync<T>(key, maxStale); // 캐시 워밍
-            return async () =>
-            {
-                var result = await GetRemoteConfigFreshAsync<T>(key, maxStale);
-                return result.IsSuccess ? result.Data : null;
-            };
-        }
-
-        /// <summary>
-        /// 폴링 기반 RemoteConfigBinding을 생성합니다. 지정한 주기마다 서버에서 값을 갱신하며 Value로 읽습니다.
-        /// </summary>
-        /// <param name="key">remote_config 테이블의 key 값.</param>
-        /// <param name="pollInterval">폴링 주기(초).</param>
-        public static RemoteConfigBinding<T> CreateRemoteConfigBinding<T>(string key, float pollInterval)
-            where T : class, new()
-        {
-            return new RemoteConfigBinding<T>(key, pollInterval);
-        }
-
-        /// <summary>
         /// 폴링 기반 반응형 RemoteConfig 구독을 생성합니다. 값이 갱신될 때마다 onChange가 호출됩니다.
         /// </summary>
         /// <param name="key">remote_config 테이블의 key 값.</param>

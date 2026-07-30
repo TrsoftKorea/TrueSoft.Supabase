@@ -34,6 +34,13 @@ namespace SdkAudit
         public IReadOnlyList<string> Warnings => _warnings.Distinct().ToList();
     }
 
+    /// <summary>한 타입의 공개 표면. 타입 자체가 public 이어야 어셈블리 밖에서 부를 수 있다.</summary>
+    public sealed class TypeSurface
+    {
+        public bool IsPublicType;
+        public HashSet<string> PublicMembers { get; } = new HashSet<string>(StringComparer.Ordinal);
+    }
+
     /// <summary>규칙들이 공유하는 파싱 결과.</summary>
     public sealed class AuditContext
     {
@@ -50,8 +57,8 @@ namespace SdkAudit
         /// <summary>파사드 공개 메서드 선언(오버로드 포함).</summary>
         public List<MethodDeclarationSyntax> PublicMethods { get; } = new List<MethodDeclarationSyntax>();
 
-        /// <summary>SupabaseSDK 의 공개 멤버. 샘플·SDK 배선이 여기를 직접 참조한다.</summary>
-        public HashSet<string> SdkPublicApi { get; } = new HashSet<string>(StringComparer.Ordinal);
+        /// <summary>타입 이름 -> 그 타입의 공개 표면. 샘플이 부르는 정적 진입점 검증에 쓴다.</summary>
+        public Dictionary<string, TypeSurface> TypeMembers { get; } = new Dictionary<string, TypeSurface>(StringComparer.Ordinal);
 
         /// <summary>SupabaseReason enum 멤버 이름.</summary>
         public HashSet<string> ReasonMembers { get; } = new HashSet<string>(StringComparer.Ordinal);

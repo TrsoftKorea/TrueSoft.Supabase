@@ -5,7 +5,7 @@
 ## 값을 가져오는 시점
 
 앱을 시작할 때 Remote Config를 자동으로 가져오지 않습니다.  
-`CreateReader()`, `CreateBinding()`, `CreateListener()` 중 하나를 처음 호출하는 순간 해당 키만 서버에서 가져옵니다.
+`GetAsync()`, `CreateListener()` 중 하나를 처음 호출하는 순간 해당 키만 서버에서 가져옵니다.
 
 이후에는 가져온 값을 메모리에 보관해두고 빠르게 반환합니다.  
 설정된 유효 시간이 지나면 낡은 값을 즉시 반환하면서 **동시에** 백그라운드에서 서버 갱신을 시작합니다. 갱신이 완료되면 다음 호출부터 새 값이 반환됩니다.
@@ -18,10 +18,13 @@
 
 | 상황 | 추천 패턴 |
 |------|-----------|
-| 가끔&nbsp;읽으면&nbsp;충분할&nbsp;때 | **Reader** |
-| 매&nbsp;프레임&nbsp;또는&nbsp;자주&nbsp;값을&nbsp;읽어야&nbsp;할&nbsp;때 | **Binding** |
-| 값이&nbsp;바뀌는&nbsp;순간&nbsp;즉시&nbsp;반응해야&nbsp;할&nbsp;때 | **Listener** |
+| 필요한&nbsp;시점에&nbsp;한&nbsp;번&nbsp;읽을&nbsp;때 | **`GetAsync()`** |
+| 값이&nbsp;바뀌는&nbsp;순간&nbsp;반응해야&nbsp;할&nbsp;때 | **`CreateListener()`** |
 
-::: tip
-대부분의 경우 **Reader**나 **Binding**으로 충분합니다.
-:::
+자주 읽어야 하면 리스너 콜백에서 게임 필드에 담아 두고 그 필드를 읽습니다.
+
+```csharp
+_listener = RemoteConfig<GameplayConfig>.CreateListener(cfg => _config = cfg);
+...
+maxStamina = _config.maxStamina;   // 게임이 들고 있는 값
+```

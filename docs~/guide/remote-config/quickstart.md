@@ -28,11 +28,9 @@ Retool 등 관리 도구에서 `remote_config` 테이블에 행을 추가합니�
 
 ```csharp
 // 가장 간단한 사용법 — 값이 필요할 때 한 번 읽기
-var reader = RemoteConfig<GameplayConfig>.CreateReader();
-var cfg = await reader();
-
-if (cfg != null)
+var cfg = await RemoteConfig<GameplayConfig>.GetAsync();
+if (cfg.IsSuccess)
 {
-    maxStamina = cfg.maxStamina;
+    maxStamina = cfg.Data.maxStamina;
 }
 ```

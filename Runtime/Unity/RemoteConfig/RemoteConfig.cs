@@ -21,13 +21,8 @@ namespace TrueBase.Unity
     /// // 리스너 등록
     /// _listener = RemoteConfig&lt;GameplayV1Config&gt;.CreateListener(OnConfigChanged);
     ///
-    /// // 바인딩 (Value 프로퍼티로 동기 접근)
-    /// _binding = RemoteConfig&lt;GameplayV1Config&gt;.CreateBinding();
-    /// var cfg = _binding.Value;
-    ///
     /// // 비동기 단발 읽기
-    /// var reader = RemoteConfig&lt;GameplayV1Config&gt;.CreateReader();
-    /// var cfg = await reader();
+    /// var cfg = await RemoteConfig&lt;GameplayV1Config&gt;.GetAsync();
     /// </code></example>
     public static class RemoteConfig<T> where T : class, new()
     {
@@ -50,28 +45,14 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 값을 비동기로 한 번 읽는 함수를 반환합니다.
-        /// 캐시가 신선하면 즉시 반환하고, 만료됐으면 서버에서 갱신합니다.
+        /// 값을 한 번 읽습니다. 캐시가 신선하면 즉시, 만료됐으면 서버 갱신을 기다린 뒤 반환합니다.
         /// </summary>
         /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 DB 설정을 따릅니다.</param>
         /// <example><code>
-        /// var cfg = await RemoteConfig&lt;GameplayV1Config&gt;.CreateReader()();
+        /// var cfg = await RemoteConfig&lt;GameplayV1Config&gt;.GetAsync();
         /// </code></example>
-        public static Func<Task<T>> CreateReader(int maxStale = 0) =>
-            SupabaseSDK.CreateRemoteConfigReader<T>(GetKey(), maxStale);
-
-        /// <summary>
-        /// 폴링으로 값을 자동 갱신하는 바인딩 객체를 반환합니다.
-        /// <c>binding.Value</c>로 최신 값을 동기적으로 읽을 수 있습니다.
-        /// 객체 파괴 시 <see cref="IDisposable.Dispose"/>를 호출하세요.
-        /// </summary>
-        /// <param name="pollInterval">갱신 확인 주기(초). 0이면 자동 폴링 없음.</param>
-        /// <example><code>
-        /// _binding = RemoteConfig&lt;GameplayV1Config&gt;.CreateBinding();
-        /// var cfg = _binding.Value;
-        /// </code></example>
-        public static RemoteConfigBinding<T> CreateBinding(float pollInterval = 60f) =>
-            SupabaseSDK.CreateRemoteConfigBinding<T>(GetKey(), pollInterval);
+        public static Task<SupabaseResult<T>> GetAsync(int maxStale = 0) =>
+            SupabaseSDK.GetRemoteConfigFreshAsync<T>(GetKey(), maxStale);
 
         /// <summary>
         /// 값이 갱신될 때마다 콜백을 호출하는 리스너를 반환합니다.
