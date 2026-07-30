@@ -73,39 +73,10 @@ namespace TrueBase.Core.Data
         /// PostgREST 오류 본문에서 서버가 <c>raise exception</c>으로 던진 사유를 뽑아냅니다.
         /// 상세가 붙은 경우 앞의 코드만 사용해 <c>SupabaseReason</c> 매핑이 동작하게 합니다.
         /// </summary>
-        private static string ExtractErrorCode(string body, string fallbackMessage, string rpcName)
-        {
-            if (!string.IsNullOrWhiteSpace(body))
-            {
-                try
-                {
-                    var message = JObject.Parse(body)["message"]?.Value<string>();
-                    if (!string.IsNullOrWhiteSpace(message))
-                    {
-                        var colon = message.IndexOf(':');
-                        return colon > 0 ? message.Substring(0, colon).Trim() : message.Trim();
-                    }
-                }
-                catch
-                {
-                    // JSON이 아니면 아래 폴백 사용
-                }
-            }
+        private static string ExtractErrorCode(string body, string fallbackMessage, string rpcName) =>
+            SupabaseRestHelpers.ExtractRpcErrorCode(body, fallbackMessage, rpcName);
 
-            if (!string.IsNullOrWhiteSpace(fallbackMessage))
-                return fallbackMessage;
-
-            return string.IsNullOrWhiteSpace(body) ? rpcName + "_failed" : body;
-        }
-
-        private Dictionary<string, string> CreateAuthHeaders(string accessToken)
-        {
-            return new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Authorization", "Bearer " + accessToken },
-                { "Content-Type", "application/json" }
-            };
-        }
+        private Dictionary<string, string> CreateAuthHeaders(string accessToken) =>
+            SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken);
     }
 }

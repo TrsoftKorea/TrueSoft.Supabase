@@ -146,6 +146,7 @@ namespace TrueBase.Unity
         private readonly Func<SupabaseSession> _sessionGetter;
 
         private readonly List<ChatSubscription> _subscriptions = new List<ChatSubscription>();
+        private readonly List<ChatSubscription> _tickBuffer = new List<ChatSubscription>();
         private IReadOnlyList<ChatChannelInfo> _channelCache;
 
         /// <param name="chat">REST 호출을 수행할 서비스. null이면 예외.</param>
@@ -212,6 +213,18 @@ namespace TrueBase.Unity
         /// <summary>
         /// 만기된 구독만 조회합니다. <see cref="SupabaseRuntime.Update"/> 등에서 호출하세요.
         /// </summary>
+        /// <summary>
+        /// 지금 조회할 구독이 하나라도 있는지 확인합니다. 매 프레임 도는 경로라 할당 없이 판정합니다.
+        /// </summary>
+        internal bool HasDueSubscription(float realtimeSinceStartup)
+        {
+            foreach (var sub in _subscriptions)
+                if (sub.IsDue(realtimeSinceStartup))
+                    return true;
+
+            return false;
+        }
+
         public async Task TickAsync(float realtimeSinceStartup)
         {
             if (_subscriptions.Count == 0)
@@ -221,9 +234,10 @@ namespace TrueBase.Unity
             if (token == null)
                 return;
 
-            // 콜백 안에서 Dispose 할 수 있으므로 복사본을 돈다.
-            var snapshot = _subscriptions.ToArray();
-            foreach (var sub in snapshot)
+            // 콜백 안에서 Dispose 할 수 있으므로 복사본을 돈다. 매 프레임 경로라 버퍼를 재사용한다.
+            _tickBuffer.Clear();
+            _tickBuffer.AddRange(_subscriptions);
+            foreach (var sub in _tickBuffer)
             {
                 if (!sub.IsDue(realtimeSinceStartup))
                     continue;

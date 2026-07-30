@@ -285,6 +285,10 @@ namespace TrueBase.Unity
             if (_remoteConfigKeyPollTickTask != null && !_remoteConfigKeyPollTickTask.IsCompleted)
                 return;
 
+            // 만기된 키가 없으면 async 메서드를 시작하지 않는다 — 매 프레임 Task 할당을 피한다.
+            if (!RemoteConfig.HasDuePoll(realtimeSinceStartup))
+                return;
+
             _remoteConfigKeyPollTickTask = RemoteConfig.TickKeyPollsAsync(realtimeSinceStartup);
         }
 
@@ -298,6 +302,10 @@ namespace TrueBase.Unity
                 return;
 
             if (_chatTickTask != null && !_chatTickTask.IsCompleted)
+                return;
+
+            // 만기된 구독이 없으면 async 메서드를 시작하지 않는다 — 매 프레임 Task 할당을 피한다.
+            if (!_chat.HasDueSubscription(realtimeSinceStartup))
                 return;
 
             _chatTickTask = _chat.TickAsync(realtimeSinceStartup);
@@ -1397,7 +1405,8 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryRestoreSessionAsync()
         {
             var ok = await RestoreSessionAsync();
-            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "restore_session_failed", errorOnFail: false);
+            var code = ok ? null : SupabaseErrorCode.RestoreSessionFailed;
+            LogApiResult(ApiLogTags.AuthRestoreSession, ok, code, errorOnFail: !IsExpectedFailureReason(code));
             return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseErrorCode.RestoreSessionFailed);
         }
 
@@ -1412,7 +1421,8 @@ namespace TrueBase.Unity
 
             var ok = await RestoreSessionAsync();
 
-            LogApiResult(ApiLogTags.AuthRestoreSession, ok, ok ? null : "auto_login_on_start_failed", errorOnFail: false);
+            var code = ok ? null : SupabaseErrorCode.AutoLoginFailed;
+            LogApiResult(ApiLogTags.AuthRestoreSession, ok, code, errorOnFail: !IsExpectedFailureReason(code));
             return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseErrorCode.AutoLoginFailed);
         }
 
@@ -1596,6 +1606,33 @@ namespace TrueBase.Unity
         {
             switch (errorCode)
             {
+                // 로그인 흐름의 정상 분기 — 유저가 취소했거나, 저장된 세션이 없거나, 연타로 중복 호출된 경우
+                case SupabaseErrorCode.GoogleSignInCancelled:
+                case SupabaseErrorCode.AppleSignInCancelled:
+                case SupabaseErrorCode.OAuthLoginInProgress:
+                case SupabaseErrorCode.RestoreSessionFailed:
+                case SupabaseErrorCode.AutoLoginNoToken:
+                case SupabaseErrorCode.AutoLoginFailed:
+
+                // 유저 계정 상태 — 게임이 문구로 안내할 사유
+                case SupabaseErrorCode.UserBanned:
+                case SupabaseErrorCode.DuplicateLogin:
+                case SupabaseErrorCode.CannotUnlinkLastIdentity:
+
+                // 유저가 입력한 닉네임이 거절된 경우
+                case SupabaseErrorCode.NameTaken:
+                case SupabaseErrorCode.NameTooLong:
+
+                // 보낼 변경분이 없어 건너뛴 경우 — 오류가 아니다
+                case SupabaseErrorCode.UserSaveNoChanges:
+
+                // 리더보드 — 기간이 끝났거나 아직 기록이 없는 경우
+                case SupabaseErrorCode.LeaderboardEnded:
+                case SupabaseErrorCode.LeaderboardScoreNotFound:
+
+                // 서버 시각을 아직 한 번도 받지 못한 경우 — 다음 호출부터 성공한다
+                case SupabaseErrorCode.ServerTimeNotSynced:
+
                 // 탈퇴 라이프사이클 — 예약 게이트 차단·탈퇴 완료로 재로그인 필요
                 case SupabaseErrorCode.WithdrawalGateBlocked:
                 case SupabaseErrorCode.WithdrawalDeleted:

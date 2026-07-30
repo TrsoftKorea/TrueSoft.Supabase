@@ -22,14 +22,10 @@ namespace TrueBase.Unity
         private readonly Dictionary<string, List<Action<string>>> _keySubscribers = new Dictionary<string, List<Action<string>>>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pollIntervalOverrideByKey = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _maxStaleByKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly List<string> _pollKeyBuffer = new List<string>();
 
         /// <summary>Remote config가 변경되어 캐시가 갱신되면 호출됩니다. 인자는 변경된 key 목록.</summary>
         public event Action<IReadOnlyList<string>> OnChanged;
-
-        /// <summary>
-        /// 최근 <c>TickKeyPollsAsync</c>에서 캐시에 실제 변경이 있었는지 여부입니다.
-        /// </summary>
-        public bool LastApplyHadChanges { get; private set; }
 
         /// <param name="service">REST 호출을 수행할 서비스. null이면 예외.</param>
         /// <param name="accessTokenGetter">현재 액세스 토큰 제공자. null이거나 빈 토큰을 반환하면 <c>requires_auth</c> 키는 조회에서 제외됩니다.</param>
@@ -210,12 +206,32 @@ namespace TrueBase.Unity
         /// <summary>
         /// 설정된 주기에 따라, 만기된 키만 폴링합니다. <see cref="SupabaseRuntime"/> 또는 <c>Update</c>에서 호출하세요.
         /// </summary>
+        /// <summary>
+        /// 지금 폴링할 키가 하나라도 있는지 확인합니다. 매 프레임 도는 경로라 할당 없이 판정합니다.
+        /// </summary>
+        public bool HasDuePoll(float realtimeSinceStartup)
+        {
+            foreach (var pair in _keyPollStates)
+            {
+                if (GetEffectivePollIntervalSeconds(pair.Key) <= 0)
+                    continue;
+
+                if (realtimeSinceStartup >= pair.Value.NextPollAtRealtime)
+                    return true;
+            }
+
+            return false;
+        }
+
         public async Task TickKeyPollsAsync(float realtimeSinceStartup)
         {
-            LastApplyHadChanges = false;
             var accessToken = _accessTokenGetter?.Invoke();
-            var keys = new List<string>(_keyPollStates.Keys);
-            foreach (var key in keys)
+
+            // 폴링 중 컬렉션이 바뀔 수 있어 복사본을 돈다. 매 프레임 경로라 버퍼를 재사용한다.
+            _pollKeyBuffer.Clear();
+            _pollKeyBuffer.AddRange(_keyPollStates.Keys);
+
+            foreach (var key in _pollKeyBuffer)
             {
                 if (_keyPollStates.TryGetValue(key, out var state) == false)
                     continue;
@@ -469,7 +485,6 @@ namespace TrueBase.Unity
                 NotifyKeySubscribers(k);
 
             OnChanged?.Invoke(changedList);
-            LastApplyHadChanges = true;
             return true;
         }
 

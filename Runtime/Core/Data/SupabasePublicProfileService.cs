@@ -448,20 +448,8 @@ namespace TrueBase.Core.Data
             return displayName == null ? string.Empty : displayName.Trim();
         }
 
-        private Dictionary<string, string> CreateUserHeaders(string accessToken, string prefer)
-        {
-            var headers = new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Authorization", "Bearer " + accessToken },
-                { "Content-Type", "application/json" }
-            };
-
-            if (string.IsNullOrEmpty(prefer) == false)
-                headers["Prefer"] = prefer;
-
-            return headers;
-        }
+        private Dictionary<string, string> CreateUserHeaders(string accessToken, string prefer) =>
+            SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken, prefer);
 
         [Serializable]
         private sealed class ProfileRowFull

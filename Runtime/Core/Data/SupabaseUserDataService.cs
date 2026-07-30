@@ -309,20 +309,8 @@ namespace TrueBase.Core.Data
                 setUpdatedAtIsoUtc);
         }
 
-        private Dictionary<string, string> CreateAuthHeaders(string accessToken, string prefer = null)
-        {
-            var headers = new Dictionary<string, string>
-            {
-                { "apikey", _publishableKey },
-                { "Authorization", "Bearer " + accessToken },
-                { "Content-Type", "application/json" }
-            };
-
-            if (string.IsNullOrEmpty(prefer) == false)
-                headers["Prefer"] = prefer;
-
-            return headers;
-        }
+        private Dictionary<string, string> CreateAuthHeaders(string accessToken, string prefer = null) =>
+            SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken, prefer);
 
         [Serializable]
         private sealed class EnsureMyRowBody

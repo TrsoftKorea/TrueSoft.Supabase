@@ -15,6 +15,7 @@ namespace SdkAudit
         {
             public string Name;
             public int Line;
+            public int FenceLine;
             public List<string> ParamNames;
         }
 
@@ -47,6 +48,7 @@ namespace SdkAudit
 
             var inCsharp = false;
             var inFence = false;
+            var fenceStartLine = -1;
             var frontmatterEnd = FrontmatterEnd(lines);
             // 이미지가 많은 단계별 절차 페이지는 단계 구분 --- 을 허용한다.
             var hasImages = lines.Any(l => l.Contains("!["));
@@ -70,6 +72,7 @@ namespace SdkAudit
                     {
                         inFence = true;
                         inCsharp = trimmed.StartsWith("```csharp", StringComparison.Ordinal);
+                        fenceStartLine = i;
                     }
                     continue;
                 }
@@ -105,7 +108,10 @@ namespace SdkAudit
                     // ── R4 선언형 시그니처 수집 ──
                     var sig = ParseSignature(lines, i);
                     if (sig != null)
+                    {
+                        sig.FenceLine = fenceStartLine;
                         signatures.Add(sig);
+                    }
                     continue;
                 }
 
@@ -148,6 +154,33 @@ namespace SdkAudit
             // ── R11 한 페이지에 시그니처 2개 이상 ──
             if (signatures.Count > 1)
                 ctx.Report.Warn($"[R5 시그니처다수] {rel} 에 시그니처가 {signatures.Count}개 있습니다({string.Join(", ", signatures.Select(s => s.Name))}). 메서드마다 페이지를 나눕니다.");
+
+            // ── R10 헤딩 바로 다음에 시그니처가 와야 한다(코드 우선) ──
+            foreach (var sig in signatures)
+            {
+                var prev = PreviousContentLine(lines, sig.FenceLine);
+                if (prev >= 0 && !lines[prev].TrimStart().StartsWith("#", StringComparison.Ordinal))
+                    ctx.Report.Error($"[R10 코드우선] 헤딩과 시그니처 사이에 설명이 있습니다. 설명은 코드 아래로 옮기세요. ({rel}:{sig.FenceLine + 1})");
+            }
+
+            // ── R10 파라미터 표는 타입 열 없이 2열 ──
+            // 첫 칸이 정확히 "파라미터"이고 다음 줄이 구분행인 **헤더 행**만 본다(셀 안의 단어에 걸리지 않도록).
+            for (var i = 0; i < lines.Length - 1; i++)
+            {
+                var t = lines[i].TrimStart();
+                if (!t.StartsWith("|", StringComparison.Ordinal))
+                    continue;
+
+                var cells = t.Trim('|').Split('|');
+                if (cells[0].Trim() != "파라미터")
+                    continue;
+                if (!Regex.IsMatch(lines[i + 1].Trim(), @"^\|[\s:|-]+\|$"))
+                    continue;
+
+                if (cells.Length != 2)
+                    ctx.Report.Error($"[R10 파라미터표] 파라미터 표는 타입 열 없이 2열입니다(현재 {cells.Length}열). ({rel}:{i + 1})");
+                break;
+            }
 
             // ── R4·R8 시그니처와 파라미터 표를 코드와 대조 ──
             foreach (var sig in signatures)
@@ -327,6 +360,15 @@ namespace SdkAudit
                 if (lines[i].Trim() == "---")
                     return i + 1;
             return 0;
+        }
+
+        /// <summary>주어진 줄 위쪽에서 가장 가까운 내용 있는 줄. 없으면 -1.</summary>
+        private static int PreviousContentLine(string[] lines, int index)
+        {
+            for (var i = index - 1; i >= 0; i--)
+                if (lines[i].Trim().Length > 0)
+                    return i;
+            return -1;
         }
 
         private static bool IsLastContentLine(string[] lines, int index)
