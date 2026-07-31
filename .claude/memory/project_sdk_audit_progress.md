@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 2d84c5d4-80fb-4e7d-be34-79931c54df32
-  modified: 2026-07-31T04:33:00.329Z
+  modified: 2026-07-31T05:16:14.093Z
 ---
 
 SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐다. 축 목록과 자동화 여부는 `Tools~/SdkAudit/README.md`의 "정기 점검 체크리스트"에 있다. **이 파일은 회차 진행 상태만 기록한다.**
@@ -78,6 +78,19 @@ SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐�
 **정의만 있고 실행되지 않는 것은 코드로 안 보인다** — 리더보드 회차 전환 크론과 `purchase-verify-apple-legacy` 가 그랬다. 호출자만 없을 뿐 정의는 멀쩡해 문법·타입·검사기 어디에도 안 걸렸다. 스킬의 세로 점검에 "정의만 있고 실행되지 않는 것을 찾는다" 절을 넣었고, `install.sql` 안쪽(주석은 cron 인데 `cron.schedule` 없음)은 **R13 으로 자동화**했다. 배포 여부·시크릿은 라이브 조회가 필요해 절차로 남겼다.
 
 **상태 수명 표가 이 리포지토리에서 특히 잘 듣는다** — 로그아웃 버그(1회차)와 계정 전환 버그(2회차)가 모두 그 표의 빈칸에서 나왔다. 세로 점검을 할 때 이 표를 건너뛰지 말 것.
+
+## 3회차 — 가로(축) 점검 (2026-07-31~)
+
+2회차가 코드를 크게 흔든 뒤 무엇이 남았는지를 본다. 자동화 축은 기준선에서 전부 초록이라 수동 축만 돈다.
+
+- **미사용 코드 — 완료.** 타입 195개·메서드 641개·프로퍼티 188개 전수 조사. 후보 25건 중 24건이 오탐(`[MenuItem]`·`[RuntimeInitializeOnLoadMethod]`·`[PostProcessBuild]`·`IPostGenerateGradleAndroidProject`·`IStoreListener` 구현·`UnitySendMessage` 네이티브 콜백·`ICollection<T>` 요구 멤버). 제거 1건:
+  - `StaticUserSave<TRow>.SharedInstance` + `_sharedInstance` 필드·대입. 주석은 "PlayNanooRuntime 등 외부에서 참조할 때"라고 했지만 그 경로는 생성자의 `SupabaseSDK._nanooSaveBridge = this` 등록으로 대체돼 있었다. 필드는 대입만 되고 읽히지 않았다
+
+  판단해 그대로 둔 것: `AutoList2D` 행의 `CopyTo`·`FindLast`·`GetRange`·`TrueForAll` 은 `List<T>` API 대칭을 위한 것이라 구멍을 내지 않는다. `SupabaseSession.ExpiresIn` 은 형제 래퍼 6개 중 하나뿐이라 혼자 빼면 `expires_in` 필드만 프로퍼티가 없어진다 — 게임에 노출되는 타입도 아니다.
+
+  **전수 조사 셸 주의** — 문자 클래스 안에 `\[` `\]` 를 넣으면 POSIX ERE 에서 클래스가 일찍 닫혀 매칭이 0이 된다. 조용히 "발견 없음"으로 보이므로 **후보가 0이면 먼저 정규식을 의심한다.** 반환 타입 자리는 `[^;={}()]+` 처럼 제외 문자로 쓰는 편이 안전하다.
+
+남은 축: 중복 코드 → 비효율 코드 → 규칙 모순 → 문서 서술·톤.
 
 ## 규칙 — 실수는 그 자리에서 반영한다
 

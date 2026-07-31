@@ -66,8 +66,6 @@ namespace TrueBase.Unity
             }
         }
 
-        private static StaticUserSave<TRow> _sharedInstance;
-
         private TRow _nanooLastLoaded;  // NanooLoadWithStateAsync 캐시 (PlayNanoo 동기화용)
 
         protected readonly TRow   Current;
@@ -90,7 +88,6 @@ namespace TrueBase.Unity
         protected StaticUserSave(string syncKey)
         {
             SingletonGuard.Assert(GetType());
-            _sharedInstance = this;
             SupabaseSDK._nanooSaveBridge = this;
             SupabaseSDK._userSave = this;   // Supabase 파사드가 Row 타입 없이 위임할 수 있도록 등록
 
@@ -225,12 +222,6 @@ namespace TrueBase.Unity
             // _loadFallback/_fallbackCaptured는 유지 — fallback은 앱 수명 설정이라
             // 로그아웃 후 재로그인에도 동일 적용(Current가 리셋돼도 스냅샷으로 재적용).
         }
-
-        /// <summary>
-        /// 이 TRow 타입에 등록된 유일한 StaticUserSave 인스턴스를 반환합니다.
-        /// <para>PlayNanooRuntime 등 외부에서 세이브 인스턴스를 참조할 때 사용합니다.</para>
-        /// </summary>
-        public static StaticUserSave<TRow> SharedInstance => _sharedInstance;
 
         /// <summary>현재 로컬 세이브 Row를 반환합니다.</summary>
         public TRow CurrentRow => Current;
