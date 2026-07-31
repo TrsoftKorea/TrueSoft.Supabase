@@ -2326,13 +2326,16 @@ alter table public.mails enable row level security;
 drop policy if exists "mails_select_own" on public.mails;
 drop policy if exists "mails_update_own" on public.mails;
 
--- 본인 + profiles.user_id 일치 + 현재 세션 서버 일치 + 숨김 아님
+-- 본인 + profiles.user_id 일치 + 현재 세션 서버 일치 + 숨김 아님 + 기한 안 지남
+-- 만료 조건은 ts_mail_inbox_counts·ts_claim_all_mail_items 와 같은 기준이다.
+-- 여기만 빠지면 배지 숫자에는 안 잡히는 우편이 목록에는 보이고, 수령하면 mail_expired 로 실패한다.
 create policy "mails_select_own"
 on public.mails for select
 using (
   account_id is not null
   and account_id = auth.uid()
   and deleted_at is null
+  and expires_at > now()
   and exists (
     select 1
     from public.user_profiles p
@@ -4327,7 +4330,9 @@ begin
                 else excluded.score
               end) is distinct from leaderboard_scores.score
         then now() else leaderboard_scores.score_achieved_at end,
-      server_id   = excluded.server_id,
+      -- 기록 시점의 서버를 유지한다. 회차 도중 서버를 옮겨도 그 회차 점수는 이전 서버 순위에 남는다.
+      -- 최초 기록 때 프로필에 서버가 없었던 경우만 뒤늦게 채운다.
+      server_id   = coalesce(leaderboard_scores.server_id, excluded.server_id),
       user_id     = excluded.user_id,
       score_count = leaderboard_scores.score_count + 1,
       updated_at  = now() %s
@@ -4574,7 +4579,11 @@ begin
     raise exception 'leaderboard_table_not_found';
   end if;
 
+  -- 지난 회차는 확정된 결과다. 본인 것이라도 고칠 수 없다(정정은 어드민 RPC).
   v_rot := coalesce(p_rotation_count, t.rotation_count);
+  if v_rot <> t.rotation_count then
+    raise exception 'leaderboard_rotation_closed';
+  end if;
 
   if p_data is not null and jsonb_typeof(p_data) = 'object' then
     v_cols := public.ts_leaderboard_columns_of(t.code);
@@ -4633,7 +4642,11 @@ begin
     raise exception 'leaderboard_table_not_found';
   end if;
 
+  -- 지난 회차는 확정된 결과다. 본인 것이라도 지울 수 없다(정정은 어드민 RPC).
   v_rot := coalesce(p_rotation_count, t.rotation_count);
+  if v_rot <> t.rotation_count then
+    raise exception 'leaderboard_rotation_closed';
+  end if;
 
   delete from public.leaderboard_scores
   where table_code = t.code and rotation_count = v_rot and account_id = v_uid;
@@ -4641,7 +4654,7 @@ end;
 $$;
 
 comment on function public.ts_leaderboard_delete_my_score(text,int) is
-  '본인 기록 삭제. 없으면 no-op. SECURITY DEFINER.';
+  '본인 기록 삭제. 없으면 no-op. 현재 회차만. SECURITY DEFINER.';
 
 revoke all on function public.ts_leaderboard_delete_my_score(text,int) from public, anon;
 grant execute on function public.ts_leaderboard_delete_my_score(text,int) to authenticated;
@@ -4688,6 +4701,15 @@ comment on function public.ts_leaderboard_rotate_due() is
   '전환 시각이 지난 리더보드의 회차를 넘긴다. 종료된 리더보드는 건너뛴다. cron 전용.';
 
 revoke all on function public.ts_leaderboard_rotate_due() from public, anon, authenticated;
+
+-- 전환 시각은 rotation_period_seconds 로 분 단위까지 지정할 수 있어 매분 확인한다.
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('ts_leaderboard_rotate_due') where exists (select 1 from cron.job where jobname = 'ts_leaderboard_rotate_due');
+    perform cron.schedule('ts_leaderboard_rotate_due', '* * * * *', $cron$ select public.ts_leaderboard_rotate_due(); $cron$);
+  end if;
+end $$;
 
 
 -- =============================================================================

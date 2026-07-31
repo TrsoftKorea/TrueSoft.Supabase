@@ -21,8 +21,6 @@ namespace TrueBase.Core.Models
         /// <summary>동일 purchase_token으로 이미 검증된 경우 true.</summary>
         public bool already_verified;
         public string order_id;
-        /// <summary>0=purchased, 1=cancelled, 2=pending. 검증 실패 시 -1.</summary>
-        public int purchase_state;
         public string reason;
     }
 

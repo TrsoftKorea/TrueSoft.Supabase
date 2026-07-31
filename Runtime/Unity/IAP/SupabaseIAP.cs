@@ -127,7 +127,6 @@ namespace TrueBase.Unity
                 ok               = true,
                 already_verified = r.already_verified,
                 order_id         = r.order_id,
-                purchase_state   = r.purchase_state,
                 reason           = r.reason,
                 store            = "google_play"
             });
@@ -140,7 +139,6 @@ namespace TrueBase.Unity
                 already_verified = r.already_verified,
                 order_id         = r.transaction_id,
                 product_id       = r.product_id,
-                purchase_state   = r.purchase_state,
                 reason           = r.reason,
                 store            = "apple_app_store"
             });
@@ -165,7 +163,6 @@ namespace TrueBase.Unity
                 already_verified = r.already_verified,
                 order_id         = r.transaction_id,
                 product_id       = r.product_id,
-                purchase_state   = r.purchase_state,
                 reason           = r.reason,
                 store            = "apple_app_store"
             });
@@ -188,7 +185,6 @@ namespace TrueBase.Unity
                 ok               = true,
                 already_verified = r.already_verified,
                 order_id         = r.order_id,
-                purchase_state   = r.purchase_state,
                 reason           = r.reason,
                 store            = "google_play"
             });
@@ -209,7 +205,6 @@ namespace TrueBase.Unity
                 already_verified = r.already_verified,
                 order_id         = r.transaction_id,
                 product_id       = r.product_id,
-                purchase_state   = r.purchase_state,
                 reason           = r.reason,
                 store            = "apple_app_store"
             });

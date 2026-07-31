@@ -2067,14 +2067,14 @@ namespace TrueBase.Unity
             return await Mailbox.GetInboxCountsAsync();
         }
 
-        /// <summary><c>ts_mail_inbox_counts</c>의 미수령 메일 수. <paramref name="userId"/>는 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
-        public static async Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null)
+        /// <summary><c>ts_mail_inbox_counts</c>의 미수령 메일 수. <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public static async Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await Mailbox.GetUnclaimedMailCountAsync(userId, category);
+            return await Mailbox.GetUnclaimedMailCountAsync(category);
         }
 
         /// <inheritdoc cref="GetMailsAsync"/>
@@ -2309,9 +2309,9 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="GetUnclaimedMailCountAsync"/>
-        public static async Task<SupabaseResult<int>> TryGetUnclaimedMailCountAsync(string userId = null, string category = null)
+        public static async Task<SupabaseResult<int>> TryGetUnclaimedMailCountAsync(string category = null)
         {
-            var r = await GetUnclaimedMailCountAsync(userId, category);
+            var r = await GetUnclaimedMailCountAsync(category);
             return LogAndReturnResult(ApiLogTags.MailboxUnclaimedCount, r);
         }
 

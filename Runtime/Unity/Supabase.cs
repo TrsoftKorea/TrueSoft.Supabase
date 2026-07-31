@@ -427,8 +427,8 @@ namespace TrueBase.Unity
             SupabaseSDK.Chat.Subscribe(channelCodes, onMessages, minIntervalSeconds, maxIntervalSeconds);
 
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
-        public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
-            SupabaseSDK.TryGetUnclaimedMailCountAsync(userId, category);
+        public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string category = null) =>
+            SupabaseSDK.TryGetUnclaimedMailCountAsync(category);
 
         /// <summary>
         /// 우편 보상 아이템(<c>items[].key</c>)을 게임에 지급하는 핸들러를 등록합니다. 앱 시작 시 키마다 1회 등록하세요.

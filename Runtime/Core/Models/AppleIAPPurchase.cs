@@ -29,8 +29,6 @@ namespace TrueBase.Core.Models
         public bool already_verified;
         public string transaction_id;
         public string product_id;
-        /// <summary>소모품은 항상 0 (purchased). 검증 실패 시 -1.</summary>
-        public int purchase_state;
         public string reason;
     }
 }

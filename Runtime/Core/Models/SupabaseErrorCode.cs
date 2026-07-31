@@ -236,6 +236,9 @@ namespace TrueBase.Core.Common
         /// <summary>존재하지 않는 회차입니다.</summary>
         public const string LeaderboardRotationNotFound = "leaderboard_rotation_not_found";
 
+        /// <summary>이미 지난 회차라 기록을 고치거나 지울 수 없습니다.</summary>
+        public const string LeaderboardRotationClosed = "leaderboard_rotation_closed";
+
         /// <summary>해당 회차에 이 플레이어의 리더보드 기록이 없습니다.</summary>
         public const string LeaderboardScoreNotFound = "leaderboard_score_not_found";
 

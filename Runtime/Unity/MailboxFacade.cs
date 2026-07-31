@@ -70,11 +70,11 @@ namespace TrueBase.Unity
             return await _mailbox.GetInboxCountsAsync(token);
         }
 
-        /// <summary>미수령 메일 개수. <paramref name="userId"/>는 계약 호환용(무시). <paramref name="category"/> 지정 시 그 분류만.</summary>
-        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string userId = null, string category = null) =>
+        /// <summary>미수령 메일 개수. <paramref name="category"/> 지정 시 그 분류만.</summary>
+        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string category = null) =>
             GetInboxCountValueAsync(_sessionGetter?.Invoke(), category, c => c.Unclaimed, c => c.Unclaimed);
 
-        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(SupabaseSession session, string userId = null, string category = null) =>
+        public Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(SupabaseSession session, string category = null) =>
             GetInboxCountValueAsync(session, category, c => c.Unclaimed, c => c.Unclaimed);
 
         private async Task<SupabaseResult<int>> GetInboxCountValueAsync(

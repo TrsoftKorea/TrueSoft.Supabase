@@ -227,8 +227,17 @@ Deno.serve(async (req) => {
     });
 
   if (insertError) {
-    // UNIQUE 위반 → 이미 검증된 영수증
+    // UNIQUE 위반 → 이미 검증된 영수증. 단, 기록의 주인이 이 계정일 때만 재처리로 인정한다.
+    // (다른 계정의 토큰을 보낸 경우까지 ok=true 로 답하면, 크래시 복구 지침대로 구현한 게임이 남의 결제로 지급한다)
     if (insertError.code === "23505") {
+      const { data: owner } = await adminClient
+        .from("purchases")
+        .select("account_id")
+        .eq("purchase_token", purchase_token)
+        .maybeSingle();
+      if (owner && owner.account_id !== user.id) {
+        return json({ ok: false, reason: "purchase_owned_by_other_account" } satisfies VerifyResponse, 409);
+      }
       return json({
         ok: true,
         already_verified: true,

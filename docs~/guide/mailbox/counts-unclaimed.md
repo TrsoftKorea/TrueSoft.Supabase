@@ -2,7 +2,6 @@
 
 ```csharp
 Task<SupabaseResult<int>> Supabase.GetUnclaimedMailCountAsync(
-    string userId   = null,
     string category = null)
 ```
 
@@ -21,7 +20,6 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `userId` | 계약 호환용. 무시됩니다 (기본값: `null`) |
 | `category` | 조회할 분류. `null`이면 전체 분류 (기본값: `null`) |
 
 **반환**

@@ -39,7 +39,7 @@ public sealed class SampleMailbox : MonoBehaviour
     private void Awake()
     {
         // 보상 지급 핸들러 등록(로그만 남기고 성공 반환) — 실제 게임은 인벤토리·재화 지급.
-        MailItemHandlerRegistry.Register(new LoggingMailItemHandler(demoItemKey));
+        Supabase.RegisterMailItemHandler(new LoggingMailItemHandler(demoItemKey));
     }
 
     private void Update()

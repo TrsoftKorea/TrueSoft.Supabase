@@ -10,15 +10,19 @@
 //   product_id string  — 기대하는 상품 ID
 //   bundle_id  string  — 앱 Bundle ID (검증에 사용)
 //
-// purchases 테이블 요구사항:
-//   - transaction_id 컬럼에 UNIQUE 제약 조건 필요
-//   - RLS: authenticated users는 자신의 account_id로 INSERT 가능
+// 기록은 purchases.purchase_token UNIQUE 로 중복을 막습니다. 유저 직접 INSERT 정책은 없고
+// 이 함수가 service_role 로만 기록합니다(가짜 결제 기록 차단).
 
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const PRODUCTION_URL = "https://buy.itunes.apple.com/verifyReceipt";
 const SANDBOX_URL    = "https://sandbox.itunes.apple.com/verifyReceipt";
+
+const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
+const publishableKeys          = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
+const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
+const secretKeys               = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY      = secretKeys.default;
 
 interface RequestBody {
   receipt:    string;
@@ -39,7 +43,7 @@ interface ReceiptInfo {
   purchase_date_ms:        string;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: {
@@ -55,13 +59,11 @@ serve(async (req: Request) => {
     return jsonResponse({ ok: false, reason: "missing_auth" }, 401);
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
+  const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
 
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user) {
     return jsonResponse({ ok: false, reason: "unauthorized" }, 401);
   }
@@ -127,29 +129,43 @@ serve(async (req: Request) => {
 
   const transactionId = match.transaction_id;
 
+  const { data: profile } = await userClient
+    .from("user_profiles").select("user_id").eq("account_id", user.id).maybeSingle();
+  const userId: string | null = profile?.user_id ?? null;
+
   // ── 중복 검증 체크 + 기록 삽입 ────────────────────────────────────────────
   // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
   // (유저 직접 INSERT를 막아 가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
-  // purchases 테이블에 transaction_id UNIQUE 제약 조건이 있어야 합니다.
-  // INSERT 성공 → 새 검증 / 23505(unique_violation) → 이미 검증됨
-  const adminClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  // purchase_token UNIQUE — INSERT 성공은 새 검증, 23505는 이미 검증된 영수증.
+  // SK1 영수증에는 가격이 없어 price_* 는 기록하지 않는다.
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const { error: insertError } = await adminClient
     .from("purchases")
     .insert({
       account_id:     user.id,
-      transaction_id: transactionId,
+      user_id:        userId,
       product_id,
-      store:          "apple_app_store_legacy",
+      purchase_token: transactionId,
+      order_id:       transactionId,
+      package_name:   bundle_id,
+      store:          "apple_app_store",
     });
 
   let alreadyVerified = false;
   if (insertError) {
     if (insertError.code === "23505") {
-      // unique_violation — 이미 검증된 영수증
+      // unique_violation — 이미 검증된 영수증. 단, 기록의 주인이 이 계정일 때만 재처리로 인정한다.
+      // (다른 계정의 토큰을 보낸 경우까지 ok=true 로 답하면, 크래시 복구 지침대로 구현한 게임이 남의 결제로 지급한다)
+      const { data: owner } = await adminClient
+        .from("purchases")
+        .select("account_id")
+        .eq("purchase_token", transactionId)
+        .maybeSingle();
+      if (owner && owner.account_id !== user.id) {
+        return jsonResponse({ ok: false, reason: "purchase_owned_by_other_account" }, 409);
+      }
       alreadyVerified = true;
     } else {
       console.error("[purchase-verify-apple-legacy] DB 삽입 오류:", insertError.message);

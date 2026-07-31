@@ -145,8 +145,8 @@ namespace TrueBase.Core.Data
         public IReadOnlyList<MailItemPayload> Items { get; set; }
     }
 
-    /// <summary>전역 핸들러 레지스트리(게임 시작 시 <see cref="Register"/>).</summary>
-    public static class MailItemHandlerRegistry
+    /// <summary>전역 핸들러 레지스트리. 게임은 <c>Supabase.RegisterMailItemHandler</c>로 등록한다.</summary>
+    internal static class MailItemHandlerRegistry
     {
         private static readonly Dictionary<string, IMailItemHandler> Map =
             new Dictionary<string, IMailItemHandler>(StringComparer.Ordinal);
@@ -172,14 +172,6 @@ namespace TrueBase.Core.Data
             lock (Gate)
             {
                 Map.Remove(itemKey.Trim());
-            }
-        }
-
-        public static void Clear()
-        {
-            lock (Gate)
-            {
-                Map.Clear();
             }
         }
 

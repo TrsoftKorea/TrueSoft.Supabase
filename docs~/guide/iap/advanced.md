@@ -23,7 +23,9 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 | 플래그 | 의미 |
 |--------|------|
 | `isResuming` | 이전 세션의 미처리 주문을 재처리 중 |
-| `alreadyVerified` | 서버 DB에 이미 검증 기록이 있음 |
+| `alreadyVerified` | 이 계정의 검증 기록이 서버 DB에 이미 있음 |
+
+다른 계정이 검증한 영수증을 보내면 `alreadyVerified`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내가 이미 산 것"만을 뜻합니다.
 
 ## 결제 금액 자동 기록
 

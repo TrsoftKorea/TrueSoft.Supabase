@@ -27,6 +27,8 @@ if (!result.IsSuccess)
 
 ## 공통 · 세션
 
+아래 사유는 로그인이 필요한 모든 호출에서 올 수 있어 함수별 **에러 코드** 표에 다시 적지 않습니다.
+
 | Reason | 설명 |
 |--------|------|
 | `NotInitialized` | SDK가 초기화되지 않았습니다 |
@@ -35,6 +37,25 @@ if (!result.IsSuccess)
 | `SessionRequired` | 로그인 세션이 필요합니다 |
 | `AccessTokenEmpty` | 액세스 토큰이 비어있습니다 |
 | `NetworkError` | 네트워크 오류 또는 타임아웃 |
+
+### 세션 만료 {#세션-만료}
+
+`NotSignedIn`은 로그인 전에 호출한 경우이고, `NotAuthenticated`는 로그인은 했지만 서버가 토큰을 거부한 경우입니다. SDK가 토큰을 자동 갱신하므로 그 뒤에도 거부되면 다시 로그인해야 합니다.
+
+세션 만료는 특정 기능이 아니라 모든 호출에 걸리므로, 기능마다 분기하지 말고 결과를 검사하는 한 곳에 모아 두세요.
+
+```csharp
+bool Handle(SupabaseResult result)
+{
+    if (result.IsSuccess) return true;
+
+    if (result.Reason == SupabaseReason.NotAuthenticated ||
+        result.Reason == SupabaseReason.NotSignedIn)
+        GoToLoginScreen();
+
+    return false;
+}
+```
 
 ## 로그인 · 세션 복원
 
@@ -162,6 +183,7 @@ if (!result.IsSuccess)
 | `LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다. 순위 조회는 계속 가능합니다 |
 | `LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
+| `LeaderboardRotationClosed` | 이미 지난 회차라 기록을 고치거나 지울 수 없습니다 |
 | `LeaderboardScoreNotFound` | 그 회차에 해당 플레이어의 기록이 없습니다 |
 | `LeaderboardScoreRequired` | 기록할 점수가 전달되지 않았습니다 |
 | `LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 플레이어 데이터 필드입니다 |
