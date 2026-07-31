@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 2d84c5d4-80fb-4e7d-be34-79931c54df32
-  modified: 2026-07-31T05:16:14.093Z
+  modified: 2026-07-31T06:00:45.864Z
 ---
 
 SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐다. 축 목록과 자동화 여부는 `Tools~/SdkAudit/README.md`의 "정기 점검 체크리스트"에 있다. **이 파일은 회차 진행 상태만 기록한다.**
@@ -90,7 +90,29 @@ SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐�
 
   **전수 조사 셸 주의** — 문자 클래스 안에 `\[` `\]` 를 넣으면 POSIX ERE 에서 클래스가 일찍 닫혀 매칭이 0이 된다. 조용히 "발견 없음"으로 보이므로 **후보가 0이면 먼저 정규식을 의심한다.** 반환 타입 자리는 `[^;={}()]+` 처럼 제외 문자로 쓰는 편이 안전하다.
 
-남은 축: 중복 코드 → 비효율 코드 → 규칙 모순 → 문서 서술·톤.
+- **중복 코드 — 완료.** 10줄 창 해시로 전수 스캔(스크립트는 세션 스크래치패드). 65줄 순감, 3건 통합:
+  - **RPC 호출 보일러플레이트** — Chat·Coupon·Leaderboard 가 같은 `CallRpcAsync` 를 따로 갖고 빈 본문 처리만 달랐다(Coupon=성공, Chat=실패, Leaderboard=파라미터). `SupabaseRestHelpers.CallRpcAsync(..., allowEmptyBody)` 한 벌로. **통합 후 세 서비스의 `ExtractErrorCode`·`CreateAuthHeaders` 포워더가 죽어서 함께 제거** — 중복을 걷으면 죽은 코드가 새로 생기므로 되짚어 확인할 것
+  - **탈퇴 게이트 8곳 중 6곳** — 로그인 경로마다 `if (!_isRecreating…) { 가드; 예약게이트; }` 를 손으로 적고 있었다. 게이트가 8벌이면 한 곳을 빠뜨렸을 때 그 경로만 조용히 통과한다. `RunWithdrawalGatesAfterSignInAsync` 로. 남긴 2곳은 진짜 다르다 — 익명 신규 생성은 "항상 no-op이라 생략"이 주석으로 근거가 있고, 익명 복구는 가드·게이트 실패를 서로 다른 `AnonymousRecoveryKind` 로 매핑한다
+  - **네이티브 Google 로그인 준비 3곳** — `EnsureGoogleNativeReadyAsync` + `RequestNativeGoogleLoginAsync` 로 분리. **한 덩어리로 뽑지 않은 이유**: `SignInWithGoogleAsync` 만 중간에 익명 세션 가드가 끼는데, 계정 선택 창을 띄운 뒤로 밀면 유저가 고른 계정이 버려진다
+
+  판단해 그대로 둔 것: `SupabaseBridge` ↔ `SupabaseSDK` 시그니처 중복(브리지의 존재 이유), `LeaderboardEntry`·`LeaderboardPlayerEntry` 의 공통 프로퍼티 7개(문서가 각각 표로 싣고 있어 기반 클래스를 빼면 공개 표면에 설명할 타입이 하나 는다).
+
+- **비효율 코드 — 완료.** 발견 1건, 나머지는 이미 최적이라 손대지 않았다.
+  - **로그인마다 탈퇴 상태를 두 번 물었다.** 가드(`withdrawal-guard` Edge Function)와 예약 게이트(`ts_my_withdrawal_status` RPC)가 둘 다 `user_profiles.withdrawn_at` 을 읽는데 순서가 가드 먼저였다. 예약이 없는 정상 로그인에서도 Edge Function 콜드 스타트를 매번 물었다. 상태를 먼저 읽어 `withdrawn_at` 이 null 이면 둘 다 건너뛰도록 해 **정상 로그인의 왕복을 2 → 1** 로 줄였다(로그인 5경로 + 자동 로그인 전부에 적용 — 중복 축에서 게이트를 한 곳으로 모아둔 덕).
+  - **`is_scheduled` 로 가르면 안 된다.** 그 값은 `withdrawn_at > now` 라 **유예가 지난 삭제 대상은 false** 다. 그것으로 건너뛰면 삭제가 영영 실행되지 않는다. 반드시 `withdrawn_at` 의 null 여부로 가른다. 조회 실패 시에는 false 를 돌려 가드를 그대로 태운다
+
+  손대지 않은 것(이미 최적): 매 프레임 tick 4개 중 3개는 게이트가 있고, 남은 `UserSaveStaticSyncRegistry.Tick` 은 dirty 검사가 5초 스로틀인 데다 **정상 상태에서 `NextAllowedAtRealtime` 이 0이라 타이머를 앞으로 옮겨도 이득이 없다**(마킹 없는 제자리 수정을 잡으려면 폴링이 불가피). `DataSchema` 는 리플렉션 결과가 전부 캐시. 로그인 후 프로필·서버코드 조회는 이미 `Task.WhenAll`. 기존 유저 로드는 왕복 1회(신규 유저만 3회 — 행 생성 후 재로드가 필요).
+
+- **규칙 모순 — 완료.** `CLAUDE.md`·`.claude/rules`·스킬의 검증 가능한 주장을 뽑아 전수 대조(파사드 7종 접근자·서비스 10종·Edge Function 10개·`RemoteConfig<T>` 표면·유저세이브 API 5개·상속 관계·`docs.md` 12개 규칙 등은 전부 일치). 어긋난 것 3건:
+  - **PlayNanoo 문단이 `SupabaseSDK` 를 부르라고 적고 있었다.** 실제 샘플은 `SupabaseBridge.*` 를 부른다 — `SupabaseSDK` 는 `internal` 이라 `Samples~` 에서 보이지도 않는다. **같은 파일의 호출자 표(어셈블리 밖 → `SupabaseBridge`)와 정면으로 모순**이었고, 1회차에 컴파일을 깨뜨린 서술과 같은 형태다. 같은 문단의 `Supabase.Try*`·`TryLinkGoogle/AppleToGuestWithIdTokenAsync` 도 파사드에 `Try` 접두어가 없어진 뒤로 틀린 이름이었다
+  - 어셈블리 목록에 `TrueBase.Unity.IAP.asmdef` 누락(4개 중 3개만). `defineConstraints` 로 패키지가 없으면 어셈블리째 빠진다는 근거까지 적었다
+  - `.claude/rules/iap.md` 의 LogTag 표가 4개만 적는데 실제 파사드는 8개 — `*V4` 짝이 빠져 한쪽만 고치는 사고가 날 자리였다
+
+  **검사기로 옮긴 것 — R14 구조 열거.** 위 어셈블리 누락처럼 `CLAUDE.md` 가 나열하는 목록이 실제와 갈라지는 건 R3 로는 안 잡힌다(R3 는 "적힌 이름이 실존하는가"만 보고 "빠진 것"은 못 본다). 어셈블리·Edge Function·Core 서비스 3종을 파일 시스템과 대조한다.
+
+  **자체 테스트가 파이프라인 목록을 따로 갖고 있었다.** R14 를 Program 에만 등록했더니 selftest 에서 미발동으로 잡혔다 — 규칙 추가 시 두 곳을 고쳐야 하는 구조였다. `AuditPipeline.Run(ctx)` 하나로 합쳐 실행과 테스트가 같은 목록을 쓰게 했다.
+
+남은 축: 문서 서술·톤.
 
 ## 규칙 — 실수는 그 자리에서 반영한다
 

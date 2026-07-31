@@ -31,6 +31,7 @@ namespace SdkAudit
             "[R11 시각타입]", "[R11 별칭]",
             "[R12 소비게임]",
             "[R13 크론미등록]",
+            "[R14 구조누락]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -59,11 +60,7 @@ namespace SdkAudit
                 Build(dir);
 
                 var ctx = new AuditContext(dir);
-                CodeRules.Run(ctx);
-                DocRules.Run(ctx);
-                CodeRules.UnusedPublicApi(ctx);
-                CodeRules.Consumers(ctx);
-                SqlRules.Run(ctx);
+                AuditPipeline.Run(ctx);
 
                 var found = ctx.Report.Errors.Concat(ctx.Report.Warnings).ToList();
                 var missing = ExpectedTags.Where(tag => !found.Any(f => f.StartsWith(tag, StringComparison.Ordinal))).ToList();
@@ -180,6 +177,10 @@ create or replace function public.ts_properly_scheduled()
 returns void language plpgsql as $$ begin end; $$;
 comment on function public.ts_properly_scheduled() is '정리. cron 전용.';
 select cron.schedule('ts_properly_scheduled', '0 3 * * *', $cron$ select public.ts_properly_scheduled(); $cron$);");
+
+            // 구조 열거 — R14(어셈블리가 CLAUDE.md 목록에 없음).
+            Write(root, "Runtime/Core/TrueBase.Core.asmdef", "{ \"name\": \"TrueBase.Core\" }");
+            Write(root, "CLAUDE.md", "# 픽스처\n\n어셈블리를 하나도 나열하지 않아 R14 가 걸린다.\n");
 
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");

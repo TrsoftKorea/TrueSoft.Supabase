@@ -25,7 +25,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 - No build commands exist in this repo. Unity compiles C# source directly when the package is imported into a Unity project.
 - The SDK has no test runner. Validation is done via `Samples~/Examples/ExampleSupabaseScenarios.cs` (keyboard-shortcut-driven test flows in Play Mode).
 - **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
-- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
+- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스) 누락을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
 
 ## Architecture
 
@@ -61,6 +61,7 @@ The SDK has three layers:
 
 - `TrueBase.Core.asmdef` — Core only, no UnityEngine references
 - `TrueBase.Unity.asmdef` — Unity layer, depends on Core
+- `TrueBase.Unity.IAP.asmdef` — IAP 파사드. `defineConstraints: TRUESOFT_IAP_AVAILABLE`(= `com.unity.purchasing` 4.0.0 이상)이라 패키지가 없으면 이 어셈블리만 통째로 빠지고 나머지는 그대로 컴파일된다. `UNITY_IAP_V5`·`UNITY_IAP_V5_1`도 여기 `versionDefines`에서 나온다
 - `TrueBase.Editor.asmdef` — Editor tools only
 
 ## Key Concepts
@@ -188,7 +189,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `SupabaseSDK.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. **인터셉터·브리지 등록은 `Supabase` 파사드가 아니라 `SupabaseSDK`를 직접 부른다** — 게임에 공개하는 API가 아니기 때문이다. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.Try*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`TryLinkGoogle/AppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
+`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `SupabaseBridge.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. **인터셉터·브리지 등록은 `Supabase` 파사드가 아니라 `SupabaseBridge`를 부른다** — 게임에 공개하는 API가 아니고, `SupabaseSDK`는 `internal`이라 어셈블리 밖인 `Samples~`에서는 보이지 않기 때문이다. 스토리지 키는 Inspector `Nanoo Storage Key` 필드로 설정. Awake 시 인터셉터를 등록해 `Supabase.*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`LinkGoogleToGuestWithIdTokenAsync`·`LinkAppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. `updated_at` 기반 데이터 동기화 포함. PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
 
 ## Debug Logs
 

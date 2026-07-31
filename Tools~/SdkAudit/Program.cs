@@ -23,13 +23,7 @@ if (args.Length > 0 && args[0] == "--if-changed" && !ChangeGate.HasRelevantChang
 
 var ctx = new AuditContext(root);
 
-// 순서가 있다. CodeRules 가 공개 표면을 채우고, DocRules 가 문서 참조를 채운 뒤,
-// 둘을 모두 아는 상태에서만 미참조 판정을 할 수 있다.
-CodeRules.Run(ctx);
-DocRules.Run(ctx);
-CodeRules.UnusedPublicApi(ctx);
-CodeRules.Consumers(ctx);
-SqlRules.Run(ctx);
+AuditPipeline.Run(ctx);
 
 var errors = ctx.Report.Errors;
 var warnings = ctx.Report.Warnings;
@@ -44,7 +38,7 @@ if (warnings.Count > 0)
 
 if (errors.Count == 0)
 {
-    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 · R12 소비 게임 · R13 크론 등록 통과.");
+    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 · R12 소비 게임 · R13 크론 등록 · R14 구조 열거 통과.");
     Console.WriteLine();
     Console.WriteLine(warnings.Count == 0 ? "결과: OK" : $"결과: OK (경고 {warnings.Count}건)");
     return 0;

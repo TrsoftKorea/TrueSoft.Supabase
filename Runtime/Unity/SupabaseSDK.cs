@@ -459,18 +459,9 @@ namespace TrueBase.Unity
                 SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Google);
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        SignInMethodKind.Google,
-                        allowRecreateOnDeletion: true);
-                    if (guarded != null)
-                        return guarded;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
-                }
+                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
+                if (gated != null)
+                    return gated;
 
                 await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
                 await TryEnsureProfileRowAfterSignInAsync();
@@ -556,18 +547,9 @@ namespace TrueBase.Unity
             RememberLastSignInMethod(SignInMethodKind.Google);
             if (deleteAnonymousRecovery)
                 await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-            if (!_isRecreatingAfterWithdrawalDelete)
-            {
-                var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                    SignInMethodKind.Google,
-                    allowRecreateOnDeletion: true);
-                if (guarded != null)
-                    return guarded;
-
-                var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                if (reserved != null)
-                    return reserved;
-            }
+            var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
+            if (gated != null)
+                return gated;
 
             await TryEnsureProfileRowAfterSignInAsync();
             return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -581,24 +563,17 @@ namespace TrueBase.Unity
         /// </remarks>
         public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleAsync()
         {
-            var webClientId = TryGetGoogleWebClientIdFromSettings();
-            if (string.IsNullOrWhiteSpace(webClientId))
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleWebClientIdEmpty);
+            var ready = await EnsureGoogleNativeReadyAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(ready.ErrorCode);
 
-            if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
-            if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
+            // 계정 선택 창을 띄우기 전에 걸러야 한다. 띄운 뒤 실패시키면 유저가 고른 계정이 버려진다.
             if (IsAnonymousSession(_currentSession))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AnonymousRequiresLink);
 
-            var bridge = EnsureGoogleLoginBridge();
-            var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
-            var loginResult = await RequestGoogleLoginResultAsync(provider);
-            if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
+            var loginResult = await RequestNativeGoogleLoginAsync(ready.Data);
+            if (!loginResult.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(loginResult.ErrorCode);
 
             if (string.IsNullOrWhiteSpace(loginResult.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleIdTokenEmpty);
@@ -616,21 +591,13 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleToGuestAsync()
         {
-            var webClientId = TryGetGoogleWebClientIdFromSettings();
-            if (string.IsNullOrWhiteSpace(webClientId))
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleWebClientIdEmpty);
+            var ready = await EnsureGoogleNativeReadyAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(ready.ErrorCode);
 
-            if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
-            if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
-            var bridge = EnsureGoogleLoginBridge();
-            var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
-            var loginResult = await RequestGoogleLoginResultAsync(provider);
-            if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
+            var loginResult = await RequestNativeGoogleLoginAsync(ready.Data);
+            if (!loginResult.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(loginResult.ErrorCode);
 
             var google = loginResult.Data;
             var ok = await TryLinkGoogleToGuestWithIdTokenAsync(google.IdToken, google.AccessToken);
@@ -642,21 +609,13 @@ namespace TrueBase.Unity
         /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleNativeAsync()
         {
-            var webClientId = TryGetGoogleWebClientIdFromSettings();
-            if (string.IsNullOrWhiteSpace(webClientId))
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleWebClientIdEmpty);
+            var ready = await EnsureGoogleNativeReadyAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(ready.ErrorCode);
 
-            if (!await EnsureInitializedAsync())
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
-            if (Auth == null)
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
-
-            var bridge = EnsureGoogleLoginBridge();
-            var provider = new AndroidGoogleLoginProvider(bridge, webClientId.Trim());
-            var loginResult = await RequestGoogleLoginResultAsync(provider);
-            if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
+            var loginResult = await RequestNativeGoogleLoginAsync(ready.Data);
+            if (!loginResult.IsSuccess)
+                return SupabaseResult<SupabaseSession>.Fail(loginResult.ErrorCode);
 
             var google = loginResult.Data;
             var ok = await TryLinkGoogleWithIdTokenAsync(google.IdToken, google.AccessToken);
@@ -817,18 +776,9 @@ namespace TrueBase.Unity
                 SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Apple);
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        SignInMethodKind.Apple,
-                        allowRecreateOnDeletion: true);
-                    if (guarded != null)
-                        return guarded;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
-                }
+                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+                if (gated != null)
+                    return gated;
 
                 await TryEnsureProfileRowAfterSignInAsync();
             }
@@ -905,18 +855,9 @@ namespace TrueBase.Unity
             RememberLastSignInMethod(SignInMethodKind.Apple);
             if (deleteAnonymousRecovery)
                 await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-            if (!_isRecreatingAfterWithdrawalDelete)
-            {
-                var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                    SignInMethodKind.Apple,
-                    allowRecreateOnDeletion: true);
-                if (guarded != null)
-                    return guarded;
-
-                var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                if (reserved != null)
-                    return reserved;
-            }
+            var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+            if (gated != null)
+                return gated;
 
             await TryEnsureProfileRowAfterSignInAsync();
             return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -1184,18 +1125,9 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 SaveSessionToStorage();
 
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        SignInMethodKind.Apple,
-                        allowRecreateOnDeletion: true);
-                    if (guarded != null)
-                        return guarded;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
-                }
+                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+                if (gated != null)
+                    return gated;
 
                 await TryEnsureProfileRowAfterSignInAsync();
             }
@@ -1856,6 +1788,35 @@ namespace TrueBase.Unity
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// 네이티브 Google 로그인 전 공통 준비. 성공이면 <c>.Data</c>에 다듬은 Web Client ID가 담깁니다.
+        /// </summary>
+        private static async Task<SupabaseResult<string>> EnsureGoogleNativeReadyAsync()
+        {
+            var webClientId = TryGetGoogleWebClientIdFromSettings();
+            if (string.IsNullOrWhiteSpace(webClientId))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.GoogleWebClientIdEmpty);
+
+            if (!await EnsureInitializedAsync())
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized);
+
+            if (Auth == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized);
+
+            return SupabaseResult<string>.Success(webClientId.Trim());
+        }
+
+        /// <summary>준비된 Web Client ID로 네이티브 계정 선택 창을 띄우고 결과를 검증해 돌려줍니다.</summary>
+        private static async Task<SupabaseResult<GoogleLoginResult>> RequestNativeGoogleLoginAsync(string webClientId)
+        {
+            var provider = new AndroidGoogleLoginProvider(EnsureGoogleLoginBridge(), webClientId);
+            var loginResult = await RequestGoogleLoginResultAsync(provider);
+            if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
+                return SupabaseResult<GoogleLoginResult>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
+
+            return SupabaseResult<GoogleLoginResult>.Success(loginResult.Data);
         }
 
         /// <summary>Android 네이티브 Google 계정 선택 창을 띄우고 결과(ID 토큰 등)를 기다립니다.</summary>
@@ -3070,19 +3031,12 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
                 SetAutoLoginBlocked(false);
 
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    var method = ReadLastSignInMethod();
-                    var guarded = await HandleWithdrawalGuardAfterSignInAsync(
-                        method == SignInMethodKind.Unknown ? SignInMethodKind.Anonymous : method,
-                        allowRecreateOnDeletion: allowRecreateOnDeletion);
-                    if (guarded != null)
-                        return guarded.IsSuccess;
-
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved.IsSuccess;
-                }
+                var method = ReadLastSignInMethod();
+                var gated = await RunWithdrawalGatesAfterSignInAsync(
+                    method == SignInMethodKind.Unknown ? SignInMethodKind.Anonymous : method,
+                    allowRecreateOnDeletion);
+                if (gated != null)
+                    return gated.IsSuccess;
 
                 // TryStartAsync / TryRestoreSessionAsync 경로는 SignIn* 를 거치지 않아 프로필 보장이 빠질 수 있음 → ts_my_server_id 빈 결과 방지
                 await TryEnsureProfileRowAfterSignInAsync();
@@ -3351,6 +3305,59 @@ namespace TrueBase.Unity
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenKey);
             PlayerPrefs.DeleteKey(WithdrawalCancelTokenExpiresAtKey);
             PlayerPrefs.Save();
+        }
+
+        /// <summary>
+        /// 로그인 직후 탈퇴 가드와 예약 게이트를 차례로 통과시킵니다.
+        /// 게이트가 하나라도 걸리면 그 결과를, 모두 통과했거나 삭제 후 재생성 중이면 null 을 돌려줍니다.
+        /// <para>
+        /// 로그인 경로마다 이 순서를 손으로 적으면 한 곳을 빠뜨렸을 때 그 경로만 가드를 건너뛴다.
+        /// 순서를 한 곳에 모아 둔다.
+        /// </para>
+        /// </summary>
+        private static async Task<SupabaseResult<SupabaseSession>> RunWithdrawalGatesAfterSignInAsync(
+            SignInMethodKind method,
+            bool allowRecreateOnDeletion = true)
+        {
+            if (_isRecreatingAfterWithdrawalDelete)
+                return null;
+
+            // 탈퇴 예약이 아예 없으면 가드도 게이트도 no-op 이다. 상태 조회 한 번으로 갈라
+            // 로그인마다 withdrawal-guard(Edge Function)를 부르지 않는다.
+            if (await HasNoWithdrawalScheduleAsync())
+            {
+                ClearStoredWithdrawalGateStatus();
+                ClearStoredWithdrawalCancelToken();
+                return null;
+            }
+
+            var guarded = await HandleWithdrawalGuardAfterSignInAsync(method, allowRecreateOnDeletion);
+            if (guarded != null)
+                return guarded;
+
+            return await HandleWithdrawalReservationGateAfterSignInAsync();
+        }
+
+        /// <summary>
+        /// 탈퇴 예약이 하나도 없음이 <b>확실할 때만</b> true. 조회에 실패하면 false 를 돌려 가드를 그대로 태웁니다.
+        /// <para>
+        /// <c>is_scheduled</c> 가 아니라 <c>withdrawn_at</c> 으로 가릅니다 — 유예가 지난 계정은
+        /// <c>is_scheduled=false</c> 인데도 삭제 대상이라, is_scheduled 로 가르면 삭제가 영영 실행되지 않습니다.
+        /// </para>
+        /// </summary>
+        private static async Task<bool> HasNoWithdrawalScheduleAsync()
+        {
+            if (_bootstrap?.PublicProfileService == null)
+                return false;
+
+            if (_currentSession == null || string.IsNullOrWhiteSpace(_currentSession.AccessToken))
+                return false;
+
+            var status = await _bootstrap.PublicProfileService.GetWithdrawalStatusAsync(_currentSession.AccessToken);
+            return status != null
+                   && status.IsSuccess
+                   && status.Data != null
+                   && string.IsNullOrEmpty(status.Data.WithdrawnAtIso);
         }
 
         /// <summary>로그인 직후 탈퇴 가드(유예 만료 삭제)를 처리합니다. 삭제 대상이면 세션을 정리합니다.</summary>

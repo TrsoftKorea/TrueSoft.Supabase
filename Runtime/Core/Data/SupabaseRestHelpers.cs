@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using TrueBase.Core.Common;
+using TrueBase.Core.Http;
+using TrueBase.Core.Models;
 
 namespace TrueBase.Core.Data
 {
@@ -55,6 +59,46 @@ namespace TrueBase.Core.Data
                 return fallbackMessage;
 
             return string.IsNullOrWhiteSpace(body) ? rpcName + "_failed" : body;
+        }
+
+        /// <summary>
+        /// PostgREST RPC를 호출하고 본문을 문자열로 돌려줍니다.
+        /// </summary>
+        /// <param name="allowEmptyBody">
+        /// 빈 본문을 정상으로 볼지 여부. <c>returns void</c> RPC는 true,
+        /// 값을 기대하는 RPC는 false로 두어 <c>&lt;rpc이름&gt;_empty_body</c> 실패를 받습니다.
+        /// </param>
+        internal static async Task<SupabaseResult<string>> CallRpcAsync(
+            ISupabaseHttpClient httpClient,
+            string supabaseUrl,
+            string publishableKey,
+            string accessToken,
+            string rpcName,
+            string bodyJson,
+            bool allowEmptyBody = false)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var response = await httpClient.SendAsync(
+                method: "POST",
+                url: $"{supabaseUrl}/rest/v1/rpc/{rpcName}",
+                jsonBody: bodyJson,
+                headers: AuthHeaders(publishableKey, accessToken));
+
+            if (response == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<string>.Fail(ExtractRpcErrorCode(response.Body, response.ErrorMessage, rpcName));
+
+            var body = response.Body?.Trim();
+            if (!string.IsNullOrEmpty(body))
+                return SupabaseResult<string>.Success(body);
+
+            return allowEmptyBody
+                ? SupabaseResult<string>.Success(string.Empty)
+                : SupabaseResult<string>.Fail(rpcName + "_empty_body");
         }
     }
 }

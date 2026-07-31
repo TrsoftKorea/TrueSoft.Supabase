@@ -235,42 +235,10 @@ namespace TrueBase.Core.Data
         /// <c>returns void</c> RPC용. 성공해도 본문이 비어 오므로 빈 본문을 실패로 보지 않습니다
         /// (<c>ts_leaderboard_set_player_data</c>·<c>ts_leaderboard_delete_my_score</c>).
         /// </param>
-        private async Task<SupabaseResult<string>> CallRpcAsync(
-            string accessToken, string rpcName, string bodyJson, bool allowEmptyBody = false)
-        {
-            if (string.IsNullOrWhiteSpace(accessToken))
-                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+        private Task<SupabaseResult<string>> CallRpcAsync(
+            string accessToken, string rpcName, string bodyJson, bool allowEmptyBody = false) =>
+            SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, rpcName, bodyJson, allowEmptyBody);
 
-            var response = await _httpClient.SendAsync(
-                method: "POST",
-                url: $"{_supabaseUrl}/rest/v1/rpc/{rpcName}",
-                jsonBody: bodyJson,
-                headers: CreateAuthHeaders(accessToken));
-
-            if (response == null)
-                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
-
-            if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(ExtractErrorCode(response.Body, response.ErrorMessage, rpcName));
-
-            var body = response.Body?.Trim();
-            if (!string.IsNullOrEmpty(body))
-                return SupabaseResult<string>.Success(body);
-
-            return allowEmptyBody
-                ? SupabaseResult<string>.Success(string.Empty)
-                : SupabaseResult<string>.Fail(rpcName + "_empty_body");
-        }
-
-        /// <summary>
-        /// PostgREST 오류 본문에서 서버가 <c>raise exception</c>으로 던진 사유를 뽑아냅니다.
-        /// <c>leaderboard_column_not_allowed: zz_lv</c> 처럼 상세가 붙은 경우 앞의 코드만 사용해
-        /// <c>SupabaseReason</c> 매핑이 동작하게 합니다.
-        /// </summary>
-        private static string ExtractErrorCode(string body, string fallbackMessage, string rpcName) =>
-            SupabaseRestHelpers.ExtractRpcErrorCode(body, fallbackMessage, rpcName);
-
-        private Dictionary<string, string> CreateAuthHeaders(string accessToken) =>
-            SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken);
     }
 }

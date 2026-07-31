@@ -108,4 +108,23 @@ namespace SdkAudit
         public static int LineOf(Source src, SyntaxNode node) =>
             src.Text.Take(node.SpanStart).Count(ch => ch == '\n') + 1;
     }
+
+    /// <summary>
+    /// 모든 규칙을 도는 단일 진입점. 실행과 자체 테스트가 같은 목록을 쓰게 해서,
+    /// 규칙을 추가하고 한쪽에만 등록해 <b>테스트되지 않는 규칙</b>이 생기는 것을 막는다.
+    /// </summary>
+    public static class AuditPipeline
+    {
+        public static void Run(AuditContext ctx)
+        {
+            // 순서가 있다. CodeRules 가 공개 표면을 채우고, DocRules 가 문서 참조를 채운 뒤,
+            // 둘을 모두 아는 상태에서만 미참조 판정을 할 수 있다.
+            CodeRules.Run(ctx);
+            DocRules.Run(ctx);
+            CodeRules.UnusedPublicApi(ctx);
+            CodeRules.Consumers(ctx);
+            CodeRules.StructureLists(ctx);
+            SqlRules.Run(ctx);
+        }
+    }
 }

@@ -18,6 +18,8 @@ IAP 파사드마다 `LogTag`를 override해 로그 출처를 구분한다.
 
 새 플랫폼별 파사드를 추가할 때는 반드시 `protected override string LogTag`를 정의한다.
 
+**표의 네 클래스마다 `*V4` 짝이 있다**(Unity IAP 4.x 경로 — `BaseIAPFacadeV4`·`IAPFacadeV4`·`AppleIAPFacadeV4`·`GooglePlayIAPFacadeV4`). LogTag 값은 같다. 로그를 고칠 때 한쪽만 고치면 v4 프로젝트에서만 형식이 어긋난다.
+
 ### 로그 메시지 형식
 
 모든 로그는 `$"{LogTag} 메시지"` 형식. `productId`를 알 수 있는 시점이면 항상 포함한다.

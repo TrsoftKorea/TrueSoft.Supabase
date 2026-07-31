@@ -90,6 +90,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R11 | 하드 오류 | 샘플이 진입점에 `using` 별칭을 두지 않음 |
 | R12 | 하드 오류 | 소비 게임이 부르는 SDK 멤버가 실존하고 공개임 |
 | R13 | 하드 오류 | 주석에 cron 이 부른다고 적힌 함수가 실제로 `cron.schedule` 됨 |
+| R14 | 하드 오류 | `CLAUDE.md`의 구조 목록(어셈블리·Edge Function·Core 서비스)에 실제 파일이 다 있음 |
 
 ## 검사 대상 파일
 
@@ -97,7 +98,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 |------|-----------|
 | `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11 |
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10 |
-| `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만** |
+| `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
 | `install.sql` | R9·R13 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
 
@@ -136,7 +137,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | 축 | 자동화 | 방법 |
 |----|--------|------|
 | 규칙의 모순·모호 제거 | ✕ | `CLAUDE.md`를 코드와 대조 |
-| 규칙 위반 수정 | 일부 | R1~R12가 기계적 위반 담당. 로그 레벨 분류는 수동 |
+| 규칙 위반 수정 | 일부 | R1~R13이 기계적 위반 담당. 로그 레벨 분류는 수동 |
 | 미사용 코드 제거 | 일부 | R7은 파사드만. 전체는 선언 이름 × 참조 수 전수 조사 |
 | 중복 코드 제거 | ✕ | 판단 필요 |
 | 비효율 코드 개선 | ✕ | 판단 필요 |
@@ -146,7 +147,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | 초기화·리셋 대칭성 | ○ | R2 |
 | 샘플 최신성 | ○ | R6 |
 | 소비 게임 호환성 | ○ | R12 |
-| DB 정합성 | 일부 | R9는 `install.sql` 설치 순서. 라이브 DB 대조는 Supabase MCP 필요 |
+| DB 정합성 | 일부 | R9는 `install.sql` 설치 순서, R13은 cron 등록 누락. 라이브 DB 대조는 Supabase MCP 필요 |
 
 **축은 하나씩 끊어서 돌립니다.** 한 번에 여러 축을 건드리면 무엇이 무엇을 깨뜨렸는지 가릴 수 없습니다. 특히 미사용·중복·비효율 축은 동작을 바꿀 수 있어 Unity 재컴파일과 Play Mode 확인이 붙으므로 마지막에 둡니다.
 

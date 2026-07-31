@@ -230,6 +230,46 @@ namespace SdkAudit
         // ── R12 소비 게임 대조 ─────────────────────────────────────────────
         // 게임은 SDK 를 UPM 으로 참조한다. 공개 API 를 지우거나 시그니처를 바꾸면 게임이 깨지는데,
         // 이쪽 리포지토리만 봐서는 드러나지 않는다. consumers.txt 에 적힌 프로젝트를 함께 본다.
+        /// <summary>
+        /// R14 구조 열거. CLAUDE.md 가 파일 목록을 나열하는 곳(어셈블리·Edge Function·Core 서비스)은
+        /// 실제와 갈라져도 드러나지 않는다 — 이름이 실존하는지만 보는 R3 는 "빠진 것"을 못 보기 때문이다.
+        /// </summary>
+        public static void StructureLists(AuditContext ctx)
+        {
+            var claudePath = Path.Combine(ctx.Root, "CLAUDE.md");
+            if (!File.Exists(claudePath))
+                return;
+
+            var text = File.ReadAllText(claudePath);
+
+            var asmdefs = new[] { "Runtime", "Editor" }
+                .Select(d => Path.Combine(ctx.Root, d))
+                .Where(Directory.Exists)
+                .SelectMany(d => Directory.GetFiles(d, "*.asmdef", SearchOption.AllDirectories))
+                .Select(Path.GetFileName);
+            ReportMissing(ctx, text, "어셈블리", asmdefs);
+
+            var edgeDir = Path.Combine(ctx.Root, "Samples~", "DatabaseSetup", "EdgeFunctions");
+            if (Directory.Exists(edgeDir))
+                ReportMissing(ctx, text, "Edge Function", Directory.GetDirectories(edgeDir).Select(Path.GetFileName));
+
+            var coreData = Path.Combine(ctx.Root, "Runtime", "Core", "Data");
+            if (Directory.Exists(coreData))
+                ReportMissing(ctx, text, "Core 서비스",
+                    Directory.GetFiles(coreData, "Supabase*Service.cs").Select(Path.GetFileNameWithoutExtension));
+        }
+
+        private static void ReportMissing(AuditContext ctx, string text, string kind, IEnumerable<string> names)
+        {
+            foreach (var name in names.OrderBy(n => n, StringComparer.Ordinal))
+            {
+                if (text.Contains(name, StringComparison.Ordinal))
+                    continue;
+
+                ctx.Report.Error($"[R14 구조누락] {kind} `{name}` 이 CLAUDE.md 의 목록에 없습니다. 목록이 실제와 갈라졌습니다. (CLAUDE.md)");
+            }
+        }
+
         public static void Consumers(AuditContext ctx)
         {
             var listPath = Path.Combine(ctx.Root, "Tools~", "SdkAudit", "consumers.txt");
