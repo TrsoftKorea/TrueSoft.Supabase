@@ -89,6 +89,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R11 | 하드 오류 | 게임 대면 절대 시각이 `DateTimeOffset` (`DateTime` 금지) |
 | R11 | 하드 오류 | 샘플이 진입점에 `using` 별칭을 두지 않음 |
 | R12 | 하드 오류 | 소비 게임이 부르는 SDK 멤버가 실존하고 공개임 |
+| R13 | 하드 오류 | 주석에 cron 이 부른다고 적힌 함수가 실제로 `cron.schedule` 됨 |
 
 ## 검사 대상 파일
 
@@ -97,7 +98,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11 |
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10 |
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만** |
-| `install.sql` | R9 |
+| `install.sql` | R9·R13 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
 
 규칙 파일을 보는 이유는 게임 문서보다 위험하기 때문입니다. **문서가 틀리면 게임 개발자가 고생하지만, `CLAUDE.md`가 틀리면 Claude가 읽고 그대로 코드를 고칩니다.** 실제로 "SupabaseSDK는 MonoBehaviour singleton"이라는 한 줄 때문에 샘플 컴파일이 깨진 적이 있습니다.

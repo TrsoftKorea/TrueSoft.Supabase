@@ -30,6 +30,7 @@ namespace SdkAudit
             "[R10 코드우선]",
             "[R11 시각타입]", "[R11 별칭]",
             "[R12 소비게임]",
+            "[R13 크론미등록]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -162,13 +163,23 @@ SupabaseResult Supabase.RealApiAsync(int wrongParam)
 
 ---");
 
-            // SQL — R9(앞 절이 뒤 절 객체를 참조).
+            // SQL — R9(앞 절이 뒤 절 객체를 참조), R13(주석은 cron 인데 스케줄 없음).
+            // 제대로 스케줄된 함수도 같이 둬서 R13 이 그건 안 잡는지 본다.
             Write(root, "Samples~/DatabaseSetup/SQL/player/install.sql", @"
 create index if not exists early_idx on public.late_table (id);
 
 create table if not exists public.late_table (
   id uuid primary key
-);");
+);
+
+create or replace function public.ts_never_scheduled()
+returns void language plpgsql as $$ begin end; $$;
+comment on function public.ts_never_scheduled() is '만료 정리. cron 이 매일 부른다.';
+
+create or replace function public.ts_properly_scheduled()
+returns void language plpgsql as $$ begin end; $$;
+comment on function public.ts_properly_scheduled() is '정리. cron 전용.';
+select cron.schedule('ts_properly_scheduled', '0 3 * * *', $cron$ select public.ts_properly_scheduled(); $cron$);");
 
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");

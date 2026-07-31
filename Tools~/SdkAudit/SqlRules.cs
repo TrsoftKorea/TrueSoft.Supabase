@@ -100,6 +100,41 @@ namespace SdkAudit
                         ctx.Report.Error($"[R9 설치순서] {SectionOf(sections, at)} 의 {kind} 가 {SectionOf(sections, defAt)} 에서 만드는 {name} 을 참조합니다. 신규 프로젝트 설치가 실패합니다. ({rel}:{LineOf(raw, at)})");
                 }
             }
+
+            CronScheduled(ctx, rel, raw);
+        }
+
+        /// <summary>
+        /// R13 크론 미등록. 주석에 cron 이 부른다고 적힌 함수인데 install.sql 에 스케줄이 없으면 아무도 부르지 않는다.
+        /// 정의는 멀쩡하고 호출자만 없어서 문법·타입 어디에도 안 걸린다 — 실제로 리더보드 회차 전환이 이 상태였다.
+        /// </summary>
+        private static void CronScheduled(AuditContext ctx, string rel, string raw)
+        {
+            // 스케줄 본문은 달러 인용이라 마스킹 전 원문에서 찾는다. cron.unschedule 은 "cron." 뒤가 schedule 이 아니라 안 걸린다.
+            var scheduled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Match m in Regex.Matches(raw, @"cron\.schedule\b", RegexOptions.IgnoreCase))
+            {
+                var end = raw.IndexOf(';', m.Index);
+                if (end < 0)
+                    end = Math.Min(raw.Length, m.Index + 500);
+                foreach (Match f in Regex.Matches(raw.Substring(m.Index, end - m.Index), @"public\.(\w+)", RegexOptions.IgnoreCase))
+                    scheduled.Add(f.Groups[1].Value);
+            }
+
+            foreach (Match m in Regex.Matches(
+                raw,
+                @"comment\s+on\s+function\s+public\.(?<fn>\w+)\s*\([^)]*\)\s*is\s*'(?<body>(?:[^']|'')*)'",
+                RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            {
+                if (!Regex.IsMatch(m.Groups["body"].Value, "cron", RegexOptions.IgnoreCase))
+                    continue;
+
+                var fn = m.Groups["fn"].Value;
+                if (scheduled.Contains(fn))
+                    continue;
+
+                ctx.Report.Error($"[R13 크론미등록] {fn} 의 주석은 cron 이 부른다고 적혀 있는데 install.sql 에 cron.schedule 이 없습니다. 아무도 부르지 않습니다. ({rel}:{LineOf(raw, m.Index)})");
+            }
         }
 
         private static bool OtherSchema(Match m)

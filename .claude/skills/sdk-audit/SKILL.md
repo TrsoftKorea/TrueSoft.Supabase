@@ -110,6 +110,24 @@ install.sql → Core 서비스 → Facade → Supabase 파사드 → 문서 → 
 
 채팅 구독 버그가 정확히 여기서 나왔다 — 로그아웃 칸이 비어 있었다.
 
+### 정의만 있고 실행되지 않는 것을 찾는다
+
+**소스에 있다고 도는 것이 아니다.** 리더보드 회차 전환 함수는 주석에 "cron 전용"이라 적혀 있고 전용 인덱스까지 있었지만 `cron.schedule` 이 어디에도 없어, daily 리더보드가 3일째 1회차에 멈춰 있었다. `purchase-verify-apple-legacy` 는 어느 프로젝트에도 배포된 적이 없었고, 코드도 없는 컬럼에 INSERT 해서 배포했어도 첫 호출부터 실패할 상태였다.
+
+**둘 다 코드만 읽어서는 안 보인다.** 정의는 멀쩡하고 호출자가 없을 뿐이라 문법·타입·검사기 어디에도 안 걸린다. 라이브를 직접 조회해야 드러난다.
+
+세로 점검마다 아래 셋을 확인한다.
+
+| 확인 | 방법 |
+|------|------|
+| cron 전용 함수가 실제로 스케줄됐나 | `install.sql` 안쪽은 **R13이 자동으로 본다.** 라이브에 실제로 걸렸는지는 `select jobname, schedule, active from cron.job` 로 대조 |
+| Edge Function 이 배포됐고 파일과 같나 | `list_edge_functions` 로 목록·`verify_jwt` 확인. `Samples~/DatabaseSetup/EdgeFunctions/` 의 디렉터리와 개수를 맞춘다 |
+| 배포된 Edge Function 이 현재 스키마로 동작하나 | INSERT·SELECT 하는 컬럼을 `information_schema.columns` 와 대조. `not null` 컬럼을 빠뜨리지 않았나 |
+
+**배포됐다고 동작하는 것도 아니다.** 필요한 시크릿(`APPLE_SHARED_SECRET` 등)이 없으면 설정 오류만 반환한다. 코드가 시크릿을 읽는 곳을 찾아 사용자에게 설정 여부를 확인한다 — 시크릿 값은 대신 넣지 않는다.
+
+프로젝트가 둘 이상이면(ProjectR·DevilSlayer) **양쪽 모두** 본다. 한쪽에만 있는 함수가 곧 드리프트다. 배포 후에는 응답의 `ezbr_sha256` 이 프로젝트 간에 같은지로 같은 코드가 올라갔는지 확인할 수 있다.
+
 ### 진행 순서
 
 1. `install.sql`의 해당 절을 읽고 **테이블·RPC·권한 목록을 만든다** (기준점)
@@ -117,7 +135,8 @@ install.sql → Core 서비스 → Facade → Supabase 파사드 → 문서 → 
 3. 문서를 열어 **서술이 코드와 맞는지** 읽는다 (검사기가 못 보는 부분)
 4. 샘플과 Retool이 실제로 쓰는지 확인
 5. 상태 수명 표를 채운다
-6. 발견 목록을 3분류해 보고
+6. **cron·Edge Function이 실제로 걸려 있고 동작 가능한지 라이브에서 확인한다**
+7. 발견 목록을 3분류해 보고
 
 읽기 위주라 중간에 멈춰도 발견 목록만 남기면 다음에 이어진다.
 
@@ -153,6 +172,8 @@ Supabase MCP로 ProjectR(`wxivrmvtpufeczltward`)과 다섯 가지를 대조한�
 | 인덱스 | `pg_indexes` — `*_pkey`·제약이 만든 `*_key`는 제외 |
 | RLS 정책 | `pg_policies` |
 | RLS 활성화 | `pg_class.relrowsecurity = false` 인 테이블이 없어야 함 |
+| cron 잡 | `cron.job` — `install.sql` 의 `cron.schedule` 호출과 개수·이름이 맞아야 함 |
+| Edge Function | `list_edge_functions` — `Samples~/DatabaseSetup/EdgeFunctions/` 디렉터리와 개수가 맞아야 함 |
 
 **테이블 제약이 만든 인덱스에 주의한다.** `constraint x unique (...)` 는 `create index` 문이 아니라서 `install.sql` 쪽 추출에 안 잡히는데 `pg_indexes` 에는 인덱스로 보인다. 드리프트가 아니다.
 
