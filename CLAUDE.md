@@ -209,9 +209,11 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 자동 메모리는 홈이 아니라 **`.claude/memory/`**(리포지토리 안)에 둔다. `settings.local.json`의 `autoMemoryDirectory`가 그리로 가리킨다. 설계 결정·운영 노하우가 코드와 함께 커밋돼 다른 PC에서도 따라온다.
 
-**새 PC에서는 그 한 줄을 직접 넣어야 한다** — 절대 경로만 허용돼서 커밋되는 `settings.json`에는 넣을 수 없다.
+**새 PC에서는 이 한 줄을 직접 넣어야 한다.** 절대 경로만 허용돼서 커밋되는 `settings.json`에는 못 넣는다(리포지토리 경로가 PC마다 다르다).
 
 ```json
-{ "autoMemoryDirectory": "<리포지토리 절대경로>/.claude/memory" }
+{ "autoMemoryDirectory": "<그 PC의 리포지토리 경로>/.claude/memory" }
 ```
+
+**안 넣으면 조용히 실패한다** — 오류 없이 기본 위치(`~/.claude/projects/…/memory/`)를 쓰고, 그 폴더는 비어 있다. 리포지토리의 `.claude/memory/`는 읽히지 않는 파일로 남는다. **세션 시작 시 메모리가 비어 보이면 이 설정부터 확인한다.**
 

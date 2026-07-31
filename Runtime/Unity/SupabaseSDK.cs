@@ -2922,6 +2922,15 @@ namespace TrueBase.Unity
         /// </summary>
         public static void SetSession(SupabaseSession session, SupabaseSessionChangeKind kind)
         {
+            // 로그아웃 없이 다른 계정으로 바로 로그인할 수 있다. 그때 계정에 묶인 상태를 끊지 않으면
+            // 이전 계정의 채팅 커서·구독과 원격 설정 캐시를 새 계정이 물려받는다.
+            if (kind == SupabaseSessionChangeKind.NewSignIn)
+            {
+                _chat?.Reset();
+                _chat = null;
+                _remoteConfig = null;
+            }
+
             _currentSession = session;
             if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.User.Id))
                 return;

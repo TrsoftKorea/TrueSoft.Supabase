@@ -23,6 +23,8 @@ dotnet run --project Tools~/SdkAudit
 dotnet run --project Tools~/SdkAudit -- --selftest
 ```
 
+작업 중에는 Stop 훅이 `--if-changed` 로 자동 실행하므로 매번 손으로 부를 필요는 없다. 다만 **점검을 시작할 때는 전체를 한 번 돌려 기준선을 잡는다** — 훅은 바뀐 게 있을 때만 돌기 때문이다.
+
 2. **지난 회차 진행 상태를 확인한다.** 메모리의 `project_sdk_audit_progress.md`에 끝난 축·남은 축·결정 대기 항목이 있다.
 
 3. **방향과 대상을 사용자와 합의한다.** 임의로 여러 개를 한꺼번에 건드리지 않는다.
@@ -77,6 +79,23 @@ install.sql → Core 서비스 → Facade → Supabase 파사드 → 문서 → 
 | 코드 ↔ 샘플 | 샘플이 주요 경로를 실제로 밟나 |
 | 코드 ↔ Retool | 운영 화면이 쓰는 RPC·컬럼이 실제로 있나 |
 
+### 문서 서술은 주장을 뽑아 대조한다
+
+검사기는 **이름이 실존하는지만** 본다. "이 함수는 ~한다"가 맞는지는 사람이 읽어야 하는데, **그냥 읽으면 못 잡는다.** "SupabaseSDK는 MonoBehaviour singleton"이라는 오기는 매 세션 읽히던 문장인데도 무언가를 깨뜨리고 원인을 찾으러 갔을 때에야 보였다. 자기가 쓴 문장은 쓴 의도가 보이지 문장이 안 보인다.
+
+그래서 읽으면서 판단하지 말고 **검증 가능한 주장을 먼저 목록으로 뽑는다.**
+
+| 주장 유형 | 예 |
+|-----------|-----|
+| 타입·구조 | "X는 MonoBehaviour다", "X는 internal이다" |
+| 자동 동작 | "로그인 시 자동으로 정리된다" |
+| 인과 | "A하면 B가 된다" |
+| 수치·기본값 | 일부는 R8이 이미 본다 |
+
+목록을 만든 뒤 하나씩 코드로 확인한다. 그래야 "읽었다"가 아니라 **"14개 중 14개 확인"**이 되고, 확인 못 한 게 남으면 드러난다.
+
+한 기능의 문서만 대상으로 하면 주장이 10~20개라 전수 확인이 가능하다. 문서 전체를 한 번에 하려 들면 훑고 지나가게 된다.
+
 ### 상태 수명 표를 반드시 채운다
 
 기능이 들고 있는 상태가 생명주기 이벤트에서 어떻게 되는지 표로 채운다. **빈칸이나 "확인 안 됨"이 곧 발견이다.**
@@ -123,7 +142,19 @@ install.sql → Core 서비스 → Facade → Supabase 파사드 → 문서 → 
 
 **파일을 지우면 `.meta`도 함께 지운다.** 새로 만들지는 않는다.
 
-**라이브 DB와 `install.sql`은 갈라진다.** 실제로 세 번 발생했다(`mails.localized`·`ts_coupon_redeem`·`user_data_logs.source`). 신규 프로젝트를 만들 때까지 드러나지 않는다. 테이블·컬럼·함수·인덱스·정책을 MCP로 대조한다.
+**라이브 DB와 `install.sql`은 갈라진다.** 실제로 세 번 발생했다(`mails.localized`·`ts_coupon_redeem`·`user_data_logs.source`). 신규 프로젝트를 만들 때까지 드러나지 않는다.
+
+Supabase MCP로 ProjectR(`wxivrmvtpufeczltward`)과 다섯 가지를 대조한다.
+
+| 대상 | 라이브 쪽 조회 |
+|------|---------------|
+| 테이블·컬럼 | `information_schema.columns` |
+| 함수 | `pg_proc` + `pg_namespace` |
+| 인덱스 | `pg_indexes` — `*_pkey`·제약이 만든 `*_key`는 제외 |
+| RLS 정책 | `pg_policies` |
+| RLS 활성화 | `pg_class.relrowsecurity = false` 인 테이블이 없어야 함 |
+
+**테이블 제약이 만든 인덱스에 주의한다.** `constraint x unique (...)` 는 `create index` 문이 아니라서 `install.sql` 쪽 추출에 안 잡히는데 `pg_indexes` 에는 인덱스로 보인다. 드리프트가 아니다.
 
 ## 검사기 오탐이 나오면
 
