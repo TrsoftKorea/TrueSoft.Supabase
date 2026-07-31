@@ -16,6 +16,11 @@ if (root == null)
     return 1;
 }
 
+// 훅에서 매 턴 부르기 위한 모드. 검사 대상 경로가 바뀌지 않았으면 아무 일도 하지 않는다.
+// 조건 판정을 셸이 아니라 여기서 하는 이유는 플랫폼마다 훅 셸이 달라서다.
+if (args.Length > 0 && args[0] == "--if-changed" && !ChangeGate.HasRelevantChange(root))
+    return 0;
+
 var ctx = new AuditContext(root);
 
 // 순서가 있다. CodeRules 가 공개 표면을 채우고, DocRules 가 문서 참조를 채운 뒤,

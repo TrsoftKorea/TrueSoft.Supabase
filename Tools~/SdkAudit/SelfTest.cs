@@ -32,8 +32,26 @@ namespace SdkAudit
             "[R12 소비게임]",
         };
 
+        /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
+        private static readonly (string Line, bool Expected)[] GateCases =
+        {
+            (" M Runtime/Unity/Supabase.cs", true),
+            ("?? docs~/guide/new.md", true),
+            (" M CLAUDE.md", true),
+            (" M .claude/rules/docs.md", true),
+            ("R  old.cs -> Runtime/Core/New.cs", true),
+            (" M Sources/Other.cs", false),
+            (" M README.md", false),
+            ("", false),
+        };
+
         public static int Run()
         {
+            var gateFailures = GateCases
+                .Where(c => ChangeGate.IsWatchedStatusLine(c.Line) != c.Expected)
+                .Select(c => $"  오류: 변경 게이트가 \"{c.Line}\" 를 {(c.Expected ? "검사 대상으로 보지 못했습니다" : "검사 대상으로 잘못 봤습니다")}.")
+                .ToList();
+
             var dir = Path.Combine(Path.GetTempPath(), "sdkaudit-selftest-" + Guid.NewGuid().ToString("N"));
             try
             {
@@ -49,12 +67,12 @@ namespace SdkAudit
                 var found = ctx.Report.Errors.Concat(ctx.Report.Warnings).ToList();
                 var missing = ExpectedTags.Where(tag => !found.Any(f => f.StartsWith(tag, StringComparison.Ordinal))).ToList();
 
-                Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개");
+                Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개 · 변경 게이트 {GateCases.Length}건");
                 Console.WriteLine();
 
-                if (missing.Count == 0)
+                if (missing.Count == 0 && gateFailures.Count == 0)
                 {
-                    Console.WriteLine("  ✔ 모든 규칙이 픽스처에서 발동했습니다.");
+                    Console.WriteLine("  ✔ 모든 규칙이 픽스처에서 발동하고, 변경 게이트도 정확합니다.");
                     Console.WriteLine();
                     Console.WriteLine("결과: OK");
                     return 0;
@@ -62,9 +80,11 @@ namespace SdkAudit
 
                 foreach (var tag in missing)
                     Console.WriteLine($"  오류: {tag} 이 픽스처에서 발동하지 않았습니다. 탐지가 깨졌거나 픽스처가 규칙과 어긋납니다.");
+                foreach (var f in gateFailures)
+                    Console.WriteLine(f);
 
                 Console.WriteLine();
-                Console.WriteLine($"결과: 실패 — 미발동 {missing.Count}건");
+                Console.WriteLine($"결과: 실패 — 미발동 {missing.Count}건, 게이트 오판 {gateFailures.Count}건");
                 return 1;
             }
             finally

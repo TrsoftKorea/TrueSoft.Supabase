@@ -53,12 +53,15 @@ namespace SdkAudit
             if (File.Exists(claudeMd))
                 yield return claudeMd;
 
-            var skills = Path.Combine(root, ".claude", "skills");
-            if (!Directory.Exists(skills))
-                yield break;
+            foreach (var sub in new[] { "skills", "rules" })
+            {
+                var dir = Path.Combine(root, ".claude", sub);
+                if (!Directory.Exists(dir))
+                    continue;
 
-            foreach (var md in Directory.EnumerateFiles(skills, "*.md", SearchOption.AllDirectories))
-                yield return md;
+                foreach (var md in Directory.EnumerateFiles(dir, "*.md", SearchOption.AllDirectories))
+                    yield return md;
+            }
         }
 
         /// <param name="isGuide">

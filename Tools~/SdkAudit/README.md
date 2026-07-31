@@ -21,6 +21,16 @@ dotnet run --project Tools~/SdkAudit
 - 종료 코드 `0` = 통과. `1` = 오류.
 - 경고는 종료 코드에 영향을 주지 않습니다. 판단이 필요한 항목입니다.
 
+작업이 끝날 때 `.claude/settings.json`의 Stop 훅이 자동으로 돌립니다.
+
+```sh
+dotnet run --project Tools~/SdkAudit -- --if-changed
+```
+
+`--if-changed`는 `git status`를 보고 **검사 대상 경로가 바뀌지 않았으면 아무 일도 하지 않습니다.** 대화만 한 턴에는 비용이 거의 없고, 파일을 고친 턴에는 잊지 않고 돕니다. 조건 판정을 셸이 아니라 검사기 안에서 하는 이유는 플랫폼마다 훅 셸이 다르기 때문입니다.
+
+감시 경로는 `ChangeGate.Watched`에 있습니다. 검사 대상을 늘리면 여기도 함께 늘립니다.
+
 **검사기를 고쳤으면 자체 테스트를 함께 돌립니다.**
 
 ```sh
@@ -86,7 +96,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 |------|-----------|
 | `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11 |
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10 |
-| `CLAUDE.md`·`.claude/skills/**/*.md` | **R3·R4·R8(사유)만** |
+| `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만** |
 | `install.sql` | R9 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
 

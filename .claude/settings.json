@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet run --project Tools~/SdkAudit -- --if-changed"
+          }
+        ]
+      }
+    ]
+  }
+}
