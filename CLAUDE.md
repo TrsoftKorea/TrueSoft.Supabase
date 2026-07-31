@@ -53,9 +53,12 @@ The SDK has three layers:
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
 - `Json/UnitySupabaseJsonSerializer.cs` — Newtonsoft.Json implementation of `ISupabaseJsonSerializer`
 
-**Editor** (`Editor/`) — Unity editor tooling:
-- `SupabaseSetupMenu.cs` — creates `SupabaseSettings.asset` via `TrueSoft > Supabase > 설정 에셋 만들기`
-- `SupabaseUserSaveClassGeneratorWindow.cs` — generates C# model classes from Supabase OpenAPI schema (`TrueSoft > Supabase > 유저 데이터 클래스 생성`)
+**Editor** (`Editor/`) — Unity editor tooling. 메뉴는 전부 `TrueSoft > Supabase` 아래에 있다:
+- `설정 에셋 만들기` — `SupabaseSettings.asset` 생성 (`SupabaseSetupMenu.cs`)
+- `씬에 런타임 오브젝트 만들기` — 씬에 `SupabaseRuntime` 배치 (`SupabaseSetupMenu.cs`)
+- `클래스 생성/유저 데이터` — PostgREST OpenAPI 스키마에서 Row 클래스 생성 (`UserSaveClassGeneratorWindow.cs`)
+- `클래스 생성/리더보드` — 리더보드 Row 클래스 생성 (`LeaderboardRowClassGeneratorWindow.cs`)
+- `클래스 생성/원격 설정` — 원격 설정 클래스 생성 (`RemoteConfigClassGeneratorWindow.cs`)
 
 ### Assembly Definitions
 

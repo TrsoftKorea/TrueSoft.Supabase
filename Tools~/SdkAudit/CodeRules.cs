@@ -257,6 +257,16 @@ namespace SdkAudit
             if (Directory.Exists(coreData))
                 ReportMissing(ctx, text, "Core 서비스",
                     Directory.GetFiles(coreData, "Supabase*Service.cs").Select(Path.GetFileNameWithoutExtension));
+
+            // 에디터 메뉴는 개발자가 실제로 눌러야 하는 진입점이라, 목록에서 빠지면 기능이 있는지도 모른다.
+            var editorDir = Path.Combine(ctx.Root, "Editor");
+            if (Directory.Exists(editorDir))
+            {
+                var menus = Directory.GetFiles(editorDir, "*.cs")
+                    .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"\[MenuItem\(""TrueSoft/Supabase/(?<path>[^""]+)""")
+                        .Select(m => m.Groups["path"].Value));
+                ReportMissing(ctx, text, "에디터 메뉴", menus);
+            }
         }
 
         private static void ReportMissing(AuditContext ctx, string text, string kind, IEnumerable<string> names)

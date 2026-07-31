@@ -11,7 +11,7 @@ PlayerSave.Level = 10;
 PlayerSave.Coins += 100;
 ```
 
-값을 쓰면 `MarkDirty()`가 자동으로 호출되고, `SupabaseRuntime`이 쿨타임 주기로 자동 저장합니다.
+값을 쓰면 `MarkDirty()`가 자동으로 호출되고, `SupabaseRuntime`이 쿨타임 주기로 자동 저장합니다. 스칼라는 **이전과 같은 값을 쓰면 아무 일도 일어나지 않습니다** — 매 프레임 같은 값을 대입해도 저장이 발생하지 않습니다.
 
 ## 컬렉션
 

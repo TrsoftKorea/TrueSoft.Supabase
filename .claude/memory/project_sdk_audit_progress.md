@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 2d84c5d4-80fb-4e7d-be34-79931c54df32
-  modified: 2026-07-31T06:00:45.864Z
+  modified: 2026-07-31T06:14:59.718Z
 ---
 
 SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐다. 축 목록과 자동화 여부는 `Tools~/SdkAudit/README.md`의 "정기 점검 체크리스트"에 있다. **이 파일은 회차 진행 상태만 기록한다.**
@@ -112,7 +112,17 @@ SDK 전체를 축 단위로 점검·개선하는 작업이 2026-07-30 시작됐�
 
   **자체 테스트가 파이프라인 목록을 따로 갖고 있었다.** R14 를 Program 에만 등록했더니 selftest 에서 미발동으로 잡혔다 — 규칙 추가 시 두 곳을 고쳐야 하는 구조였다. `AuditPipeline.Run(ctx)` 하나로 합쳐 실행과 테스트가 같은 목록을 쓰게 했다.
 
-남은 축: 문서 서술·톤.
+- **문서 서술·톤 — 완료.** 세로 점검이 닿지 않은 기능(user-data·auth)의 주장을 대조하고, 자동화 못 하는 톤 규칙(6·8·12)을 눈으로 확인했다. 발견 2건:
+  - **`CLAUDE.md` 의 Editor 절이 없는 파일을 가리켰다** — `SupabaseUserSaveClassGeneratorWindow.cs` 는 실존하지 않고 실제 이름은 `UserSaveClassGeneratorWindow.cs`. 메뉴도 5개 중 2개만 적혀 있었고 그중 하나는 경로가 틀렸다(실제는 `클래스 생성/유저 데이터` 하위 메뉴). 5개 전부로 고침
+  - `read-write.md` 가 "값을 쓰면 `MarkDirty()` 가 자동 호출"이라고만 적었는데, 생성된 스칼라 setter 는 **같은 값이면 아무 일도 하지 않는다**(`EqualityComparer` 로 조기 반환). 그 조건을 덧붙임
+
+  **R14 에 에디터 메뉴를 추가**했다 — `[MenuItem("TrueSoft/Supabase/…")]` 경로가 `CLAUDE.md` 에 다 있는지 본다. 메뉴는 개발자가 실제로 눌러야 하는 진입점이라 목록에서 빠지면 기능이 있는지도 모른다.
+
+  대조해서 일치한 것: 클래스 생성기 주장 4개(기본값 없으면 `⚠ 필요` + 생성 버튼 비활성 · `[JsonProperty]` 자동 부착 · 함수·jsonb 기본값 제외 · 시스템 컬럼 `SkipColumns` 제외), `null` 원소 fallback, 중복 로그인 60초, 세션 상태 프로퍼티 5종, 톤 규칙 6·12. **탈퇴 문서(유예 중 재로그인 → `WithdrawalGateBlocked`, 유예 만료 → 다음 로그인 시 삭제)가 이번 회차 게이트 최적화 뒤에도 그대로 참임을 확인**했다 — `withdrawn_at` 이 있으면 두 경로 다 정상 진입한다.
+
+  `Supabase.ServerCode` 가 `session-state.md` 표에 없는 건 드리프트가 아니다 — 세션 파생값이 아니라 기기 로컬값이라 `server/index.md` 가 따로 설명한다.
+
+**3회차 완료 (2026-07-31).** 가로 5개 축을 다 돌았다. 검사기는 R14까지, 자체 테스트 19/19.
 
 ## 규칙 — 실수는 그 자리에서 반영한다
 
