@@ -1,14 +1,10 @@
 # 자동 로그인
 
-앱 재시작 시 저장된 세션으로 로그인을 복원합니다.
-
-## 자동 로그인 호출
-
 ```csharp
 Task<SupabaseSignInResult> Supabase.TriggerAutoLoginAsync()
 ```
 
-씬에 `SupabaseRuntime` 컴포넌트를 배치하면 SDK가 초기화됩니다. 로그인은 자동 실행되지 않으므로 원하는 타이밍에 직접 호출합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
+앱 재시작 시 저장된 세션으로 로그인을 복원합니다. 씬에 `SupabaseRuntime` 컴포넌트를 배치하면 SDK가 초기화되지만 로그인은 자동 실행되지 않으므로, 원하는 타이밍에 직접 호출합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.TriggerAutoLoginAsync();

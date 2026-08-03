@@ -1,9 +1,10 @@
 # 중복 로그인 감지
 
-다른 기기에서 같은 계정으로 로그인되면 `OnDuplicateLoginDetected`가 발행됩니다.  
-앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록하세요.
+```csharp
+event Action Supabase.OnDuplicateLoginDetected
+```
 
-60초 주기로 서버와 세션 토큰을 비교해 감지합니다. `SupabaseSettings`의 **Duplicate Session Poll Seconds**에서 조정할 수 있습니다.
+다른 기기에서 같은 계정으로 로그인되면 발행됩니다. 앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록하세요. 60초 주기로 서버와 세션 토큰을 비교해 감지하며, 주기는 `SupabaseSettings`의 **Duplicate Session Poll Seconds**에서 조정합니다.
 
 ```csharp
 void Awake()     => Supabase.OnDuplicateLoginDetected += OnDuplicateLogin;
