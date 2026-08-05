@@ -22,7 +22,7 @@
 
 ## Retool 운영
 
-- [스레드/게시 위생](project_retool_thread_publish_hygiene.md) — 오래된 main 기준 스레드를 게시하면 다른 작업이 되돌아감. 신규 파일 먼저 게시.
+- [스레드/게시 위생](project_retool_thread_publish_hygiene.md) — 오래된 main 기준 스레드를 게시하면 다른 작업이 되돌아감. 신규 파일 먼저 게시. 게시 후 남는 빈 스레드 판별법.
 - [게시 1회당 대화 1개](project_retool_publish_needs_new_thread.md) — 게시된 대화에서 수정하면 Publish가 잠김. 후속 수정은 새 대화로.
 - [라이브 프로젝트 전환(방식 B)](project_retool_project_switching_methodB.md) — `backend/lib/resources.ts` 레지스트리 + `getTarget()`.
 - [리소스 바인딩/데슬 가드](project_retool_resource_bindings.md) — 데슬은 `supabaseDevilslayer` 필수. 데슬 DDL은 RPC 패턴으로.
@@ -30,6 +30,7 @@
 - [pg 래퍼는 $N을 등장 순서로 바인딩](project_retool_pg_param_appearance_order.md) — placeholder 번호를 SQL 등장 순서와 일치시킬 것.
 - [운영자 스키마 변경 버전관리](project_operator_schema_versioning.md) — 스테이징→게시→롤백. 화면은 라이브만, 대기 변경은 PendingChanges 패널로.
 - [페이지 헤더 통일](project_retool_page_header.md) — 제목·부제목은 PageHeader 컴포넌트로.
+- [확인 창은 ConfirmDialog로](project_retool_confirm_dialog.md) — `window.confirm` 금지. 지울 대상을 창에 보여줄 것.
 - [표 로딩 UI 통일 진행상황](project_retool_table_status_row_rollout.md) — TableStatusRow 롤아웃. RemoteConfig·ColumnManagementTab 미적용 확인(2026-07-27).
 
 ## SDK 설계 결정

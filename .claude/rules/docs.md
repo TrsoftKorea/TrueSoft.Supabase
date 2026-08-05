@@ -18,7 +18,7 @@ All user-facing docs live in `docs~/guide/`. Apply these rules on every code cha
 | 8 시그니처 형식·기본값 | R4·R8 |
 | 9 파라미터 표·에러 코드 표기 | R8·R10 |
 | 10 H1 아래 H2 | R5 |
-| 11 코드 우선·페이지당 시그니처 1개 | R10·R5 |
+| 11 코드 우선·페이지당 시그니처 1개 | R10·R5·R15 |
 | 1·4·5·6·12 | **수동** |
 
 수동 규칙은 정기 점검의 문서 축에서 사람이 훑는다.

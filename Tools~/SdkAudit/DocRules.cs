@@ -191,6 +191,10 @@ namespace SdkAudit
             if (isGuide && h1Line >= 0 && firstH2Line > h1Line)
                 CheckOutlineGap(ctx, rel, lines, h1Line, firstH2Line);
 
+            // ── R15 단일 함수 페이지는 H1 직후 시그니처 ──
+            if (isGuide && h1Line >= 0 && signatures.Count == 1)
+                CheckCodeFirst(ctx, rel, lines, h1Line);
+
             // ── R5 한 페이지에 시그니처 2개 이상 ──
             if (isGuide && signatures.Count > 1)
                 ctx.Report.Warn($"[R5 시그니처다수] {rel} 에 시그니처가 {signatures.Count}개 있습니다({string.Join(", ", signatures.Select(s => s.Name))}). 메서드마다 페이지를 나눕니다.");
@@ -240,6 +244,29 @@ namespace SdkAudit
                 if (isGuide && signatures.Count == 1 && overloads.Count == 1)
                     CheckParamTable(ctx, rel, lines, overloads[0], sig);
             }
+        }
+
+        /// <summary>
+        /// R15 코드 우선. 단일 함수 페이지는 H1 직후에 바로 시그니처가 와야 한다(docs 규칙 11.2).
+        /// <para>
+        /// R5 책갈피누락은 이 형태를 못 본다 — 도입문을 넣고 <c>## X 호출</c> 로 감싸면 오히려 통과하기 때문이다.
+        /// <c>##</c> 가 2개 이상인 다중 절 페이지는 첫 절 제목이 정당하므로 제외한다(그것까지 잡으면 오탐이 된다).
+        /// </para>
+        /// </summary>
+        private static void CheckCodeFirst(AuditContext ctx, string rel, string[] lines, int h1Line)
+        {
+            var h2Count = lines.Count(l => l.StartsWith("## ", StringComparison.Ordinal));
+            if (h2Count > 1)
+                return;
+
+            var i = h1Line + 1;
+            while (i < lines.Length && lines[i].Trim().Length == 0)
+                i++;
+
+            if (i >= lines.Length || lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal))
+                return;
+
+            ctx.Report.Error($"[R15 코드우선] 단일 함수 페이지는 H1 다음에 바로 시그니처가 와야 합니다. 도입문은 코드 아래 설명으로 합치세요. ({rel}:{i + 1})");
         }
 
         /// <summary>H1 과 첫 H2 사이에 코드블록·표·2단락 이상이 있으면 그 본문은 책갈피에 잡히지 않는다.</summary>
