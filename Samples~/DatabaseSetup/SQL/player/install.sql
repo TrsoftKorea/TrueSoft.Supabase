@@ -165,8 +165,10 @@ grant execute on function public.ts_server_now() to anon, authenticated;
 create table if not exists public.user_profiles (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
-  account_id uuid unique references auth.users (id) on delete set null,
-  server_id uuid references public.game_servers (id) on delete restrict,
+  -- account_id·server_id 의 unique·FK 는 아래 가드 블록이 profiles_* 이름으로 붙인다.
+  -- 여기서 인라인으로 걸면 가드가 이름으로 못 찾아 신규 설치에서 같은 제약이 두 벌 생긴다.
+  account_id uuid,
+  server_id uuid,
   withdrawn_at timestamptz null,
   last_activity_at timestamptz default now(),
   country_code text null,
@@ -882,6 +884,24 @@ begin
 exception
   when others then
     raise notice 'anonymous_recovery_tokens.server_id SET NOT NULL skipped: %', sqlerrm;
+end $$;
+
+-- server_id FK 는 위 create table 인라인 정의라 기존 DB에는 붙지 않는다. 여기서 보강한다.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_class t on c.conrelid = t.oid
+    join pg_namespace n on t.relnamespace = n.oid
+    where n.nspname = 'public'
+      and t.relname = 'anonymous_recovery_tokens'
+      and c.conname = 'anonymous_recovery_tokens_server_id_fkey'
+  ) then
+    alter table public.anonymous_recovery_tokens
+      add constraint anonymous_recovery_tokens_server_id_fkey
+      foreign key (server_id) references public.game_servers (id) on delete restrict;
+  end if;
 end $$;
 
 do $$
@@ -6862,6 +6882,13 @@ grant execute on function public.ts_claim_all_mail_items(text)             to au
 grant execute on function public.ts_delete_mail_for_user(uuid)             to authenticated;
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;
 grant execute on function public.ts_mail_inbox_counts()                    to authenticated;
+
+-- 본인 우편 RPC는 auth.uid() 기반이라 service_role로는 동작하지 않는다.
+-- 프로젝트 기본 권한 차이와 무관하게 같은 상태가 되도록 명시적으로 회수한다.
+revoke execute on function public.ts_view_mail_for_user(uuid)   from service_role;
+revoke execute on function public.ts_claim_mail_items(uuid)     from service_role;
+revoke execute on function public.ts_delete_mail_for_user(uuid) from service_role;
+revoke execute on function public.ts_mail_inbox_counts()        from service_role;
 
 -- 리더보드 (16_leaderboard.sql)
 grant execute on function public.ts_leaderboard_tables()                              to authenticated;

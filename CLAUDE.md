@@ -8,8 +8,16 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 
 ## Supabase 프로젝트 규칙
 
-- **ProjectR (`wxivrmvtpufeczltward`)** — 실제 게임 프로젝트. SQL 변경 시 Supabase MCP로 이 프로젝트에만 직접 적용한다.
-- **`Samples~/DatabaseSetup/SQL/player/`** 의 SQL 파일은 SDK 사용자(개발자)가 자신의 프로젝트에 직접 실행하도록 안내하는 문서다. Claude가 임의로 다른 프로젝트에 적용하지 않는다.
+**SQL 변경은 아래 라이브 프로젝트 전부에 Supabase MCP로 적용한다.** 한 곳만 고치면 갈라진 차이가 다음 온보딩에서야 드러난다.
+
+| 프로젝트 | ref |
+|----------|-----|
+| ProjectR (DefenceR) | `wxivrmvtpufeczltward` |
+| DevilSlayer | `owumqjyctqhuyailqutd` |
+
+**사용자가 "새 프로젝트에 SDK를 적용했다"고 알리면 이 표에 추가하고, 이후 SQL 변경 대상에 함께 넣는다.** 표에 없는 Supabase 프로젝트는 건드리지 않는다.
+
+`Samples~/DatabaseSetup/SQL/player/install.sql`이 유일한 캐노니컬 소스다. 프로젝트별 분기 SQL을 만들지 않고, 라이브 DB와 파일이 어긋나면 파일을 기준으로 수렴시킨다.
 
 ## Retool 수정 규칙
 
@@ -186,7 +194,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
 
-`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-displayname-set`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
+`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
 
 ## Samples
 
