@@ -3196,6 +3196,133 @@ comment on table public.user_ban_messages is
    쓰기: service_role (Retool 또는 admin Edge Function).
    읽기: get-ban-info Edge Function (service_role) 경유 — 게임 클라이언트는 직접 접근 불가.';
 
+-- ---------------------------------------------------------------------------
+-- 어드민 플레이어 조회 — TrueBase.Admin(Retool 대체 도구) 전용. service_role만.
+-- auth.users는 PostgREST에 노출되지 않으므로 SECURITY DEFINER 함수로 감싼다.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_admin_search_players(
+  p_search      text    default null,
+  p_banned_only boolean default false,
+  p_page        int     default 1,
+  p_page_size   int     default 20
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_search text := nullif(btrim(coalesce(p_search, '')), '');
+  v_page   int  := greatest(1, coalesce(p_page, 1));
+  v_size   int  := least(100, greatest(1, coalesce(p_page_size, 20)));
+  v_total  int;
+  v_rows   jsonb;
+begin
+  select count(*) into v_total
+  from public.user_profiles p
+  join auth.users u on u.id = p.account_id
+  left join public.display_names d on d.account_id = p.account_id
+  where p.withdrawn_at is null
+    and (v_search is null or d.display_name ilike '%' || v_search || '%')
+    and (not p_banned_only or (u.banned_until is not null and u.banned_until > now()));
+
+  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  from (
+    select
+      p.account_id,
+      coalesce(d.display_name, p.user_id) as display_name,
+      u.is_anonymous     as is_guest,
+      p.platform,
+      p.country_code,
+      p.total_paid_krw,
+      u.created_at,
+      p.last_activity_at
+    from public.user_profiles p
+    join auth.users u on u.id = p.account_id
+    left join public.display_names d on d.account_id = p.account_id
+    where p.withdrawn_at is null
+      and (v_search is null or d.display_name ilike '%' || v_search || '%')
+      and (not p_banned_only or (u.banned_until is not null and u.banned_until > now()))
+    order by p.last_activity_at desc nulls last
+    limit v_size offset (v_page - 1) * v_size
+  ) t;
+
+  return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
+end;
+$$;
+
+create or replace function public.ts_admin_player_profile(p_account_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row jsonb;
+begin
+  select jsonb_build_object(
+    'account_id',       p.account_id,
+    'display_name',     coalesce(d.display_name, p.user_id),
+    'is_guest',         u.is_anonymous,
+    'platform',         p.platform,
+    'country_code',     p.country_code,
+    'total_paid_krw',   p.total_paid_krw,
+    'created_at',       u.created_at,
+    'last_activity_at', p.last_activity_at,
+    'last_sign_in_at',  u.last_sign_in_at
+  )
+  into v_row
+  from public.user_profiles p
+  join auth.users u on u.id = p.account_id
+  left join public.display_names d on d.account_id = p.account_id
+  where p.account_id = p_account_id;
+
+  if v_row is null then
+    raise exception 'player_not_found';
+  end if;
+
+  return v_row;
+end;
+$$;
+
+create or replace function public.ts_admin_player_ban_info(p_account_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_banned_until timestamptz;
+  v_message      text;
+  v_is_banned    boolean;
+begin
+  select banned_until into v_banned_until from auth.users where id = p_account_id;
+  v_is_banned := v_banned_until is not null and v_banned_until > now();
+
+  if v_is_banned then
+    select ban_message into v_message from public.user_ban_messages where account_id = p_account_id;
+  end if;
+
+  return jsonb_build_object(
+    'isBanned',    v_is_banned,
+    'bannedUntil', case when v_is_banned then v_banned_until else null end,
+    'banMessage',  v_message
+  );
+end;
+$$;
+
+comment on function public.ts_admin_search_players(text, boolean, int, int) is '플레이어 검색·목록. service_role 전용.';
+comment on function public.ts_admin_player_profile(uuid) is '플레이어 1명 프로필(auth.users 포함). service_role 전용.';
+comment on function public.ts_admin_player_ban_info(uuid) is '플레이어 1명 차단 정보. service_role 전용.';
+
+revoke all on function public.ts_admin_search_players(text, boolean, int, int) from public, anon, authenticated;
+revoke all on function public.ts_admin_player_profile(uuid) from public, anon, authenticated;
+revoke all on function public.ts_admin_player_ban_info(uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_search_players(text, boolean, int, int) to service_role;
+grant execute on function public.ts_admin_player_profile(uuid) to service_role;
+grant execute on function public.ts_admin_player_ban_info(uuid) to service_role;
+
 notify pgrst, 'reload schema';
 
 
@@ -7282,7 +7409,7 @@ grant execute on function public.ts_match_report_result(text, text, boolean, uui
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
 --                                            열려 있으면 플레이어가 재화 최소값 보호를 해제할 수 있다.
 --   ts_run_due_mail_schedules / ts_withdrawal_cleanup_batch / ts_cleanup_expired_mails
---   ts_admin_* (우편 발송·카탈로그·리더보드·매치 보상 설정), rls_auto_enable, ts_mail_schedule_next_run
+--   ts_admin_* (우편 발송·카탈로그·리더보드·매치 보상 설정·플레이어 조회), rls_auto_enable, ts_mail_schedule_next_run
 --   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
 --   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
 --                             리더보드를 지우거나 점수를 조작할 수 있다.

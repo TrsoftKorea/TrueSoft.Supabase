@@ -173,7 +173,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 7. 인앱 결제 — purchases
 8. 원격 설정 — remote_config
 9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
-10. 계정 차단 — user_ban_messages + ban RPCs
+10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만)
 11. 유저 데이터 로그 — user_data_logs + change-diff trigger
 12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail
 13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송
