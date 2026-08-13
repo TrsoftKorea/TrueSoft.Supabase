@@ -5787,6 +5787,102 @@ revoke all on function public.ts_admin_schema_stage_config_item(text,text,jsonb,
 revoke all on function public.ts_admin_schema_stage_config_item_delete(text,text,text)      from public, anon, authenticated;
 revoke all on function public.ts_admin_schema_stage_config_delete(text,text)                from public, anon, authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 운영자 계정 — 운영 도구에 들어올 수 있는 사람 목록
+-- ---------------------------------------------------------------------------
+-- 게임 플레이어(auth.users)와 별개다. 운영자는 구글로 신원만 증명하고, 들어올 수 있는지는
+-- 이 표가 정한다. 마스터 1명은 운영 도구의 환경변수에 있어 여기서 지울 수 없다 — 표가
+-- 비거나 잘못 지워져도 잠기지 않게 하려는 비상구다.
+-- 삭제 대신 disabled_at 으로 끄는 이유는 누가 언제 빠졌는지가 남아야 하기 때문이다.
+create table if not exists public.ts_admin_operators (
+  email        text primary key,
+  display_name text not null default '',
+  disabled_at  timestamptz,
+  created_at   timestamptz not null default now(),
+  created_by   text
+);
+
+alter table public.ts_admin_operators enable row level security;
+-- [의도적] 정책 없음 — service_role 전용. 클라이언트는 이 표에 닿지 않는다.
+
+comment on table public.ts_admin_operators is
+  '운영 도구 접근이 허용된 계정. 이메일은 소문자로 저장한다. 마스터는 여기 없다(도구 환경변수).';
+
+create or replace function public.ts_admin_list_operators()
+returns table (email text, display_name text, disabled_at timestamptz, created_at timestamptz, created_by text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select o.email, o.display_name, o.disabled_at, o.created_at, o.created_by
+    from public.ts_admin_operators o
+   order by o.disabled_at nulls first, o.created_at
+$$;
+
+create or replace function public.ts_admin_upsert_operator(
+  p_email        text,
+  p_display_name text default '',
+  p_by           text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(btrim(coalesce(p_email, '')));
+begin
+  -- 형식이 틀린 값이 들어오면 영영 로그인 못 하는 유령 항목이 남는다.
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'operator_email_invalid';
+  end if;
+
+  insert into public.ts_admin_operators (email, display_name, created_by)
+  values (v_email, coalesce(p_display_name, ''), p_by)
+  on conflict (email) do update
+    set display_name = excluded.display_name,
+        disabled_at  = null;   -- 다시 추가하면 되살아난다
+end;
+$$;
+
+create or replace function public.ts_admin_set_operator_disabled(
+  p_email    text,
+  p_disabled boolean,
+  p_by       text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(btrim(coalesce(p_email, '')));
+begin
+  update public.ts_admin_operators
+     set disabled_at = case when p_disabled then now() else null end,
+         created_by  = coalesce(created_by, p_by)
+   where email = v_email;
+
+  if not found then
+    raise exception 'operator_not_found';
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_list_operators() is '운영자 목록(어드민 전용).';
+comment on function public.ts_admin_upsert_operator(text,text,text) is
+  '운영자 추가·이름 수정. 비활성 상태였으면 다시 활성화된다.';
+comment on function public.ts_admin_set_operator_disabled(text,boolean,text) is
+  '운영자 비활성화·복구. 행은 남기고 disabled_at 만 바꾼다.';
+
+revoke all on function public.ts_admin_list_operators()                             from public, anon, authenticated;
+revoke all on function public.ts_admin_upsert_operator(text,text,text)              from public, anon, authenticated;
+revoke all on function public.ts_admin_set_operator_disabled(text,boolean,text)     from public, anon, authenticated;
+grant execute on function public.ts_admin_list_operators()                          to service_role;
+grant execute on function public.ts_admin_upsert_operator(text,text,text)           to service_role;
+grant execute on function public.ts_admin_set_operator_disabled(text,boolean,text)  to service_role;
+
 notify pgrst, 'reload schema';
 
 
