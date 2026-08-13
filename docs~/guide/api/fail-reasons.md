@@ -190,6 +190,17 @@ bool Handle(SupabaseResult result)
 | `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |
 | `LeaderboardRowNotLoaded` | 조회에서 만들지 않은 행입니다. `Supabase.ToRow`로 현재 값을 받아 고쳐서 넘기세요 |
 
+## 매치 결과
+
+| Reason | 설명 |
+|--------|------|
+| `MatchSessionIdEmpty` | 매치 세션 ID가 비어 있습니다 |
+| `MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
+| `MatchOpponentRequired` | 상대 계정이 지정되지 않았습니다 |
+| `MatchOpponentInvalid` | 상대 계정으로 본인을 지목했습니다 |
+| `MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다 |
+| `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 지급되지 않았습니다 |
+
 ## 쿠폰
 
 | Reason | 설명 |

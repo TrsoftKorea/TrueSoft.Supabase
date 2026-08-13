@@ -208,6 +208,14 @@ export default defineConfig({
             ]
           },
           {
+            text: '매치 결과',
+            link: '/guide/match-result/',
+            collapsed: true,
+            items: [
+              { text: '결과 신고', link: '/guide/match-result/report' }
+            ]
+          },
+          {
             text: '쿠폰',
             link: '/guide/coupon/',
             collapsed: true,
@@ -269,6 +277,7 @@ export default defineConfig({
           { text: '인앱 결제', link: '/guide/api/iap' },
           { text: '우편함', link: '/guide/api/mailbox' },
           { text: '리더보드', link: '/guide/api/leaderboard' },
+          { text: '매치 결과', link: '/guide/api/match-result' },
           { text: '쿠폰', link: '/guide/api/coupon' },
           { text: '채팅', link: '/guide/api/chat' },
           { text: '기타', link: '/guide/api/etc' },

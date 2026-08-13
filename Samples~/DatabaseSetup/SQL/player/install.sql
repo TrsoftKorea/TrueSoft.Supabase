@@ -6907,7 +6907,252 @@ notify pgrst, 'reload schema';
 
 
 -- #############################################################################
--- 19. 클라이언트 권한 최소화
+-- 19. 매치 결과 신고
+-- #############################################################################
+
+-- 참가자 각자가 자기 쪽 결과를 신고합니다(ts_match_report_result). 클라이언트 신고를 그대로 믿지 않고
+-- 상대의 신고와 상호 지목·승패(또는 협동 결과)가 맞아야만 지급합니다. 지급 금액도 클라가 보내지 않고,
+-- game_code 별로 이 절에서 만드는 match_reward_configs 를 서버가 읽어 계산해 우편함으로 보냅니다.
+-- game_code 로 프로젝트·모드를 구분하므로 여러 게임이 이 한 벌의 테이블·RPC 를 함께 씁니다.
+
+create table if not exists public.match_reward_configs (
+  game_code         text primary key,
+  mode              text not null default 'competitive' check (mode in ('competitive', 'coop')),
+  win_items         jsonb not null default '[]'::jsonb,
+  mail_title        text not null default '매치 보상',
+  mail_content      text not null default '',
+  mail_expires_days int not null default 7,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+comment on table public.match_reward_configs is
+  'game_code 별 매치 보상 정책. mode=competitive 는 승패가 반대여야, coop 는 결과가 같아야 검증 통과. Retool 에서 값만 바꿉니다(코드 변경 불필요).';
+comment on column public.match_reward_configs.win_items is '승리 보상 아이템 배열 [{key,count}, ...]. mails.items 와 같은 형식.';
+
+create table if not exists public.match_results (
+  id                    uuid primary key default gen_random_uuid(),
+  session_id            text not null,
+  game_code             text not null,
+  account_id            uuid not null references auth.users (id) on delete cascade,
+  user_id               text not null,
+  is_win                boolean not null,
+  opponent_account_id   uuid not null,
+  status                text not null default 'pending' check (status in ('pending', 'paid', 'mismatch')),
+  paid_mail_id          uuid null references public.mails (id) on delete set null,
+  reported_at           timestamptz not null default now(),
+  resolved_at           timestamptz null
+);
+
+comment on table public.match_results is
+  '참가자별 매치 결과 신고. (session_id, account_id) 유니크로 재신고를 멱등하게 만듭니다.';
+
+create unique index if not exists match_results_session_account_key
+  on public.match_results (session_id, account_id);
+create index if not exists match_results_session_idx on public.match_results (session_id);
+
+alter table public.match_reward_configs enable row level security;
+alter table public.match_results        enable row level security;
+
+-- 두 테이블 모두 SECURITY DEFINER RPC 경유로만 읽고 쓴다 — 클라이언트 직접 접근 없음(RLS 정책 없이 grant 만 회수).
+revoke all on table public.match_reward_configs from anon, authenticated;
+revoke all on table public.match_results        from anon, authenticated;
+
+create or replace function public.ts_match_report_result(
+  p_session_id          text,
+  p_game_code           text,
+  p_is_win              boolean,
+  p_opponent_account_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  v_user    text;
+  v_cfg     public.match_reward_configs%rowtype;
+  v_mine    public.match_results%rowtype;
+  v_opp     public.match_results%rowtype;
+  v_mail_id uuid;
+  v_now     timestamptz := now();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_session_id is null or btrim(p_session_id) = '' then
+    raise exception 'match_session_id_empty';
+  end if;
+  if p_game_code is null or btrim(p_game_code) = '' then
+    raise exception 'match_game_code_empty';
+  end if;
+  if p_opponent_account_id is null then
+    raise exception 'match_opponent_required';
+  end if;
+  if p_opponent_account_id = v_uid then
+    raise exception 'match_opponent_invalid';
+  end if;
+
+  select * into v_cfg from public.match_reward_configs where game_code = btrim(p_game_code);
+  if not found then
+    raise exception 'match_reward_config_not_found';
+  end if;
+
+  -- 세션 단위 직렬화 — 두 참가자가 거의 동시에 불러도 한 쪽씩 처리되어 이중 지급이 나지 않는다.
+  perform pg_advisory_xact_lock(hashtextextended(btrim(p_session_id), 0));
+
+  select p.user_id into v_user from public.user_profiles p where p.account_id = v_uid;
+  v_user := coalesce(v_user, v_uid::text);
+
+  insert into public.match_results
+    (session_id, game_code, account_id, user_id, is_win, opponent_account_id)
+  values
+    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, p_opponent_account_id)
+  on conflict (session_id, account_id) do nothing;
+
+  select * into v_mine from public.match_results
+  where session_id = btrim(p_session_id) and account_id = v_uid
+  for update;
+
+  -- 이미 끝난 처리는 재신고해도 그대로 반환한다 — 멱등.
+  if v_mine.status = 'paid' then
+    return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.is_win);
+  end if;
+  if v_mine.status = 'mismatch' then
+    raise exception 'match_result_mismatch';
+  end if;
+
+  select * into v_opp from public.match_results
+  where session_id = btrim(p_session_id) and account_id = p_opponent_account_id
+  for update;
+
+  if not found then
+    return jsonb_build_object('status', 'pending', 'rewarded', false);
+  end if;
+
+  -- 상호 지목 확인 — 상대가 나를 상대로 지목하지 않았으면 신고가 서로 다른 매치를 가리킨 것이다.
+  if v_opp.opponent_account_id is distinct from v_uid then
+    update public.match_results set status = 'mismatch', resolved_at = v_now
+    where session_id = btrim(p_session_id) and account_id = v_uid;
+    raise exception 'match_result_mismatch';
+  end if;
+
+  -- 결과 일치 확인 — 경쟁은 승패가 반대, 협동은 결과가 같아야 한다.
+  if (v_cfg.mode = 'competitive' and v_mine.is_win = v_opp.is_win)
+     or (v_cfg.mode = 'coop' and v_mine.is_win is distinct from v_opp.is_win) then
+    update public.match_results set status = 'mismatch', resolved_at = v_now
+    where session_id = btrim(p_session_id) and account_id in (v_uid, p_opponent_account_id);
+    raise exception 'match_result_mismatch';
+  end if;
+
+  -- 검증 통과 — 승리 쪽에만 우편으로 지급하고, 양쪽 모두 처리 완료로 표시한다.
+  v_mail_id := null;
+  if v_mine.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
+    insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
+    values (v_uid, v_user, 'system', v_cfg.mail_title, v_cfg.mail_content,
+            v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
+    returning id into v_mail_id;
+  end if;
+
+  update public.match_results
+  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now
+  where session_id = btrim(p_session_id) and account_id = v_uid;
+
+  v_mail_id := null;
+  if v_opp.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
+    select p.user_id into v_user from public.user_profiles p where p.account_id = v_opp.account_id;
+    v_user := coalesce(v_user, v_opp.account_id::text);
+    insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
+    values (v_opp.account_id, v_user, 'system', v_cfg.mail_title, v_cfg.mail_content,
+            v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
+    returning id into v_mail_id;
+  end if;
+
+  update public.match_results
+  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now
+  where session_id = btrim(p_session_id) and account_id = p_opponent_account_id;
+
+  return jsonb_build_object('status', 'paid', 'rewarded', v_mine.is_win);
+end;
+$$;
+
+comment on function public.ts_match_report_result(text, text, boolean, uuid) is
+  '본인 매치 결과 신고. 상대 신고와 교차검증돼야 지급. 재신고는 멱등. SECURITY DEFINER.';
+
+revoke all on function public.ts_match_report_result(text, text, boolean, uuid) from public, anon;
+grant execute on function public.ts_match_report_result(text, text, boolean, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 운영 전용 — 보상 설정 조회·등록(Retool, service_role)
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_admin_match_reward_config_list()
+returns setof public.match_reward_configs
+language sql
+security definer
+set search_path = public
+as $$
+  select * from public.match_reward_configs order by game_code;
+$$;
+
+create or replace function public.ts_admin_match_reward_config_upsert(
+  p_game_code         text,
+  p_mode              text,
+  p_win_items         jsonb,
+  p_mail_title        text default '매치 보상',
+  p_mail_content      text default '',
+  p_mail_expires_days int  default 7
+)
+returns public.match_reward_configs
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.match_reward_configs%rowtype;
+begin
+  if p_game_code is null or btrim(p_game_code) = '' then
+    raise exception 'match_game_code_empty';
+  end if;
+  if p_mode not in ('competitive', 'coop') then
+    raise exception 'invalid_match_mode: %', p_mode;
+  end if;
+  if p_win_items is null or jsonb_typeof(p_win_items) <> 'array' then
+    raise exception 'items_not_array';
+  end if;
+
+  insert into public.match_reward_configs
+    (game_code, mode, win_items, mail_title, mail_content, mail_expires_days, updated_at)
+  values
+    (btrim(p_game_code), p_mode, p_win_items, coalesce(p_mail_title, '매치 보상'),
+     coalesce(p_mail_content, ''), coalesce(p_mail_expires_days, 7), now())
+  on conflict (game_code) do update set
+    mode              = excluded.mode,
+    win_items         = excluded.win_items,
+    mail_title        = excluded.mail_title,
+    mail_content      = excluded.mail_content,
+    mail_expires_days = excluded.mail_expires_days,
+    updated_at        = now()
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+comment on function public.ts_admin_match_reward_config_list() is '매치 보상 설정 전체 조회. service_role 전용.';
+comment on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) is '매치 보상 설정 등록·수정. service_role 전용.';
+
+revoke all on function public.ts_admin_match_reward_config_list() from public, anon, authenticated;
+revoke all on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) from public, anon, authenticated;
+grant execute on function public.ts_admin_match_reward_config_list() to service_role;
+grant execute on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) to service_role;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 20. 클라이언트 권한 최소화
 -- #############################################################################
 
 -- 클라이언트 롤(anon·authenticated)의 테이블·함수 권한을 실제로 필요한 범위까지 좁힙니다.
@@ -6961,7 +7206,8 @@ grant select, insert, update, delete on table public.user_data     to authentica
 
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
 --   account_closures, anonymous_recovery_tokens, mail_batches, mail_categories,
---   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue
+--   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
+--   match_reward_configs, match_results
 
 -- ---------------------------------------------------------------------------
 -- 3. 함수 — 전부 회수 후 SDK 가 실제로 호출하는 RPC 만 되돌려 준다
@@ -7028,12 +7274,15 @@ grant execute on function public.ts_chat_send(text, text)                       
 grant execute on function public.ts_chat_fetch_many(jsonb, int)                        to authenticated;
 grant execute on function public.ts_chat_channels()                                   to authenticated;
 
+-- 매치 결과
+grant execute on function public.ts_match_report_result(text, text, boolean, uuid)    to authenticated;
+
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
 --                                            열려 있으면 플레이어가 재화 최소값 보호를 해제할 수 있다.
 --   ts_run_due_mail_schedules / ts_withdrawal_cleanup_batch / ts_cleanup_expired_mails
---   ts_admin_* (우편 발송·카탈로그·리더보드), rls_auto_enable, ts_mail_schedule_next_run
+--   ts_admin_* (우편 발송·카탈로그·리더보드·매치 보상 설정), rls_auto_enable, ts_mail_schedule_next_run
 --   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
 --   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
 --                             리더보드를 지우거나 점수를 조작할 수 있다.

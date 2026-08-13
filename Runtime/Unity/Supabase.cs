@@ -386,6 +386,17 @@ namespace TrueBase.Unity
             return row;
         }
 
+        // ── 매치 결과 ──────────────────────────────────────────────────────────
+        //
+        // 참가자 각자가 자기 쪽 결과를 신고하면, 서버가 상대의 신고와 교차검증한 뒤에만 보상을 지급합니다.
+        // 클라이언트가 결과를 그대로 신뢰하지 않으므로 지급액도 클라가 보내지 않습니다 — game_code별로
+        // 운영이 등록한 보상 설정을 서버가 읽어 계산하고, 우편함으로 지급합니다.
+
+        /// <inheritdoc cref="SupabaseSDK.TryReportMatchResultAsync"/>
+        public static Task<SupabaseResult<MatchResultReportOutcome>> ReportMatchResultAsync(
+            string sessionId, string gameCode, bool isWin, string opponentAccountId) =>
+            SupabaseSDK.TryReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId);
+
         // ── 쿠폰 ──────────────────────────────────────────────────────────────
         //
         // 쿠폰 정의·발급은 운영(Retool) 전용입니다. 게임은 코드를 보내 사용하는 것만 합니다.

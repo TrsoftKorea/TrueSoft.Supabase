@@ -48,6 +48,7 @@ namespace TrueBase.Unity
         private static UserSavesFacade _userSaves;
         private static MailboxFacade _mailbox;
         private static LeaderboardFacade _leaderboard;
+        private static MatchResultFacade _matchResult;
         private static CouponFacade _coupon;
         private static ChatFacade _chat;
         private static Task _chatTickTask;
@@ -269,6 +270,7 @@ namespace TrueBase.Unity
             public const string LeaderboardPlayer = "Supabase.Leaderboard.Player";
             public const string LeaderboardSetPlayerData = "Supabase.Leaderboard.SetPlayerData";
             public const string LeaderboardDeleteMyScore = "Supabase.Leaderboard.DeleteMyScore";
+            public const string MatchResultReport = "Supabase.MatchResult.Report";
             public const string CouponRedeem = "Supabase.Coupon.Redeem";
             public const string ChatChannels = "Supabase.Chat.Channels";
             public const string ChatSend = "Supabase.Chat.Send";
@@ -1590,6 +1592,10 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.CouponExpired:
                 case SupabaseErrorCode.CouponAlreadyUsed:
                 case SupabaseErrorCode.CouponExhausted:
+
+                // 매치 결과 — 상대가 다르게 신고했거나 상호 지목이 어긋난 경우. 부정 신고 시도일 수도 있지만
+                // 정상적인 통신 유실로도 발생하므로 코드 오류로 취급하지 않는다.
+                case SupabaseErrorCode.MatchResultMismatch:
                     return true;
 
                 default:
@@ -1932,6 +1938,19 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>매치 결과 신고(신고·교차검증·보상 지급 RPC). 보상 설정 등록·수정은 운영 전용입니다.</summary>
+        internal static MatchResultFacade MatchResult
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _matchResult ??= new MatchResultFacade(_bootstrap.MatchResultService, () => _currentSession);
+            }
+        }
+
         /// <summary>쿠폰(코드 사용 RPC). 쿠폰 정의·발급은 운영 전용입니다.</summary>
         internal static CouponFacade Coupon
         {
@@ -2162,6 +2181,25 @@ namespace TrueBase.Unity
             return await Leaderboard.DeleteMyScoreAsync(code);
         }
 
+        /// <summary>
+        /// <c>ts_match_report_result</c> — 본인이 겪은 매치 결과를 신고합니다. 상대의 신고와 교차검증되어야
+        /// 보상이 지급됩니다. 상대가 아직 신고 전이면 <see cref="MatchResultStatus.Pending"/>으로 성공(오류 아님).
+        /// 같은 (세션 ID, 본인 계정) 재신고는 멱등 — 중복 지급되지 않습니다.
+        /// </summary>
+        /// <param name="sessionId">게임이 부여한 매치 세션 식별자(예: Photon 룸 이름).</param>
+        /// <param name="gameCode">보상 설정을 구분하는 코드. 운영이 미리 등록해야 합니다.</param>
+        /// <param name="isWin">본인 기준 승패.</param>
+        /// <param name="opponentAccountId">상대로 지목하는 계정 ID.</param>
+        public static async Task<SupabaseResult<MatchResultReportOutcome>> ReportMatchResultAsync(
+            string sessionId, string gameCode, bool isWin, string opponentAccountId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<MatchResultReportOutcome>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await MatchResult.ReportResultAsync(sessionId, gameCode, isWin, opponentAccountId);
+        }
+
         /// <inheritdoc cref="GetLeaderboardTablesAsync"/>
         public static async Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> TryGetLeaderboardTablesAsync()
         {
@@ -2215,6 +2253,14 @@ namespace TrueBase.Unity
             var r = await DeleteMyLeaderboardScoreAsync(code);
             LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode);
             return r;
+        }
+
+        /// <inheritdoc cref="ReportMatchResultAsync"/>
+        public static async Task<SupabaseResult<MatchResultReportOutcome>> TryReportMatchResultAsync(
+            string sessionId, string gameCode, bool isWin, string opponentAccountId)
+        {
+            var r = await ReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId);
+            return LogAndReturnResult(ApiLogTags.MatchResultReport, r);
         }
 
         /// <summary><c>ts_coupon_redeem</c> — 쿠폰 사용. 보상은 우편으로 지급됩니다.</summary>
@@ -3085,6 +3131,7 @@ namespace TrueBase.Unity
             _userSaves = null;
             _mailbox = null;
             _leaderboard = null;
+            _matchResult = null;
             _coupon = null;
             _chat?.Reset();
             _chat = null;

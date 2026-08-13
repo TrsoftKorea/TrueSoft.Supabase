@@ -304,5 +304,23 @@ namespace TrueBase.Core.Common
 
         /// <summary>서버 시각을 아직 한 번도 맞추지 못했습니다. 동기 조회에서만 나오며, 곧 맞춰집니다.</summary>
         public const string ServerTimeNotSynced = "server_time_not_synced";
+
+        /// <summary>매치 세션 ID가 비어 있습니다.</summary>
+        public const string MatchSessionIdEmpty = "match_session_id_empty";
+
+        /// <summary>게임 코드가 비어 있습니다.</summary>
+        public const string MatchGameCodeEmpty = "match_game_code_empty";
+
+        /// <summary>상대 계정이 지정되지 않았습니다.</summary>
+        public const string MatchOpponentRequired = "match_opponent_required";
+
+        /// <summary>상대 계정으로 본인을 지목했습니다.</summary>
+        public const string MatchOpponentInvalid = "match_opponent_invalid";
+
+        /// <summary>해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다.</summary>
+        public const string MatchRewardConfigNotFound = "match_reward_config_not_found";
+
+        /// <summary>양쪽이 신고한 결과가 서로 맞지 않습니다(상호 지목 불일치 또는 승패 불일치). 지급되지 않습니다.</summary>
+        public const string MatchResultMismatch = "match_result_mismatch";
     }
 }

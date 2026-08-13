@@ -116,6 +116,12 @@
         ChatCursorsInvalid,
         ChatKindUnsupported,
         ServerTimeNotSynced,
+        MatchSessionIdEmpty,
+        MatchGameCodeEmpty,
+        MatchOpponentRequired,
+        MatchOpponentInvalid,
+        MatchRewardConfigNotFound,
+        MatchResultMismatch,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -225,6 +231,12 @@
             SupabaseErrorCode.ChatCursorsInvalid => SupabaseReason.ChatCursorsInvalid,
             SupabaseErrorCode.ChatKindUnsupported => SupabaseReason.ChatKindUnsupported,
             SupabaseErrorCode.ServerTimeNotSynced => SupabaseReason.ServerTimeNotSynced,
+            SupabaseErrorCode.MatchSessionIdEmpty => SupabaseReason.MatchSessionIdEmpty,
+            SupabaseErrorCode.MatchGameCodeEmpty => SupabaseReason.MatchGameCodeEmpty,
+            SupabaseErrorCode.MatchOpponentRequired => SupabaseReason.MatchOpponentRequired,
+            SupabaseErrorCode.MatchOpponentInvalid => SupabaseReason.MatchOpponentInvalid,
+            SupabaseErrorCode.MatchRewardConfigNotFound => SupabaseReason.MatchRewardConfigNotFound,
+            SupabaseErrorCode.MatchResultMismatch => SupabaseReason.MatchResultMismatch,
             _ => SupabaseReason.Unknown,
         };
     }
