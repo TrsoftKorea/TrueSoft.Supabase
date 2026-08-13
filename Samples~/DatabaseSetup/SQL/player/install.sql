@@ -3707,6 +3707,154 @@ comment on function public.ts_admin_count_recipients(text,uuid) is
   '발송 전 대상 수 프리뷰(all/server). 탈퇴 제외.';
 
 -- ---------------------------------------------------------------------------
+-- 어드민 우편 조회 — TrueBase.Admin(Retool 대체 도구) 전용. mails·mail_batches는
+-- service_role에도 테이블 grant가 없으므로(19_20절 회수) RPC로 감싼다.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_admin_list_mail_batches(
+  p_search    text default null,
+  p_category  text default null,
+  p_page      int  default 1,
+  p_page_size int  default 20
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_search   text := nullif(btrim(coalesce(p_search, '')), '');
+  v_category text := nullif(btrim(coalesce(p_category, '')), '');
+  v_page     int  := greatest(1, coalesce(p_page, 1));
+  v_size     int  := least(100, greatest(1, coalesce(p_page_size, 20)));
+  v_total    int;
+  v_rows     jsonb;
+begin
+  select count(*) into v_total
+  from public.mail_batches b
+  where (v_search is null or b.title ilike '%' || v_search || '%')
+    and (v_category is null or b.category = v_category);
+
+  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  from (
+    select
+      b.id, b.target_mode, gs.server_code, b.title, b.items,
+      b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at
+    from public.mail_batches b
+    left join public.game_servers gs on gs.id = b.server_id
+    where (v_search is null or b.title ilike '%' || v_search || '%')
+      and (v_category is null or b.category = v_category)
+    order by b.created_at desc
+    limit v_size offset (v_page - 1) * v_size
+  ) t;
+
+  return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
+end;
+$$;
+
+create or replace function public.ts_admin_mail_batch_detail(p_batch_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_batch jsonb;
+  v_stats jsonb;
+begin
+  select jsonb_build_object(
+    'id', b.id, 'target_mode', b.target_mode, 'server_code', gs.server_code,
+    'title', b.title, 'items', b.items, 'recipient_count', b.recipient_count,
+    'category', b.category, 'expires_at', b.expires_at, 'created_by', b.created_by, 'created_at', b.created_at
+  )
+  into v_batch
+  from public.mail_batches b
+  left join public.game_servers gs on gs.id = b.server_id
+  where b.id = p_batch_id;
+
+  if v_batch is null then
+    raise exception 'mail_batch_not_found';
+  end if;
+
+  select jsonb_build_object(
+    'claimed_count', count(*) filter (where m.items_claimed_at is not null),
+    'deleted_count', count(*) filter (where m.deleted_at is not null)
+  )
+  into v_stats
+  from public.mails m
+  where m.batch_id = p_batch_id;
+
+  return jsonb_build_object('batch', v_batch, 'stats', v_stats);
+end;
+$$;
+
+create or replace function public.ts_admin_search_mails(
+  p_search     text        default null,
+  p_status     text        default null,
+  p_category   text        default null,
+  p_start_date date        default null,
+  p_end_date   date        default null,
+  p_batch_id   uuid        default null,
+  p_page       int         default 1,
+  p_page_size  int         default 20
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_search   text := nullif(btrim(coalesce(p_search, '')), '');
+  v_category text := nullif(btrim(coalesce(p_category, '')), '');
+  v_page     int  := greatest(1, coalesce(p_page, 1));
+  v_size     int  := least(100, greatest(1, coalesce(p_page_size, 20)));
+  v_total    int;
+  v_rows     jsonb;
+begin
+  select count(*) into v_total
+  from public.mails m
+  left join public.display_names d on d.account_id = m.account_id
+  where (v_search is null or d.display_name ilike '%' || v_search || '%' or m.account_id::text ilike '%' || v_search || '%')
+    and (v_category is null or m.category = v_category)
+    and (p_status is null or p_status = '전체'
+         or (p_status = '미수령' and m.deleted_at is null and m.items_claimed_at is null)
+         or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
+         or (p_status = '삭제'   and m.deleted_at is not null))
+    and (p_start_date is null or m.created_at >= p_start_date::timestamptz)
+    and (p_end_date   is null or m.created_at <  (p_end_date + 1)::timestamptz)
+    and (p_batch_id is null or m.batch_id = p_batch_id);
+
+  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  from (
+    select
+      m.id, m.account_id, m.user_id, d.display_name, m.category, m.title, m.content,
+      m.items, m.items_claimed_at, m.deleted_at, m.expires_at, m.created_at, gs.server_code
+    from public.mails m
+    left join public.display_names d on d.account_id = m.account_id
+    left join public.user_profiles p on p.account_id = m.account_id
+    left join public.game_servers gs on gs.id = p.server_id
+    where (v_search is null or d.display_name ilike '%' || v_search || '%' or m.account_id::text ilike '%' || v_search || '%')
+      and (v_category is null or m.category = v_category)
+      and (p_status is null or p_status = '전체'
+           or (p_status = '미수령' and m.deleted_at is null and m.items_claimed_at is null)
+           or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
+           or (p_status = '삭제'   and m.deleted_at is not null))
+      and (p_start_date is null or m.created_at >= p_start_date::timestamptz)
+      and (p_end_date   is null or m.created_at <  (p_end_date + 1)::timestamptz)
+      and (p_batch_id is null or m.batch_id = p_batch_id)
+    order by m.created_at desc
+    limit v_size offset (v_page - 1) * v_size
+  ) t;
+
+  return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
+end;
+$$;
+
+comment on function public.ts_admin_list_mail_batches(text,text,int,int) is '발송 단위(배치) 목록. service_role 전용.';
+comment on function public.ts_admin_mail_batch_detail(uuid) is '배치 1건 + 수령·삭제 통계. service_role 전용.';
+comment on function public.ts_admin_search_mails(text,text,text,date,date,uuid,int,int) is '개별 우편 검색·목록. service_role 전용.';
+
+-- ---------------------------------------------------------------------------
 -- 어드민 RPC EXECUTE — service_role 전용(클라이언트 금지)
 -- ---------------------------------------------------------------------------
 revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb) from public, anon, authenticated;
@@ -3719,6 +3867,12 @@ revoke all on function public.ts_admin_list_game_items(text) from public, anon, 
 grant execute on function public.ts_admin_list_game_items(text) to service_role;
 revoke all on function public.ts_admin_count_recipients(text,uuid) from public, anon, authenticated;
 grant execute on function public.ts_admin_count_recipients(text,uuid) to service_role;
+revoke all on function public.ts_admin_list_mail_batches(text,text,int,int) from public, anon, authenticated;
+grant execute on function public.ts_admin_list_mail_batches(text,text,int,int) to service_role;
+revoke all on function public.ts_admin_mail_batch_detail(uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_mail_batch_detail(uuid) to service_role;
+revoke all on function public.ts_admin_search_mails(text,text,text,date,date,uuid,int,int) from public, anon, authenticated;
+grant execute on function public.ts_admin_search_mails(text,text,text,date,date,uuid,int,int) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -3954,6 +4108,145 @@ comment on function public.ts_run_due_mail_schedules() is
   '만기 우편 스케줄을 발송(ts_admin_send_mail). scheduled=소진, repeat=다음 시각 갱신. cron 매분.';
 
 revoke all on function public.ts_run_due_mail_schedules() from public;
+
+-- ---------------------------------------------------------------------------
+-- 어드민 예약 관리 — TrueBase.Admin(Retool 대체 도구) 전용. mail_schedules는
+-- service_role에도 테이블 grant가 없으므로(19_20절 회수) RPC로 감싼다.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_admin_create_mail_schedule(
+  p_schedule_type text,
+  p_target_mode   text,
+  p_title         text,
+  p_expires_days  int,
+  p_account_ids   jsonb       default null,
+  p_server_id     uuid        default null,
+  p_content       text        default '',
+  p_items         jsonb       default null,
+  p_localized     jsonb       default null,
+  p_category      text        default 'default',
+  p_scheduled_at  timestamptz default null,
+  p_repeat_time   time        default null,
+  p_repeat_unit   text        default 'day',
+  p_repeat_dow    int         default null,
+  p_repeat_dom    int         default null,
+  p_created_by    text        default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id       uuid;
+  v_next     timestamptz;
+  v_category text;
+  v_item     jsonb;
+  v_key      text;
+begin
+  if p_schedule_type not in ('scheduled', 'repeat') then
+    raise exception 'invalid_schedule_type: %', p_schedule_type;
+  end if;
+  if p_target_mode not in ('all', 'server', 'players') then
+    raise exception 'invalid_target_mode: %', p_target_mode;
+  end if;
+  if p_title is null or btrim(p_title) = '' then
+    raise exception 'title_empty';
+  end if;
+  if p_target_mode = 'server' and p_server_id is null then
+    raise exception 'server_id_required';
+  end if;
+  if p_target_mode = 'players' and (p_account_ids is null or jsonb_array_length(p_account_ids) = 0) then
+    raise exception 'account_ids_required';
+  end if;
+
+  v_category := coalesce(nullif(btrim(p_category), ''), 'default');
+
+  -- items 검증(있을 때): 배열·각 key non-empty·count 양의 정수·카탈로그 존재
+  if p_items is not null then
+    if jsonb_typeof(p_items) <> 'array' then
+      raise exception 'items_not_array';
+    end if;
+    for v_item in select value from jsonb_array_elements(p_items) as t(value) loop
+      v_key := v_item->>'key';
+      if v_key is null or btrim(v_key) = '' then
+        raise exception 'item_key_empty';
+      end if;
+      if (v_item->>'count') is null
+         or (v_item->>'count') !~ '^[0-9]+$'
+         or (v_item->>'count')::int <= 0 then
+        raise exception 'item_count_invalid: %', v_key;
+      end if;
+      if not exists (select 1 from public.game_items gi where gi.key = v_key) then
+        raise exception 'unknown_item_key: %', v_key;
+      end if;
+    end loop;
+  end if;
+
+  v_next := public.ts_mail_schedule_next_run(
+    p_schedule_type, p_scheduled_at, p_repeat_time, 'Asia/Seoul', p_repeat_unit, p_repeat_dow, p_repeat_dom);
+
+  insert into public.mail_schedules
+    (schedule_type, target_mode, server_id, account_ids, title, content, items, localized,
+     category, expires_days, scheduled_at, repeat_time, repeat_unit, repeat_dow, repeat_dom,
+     next_run_at, created_by)
+  values
+    (p_schedule_type, p_target_mode, p_server_id, p_account_ids, p_title, coalesce(p_content, ''), p_items, p_localized,
+     v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
+     v_next, p_created_by)
+  returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+create or replace function public.ts_admin_list_mail_schedules()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(row_to_json(t) order by t.next_run_at asc), '[]'::jsonb)
+  from (
+    select
+      s.id, s.schedule_type, s.target_mode, gs.server_code, s.title, s.items, s.category,
+      s.scheduled_at, s.repeat_time, s.next_run_at, s.is_active, s.run_count, s.created_by
+    from public.mail_schedules s
+    left join public.game_servers gs on gs.id = s.server_id
+  ) t;
+$$;
+
+create or replace function public.ts_admin_set_mail_schedule_active(p_id uuid, p_is_active boolean)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.mail_schedules set is_active = p_is_active where id = p_id;
+$$;
+
+create or replace function public.ts_admin_delete_mail_schedule(p_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.mail_schedules where id = p_id;
+$$;
+
+comment on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) is '우편 예약·반복 발송 등록. service_role 전용.';
+comment on function public.ts_admin_list_mail_schedules() is '우편 예약 목록. service_role 전용.';
+comment on function public.ts_admin_set_mail_schedule_active(uuid,boolean) is '우편 예약 활성/비활성 전환. service_role 전용.';
+comment on function public.ts_admin_delete_mail_schedule(uuid) is '우편 예약 삭제. service_role 전용.';
+
+revoke all on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) from public, anon, authenticated;
+grant execute on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) to service_role;
+revoke all on function public.ts_admin_list_mail_schedules() from public, anon, authenticated;
+grant execute on function public.ts_admin_list_mail_schedules() to service_role;
+revoke all on function public.ts_admin_set_mail_schedule_active(uuid,boolean) from public, anon, authenticated;
+grant execute on function public.ts_admin_set_mail_schedule_active(uuid,boolean) to service_role;
+revoke all on function public.ts_admin_delete_mail_schedule(uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_delete_mail_schedule(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- cron 등록 (멱등: 기존 잡 교체) — 매분

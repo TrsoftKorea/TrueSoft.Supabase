@@ -175,8 +175,8 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
 10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만)
 11. 유저 데이터 로그 — user_data_logs + change-diff trigger
-12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail
-13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송
+12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail + TrueBase.Admin 전용 조회 RPC(배치·개별 우편, service_role만)
+13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송 + TrueBase.Admin 전용 관리 RPC(등록·목록·on/off·삭제, service_role만)
 14. 우편 분류 — mail_categories
 15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
 16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음
