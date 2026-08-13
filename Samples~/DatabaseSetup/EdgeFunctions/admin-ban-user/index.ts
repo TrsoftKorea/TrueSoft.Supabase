@@ -5,6 +5,12 @@ type Body = {
   duration_hours: number; // 예: 1, 24, 72
 };
 
+// legacy service_role JWT 키가 아니라 새 secret key를 쓴다(형제 함수들과 동일).
+// 두 값 모두 플랫폼이 주입하므로 모듈 로드 시점에 읽어 빠르게 실패시킨다.
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
+const SUPABASE_SECRET_KEY = secretKeys.default;
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405 });
@@ -23,9 +29,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "invalid_input" }), { status: 400 });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 
   // ban_duration 포맷: decimal + 단위 (예: "24h", unban은 "none")
   const banDuration = duration_hours === 0 ? "none" : `${duration_hours}h`;

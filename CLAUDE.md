@@ -22,7 +22,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 ## Retool 수정 규칙
 
 - Retool 파일 수정 요청 시 **반드시 `retool_read_react_app_files`로 실제 파일을 먼저 읽은 후** 작업한다.
-- 수정된 파일은 **전체 코드**를 제공한다. 부분 코드(diff/snippet)만 제공하지 않는다.
+- 분량은 **고칠 곳의 개수로 정한다** — 3곳 이상이면 전체 코드, 1~2곳이면 파일 경로와 줄 번호를 짚어 부분 코드. 전역 규칙과 같고, 판단 표는 `memory/feedback_code_delivery.md` 에 있다.
 - 코드 제공 시 **파일 경로(예: `/frontend/pages/data/ColumnManagementTab.tsx`)를 반드시 명시**한다.
 - **기존 파일 수정** 시 전체 코드를 제공해 사용자가 붙여넣도록 한다. `retool_create_or_append_react_app_thread_message`를 사용하지 않는다.
 - **신규 파일 생성** 시 `retool_create_or_append_react_app_thread_message`를 사용해 직접 생성한다. (AI 크레딧 소모를 최소화하기 위해 생성 목적으로만 사용하고, 코드 생성은 Claude가 직접 작성한다.)
@@ -221,5 +221,5 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 자동 메모리는 기본 위치인 **`~/.claude/projects/D--Project-TrueSoft-Supabase/memory/`**에 둔다. 리포지토리 안(`.claude/memory/`)에 두고 `autoMemoryDirectory`로 가리키던 방식은 폐기했다 — 그 설정을 **다시 넣지 않는다**.
 
-리포지토리 밖이라 커밋되지 않고, **PC마다 따로 쌓인다.** 다른 PC에서 이어서 작업하려면 그 폴더를 직접 복사해 온다.
+이 리포지토리에는 안 들어가지만 **`claude-config` 저장소(`~/.claude`)가 그 폴더를 추적한다.** 커밋·푸시하면 다른 PC에 그대로 따라오므로 **손으로 복사하지 않는다** — 복사하면 오히려 덮어쓴다. 커밋은 그 저장소에서 사용자가 한다.
 

@@ -3534,6 +3534,29 @@ comment on function public.ts_admin_delete_game_item(text) is
   '아이템 카탈로그 삭제(어드민). 카탈로그만 제거, 발송 이력 불변.';
 
 -- ---------------------------------------------------------------------------
+-- ts_admin_list_game_items — 카탈로그 조회
+-- ---------------------------------------------------------------------------
+-- game_items 는 쓰기·읽기 모두 RPC 경유다. 운영 도구가 owner 로 접속하면 직접 SELECT 가
+-- 되지만, secret key(service_role)로 붙는 도구는 이 테이블에 SELECT 가 없어 조회가 막힌다.
+create or replace function public.ts_admin_list_game_items(p_search text default '')
+returns table (key text, display_name text, created_at timestamptz)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select g.key, g.display_name, g.created_at
+    from public.game_items g
+   where coalesce(p_search, '') = ''
+      or g.key ilike '%' || p_search || '%'
+      or g.display_name ilike '%' || p_search || '%'
+   order by g.created_at desc
+$$;
+
+comment on function public.ts_admin_list_game_items(text) is
+  '아이템 카탈로그 조회(어드민 전용). 검색어가 비면 전체.';
+
+-- ---------------------------------------------------------------------------
 -- ts_admin_count_recipients — 발송 전 대상 수 프리뷰(all/server)
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_admin_count_recipients(
@@ -3565,6 +3588,8 @@ revoke all on function public.ts_admin_upsert_game_item(text,text) from public, 
 grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;
 grant execute on function public.ts_admin_delete_game_item(text) to service_role;
+revoke all on function public.ts_admin_list_game_items(text) from public, anon, authenticated;
+grant execute on function public.ts_admin_list_game_items(text) to service_role;
 revoke all on function public.ts_admin_count_recipients(text,uuid) from public, anon, authenticated;
 grant execute on function public.ts_admin_count_recipients(text,uuid) to service_role;
 
