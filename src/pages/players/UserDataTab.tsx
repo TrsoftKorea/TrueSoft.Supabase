@@ -6,6 +6,7 @@ import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
+import { TypedValueInput, parseTypedValue, type ValueType } from '../../components/ui/TypedValueField'
 
 type Col = { column_name: string; data_type: string }
 type Row = Record<string, unknown>
@@ -48,10 +49,14 @@ function EditValueModal({
   onClose: () => void
   onSaved: (row: Row) => void
 }) {
-  const isBool = col.data_type === 'boolean'
-  const isInt = isIntegerType(col.data_type)
-  const isDecimal = isDecimalType(col.data_type)
   const isJson = col.data_type === 'jsonb'
+  const type: ValueType = col.data_type === 'boolean'
+    ? 'boolean'
+    : isJson
+      ? 'json'
+      : isIntegerType(col.data_type) || isDecimalType(col.data_type)
+        ? 'number'
+        : 'string'
 
   const [text, setText] = useState(() =>
     isJson ? JSON.stringify(current ?? null, null, 2) : current === null || current === undefined ? '' : String(current),
@@ -62,32 +67,17 @@ function EditValueModal({
 
   const handleSubmit = async () => {
     setError('')
-    let value: unknown
-    if (isBool) {
-      value = boolValue
-    } else if (isJson) {
-      try {
-        value = text.trim() === '' ? null : JSON.parse(text)
-      } catch {
-        setError('올바른 JSON이 아닙니다.')
-        return
-      }
-    } else if (isInt || isDecimal) {
-      const n = Number(text)
-      if (text.trim() === '' || Number.isNaN(n)) {
-        setError('숫자를 입력하세요.')
-        return
-      }
-      value = n
-    } else {
-      value = text
+    const parsed = parseTypedValue(type, text, boolValue)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return
     }
 
     setLoading(true)
     try {
       const row = await callAdmin<Row>(target, 'userData.update', {
         accountId,
-        patch: { [col.column_name]: value },
+        patch: { [col.column_name]: parsed.value },
       })
       onSaved(row)
     } catch (e: unknown) {
@@ -115,31 +105,7 @@ function EditValueModal({
             <span className="font-medium text-neutral-700">{col.column_name}</span>
             <span className="text-xs text-neutral-400">{col.data_type}</span>
           </div>
-          {isBool ? (
-            <select
-              value={boolValue ? 'true' : 'false'}
-              onChange={(e) => setBoolValue(e.target.value === 'true')}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
-            >
-              <option value="true">참</option>
-              <option value="false">거짓</option>
-            </select>
-          ) : isJson ? (
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 rounded-md border border-neutral-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
-            />
-          ) : (
-            <input
-              type={isInt || isDecimal ? 'number' : 'text'}
-              step={isInt ? 1 : isDecimal ? 'any' : undefined}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
-            />
-          )}
+          <TypedValueInput type={type} text={text} onTextChange={setText} boolValue={boolValue} onBoolChange={setBoolValue} />
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">

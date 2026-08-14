@@ -8,6 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../components/ui/PendingChanges'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } from '../components/ui/TypedValueField'
 import { opLabel } from '../lib/schemaLabels'
 
 type ConfigRow = {
@@ -21,13 +22,6 @@ type ConfigRow = {
 type DraftRow = { id: number; feature: string; action: string; object_name: string; params: Record<string, unknown> }
 type Effective = { value_json: Record<string, unknown>; enabled: boolean; requires_auth: boolean; deleted: boolean; pendingId: number | null }
 
-type ValueType = 'string' | 'number' | 'boolean' | 'json'
-const detectType = (v: unknown): ValueType => {
-  if (typeof v === 'boolean') return 'boolean'
-  if (typeof v === 'number') return 'number'
-  if (typeof v === 'string') return 'string'
-  return 'json'
-}
 const formatItemValue = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v))
 
 function NewConfigModal({ target, onUnauthenticated, onClose, onCreated }: {
@@ -98,7 +92,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
 }) {
   const isNew = itemKey === null
   const [key, setKey] = useState(itemKey ?? '')
-  const [type, setType] = useState<ValueType>(() => (isNew ? 'string' : detectType(currentValue)))
+  const [type, setType] = useState<ValueType>(() => (isNew ? 'string' : detectValueType(currentValue)))
   const [text, setText] = useState(() => {
     if (isNew) return ''
     if (type === 'json') return JSON.stringify(currentValue, null, 2)
@@ -111,21 +105,14 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   const submit = async () => {
     if (!key.trim() || loading) return
     setError('')
-    let value: unknown
-    if (type === 'boolean') {
-      value = boolValue
-    } else if (type === 'json') {
-      try { value = text.trim() === '' ? null : JSON.parse(text) } catch { setError('올바른 JSON이 아닙니다.'); return }
-    } else if (type === 'number') {
-      const n = Number(text)
-      if (text.trim() === '' || Number.isNaN(n)) { setError('숫자를 입력하세요.'); return }
-      value = n
-    } else {
-      value = text
+    const parsed = parseTypedValue(type, text, boolValue)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return
     }
     setLoading(true)
     try {
-      await callAdmin(target, 'remoteConfig.stageItem', { key: configKey, itemKey: key.trim(), itemValue: value })
+      await callAdmin(target, 'remoteConfig.stageItem', { key: configKey, itemKey: key.trim(), itemValue: parsed.value })
       onSaved()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -160,21 +147,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
               <option value="json">JSON</option>
             </select>
           </div>
-          {type === 'boolean' ? (
-            <select value={boolValue ? 'true' : 'false'} onChange={(e) => setBoolValue(e.target.value === 'true')} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]">
-              <option value="true">참</option>
-              <option value="false">거짓</option>
-            </select>
-          ) : type === 'json' ? (
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} className="w-full px-3 py-2 rounded-md border border-neutral-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
-          ) : (
-            <input
-              type={type === 'number' ? 'number' : 'text'}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
-            />
-          )}
+          <TypedValueInput type={type} text={text} onTextChange={setText} boolValue={boolValue} onBoolChange={setBoolValue} />
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
@@ -213,21 +186,34 @@ export default function RemoteConfig({
     [onUnauthenticated],
   )
 
+  // 라이브 값(rows)은 게시(publish) 전까지 안 바뀐다 — 이 화면의 모든 조작은 대기(draft)만
+  // 건드리므로, 필드 하나 고칠 때마다 라이브 표까지 통째로 다시 받을 필요가 없다.
+  const reloadRows = useCallback(async () => {
+    try {
+      const cfg = await callAdmin<{ rows: ConfigRow[] }>(target, 'remoteConfig.list')
+      setRows(cfg.rows)
+    } catch (e: unknown) {
+      report(e, '원격 설정을 불러오지 못했습니다.')
+    }
+  }, [target, report])
+
+  const reloadDrafts = useCallback(async () => {
+    try {
+      const draft = await callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft')
+      setDrafts(draft.rows.filter((d) => d.feature === 'remote_config'))
+    } catch (e: unknown) {
+      report(e, '대기 중 변경을 불러오지 못했습니다.')
+    }
+  }, [target, report])
+
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const [cfg, draft] = await Promise.all([
-        callAdmin<{ rows: ConfigRow[] }>(target, 'remoteConfig.list'),
-        callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft'),
-      ])
-      setRows(cfg.rows)
-      setDrafts(draft.rows.filter((d) => d.feature === 'remote_config'))
-    } catch (e: unknown) {
-      report(e, '원격 설정을 불러오지 못했습니다.')
+      await Promise.all([reloadRows(), reloadDrafts()])
     } finally {
       setLoading(false)
     }
-  }, [target, report])
+  }, [reloadRows, reloadDrafts])
 
   useEffect(() => { void reload() }, [reload])
 
@@ -261,7 +247,7 @@ export default function RemoteConfig({
 
   const discardOne = async (id: number) => {
     setBusy(true)
-    try { await callAdmin(target, 'schema.discardDraft', { id }); await reload() }
+    try { await callAdmin(target, 'schema.discardDraft', { id }); await reloadDrafts() }
     catch (e: unknown) { report(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
@@ -275,7 +261,7 @@ export default function RemoteConfig({
         enabled: field === 'enabled' ? !eff.enabled : eff.enabled,
         requiresAuth: field === 'requires_auth' ? !eff.requires_auth : eff.requires_auth,
       })
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) { report(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
@@ -286,14 +272,14 @@ export default function RemoteConfig({
       await callAdmin(target, 'remoteConfig.stageDelete', { key: deleteKey })
       setDeleteKey('')
       if (selectedKey === deleteKey) setSelectedKey('')
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) { report(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
 
   const deleteItem = async (key: string, itemKey: string) => {
     setBusy(true)
-    try { await callAdmin(target, 'remoteConfig.stageItemDelete', { key, itemKey }); await reload() }
+    try { await callAdmin(target, 'remoteConfig.stageItemDelete', { key, itemKey }); await reloadDrafts() }
     catch (e: unknown) { report(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
@@ -433,7 +419,7 @@ export default function RemoteConfig({
       )}
 
       {showNew && (
-        <NewConfigModal target={target} onUnauthenticated={onUnauthenticated} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); void reload() }} />
+        <NewConfigModal target={target} onUnauthenticated={onUnauthenticated} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); void reloadDrafts() }} />
       )}
 
       {itemModal && selectedKey && (
@@ -444,7 +430,7 @@ export default function RemoteConfig({
           itemKey={itemModal.itemKey}
           currentValue={itemModal.value}
           onClose={() => setItemModal(null)}
-          onSaved={() => { setItemModal(null); void reload() }}
+          onSaved={() => { setItemModal(null); void reloadDrafts() }}
         />
       )}
 

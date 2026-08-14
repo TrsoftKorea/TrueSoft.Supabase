@@ -337,15 +337,24 @@ Deno.serve(async (req) => {
           .order("verified_at", { ascending: false })
           .range(from, to);
 
-        // PostgREST or() 필터 문법을 깨는 문자만 제거한다 — 검색이 조금 부정확해질 뿐 인가 우회는 아니다.
-        const search = optStr(params, "search").trim().replace(/[,()]/g, "");
+        // `,()` 는 PostgREST or() 필터 문법을 깨서 제거하고, `%`·`_`·`\` 는 ILIKE 와일드카드라
+        // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
+        const search = optStr(params, "search").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
         if (search) {
           query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
         }
         const startDate = params["startDate"];
         const endDate = params["endDate"];
         if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
-        if (typeof endDate === "string" && endDate) query = query.lte("verified_at", endDate);
+        // endDate 는 'YYYY-MM-DD' 뿐이라 그대로 lte 하면 그날 00:00:00 까지만 걸려 당일 데이터가
+        // 거의 다 빠진다 — 다음날 자정 미만(<)으로 바꿔 그날 전체를 포함한다.
+        if (typeof endDate === "string" && endDate) {
+          const [y, m, d] = endDate.split("-").map(Number);
+          if (y && m && d) {
+            const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+            query = query.lt("verified_at", next);
+          }
+        }
 
         const { data, error, count } = await query;
         if (error) throw new Error(error.message);

@@ -8,6 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatKRW } from '../components/ui/format'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 
 type PurchaseRow = {
   id: string
@@ -86,11 +87,7 @@ export default function Purchases({
     <div className="space-y-4">
       <PageHeader title="구매 내역" description="검증된 인앱 결제 내역을 조회합니다." />
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard className="p-4">
         <div className="flex flex-wrap items-center gap-3">

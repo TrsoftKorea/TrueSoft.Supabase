@@ -135,7 +135,16 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
 
   const submit = async () => {
     if (!canSubmit || loading) return
-    setLoading(true); setError(''); setIssuedMsg('')
+    setError('')
+    let maxUsesValue: number | null = null
+    if (maxUses.trim() !== '') {
+      maxUsesValue = Number(maxUses)
+      if (Number.isNaN(maxUsesValue)) {
+        setError('최대 사용 횟수는 숫자여야 합니다.')
+        return
+      }
+    }
+    setLoading(true); setIssuedMsg('')
     const common = {
       title: title.trim(),
       content,
@@ -144,7 +153,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       mailExpiresDays,
       isActive,
-      maxUses: maxUses.trim() === '' ? null : Number(maxUses),
+      maxUses: maxUsesValue,
     }
     try {
       if (isEdit) {
