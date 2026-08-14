@@ -352,6 +352,68 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
       }
 
+      case "remoteConfig.list": {
+        const { data, error } = await db
+          .from("remote_config")
+          .select("key, value_json, enabled, requires_auth, description, version, updated_at")
+          .order("key");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      case "remoteConfig.stageNew": {
+        const { data, error } = await db.rpc("ts_admin_schema_stage_config_new", {
+          p_key: str(params, "key"),
+          p_enabled: bool(params, "enabled"),
+          p_requires_auth: bool(params, "requiresAuth"),
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "remoteConfig.stageMeta": {
+        const { data, error } = await db.rpc("ts_admin_schema_stage_config_meta", {
+          p_key: str(params, "key"),
+          p_enabled: bool(params, "enabled"),
+          p_requires_auth: bool(params, "requiresAuth"),
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "remoteConfig.stageItem": {
+        const { data, error } = await db.rpc("ts_admin_schema_stage_config_item", {
+          p_key: str(params, "key"),
+          p_item_key: str(params, "itemKey"),
+          p_item_value: params["itemValue"] ?? null,
+          p_meta_type: null,
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "remoteConfig.stageItemDelete": {
+        const { data, error } = await db.rpc("ts_admin_schema_stage_config_item_delete", {
+          p_key: str(params, "key"),
+          p_item_key: str(params, "itemKey"),
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "remoteConfig.stageDelete": {
+        const { data, error } = await db.rpc("ts_admin_schema_stage_config_delete", {
+          p_key: str(params, "key"),
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "mails.getServers": {
         const { data, error } = await db.from("game_servers").select("id, server_code, display_name").order("display_name");
         if (error) throw new Error(error.message);
