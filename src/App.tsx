@@ -15,6 +15,7 @@ import MailCategories from './pages/MailCategories'
 import MailSchedules from './pages/MailSchedules'
 import Leaderboard from './pages/Leaderboard'
 import SchemaChanges from './pages/SchemaChanges'
+import Purchases from './pages/Purchases'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -106,6 +107,7 @@ export default function App() {
         <Route path="/mails/categories" element={<MailCategories target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/schedules" element={<MailSchedules target={target} onUnauthenticated={signOut} />} />
         <Route path="/leaderboard" element={<Leaderboard target={target} onUnauthenticated={signOut} />} />
+        <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

@@ -322,6 +322,36 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: data ?? [] });
       }
 
+      case "purchases.list": {
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 20;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = db
+          .from("purchases")
+          .select(
+            "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at",
+            { count: "exact" },
+          )
+          .order("verified_at", { ascending: false })
+          .range(from, to);
+
+        // PostgREST or() 필터 문법을 깨는 문자만 제거한다 — 검색이 조금 부정확해질 뿐 인가 우회는 아니다.
+        const search = optStr(params, "search").trim().replace(/[,()]/g, "");
+        if (search) {
+          query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
+        }
+        const startDate = params["startDate"];
+        const endDate = params["endDate"];
+        if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
+        if (typeof endDate === "string" && endDate) query = query.lte("verified_at", endDate);
+
+        const { data, error, count } = await query;
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+      }
+
       case "mails.getServers": {
         const { data, error } = await db.from("game_servers").select("id, server_code, display_name").order("display_name");
         if (error) throw new Error(error.message);

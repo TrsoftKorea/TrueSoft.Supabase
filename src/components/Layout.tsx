@@ -110,6 +110,9 @@ export function Layout({
             <NavLink to="/leaderboard" className={navClass}>
               리더보드
             </NavLink>
+            <NavLink to="/purchases" className={navClass}>
+              구매 내역
+            </NavLink>
             <NavLink to="/schema-changes" className={navClass}>
               변경 관리
             </NavLink>
