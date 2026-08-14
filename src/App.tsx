@@ -17,6 +17,7 @@ import Leaderboard from './pages/Leaderboard'
 import SchemaChanges from './pages/SchemaChanges'
 import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
+import Coupons from './pages/Coupons'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -110,6 +111,7 @@ export default function App() {
         <Route path="/leaderboard" element={<Leaderboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
+        <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

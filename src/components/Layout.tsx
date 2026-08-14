@@ -116,6 +116,9 @@ export function Layout({
             <NavLink to="/remote-config" className={navClass}>
               원격 설정
             </NavLink>
+            <NavLink to="/coupons" className={navClass}>
+              쿠폰
+            </NavLink>
             <NavLink to="/schema-changes" className={navClass}>
               변경 관리
             </NavLink>

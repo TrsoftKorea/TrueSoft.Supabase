@@ -414,6 +414,63 @@ Deno.serve(async (req) => {
         return json({ ok: true, data });
       }
 
+      case "coupons.list": {
+        const { data, error } = await db.rpc("ts_admin_coupon_list", { p_search: optStr(params, "search") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "coupons.codes": {
+        const { data, error } = await db.rpc("ts_admin_coupon_codes", { p_coupon_id: str(params, "id") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "coupons.create": {
+        const { data, error } = await db.rpc("ts_admin_coupon_create", {
+          p_kind: str(params, "kind"),
+          p_title: str(params, "title"),
+          p_content: optStr(params, "content"),
+          p_category: optStr(params, "category") || "default",
+          p_items: params["items"] ?? null,
+          p_localized: null,
+          p_expires_at: params["expiresAt"] ?? null,
+          p_mail_expires_days: typeof params["mailExpiresDays"] === "number" ? params["mailExpiresDays"] : 7,
+          p_is_active: bool(params, "isActive"),
+          p_code: optStr(params, "code") || null,
+          p_max_uses: typeof params["maxUses"] === "number" ? params["maxUses"] : null,
+          p_prefix: optStr(params, "prefix"),
+          p_random_len: typeof params["randomLen"] === "number" ? params["randomLen"] : 6,
+          p_quantity: typeof params["quantity"] === "number" ? params["quantity"] : 1,
+          p_created_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "coupons.update": {
+        const { error } = await db.rpc("ts_admin_coupon_update", {
+          p_id: str(params, "id"),
+          p_title: str(params, "title"),
+          p_content: optStr(params, "content"),
+          p_category: optStr(params, "category") || "default",
+          p_items: params["items"] ?? null,
+          p_localized: null,
+          p_expires_at: params["expiresAt"] ?? null,
+          p_mail_expires_days: typeof params["mailExpiresDays"] === "number" ? params["mailExpiresDays"] : 7,
+          p_max_uses: typeof params["maxUses"] === "number" ? params["maxUses"] : null,
+          p_is_active: bool(params, "isActive"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "coupons.delete": {
+        const { error } = await db.rpc("ts_admin_coupon_delete", { p_id: str(params, "id") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "mails.getServers": {
         const { data, error } = await db.from("game_servers").select("id, server_code, display_name").order("display_name");
         if (error) throw new Error(error.message);
