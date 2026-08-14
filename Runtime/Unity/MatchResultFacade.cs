@@ -27,7 +27,7 @@ namespace TrueBase.Unity
         {
             var token = RequireToken(session);
             if (token == null)
-                return SupabaseResult<MatchResultReportOutcome>.Fail("auth_not_signed_in");
+                return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.NotSignedIn);
 
             return await _matchResult.ReportResultAsync(token, sessionId, gameCode, isWin, opponentAccountId);
         }

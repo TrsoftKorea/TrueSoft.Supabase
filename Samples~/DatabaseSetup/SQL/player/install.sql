@@ -3219,15 +3219,10 @@ declare
   v_total  int;
   v_rows   jsonb;
 begin
-  select count(*) into v_total
-  from public.user_profiles p
-  join auth.users u on u.id = p.account_id
-  left join public.display_names d on d.account_id = p.account_id
-  where p.withdrawn_at is null
-    and (v_search is null or d.display_name ilike '%' || v_search || '%')
-    and (not p_banned_only or (u.banned_until is not null and u.banned_until > now()));
-
-  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  -- count(*) over()를 페이지 쿼리 안에서 함께 구해 테이블을 두 번 스캔하지 않는다.
+  select coalesce(jsonb_agg(to_jsonb(t) - 'total'), '[]'::jsonb),
+         coalesce(max(t.total), 0)
+    into v_rows, v_total
   from (
     select
       p.account_id,
@@ -3237,7 +3232,8 @@ begin
       p.country_code,
       p.total_paid_krw,
       u.created_at,
-      p.last_activity_at
+      p.last_activity_at,
+      count(*) over() as total
     from public.user_profiles p
     join auth.users u on u.id = p.account_id
     left join public.display_names d on d.account_id = p.account_id
@@ -3730,16 +3726,15 @@ declare
   v_total    int;
   v_rows     jsonb;
 begin
-  select count(*) into v_total
-  from public.mail_batches b
-  where (v_search is null or b.title ilike '%' || v_search || '%')
-    and (v_category is null or b.category = v_category);
-
-  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  -- count(*) over()를 페이지 쿼리 안에서 함께 구해 테이블을 두 번 스캔하지 않는다.
+  select coalesce(jsonb_agg(to_jsonb(t) - 'total'), '[]'::jsonb),
+         coalesce(max(t.total), 0)
+    into v_rows, v_total
   from (
     select
       b.id, b.target_mode, gs.server_code, b.title, b.items,
-      b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at
+      b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at,
+      count(*) over() as total
     from public.mail_batches b
     left join public.game_servers gs on gs.id = b.server_id
     where (v_search is null or b.title ilike '%' || v_search || '%')
@@ -3811,24 +3806,15 @@ declare
   v_total    int;
   v_rows     jsonb;
 begin
-  select count(*) into v_total
-  from public.mails m
-  left join public.display_names d on d.account_id = m.account_id
-  where (v_search is null or d.display_name ilike '%' || v_search || '%' or m.account_id::text ilike '%' || v_search || '%')
-    and (v_category is null or m.category = v_category)
-    and (p_status is null or p_status = '전체'
-         or (p_status = '미수령' and m.deleted_at is null and m.items_claimed_at is null)
-         or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
-         or (p_status = '삭제'   and m.deleted_at is not null))
-    and (p_start_date is null or m.created_at >= p_start_date::timestamptz)
-    and (p_end_date   is null or m.created_at <  (p_end_date + 1)::timestamptz)
-    and (p_batch_id is null or m.batch_id = p_batch_id);
-
-  select coalesce(jsonb_agg(row_to_json(t)), '[]'::jsonb) into v_rows
+  -- count(*) over()를 페이지 쿼리 안에서 함께 구해 mails 테이블을 두 번 스캔하지 않는다.
+  select coalesce(jsonb_agg(to_jsonb(t) - 'total'), '[]'::jsonb),
+         coalesce(max(t.total), 0)
+    into v_rows, v_total
   from (
     select
       m.id, m.account_id, m.user_id, d.display_name, m.category, m.title, m.content,
-      m.items, m.items_claimed_at, m.deleted_at, m.expires_at, m.created_at, gs.server_code
+      m.items, m.items_claimed_at, m.deleted_at, m.expires_at, m.created_at, gs.server_code,
+      count(*) over() as total
     from public.mails m
     left join public.display_names d on d.account_id = m.account_id
     left join public.user_profiles p on p.account_id = m.account_id
@@ -5647,6 +5633,146 @@ $$;
 comment on function public.ts_admin_leaderboard_detach_column(text,text) is
   '리더보드에서 플레이어 데이터 컬럼 등록 해제(어드민). 물리 컬럼은 남는다.';
 
+-- ---------------------------------------------------------------------------
+-- 어드민 조회 — TrueBase.Admin(Retool 대체 도구) 전용. information_schema는
+-- PostgREST에 노출되지 않고, 순위·통계는 동적 컬럼 계산이 필요해 RPC로 감싼다.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_admin_list_leaderboards()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(row_to_json(t) order by t.code), '[]'::jsonb)
+  from (
+    select
+      lt.code, lt.display_name, lt.scope, lt.record_type, lt.sort_type, lt.rotation,
+      lt.rotation_period_seconds, lt.rotation_anchor_at, lt.rotation_count,
+      lt.next_rotation_at, lt.ends_at, lt.is_active,
+      (lt.ends_at is not null and now() >= lt.ends_at) as is_ended,
+      coalesce((
+        select count(*) from public.leaderboard_scores s
+        where s.table_code = lt.code and s.rotation_count = lt.rotation_count
+      ), 0) as current_entries,
+      coalesce((
+        select string_agg(c.column_name, ',' order by c.sort_order)
+        from public.leaderboard_table_columns c where c.table_code = lt.code
+      ), '') as columns
+    from public.leaderboard_tables lt
+  ) t;
+$$;
+
+create or replace function public.ts_admin_leaderboard_columns(p_code text)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'all', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'column_name', c.column_name, 'data_type', c.data_type,
+        'is_nullable', c.is_nullable, 'column_default', c.column_default
+      ) order by c.column_name)
+      from information_schema.columns c
+      where c.table_schema = 'public' and c.table_name = 'leaderboard_scores'
+        and c.column_name not in (
+          'id','table_code','rotation_count','account_id','user_id','server_id',
+          'score','score_achieved_at','first_recorded_at','score_count','updated_at')
+    ), '[]'::jsonb),
+    'attached', coalesce((
+      select jsonb_agg(jsonb_build_object('column_name', lc.column_name, 'sort_order', lc.sort_order) order by lc.sort_order)
+      from public.leaderboard_table_columns lc
+      where lc.table_code = p_code
+    ), '[]'::jsonb)
+  );
+$$;
+
+create or replace function public.ts_admin_leaderboard_scores(
+  p_code           text,
+  p_rotation_count int  default null,
+  p_server_id      uuid default null,
+  p_search         text default null,
+  p_page           int  default 1,
+  p_page_size      int  default 20
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  t         public.leaderboard_tables%rowtype;
+  v_rot     int;
+  v_max_rot int;
+  v_desc    boolean;
+  v_search  text := nullif(btrim(coalesce(p_search, '')), '');
+  v_page    int  := greatest(1, coalesce(p_page, 1));
+  v_size    int  := least(100, greatest(1, coalesce(p_page_size, 20)));
+  v_cols    text[];
+  v_data    text := '''{}''::jsonb';
+  v_col     text;
+  v_rows    jsonb;
+begin
+  select * into t from public.leaderboard_tables where code = p_code;
+  if not found then
+    raise exception 'leaderboard_table_not_found';
+  end if;
+
+  v_rot  := coalesce(p_rotation_count, t.rotation_count);
+  v_desc := (t.sort_type = 'desc');
+  select max(rotation_count) into v_max_rot from public.leaderboard_scores where table_code = t.code;
+
+  v_cols := public.ts_leaderboard_columns_of(t.code);
+  if array_length(v_cols, 1) is not null then
+    v_data := 'jsonb_build_object(';
+    foreach v_col in array v_cols loop
+      v_data := v_data || format('%L, s.%I,', v_col, v_col);
+    end loop;
+    v_data := left(v_data, length(v_data) - 1) || ')';
+  end if;
+
+  execute format($f$
+    with ranked as (
+      select s.account_id, s.user_id, s.score, s.score_achieved_at, s.score_count, gs.server_code,
+             dn.display_name, %s as data,
+             rank() over (order by (case when $6 then -s.score else s.score end) asc, s.score_achieved_at asc) as rnk
+      from public.leaderboard_scores s
+      left join public.display_names dn on dn.account_id = s.account_id
+      left join public.game_servers gs on gs.id = s.server_id
+      where s.table_code = $1
+        and s.rotation_count = $2
+        and ($3 is null or s.server_id = $3)
+        and ($4 is null or dn.display_name ilike '%%' || $4 || '%%' or s.account_id::text ilike '%%' || $4 || '%%')
+    )
+    select jsonb_build_object(
+      'total', (select count(*) from ranked),
+      'rows', coalesce((
+        select jsonb_agg(
+          (jsonb_build_object(
+            'rank', r.rnk, 'account_id', r.account_id, 'user_id', r.user_id,
+            'display_name', r.display_name, 'score', r.score,
+            'score_achieved_at', r.score_achieved_at, 'score_count', r.score_count,
+            'server_code', r.server_code
+          ) || r.data)
+          order by r.rnk)
+        from (select * from ranked order by rnk limit $5 offset (($7 - 1) * $5)) r
+      ), '[]'::jsonb)
+    )
+  $f$, v_data)
+  into v_rows
+  using t.code, v_rot, p_server_id, v_search, v_size, v_desc, v_page;
+
+  return v_rows || jsonb_build_object(
+    'pageSize', v_size, 'rotationCount', v_rot, 'maxRotation', v_max_rot,
+    'scope', t.scope, 'dataColumns', to_jsonb(v_cols));
+end;
+$$;
+
+comment on function public.ts_admin_list_leaderboards() is '리더보드 정의 전체 목록(운영용, 종료·비활성 포함). service_role 전용.';
+comment on function public.ts_admin_leaderboard_columns(text) is '리더보드 플레이어 데이터 필드 전체 카탈로그 + 이 리더보드에 등록된 것. service_role 전용.';
+comment on function public.ts_admin_leaderboard_scores(text,int,uuid,text,int,int) is '리더보드 순위·기록 검색(운영용, 종료된 리더보드도 조회 가능). service_role 전용.';
 
 -- =============================================================================
 -- 어드민·cron RPC 권한 — 클라이언트에 열지 않는다
@@ -5665,6 +5791,12 @@ revoke all on function public.ts_admin_leaderboard_update_column(text,boolean,te
 revoke all on function public.ts_admin_leaderboard_drop_column(text) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_attach_column(text,text,int) from public, anon, authenticated;
 revoke all on function public.ts_admin_leaderboard_detach_column(text,text) from public, anon, authenticated;
+revoke all on function public.ts_admin_list_leaderboards() from public, anon, authenticated;
+grant execute on function public.ts_admin_list_leaderboards() to service_role;
+revoke all on function public.ts_admin_leaderboard_columns(text) from public, anon, authenticated;
+grant execute on function public.ts_admin_leaderboard_columns(text) to service_role;
+revoke all on function public.ts_admin_leaderboard_scores(text,int,uuid,text,int,int) from public, anon, authenticated;
+grant execute on function public.ts_admin_leaderboard_scores(text,int,uuid,text,int,int) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -7390,13 +7522,14 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid     uuid := auth.uid();
-  v_user    text;
-  v_cfg     public.match_reward_configs%rowtype;
-  v_mine    public.match_results%rowtype;
-  v_opp     public.match_results%rowtype;
-  v_mail_id uuid;
-  v_now     timestamptz := now();
+  v_uid          uuid := auth.uid();
+  v_user         text;
+  v_cfg          public.match_reward_configs%rowtype;
+  v_mine         public.match_results%rowtype;
+  v_opp          public.match_results%rowtype;
+  v_mail_id      uuid;
+  v_mine_mail_id uuid;
+  v_now          timestamptz := now();
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -7437,7 +7570,7 @@ begin
 
   -- 이미 끝난 처리는 재신고해도 그대로 반환한다 — 멱등.
   if v_mine.status = 'paid' then
-    return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.is_win);
+    return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.paid_mail_id is not null);
   end if;
   if v_mine.status = 'mismatch' then
     raise exception 'match_result_mismatch';
@@ -7451,8 +7584,9 @@ begin
     return jsonb_build_object('status', 'pending', 'rewarded', false);
   end if;
 
-  -- 상호 지목 확인 — 상대가 나를 상대로 지목하지 않았으면 신고가 서로 다른 매치를 가리킨 것이다.
-  if v_opp.opponent_account_id is distinct from v_uid then
+  -- 상호 지목 확인 — 상대가 나를 상대로 지목하지 않았거나 서로 다른 game_code로 신고했으면
+  -- 신고가 서로 다른 매치를 가리킨 것이다(game_code가 다르면 보상 설정도 달라 지급액이 갈린다).
+  if v_opp.opponent_account_id is distinct from v_uid or v_opp.game_code is distinct from v_mine.game_code then
     update public.match_results set status = 'mismatch', resolved_at = v_now
     where session_id = btrim(p_session_id) and account_id = v_uid;
     raise exception 'match_result_mismatch';
@@ -7467,16 +7601,16 @@ begin
   end if;
 
   -- 검증 통과 — 승리 쪽에만 우편으로 지급하고, 양쪽 모두 처리 완료로 표시한다.
-  v_mail_id := null;
+  v_mine_mail_id := null;
   if v_mine.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
     insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
     values (v_uid, v_user, 'system', v_cfg.mail_title, v_cfg.mail_content,
             v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
-    returning id into v_mail_id;
+    returning id into v_mine_mail_id;
   end if;
 
   update public.match_results
-  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now
+  set status = 'paid', paid_mail_id = v_mine_mail_id, resolved_at = v_now
   where session_id = btrim(p_session_id) and account_id = v_uid;
 
   v_mail_id := null;
@@ -7493,7 +7627,8 @@ begin
   set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now
   where session_id = btrim(p_session_id) and account_id = p_opponent_account_id;
 
-  return jsonb_build_object('status', 'paid', 'rewarded', v_mine.is_win);
+  -- rewarded는 승패가 아니라 실제로 우편이 갔는지를 반영한다(win_items가 비어 있으면 승리해도 우편 없음).
+  return jsonb_build_object('status', 'paid', 'rewarded', v_mine_mail_id is not null);
 end;
 $$;
 

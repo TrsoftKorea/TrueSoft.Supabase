@@ -2195,7 +2195,7 @@ namespace TrueBase.Unity
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
-                return SupabaseResult<MatchResultReportOutcome>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+                return SupabaseResult<MatchResultReportOutcome>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
             return await MatchResult.ReportResultAsync(sessionId, gameCode, isWin, opponentAccountId);
         }
