@@ -1,0 +1,29 @@
+{
+  "name": "truebase-admin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "//": "버전은 Retool 앱(/frontend/package.json)과 메이저를 맞춘다. 화면 48개를 그대로 옮기기 위해서다.",
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.14.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.0",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.0",
+    "vite": "^8.2.0"
+  }
+}
