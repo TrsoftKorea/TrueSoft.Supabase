@@ -289,6 +289,39 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: null });
       }
 
+      case "userData.columns": {
+        const { data, error } = await db.rpc("ts_admin_user_data_columns");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "userData.get": {
+        const { data, error } = await db.rpc("ts_admin_user_data_get", {
+          p_account_id: str(params, "accountId"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "userData.update": {
+        const { data, error } = await db.rpc("ts_admin_user_data_update", {
+          p_account_id: str(params, "accountId"),
+          p_patch: params["patch"] ?? {},
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "userData.logs": {
+        const { data, error } = await db.rpc("ts_admin_user_data_logs", {
+          p_account_id: str(params, "accountId"),
+          p_limit: typeof params["limit"] === "number" ? params["limit"] : 20,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
       case "mails.getServers": {
         const { data, error } = await db.from("game_servers").select("id, server_code, display_name").order("display_name");
         if (error) throw new Error(error.message);

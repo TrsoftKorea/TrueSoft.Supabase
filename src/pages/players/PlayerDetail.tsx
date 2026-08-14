@@ -7,6 +7,9 @@ import { WhiteCard } from '../../components/ui/Card'
 import { formatDateTime, formatKRW, formatBanUntil } from '../../components/ui/format'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
+import UserDataTab from './UserDataTab'
+
+type Tab = 'info' | 'userData'
 
 const PERMANENT_UNTIL = '2999-12-31T23:59:59.000Z'
 
@@ -47,6 +50,7 @@ export default function PlayerDetail({
   initialName: string
   onBack: () => void
 }) {
+  const [tab, setTab] = useState<Tab>('info')
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [ban, setBan] = useState<BanInfo | null>(null)
@@ -174,6 +178,32 @@ export default function PlayerDetail({
         </button>
       </div>
 
+      <div className="border-b border-neutral-200 flex gap-1">
+        {(
+          [
+            ['info', '기본 정보'],
+            ['userData', '유저 데이터'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={[
+              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors',
+              tab === key
+                ? 'border-[#1677ff] text-[#1677ff] font-medium'
+                : 'border-transparent text-neutral-600 hover:text-neutral-900',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'userData' ? (
+        <UserDataTab target={target} onUnauthenticated={onUnauthenticated} accountId={accountId} />
+      ) : (
+      <>
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       {profileLoading && !profile ? (
@@ -318,6 +348,8 @@ export default function PlayerDetail({
           </div>
         )}
       </WhiteCard>
+      </>
+      )}
       </>
       )}
 
