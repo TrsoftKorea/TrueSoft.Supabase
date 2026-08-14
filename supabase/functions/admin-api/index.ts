@@ -423,6 +423,77 @@ Deno.serve(async (req) => {
         return json({ ok: true, data });
       }
 
+      case "chat.channels": {
+        const { data, error } = await db
+          .from("chat_channels")
+          .select("id, kind, code, display_name, is_active, slow_mode_seconds, max_length, retention_days")
+          .order("kind")
+          .order("code");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      case "chat.messages": {
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 30;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = db
+          .from("chat_messages")
+          .select("id, channel_id, account_id, user_id, display_name, content, created_at, deleted_at, deleted_by", { count: "exact" })
+          .order("id", { ascending: false })
+          .range(from, to);
+
+        const channelId = params["channelId"];
+        if (typeof channelId === "string" && channelId) query = query.eq("channel_id", channelId);
+        if (!bool(params, "includeDeleted")) query = query.is("deleted_at", null);
+
+        const search = optStr(params, "search").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+        if (search) query = query.or(`display_name.ilike.%${search}%,content.ilike.%${search}%,user_id.ilike.%${search}%`);
+
+        const { data, error, count } = await query;
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+      }
+
+      case "chat.deleteMessage": {
+        const { error } = await db.rpc("ts_admin_chat_delete_message", {
+          p_id: typeof params["id"] === "number" ? params["id"] : Number(str(params, "id")),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "chat.mutes": {
+        const { data, error } = await db
+          .from("chat_mutes")
+          .select("id, account_id, channel_id, until, reason, created_by, created_at")
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      case "chat.mute": {
+        const { error } = await db.rpc("ts_admin_chat_mute", {
+          p_account_id: str(params, "accountId"),
+          p_channel_id: optStr(params, "channelId") || null,
+          p_minutes: typeof params["minutes"] === "number" ? params["minutes"] : 60,
+          p_reason: optStr(params, "reason"),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "chat.unmute": {
+        const { error } = await db.from("chat_mutes").delete().eq("id", typeof params["id"] === "number" ? params["id"] : Number(str(params, "id")));
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "coupons.list": {
         const { data, error } = await db.rpc("ts_admin_coupon_list", { p_search: optStr(params, "search") });
         if (error) throw new Error(error.message);

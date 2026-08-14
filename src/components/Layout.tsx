@@ -119,6 +119,9 @@ export function Layout({
             <NavLink to="/coupons" className={navClass}>
               쿠폰
             </NavLink>
+            <NavLink to="/chat" className={navClass}>
+              채팅 관리
+            </NavLink>
             <NavLink to="/schema-changes" className={navClass}>
               변경 관리
             </NavLink>
