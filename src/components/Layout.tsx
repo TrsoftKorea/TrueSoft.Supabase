@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type ComponentType } from 'react'
+import { useState, type ReactNode, type ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
@@ -6,7 +6,7 @@ import {
   ChevronDown, LogOut, AlertTriangle,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
-import { callAdmin, NotAuthenticatedError } from '../lib/api'
+import { usePendingChanges } from '../lib/pendingChanges'
 
 const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
 
@@ -76,7 +76,6 @@ export function Layout({
   email,
   isMaster,
   onSignOut,
-  onUnauthenticated,
   children,
 }: {
   target: ProjectTarget
@@ -84,7 +83,6 @@ export function Layout({
   email: string
   isMaster: boolean
   onSignOut: () => void
-  onUnauthenticated: () => void
   children: ReactNode
 }) {
   const location = useLocation()
@@ -94,35 +92,10 @@ export function Layout({
   }
 
   // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.
-  const [pendingCount, setPendingCount] = useState<number | null>(null)
-  useEffect(() => {
-    let alive = true
-    let inFlight = false
-    setPendingCount(null) // 프로젝트를 바꾸면 새 값이 올 때까지 이전 프로젝트 숫자를 보여주지 않는다.
-    const load = async () => {
-      if (inFlight || document.hidden) return
-      inFlight = true
-      try {
-        const draft = await callAdmin<{ rows: unknown[] }>(target, 'schema.getDraft')
-        if (alive) setPendingCount(draft.rows.length)
-      } catch (e: unknown) {
-        if (e instanceof NotAuthenticatedError) onUnauthenticated()
-        // 그 외 실패는 조용히 무시 — 다음 폴링에서 다시 시도한다.
-      } finally {
-        inFlight = false
-      }
-    }
-    void load()
-    const timer = window.setInterval(load, 5000)
-    // 탭이 백그라운드일 땐 위에서 건너뛰므로, 다시 돌아왔을 때 바로 한 번 갱신한다.
-    const onVisible = () => { if (!document.hidden) void load() }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      alive = false
-      window.clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [target, onUnauthenticated])
+  // 실제 조회·폴링은 PendingChangesProvider 하나가 맡는다 — 각 관리 화면도 같은 값을 구독하므로,
+  // 거기서 변경을 담거나 취소하면 이 배지도 그 자리에서 같이 바뀐다.
+  const { drafts } = usePendingChanges()
+  const pendingCount = drafts?.length ?? null
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
 
@@ -130,7 +103,7 @@ export function Layout({
     <div className="min-h-screen flex">
       <aside className="w-56 shrink-0 bg-white border-r border-neutral-200 flex flex-col">
         <div className="h-14 flex items-center px-4 border-b border-neutral-200">
-          <span className="font-semibold text-neutral-900">TrueBase</span>
+          <span className="font-semibold text-neutral-900">트루베이스</span>
         </div>
 
         <div className="px-3 pt-3">
@@ -170,8 +143,8 @@ export function Layout({
               items={[
                 { to: '/mails/send', label: '우편 발송', icon: Send },
                 { to: '/mails/records', label: '우편 내역', icon: Inbox },
-                { to: '/mails/categories', label: '우편 분류', icon: Tags },
                 { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
+                { to: '/mails/categories', label: '우편 분류', icon: Tags },
               ]}
             />
           </NavSection>
@@ -179,13 +152,14 @@ export function Layout({
           <NavSection label="모니터링">
             <NavLinkRow to="/data-logs" label="데이터 로그" icon={ScrollText} />
           </NavSection>
-
-          <NavSection>
-            <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} />
-            {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
-            {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} />}
-          </NavSection>
         </nav>
+
+        {/* 스크롤 영역 밖에 고정 — 메뉴가 길어져도 변경 관리는 항상 보인다. */}
+        <div className="border-t border-neutral-200 p-3 space-y-0.5">
+          <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} />
+          {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
+          {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} />}
+        </div>
 
         <div className="border-t border-neutral-200 p-3 space-y-2">
           <div className="text-xs text-neutral-500 truncate">

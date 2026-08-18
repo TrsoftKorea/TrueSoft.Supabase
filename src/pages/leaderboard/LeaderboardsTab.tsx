@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, type ChangeEvent } from 'react'
 import { Plus, Trash2, RotateCw, Pencil, Loader2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime } from '../../components/ui/format'
@@ -173,8 +174,6 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   )
 }
 
-type DraftRow = { id: number; feature: string; action: string; object_name: string }
-
 export default function LeaderboardsTab({
   target,
   onUnauthenticated,
@@ -198,7 +197,8 @@ export default function LeaderboardsTab({
 
   const [rows, setRows] = useState<LeaderboardRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [drafts, setDrafts] = useState<DraftRow[]>([])
+  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const drafts = allDrafts ?? []
   const [discarding, setDiscarding] = useState(false)
 
   const report = useCallback(
@@ -212,15 +212,11 @@ export default function LeaderboardsTab({
     [onUnauthenticated],
   )
 
-  const reload = useCallback(async () => {
+  const reloadRows = useCallback(async () => {
     setLoading(true)
     try {
-      const [lb, d] = await Promise.all([
-        callAdmin<{ rows: LeaderboardRow[] }>(target, 'leaderboard.list'),
-        callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft'),
-      ])
+      const lb = await callAdmin<{ rows: LeaderboardRow[] }>(target, 'leaderboard.list')
       setRows(lb.rows)
-      setDrafts(d.rows)
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
     } finally {
@@ -228,7 +224,7 @@ export default function LeaderboardsTab({
     }
   }, [target, report])
 
-  useEffect(() => { void reload() }, [reload])
+  useEffect(() => { void reloadRows() }, [reloadRows])
 
   // 리더보드 생성·수정·삭제 중 게시 대기(draft)인 것만 추린다. 목록 표는 라이브 상태를 그대로 보여준다.
   const pendingItems: PendingItem[] = drafts
@@ -239,7 +235,7 @@ export default function LeaderboardsTab({
     setDiscarding(true)
     try {
       await callAdmin(target, 'schema.discardDraft', { id })
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally {
@@ -304,7 +300,7 @@ export default function LeaderboardsTab({
         },
       })
       closeModal()
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally {
@@ -324,7 +320,7 @@ export default function LeaderboardsTab({
       })
       if (selectedCode === delTarget.code) onSelect('')
       setDelTarget(null)
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally { setActing(false) }
@@ -336,7 +332,7 @@ export default function LeaderboardsTab({
     try {
       await callAdmin(target, 'leaderboard.rotate', { code: rotateTarget.code })
       setRotateTarget(null)
-      await reload()
+      await reloadRows()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally { setActing(false) }

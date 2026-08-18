@@ -3,20 +3,16 @@ import { Link } from 'react-router-dom'
 import { RefreshCw, Search, Pencil, X, ExternalLink } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime, diffSummary } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { TypedValueInput, parseTypedValue, type ValueType } from '../../components/ui/TypedValueField'
+import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 
-type Col = { column_name: string; data_type: string }
-type Row = Record<string, unknown>
 type LogRow = { id: number; diff: Record<string, unknown>; source: string | null; created_at: string }
 
 const PAGE_SIZE = 15
-
-const isIntegerType = (t: string) => ['integer', 'smallint', 'bigint', 'int2', 'int4', 'int8'].includes(t)
-const isDecimalType = (t: string) => ['numeric', 'real', 'double precision', 'float4', 'float8'].includes(t)
 
 function formatValue(v: unknown, dataType: string): string {
   if (v === null || v === undefined) return '—'
@@ -29,32 +25,24 @@ function EditValueModal({
   target,
   onUnauthenticated,
   accountId,
-  col,
-  current,
+  field,
   onClose,
   onSaved,
 }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   accountId: string
-  col: Col
-  current: unknown
+  field: UserDataField
   onClose: () => void
-  onSaved: (row: Row) => void
+  onSaved: (row: Record<string, unknown>) => void
 }) {
-  const isJson = col.data_type === 'jsonb'
-  const type: ValueType = col.data_type === 'boolean'
-    ? 'boolean'
-    : isJson
-      ? 'json'
-      : isIntegerType(col.data_type) || isDecimalType(col.data_type)
-        ? 'number'
-        : 'string'
+  const type = pgTypeToValueType(field.data_type)
+  const isJson = type === 'json'
 
   const [text, setText] = useState(() =>
-    isJson ? JSON.stringify(current ?? null, null, 2) : current === null || current === undefined ? '' : String(current),
+    isJson ? JSON.stringify(field.value ?? null, null, 2) : field.value === null || field.value === undefined ? '' : String(field.value),
   )
-  const [boolValue, setBoolValue] = useState(() => Boolean(current))
+  const [boolValue, setBoolValue] = useState(() => Boolean(field.value))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -68,9 +56,9 @@ function EditValueModal({
 
     setLoading(true)
     try {
-      const row = await callAdmin<Row>(target, 'userData.update', {
+      const row = await callAdmin<Record<string, unknown>>(target, 'userData.update', {
         accountId,
-        patch: { [col.column_name]: parsed.value },
+        patch: { [field.column_name]: parsed.value },
       })
       onSaved(row)
     } catch (e: unknown) {
@@ -88,15 +76,15 @@ function EditValueModal({
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">값 수정 — {col.column_name}</h3>
+          <h3 className="text-base font-semibold">값 수정 — {field.column_name}</h3>
           <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
-            <span className="font-medium text-neutral-700">{col.column_name}</span>
-            <span className="text-xs text-neutral-400">{col.data_type}</span>
+            <span className="font-medium text-neutral-700">{field.column_name}</span>
+            <span className="text-xs text-neutral-400">{field.data_type}</span>
           </div>
           <TypedValueInput
             type={type}
@@ -104,7 +92,7 @@ function EditValueModal({
             onTextChange={setText}
             boolValue={boolValue}
             onBoolChange={setBoolValue}
-            integer={isIntegerType(col.data_type)}
+            integer={isIntegerPgType(field.data_type)}
           />
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
@@ -136,14 +124,14 @@ export default function UserDataTab({
   accountId: string
   displayName?: string
 }) {
-  const [columns, setColumns] = useState<Col[]>([])
-  const [row, setRow] = useState<Row | null>(null)
+  const [fields, setFields] = useState<UserDataField[]>([])
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<LogRow[]>([])
   const [logsLoading, setLogsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [editCol, setEditCol] = useState<Col | null>(null)
+  const [editField, setEditField] = useState<UserDataField | null>(null)
   const [error, setError] = useState('')
 
   const report = useCallback(
@@ -160,12 +148,9 @@ export default function UserDataTab({
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const [cols, r] = await Promise.all([
-        callAdmin<Col[]>(target, 'userData.columns'),
-        callAdmin<Row | null>(target, 'userData.get', { accountId }),
-      ])
-      setColumns(cols)
-      setRow(r)
+      const { fields: f, row } = await fetchUserDataFields(target, accountId)
+      setFields(f)
+      setUpdatedAt(row?.['updated_at'] != null ? String(row['updated_at']) : null)
     } catch (e: unknown) {
       report(e, '유저 데이터를 불러오지 못했습니다.')
     } finally {
@@ -191,8 +176,8 @@ export default function UserDataTab({
 
   const q = search.trim().toLowerCase()
   const filtered = useMemo(
-    () => (q ? columns.filter((c) => c.column_name.toLowerCase().includes(q)) : columns),
-    [columns, q],
+    () => (q ? fields.filter((f) => f.column_name.toLowerCase().includes(q)) : fields),
+    [fields, q],
   )
 
   useEffect(() => { setPage(1) }, [q])
@@ -218,8 +203,8 @@ export default function UserDataTab({
               className="w-full h-9 pl-9 pr-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
             />
           </div>
-          {row?.['updated_at'] != null && (
-            <span className="text-xs text-neutral-500">마지막 저장: {formatDateTime(row['updated_at'] as string)}</span>
+          {updatedAt && (
+            <span className="text-xs text-neutral-500">마지막 저장: {formatDateTime(updatedAt)}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -251,28 +236,28 @@ export default function UserDataTab({
             </tr>
           </thead>
           <tbody>
-            {loading || !row || pageRows.length === 0 ? (
+            {loading || pageRows.length === 0 ? (
               <TableStatusRow
                 loading={loading}
-                empty={!row || pageRows.length === 0}
+                empty={pageRows.length === 0}
                 colSpan={4}
-                emptyText={!row ? '이 플레이어의 저장된 데이터가 없습니다.' : '검색 결과가 없습니다.'}
+                emptyText={fields.length === 0 ? '이 플레이어의 저장된 데이터가 없습니다.' : '검색 결과가 없습니다.'}
               />
             ) : (
-              pageRows.map((c) => (
-                <tr key={c.column_name} className="border-t border-neutral-100">
-                  <td className="px-5 py-3 font-medium">{c.column_name}</td>
+              pageRows.map((f) => (
+                <tr key={f.column_name} className="border-t border-neutral-100">
+                  <td className="px-5 py-3 font-medium">{f.column_name}</td>
                   <td className="px-4 py-3">
                     <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">
-                      {c.data_type}
+                      {f.data_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatValue(row[c.column_name], c.data_type)}>
-                    {formatValue(row[c.column_name], c.data_type)}
+                  <td className="px-4 py-3 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatValue(f.value, f.data_type)}>
+                    {formatValue(f.value, f.data_type)}
                   </td>
                   <td className="px-3 py-3 text-right">
                     <button
-                      onClick={() => setEditCol(c)}
+                      onClick={() => setEditField(f)}
                       className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -339,15 +324,19 @@ export default function UserDataTab({
         </div>
       </WhiteCard>
 
-      {editCol && row && (
+      {editField && (
         <EditValueModal
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={accountId}
-          col={editCol}
-          current={row[editCol.column_name]}
-          onClose={() => setEditCol(null)}
-          onSaved={(updated) => { setRow(updated); setEditCol(null); void reloadLogs() }}
+          field={editField}
+          onClose={() => setEditField(null)}
+          onSaved={(updated) => {
+            setFields((prev) => prev.map((f) => ({ ...f, value: updated[f.column_name] ?? null })))
+            setUpdatedAt(updated['updated_at'] != null ? String(updated['updated_at']) : null)
+            setEditField(null)
+            void reloadLogs()
+          }}
         />
       )}
     </div>

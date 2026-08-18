@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
@@ -486,8 +487,6 @@ function DeleteFieldModal({ target, col, onClose, onDeleted }: {
   )
 }
 
-type PendingRow = { id: number; feature: string; action: string; object_name: string; params: Record<string, unknown> }
-
 export default function ColumnsTab({
   target,
   onUnauthenticated,
@@ -510,7 +509,8 @@ export default function ColumnsTab({
   const [listLoading, setListLoading] = useState(true)
   const [colsData, setColsData] = useState<ColsData | undefined>(undefined)
   const [colsLoading, setColsLoading] = useState(false)
-  const [drafts, setDrafts] = useState<PendingRow[]>([])
+  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const drafts = allDrafts ?? []
   const [busy, setBusy] = useState(false)
 
   const report = useCallback(
@@ -550,22 +550,13 @@ export default function ColumnsTab({
     }
   }, [target, selectedCode, report])
 
-  const reloadDrafts = useCallback(async () => {
-    try {
-      setDrafts((await callAdmin<{ rows: PendingRow[] }>(target, 'schema.getDraft')).rows)
-    } catch (e: unknown) {
-      report(e, '대기 중 변경을 불러오지 못했습니다.')
-    }
-  }, [target, report])
-
   const refresh = useCallback(() => {
     void reloadBoards(); void reloadCols(); void reloadDrafts()
   }, [reloadBoards, reloadCols, reloadDrafts])
 
   useEffect(() => {
     void reloadBoards()
-    void reloadDrafts()
-  }, [reloadBoards, reloadDrafts])
+  }, [reloadBoards])
 
   useEffect(() => {
     void reloadCols()

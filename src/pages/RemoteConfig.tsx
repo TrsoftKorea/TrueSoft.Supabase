@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Plus, RefreshCw, Pencil, Trash2, X, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
+import { usePendingChanges } from '../lib/pendingChanges'
 import { PageHeader } from '../components/ui/PageHeader'
 import { WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
@@ -19,7 +20,6 @@ type ConfigRow = {
   description: string | null
   version: number
 }
-type DraftRow = { id: number; feature: string; action: string; object_name: string; params: Record<string, unknown> }
 type Effective = { value_json: Record<string, unknown>; enabled: boolean; requires_auth: boolean; deleted: boolean; pendingId: number | null }
 
 const formatItemValue = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v))
@@ -169,7 +169,8 @@ export default function RemoteConfig({
   onUnauthenticated: () => void
 }) {
   const [rows, setRows] = useState<ConfigRow[]>([])
-  const [drafts, setDrafts] = useState<DraftRow[]>([])
+  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const drafts = useMemo(() => (allDrafts ?? []).filter((d) => d.feature === 'remote_config'), [allDrafts])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState('')
   const [showNew, setShowNew] = useState(false)
@@ -197,23 +198,14 @@ export default function RemoteConfig({
     }
   }, [target, report])
 
-  const reloadDrafts = useCallback(async () => {
-    try {
-      const draft = await callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft')
-      setDrafts(draft.rows.filter((d) => d.feature === 'remote_config'))
-    } catch (e: unknown) {
-      report(e, '대기 중 변경을 불러오지 못했습니다.')
-    }
-  }, [target, report])
-
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      await Promise.all([reloadRows(), reloadDrafts()])
+      await reloadRows()
     } finally {
       setLoading(false)
     }
-  }, [reloadRows, reloadDrafts])
+  }, [reloadRows])
 
   useEffect(() => { void reload() }, [reload])
 

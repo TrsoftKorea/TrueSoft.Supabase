@@ -2,19 +2,17 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
-import { TypedValueInput, parseTypedValue, type ValueType } from '../../components/ui/TypedValueField'
+import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 
 type Row = { account_id: string; display_name: string; updated_at: string }
-type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
-type Field = { column_name: string; data_type: string; value: unknown }
 
 const CLIPBOARD_KEY = 'tb_data_clipboard'
-const SYSTEM_COLS = new Set(['id', 'account_id', 'user_id', 'server_id', 'created_at', 'updated_at'])
 
 type DataClipboard = {
   sourceLabel: string
@@ -40,35 +38,18 @@ function valueToString(v: unknown): string {
   return String(v)
 }
 
-const INTEGER_TYPES = ['integer', 'bigint', 'smallint', 'int2', 'int4', 'int8']
-const NUMERIC_TYPES = [...INTEGER_TYPES, 'real', 'double precision', 'numeric', 'float4', 'float8']
-
-/** Postgres data_type 문자열을 값 편집 위젯이 아는 4가지 타입으로 매핑한다. */
-function valueTypeOf(dataType: string): ValueType {
-  if (dataType === 'boolean') return 'boolean'
-  if (dataType === 'jsonb' || dataType === 'json') return 'json'
-  if (NUMERIC_TYPES.includes(dataType)) return 'number'
-  return 'string'
-}
-
-/** accountId 의 필드 값을 (컬럼 정의 + 현재 값)으로 합쳐 돌려준다. 시스템 컬럼은 뺀다. */
-async function fetchFields(target: ProjectTarget, accountId: string): Promise<Field[]> {
-  const [cols, row] = await Promise.all([
-    callAdmin<Col[]>(target, 'userData.columns'),
-    callAdmin<Record<string, unknown> | null>(target, 'userData.get', { accountId }),
-  ])
-  return cols
-    .filter((c) => !SYSTEM_COLS.has(c.column_name))
-    .map((c) => ({ column_name: c.column_name, data_type: c.data_type, value: row?.[c.column_name] ?? null }))
+/** accountId 의 필드 값만 뽑는다 — 컬럼 정의는 lib/userData 에서 공유한다. */
+async function fetchFields(target: ProjectTarget, accountId: string): Promise<UserDataField[]> {
+  return (await fetchUserDataFields(target, accountId)).fields
 }
 
 function FieldValueModal({ field, initialValue, onClose, onApply }: {
-  field: Field
+  field: UserDataField
   initialValue: string
   onClose: () => void
   onApply: (column: string, value: unknown) => void
 }) {
-  const type = valueTypeOf(field.data_type)
+  const type = pgTypeToValueType(field.data_type)
   const [text, setText] = useState(initialValue)
   const [boolValue, setBoolValue] = useState(initialValue.trim().toLowerCase() === 'true')
   const [error, setError] = useState('')
@@ -104,7 +85,7 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
               onTextChange={setText}
               boolValue={boolValue}
               onBoolChange={setBoolValue}
-              integer={INTEGER_TYPES.includes(field.data_type)}
+              integer={isIntegerPgType(field.data_type)}
             />
           </div>
           {error && <div className="text-sm text-red-500">{error}</div>}
@@ -135,11 +116,11 @@ function PlayerEditModal({
   onClose: () => void
   onChanged: () => void
 }) {
-  const [rows, setRows] = useState<Field[]>([])
+  const [rows, setRows] = useState<UserDataField[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [editField, setEditField] = useState<Field | null>(null)
+  const [editField, setEditField] = useState<UserDataField | null>(null)
   const [edits, setEdits] = useState<Record<string, unknown>>({})
   const [colSearch, setColSearch] = useState('')
   const [askDiscard, setAskDiscard] = useState(false)

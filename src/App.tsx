@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { getTarget, type ProjectTarget } from './lib/projectTarget'
 import { clearToken, emailOf, getToken } from './lib/googleAuth'
 import { callAdmin, NotAuthenticatedError } from './lib/api'
+import { PendingChangesProvider } from './lib/pendingChanges'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import GameItems from './pages/GameItems'
@@ -98,13 +99,13 @@ export default function App() {
   }
 
   return (
+    <PendingChangesProvider target={target} onUnauthenticated={signOut}>
     <Layout
       target={target}
       onTargetChange={setTargetState}
       email={me.email}
       isMaster={me.isMaster}
       onSignOut={signOut}
-      onUnauthenticated={signOut}
     >
       <Routes>
         <Route path="/" element={<GameItems target={target} onUnauthenticated={signOut} />} />
@@ -135,5 +136,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
+    </PendingChangesProvider>
   )
 }

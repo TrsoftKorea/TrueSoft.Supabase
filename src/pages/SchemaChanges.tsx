@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RotateCcw, Trash2, Send, Loader2, AlertTriangle, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
+import { usePendingChanges } from '../lib/pendingChanges'
 import { opLabel } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
 import { WhiteCard } from '../components/ui/Card'
@@ -10,16 +11,6 @@ import { formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 
-type DraftRow = {
-  id: number
-  created_at: string
-  operator: string | null
-  feature: string
-  action: string
-  object_name: string
-  params: Record<string, unknown>
-  sort_order: number
-}
 type VersionRow = {
   id: number
   published_at: string
@@ -123,8 +114,9 @@ export default function SchemaChanges({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const [drafts, setDrafts] = useState<DraftRow[]>([])
-  const [draftLoading, setDraftLoading] = useState(true)
+  const { drafts: draftsOrNull, reload: reloadDrafts } = usePendingChanges()
+  const drafts = draftsOrNull ?? []
+  const draftLoading = draftsOrNull === null
   const [versions, setVersions] = useState<VersionRow[]>([])
   const [versionsLoading, setVersionsLoading] = useState(true)
 
@@ -146,25 +138,19 @@ export default function SchemaChanges({
     [onUnauthenticated],
   )
 
-  const reload = useCallback(async () => {
-    setDraftLoading(true)
+  const reloadVersions = useCallback(async () => {
     setVersionsLoading(true)
     try {
-      const [d, v] = await Promise.all([
-        callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft'),
-        callAdmin<{ rows: VersionRow[] }>(target, 'schema.getVersions'),
-      ])
-      setDrafts(d.rows)
+      const v = await callAdmin<{ rows: VersionRow[] }>(target, 'schema.getVersions')
       setVersions(v.rows)
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
     } finally {
-      setDraftLoading(false)
       setVersionsLoading(false)
     }
   }, [target, report])
 
-  useEffect(() => { void reload() }, [reload])
+  useEffect(() => { void reloadVersions() }, [reloadVersions])
 
   const hasDestructiveDraft = drafts.some((d) => isDestructive(d.feature, d.action))
   // 이름을 비우고 게시하면 이력에 이 작업 요약이 이름으로 자동 표시된다.
@@ -177,7 +163,7 @@ export default function SchemaChanges({
       await callAdmin(target, 'schema.publish', { label: label.trim() || null })
       setLabel('')
       setShowPublish(false)
-      await reload()
+      await Promise.all([reloadDrafts(), reloadVersions()])
     } catch (e: unknown) {
       report(e, '게시에 실패했습니다.')
     } finally { setBusy(false) }
@@ -187,7 +173,7 @@ export default function SchemaChanges({
     setBusy(true)
     try {
       await callAdmin(target, 'schema.discardDraft', { id })
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally { setBusy(false) }
@@ -198,7 +184,7 @@ export default function SchemaChanges({
     try {
       await callAdmin(target, 'schema.discardDraft', {})
       setAskDiscardAll(false)
-      await reload()
+      await reloadDrafts()
     } catch (e: unknown) {
       report(e, '실패했습니다.')
     } finally { setBusy(false) }
@@ -210,7 +196,7 @@ export default function SchemaChanges({
     try {
       await callAdmin(target, 'schema.revertVersion', { versionId: revertTarget.id })
       setRevertTarget(null)
-      await reload()
+      await Promise.all([reloadDrafts(), reloadVersions()])
     } catch (e: unknown) {
       report(e, '되돌리기에 실패했습니다.')
     } finally { setBusy(false) }

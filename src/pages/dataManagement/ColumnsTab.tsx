@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { SYSTEM_COLS } from '../../lib/userData'
+import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
@@ -9,7 +11,6 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
-type DraftRow = { id: number; feature: string; action: string; object_name: string }
 
 const PAGE_SIZE = 10
 // schema.stage 의 feature 값 — 문자열을 곳곳에 흩어 적으면 오타 하나가 조용히 변경 목록에서
@@ -386,7 +387,8 @@ export default function ColumnsTab({
 }) {
   const [cols, setCols] = useState<Col[]>([])
   const [loading, setLoading] = useState(true)
-  const [drafts, setDrafts] = useState<DraftRow[]>([])
+  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const drafts = useMemo(() => (allDrafts ?? []).filter((d) => d.feature === USER_DATA_FIELD), [allDrafts])
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -406,9 +408,10 @@ export default function ColumnsTab({
   const reloadCols = useCallback(async () => {
     setLoading(true)
     try {
-      // created_at 은 시스템 컬럼이라 필드 목록에서 뺀다 — 게임 데이터가 아니다.
+      // 시스템 컬럼은 필드 목록에서 뺀다 — 게임 데이터가 아니다. userData.columns 는 대부분
+      // 이미 서버에서 걸러 주지만(created_at 만 남는다), 판단 기준은 여기 하나(SYSTEM_COLS)로 통일한다.
       const rows = await callAdmin<Col[]>(target, 'userData.columns')
-      setCols(rows.filter((c) => c.column_name !== 'created_at'))
+      setCols(rows.filter((c) => !SYSTEM_COLS.has(c.column_name)))
     } catch (e: unknown) {
       report(e, '필드 목록을 불러오지 못했습니다.')
     } finally {
@@ -416,19 +419,9 @@ export default function ColumnsTab({
     }
   }, [target, report])
 
-  const reloadDrafts = useCallback(async () => {
-    try {
-      const draft = await callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft')
-      setDrafts(draft.rows.filter((d) => d.feature === USER_DATA_FIELD))
-    } catch (e: unknown) {
-      report(e, '대기 중 변경을 불러오지 못했습니다.')
-    }
-  }, [target, report])
-
   useEffect(() => {
     void reloadCols()
-    void reloadDrafts()
-  }, [reloadCols, reloadDrafts])
+  }, [reloadCols])
 
   const pendingItems: PendingItem[] = drafts.map((d) => ({ id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name }))
 
