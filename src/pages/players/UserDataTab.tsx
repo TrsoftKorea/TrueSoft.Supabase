@@ -4,7 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatDateTime } from '../../components/ui/format'
+import { formatDateTime, diffSummary } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue, type ValueType } from '../../components/ui/TypedValueField'
 
@@ -22,14 +22,6 @@ function formatValue(v: unknown, dataType: string): string {
   if (dataType === 'jsonb') return JSON.stringify(v)
   if (dataType === 'boolean') return v ? '참' : '거짓'
   return String(v)
-}
-
-function diffSummary(diff: Record<string, unknown>): string {
-  const entries = Object.entries(diff ?? {})
-  if (entries.length === 0) return '—'
-  return entries
-    .map(([k, v]) => `${k}: 이전값 ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ')
 }
 
 function EditValueModal({

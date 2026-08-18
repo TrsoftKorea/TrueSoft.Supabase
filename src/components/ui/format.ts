@@ -37,3 +37,12 @@ export function formatKRW(n: number | string | null | undefined): string {
   if (!Number.isFinite(num)) return '₩0'
   return '₩' + num.toLocaleString('ko-KR')
 }
+
+/** user_data_logs.diff(바뀌기 전 값)를 "필드: 이전값" 목록 한 줄로 요약합니다. */
+export function diffSummary(diff: Record<string, unknown> | null | undefined): string {
+  const entries = Object.entries(diff ?? {})
+  if (entries.length === 0) return '—'
+  return entries
+    .map(([k, v]) => `${k}: 이전값 ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+    .join(' · ')
+}

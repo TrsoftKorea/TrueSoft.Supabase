@@ -125,6 +125,9 @@ export function Layout({
             <NavLink to="/chat" className={navClass}>
               채팅 관리
             </NavLink>
+            <NavLink to="/data-logs" className={navClass}>
+              데이터 로그
+            </NavLink>
             <NavLink to="/schema-changes" className={navClass}>
               변경 관리
             </NavLink>

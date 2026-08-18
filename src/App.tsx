@@ -20,6 +20,7 @@ import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
 import Dashboard from './pages/Dashboard'
+import DataLogs from './pages/DataLogs'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -116,6 +117,7 @@ export default function App() {
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
         <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
+        <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

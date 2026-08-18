@@ -423,6 +423,42 @@ Deno.serve(async (req) => {
         return json({ ok: true, data });
       }
 
+      case "dataLogs.list": {
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 30;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = db
+          .from("user_data_logs")
+          .select("id, account_id, diff, source, created_at", { count: "exact" })
+          .order("id", { ascending: false })
+          .range(from, to);
+
+        const accountId = optStr(params, "accountId").trim();
+        if (accountId) query = query.eq("account_id", accountId);
+
+        const source = optStr(params, "source").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+        if (source) query = query.ilike("source", `%${source}%`);
+
+        const startDate = params["startDate"];
+        if (typeof startDate === "string" && startDate) query = query.gte("created_at", startDate);
+        // endDate 는 날짜만 있어 그대로 lte 하면 그날 00:00:00 까지만 걸린다 — 다음날 자정
+        // 미만(<)으로 바꿔 그날 전체를 포함한다(구매내역과 같은 이유로 같은 방식).
+        const endDate = params["endDate"];
+        if (typeof endDate === "string" && endDate) {
+          const [y, m, d] = endDate.split("-").map(Number);
+          if (y && m && d) {
+            const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+            query = query.lt("created_at", next);
+          }
+        }
+
+        const { data, error, count } = await query;
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+      }
+
       case "dashboard.stats": {
         const { data, error } = await db.rpc("ts_admin_dashboard_stats");
         if (error) throw new Error(error.message);
