@@ -19,6 +19,7 @@ import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
+import Dashboard from './pages/Dashboard'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
+        <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

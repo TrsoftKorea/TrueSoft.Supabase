@@ -92,6 +92,9 @@ export function Layout({
           </select>
 
           <nav className="flex items-center gap-1">
+            <NavLink to="/dashboard" className={navClass}>
+              대시보드
+            </NavLink>
             <NavLink to="/" end className={navClass}>
               아이템 카탈로그
             </NavLink>

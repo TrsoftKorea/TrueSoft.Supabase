@@ -423,6 +423,12 @@ Deno.serve(async (req) => {
         return json({ ok: true, data });
       }
 
+      case "dashboard.stats": {
+        const { data, error } = await db.rpc("ts_admin_dashboard_stats");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "chat.channels": {
         const { data, error } = await db
           .from("chat_channels")
