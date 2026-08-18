@@ -25,9 +25,11 @@ export default function Login({
   useEffect(() => {
     const el = buttonRef.current
     if (!el) return
-    renderGoogleButton(el, onToken).catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : '구글 로그인을 준비하지 못했습니다.')
+    let cancelled = false
+    renderGoogleButton(el, onToken, () => cancelled).catch((e: unknown) => {
+      if (!cancelled) setError(e instanceof Error ? e.message : '구글 로그인을 준비하지 못했습니다.')
     })
+    return () => { cancelled = true }
   }, [onToken])
 
   return (

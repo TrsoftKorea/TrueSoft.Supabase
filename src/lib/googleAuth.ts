@@ -87,13 +87,19 @@ function loadGsi(): Promise<void> {
 /**
  * 구글 로그인 버튼을 그린다. 로그인에 성공하면 토큰을 저장하고 onToken 을 부른다.
  * 반환값은 정리 함수가 아니라, 스크립트 로딩 실패를 알리기 위한 Promise 다.
+ *
+ * isCancelled 는 React StrictMode 의 effect 이중 실행을 막는 용도다 — 그게 없으면
+ * google.accounts.id.initialize() 가 두 번 불려 버튼이 클릭에 반응하지 않는 상태로
+ * 깨진다(개발 모드 콘솔에 "initialize() is called multiple times" 경고로 나타난다).
  */
 export async function renderGoogleButton(
   parent: HTMLElement,
   onToken: (token: string) => void,
+  isCancelled: () => boolean = () => false,
 ): Promise<void> {
   if (!GOOGLE_CLIENT_ID) throw new Error('VITE_GOOGLE_CLIENT_ID 가 비어 있습니다.')
   await loadGsi()
+  if (isCancelled()) return
 
   const api = window.google?.accounts.id
   if (!api) throw new Error('구글 로그인을 초기화하지 못했습니다.')
