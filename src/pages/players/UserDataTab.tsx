@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { RefreshCw, Search, Pencil, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { RefreshCw, Search, Pencil, X, ExternalLink } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
@@ -128,10 +129,12 @@ export default function UserDataTab({
   target,
   onUnauthenticated,
   accountId,
+  displayName,
 }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   accountId: string
+  displayName?: string
 }) {
   const [columns, setColumns] = useState<Col[]>([])
   const [row, setRow] = useState<Row | null>(null)
@@ -219,13 +222,22 @@ export default function UserDataTab({
             <span className="text-xs text-neutral-500">마지막 저장: {formatDateTime(row['updated_at'] as string)}</span>
           )}
         </div>
-        <button
-          onClick={() => { void reload(); void reloadLogs() }}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/data-management?tab=players&account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(displayName ?? '')}`}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            데이터 관리에서 열기
+          </Link>
+          <button
+            onClick={() => { void reload(); void reloadLogs() }}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            새로고침
+          </button>
+        </div>
       </div>
 
       <WhiteCard>

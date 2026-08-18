@@ -21,6 +21,7 @@ import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
+import DataManagement from './pages/DataManagement'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -103,6 +104,7 @@ export default function App() {
       email={me.email}
       isMaster={me.isMaster}
       onSignOut={signOut}
+      onUnauthenticated={signOut}
     >
       <Routes>
         <Route path="/" element={<GameItems target={target} onUnauthenticated={signOut} />} />
@@ -118,6 +120,7 @@ export default function App() {
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
         <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
+        <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

@@ -1,13 +1,19 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode, type ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import {
+  LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
+  MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
+  ChevronDown, LogOut, AlertTriangle,
+} from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
+import { callAdmin, NotAuthenticatedError } from '../lib/api'
 
-const NAV_BASE = 'flex items-center h-9 px-3 rounded-md text-sm transition-colors'
+const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
 
-type NavItem = { to: string; label: string; end?: boolean }
+type Icon = ComponentType<{ className?: string }>
+type NavItem = { to: string; label: string; icon: Icon; end?: boolean }
 
-function NavLinkRow({ to, label, end = false }: NavItem) {
+function NavLinkRow({ to, label, icon: Icon, end = false, badge }: NavItem & { badge?: number | undefined }) {
   return (
     <NavLink
       to={to}
@@ -16,22 +22,50 @@ function NavLinkRow({ to, label, end = false }: NavItem) {
         `${NAV_BASE} ${isActive ? 'bg-[#e8f0fe] text-[#1677ff] font-medium' : 'text-neutral-600 hover:bg-neutral-100'}`
       }
     >
-      {label}
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
+      {!!badge && (
+        <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[11px] font-medium leading-none">
+          {badge}
+        </span>
+      )}
     </NavLink>
   )
 }
 
-function NavGroupBlock({ label, items }: { label: string; items: NavItem[] }) {
+function NavGroupBlock({ label, icon: Icon, items }: { label: string; icon: Icon; items: NavItem[] }) {
   const location = useLocation()
   const active = items.some((it) => location.pathname.startsWith(it.to))
+  // 현재 화면이 이 그룹 소속이면 펼친 채로 시작한다.
+  const [open, setOpen] = useState(active)
+
   return (
     <div>
-      <div className={`px-3 pt-3 pb-1 text-xs font-medium ${active ? 'text-[#1677ff]' : 'text-neutral-400'}`}>{label}</div>
-      <div className="space-y-0.5">
-        {items.map((it) => (
-          <NavLinkRow key={it.to} {...it} />
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 w-full h-9 px-3 rounded-md text-sm transition-colors ${active ? 'text-[#1677ff] font-medium' : 'text-neutral-600 hover:bg-neutral-100'}`}
+      >
+        <Icon className="w-4 h-4" />
+        <span>{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-0.5 space-y-0.5 pl-3">
+          {items.map((it) => (
+            <NavLinkRow key={it.to} {...it} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NavSection({ label, children }: { label?: string; children: ReactNode }) {
+  return (
+    <div className="pt-3 first:pt-0">
+      {label && <div className="px-3 pb-1 text-[11px] font-medium text-neutral-400">{label}</div>}
+      <div className="space-y-0.5">{children}</div>
     </div>
   )
 }
@@ -42,6 +76,7 @@ export function Layout({
   email,
   isMaster,
   onSignOut,
+  onUnauthenticated,
   children,
 }: {
   target: ProjectTarget
@@ -49,12 +84,47 @@ export function Layout({
   email: string
   isMaster: boolean
   onSignOut: () => void
+  onUnauthenticated: () => void
   children: ReactNode
 }) {
+  const location = useLocation()
   const switchTarget = (t: ProjectTarget) => {
     setTarget(t)
     onTargetChange(t)
   }
+
+  // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.
+  const [pendingCount, setPendingCount] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    let inFlight = false
+    setPendingCount(null) // 프로젝트를 바꾸면 새 값이 올 때까지 이전 프로젝트 숫자를 보여주지 않는다.
+    const load = async () => {
+      if (inFlight || document.hidden) return
+      inFlight = true
+      try {
+        const draft = await callAdmin<{ rows: unknown[] }>(target, 'schema.getDraft')
+        if (alive) setPendingCount(draft.rows.length)
+      } catch (e: unknown) {
+        if (e instanceof NotAuthenticatedError) onUnauthenticated()
+        // 그 외 실패는 조용히 무시 — 다음 폴링에서 다시 시도한다.
+      } finally {
+        inFlight = false
+      }
+    }
+    void load()
+    const timer = window.setInterval(load, 5000)
+    // 탭이 백그라운드일 땐 위에서 건너뛰므로, 다시 돌아왔을 때 바로 한 번 갱신한다.
+    const onVisible = () => { if (!document.hidden) void load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [target, onUnauthenticated])
+
+  const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
 
   return (
     <div className="min-h-screen flex">
@@ -77,28 +147,44 @@ export function Layout({
           </select>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-          <NavLinkRow to="/dashboard" label="대시보드" />
-          <NavLinkRow to="/" label="아이템 카탈로그" end />
-          <NavLinkRow to="/players" label="플레이어" />
-          <NavGroupBlock
-            label="우편함"
-            items={[
-              { to: '/mails/send', label: '우편 발송' },
-              { to: '/mails/records', label: '우편 내역' },
-              { to: '/mails/categories', label: '우편 분류' },
-              { to: '/mails/schedules', label: '예약 목록' },
-            ]}
-          />
-          <NavLinkRow to="/leaderboard" label="리더보드" />
-          <NavLinkRow to="/purchases" label="구매 내역" />
-          <NavLinkRow to="/remote-config" label="원격 설정" />
-          <NavLinkRow to="/coupons" label="쿠폰" />
-          <NavLinkRow to="/chat" label="채팅 관리" />
-          <NavLinkRow to="/data-logs" label="데이터 로그" />
-          <NavLinkRow to="/schema-changes" label="변경 관리" />
-          {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
-          {isMaster && <NavLinkRow to="/operators" label="운영자 관리" />}
+        <nav className="flex-1 overflow-y-auto px-3 py-3">
+          <NavSection>
+            <NavLinkRow to="/dashboard" label="대시보드" icon={LayoutDashboard} />
+          </NavSection>
+
+          <NavSection label="빌드">
+            <NavLinkRow to="/data-management" label="데이터 관리" icon={Database} />
+            <NavLinkRow to="/leaderboard" label="리더보드" icon={Trophy} />
+            <NavLinkRow to="/remote-config" label="원격 설정" icon={Settings} />
+          </NavSection>
+
+          <NavSection label="운영">
+            <NavLinkRow to="/players" label="플레이어" icon={Users} />
+            <NavLinkRow to="/purchases" label="구매 내역" icon={ReceiptText} />
+            <NavLinkRow to="/" label="아이템 카탈로그" icon={Package} end />
+            <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} />
+            <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
+            <NavGroupBlock
+              label="우편함"
+              icon={Mail}
+              items={[
+                { to: '/mails/send', label: '우편 발송', icon: Send },
+                { to: '/mails/records', label: '우편 내역', icon: Inbox },
+                { to: '/mails/categories', label: '우편 분류', icon: Tags },
+                { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
+              ]}
+            />
+          </NavSection>
+
+          <NavSection label="모니터링">
+            <NavLinkRow to="/data-logs" label="데이터 로그" icon={ScrollText} />
+          </NavSection>
+
+          <NavSection>
+            <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} />
+            {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
+            {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} />}
+          </NavSection>
         </nav>
 
         <div className="border-t border-neutral-200 p-3 space-y-2">
@@ -117,7 +203,19 @@ export function Layout({
       </aside>
 
       <div className="flex-1 min-w-0">
-        <main className="max-w-6xl mx-auto px-6 py-6">{children}</main>
+        <main className="max-w-6xl mx-auto px-6 py-6">
+          {showPendingBanner && (
+            <NavLink
+              to="/schema-changes"
+              className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>미게시 변경 {pendingCount}건이 있습니다. 변경 관리에서 검토 후 게시하세요.</span>
+              <span className="ml-auto text-xs text-amber-600 underline">게시하러 가기</span>
+            </NavLink>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

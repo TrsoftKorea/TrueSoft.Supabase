@@ -336,6 +336,15 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: data ?? [] });
       }
 
+      case "dataManagement.searchPlayers": {
+        const { data, error } = await db.rpc("ts_admin_search_user_data_players", {
+          p_search: optStr(params, "search"),
+          p_mode: optStr(params, "mode") === "id" ? "id" : "nickname",
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
       case "purchases.list": {
         const page = typeof params["page"] === "number" ? params["page"] : 1;
         const pageSize = 20;

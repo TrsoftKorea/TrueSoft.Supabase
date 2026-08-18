@@ -201,7 +201,12 @@ export default function PlayerDetail({
       </div>
 
       {tab === 'userData' ? (
-        <UserDataTab target={target} onUnauthenticated={onUnauthenticated} accountId={accountId} />
+        <UserDataTab
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={accountId}
+          displayName={profile?.display_name ?? initialName}
+        />
       ) : (
       <>
       <ErrorBanner message={error} onDismiss={() => setError('')} />

@@ -28,7 +28,9 @@ export function parseTypedValue(type: ValueType, text: string, boolValue: boolea
     if (text.trim() === '' || Number.isNaN(n)) return { ok: false, error: '숫자를 입력하세요.' }
     return { ok: true, value: n }
   }
-  return { ok: true, value: text }
+  // 빈 문자열은 null 로 취급한다 — 안 그러면 원래 null 이던 값을 열어만 보고 그대로
+  // 적용해도 빈 문자열로 덮어써진다(다른 타입은 이미 빈 입력을 null 로 되돌린다).
+  return { ok: true, value: text === '' ? null : text }
 }
 
 export function TypedValueInput({
