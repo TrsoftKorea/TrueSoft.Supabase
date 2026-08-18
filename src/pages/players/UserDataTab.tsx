@@ -97,7 +97,14 @@ function EditValueModal({
             <span className="font-medium text-neutral-700">{col.column_name}</span>
             <span className="text-xs text-neutral-400">{col.data_type}</span>
           </div>
-          <TypedValueInput type={type} text={text} onTextChange={setText} boolValue={boolValue} onBoolChange={setBoolValue} />
+          <TypedValueInput
+            type={type}
+            text={text}
+            onTextChange={setText}
+            boolValue={boolValue}
+            onBoolChange={setBoolValue}
+            integer={isIntegerType(col.data_type)}
+          />
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">

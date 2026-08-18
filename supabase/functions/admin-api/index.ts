@@ -56,6 +56,20 @@ const optStr = (p: Params, k: string): string => {
 };
 const bool = (p: Params, k: string): boolean => p[k] === true;
 
+// `,()` 는 PostgREST or() 필터 문법을 깨서 제거하고, `%`·`_`·`\` 는 ILIKE 와일드카드라
+// 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
+const sanitizeSearchTerm = (s: string): string => s.replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+
+// endDate 는 'YYYY-MM-DD' 뿐이라 그대로 lte 하면 그날 00:00:00 까지만 걸려 당일 데이터가
+// 거의 다 빠진다 — 다음날 자정 미만(<)으로 바꿔 그날 전체를 포함한다.
+const nextDayExclusive = (dateStr: string): string | null => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** 구글 ID 토큰을 검증하고 확인된 이메일을 돌려준다. 실패하면 null. */
 async function verifyGoogleIdToken(idToken: string): Promise<string | null> {
   if (!GOOGLE_CLIENT_ID) {
@@ -337,23 +351,16 @@ Deno.serve(async (req) => {
           .order("verified_at", { ascending: false })
           .range(from, to);
 
-        // `,()` 는 PostgREST or() 필터 문법을 깨서 제거하고, `%`·`_`·`\` 는 ILIKE 와일드카드라
-        // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
-        const search = optStr(params, "search").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+        const search = sanitizeSearchTerm(optStr(params, "search").trim());
         if (search) {
           query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
         }
         const startDate = params["startDate"];
         const endDate = params["endDate"];
         if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
-        // endDate 는 'YYYY-MM-DD' 뿐이라 그대로 lte 하면 그날 00:00:00 까지만 걸려 당일 데이터가
-        // 거의 다 빠진다 — 다음날 자정 미만(<)으로 바꿔 그날 전체를 포함한다.
         if (typeof endDate === "string" && endDate) {
-          const [y, m, d] = endDate.split("-").map(Number);
-          if (y && m && d) {
-            const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-            query = query.lt("verified_at", next);
-          }
+          const next = nextDayExclusive(endDate);
+          if (next) query = query.lt("verified_at", next);
         }
 
         const { data, error, count } = await query;
@@ -436,22 +443,22 @@ Deno.serve(async (req) => {
           .range(from, to);
 
         const accountId = optStr(params, "accountId").trim();
-        if (accountId) query = query.eq("account_id", accountId);
+        if (accountId) {
+          // account_id 는 uuid 컬럼이다 — 형식이 안 맞으면 Postgres 가 원본 에러를 던지므로,
+          // 다른 검색 필드처럼 "결과 없음"으로 조용히 처리되게 여기서 먼저 걸러낸다.
+          if (!UUID_RE.test(accountId)) return json({ ok: true, data: { rows: [], total: 0, pageSize } });
+          query = query.eq("account_id", accountId);
+        }
 
-        const source = optStr(params, "source").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+        const source = sanitizeSearchTerm(optStr(params, "source").trim());
         if (source) query = query.ilike("source", `%${source}%`);
 
         const startDate = params["startDate"];
         if (typeof startDate === "string" && startDate) query = query.gte("created_at", startDate);
-        // endDate 는 날짜만 있어 그대로 lte 하면 그날 00:00:00 까지만 걸린다 — 다음날 자정
-        // 미만(<)으로 바꿔 그날 전체를 포함한다(구매내역과 같은 이유로 같은 방식).
         const endDate = params["endDate"];
         if (typeof endDate === "string" && endDate) {
-          const [y, m, d] = endDate.split("-").map(Number);
-          if (y && m && d) {
-            const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-            query = query.lt("created_at", next);
-          }
+          const next = nextDayExclusive(endDate);
+          if (next) query = query.lt("created_at", next);
         }
 
         const { data, error, count } = await query;
@@ -491,7 +498,7 @@ Deno.serve(async (req) => {
         if (typeof channelId === "string" && channelId) query = query.eq("channel_id", channelId);
         if (!bool(params, "includeDeleted")) query = query.is("deleted_at", null);
 
-        const search = optStr(params, "search").trim().replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
+        const search = sanitizeSearchTerm(optStr(params, "search").trim());
         if (search) query = query.or(`display_name.ilike.%${search}%,content.ilike.%${search}%,user_id.ilike.%${search}%`);
 
         const { data, error, count } = await query;
@@ -509,13 +516,18 @@ Deno.serve(async (req) => {
       }
 
       case "chat.mutes": {
-        const { data, error } = await db
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 30;
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error, count } = await db
           .from("chat_mutes")
-          .select("id, account_id, channel_id, until, reason, created_by, created_at")
+          .select("id, account_id, channel_id, until, reason, created_by, created_at", { count: "exact" })
           .order("created_at", { ascending: false })
-          .limit(200);
+          .range(from, to);
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: data ?? [] } });
+        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
       }
 
       case "chat.mute": {
@@ -531,7 +543,9 @@ Deno.serve(async (req) => {
       }
 
       case "chat.unmute": {
-        const { error } = await db.from("chat_mutes").delete().eq("id", typeof params["id"] === "number" ? params["id"] : Number(str(params, "id")));
+        const { error } = await db.rpc("ts_admin_chat_unmute", {
+          p_id: typeof params["id"] === "number" ? params["id"] : Number(str(params, "id")),
+        });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
       }

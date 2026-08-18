@@ -74,18 +74,18 @@ export default function DataLogs({
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-neutral-500">변경 시각</span>
           <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
+          <span className="text-xs text-neutral-500">계정 ID</span>
           <input
             value={accountIdInput}
             onChange={(e) => setAccountIdInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            placeholder="계정 ID"
             className="h-9 px-3 rounded-md border border-neutral-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] w-64"
           />
+          <span className="text-xs text-neutral-500">출처</span>
           <input
             value={sourceInput}
             onChange={(e) => setSourceInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            placeholder="출처 (예: admin)"
             className="h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] w-48"
           />
           <button

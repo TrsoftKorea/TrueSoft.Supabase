@@ -81,6 +81,8 @@ function loadGsi(): Promise<void> {
     el.onerror = () => reject(new Error('구글 로그인 스크립트를 불러오지 못했습니다.'))
     document.head.appendChild(el)
   })
+  // 실패는 캐시하지 않는다 — 캐시해 두면 네트워크가 살아난 뒤에도 재시도가 같은 reject 를 재생한다.
+  scriptPromise.catch(() => { scriptPromise = null })
   return scriptPromise
 }
 

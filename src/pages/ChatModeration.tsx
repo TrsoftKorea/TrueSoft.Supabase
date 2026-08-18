@@ -17,6 +17,7 @@ type MessageRow = {
 }
 type MessageData = { rows: MessageRow[]; total: number; pageSize: number }
 type MuteRow = { id: number; account_id: string; channel_id: string | null; until: string; reason: string; created_by: string | null; created_at: string }
+type MuteData = { rows: MuteRow[]; total: number; pageSize: number }
 type PlayerRow = { account_id: string; display_name: string }
 
 const KIND_LABEL: Record<string, string> = { global: '전체', server: '서버', group: '그룹', direct: '귓속말' }
@@ -49,14 +50,19 @@ function MuteModal({
 
   useEffect(() => {
     if (fixedAccount) return
+    const q = playerQuery.trim()
+    if (!q) { setPlayerRows([]); return }
     const reqId = ++reqRef.current
-    void (async () => {
-      try {
-        const res = await callAdmin<{ rows: PlayerRow[] }>(target, 'players.list', { search: playerQuery, page: 1, bannedOnly: false })
-        if (reqId !== reqRef.current) return
-        setPlayerRows(res.rows)
-      } catch { /* 검색 실패는 조용히 무시 — 다시 입력하면 재시도된다 */ }
-    })()
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await callAdmin<{ rows: PlayerRow[] }>(target, 'players.list', { search: q, page: 1, bannedOnly: false })
+          if (reqId !== reqRef.current) return
+          setPlayerRows(res.rows)
+        } catch { /* 검색 실패는 조용히 무시 — 다시 입력하면 재시도된다 */ }
+      })()
+    }, 300)
+    return () => clearTimeout(timer)
   }, [target, playerQuery, fixedAccount])
 
   const canSubmit = accountId.trim() !== '' && minutes > 0
@@ -99,7 +105,6 @@ function MuteModal({
                   <input
                     value={playerQuery}
                     onChange={(e) => setPlayerQuery(e.target.value)}
-                    placeholder="닉네임 또는 계정 ID"
                     className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
                   />
                   {playerRows.length > 0 && (
@@ -169,7 +174,8 @@ export default function ChatModeration({
   const [delTarget, setDelTarget] = useState<MessageRow | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const [mutes, setMutes] = useState<MuteRow[]>([])
+  const [mutePage, setMutePage] = useState(1)
+  const [muteData, setMuteData] = useState<MuteData | null>(null)
   const [mutesLoading, setMutesLoading] = useState(false)
   const [unmuteTarget, setUnmuteTarget] = useState<MuteRow | null>(null)
   const [unmuting, setUnmuting] = useState(false)
@@ -208,22 +214,27 @@ export default function ChatModeration({
   }, [target, channelId, includeDeleted, search, page, report])
   useEffect(() => { if (tab === 'messages') void loadMessages() }, [tab, loadMessages])
 
-  const loadMutes = useCallback(async () => {
+  const loadMutes = useCallback(async (pageOverride?: number) => {
     setMutesLoading(true)
     try {
-      setMutes((await callAdmin<{ rows: MuteRow[] }>(target, 'chat.mutes')).rows)
+      setMuteData(await callAdmin<MuteData>(target, 'chat.mutes', { page: pageOverride ?? mutePage }))
     } catch (e: unknown) {
       report(e, '차단 목록을 불러오지 못했습니다.')
     } finally {
       setMutesLoading(false)
     }
-  }, [target, report])
+  }, [target, mutePage, report])
   useEffect(() => { if (tab === 'mutes') void loadMutes() }, [tab, loadMutes])
 
   const rows = msgData?.rows ?? []
   const total = msgData?.total ?? 0
   const pageSize = msgData?.pageSize ?? 30
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  const mutes = muteData?.rows ?? []
+  const muteTotal = muteData?.total ?? 0
+  const mutePageSize = muteData?.pageSize ?? 30
+  const muteTotalPages = Math.max(1, Math.ceil(muteTotal / mutePageSize))
 
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
 
@@ -242,8 +253,16 @@ export default function ChatModeration({
     setDeleting(true)
     try {
       await callAdmin(target, 'chat.deleteMessage', { id: delTarget.id })
+      const deletedId = delTarget.id
       setDelTarget(null)
-      await loadMessages()
+      setMsgData((d) => {
+        if (!d) return d
+        if (includeDeleted) {
+          const now = new Date().toISOString()
+          return { ...d, rows: d.rows.map((m) => (m.id === deletedId ? { ...m, deleted_at: now } : m)) }
+        }
+        return { ...d, rows: d.rows.filter((m) => m.id !== deletedId), total: Math.max(0, d.total - 1) }
+      })
     } catch (e: unknown) {
       report(e, '삭제에 실패했습니다.')
     } finally {
@@ -256,8 +275,9 @@ export default function ChatModeration({
     setUnmuting(true)
     try {
       await callAdmin(target, 'chat.unmute', { id: unmuteTarget.id })
+      const unmutedId = unmuteTarget.id
       setUnmuteTarget(null)
-      await loadMutes()
+      setMuteData((d) => (d ? { ...d, rows: d.rows.filter((m) => m.id !== unmutedId), total: Math.max(0, d.total - 1) } : d))
     } catch (e: unknown) {
       report(e, '해제에 실패했습니다.')
     } finally {
@@ -399,6 +419,14 @@ export default function ChatModeration({
                 </tbody>
               </table>
             </div>
+            <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
+              <span>{muteTotal} result{muteTotal === 1 ? '' : 's'}</span>
+              <div className="flex items-center gap-1">
+                <button disabled={mutePage <= 1} onClick={() => setMutePage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                <span className="px-2">{mutePage} / {muteTotalPages}</span>
+                <button disabled={mutePage >= muteTotalPages} onClick={() => setMutePage((p) => Math.min(muteTotalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
           </WhiteCard>
         </>
       )}
@@ -410,7 +438,7 @@ export default function ChatModeration({
           channels={channels}
           fixedAccount={muteModal}
           onClose={() => setMuteModal(null)}
-          onSaved={() => { setMuteModal(null); if (tab === 'mutes') void loadMutes() }}
+          onSaved={() => { setMuteModal(null); setMutePage(1); if (tab === 'mutes') void loadMutes(1) }}
         />
       )}
       {showMuteAdd && (
@@ -420,7 +448,7 @@ export default function ChatModeration({
           channels={channels}
           fixedAccount={null}
           onClose={() => setShowMuteAdd(false)}
-          onSaved={() => { setShowMuteAdd(false); void loadMutes() }}
+          onSaved={() => { setShowMuteAdd(false); setMutePage(1); void loadMutes(1) }}
         />
       )}
 

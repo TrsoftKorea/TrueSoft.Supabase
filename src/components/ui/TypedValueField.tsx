@@ -37,12 +37,15 @@ export function TypedValueInput({
   onTextChange,
   boolValue,
   onBoolChange,
+  integer = false,
 }: {
   type: ValueType
   text: string
   onTextChange: (v: string) => void
   boolValue: boolean
   onBoolChange: (v: boolean) => void
+  /** number 타입일 때 스피너 단위를 1로 고정한다(정수 컬럼용). 기본은 소수 허용. */
+  integer?: boolean
 }) {
   if (type === 'boolean') {
     return (
@@ -69,7 +72,7 @@ export function TypedValueInput({
   return (
     <input
       type={type === 'number' ? 'number' : 'text'}
-      step={type === 'number' ? 'any' : undefined}
+      step={type === 'number' ? (integer ? 1 : 'any') : undefined}
       value={text}
       onChange={(e) => onTextChange(e.target.value)}
       className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
