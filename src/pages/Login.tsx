@@ -20,7 +20,6 @@ export default function Login({
 }) {
   const buttonRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
-  const [usePassword, setUsePassword] = useState(false)
 
   const project = getProject(target)
 
@@ -40,24 +39,18 @@ export default function Login({
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
         <p className="text-sm text-neutral-500 mt-1">{project.label}</p>
 
-        <div ref={buttonRef} className={`mt-6 flex justify-center ${usePassword ? 'hidden' : ''}`} />
-        {usePassword && (
-          <div className="mt-6">
-            <PasswordLoginForm target={target} onToken={onToken} />
-          </div>
-        )}
-
+        <div ref={buttonRef} className="mt-6 flex justify-center" />
         {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
-        <button
-          type="button"
-          onClick={() => setUsePassword((v) => !v)}
-          className="mt-4 text-xs text-[#1677ff] hover:underline"
-        >
-          {usePassword ? '구글 계정으로 로그인' : '이메일과 비밀번호로 로그인'}
-        </button>
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-neutral-200" />
+          <span className="text-xs text-neutral-400">또는</span>
+          <div className="h-px flex-1 bg-neutral-200" />
+        </div>
 
-        <p className="mt-3 text-xs text-neutral-400">허용된 운영자 계정만 들어올 수 있습니다.</p>
+        <PasswordLoginForm target={target} onToken={onToken} />
+
+        <p className="mt-4 text-xs text-neutral-400">허용된 운영자 계정만 들어올 수 있습니다.</p>
       </WhiteCard>
     </div>
   )
