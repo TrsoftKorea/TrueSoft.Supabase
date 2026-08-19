@@ -1,19 +1,30 @@
 // 운영 도구 백엔드.
 //
-// 운영자 인증은 게임 Auth 를 쓰지 않는다. 구글이 발급한 ID 토큰을 여기서 직접 검증한다.
-// 그래서 운영자는 auth.users 에 존재하지 않는다 — 플레이어와 계정 풀이 겹치지 않고,
-// 게임의 탈퇴·차단 흐름이 운영자 접근에 영향을 주지 않는다.
+// 운영자 인증은 게임 Auth 를 쓰지 않는다. 구글 ID 토큰이나, 아래 비밀번호 로그인으로 발급한
+// 자체 세션 토큰을 여기서 직접 검증한다. 그래서 운영자는 auth.users 에 존재하지 않는다 —
+// 플레이어와 계정 풀이 겹치지 않고, 게임의 탈퇴·차단 흐름이 운영자 접근에 영향을 주지 않는다.
+//
+// 로그인 방법은 둘이다.
+//   구글 로그인    — 구글 계정이 있는 운영자용. 매번 구글이 신원을 증명한다.
+//   비밀번호 로그인 — 구글 계정이 없어도 등록된 이메일이면 쓸 수 있다. 최초 설정/재설정은
+//                   이메일로 받는 6자리 코드(auth.requestReset → auth.resetPassword)로 한다.
+//                   평소 로그인(auth.passwordLogin)은 이메일을 안 거친다.
 //
 // 권한은 두 단계다.
 //   마스터  — ADMIN_EMAILS 환경변수. 화면에서 지울 수 없어 잠기지 않는 비상구. 운영자 관리 가능.
 //   운영자  — ts_admin_operators 표. 마스터가 화면에서 추가·비활성화한다.
 //
-// 필요한 시크릿: GOOGLE_CLIENT_ID, ADMIN_EMAILS(쉼표 구분). SUPABASE_* 는 플랫폼이 주입한다.
+// 필요한 시크릿:
+//   GOOGLE_CLIENT_ID, ADMIN_EMAILS(쉼표 구분) — 기존과 동일.
+//   ADMIN_SESSION_SECRET — 비밀번호 로그인 세션 토큰 서명용. 긴 무작위 문자열.
+//   RESEND_API_KEY, RESEND_FROM_EMAIL(선택) — 재설정·초대 코드 이메일 발송용.
+//   ADMIN_APP_URL(선택) — 초대 메일에 넣을 로그인 페이지 주소(예: https://truebase-admin.pages.dev).
+//   SUPABASE_* 는 플랫폼이 자동 주입한다.
 //
 // verify_jwt 는 false 로 배포한다. 게이트웨이의 JWT 검증은 게임 Auth 기준이라 구글 토큰을
 // 통과시키지 못하고, CORS 프리플라이트(Authorization 없음)까지 막는다. 검증은 아래가 직접 한다.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+import { createRemoteJWKSet, jwtVerify, SignJWT } from "npm:jose@5";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
@@ -21,6 +32,19 @@ const SUPABASE_SECRET_KEY = secretKeys.default;
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+// 비밀번호 로그인 세션 토큰 서명 키. 구글 토큰과 형태(JWT)를 맞춰서 프런트의
+// 만료 판단 로직을 그대로 재사용한다 — 다만 서명 알고리즘이 달라(HS256 vs RS256)
+// verifyIdentity() 가 시도 순서로 둘을 구분한다.
+const SESSION_SECRET = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
+const SESSION_KEY = SESSION_SECRET ? new TextEncoder().encode(SESSION_SECRET) : null;
+const SESSION_TTL = "12h";
+
+// 비밀번호 재설정·초대 코드를 보낼 이메일 발송(Resend). 비어 있으면 코드 발송이 실패한다.
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "TrueBase 운영 도구 <onboarding@resend.dev>";
+// 초대 메일의 "바로가기" 링크에 쓸 로그인 페이지 주소. 비어 있으면 링크 없이 코드만 보낸다.
+const ADMIN_APP_URL = (Deno.env.get("ADMIN_APP_URL") ?? "").replace(/\/$/, "");
 
 // 비어 있으면 마스터가 없는 상태 — 표에 등록된 운영자만 들어온다.
 const MASTER_EMAILS = new Set(
@@ -102,31 +126,156 @@ async function isEnabledOperator(db: SupabaseClient, email: string): Promise<boo
   return rows.some((r) => r.email === email && r.disabled_at == null);
 }
 
+/** 마스터이거나, 표에 등록되고 비활성화되지 않은 운영자인지. 비밀번호 로그인·재설정에서 공용으로 쓴다. */
+async function isAllowedIdentity(db: SupabaseClient, email: string): Promise<boolean> {
+  return MASTER_EMAILS.has(email) || (await isEnabledOperator(db, email));
+}
+
+/** 비밀번호 로그인 세션 토큰을 발급한다. 구글 ID 토큰과 같은 JWT 형태라 프런트가 만료를 그대로 읽는다. */
+async function issueSessionToken(email: string): Promise<string> {
+  if (!SESSION_KEY) throw new Error("ADMIN_SESSION_SECRET 가 설정되지 않았습니다.");
+  return await new SignJWT({ email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(SESSION_TTL)
+    .sign(SESSION_KEY);
+}
+
+/** 비밀번호 로그인 세션 토큰을 검증한다. 실패하면 null. */
+async function verifySessionToken(token: string): Promise<string | null> {
+  if (!SESSION_KEY) return null;
+  try {
+    const { payload } = await jwtVerify(token, SESSION_KEY);
+    const email = payload["email"];
+    return typeof email === "string" ? email.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인하고 이메일을 돌려준다. */
+async function verifyIdentity(token: string): Promise<string | null> {
+  return (await verifyGoogleIdToken(token)) ?? (await verifySessionToken(token));
+}
+
+// ── 비밀번호 해시 (Web Crypto PBKDF2-SHA256, 외부 의존성 없음) ──────────────────────
+const PBKDF2_ITERATIONS = 100_000;
+
+function toBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+function fromBase64(b64: string): Uint8Array {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function pbkdf2(secret: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, [
+    "deriveBits",
+  ]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    keyMaterial,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+/** "pbkdf2$반복수$salt$hash" 형태로 저장한다. 원문은 어디에도 남지 않는다. */
+async function hashSecret(secret: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await pbkdf2(secret, salt, PBKDF2_ITERATIONS);
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`;
+}
+
+/** 저장된 해시와 대조한다. 형식이 깨졌으면 false(예외를 던지지 않는다). */
+async function verifySecretHash(secret: string, stored: string): Promise<boolean> {
+  const parts = stored.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
+  const iterations = Number(parts[1]);
+  if (!Number.isFinite(iterations) || iterations <= 0) return false;
+  try {
+    const salt = fromBase64(parts[2]);
+    const expected = fromBase64(parts[3]);
+    const actual = await pbkdf2(secret, salt, iterations);
+    if (actual.length !== expected.length) return false;
+    // 타이밍 공격을 막으려 길이가 같을 때만 상수시간으로 비교한다.
+    let diff = 0;
+    for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
+    return diff === 0;
+  } catch {
+    return false;
+  }
+}
+
+function generateNumericCode(digits: number): string {
+  const bytes = crypto.getRandomValues(new Uint32Array(1));
+  const max = 10 ** digits;
+  return String(bytes[0] % max).padStart(digits, "0");
+}
+
+/** Resend REST API 로 발송한다. 키가 없으면 예외를 던진다(조용히 실패해 코드가 안 갔는데 성공으로 보이는 것을 막는다). */
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY 가 설정되지 않았습니다.");
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: [to], subject, html }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`이메일 발송 실패 (HTTP ${res.status}): ${body}`);
+  }
+}
+
+const RESET_CODE_TTL_MS = 30 * 60 * 1000;
+const RESET_CODE_MIN_INTERVAL_MS = 60 * 1000;
+const RESET_CODE_MAX_ATTEMPTS = 5;
+const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * 코드를 만들어 ts_admin_reset_codes 에 저장하고 이메일로 보낸다. 운영자 본인이 "코드 받기"를
+ * 눌렀을 때(reset)와, 마스터가 운영자를 추가해서 자동으로 초대할 때(invite) 둘 다 이 함수를 쓴다.
+ * 재요청 간격(RESET_CODE_MIN_INTERVAL_MS) 안에 다시 부르면 조용히 건너뛴다 — 초대 재발송
+ * 남용도 같은 규칙으로 막힌다. 실제로 보냈으면 true, 간격 제한에 걸려 건너뛰었으면 false.
+ */
+async function sendLoginCode(db: SupabaseClient, email: string, kind: "invite" | "reset"): Promise<boolean> {
+  const { data: existing } = await db
+    .from("ts_admin_reset_codes")
+    .select("created_at")
+    .eq("email", email)
+    .maybeSingle();
+  const lastCreated = existing?.created_at ? Date.parse(existing.created_at) : 0;
+  if (Date.now() - lastCreated < RESET_CODE_MIN_INTERVAL_MS) return false;
+
+  const code = generateNumericCode(6);
+  const codeHash = await hashSecret(code);
+  const expiresAt = new Date(Date.now() + RESET_CODE_TTL_MS).toISOString();
+  const { error } = await db.from("ts_admin_reset_codes").upsert(
+    { email, code_hash: codeHash, expires_at: expiresAt, attempts: 0, created_at: new Date().toISOString() },
+    { onConflict: "email" },
+  );
+  if (error) throw new Error(error.message);
+
+  const link = ADMIN_APP_URL
+    ? `<p><a href="${ADMIN_APP_URL}/?email=${encodeURIComponent(email)}&code=${code}">여기를 눌러 바로 설정하기</a></p>`
+    : "";
+  const intro = kind === "invite"
+    ? "TrueBase 운영 도구의 운영자로 등록되었습니다. 아래 코드로 비밀번호를 설정하세요."
+    : "비밀번호 설정/재설정 코드입니다.";
+  await sendEmail(
+    email,
+    kind === "invite" ? "TrueBase 운영 도구 운영자 초대" : "TrueBase 운영 도구 로그인 코드",
+    `<p>${intro} 30분간 유효합니다.</p><p style="font-size:24px;font-weight:600;letter-spacing:4px;">${code}</p>${link}`,
+  );
+  return true;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return fail("method_not_allowed", 405);
 
-  // ── 1. 신원 확인 (구글) ─────────────────────────────────────────────────────
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
-  if (!idToken) return fail("로그인이 필요합니다.", 401);
-
-  const email = await verifyGoogleIdToken(idToken);
-  if (!email) return fail("로그인이 필요합니다.", 401);
-
-  // ── 2. 인가 ────────────────────────────────────────────────────────────────
-  // 운영자 표를 읽으려면 secret key 가 필요해 여기서 클라이언트를 만든다.
-  // 이 시점의 질의는 고정된 목록 조회 하나뿐이라 호출자가 조종할 수 있는 부분이 없다.
-  const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const isMaster = MASTER_EMAILS.has(email);
-  if (!isMaster && !(await isEnabledOperator(db, email))) {
-    return fail("운영자 권한이 없습니다.", 403);
-  }
-
-  // ── 3. 처리 ────────────────────────────────────────────────────────────────
+  // ── 1. 요청 본문 ──────────────────────────────────────────────────────────────
+  // 로그인 전(auth.*) 요청은 아직 신원이 없으므로, 신원 확인보다 먼저 action 을 읽어야 한다.
   let action = "";
   let params: Params = {};
   try {
@@ -138,6 +287,103 @@ Deno.serve(async (req) => {
     return fail(e instanceof Error ? e.message : "요청 본문을 읽을 수 없습니다.", 400);
   }
 
+  const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // ── 2. 로그인 전 공개 액션(비밀번호 로그인·재설정) ────────────────────────────────
+  // 아직 세션이 없는 상태에서만 의미가 있으므로 아래 신원 확인보다 먼저 처리하고 끝낸다.
+  if (action.startsWith("auth.")) {
+    try {
+      switch (action) {
+        case "auth.passwordLogin": {
+          const loginEmail = str(params, "email").toLowerCase();
+          const password = str(params, "password");
+          const { data: row, error } = await db
+            .from("ts_admin_passwords")
+            .select("password_hash")
+            .eq("email", loginEmail)
+            .maybeSingle();
+          if (error) throw new Error(error.message);
+          if (!row || !(await verifySecretHash(password, row.password_hash))) {
+            return fail("이메일 또는 비밀번호가 올바르지 않습니다.", 401);
+          }
+          if (!(await isAllowedIdentity(db, loginEmail))) {
+            return fail("운영자 권한이 없습니다.", 403);
+          }
+          const token = await issueSessionToken(loginEmail);
+          return json({ ok: true, data: { token } });
+        }
+
+        case "auth.requestReset": {
+          const targetEmail = str(params, "email").toLowerCase();
+          // 등록 안 된 이메일이어도 항상 성공 응답 — 어떤 이메일이 허용목록에 있는지 새지 않게 한다.
+          if (await isAllowedIdentity(db, targetEmail)) {
+            await sendLoginCode(db, targetEmail, "reset");
+          }
+          return json({ ok: true, data: null });
+        }
+
+        case "auth.resetPassword": {
+          const targetEmail = str(params, "email").toLowerCase();
+          const code = str(params, "code");
+          const newPassword = str(params, "newPassword");
+          if (newPassword.length < MIN_PASSWORD_LENGTH) {
+            return fail(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400);
+          }
+          if (!(await isAllowedIdentity(db, targetEmail))) {
+            return fail("운영자 권한이 없습니다.", 403);
+          }
+          const { data: row, error } = await db
+            .from("ts_admin_reset_codes")
+            .select("code_hash, expires_at, attempts")
+            .eq("email", targetEmail)
+            .maybeSingle();
+          if (error) throw new Error(error.message);
+          if (!row || Date.parse(row.expires_at) < Date.now()) {
+            return fail("코드가 만료되었거나 없습니다. 다시 요청하세요.", 400);
+          }
+          if (row.attempts >= RESET_CODE_MAX_ATTEMPTS) {
+            await db.from("ts_admin_reset_codes").delete().eq("email", targetEmail);
+            return fail("시도 횟수를 초과했습니다. 다시 요청하세요.", 400);
+          }
+          if (!(await verifySecretHash(code, row.code_hash))) {
+            await db.from("ts_admin_reset_codes").update({ attempts: row.attempts + 1 }).eq("email", targetEmail);
+            return fail("코드가 일치하지 않습니다.", 400);
+          }
+          const passwordHash = await hashSecret(newPassword);
+          const { error: upsertError } = await db
+            .from("ts_admin_passwords")
+            .upsert({ email: targetEmail, password_hash: passwordHash, updated_at: new Date().toISOString() }, { onConflict: "email" });
+          if (upsertError) throw new Error(upsertError.message);
+          await db.from("ts_admin_reset_codes").delete().eq("email", targetEmail);
+          return json({ ok: true, data: null });
+        }
+
+        default:
+          return fail(`알 수 없는 action: ${action}`, 400);
+      }
+    } catch (e) {
+      console.error(`[admin-api] ${action} 실패: ${e}`);
+      return fail(e instanceof Error ? e.message : "처리에 실패했습니다.", 400);
+    }
+  }
+
+  // ── 3. 신원 확인(구글 또는 비밀번호 로그인 세션) ───────────────────────────────────
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
+  if (!idToken) return fail("로그인이 필요합니다.", 401);
+
+  const email = await verifyIdentity(idToken);
+  if (!email) return fail("로그인이 필요합니다.", 401);
+
+  // ── 4. 인가 ────────────────────────────────────────────────────────────────
+  const isMaster = MASTER_EMAILS.has(email);
+  if (!isMaster && !(await isEnabledOperator(db, email))) {
+    return fail("운영자 권한이 없습니다.", 403);
+  }
+
+  // ── 5. 처리 ────────────────────────────────────────────────────────────────
   // 운영자 관리는 마스터만. 화면에서도 숨기지만 서버가 다시 막는다.
   if (action.startsWith("operators.") && !isMaster) {
     return fail("운영자 관리는 마스터만 할 수 있습니다.", 403);
@@ -151,16 +397,56 @@ Deno.serve(async (req) => {
       case "operators.list": {
         const { data, error } = await db.rpc("ts_admin_list_operators");
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: data ?? [] });
+        // 표 자체는 안 건드리고, 비밀번호 설정 여부만 덧붙인다 — 화면에서 "초대 재발송"을 보여줄지 판단하는 데 쓴다.
+        const rows = (data ?? []) as Array<Record<string, unknown> & { email: string }>;
+        const emails = rows.map((r) => r.email);
+        const withPassword = new Set<string>();
+        if (emails.length > 0) {
+          const { data: pwRows, error: pwError } = await db
+            .from("ts_admin_passwords")
+            .select("email")
+            .in("email", emails);
+          if (pwError) throw new Error(pwError.message);
+          for (const r of pwRows ?? []) withPassword.add(r.email as string);
+        }
+        return json({ ok: true, data: rows.map((r) => ({ ...r, hasPassword: withPassword.has(r.email) })) });
       }
 
       case "operators.upsert": {
+        const targetEmail = str(params, "email").toLowerCase();
+        // 등록하기 전에 먼저 확인해야 한다 — upsert 뒤에 물으면 방금 만든 상태만 보인다.
+        const { data: existingPw } = await db
+          .from("ts_admin_passwords")
+          .select("email")
+          .eq("email", targetEmail)
+          .maybeSingle();
+
         const { error } = await db.rpc("ts_admin_upsert_operator", {
           p_email: str(params, "email"),
           p_display_name: optStr(params, "displayName"),
           p_by: email,
         });
         if (error) throw new Error(error.message);
+
+        // 비밀번호를 한 번도 설정한 적 없는 이메일이면(신규 추가, 또는 미완료 상태로 재추가) 초대 메일을 보낸다.
+        // 메일 발송이 실패해도 운영자 추가 자체는 이미 끝났으니 되돌리지 않고, 대신 warning 으로 알린다.
+        let warning: string | null = null;
+        if (!existingPw) {
+          try {
+            await sendLoginCode(db, targetEmail, "invite");
+          } catch (e) {
+            warning = `운영자는 추가됐지만 초대 메일 발송에 실패했습니다: ${e instanceof Error ? e.message : String(e)}`;
+          }
+        }
+        return json({ ok: true, data: { warning } });
+      }
+
+      case "operators.resendInvite": {
+        const targetEmail = str(params, "email").toLowerCase();
+        if (!(await isEnabledOperator(db, targetEmail))) {
+          throw new Error("등록된 운영자가 아닙니다.");
+        }
+        await sendLoginCode(db, targetEmail, "invite");
         return json({ ok: true, data: null });
       }
 

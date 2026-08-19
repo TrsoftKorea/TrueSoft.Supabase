@@ -46,3 +46,32 @@ export async function callAdmin<T>(
   }
   return body.data as T
 }
+
+/**
+ * 로그인 전에도 부르는 호출(비밀번호 로그인·재설정 코드 요청/확인).
+ * 아직 토큰이 없는 상태이므로 Authorization 헤더를 안 보낸다 — admin-api 도 `auth.*` action은
+ * 이 헤더 없이도 처리하도록 따로 분기돼 있다.
+ */
+export async function callAdminPublic<T>(
+  target: ProjectTarget,
+  action: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  const project = getProject(target)
+  if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
+
+  const res = await fetch(`${project.url}/functions/v1/admin-api`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, params }),
+  })
+
+  const body = (await res.json().catch(() => null)) as
+    | { ok?: boolean; data?: T; error?: string }
+    | null
+
+  if (!res.ok || !body?.ok) {
+    throw new Error(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`)
+  }
+  return body.data as T
+}

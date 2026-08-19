@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
-  ChevronDown, LogOut, AlertTriangle,
+  ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -159,6 +159,18 @@ export function Layout({
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
           {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} />}
+        </div>
+
+        <div className="border-t border-neutral-200 p-3 space-y-0.5">
+          <a
+            href="https://trsoftkorea.github.io/TrueSoft.Supabase/"
+            target="_blank"
+            rel="noreferrer"
+            className={`${NAV_BASE} text-neutral-600 hover:bg-neutral-100`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>SDK 가이드 문서</span>
+          </a>
         </div>
 
         <div className="border-t border-neutral-200 p-3 space-y-2">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Plus, RotateCcw, UserMinus } from 'lucide-react'
+import { Loader2, Mail, Plus, RotateCcw, UserMinus } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, type ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -14,6 +14,7 @@ type Operator = {
   disabled_at: string | null
   created_at: string
   created_by: string | null
+  hasPassword: boolean
 }
 
 export default function Operators({
@@ -70,10 +71,11 @@ export default function Operators({
     setAdding(true)
     setError('')
     try {
-      await callAdmin(target, 'operators.upsert', {
+      const result = await callAdmin<{ warning: string | null }>(target, 'operators.upsert', {
         email: email.trim(),
         displayName: name.trim(),
       })
+      if (result.warning) setError(result.warning)
       setEmail('')
       setName('')
       await load()
@@ -81,6 +83,19 @@ export default function Operators({
       report(e, '추가하지 못했습니다.')
     } finally {
       setAdding(false)
+    }
+  }
+
+  const resendInvite = async (op: Operator) => {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await callAdmin(target, 'operators.resendInvite', { email: op.email })
+    } catch (e: unknown) {
+      report(e, '초대 메일을 다시 보내지 못했습니다.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -123,7 +138,7 @@ export default function Operators({
         <div className="text-xs font-medium text-neutral-500 mb-2">운영자 추가</div>
         <div className="grid grid-cols-[1.5fr_1fr_auto] gap-2 items-end">
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">구글 계정 이메일</span>
+            <span className="text-xs text-neutral-500">이메일</span>
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -150,7 +165,7 @@ export default function Operators({
           </button>
         </div>
         <p className="mt-2 text-xs text-neutral-400">
-          이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
+          비밀번호를 아직 설정하지 않은 이메일이면 초대 메일이 자동으로 갑니다. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
         </p>
       </WhiteCard>
 
@@ -186,12 +201,23 @@ export default function Operators({
                     <td className="px-4 py-2.5">
                       {disabled ? (
                         <span className="text-xs text-neutral-500">비활성</span>
-                      ) : (
+                      ) : op.hasPassword ? (
                         <span className="text-xs text-emerald-600">사용 중</span>
+                      ) : (
+                        <span className="text-xs text-amber-600">초대 대기 중</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-neutral-600">{formatDateTime(op.created_at)}</td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="px-4 py-2.5 text-right space-x-1.5">
+                      {!disabled && !op.hasPassword && (
+                        <button
+                          onClick={() => void resendInvite(op)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+                        >
+                          <Mail className="w-3 h-3" /> 초대 재발송
+                        </button>
+                      )}
                       {disabled ? (
                         <button
                           onClick={() => void setDisabled(op, false)}

@@ -55,6 +55,14 @@ export function clearToken(): void {
   window.google?.accounts.id.disableAutoSelect()
 }
 
+/**
+ * 로그인 토큰을 저장한다. 구글이 발급했든(renderGoogleButton 내부) 비밀번호 로그인이
+ * 발급했든 형태(JWT)가 같아 저장·만료 판단(getToken)을 그대로 공유한다.
+ */
+export function storeToken(token: string): void {
+  window.sessionStorage.setItem(STORAGE_KEY, token)
+}
+
 /** 토큰의 이메일. 화면 표시용이며 권한 판단에는 쓰지 않는다(그건 백엔드가 한다). */
 export function emailOf(token: string): string {
   const part = token.split('.')[1]

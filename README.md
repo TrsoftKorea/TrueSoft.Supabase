@@ -53,13 +53,27 @@ npm run dev
 
 ### 3. Edge Function
 
-`supabase/functions/admin-api/index.ts` 를 게임 프로젝트마다 배포하고, 시크릿 둘을 설정합니다.
+`supabase/functions/admin-api/index.ts` 를 게임 프로젝트마다 배포하고, 시크릿을 설정합니다.
 
 ```bash
-supabase secrets set --project-ref <ref> GOOGLE_CLIENT_ID=<1번에서 만든 것> ADMIN_EMAILS=a@example.com,b@example.com
+supabase secrets set --project-ref <ref> \
+  GOOGLE_CLIENT_ID=<1번에서 만든 것> \
+  ADMIN_EMAILS=a@example.com,b@example.com \
+  ADMIN_SESSION_SECRET=<32바이트 이상 무작위 문자열, 프로젝트마다 다르게> \
+  RESEND_API_KEY=<resend.com 에서 발급> \
+  RESEND_FROM_EMAIL="TrueBase 운영 도구 <onboarding@resend.dev>" \
+  ADMIN_APP_URL=https://truebase-admin.pages.dev
 ```
 
-둘 중 하나라도 비면 **모든 요청이 막힙니다**(설정 누락이 개방이 되지 않도록). `SUPABASE_URL`·`SUPABASE_SECRET_KEYS` 는 플랫폼이 자동 주입합니다.
+`GOOGLE_CLIENT_ID`·`ADMIN_EMAILS` 둘 중 하나라도 비면 **모든 요청이 막힙니다**(설정 누락이 개방이 되지 않도록). `SUPABASE_URL`·`SUPABASE_SECRET_KEYS` 는 플랫폼이 자동 주입합니다.
+
+**구글 계정이 없는 운영자를 위한 비밀번호 로그인**을 쓰려면 나머지 넷도 필요합니다.
+
+- `ADMIN_SESSION_SECRET` — 비밀번호 로그인 세션 토큰 서명용. 비어 있으면 비밀번호 로그인 자체가 안 됩니다(구글 로그인은 영향 없음).
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`(선택) — 비밀번호 최초 설정/재설정 코드, 그리고 운영자 추가 시 자동으로 가는 초대 메일을 보내는 데 씁니다([resend.com](https://resend.com) 가입 후 API 키 발급). 도메인을 따로 인증하기 전까지는 Resend 가입 계정의 이메일로만 발송됩니다 — 다른 운영자에게 보내려면 도메인 인증이 필요합니다. `RESEND_FROM_EMAIL` 을 생략하면 Resend 기본 테스트 주소로 나갑니다.
+- `ADMIN_APP_URL`(선택) — 초대·재설정 메일에 "여기를 눌러 바로 설정하기" 링크를 넣는 데 씁니다(배포한 프런트엔드 주소). 비우면 링크 없이 코드만 이메일로 갑니다.
+
+**운영자 초대**: "운영자 관리"에서 비밀번호를 아직 설정하지 않은 이메일을 추가하면 자동으로 초대 메일이 갑니다. 메일 링크를 누르면 로그인 화면이 곧바로 "비밀번호 설정" 단계로 열립니다. 메일을 못 받았으면 운영자 목록에서 "초대 재발송"을 누르면 됩니다.
 
 ## 화면을 추가할 때
 
@@ -67,9 +81,26 @@ supabase secrets set --project-ref <ref> GOOGLE_CLIENT_ID=<1번에서 만든 것
 2. `admin-api` 의 switch 에 action 을 추가합니다.
 3. `src/pages/` 에 화면을 추가하고 `callAdmin(target, 'action', params)` 로 호출합니다.
 
+## 배포 (Cloudflare Pages)
+
+브라우저는 Supabase 비밀 키를 갖지 않으므로 `npm run build` 결과물(정적 파일)을 아무 곳에나 올려도 안전하다. 여러 PC에서 접속하려면 이 결과물을 인터넷에 올려두면 된다.
+
+1. **Cloudflare 대시보드 → Workers & Pages → Pages → GitHub 프로젝트 연결**, 이 저장소(`TrueBase.Admin`) 선택.
+2. 빌드 설정:
+   - 프레임워크 프리셋: **Vite**
+   - 빌드 명령: `npm run build`
+   - 빌드 출력 디렉터리: `dist`
+3. **환경 변수**에 `.env`와 같은 값 3개를 등록(`Settings → Environment variables`):
+   - `VITE_GOOGLE_CLIENT_ID`
+   - `VITE_DEFENCER_URL`
+   - `VITE_DEVILSLAYER_URL`
+4. 배포되면 `https://<프로젝트명>.pages.dev` 주소가 생긴다. **Google Cloud Console → OAuth 클라이언트 ID → 승인된 자바스크립트 원본**에 이 주소를 추가해야 로그인이 된다(1번 "설정" 섹션 참고).
+5. 이후 `master`에 push할 때마다 자동으로 새 버전이 배포된다.
+
+SPA 라우팅(주소를 새로고침해도 화면이 유지되도록)은 `public/_redirects`가 처리한다 — Cloudflare Pages가 이 파일을 자동으로 인식한다.
+
 ## 아직 안 된 것
 
 - 아이템 카탈로그·운영자 관리·플레이어 관리(+ 유저 데이터 탭)·우편함 4종·리더보드·변경 관리·구매 내역·원격 설정·쿠폰·채팅 관리·대시보드·데이터 로그까지 이식됐습니다. Retool 원본(`/frontend`)과 화면 단위로 직접 대조하지는 않았습니다 — 원본 저장소가 이 프로젝트에 없습니다.
 - 감사 로그를 남기지 않습니다. 누가 무엇을 했는지 DB 에 기록되지 않습니다.
 - 구글 ID 토큰은 1시간이면 만료되고, 만료되면 로그인 화면으로 돌아갑니다. 자동 갱신은 없습니다.
-- 정적 호스팅 배포 파이프라인이 없습니다. `npm run build` 결과물은 어디에든 올릴 수 있습니다.
