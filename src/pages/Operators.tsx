@@ -177,7 +177,7 @@ export default function Operators({
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
               <th className="text-left px-4 py-2.5 font-medium w-28">상태</th>
               <th className="text-left px-4 py-2.5 font-medium w-40">추가일자</th>
-              <th className="px-4 py-2.5 w-28"></th>
+              <th className="px-4 py-2.5 w-48"></th>
             </tr>
           </thead>
           <tbody>
@@ -213,7 +213,7 @@ export default function Operators({
                         <button
                           onClick={() => void resendInvite(op)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
                         >
                           <Mail className="w-3 h-3" /> 초대 재발송
                         </button>
@@ -222,7 +222,7 @@ export default function Operators({
                         <button
                           onClick={() => void setDisabled(op, false)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
                         >
                           <RotateCcw className="w-3 h-3" /> 복구
                         </button>
@@ -230,7 +230,7 @@ export default function Operators({
                         <button
                           onClick={() => setDisableTarget(op)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 whitespace-nowrap"
                         >
                           <UserMinus className="w-3 h-3" /> 비활성화
                         </button>
