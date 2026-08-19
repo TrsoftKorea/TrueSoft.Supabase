@@ -39,8 +39,9 @@ export default function Login({
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
         <p className="text-sm text-neutral-500 mt-1">{project.label}</p>
 
-        <div ref={buttonRef} className="mt-6 flex justify-center" />
-        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+        <div className="mt-6">
+          <PasswordLoginForm target={target} onToken={onToken} />
+        </div>
 
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-neutral-200" />
@@ -48,7 +49,8 @@ export default function Login({
           <div className="h-px flex-1 bg-neutral-200" />
         </div>
 
-        <PasswordLoginForm target={target} onToken={onToken} />
+        <div ref={buttonRef} className="flex justify-center" />
+        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
         <p className="mt-4 text-xs text-neutral-400">허용된 운영자 계정만 들어올 수 있습니다.</p>
       </WhiteCard>
