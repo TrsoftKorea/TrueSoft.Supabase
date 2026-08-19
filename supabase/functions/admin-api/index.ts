@@ -353,6 +353,15 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: null });
       }
 
+      case "operators.delete": {
+        // 되돌릴 수 없다 — 화면에서도 비활성화된 운영자만 지울 수 있게 막지만, 서버가 다시 막는다.
+        const targetEmail = str(params, "email").toLowerCase();
+        if (targetEmail === email) throw new Error("자기 계정은 삭제할 수 없습니다.");
+        const { error } = await db.rpc("ts_admin_delete_operator", { p_email: targetEmail });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "gameItems.list": {
         const { data, error } = await db.rpc("ts_admin_list_game_items", {
           p_search: optStr(params, "search"),
