@@ -109,8 +109,10 @@ async function verifyGoogleIdToken(idToken: string): Promise<string | null> {
     if (payload["email_verified"] !== true) return null;
     const email = payload["email"];
     return typeof email === "string" ? email.toLowerCase() : null;
-  } catch (e) {
-    console.error(`[admin-api] 구글 토큰 검증 실패: ${e}`);
+  } catch {
+    // 실패 로그는 여기서 안 남긴다 — 비밀번호 로그인 세션 토큰(HS256)도 항상 이 경로를
+    // 먼저 타서 매번 "실패"하므로, 여기서 찍으면 정상적인 비밀번호 로그인마다 가짜 에러가
+    // 쌓인다. 진짜 실패(둘 다 아님)는 verifyIdentity 에서 한 번만 남긴다.
     return null;
   }
 }
@@ -155,7 +157,14 @@ async function verifySessionToken(token: string): Promise<string | null> {
 
 /** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인하고 이메일을 돌려준다. */
 async function verifyIdentity(token: string): Promise<string | null> {
-  return (await verifyGoogleIdToken(token)) ?? (await verifySessionToken(token));
+  const google = await verifyGoogleIdToken(token);
+  if (google) return google;
+  const session = await verifySessionToken(token);
+  if (session) return session;
+  // 둘 다 아니면 그때만 로그를 남긴다 — 어느 한쪽만 실패하는 건 정상(로그인 방식이 둘이라
+  // 그렇다) 이라 노이즈가 안 되고, 진짜 문제만 여기 걸린다.
+  console.error("[admin-api] 토큰 검증 실패 — 구글 ID 토큰도 비밀번호 로그인 세션도 아닙니다.");
+  return null;
 }
 
 // ── 비밀번호 해시 (Web Crypto PBKDF2-SHA256, 외부 의존성 없음) ──────────────────────
@@ -422,7 +431,9 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         const { error } = await db.rpc("ts_admin_upsert_operator", {
-          p_email: str(params, "email"),
+          // 소문자로 저장해야 한다 — 로그인·재설정·재초대·hasPassword 판정이 전부 소문자로
+          // 비교한다(원본 대소문자를 그대로 넣으면 그 운영자는 영원히 인증에 실패한다).
+          p_email: targetEmail,
           p_display_name: optStr(params, "displayName"),
           p_by: email,
         });

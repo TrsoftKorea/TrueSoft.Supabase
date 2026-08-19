@@ -169,7 +169,7 @@ export default function RemoteConfig({
   onUnauthenticated: () => void
 }) {
   const [rows, setRows] = useState<ConfigRow[]>([])
-  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const { drafts: allDrafts, error: draftsError, reload: reloadDrafts } = usePendingChanges()
   const drafts = useMemo(() => (allDrafts ?? []).filter((d) => d.feature === 'remote_config'), [allDrafts])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState('')
@@ -186,6 +186,12 @@ export default function RemoteConfig({
     },
     [onUnauthenticated],
   )
+
+  // 대기 중 변경 조회 실패(인증 실패 제외)는 공유 컨텍스트가 조용히 삼키므로, 여기로 넘어오면
+  // 기존 에러 배너에 실어 보여준다.
+  useEffect(() => {
+    if (draftsError) setError(draftsError)
+  }, [draftsError])
 
   // 라이브 값(rows)은 게시(publish) 전까지 안 바뀐다 — 이 화면의 모든 조작은 대기(draft)만
   // 건드리므로, 필드 하나 고칠 때마다 라이브 표까지 통째로 다시 받을 필요가 없다.

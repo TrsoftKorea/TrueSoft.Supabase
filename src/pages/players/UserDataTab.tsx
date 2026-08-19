@@ -125,6 +125,9 @@ export default function UserDataTab({
   displayName?: string
 }) {
   const [fields, setFields] = useState<UserDataField[]>([])
+  // 필드 목록(fields)은 스키마의 컬럼 수만큼 항상 채워지므로(값이 null이어도 항목은 남는다),
+  // "저장된 데이터가 아예 없음"은 fields.length가 아니라 이걸로 따로 추적해야 한다.
+  const [hasRow, setHasRow] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<LogRow[]>([])
@@ -150,6 +153,7 @@ export default function UserDataTab({
     try {
       const { fields: f, row } = await fetchUserDataFields(target, accountId)
       setFields(f)
+      setHasRow(row !== null)
       setUpdatedAt(row?.['updated_at'] != null ? String(row['updated_at']) : null)
     } catch (e: unknown) {
       report(e, '유저 데이터를 불러오지 못했습니다.')
@@ -241,7 +245,7 @@ export default function UserDataTab({
                 loading={loading}
                 empty={pageRows.length === 0}
                 colSpan={4}
-                emptyText={fields.length === 0 ? '이 플레이어의 저장된 데이터가 없습니다.' : '검색 결과가 없습니다.'}
+                emptyText={!hasRow ? '이 플레이어의 저장된 데이터가 없습니다.' : '검색 결과가 없습니다.'}
               />
             ) : (
               pageRows.map((f) => (

@@ -10,6 +10,40 @@ export class NotAuthenticatedError extends Error {
 }
 
 /**
+ * 어드민 백엔드에 POST 하나를 보낸다. token 이 있으면 Authorization 헤더를 실어 보내고
+ * 401 을 NotAuthenticatedError 로 바꾼다 — callAdmin/callAdminPublic 이 공유하는 실제 요청 로직은
+ * 이 함수 하나뿐이라, 헤더·에러 처리 방식이 바뀌어도 고칠 곳이 한 곳이다.
+ */
+async function postAdmin<T>(
+  target: ProjectTarget,
+  action: string,
+  params: Record<string, unknown>,
+  token: string | null,
+): Promise<T> {
+  const project = getProject(target)
+  if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
+
+  const res = await fetch(`${project.url}/functions/v1/admin-api`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action, params }),
+  })
+
+  const body = (await res.json().catch(() => null)) as
+    | { ok?: boolean; data?: T; error?: string }
+    | null
+
+  if (token && res.status === 401) throw new NotAuthenticatedError()
+  if (!res.ok || !body?.ok) {
+    throw new Error(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`)
+  }
+  return body.data as T
+}
+
+/**
  * 어드민 백엔드 호출.
  *
  * 브라우저는 secret 키를 갖지 않는다. 구글 ID 토큰만 보내고,
@@ -23,28 +57,7 @@ export async function callAdmin<T>(
 ): Promise<T> {
   const token = getToken()
   if (!token) throw new NotAuthenticatedError()
-
-  const project = getProject(target)
-  if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
-
-  const res = await fetch(`${project.url}/functions/v1/admin-api`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, params }),
-  })
-
-  const body = (await res.json().catch(() => null)) as
-    | { ok?: boolean; data?: T; error?: string }
-    | null
-
-  if (res.status === 401) throw new NotAuthenticatedError()
-  if (!res.ok || !body?.ok) {
-    throw new Error(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`)
-  }
-  return body.data as T
+  return postAdmin<T>(target, action, params, token)
 }
 
 /**
@@ -57,21 +70,5 @@ export async function callAdminPublic<T>(
   action: string,
   params: Record<string, unknown> = {},
 ): Promise<T> {
-  const project = getProject(target)
-  if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
-
-  const res = await fetch(`${project.url}/functions/v1/admin-api`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, params }),
-  })
-
-  const body = (await res.json().catch(() => null)) as
-    | { ok?: boolean; data?: T; error?: string }
-    | null
-
-  if (!res.ok || !body?.ok) {
-    throw new Error(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`)
-  }
-  return body.data as T
+  return postAdmin<T>(target, action, params, null)
 }

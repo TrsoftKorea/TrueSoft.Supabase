@@ -114,9 +114,11 @@ export default function SchemaChanges({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const { drafts: draftsOrNull, reload: reloadDrafts } = usePendingChanges()
+  const { drafts: draftsOrNull, error: draftsError, reload: reloadDrafts } = usePendingChanges()
   const drafts = draftsOrNull ?? []
-  const draftLoading = draftsOrNull === null
+  // 아직 못 불러왔고(null) 실패한 적도 없을 때만 로딩으로 본다 — 실패했으면 로딩을 멈추고
+  // 아래 에러 배너로 알린다. 안 그러면 인증 외 사유로 계속 실패할 때 스피너만 영원히 돈다.
+  const draftLoading = draftsOrNull === null && !draftsError
   const [versions, setVersions] = useState<VersionRow[]>([])
   const [versionsLoading, setVersionsLoading] = useState(true)
 
@@ -137,6 +139,12 @@ export default function SchemaChanges({
     },
     [onUnauthenticated],
   )
+
+  // 대기 중 변경 조회가 실패하면(인증 실패 제외) 공유 컨텍스트가 조용히 삼키지 않고 여기로
+  // 넘겨준다 — 이 화면의 기존 에러 배너에 그대로 실어 보여준다.
+  useEffect(() => {
+    if (draftsError) setError(draftsError)
+  }, [draftsError])
 
   const reloadVersions = useCallback(async () => {
     setVersionsLoading(true)

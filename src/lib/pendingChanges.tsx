@@ -20,6 +20,9 @@ export type DraftRow = {
 type Ctx = {
   /** null = 아직 한 번도 못 불러옴(로딩 중). */
   drafts: DraftRow[] | null
+  /** 마지막 조회가 인증 실패가 아닌 이유로 실패했으면 그 메시지, 성공했으면 null.
+   *  화면들이 이 값을 자기 에러 배너에 실어야 실패가 조용히 묻히지 않는다. */
+  error: string | null
   reload: () => Promise<void>
 }
 
@@ -35,14 +38,16 @@ export function PendingChangesProvider({
   children: ReactNode
 }) {
   const [drafts, setDrafts] = useState<DraftRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     try {
       const draft = await callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft')
       setDrafts(draft.rows)
+      setError(null)
     } catch (e: unknown) {
-      if (e instanceof NotAuthenticatedError) onUnauthenticated()
-      // 그 외 실패는 조용히 무시 — 다음 폴링에서 다시 시도한다.
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setError(e instanceof Error ? e.message : '불러오지 못했습니다.')
     }
   }, [target, onUnauthenticated])
 
@@ -50,14 +55,17 @@ export function PendingChangesProvider({
     let alive = true
     let inFlight = false
     setDrafts(null) // 프로젝트를 바꾸면 새 값이 올 때까지 이전 프로젝트 목록을 보여주지 않는다.
+    setError(null)
     const poll = async (force = false) => {
       if (inFlight || (!force && document.hidden)) return
       inFlight = true
       try {
         const draft = await callAdmin<{ rows: DraftRow[] }>(target, 'schema.getDraft')
-        if (alive) setDrafts(draft.rows)
+        if (alive) { setDrafts(draft.rows); setError(null) }
       } catch (e: unknown) {
+        if (!alive) return
         if (e instanceof NotAuthenticatedError) onUnauthenticated()
+        else setError(e instanceof Error ? e.message : '불러오지 못했습니다.')
       } finally {
         inFlight = false
       }
@@ -76,7 +84,7 @@ export function PendingChangesProvider({
     }
   }, [target, onUnauthenticated])
 
-  return <PendingChangesContext.Provider value={{ drafts, reload }}>{children}</PendingChangesContext.Provider>
+  return <PendingChangesContext.Provider value={{ drafts, error, reload }}>{children}</PendingChangesContext.Provider>
 }
 
 export function usePendingChanges(): Ctx {

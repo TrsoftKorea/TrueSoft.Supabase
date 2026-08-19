@@ -387,7 +387,7 @@ export default function ColumnsTab({
 }) {
   const [cols, setCols] = useState<Col[]>([])
   const [loading, setLoading] = useState(true)
-  const { drafts: allDrafts, reload: reloadDrafts } = usePendingChanges()
+  const { drafts: allDrafts, error: draftsError, reload: reloadDrafts } = usePendingChanges()
   const drafts = useMemo(() => (allDrafts ?? []).filter((d) => d.feature === USER_DATA_FIELD), [allDrafts])
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -404,6 +404,12 @@ export default function ColumnsTab({
     },
     [onUnauthenticated],
   )
+
+  // 대기 중 변경 조회 실패(인증 실패 제외)는 공유 컨텍스트가 조용히 삼키므로, 여기로 넘어오면
+  // 기존 에러 배너에 실어 보여준다.
+  useEffect(() => {
+    if (draftsError) setError(draftsError)
+  }, [draftsError])
 
   const reloadCols = useCallback(async () => {
     setLoading(true)

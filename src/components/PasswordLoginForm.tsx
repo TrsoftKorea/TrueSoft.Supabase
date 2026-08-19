@@ -166,6 +166,7 @@ export default function PasswordLoginForm({
           type="button"
           onClick={() => {
             setError('')
+            setNotice('')
             setMode('login')
           }}
           className={linkBtnCls}
@@ -216,6 +217,7 @@ export default function PasswordLoginForm({
         type="button"
         onClick={() => {
           setError('')
+          setNotice('')
           setMode('request')
         }}
         className={linkBtnCls}

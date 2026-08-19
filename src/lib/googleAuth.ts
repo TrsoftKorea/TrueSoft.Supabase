@@ -118,7 +118,7 @@ export async function renderGoogleButton(
     client_id: GOOGLE_CLIENT_ID,
     callback: (res) => {
       if (!res.credential) return
-      window.sessionStorage.setItem(STORAGE_KEY, res.credential)
+      storeToken(res.credential)
       onToken(res.credential)
     },
     auto_select: false,
