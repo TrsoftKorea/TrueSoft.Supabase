@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Mail, Plus, RotateCcw, UserMinus } from 'lucide-react'
+import { KeyRound, Loader2, Plus, RotateCcw, UserMinus } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, type ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -15,6 +15,91 @@ type Operator = {
   created_at: string
   created_by: string | null
   hasPassword: boolean
+}
+
+// admin-api/index.ts 의 MIN_PASSWORD_LENGTH 와 같은 값이어야 한다 — 프런트와 백엔드가
+// 런타임이 달라(Vite 번들 vs Deno 함수) 상수를 공유할 수 없다.
+const MIN_PASSWORD_LENGTH = 8
+
+function SetPasswordModal({
+  target,
+  op,
+  onClose,
+  onSaved,
+  report,
+}: {
+  target: ProjectTarget
+  op: Operator
+  onClose: () => void
+  onSaved: () => void
+  report: (e: unknown, fallback: string) => void
+}) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const tooShort = newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH
+  const mismatch = confirm.length > 0 && newPassword !== confirm
+  const canSubmit = newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirm && !busy
+
+  const submit = async () => {
+    if (!canSubmit) return
+    setBusy(true)
+    setError('')
+    try {
+      await callAdmin(target, 'operators.setPassword', { email: op.email, newPassword })
+      onSaved()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) {
+        report(e, '설정하지 못했습니다.')
+        return
+      }
+      setError(e instanceof Error ? e.message : '설정하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open
+      title="비밀번호 설정"
+      confirmLabel="설정"
+      busy={busy}
+      onConfirm={() => void submit()}
+      onCancel={onClose}
+    >
+      <div className="space-y-3">
+        <div className="px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm font-mono">
+          {op.email}
+        </div>
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 ({MIN_PASSWORD_LENGTH}자 이상)</label>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white"
+          />
+          {tooShort && <p className="mt-1 text-xs text-amber-600">{MIN_PASSWORD_LENGTH}자 이상이어야 합니다.</p>}
+        </div>
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 확인</label>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void submit()}
+            className="h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white"
+          />
+          {mismatch && <p className="mt-1 text-xs text-amber-600">비밀번호가 서로 다릅니다.</p>}
+        </div>
+        <p className="text-xs text-neutral-400">이 비밀번호는 이메일로 전달되지 않습니다. 직접 알려주세요.</p>
+        {error && <div className="text-sm text-red-500">{error}</div>}
+      </div>
+    </ConfirmDialog>
+  )
 }
 
 export default function Operators({
@@ -34,6 +119,7 @@ export default function Operators({
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [disableTarget, setDisableTarget] = useState<Operator | null>(null)
+  const [passwordTarget, setPasswordTarget] = useState<Operator | null>(null)
   const [busy, setBusy] = useState(false)
 
   const project = getProject(target)
@@ -71,11 +157,10 @@ export default function Operators({
     setAdding(true)
     setError('')
     try {
-      const result = await callAdmin<{ warning: string | null }>(target, 'operators.upsert', {
+      await callAdmin(target, 'operators.upsert', {
         email: email.trim(),
         displayName: name.trim(),
       })
-      if (result.warning) setError(result.warning)
       setEmail('')
       setName('')
       await load()
@@ -83,19 +168,6 @@ export default function Operators({
       report(e, '추가하지 못했습니다.')
     } finally {
       setAdding(false)
-    }
-  }
-
-  const resendInvite = async (op: Operator) => {
-    if (busy) return
-    setBusy(true)
-    setError('')
-    try {
-      await callAdmin(target, 'operators.resendInvite', { email: op.email })
-    } catch (e: unknown) {
-      report(e, '초대 메일을 다시 보내지 못했습니다.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -165,7 +237,7 @@ export default function Operators({
           </button>
         </div>
         <p className="mt-2 text-xs text-neutral-400">
-          비밀번호를 아직 설정하지 않은 이메일이면 초대 메일이 자동으로 갑니다. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
+          구글 계정으로 바로 로그인할 수 있습니다. 비밀번호 로그인이 필요하면 추가 후 "비밀번호 설정"으로 정해서 알려주세요. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
         </p>
       </WhiteCard>
 
@@ -177,7 +249,7 @@ export default function Operators({
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
               <th className="text-left px-4 py-2.5 font-medium w-28">상태</th>
               <th className="text-left px-4 py-2.5 font-medium w-40">추가일자</th>
-              <th className="px-4 py-2.5 w-48"></th>
+              <th className="px-4 py-2.5 w-56"></th>
             </tr>
           </thead>
           <tbody>
@@ -202,20 +274,20 @@ export default function Operators({
                       {disabled ? (
                         <span className="text-xs text-neutral-500">비활성</span>
                       ) : op.hasPassword ? (
-                        <span className="text-xs text-emerald-600">사용 중</span>
+                        <span className="text-xs text-emerald-600">비밀번호 사용 중</span>
                       ) : (
-                        <span className="text-xs text-amber-600">초대 대기 중</span>
+                        <span className="text-xs text-amber-600">비밀번호 미설정</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-neutral-600">{formatDateTime(op.created_at)}</td>
                     <td className="px-4 py-2.5 text-right space-x-1.5">
-                      {!disabled && !op.hasPassword && (
+                      {!disabled && (
                         <button
-                          onClick={() => void resendInvite(op)}
+                          onClick={() => setPasswordTarget(op)}
                           disabled={busy}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
                         >
-                          <Mail className="w-3 h-3" /> 초대 재발송
+                          <KeyRound className="w-3 h-3" /> 비밀번호 설정
                         </button>
                       )}
                       {disabled ? (
@@ -263,6 +335,19 @@ export default function Operators({
           </div>
         )}
       </ConfirmDialog>
+
+      {passwordTarget && (
+        <SetPasswordModal
+          target={target}
+          op={passwordTarget}
+          onClose={() => setPasswordTarget(null)}
+          onSaved={() => {
+            setPasswordTarget(null)
+            void load()
+          }}
+          report={report}
+        />
+      )}
     </div>
   )
 }

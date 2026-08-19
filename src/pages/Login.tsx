@@ -20,24 +20,7 @@ export default function Login({
 }) {
   const buttonRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
-
-  // 초대·재설정 메일의 링크(?email=&code=)로 들어온 경우 — 비밀번호 폼을 코드 확인
-  // 단계부터 바로 연다. 링크는 한 번만 유효하므로 읽자마자 주소창에서 지운다.
-  const [invite] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    const inviteEmail = params.get('email')
-    const inviteCode = params.get('code')
-    return inviteEmail && inviteCode ? { email: inviteEmail, code: inviteCode } : null
-  })
-  const [usePassword, setUsePassword] = useState(!!invite)
-
-  useEffect(() => {
-    if (!invite) return
-    const url = new URL(window.location.href)
-    url.searchParams.delete('email')
-    url.searchParams.delete('code')
-    window.history.replaceState({}, '', url.toString())
-  }, [invite])
+  const [usePassword, setUsePassword] = useState(false)
 
   const project = getProject(target)
 
@@ -60,13 +43,7 @@ export default function Login({
         <div ref={buttonRef} className={`mt-6 flex justify-center ${usePassword ? 'hidden' : ''}`} />
         {usePassword && (
           <div className="mt-6">
-            <PasswordLoginForm
-              target={target}
-              onToken={onToken}
-              initialMode={invite ? 'confirm' : 'login'}
-              initialEmail={invite?.email ?? ''}
-              initialCode={invite?.code ?? ''}
-            />
+            <PasswordLoginForm target={target} onToken={onToken} />
           </div>
         )}
 

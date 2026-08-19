@@ -61,7 +61,7 @@ export async function callAdmin<T>(
 }
 
 /**
- * 로그인 전에도 부르는 호출(비밀번호 로그인·재설정 코드 요청/확인).
+ * 로그인 전에도 부르는 호출(비밀번호 로그인).
  * 아직 토큰이 없는 상태이므로 Authorization 헤더를 안 보낸다 — admin-api 도 `auth.*` action은
  * 이 헤더 없이도 처리하도록 따로 분기돼 있다.
  */

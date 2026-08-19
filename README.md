@@ -59,21 +59,14 @@ npm run dev
 supabase secrets set --project-ref <ref> \
   GOOGLE_CLIENT_ID=<1번에서 만든 것> \
   ADMIN_EMAILS=a@example.com,b@example.com \
-  ADMIN_SESSION_SECRET=<32바이트 이상 무작위 문자열, 프로젝트마다 다르게> \
-  RESEND_API_KEY=<resend.com 에서 발급> \
-  RESEND_FROM_EMAIL="TrueBase 운영 도구 <onboarding@resend.dev>" \
-  ADMIN_APP_URL=https://truebase-admin.pages.dev
+  ADMIN_SESSION_SECRET=<32바이트 이상 무작위 문자열, 프로젝트마다 다르게>
 ```
 
 `GOOGLE_CLIENT_ID`·`ADMIN_EMAILS` 둘 중 하나라도 비면 **모든 요청이 막힙니다**(설정 누락이 개방이 되지 않도록). `SUPABASE_URL`·`SUPABASE_SECRET_KEYS` 는 플랫폼이 자동 주입합니다.
 
-**구글 계정이 없는 운영자를 위한 비밀번호 로그인**을 쓰려면 나머지 넷도 필요합니다.
+**구글 계정이 없는 운영자를 위한 비밀번호 로그인**을 쓰려면 `ADMIN_SESSION_SECRET`도 필요합니다 — 비밀번호 로그인 세션 토큰 서명용이며, 비어 있으면 비밀번호 로그인 자체가 안 됩니다(구글 로그인은 영향 없음).
 
-- `ADMIN_SESSION_SECRET` — 비밀번호 로그인 세션 토큰 서명용. 비어 있으면 비밀번호 로그인 자체가 안 됩니다(구글 로그인은 영향 없음).
-- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`(선택) — 비밀번호 최초 설정/재설정 코드, 그리고 운영자 추가 시 자동으로 가는 초대 메일을 보내는 데 씁니다([resend.com](https://resend.com) 가입 후 API 키 발급). 도메인을 따로 인증하기 전까지는 Resend 가입 계정의 이메일로만 발송됩니다 — 다른 운영자에게 보내려면 도메인 인증이 필요합니다. `RESEND_FROM_EMAIL` 을 생략하면 Resend 기본 테스트 주소로 나갑니다.
-- `ADMIN_APP_URL`(선택) — 초대·재설정 메일에 "여기를 눌러 바로 설정하기" 링크를 넣는 데 씁니다(배포한 프런트엔드 주소). 비우면 링크 없이 코드만 이메일로 갑니다.
-
-**운영자 초대**: "운영자 관리"에서 비밀번호를 아직 설정하지 않은 이메일을 추가하면 자동으로 초대 메일이 갑니다. 메일 링크를 누르면 로그인 화면이 곧바로 "비밀번호 설정" 단계로 열립니다. 메일을 못 받았으면 운영자 목록에서 "초대 재발송"을 누르면 됩니다.
+**운영자 비밀번호 설정**: 이메일 발송 없이, "운영자 관리" 화면에서 마스터가 직접 새 비밀번호를 정해서 운영자에게 알려줍니다. 최초 설정과 재설정 모두 같은 "비밀번호 설정" 버튼을 씁니다.
 
 ## 화면을 추가할 때
 
