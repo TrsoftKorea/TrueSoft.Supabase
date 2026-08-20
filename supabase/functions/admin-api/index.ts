@@ -342,8 +342,9 @@ Deno.serve(async (req) => {
 
       case "operators.setDisabled": {
         const targetEmail = str(params, "email").toLowerCase();
-        // 마스터는 표에 없지만, 혹시 같은 이메일이 들어와도 자기 발등은 못 찍게 한다.
-        if (targetEmail === email) throw new Error("자기 계정은 비활성화할 수 없습니다.");
+        // 여기 오는 요청은 항상 마스터가 보낸 것이다(operators.* 는 위에서 이미 막았다) — 마스터
+        // 접근은 이 표가 아니라 ADMIN_EMAILS 로 정해지므로, 자기 이메일이 표에 우연히 들어 있어도
+        // 그걸 비활성화한다고 본인이 잠기지 않는다. 막을 이유가 없다.
         const { error } = await db.rpc("ts_admin_set_operator_disabled", {
           p_email: targetEmail,
           p_disabled: bool(params, "disabled"),
@@ -355,8 +356,8 @@ Deno.serve(async (req) => {
 
       case "operators.delete": {
         // 되돌릴 수 없다 — 화면에서도 비활성화된 운영자만 지울 수 있게 막지만, 서버가 다시 막는다.
+        // (자기 이메일 여부는 안 막는다 — setDisabled 와 같은 이유.)
         const targetEmail = str(params, "email").toLowerCase();
-        if (targetEmail === email) throw new Error("자기 계정은 삭제할 수 없습니다.");
         const { error } = await db.rpc("ts_admin_delete_operator", { p_email: targetEmail });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
