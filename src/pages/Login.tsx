@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
+import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { renderGoogleButton } from '../lib/googleAuth'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
@@ -21,7 +21,11 @@ export default function Login({
   onToken: (token: string) => void
 }) {
   const buttonRef = useRef<HTMLDivElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  const project = getProject(target)
 
   useEffect(() => {
     const el = buttonRef.current
@@ -33,26 +37,52 @@ export default function Login({
     return () => { cancelled = true }
   }, [onToken])
 
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [pickerOpen])
+
+  const pick = (t: ProjectTarget) => {
+    setTarget(t)
+    onTargetChange(t)
+    setPickerOpen(false)
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <WhiteCard className="w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
 
-        <select
-          value={target}
-          onChange={(e) => {
-            const t = e.target.value as ProjectTarget
-            setTarget(t)
-            onTargetChange(t)
-          }}
-          className="mt-2 w-full h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white"
-        >
-          {PROJECTS.map((p) => (
-            <option key={p.key} value={p.key}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        <div ref={pickerRef} className="relative mt-1 flex items-center gap-2">
+          <p className="text-sm text-neutral-500">{project.label}</p>
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            className="text-xs text-[#1677ff] hover:underline"
+          >
+            변경
+          </button>
+          {pickerOpen && (
+            <div className="absolute left-0 top-full mt-1 z-30 min-w-[160px] rounded-lg border border-neutral-200 bg-white py-1 shadow-xl">
+              {PROJECTS.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => pick(p.key)}
+                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 ${
+                    p.key === target ? 'text-[#1677ff] font-medium' : 'text-neutral-700'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-6">
           <PasswordLoginForm target={target} onToken={onToken} />
