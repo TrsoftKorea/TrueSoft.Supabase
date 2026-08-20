@@ -100,8 +100,10 @@ export function Layout({
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-56 shrink-0 bg-white border-r border-neutral-200 flex flex-col">
+    <div className="h-screen flex overflow-hidden">
+      {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
+          화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
+      <aside className="w-56 shrink-0 h-full bg-white border-r border-neutral-200 flex flex-col">
         <div className="h-14 flex items-center px-4 border-b border-neutral-200">
           <span className="font-semibold text-neutral-900">트루베이스</span>
         </div>
@@ -188,7 +190,7 @@ export function Layout({
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 overflow-y-auto">
         <main className="max-w-6xl mx-auto px-6 py-6">
           {showPendingBanner && (
             <NavLink
