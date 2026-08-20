@@ -70,7 +70,7 @@ export default function App() {
     }
   }, [token, target, signOut])
 
-  if (!token) return <Login target={target} onToken={setToken} />
+  if (!token) return <Login target={target} onTargetChange={setTargetState} onToken={setToken} />
 
   // 권한 확인에 실패하면(대개 403) 화면 대신 사유를 보여준다.
   if (meError) {

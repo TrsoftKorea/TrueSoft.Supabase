@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getProject, type ProjectTarget } from '../lib/projectTarget'
+import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { renderGoogleButton } from '../lib/googleAuth'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
@@ -13,15 +13,15 @@ import PasswordLoginForm from '../components/PasswordLoginForm'
  */
 export default function Login({
   target,
+  onTargetChange,
   onToken,
 }: {
   target: ProjectTarget
+  onTargetChange: (t: ProjectTarget) => void
   onToken: (token: string) => void
 }) {
   const buttonRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
-
-  const project = getProject(target)
 
   useEffect(() => {
     const el = buttonRef.current
@@ -37,7 +37,22 @@ export default function Login({
     <div className="min-h-screen flex items-center justify-center p-6">
       <WhiteCard className="w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
-        <p className="text-sm text-neutral-500 mt-1">{project.label}</p>
+
+        <select
+          value={target}
+          onChange={(e) => {
+            const t = e.target.value as ProjectTarget
+            setTarget(t)
+            onTargetChange(t)
+          }}
+          className="mt-2 w-full h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white"
+        >
+          {PROJECTS.map((p) => (
+            <option key={p.key} value={p.key}>
+              {p.label}
+            </option>
+          ))}
+        </select>
 
         <div className="mt-6">
           <PasswordLoginForm target={target} onToken={onToken} />
