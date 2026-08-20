@@ -258,14 +258,15 @@ export default function Operators({
       </WhiteCard>
 
       <WhiteCard>
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-neutral-500 text-xs">
             <tr>
               <th className="text-left px-4 py-2.5 font-medium">이메일</th>
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-28">상태</th>
+              <th className="text-left px-4 py-2.5 font-medium w-36">상태</th>
               <th className="text-left px-4 py-2.5 font-medium w-40">추가일자</th>
-              <th className="px-4 py-2.5 w-56"></th>
+              <th className="px-4 py-2.5 w-72"></th>
             </tr>
           </thead>
           <tbody>
@@ -286,7 +287,7 @@ export default function Operators({
                   >
                     <td className="px-4 py-2.5 font-mono text-xs">{op.email}</td>
                     <td className="px-4 py-2.5">{op.display_name || '-'}</td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {disabled ? (
                         <span className="text-xs text-neutral-500">비활성</span>
                       ) : op.hasPassword ? (
@@ -295,8 +296,8 @@ export default function Operators({
                         <span className="text-xs text-amber-600">비밀번호 미설정</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5 text-neutral-600">{formatDateTime(op.created_at)}</td>
-                    <td className="px-4 py-2.5 text-right space-x-1.5">
+                    <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(op.created_at)}</td>
+                    <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
                       {!disabled && (
                         <button
                           onClick={() => setPasswordTarget(op)}
@@ -339,6 +340,7 @@ export default function Operators({
             )}
           </tbody>
         </table>
+        </div>
       </WhiteCard>
 
       <ConfirmDialog
