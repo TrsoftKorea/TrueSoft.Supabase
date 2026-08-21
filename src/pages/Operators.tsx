@@ -6,6 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 
 type Operator = {
@@ -243,14 +244,10 @@ export default function Operators({
               className={inputCls}
             />
           </div>
-          <button
-            onClick={() => void add()}
-            disabled={adding || !email.trim()}
-            className="inline-flex items-center justify-center gap-1 h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-50"
-          >
+          <Button variant="primary" onClick={() => void add()} disabled={adding || !email.trim()}>
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             추가
-          </button>
+          </Button>
         </div>
         <p className="mt-2 text-xs text-neutral-400">
           구글 계정으로 바로 로그인할 수 있습니다. 비밀번호 로그인이 필요하면 추가 후 "비밀번호 설정"으로 정해서 알려주세요. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
@@ -299,39 +296,23 @@ export default function Operators({
                     <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(op.created_at)}</td>
                     <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
                       {!disabled && (
-                        <button
-                          onClick={() => setPasswordTarget(op)}
-                          disabled={busy}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setPasswordTarget(op)} disabled={busy}>
                           <KeyRound className="w-3 h-3" /> 비밀번호 설정
-                        </button>
+                        </Button>
                       )}
                       {disabled ? (
                         <>
-                          <button
-                            onClick={() => void setDisabled(op, false)}
-                            disabled={busy}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
-                          >
+                          <Button variant="outline" size="sm" onClick={() => void setDisabled(op, false)} disabled={busy}>
                             <RotateCcw className="w-3 h-3" /> 복구
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(op)}
-                            disabled={busy}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 whitespace-nowrap"
-                          >
+                          </Button>
+                          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(op)} disabled={busy}>
                             <Trash2 className="w-3 h-3" /> 삭제
-                          </button>
+                          </Button>
                         </>
                       ) : (
-                        <button
-                          onClick={() => setDisableTarget(op)}
-                          disabled={busy}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 whitespace-nowrap"
-                        >
+                        <Button variant="danger" size="sm" onClick={() => setDisableTarget(op)} disabled={busy}>
                           <UserMinus className="w-3 h-3" /> 비활성화
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>
