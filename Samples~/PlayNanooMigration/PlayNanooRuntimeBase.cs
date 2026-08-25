@@ -26,6 +26,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
 using PlayNANOO;
 using TrueBase.Core.Common;
 using TrueBase.Core.Models;
@@ -40,6 +41,9 @@ using UnityEngine;
 /// </summary>
 public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
+    [Tooltip("플레이나누와 SDK 중 어느 쪽 데이터가 최신인지 비교할 때 쓸 Row 필드 이름입니다.")]
+    [SerializeField] private string _nanooCompareField = "updated_at";
+
     protected Plugin _plugin;
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
     private string   _nanooNickname;       // 닉네임 변경 롤백용
@@ -663,7 +667,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
         }
 
-        var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync();
+        var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync(_nanooCompareField);
         if (!ok) return;
 
         var nanooJson = await LoadRawFromNanoo();
@@ -677,7 +681,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
         }
 
-        var nanooTime = ParseNanooTimestamp(nanooJson);
+        var nanooTime = ParseNanooTimestamp(nanooJson, _nanooCompareField);
         if (nanooTime > sdkTime)
             await save.NanooPatchFromLastLoadedAsync(nanooJson);
         else
@@ -713,16 +717,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return tcs.Task;
     }
 
-    [Serializable]
-    private class NanooTimestampHelper { public string updated_at; }
-
-    private static DateTime ParseNanooTimestamp(string json)
+    private static DateTime ParseNanooTimestamp(string json, string compareField)
     {
         if (string.IsNullOrEmpty(json)) return DateTime.MinValue;
-        var h = JsonUtility.FromJson<NanooTimestampHelper>(json);
-        if (!string.IsNullOrEmpty(h?.updated_at) && DateTime.TryParse(h.updated_at, out var t))
+        var val = JObject.Parse(json)[compareField]?.ToString();
+        if (!string.IsNullOrEmpty(val) && DateTime.TryParse(val, out var t))
             return t;
-        // updated_at 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
+        // 비교 필드 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
         return DateTime.MaxValue;
     }
 

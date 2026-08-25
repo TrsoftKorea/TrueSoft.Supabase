@@ -14,7 +14,8 @@ namespace TrueBase.Unity
         /// 로드된 Row는 내부에 캐시되어 이후 <see cref="NanooPatchFromLastLoadedAsync"/>,
         /// <see cref="NanooApplyLastLoaded"/>, <see cref="NanooGetLastLoadedJson"/>에서 사용됩니다.
         /// </summary>
-        Task<(bool success, bool hasRow, DateTime updatedAt)> NanooLoadWithStateAsync();
+        /// <param name="compareField">플레이나누와 최신 여부를 비교할 때 쓸 Row 필드 이름. 값을 문자열로 변환해 시간으로 파싱합니다.</param>
+        Task<(bool success, bool hasRow, DateTime updatedAt)> NanooLoadWithStateAsync(string compareField);
 
         /// <summary>새 유저 — 빈 Row에서 nanooJson으로 패치 후 Apply합니다.</summary>
         Task<bool> NanooPatchFromEmptyAsync(string nanooJson);

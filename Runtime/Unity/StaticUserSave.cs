@@ -228,7 +228,7 @@ namespace TrueBase.Unity
 
         // INanooSaveSyncable 구현 (PlayNanooRuntime 전용)
 
-        async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
+        async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync(string compareField)
         {
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
             if (!success) return (false, false, DateTime.MinValue);
@@ -237,9 +237,13 @@ namespace TrueBase.Unity
             {
                 return (true, false, DateTime.MinValue);
             }
-            var val = typeof(TRow)
-                .GetField("updated_at", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                ?.GetValue(row)?.ToString();
+            var field = typeof(TRow).GetField(compareField, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field == null)
+            {
+                Debug.LogWarning($"{LogTag} 플레이나누 비교 필드 '{compareField}'를 {typeof(TRow).Name}에서 찾지 못했습니다. 필드 이름을 확인하세요.");
+                return (true, true, DateTime.MinValue);
+            }
+            var val = field.GetValue(row)?.ToString();
             var updatedAt = DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
             return (true, true, updatedAt);
         }
