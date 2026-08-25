@@ -228,24 +228,23 @@ namespace TrueBase.Unity
 
         // INanooSaveSyncable 구현 (PlayNanooRuntime 전용)
 
-        async Task<(bool success, bool hasRow, DateTime updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync(string compareField)
+        async Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync(string compareField, double fallbackUtcOffsetHours)
         {
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
-            if (!success) return (false, false, DateTime.MinValue);
+            if (!success) return (false, false, DateTimeOffset.MinValue);
             _nanooLastLoaded = row;
             if (!hasRow || row == null)
             {
-                return (true, false, DateTime.MinValue);
+                return (true, false, DateTimeOffset.MinValue);
             }
             var field = typeof(TRow).GetField(compareField, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (field == null)
             {
                 Debug.LogWarning($"{LogTag} 플레이나누 비교 필드 '{compareField}'를 {typeof(TRow).Name}에서 찾지 못했습니다. 필드 이름을 확인하세요.");
-                return (true, true, DateTime.MinValue);
+                return (true, true, DateTimeOffset.MinValue);
             }
             var val = field.GetValue(row)?.ToString();
-            var updatedAt = DateTime.TryParse(val, out var t) ? t : DateTime.MinValue;
-            return (true, true, updatedAt);
+            return (true, true, NanooTimestamp.Parse(val, fallbackUtcOffsetHours));
         }
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromEmptyAsync(string nanooJson)

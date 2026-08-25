@@ -15,7 +15,8 @@ namespace TrueBase.Unity
         /// <see cref="NanooApplyLastLoaded"/>, <see cref="NanooGetLastLoadedJson"/>에서 사용됩니다.
         /// </summary>
         /// <param name="compareField">플레이나누와 최신 여부를 비교할 때 쓸 Row 필드 이름. 값을 문자열로 변환해 시간으로 파싱합니다.</param>
-        Task<(bool success, bool hasRow, DateTime updatedAt)> NanooLoadWithStateAsync(string compareField);
+        /// <param name="fallbackUtcOffsetHours">필드 값에 시간대 정보가 없을 때 적용할 UTC 오프셋(시간 단위).</param>
+        Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> NanooLoadWithStateAsync(string compareField, double fallbackUtcOffsetHours);
 
         /// <summary>새 유저 — 빈 Row에서 nanooJson으로 패치 후 Apply합니다.</summary>
         Task<bool> NanooPatchFromEmptyAsync(string nanooJson);
