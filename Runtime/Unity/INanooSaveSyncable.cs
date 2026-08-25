@@ -10,13 +10,18 @@ namespace TrueBase.Unity
     public interface INanooSaveSyncable
     {
         /// <summary>
-        /// DB에서 Row를 로드하고 (success, hasRow, updatedAt)을 반환합니다.
+        /// DB에서 Row를 로드하고 (success, hasRow, updatedAt)을 반환합니다. 비교 필드는
+        /// <see cref="StaticUserSave{TRow}.UseNanooConverters"/>로 등록한 <c>CompareBy</c>를 따르며, 미등록 시 <c>updated_at</c>입니다.
         /// 로드된 Row는 내부에 캐시되어 이후 <see cref="NanooPatchFromLastLoadedAsync"/>,
         /// <see cref="NanooApplyLastLoaded"/>, <see cref="NanooGetLastLoadedJson"/>에서 사용됩니다.
         /// </summary>
-        /// <param name="compareField">플레이나누와 최신 여부를 비교할 때 쓸 Row 필드 이름. 값을 문자열로 변환해 시간으로 파싱합니다.</param>
-        /// <param name="fallbackUtcOffsetHours">필드 값에 시간대 정보가 없을 때 적용할 UTC 오프셋(시간 단위).</param>
-        Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> NanooLoadWithStateAsync(string compareField, double fallbackUtcOffsetHours);
+        Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> NanooLoadWithStateAsync();
+
+        /// <summary>
+        /// 플레이나누 JSON에서 비교 필드 값을 읽어 <see cref="DateTimeOffset"/>으로 파싱합니다.
+        /// <see cref="NanooLoadWithStateAsync"/>와 같은 비교 필드 설정을 따릅니다.
+        /// </summary>
+        DateTimeOffset NanooParseCompareTimestamp(string nanooJson);
 
         /// <summary>새 유저 — 빈 Row에서 nanooJson으로 패치 후 Apply합니다.</summary>
         Task<bool> NanooPatchFromEmptyAsync(string nanooJson);

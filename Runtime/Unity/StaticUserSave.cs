@@ -228,7 +228,7 @@ namespace TrueBase.Unity
 
         // INanooSaveSyncable 구현 (PlayNanooRuntime 전용)
 
-        async Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync(string compareField, double fallbackUtcOffsetHours)
+        async Task<(bool success, bool hasRow, DateTimeOffset updatedAt)> INanooSaveSyncable.NanooLoadWithStateAsync()
         {
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(defaultWhenFailed: null);
             if (!success) return (false, false, DateTimeOffset.MinValue);
@@ -237,6 +237,8 @@ namespace TrueBase.Unity
             {
                 return (true, false, DateTimeOffset.MinValue);
             }
+            var map = GetNanooMap();
+            var compareField = map?.CompareMemberName ?? "updated_at";
             var field = typeof(TRow).GetField(compareField, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (field == null)
             {
@@ -244,7 +246,19 @@ namespace TrueBase.Unity
                 return (true, true, DateTimeOffset.MinValue);
             }
             var val = field.GetValue(row)?.ToString();
-            return (true, true, NanooTimestamp.Parse(val, fallbackUtcOffsetHours));
+            return (true, true, NanooTimestamp.Parse(val, map?.CompareFallbackUtcOffsetHours ?? 0));
+        }
+
+        DateTimeOffset INanooSaveSyncable.NanooParseCompareTimestamp(string nanooJson)
+        {
+            if (string.IsNullOrEmpty(nanooJson)) return DateTimeOffset.MinValue;
+            var map = GetNanooMap();
+            var val = Newtonsoft.Json.Linq.JObject.Parse(nanooJson)[map?.CompareJsonKey ?? "updated_at"]?.ToString();
+            if (string.IsNullOrEmpty(val))
+                // 비교 필드 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
+                return DateTimeOffset.MaxValue;
+            var parsed = NanooTimestamp.Parse(val, map?.CompareFallbackUtcOffsetHours ?? 0);
+            return parsed == DateTimeOffset.MinValue ? DateTimeOffset.MaxValue : parsed;
         }
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromEmptyAsync(string nanooJson)

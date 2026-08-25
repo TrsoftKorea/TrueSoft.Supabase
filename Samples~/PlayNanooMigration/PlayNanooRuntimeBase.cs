@@ -26,7 +26,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using PlayNANOO;
 using TrueBase.Core.Common;
 using TrueBase.Core.Models;
@@ -41,12 +40,6 @@ using UnityEngine;
 /// </summary>
 public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
-    [Tooltip("플레이나누와 SDK 중 어느 쪽 데이터가 최신인지 비교할 때 쓸 Row 필드 이름입니다.")]
-    [SerializeField] private string _nanooCompareField = "updated_at";
-
-    [Tooltip("비교 필드 값에 시간대 정보(Z·오프셋)가 없을 때 적용할 UTC 오프셋(시간 단위). 예: 한국 표준시는 9.")]
-    [SerializeField] private float _nanooCompareFieldUtcOffsetHours = 0f;
-
     protected Plugin _plugin;
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
     private string   _nanooNickname;       // 닉네임 변경 롤백용
@@ -670,7 +663,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
         }
 
-        var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync(_nanooCompareField, _nanooCompareFieldUtcOffsetHours);
+        var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync();
         if (!ok) return;
 
         var nanooJson = await LoadRawFromNanoo();
@@ -684,7 +677,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
         }
 
-        var nanooTime = ParseNanooTimestamp(nanooJson, _nanooCompareField);
+        var nanooTime = save.NanooParseCompareTimestamp(nanooJson);
         if (nanooTime > sdkTime)
             await save.NanooPatchFromLastLoadedAsync(nanooJson);
         else
@@ -718,17 +711,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             tcs.SetResult(values["StorageValue"]?.ToString());
         });
         return tcs.Task;
-    }
-
-    private DateTimeOffset ParseNanooTimestamp(string json, string compareField)
-    {
-        if (string.IsNullOrEmpty(json)) return DateTimeOffset.MinValue;
-        var val = JObject.Parse(json)[compareField]?.ToString();
-        if (string.IsNullOrEmpty(val))
-            // 비교 필드 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
-            return DateTimeOffset.MaxValue;
-        var parsed = NanooTimestamp.Parse(val, _nanooCompareFieldUtcOffsetHours);
-        return parsed == DateTimeOffset.MinValue ? DateTimeOffset.MaxValue : parsed;
     }
 
     /// <summary>PlayNANOO에 JSON 데이터를 저장합니다.</summary>

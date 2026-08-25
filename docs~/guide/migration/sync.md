@@ -19,9 +19,15 @@ SDK 저장 이후 플레이나누에도 자동으로 반영됩니다.
 
 ## 비교 필드 커스터마이징
 
-`updated_at` 대신 다른 필드로 최신 여부를 비교하려면, `PlayNanooRuntime`(또는 `PlayNanooLegacyRuntime`) Inspector의 **Nanoo Compare Field**에 필드 이름을 입력합니다. 값을 문자열로 변환해 `DateTimeOffset`으로 파싱하므로 `string`·`DateTime` 등 타입은 상관없습니다.
+`updated_at` 대신 다른 필드로 최신 여부를 비교하려면 `CompareBy`를 등록합니다.
 
-값에 `Z`나 `+09:00` 같은 시간대 정보가 이미 있으면 그걸 그대로 씁니다. 없으면 **Nanoo Compare Field Utc Offset Hours**에 지정한 오프셋을 적용합니다 — 기기 시간대에 따라 비교 결과가 달라지는 걸 막기 위함이며, 기본값은 0(UTC)입니다.
+```csharp
+// 게임 시작 시 1회 (첫 로그인 전)
+PlayerSave.UseNanooConverters(map => map
+    .CompareBy(r => r.lastSyncedAt, fallbackUtcOffsetHours: 9));   // 한국 표준시
+```
+
+값을 문자열로 변환해 `DateTimeOffset`으로 파싱하므로 `string`·`DateTime` 등 타입은 상관없습니다. 값에 `Z`나 `+09:00` 같은 시간대 정보가 이미 있으면 그걸 그대로 쓰고, 없을 때만 `fallbackUtcOffsetHours`(기본값 0=UTC)를 적용합니다 — 기기 시간대에 따라 비교 결과가 달라지는 걸 막기 위함입니다.
 
 ## 데이터 변환 커스터마이징
 
