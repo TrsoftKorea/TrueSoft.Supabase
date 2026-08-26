@@ -114,6 +114,29 @@ namespace TrueBase.Unity
             return true;
         }
 
+        /// <summary>
+        /// 스토어 카탈로그에서 상품 정보를 조회합니다. 네트워크 호출 없이 <see cref="InitializeAsync"/>가
+        /// 이미 받아온 정보를 그대로 읽습니다.
+        /// </summary>
+        /// <param name="productId">조회할 상품 ID.</param>
+        /// <returns>카탈로그에 있으면 정보, 없으면(초기화 전이거나 잘못된 ID) <c>null</c>.</returns>
+        public IAPProductInfo GetProductInfo(string productId)
+        {
+            var product = Controller?.products.WithID(productId);
+            if (product == null) return null;
+
+            return new IAPProductInfo
+            {
+                ProductId     = product.definition.id,
+                Title         = product.metadata.localizedTitle,
+                Description   = product.metadata.localizedDescription,
+                PriceString   = product.metadata.localizedPriceString,
+                Price         = product.metadata.localizedPrice,
+                CurrencyCode  = product.metadata.isoCurrencyCode,
+                IsAvailable   = product.availableToPurchase,
+            };
+        }
+
         /// <summary>이벤트 핸들러를 해제합니다. 씬 언로드 시 반드시 호출하세요.</summary>
         public void Dispose()
         {

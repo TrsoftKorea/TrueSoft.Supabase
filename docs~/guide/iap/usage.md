@@ -43,3 +43,5 @@ var iap = result.Data;
 | `SupabaseReason.IapInitFailed` | 스토어 연결·상품 조회 실패 |
 
 `onGrant`의 `isResuming` · `alreadyVerified` 파라미터는 [중복 지급 방지](/guide/iap/advanced#duplicate-grant)를 참고하세요.
+
+구매창을 열기 전에 가격을 표시하려면 [상품 정보 조회](/guide/iap/product-info)를 참고하세요.

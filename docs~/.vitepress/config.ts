@@ -169,6 +169,7 @@ export default defineConfig({
             items: [
               { text: '사전 준비', link: '/guide/iap/prepare' },
               { text: '사용법', link: '/guide/iap/usage' },
+              { text: '상품 정보 조회', link: '/guide/iap/product-info' },
               { text: '알아둘 점', link: '/guide/iap/notes' },
               { text: '더 알아보기', link: '/guide/iap/advanced' },
               { text: '버전별 차이', link: '/guide/iap/versions' }
