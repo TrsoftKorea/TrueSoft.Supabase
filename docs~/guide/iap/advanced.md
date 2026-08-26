@@ -1,31 +1,6 @@
 # 더 알아보기 {#more}
 
-## 중복 지급 방지 {#duplicate-grant}
-
-아이템을 지급한 직후 앱이 크래시되면, 다음 실행 시 같은 주문이 재처리됩니다.  
-이때 `alreadyVerified = true`로 전달되며, [사용법](/guide/iap/usage)의 `onGrant`에 이 확인 하나만 추가하면 중복 지급을 막을 수 있습니다.
-
-```csharp
-async (productId, isResuming, alreadyVerified) =>
-{
-    if (alreadyVerified)
-    {
-        // 서버에 이미 검증 기록이 있음 — 실제로 지급됐는지 확인
-        bool alreadyGranted = await MyInventory.HasItemAsync(productId);
-        if (alreadyGranted) return true;  // 이미 지급됨 → 소비만 완료
-    }
-
-    await MyInventory.GiveItemAsync(productId);
-    return true;
-}
-```
-
-| 플래그 | 의미 |
-|--------|------|
-| `isResuming` | 이전 세션의 미처리 주문을 재처리 중 |
-| `alreadyVerified` | 이 계정의 검증 기록이 서버 DB에 이미 있음 |
-
-다른 계정이 검증한 영수증을 보내면 `alreadyVerified`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내가 이미 산 것"만을 뜻합니다.
+중복 지급 방지는 [사용법](/guide/iap/usage#duplicate-grant)을 참고하세요 — `CreateIAPAsync`의 `onGrant`에서 바로 쓰는 내용이라 그쪽으로 옮겼습니다.
 
 ## 결제 금액 자동 기록
 

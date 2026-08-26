@@ -103,7 +103,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, boo
 ```
 
 ::: tip
-`alreadyVerified` 처리는 [중복 지급 방지](/guide/iap/advanced#duplicate-grant)를 참고하세요.
+`alreadyVerified` 처리는 [중복 지급 방지](/guide/iap/usage#duplicate-grant)를 참고하세요.
 :::
 
 ## SampleMailbox
