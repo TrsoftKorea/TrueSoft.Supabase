@@ -118,8 +118,11 @@ namespace TrueBase.Unity
         private static MemberInfo ResolveMember<T>(Expression<Func<TRow, T>> selector)
         {
             var body = selector.Body;
-            if (body is UnaryExpression u && u.NodeType == ExpressionType.Convert)
-                body = u.Operand;   // r => (object)r.field 같은 박싱 변환 제거
+            // r => (object)r.field 같은 박싱 변환을 벗겨낸다. Unity의 Mono 컴파일러는 값 타입 필드
+            // 선택식에서 Convert 를 중첩으로 두 겹 이상 붙이는 경우가 있어(.NET 컴파일러는 한 겹만
+            // 붙임 — 2026-08-25 재현), 하나만 벗기면 부족하다. 몇 겹이든 다 벗겨낸다.
+            while (body is UnaryExpression u && u.NodeType == ExpressionType.Convert)
+                body = u.Operand;
             if (body is not MemberExpression me)
                 throw new ArgumentException("필드/프로퍼티 선택식이어야 합니다. 예: r => r.itemIds", nameof(selector));
             return me.Member;
