@@ -3,10 +3,10 @@
 ## 중복 지급 방지 {#duplicate-grant}
 
 아이템을 지급한 직후 앱이 크래시되면, 다음 실행 시 같은 주문이 재처리됩니다.  
-이때 `alreadyVerified = true`로 전달되며, 이 신호를 이용해 중복 지급을 막을 수 있습니다.
+이때 `alreadyVerified = true`로 전달되며, [사용법](/guide/iap/usage)의 `onGrant`에 이 확인 하나만 추가하면 중복 지급을 막을 수 있습니다.
 
 ```csharp
-onGrant: async (productId, isResuming, alreadyVerified) =>
+async (productId, isResuming, alreadyVerified) =>
 {
     if (alreadyVerified)
     {

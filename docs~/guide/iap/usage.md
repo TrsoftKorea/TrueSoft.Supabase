@@ -24,7 +24,11 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 초기화 성공 시 `.Data`에 `IAPFacade`가 담깁니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다.
 
 ```csharp
-var result = await SupabaseIAP.CreateIAPAsync(productIds, OnGrant);
+var result = await SupabaseIAP.CreateIAPAsync(productIds, async (productId, isResuming, alreadyVerified) =>
+{
+    await MyInventory.GiveItemAsync(productId);
+    return true;
+});
 if (!result.IsSuccess) return;
 var iap = result.Data;
 ```
