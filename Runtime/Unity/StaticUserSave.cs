@@ -238,6 +238,9 @@ namespace TrueBase.Unity
                 return (true, false, DateTimeOffset.MinValue);
             }
             var map = GetNanooMap();
+            if (map != null && map.HasCompareBy)
+                return (true, true, map.CompareSelector(row));
+
             var compareField = map?.CompareMemberName ?? "updated_at";
             var field = typeof(TRow).GetField(compareField, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (field == null)
@@ -323,6 +326,11 @@ namespace TrueBase.Unity
         /// 플레이나누에서 특정 필드만 다른 형태로 저장/복원할 때, 그 필드 변환을 <b>코드에서</b> 등록합니다(상속·partial 불필요).
         /// 부트스트랩 등 <b>첫 로그인/동기화 전에</b> 한 번 호출하세요. 등록 안 한 필드는 자동 변환됩니다.
         /// <para>예: <c>PlayerSave.UseNanooConverters(map =&gt; map.Field(r =&gt; r.itemIds, toString, fromString))</c></para>
+        /// <para>
+        /// 이 메서드를 호출해 뭐라도 등록했다면 <see cref="NanooFieldMap{TRow}.CompareBy{T}"/>도 반드시 함께 등록해야 합니다 —
+        /// 안 하면 첫 사용 시점에 <see cref="InvalidOperationException"/>이 발생합니다. 이 메서드를 아예 안 부르는 경우는
+        /// 예외가 아니며, 생성기가 항상 넣어주는 <c>updated_at</c> 컬럼을 기본 비교 기준으로 씁니다.
+        /// </para>
         /// </summary>
         public static void UseNanooConverters(Action<NanooFieldMap<TRow>> configure)
             => s_nanooConfigure = configure;
@@ -333,6 +341,19 @@ namespace TrueBase.Unity
             {
                 var m = new NanooFieldMap<TRow>();
                 s_nanooConfigure?.Invoke(m);  // UseNanooConverters로 등록한 변환(있으면)
+
+                // Field()만 등록하고 CompareBy()를 빠뜨리면 updated_at으로 조용히 넘어가던 게 실제 사고 원인이었다
+                // (해당 Row엔 의미 있는 updated_at이 없는 경우). UseNanooConverters를 아예 안 쓰는 게임은
+                // 여기 안 걸린다 — 그쪽은 생성기가 항상 넣어주는 진짜 updated_at 컬럼을 쓰는 게 맞기 때문이다.
+                if (!m.IsEmpty && !m.HasCompareBy)
+                {
+                    var ownerName = typeof(TRow).DeclaringType?.Name ?? typeof(TRow).Name;
+                    throw new InvalidOperationException(
+                        $"{ownerName}.UseNanooConverters(...)에 .CompareBy(...)가 없습니다. " +
+                        "PlayNANOO·SDK 중 최신 데이터를 가릴 기준 필드를 명시적으로 지정하세요. " +
+                        "예: map.CompareBy(r => r.updated_at)");
+                }
+
                 _nanooMap = m.IsEmpty ? null : m;
                 _nanooMapBuilt = true;
             }

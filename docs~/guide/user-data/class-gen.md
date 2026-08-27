@@ -140,7 +140,6 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
         [DataColumn("level")]     internal int            level;
         [DataColumn("coins")]     internal int            coins;
         [DataColumn("inventory")] internal List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
-        [DataColumn("updated_at")] internal string        updated_at;                    // 동기화 기준 컬럼 — 항상 포함
     }
 
     // 스칼라: get/set — 값이 실제로 바뀔 때만 MarkDirty
@@ -166,6 +165,10 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
 ```
 
 새 컬럼이 생기면 생성기를 다시 실행해 덮어씁니다.
+
+::: info PlayNANOO 이관 중이면
+생성된 클래스엔 `updated_at` 필드가 자동으로 들어가지 않습니다. PlayNANOO·SDK 중 최신 데이터를 가릴 비교 필드가 필요하면 [비교 필드 커스터마이징](/guide/migration/sync#compare-by)으로 직접 지정하세요.
+:::
 
 ::: info 다시 생성해야 하는 시점
 생성 파일에는 컬럼 접근만 들어갑니다. 로드·저장·삭제는 [`Supabase` 파사드](/guide/api/game-data)에 있으므로, SDK를 올려도 이 파일은 그대로 두면 됩니다. **DB 컬럼이 바뀔 때만** 다시 생성하세요.

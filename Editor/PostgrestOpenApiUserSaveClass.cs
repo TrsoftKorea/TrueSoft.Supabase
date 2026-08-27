@@ -281,10 +281,6 @@ namespace TrueBase.Editor
                 sb.AppendLine(indent + "        [DataColumn(\"" + EscapeCSharpString(c.Name) + "\"" + priorityParam + ")] " + autoDefaultAttr + jsonProp + "internal " + c.ClrType + " " + fieldName + fieldInit + ";");
             }
 
-            // updated_at: 타임스탬프 비교(이관 등)에 사용. DB에 없는 테이블을 위해 항상 포함.
-            if (!columns.Any(c => c.Name == "updated_at"))
-                sb.AppendLine(indent + "        [DataColumn(\"updated_at\")] internal string updated_at;");
-
             sb.AppendLine(indent + "#pragma warning restore CS0169, CS0649");
             sb.AppendLine(indent + "    }");
 

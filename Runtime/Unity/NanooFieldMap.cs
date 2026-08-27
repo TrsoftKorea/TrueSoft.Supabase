@@ -30,12 +30,19 @@ namespace TrueBase.Unity
         internal string CompareJsonKey { get; private set; } = "updated_at";
         internal double CompareFallbackUtcOffsetHours { get; private set; }
 
+        // CompareBy가 등록되면 선택식을 그대로 컴파일해 둔다 — 변환식(예: DateTime.FromOADate(r.field))이
+        // 있어도 그 결과값을 바로 씀. 등록 안 됐으면 null이고 호출부가 기존 리플렉션 경로(updated_at)로 대체한다.
+        internal bool HasCompareBy => _hasCompareBy;
+        internal Func<TRow, DateTimeOffset> CompareSelector { get; private set; }
+
         /// <summary>
-        /// 플레이나누와 SDK 중 어느 쪽 데이터가 최신인지 비교할 필드를 지정합니다. 지정하지 않으면 <c>updated_at</c>을 씁니다.
+        /// 플레이나누와 SDK 중 어느 쪽 데이터가 최신인지 비교할 필드를 지정합니다.
+        /// <see cref="StaticUserSave{TRow}.UseNanooConverters"/>로 뭐라도 등록했다면 이 호출이 필수입니다 —
+        /// 빠뜨리면 <c>updated_at</c>으로 조용히 넘어가는 대신 첫 사용 시점에 예외가 발생합니다.
         /// </summary>
-        /// <typeparam name="T">필드 타입(자동 추론). 값을 문자열로 변환해 <see cref="DateTimeOffset"/>으로 파싱합니다.</typeparam>
-        /// <param name="selector">필드 선택식. 예: <c>r =&gt; r.lastSyncedAt</c></param>
-        /// <param name="fallbackUtcOffsetHours">필드 값에 시간대 정보(<c>Z</c>·오프셋)가 없을 때 적용할 UTC 오프셋(시간 단위). 기본값 0(UTC).</param>
+        /// <typeparam name="T">필드 타입(자동 추론). <see cref="DateTimeOffset"/>·<see cref="DateTime"/>이면 그대로 쓰고, 그 외는 문자열로 변환해 파싱합니다.</typeparam>
+        /// <param name="selector">필드 선택식. 예: <c>r =&gt; r.lastSyncedAt</c>. 필드를 감싼 변환식도 가능합니다: <c>r =&gt; DateTime.FromOADate(r.serverDataTime)</c></param>
+        /// <param name="fallbackUtcOffsetHours">값에 시간대 정보(<c>Z</c>·오프셋)가 없을 때 적용할 UTC 오프셋(시간 단위). 기본값 0(UTC).</param>
         public NanooFieldMap<TRow> CompareBy<T>(Expression<Func<TRow, T>> selector, double fallbackUtcOffsetHours = 0)
         {
             var member = ResolveMember(selector);
@@ -43,8 +50,32 @@ namespace TrueBase.Unity
             CompareMemberName = member.Name;
             CompareJsonKey = string.IsNullOrEmpty(jp?.PropertyName) ? member.Name : jp.PropertyName;
             CompareFallbackUtcOffsetHours = fallbackUtcOffsetHours;
+
+            var compiled = selector.Compile();
+            CompareSelector = row => ToDateTimeOffset(compiled(row), fallbackUtcOffsetHours);
+
             _hasCompareBy = true;
             return this;
+        }
+
+        // 선택식 결과값을 비교용 DateTimeOffset으로 정규화한다.
+        // DateTime.Kind가 Unspecified면(예: FromOADate) fallbackUtcOffsetHours를 적용하고,
+        // Utc/Local이면 그 정보를 그대로 쓴다. 그 외 타입(string 등)은 기존처럼 문자열로 파싱한다.
+        private static DateTimeOffset ToDateTimeOffset<T>(T value, double fallbackUtcOffsetHours)
+        {
+            switch (value)
+            {
+                case null:
+                    return DateTimeOffset.MinValue;
+                case DateTimeOffset dto:
+                    return dto;
+                case DateTime dt:
+                    return dt.Kind == DateTimeKind.Unspecified
+                        ? new DateTimeOffset(dt, TimeSpan.FromHours(fallbackUtcOffsetHours))
+                        : new DateTimeOffset(dt);
+                default:
+                    return NanooTimestamp.Parse(value.ToString(), fallbackUtcOffsetHours);
+            }
         }
 
         /// <summary>
@@ -117,15 +148,38 @@ namespace TrueBase.Unity
 
         private static MemberInfo ResolveMember<T>(Expression<Func<TRow, T>> selector)
         {
-            var body = selector.Body;
-            // r => (object)r.field 같은 박싱 변환을 벗겨낸다. Unity의 Mono 컴파일러는 값 타입 필드
-            // 선택식에서 Convert 를 중첩으로 두 겹 이상 붙이는 경우가 있어(.NET 컴파일러는 한 겹만
-            // 붙임 — 2026-08-25 재현), 하나만 벗기면 부족하다. 몇 겹이든 다 벗겨낸다.
-            while (body is UnaryExpression u && u.NodeType == ExpressionType.Convert)
-                body = u.Operand;
-            if (body is not MemberExpression me)
-                throw new ArgumentException("필드/프로퍼티 선택식이어야 합니다. 예: r => r.itemIds", nameof(selector));
-            return me.Member;
+            var member = TryResolveMember(selector.Body);
+            if (member == null)
+                throw new ArgumentException(
+                    "필드/프로퍼티 선택식이어야 합니다. 예: r => r.itemIds 또는 그 필드를 감싼 변환식 r => DateTime.FromOADate(r.serverDataTime)",
+                    nameof(selector));
+            return member;
+        }
+
+        // body를 따라 내려가며 실제 멤버 접근을 찾는다. Convert 박싱과 DateTime.FromOADate(r.field) 같은
+        // 변환 메서드 호출(정적 호출의 첫 인자, 인스턴스 호출의 대상)을 몇 겹이든 벗겨낸다.
+        // Unity의 Mono 컴파일러는 값 타입 필드 선택식에서 Convert 를 중첩으로 두 겹 이상 붙이는 경우가
+        // 있어(.NET 컴파일러는 한 겹만 붙임 — 2026-08-25 재현) 단순 while 한 번으로는 부족했다.
+        private static MemberInfo TryResolveMember(Expression body)
+        {
+            while (true)
+            {
+                switch (body)
+                {
+                    case UnaryExpression u when u.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked:
+                        body = u.Operand;
+                        continue;
+                    case MemberExpression me:
+                        return me.Member;
+                    case MethodCallExpression call:
+                        var target = call.Object ?? (call.Arguments.Count > 0 ? call.Arguments[0] : null);
+                        if (target == null) return null;
+                        body = target;
+                        continue;
+                    default:
+                        return null;
+                }
+            }
         }
     }
 }
