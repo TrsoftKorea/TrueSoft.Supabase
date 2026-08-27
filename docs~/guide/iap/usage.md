@@ -4,10 +4,10 @@
 
 ```csharp
 Task<SupabaseResult<IAPFacade>> SupabaseIAP.CreateIAPAsync(
-    string[]                       productIds,
-    Func<string, bool, Task<bool>> onGrant,
-    Action<IAPPurchaseFailedInfo>  onFailed  = null,
-    int                            timeoutMs = 10_000)
+    string[]                               productIds,
+    Func<string, string, bool, Task<bool>> onGrant,
+    Action<IAPPurchaseFailedInfo>          onFailed  = null,
+    int                                    timeoutMs = 10_000)
 ```
 
 Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결합니다. Android/iOS를 자동 감지하므로 대부분의 게임은 이 메서드 하나면 됩니다.
@@ -17,7 +17,7 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 | 파라미터 | 설명 |
 |----------|------|
 | `productIds` | 등록할 소모품 ID 목록 |
-| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, alreadyVerified)` — `true` 반환 시 SDK가 결제를 소비 처리. [자세히](#duplicate-grant) |
+| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, orderId, alreadyGranted)` — `true` 반환 시 SDK가 결제를 소비 처리. [자세히](#duplicate-grant) |
 | `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` (기본값: `null`) |
 | `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) |
 
@@ -26,7 +26,7 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 초기화 성공 시 `.Data`에 `IAPFacade`가 담깁니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다.
 
 ```csharp
-var result = await SupabaseIAP.CreateIAPAsync(productIds, async (productId, alreadyVerified) =>
+var result = await SupabaseIAP.CreateIAPAsync(productIds, async (productId, orderId, alreadyGranted) =>
 {
     await MyInventory.GiveItemAsync(productId);
     return true;
@@ -67,19 +67,15 @@ var iap = result.Data;
 
 ## 중복 지급 방지 {#duplicate-grant}
 
-`alreadyVerified`는 이 영수증을 **서버**가 예전에 이미 처리한 적이 있는지를 나타냅니다. `purchases` 테이블의 영수증 고유값 UNIQUE 제약으로 감지합니다. 이전 결제가 서버 검증까지는 성공했는데 그 직후 앱이 꺼져서 지급이 안 됐거나, 지급 후 소비 처리 전에 꺼진 경우 재처리 시 `true`로 옵니다 — **중복 지급 위험 케이스**입니다.
+`alreadyGranted`는 이 주문(`orderId`)을 **서버**가 이미 지급 완료로 기록해 뒀는지를 나타냅니다. `onGrant`가 `true`를 반환하면 SDK가 소비 처리 직전에 서버에 자동으로 기록하므로, 게임이 직접 기록을 관리할 필요는 없습니다.
 
-**`alreadyVerified = true`일 때** 실제로 이미 지급했는지 확인하면 중복 지급을 막을 수 있습니다.
+이전 결제가 지급까지는 성공했는데 그 직후 앱이 꺼져서 소비 처리가 안 된 경우, 재처리 시 `alreadyGranted = true`로 옵니다 — 소모품은 "이미 가지고 있는지"로 판단할 수 없으므로(골드처럼 쌓이는 재화는 항상 가지고 있음) 이 값만 보고 재지급 여부를 정합니다.
 
 ```csharp
-onGrant: async (productId, alreadyVerified) =>
+onGrant: async (productId, orderId, alreadyGranted) =>
 {
-    if (alreadyVerified)
-    {
-        // 서버에 이미 검증 기록이 있음 — 실제로 지급됐는지 확인
-        bool alreadyGranted = await MyInventory.HasItemAsync(productId);
-        if (alreadyGranted) return true;  // 이미 지급됨 → 소비만 완료
-    }
+    if (alreadyGranted)
+        return true;  // 이미 지급됨 → 소비만 완료
 
     await MyInventory.GiveItemAsync(productId);
     return true;
@@ -87,7 +83,7 @@ onGrant: async (productId, alreadyVerified) =>
 ```
 
 ::: info 다른 계정의 영수증
-다른 계정이 검증한 영수증을 보내면 `alreadyVerified`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내 계정이 이미 처리한 것"만을 뜻합니다.
+다른 계정이 검증한 영수증을 보내면 `alreadyGranted`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내 계정이 이미 지급한 것"만을 뜻합니다.
 :::
 
 구매창을 열기 전에 가격을 표시하려면 [상품 정보 조회](/guide/iap/product-info)를 참고하세요.

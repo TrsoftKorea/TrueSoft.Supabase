@@ -2925,6 +2925,24 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// 주문을 지급 완료로 표시합니다. IAP 파사드가 <c>onGrant</c>의 true 반환 직후 내부적으로 호출합니다.
+        /// 게임이 직접 부르는 API가 아닙니다.
+        /// </summary>
+        /// <param name="orderId">주문 고유 ID(Google은 orderId, Apple은 transaction_id).</param>
+        public static async Task<bool> TryMarkPurchaseGrantedAsync(string orderId)
+        {
+            const string tag = "[Supabase.Purchase.MarkGranted]";
+            EnsureInitializedOrBootstrapSync();
+            if (_bootstrap == null || _currentSession == null)
+                return false;
+
+            var result = await _bootstrap.IAPService.MarkGrantedAsync(_currentSession.AccessToken, orderId);
+            if (!result.IsSuccess && _enableApiResultLogs)
+                Debug.LogWarning($"{tag} {result.ErrorCode}");
+            return result.IsSuccess;
+        }
+
+        /// <summary>
         /// 세션을 설정합니다. <paramref name="kind"/>가 <see cref="SupabaseSessionChangeKind.NewSignIn"/>이면 서버에 새 세션 토큰을 등록합니다(중복 로그인 감지).
         /// </summary>
         public static void SetSession(SupabaseSession session, SupabaseSessionChangeKind kind)

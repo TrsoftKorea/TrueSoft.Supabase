@@ -2881,7 +2881,8 @@ alter table public.purchases
   add column if not exists store          text   not null default 'google_play',
   add column if not exists price_amount     bigint,     -- 결제 금액(micros = 주 단위 ×1,000,000, price_currency 기준). 내부용
   add column if not exists price_currency   text,       -- ISO 4217 통화 코드 (예: "KRW", "USD")
-  add column if not exists price_amount_krw bigint;     -- KRW 환산 금액(원, 정수). 매출 확인용 — 구매 시점 환율 적용
+  add column if not exists price_amount_krw bigint,     -- KRW 환산 금액(원, 정수). 매출 확인용 — 구매 시점 환율 적용
+  add column if not exists granted_at       timestamptz; -- 게임이 실제로 아이템을 지급 완료한 시각. null = 아직 미지급
 
 -- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
 alter table public.purchases drop column if exists purchase_state;
@@ -2941,6 +2942,37 @@ create trigger tr_after_purchase_insert
 --      WHERE pu.account_id = p.account_id
 --        AND pu.price_amount_krw IS NOT NULL
 --    ), 0);
+
+-- =============================================================================
+-- 지급 완료 기록 RPC
+-- 선행: 없음 (purchases.granted_at 컬럼만 필요)
+--
+-- onGrant 콜백이 true를 반환하면 SDK가 내부적으로 이 RPC를 호출해 orderId를 지급 완료로
+-- 표시합니다. 게임 코드가 직접 부르는 API가 아닙니다(SupabaseIAP 파사드 내부 전용).
+-- 소모품은 "이미 가지고 있는지"로 중복 지급을 판단할 수 없어, 서버가 주문 단위로 지급
+-- 여부를 기억해 두었다가 재처리 시 onGrant에 alreadyGranted로 알려줍니다.
+-- =============================================================================
+
+create or replace function public.ts_mark_purchase_granted(p_order_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.purchases
+     set granted_at = now()
+   where order_id = p_order_id
+     and account_id = auth.uid()
+     and granted_at is null;
+end;
+$$;
+
+comment on function public.ts_mark_purchase_granted(text) is
+  '주문 orderId를 지급 완료로 표시. onGrant가 true를 반환하면 SDK가 내부적으로 호출. SECURITY DEFINER, 본인 소유 주문만 갱신.';
+
+revoke all on function public.ts_mark_purchase_granted(text) from public, anon, authenticated;
+grant execute on function public.ts_mark_purchase_granted(text) to authenticated;
 
 
 -- #############################################################################
@@ -7811,6 +7843,9 @@ revoke execute on function public.ts_view_mail_for_user(uuid)   from service_rol
 revoke execute on function public.ts_claim_mail_items(uuid)     from service_role;
 revoke execute on function public.ts_delete_mail_for_user(uuid) from service_role;
 revoke execute on function public.ts_mail_inbox_counts()        from service_role;
+
+-- 인앱 결제 (07_purchases.sql)
+grant execute on function public.ts_mark_purchase_granted(text)                       to authenticated;
 
 -- 리더보드 (16_leaderboard.sql)
 grant execute on function public.ts_leaderboard_tables()                              to authenticated;

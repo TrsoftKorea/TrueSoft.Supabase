@@ -129,11 +129,12 @@ If the information matters, state it as a separate sentence or callout box. If i
 
 ```csharp
 Task<SupabaseResult<IAPFacade>> SupabaseIAP.CreateIAPAsync(
-    string[]                       productIds,
-    Func<string, bool, Task<bool>> onGrant,
-    Action<IAPPurchaseFailedInfo>  onFailed  = null,
-    int                            timeoutMs = 10_000)
+    string[]                               productIds,
+    Func<string, string, bool, Task<bool>> onGrant,
+    Action<IAPPurchaseFailedInfo>          onFailed  = null,
+    int                                    timeoutMs = 10_000)
 ```
+`onGrant`는 `(productId, orderId, alreadyGranted)`.
 
 파라미터 표는 타입 열 없이 `| 파라미터 | 설명 |` 2열로. 모든 파라미터를 표기하되 이름만으로 의미가 명확하면 생략 가능, optional은 `(기본값: x)` 표기.
 

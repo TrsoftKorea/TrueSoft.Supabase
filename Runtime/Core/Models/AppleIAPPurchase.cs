@@ -27,6 +27,8 @@ namespace TrueBase.Core.Models
         public bool ok;
         /// <summary>동일 transaction_id로 이미 검증된 경우 true.</summary>
         public bool already_verified;
+        /// <summary>이 주문을 게임이 이미 지급 완료로 표시한 경우 true. 소모품 중복 지급 판단용.</summary>
+        public bool already_granted;
         public string transaction_id;
         public string product_id;
         public string reason;

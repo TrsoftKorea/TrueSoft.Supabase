@@ -227,6 +227,9 @@ namespace TrueBase.Core.Common
         /// <summary>IAP 초기화에 실패했습니다(스토어 연결·상품 조회 실패).</summary>
         public const string IapInitFailed = "iap_init_failed";
 
+        /// <summary>지급 완료 기록에 전달된 주문 ID가 비어 있습니다.</summary>
+        public const string IapOrderIdEmpty = "iap_order_id_empty";
+
         /// <summary>해당 코드의 리더보드가 없습니다.</summary>
         public const string LeaderboardTableNotFound = "leaderboard_table_not_found";
 

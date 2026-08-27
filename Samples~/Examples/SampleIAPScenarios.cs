@@ -101,25 +101,20 @@ public sealed class SampleIAPScenarios : MonoBehaviour
     /// <summary>
     /// 서버 검증 성공 후 호출됩니다.
     ///
-    /// alreadyVerified=true: 서버 DB에 이미 검증 기록이 있음
-    ///   → 아이템 지급 후 ConfirmPurchase 전에 크래시된 경우
-    ///   → DB에서 지급 여부를 확인해 중복 지급을 방지하세요
+    /// alreadyGranted=true: 서버가 이 orderId를 이미 지급 완료로 기록해 둔 상태
+    ///   → 아이템 지급 후 ConfirmPurchase 전에 크래시된 경우 재처리 시 true로 옴
+    ///   → 소모품은 보유 여부로 중복 지급을 판단할 수 없으므로, 이 값이 true면 소비만 하고 재지급하지 않는다
     ///
-    /// true 반환 → SDK가 ConfirmPurchase(소모품 소비) 호출
+    /// true 반환 → SDK가 서버에 지급 완료를 기록하고 ConfirmPurchase(소모품 소비) 호출
     /// false 반환 → Pending 유지 → 다음 InitializeAsync에서 재처리
     /// </summary>
-    private async Task<bool> OnGrantItemAsync(string grantedProductId, bool alreadyVerified)
+    private async Task<bool> OnGrantItemAsync(string grantedProductId, string orderId, bool alreadyGranted)
     {
-        if (alreadyVerified)
-        {
-            // 서버는 이미 이 영수증을 처리했음 (지급 후 크래시 케이스)
-            // DB에서 지급 여부를 확인해 중복 지급을 방지하세요
-            // bool alreadyGranted = await MyInventory.HasItemAsync(grantedProductId);
-            // if (alreadyGranted) return true; // 이미 지급됨 → 소비만 완료
-        }
+        if (alreadyGranted)
+            return true; // 이미 지급됨 → 소비만 완료
 
         // ── 실제 아이템 지급 로직을 여기에 작성하세요 ──
-        Debug.Log($"[Supabase.IAP] 아이템 지급: {grantedProductId} (alreadyVerified={alreadyVerified})");
+        Debug.Log($"[Supabase.IAP] 아이템 지급: {grantedProductId} (orderId={orderId})");
         // await MyInventory.GiveItemAsync(grantedProductId);
 
         await Task.CompletedTask; // 위 주석 해제 시 제거

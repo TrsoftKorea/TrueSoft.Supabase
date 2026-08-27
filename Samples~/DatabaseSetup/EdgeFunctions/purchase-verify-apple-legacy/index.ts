@@ -154,19 +154,21 @@ Deno.serve(async (req: Request) => {
     });
 
   let alreadyVerified = false;
+  let alreadyGranted = false;
   if (insertError) {
     if (insertError.code === "23505") {
       // unique_violation — 이미 검증된 영수증. 단, 기록의 주인이 이 계정일 때만 재처리로 인정한다.
       // (다른 계정의 토큰을 보낸 경우까지 ok=true 로 답하면, 크래시 복구 지침대로 구현한 게임이 남의 결제로 지급한다)
       const { data: owner } = await adminClient
         .from("purchases")
-        .select("account_id")
+        .select("account_id, granted_at")
         .eq("purchase_token", transactionId)
         .maybeSingle();
       if (owner && owner.account_id !== user.id) {
         return jsonResponse({ ok: false, reason: "purchase_owned_by_other_account" }, 409);
       }
       alreadyVerified = true;
+      alreadyGranted = !!owner?.granted_at;
     } else {
       console.error("[purchase-verify-apple-legacy] DB 삽입 오류:", insertError.message);
       return jsonResponse({ ok: false, reason: "db_error" }, 500);
@@ -176,6 +178,7 @@ Deno.serve(async (req: Request) => {
   return jsonResponse({
     ok:               true,
     already_verified: alreadyVerified,
+    already_granted:  alreadyGranted,
     transaction_id:   transactionId,
     product_id,
     reason:           null,

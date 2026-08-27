@@ -30,11 +30,12 @@ namespace TrueBase.Unity
         /// 아이템 지급 콜백 (필수 설정).
         /// <list type="bullet">
         ///   <item>인자 1: <c>string productId</c> — 구매된 상품 ID</item>
-        ///   <item>인자 2: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
+        ///   <item>인자 2: <c>string orderId</c> — 주문 고유 ID(Google은 orderId, Apple은 transaction_id)</item>
+        ///   <item>인자 3: <c>bool alreadyGranted</c> — 서버가 이 주문을 이미 지급 완료로 표시했으면 true. 소모품 중복 지급 판단용</item>
         ///   <item>반환: <c>true</c> → SDK가 ConfirmPurchase 호출 / <c>false</c> → Pending 유지</item>
         /// </list>
         /// </summary>
-        public Func<string, bool, Task<bool>> OnGrantItemAsync { get; set; }
+        public Func<string, string, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
         public event Action<IAPPurchaseFailedInfo> OnPurchaseFailed;
@@ -201,10 +202,11 @@ namespace TrueBase.Unity
         /// 콜백이 false를 반환하거나 예외를 던지면 Pending 상태로 남겨 다음 초기화 때 재처리됩니다.
         /// </summary>
         /// <param name="productId">구매된 상품 ID.</param>
-        /// <param name="alreadyVerified">서버 DB에 이미 검증 기록이 있으면 true. 중복 지급 방지 판단용.</param>
+        /// <param name="orderId">주문 고유 ID(Google은 orderId, Apple은 transaction_id). 소모품 중복 지급 판단용.</param>
+        /// <param name="alreadyGranted">서버가 이 주문을 이미 지급 완료로 표시했으면 true. 중복 지급 방지 판단용.</param>
         /// <param name="pendingOrder">소비(<c>ConfirmPurchase</c>) 대상 주문.</param>
         protected async Task GrantAndConfirmAsync(
-            string productId, bool alreadyVerified, PendingOrder pendingOrder)
+            string productId, string orderId, bool alreadyGranted, PendingOrder pendingOrder)
         {
             if (OnGrantItemAsync == null)
             {
@@ -215,7 +217,7 @@ namespace TrueBase.Unity
             bool granted;
             try
             {
-                granted = await OnGrantItemAsync(productId, alreadyVerified);
+                granted = await OnGrantItemAsync(productId, orderId, alreadyGranted);
             }
             catch (Exception e)
             {
@@ -224,7 +226,13 @@ namespace TrueBase.Unity
             }
 
             if (granted)
+            {
+                // 소비 처리 전에 서버에 지급 완료를 기록한다 — 실패해도(네트워크 등) 지급 자체는
+                // 이미 끝났으므로 소비까지는 그대로 진행한다.
+                if (!string.IsNullOrEmpty(orderId))
+                    await SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
                 _storeController?.ConfirmPurchase(pendingOrder);
+            }
             else
                 Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
         }

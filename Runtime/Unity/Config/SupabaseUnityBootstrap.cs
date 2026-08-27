@@ -30,6 +30,7 @@ namespace TrueBase.Unity.Config
         public SupabaseMatchResultService MatchResultService { get; private set; }
         public SupabaseCouponService CouponService { get; private set; }
         public SupabaseChatService ChatService { get; private set; }
+        public SupabaseIAPService IAPService { get; private set; }
         /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public float DuplicateSessionPollSeconds { get; private set; }
 
@@ -142,6 +143,11 @@ namespace TrueBase.Unity.Config
                 http);
 
             ChatService = new SupabaseChatService(
+                options.ProjectURL,
+                options.PublishableKey,
+                http);
+
+            IAPService = new SupabaseIAPService(
                 options.ProjectURL,
                 options.PublishableKey,
                 http);

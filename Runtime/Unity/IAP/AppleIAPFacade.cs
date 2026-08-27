@@ -17,7 +17,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateAppleIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, alreadyVerified) =>
+    ///     onGrant: async (productId, orderId, alreadyGranted) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true;
@@ -82,7 +82,7 @@ namespace TrueBase.Unity
                 var (success, response) = await _verifyJwsAsync(jws, productId);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} Apple이 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
-                await GrantAndConfirmAsync(productId, response.already_verified, pendingOrder);
+                await GrantAndConfirmAsync(productId, response.transaction_id, response.already_granted, pendingOrder);
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace TrueBase.Unity
                 var (success, response) = await _verifyReceiptAsync(receipt, productId);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증(SK1) 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} Apple이 구매를 거부했습니다(SK1). reason={response.reason}, product={productId}"); return; }
-                await GrantAndConfirmAsync(productId, response.already_verified, pendingOrder);
+                await GrantAndConfirmAsync(productId, response.transaction_id, response.already_granted, pendingOrder);
             }
         }
 

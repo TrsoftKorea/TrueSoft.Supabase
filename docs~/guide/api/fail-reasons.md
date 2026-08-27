@@ -176,6 +176,7 @@ bool Handle(SupabaseResult result)
 | `IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
 | `IapInitTimeout` | IAP 초기화가 제한 시간 내에 완료되지 않았습니다 |
 | `IapInitFailed` | IAP 초기화에 실패했습니다 |
+| `IapOrderIdEmpty` | 지급 완료 기록에 전달된 주문 ID가 비어 있습니다. SDK 내부용이라 게임 코드에서 직접 만날 일은 없습니다 |
 
 ## 리더보드
 

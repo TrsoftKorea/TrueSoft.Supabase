@@ -10,6 +10,7 @@ type VerifyRequest = {
 type VerifyResponse = {
   ok: boolean;
   already_verified?: boolean;
+  already_granted?: boolean;
   transaction_id?: string;
   product_id?: string;
   reason?: string;
@@ -163,7 +164,7 @@ Deno.serve(async (req) => {
     if (insertError.code === "23505") {
       const { data: owner } = await adminClient
         .from("purchases")
-        .select("account_id")
+        .select("account_id, granted_at")
         .eq("purchase_token", transactionId)
         .maybeSingle();
       if (owner && owner.account_id !== user.id) {
@@ -171,6 +172,7 @@ Deno.serve(async (req) => {
       }
       return json({
         ok: true, already_verified: true,
+        already_granted: !!owner?.granted_at,
         transaction_id: transactionId, product_id,
       } satisfies VerifyResponse);
     }
@@ -179,6 +181,7 @@ Deno.serve(async (req) => {
 
   return json({
     ok: true, already_verified: false,
+    already_granted: false,
     transaction_id: transactionId, product_id,
   } satisfies VerifyResponse);
 });

@@ -16,7 +16,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateAppleIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, alreadyVerified) =>
+    ///     onGrant: async (productId, orderId, alreadyGranted) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true;
@@ -70,7 +70,7 @@ namespace TrueBase.Unity
                 return;
             }
 
-            await GrantAndConfirmAsync(productId, response.already_verified, args.purchasedProduct);
+            await GrantAndConfirmAsync(productId, response.transaction_id, response.already_granted, args.purchasedProduct);
         }
 
 

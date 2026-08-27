@@ -43,7 +43,7 @@ The SDK has three layers:
 - `Abstractions/` — `ISupabaseHttpClient`, `ISupabaseJsonSerializer` interfaces
 - `Auth/` — `SupabaseAuthService`, `SupabaseAnonymousRecoveryService`, `SupabaseSessionChangeKind`
 - `Config/` — `SupabaseOptions` (project URL, keys, table names, defaults)
-- `Data/` — individual REST services (`SupabaseUserDataService`, `SupabaseRemoteConfigService`, `SupabaseMailboxService`, `SupabaseLeaderboardService`, `SupabaseMatchResultService`, `SupabaseCouponService`, `SupabaseChatService`, `SupabaseEdgeFunctionsService`, `SupabasePublicProfileService`, `SupabaseServerTimeService`, `SupabaseUserSessionService`)
+- `Data/` — individual REST services (`SupabaseUserDataService`, `SupabaseRemoteConfigService`, `SupabaseMailboxService`, `SupabaseLeaderboardService`, `SupabaseMatchResultService`, `SupabaseCouponService`, `SupabaseChatService`, `SupabaseIAPService`, `SupabaseEdgeFunctionsService`, `SupabasePublicProfileService`, `SupabaseServerTimeService`, `SupabaseUserSessionService`)
 - `Models/` — `SupabaseSession`, `SupabaseUser`, `SupabaseResult<T>`
 
 **Unity** (`Runtime/Unity/`) — Unity-specific wrappers:
