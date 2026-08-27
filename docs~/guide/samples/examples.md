@@ -92,7 +92,7 @@ _iapFacade = result.Data;
 _iapFacade.Purchase(productId);
 
 // 3. 서버 검증 성공 → 아이템 지급 콜백
-private async Task<bool> OnGrantItemAsync(string productId, string orderId, bool alreadyGranted)
+private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 {
     if (alreadyGranted) return true; // 이미 지급됨 → 소비만 완료
     await MyInventory.GiveItemAsync(productId);

@@ -17,7 +17,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, orderId, alreadyGranted) =>
+    ///     onGrant: async (productId, alreadyGranted) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)

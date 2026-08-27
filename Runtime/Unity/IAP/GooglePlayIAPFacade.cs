@@ -16,7 +16,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateGooglePlayIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, orderId, alreadyGranted) =>
+    ///     onGrant: async (productId, alreadyGranted) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true;
