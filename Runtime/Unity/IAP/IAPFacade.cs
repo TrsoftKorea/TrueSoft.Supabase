@@ -17,7 +17,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, isResuming, alreadyVerified) =>
+    ///     onGrant: async (productId, alreadyVerified) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
@@ -54,7 +54,7 @@ namespace TrueBase.Unity
 
         // 서버 검증 (플랫폼 자동 감지)
 
-        protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming)
+        protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder)
         {
             if (pendingOrder == null)
             {
@@ -95,7 +95,7 @@ namespace TrueBase.Unity
             var (success, response) = await _verifyAsync(token, productId, priceAmount, priceCurrency);
             if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
             if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
-            await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+            await GrantAndConfirmAsync(productId, response.already_verified, pendingOrder);
 
 #elif UNITY_IOS
             var appleInfo = pendingOrder.Info as IAppleOrderInfo;
@@ -109,7 +109,7 @@ namespace TrueBase.Unity
                 var (success, response) = await _verifyAsync(jws, productId, priceAmount, priceCurrency);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
-                await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+                await GrantAndConfirmAsync(productId, response.already_verified, pendingOrder);
             }
             else
             {
@@ -128,7 +128,7 @@ namespace TrueBase.Unity
                 var (success, response) = await _verifyReceiptAsync(receiptPayload, productId);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증(SK1) 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다(SK1). reason={response.reason}, product={productId}"); return; }
-                await GrantAndConfirmAsync(productId, isResuming, response.already_verified, pendingOrder);
+                await GrantAndConfirmAsync(productId, response.already_verified, pendingOrder);
             }
 #else
             Debug.LogWarning($"{LogTag} 지원되지 않는 플랫폼입니다.");

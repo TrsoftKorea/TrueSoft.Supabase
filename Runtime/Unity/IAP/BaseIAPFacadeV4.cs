@@ -28,12 +28,11 @@ namespace TrueBase.Unity
         /// 아이템 지급 콜백 (필수 설정).
         /// <list type="bullet">
         ///   <item>인자 1: <c>string productId</c> — 구매된 상품 ID</item>
-        ///   <item>인자 2: <c>bool isResuming</c> — 앱 재시작 후 미처리 주문 재처리 중이면 true</item>
-        ///   <item>인자 3: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
+        ///   <item>인자 2: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
         ///   <item>반환: <c>true</c> → SDK가 ConfirmPurchase 호출 / <c>false</c> → Pending 유지</item>
         /// </list>
         /// </summary>
-        public Func<string, bool, bool, Task<bool>> OnGrantItemAsync { get; set; }
+        public Func<string, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
         public event Action<IAPPurchaseFailedInfo> OnPurchaseFailed;
@@ -208,11 +207,10 @@ namespace TrueBase.Unity
         /// 콜백이 false를 반환하거나 예외를 던지면 Pending 상태로 남겨 다음 초기화 때 재처리됩니다.
         /// </summary>
         /// <param name="productId">구매된 상품 ID.</param>
-        /// <param name="isResuming">앱 재시작 후 재처리 중이면 true.</param>
         /// <param name="alreadyVerified">서버 DB에 이미 검증 기록이 있으면 true. 중복 지급 방지 판단용.</param>
         /// <param name="product">소비(<c>ConfirmPendingPurchase</c>) 대상 상품.</param>
         protected async Task GrantAndConfirmAsync(
-            string productId, bool isResuming, bool alreadyVerified, Product product)
+            string productId, bool alreadyVerified, Product product)
         {
             if (OnGrantItemAsync == null)
             {
@@ -223,7 +221,7 @@ namespace TrueBase.Unity
             bool granted;
             try
             {
-                granted = await OnGrantItemAsync(productId, isResuming, alreadyVerified);
+                granted = await OnGrantItemAsync(productId, alreadyVerified);
             }
             catch (Exception e)
             {

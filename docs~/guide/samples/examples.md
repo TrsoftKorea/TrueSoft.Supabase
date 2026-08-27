@@ -92,7 +92,7 @@ _iapFacade = result.Data;
 _iapFacade.Purchase(productId);
 
 // 3. 서버 검증 성공 → 아이템 지급 콜백
-private async Task<bool> OnGrantItemAsync(string productId, bool isResuming, bool alreadyVerified)
+private async Task<bool> OnGrantItemAsync(string productId, bool alreadyVerified)
 {
     // alreadyVerified=true → 지급 후 크래시 케이스. DB로 중복 지급 여부 확인 권장
     await MyInventory.GiveItemAsync(productId);

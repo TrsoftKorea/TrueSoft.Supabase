@@ -17,7 +17,7 @@ namespace TrueBase.Unity
     /// <code>
     /// var result = await SupabaseIAP.CreateIAPAsync(
     ///     productIds: new[] { "com.mygame.item" },
-    ///     onGrant: async (productId, isResuming, alreadyVerified) =>
+    ///     onGrant: async (productId, alreadyVerified) =>
     ///     {
     ///         await MyInventory.GiveItemAsync(productId);
     ///         return true; // true → SDK가 ConfirmPurchase 호출 (소모품 소비)
@@ -69,7 +69,7 @@ namespace TrueBase.Unity
             var (success, response) = await _verifyGoogleAsync(token, productId, priceAmount, priceCurrency);
             if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
             if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
-            await GrantAndConfirmAsync(productId, false, response.already_verified, args.purchasedProduct);
+            await GrantAndConfirmAsync(productId, response.already_verified, args.purchasedProduct);
 
 #elif UNITY_IOS
             var receipt = AppleIAPFacade.ExtractAppleReceiptPayload(args.purchasedProduct.receipt);
@@ -81,7 +81,7 @@ namespace TrueBase.Unity
             var (ok, resp) = await _verifyAppleAsync(receipt, productId);
             if (!ok || resp == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
             if (!resp.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={resp.reason}, product={productId}"); return; }
-            await GrantAndConfirmAsync(productId, false, resp.already_verified, args.purchasedProduct);
+            await GrantAndConfirmAsync(productId, resp.already_verified, args.purchasedProduct);
 
 #else
             Debug.LogWarning($"{LogTag} 지원되지 않는 플랫폼입니다.");

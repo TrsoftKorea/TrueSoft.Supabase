@@ -23,8 +23,6 @@ namespace TrueBase.Unity
 
         private StoreController _storeController;
         private bool _isInitialized;
-        private bool _isFetchingPurchases;
-        private int  _resumingPurchaseCount;
         private bool _disposed;
 
 
@@ -32,12 +30,11 @@ namespace TrueBase.Unity
         /// 아이템 지급 콜백 (필수 설정).
         /// <list type="bullet">
         ///   <item>인자 1: <c>string productId</c> — 구매된 상품 ID</item>
-        ///   <item>인자 2: <c>bool isResuming</c> — 앱 재시작 후 미처리 주문 재처리 중이면 true</item>
-        ///   <item>인자 3: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
+        ///   <item>인자 2: <c>bool alreadyVerified</c> — 서버 DB에 이미 검증 기록이 있으면 true (크래시 후 재처리 감지)</item>
         ///   <item>반환: <c>true</c> → SDK가 ConfirmPurchase 호출 / <c>false</c> → Pending 유지</item>
         /// </list>
         /// </summary>
-        public Func<string, bool, bool, Task<bool>> OnGrantItemAsync { get; set; }
+        public Func<string, bool, Task<bool>> OnGrantItemAsync { get; set; }
 
         /// <summary>구매 실패 알림 (선택). UI 표시 등에 사용.</summary>
         public event Action<IAPPurchaseFailedInfo> OnPurchaseFailed;
@@ -80,9 +77,7 @@ namespace TrueBase.Unity
                 }
             }
 
-            _isInitialized         = false;
-            _isFetchingPurchases   = false;
-            _resumingPurchaseCount = 0;
+            _isInitialized   = false;
 
             _storeController = UnityIAPServices.StoreController();
 
@@ -195,8 +190,7 @@ namespace TrueBase.Unity
         /// 구현 완료 후 <see cref="GrantAndConfirmAsync"/>를 호출하세요.
         /// </summary>
         /// <param name="pendingOrder">Unity IAP가 전달한 미확정 주문. 영수증·상품 정보가 들어 있습니다.</param>
-        /// <param name="isResuming">앱 재시작 후 미처리 주문 재처리 중이면 true, 방금 발생한 신규 구매면 false.</param>
-        protected abstract Task ProcessPendingOrderAsync(PendingOrder pendingOrder, bool isResuming);
+        protected abstract Task ProcessPendingOrderAsync(PendingOrder pendingOrder);
 
         /// <summary>로그 접두사. 서브클래스에서 재정의하세요.</summary>
         protected virtual string LogTag => "[Supabase.IAP]";
@@ -207,11 +201,10 @@ namespace TrueBase.Unity
         /// 콜백이 false를 반환하거나 예외를 던지면 Pending 상태로 남겨 다음 초기화 때 재처리됩니다.
         /// </summary>
         /// <param name="productId">구매된 상품 ID.</param>
-        /// <param name="isResuming">앱 재시작 후 재처리 중이면 true.</param>
         /// <param name="alreadyVerified">서버 DB에 이미 검증 기록이 있으면 true. 중복 지급 방지 판단용.</param>
         /// <param name="pendingOrder">소비(<c>ConfirmPurchase</c>) 대상 주문.</param>
         protected async Task GrantAndConfirmAsync(
-            string productId, bool isResuming, bool alreadyVerified, PendingOrder pendingOrder)
+            string productId, bool alreadyVerified, PendingOrder pendingOrder)
         {
             if (OnGrantItemAsync == null)
             {
@@ -222,7 +215,7 @@ namespace TrueBase.Unity
             bool granted;
             try
             {
-                granted = await OnGrantItemAsync(productId, isResuming, alreadyVerified);
+                granted = await OnGrantItemAsync(productId, alreadyVerified);
             }
             catch (Exception e)
             {
@@ -239,40 +232,22 @@ namespace TrueBase.Unity
         // Unity IAP v5 이벤트 핸들러 (공통)
 
         private void OnProductsFetchedHandler(List<Product> products)
-        {
-            // FetchPurchases 호출 전에 플래그 세팅
-            // — OnPurchasePending이 OnPurchasesFetched보다 먼저 올 경우 isResuming을 올바르게 판별하기 위함
-            _isFetchingPurchases = true;
-            _storeController.FetchPurchases();
-        }
+            => _storeController.FetchPurchases();
 
         private void OnProductsFetchFailedHandler(ProductFetchFailed failure)
             => Debug.LogWarning($"{LogTag} 상품 조회 실패: {failure.FailureReason}");
 
         private void OnPurchasesFetchedHandler(Orders orders)
-        {
-            _resumingPurchaseCount = orders.PendingOrders?.Count ?? 0;
-            _isFetchingPurchases   = false;
-            _isInitialized         = true;
-        }
+            => _isInitialized = true;
 
         private void OnPurchasesFetchFailedHandler(PurchasesFetchFailureDescription failure)
         {
             Debug.LogWarning($"{LogTag} 구매 이력 조회 실패: {failure.FailureReason} — {failure.Message}");
-            _isFetchingPurchases = false;
-            _isInitialized       = true; // 실패해도 초기화 완료 처리 (신규 구매는 가능)
+            _isInitialized = true; // 실패해도 초기화 완료 처리 (신규 구매는 가능)
         }
 
         private void OnPurchasePendingHandler(PendingOrder pendingOrder)
-        {
-            // isResuming 이중 판별 (Unity IAP v5 타이밍 이슈 대응):
-            // - _isFetchingPurchases == true : OnPurchasePending이 OnPurchasesFetched보다 먼저 온 경우
-            // - _resumingPurchaseCount > 0   : OnPurchasePending이 OnPurchasesFetched 이후에 온 경우
-            var isResuming = _isFetchingPurchases || _resumingPurchaseCount > 0;
-            if (_resumingPurchaseCount > 0) _resumingPurchaseCount--;
-
-            _ = ProcessPendingOrderAsync(pendingOrder, isResuming);
-        }
+            => _ = ProcessPendingOrderAsync(pendingOrder);
 
         private void OnPurchaseConfirmedHandler(Order _) { }
 

@@ -108,7 +108,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
     /// true 반환 → SDK가 ConfirmPurchase(소모품 소비) 호출
     /// false 반환 → Pending 유지 → 다음 InitializeAsync에서 재처리
     /// </summary>
-    private async Task<bool> OnGrantItemAsync(string grantedProductId, bool isResuming, bool alreadyVerified)
+    private async Task<bool> OnGrantItemAsync(string grantedProductId, bool alreadyVerified)
     {
         if (alreadyVerified)
         {
@@ -119,8 +119,7 @@ public sealed class SampleIAPScenarios : MonoBehaviour
         }
 
         // ── 실제 아이템 지급 로직을 여기에 작성하세요 ──
-        Debug.Log($"[Supabase.IAP] 아이템 지급: {grantedProductId} " +
-                  $"(isResuming={isResuming}, alreadyVerified={alreadyVerified})");
+        Debug.Log($"[Supabase.IAP] 아이템 지급: {grantedProductId} (alreadyVerified={alreadyVerified})");
         // await MyInventory.GiveItemAsync(grantedProductId);
 
         await Task.CompletedTask; // 위 주석 해제 시 제거
