@@ -44,6 +44,10 @@ var iap = result.Data;
 | `SupabaseReason.IapInitTimeout` | 제한 시간 내 초기화 미완료 |
 | `SupabaseReason.IapInitFailed` | 스토어 연결·상품 조회 실패 |
 
+::: warning 로그인 완료 후 호출
+`CreateIAPAsync`는 로그인 완료 후에 호출하세요. 자동 로그인 경로에서도 동일합니다. 초기화 도중 스토어에 남아있는 미처리 주문이 있으면 [구매 처리 흐름](#purchase-flow)이 곧바로 재시작되는데, 이때 세션이 없으면 서버 검증이 실패해 불필요한 재시도가 한 번 낍니다.
+:::
+
 ## 구매 처리 흐름 {#purchase-flow}
 
 `iap.Purchase(productId)`로 결제창을 연 뒤, 실제 지급까지는 이런 순서로 진행됩니다.
@@ -99,3 +103,11 @@ onGrant: async (productId, isResuming, alreadyVerified) =>
 :::
 
 구매창을 열기 전에 가격을 표시하려면 [상품 정보 조회](/guide/iap/product-info)를 참고하세요.
+
+## 정리 {#cleanup}
+
+`OnDestroy`에서 `Dispose()`를 호출해 이벤트 핸들러를 정리합니다.
+
+::: tip 계정을 바꿀 때
+미처리 주문은 스토어 계정에 남아 있어, 다음에 로그인한 게임 계정으로 검증·지급됩니다. 한 기기에서 계정을 갈아 쓰는 구조라면 로그아웃 전에 `Dispose()`로 파사드를 끊고, 다시 로그인한 뒤 새로 만드세요.
+:::
