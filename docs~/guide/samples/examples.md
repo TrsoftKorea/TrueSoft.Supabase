@@ -72,7 +72,7 @@ await Supabase.SaveNowAsync(timeoutMs: 5000);        // 즉시 저장
 `com.unity.purchasing` 최신 버전을 설치하면 자동으로 활성화됩니다. 최소 5.1 이상을 권장합니다.
 
 **사전 준비:**
-1. `com.unity.purchasing` 설치 — 최신 버전을 권장하며 최소 5.1 이상
+1. `com.unity.purchasing` 설치
 2. [데이터베이스 설정](/guide/start/database-setup) 완료
 3. Inspector에서 `productId` 입력
 

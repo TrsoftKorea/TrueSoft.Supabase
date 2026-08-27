@@ -69,7 +69,7 @@ var iap = result.Data;
 
 `alreadyVerified`는 이 영수증을 **서버**가 예전에 이미 처리한 적이 있는지를 나타냅니다. `purchases` 테이블의 영수증 고유값 UNIQUE 제약으로 감지합니다. 이전 결제가 서버 검증까지는 성공했는데 그 직후 앱이 꺼져서 지급이 안 됐거나, 지급 후 소비 처리 전에 꺼진 경우 재처리 시 `true`로 옵니다 — **중복 지급 위험 케이스**입니다.
 
-**`alreadyVerified = true`일 때만** 실제로 이미 지급했는지 확인하면 중복 지급을 막을 수 있습니다.
+**`alreadyVerified = true`일 때** 실제로 이미 지급했는지 확인하면 중복 지급을 막을 수 있습니다.
 
 ```csharp
 onGrant: async (productId, alreadyVerified) =>
