@@ -4,10 +4,10 @@
 
 ## Client IDs 순서 {#client-ids}
 
-Supabase는 Android(웹) OAuth의 client_id로 **Client IDs 목록의 첫 값**을 사용합니다. 그래서 Services ID가 맨 앞이어야 합니다.
+Supabase는 Android 웹 OAuth의 client_id로 **Client IDs 목록의 첫 값**을 사용합니다. 그래서 Services ID가 맨 앞이어야 합니다.
 
 - 번들 ID가 첫 값이면 Apple이 `invalid_request: Invalid client id or web redirect url`로 거부합니다. 번들 ID에는 웹 redirect 설정이 없기 때문입니다.
-- iOS 네이티브는 토큰의 `aud`(=번들 ID)가 **목록에 포함**되어 있으면 검증을 통과하므로, 번들 ID는 뒤에 둬도 됩니다.
+- iOS 네이티브는 토큰의 `aud`, 즉 번들 ID가 **목록에 포함**되어 있으면 검증을 통과하므로, 번들 ID는 뒤에 둬도 됩니다.
 
 ## Return URLs와 Redirect URLs {#redirects}
 
@@ -20,7 +20,7 @@ Supabase는 Android(웹) OAuth의 client_id로 **Client IDs 목록의 첫 값**�
 
 ## aud와 Client IDs {#aud}
 
-`aud`(audience)는 토큰이 발급된 client_id입니다. Supabase **Client IDs**는 허용할 `aud` 목록입니다. iOS 네이티브 토큰의 `aud`는 앱 **Bundle ID**, Android(웹) 토큰의 `aud`는 **Services ID**입니다.
+`aud`는 audience의 약자로, 토큰이 발급된 client_id입니다. Supabase **Client IDs**는 허용할 `aud` 목록입니다. iOS 네이티브 토큰의 `aud`는 앱 **Bundle ID**, Android 웹 토큰의 `aud`는 **Services ID**입니다.
 
 ## Secret Key 갱신 {#secret}
 

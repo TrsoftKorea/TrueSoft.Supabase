@@ -1,10 +1,10 @@
 # 우편함
 
-서버가 플레이어에게 아이템·메시지를 전달하는 시스템 우편함입니다. 발송은 어드민(Retool)에서만 하고, 클라이언트는 조회·수령·삭제만 합니다.
+서버가 플레이어에게 아이템·메시지를 전달하는 시스템 우편함입니다. 발송은 Retool 어드민에서만 하고, 클라이언트는 조회·수령·삭제만 합니다.
 
 ## 분류 {#category}
 
-메일은 `category`(분류) 값으로 나뉩니다. 기본값은 `default`이며, 클라이언트는 발송자가 지정한 문자열을 그대로 조회 키로 씁니다. 공지·이벤트·보상처럼 소수의 고정된 값으로 운영하는 것을 권장합니다.
+메일은 분류를 뜻하는 `category` 값으로 나뉩니다. 기본값은 `default`이며, 클라이언트는 발송자가 지정한 문자열을 그대로 조회 키로 씁니다. 공지·이벤트·보상처럼 소수의 고정된 값으로 운영하는 것을 권장합니다.
 
 목록·전체 수령·수령한 우편 일괄 삭제·카운트 조회 메서드는 모두 `category` 파라미터를 받습니다. 생략하거나 `null`을 넘기면 전체 분류를 대상으로 동작합니다.
 
@@ -16,12 +16,12 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`GetMailsAsync`](/guide/mailbox/list) | 우편함 목록 조회(분류 필터) |
+| [`GetMailsAsync`](/guide/mailbox/list) | 우편함 목록 조회, 분류 필터 |
 | [`GetMailAsync`](/guide/mailbox/detail) | 우편 상세 조회 |
 | [`ClaimMailItemsAsync`](/guide/mailbox/claim) | 우편 1건 보상 수령 |
-| [`ClaimAllMailItemsAsync`](/guide/mailbox/claim-all) | 보상 일괄 수령(분류 필터) |
+| [`ClaimAllMailItemsAsync`](/guide/mailbox/claim-all) | 보상 일괄 수령, 분류 필터 |
 | [`DeleteMailAsync`](/guide/mailbox/delete) | 우편 1건 삭제 |
-| [`DeleteClaimedMailsAsync`](/guide/mailbox/delete-claimed) | 수령한 우편 일괄 삭제(분류 필터) |
+| [`DeleteClaimedMailsAsync`](/guide/mailbox/delete-claimed) | 수령한 우편 일괄 삭제, 분류 필터 |
 | [`GetUnclaimedMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 메일 수 |
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미수령 수 + 분류별 세부 내역 |
 

@@ -30,6 +30,6 @@ else
 |--------|------|
 | `SupabaseReason.RestoreSessionFailed` | 저장된 토큰이 없거나 복원에 실패했습니다 |
 
-::: info 유저 데이터는 따로 로드합니다
-세션만 복원하므로, 수동 로그인과 동일하게 성공 후 [로드](/guide/user-data/load)를 직접 호출하세요.
+::: info
+세션만 복원하므로 유저 데이터는 따로 로드해야 합니다. 로그인과 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](./auto-login#login-load-separate)를 참고하세요.
 :::

@@ -6,9 +6,9 @@
 
 | 항목 | 찾는 위치 | 사용처 |
 |------|-----------|--------|
-| **Project URL** | 프로젝트 오버뷰 URL 옆 **Copy** 드롭다운 | `SupabaseSettings.projectUrl` |
-| **Publishable key** | **Settings > API Keys** → Publishable key 섹션 복사 버튼 | `SupabaseSettings.publishableKey` |
-| **Secret key** | **Settings > API Keys** → Secret keys 섹션 복사 버튼 | 클래스 생성기(유저 데이터·Remote Config) 전용. EditorPrefs 저장, 빌드 미포함 |
+| **Project URL** | 프로젝트&nbsp;오버뷰&nbsp;URL&nbsp;옆&nbsp;**Copy**&nbsp;드롭다운 | `SupabaseSettings.projectUrl` |
+| **Publishable key** | **Settings&nbsp;>&nbsp;API&nbsp;Keys**&nbsp;→&nbsp;Publishable&nbsp;key&nbsp;섹션&nbsp;복사&nbsp;버튼 | `SupabaseSettings.publishableKey` |
+| **Secret key** | **Settings&nbsp;>&nbsp;API&nbsp;Keys**&nbsp;→&nbsp;Secret&nbsp;keys&nbsp;섹션&nbsp;복사&nbsp;버튼 | 유저 데이터·Remote Config 클래스 생성기 전용. EditorPrefs 저장, 빌드 미포함 |
 
 ## 2. 설정 에셋 생성
 

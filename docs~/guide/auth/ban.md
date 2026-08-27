@@ -4,7 +4,7 @@
 
 ## 로그인 시 자동 감지
 
-Supabase 대시보드에서 계정을 차단(`banned_until` 설정)하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
+Supabase 대시보드에서 `banned_until`을 설정해 계정을 차단하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
@@ -49,7 +49,7 @@ else
 
 | 파라미터 | 설명 |
 |----------|------|
-| `accountId` | 조회할 계정 ID (`auth.users.id`) |
+| `accountId` | 조회할 `auth.users.id` 값 |
 
 **반환**
 

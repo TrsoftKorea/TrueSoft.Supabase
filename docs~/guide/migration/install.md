@@ -5,7 +5,7 @@
 
 | 구현체 | 사용 API |
 |--------|---------|
-| `PlayNanooRuntime` | `AccountManagerV20240401.*` (신버전) |
-| `PlayNanooLegacyRuntime` | `AccountGuestSignIn` / `AccountManager.*` (구버전) |
+| `PlayNanooRuntime` | 신버전 `AccountManagerV20240401.*` |
+| `PlayNanooLegacyRuntime` | 구버전 `AccountGuestSignIn` / `AccountManager.*` |
 
 씬에는 `PlayNanooRuntime` / `PlayNanooLegacyRuntime` 중 하나만 둡니다. `SupabaseRuntime`을 따로 배치하지 않습니다.

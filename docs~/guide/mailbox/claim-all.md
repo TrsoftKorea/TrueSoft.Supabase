@@ -23,7 +23,7 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 지급된 모든 보상(`ClaimResult`)이 우편·순서대로 담깁니다.
+`.Data`에 `ClaimResult`로 지급된 모든 보상이 우편·순서대로 담깁니다.
 
 **에러 코드**
 

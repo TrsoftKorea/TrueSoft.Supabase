@@ -1,10 +1,10 @@
 # 탈퇴 취소
 
-탈퇴 예약(`RequestWithdrawalAsync`)은 SDK 단독 사용과 동일해 이관에서 따로 할 일이 없습니다. **취소도 표준 SDK API 그대로** `Supabase.RedeemWithdrawalCancelAsync()`를 호출하면 됩니다 — `PlayNanooRuntime`이 인터셉터로 나누 탈퇴 복구까지 함께 처리합니다. 그래서 플레이나누를 제거해도 이 취소 코드는 그대로 동작합니다.
+`RequestWithdrawalAsync`로 하는 탈퇴 예약은 SDK 단독 사용과 동일해 이관에서 따로 할 일이 없습니다. **취소도 표준 SDK API 그대로** `Supabase.RedeemWithdrawalCancelAsync()`를 호출하면 됩니다 — `PlayNanooRuntime`이 인터셉터로 나누 탈퇴 복구까지 함께 처리합니다. 그래서 플레이나누를 제거해도 이 취소 코드는 그대로 동작합니다.
 
 ## 취소 흐름
 
-로그인 결과가 탈퇴 예약이면(`Reason`이 `SupabaseReason.WithdrawalGateBlocked`) 취소 UI를 띄우고, 플레이어가 취소를 선택하면 `Supabase.RedeemWithdrawalCancelAsync()`를 호출합니다.
+로그인 결과의 `Reason`이 `SupabaseReason.WithdrawalGateBlocked`이면 탈퇴 예약 상태이므로 취소 UI를 띄우고, 플레이어가 취소를 선택하면 `Supabase.RedeemWithdrawalCancelAsync()`를 호출합니다.
 
 ```csharp
 var login = await Supabase.SignInAnonymouslyAsync();

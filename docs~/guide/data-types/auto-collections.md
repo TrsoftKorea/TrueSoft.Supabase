@@ -8,7 +8,7 @@
 
 게임 버전업으로 크기가 늘어나는 컬렉션(예: 3 → 5 스테이지)은 매 접속마다 칸을 미리 늘려두는 선작업이 번거롭습니다. `AutoList<T>` / `AutoDict<TKey,TValue>`를 쓰면 그 작업이 사라집니다.
 
-- **범위 밖 읽기** → 지정한 기본값 반환 (확장하지 않음 → 단순 조회는 저장을 유발하지 않음)
+- **범위 밖 읽기** → 지정한 기본값 반환. 확장하지 않으므로 단순 조회는 저장을 유발하지 않습니다
 - **범위 밖 쓰기** → 그 위치까지 기본값으로 채운 뒤 저장
 
 `List<T>` / `Dictionary<TKey,TValue>`와 사용법·직렬화(일반 배열/객체)가 동일합니다.
@@ -77,7 +77,7 @@ PlayerSave.HeroData[hero].Count = 1;   // hero가 처음 등장해도 그 자리
 
 ## 이중 리스트
 
-행·열이 모두 가변인 이중 리스트입니다. `grid[i]`가 **지연 프록시**를 돌려줘서 `[i][j]`·`[i, j]` 모두 **모든 경우 안전**합니다 — 읽기는 비파괴(없는 행/열이면 기본값, 아무것도 안 만듦), 쓰기는 그 시점에 행·열을 생성·저장합니다.
+행·열이 모두 가변인 이중 리스트입니다. `grid[i]`가 **지연 프록시**를 돌려줘서 `[i][j]`·`[i, j]` 모두 **모든 경우 안전**합니다 — 읽기는 비파괴입니다 — 없는 행·열이면 기본값을 반환할 뿐 아무것도 만들지 않습니다. 쓰기는 그 시점에 행·열을 생성·저장합니다.
 
 ```csharp
 [DataColumn("scores")] [AutoDefault(-1)] internal AutoList2D<int> scores = new();   // 예: [스테이지][웨이브]
@@ -92,7 +92,7 @@ PlayerSave.Scores[5].Sort();                             // 정렬
 int sum = PlayerSave.Scores[5].Where(n => n > 0).Sum();  // LINQ
 ```
 
-- **읽기는 절대 데이터를 만들지 않습니다** — `grid[i]`·`grid[i][j]`를 조회만 하면 행이 생기지 않습니다(`Count`도 그대로).
+- **읽기는 절대 데이터를 만들지 않습니다** — `grid[i]`·`grid[i][j]`를 조회만 하면 행이 생기지 않고 `Count`도 그대로입니다.
 - **쓰기만 생성** — `grid[i][j] = v`를 하는 그 순간에만 행·열이 만들어집니다.
 - `grid[i]`(`AutoRow<T>`)는 **`IList<T>`를 구현**합니다 — `Add`·`AddRange`·`Insert`·`Remove`·`RemoveAt`·`RemoveAll`·`Clear`·`Contains`·`IndexOf`·`Find`·`FindAll`·`FindIndex`·`Sort`·`Reverse`·`ToArray`·`ForEach`·LINQ 등 List 연산을 그대로 씁니다. 실제 `AutoList` 행은 `Row(i)`, 통째 교체는 `SetRow(i, …)`.
 - 프록시를 변수·파라미터·반환에 담을 땐 `AutoRow<T>` 타입으로 명명합니다: `AutoRow<int> row = grid[i];`.

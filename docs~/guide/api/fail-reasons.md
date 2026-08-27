@@ -126,6 +126,7 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `ServerCodeEmpty` | 서버 코드가 비어 있습니다 |
+| `ServerTimeNotSynced` | 아직 서버 시각 기준점이 없습니다. 이 호출이 동기화를 시작하므로 잠시 뒤부터 성공합니다 |
 
 ## 탈퇴
 

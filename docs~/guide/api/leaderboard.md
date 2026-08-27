@@ -11,7 +11,7 @@
 | [`SetRowAsync`](/guide/leaderboard/set-player-data) | 본인 추가 데이터 수정 |
 | [`DeleteMyScoreAsync<T>`](/guide/leaderboard/delete-my-score) | 본인 기록 삭제 |
 
-리더보드 생성·수정·삭제와 컬럼 관리는 어드민(Retool) 전용이라 SDK에 없습니다.
+리더보드 생성·수정·삭제와 컬럼 관리는 Retool 어드민 전용이라 SDK에 없습니다.
 
 ::: tip
 리더보드는 [생성한 클래스](/guide/leaderboard/columns#generate) 타입으로 지정합니다. 순위에 함께 표시할 값도 그 클래스의 `Row`로 주고받습니다.

@@ -14,7 +14,7 @@ IAPProductInfo IAPFacade.GetProductInfo(string productId)
 
 **반환**
 
-카탈로그에 없으면(초기화 전이거나 잘못된 ID) `null`.
+초기화 전이거나 잘못된 ID로 카탈로그에 없으면 `null`.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|

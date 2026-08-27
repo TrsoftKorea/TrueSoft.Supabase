@@ -33,7 +33,7 @@ Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
-| `SupabaseReason.AppleSignInUnsupportedPlatform` | 에디터 등 미지원 환경 (iOS·Android 실기기 빌드에서 동작) |
+| `SupabaseReason.AppleSignInUnsupportedPlatform` | 에디터 등 미지원 환경. iOS·Android 실기기 빌드에서 동작 |
 | `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link)을 사용 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

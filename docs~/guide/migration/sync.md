@@ -27,7 +27,7 @@ PlayerSave.UseNanooConverters(map => map
     .CompareBy(r => r.lastSyncedAt, fallbackUtcOffsetHours: 9));   // 한국 표준시
 ```
 
-값을 문자열로 변환해 `DateTimeOffset`으로 파싱하므로 `string`·`DateTime` 등 타입은 상관없습니다. 값에 `Z`나 `+09:00` 같은 시간대 정보가 이미 있으면 그걸 그대로 쓰고, 없을 때만 `fallbackUtcOffsetHours`(기본값 0=UTC)를 적용합니다 — 기기 시간대에 따라 비교 결과가 달라지는 걸 막기 위함입니다.
+값을 문자열로 변환해 `DateTimeOffset`으로 파싱하므로 `string`·`DateTime` 등 타입은 상관없습니다. 값에 `Z`나 `+09:00` 같은 시간대 정보가 이미 있으면 그걸 그대로 쓰고, 없을 때만 `fallbackUtcOffsetHours`를 적용합니다. 기본값은 UTC를 뜻하는 0입니다 — 기기 시간대에 따라 비교 결과가 달라지는 걸 막기 위함입니다.
 
 ## 데이터 변환 커스터마이징
 
@@ -52,8 +52,8 @@ PlayerSave.UseNanooConverters(map => map
         s => s == "Y"));
 ```
 
-- **필드 선택식**(`r => r.itemIds`)으로 키 문자열 대신 필드를 직접 가리키므로 타입(`List<int>`·`bool`)도 자동 추론됩니다.
-- 등록한 **그 필드만** 가공되고, 나머지(및 `updated_at`)는 자동 처리 → 동기화 비교도 그대로 유지됩니다.
+- **필드 선택식**, 즉 `r => r.itemIds`로 키 문자열 대신 필드를 직접 가리키므로 `List<int>`·`bool` 같은 타입도 자동 추론됩니다.
+- 등록한 **그 필드만** 가공되고, `updated_at`을 포함한 나머지는 자동 처리되어 동기화 비교도 그대로 유지됩니다.
 - 플레이나누 직렬화·역직렬화 양쪽에 적용되며, **REST/DB 저장·로드에는 영향이 없습니다.**
 
-단순한 키명 차이는 C# 필드명을 플레이나누 키(camelCase)에 맞추면 자동으로 연결됩니다. DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 영향이 없습니다.
+단순한 키명 차이는 C# 필드명을 카멜케이스인 플레이나누 키에 맞추면 자동으로 연결됩니다. DB 컬럼명은 `[DataColumn]`으로 별도 지정하므로 영향이 없습니다.

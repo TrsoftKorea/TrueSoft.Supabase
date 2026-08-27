@@ -31,6 +31,7 @@ else
 | `SupabaseReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
 | `SupabaseReason.GoogleSignInFailed` | Play Services 오류 |
 | `SupabaseReason.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-android)을 사용 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

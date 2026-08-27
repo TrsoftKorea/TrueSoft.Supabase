@@ -7,11 +7,11 @@
 | [`SupabaseIAP.CreateIAPAsync`](/guide/iap/usage) | 플랫폼 자동 감지 IAP 생성·초기화 · 권장 |
 
 ::: info
-영수증 검증은 SDK가 내부에서 자동으로 수행합니다. 중복 지급 방지·결제 금액 기록은 [더 알아보기](/guide/iap/advanced)를 참고하세요.
+영수증 검증은 SDK가 내부에서 자동으로 수행합니다. 중복 지급 방지는 [사용법](/guide/iap/usage#duplicate-grant), 결제 금액 기록은 [결제 금액 자동 기록](/guide/iap/advanced#auto-price-tracking)을 참고하세요.
 :::
 
 ::: details 플랫폼 전용 생성
-구체 파사드 타입(`GooglePlayIAPFacade` / `AppleIAPFacade`)이 필요한 경우에만 사용합니다. 일반적인 크로스플랫폼 게임은 위 `CreateIAPAsync`로 충분합니다.
+구체 파사드 타입인 `GooglePlayIAPFacade`·`AppleIAPFacade`가 필요한 경우에만 사용합니다. 일반적인 크로스플랫폼 게임은 위 `CreateIAPAsync`로 충분합니다.
 
 | 메서드 | 설명 |
 |--------|------|

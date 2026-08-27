@@ -34,6 +34,7 @@ else
 
 | Reason | 설명 |
 |--------|------|
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-ios)을 사용 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

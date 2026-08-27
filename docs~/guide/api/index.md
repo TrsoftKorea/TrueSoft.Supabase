@@ -13,7 +13,7 @@ if (await Supabase.SignInAnonymouslyAsync())
     StartGame();
 ```
 
-**에러 코드 분기** — 결과를 변수로 받아 `Reason`(enum)으로 분기합니다.
+**에러 코드 분기** — 결과를 변수로 받아 enum 타입인 `Reason`으로 분기합니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
@@ -34,7 +34,7 @@ if (result.Reason == SupabaseReason.UserBanned)
 ```
 
 ::: tip 왜 이렇게 설계했나
-실패(네트워크·차단·중복 등)는 게임에서 흔한 정상 결과라 예외를 던지지 않습니다. `SupabaseResult`는 `bool`로 암묵 변환되어 기존 `if (await ...())` 코드와 그대로 호환되면서, 필요할 때만 `Reason`(타입 안전 분기)·`ErrorCode`(원문)·`BanInfo`로 원인을 꺼낼 수 있습니다.
+실패는 네트워크·차단·중복 등 게임에서 흔한 정상 결과라 예외를 던지지 않습니다. `SupabaseResult`는 `bool`로 암묵 변환되어 기존 `if (await ...())` 코드와 그대로 호환되면서, 필요할 때만 타입 안전 분기용 `Reason`, 원문 문자열인 `ErrorCode`, `BanInfo`로 원인을 꺼낼 수 있습니다.
 :::
 
 ## 분류

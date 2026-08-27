@@ -49,16 +49,16 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 
 | 함수 이름 | 필요 기능 |
 |-----------|----------|
-| `displayname-get` | 공개 프로필 — 닉네임 조회 |
-| `displayname-set` | 공개 프로필 — 닉네임 설정 |
-| `admin-displayname-set` | 어드민 — 닉네임 강제 변경 (Retool 사용 시) |
-| `withdrawal-cancel-issue` | 공개 프로필 — 탈퇴 취소 토큰 발급 |
-| `withdrawal-cancel-redeem` | 공개 프로필 — 탈퇴 취소 토큰 사용 |
-| `withdrawal-guard` | 공개 프로필 — 탈퇴 계정 자동 처리 |
-| `purchase-verify-google` | 인앱 결제 — Android |
-| `purchase-verify-apple` | 인앱 결제 — iOS (SK2 / Unity IAP v5) |
-| `purchase-verify-apple-legacy` | 인앱 결제 — iOS (SK1 / Unity IAP v4 또는 forceStoreKit1) |
-| `get-ban-info` | 인증 — 차단된 계정 정보 조회 |
+| `displayname-get` | 공개 프로필 · 닉네임 조회 |
+| `displayname-set` | 공개 프로필 · 닉네임 설정 |
+| `admin-displayname-set` | 어드민 · 닉네임 강제 변경. Retool 사용 시 |
+| `withdrawal-cancel-issue` | 공개 프로필 · 탈퇴 취소 토큰 발급 |
+| `withdrawal-cancel-redeem` | 공개 프로필 · 탈퇴 취소 토큰 사용 |
+| `withdrawal-guard` | 공개 프로필 · 탈퇴 계정 자동 처리 |
+| `purchase-verify-google` | 인앱 결제 · Android |
+| `purchase-verify-apple` | 인앱 결제 · iOS · SK2 · Unity IAP v5 |
+| `purchase-verify-apple-legacy` | 인앱 결제 · iOS · SK1 · Unity IAP v4 또는 forceStoreKit1 |
+| `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
 
 ## 4. 시크릿 설정
 
@@ -66,8 +66,8 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 
 | 시크릿 키 | 필수 | 용도 |
 |----------|----|------|
-| `CANCEL_TOKEN_SECRET` | 탈퇴 취소 사용 시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Android IAP 사용 시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
-| `APPLE_SHARED_SECRET` | iOS IAP 사용 시 (SK1) | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
+| `CANCEL_TOKEN_SECRET` | 탈퇴&nbsp;취소&nbsp;사용&nbsp;시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
+| `APPLE_SHARED_SECRET` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시 | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
 
 발급 절차는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)을 참고하세요.

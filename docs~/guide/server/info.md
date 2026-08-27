@@ -4,14 +4,14 @@
 Task<SupabaseResult<ServerInfo>> Supabase.GetServerInfoAsync()
 ```
 
-DB에 기록된 내 서버(`profiles.server_id`)에 대응하는 서버 코드를 조회합니다. 서버 배정은 로그인 시 자동으로 동기화됩니다.
+DB 컬럼 `profiles.server_id`에 기록된 내 서버에 대응하는 서버 코드를 조회합니다. 서버 배정은 로그인 시 자동으로 동기화됩니다.
 
 **반환**
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 | `ServerId` | `string` | 서버의 내부 ID |
-| `ServerCode` | `string` | 서버 코드 (예: `"GLOBAL"`, `"KR1"`) |
+| `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
 
 **에러 코드**
 

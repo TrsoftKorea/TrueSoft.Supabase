@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.LinkAppleToGuestAsync()
 ```
 
-익명(게스트) 계정에 Apple 계정을 연동합니다(iOS). 기존 계정의 데이터는 그대로 이어집니다. [대시보드 설정](./setup)을 먼저 완료하세요.
+익명 계정에 iOS에서 Apple 계정을 연동합니다. 기존 계정의 데이터는 그대로 이어집니다. [대시보드 설정](./setup)을 먼저 완료하세요.
 
 ```csharp
 var result = await Supabase.LinkAppleToGuestAsync();
@@ -28,7 +28,7 @@ else
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
-| `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경(에디터·Android) |
+| `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경. 에디터·Android 포함 |
 | `SupabaseReason.AnonymousRequired` | 익명 세션이 아닌 상태 |
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |

@@ -49,7 +49,7 @@ switch (result.Data.Status)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Status` | `MatchResultStatus` | `Pending`(상대 신고 대기) · `Paid`(이번 호출로 지급 완료) · `AlreadyPaid`(이전에 이미 지급된 세션을 재신고) |
+| `.Status` | `MatchResultStatus` | `Pending`은 상대 신고 대기, `Paid`는 이번 호출로 지급 완료, `AlreadyPaid`는 이전에 이미 지급된 세션을 재신고한 경우 |
 | `.Rewarded` | `bool` | 본인에게 보상 우편이 지급됐는지. `Pending`이면 항상 false |
 
 **에러 코드**

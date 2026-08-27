@@ -1,5 +1,7 @@
 # 자동 로그인
 
+## 자동 로그인 호출
+
 ```csharp
 Task<SupabaseSignInResult> Supabase.TriggerAutoLoginAsync()
 ```
@@ -38,6 +40,6 @@ else
 
 첫 실행이나 로그아웃 직후에는 `AutoLoginNoToken`이 정상입니다. 오류로 안내하지 말고 로그인 화면을 띄우세요.
 
-::: info 로그인과 로드는 별개 단계
+## 로그인과 로드는 별개 단계 {#login-load-separate}
+
 `TriggerAutoLoginAsync()`는 세션만 복원하고 유저 데이터는 로드하지 않습니다. 수동 로그인과 동일하게 성공 후 [로드](/guide/user-data/load)를 직접 호출하세요.
-:::

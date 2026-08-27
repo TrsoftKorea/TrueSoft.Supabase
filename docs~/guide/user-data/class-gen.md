@@ -10,7 +10,7 @@
 |----|------|
 | **컬럼** | DB 컬럼명. `[DataColumn]` 매핑 키로 그대로 쓰입니다. |
 | **필드명** | 생성될 C# 필드·프로퍼티 이름. 기본값은 컬럼명. 컬럼명과 다르면 직렬화 보존을 위해 `[JsonProperty("컬럼명")]`이 자동으로 붙습니다. |
-| **저장 주기** | 자동 저장 배치 우선순위 — 보통(기본) · 짧게 · 길게. |
+| **저장 주기** | 자동 저장 배치 우선순위. 기본은 보통이며 짧게·길게 중 선택 가능 |
 | **기본값** | 새 유저 시작값. DB 컬럼에 기본값이 있으면 가져올 때 자동으로 채워집니다. 스칼라 필드는 `= 값` 초기화로, Auto 컬렉션은 `[AutoDefault]`로 생성됩니다. 요소가 클래스라도 마찬가지입니다. **모든 컬럼은 기본값이 필수** — 비어 있으면 경고가 뜨고 소스 생성이 막힙니다. |
 | **포함** | 해제하면 그 컬럼은 생성에서 제외됩니다. |
 | **타입** | 생성될 C# 타입. 단순 값 컬렉션은 생성 시 `AutoList` / `AutoDict`로 변환됩니다. [데이터 타입](../data-types/auto-collections)을 참고하세요. |
@@ -27,9 +27,9 @@
    | `컬럼` | DB 컬럼명 — **매칭 키이므로 수정 금지** |
    | `필드명` | C# 필드명 |
    | `타입` | `int`·`List<bool>`·`Dictionary<string, int>` 등 |
-   | `저장주기` | `1`(보통)·`0`(짧게, 빠르게 저장)·`2`(길게, 느리게 저장). 알 수 없는 값은 보통(`1`) |
+   | `저장주기` | `1`은 보통, `0`은 짧게로 빠르게 저장, `2`는 길게로 느리게 저장. 알 수 없는 값은 보통인 `1` |
    | `기본값` | 기본값. **모든 컬럼 필수** — 빈 칸이면 소스 생성이 막힙니다 |
-   | `포함` | `1`(포함) / `0`(제외) |
+   | `포함` | `1`은 포함, `0`은 제외 |
 
 ::: warning 모든 필드는 기본값 필수
 포함된 모든 컬럼은 `default`를 반드시 채워야 합니다. 비어 있으면 표의 기본값 칸에 `⚠ 필요`가 표시되고 **소스 생성이 차단**됩니다. 스칼라는 `0`·`false`·문자열 같은 시작값을, 값 컬렉션은 슬롯 기본값을, 클래스 요소 컬렉션은 생성자 인자를 씁니다. 빈 문자열을 기본값으로 두려면 `""`처럼 명시하세요. (`account_id`·`user_id`·`updated_at` 등 시스템 컬럼은 애초에 목록에서 제외됩니다.)
@@ -57,7 +57,12 @@
 
 ```csharp
 [DataColumn("user_id")] [JsonProperty("user_id")] internal int playerId;
-public static int PlayerId { get => Instance.Current.playerId; set { Instance.Current.playerId = value; Instance.MarkDirty(); } }
+
+public static int PlayerId
+{
+    get => Instance.Current.playerId;
+    set { if (EqualityComparer<int>.Default.Equals(Instance.Current.playerId, value)) return; Instance.Current.playerId = value; Instance.MarkDirty(DataSavePriority.Normal); }
+}
 ```
 
 **기본값** 칸을 채우면 타입에 따라 다르게 생성됩니다. 스칼라는 필드 초기화식, [Auto 컬렉션](../data-types/auto-collections)은 범위 밖 요소 기본값을 정하는 `[AutoDefault]`로 변환됩니다. DB 컬럼에 `default 1` 같은 리터럴 기본값이 설정돼 있으면 스키마를 가져올 때 이 칸에 자동으로 채워지며, `now()`·`gen_random_uuid()` 같은 함수 기본값이나 jsonb 기본값은 제외됩니다.
@@ -113,6 +118,9 @@ jsonb 컬럼은 가져올 때 미지정 상태를 뜻하는 `Dictionary<string, 
 
 ```csharp
 // PlayerSave.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
+using System;
+using System.Collections.Generic;
+using UnityEngine;
 using Newtonsoft.Json;
 using TrueBase.Core.Data;
 using TrueBase.Unity;
@@ -135,24 +143,24 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
         [DataColumn("updated_at")] internal string        updated_at;                    // 동기화 기준 컬럼 — 항상 포함
     }
 
-    // 스칼라: get/set — 쓰면 MarkDirty 자동
+    // 스칼라: get/set — 값이 실제로 바뀔 때만 MarkDirty
     public static int Level
     {
         get => Instance.Current.level;
-        set { Instance.Current.level = value; Instance.MarkDirty(); }
+        set { if (EqualityComparer<int>.Default.Equals(Instance.Current.level, value)) return; Instance.Current.level = value; Instance.MarkDirty(DataSavePriority.Normal); }
     }
 
     public static int Coins
     {
         get => Instance.Current.coins;
-        set { Instance.Current.coins = value; Instance.MarkDirty(); }
+        set { if (EqualityComparer<int>.Default.Equals(Instance.Current.coins, value)) return; Instance.Current.coins = value; Instance.MarkDirty(DataSavePriority.Normal); }
     }
 
     // 컬렉션: 일반 컬렉션처럼 사용 — 제자리 수정도 자동 동기화에 반영
     public static List<int> Inventory
     {
         get => Instance.Current.inventory;
-        set { Instance.Current.inventory = value ?? new List<int>(); Instance.MarkDirty(); }
+        set { Instance.Current.inventory = value ?? new List<int>(); Instance.MarkDirty(DataSavePriority.Normal); }
     }
 }
 ```

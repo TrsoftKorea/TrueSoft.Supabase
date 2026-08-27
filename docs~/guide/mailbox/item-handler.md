@@ -1,6 +1,6 @@
 # 아이템 핸들러 등록
 
-우편 보상(`items[].key`)을 실제로 게임에 지급하는 로직은 `IMailItemHandler`를 구현해 앱 시작 시 등록합니다. 로그인 전에 등록해도 됩니다.
+`items[].key`로 표현되는 우편 보상을 실제로 게임에 지급하는 로직은 `IMailItemHandler`를 구현해 앱 시작 시 등록합니다. 로그인 전에 등록해도 됩니다.
 
 ```csharp
 public sealed class GoldMailItemHandler : IMailItemHandler

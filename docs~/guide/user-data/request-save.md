@@ -4,7 +4,7 @@
 SupabaseResult Supabase.RequestSave()
 ```
 
-쿨다운을 무시하고 즉시 전송을 요청하되 완료를 기다리지 않습니다(fire-and-forget). 완료를 확인해야 하면 [즉시 저장 후 대기](./save-now)를 씁니다.
+쿨다운을 무시하고 즉시 전송을 요청하되 완료를 기다리지 않습니다. 완료를 확인해야 하면 [즉시 저장 후 대기](./save-now)를 씁니다.
 
 ```csharp
 Supabase.RequestSave();   // 완료를 기다리지 않음

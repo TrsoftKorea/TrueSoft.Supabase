@@ -22,13 +22,11 @@ if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `timeoutMs` | 전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패 (기본값: 5000) |
+| `timeoutMs` | 전송 완료를 기다리는 최대 시간, 밀리초 단위. 초과 시 실패 (기본값: 5000) |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뜀. 오류 아님 |
-| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않음 |
-| `SupabaseReason.UserSaveFlushFailed` | 서버 거부 또는 네트워크 오류 |
 | `SupabaseReason.UserSaveTimeout` | `timeoutMs` 초과. 전송은 계속 진행될 수 있음 |
