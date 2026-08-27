@@ -15,8 +15,8 @@ Supabase는 Android 웹 OAuth의 client_id로 **Client IDs 목록의 첫 값**�
 
 | 설정 위치 | 값 | 흐름 |
 |----------|-----|------|
-| Apple Services ID **Return URLs** | `https://<프로젝트-ref>.supabase.co/auth/v1/callback` | Apple → Supabase |
-| Supabase **Redirect URLs** | `{패키지이름}://login-callback` | Supabase → 앱 |
+| Apple&nbsp;Services&nbsp;ID&nbsp;**Return&nbsp;URLs** | `https://<프로젝트-ref>.supabase.co/auth/v1/callback` | Apple → Supabase |
+| Supabase&nbsp;**Redirect&nbsp;URLs** | `{패키지이름}://login-callback` | Supabase → 앱 |
 
 ## aud와 Client IDs {#aud}
 

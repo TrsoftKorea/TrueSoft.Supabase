@@ -29,12 +29,12 @@ Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합
 - **Web Authentication Configuration** 구성 화면에서 Primary App ID를 선택하고 등록합니다.
   - **Domains and Subdomains**: `<프로젝트-ref>.supabase.co`
   - **Return URLs**: `https://<프로젝트-ref>.supabase.co/auth/v1/callback`
-- **Sign in with Apple Key(.p8)**를 발급해 둡니다.
+- 확장자가 `.p8`인 **Sign in with Apple Key**를 발급해 둡니다.
 
 **Supabase · Providers > Apple**
 
 - **Client IDs**: 위 Bundle ID 앞에 **Services ID를 맨 앞에 오도록 추가**합니다. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](./setup-details#client-ids))
-- **Secret Key (for OAuth)**: [client_secret(JWT)을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 넣습니다.
+- OAuth에 쓰는 **Secret Key**는 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 JWT 형태로 넣습니다.
 
 **Supabase · URL Configuration**
 
