@@ -28,8 +28,14 @@ jobs:
           cache-dependency-path: Admin~/package-lock.json
       - run: npm ci
         working-directory: Admin~
+      # Cloudflare 대시보드의 "환경 변수"는 여기선 안 먹는다 — 빌드가 Cloudflare가 아니라
+      # 여기(GitHub Actions)에서 일어나기 때문이다. 전부 공개돼도 되는 값(README 참고).
       - run: npm run build
         working-directory: Admin~
+        env:
+          VITE_GOOGLE_CLIENT_ID: 782622202301-336bs6o064t4i739lcuo1e4idkh8kkt2.apps.googleusercontent.com
+          VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
+          VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
       # 첫 실행 때만 필요 — 프로젝트가 이미 있으면 에러가 나지만 그냥 넘어간다.
       - uses: cloudflare/wrangler-action@v3
         continue-on-error: true
