@@ -43,8 +43,14 @@ namespace TrueBase.Editor
 
         private static void InjectGradleDependencies(string path)
         {
-            const string credentialsMarker = "androidx.credentials";
-            const string depsBlock        = "dependencies {";
+            // EDM(External Dependency Manager)이 설치돼 있으면 GoogleLoginDependencies.xml을
+            // 이미 해석해 반영했다고 신뢰하고 건너뛴다. build.gradle 텍스트에 "androidx.credentials"가
+            // 있는지로 판단하던 예전 방식은, EDM이 의존성을 텍스트 선언이 아니라 실제 AAR 파일 배치로
+            // 해석하는 경우(흔한 동작) 이 문자열이 안 남아 True Positive를 못 잡고 이중 선언으로
+            // 이어져 R8 단계에서 androidx.core 클래스 중복(버전 충돌)을 일으킬 수 있었다.
+            if (IsExternalDependencyManagerInstalled()) return;
+
+            const string depsBlock = "dependencies {";
             const string injection =
                 "\n    // TrueSoft Supabase SDK - Google Login (CredentialManager)\n" +
                 "    implementation 'androidx.credentials:credentials:1.3.0'\n" +
@@ -56,8 +62,8 @@ namespace TrueBase.Editor
 
             var content = File.ReadAllText(buildGradle);
 
-            // EDM 등으로 이미 포함된 경우 건너뜀
-            if (content.Contains(credentialsMarker)) return;
+            // 이미 들어가 있으면(다른 경로로든) 건너뜀
+            if (content.Contains("androidx.credentials")) return;
 
             var idx = content.IndexOf(depsBlock, StringComparison.Ordinal);
             if (idx < 0) return;
@@ -65,6 +71,17 @@ namespace TrueBase.Editor
             var insertAt = idx + depsBlock.Length;
             content = content.Substring(0, insertAt) + injection + content.Substring(insertAt);
             File.WriteAllText(buildGradle, content);
+        }
+
+        /// <summary>External Dependency Manager for Unity(Play Services Resolver)가 프로젝트에 설치돼 있는지 확인합니다.</summary>
+        private static bool IsExternalDependencyManagerInstalled()
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetType("GooglePlayServices.PlayServicesResolver") != null)
+                    return true;
+            }
+            return false;
         }
     }
 }
