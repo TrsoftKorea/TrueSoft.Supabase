@@ -1,0 +1,38 @@
+name: Deploy Admin to Cloudflare Pages
+
+# Cloudflare Pages의 네이티브 Git 연동(GitHub 앱)을 쓰지 않는다 — 이 저장소가 조직(TrsoftKorea)
+# 소속이라 그 앱을 조직에 새로 설치할 권한이 없어서, wrangler-action으로 직접 배포한다.
+# 필요한 저장소 시크릿(Settings > Secrets and variables > Actions):
+#   CLOUDFLARE_API_TOKEN   — Account/Cloudflare Pages/Edit 권한으로 발급
+#   CLOUDFLARE_ACCOUNT_ID  — Cloudflare 대시보드 우측에서 확인
+
+on:
+  push:
+    branches: [main]
+    paths: ['Admin~/**', '.github/workflows/admin-deploy.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Admin~/package-lock.json
+      - run: npm ci
+        working-directory: Admin~
+      - run: npm run build
+        working-directory: Admin~
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: Admin~
+          command: pages deploy dist --project-name=truebase-admin
