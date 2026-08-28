@@ -90,7 +90,10 @@ namespace TrueBase.Unity
             _storeController.OnPurchaseFailed       += OnPurchaseFailedHandler;
 
             await _storeController.Connect();
-            OnStoreConnected(_storeController);
+            // Dispose()가 await 도중 _storeController를 지웠을 수 있으니 지역 변수로 한 번만 읽는다.
+            var connectedController = _storeController;
+            if (connectedController != null)
+                OnStoreConnected(connectedController);
 
             var defs = productIds
                 .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -221,6 +224,9 @@ namespace TrueBase.Unity
                 return;
             }
 
+            // Dispose()가 콜백 대기 중 _storeController를 지워도 소비 처리를 놓치지 않도록 미리 붙잡아 둔다.
+            var controller = _storeController;
+
             bool granted;
             try
             {
@@ -234,11 +240,10 @@ namespace TrueBase.Unity
 
             if (granted)
             {
-                // 소비 처리 전에 서버에 지급 완료를 기록한다 — 실패해도(네트워크 등) 지급 자체는
-                // 이미 끝났으므로 소비까지는 그대로 진행한다.
+                // 지급 완료 기록은 결과를 기다리지 않는다 — 실패해도(네트워크 등) 지급·소비 자체는 막지 않는다.
                 if (!string.IsNullOrEmpty(orderId))
-                    await SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
-                _storeController?.ConfirmPurchase(pendingOrder);
+                    _ = SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
+                controller?.ConfirmPurchase(pendingOrder);
             }
             else
                 Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");

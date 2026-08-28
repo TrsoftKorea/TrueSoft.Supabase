@@ -3180,6 +3180,7 @@ namespace TrueBase.Unity
             _chat = null;
             _remoteConfig = null;
             _functions = null;
+            DisposeActiveIapFacade();
 
             if (!preserveSession)
                 UserSaveStaticSyncRegistry.ResetAll();

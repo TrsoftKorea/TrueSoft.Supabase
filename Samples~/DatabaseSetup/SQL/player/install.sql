@@ -2953,23 +2953,32 @@ create trigger tr_after_purchase_insert
 -- 여부를 기억해 두었다가 재처리 시 onGrant에 alreadyGranted로 알려줍니다.
 -- =============================================================================
 
+-- 반환 타입 변경(void → boolean) 시 CREATE OR REPLACE로는 안 바뀌므로 먼저 지운다.
+drop function if exists public.ts_mark_purchase_granted(text);
+
 create or replace function public.ts_mark_purchase_granted(p_order_id text)
-returns void
+returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_row_count integer;
 begin
   update public.purchases
      set granted_at = now()
    where order_id = p_order_id
      and account_id = auth.uid()
      and granted_at is null;
+
+  -- 호출 계정과 주문 소유 계정이 다르면(계정 전환 중 호출 등) 0행 갱신 — 호출부가 구분할 수 있게 알린다.
+  get diagnostics v_row_count = row_count;
+  return v_row_count > 0;
 end;
 $$;
 
 comment on function public.ts_mark_purchase_granted(text) is
-  '주문 orderId를 지급 완료로 표시. onGrant가 true를 반환하면 SDK가 내부적으로 호출. SECURITY DEFINER, 본인 소유 주문만 갱신.';
+  '주문 orderId를 지급 완료로 표시. onGrant가 true를 반환하면 SDK가 내부적으로 호출. SECURITY DEFINER, 본인 소유 주문만 갱신. 반환값은 실제 갱신 행 존재 여부.';
 
 revoke all on function public.ts_mark_purchase_granted(text) from public, anon, authenticated;
 grant execute on function public.ts_mark_purchase_granted(text) to authenticated;
@@ -7858,6 +7867,9 @@ grant execute on function public.ts_leaderboard_delete_my_score(text, int)      
 -- 클래스 생성기 전용(무인증). 등록 컬럼의 이름+타입만 노출(민감정보 아님) → anon 도 허용.
 grant execute on function public.ts_leaderboard_columns_meta(text)                    to anon, authenticated;
 grant execute on function public.ts_leaderboard_list_meta()                           to anon, authenticated;
+
+-- 쿠폰
+grant execute on function public.ts_coupon_redeem(text)                               to authenticated;
 
 -- 채팅
 grant execute on function public.ts_chat_send(text, text)                             to authenticated;

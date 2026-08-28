@@ -256,9 +256,30 @@ namespace TrueBase.Unity
         {
             if (string.IsNullOrEmpty(nanooJson)) return DateTimeOffset.MinValue;
             var map = GetNanooMap();
-            var val = Newtonsoft.Json.Linq.JObject.Parse(nanooJson)[map?.CompareJsonKey ?? "updated_at"]?.ToString();
-            if (string.IsNullOrEmpty(val))
+
+            var jVal = Newtonsoft.Json.Linq.JObject.Parse(nanooJson)[map?.CompareJsonKey ?? "updated_at"];
+            if (jVal == null)
                 // 비교 필드 없음 = 이관 전 순수 PlayNANOO 데이터 → PlayNANOO 항상 우선
+                return DateTimeOffset.MaxValue;
+
+            if (map != null && map.HasCompareBy)
+            {
+                // CompareBy(예: r => DateTime.FromOADate(r.field))가 등록돼 있으면 원시 JSON 값만으로는
+                // 그 변환을 재현할 수 없다 — TRow로 역직렬화해 CompareSelector를 그대로 태운다.
+                try
+                {
+                    var row = NanooDeserializeJson(nanooJson);
+                    if (row != null) return map.CompareSelector(row);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"{LogTag} 플레이나누 비교 필드 변환 실패: {e.Message}");
+                }
+                return DateTimeOffset.MaxValue;
+            }
+
+            var val = jVal.ToString();
+            if (string.IsNullOrEmpty(val))
                 return DateTimeOffset.MaxValue;
             var parsed = NanooTimestamp.Parse(val, map?.CompareFallbackUtcOffsetHours ?? 0);
             return parsed == DateTimeOffset.MinValue ? DateTimeOffset.MaxValue : parsed;

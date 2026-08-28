@@ -227,6 +227,9 @@ namespace TrueBase.Unity
                 return;
             }
 
+            // Dispose()가 콜백 대기 중 Controller를 지워도 소비 처리를 놓치지 않도록 미리 붙잡아 둔다.
+            var controller = Controller;
+
             bool granted;
             try
             {
@@ -240,11 +243,10 @@ namespace TrueBase.Unity
 
             if (granted)
             {
-                // 소비 처리 전에 서버에 지급 완료를 기록한다 — 실패해도(네트워크 등) 지급 자체는
-                // 이미 끝났으므로 소비까지는 그대로 진행한다.
+                // 지급 완료 기록은 결과를 기다리지 않는다 — 실패해도(네트워크 등) 지급·소비 자체는 막지 않는다.
                 if (!string.IsNullOrEmpty(orderId))
-                    await SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
-                Controller?.ConfirmPendingPurchase(product);
+                    _ = SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
+                controller?.ConfirmPendingPurchase(product);
             }
             else
                 Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");

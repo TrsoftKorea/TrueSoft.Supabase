@@ -190,6 +190,7 @@ namespace TrueBase.Unity
             return (true, new IAPPurchaseResponse {
                 ok               = true,
                 already_verified = r.already_verified,
+                already_granted  = r.already_granted,
                 order_id         = r.order_id,
                 reason           = r.reason,
                 store            = "google_play"
@@ -209,6 +210,7 @@ namespace TrueBase.Unity
             return (true, new IAPPurchaseResponse {
                 ok               = true,
                 already_verified = r.already_verified,
+                already_granted  = r.already_granted,
                 order_id         = r.transaction_id,
                 product_id       = r.product_id,
                 reason           = r.reason,

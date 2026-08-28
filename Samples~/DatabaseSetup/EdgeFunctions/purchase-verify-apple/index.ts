@@ -25,6 +25,7 @@ type JWSTransactionPayload = {
   currency?: string;   // ISO 4217 통화 코드 (예: "KRW", "USD")
   purchaseDate?: number;
   type?: string;
+  appAccountToken?: string;  // 결제 시점에 클라이언트가 SetAppAccountToken으로 심어둔 계정 id
 };
 
 const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
@@ -123,6 +124,14 @@ Deno.serve(async (req) => {
   const transactionId = jwsData.transactionId ?? "";
   if (!transactionId) {
     return json({ ok: false, reason: "jws_missing_transaction_id" } satisfies VerifyResponse);
+  }
+
+  // 감사 모드 — 구글의 obfuscatedExternalAccountId와 같은 목적(결제 시점 계정과 검증 시점 계정 대조)
+  // 이지만, StoreKit 2의 SetAppAccountToken이 구매마다 값을 제대로 갱신하는지 아직 확인 전이라
+  // (새 구매마다 갱신 안 되고 첫 거래 값을 계속 돌려주는 사례가 보고돼 있음) 거부하지 않고 로그만
+  // 남긴다. 샌드박스 테스트로 신뢰성이 확인되면 구글과 동일하게 거부로 전환한다.
+  if (jwsData.appAccountToken && jwsData.appAccountToken !== user.id) {
+    console.warn(`[purchase-verify-apple] app_account_token_mismatch: token=${jwsData.appAccountToken}, caller=${user.id}, transaction=${transactionId}`);
   }
 
   const { data: profile } = await userClient

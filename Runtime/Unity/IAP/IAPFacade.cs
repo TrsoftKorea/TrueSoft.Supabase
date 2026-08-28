@@ -58,8 +58,16 @@ namespace TrueBase.Unity
         {
 #if UNITY_ANDROID
             var accountId = SupabaseSDK.CurrentAccountId;
-            if (!string.IsNullOrEmpty(accountId))
+            if (string.IsNullOrEmpty(accountId))
+                Debug.LogWarning($"{LogTag} 로그인 전 초기화되어 계정 바인딩을 건너뜁니다 — 이 파사드로 처리되는 결제는 오지급 방어(계정 대조)가 적용되지 않습니다.");
+            else
                 controller.GooglePlayStoreExtendedService?.SetObfuscatedAccountId(accountId);
+#elif UNITY_IOS
+            // 감사 모드 — StoreKit 2의 SetAppAccountToken이 구매마다 값을 제대로 갱신하는지
+            // 아직 확인 전이라(알려진 버그 보고 있음) 서버는 거부하지 않고 로그만 남긴다.
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (!string.IsNullOrEmpty(accountId) && Guid.TryParse(accountId, out var token))
+                controller.AppleStoreExtendedService?.SetAppAccountToken(token);
 #endif
         }
 
