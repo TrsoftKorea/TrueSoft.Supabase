@@ -50,11 +50,13 @@ namespace TrueBase.Editor
             // 이어져 R8 단계에서 androidx.core 클래스 중복(버전 충돌)을 일으킬 수 있었다.
             if (IsExternalDependencyManagerInstalled()) return;
 
+            // 1.3.0 이상은 Unity 2022.3(JDK 11 고정)에서 R8 단계가 깨지는 사례가 보고돼
+            // 1.2.2(2024-04, 마지막 1.2.x 안정 버전)로 낮춰 둔다 — GoogleLoginDependencies.xml과 동일 버전 유지.
             const string depsBlock = "dependencies {";
             const string injection =
                 "\n    // TrueSoft Supabase SDK - Google Login (CredentialManager)\n" +
-                "    implementation 'androidx.credentials:credentials:1.3.0'\n" +
-                "    implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'\n" +
+                "    implementation 'androidx.credentials:credentials:1.2.2'\n" +
+                "    implementation 'androidx.credentials:credentials-play-services-auth:1.2.2'\n" +
                 "    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'\n";
 
             var buildGradle = Path.Combine(path, "build.gradle");
