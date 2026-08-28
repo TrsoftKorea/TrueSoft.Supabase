@@ -70,6 +70,7 @@ namespace TrueBase.Unity
                 if (!string.IsNullOrWhiteSpace(id))
                     builder.AddProduct(id, ProductType.Consumable);
 
+            ConfigureBuilder(builder);
             UnityPurchasing.Initialize(this, builder);
 
             var timeoutTask   = Task.Delay(timeoutMs);
@@ -200,6 +201,13 @@ namespace TrueBase.Unity
 
         /// <summary>로그 접두사. 서브클래스에서 재정의하세요.</summary>
         protected virtual string LogTag => "[Supabase.IAP]";
+
+        /// <summary>
+        /// <c>UnityPurchasing.Initialize</c> 호출 직전에 호출됩니다. Google Play 파사드는 이 시점에
+        /// 현재 계정을 <c>SetObfuscatedAccountId</c>로 심어, 결제 시점 계정과 검증 시점 계정이 달라지는
+        /// 것을 서버가 감지하게 합니다(계정 전환 중 미처리 주문이 다른 계정으로 넘어가 오지급되는 것을 방지).
+        /// </summary>
+        protected virtual void ConfigureBuilder(ConfigurationBuilder builder) { }
 
 
         /// <summary>

@@ -56,6 +56,7 @@ namespace TrueBase.Unity
             int                            timeoutMs = 10_000)
         {
             var facade = CreateIAP();
+            SupabaseSDK.RegisterActiveIapFacade(facade);
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
             var init = await facade.InitializeAsync(productIds, timeoutMs);
@@ -78,6 +79,7 @@ namespace TrueBase.Unity
             int                            timeoutMs = 10_000)
         {
             var facade = CreateGooglePlayIAP();
+            SupabaseSDK.RegisterActiveIapFacade(facade);
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
             var init = await facade.InitializeAsync(productIds, timeoutMs);
@@ -100,6 +102,7 @@ namespace TrueBase.Unity
             int                            timeoutMs = 10_000)
         {
             var facade = CreateAppleIAP();
+            SupabaseSDK.RegisterActiveIapFacade(facade);
             facade.OnGrantItemAsync = onGrant;
             if (onFailed != null) facade.OnPurchaseFailed += onFailed;
             var init = await facade.InitializeAsync(productIds, timeoutMs);

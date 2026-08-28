@@ -22,6 +22,7 @@ type GoogleProductPurchase = {
   orderId?: string;
   consumptionState?: number;
   purchaseTimeMillis?: string;
+  obfuscatedExternalAccountId?: string;  // 결제 시점에 클라이언트가 SetObfuscatedAccountId로 심어둔 계정 id
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -186,6 +187,14 @@ Deno.serve(async (req) => {
       ok: false,
       reason: "not_purchased",
     } satisfies VerifyResponse);
+  }
+
+  // 결제 시점에 클라이언트가 SetObfuscatedAccountId로 심어둔 계정과 지금 검증을 요청한 계정이
+  // 다르면 거부한다. 기기에서 계정을 바꿔 로그인한 사이, 이전 계정이 결제만 하고 검증 전에 남긴
+  // 미처리 주문이 새 계정으로 넘어와 그대로 지급되는 것을 막는다. (아직 한 번도 검증되지 않은
+  // 주문이라 purchase_token UNIQUE 검사만으로는 못 막는다 — 이 주문의 DB 행이 아직 없기 때문.)
+  if (googlePurchase.obfuscatedExternalAccountId && googlePurchase.obfuscatedExternalAccountId !== user.id) {
+    return json({ ok: false, reason: "purchase_owned_by_other_account" } satisfies VerifyResponse, 409);
   }
 
   // user_profiles는 SELECT가 공개이므로 account_id로 본인 행을 명시 필터

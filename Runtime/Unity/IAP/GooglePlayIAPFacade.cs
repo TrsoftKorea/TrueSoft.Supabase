@@ -45,6 +45,13 @@ namespace TrueBase.Unity
         }
 
 
+        protected override void OnStoreConnected(StoreController controller)
+        {
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (string.IsNullOrEmpty(accountId)) return;
+            controller.GooglePlayStoreExtendedService?.SetObfuscatedAccountId(accountId);
+        }
+
         protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder)
         {
             if (pendingOrder == null)

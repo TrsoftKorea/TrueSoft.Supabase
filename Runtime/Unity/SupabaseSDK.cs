@@ -2942,6 +2942,29 @@ namespace TrueBase.Unity
             return result.IsSuccess;
         }
 
+        /// <summary>내부: 현재 로그인된 계정의 account_id. 세션이 없으면 null.</summary>
+        internal static string CurrentAccountId => _currentSession?.User?.Id;
+
+        private static IDisposable _activeIapFacade;
+
+        /// <summary>
+        /// 내부: IAP 파사드가 자신을 등록합니다(<c>SupabaseIAP.CreateXxxAsync</c>에서 호출).
+        /// 계정 전환·로그아웃 시 자동으로 Dispose되어, 이전 파사드가 등록한 이벤트 핸들러가 남아있다가
+        /// 다음 계정의 세션으로 미처리 주문을 처리하는 것을 막는다.
+        /// </summary>
+        internal static void RegisterActiveIapFacade(IDisposable facade)
+        {
+            if (!ReferenceEquals(_activeIapFacade, facade))
+                _activeIapFacade?.Dispose();
+            _activeIapFacade = facade;
+        }
+
+        private static void DisposeActiveIapFacade()
+        {
+            _activeIapFacade?.Dispose();
+            _activeIapFacade = null;
+        }
+
         /// <summary>
         /// 세션을 설정합니다. <paramref name="kind"/>가 <see cref="SupabaseSessionChangeKind.NewSignIn"/>이면 서버에 새 세션 토큰을 등록합니다(중복 로그인 감지).
         /// </summary>
@@ -2954,6 +2977,7 @@ namespace TrueBase.Unity
                 _chat?.Reset();
                 _chat = null;
                 _remoteConfig = null;
+                DisposeActiveIapFacade();
             }
 
             _currentSession = session;
@@ -3028,6 +3052,7 @@ namespace TrueBase.Unity
             // 구독·커서·채널 캐시는 계정에 묶인 상태다. 남겨두면 다음 계정이 물려받는다.
             _chat?.Reset();
             _chat           = null;
+            DisposeActiveIapFacade();
             _pendingSignInProfile      = PublicProfile.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)

@@ -45,6 +45,13 @@ namespace TrueBase.Unity
         }
 
 
+        protected override void ConfigureBuilder(ConfigurationBuilder builder)
+        {
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (string.IsNullOrEmpty(accountId)) return;
+            builder.Configure<IGooglePlayConfiguration>().SetObfuscatedAccountId(accountId);
+        }
+
         protected override async Task ProcessPurchaseAsync(PurchaseEventArgs args)
         {
             var productId     = args.purchasedProduct.definition.id;

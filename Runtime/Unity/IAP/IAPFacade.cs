@@ -54,6 +54,15 @@ namespace TrueBase.Unity
 
         // 서버 검증 (플랫폼 자동 감지)
 
+        protected override void OnStoreConnected(StoreController controller)
+        {
+#if UNITY_ANDROID
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (!string.IsNullOrEmpty(accountId))
+                controller.GooglePlayStoreExtendedService?.SetObfuscatedAccountId(accountId);
+#endif
+        }
+
         protected override async Task ProcessPendingOrderAsync(PendingOrder pendingOrder)
         {
             if (pendingOrder == null)

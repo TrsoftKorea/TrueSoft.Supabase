@@ -52,6 +52,15 @@ namespace TrueBase.Unity
 
         // 서버 검증 (플랫폼 자동 감지)
 
+        protected override void ConfigureBuilder(ConfigurationBuilder builder)
+        {
+#if UNITY_ANDROID
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (!string.IsNullOrEmpty(accountId))
+                builder.Configure<IGooglePlayConfiguration>().SetObfuscatedAccountId(accountId);
+#endif
+        }
+
         protected override async Task ProcessPurchaseAsync(PurchaseEventArgs args)
         {
             var productId = args.purchasedProduct.definition.id;
