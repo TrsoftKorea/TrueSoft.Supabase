@@ -30,6 +30,14 @@ jobs:
         working-directory: Admin~
       - run: npm run build
         working-directory: Admin~
+      # 첫 실행 때만 필요 — 프로젝트가 이미 있으면 에러가 나지만 그냥 넘어간다.
+      - uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: Admin~
+          command: pages project create truebase-admin --production-branch=main
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
