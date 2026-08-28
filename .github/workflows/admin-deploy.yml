@@ -50,11 +50,3 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: Admin~
           command: pages deploy dist --project-name=truebase-admin
-      # 임시: 이름 충돌로 만들었다가 안 쓰는 -92b 프로젝트 정리. 한 번 돌고 나면 이 스텝은 지운다.
-      - uses: cloudflare/wrangler-action@v3
-        continue-on-error: true
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: Admin~
-          command: pages project delete truebase-admin-92b -y
