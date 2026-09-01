@@ -148,6 +148,9 @@ GameAnalytics.meta
 # Claude Code 로컬 개인 설정(머신별 권한 허용목록 등) — 커밋 안 함
 .claude/settings.local.json
 
+# Closing 백업 훅 진행 상태(기기·세션별 오프셋, 절대경로 포함) — 커밋 안 함
+.claude/raw-log-state.json
+
 # VitePress docs (docs~ : Unity가 무시하는 폴더)
 docs~/node_modules
 docs~/.vitepress/dist
