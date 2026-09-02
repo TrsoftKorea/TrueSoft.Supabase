@@ -1,6 +1,7 @@
 // Closing 프로젝트(D:\Project\Closing) 요청 — 압축(PreCompact) 전 대화 원본이 요약으로
 // 바뀌기 전에 백업해 둔다. AI 호출 없이 순수 파일 이어붙이기만 한다(비용 없음).
 // PreCompact·SessionEnd 둘 다 이 스크립트를 쓴다 — 로직은 "새 줄만 이어붙이기"로 동일하다.
+// 백업 위치는 프로젝트 내부(DefenceR과 같은 관례) — Closing으로 반출하지 않는다.
 
 import { readFileSync, existsSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -17,7 +18,7 @@ if (!transcriptPath || !existsSync(transcriptPath)) process.exit(0)
 
 const hooksDir = dirname(fileURLToPath(import.meta.url))  // .claude/hooks
 const stateFile = join(hooksDir, '..', 'raw-log-state.json')  // .claude/raw-log-state.json
-const destDir = 'D:\\Project\\Closing\\TrueSoft.Supabase\\raw-log'
+const destDir = join(hooksDir, '..', '..', 'Logs', 'RawLog')  // TrueSoft.Supabase/Logs/RawLog
 const destFile = join(destDir, 'raw.jsonl')
 
 let state = {}
@@ -42,6 +43,6 @@ try {
   state[transcriptPath] = total
   writeFileSync(stateFile, JSON.stringify(state, null, 2))
 } catch {
-  // Closing 쪽 폴더에 못 쓰더라도(경로 없음·권한 등) 세션 진행을 막지 않는다 — 조용히 넘어간다.
+  // 대상 폴더에 못 쓰더라도(경로 없음·권한 등) 세션 진행을 막지 않는다 — 조용히 넘어간다.
   process.exit(0)
 }
