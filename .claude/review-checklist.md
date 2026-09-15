@@ -19,17 +19,17 @@
 
 ## 직접 돌려보는 검사
 
-```
+```bash
 dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj
 ```
 Core(`Runtime/Core/`) 컴파일 확인 — UnityEngine 의존 없이 즉시 오류를 잡는다. 경고 0이 정상.
 
-```
+```bash
 dotnet run --project Tools~/SdkAudit
 ```
 공개 API·파사드 노출 규칙·문서 정합성 등 정적 검사. 파사드·공개 API·문서·`install.sql`을 건드렸으면 실행.
 
-```
+```bash
 dotnet run --project Tools~/FailReasonCheck
 ```
 `SupabaseErrorCode`·`SupabaseReason`·`FromErrorCode` 3자 정합성 및 죽은 사유 검증. 실패 사유를 추가·수정했으면 실행.
