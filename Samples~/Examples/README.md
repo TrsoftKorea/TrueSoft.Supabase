@@ -6,6 +6,8 @@
 - `ExampleSupabaseScenarios.cs` — 단축키 기반 테스트 컴포넌트 (`StaticUserSave` 상속 예시인 `SamplePlayerSave` 클래스 포함)
 - `SampleIAPScenarios.cs` — IAP 서버 검증 예제 (`com.unity.purchasing` 설치 시 자동 컴파일)
 - `SampleAutoCollections.cs` — 자동 확장 2D 컬렉션(`AutoList2D`/`AutoDict2D`) 예제 (로그인·네트워크 불필요)
+- `SampleFriend.cs` — 친구 검색·요청·수락·목록·귓속말 예제
+- `SampleMatchLobby.cs` — 매치 로비(친구 초대) 예제
 
 ---
 
@@ -80,6 +82,33 @@ IAP는 로그인 감지 시 자동으로 초기화됩니다.
 | **1** | AutoList2D 데모 (스테이지 × 웨이브 최고점수) |
 | **2** | AutoDict2D 데모 (지역 × 몬스터 처치수) |
 | **3** | 저장 → 로드 왕복 (직렬화) |
+
+**SampleFriend** (`SupabaseRuntime` 필요, 두 계정이 있어야 요청→수락 왕복까지 확인 가능):
+
+| 키 | 기능 |
+|----|------|
+| **1** | 익명 로그인 |
+| **2** | 닉네임 검색 |
+| **3** | 검색 결과에 친구 요청 보내기 |
+| **4** | 받은 요청 목록 |
+| **5** | 받은 요청 중 첫 번째 수락 |
+| **6** | 친구 목록 |
+| **7** | 친구 목록 중 첫 번째에게 귓속말 보내기 |
+| **8** | 그 친구와의 대화 조회 |
+
+**SampleMatchLobby** (`SupabaseRuntime` 필요, 초대 대상은 미리 친구여야 함 — Inspector의 `inviteAccountId`에 계정 ID 입력):
+
+| 키 | 기능 |
+|----|------|
+| **1** | 익명 로그인 |
+| **2** | 로비 생성 + 초대 |
+| **3** | 내 로비 목록 |
+| **4** | 내가 초대받은 로비 중 첫 번째 수락 |
+| **5** | 방금 만든 로비에 추가 초대 |
+| **6** | 방금 만든 로비에서 내 역할 태그 지정 |
+| **7** | 방금 만든 로비 시작 |
+| **8** | 방금 만든 로비 취소 |
+| **9** | 방금 만든 로비 나가기 |
 
 선택 기능(Edge Function, 공개 프로필 등)은 `ExampleSupabaseScenarios.cs`의 주석을 해제하면 사용할 수 있습니다.
 

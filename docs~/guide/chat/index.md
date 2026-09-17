@@ -49,6 +49,10 @@ void CloseChatWindow()
 
 둘 다 서버가 판정하므로 게임이 우회할 수 없습니다.
 
+## 친구와 귓속말 {#direct}
+
+[친구](/guide/friend/) 사이의 1:1 대화입니다. 채널 구독 대상이 아니라 대화창을 열 때·주기적으로 [직접 조회](/guide/chat/fetch-direct)합니다. 친구가 아니면 보낼 수 없습니다.
+
 ## 메서드
 
 | 메서드 | 설명 |
@@ -56,6 +60,8 @@ void CloseChatWindow()
 | [`GetChatChannelsAsync`](/guide/chat/channels) | 사용 가능한 채널 목록 |
 | [`SubscribeChat`](/guide/chat/subscribe) | 채널 구독 · 새 메시지 수신 |
 | [`SendChatAsync`](/guide/chat/send) | 메시지 발송 |
+| [`SendDirectChatAsync`](/guide/chat/send-direct) | 친구에게 귓속말 발송 |
+| [`GetDirectChatAsync`](/guide/chat/fetch-direct) | 친구와의 대화 조회 |
 
 채널 생성·설정, 대화 삭제, 채팅 차단은 어드민 전용이라 SDK에 없습니다.
 

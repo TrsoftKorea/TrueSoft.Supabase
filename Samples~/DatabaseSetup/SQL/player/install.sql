@@ -7748,7 +7748,1006 @@ notify pgrst, 'reload schema';
 
 
 -- #############################################################################
--- 20. 클라이언트 권한 최소화
+-- 20. 친구
+-- #############################################################################
+
+-- 닉네임으로 검색해 친구 요청을 보내고, 수락하면 친구가 됩니다. 친구 관계는 요청 행 하나가
+-- status='accepted'로 남는 것으로 표현합니다(A→B든 B→A든 한 행). 클라이언트는 이 테이블에
+-- 직접 접근하지 않고 전부 SECURITY DEFINER RPC를 거칩니다(정책 0개, mail_batches 등과 같은 패턴).
+--
+-- 두 사람이 동시에 서로에게 요청을 보내면, 나중 요청은 새 행을 만들지 않고 상대의 기존 pending
+-- 행을 즉시 accepted로 전환합니다 — 안 그러면 양쪽 다 "요청 보냄"인 상태로 서로를 못 보고
+-- 영원히 pending으로 남습니다.
+-- =============================================================================
+-- 친구 — friend_requests + RPC
+-- 선행: 02(user_profiles, display_names)
+-- =============================================================================
+
+create table if not exists public.friend_requests (
+  id                    uuid primary key default gen_random_uuid(),
+  requester_account_id  uuid not null references auth.users (id) on delete cascade,
+  addressee_account_id  uuid not null references auth.users (id) on delete cascade,
+  status                text not null default 'pending' check (status in ('pending', 'accepted', 'declined', 'cancelled')),
+  created_at            timestamptz not null default now(),
+  responded_at          timestamptz null,
+  constraint friend_requests_not_self check (requester_account_id <> addressee_account_id)
+);
+
+comment on table public.friend_requests is
+  '친구 요청/친구 관계. status=accepted인 행이 곧 친구 관계다. 조회·응답은 전부 RPC 경유(SECURITY DEFINER), 클라이언트 직접 접근 없음.';
+
+-- 같은 방향 중복 pending 방지. 반대 방향 pending은 RPC가 즉시 accepted로 합친다(위 설명).
+create unique index if not exists friend_requests_pending_pair_uidx
+  on public.friend_requests (requester_account_id, addressee_account_id)
+  where status = 'pending';
+
+create index if not exists friend_requests_addressee_idx on public.friend_requests (addressee_account_id, status);
+create index if not exists friend_requests_requester_idx on public.friend_requests (requester_account_id, status);
+
+alter table public.friend_requests enable row level security;
+
+revoke all on table public.friend_requests from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_are_friends — 두 계정이 친구인지(status=accepted). 방향은 무관하다. 검색·귓속말·
+-- 로비 초대 등 여러 곳에서 반복되던 조건이라 여기 하나로 뺐다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_are_friends(p_a uuid, p_b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.friend_requests
+     where status = 'accepted'
+       and ((requester_account_id = p_a and addressee_account_id = p_b)
+         or (requester_account_id = p_b and addressee_account_id = p_a))
+  );
+$$;
+
+revoke all on function public.ts_are_friends(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_search — 닉네임 정확 일치(대소문자 무시) 검색. 부분 검색은 전체 유저 스캔이
+-- 가능해져 열지 않는다. 이미 친구·요청 중인지 status도 같이 돌려준다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_search(p_nickname text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_target uuid;
+  v_status text;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_nickname is null or btrim(p_nickname) = '' then
+    raise exception 'friend_nickname_empty';
+  end if;
+
+  select account_id into v_target
+    from public.display_names
+   where lower(trim(display_name)) = lower(trim(p_nickname));
+
+  if not found then
+    raise exception 'friend_nickname_not_found';
+  end if;
+  if v_target = v_uid then
+    raise exception 'friend_self_request';
+  end if;
+
+  select case
+           when status = 'accepted' then 'friends'
+           when status = 'pending' and requester_account_id = v_uid then 'request_sent'
+           when status = 'pending' and addressee_account_id = v_uid then 'request_received'
+           else 'none'
+         end
+    into v_status
+    from public.friend_requests
+   where status in ('pending', 'accepted')
+     and ((requester_account_id = v_uid and addressee_account_id = v_target)
+       or (requester_account_id = v_target and addressee_account_id = v_uid))
+   order by created_at desc
+   limit 1;
+
+  return jsonb_build_object(
+    'account_id', v_target,
+    'display_name', (select display_name from public.display_names where account_id = v_target),
+    'status', coalesce(v_status, 'none')
+  );
+end;
+$$;
+
+comment on function public.ts_friend_search(text) is
+  '닉네임 정확 일치(대소문자 무시)로 유저 검색. 친구·요청 상태도 같이 반환.';
+
+revoke all on function public.ts_friend_search(text) from public, anon;
+grant execute on function public.ts_friend_search(text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_request_send — 친구 요청 전송. 상대가 이미 나에게 보낸 pending이 있으면
+-- 즉시 상호 수락으로 전환한다(상호 요청 교착 방지).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_request_send(p_target_account_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid      uuid := auth.uid();
+  v_now      timestamptz := now();
+  v_existing public.friend_requests%rowtype;
+  v_new_id   uuid;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_target_account_id is null then
+    raise exception 'friend_target_required';
+  end if;
+  if p_target_account_id = v_uid then
+    raise exception 'friend_self_request';
+  end if;
+
+  -- 아직 행이 없으면 아래 FOR UPDATE가 잠글 대상이 없어 동시 요청이 안 걸린다 — A→B·B→A가
+  -- 정확히 동시에 들어오면 둘 다 "없음"을 보고 각자 pending 행을 만들어 영원히 안 합쳐질 수
+  -- 있다. 쌍 자체를 advisory lock으로 잠가 한쪽씩 처리되게 한다.
+  perform pg_advisory_xact_lock(hashtextextended(
+    least(v_uid, p_target_account_id)::text || ':' || greatest(v_uid, p_target_account_id)::text, 0));
+
+  -- 두 사람 사이의 최신 유효 행(가는 방향 무관)을 잠근다 — 동시 요청·중복 요청을 직렬화.
+  select * into v_existing
+    from public.friend_requests
+   where status in ('pending', 'accepted')
+     and ((requester_account_id = v_uid and addressee_account_id = p_target_account_id)
+       or (requester_account_id = p_target_account_id and addressee_account_id = v_uid))
+   order by created_at desc
+   limit 1
+   for update;
+
+  if found then
+    if v_existing.status = 'accepted' then
+      raise exception 'friend_already_friends';
+    end if;
+    if v_existing.requester_account_id = p_target_account_id then
+      update public.friend_requests set status = 'accepted', responded_at = v_now where id = v_existing.id;
+      return jsonb_build_object('status', 'accepted', 'request_id', v_existing.id);
+    end if;
+    raise exception 'friend_request_already_sent';
+  end if;
+
+  insert into public.friend_requests (requester_account_id, addressee_account_id)
+  values (v_uid, p_target_account_id)
+  returning id into v_new_id;
+
+  return jsonb_build_object('status', 'pending', 'request_id', v_new_id);
+end;
+$$;
+
+comment on function public.ts_friend_request_send(uuid) is
+  '친구 요청 전송. 상대가 이미 나에게 보낸 pending이 있으면 즉시 상호 수락으로 전환.';
+
+revoke all on function public.ts_friend_request_send(uuid) from public, anon;
+grant execute on function public.ts_friend_request_send(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_requests_list — 내가 받은/보낸 대기 중 요청 목록.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_requests_list(p_direction text default 'incoming')
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_direction not in ('incoming', 'outgoing') then
+    raise exception 'friend_direction_invalid';
+  end if;
+
+  if p_direction = 'incoming' then
+    return coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'request_id', r.id, 'account_id', r.requester_account_id,
+               'display_name', d.display_name, 'created_at', r.created_at)
+             order by r.created_at desc)
+        from public.friend_requests r
+        join public.display_names d on d.account_id = r.requester_account_id
+       where r.addressee_account_id = v_uid and r.status = 'pending'
+    ), '[]'::jsonb);
+  else
+    return coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'request_id', r.id, 'account_id', r.addressee_account_id,
+               'display_name', d.display_name, 'created_at', r.created_at)
+             order by r.created_at desc)
+        from public.friend_requests r
+        join public.display_names d on d.account_id = r.addressee_account_id
+       where r.requester_account_id = v_uid and r.status = 'pending'
+    ), '[]'::jsonb);
+  end if;
+end;
+$$;
+
+comment on function public.ts_friend_requests_list(text) is
+  '내 대기 중 친구 요청 목록. p_direction: incoming(받은)/outgoing(보낸).';
+
+revoke all on function public.ts_friend_requests_list(text) from public, anon;
+grant execute on function public.ts_friend_requests_list(text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_request_respond — 받은 요청을 수락/거절한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_request_respond(p_request_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_req public.friend_requests%rowtype;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_req from public.friend_requests where id = p_request_id for update;
+  if not found or v_req.addressee_account_id <> v_uid then
+    raise exception 'friend_request_not_found';
+  end if;
+  if v_req.status <> 'pending' then
+    raise exception 'friend_request_not_pending';
+  end if;
+
+  update public.friend_requests
+     set status = case when p_accept then 'accepted' else 'declined' end,
+         responded_at = now()
+   where id = p_request_id;
+
+  return jsonb_build_object('status', case when p_accept then 'accepted' else 'declined' end);
+end;
+$$;
+
+comment on function public.ts_friend_request_respond(uuid, boolean) is
+  '받은 친구 요청 수락/거절. 본인이 addressee인 pending 요청만 처리.';
+
+revoke all on function public.ts_friend_request_respond(uuid, boolean) from public, anon;
+grant execute on function public.ts_friend_request_respond(uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_request_cancel — 내가 보낸 pending 요청을 취소한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_request_cancel(p_request_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_req public.friend_requests%rowtype;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_req from public.friend_requests where id = p_request_id for update;
+  if not found or v_req.requester_account_id <> v_uid then
+    raise exception 'friend_request_not_found';
+  end if;
+  if v_req.status <> 'pending' then
+    raise exception 'friend_request_not_pending';
+  end if;
+
+  update public.friend_requests set status = 'cancelled', responded_at = now() where id = p_request_id;
+
+  return jsonb_build_object('status', 'cancelled');
+end;
+$$;
+
+comment on function public.ts_friend_request_cancel(uuid) is
+  '내가 보낸 pending 친구 요청 취소.';
+
+revoke all on function public.ts_friend_request_cancel(uuid) from public, anon;
+grant execute on function public.ts_friend_request_cancel(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friends_list — 내 친구 목록.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friends_list()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'account_id', r.other_id, 'display_name', d.display_name, 'since', r.responded_at)
+           order by r.responded_at desc)
+      from (
+        select responded_at,
+               case when requester_account_id = v_uid then addressee_account_id else requester_account_id end as other_id
+          from public.friend_requests
+         where status = 'accepted' and (requester_account_id = v_uid or addressee_account_id = v_uid)
+      ) r
+      join public.display_names d on d.account_id = r.other_id
+  ), '[]'::jsonb);
+end;
+$$;
+
+comment on function public.ts_friends_list() is
+  '내 친구 목록(닉네임 포함).';
+
+revoke all on function public.ts_friends_list() from public, anon;
+grant execute on function public.ts_friends_list() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_remove — 친구를 삭제한다(관계 행을 지워 다시 요청 가능한 상태로 되돌린다).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_remove(p_friend_account_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_n   int;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  delete from public.friend_requests
+   where status = 'accepted'
+     and ((requester_account_id = v_uid and addressee_account_id = p_friend_account_id)
+       or (requester_account_id = p_friend_account_id and addressee_account_id = v_uid));
+  get diagnostics v_n = row_count;
+
+  if v_n = 0 then
+    raise exception 'friend_not_found';
+  end if;
+
+  return jsonb_build_object('status', 'removed');
+end;
+$$;
+
+comment on function public.ts_friend_remove(uuid) is
+  '친구 삭제. 관계 행을 지워 다시 요청 가능한 상태로 되돌린다.';
+
+revoke all on function public.ts_friend_remove(uuid) from public, anon;
+grant execute on function public.ts_friend_remove(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 친구 1:1 채팅(귓속말) — 18절 채팅 인프라(chat_channels·chat_messages)를 그대로 쓴다.
+-- kind='direct' 채널은 18절 주석에 "미구현"으로 남아 있던 것을 여기서 채운다: 채널 행은
+-- 하나뿐이고, 실제로 대화를 가르는 건 scope_key(정렬된 계정쌍)다. 친구가 아니면 보낼 수 없다.
+-- ---------------------------------------------------------------------------
+
+insert into public.chat_channels (kind, code, display_name, max_length, slow_mode_seconds, retention_days)
+values ('direct', 'direct', '귓속말', 500, 0, 30)
+on conflict (code) do nothing;
+
+create or replace function public.ts_chat_direct_scope_key(p_a uuid, p_b uuid)
+returns text
+language sql
+immutable
+as $$
+  select least(p_a, p_b)::text || ':' || greatest(p_a, p_b)::text;
+$$;
+
+revoke all on function public.ts_chat_direct_scope_key(uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_send_direct — 친구에게 귓속말 발송. 길이·뮤트·도배 검사는 18절 ts_chat_send와 동일.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_chat_send_direct(p_target_account_id uuid, p_content text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_user  text;
+  v_name  text;
+  c       public.chat_channels%rowtype;
+  v_scope text;
+  v_text  text;
+  v_last  timestamptz;
+  v_id    bigint;
+  v_at    timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_target_account_id is null then
+    raise exception 'friend_target_required';
+  end if;
+  if p_target_account_id = v_uid then
+    raise exception 'friend_self_request';
+  end if;
+  if not public.ts_are_friends(v_uid, p_target_account_id) then
+    raise exception 'friend_not_found';
+  end if;
+
+  select * into c from public.chat_channels where code = 'direct';
+  if not found or not c.is_active then
+    raise exception 'chat_channel_inactive';
+  end if;
+
+  v_text := btrim(coalesce(p_content, ''));
+  if v_text = '' then
+    raise exception 'chat_message_empty';
+  end if;
+  if char_length(v_text) > c.max_length then
+    raise exception 'chat_message_too_long';
+  end if;
+
+  if exists (
+    select 1 from public.chat_mutes m
+     where m.account_id = v_uid and m.until > now()
+       and (m.channel_id is null or m.channel_id = c.id)
+  ) then
+    raise exception 'chat_muted';
+  end if;
+
+  v_scope := public.ts_chat_direct_scope_key(v_uid, p_target_account_id);
+
+  if c.slow_mode_seconds > 0 then
+    select max(created_at) into v_last
+      from public.chat_messages
+     where channel_id = c.id and scope_key = v_scope and account_id = v_uid;
+    if v_last is not null and v_last > now() - make_interval(secs => c.slow_mode_seconds) then
+      raise exception 'chat_too_fast';
+    end if;
+  end if;
+
+  select user_id into v_user from public.user_profiles  where account_id = v_uid;
+  select display_name into v_name from public.display_names where account_id = v_uid;
+
+  insert into public.chat_messages (channel_id, scope_key, account_id, user_id, display_name, content)
+  values (c.id, v_scope, v_uid, coalesce(v_user, v_uid::text), coalesce(v_name, ''), v_text)
+  returning id, created_at into v_id, v_at;
+
+  return jsonb_build_object('id', v_id, 'created_at', v_at);
+end;
+$$;
+
+comment on function public.ts_chat_send_direct(uuid, text) is
+  '친구에게 귓속말 발송. 친구가 아니면 friend_not_found로 실패.';
+
+revoke all on function public.ts_chat_send_direct(uuid, text) from public, anon;
+grant execute on function public.ts_chat_send_direct(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_chat_fetch_direct — 특정 친구와의 대화를 커서 조회. after_id<=0이면 최근 p_limit개.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_chat_fetch_direct(p_target_account_id uuid, p_after_id bigint default 0, p_limit int default 50)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_scope text;
+  c       public.chat_channels%rowtype;
+  v_limit int;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_target_account_id is null then
+    raise exception 'friend_target_required';
+  end if;
+
+  select * into c from public.chat_channels where code = 'direct';
+  if not found then
+    raise exception 'chat_channel_inactive';
+  end if;
+
+  v_scope := public.ts_chat_direct_scope_key(v_uid, p_target_account_id);
+  v_limit := least(greatest(coalesce(p_limit, 50), 1), 200);
+
+  if coalesce(p_after_id, 0) <= 0 then
+    return coalesce((
+      select jsonb_agg(t order by t.id)
+        from (
+          select m.id, m.account_id, m.user_id, m.display_name,
+                 case when m.deleted_at is null then m.content else null end as content,
+                 (m.deleted_at is not null) as deleted, m.created_at
+            from public.chat_messages m
+           where m.channel_id = c.id and m.scope_key = v_scope
+           order by m.id desc limit v_limit
+        ) t
+    ), '[]'::jsonb);
+  end if;
+
+  return coalesce((
+    select jsonb_agg(t order by t.id)
+      from (
+        select m.id, m.account_id, m.user_id, m.display_name,
+               case when m.deleted_at is null then m.content else null end as content,
+               (m.deleted_at is not null) as deleted, m.created_at
+          from public.chat_messages m
+         where m.channel_id = c.id and m.scope_key = v_scope and m.id > p_after_id
+         order by m.id limit v_limit
+      ) t
+  ), '[]'::jsonb);
+end;
+$$;
+
+comment on function public.ts_chat_fetch_direct(uuid, bigint, int) is
+  '특정 친구와의 귓속말 커서 조회. after_id<=0이면 최근 메시지부터.';
+
+revoke all on function public.ts_chat_fetch_direct(uuid, bigint, int) from public, anon;
+grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int) to authenticated;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 21. 매치 로비(초대)
+-- #############################################################################
+
+-- 친구를 초대해 같은 대기방(로비)에 모읍니다. 팀·상대·그냥 같은 방인지는 게임마다 다르므로
+-- 이 SDK는 "누가 로비에 있고 어떤 상태인지"만 관리하고, 역할(팀/상대 등) 해석과 실제 게임
+-- 연결은 게임이 합니다. 로비 id를 문자열로 캐스팅하면 그대로 기존 매치 결과 신고(19절,
+-- session_id)에 넘길 수 있습니다. 알림은 폴링이 전제입니다 — ts_match_lobby_list_my()를
+-- 주기적으로 불러 상태 변화를 감지합니다.
+-- =============================================================================
+-- 매치 로비 — match_lobbies + match_lobby_members + RPC
+-- 선행: 02(user_profiles, display_names), 20(friend_requests, 초대 대상 제한에 사용)
+-- =============================================================================
+
+create table if not exists public.match_lobbies (
+  id              uuid primary key default gen_random_uuid(),
+  game_code       text not null,
+  host_account_id uuid not null references auth.users (id) on delete cascade,
+  status          text not null default 'open' check (status in ('open', 'started', 'cancelled', 'expired')),
+  max_members     int not null default 8 check (max_members between 2 and 64),
+  created_at      timestamptz not null default now(),
+  expires_at      timestamptz not null default (now() + interval '10 minutes'),
+  started_at      timestamptz null,
+  ended_at        timestamptz null
+);
+
+comment on table public.match_lobbies is
+  '친구 초대 매치 로비. id를 text로 캐스팅하면 그대로 match_results.session_id로 쓸 수 있다. 팀/역할 해석은 게임 몫.';
+
+create table if not exists public.match_lobby_members (
+  lobby_id     uuid not null references public.match_lobbies (id) on delete cascade,
+  account_id   uuid not null references auth.users (id) on delete cascade,
+  status       text not null default 'invited' check (status in ('invited', 'accepted', 'declined', 'left')),
+  role_tag     text null,
+  invited_at   timestamptz not null default now(),
+  responded_at timestamptz null,
+  primary key (lobby_id, account_id)
+);
+
+comment on table public.match_lobby_members is
+  '로비 참가자. role_tag는 서버가 의미를 두지 않는 자유 문자열 — 팀 이름이든 진영이든 게임이 정해서 쓴다.';
+
+create index if not exists match_lobbies_host_idx on public.match_lobbies (host_account_id, status);
+create index if not exists match_lobby_members_account_idx on public.match_lobby_members (account_id, status);
+
+alter table public.match_lobbies       enable row level security;
+alter table public.match_lobby_members enable row level security;
+
+-- 두 테이블 모두 SECURITY DEFINER RPC 경유로만 접근(정책 0개) — friend_requests와 같은 패턴.
+revoke all on table public.match_lobbies       from anon, authenticated;
+revoke all on table public.match_lobby_members from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_create — 로비를 만들고 나를 accepted로, 초대 대상을 invited로 등록한다.
+-- 초대 대상은 전부 내 친구여야 한다(친구 아닌 사람을 무작위로 스팸 초대하지 못하게).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_create(p_game_code text, p_invited_account_ids uuid[] default '{}')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid        uuid := auth.uid();
+  v_lobby_id   uuid;
+  v_non_friend uuid;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_game_code is null or btrim(p_game_code) = '' then
+    raise exception 'match_game_code_empty';
+  end if;
+
+  select target into v_non_friend
+    from unnest(p_invited_account_ids) as target
+   where not public.ts_are_friends(v_uid, target)
+   limit 1;
+
+  if v_non_friend is not null then
+    raise exception 'match_lobby_invite_not_friend';
+  end if;
+
+  insert into public.match_lobbies (game_code, host_account_id)
+  values (btrim(p_game_code), v_uid)
+  returning id into v_lobby_id;
+
+  insert into public.match_lobby_members (lobby_id, account_id, status, responded_at)
+  values (v_lobby_id, v_uid, 'accepted', now());
+
+  if array_length(p_invited_account_ids, 1) > 0 then
+    insert into public.match_lobby_members (lobby_id, account_id)
+    select v_lobby_id, target from unnest(p_invited_account_ids) as target
+    on conflict (lobby_id, account_id) do nothing;
+  end if;
+
+  return jsonb_build_object('lobby_id', v_lobby_id, 'session_id', v_lobby_id::text);
+end;
+$$;
+
+comment on function public.ts_match_lobby_create(text, uuid[]) is
+  '매치 로비 생성 + 초대. 초대 대상은 전부 내 친구여야 한다. lobby_id를 그대로 session_id로 쓸 수 있다.';
+
+revoke all on function public.ts_match_lobby_create(text, uuid[]) from public, anon;
+grant execute on function public.ts_match_lobby_create(text, uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_invite — 진행 중(open)인 로비에 친구를 더 초대한다(호스트 전용).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_invite(p_lobby_id uuid, p_account_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_lobby public.match_lobbies%rowtype;
+  v_count int;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_lobby from public.match_lobbies where id = p_lobby_id for update;
+  if not found or v_lobby.host_account_id <> v_uid then
+    raise exception 'match_lobby_not_found';
+  end if;
+  if v_lobby.status <> 'open' then
+    raise exception 'match_lobby_not_open';
+  end if;
+  if not public.ts_are_friends(v_uid, p_account_id) then
+    raise exception 'match_lobby_invite_not_friend';
+  end if;
+
+  -- 정원은 지금 자리를 차지한 인원(초대 대기·수락)만 센다 — 거절·퇴장한 행은 남아있어도
+  -- 자리를 차지하지 않는다.
+  select count(*) into v_count from public.match_lobby_members
+   where lobby_id = p_lobby_id and status in ('invited', 'accepted');
+  if v_count >= v_lobby.max_members then
+    raise exception 'match_lobby_full';
+  end if;
+
+  insert into public.match_lobby_members (lobby_id, account_id)
+  values (p_lobby_id, p_account_id)
+  on conflict (lobby_id, account_id) do nothing;
+
+  return jsonb_build_object('status', 'invited');
+end;
+$$;
+
+comment on function public.ts_match_lobby_invite(uuid, uuid) is
+  '열려 있는 로비에 친구 추가 초대(호스트 전용).';
+
+revoke all on function public.ts_match_lobby_invite(uuid, uuid) from public, anon;
+grant execute on function public.ts_match_lobby_invite(uuid, uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_respond — 초대받은 사람이 수락/거절한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_respond(p_lobby_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_member public.match_lobby_members%rowtype;
+  v_lobby  public.match_lobbies%rowtype;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_lobby from public.match_lobbies where id = p_lobby_id;
+  if not found or v_lobby.status <> 'open' then
+    raise exception 'match_lobby_not_open';
+  end if;
+
+  select * into v_member from public.match_lobby_members
+   where lobby_id = p_lobby_id and account_id = v_uid for update;
+  if not found or v_member.status <> 'invited' then
+    raise exception 'match_lobby_invite_not_found';
+  end if;
+
+  update public.match_lobby_members
+     set status = case when p_accept then 'accepted' else 'declined' end,
+         responded_at = now()
+   where lobby_id = p_lobby_id and account_id = v_uid;
+
+  return jsonb_build_object('status', case when p_accept then 'accepted' else 'declined' end);
+end;
+$$;
+
+comment on function public.ts_match_lobby_respond(uuid, boolean) is
+  '로비 초대 수락/거절.';
+
+revoke all on function public.ts_match_lobby_respond(uuid, boolean) from public, anon;
+grant execute on function public.ts_match_lobby_respond(uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_leave — 멤버가 로비를 나간다. 호스트가 나가면 로비 전체를 취소한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_leave(p_lobby_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_lobby public.match_lobbies%rowtype;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select * into v_lobby from public.match_lobbies where id = p_lobby_id for update;
+  if not found then
+    raise exception 'match_lobby_not_found';
+  end if;
+
+  if v_lobby.host_account_id = v_uid then
+    -- 이미 취소·만료된 로비를 또 "취소했다"고 응답하면 호출부가 실제로 안 바뀐 걸 성공으로
+    -- 오인한다 — open·started일 때만 실제로 바꾸고, 아니면 명시적으로 실패시킨다.
+    if v_lobby.status not in ('open', 'started') then
+      raise exception 'match_lobby_not_open';
+    end if;
+    update public.match_lobbies set status = 'cancelled', ended_at = now() where id = p_lobby_id;
+    return jsonb_build_object('status', 'cancelled');
+  end if;
+
+  update public.match_lobby_members set status = 'left', responded_at = now()
+   where lobby_id = p_lobby_id and account_id = v_uid;
+  if not found then
+    raise exception 'match_lobby_member_not_found';
+  end if;
+
+  return jsonb_build_object('status', 'left');
+end;
+$$;
+
+comment on function public.ts_match_lobby_leave(uuid) is
+  '로비 나가기. 호스트가 나가면 로비 전체 취소.';
+
+revoke all on function public.ts_match_lobby_leave(uuid) from public, anon;
+grant execute on function public.ts_match_lobby_leave(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_set_role — 멤버의 역할 태그를 지정한다(호스트 전용, 의미는 게임이 정함).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_set_role(p_lobby_id uuid, p_account_id uuid, p_role_tag text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if not exists (select 1 from public.match_lobbies where id = p_lobby_id and host_account_id = v_uid) then
+    raise exception 'match_lobby_not_found';
+  end if;
+
+  update public.match_lobby_members set role_tag = p_role_tag
+   where lobby_id = p_lobby_id and account_id = p_account_id;
+
+  if not found then
+    raise exception 'match_lobby_member_not_found';
+  end if;
+
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+comment on function public.ts_match_lobby_set_role(uuid, uuid, text) is
+  '로비 멤버의 역할 태그 지정(호스트 전용). 팀 이름·진영 등 의미는 게임이 정한다.';
+
+revoke all on function public.ts_match_lobby_set_role(uuid, uuid, text) from public, anon;
+grant execute on function public.ts_match_lobby_set_role(uuid, uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_start — 호스트가 시작을 알린다. 폴링 중인 멤버가 status='started'로
+-- 이를 감지한다. 실제 접속·연결은 게임이 한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_start(p_lobby_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  update public.match_lobbies
+     set status = 'started', started_at = now()
+   where id = p_lobby_id and host_account_id = v_uid and status = 'open';
+
+  if not found then
+    raise exception 'match_lobby_not_open';
+  end if;
+
+  return jsonb_build_object('status', 'started');
+end;
+$$;
+
+comment on function public.ts_match_lobby_start(uuid) is
+  '로비 시작 표시(호스트 전용). 실제 게임 연결은 게임이 처리.';
+
+revoke all on function public.ts_match_lobby_start(uuid) from public, anon;
+grant execute on function public.ts_match_lobby_start(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_cancel — 호스트가 로비를 취소한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_cancel(p_lobby_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  update public.match_lobbies
+     set status = 'cancelled', ended_at = now()
+   where id = p_lobby_id and host_account_id = v_uid and status = 'open';
+
+  if not found then
+    raise exception 'match_lobby_not_open';
+  end if;
+
+  return jsonb_build_object('status', 'cancelled');
+end;
+$$;
+
+comment on function public.ts_match_lobby_cancel(uuid) is
+  '로비 취소(호스트 전용).';
+
+revoke all on function public.ts_match_lobby_cancel(uuid) from public, anon;
+grant execute on function public.ts_match_lobby_cancel(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_list_my — 폴링용. 내가 호스트거나 멤버인 로비 + 참가자 상태를 전부 돌려준다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_list_my()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'lobby_id', l.id, 'session_id', l.id::text, 'game_code', l.game_code,
+             'host_account_id', l.host_account_id, 'status', l.status,
+             'created_at', l.created_at, 'started_at', l.started_at,
+             'members', (
+               select jsonb_agg(jsonb_build_object(
+                        'account_id', m.account_id, 'display_name', d.display_name,
+                        'status', m.status, 'role_tag', m.role_tag)
+                      order by m.invited_at)
+                 from public.match_lobby_members m
+                 join public.display_names d on d.account_id = m.account_id
+                where m.lobby_id = l.id
+             ))
+           order by l.created_at desc)
+      from public.match_lobbies l
+     where l.status in ('open', 'started')
+       and (l.host_account_id = v_uid or exists (
+             select 1 from public.match_lobby_members
+              where lobby_id = l.id and account_id = v_uid and status in ('invited', 'accepted')
+           ))
+  ), '[]'::jsonb);
+end;
+$$;
+
+comment on function public.ts_match_lobby_list_my() is
+  '내가 호스트·멤버인 진행 중 로비 목록(폴링용). 상태 변화 감지에 쓴다.';
+
+revoke all on function public.ts_match_lobby_list_my() from public, anon;
+grant execute on function public.ts_match_lobby_list_my() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_cleanup — 만료된 open 로비를 정리한다. cron이 주기적으로 호출.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_cleanup()
+returns int
+language sql
+security definer
+set search_path = public
+as $$
+  with expired as (
+    update public.match_lobbies
+       set status = 'expired', ended_at = now()
+     where status = 'open' and expires_at < now()
+    returning id
+  )
+  select count(*)::int from expired;
+$$;
+
+comment on function public.ts_match_lobby_cleanup() is
+  '만료된 open 로비를 expired로 전환. cron이 5분마다 호출.';
+
+revoke all on function public.ts_match_lobby_cleanup() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('ts_match_lobby_cleanup') where exists (select 1 from cron.job where jobname = 'ts_match_lobby_cleanup');
+    perform cron.schedule('ts_match_lobby_cleanup', '*/5 * * * *', $cron$ select public.ts_match_lobby_cleanup(); $cron$);
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 22. 클라이언트 권한 최소화
 -- #############################################################################
 
 -- 클라이언트 롤(anon·authenticated)의 테이블·함수 권한을 실제로 필요한 범위까지 좁힙니다.
@@ -7803,7 +8802,7 @@ grant select, insert, update, delete on table public.user_data     to authentica
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
 --   account_closures, anonymous_recovery_tokens, mail_batches, mail_categories,
 --   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
---   match_reward_configs, match_results
+--   match_reward_configs, match_results, friend_requests, match_lobbies, match_lobby_members
 
 -- ---------------------------------------------------------------------------
 -- 3. 함수 — 전부 회수 후 SDK 가 실제로 호출하는 RPC 만 되돌려 준다
@@ -7875,9 +8874,30 @@ grant execute on function public.ts_coupon_redeem(text)                         
 grant execute on function public.ts_chat_send(text, text)                             to authenticated;
 grant execute on function public.ts_chat_fetch_many(jsonb, int)                        to authenticated;
 grant execute on function public.ts_chat_channels()                                   to authenticated;
+grant execute on function public.ts_chat_send_direct(uuid, text)                      to authenticated;
+grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int)              to authenticated;
 
 -- 매치 결과
 grant execute on function public.ts_match_report_result(text, text, boolean, uuid)    to authenticated;
+
+-- 친구
+grant execute on function public.ts_friend_search(text)                              to authenticated;
+grant execute on function public.ts_friend_request_send(uuid)                        to authenticated;
+grant execute on function public.ts_friend_requests_list(text)                       to authenticated;
+grant execute on function public.ts_friend_request_respond(uuid, boolean)            to authenticated;
+grant execute on function public.ts_friend_request_cancel(uuid)                      to authenticated;
+grant execute on function public.ts_friends_list()                                   to authenticated;
+grant execute on function public.ts_friend_remove(uuid)                              to authenticated;
+
+-- 매치 로비(초대)
+grant execute on function public.ts_match_lobby_create(text, uuid[])                 to authenticated;
+grant execute on function public.ts_match_lobby_invite(uuid, uuid)                   to authenticated;
+grant execute on function public.ts_match_lobby_respond(uuid, boolean)               to authenticated;
+grant execute on function public.ts_match_lobby_leave(uuid)                          to authenticated;
+grant execute on function public.ts_match_lobby_set_role(uuid, uuid, text)           to authenticated;
+grant execute on function public.ts_match_lobby_start(uuid)                          to authenticated;
+grant execute on function public.ts_match_lobby_cancel(uuid)                         to authenticated;
+grant execute on function public.ts_match_lobby_list_my()                            to authenticated;
 
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
@@ -7888,6 +8908,9 @@ grant execute on function public.ts_match_report_result(text, text, boolean, uui
 --   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
 --   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
 --                             리더보드를 지우거나 점수를 조작할 수 있다.
+--   ts_match_lobby_cleanup ← cron 전용(만료 로비 정리).
+--   ts_chat_direct_scope_key ← 내부 헬퍼(귓속말 범위 키 계산).
+--   ts_are_friends ← 내부 헬퍼(친구 여부 판정).
 
 -- ---------------------------------------------------------------------------
 -- 검증

@@ -120,6 +120,65 @@ namespace TrueBase.Core.Data
             }
         }
 
+        /// <summary>친구에게 귓속말을 보냅니다. 친구가 아니면 <see cref="SupabaseErrorCode.FriendNotFound"/>로 실패합니다.</summary>
+        public async Task<SupabaseResult<ChatSendResult>> SendDirectAsync(string accessToken, string targetAccountId, string content)
+        {
+            if (string.IsNullOrWhiteSpace(targetAccountId))
+                return SupabaseResult<ChatSendResult>.Fail(SupabaseErrorCode.FriendTargetRequired);
+
+            var body = JsonConvert.SerializeObject(new
+            {
+                p_target_account_id = targetAccountId.Trim(),
+                p_content = content ?? string.Empty
+            });
+
+            var r = await CallRpcAsync(accessToken, "ts_chat_send_direct", body);
+            if (!r.IsSuccess)
+                return SupabaseResult<ChatSendResult>.Fail(r.ErrorCode);
+
+            try
+            {
+                var res = JsonConvert.DeserializeObject<ChatSendResult>(r.Data);
+                return SupabaseResult<ChatSendResult>.Success(res ?? new ChatSendResult());
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<ChatSendResult>.Fail("chat_send_direct_parse:" + e.Message);
+            }
+        }
+
+        /// <summary>특정 친구와의 대화를 커서 조회합니다. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
+        public async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> FetchDirectAsync(
+            string accessToken, string targetAccountId, long afterId = 0, int limit = 50)
+        {
+            if (string.IsNullOrWhiteSpace(targetAccountId))
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(SupabaseErrorCode.FriendTargetRequired);
+
+            var body = JsonConvert.SerializeObject(new
+            {
+                p_target_account_id = targetAccountId.Trim(),
+                p_after_id = afterId,
+                p_limit = limit
+            });
+
+            var r = await CallRpcAsync(accessToken, "ts_chat_fetch_direct", body);
+            if (!r.IsSuccess)
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(r.ErrorCode);
+
+            try
+            {
+                var list = JsonConvert.DeserializeObject<List<ChatMessage>>(r.Data) ?? new List<ChatMessage>();
+                foreach (var m in list)
+                    m.ChannelCode = "direct";
+
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Success(list);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail("chat_fetch_direct_parse:" + e.Message);
+            }
+        }
+
         // -------------------------------------------------------------------
         // 공통 RPC 호출
         // -------------------------------------------------------------------

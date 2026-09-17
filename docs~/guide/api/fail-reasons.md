@@ -203,6 +203,32 @@ bool Handle(SupabaseResult result)
 | `MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다 |
 | `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 지급되지 않았습니다 |
 
+## 친구
+
+| Reason | 설명 |
+|--------|------|
+| `FriendNicknameEmpty` | 검색할 닉네임이 비어 있습니다 |
+| `FriendNicknameNotFound` | 해당 닉네임의 유저가 없습니다 |
+| `FriendSelfRequest` | 자기 자신에게 요청을 보내려 했습니다 |
+| `FriendTargetRequired` | 요청 대상 계정이 지정되지 않았습니다 |
+| `FriendAlreadyFriends` | 이미 친구인 상대에게 다시 요청했습니다 |
+| `FriendRequestAlreadySent` | 이미 보낸 요청이 대기 중입니다 |
+| `FriendDirectionInvalid` | 요청 목록 조회 방향이 올바르지 않습니다 |
+| `FriendRequestNotFound` | 해당 요청이 없거나 본인 것이 아닙니다 |
+| `FriendRequestNotPending` | 이미 처리된 요청입니다 |
+| `FriendNotFound` | 해당 계정과 친구 관계가 아닙니다 |
+
+## 매치 로비
+
+| Reason | 설명 |
+|--------|------|
+| `MatchLobbyInviteNotFriend` | 초대 대상이 내 친구가 아닙니다 |
+| `MatchLobbyNotFound` | 해당 로비가 없거나 호스트가 아닙니다 |
+| `MatchLobbyNotOpen` | 로비가 이미 시작됐거나 취소·만료되었습니다 |
+| `MatchLobbyFull` | 로비 정원이 가득 찼습니다 |
+| `MatchLobbyInviteNotFound` | 응답할 초대가 없습니다 |
+| `MatchLobbyMemberNotFound` | 역할 태그를 지정하려는 멤버가 로비에 없습니다 |
+
 ## 쿠폰
 
 | Reason | 설명 |

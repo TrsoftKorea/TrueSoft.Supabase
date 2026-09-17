@@ -437,6 +437,88 @@ namespace TrueBase.Unity
             float maxIntervalSeconds = 10f) =>
             SupabaseSDK.Chat.Subscribe(channelCodes, onMessages, minIntervalSeconds, maxIntervalSeconds);
 
+        /// <inheritdoc cref="SupabaseSDK.TrySendDirectChatAsync"/>
+        public static Task<SupabaseResult<ChatSendResult>> SendDirectChatAsync(string targetAccountId, string content) =>
+            SupabaseSDK.TrySendDirectChatAsync(targetAccountId, content);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetDirectChatAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetDirectChatAsync(string targetAccountId, long afterId = 0, int limit = 50) =>
+            SupabaseSDK.TryGetDirectChatAsync(targetAccountId, afterId, limit);
+
+        // ── 친구 ──────────────────────────────────────────────────────────────
+        //
+        // 닉네임으로 검색해 요청을 보내고, 상대가 수락하면 친구가 됩니다. 새 요청·응답은
+        // 실시간 알림이 아니라 폴링 전제입니다 — GetFriendRequestsAsync를 주기적으로 불러 확인하세요.
+
+        /// <inheritdoc cref="SupabaseSDK.TrySearchFriendAsync"/>
+        public static Task<SupabaseResult<FriendSearchResult>> SearchFriendAsync(string nickname) =>
+            SupabaseSDK.TrySearchFriendAsync(nickname);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySendFriendRequestAsync"/>
+        public static Task<SupabaseResult<FriendRequestSendOutcome>> SendFriendRequestAsync(string targetAccountId) =>
+            SupabaseSDK.TrySendFriendRequestAsync(targetAccountId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetFriendRequestsAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<FriendRequestSummary>>> GetFriendRequestsAsync(
+            FriendRequestDirection direction = FriendRequestDirection.Incoming) =>
+            SupabaseSDK.TryGetFriendRequestsAsync(direction);
+
+        /// <inheritdoc cref="SupabaseSDK.TryRespondFriendRequestAsync"/>
+        public static Task<SupabaseResult> RespondFriendRequestAsync(string requestId, bool accept) =>
+            SupabaseSDK.TryRespondFriendRequestAsync(requestId, accept);
+
+        /// <inheritdoc cref="SupabaseSDK.TryCancelFriendRequestAsync"/>
+        public static Task<SupabaseResult> CancelFriendRequestAsync(string requestId) =>
+            SupabaseSDK.TryCancelFriendRequestAsync(requestId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetFriendsAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<FriendSummary>>> GetFriendsAsync() =>
+            SupabaseSDK.TryGetFriendsAsync();
+
+        /// <inheritdoc cref="SupabaseSDK.TryRemoveFriendAsync"/>
+        public static Task<SupabaseResult> RemoveFriendAsync(string friendAccountId) =>
+            SupabaseSDK.TryRemoveFriendAsync(friendAccountId);
+
+        // ── 매치 로비(친구 초대) ─────────────────────────────────────────────────
+        //
+        // 친구를 초대해 같은 대기방에 모읍니다. 팀·상대·같은 방인지는 게임마다 다르므로 이 API는
+        // "누가 로비에 있고 어떤 상태인지"만 다루고, 역할 해석과 실제 접속은 게임이 처리합니다.
+        // CreateMatchLobbyAsync가 돌려주는 SessionId를 ReportMatchResultAsync의 sessionId로 그대로 쓸 수 있습니다.
+        // 알림은 폴링 전제입니다 — ListMatchLobbiesAsync를 주기적으로 불러 상태 변화를 감지하세요.
+
+        /// <inheritdoc cref="SupabaseSDK.TryCreateMatchLobbyAsync"/>
+        public static Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateMatchLobbyAsync(
+            string gameCode, IEnumerable<string> invitedAccountIds = null) =>
+            SupabaseSDK.TryCreateMatchLobbyAsync(gameCode, invitedAccountIds);
+
+        /// <inheritdoc cref="SupabaseSDK.TryInviteToMatchLobbyAsync"/>
+        public static Task<SupabaseResult> InviteToMatchLobbyAsync(string lobbyId, string accountId) =>
+            SupabaseSDK.TryInviteToMatchLobbyAsync(lobbyId, accountId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryRespondMatchLobbyAsync"/>
+        public static Task<SupabaseResult> RespondMatchLobbyAsync(string lobbyId, bool accept) =>
+            SupabaseSDK.TryRespondMatchLobbyAsync(lobbyId, accept);
+
+        /// <inheritdoc cref="SupabaseSDK.TryLeaveMatchLobbyAsync"/>
+        public static Task<SupabaseResult> LeaveMatchLobbyAsync(string lobbyId) =>
+            SupabaseSDK.TryLeaveMatchLobbyAsync(lobbyId);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySetMatchLobbyMemberRoleAsync"/>
+        public static Task<SupabaseResult> SetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag) =>
+            SupabaseSDK.TrySetMatchLobbyMemberRoleAsync(lobbyId, accountId, roleTag);
+
+        /// <inheritdoc cref="SupabaseSDK.TryStartMatchLobbyAsync"/>
+        public static Task<SupabaseResult> StartMatchLobbyAsync(string lobbyId) =>
+            SupabaseSDK.TryStartMatchLobbyAsync(lobbyId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryCancelMatchLobbyAsync"/>
+        public static Task<SupabaseResult> CancelMatchLobbyAsync(string lobbyId) =>
+            SupabaseSDK.TryCancelMatchLobbyAsync(lobbyId);
+
+        /// <inheritdoc cref="SupabaseSDK.TryListMatchLobbiesAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<MatchLobbySummary>>> ListMatchLobbiesAsync() =>
+            SupabaseSDK.TryListMatchLobbiesAsync();
+
         /// <inheritdoc cref="SupabaseSDK.TryGetUnclaimedMailCountAsync"/>
         public static Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string category = null) =>
             SupabaseSDK.TryGetUnclaimedMailCountAsync(category);

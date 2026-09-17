@@ -230,7 +230,38 @@ export default defineConfig({
             items: [
               { text: '채널 목록 조회', link: '/guide/chat/channels' },
               { text: '채널 구독', link: '/guide/chat/subscribe' },
-              { text: '메시지 발송', link: '/guide/chat/send' }
+              { text: '메시지 발송', link: '/guide/chat/send' },
+              { text: '귓속말 발송', link: '/guide/chat/send-direct' },
+              { text: '귓속말 조회', link: '/guide/chat/fetch-direct' }
+            ]
+          },
+          {
+            text: '친구',
+            link: '/guide/friend/',
+            collapsed: true,
+            items: [
+              { text: '닉네임 검색', link: '/guide/friend/search' },
+              { text: '요청 전송', link: '/guide/friend/request-send' },
+              { text: '대기 중인 요청 목록', link: '/guide/friend/requests-list' },
+              { text: '요청 수락·거절', link: '/guide/friend/request-respond' },
+              { text: '요청 취소', link: '/guide/friend/request-cancel' },
+              { text: '친구 목록', link: '/guide/friend/list' },
+              { text: '친구 삭제', link: '/guide/friend/remove' }
+            ]
+          },
+          {
+            text: '매치 로비',
+            link: '/guide/match-lobby/',
+            collapsed: true,
+            items: [
+              { text: '로비 생성', link: '/guide/match-lobby/create' },
+              { text: '추가 초대', link: '/guide/match-lobby/invite' },
+              { text: '초대 응답', link: '/guide/match-lobby/respond' },
+              { text: '로비 나가기', link: '/guide/match-lobby/leave' },
+              { text: '멤버 역할 태그 지정', link: '/guide/match-lobby/set-role' },
+              { text: '시작 알림', link: '/guide/match-lobby/start' },
+              { text: '로비 취소', link: '/guide/match-lobby/cancel' },
+              { text: '내 로비 목록', link: '/guide/match-lobby/list' }
             ]
           },
           {
@@ -280,6 +311,8 @@ export default defineConfig({
           { text: '매치 결과', link: '/guide/api/match-result' },
           { text: '쿠폰', link: '/guide/api/coupon' },
           { text: '채팅', link: '/guide/api/chat' },
+          { text: '친구', link: '/guide/api/friend' },
+          { text: '매치 로비', link: '/guide/api/match-lobby' },
           { text: '기타', link: '/guide/api/etc' },
           { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]

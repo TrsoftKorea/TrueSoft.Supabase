@@ -51,6 +51,8 @@ namespace TrueBase.Unity
         private static MatchResultFacade _matchResult;
         private static CouponFacade _coupon;
         private static ChatFacade _chat;
+        private static FriendFacade _friend;
+        private static MatchLobbyFacade _matchLobby;
         private static Task _chatTickTask;
         private static RemoteConfigFacade _remoteConfig;
         private static ServerFunctionsFacade _functions;
@@ -274,6 +276,23 @@ namespace TrueBase.Unity
             public const string CouponRedeem = "Supabase.Coupon.Redeem";
             public const string ChatChannels = "Supabase.Chat.Channels";
             public const string ChatSend = "Supabase.Chat.Send";
+            public const string ChatSendDirect = "Supabase.Chat.SendDirect";
+            public const string ChatFetchDirect = "Supabase.Chat.FetchDirect";
+            public const string FriendSearch = "Supabase.Friend.Search";
+            public const string FriendRequestSend = "Supabase.Friend.RequestSend";
+            public const string FriendRequestsList = "Supabase.Friend.RequestsList";
+            public const string FriendRequestRespond = "Supabase.Friend.RequestRespond";
+            public const string FriendRequestCancel = "Supabase.Friend.RequestCancel";
+            public const string FriendsList = "Supabase.Friend.List";
+            public const string FriendRemove = "Supabase.Friend.Remove";
+            public const string MatchLobbyCreate = "Supabase.MatchLobby.Create";
+            public const string MatchLobbyInvite = "Supabase.MatchLobby.Invite";
+            public const string MatchLobbyRespond = "Supabase.MatchLobby.Respond";
+            public const string MatchLobbyLeave = "Supabase.MatchLobby.Leave";
+            public const string MatchLobbySetRole = "Supabase.MatchLobby.SetRole";
+            public const string MatchLobbyStart = "Supabase.MatchLobby.Start";
+            public const string MatchLobbyCancel = "Supabase.MatchLobby.Cancel";
+            public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
         }
 
         /// <summary>
@@ -1596,6 +1615,24 @@ namespace TrueBase.Unity
                 // 매치 결과 — 상대가 다르게 신고했거나 상호 지목이 어긋난 경우. 부정 신고 시도일 수도 있지만
                 // 정상적인 통신 유실로도 발생하므로 코드 오류로 취급하지 않는다.
                 case SupabaseErrorCode.MatchResultMismatch:
+
+                // 친구 — 유저 상태·레이스로 정상 발생(닉네임 오타, 이미 친구, 상대가 먼저 처리·취소한 경우 등)
+                case SupabaseErrorCode.FriendNicknameEmpty:
+                case SupabaseErrorCode.FriendNicknameNotFound:
+                case SupabaseErrorCode.FriendSelfRequest:
+                case SupabaseErrorCode.FriendAlreadyFriends:
+                case SupabaseErrorCode.FriendRequestAlreadySent:
+                case SupabaseErrorCode.FriendRequestNotFound:
+                case SupabaseErrorCode.FriendRequestNotPending:
+                case SupabaseErrorCode.FriendNotFound:
+
+                // 매치 로비 — 정원 초과·이미 시작/취소됨·응답할 초대가 없어짐 등 레이스로 정상 발생
+                case SupabaseErrorCode.MatchLobbyInviteNotFriend:
+                case SupabaseErrorCode.MatchLobbyNotFound:
+                case SupabaseErrorCode.MatchLobbyNotOpen:
+                case SupabaseErrorCode.MatchLobbyFull:
+                case SupabaseErrorCode.MatchLobbyInviteNotFound:
+                case SupabaseErrorCode.MatchLobbyMemberNotFound:
                     return true;
 
                 default:
@@ -1977,6 +2014,32 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>친구(검색·요청·수락/거절·목록 RPC).</summary>
+        internal static FriendFacade Friend
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _friend ??= new FriendFacade(_bootstrap.FriendService, () => _currentSession);
+            }
+        }
+
+        /// <summary>매치 로비(친구 초대·수락·시작 RPC). 폴링(<see cref="TryListMatchLobbiesAsync"/>)으로 상태 변화를 감지합니다.</summary>
+        internal static MatchLobbyFacade MatchLobby
+        {
+            get
+            {
+                EnsureInitializedOrBootstrapSync();
+                if (_bootstrap == null)
+                    throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
+
+                return _matchLobby ??= new MatchLobbyFacade(_bootstrap.MatchLobbyService, () => _currentSession);
+            }
+        }
+
         /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
@@ -2313,6 +2376,318 @@ namespace TrueBase.Unity
         {
             var r = await SendChatAsync(channelCode, content);
             return LogAndReturnResult(ApiLogTags.ChatSend, r);
+        }
+
+        /// <summary><c>ts_chat_send_direct</c> — 친구에게 귓속말 발송. 친구가 아니면 실패합니다.</summary>
+        public static async Task<SupabaseResult<ChatSendResult>> SendDirectChatAsync(string targetAccountId, string content)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<ChatSendResult>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.SendDirectAsync(targetAccountId, content);
+        }
+
+        /// <inheritdoc cref="SendDirectChatAsync"/>
+        public static async Task<SupabaseResult<ChatSendResult>> TrySendDirectChatAsync(string targetAccountId, string content)
+        {
+            var r = await SendDirectChatAsync(targetAccountId, content);
+            return LogAndReturnResult(ApiLogTags.ChatSendDirect, r);
+        }
+
+        /// <summary><c>ts_chat_fetch_direct</c> — 특정 친구와의 대화 커서 조회. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetDirectChatAsync(string targetAccountId, long afterId = 0, int limit = 50)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.FetchDirectAsync(targetAccountId, afterId, limit);
+        }
+
+        /// <inheritdoc cref="GetDirectChatAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> TryGetDirectChatAsync(string targetAccountId, long afterId = 0, int limit = 50)
+        {
+            var r = await GetDirectChatAsync(targetAccountId, afterId, limit);
+            return LogAndReturnResult(ApiLogTags.ChatFetchDirect, r);
+        }
+
+        /// <summary><c>ts_friend_search</c> — 닉네임 정확 일치(대소문자 무시) 검색. 친구·요청 상태도 같이 돌아옵니다.</summary>
+        public static async Task<SupabaseResult<FriendSearchResult>> SearchFriendAsync(string nickname)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<FriendSearchResult>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.SearchAsync(nickname);
+        }
+
+        /// <inheritdoc cref="SearchFriendAsync"/>
+        public static async Task<SupabaseResult<FriendSearchResult>> TrySearchFriendAsync(string nickname)
+        {
+            var r = await SearchFriendAsync(nickname);
+            return LogAndReturnResult(ApiLogTags.FriendSearch, r);
+        }
+
+        /// <summary>
+        /// <c>ts_friend_request_send</c> — 친구 요청 전송. 상대가 이미 나에게 보낸 요청이 있으면
+        /// 즉시 상호 수락되어 <see cref="FriendRequestSendOutcome.Accepted"/>가 true로 돌아옵니다.
+        /// </summary>
+        public static async Task<SupabaseResult<FriendRequestSendOutcome>> SendFriendRequestAsync(string targetAccountId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<FriendRequestSendOutcome>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.SendRequestAsync(targetAccountId);
+        }
+
+        /// <inheritdoc cref="SendFriendRequestAsync"/>
+        public static async Task<SupabaseResult<FriendRequestSendOutcome>> TrySendFriendRequestAsync(string targetAccountId)
+        {
+            var r = await SendFriendRequestAsync(targetAccountId);
+            return LogAndReturnResult(ApiLogTags.FriendRequestSend, r);
+        }
+
+        /// <summary><c>ts_friend_requests_list</c> — 대기 중인 친구 요청 목록(받은 것 또는 보낸 것).</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<FriendRequestSummary>>> GetFriendRequestsAsync(
+            FriendRequestDirection direction = FriendRequestDirection.Incoming)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<FriendRequestSummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.ListRequestsAsync(direction);
+        }
+
+        /// <inheritdoc cref="GetFriendRequestsAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<FriendRequestSummary>>> TryGetFriendRequestsAsync(
+            FriendRequestDirection direction = FriendRequestDirection.Incoming)
+        {
+            var r = await GetFriendRequestsAsync(direction);
+            return LogAndReturnResult(ApiLogTags.FriendRequestsList, r);
+        }
+
+        /// <summary><c>ts_friend_request_respond</c> — 받은 친구 요청을 수락하거나 거절합니다.</summary>
+        public static async Task<SupabaseResult> RespondFriendRequestAsync(string requestId, bool accept)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.RespondAsync(requestId, accept);
+        }
+
+        /// <inheritdoc cref="RespondFriendRequestAsync"/>
+        public static async Task<SupabaseResult> TryRespondFriendRequestAsync(string requestId, bool accept)
+        {
+            var r = await RespondFriendRequestAsync(requestId, accept);
+            LogApiResult(ApiLogTags.FriendRequestRespond, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_friend_request_cancel</c> — 내가 보낸 대기 중 요청을 취소합니다.</summary>
+        public static async Task<SupabaseResult> CancelFriendRequestAsync(string requestId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.CancelRequestAsync(requestId);
+        }
+
+        /// <inheritdoc cref="CancelFriendRequestAsync"/>
+        public static async Task<SupabaseResult> TryCancelFriendRequestAsync(string requestId)
+        {
+            var r = await CancelFriendRequestAsync(requestId);
+            LogApiResult(ApiLogTags.FriendRequestCancel, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_friends_list</c> — 내 친구 목록.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<FriendSummary>>> GetFriendsAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<FriendSummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.ListFriendsAsync();
+        }
+
+        /// <inheritdoc cref="GetFriendsAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<FriendSummary>>> TryGetFriendsAsync()
+        {
+            var r = await GetFriendsAsync();
+            return LogAndReturnResult(ApiLogTags.FriendsList, r);
+        }
+
+        /// <summary><c>ts_friend_remove</c> — 친구를 삭제합니다. 이후 다시 요청을 보낼 수 있습니다.</summary>
+        public static async Task<SupabaseResult> RemoveFriendAsync(string friendAccountId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.RemoveAsync(friendAccountId);
+        }
+
+        /// <inheritdoc cref="RemoveFriendAsync"/>
+        public static async Task<SupabaseResult> TryRemoveFriendAsync(string friendAccountId)
+        {
+            var r = await RemoveFriendAsync(friendAccountId);
+            LogApiResult(ApiLogTags.FriendRemove, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary>
+        /// <c>ts_match_lobby_create</c> — 매치 로비를 만들고 지정한 친구들을 초대합니다.
+        /// 초대 대상은 전부 내 친구여야 합니다. 반환된 <c>SessionId</c>는 <see cref="ReportMatchResultAsync"/>의
+        /// sessionId로 그대로 쓸 수 있습니다.
+        /// </summary>
+        public static async Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateMatchLobbyAsync(
+            string gameCode, IEnumerable<string> invitedAccountIds = null)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<MatchLobbyCreateOutcome>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.CreateAsync(gameCode, invitedAccountIds);
+        }
+
+        /// <inheritdoc cref="CreateMatchLobbyAsync"/>
+        public static async Task<SupabaseResult<MatchLobbyCreateOutcome>> TryCreateMatchLobbyAsync(
+            string gameCode, IEnumerable<string> invitedAccountIds = null)
+        {
+            var r = await CreateMatchLobbyAsync(gameCode, invitedAccountIds);
+            return LogAndReturnResult(ApiLogTags.MatchLobbyCreate, r);
+        }
+
+        /// <summary><c>ts_match_lobby_invite</c> — 열려 있는 로비에 친구를 추가 초대합니다(호스트 전용).</summary>
+        public static async Task<SupabaseResult> InviteToMatchLobbyAsync(string lobbyId, string accountId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.InviteAsync(lobbyId, accountId);
+        }
+
+        /// <inheritdoc cref="InviteToMatchLobbyAsync"/>
+        public static async Task<SupabaseResult> TryInviteToMatchLobbyAsync(string lobbyId, string accountId)
+        {
+            var r = await InviteToMatchLobbyAsync(lobbyId, accountId);
+            LogApiResult(ApiLogTags.MatchLobbyInvite, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_match_lobby_respond</c> — 로비 초대에 응답합니다.</summary>
+        public static async Task<SupabaseResult> RespondMatchLobbyAsync(string lobbyId, bool accept)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.RespondAsync(lobbyId, accept);
+        }
+
+        /// <inheritdoc cref="RespondMatchLobbyAsync"/>
+        public static async Task<SupabaseResult> TryRespondMatchLobbyAsync(string lobbyId, bool accept)
+        {
+            var r = await RespondMatchLobbyAsync(lobbyId, accept);
+            LogApiResult(ApiLogTags.MatchLobbyRespond, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_match_lobby_leave</c> — 로비를 나갑니다. 호스트가 나가면 로비 전체가 취소됩니다.</summary>
+        public static async Task<SupabaseResult> LeaveMatchLobbyAsync(string lobbyId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.LeaveAsync(lobbyId);
+        }
+
+        /// <inheritdoc cref="LeaveMatchLobbyAsync"/>
+        public static async Task<SupabaseResult> TryLeaveMatchLobbyAsync(string lobbyId)
+        {
+            var r = await LeaveMatchLobbyAsync(lobbyId);
+            LogApiResult(ApiLogTags.MatchLobbyLeave, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_match_lobby_set_role</c> — 멤버의 역할 태그를 지정합니다(호스트 전용). 팀 이름·진영 등 의미는 게임이 정합니다.</summary>
+        public static async Task<SupabaseResult> SetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.SetRoleAsync(lobbyId, accountId, roleTag);
+        }
+
+        /// <inheritdoc cref="SetMatchLobbyMemberRoleAsync"/>
+        public static async Task<SupabaseResult> TrySetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag)
+        {
+            var r = await SetMatchLobbyMemberRoleAsync(lobbyId, accountId, roleTag);
+            LogApiResult(ApiLogTags.MatchLobbySetRole, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_match_lobby_start</c> — 로비 시작을 알립니다(호스트 전용). 실제 접속·연결은 게임이 처리합니다.</summary>
+        public static async Task<SupabaseResult> StartMatchLobbyAsync(string lobbyId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.StartAsync(lobbyId);
+        }
+
+        /// <inheritdoc cref="StartMatchLobbyAsync"/>
+        public static async Task<SupabaseResult> TryStartMatchLobbyAsync(string lobbyId)
+        {
+            var r = await StartMatchLobbyAsync(lobbyId);
+            LogApiResult(ApiLogTags.MatchLobbyStart, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary><c>ts_match_lobby_cancel</c> — 로비를 취소합니다(호스트 전용).</summary>
+        public static async Task<SupabaseResult> CancelMatchLobbyAsync(string lobbyId)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.CancelAsync(lobbyId);
+        }
+
+        /// <inheritdoc cref="CancelMatchLobbyAsync"/>
+        public static async Task<SupabaseResult> TryCancelMatchLobbyAsync(string lobbyId)
+        {
+            var r = await CancelMatchLobbyAsync(lobbyId);
+            LogApiResult(ApiLogTags.MatchLobbyCancel, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <summary>
+        /// <c>ts_match_lobby_list_my</c> — 내가 호스트거나 멤버인 진행 중 로비 목록. 알림이 폴링 전제이므로
+        /// 주기적으로 호출해 초대 수락·시작·취소 등 상태 변화를 감지하세요.
+        /// </summary>
+        public static async Task<SupabaseResult<IReadOnlyList<MatchLobbySummary>>> ListMatchLobbiesAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<MatchLobbySummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchLobby.ListMyAsync();
+        }
+
+        /// <inheritdoc cref="ListMatchLobbiesAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<MatchLobbySummary>>> TryListMatchLobbiesAsync()
+        {
+            var r = await ListMatchLobbiesAsync();
+            return LogAndReturnResult(ApiLogTags.MatchLobbyListMy, r);
         }
 
         /// <inheritdoc cref="GetUnclaimedMailCountAsync"/>
@@ -3176,6 +3551,8 @@ namespace TrueBase.Unity
             _leaderboard = null;
             _matchResult = null;
             _coupon = null;
+            _friend = null;
+            _matchLobby = null;
             _chat?.Reset();
             _chat = null;
             _remoteConfig = null;

@@ -5,6 +5,8 @@
 | [`GetChatChannelsAsync`](/guide/chat/channels) | 사용 가능한 채널 목록 |
 | [`SubscribeChat`](/guide/chat/subscribe) | 채널 구독 · 새 메시지 수신 |
 | [`SendChatAsync`](/guide/chat/send) | 메시지 발송 |
+| [`SendDirectChatAsync`](/guide/chat/send-direct) | 친구에게 귓속말 발송 |
+| [`GetDirectChatAsync`](/guide/chat/fetch-direct) | 친구와의 대화 조회 |
 
 채널 생성·설정, 대화 삭제, 채팅 차단은 Retool 어드민 전용이라 SDK에 없습니다.
 

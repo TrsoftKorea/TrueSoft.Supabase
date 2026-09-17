@@ -325,5 +325,53 @@ namespace TrueBase.Core.Common
 
         /// <summary>양쪽이 신고한 결과가 서로 맞지 않습니다(상호 지목 불일치 또는 승패 불일치). 지급되지 않습니다.</summary>
         public const string MatchResultMismatch = "match_result_mismatch";
+
+        /// <summary>검색할 닉네임이 비어 있습니다.</summary>
+        public const string FriendNicknameEmpty = "friend_nickname_empty";
+
+        /// <summary>해당 닉네임의 유저가 없습니다.</summary>
+        public const string FriendNicknameNotFound = "friend_nickname_not_found";
+
+        /// <summary>자기 자신에게 친구 요청을 보내려 했습니다.</summary>
+        public const string FriendSelfRequest = "friend_self_request";
+
+        /// <summary>친구 요청 대상 계정이 지정되지 않았습니다.</summary>
+        public const string FriendTargetRequired = "friend_target_required";
+
+        /// <summary>이미 친구인 상대에게 다시 요청했습니다.</summary>
+        public const string FriendAlreadyFriends = "friend_already_friends";
+
+        /// <summary>이미 보낸 요청이 대기 중입니다.</summary>
+        public const string FriendRequestAlreadySent = "friend_request_already_sent";
+
+        /// <summary>요청 목록 조회 방향이 incoming·outgoing이 아닙니다.</summary>
+        public const string FriendDirectionInvalid = "friend_direction_invalid";
+
+        /// <summary>해당 친구 요청이 없거나 본인 것이 아닙니다.</summary>
+        public const string FriendRequestNotFound = "friend_request_not_found";
+
+        /// <summary>이미 처리된(수락·거절·취소) 요청입니다.</summary>
+        public const string FriendRequestNotPending = "friend_request_not_pending";
+
+        /// <summary>해당 계정과 친구 관계가 아닙니다.</summary>
+        public const string FriendNotFound = "friend_not_found";
+
+        /// <summary>초대 대상이 내 친구가 아닙니다.</summary>
+        public const string MatchLobbyInviteNotFriend = "match_lobby_invite_not_friend";
+
+        /// <summary>해당 로비가 없거나 호스트가 아닙니다.</summary>
+        public const string MatchLobbyNotFound = "match_lobby_not_found";
+
+        /// <summary>로비가 이미 시작됐거나 취소·만료되어 더 이상 열려 있지 않습니다.</summary>
+        public const string MatchLobbyNotOpen = "match_lobby_not_open";
+
+        /// <summary>로비 정원이 가득 찼습니다.</summary>
+        public const string MatchLobbyFull = "match_lobby_full";
+
+        /// <summary>응답할 초대가 없습니다(이미 처리됐거나 초대받지 않음).</summary>
+        public const string MatchLobbyInviteNotFound = "match_lobby_invite_not_found";
+
+        /// <summary>역할 태그를 지정하려는 멤버가 로비에 없습니다.</summary>
+        public const string MatchLobbyMemberNotFound = "match_lobby_member_not_found";
     }
 }
