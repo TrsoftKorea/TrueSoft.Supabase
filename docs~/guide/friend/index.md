@@ -12,6 +12,10 @@
 
 실시간 알림이 아닙니다. [받은 요청 목록](/guide/friend/requests-list)을 원하는 주기로 직접 불러 배지·알림을 표시하세요.
 
+## 제한값은 운영이 정합니다 {#limits}
+
+친구 수 상한, 보낸 뒤 응답을 기다리는 요청의 개수 상한, 연속 요청 최소 간격 세 가지를 서버가 검사합니다. 기본값은 각각 100명·50건·3초이며 운영 콘솔에서 바꿉니다. 상한에 걸리면 `FriendLimitReached`·`FriendPendingLimitReached`·`FriendRequestTooFast`로 실패하므로 안내 문구를 붙여 두세요.
+
 ## 메서드
 
 | 메서드 | 설명 |

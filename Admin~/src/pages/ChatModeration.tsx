@@ -14,6 +14,8 @@ type ChannelRow = { id: string; kind: string; code: string; display_name: string
 type MessageRow = {
   id: number; channel_id: string; account_id: string | null; user_id: string; display_name: string
   content: string; created_at: string; deleted_at: string | null; deleted_by: string | null
+  // 귓속말일 때만 채워진다. 전체·서버 채팅은 받는 사람이 따로 없어 null.
+  to_account_id: string | null; to_display_name: string | null
 }
 type MessageData = { rows: MessageRow[]; total: number; pageSize: number }
 type MuteRow = { id: number; account_id: string; channel_id: string | null; until: string; reason: string; created_by: string | null; created_at: string }
@@ -325,13 +327,14 @@ export default function ChatModeration({
                     <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
                     <th className="text-left px-4 py-2.5 font-medium w-28">채널</th>
                     <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-36">받는 사람</th>
                     <th className="text-left px-4 py-2.5 font-medium">내용</th>
                     <th className="px-3 py-2.5 w-24" />
                   </tr>
                 </thead>
                 <tbody>
                   {msgLoading || rows.length === 0 ? (
-                    <TableStatusRow loading={msgLoading} empty={rows.length === 0} colSpan={5} emptyText="메시지가 없습니다." />
+                    <TableStatusRow loading={msgLoading} empty={rows.length === 0} colSpan={6} emptyText="메시지가 없습니다." />
                   ) : (
                     rows.map((m) => (
                       <tr key={m.id} className={`border-t border-neutral-100 ${m.deleted_at ? 'bg-neutral-50/50' : ''}`}>
@@ -341,6 +344,13 @@ export default function ChatModeration({
                           {m.account_id ? (
                             <button onClick={() => goPlayer(m.account_id, m.display_name)} className="text-[#1677ff] hover:underline">{m.display_name}</button>
                           ) : (m.display_name || '-')}
+                        </td>
+                        <td className="px-4 py-3">
+                          {m.to_account_id ? (
+                            <button onClick={() => goPlayer(m.to_account_id, m.to_display_name ?? '')} className="text-[#1677ff] hover:underline">
+                              {m.to_display_name || m.to_account_id.slice(0, 8)}
+                            </button>
+                          ) : <span className="text-neutral-300">-</span>}
                         </td>
                         <td className="px-4 py-3 text-neutral-700 max-w-[420px] truncate" title={m.content}>
                           {m.deleted_at ? <span className="text-neutral-400 line-through">{m.content}</span> : m.content}

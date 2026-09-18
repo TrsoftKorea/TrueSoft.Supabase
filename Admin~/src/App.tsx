@@ -20,6 +20,7 @@ import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
+import Social from './pages/Social'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
 import DataManagement from './pages/DataManagement'
@@ -119,6 +120,7 @@ export default function App() {
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
+        <Route path="/social" element={<Social target={target} onUnauthenticated={signOut} />} />
         <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />

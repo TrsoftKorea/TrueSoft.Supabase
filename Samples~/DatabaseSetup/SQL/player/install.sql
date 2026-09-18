@@ -7789,6 +7789,70 @@ alter table public.friend_requests enable row level security;
 revoke all on table public.friend_requests from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
+-- friend_settings — 친구 기능 제한값. 행 하나만 두고 운영자가 값만 바꾼다.
+--   제한이 없으면 봇 하나가 전체 유저에게 친구 요청을 도배할 수 있어 기본값을 둔다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.friend_settings (
+  id                       int primary key default 1 check (id = 1),
+  max_friends              int not null default 100 check (max_friends > 0),
+  max_pending_sent         int not null default 50  check (max_pending_sent > 0),
+  request_cooldown_seconds int not null default 3   check (request_cooldown_seconds >= 0),
+  updated_at               timestamptz not null default now()
+);
+
+insert into public.friend_settings (id) values (1) on conflict (id) do nothing;
+
+comment on table public.friend_settings is
+  '친구 기능 제한값(행 하나). max_friends=친구 수 상한, max_pending_sent=보낸 대기 요청 상한, request_cooldown_seconds=연속 요청 최소 간격.';
+
+alter table public.friend_settings enable row level security;
+
+revoke all on table public.friend_settings from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_settings — 제한값을 읽는다. 설정 행이 없어도 무제한이 되면 안 되므로
+-- 테이블 기본값과 같은 값으로 채워 돌려준다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_settings()
+returns public.friend_settings
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_cfg public.friend_settings%rowtype;
+begin
+  select * into v_cfg from public.friend_settings where id = 1;
+  if not found then
+    v_cfg.id                       := 1;
+    v_cfg.max_friends              := 100;
+    v_cfg.max_pending_sent         := 50;
+    v_cfg.request_cooldown_seconds := 3;
+  end if;
+  return v_cfg;
+end;
+$$;
+
+revoke all on function public.ts_friend_settings() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_count — 그 계정의 현재 친구 수. 상한 검사가 여러 곳에 있어 함수로 뺐다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_count(p_account_id uuid)
+returns int
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::int from public.friend_requests
+   where status = 'accepted'
+     and (requester_account_id = p_account_id or addressee_account_id = p_account_id);
+$$;
+
+revoke all on function public.ts_friend_count(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- ts_are_friends — 두 계정이 친구인지(status=accepted). 방향은 무관하다. 검색·귓속말·
 -- 로비 초대 등 여러 곳에서 반복되던 조건이라 여기 하나로 뺐다.
 -- ---------------------------------------------------------------------------
@@ -7885,7 +7949,10 @@ declare
   v_uid      uuid := auth.uid();
   v_now      timestamptz := now();
   v_existing public.friend_requests%rowtype;
+  v_cfg      public.friend_settings%rowtype;
   v_new_id   uuid;
+  v_last     timestamptz;
+  v_count    int;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -7896,6 +7963,8 @@ begin
   if p_target_account_id = v_uid then
     raise exception 'friend_self_request';
   end if;
+
+  v_cfg := public.ts_friend_settings();
 
   -- 아직 행이 없으면 아래 FOR UPDATE가 잠글 대상이 없어 동시 요청이 안 걸린다 — A→B·B→A가
   -- 정확히 동시에 들어오면 둘 다 "없음"을 보고 각자 pending 행을 만들어 영원히 안 합쳐질 수
@@ -7918,10 +7987,38 @@ begin
       raise exception 'friend_already_friends';
     end if;
     if v_existing.requester_account_id = p_target_account_id then
+      -- 상호 요청이라 여기서 친구가 된다 — 양쪽 상한을 모두 확인한다.
+      if public.ts_friend_count(v_uid) >= v_cfg.max_friends then
+        raise exception 'friend_limit_reached';
+      end if;
+      if public.ts_friend_count(p_target_account_id) >= v_cfg.max_friends then
+        raise exception 'friend_target_limit_reached';
+      end if;
       update public.friend_requests set status = 'accepted', responded_at = v_now where id = v_existing.id;
       return jsonb_build_object('status', 'accepted', 'request_id', v_existing.id);
     end if;
     raise exception 'friend_request_already_sent';
+  end if;
+
+  -- 새 요청을 만들 때만 도배·상한을 본다. 위 상호 수락 경로는 요청을 새로 만드는 게 아니라
+  -- 이미 온 요청을 받는 것이라 쿨다운·대기 상한 대상이 아니다.
+  if v_cfg.request_cooldown_seconds > 0 then
+    select max(created_at) into v_last
+      from public.friend_requests where requester_account_id = v_uid;
+    if v_last is not null and v_last > v_now - make_interval(secs => v_cfg.request_cooldown_seconds) then
+      raise exception 'friend_request_too_fast';
+    end if;
+  end if;
+
+  if public.ts_friend_count(v_uid) >= v_cfg.max_friends then
+    raise exception 'friend_limit_reached';
+  end if;
+
+  select count(*) into v_count
+    from public.friend_requests
+   where requester_account_id = v_uid and status = 'pending';
+  if v_count >= v_cfg.max_pending_sent then
+    raise exception 'friend_pending_limit_reached';
   end if;
 
   insert into public.friend_requests (requester_account_id, addressee_account_id)
@@ -7962,20 +8059,20 @@ begin
     return coalesce((
       select jsonb_agg(jsonb_build_object(
                'request_id', r.id, 'account_id', r.requester_account_id,
-               'display_name', d.display_name, 'created_at', r.created_at)
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
              order by r.created_at desc)
         from public.friend_requests r
-        join public.display_names d on d.account_id = r.requester_account_id
+        left join public.display_names d on d.account_id = r.requester_account_id
        where r.addressee_account_id = v_uid and r.status = 'pending'
     ), '[]'::jsonb);
   else
     return coalesce((
       select jsonb_agg(jsonb_build_object(
                'request_id', r.id, 'account_id', r.addressee_account_id,
-               'display_name', d.display_name, 'created_at', r.created_at)
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
              order by r.created_at desc)
         from public.friend_requests r
-        join public.display_names d on d.account_id = r.addressee_account_id
+        left join public.display_names d on d.account_id = r.addressee_account_id
        where r.requester_account_id = v_uid and r.status = 'pending'
     ), '[]'::jsonb);
   end if;
@@ -8000,6 +8097,7 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_req public.friend_requests%rowtype;
+  v_cfg public.friend_settings%rowtype;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -8011,6 +8109,17 @@ begin
   end if;
   if v_req.status <> 'pending' then
     raise exception 'friend_request_not_pending';
+  end if;
+
+  -- 요청을 보낸 뒤 그 사이에 양쪽 중 한 명이 상한을 채웠을 수 있어 수락 시점에 다시 본다.
+  if p_accept then
+    v_cfg := public.ts_friend_settings();
+    if public.ts_friend_count(v_uid) >= v_cfg.max_friends then
+      raise exception 'friend_limit_reached';
+    end if;
+    if public.ts_friend_count(v_req.requester_account_id) >= v_cfg.max_friends then
+      raise exception 'friend_target_limit_reached';
+    end if;
   end if;
 
   update public.friend_requests
@@ -8084,7 +8193,7 @@ begin
 
   return coalesce((
     select jsonb_agg(jsonb_build_object(
-             'account_id', r.other_id, 'display_name', d.display_name, 'since', r.responded_at)
+             'account_id', r.other_id, 'display_name', coalesce(d.display_name, ''), 'since', r.responded_at)
            order by r.responded_at desc)
       from (
         select responded_at,
@@ -8092,7 +8201,7 @@ begin
           from public.friend_requests
          where status = 'accepted' and (requester_account_id = v_uid or addressee_account_id = v_uid)
       ) r
-      join public.display_names d on d.account_id = r.other_id
+      left join public.display_names d on d.account_id = r.other_id
   ), '[]'::jsonb);
 end;
 $$;
@@ -8306,6 +8415,117 @@ comment on function public.ts_chat_fetch_direct(uuid, bigint, int) is
 
 revoke all on function public.ts_chat_fetch_direct(uuid, bigint, int) from public, anon;
 grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int) to authenticated;
+
+-- =============================================================================
+-- 운영자 RPC (service_role 전용)
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- ts_admin_friend_overview — 특정 플레이어의 친구 관계 한눈에 보기.
+--   "친구가 사라졌다" 같은 문의를 확인하려면 친구 목록과 대기 중 요청을 같이 봐야 한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_friend_overview(p_account_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'account_id',   p_account_id,
+    'display_name', coalesce((select display_name from public.display_names where account_id = p_account_id), ''),
+    'friend_count', public.ts_friend_count(p_account_id),
+    'max_friends',  (public.ts_friend_settings()).max_friends,
+    'friends', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'account_id', r.other_id, 'display_name', coalesce(d.display_name, ''),
+               'since', r.responded_at)
+             order by r.responded_at desc)
+        from (
+          select responded_at,
+                 case when requester_account_id = p_account_id then addressee_account_id else requester_account_id end as other_id
+            from public.friend_requests
+           where status = 'accepted'
+             and (requester_account_id = p_account_id or addressee_account_id = p_account_id)
+        ) r
+        left join public.display_names d on d.account_id = r.other_id
+    ), '[]'::jsonb),
+    'incoming', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'request_id', r.id, 'account_id', r.requester_account_id,
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
+             order by r.created_at desc)
+        from public.friend_requests r
+        left join public.display_names d on d.account_id = r.requester_account_id
+       where r.addressee_account_id = p_account_id and r.status = 'pending'
+    ), '[]'::jsonb),
+    'outgoing', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'request_id', r.id, 'account_id', r.addressee_account_id,
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
+             order by r.created_at desc)
+        from public.friend_requests r
+        left join public.display_names d on d.account_id = r.addressee_account_id
+       where r.requester_account_id = p_account_id and r.status = 'pending'
+    ), '[]'::jsonb)
+  );
+$$;
+
+comment on function public.ts_admin_friend_overview(uuid) is
+  '플레이어 한 명의 친구 목록·대기 요청·상한 현황. service_role 전용.';
+
+revoke all on function public.ts_admin_friend_overview(uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_friend_overview(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- ts_admin_friend_settings_get / _update — 제한값 조회·수정.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_friend_settings_get()
+returns public.friend_settings
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.ts_friend_settings();
+$$;
+
+comment on function public.ts_admin_friend_settings_get() is
+  '친구 제한값 조회. 설정 행이 없으면 기본값을 돌려준다. service_role 전용.';
+
+revoke all on function public.ts_admin_friend_settings_get() from public, anon, authenticated;
+grant execute on function public.ts_admin_friend_settings_get() to service_role;
+
+create or replace function public.ts_admin_friend_settings_update(
+  p_max_friends              int,
+  p_max_pending_sent         int,
+  p_request_cooldown_seconds int
+)
+returns public.friend_settings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_row public.friend_settings%rowtype;
+begin
+  insert into public.friend_settings (id, max_friends, max_pending_sent, request_cooldown_seconds, updated_at)
+  values (1, p_max_friends, p_max_pending_sent, p_request_cooldown_seconds, now())
+  on conflict (id) do update
+    set max_friends              = excluded.max_friends,
+        max_pending_sent         = excluded.max_pending_sent,
+        request_cooldown_seconds = excluded.request_cooldown_seconds,
+        updated_at               = now()
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+comment on function public.ts_admin_friend_settings_update(int, int, int) is
+  '친구 제한값 수정. 값 범위는 테이블 CHECK가 검사한다. service_role 전용.';
+
+revoke all on function public.ts_admin_friend_settings_update(int, int, int) from public, anon, authenticated;
+grant execute on function public.ts_admin_friend_settings_update(int, int, int) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -8688,11 +8908,11 @@ begin
              'created_at', l.created_at, 'started_at', l.started_at,
              'members', (
                select jsonb_agg(jsonb_build_object(
-                        'account_id', m.account_id, 'display_name', d.display_name,
+                        'account_id', m.account_id, 'display_name', coalesce(d.display_name, ''),
                         'status', m.status, 'role_tag', m.role_tag)
                       order by m.invited_at)
                  from public.match_lobby_members m
-                 join public.display_names d on d.account_id = m.account_id
+                 left join public.display_names d on d.account_id = m.account_id
                 where m.lobby_id = l.id
              ))
            order by l.created_at desc)
@@ -8734,6 +8954,63 @@ comment on function public.ts_match_lobby_cleanup() is
   '만료된 open 로비를 expired로 전환. cron이 5분마다 호출.';
 
 revoke all on function public.ts_match_lobby_cleanup() from public, anon, authenticated;
+
+-- =============================================================================
+-- 운영자 RPC (service_role 전용)
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- ts_admin_match_lobby_list — 로비 현황. 끝난 로비까지 보이므로 "그때 누가 있었는지"를
+--   사후에 확인할 수 있다. p_status 를 주면 그 상태만, 없으면 전부.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_match_lobby_list(
+  p_status text default null,
+  p_limit  int  default 50,
+  p_offset int  default 0
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with page as (
+    select *
+      from public.match_lobbies
+     where p_status is null or status = p_status
+     order by created_at desc
+     limit  least(greatest(coalesce(p_limit, 50), 1), 200)
+    offset greatest(coalesce(p_offset, 0), 0)
+  )
+  select jsonb_build_object(
+    'total', (select count(*) from public.match_lobbies where p_status is null or status = p_status),
+    'rows', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'lobby_id', l.id, 'game_code', l.game_code,
+               'host_account_id', l.host_account_id, 'status', l.status,
+               'max_members', l.max_members, 'created_at', l.created_at,
+               'started_at', l.started_at, 'ended_at', l.ended_at, 'expires_at', l.expires_at,
+               'members', (
+                 select coalesce(jsonb_agg(jsonb_build_object(
+                          'account_id', m.account_id, 'display_name', coalesce(d.display_name, ''),
+                          'status', m.status, 'role_tag', m.role_tag,
+                          'invited_at', m.invited_at, 'responded_at', m.responded_at)
+                        order by m.invited_at), '[]'::jsonb)
+                   from public.match_lobby_members m
+                   left join public.display_names d on d.account_id = m.account_id
+                  where m.lobby_id = l.id
+               ))
+             order by l.created_at desc)
+        from page l
+    ), '[]'::jsonb)
+  );
+$$;
+
+comment on function public.ts_admin_match_lobby_list(text, int, int) is
+  '매치 로비 현황(멤버 포함). 끝난 로비도 조회된다. service_role 전용.';
+
+revoke all on function public.ts_admin_match_lobby_list(text, int, int) from public, anon, authenticated;
+grant execute on function public.ts_admin_match_lobby_list(text, int, int) to service_role;
 
 do $$
 begin
@@ -8802,7 +9079,8 @@ grant select, insert, update, delete on table public.user_data     to authentica
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
 --   account_closures, anonymous_recovery_tokens, mail_batches, mail_categories,
 --   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
---   match_reward_configs, match_results, friend_requests, match_lobbies, match_lobby_members
+--   match_reward_configs, match_results, friend_requests, friend_settings,
+--   match_lobbies, match_lobby_members
 
 -- ---------------------------------------------------------------------------
 -- 3. 함수 — 전부 회수 후 SDK 가 실제로 호출하는 RPC 만 되돌려 준다
@@ -8910,7 +9188,8 @@ grant execute on function public.ts_match_lobby_list_my()                       
 --                             리더보드를 지우거나 점수를 조작할 수 있다.
 --   ts_match_lobby_cleanup ← cron 전용(만료 로비 정리).
 --   ts_chat_direct_scope_key ← 내부 헬퍼(귓속말 범위 키 계산).
---   ts_are_friends ← 내부 헬퍼(친구 여부 판정).
+--   ts_are_friends / ts_friend_count / ts_friend_settings ← 내부 헬퍼(친구 판정·수·제한값).
+--   ts_admin_friend_overview / ts_admin_friend_settings_* / ts_admin_match_lobby_list ← 운영 콘솔 전용.
 
 -- ---------------------------------------------------------------------------
 -- 검증

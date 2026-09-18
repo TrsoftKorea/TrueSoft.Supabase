@@ -217,6 +217,10 @@ bool Handle(SupabaseResult result)
 | `FriendRequestNotFound` | 해당 요청이 없거나 본인 것이 아닙니다 |
 | `FriendRequestNotPending` | 이미 처리된 요청입니다 |
 | `FriendNotFound` | 해당 계정과 친구 관계가 아닙니다 |
+| `FriendLimitReached` | 내 친구 수가 상한에 도달했습니다 |
+| `FriendTargetLimitReached` | 상대의 친구 수가 상한에 도달했습니다 |
+| `FriendPendingLimitReached` | 보낸 뒤 응답을 기다리는 요청이 상한에 도달했습니다 |
+| `FriendRequestTooFast` | 연속 요청 최소 간격을 지키지 않았습니다 |
 
 ## 매치 로비
 

@@ -356,6 +356,18 @@ namespace TrueBase.Core.Common
         /// <summary>해당 계정과 친구 관계가 아닙니다.</summary>
         public const string FriendNotFound = "friend_not_found";
 
+        /// <summary>내 친구 수가 상한에 도달했습니다.</summary>
+        public const string FriendLimitReached = "friend_limit_reached";
+
+        /// <summary>상대의 친구 수가 상한에 도달했습니다.</summary>
+        public const string FriendTargetLimitReached = "friend_target_limit_reached";
+
+        /// <summary>보낸 뒤 대기 중인 요청이 상한에 도달했습니다. 기존 요청이 처리돼야 더 보낼 수 있습니다.</summary>
+        public const string FriendPendingLimitReached = "friend_pending_limit_reached";
+
+        /// <summary>연속 요청 최소 간격을 지키지 않았습니다.</summary>
+        public const string FriendRequestTooFast = "friend_request_too_fast";
+
         /// <summary>초대 대상이 내 친구가 아닙니다.</summary>
         public const string MatchLobbyInviteNotFriend = "match_lobby_invite_not_friend";
 

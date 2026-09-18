@@ -8,8 +8,9 @@ import { formatDateTime, formatKRW, formatBanUntil } from '../../components/ui/f
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import UserDataTab from './UserDataTab'
+import FriendsTab from './FriendsTab'
 
-type Tab = 'info' | 'userData'
+type Tab = 'info' | 'userData' | 'friends'
 
 const PERMANENT_UNTIL = '2999-12-31T23:59:59.000Z'
 
@@ -183,6 +184,7 @@ export default function PlayerDetail({
           [
             ['info', '기본 정보'],
             ['userData', '유저 데이터'],
+            ['friends', '친구'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -202,6 +204,13 @@ export default function PlayerDetail({
 
       {tab === 'userData' ? (
         <UserDataTab
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={accountId}
+          displayName={profile?.display_name ?? initialName}
+        />
+      ) : tab === 'friends' ? (
+        <FriendsTab
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={accountId}

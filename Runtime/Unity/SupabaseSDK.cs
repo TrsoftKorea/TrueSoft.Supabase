@@ -1625,6 +1625,10 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.FriendRequestNotFound:
                 case SupabaseErrorCode.FriendRequestNotPending:
                 case SupabaseErrorCode.FriendNotFound:
+                case SupabaseErrorCode.FriendLimitReached:
+                case SupabaseErrorCode.FriendTargetLimitReached:
+                case SupabaseErrorCode.FriendPendingLimitReached:
+                case SupabaseErrorCode.FriendRequestTooFast:
 
                 // 매치 로비 — 정원 초과·이미 시작/취소됨·응답할 초대가 없어짐 등 레이스로 정상 발생
                 case SupabaseErrorCode.MatchLobbyInviteNotFriend:

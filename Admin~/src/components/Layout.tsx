@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
+  UsersRound,
   ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
@@ -139,6 +140,7 @@ export function Layout({
             <NavLinkRow to="/" label="아이템 카탈로그" icon={Package} end />
             <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} />
             <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
+            <NavLinkRow to="/social" label="친구·로비" icon={UsersRound} />
             <NavGroupBlock
               label="우편함"
               icon={Mail}

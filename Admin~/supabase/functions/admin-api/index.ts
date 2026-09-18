@@ -86,6 +86,17 @@ const nextDayExclusive = (dateStr: string): string | null => {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// 귓속말은 scope_key 가 "계정A:계정B"(정렬된 쌍)이고 받는 사람이 행에 따로 없다. 보낸 사람을
+// 빼면 남는 쪽이 받는 사람이다 — 이게 없으면 운영자가 신고받은 귓속말의 상대를 알 수 없다.
+const directPartnerId = (scopeKey: unknown, senderId: unknown): string | null => {
+  if (typeof scopeKey !== "string" || !scopeKey.includes(":")) return null;
+  const [a, b] = scopeKey.split(":");
+  if (!UUID_RE.test(a) || !UUID_RE.test(b)) return null;
+  if (senderId === a) return b;
+  if (senderId === b) return a;
+  return null;
+};
+
 /** 구글 ID 토큰을 검증하고 확인된 이메일을 돌려준다. 실패하면 null. */
 async function verifyGoogleIdToken(idToken: string): Promise<string | null> {
   if (!GOOGLE_CLIENT_ID) {
@@ -685,7 +696,7 @@ Deno.serve(async (req) => {
 
         let query = db
           .from("chat_messages")
-          .select("id, channel_id, account_id, user_id, display_name, content, created_at, deleted_at, deleted_by", { count: "exact" })
+          .select("id, channel_id, scope_key, account_id, user_id, display_name, content, created_at, deleted_at, deleted_by", { count: "exact" })
           .order("id", { ascending: false })
           .range(from, to);
 
@@ -698,7 +709,31 @@ Deno.serve(async (req) => {
 
         const { data, error, count } = await query;
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+
+        // 귓속말 행에는 받는 사람이 없다 — scope_key 에서 상대를 뽑고 닉네임까지 붙여 준다.
+        const rows = (data ?? []) as Array<Record<string, unknown>>;
+        const partnerIds = new Set<string>();
+        for (const r of rows) {
+          const other = directPartnerId(r["scope_key"], r["account_id"]);
+          if (other) partnerIds.add(other);
+        }
+
+        const partnerNames = new Map<string, string>();
+        if (partnerIds.size > 0) {
+          const { data: names, error: nameError } = await db
+            .from("display_names")
+            .select("account_id, display_name")
+            .in("account_id", [...partnerIds]);
+          if (nameError) throw new Error(nameError.message);
+          for (const n of names ?? []) partnerNames.set(n.account_id as string, (n.display_name as string) ?? "");
+        }
+
+        const withPartner = rows.map((r) => {
+          const other = directPartnerId(r["scope_key"], r["account_id"]);
+          return { ...r, to_account_id: other, to_display_name: other ? partnerNames.get(other) ?? "" : null };
+        });
+
+        return json({ ok: true, data: { rows: withPartner, total: count ?? 0, pageSize } });
       }
 
       case "chat.deleteMessage": {
@@ -743,6 +778,52 @@ Deno.serve(async (req) => {
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
+      }
+
+      case "friends.overview": {
+        const { data, error } = await db.rpc("ts_admin_friend_overview", {
+          p_account_id: str(params, "accountId"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "friends.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_friend_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "friends.settingsUpdate": {
+        const num = (k: string): number => {
+          const v = params[k];
+          const n = typeof v === "number" ? v : Number(v);
+          if (!Number.isFinite(n)) throw new Error(`${k} 값이 필요합니다.`);
+          return Math.trunc(n);
+        };
+        const { data, error } = await db.rpc("ts_admin_friend_settings_update", {
+          p_max_friends: num("maxFriends"),
+          p_max_pending_sent: num("maxPendingSent"),
+          p_request_cooldown_seconds: num("requestCooldownSeconds"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "matchLobby.list": {
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 20;
+        const status = optStr(params, "status").trim();
+
+        const { data, error } = await db.rpc("ts_admin_match_lobby_list", {
+          p_status: status === "" ? null : status,
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        });
+        if (error) throw new Error(error.message);
+
+        const result = (data ?? {}) as { rows?: unknown[]; total?: number };
+        return json({ ok: true, data: { rows: result.rows ?? [], total: result.total ?? 0, pageSize } });
       }
 
       case "coupons.list": {
