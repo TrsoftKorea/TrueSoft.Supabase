@@ -127,3 +127,48 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 ::: tip
 키 `5`·`6`의 보상 수령은 `Demo Item Key`와 일치하는 [아이템 핸들러](/guide/mailbox/item-handler)가 등록돼 있을 때만 성공합니다. 샘플은 `Awake`에서 로그만 남기는 데모 핸들러를 자동 등록합니다.
 :::
+
+## SampleFriend
+
+`SupabaseRuntime`이 있는 씬에 `SampleFriend` 컴포넌트를 붙이면 [친구](/guide/friend/) 검색·요청·수락과 [귓속말](/guide/chat/#direct)을 테스트할 수 있습니다.
+
+**사전 준비:**
+1. [데이터베이스 설정](/guide/start/database-setup) 완료
+2. 상대가 될 계정을 따로 하나 만들고 [닉네임](/guide/display-name/nickname/set)을 정해 둡니다 — 혼자서는 요청을 주고받을 수 없습니다
+3. Inspector의 `Target Nickname`에 그 닉네임을 넣습니다
+
+| 키 | 동작 |
+|----|------|
+| `1` | 익명 로그인 |
+| `2` | `Target Nickname` 으로 검색 |
+| `3` | 검색된 상대에게 요청 전송 |
+| `4` | 받은 요청 목록 출력 |
+| `5` | 받은 요청 중 첫 번째 수락 |
+| `6` | 친구 목록 출력 |
+| `7` | 첫 친구에게 `Message` 귓속말 전송 |
+| `8` | 그 친구와 주고받은 귓속말 출력 |
+
+::: tip 두 기기로 번갈아 확인합니다
+한 계정으로 `3`을 눌러 요청을 보내고, 다른 계정으로 로그인해 `4`·`5`로 받습니다. 에디터와 빌드를 같이 띄우면 편합니다.
+:::
+
+## SampleMatchLobby
+
+`SupabaseRuntime`이 있는 씬에 `SampleMatchLobby` 컴포넌트를 붙이면 [매치 로비](/guide/match-lobby/)의 생성·초대·시작을 테스트할 수 있습니다. 초대는 친구에게만 보낼 수 있으므로 `SampleFriend`로 먼저 친구를 만들어 두세요.
+
+**사전 준비:**
+1. `SampleFriend`로 친구 관계를 만들어 둡니다
+2. Inspector의 `Game Code` 확인(기본값 `arena_1v1`)
+3. 추가 초대를 시험하려면 `Invite Account Id`에 대상 계정 ID를 넣습니다
+
+| 키 | 동작 |
+|----|------|
+| `1` | 익명 로그인 |
+| `2` | 친구 전원을 초대해 로비 생성 |
+| `3` | 내 로비 목록 출력 |
+| `4` | 받은 초대 중 첫 번째 수락 |
+| `5` | `Invite Account Id` 추가 초대 |
+| `6` | 내 역할 태그 지정 |
+| `7` | 시작 알림 |
+| `8` | 로비 취소 |
+| `9` | 로비 나가기 |
