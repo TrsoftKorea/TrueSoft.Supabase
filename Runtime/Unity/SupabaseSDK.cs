@@ -28,6 +28,7 @@ namespace TrueBase.Unity
         private const string AccountIdPlayerPrefsKey = "TrueBase.AccountId";
         private const string LastSignInMethodKey = "TrueBase.LastSignInMethod";
         private const string AutoLoginBlockedKey = "TrueBase.AutoLoginBlocked";
+        private const string KeepAnonymousRecoveryNoteKey = "TrueBase.KeepAnonymousRecoveryNote";
         private const string CurrentServerCodeKey = "TrueBase.CurrentServerCode";
         private const string WithdrawalCancelTokenKey = "TrueBase.WithdrawalCancelToken";
         private const string WithdrawalCancelTokenExpiresAtKey = "TrueBase.WithdrawalCancelTokenExpiresAt";
@@ -3366,6 +3367,14 @@ namespace TrueBase.Unity
             // ban 감지 시 account_id 조회에 사용하기 위해 저장 (PlayerPrefs.Save는 이후 흐름에서 처리)
             PlayerPrefs.SetString(AccountIdPlayerPrefsKey, session.User.Id);
 
+            // 갱신으로 새 refresh 를 받았으면 복구 쪽지도 같이 바꾼다. 서버는 refresh 를 한 번 쓰면
+            // 폐기하므로, 로그인 시점에 적어 둔 쪽지는 앱을 한 번만 껐다 켜도 죽는다. 그 상태로
+            // 재설치하면 복구가 refresh_token_already_used 로 실패해 새 계정이 생기고, 직전 계정의
+            // 세이브는 영영 닿을 수 없게 된다(쪽지가 새 계정으로 덮어써지기 때문).
+            // NewSignIn 은 RunAnonymousRecoveryWritesAsync 가 삭제→저장 순으로 따로 처리하므로 제외한다.
+            if (kind == SupabaseSessionChangeKind.RestoredOrRefreshed && IsAnonymousSession(session))
+                _ = TryUpsertAnonymousRecoveryTokenAsync(session);
+
             SupabaseDuplicateSessionCoordinator.ScheduleSyncAfterSessionChange(kind);
         }
 
@@ -3917,6 +3926,43 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// 서버에 남아 있는 복구 쪽지를 덮어쓰지 말아야 하는지. 복구가 실패했는데 그 사유가
+        /// "서버가 토큰을 거절함"이라고 확정되지 않았을 때(네트워크 단절 등) 켜집니다.
+        /// </summary>
+        /// <remarks>
+        /// 덮어쓰면 직전 계정으로 가는 길이 영영 끊긴다. 잠깐 끊겨서 실패한 것뿐인데 지워 버리면
+        /// 멀쩡한 세이브를 잃는다. 반대로 죽은 쪽지를 남겨 두는 쪽은 계정이 하나 더 생길 뿐이라,
+        /// 사유를 모를 때는 남기는 쪽으로 기운다.
+        ///
+        /// 기기에 저장한다. 메모리에만 두면 이번 실행에서만 지켜지고, 다음 실행에서 새 계정 세션이
+        /// 갱신되는 순간 쪽지가 그 계정으로 덮어써져 결국 같은 손실이 난다. 복구가 성공했거나
+        /// 쪽지가 확실히 죽은 것으로 확인되면 그때 끈다.
+        /// </remarks>
+        private static bool KeepExistingAnonymousRecoveryNote
+        {
+            get => PlayerPrefs.GetInt(KeepAnonymousRecoveryNoteKey, 0) == 1;
+            set
+            {
+                PlayerPrefs.SetInt(KeepAnonymousRecoveryNoteKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>복구용 refresh 갱신 실패가 "서버가 거절함"으로 확정되는지. 확정 못 하면 false.</summary>
+        private static bool IsRefreshRejectedByServer(string errorCode)
+        {
+            if (string.IsNullOrWhiteSpace(errorCode))
+                return false;
+
+            // GoTrue가 죽은 refresh에 돌려주는 문구들. 하나라도 걸리면 이 쪽지는 다시 쓸 수 없다.
+            return errorCode.IndexOf("already used", StringComparison.OrdinalIgnoreCase) >= 0
+                   || errorCode.IndexOf("invalid refresh token", StringComparison.OrdinalIgnoreCase) >= 0
+                   || errorCode.IndexOf("refresh_token_not_found", StringComparison.OrdinalIgnoreCase) >= 0
+                   || errorCode.IndexOf("invalid_grant", StringComparison.OrdinalIgnoreCase) >= 0
+                   || errorCode.IndexOf("revoked", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
         /// 기기 지문으로 서버의 익명 복구 refresh_token을 찾아 세션 복원을 시도합니다(best-effort).
         /// 복원 후 탈퇴 가드·예약 게이트를 통과해야 <see cref="AnonymousRecoveryKind.Restored"/>가 됩니다.
         /// </summary>
@@ -3932,8 +3978,19 @@ namespace TrueBase.Unity
 
             var serverCode = GetCurrentServerCode();
             var tokenResult = await svc.TryGetRefreshTokenByFingerprintAsync(fingerprintHash, serverCode);
-            if (tokenResult == null || tokenResult.IsSuccess == false || string.IsNullOrWhiteSpace(tokenResult.Data))
+            if (tokenResult == null || tokenResult.IsSuccess == false)
+            {
+                // 조회 자체가 실패했다 — 쪽지가 있는지조차 모르는 상태라 건드리지 않는다.
+                KeepExistingAnonymousRecoveryNote = true;
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
+            }
+
+            if (string.IsNullOrWhiteSpace(tokenResult.Data))
+            {
+                // 이 기기 몫의 쪽지가 없다. 지킬 것이 없으므로 새로 쓰도록 둔다.
+                KeepExistingAnonymousRecoveryNote = false;
+                return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
+            }
 
             var refreshResult = await RefreshSessionAsync(tokenResult.Data);
             if (refreshResult == null || refreshResult.IsSuccess == false || refreshResult.Data == null)
@@ -3944,8 +4001,24 @@ namespace TrueBase.Unity
                     var banInfo = string.IsNullOrWhiteSpace(accountId) ? null : await FetchBanInfoAsync(accountId);
                     return new AnonymousRecoveryResult(AnonymousRecoveryKind.Banned, banInfo: banInfo);
                 }
+
+                // 쪽지는 있었는데 못 썼다. 서버가 거절했다고 확정될 때만 덮어쓰기를 허용한다.
+                var rejected = IsRefreshRejectedByServer(refreshResult?.ErrorCode);
+                KeepExistingAnonymousRecoveryNote = !rejected;
+                if (!rejected)
+                {
+                    Debug.LogWarning(
+                        "[Supabase.AnonymousRecovery] 복구 실패 사유를 확정하지 못해 기존 복구 토큰을 유지합니다: "
+                        + (refreshResult?.ErrorCode ?? "unknown"));
+                }
+
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
+
+            // 쪽지로 실제 로그인이 됐다 — 이 기기의 주인이 확인됐으므로 보호를 풀고, 방금 받은
+            // 새 refresh 로 쪽지를 갱신한다(방금 쓴 것은 이미 폐기돼 그대로 두면 다음에 또 실패한다).
+            KeepExistingAnonymousRecoveryNote = false;
+            await TryUpsertAnonymousRecoveryTokenAsync(refreshResult.Data);
 
             // 사용자가 "익명 로그인 버튼"을 눌렀다고 가정하고, 만료(삭제 필요) 계정이면
             // allowRecreate=true 로 처리합니다(자동 복원 경로와 분리 목적).
@@ -3973,19 +4046,26 @@ namespace TrueBase.Unity
         /// <param name="session">복구 대상 세션. null이거나 refresh_token이 없으면 아무 것도 하지 않습니다.</param>
         private static async Task TryUpsertAnonymousRecoveryTokenAsync(SupabaseSession session)
         {
-            var svc = AnonymousRecoveryService;
-            if (svc == null)
-                return;
-
-            if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.RefreshToken))
-                return;
-
-            var fingerprintHash = DeviceFingerprintProvider.TryCreateHashedFingerprint(_initializedProjectUrl);
-            if (string.IsNullOrWhiteSpace(fingerprintHash))
-                return;
-
+            // SetSession 에서 await 없이 부르는 경로가 있어 전체를 감싼다 — 여기서 예외가 새면
+            // 아무도 관측하지 않는 Task 예외가 되어 조용히 묻힌다.
             try
             {
+                // 지켜야 할 남의 쪽지가 있으면 어느 경로로 들어왔든 쓰지 않는다. 호출부가 여럿이라
+                // (로그인·로그아웃·탈퇴·세션 갱신) 각자 검사하게 두면 한 곳이 빠진다.
+                if (KeepExistingAnonymousRecoveryNote)
+                    return;
+
+                var svc = AnonymousRecoveryService;
+                if (svc == null)
+                    return;
+
+                if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.RefreshToken))
+                    return;
+
+                var fingerprintHash = DeviceFingerprintProvider.TryCreateHashedFingerprint(_initializedProjectUrl);
+                if (string.IsNullOrWhiteSpace(fingerprintHash))
+                    return;
+
                 _ = await svc.UpsertRefreshTokenByFingerprintAsync(
                     fingerprintHash,
                     session.RefreshToken,
@@ -4069,6 +4149,10 @@ namespace TrueBase.Unity
             try
             {
                 _ = await svc.DeleteByFingerprintAsync(fingerprintHash, GetCurrentServerCode());
+
+                // 지울 쪽지가 없어졌으니 보호도 함께 푼다. 안 풀면 계정 연동 등으로 쪽지를 지운 뒤에도
+                // 플래그가 남아, 이 기기에서 다시는 복구 쪽지를 못 쓰게 된다.
+                KeepExistingAnonymousRecoveryNote = false;
             }
             catch
             {
@@ -4079,6 +4163,12 @@ namespace TrueBase.Unity
         /// <summary>익명 복구 토큰 정리(삭제)→저장(upsert)을 순서대로 수행합니다. 로그인 크리티컬 패스와 병렬 실행하도록 별도 Task로 분리했습니다(best-effort, 실패 무시).</summary>
         private static async Task RunAnonymousRecoveryWritesAsync(SupabaseSession session)
         {
+            // 직전 복구 시도가 "서버가 거절함"으로 확정되지 않았으면 기존 쪽지를 그대로 둔다.
+            // 여기서 덮어쓰면 방금 만든 새 계정이 그 기기의 주인이 되어, 잠깐 끊겼을 뿐인
+            // 직전 계정의 세이브에 다시 닿을 길이 사라진다.
+            if (KeepExistingAnonymousRecoveryNote)
+                return;
+
             await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
             await TryUpsertAnonymousRecoveryTokenAsync(session);
         }
