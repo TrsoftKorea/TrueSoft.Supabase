@@ -368,6 +368,9 @@ namespace TrueBase.Core.Common
         /// <summary>연속 요청 최소 간격을 지키지 않았습니다.</summary>
         public const string FriendRequestTooFast = "friend_request_too_fast";
 
+        /// <summary>친구 제한값 설정 행이 없습니다. DB 설치가 깨진 상태입니다.</summary>
+        public const string FriendSettingsMissing = "friend_settings_missing";
+
         /// <summary>초대 대상이 내 친구가 아닙니다.</summary>
         public const string MatchLobbyInviteNotFriend = "match_lobby_invite_not_friend";
 

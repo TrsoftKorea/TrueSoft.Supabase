@@ -214,7 +214,6 @@ export default function PlayerDetail({
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={accountId}
-          displayName={profile?.display_name ?? initialName}
         />
       ) : (
       <>

@@ -14,7 +14,18 @@
 
 ## 제한값은 운영이 정합니다 {#limits}
 
-친구 수 상한, 보낸 뒤 응답을 기다리는 요청의 개수 상한, 연속 요청 최소 간격 세 가지를 서버가 검사합니다. 기본값은 각각 100명·50건·3초이며 운영 콘솔에서 바꿉니다. 상한에 걸리면 `FriendLimitReached`·`FriendPendingLimitReached`·`FriendRequestTooFast`로 실패하므로 안내 문구를 붙여 두세요.
+친구 수 상한, 보낸 뒤 응답을 기다리는 요청의 개수 상한, 연속 요청 최소 간격 세 가지를 서버가 검사합니다. 기본값은 각각 100명·50건·3초이며 운영 콘솔에서 바꿉니다. 아래 네 가지로 실패하므로 안내 문구를 붙여 두세요.
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseReason.FriendLimitReached` | 내 친구 수가 상한에 도달했습니다 |
+| `SupabaseReason.FriendTargetLimitReached` | 상대의 친구 수가 상한에 도달했습니다 |
+| `SupabaseReason.FriendPendingLimitReached` | 보낸 뒤 응답을 기다리는 요청이 상한에 도달했습니다 |
+| `SupabaseReason.FriendRequestTooFast` | 연속 요청 최소 간격을 지키지 않았습니다 |
+
+::: warning 대기 상한은 취소해야 풀립니다
+상대가 응답하지 않으면 그 요청은 계속 자리를 차지합니다. 서버가 30일 뒤 정리하지만 그전까지는 상한이 그대로 차 있으므로, [보낸 요청 목록](/guide/friend/requests-list)과 [요청 취소](/guide/friend/request-cancel)를 함께 넣어 플레이어가 직접 비울 수 있게 하세요.
+:::
 
 ## 메서드
 

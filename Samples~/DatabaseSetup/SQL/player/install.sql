@@ -7797,21 +7797,27 @@ create table if not exists public.friend_settings (
   max_friends              int not null default 100 check (max_friends > 0),
   max_pending_sent         int not null default 50  check (max_pending_sent > 0),
   request_cooldown_seconds int not null default 3   check (request_cooldown_seconds >= 0),
-  updated_at               timestamptz not null default now()
+  updated_at               timestamptz not null default now(),
+  updated_by               text
 );
+
+alter table public.friend_settings add column if not exists updated_by text;
 
 insert into public.friend_settings (id) values (1) on conflict (id) do nothing;
 
 comment on table public.friend_settings is
-  '친구 기능 제한값(행 하나). max_friends=친구 수 상한, max_pending_sent=보낸 대기 요청 상한, request_cooldown_seconds=연속 요청 최소 간격.';
+  '친구 기능 제한값(행 하나). max_friends=친구 수 상한, max_pending_sent=보낸 대기 요청 상한, request_cooldown_seconds=연속 요청 최소 간격. 기본값은 여기 한 곳에만 둔다.';
 
 alter table public.friend_settings enable row level security;
 
 revoke all on table public.friend_settings from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_friend_settings — 제한값을 읽는다. 설정 행이 없어도 무제한이 되면 안 되므로
--- 테이블 기본값과 같은 값으로 채워 돌려준다.
+-- ts_friend_settings — 제한값을 읽는다.
+--   기본값을 여기 다시 적지 않는다. 적어 두면 테이블 DEFAULT 와 두 벌이 되어 한쪽만
+--   고쳤을 때 조용히 갈라진다. 설정 행은 위 insert 가 만들고 지울 수 있는 경로가 없으므로
+--   (delete 권한을 가진 롤도, 지우는 RPC 도 없다) 없으면 설치가 깨진 것이다 — 무제한으로
+--   열어 두지 않고 곧바로 실패시킨다.
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_friend_settings()
 returns public.friend_settings
@@ -7824,10 +7830,7 @@ declare v_cfg public.friend_settings%rowtype;
 begin
   select * into v_cfg from public.friend_settings where id = 1;
   if not found then
-    v_cfg.id                       := 1;
-    v_cfg.max_friends              := 100;
-    v_cfg.max_pending_sent         := 50;
-    v_cfg.request_cooldown_seconds := 3;
+    raise exception 'friend_settings_missing';
   end if;
   return v_cfg;
 end;
@@ -8012,6 +8015,12 @@ begin
 
   if public.ts_friend_count(v_uid) >= v_cfg.max_friends then
     raise exception 'friend_limit_reached';
+  end if;
+
+  -- 상대가 꽉 찼으면 여기서 거절한다. 안 그러면 요청은 들어가지만 상대가 수락을 누를 때
+  -- 거절되고, 그 요청은 pending 으로 남아 보낸 쪽의 대기 상한만 영구히 갉아먹는다.
+  if public.ts_friend_count(p_target_account_id) >= v_cfg.max_friends then
+    raise exception 'friend_target_limit_reached';
   end if;
 
   select count(*) into v_count
@@ -8416,6 +8425,41 @@ comment on function public.ts_chat_fetch_direct(uuid, bigint, int) is
 revoke all on function public.ts_chat_fetch_direct(uuid, bigint, int) from public, anon;
 grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- ts_friend_request_cleanup — 오래 방치된 대기 요청을 취소로 돌린다. cron이 호출.
+--   대기 상한(max_pending_sent)은 pending 개수로 세므로, 무시된 요청이 영원히 남으면
+--   그 상한이 "평생 보낼 수 있는 요청 수"가 되어 버린다. 요청을 무시하는 건 흔한 행동이라
+--   서버가 스스로 회복시켜 준다 — 로비의 expires_at·cleanup과 같은 역할이다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_request_cleanup(p_days int default 30)
+returns int
+language sql
+security definer
+set search_path = public
+as $$
+  with stale as (
+    update public.friend_requests
+       set status = 'cancelled', responded_at = now()
+     where status = 'pending'
+       and created_at < now() - make_interval(days => greatest(coalesce(p_days, 30), 1))
+    returning id
+  )
+  select count(*)::int from stale;
+$$;
+
+comment on function public.ts_friend_request_cleanup(int) is
+  '30일 넘게 방치된 pending 친구 요청을 cancelled로 전환. cron이 하루 한 번 호출.';
+
+revoke all on function public.ts_friend_request_cleanup(int) from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('ts_friend_request_cleanup') where exists (select 1 from cron.job where jobname = 'ts_friend_request_cleanup');
+    perform cron.schedule('ts_friend_request_cleanup', '20 4 * * *', $cron$ select public.ts_friend_request_cleanup(); $cron$);
+  end if;
+end $$;
+
 -- =============================================================================
 -- 운영자 RPC (service_role 전용)
 -- =============================================================================
@@ -8480,18 +8524,30 @@ grant execute on function public.ts_admin_friend_overview(uuid) to service_role;
 -- ---------------------------------------------------------------------------
 -- ts_admin_friend_settings_get / _update — 제한값 조회·수정.
 -- ---------------------------------------------------------------------------
+-- 둘 다 jsonb 로 돌려준다. 행 타입(returns public.friend_settings)으로 두면 PostgREST 가
+-- "여러 줄이 될 수 있는 것"으로 보고 배열로 감싸 보내, 운영 콘솔이 값을 못 읽는다.
+-- 이 파일의 다른 운영 RPC 도 전부 jsonb 다.
+drop function if exists public.ts_admin_friend_settings_get();
+drop function if exists public.ts_admin_friend_settings_update(int, int, int);
+
 create or replace function public.ts_admin_friend_settings_get()
-returns public.friend_settings
+returns jsonb
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select public.ts_friend_settings();
+  select jsonb_build_object(
+           'max_friends',              c.max_friends,
+           'max_pending_sent',         c.max_pending_sent,
+           'request_cooldown_seconds', c.request_cooldown_seconds,
+           'updated_at',               c.updated_at,
+           'updated_by',               c.updated_by)
+    from public.ts_friend_settings() c;
 $$;
 
 comment on function public.ts_admin_friend_settings_get() is
-  '친구 제한값 조회. 설정 행이 없으면 기본값을 돌려준다. service_role 전용.';
+  '친구 제한값 조회. service_role 전용.';
 
 revoke all on function public.ts_admin_friend_settings_get() from public, anon, authenticated;
 grant execute on function public.ts_admin_friend_settings_get() to service_role;
@@ -8499,33 +8555,52 @@ grant execute on function public.ts_admin_friend_settings_get() to service_role;
 create or replace function public.ts_admin_friend_settings_update(
   p_max_friends              int,
   p_max_pending_sent         int,
-  p_request_cooldown_seconds int
+  p_request_cooldown_seconds int,
+  p_by                       text default null
 )
-returns public.friend_settings
+returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare v_row public.friend_settings%rowtype;
 begin
-  insert into public.friend_settings (id, max_friends, max_pending_sent, request_cooldown_seconds, updated_at)
-  values (1, p_max_friends, p_max_pending_sent, p_request_cooldown_seconds, now())
+  -- 테이블 CHECK 는 하한만 본다. 상한이 없으면 오타 하나로 기능이 멈춘다 — 간격은 초 단위라
+  -- 3600 을 넣으면 "최근 1시간 안에 요청한 모든 유저"가 차단되고, 그 실패는 정상 거절로
+  -- 분류돼 로그에도 빨갛게 안 뜬다. 그래서 여기서 범위를 먼저 막는다.
+  --   친구 수 1~1000 · 대기 요청 1~500 · 간격 0~300초(0은 "제한 없음", 화면 안내와 같다).
+  -- 값을 더 키워야 하면 이 세 줄만 고치면 된다.
+  if p_max_friends is null or p_max_pending_sent is null or p_request_cooldown_seconds is null
+     or p_max_friends              not between 1 and 1000
+     or p_max_pending_sent         not between 1 and 500
+     or p_request_cooldown_seconds not between 0 and 300 then
+    raise exception 'friend_settings_out_of_range';
+  end if;
+
+  insert into public.friend_settings (id, max_friends, max_pending_sent, request_cooldown_seconds, updated_at, updated_by)
+  values (1, p_max_friends, p_max_pending_sent, p_request_cooldown_seconds, now(), p_by)
   on conflict (id) do update
     set max_friends              = excluded.max_friends,
         max_pending_sent         = excluded.max_pending_sent,
         request_cooldown_seconds = excluded.request_cooldown_seconds,
-        updated_at               = now()
+        updated_at               = now(),
+        updated_by               = excluded.updated_by
   returning * into v_row;
 
-  return v_row;
+  return jsonb_build_object(
+           'max_friends',              v_row.max_friends,
+           'max_pending_sent',         v_row.max_pending_sent,
+           'request_cooldown_seconds', v_row.request_cooldown_seconds,
+           'updated_at',               v_row.updated_at,
+           'updated_by',               v_row.updated_by);
 end;
 $$;
 
-comment on function public.ts_admin_friend_settings_update(int, int, int) is
-  '친구 제한값 수정. 값 범위는 테이블 CHECK가 검사한다. service_role 전용.';
+comment on function public.ts_admin_friend_settings_update(int, int, int, text) is
+  '친구 제한값 수정. 범위를 벗어나면 friend_settings_out_of_range. service_role 전용.';
 
-revoke all on function public.ts_admin_friend_settings_update(int, int, int) from public, anon, authenticated;
-grant execute on function public.ts_admin_friend_settings_update(int, int, int) to service_role;
+revoke all on function public.ts_admin_friend_settings_update(int, int, int, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_friend_settings_update(int, int, int, text) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -8978,7 +9053,9 @@ as $$
     select *
       from public.match_lobbies
      where p_status is null or status = p_status
-     order by created_at desc
+     -- id 보조 정렬이 없으면 created_at 이 같은 로비들의 순서가 조회마다 달라져,
+     -- 페이지를 넘길 때 같은 로비가 두 번 보이거나 한 개가 통째로 빠진다.
+     order by created_at desc, id desc
      limit  least(greatest(coalesce(p_limit, 50), 1), 200)
     offset greatest(coalesce(p_offset, 0), 0)
   )
@@ -9000,7 +9077,7 @@ as $$
                    left join public.display_names d on d.account_id = m.account_id
                   where m.lobby_id = l.id
                ))
-             order by l.created_at desc)
+             order by l.created_at desc, l.id desc)
         from page l
     ), '[]'::jsonb)
   );
@@ -9186,7 +9263,7 @@ grant execute on function public.ts_match_lobby_list_my()                       
 --   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
 --   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
 --                             리더보드를 지우거나 점수를 조작할 수 있다.
---   ts_match_lobby_cleanup ← cron 전용(만료 로비 정리).
+--   ts_match_lobby_cleanup / ts_friend_request_cleanup ← cron 전용(만료 로비·방치 요청 정리).
 --   ts_chat_direct_scope_key ← 내부 헬퍼(귓속말 범위 키 계산).
 --   ts_are_friends / ts_friend_count / ts_friend_settings ← 내부 헬퍼(친구 판정·수·제한값).
 --   ts_admin_friend_overview / ts_admin_friend_settings_* / ts_admin_match_lobby_list ← 운영 콘솔 전용.

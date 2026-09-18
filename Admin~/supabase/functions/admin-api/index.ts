@@ -89,8 +89,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // 귓속말은 scope_key 가 "계정A:계정B"(정렬된 쌍)이고 받는 사람이 행에 따로 없다. 보낸 사람을
 // 빼면 남는 쪽이 받는 사람이다 — 이게 없으면 운영자가 신고받은 귓속말의 상대를 알 수 없다.
 const directPartnerId = (scopeKey: unknown, senderId: unknown): string | null => {
-  if (typeof scopeKey !== "string" || !scopeKey.includes(":")) return null;
-  const [a, b] = scopeKey.split(":");
+  if (typeof scopeKey !== "string") return null;
+  // 조각이 정확히 둘일 때만 본다 — group 채널의 scope_key 는 게임이 정하는 값이라
+  // "uuidA:uuidB:태그" 같은 형태가 올 수 있고, 앞 둘만 보면 귓속말로 오인한다.
+  const parts = scopeKey.split(":");
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
   if (!UUID_RE.test(a) || !UUID_RE.test(b)) return null;
   if (senderId === a) return b;
   if (senderId === b) return a;
@@ -711,10 +715,24 @@ Deno.serve(async (req) => {
         if (error) throw new Error(error.message);
 
         // 귓속말 행에는 받는 사람이 없다 — scope_key 에서 상대를 뽑고 닉네임까지 붙여 준다.
+        // kind='direct' 채널의 행만 본다. 문자열 모양만 보고 판단하면 게임이 정한 group
+        // 채널 키가 우연히 같은 형태일 때 귓속말이 아닌 메시지에 상대가 찍힌다.
         const rows = (data ?? []) as Array<Record<string, unknown>>;
+        const directIds = new Set<string>();
+        if (rows.length > 0) {
+          const { data: directChannels, error: channelError } = await db
+            .from("chat_channels")
+            .select("id")
+            .eq("kind", "direct");
+          if (channelError) throw new Error(channelError.message);
+          for (const c of directChannels ?? []) directIds.add(c.id as string);
+        }
+        const partnerOf = (r: Record<string, unknown>): string | null =>
+          directIds.has(r["channel_id"] as string) ? directPartnerId(r["scope_key"], r["account_id"]) : null;
+
         const partnerIds = new Set<string>();
         for (const r of rows) {
-          const other = directPartnerId(r["scope_key"], r["account_id"]);
+          const other = partnerOf(r);
           if (other) partnerIds.add(other);
         }
 
@@ -729,7 +747,7 @@ Deno.serve(async (req) => {
         }
 
         const withPartner = rows.map((r) => {
-          const other = directPartnerId(r["scope_key"], r["account_id"]);
+          const other = partnerOf(r);
           return { ...r, to_account_id: other, to_display_name: other ? partnerNames.get(other) ?? "" : null };
         });
 
@@ -795,16 +813,22 @@ Deno.serve(async (req) => {
       }
 
       case "friends.settingsUpdate": {
-        const num = (k: string): number => {
+        // 범위는 ts_admin_friend_settings_update 와 같게 둔다. DB 만 막으면 운영자가 영문
+        // 제약조건 오류를 보게 되고, 상한이 없으면 오타 하나로 친구 요청이 통째로 멈춘다 —
+        // 간격에 3600 을 넣으면 최근 1시간 안에 요청한 유저가 전부 차단된다.
+        const num = (k: string, label: string, min: number, max: number): number => {
           const v = params[k];
           const n = typeof v === "number" ? v : Number(v);
-          if (!Number.isFinite(n)) throw new Error(`${k} 값이 필요합니다.`);
-          return Math.trunc(n);
+          if (!Number.isInteger(n) || n < min || n > max) {
+            throw new Error(`${label}은 ${min}에서 ${max} 사이의 정수여야 합니다.`);
+          }
+          return n;
         };
         const { data, error } = await db.rpc("ts_admin_friend_settings_update", {
-          p_max_friends: num("maxFriends"),
-          p_max_pending_sent: num("maxPendingSent"),
-          p_request_cooldown_seconds: num("requestCooldownSeconds"),
+          p_max_friends: num("maxFriends", "친구 수 상한", 1, 1000),
+          p_max_pending_sent: num("maxPendingSent", "보낸 요청 대기 상한", 1, 500),
+          p_request_cooldown_seconds: num("requestCooldownSeconds", "연속 요청 최소 간격", 0, 300),
+          p_by: email,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });

@@ -147,9 +147,35 @@ static SqlErrorCodes CollectSqlErrorCodes(string root, List<string> warnings)
         return result;
     }
 
+    // 클라이언트에 열린 함수가 부르는 내부 헬퍼의 raise 도 그대로 게임까지 올라온다
+    // (ts_friend_request_send → ts_friend_settings 처럼). grant 가 붙은 함수만 보면
+    // 그런 사유가 "아무도 안 쓴다"는 오탐으로 잡히므로, 호출 그래프를 따라 넓힌다.
+    var bodies = EnumerateFunctionBodies(sql)
+        .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(g => g.Key, g => string.Concat(g.Select(f => f.Body)), StringComparer.OrdinalIgnoreCase);
+
+    var reachable = new HashSet<string>(clientFuncs, StringComparer.OrdinalIgnoreCase);
+    var queue = new Queue<string>(clientFuncs);
+    while (queue.Count > 0)
+    {
+        if (!bodies.TryGetValue(queue.Dequeue(), out var body))
+            continue;
+
+        foreach (Match c in Regex.Matches(body, @"\bpublic\.(\w+)\s*\(", RegexOptions.IgnoreCase))
+        {
+            var callee = c.Groups[1].Value;
+            // 관리 함수는 service_role 전용이라 클라이언트 경로에 들어올 수 없다.
+            if (callee.StartsWith("ts_admin_", StringComparison.OrdinalIgnoreCase) ||
+                callee.StartsWith("admin_", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (bodies.ContainsKey(callee) && reachable.Add(callee))
+                queue.Enqueue(callee);
+        }
+    }
+
     foreach (var (name, body) in EnumerateFunctionBodies(sql))
     {
-        if (!clientFuncs.Contains(name))
+        if (!reachable.Contains(name))
             continue;
 
         foreach (Match r in Regex.Matches(body, @"raise\s+exception\s+'([^']+)'", RegexOptions.IgnoreCase))

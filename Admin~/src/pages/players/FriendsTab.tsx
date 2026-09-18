@@ -28,7 +28,6 @@ export default function FriendsTab({
   target: ProjectTarget
   onUnauthenticated: () => void
   accountId: string
-  displayName: string
 }) {
   const navigate = useNavigate()
   const [data, setData] = useState<Overview | null>(null)

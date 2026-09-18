@@ -345,9 +345,9 @@ export default function ChatModeration({
                             <button onClick={() => goPlayer(m.account_id, m.display_name)} className="text-[#1677ff] hover:underline">{m.display_name}</button>
                           ) : (m.display_name || '-')}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 max-w-[9rem]">
                           {m.to_account_id ? (
-                            <button onClick={() => goPlayer(m.to_account_id, m.to_display_name ?? '')} className="text-[#1677ff] hover:underline">
+                            <button onClick={() => goPlayer(m.to_account_id, m.to_display_name ?? '')} className="block w-full text-left text-[#1677ff] hover:underline truncate" title={m.to_display_name ?? ''}>
                               {m.to_display_name || m.to_account_id.slice(0, 8)}
                             </button>
                           ) : <span className="text-neutral-300">-</span>}

@@ -35,12 +35,13 @@ dotnet run --project Tools~/FailReasonCheck
 `install.sql`을 파싱해 이렇게 대조합니다.
 
 1. 19절의 `grant execute on function ... to anon/authenticated`로 **클라이언트에 열린 함수 목록**을 만든다
-2. 각 함수의 달러 인용 본문에서 `raise exception '...'`를 뽑는다
-3. 클라이언트가 하는 것과 같이 첫 `:` 앞부분만 취한다
-4. `^[a-z][a-z0-9_]*$` 형태만 사유 코드로 본다
-5. `SupabaseErrorCode` 값과 대조한다
+2. 그 함수들이 부르는 내부 헬퍼까지 호출을 따라 넓힌다 — 헬퍼가 던진 예외도 그대로 게임까지 올라오기 때문이다(`ts_friend_request_send` → `ts_friend_settings`)
+3. 각 함수의 달러 인용 본문에서 `raise exception '...'`를 뽑는다
+4. 클라이언트가 하는 것과 같이 첫 `:` 앞부분만 취한다
+5. `^[a-z][a-z0-9_]*$` 형태만 사유 코드로 본다
+6. `SupabaseErrorCode` 값과 대조한다
 
-관리 함수(`admin_*`·`ts_admin_*`)는 service_role 전용이라 SDK가 볼 일이 없어 제외합니다. 그 함수들의 `raise exception`은 사람이 읽는 문장(`Column already exists: %`)이라 4번에서도 걸러집니다.
+관리 함수(`admin_*`·`ts_admin_*`)는 service_role 전용이라 SDK가 볼 일이 없어 제외합니다 — 2번의 호출 추적에서도 빼므로 관리 함수를 거친 경로는 넓혀지지 않습니다. 그 함수들의 `raise exception`은 사람이 읽는 문장(`Column already exists: %`)이라 5번에서도 걸러집니다.
 
 ## 한계
 

@@ -221,6 +221,7 @@ bool Handle(SupabaseResult result)
 | `FriendTargetLimitReached` | 상대의 친구 수가 상한에 도달했습니다 |
 | `FriendPendingLimitReached` | 보낸 뒤 응답을 기다리는 요청이 상한에 도달했습니다 |
 | `FriendRequestTooFast` | 연속 요청 최소 간격을 지키지 않았습니다 |
+| `FriendSettingsMissing` | 제한값 설정이 DB에 없습니다. 설치가 깨진 상태입니다 |
 
 ## 매치 로비
 

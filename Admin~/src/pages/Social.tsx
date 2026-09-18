@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, RefreshCw, Save } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -20,8 +21,17 @@ type LobbyRow = {
 }
 type LobbyData = { rows: LobbyRow[]; total: number; pageSize: number }
 type FriendSettings = {
-  max_friends: number; max_pending_sent: number; request_cooldown_seconds: number; updated_at: string
+  max_friends: number; max_pending_sent: number; request_cooldown_seconds: number
+  updated_at: string; updated_by: string | null
 }
+
+// 서버(ts_admin_friend_settings_update)가 막는 범위와 같게 둔다. 서버만 막으면 운영자가
+// 저장을 누른 뒤에야 영문 오류를 보게 되고, 화면만 막으면 검증이 없는 것과 같다.
+const LIMITS = {
+  maxFriends: { min: 1, max: 1000 },
+  maxPendingSent: { min: 1, max: 500 },
+  cooldown: { min: 0, max: 300 },
+} as const
 
 const LOBBY_STATUS_LABEL: Record<string, string> = {
   open: '모집 중', started: '시작됨', cancelled: '취소됨', expired: '만료됨',
@@ -149,12 +159,12 @@ function LobbyList({
                     <tr key={l.lobby_id} className="border-t border-neutral-100 align-top">
                       <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(l.created_at)}</td>
                       <td className="px-4 py-3 text-neutral-700">{l.game_code}</td>
-                      <td className="px-4 py-3 text-neutral-600">{LOBBY_STATUS_LABEL[l.status] ?? l.status}</td>
-                      <td className="px-4 py-3 text-neutral-600">{active} / {l.max_members}</td>
+                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{LOBBY_STATUS_LABEL[l.status] ?? l.status}</td>
+                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{active} / {l.max_members}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => setOpenId(expanded ? null : l.lobby_id)}
-                          className="text-[#1677ff] hover:underline text-xs"
+                          className="text-[#1677ff] hover:underline text-xs whitespace-nowrap"
                         >
                           {expanded ? '접기' : `참가자 ${l.members.length}명 보기`}
                         </button>
@@ -205,19 +215,20 @@ function FriendSettingsForm({
   target: ProjectTarget
   report: (e: unknown, fallback: string) => void
 }) {
+  const [current, setCurrent] = useState<FriendSettings | null>(null)
   const [maxFriends, setMaxFriends] = useState('')
   const [maxPendingSent, setMaxPendingSent] = useState('')
   const [cooldown, setCooldown] = useState('')
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
   const apply = (s: FriendSettings) => {
+    setCurrent(s)
     setMaxFriends(String(s.max_friends))
     setMaxPendingSent(String(s.max_pending_sent))
     setCooldown(String(s.request_cooldown_seconds))
-    setUpdatedAt(s.updated_at ?? null)
   }
 
   const load = useCallback(async () => {
@@ -225,6 +236,7 @@ function FriendSettingsForm({
     try {
       apply(await callAdmin<FriendSettings>(target, 'friends.settingsGet'))
     } catch (e: unknown) {
+      setCurrent(null)
       report(e, '설정을 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -233,16 +245,34 @@ function FriendSettingsForm({
 
   useEffect(() => { void load() }, [load])
 
+  // 빈 칸은 Number('') === 0 이라 그냥 두면 0 이 저장된다. 간격은 0 이 "제한 없음"이라
+  // DB CHECK 도 안 걸려, 칸을 지운 실수가 도배 방지를 끄는 것으로 이어진다.
+  const parsed = {
+    maxFriends: parseField(maxFriends, LIMITS.maxFriends),
+    maxPendingSent: parseField(maxPendingSent, LIMITS.maxPendingSent),
+    cooldown: parseField(cooldown, LIMITS.cooldown),
+  }
+  const invalid = Object.values(parsed).some((v) => v === null)
+  const changed = !!current && (
+    parsed.maxFriends !== current.max_friends
+    || parsed.maxPendingSent !== current.max_pending_sent
+    || parsed.cooldown !== current.request_cooldown_seconds
+  )
+
+  const edit = (set: (v: string) => void) => (v: string) => { set(v); setSaved(false) }
+
   const save = async () => {
+    if (invalid) return
     setSaving(true)
     setSaved(false)
     try {
       apply(await callAdmin<FriendSettings>(target, 'friends.settingsUpdate', {
-        maxFriends: Number(maxFriends),
-        maxPendingSent: Number(maxPendingSent),
-        requestCooldownSeconds: Number(cooldown),
+        maxFriends: parsed.maxFriends,
+        maxPendingSent: parsed.maxPendingSent,
+        requestCooldownSeconds: parsed.cooldown,
       }))
       setSaved(true)
+      setConfirming(false)
     } catch (e: unknown) {
       report(e, '설정을 저장하지 못했습니다.')
     } finally {
@@ -254,39 +284,84 @@ function FriendSettingsForm({
     <WhiteCard className="p-5 space-y-4 max-w-xl">
       <Field
         label="친구 수 상한"
-        hint="한 계정이 가질 수 있는 친구의 최대 수. 상한에 닿으면 요청도 수락도 막힙니다."
+        hint={`한 계정이 가질 수 있는 친구의 최대 수. 상한에 닿으면 요청도 수락도 막힙니다. ${LIMITS.maxFriends.min}~${LIMITS.maxFriends.max} 사이.`}
         value={maxFriends}
-        onChange={setMaxFriends}
-        disabled={loading}
+        onChange={edit(setMaxFriends)}
+        disabled={loading || !current}
+        limits={LIMITS.maxFriends}
       />
       <Field
         label="보낸 요청 대기 상한"
-        hint="아직 상대가 응답하지 않은 요청의 최대 개수. 무차별 요청을 막습니다."
+        hint={`아직 상대가 응답하지 않은 요청의 최대 개수. 무차별 요청을 막습니다. ${LIMITS.maxPendingSent.min}~${LIMITS.maxPendingSent.max} 사이.`}
         value={maxPendingSent}
-        onChange={setMaxPendingSent}
-        disabled={loading}
+        onChange={edit(setMaxPendingSent)}
+        disabled={loading || !current}
+        limits={LIMITS.maxPendingSent}
       />
       <Field
         label="연속 요청 최소 간격"
-        hint="같은 사람이 요청을 연달아 보낼 때 기다려야 하는 시간(초). 0이면 제한 없음."
+        hint={`같은 사람이 요청을 연달아 보낼 때 기다려야 하는 시간. 초 단위로 최대 ${LIMITS.cooldown.max}까지, 0이면 제한 없음.`}
         value={cooldown}
-        onChange={setCooldown}
-        disabled={loading}
+        onChange={edit(setCooldown)}
+        disabled={loading || !current}
+        limits={LIMITS.cooldown}
       />
 
       <div className="flex items-center gap-3 pt-1">
         <button
-          onClick={() => void save()}
-          disabled={saving || loading}
-          className="h-9 px-4 inline-flex items-center gap-1.5 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-40"
+          onClick={() => setConfirming(true)}
+          disabled={saving || loading || !current || invalid || !changed}
+          className="h-9 px-4 inline-flex items-center gap-1.5 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-40 whitespace-nowrap"
         >
           <Save className="w-3.5 h-3.5" />
           저장
         </button>
-        {saved && <span className="text-sm text-green-600">저장했습니다.</span>}
-        {updatedAt && <span className="text-xs text-neutral-400">마지막 수정 {formatDateTime(updatedAt)}</span>}
+        {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
+        {current?.updated_at && (
+          <span className="text-xs text-neutral-400">
+            마지막 수정 {formatDateTime(current.updated_at)}
+            {current.updated_by ? ` · ${current.updated_by}` : ''}
+          </span>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="제한값을 바꿀까요?"
+        description="모든 플레이어에게 곧바로 적용됩니다."
+        confirmLabel="저장"
+        busy={saving}
+        onConfirm={() => void save()}
+        onCancel={() => setConfirming(false)}
+      >
+        {current && (
+          <ul className="space-y-1 text-sm text-neutral-700">
+            <ChangeRow label="친구 수 상한" before={current.max_friends} after={parsed.maxFriends} />
+            <ChangeRow label="보낸 요청 대기 상한" before={current.max_pending_sent} after={parsed.maxPendingSent} />
+            <ChangeRow label="연속 요청 최소 간격" before={current.request_cooldown_seconds} after={parsed.cooldown} />
+          </ul>
+        )}
+      </ConfirmDialog>
     </WhiteCard>
+  )
+}
+
+/** 빈 칸·범위 밖이면 null. 저장 버튼은 null 이 하나라도 있으면 눌리지 않는다. */
+function parseField(raw: string, limits: { min: number; max: number }): number | null {
+  if (raw.trim() === '') return null
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < limits.min || n > limits.max) return null
+  return n
+}
+
+function ChangeRow({ label, before, after }: { label: string; before: number; after: number | null }) {
+  const same = before === after
+  return (
+    <li className="flex items-center gap-2 whitespace-nowrap">
+      <span className="text-neutral-500">{label}</span>
+      <span className={same ? 'text-neutral-400' : 'text-neutral-400 line-through'}>{before}</span>
+      {!same && <span className="text-neutral-900 font-medium">→ {after}</span>}
+    </li>
   )
 }
 
@@ -296,25 +371,31 @@ function Field({
   value,
   onChange,
   disabled,
+  limits,
 }: {
   label: string
   hint: string
   value: string
   onChange: (v: string) => void
   disabled: boolean
+  limits: { min: number; max: number }
 }) {
+  const bad = !disabled && parseField(value, limits) === null
   return (
     <div className="space-y-1">
       <label className="block text-sm font-medium text-neutral-800">{label}</label>
       <input
         type="number"
-        min={0}
-        className={`${inputCls} w-40`}
+        min={limits.min}
+        max={limits.max}
+        className={`${inputCls} w-40 ${bad ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
-      <p className="text-xs text-neutral-500">{hint}</p>
+      <p className={`text-xs ${bad ? 'text-red-600' : 'text-neutral-500'}`}>
+        {bad ? `${limits.min}에서 ${limits.max} 사이의 정수를 넣어 주세요.` : hint}
+      </p>
     </div>
   )
 }
