@@ -69,6 +69,10 @@ namespace TrueBase.Core.Data
 
         [JsonProperty("created_at")]
         public DateTimeOffset CreatedAt { get; set; }
+
+        /// <summary>상대가 마지막으로 게임에 접속하거나 데이터를 저장한 시각. 기록이 없으면 null.</summary>
+        [JsonProperty("last_activity_at")]
+        public DateTimeOffset? LastActivityAt { get; set; }
     }
 
     /// <summary>친구 한 명.</summary>
@@ -83,6 +87,26 @@ namespace TrueBase.Core.Data
         /// <summary>친구가 된 시각.</summary>
         [JsonProperty("since")]
         public DateTimeOffset Since { get; set; }
+
+        /// <summary>그 친구가 마지막으로 게임에 접속하거나 데이터를 저장한 시각. 기록이 없으면 null.</summary>
+        [JsonProperty("last_activity_at")]
+        public DateTimeOffset? LastActivityAt { get; set; }
+    }
+
+    /// <summary>친구 기능 제한값. 운영 콘솔에서 바뀌므로 게임에 박아 두지 말고 이 값을 쓴다.</summary>
+    public sealed class FriendLimits
+    {
+        /// <summary>한 계정이 가질 수 있는 친구 수 상한.</summary>
+        [JsonProperty("max_friends")]
+        public int MaxFriends { get; set; }
+
+        /// <summary>보낸 뒤 응답을 기다리는 요청의 개수 상한.</summary>
+        [JsonProperty("max_pending_sent")]
+        public int MaxPendingSent { get; set; }
+
+        /// <summary>연속 요청 최소 간격(초). 0이면 제한 없음.</summary>
+        [JsonProperty("request_cooldown_seconds")]
+        public int RequestCooldownSeconds { get; set; }
     }
 
     /// <summary><see cref="SupabaseFriendService.ListRequestsAsync"/>의 조회 방향.</summary>

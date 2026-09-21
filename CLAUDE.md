@@ -183,7 +183,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem
 18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many
 19. 매치 결과 신고 — match_reward_configs + match_results + ts_match_report_result(신고·교차검증·우편 지급 한 번에) + ts_admin_match_reward_config_*
-20. 친구 — friend_requests(요청/친구 관계 단일 테이블) + friend_settings(제한값 1행) + ts_friend_search·ts_friend_request_send·ts_friend_requests_list·ts_friend_request_respond·ts_friend_request_cancel·ts_friends_list·ts_friend_remove + ts_friend_request_cleanup(cron, 30일 방치 요청 취소). 18절 채팅 인프라를 재사용해 친구 1:1 채팅(ts_chat_send_direct·ts_chat_fetch_direct, kind='direct' 채널)도 여기서 구현. 운영 RPC는 ts_admin_friend_overview·ts_admin_friend_settings_get/update
+20. 친구 — friend_requests(요청/친구 관계 단일 테이블) + friend_settings(제한값 1행) + ts_friend_search·ts_friend_request_send·ts_friend_requests_list·ts_friend_request_respond·ts_friend_request_cancel·ts_friends_list·ts_friend_remove·ts_friend_limits(제한값 읽기, 클라이언트용) + ts_friend_request_cleanup(cron, 30일 방치 요청 취소). 18절 채팅 인프라를 재사용해 친구 1:1 채팅(ts_chat_send_direct·ts_chat_fetch_direct, kind='direct' 채널)도 여기서 구현. 운영 RPC는 ts_admin_friend_overview·ts_admin_friend_settings_get/update
 21. 매치 로비(초대) — match_lobbies + match_lobby_members + ts_match_lobby_create·invite·respond·leave·set_role·start·cancel·list_my(폴링용) + ts_match_lobby_cleanup(cron) + 운영 RPC ts_admin_match_lobby_list. 로비 id를 그대로 19절 session_id로 재사용
 22. 클라이언트 권한 최소화 — anon·authenticated 테이블·함수 권한 회수 후 허용 목록만 부여
 

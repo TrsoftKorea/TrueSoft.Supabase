@@ -8068,20 +8068,24 @@ begin
     return coalesce((
       select jsonb_agg(jsonb_build_object(
                'request_id', r.id, 'account_id', r.requester_account_id,
-               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at,
+               'last_activity_at', p.last_activity_at)
              order by r.created_at desc)
         from public.friend_requests r
         left join public.display_names d on d.account_id = r.requester_account_id
+        left join public.user_profiles p on p.account_id = r.requester_account_id
        where r.addressee_account_id = v_uid and r.status = 'pending'
     ), '[]'::jsonb);
   else
     return coalesce((
       select jsonb_agg(jsonb_build_object(
                'request_id', r.id, 'account_id', r.addressee_account_id,
-               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at)
+               'display_name', coalesce(d.display_name, ''), 'created_at', r.created_at,
+               'last_activity_at', p.last_activity_at)
              order by r.created_at desc)
         from public.friend_requests r
         left join public.display_names d on d.account_id = r.addressee_account_id
+        left join public.user_profiles p on p.account_id = r.addressee_account_id
        where r.requester_account_id = v_uid and r.status = 'pending'
     ), '[]'::jsonb);
   end if;
@@ -8202,7 +8206,8 @@ begin
 
   return coalesce((
     select jsonb_agg(jsonb_build_object(
-             'account_id', r.other_id, 'display_name', coalesce(d.display_name, ''), 'since', r.responded_at)
+             'account_id', r.other_id, 'display_name', coalesce(d.display_name, ''), 'since', r.responded_at,
+             'last_activity_at', p.last_activity_at)
            order by r.responded_at desc)
       from (
         select responded_at,
@@ -8211,6 +8216,7 @@ begin
          where status = 'accepted' and (requester_account_id = v_uid or addressee_account_id = v_uid)
       ) r
       left join public.display_names d on d.account_id = r.other_id
+      left join public.user_profiles p on p.account_id = r.other_id
   ), '[]'::jsonb);
 end;
 $$;
@@ -8257,6 +8263,31 @@ comment on function public.ts_friend_remove(uuid) is
 
 revoke all on function public.ts_friend_remove(uuid) from public, anon;
 grant execute on function public.ts_friend_remove(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_friend_limits — 게임이 화면에 "1 / 100" 같은 분모를 띄우려면 상한을 알아야 한다.
+--   운영 콘솔에서 바꾸는 값이라 게임에 박아 두면 바꾸는 순간 화면이 틀려진다.
+--   ts_friend_settings() 는 운영 전용이라 클라이언트용으로 따로 연다(읽기만, 세 값뿐).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_friend_limits()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+           'max_friends',              c.max_friends,
+           'max_pending_sent',         c.max_pending_sent,
+           'request_cooldown_seconds', c.request_cooldown_seconds)
+    from public.ts_friend_settings() c;
+$$;
+
+comment on function public.ts_friend_limits() is
+  '친구 기능 제한값 읽기(클라이언트용). 값만 돌려주고 수정은 운영 전용이다.';
+
+revoke all on function public.ts_friend_limits() from public, anon;
+grant execute on function public.ts_friend_limits() to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 친구 1:1 채팅(귓속말) — 18절 채팅 인프라(chat_channels·chat_messages)를 그대로 쓴다.
@@ -9243,6 +9274,7 @@ grant execute on function public.ts_friend_request_respond(uuid, boolean)       
 grant execute on function public.ts_friend_request_cancel(uuid)                      to authenticated;
 grant execute on function public.ts_friends_list()                                   to authenticated;
 grant execute on function public.ts_friend_remove(uuid)                              to authenticated;
+grant execute on function public.ts_friend_limits()                                   to authenticated;
 
 -- 매치 로비(초대)
 grant execute on function public.ts_match_lobby_create(text, uuid[])                 to authenticated;

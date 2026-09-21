@@ -246,7 +246,8 @@ export default defineConfig({
               { text: '요청 수락·거절', link: '/guide/friend/request-respond' },
               { text: '요청 취소', link: '/guide/friend/request-cancel' },
               { text: '친구 목록', link: '/guide/friend/list' },
-              { text: '친구 삭제', link: '/guide/friend/remove' }
+              { text: '친구 삭제', link: '/guide/friend/remove' },
+              { text: '제한값 읽기', link: '/guide/friend/limits' }
             ]
           },
           {

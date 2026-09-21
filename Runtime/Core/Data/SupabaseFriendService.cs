@@ -150,6 +150,26 @@ namespace TrueBase.Core.Data
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
+        /// <summary>친구 기능 제한값을 읽습니다. 운영 콘솔에서 바뀌므로 화면에 쓸 값은 여기서 받습니다.</summary>
+        public async Task<SupabaseResult<FriendLimits>> GetLimitsAsync(string accessToken)
+        {
+            var r = await CallRpcAsync(accessToken, "ts_friend_limits", "{}");
+            if (!r.IsSuccess)
+                return SupabaseResult<FriendLimits>.Fail(r.ErrorCode);
+
+            try
+            {
+                var limits = JsonConvert.DeserializeObject<FriendLimits>(r.Data);
+                if (limits == null)
+                    return SupabaseResult<FriendLimits>.Fail("friend_limits_parse:empty");
+                return SupabaseResult<FriendLimits>.Success(limits);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<FriendLimits>.Fail("friend_limits_parse:" + e.Message);
+            }
+        }
+
         // -------------------------------------------------------------------
         // 공통 RPC 호출
         // -------------------------------------------------------------------

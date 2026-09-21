@@ -85,6 +85,15 @@ namespace TrueBase.Unity
             return await _friend.RemoveAsync(token, friendAccountId);
         }
 
+        public async Task<SupabaseResult<FriendLimits>> GetLimitsAsync()
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult<FriendLimits>.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _friend.GetLimitsAsync(token);
+        }
+
         /// <summary>세션에서 액세스 토큰을 추출합니다. 세션이 null이거나 토큰이 비어 있으면 null.</summary>
         private static string RequireToken(SupabaseSession session)
         {

@@ -286,6 +286,7 @@ namespace TrueBase.Unity
             public const string FriendRequestCancel = "Supabase.Friend.RequestCancel";
             public const string FriendsList = "Supabase.Friend.List";
             public const string FriendRemove = "Supabase.Friend.Remove";
+            public const string FriendLimits = "Supabase.Friend.Limits";
             public const string MatchLobbyCreate = "Supabase.MatchLobby.Create";
             public const string MatchLobbyInvite = "Supabase.MatchLobby.Invite";
             public const string MatchLobbyRespond = "Supabase.MatchLobby.Respond";
@@ -2524,6 +2525,23 @@ namespace TrueBase.Unity
         {
             var r = await GetFriendsAsync();
             return LogAndReturnResult(ApiLogTags.FriendsList, r);
+        }
+
+        /// <summary><c>ts_friend_limits</c> — 친구 기능 제한값(상한·간격)을 읽습니다.</summary>
+        public static async Task<SupabaseResult<FriendLimits>> GetFriendLimitsAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<FriendLimits>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Friend.GetLimitsAsync();
+        }
+
+        /// <inheritdoc cref="GetFriendLimitsAsync"/>
+        public static async Task<SupabaseResult<FriendLimits>> TryGetFriendLimitsAsync()
+        {
+            var r = await GetFriendLimitsAsync();
+            return LogAndReturnResult(ApiLogTags.FriendLimits, r);
         }
 
         /// <summary><c>ts_friend_remove</c> — 친구를 삭제합니다. 이후 다시 요청을 보낼 수 있습니다.</summary>

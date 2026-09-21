@@ -479,6 +479,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> RemoveFriendAsync(string friendAccountId) =>
             SupabaseSDK.TryRemoveFriendAsync(friendAccountId);
 
+        /// <inheritdoc cref="SupabaseSDK.TryGetFriendLimitsAsync"/>
+        public static Task<SupabaseResult<FriendLimits>> GetFriendLimitsAsync() =>
+            SupabaseSDK.TryGetFriendLimitsAsync();
+
         // ── 매치 로비(친구 초대) ─────────────────────────────────────────────────
         //
         // 친구를 초대해 같은 대기방에 모읍니다. 팀·상대·같은 방인지는 게임마다 다르므로 이 API는
