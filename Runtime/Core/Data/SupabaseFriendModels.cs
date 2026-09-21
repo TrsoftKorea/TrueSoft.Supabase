@@ -32,6 +32,10 @@ namespace TrueBase.Core.Data
         [JsonProperty("status")]
         public string RelationRaw { get; set; }
 
+        /// <summary>그 유저가 마지막으로 게임에 접속하거나 데이터를 저장한 시각. 기록이 없으면 null.</summary>
+        [JsonProperty("last_activity_at")]
+        public DateTimeOffset? LastActivityAt { get; set; }
+
         public FriendRelation Relation => RelationRaw switch
         {
             "friends" => FriendRelation.Friends,

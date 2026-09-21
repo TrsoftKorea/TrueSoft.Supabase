@@ -7927,7 +7927,10 @@ begin
   return jsonb_build_object(
     'account_id', v_target,
     'display_name', (select display_name from public.display_names where account_id = v_target),
-    'status', coalesce(v_status, 'none')
+    'status', coalesce(v_status, 'none'),
+    -- 검색은 닉네임 정확 일치라 이미 닉네임을 아는 사람만 조회할 수 있다(부분 검색·목록 열람 불가).
+    -- 그 전제 위에서 노출하기로 한 값이다 — 개인이 끄는 수단(플레이어 간 차단)은 아직 없다.
+    'last_activity_at', (select last_activity_at from public.user_profiles where account_id = v_target)
   );
 end;
 $$;
