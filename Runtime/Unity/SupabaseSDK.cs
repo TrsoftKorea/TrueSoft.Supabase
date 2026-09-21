@@ -1779,6 +1779,12 @@ namespace TrueBase.Unity
                     else
                     {
                         RememberLastSignInMethod(SignInMethodKind.Anonymous);
+
+                        // 복구로 들어온 것도 로그인이다 — 아래 일반 경로와 같은 뒷정리를 해야 한다.
+                        // 빠뜨리면 last_activity_at 이 안 찍히고(재설치 복구가 "접속"으로 안 잡힌다),
+                        // _pendingSignInProfile 이 비어 로그인 결과의 닉네임·서버 코드가 빈 채로 나간다.
+                        await TryEnsureProfileRowAfterSignInAsync();
+
                         SaveSessionToStorage();
                         return SupabaseResult<SupabaseSession>.Success(_currentSession);
                     }
