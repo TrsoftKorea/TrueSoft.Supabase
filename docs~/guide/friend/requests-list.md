@@ -29,7 +29,7 @@ if (r.IsSuccess)
 | `AccountId` | string | 상대 계정 ID — 받은 요청이면 보낸 사람, 보낸 요청이면 받는 사람 |
 | `Name` | string | 상대 닉네임 |
 | `CreatedAt` | DateTimeOffset | 요청이 만들어진 시각 |
-| `LastActivityAt` | DateTimeOffset? | 상대가 마지막으로 접속하거나 데이터를 저장한 시각. 기록이 없으면 null |
+| `LastActivityAt` | DateTimeOffset? | 상대가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
 **에러 코드**
 

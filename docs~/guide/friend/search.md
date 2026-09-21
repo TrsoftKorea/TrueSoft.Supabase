@@ -38,7 +38,7 @@ switch (r.Data.Relation)
 | `AccountId` | string | 찾은 유저의 계정 ID |
 | `Name` | string | 닉네임 |
 | `Relation` | `FriendRelation` | `None`·`Friends`·`RequestSent`·`RequestReceived` 중 하나 |
-| `LastActivityAt` | DateTimeOffset? | 그 유저가 마지막으로 접속하거나 데이터를 저장한 시각. 기록이 없으면 null |
+| `LastActivityAt` | DateTimeOffset? | 그 유저가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
 **에러 코드**
 
