@@ -3944,26 +3944,61 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// 사유를 확정하지 못한 복구 실패를 연속 몇 번까지 "쪽지를 지키는" 쪽으로 볼지. 이 횟수를
+        /// 넘으면 포기하고 덮어쓰기를 허용한다.
+        /// </summary>
+        /// <remarks>
+        /// 상한이 없으면 분류 못 하는 실패가 반복될 때 이 기기는 영영 복구 쪽지를 못 쓰게 된다 —
+        /// 재설치할 때마다 새 계정만 생기고 아무도 그걸 눈치채지 못한다. 넉넉하게 잡는다: 잘못
+        /// 포기하면 계정 하나를 잃지만, 늦게 포기하면 쓸모없는 계정이 몇 개 더 생길 뿐이다.
+        /// </remarks>
+        private const int MaxKeepAnonymousRecoveryNoteAttempts = 3;
+
+        /// <summary>사유를 확정 못 해 쪽지를 지킨 연속 횟수. 0이면 보호가 걸려 있지 않다.</summary>
+        /// <remarks>
+        /// 기기에 저장한다. 메모리에만 두면 이번 실행에서만 지켜지고, 다음 실행에서 새 계정 세션이
+        /// 갱신되는 순간 쪽지가 그 계정으로 덮어써져 결국 같은 손실이 난다.
+        /// </remarks>
+        private static int KeptAnonymousRecoveryNoteAttempts
+        {
+            get => PlayerPrefs.GetInt(KeepAnonymousRecoveryNoteKey, 0);
+            set
+            {
+                PlayerPrefs.SetInt(KeepAnonymousRecoveryNoteKey, value);
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>
         /// 서버에 남아 있는 복구 쪽지를 덮어쓰지 말아야 하는지. 복구가 실패했는데 그 사유가
         /// "서버가 토큰을 거절함"이라고 확정되지 않았을 때(네트워크 단절 등) 켜집니다.
         /// </summary>
-        /// <remarks>
-        /// 덮어쓰면 직전 계정으로 가는 길이 영영 끊긴다. 잠깐 끊겨서 실패한 것뿐인데 지워 버리면
-        /// 멀쩡한 세이브를 잃는다. 반대로 죽은 쪽지를 남겨 두는 쪽은 계정이 하나 더 생길 뿐이라,
-        /// 사유를 모를 때는 남기는 쪽으로 기운다.
-        ///
-        /// 기기에 저장한다. 메모리에만 두면 이번 실행에서만 지켜지고, 다음 실행에서 새 계정 세션이
-        /// 갱신되는 순간 쪽지가 그 계정으로 덮어써져 결국 같은 손실이 난다. 복구가 성공했거나
-        /// 쪽지가 확실히 죽은 것으로 확인되면 그때 끈다.
-        /// </remarks>
-        private static bool KeepExistingAnonymousRecoveryNote
+        private static bool KeepExistingAnonymousRecoveryNote => KeptAnonymousRecoveryNoteAttempts > 0;
+
+        /// <summary>쪽지 보호를 푼다. 복구가 성공했거나, 쪽지가 확실히 죽었거나, 아예 없을 때.</summary>
+        private static void ClearAnonymousRecoveryNoteProtection()
         {
-            get => PlayerPrefs.GetInt(KeepAnonymousRecoveryNoteKey, 0) == 1;
-            set
+            if (KeptAnonymousRecoveryNoteAttempts != 0)
+                KeptAnonymousRecoveryNoteAttempts = 0;
+        }
+
+        /// <summary>쪽지 보호를 한 번 더 건다. 상한을 넘으면 포기하고 덮어쓰기를 허용한다.</summary>
+        private static void ProtectAnonymousRecoveryNote(string reason)
+        {
+            var attempts = KeptAnonymousRecoveryNoteAttempts + 1;
+            if (attempts > MaxKeepAnonymousRecoveryNoteAttempts)
             {
-                PlayerPrefs.SetInt(KeepAnonymousRecoveryNoteKey, value ? 1 : 0);
-                PlayerPrefs.Save();
+                KeptAnonymousRecoveryNoteAttempts = 0;
+                Debug.LogWarning(
+                    $"[Supabase.AnonymousRecovery] 복구 실패 사유를 {MaxKeepAnonymousRecoveryNoteAttempts}번 연속 확정하지 못해 "
+                    + $"기존 복구 토큰 보호를 풉니다(다음 로그인부터 이 기기의 쪽지를 새로 씁니다): {reason}");
+                return;
             }
+
+            KeptAnonymousRecoveryNoteAttempts = attempts;
+            Debug.LogWarning(
+                $"[Supabase.AnonymousRecovery] 복구 실패 사유를 확정하지 못해 기존 복구 토큰을 유지합니다"
+                + $"({attempts}/{MaxKeepAnonymousRecoveryNoteAttempts}): {reason}");
         }
 
         /// <summary>복구용 refresh 갱신 실패가 "서버가 거절함"으로 확정되는지. 확정 못 하면 false.</summary>
@@ -3999,14 +4034,14 @@ namespace TrueBase.Unity
             if (tokenResult == null || tokenResult.IsSuccess == false)
             {
                 // 조회 자체가 실패했다 — 쪽지가 있는지조차 모르는 상태라 건드리지 않는다.
-                KeepExistingAnonymousRecoveryNote = true;
+                ProtectAnonymousRecoveryNote("복구 토큰 조회 실패: " + (tokenResult?.ErrorCode ?? "unknown"));
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
 
             if (string.IsNullOrWhiteSpace(tokenResult.Data))
             {
                 // 이 기기 몫의 쪽지가 없다. 지킬 것이 없으므로 새로 쓰도록 둔다.
-                KeepExistingAnonymousRecoveryNote = false;
+                ClearAnonymousRecoveryNoteProtection();
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
 
@@ -4021,21 +4056,17 @@ namespace TrueBase.Unity
                 }
 
                 // 쪽지는 있었는데 못 썼다. 서버가 거절했다고 확정될 때만 덮어쓰기를 허용한다.
-                var rejected = IsRefreshRejectedByServer(refreshResult?.ErrorCode);
-                KeepExistingAnonymousRecoveryNote = !rejected;
-                if (!rejected)
-                {
-                    Debug.LogWarning(
-                        "[Supabase.AnonymousRecovery] 복구 실패 사유를 확정하지 못해 기존 복구 토큰을 유지합니다: "
-                        + (refreshResult?.ErrorCode ?? "unknown"));
-                }
+                if (IsRefreshRejectedByServer(refreshResult?.ErrorCode))
+                    ClearAnonymousRecoveryNoteProtection();
+                else
+                    ProtectAnonymousRecoveryNote(refreshResult?.ErrorCode ?? "unknown");
 
                 return new AnonymousRecoveryResult(AnonymousRecoveryKind.None);
             }
 
             // 쪽지로 실제 로그인이 됐다 — 이 기기의 주인이 확인됐으므로 보호를 풀고, 방금 받은
             // 새 refresh 로 쪽지를 갱신한다(방금 쓴 것은 이미 폐기돼 그대로 두면 다음에 또 실패한다).
-            KeepExistingAnonymousRecoveryNote = false;
+            ClearAnonymousRecoveryNoteProtection();
             await TryUpsertAnonymousRecoveryTokenAsync(refreshResult.Data);
 
             // 사용자가 "익명 로그인 버튼"을 눌렀다고 가정하고, 만료(삭제 필요) 계정이면
@@ -4082,6 +4113,14 @@ namespace TrueBase.Unity
 
                 var fingerprintHash = DeviceFingerprintProvider.TryCreateHashedFingerprint(_initializedProjectUrl);
                 if (string.IsNullOrWhiteSpace(fingerprintHash))
+                    return;
+
+                // 부를 때의 계정이 아직 현재 계정인지 마지막으로 확인한다. SetSession 이 await 없이
+                // 부르는 경로가 있어, 그사이 다른 계정으로 갈아탔으면(탈퇴 삭제 후 재생성 등) 늦게
+                // 도착한 이 쓰기가 새 계정의 쪽지를 옛 계정 것으로 덮어쓴다.
+                var live = _currentSession;
+                if (live == null || live.User == null
+                    || !string.Equals(live.User.Id, session.User.Id, StringComparison.Ordinal))
                     return;
 
                 _ = await svc.UpsertRefreshTokenByFingerprintAsync(
@@ -4166,11 +4205,13 @@ namespace TrueBase.Unity
 
             try
             {
-                _ = await svc.DeleteByFingerprintAsync(fingerprintHash, GetCurrentServerCode());
+                var deleted = await svc.DeleteByFingerprintAsync(fingerprintHash, GetCurrentServerCode());
 
-                // 지울 쪽지가 없어졌으니 보호도 함께 푼다. 안 풀면 계정 연동 등으로 쪽지를 지운 뒤에도
-                // 플래그가 남아, 이 기기에서 다시는 복구 쪽지를 못 쓰게 된다.
-                KeepExistingAnonymousRecoveryNote = false;
+                // 실제로 지워졌을 때만 보호를 푼다. 안 풀면 계정 연동 등으로 쪽지를 지운 뒤에도
+                // 플래그가 남아 이 기기에서 다시는 복구 쪽지를 못 쓰게 되고, 반대로 실패했는데 풀면
+                // 서버에 그대로 남은 지킬 쪽지가 다음 쓰기에 덮인다.
+                if (deleted != null && deleted.IsSuccess)
+                    ClearAnonymousRecoveryNoteProtection();
             }
             catch
             {
