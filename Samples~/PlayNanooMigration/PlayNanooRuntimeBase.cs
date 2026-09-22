@@ -42,6 +42,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 {
     protected Plugin _plugin;
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
+
+    // 이번 로그인에서 나누 읽기가 실패했는가. 실패했으면 나누 상태를 모르므로 쓰지 않는다.
+    // 다음 로그인의 동기화가 성공하면 풀린다.
+    private bool     _nanooWriteBlocked;
     private string   _nanooNickname;       // 닉네임 변경 롤백용
 
     private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
@@ -676,7 +680,66 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         PlayerPrefs.Save();
     }
 
+    // ── 진단 로그 ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 플레이나누 읽기·쓰기와 동기화 판정을 콘솔에 남깁니다. <b>플레이나누 데이터가 언제 무엇에
+    /// 덮였는지 추적할 때 켭니다.</b> 원인을 확인한 뒤에는 <c>false</c>로 되돌리세요 — 로그인마다
+    /// 여러 줄이 남고, 쓰기 로그에는 호출 경로 전체가 붙습니다.
+    /// </summary>
+    public static bool NanooTrace = true;
+
+    private const string TraceTag = "[PlayNanooTrace]";
+
+    /// <summary>
+    /// 플레이나누에 쓰기 직전에 남깁니다. <b>나누에 쓰는 경로는 전부 여기를 지나갑니다</b> —
+    /// 동기화의 SDK 승 갈래, 세이브 삭제(초기값 되돌리기), 게임이 직접 부르는 SaveCurrentToNanoo.
+    /// 호출 경로를 함께 남겨야 셋 중 무엇이었는지 사후에 가릴 수 있습니다.
+    /// </summary>
+    protected static void TraceNanooWrite(string caller, string json)
+    {
+        if (!NanooTrace) return;
+
+        var len  = json?.Length ?? -1;
+        var head = string.IsNullOrEmpty(json)
+            ? "(비어 있음 — 이 쓰기는 무시됩니다)"
+            : json.Substring(0, Math.Min(400, json.Length));
+
+        Debug.Log($"{TraceTag} 나누에 쓰기 시도 ← {caller} / 길이={len}\n" +
+                  $"  내용 앞부분: {head}\n" +
+                  $"  호출 경로:\n{StackTraceUtility.ExtractStackTrace()}");
+    }
+
+    private static void Trace(string message)
+    {
+        if (NanooTrace) Debug.Log($"{TraceTag} {message}");
+    }
+
     // ── 데이터 동기화 ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// PlayNANOO 스토리지 읽기 결과. <b>"못 읽었다"와 "비어 있다"를 반드시 구분합니다.</b>
+    /// <para>
+    /// 둘을 null 하나로 합치면, 통신이 한 번 실패했을 뿐인데 "나누에 데이터가 없다"로 읽혀
+    /// SDK 데이터가 나누 원본을 덮어씁니다. 실제로 그렇게 원본이 초기값으로 날아간 적이 있습니다.
+    /// </para>
+    /// </summary>
+    protected readonly struct NanooRead
+    {
+        /// <summary>읽기 자체가 실패했는지. true면 나누 상태를 알 수 없으므로 아무것도 쓰면 안 됩니다.</summary>
+        public bool ReadFailed { get; }
+
+        /// <summary>읽어온 JSON. 실패했거나 스토리지가 비었으면 null.</summary>
+        public string Json { get; }
+
+        /// <summary>읽기에 성공했고 내용도 있는지.</summary>
+        public bool HasData => !ReadFailed && !string.IsNullOrEmpty(Json);
+
+        private NanooRead(bool readFailed, string json) { ReadFailed = readFailed; Json = json; }
+
+        public static NanooRead Failed()            => new NanooRead(true, null);
+        public static NanooRead From(string json)   => new NanooRead(false, string.IsNullOrEmpty(json) ? null : json);
+    }
 
     private async Task SyncDataAfterLogin()
     {
@@ -690,22 +753,48 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync();
         if (!ok) return;
 
-        var nanooJson = await LoadRawFromNanoo();
+        _nanooWriteBlocked = false;   // 이번 동기화 결과로 다시 판정한다
+        var nanoo = await LoadRawFromNanoo();
 
-        if (!hasRow)
+        Trace($"동기화 시작 — SDK행={(hasRow ? "있음" : "없음")}, SDK시각={sdkTime:o}, " +
+              $"나누읽기={(nanoo.ReadFailed ? "실패" : nanoo.HasData ? "데이터있음" : "비어있음")}, " +
+              $"나누길이={nanoo.Json?.Length ?? 0}, 나누UserId={UserId ?? "(없음)"}");
+
+        // 나누를 못 읽었으면 어느 쪽이 최신인지 판단할 근거가 없다. 여기서 멈춘다 —
+        // 예전에는 못 읽은 것을 "나누가 낡음"으로 읽어 SDK 데이터로 원본을 덮어썼다.
+        if (nanoo.ReadFailed)
         {
-            if (nanooJson != null)
-                await save.NanooPatchFromEmptyAsync(nanooJson);
-            else
-                await save.TryLoadAsync();
+            Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못해 동기화를 건너뜁니다. " +
+                             "이번 로그인에서는 나누에 쓰지 않습니다 — 다음 로그인에 다시 맞춥니다.");
+            _nanooWriteBlocked = true;
+            await save.TryLoadAsync();
             return;
         }
 
-        var nanooTime = save.NanooParseCompareTimestamp(nanooJson);
+        if (!hasRow)
+        {
+            if (nanoo.HasData)
+            {
+                Trace("판정: SDK행 없음 + 나누 데이터 있음 → 나누에서 가져옴(이관)");
+                await save.NanooPatchFromEmptyAsync(nanoo.Json);
+            }
+            else
+            {
+                Trace("판정: SDK행 없음 + 나누도 비어 있음 → 새 게임으로 시작");
+                await save.TryLoadAsync();
+            }
+            return;
+        }
+
+        var nanooTime = save.NanooParseCompareTimestamp(nanoo.Json);
         if (nanooTime > sdkTime)
-            await save.NanooPatchFromLastLoadedAsync(nanooJson);
+        {
+            Trace($"판정: 나누가 최신(나누={nanooTime:o} > SDK={sdkTime:o}) → 나누에서 가져옴");
+            await save.NanooPatchFromLastLoadedAsync(nanoo.Json);
+        }
         else
         {
+            Trace($"판정: SDK가 최신(나누={nanooTime:o} <= SDK={sdkTime:o}) → 나누를 SDK 데이터로 덮어씀");
             save.NanooApplyLastLoaded();
             SaveToNanoo(save.NanooGetLastLoadedJson());
         }
@@ -719,20 +808,30 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <param name="defaultsJson">세이브 클래스 초기값 + <c>updated_at</c>이 담긴 JSON.</param>
     protected virtual Task ResetNanooStorageAsync(string defaultsJson)
     {
+        // 이 경로는 나누 원본을 의도적으로 지웁니다. 테스트 초기화 목적으로 DeleteUserSaveAsync 를
+        // 부르면 여기로 들어와 원본이 사라지므로, 눈에 띄게 남깁니다.
+        Debug.LogWarning("[PlayNanooRuntime] 세이브 삭제 요청 — PlayNANOO 스토리지를 초기값으로 되돌립니다. " +
+                         "원본 데이터가 사라집니다.\n호출 경로:\n" + StackTraceUtility.ExtractStackTrace());
         SaveToNanoo(defaultsJson);
-        Debug.Log("[PlayNanooRuntime] 세이브 삭제 — PlayNANOO 스토리지를 초기값으로 되돌렸습니다.");
         return Task.CompletedTask;
     }
 
     // ── PlayNANOO 저장/로드 ───────────────────────────────────────────────────
 
-    protected virtual Task<string> LoadRawFromNanoo()
+    protected virtual Task<NanooRead> LoadRawFromNanoo()
     {
-        var tcs = new TaskCompletionSource<string>();
+        var tcs = new TaskCompletionSource<NanooRead>();
         _plugin.Storage.Load("Data", (status, _, _, values) =>
         {
-            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(null); return; }
-            tcs.SetResult(values["StorageValue"]?.ToString());
+            if (status != Configure.PN_API_STATE_SUCCESS)
+            {
+                Trace($"나누 읽기 실패 — status={status}");
+                tcs.SetResult(NanooRead.Failed());
+                return;
+            }
+            var raw = values["StorageValue"]?.ToString();
+            Trace($"나누 읽기 성공 — 길이={raw?.Length ?? 0}");
+            tcs.SetResult(NanooRead.From(raw));
         });
         return tcs.Task;
     }
@@ -740,6 +839,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <summary>PlayNANOO에 JSON 데이터를 저장합니다.</summary>
     public virtual void SaveToNanoo(string json)
     {
+        TraceNanooWrite("SaveToNanoo", json);
         if (string.IsNullOrEmpty(json)) return;
         _plugin.Storage.Save("Data", json, true,
             (status, _, _, _) =>
@@ -749,10 +849,38 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             });
     }
 
-    /// <summary>현재 로컬 세이브 데이터를 PlayNANOO에 저장합니다.</summary>
+    /// <summary>
+    /// 현재 로컬 세이브 데이터를 PlayNANOO에 저장합니다.
+    /// <para>로그인·동기화가 끝나기 전에 부르면 아무것도 하지 않습니다 — 그 시점의 로컬 데이터는
+    /// 아직 기본값이라, 내보내면 나누 원본을 지우게 됩니다.</para>
+    /// </summary>
     public void SaveCurrentToNanoo()
     {
+        if (!CanWriteToNanoo("SaveCurrentToNanoo")) return;
+
         var json = Save?.NanooCurrentJson;
         if (json != null) SaveToNanoo(json);
+    }
+
+    /// <summary>
+    /// 지금 나누에 써도 되는 상태인지. 서버 정본을 한 번도 못 읽었거나 이번 로그인에서
+    /// 나누 읽기가 실패했으면 쓰지 않습니다. 기본값으로 원본을 덮는 사고를 막는 마지막 방어선입니다.
+    /// </summary>
+    private bool CanWriteToNanoo(string caller)
+    {
+        if (_nanooWriteBlocked)
+        {
+            Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 이번 로그인에서 PlayNANOO 읽기가 실패해 쓰기를 막았습니다.");
+            return false;
+        }
+
+        var save = Save;
+        if (save == null || !save.NanooHasServerData)
+        {
+            Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 서버 데이터를 아직 못 읽어 로컬이 기본값일 수 있습니다.");
+            return false;
+        }
+
+        return true;
     }
 }

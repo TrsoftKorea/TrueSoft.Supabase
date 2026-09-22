@@ -41,20 +41,21 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
 
     // ── 구버전 스토리지: 키 = "ServerData_{UserID}", isPrivate = false ──────────
 
-    protected override Task<string> LoadRawFromNanoo()
+    protected override Task<NanooRead> LoadRawFromNanoo()
     {
-        var tcs = new TaskCompletionSource<string>();
+        var tcs = new TaskCompletionSource<NanooRead>();
         var key = $"ServerData_{UserId}";
         _plugin.Storage.Load(key, (status, _, _, values) =>
         {
-            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(null); return; }
-            tcs.SetResult(values["StorageValue"]?.ToString());
+            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(NanooRead.Failed()); return; }
+            tcs.SetResult(NanooRead.From(values["StorageValue"]?.ToString()));
         });
         return tcs.Task;
     }
 
     public override void SaveToNanoo(string json)
     {
+        TraceNanooWrite("SaveToNanoo(Legacy)", json);
         if (string.IsNullOrEmpty(json)) return;
         var key = $"ServerData_{UserId}";
         _plugin.Storage.Save(key, json, false,

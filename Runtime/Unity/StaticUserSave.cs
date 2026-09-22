@@ -328,7 +328,10 @@ namespace TrueBase.Unity
 
             if (!success || !hasRow || row == null)
             {
-                Debug.LogWarning($"{LogTag} 플레이나누 반영 후 재조회에 실패했습니다. 다음 로드에서 다시 맞춰집니다.");
+                // _hasLoadedOnce 를 올리지 않은 채 돌아간다 — 로컬은 아직 기본값일 수 있고,
+                // NanooHasServerData 가 false 로 남아 플레이나누 쓰기가 막힌다(기본값 유출 방지).
+                Debug.LogWarning($"{LogTag} 플레이나누 반영 후 재조회에 실패했습니다. 로컬이 서버와 어긋난 상태라 " +
+                                 $"플레이나누 저장을 막습니다 — 다음 로드에서 다시 맞춰집니다.");
                 return;
             }
 
@@ -440,6 +443,8 @@ namespace TrueBase.Unity
         async Task<bool> INanooSaveSyncable.TryLoadAsync() => (await LoadAsync()).IsSuccess;
 
         string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
+
+        bool INanooSaveSyncable.NanooHasServerData => _hasLoadedOnce;
 
 
         /// <summary>

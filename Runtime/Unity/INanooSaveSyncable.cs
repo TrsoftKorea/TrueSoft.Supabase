@@ -40,5 +40,12 @@ namespace TrueBase.Unity
 
         /// <summary>현재 로컬 세이브 데이터를 JSON으로 반환합니다. PlayNANOO에 저장할 때 사용합니다.</summary>
         string NanooCurrentJson { get; }
+
+        /// <summary>
+        /// 로컬 데이터가 서버 정본을 반영한 상태인지 여부. <c>false</c>면 아직 한 번도 로드되지 않아
+        /// 기본값일 수 있습니다.
+        /// <para><b>PlayNANOO에 쓰기 전에 반드시 확인하세요.</b> 기본값을 내보내면 나누 원본이 지워집니다.</para>
+        /// </summary>
+        bool NanooHasServerData { get; }
     }
 }
