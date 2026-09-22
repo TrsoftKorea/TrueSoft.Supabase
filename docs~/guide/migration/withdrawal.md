@@ -22,7 +22,7 @@ if (login.Reason == SupabaseReason.WithdrawalGateBlocked)
 인터셉터가 나누 복구를 먼저 수행하고, 성공하면 Supabase 예약을 철회합니다. 나누 복구가 실패하면 Supabase 예약은 그대로 두고 실패를 반환해 양쪽 상태를 일치시킵니다.
 
 ::: tip 감지 시점 훅
-로그인 호출부마다 결과를 검사하기 번거로우면 `playNanooRuntime.OnWithdrawalPending` 이벤트로 감지 시점에 취소 UI를 띄울 수 있습니다. 취소 실행은 동일하게 `Supabase.RedeemWithdrawalCancelAsync()`입니다.
+로그인 호출부마다 결과를 검사하기 번거로우면 `TrueBaseNanoo.OnWithdrawalPending` 이벤트로 감지 시점에 취소 UI를 띄울 수 있습니다. 취소 실행은 동일하게 `Supabase.RedeemWithdrawalCancelAsync()`입니다. 정적 이벤트라 구독한 쪽이 사라질 때 `-=`로 해제해야 중복 구독이 쌓이지 않습니다.
 :::
 
 ::: warning 유예 기간

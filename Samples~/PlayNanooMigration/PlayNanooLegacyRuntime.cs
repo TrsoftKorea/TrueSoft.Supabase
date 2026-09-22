@@ -44,7 +44,7 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
     protected override Task<NanooRead> LoadRawFromNanoo()
     {
         var tcs = new TaskCompletionSource<NanooRead>();
-        var key = $"ServerData_{UserId}";
+        var key = $"ServerData_{TrueBaseNanoo.UserId}";
         _plugin.Storage.Load(key, (status, _, _, values) =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(NanooRead.Failed()); return; }
@@ -57,7 +57,7 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
     {
         TraceNanooWrite("SaveToNanoo(Legacy)", json);
         if (string.IsNullOrEmpty(json)) return;
-        var key = $"ServerData_{UserId}";
+        var key = $"ServerData_{TrueBaseNanoo.UserId}";
         _plugin.Storage.Save(key, json, false,
             (status, _, _, _) =>
             {

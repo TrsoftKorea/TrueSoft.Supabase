@@ -18,7 +18,8 @@
 //   await Supabase.RequestWithdrawalAsync()
 //
 // [PlayNANOO 제거 후]
-// 1. 이 파일과 PlayNanooRuntime.cs / PlayNanooLegacyRuntime.cs 삭제
+// 1. PlayNANOO Migration 폴더를 통째로 삭제 (이 파일 · PlayNanooRuntime.cs ·
+//    PlayNanooLegacyRuntime.cs · TrueBaseNanoo.cs)
 // 2. 씬에 SupabaseRuntime 배치
 // 3. 게임 코드 변경 없음 (Supabase.* 호출은 그대로)
 // =============================================================================
@@ -56,21 +57,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const double NanooTokenRefreshLeadHours = 1.0;   // 만료 1시간 전부터 갱신
     private const float  NanooRefreshCheckInterval  = 600f;  // 10분마다 체크
 
-    /// <summary>PlayNANOO 로그인 성공 시 반환된 uuid. 로그인 전에는 null.</summary>
-    public static string UserId { get; private set; }
-
-    /// <summary>PlayNANOO 로그인 성공 시 반환된 openid. SDK가 반환하지 않으면 null.</summary>
-    public static string OpenId { get; private set; }
+    // 로그인 정보(UserId·OpenId)·탈퇴 이벤트·애플 로그인은 TrueBaseNanoo(정적 진입점)로 옮겼다.
+    // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
 
     private INanooSaveSyncable Save => SupabaseBridge.GetNanooSaveBridge();
-
-    // ── 이벤트 ───────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// 로그인 시 탈퇴 예약 계정이 감지됨. 취소 UI를 띄우고 <see cref="Supabase.RedeemWithdrawalCancelAsync"/>를 호출하세요.
-    /// 표준 SDK 취소 API가 인터셉터로 나누 복구까지 함께 처리하므로 별도 취소 메서드가 필요 없습니다.
-    /// </summary>
-    public event Action OnWithdrawalPending;
 
     // 로그인 시 감지한 나누 탈퇴 복구 키. RedeemWithdrawalCancel 인터셉터가 내부적으로 사용합니다.
     private string _pendingWithdrawalKey;
@@ -129,9 +119,17 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 초기화 ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// 씬에 배치된 런타임. 게임이 <see cref="TrueBaseNanoo"/> 정적 진입점으로 부를 수 있게 잡아 둡니다.
+    /// 구버전(<c>PlayNanooLegacyRuntime</c>)을 배치했어도 같은 자리에 들어가므로, 게임 코드는
+    /// 어느 쪽을 쓰는지 몰라도 됩니다.
+    /// </summary>
+    internal static PlayNanooRuntimeBase Instance { get; private set; }
+
     protected override void Awake()
     {
         base.Awake();
+        Instance = this;
         _plugin = Plugin.GetInstance();
 
         SupabaseBridge.RegisterPlayNanooInterceptors(
@@ -196,6 +194,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private void OnDestroy()
     {
+        // 씬 전환으로 새 런타임이 먼저 Awake 를 탔을 수 있다. 그때 남의 등록을 지우지 않는다.
+        if (ReferenceEquals(Instance, this)) Instance = null;
+
         SupabaseBridge.UnregisterPlayNanooInterceptors();
         // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
     }
@@ -355,8 +356,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             _nanooAccessToken = null;
             ClearNanooTokens();
-            UserId = null;
-            OpenId = null;
+            TrueBaseNanoo.UserId = null;
+            TrueBaseNanoo.OpenId = null;
             var result = await sdkSignOut();
             if (!result.IsSuccess)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 로그아웃 실패. PlayNANOO 로그아웃은 완료됨.");
@@ -516,8 +517,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             _nanooAccessToken      = values["access_token"]?.ToString();
             _nanooNickname         = values["nickname"]?.ToString();
-            UserId                 = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
-            OpenId                 = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
+            TrueBaseNanoo.UserId   = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
+            TrueBaseNanoo.OpenId   = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
             _nanooTokenRefreshedAt = DateTime.UtcNow;
             SaveNanooTokens();
             OnNanooLoginSuccess(values);
@@ -531,7 +532,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             _pendingWithdrawalKey = null;
             if (values != null && values.TryGetValue("WithdrawalKey", out var wkObj))
                 _pendingWithdrawalKey = wkObj?.ToString();
-            OnWithdrawalPending?.Invoke();
+            TrueBaseNanoo.RaiseWithdrawalPending();
         }
         else
         {
@@ -549,8 +550,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         var token = _nanooAccessToken;
         _nanooAccessToken = null;
         ClearNanooTokens();
-        UserId = null;
-        OpenId = null;
+        TrueBaseNanoo.UserId = null;
+        TrueBaseNanoo.OpenId = null;
         var tcs = new TaskCompletionSource<bool>();
         NanooTokenSignOut(token, async () => tcs.SetResult(true));
         return tcs.Task;
@@ -558,8 +559,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────
 
-    /// <summary>애플 로그인 (Android). PlayNANOO 내장 WebView로 토큰 획득 후 Supabase.SignInWithAppleIdTokenAsync 자동 호출.</summary>
-    public void StartAppleSignInAndroid() =>
+    /// <summary>애플 로그인 웹뷰를 엽니다. 게임은 TrueBaseNanoo.StartAppleSignInAndroid 로 부릅니다.</summary>
+    internal void OpenAppleIdSignIn() =>
         _plugin.OpenAppleID(
             async token => await Supabase.SignInWithAppleIdTokenAsync(token));
 
@@ -646,8 +647,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             {
                 _nanooAccessToken    = values["access_token"]?.ToString();
                 _nanooNickname      = values.TryGetValue("nickname", out var nk) ? nk?.ToString() : _nanooNickname;
-                UserId              = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
-                OpenId              = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
+                TrueBaseNanoo.UserId = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
+                TrueBaseNanoo.OpenId = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
                 _nanooTokenRefreshedAt = DateTime.UtcNow;
                 SaveNanooTokens();
                 Debug.Log("[PlayNanooRuntime] PlayNANOO 토큰 로그인 성공.");
@@ -758,7 +759,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         Trace($"동기화 시작 — SDK행={(hasRow ? "있음" : "없음")}, SDK시각={sdkTime:o}, " +
               $"나누읽기={(nanoo.ReadFailed ? "실패" : nanoo.HasData ? "데이터있음" : "비어있음")}, " +
-              $"나누길이={nanoo.Json?.Length ?? 0}, 나누UserId={UserId ?? "(없음)"}");
+              $"나누길이={nanoo.Json?.Length ?? 0}, 나누UserId={TrueBaseNanoo.UserId ?? "(없음)"}");
 
         // 나누를 못 읽었으면 어느 쪽이 최신인지 판단할 근거가 없다. 여기서 멈춘다 —
         // 예전에는 못 읽은 것을 "나누가 낡음"으로 읽어 SDK 데이터로 원본을 덮어썼다.

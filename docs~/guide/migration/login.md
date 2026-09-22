@@ -8,15 +8,15 @@ Android에서 Apple 로그인은 플레이나누 WebView를 통해 토큰을 획
 
 ```csharp
 // Apple (Android) — 플레이나누 WebView로 토큰 획득
-playNanooRuntime.StartAppleSignInAndroid();
+TrueBaseNanoo.StartAppleSignInAndroid();
 ```
 
 플레이나누 로그인이 성공하면 아래 프로퍼티를 사용할 수 있습니다.
 
 | 프로퍼티 | 설명 |
 |---------|------|
-| `PlayNanooRuntimeBase.UserId` | 플레이나누 uuid. 로그인 전에는 null |
-| `PlayNanooRuntimeBase.OpenId` | 플레이나누 openid. SDK가 반환하지 않으면 null |
+| `TrueBaseNanoo.UserId` | 플레이나누 uuid. 로그인 전에는 null |
+| `TrueBaseNanoo.OpenId` | 플레이나누 openid. SDK가 반환하지 않으면 null |
 
 ## 자동 로그인
 
