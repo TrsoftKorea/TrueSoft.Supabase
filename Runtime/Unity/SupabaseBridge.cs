@@ -50,7 +50,7 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.RegisterIAPGoogleInterceptor"/>
         public static void RegisterIAPGoogleInterceptor(
-            Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor) =>
+            Func<string, string, long, string, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor) =>
             SupabaseSDK.RegisterIAPGoogleInterceptor(interceptor);
 
         /// <inheritdoc cref="SupabaseSDK.GetNanooSaveBridge"/>

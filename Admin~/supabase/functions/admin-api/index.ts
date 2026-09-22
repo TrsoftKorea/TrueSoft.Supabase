@@ -72,6 +72,17 @@ const optStr = (p: Params, k: string): string => {
 };
 const bool = (p: Params, k: string): boolean => p[k] === true;
 
+// 제한값 입력은 화면·엣지 함수·DB 세 곳에서 같은 범위를 봐야 한다. DB 만 막으면 운영자가
+// 영문 제약조건 오류를 보고, 상한이 없으면 오타 하나가 기능을 통째로 멈춘다.
+const intInRange = (p: Params, k: string, label: string, min: number, max: number): number => {
+  const v = p[k];
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`${label}은 ${min}에서 ${max} 사이의 정수여야 합니다.`);
+  }
+  return n;
+};
+
 // `,()` 는 PostgREST or() 필터 문법을 깨서 제거하고, `%`·`_`·`\` 는 ILIKE 와일드카드라
 // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
 const sanitizeSearchTerm = (s: string): string => s.replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -813,21 +824,33 @@ Deno.serve(async (req) => {
       }
 
       case "friends.settingsUpdate": {
-        // 범위는 ts_admin_friend_settings_update 와 같게 둔다. DB 만 막으면 운영자가 영문
-        // 제약조건 오류를 보게 되고, 상한이 없으면 오타 하나로 친구 요청이 통째로 멈춘다 —
-        // 간격에 3600 을 넣으면 최근 1시간 안에 요청한 유저가 전부 차단된다.
-        const num = (k: string, label: string, min: number, max: number): number => {
-          const v = params[k];
-          const n = typeof v === "number" ? v : Number(v);
-          if (!Number.isInteger(n) || n < min || n > max) {
-            throw new Error(`${label}은 ${min}에서 ${max} 사이의 정수여야 합니다.`);
-          }
-          return n;
-        };
+        // 범위는 ts_admin_friend_settings_update 와 같게 둔다 — 간격에 3600 을 넣으면
+        // 최근 1시간 안에 요청한 유저가 전부 차단된다.
         const { data, error } = await db.rpc("ts_admin_friend_settings_update", {
-          p_max_friends: num("maxFriends", "친구 수 상한", 1, 1000),
-          p_max_pending_sent: num("maxPendingSent", "보낸 요청 대기 상한", 1, 500),
-          p_request_cooldown_seconds: num("requestCooldownSeconds", "연속 요청 최소 간격", 0, 300),
+          p_max_friends: intInRange(params, "maxFriends", "친구 수 상한", 1, 1000),
+          p_max_pending_sent: intInRange(params, "maxPendingSent", "보낸 요청 대기 상한", 1, 500),
+          p_request_cooldown_seconds: intInRange(params, "requestCooldownSeconds", "연속 요청 최소 간격", 0, 300),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "matchLobby.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_match_lobby_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "matchLobby.settingsUpdate": {
+        // 범위는 ts_admin_match_lobby_settings_update 와 같게 둔다.
+        const { data, error } = await db.rpc("ts_admin_match_lobby_settings_update", {
+          p_max_pending_invites_received:
+            intInRange(params, "maxPendingInvitesReceived", "받는 쪽 대기 초대 상한", 1, 200),
+          p_invite_cooldown_seconds:
+            intInRange(params, "inviteCooldownSeconds", "연속 초대 최소 간격", 0, 300),
+          p_lobby_expire_minutes:
+            intInRange(params, "lobbyExpireMinutes", "방이 닫히기까지의 시간", 1, 1440),
           p_by: email,
         });
         if (error) throw new Error(error.message);

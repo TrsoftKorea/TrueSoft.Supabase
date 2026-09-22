@@ -6,7 +6,7 @@
 | [`InviteToMatchLobbyAsync`](/guide/match-lobby/invite) | 진행 중인 로비에 추가 초대 |
 | [`RespondMatchLobbyAsync`](/guide/match-lobby/respond) | 초대 수락·거절 |
 | [`LeaveMatchLobbyAsync`](/guide/match-lobby/leave) | 로비 나가기 |
-| [`SetMatchLobbyMemberRoleAsync`](/guide/match-lobby/set-role) | 멤버 역할 태그 지정 |
+| [`SetMatchLobbyMemberMetaAsync`](/guide/match-lobby/set-member-meta) | 참가자 칸 지정 |
 | [`StartMatchLobbyAsync`](/guide/match-lobby/start) | 시작 알림 |
 | [`CancelMatchLobbyAsync`](/guide/match-lobby/cancel) | 로비 취소 |
 | [`ListMatchLobbiesAsync`](/guide/match-lobby/list) | 내 로비 목록 조회 |

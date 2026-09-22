@@ -154,21 +154,24 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 
 ## SampleMatchLobby
 
-`SupabaseRuntime`이 있는 씬에 `SampleMatchLobby` 컴포넌트를 붙이면 [매치 로비](/guide/match-lobby/)의 생성·초대·시작을 테스트할 수 있습니다. 초대는 친구에게만 보낼 수 있으므로 `SampleFriend`로 먼저 친구를 만들어 두세요.
+`SupabaseRuntime`이 있는 씬에 `SampleMatchLobby` 컴포넌트를 붙이면 [매치 로비](/guide/match-lobby/)의 생성·초대·시작과 [로비 대화](/guide/chat/send-lobby)를 테스트할 수 있습니다. 초대는 친구가 아니어도 되므로 계정 ID만 있으면 됩니다.
 
 **사전 준비:**
-1. `SampleFriend`로 친구 관계를 만들어 둡니다
+1. 초대할 상대 계정을 하나 준비합니다 — 친구가 아니어도 됩니다
 2. Inspector의 `Game Code` 확인(기본값 `arena_1v1`)
 3. 추가 초대를 시험하려면 `Invite Account Id`에 대상 계정 ID를 넣습니다
+4. 방 이름·정원을 바꿔 보려면 `Lobby Name`·`Max Members`를 고칩니다
 
 | 키 | 동작 |
 |----|------|
 | `1` | 익명 로그인 |
-| `2` | 친구 전원을 초대해 로비 생성 |
+| `2` | 이름·정원·맵 정보를 넣어 로비 생성 + 초대 |
 | `3` | 내 로비 목록 출력 |
 | `4` | 받은 초대 중 첫 번째 수락 |
 | `5` | `Invite Account Id` 추가 초대 |
-| `6` | 내 역할 태그 지정 |
+| `6` | 내 참가자 칸 지정 |
 | `7` | 시작 알림 |
 | `8` | 로비 취소 |
 | `9` | 로비 나가기 |
+| `0` | 로비 대화 보내기 |
+| `-` | 로비 대화 읽기 |

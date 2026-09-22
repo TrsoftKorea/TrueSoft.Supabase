@@ -232,7 +232,9 @@ export default defineConfig({
               { text: '채널 구독', link: '/guide/chat/subscribe' },
               { text: '메시지 발송', link: '/guide/chat/send' },
               { text: '귓속말 발송', link: '/guide/chat/send-direct' },
-              { text: '귓속말 조회', link: '/guide/chat/fetch-direct' }
+              { text: '귓속말 조회', link: '/guide/chat/fetch-direct' },
+              { text: '로비 대화 발송', link: '/guide/chat/send-lobby' },
+              { text: '로비 대화 조회', link: '/guide/chat/fetch-lobby' }
             ]
           },
           {
@@ -259,7 +261,7 @@ export default defineConfig({
               { text: '추가 초대', link: '/guide/match-lobby/invite' },
               { text: '초대 응답', link: '/guide/match-lobby/respond' },
               { text: '로비 나가기', link: '/guide/match-lobby/leave' },
-              { text: '멤버 역할 태그 지정', link: '/guide/match-lobby/set-role' },
+              { text: '참가자 칸 지정', link: '/guide/match-lobby/set-member-meta' },
               { text: '시작 알림', link: '/guide/match-lobby/start' },
               { text: '로비 취소', link: '/guide/match-lobby/cancel' },
               { text: '내 로비 목록', link: '/guide/match-lobby/list' }

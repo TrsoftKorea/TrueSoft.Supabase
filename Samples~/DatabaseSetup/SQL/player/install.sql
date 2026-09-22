@@ -8460,6 +8460,191 @@ revoke all on function public.ts_chat_fetch_direct(uuid, bigint, int) from publi
 grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 로비 채팅 — 18절 채팅 인프라를 재사용한다. kind='group' 채널 하나에 로비 id를 범위 키로
+-- 써서, 그 로비 사람들끼리만 보이는 대화가 된다. 귓속말과 같은 방식이라 글자 수 제한·도배
+-- 방지·운영자 삭제·보관 기간 정리가 그대로 따라온다.
+--   초대가 친구로 제한되지 않으므로 로비에는 친구가 아닌 사람이 섞인다 — 귓속말(친구 전용)로는
+--   대화가 안 되는 조합이라 이 채널이 필요하다.
+--   보관 1일: 로비는 10분이면 닫히므로 대화를 길게 남길 이유가 없다.
+-- ---------------------------------------------------------------------------
+insert into public.chat_channels (kind, code, display_name, max_length, slow_mode_seconds, retention_days)
+values ('group', 'lobby', '로비 채팅', 300, 1, 1)
+on conflict (code) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_chat_member — 그 로비에서 대화할 자격이 있는지. 없으면 예외.
+--   수락해서 실제로 방에 들어온 사람만이다. 초대만 받은 상태는 막는다 — 열어 두면 초대가
+--   "모르는 사람에게 말을 거는 통로"가 되어, 귓속말을 친구로 제한한 것이 그대로 뚫린다.
+--   수락 전에 물어볼 일이 있으면 들어와서 묻고 나가면 된다(나가기는 되돌릴 수 있다).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_chat_member(p_lobby_id uuid, p_account_id uuid)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_status text;
+begin
+  if not exists (select 1 from public.match_lobbies
+                  where id = p_lobby_id and status in ('open', 'started')) then
+    raise exception 'match_lobby_not_open';
+  end if;
+
+  select status into v_status from public.match_lobby_members
+   where lobby_id = p_lobby_id and account_id = p_account_id;
+
+  if not found or v_status <> 'accepted' then
+    raise exception 'match_lobby_member_not_found';
+  end if;
+end;
+$$;
+
+revoke all on function public.ts_match_lobby_chat_member(uuid, uuid) from public, anon, authenticated;
+
+create or replace function public.ts_chat_send_lobby(p_lobby_id uuid, p_content text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_user  text;
+  v_name  text;
+  c       public.chat_channels%rowtype;
+  v_scope text;
+  v_text  text;
+  v_last  timestamptz;
+  v_id    bigint;
+  v_at    timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_lobby_id is null then
+    raise exception 'match_lobby_not_found';
+  end if;
+
+  perform public.ts_match_lobby_chat_member(p_lobby_id, v_uid);
+
+  select * into c from public.chat_channels where code = 'lobby';
+  if not found or not c.is_active then
+    raise exception 'chat_channel_inactive';
+  end if;
+
+  v_text := btrim(coalesce(p_content, ''));
+  if v_text = '' then
+    raise exception 'chat_message_empty';
+  end if;
+  if char_length(v_text) > c.max_length then
+    raise exception 'chat_message_too_long';
+  end if;
+
+  if exists (
+    select 1 from public.chat_mutes m
+     where m.account_id = v_uid and m.until > now()
+       and (m.channel_id is null or m.channel_id = c.id)
+  ) then
+    raise exception 'chat_muted';
+  end if;
+
+  v_scope := p_lobby_id::text;
+
+  if c.slow_mode_seconds > 0 then
+    select max(created_at) into v_last
+      from public.chat_messages
+     where channel_id = c.id and scope_key = v_scope and account_id = v_uid;
+    if v_last is not null and v_last > now() - make_interval(secs => c.slow_mode_seconds) then
+      raise exception 'chat_too_fast';
+    end if;
+  end if;
+
+  select user_id into v_user from public.user_profiles  where account_id = v_uid;
+  select display_name into v_name from public.display_names where account_id = v_uid;
+
+  insert into public.chat_messages (channel_id, scope_key, account_id, user_id, display_name, content)
+  values (c.id, v_scope, v_uid, coalesce(v_user, v_uid::text), coalesce(v_name, ''), v_text)
+  returning id, created_at into v_id, v_at;
+
+  return jsonb_build_object('id', v_id, 'created_at', v_at);
+end;
+$$;
+
+comment on function public.ts_chat_send_lobby(uuid, text) is
+  '로비 대화 보내기. 수락한 멤버만 가능하고(초대만 받은 상태는 불가) 로비가 닫히면 막힌다.';
+
+revoke all on function public.ts_chat_send_lobby(uuid, text) from public, anon;
+grant execute on function public.ts_chat_send_lobby(uuid, text) to authenticated;
+
+create or replace function public.ts_chat_fetch_lobby(
+  p_lobby_id uuid,
+  p_after_id bigint default 0,
+  p_limit    int    default 50
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  c       public.chat_channels%rowtype;
+  v_scope text;
+  v_limit int := least(greatest(coalesce(p_limit, 50), 1), 200);
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_lobby_id is null then
+    raise exception 'match_lobby_not_found';
+  end if;
+
+  perform public.ts_match_lobby_chat_member(p_lobby_id, v_uid);
+
+  select * into c from public.chat_channels where code = 'lobby';
+  if not found then
+    raise exception 'chat_channel_not_found';
+  end if;
+
+  v_scope := p_lobby_id::text;
+
+  if coalesce(p_after_id, 0) <= 0 then
+    return coalesce((
+      select jsonb_agg(t order by t.id)
+        from (
+          select m.id, m.account_id, m.user_id, m.display_name,
+                 case when m.deleted_at is null then m.content else null end as content,
+                 (m.deleted_at is not null) as deleted, m.created_at
+            from public.chat_messages m
+           where m.channel_id = c.id and m.scope_key = v_scope
+           order by m.id desc limit v_limit
+        ) t
+    ), '[]'::jsonb);
+  end if;
+
+  return coalesce((
+    select jsonb_agg(t order by t.id)
+      from (
+        select m.id, m.account_id, m.user_id, m.display_name,
+               case when m.deleted_at is null then m.content else null end as content,
+               (m.deleted_at is not null) as deleted, m.created_at
+          from public.chat_messages m
+         where m.channel_id = c.id and m.scope_key = v_scope and m.id > p_after_id
+         order by m.id limit v_limit
+      ) t
+  ), '[]'::jsonb);
+end;
+$$;
+
+comment on function public.ts_chat_fetch_lobby(uuid, bigint, int) is
+  '로비 대화 커서 조회. after_id<=0이면 최근 메시지부터.';
+
+revoke all on function public.ts_chat_fetch_lobby(uuid, bigint, int) from public, anon;
+grant execute on function public.ts_chat_fetch_lobby(uuid, bigint, int) to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- ts_friend_request_cleanup — 오래 방치된 대기 요청을 취소로 돌린다. cron이 호출.
 --   대기 상한(max_pending_sent)은 pending 개수로 세므로, 무시된 요청이 영원히 남으면
 --   그 상한이 "평생 보낼 수 있는 요청 수"가 되어 버린다. 요청을 무시하는 건 흔한 행동이라
@@ -8643,43 +8828,57 @@ notify pgrst, 'reload schema';
 -- 21. 매치 로비(초대)
 -- #############################################################################
 
--- 친구를 초대해 같은 대기방(로비)에 모읍니다. 팀·상대·그냥 같은 방인지는 게임마다 다르므로
--- 이 SDK는 "누가 로비에 있고 어떤 상태인지"만 관리하고, 역할(팀/상대 등) 해석과 실제 게임
--- 연결은 게임이 합니다. 로비 id를 문자열로 캐스팅하면 그대로 기존 매치 결과 신고(19절,
--- session_id)에 넘길 수 있습니다. 알림은 폴링이 전제입니다 — ts_match_lobby_list_my()를
--- 주기적으로 불러 상태 변화를 감지합니다.
+-- 사람을 초대해 같은 대기방(로비)에 모읍니다. 초대 대상은 친구가 아니어도 됩니다 — 닉네임으로
+-- 찾아 바로 부르는 흐름을 막지 않으려는 것이고, 도배는 match_lobby_settings 가 막습니다.
+-- 팀·상대·그냥 같은 방인지는 게임마다 다르므로 이 SDK는 "누가 로비에 있고 어떤 상태인지"만
+-- 관리하고, 방 이름·참가자 칸(metadata) 의 의미와 실제 게임 연결은 게임이 정합니다.
+-- 로비 id를 문자열로 캐스팅하면 그대로 기존 매치 결과 신고(19절, session_id)에 넘길 수 있습니다.
+-- 알림은 폴링이 전제입니다 — ts_match_lobby_list_my()를 주기적으로 불러 상태 변화를 감지합니다.
 -- =============================================================================
 -- 매치 로비 — match_lobbies + match_lobby_members + RPC
--- 선행: 02(user_profiles, display_names), 20(friend_requests, 초대 대상 제한에 사용)
+-- 선행: 02(user_profiles, display_names), 18(chat_channels, 로비 대화에 사용)
 -- =============================================================================
 
 create table if not exists public.match_lobbies (
   id              uuid primary key default gen_random_uuid(),
   game_code       text not null,
   host_account_id uuid not null references auth.users (id) on delete cascade,
+  name            text null,
+  -- 게임이 자유롭게 담는 칸(맵·규칙·모드 세부 등). 서버는 내용을 해석하지 않는다.
+  -- 프로젝트마다 다른 값은 컬럼을 늘리지 말고 여기에 넣는다.
+  metadata        jsonb not null default '{}'::jsonb,
   status          text not null default 'open' check (status in ('open', 'started', 'cancelled', 'expired')),
   max_members     int not null default 8 check (max_members between 2 and 64),
   created_at      timestamptz not null default now(),
+  -- 실제 값은 ts_match_lobby_create 가 match_lobby_settings.lobby_expire_minutes 로 덮어쓴다.
+  -- 이 기본값은 그 경로를 안 타는 INSERT 를 위한 마지막 방어선일 뿐이니 운영 설정과 맞추려 하지 말 것.
   expires_at      timestamptz not null default (now() + interval '10 minutes'),
   started_at      timestamptz null,
   ended_at        timestamptz null
 );
 
 comment on table public.match_lobbies is
-  '친구 초대 매치 로비. id를 text로 캐스팅하면 그대로 match_results.session_id로 쓸 수 있다. 팀/역할 해석은 게임 몫.';
+  '매치 로비. 초대는 친구가 아니어도 된다. id를 text로 캐스팅하면 그대로 match_results.session_id로 쓸 수 있다. name·metadata 해석은 게임 몫.';
 
 create table if not exists public.match_lobby_members (
   lobby_id     uuid not null references public.match_lobbies (id) on delete cascade,
   account_id   uuid not null references auth.users (id) on delete cascade,
   status       text not null default 'invited' check (status in ('invited', 'accepted', 'declined', 'left')),
-  role_tag     text null,
+  -- 게임이 참가자마다 담는 칸(팀·진영·캐릭터·준비 상태 등). 서버는 내용을 해석하지 않는다.
+  metadata     jsonb not null default '{}'::jsonb,
   invited_at   timestamptz not null default now(),
   responded_at timestamptz null,
   primary key (lobby_id, account_id)
 );
 
+-- 기존 설치본에서 올라오는 경로. role_tag 는 metadata 로 대체됐다.
+alter table public.match_lobbies       add column if not exists name     text;
+alter table public.match_lobbies       add column if not exists metadata jsonb not null default '{}'::jsonb;
+alter table public.match_lobby_members add column if not exists metadata jsonb not null default '{}'::jsonb;
+alter table public.match_lobby_members drop column if exists role_tag;
+
 comment on table public.match_lobby_members is
-  '로비 참가자. role_tag는 서버가 의미를 두지 않는 자유 문자열 — 팀 이름이든 진영이든 게임이 정해서 쓴다.';
+  '로비 참가자. metadata는 서버가 의미를 두지 않는 자유 칸 — 팀이든 진영이든 게임이 정해서 쓴다.';
 
 create index if not exists match_lobbies_host_idx on public.match_lobbies (host_account_id, status);
 create index if not exists match_lobby_members_account_idx on public.match_lobby_members (account_id, status);
@@ -8692,19 +8891,159 @@ revoke all on table public.match_lobbies       from anon, authenticated;
 revoke all on table public.match_lobby_members from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_lobby_create — 로비를 만들고 나를 accepted로, 초대 대상을 invited로 등록한다.
--- 초대 대상은 전부 내 친구여야 한다(친구 아닌 사람을 무작위로 스팸 초대하지 못하게).
+-- match_lobby_settings — 초대 도배를 막는 값. 행 하나만 두고 운영자가 값만 바꾼다.
+--   초대는 친구가 아니어도 보낼 수 있다(닉네임으로 찾아 바로 부르는 흐름을 막지 않으려고).
+--   그래서 "아무나 부를 수 있다"가 성립하므로, 받는 쪽이 감당할 양을 여기서 제한한다.
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_match_lobby_create(p_game_code text, p_invited_account_ids uuid[] default '{}')
+create table if not exists public.match_lobby_settings (
+  id                           int primary key default 1 check (id = 1),
+  max_pending_invites_received int not null default 20 check (max_pending_invites_received > 0),
+  invite_cooldown_seconds      int not null default 2  check (invite_cooldown_seconds >= 0),
+  -- 아무도 수락하지 않은 방을 언제 닫을지. 게임이 정하지 않고 운영이 정한다 — 적정 대기 시간은
+  -- 플레이 패턴을 보고 조정할 값이지 클라이언트가 매번 넘길 값이 아니다.
+  lobby_expire_minutes         int not null default 10 check (lobby_expire_minutes between 1 and 1440),
+  updated_at                   timestamptz not null default now(),
+  updated_by                   text
+);
+
+-- 아래 두 칸은 이 테이블을 만든 뒤에 추가했다. 중간 판으로 이미 설치한 DB 에는 없으므로 채운다.
+alter table public.match_lobby_settings add column if not exists updated_by           text;
+alter table public.match_lobby_settings add column if not exists lobby_expire_minutes int not null default 10;
+
+-- add column 은 CHECK 를 붙여 주지 않는다. 기존 설치본에도 같은 범위가 걸리도록 따로 건다.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint c
+    join pg_class t on c.conrelid = t.oid
+    join pg_namespace n on t.relnamespace = n.oid
+    where n.nspname = 'public'
+      and t.relname = 'match_lobby_settings'
+      and c.conname = 'match_lobby_settings_lobby_expire_minutes_check'
+  ) then
+    alter table public.match_lobby_settings
+      add constraint match_lobby_settings_lobby_expire_minutes_check
+      check (lobby_expire_minutes between 1 and 1440);
+  end if;
+end $$;
+
+insert into public.match_lobby_settings (id) values (1) on conflict (id) do nothing;
+
+comment on table public.match_lobby_settings is
+  '로비 운영 설정(행 하나). max_pending_invites_received=받는 쪽이 동시에 쌓아 둘 수 있는 대기 초대 수, invite_cooldown_seconds=같은 사람이 연달아 초대를 보낼 때의 최소 간격, lobby_expire_minutes=아무도 수락하지 않은 방이 닫히기까지의 시간. 기본값은 여기 한 곳에만 둔다.';
+
+alter table public.match_lobby_settings enable row level security;
+
+revoke all on table public.match_lobby_settings from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_settings — 제한값을 읽는다. 기본값을 여기 다시 적지 않는다(친구 쪽과 같은 이유).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_match_lobby_settings()
+returns public.match_lobby_settings
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_cfg public.match_lobby_settings%rowtype;
+begin
+  select * into v_cfg from public.match_lobby_settings where id = 1;
+  if not found then
+    raise exception 'match_lobby_settings_missing';
+  end if;
+  return v_cfg;
+end;
+$$;
+
+revoke all on function public.ts_match_lobby_settings() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_guard_invite — 초대 한 건이 허용되는지 보고, 아니면 예외를 던진다.
+--   로비 생성(여러 명 한꺼번에)과 추가 초대 두 곳에서 같은 판정을 써야 해서 함수로 뺐다.
+-- ---------------------------------------------------------------------------
+-- p_lobby_id 가 붙어 시그니처가 바뀌었다. create or replace 는 인자 목록이 다르면 오버로드를
+-- 만들 뿐이라, 기존 2인자 호출이 옛 함수로 계속 가 버린다. 먼저 지운다.
+drop function if exists public.ts_match_lobby_guard_invite(uuid, uuid);
+
+create or replace function public.ts_match_lobby_guard_invite(
+  p_inviter  uuid,
+  p_target   uuid,
+  p_lobby_id uuid default null   -- 지금 채우고 있는 로비. 이 방 건은 도배로 세지 않는다.
+)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_cfg   public.match_lobby_settings%rowtype;
+  v_count int;
+  v_last  timestamptz;
+begin
+  if p_target = p_inviter then
+    return;  -- 방장 자신은 초대가 아니라 참가다.
+  end if;
+
+  v_cfg := public.ts_match_lobby_settings();
+
+  -- 받는 쪽이 지금 떠안고 있는 대기 초대. 끝난 로비 것은 자리를 차지하지 않으므로 뺀다.
+  -- 이 방 건도 뺀다 — 안 그러면 같은 사람을 다시 초대하는 재시도가 자기 자신 때문에 막힌다.
+  select count(*) into v_count
+    from public.match_lobby_members m
+    join public.match_lobbies l on l.id = m.lobby_id
+   where m.account_id = p_target and m.status = 'invited' and l.status = 'open'
+     and (p_lobby_id is null or l.id <> p_lobby_id);
+  if v_count >= v_cfg.max_pending_invites_received then
+    raise exception 'match_lobby_invite_limit_reached';
+  end if;
+
+  if v_cfg.invite_cooldown_seconds > 0 then
+    -- 한 방을 채우는 건 한 번의 행동이다. 추가 초대 API 가 한 명씩만 받으므로, 이 방 건을
+    -- 빼지 않으면 "세 명 골라 부르기" 같은 정상 흐름이 두 번째부터 전부 거절된다.
+    select max(m.invited_at) into v_last
+      from public.match_lobby_members m
+      join public.match_lobbies l on l.id = m.lobby_id
+     where l.host_account_id = p_inviter and m.account_id <> p_inviter
+       and (p_lobby_id is null or l.id <> p_lobby_id);
+    if v_last is not null and v_last > now() - make_interval(secs => v_cfg.invite_cooldown_seconds) then
+      raise exception 'match_lobby_invite_too_fast';
+    end if;
+  end if;
+end;
+$$;
+
+revoke all on function public.ts_match_lobby_guard_invite(uuid, uuid, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_lobby_create — 로비를 만들고 나를 accepted로, 초대 대상을 invited로 등록한다.
+-- 친구가 아니어도 초대할 수 있다 — 닉네임으로 찾아 바로 부르는 흐름을 막지 않으려는 것이고,
+-- 도배는 match_lobby_settings(받는 쪽 대기 초대 상한·보내는 쪽 쿨다운)로 막는다.
+-- ---------------------------------------------------------------------------
+-- 파라미터가 늘어 시그니처가 바뀌었다. create or replace는 인자 목록이 다르면 교체가 아니라
+-- 오버로드를 만들고, 그러면 두 개짜리 호출이 "어느 쪽인지 모르겠다"며 실패한다. 먼저 지운다.
+drop function if exists public.ts_match_lobby_create(text, uuid[]);
+
+create or replace function public.ts_match_lobby_create(
+  p_game_code           text,
+  p_invited_account_ids uuid[] default '{}',
+  p_name                text   default null,
+  p_max_members         int    default null,
+  p_metadata            jsonb  default null
+)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid        uuid := auth.uid();
-  v_lobby_id   uuid;
-  v_non_friend uuid;
+  v_uid      uuid := auth.uid();
+  v_lobby_id uuid;
+  v_target   uuid;
+  v_cfg      public.match_lobby_settings%rowtype;
+  v_max      int;
+  v_name     text;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -8713,25 +9052,47 @@ begin
     raise exception 'match_game_code_empty';
   end if;
 
-  select target into v_non_friend
-    from unnest(p_invited_account_ids) as target
-   where not public.ts_are_friends(v_uid, target)
-   limit 1;
-
-  if v_non_friend is not null then
-    raise exception 'match_lobby_invite_not_friend';
+  -- 안 넘기면 테이블 기본값과 같은 8. 범위는 컬럼 CHECK 와 같지만 여기서 먼저 걸러 이름 붙은
+  -- 사유로 돌려준다 — 안 그러면 게임이 영문 제약조건 오류를 받는다.
+  v_max := coalesce(p_max_members, 8);
+  if v_max not between 2 and 64 then
+    raise exception 'match_lobby_max_members_invalid';
   end if;
 
-  insert into public.match_lobbies (game_code, host_account_id)
-  values (btrim(p_game_code), v_uid)
+  v_name := nullif(btrim(coalesce(p_name, '')), '');
+  if v_name is not null and char_length(v_name) > 40 then
+    raise exception 'match_lobby_name_too_long';
+  end if;
+
+  -- 한 명이라도 막히면 로비 자체를 안 만든다 — 절반만 초대된 방이 남는 것보다 낫다.
+  foreach v_target in array coalesce(p_invited_account_ids, '{}')
+  loop
+    perform public.ts_match_lobby_guard_invite(v_uid, v_target);
+  end loop;
+
+  -- 만료까지의 시간은 운영이 정한다(match_lobby_settings). 게임이 매번 넘길 값이 아니다.
+  v_cfg := public.ts_match_lobby_settings();
+
+  insert into public.match_lobbies (game_code, host_account_id, name, max_members, metadata, expires_at)
+  values (btrim(p_game_code), v_uid, v_name, v_max, coalesce(p_metadata, '{}'::jsonb),
+          now() + make_interval(mins => v_cfg.lobby_expire_minutes))
   returning id into v_lobby_id;
 
   insert into public.match_lobby_members (lobby_id, account_id, status, responded_at)
   values (v_lobby_id, v_uid, 'accepted', now());
 
   if array_length(p_invited_account_ids, 1) > 0 then
+    -- 정원은 여기서도 센다. 추가 초대(ts_match_lobby_invite)만 막아 두면 생성 한 번에 50명을
+    -- 넘겨 정원 2인 방을 채울 수 있다. 호스트 자신이 한 자리를 쓰므로 +1, 같은 사람을 여러 번
+    -- 넣은 배열은 아래 on conflict 로 한 명이 되니 distinct 로 센다.
+    if 1 + (select count(distinct target) from unnest(p_invited_account_ids) as target
+             where target is not null and target <> v_uid) > v_max then
+      raise exception 'match_lobby_full';
+    end if;
+
     insert into public.match_lobby_members (lobby_id, account_id)
     select v_lobby_id, target from unnest(p_invited_account_ids) as target
+     where target is not null and target <> v_uid
     on conflict (lobby_id, account_id) do nothing;
   end if;
 
@@ -8739,14 +9100,14 @@ begin
 end;
 $$;
 
-comment on function public.ts_match_lobby_create(text, uuid[]) is
-  '매치 로비 생성 + 초대. 초대 대상은 전부 내 친구여야 한다. lobby_id를 그대로 session_id로 쓸 수 있다.';
+comment on function public.ts_match_lobby_create(text, uuid[], text, int, jsonb) is
+  '매치 로비 생성 + 초대. 초대는 친구가 아니어도 되고 도배는 match_lobby_settings가 막는다. name·metadata는 게임이 정하는 값이며 서버는 해석하지 않는다. lobby_id를 그대로 session_id로 쓸 수 있다.';
 
-revoke all on function public.ts_match_lobby_create(text, uuid[]) from public, anon;
-grant execute on function public.ts_match_lobby_create(text, uuid[]) to authenticated;
+revoke all on function public.ts_match_lobby_create(text, uuid[], text, int, jsonb) from public, anon;
+grant execute on function public.ts_match_lobby_create(text, uuid[], text, int, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_lobby_invite — 진행 중(open)인 로비에 친구를 더 초대한다(호스트 전용).
+-- ts_match_lobby_invite — 진행 중(open)인 로비에 한 명을 더 초대한다(호스트 전용, 친구가 아니어도 된다).
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_match_lobby_invite(p_lobby_id uuid, p_account_id uuid)
 returns jsonb
@@ -8770,9 +9131,7 @@ begin
   if v_lobby.status <> 'open' then
     raise exception 'match_lobby_not_open';
   end if;
-  if not public.ts_are_friends(v_uid, p_account_id) then
-    raise exception 'match_lobby_invite_not_friend';
-  end if;
+  perform public.ts_match_lobby_guard_invite(v_uid, p_account_id, p_lobby_id);
 
   -- 정원은 지금 자리를 차지한 인원(초대 대기·수락)만 센다 — 거절·퇴장한 행은 남아있어도
   -- 자리를 차지하지 않는다.
@@ -8791,7 +9150,7 @@ end;
 $$;
 
 comment on function public.ts_match_lobby_invite(uuid, uuid) is
-  '열려 있는 로비에 친구 추가 초대(호스트 전용).';
+  '열려 있는 로비에 추가 초대(호스트 전용). 초대 대상은 친구가 아니어도 된다.';
 
 revoke all on function public.ts_match_lobby_invite(uuid, uuid) from public, anon;
 grant execute on function public.ts_match_lobby_invite(uuid, uuid) to authenticated;
@@ -8806,15 +9165,18 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid    uuid := auth.uid();
-  v_member public.match_lobby_members%rowtype;
-  v_lobby  public.match_lobbies%rowtype;
+  v_uid      uuid := auth.uid();
+  v_member   public.match_lobby_members%rowtype;
+  v_lobby    public.match_lobbies%rowtype;
+  v_accepted int;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
   end if;
 
-  select * into v_lobby from public.match_lobbies where id = p_lobby_id;
+  -- 로비 행을 잠근다. 정원 확인과 수락 사이에 남이 끼어들면 둘 다 "자리 있음"을 보고 같이
+  -- 들어가므로, 같은 로비의 수락은 여기서 한 줄로 세운다(ts_match_lobby_invite 도 같은 행을 잠근다).
+  select * into v_lobby from public.match_lobbies where id = p_lobby_id for update;
   if not found or v_lobby.status <> 'open' then
     raise exception 'match_lobby_not_open';
   end if;
@@ -8823,6 +9185,16 @@ begin
    where lobby_id = p_lobby_id and account_id = v_uid for update;
   if not found or v_member.status <> 'invited' then
     raise exception 'match_lobby_invite_not_found';
+  end if;
+
+  -- 초대받을 때는 자리가 있었어도 그사이 다른 사람들이 먼저 수락했을 수 있다. 수락하는 이 시점에
+  -- 다시 센다 — 안 그러면 대기 초대가 정원보다 많을 때 먼저 누른 순서대로 정원을 넘어 들어간다.
+  if p_accept then
+    select count(*) into v_accepted from public.match_lobby_members
+     where lobby_id = p_lobby_id and status = 'accepted';
+    if v_accepted >= v_lobby.max_members then
+      raise exception 'match_lobby_full';
+    end if;
   end if;
 
   update public.match_lobby_members
@@ -8889,26 +9261,33 @@ revoke all on function public.ts_match_lobby_leave(uuid) from public, anon;
 grant execute on function public.ts_match_lobby_leave(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_lobby_set_role — 멤버의 역할 태그를 지정한다(호스트 전용, 의미는 게임이 정함).
+-- ts_match_lobby_set_member_meta — 참가자 칸(metadata)을 통째로 바꾼다.
+--   호스트는 누구 것이든, 참가자는 자기 것만. 준비 완료처럼 본인이 바꾸는 값이 있어서
+--   호스트 전용으로 두면 쓸 수 없는 흐름이 생긴다.
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_match_lobby_set_role(p_lobby_id uuid, p_account_id uuid, p_role_tag text)
+drop function if exists public.ts_match_lobby_set_role(uuid, uuid, text);
+
+create or replace function public.ts_match_lobby_set_member_meta(p_lobby_id uuid, p_account_id uuid, p_metadata jsonb)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid uuid := auth.uid();
+  v_uid    uuid := auth.uid();
+  v_target uuid := coalesce(p_account_id, auth.uid());
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
   end if;
-  if not exists (select 1 from public.match_lobbies where id = p_lobby_id and host_account_id = v_uid) then
+
+  if v_target <> v_uid
+     and not exists (select 1 from public.match_lobbies where id = p_lobby_id and host_account_id = v_uid) then
     raise exception 'match_lobby_not_found';
   end if;
 
-  update public.match_lobby_members set role_tag = p_role_tag
-   where lobby_id = p_lobby_id and account_id = p_account_id;
+  update public.match_lobby_members set metadata = coalesce(p_metadata, '{}'::jsonb)
+   where lobby_id = p_lobby_id and account_id = v_target;
 
   if not found then
     raise exception 'match_lobby_member_not_found';
@@ -8918,11 +9297,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_match_lobby_set_role(uuid, uuid, text) is
-  '로비 멤버의 역할 태그 지정(호스트 전용). 팀 이름·진영 등 의미는 게임이 정한다.';
+comment on function public.ts_match_lobby_set_member_meta(uuid, uuid, jsonb) is
+  '로비 참가자 칸 지정. 호스트는 누구 것이든, 참가자는 자기 것만. 팀·진영·준비 상태 등 의미는 게임이 정한다.';
 
-revoke all on function public.ts_match_lobby_set_role(uuid, uuid, text) from public, anon;
-grant execute on function public.ts_match_lobby_set_role(uuid, uuid, text) to authenticated;
+revoke all on function public.ts_match_lobby_set_member_meta(uuid, uuid, jsonb) from public, anon;
+grant execute on function public.ts_match_lobby_set_member_meta(uuid, uuid, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- ts_match_lobby_start — 호스트가 시작을 알린다. 폴링 중인 멤버가 status='started'로
@@ -9013,12 +9392,13 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
              'lobby_id', l.id, 'session_id', l.id::text, 'game_code', l.game_code,
+             'name', l.name, 'metadata', l.metadata, 'max_members', l.max_members,
              'host_account_id', l.host_account_id, 'status', l.status,
-             'created_at', l.created_at, 'started_at', l.started_at,
+             'created_at', l.created_at, 'expires_at', l.expires_at, 'started_at', l.started_at,
              'members', (
                select jsonb_agg(jsonb_build_object(
                         'account_id', m.account_id, 'display_name', coalesce(d.display_name, ''),
-                        'status', m.status, 'role_tag', m.role_tag)
+                        'status', m.status, 'metadata', m.metadata)
                       order by m.invited_at)
                  from public.match_lobby_members m
                  left join public.display_names d on d.account_id = m.account_id
@@ -9097,14 +9477,14 @@ as $$
     'total', (select count(*) from public.match_lobbies where p_status is null or status = p_status),
     'rows', coalesce((
       select jsonb_agg(jsonb_build_object(
-               'lobby_id', l.id, 'game_code', l.game_code,
+               'lobby_id', l.id, 'game_code', l.game_code, 'name', l.name, 'metadata', l.metadata,
                'host_account_id', l.host_account_id, 'status', l.status,
                'max_members', l.max_members, 'created_at', l.created_at,
                'started_at', l.started_at, 'ended_at', l.ended_at, 'expires_at', l.expires_at,
                'members', (
                  select coalesce(jsonb_agg(jsonb_build_object(
                           'account_id', m.account_id, 'display_name', coalesce(d.display_name, ''),
-                          'status', m.status, 'role_tag', m.role_tag,
+                          'status', m.status, 'metadata', m.metadata,
                           'invited_at', m.invited_at, 'responded_at', m.responded_at)
                         order by m.invited_at), '[]'::jsonb)
                    from public.match_lobby_members m
@@ -9122,6 +9502,82 @@ comment on function public.ts_admin_match_lobby_list(text, int, int) is
 
 revoke all on function public.ts_admin_match_lobby_list(text, int, int) from public, anon, authenticated;
 grant execute on function public.ts_admin_match_lobby_list(text, int, int) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- ts_admin_match_lobby_settings_get / _update — 초대 제한값 조회·수정.
+--   친구 제한값과 같은 모양이다. 상한을 두는 이유도 같다 — 테이블 CHECK 는 하한만 보므로,
+--   운영자가 0 이나 터무니없이 큰 값을 넣어 초대를 통째로 막거나 풀어 버리지 못하게 한다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_match_lobby_settings_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+           'max_pending_invites_received', c.max_pending_invites_received,
+           'invite_cooldown_seconds',      c.invite_cooldown_seconds,
+           'lobby_expire_minutes',         c.lobby_expire_minutes,
+           'updated_at',                   c.updated_at,
+           'updated_by',                   c.updated_by)
+    from public.ts_match_lobby_settings() c;
+$$;
+
+comment on function public.ts_admin_match_lobby_settings_get() is
+  '로비 운영 설정 조회. service_role 전용.';
+
+revoke all on function public.ts_admin_match_lobby_settings_get() from public, anon, authenticated;
+grant execute on function public.ts_admin_match_lobby_settings_get() to service_role;
+
+drop function if exists public.ts_admin_match_lobby_settings_update(int, int, text);
+
+create or replace function public.ts_admin_match_lobby_settings_update(
+  p_max_pending_invites_received int,
+  p_invite_cooldown_seconds      int,
+  p_lobby_expire_minutes         int,
+  p_by                           text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_row public.match_lobby_settings%rowtype;
+begin
+  if p_max_pending_invites_received is null or p_invite_cooldown_seconds is null
+     or p_lobby_expire_minutes is null
+     or p_max_pending_invites_received not between 1 and 200
+     or p_invite_cooldown_seconds      not between 0 and 300
+     or p_lobby_expire_minutes         not between 1 and 1440 then
+    raise exception 'match_lobby_settings_out_of_range';
+  end if;
+
+  insert into public.match_lobby_settings
+         (id, max_pending_invites_received, invite_cooldown_seconds, lobby_expire_minutes, updated_at, updated_by)
+  values (1, p_max_pending_invites_received, p_invite_cooldown_seconds, p_lobby_expire_minutes, now(), p_by)
+  on conflict (id) do update
+    set max_pending_invites_received = excluded.max_pending_invites_received,
+        invite_cooldown_seconds      = excluded.invite_cooldown_seconds,
+        lobby_expire_minutes         = excluded.lobby_expire_minutes,
+        updated_at                   = now(),
+        updated_by                   = excluded.updated_by
+  returning * into v_row;
+
+  return jsonb_build_object(
+           'max_pending_invites_received', v_row.max_pending_invites_received,
+           'invite_cooldown_seconds',      v_row.invite_cooldown_seconds,
+           'lobby_expire_minutes',         v_row.lobby_expire_minutes,
+           'updated_at',                   v_row.updated_at,
+           'updated_by',                   v_row.updated_by);
+end;
+$$;
+
+comment on function public.ts_admin_match_lobby_settings_update(int, int, int, text) is
+  '로비 운영 설정 수정. 범위를 벗어나면 match_lobby_settings_out_of_range. service_role 전용.';
+
+revoke all on function public.ts_admin_match_lobby_settings_update(int, int, int, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_match_lobby_settings_update(int, int, int, text) to service_role;
 
 do $$
 begin
@@ -9191,7 +9647,7 @@ grant select, insert, update, delete on table public.user_data     to authentica
 --   account_closures, anonymous_recovery_tokens, mail_batches, mail_categories,
 --   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
 --   match_reward_configs, match_results, friend_requests, friend_settings,
---   match_lobbies, match_lobby_members
+--   match_lobbies, match_lobby_members, match_lobby_settings
 
 -- ---------------------------------------------------------------------------
 -- 3. 함수 — 전부 회수 후 SDK 가 실제로 호출하는 RPC 만 되돌려 준다
@@ -9265,6 +9721,8 @@ grant execute on function public.ts_chat_fetch_many(jsonb, int)                 
 grant execute on function public.ts_chat_channels()                                   to authenticated;
 grant execute on function public.ts_chat_send_direct(uuid, text)                      to authenticated;
 grant execute on function public.ts_chat_fetch_direct(uuid, bigint, int)              to authenticated;
+grant execute on function public.ts_chat_send_lobby(uuid, text)                       to authenticated;
+grant execute on function public.ts_chat_fetch_lobby(uuid, bigint, int)               to authenticated;
 
 -- 매치 결과
 grant execute on function public.ts_match_report_result(text, text, boolean, uuid)    to authenticated;
@@ -9280,11 +9738,11 @@ grant execute on function public.ts_friend_remove(uuid)                         
 grant execute on function public.ts_friend_limits()                                   to authenticated;
 
 -- 매치 로비(초대)
-grant execute on function public.ts_match_lobby_create(text, uuid[])                 to authenticated;
+grant execute on function public.ts_match_lobby_create(text, uuid[], text, int, jsonb) to authenticated;
 grant execute on function public.ts_match_lobby_invite(uuid, uuid)                   to authenticated;
 grant execute on function public.ts_match_lobby_respond(uuid, boolean)               to authenticated;
 grant execute on function public.ts_match_lobby_leave(uuid)                          to authenticated;
-grant execute on function public.ts_match_lobby_set_role(uuid, uuid, text)           to authenticated;
+grant execute on function public.ts_match_lobby_set_member_meta(uuid, uuid, jsonb)   to authenticated;
 grant execute on function public.ts_match_lobby_start(uuid)                          to authenticated;
 grant execute on function public.ts_match_lobby_cancel(uuid)                         to authenticated;
 grant execute on function public.ts_match_lobby_list_my()                            to authenticated;
@@ -9301,6 +9759,8 @@ grant execute on function public.ts_match_lobby_list_my()                       
 --   ts_match_lobby_cleanup / ts_friend_request_cleanup ← cron 전용(만료 로비·방치 요청 정리).
 --   ts_chat_direct_scope_key ← 내부 헬퍼(귓속말 범위 키 계산).
 --   ts_are_friends / ts_friend_count / ts_friend_settings ← 내부 헬퍼(친구 판정·수·제한값).
+--   ts_match_lobby_settings / ts_match_lobby_guard_invite / ts_match_lobby_chat_member
+--                          ← 내부 헬퍼(로비 초대 제한값·초대 판정·대화 자격).
 --   ts_admin_friend_overview / ts_admin_friend_settings_* / ts_admin_match_lobby_list ← 운영 콘솔 전용.
 
 -- ---------------------------------------------------------------------------

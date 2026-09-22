@@ -13,8 +13,8 @@
 | `price_amount_krw` | bigint | **KRW로 환산한 정수 금액.** 매출 확인은 이 값을 쓰세요. 환율은 결제 시점 frankfurter.app 기준. 환산 실패 시 null |
 
 - **Android**: 클라이언트가 Unity IAP `Product.metadata.localizedPrice` / `isoCurrencyCode`를 서버로 전달합니다.
-- **iOS SK2**: Unity IAP v5의 StoreKit 2 경로에서는 JWS 토큰에 가격 정보가 포함되어 있어 서버가 자동으로 추출합니다.
-- **iOS SK1**: Unity IAP v4 또는 v5 `forceStoreKit1` 경로는 가격 정보가 영수증에 없으므로 `price_amount` / `price_currency`는 저장되지 않습니다.
+- **iOS SK2**: StoreKit 2 경로에서는 JWS 토큰에 가격 정보가 포함되어 있어 서버가 자동으로 추출합니다.
+- **iOS SK1**: `forceStoreKit1` 경로는 가격 정보가 영수증에 없으므로 `price_amount` / `price_currency`는 저장되지 않습니다.
 
 ::: tip Retool 집계
 `price_amount_krw` 컬럼을 사용하면 해외 결제 포함 합산이 가능합니다.  

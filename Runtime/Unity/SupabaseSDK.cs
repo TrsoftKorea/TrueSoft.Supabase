@@ -108,7 +108,10 @@ namespace TrueBase.Unity
 
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
         internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;
-        internal static Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> _interceptIAPGoogle;
+        // 인자 순서: purchaseToken, productId, priceAmount, priceCurrency, rawReceipt, sdkVerify.
+        // rawReceipt(유니티 영수증 원문)까지 주는 이유는, 외부 결제 서버가 토큰이 아니라 영수증 전체를
+        // 받는 경우가 있기 때문이다 — PlayNANOO 가 그렇다. 토큰만 넘기면 "영수증을 못 찾았다"로 거절된다.
+        internal static Func<string, string, long, string, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> _interceptIAPGoogle;
 
         /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
         public static void RegisterIAPAppleInterceptor(
@@ -117,7 +120,7 @@ namespace TrueBase.Unity
 
         /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
         public static void RegisterIAPGoogleInterceptor(
-            Func<string, string, long, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor)
+            Func<string, string, long, string, string, Func<Task<SupabaseResult<GooglePlayPurchaseResponse>>>, Task<SupabaseResult<GooglePlayPurchaseResponse>>> interceptor)
             => _interceptIAPGoogle = interceptor;
 
         /// <summary>PlayNANOO 이관 브릿지 전용. 게임 코드에서 직접 호출하지 마세요.</summary>
@@ -279,6 +282,8 @@ namespace TrueBase.Unity
             public const string ChatSend = "Supabase.Chat.Send";
             public const string ChatSendDirect = "Supabase.Chat.SendDirect";
             public const string ChatFetchDirect = "Supabase.Chat.FetchDirect";
+            public const string ChatSendLobby = "Supabase.Chat.SendLobby";
+            public const string ChatFetchLobby = "Supabase.Chat.FetchLobby";
             public const string FriendSearch = "Supabase.Friend.Search";
             public const string FriendRequestSend = "Supabase.Friend.RequestSend";
             public const string FriendRequestsList = "Supabase.Friend.RequestsList";
@@ -291,7 +296,7 @@ namespace TrueBase.Unity
             public const string MatchLobbyInvite = "Supabase.MatchLobby.Invite";
             public const string MatchLobbyRespond = "Supabase.MatchLobby.Respond";
             public const string MatchLobbyLeave = "Supabase.MatchLobby.Leave";
-            public const string MatchLobbySetRole = "Supabase.MatchLobby.SetRole";
+            public const string MatchLobbySetMemberMeta = "Supabase.MatchLobby.SetMemberMeta";
             public const string MatchLobbyStart = "Supabase.MatchLobby.Start";
             public const string MatchLobbyCancel = "Supabase.MatchLobby.Cancel";
             public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
@@ -1633,12 +1638,17 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.FriendRequestTooFast:
 
                 // 매치 로비 — 정원 초과·이미 시작/취소됨·응답할 초대가 없어짐 등 레이스로 정상 발생
-                case SupabaseErrorCode.MatchLobbyInviteNotFriend:
+                case SupabaseErrorCode.MatchLobbyInviteLimitReached:
+                case SupabaseErrorCode.MatchLobbyInviteTooFast:
                 case SupabaseErrorCode.MatchLobbyNotFound:
                 case SupabaseErrorCode.MatchLobbyNotOpen:
                 case SupabaseErrorCode.MatchLobbyFull:
                 case SupabaseErrorCode.MatchLobbyInviteNotFound:
                 case SupabaseErrorCode.MatchLobbyMemberNotFound:
+
+                // 유저가 입력한 방 이름이 너무 긴 경우. 정원 값(MatchLobbyMaxMembersInvalid)은 게임이
+                // 넘기는 값이라 여기 넣지 않는다 — 그건 고쳐야 할 코드 오류다.
+                case SupabaseErrorCode.MatchLobbyNameTooLong:
                     return true;
 
                 default:
@@ -2390,6 +2400,40 @@ namespace TrueBase.Unity
             return LogAndReturnResult(ApiLogTags.ChatSend, r);
         }
 
+        /// <summary><c>ts_chat_send_lobby</c> — 로비 참가자끼리 보는 대화에 발송. 수락해 들어온 멤버만 가능합니다.</summary>
+        public static async Task<SupabaseResult<ChatSendResult>> SendLobbyChatAsync(string lobbyId, string content)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<ChatSendResult>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.SendLobbyAsync(lobbyId, content);
+        }
+
+        /// <inheritdoc cref="SendLobbyChatAsync"/>
+        public static async Task<SupabaseResult<ChatSendResult>> TrySendLobbyChatAsync(string lobbyId, string content)
+        {
+            var r = await SendLobbyChatAsync(lobbyId, content);
+            return LogAndReturnResult(ApiLogTags.ChatSendLobby, r);
+        }
+
+        /// <summary><c>ts_chat_fetch_lobby</c> — 로비 대화 커서 조회. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetLobbyChatAsync(string lobbyId, long afterId = 0, int limit = 50)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await Chat.FetchLobbyAsync(lobbyId, afterId, limit);
+        }
+
+        /// <inheritdoc cref="GetLobbyChatAsync"/>
+        public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> TryGetLobbyChatAsync(string lobbyId, long afterId = 0, int limit = 50)
+        {
+            var r = await GetLobbyChatAsync(lobbyId, afterId, limit);
+            return LogAndReturnResult(ApiLogTags.ChatFetchLobby, r);
+        }
+
         /// <summary><c>ts_chat_send_direct</c> — 친구에게 귓속말 발송. 친구가 아니면 실패합니다.</summary>
         public static async Task<SupabaseResult<ChatSendResult>> SendDirectChatAsync(string targetAccountId, string content)
         {
@@ -2569,29 +2613,31 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <c>ts_match_lobby_create</c> — 매치 로비를 만들고 지정한 친구들을 초대합니다.
-        /// 초대 대상은 전부 내 친구여야 합니다. 반환된 <c>SessionId</c>는 <see cref="ReportMatchResultAsync"/>의
+        /// <c>ts_match_lobby_create</c> — 매치 로비를 만들고 지정한 계정들을 초대합니다.
+        /// 초대 대상은 친구가 아니어도 됩니다. 반환된 <c>SessionId</c>는 <see cref="ReportMatchResultAsync"/>의
         /// sessionId로 그대로 쓸 수 있습니다.
         /// </summary>
         public static async Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateMatchLobbyAsync(
-            string gameCode, IEnumerable<string> invitedAccountIds = null)
+            string gameCode, IEnumerable<string> invitedAccountIds = null,
+            string name = null, int? maxMembers = null, IReadOnlyDictionary<string, object> metadata = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<MatchLobbyCreateOutcome>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
-            return await MatchLobby.CreateAsync(gameCode, invitedAccountIds);
+            return await MatchLobby.CreateAsync(gameCode, invitedAccountIds, name, maxMembers, metadata);
         }
 
         /// <inheritdoc cref="CreateMatchLobbyAsync"/>
         public static async Task<SupabaseResult<MatchLobbyCreateOutcome>> TryCreateMatchLobbyAsync(
-            string gameCode, IEnumerable<string> invitedAccountIds = null)
+            string gameCode, IEnumerable<string> invitedAccountIds = null,
+            string name = null, int? maxMembers = null, IReadOnlyDictionary<string, object> metadata = null)
         {
-            var r = await CreateMatchLobbyAsync(gameCode, invitedAccountIds);
+            var r = await CreateMatchLobbyAsync(gameCode, invitedAccountIds, name, maxMembers, metadata);
             return LogAndReturnResult(ApiLogTags.MatchLobbyCreate, r);
         }
 
-        /// <summary><c>ts_match_lobby_invite</c> — 열려 있는 로비에 친구를 추가 초대합니다(호스트 전용).</summary>
+        /// <summary><c>ts_match_lobby_invite</c> — 열려 있는 로비에 한 명을 추가 초대합니다(호스트 전용).</summary>
         public static async Task<SupabaseResult> InviteToMatchLobbyAsync(string lobbyId, string accountId)
         {
             var ready = await EnsureReadySessionAsync();
@@ -2645,21 +2691,26 @@ namespace TrueBase.Unity
             return r;
         }
 
-        /// <summary><c>ts_match_lobby_set_role</c> — 멤버의 역할 태그를 지정합니다(호스트 전용). 팀 이름·진영 등 의미는 게임이 정합니다.</summary>
-        public static async Task<SupabaseResult> SetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag)
+        /// <summary>
+        /// <c>ts_match_lobby_set_member_meta</c> — 참가자 칸을 통째로 바꿉니다. 호스트는 누구 것이든,
+        /// 참가자는 자기 것만. 팀·진영·준비 상태 등 의미는 게임이 정합니다.
+        /// </summary>
+        public static async Task<SupabaseResult> SetMatchLobbyMemberMetaAsync(
+            string lobbyId, string accountId, IReadOnlyDictionary<string, object> metadata)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
-            return await MatchLobby.SetRoleAsync(lobbyId, accountId, roleTag);
+            return await MatchLobby.SetMemberMetaAsync(lobbyId, accountId, metadata);
         }
 
-        /// <inheritdoc cref="SetMatchLobbyMemberRoleAsync"/>
-        public static async Task<SupabaseResult> TrySetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag)
+        /// <inheritdoc cref="SetMatchLobbyMemberMetaAsync"/>
+        public static async Task<SupabaseResult> TrySetMatchLobbyMemberMetaAsync(
+            string lobbyId, string accountId, IReadOnlyDictionary<string, object> metadata)
         {
-            var r = await SetMatchLobbyMemberRoleAsync(lobbyId, accountId, roleTag);
-            LogApiResult(ApiLogTags.MatchLobbySetRole, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            var r = await SetMatchLobbyMemberMetaAsync(lobbyId, accountId, metadata);
+            LogApiResult(ApiLogTags.MatchLobbySetMemberMeta, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r;
         }
 
@@ -3206,12 +3257,14 @@ namespace TrueBase.Unity
         /// <param name="packageName">앱 패키지명. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
         /// <param name="priceAmount">결제 금액 정수. Unity IAP <c>Product.metadata.localizedPrice</c>를 long으로 변환한 값. 0이면 미제공.</param>
         /// <param name="priceCurrency">ISO 4217 통화 코드 (예: "KRW", "USD"). Unity IAP <c>Product.metadata.isoCurrencyCode</c>. null이면 미제공.</param>
+        /// <param name="rawReceipt">Unity IAP 영수증 원문. SDK 검증에는 쓰지 않고 외부 결제 서버 인터셉터에만 전달합니다.</param>
         public static async Task<SupabaseResult<GooglePlayPurchaseResponse>> VerifyGooglePlayPurchaseAsync(
             string purchaseToken,
             string productId,
             string packageName    = null,
             long   priceAmount    = 0,
-            string priceCurrency  = null)
+            string priceCurrency  = null,
+            string rawReceipt     = null)
         {
             var finalPackageName = packageName ?? UnityEngine.Application.identifier;
             var req = new GooglePlayPurchaseRequest
@@ -3224,7 +3277,7 @@ namespace TrueBase.Unity
             };
 
             if (_interceptIAPGoogle != null)
-                return await _interceptIAPGoogle(purchaseToken, productId, priceAmount, priceCurrency,
+                return await _interceptIAPGoogle(purchaseToken, productId, priceAmount, priceCurrency, rawReceipt,
                     () => Functions.InvokeAsync<GooglePlayPurchaseResponse>(_purchaseVerifyGoogleFunctionName, req, requireAuth: true));
 
             return await Functions.InvokeAsync<GooglePlayPurchaseResponse>(
@@ -3237,10 +3290,11 @@ namespace TrueBase.Unity
             string productId,
             string packageName    = null,
             long   priceAmount    = 0,
-            string priceCurrency  = null)
+            string priceCurrency  = null,
+            string rawReceipt     = null)
         {
             const string tag = "[Supabase.Purchase.VerifyGoogle]";
-            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency);
+            var result = await VerifyGooglePlayPurchaseAsync(purchaseToken, productId, packageName, priceAmount, priceCurrency, rawReceipt);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)
@@ -3287,7 +3341,7 @@ namespace TrueBase.Unity
             return (true, result.Data);
         }
 
-        /// <summary>Apple App Store SK1 영수증(verifyReceipt)을 서버에서 검증합니다. Unity IAP v4 또는 iOS 14 이하에서 사용합니다.</summary>
+        /// <summary>Apple App Store SK1 영수증(verifyReceipt)을 서버에서 검증합니다. iOS 14 이하 또는 forceStoreKit1 경로에서 사용합니다.</summary>
         /// <param name="receipt">SK1 base64 encoded receipt blob (Unity IAP 영수증의 Payload 필드).</param>
         /// <param name="productId">상품 ID.</param>
         /// <param name="bundleId">앱 Bundle ID. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>

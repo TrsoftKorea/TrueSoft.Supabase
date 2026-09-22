@@ -105,19 +105,23 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// </summary>
     protected virtual void NanooIAPIOS(
         string receipt, string productId, string currency, double price,
-        Func<string, Task> callback)
+        Func<string, string, Dictionary<string, object>, Task> callback)
         => _plugin.IAP.IOS(receipt, productId, currency, (float)price,
-            async (s, _, _, _) => await callback(s));
+            async (s, errorMessage, _, values) => await callback(s, errorMessage, values));
 
     /// <summary>
-    /// PlayNANOO Android IAP 검증 호출. callback(status)로 결과를 반환합니다.
+    /// PlayNANOO Android IAP 검증 호출. callback(status, errorMessage, values)로 결과를 반환합니다.
     /// 구/신버전 PlayNANOO 모두 동일 API이므로 일반적으로 override 불필요합니다.
     /// </summary>
+    /// <param name="receipt">
+    /// Unity IAP 영수증 <b>원문</b>. PlayNANOO 는 이 값에서 직접 영수증을 읽으므로
+    /// purchaseToken 만 넘기면 서버가 "영수증 없음"(20004)으로 거절합니다.
+    /// </param>
     protected virtual void NanooIAPAndroid(
-        string purchaseToken,
-        Func<string, Task> callback)
-        => _plugin.IAP.Android(purchaseToken,
-            async (s, _, _, _) => await callback(s));
+        string receipt,
+        Func<string, string, Dictionary<string, object>, Task> callback)
+        => _plugin.IAP.Android(receipt,
+            async (s, errorMessage, _, values) => await callback(s, errorMessage, values));
 
     // ── 초기화 ───────────────────────────────────────────────────────────────
 
@@ -146,18 +150,20 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
 #if UNITY_IAP_V5_1 && UNITY_IOS
-        UnityEngine.Purchasing.StoreKitSelector.forceStoreKit1 = true;
-#elif UNITY_IAP_V5 && UNITY_IOS
+        // 네임스페이스가 UnityEngine.Purchasing 이 아니다 — StoreKitSelector 는 Purchasing.Utilities 에 있다.
+        Purchasing.Utilities.StoreKitSelector.forceStoreKit1 = true;
+#elif UNITY_IOS
         Debug.LogError("[PlayNanooRuntime] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
 #endif
 
         SupabaseBridge.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>
         {
             var tcs = new TaskCompletionSource<SupabaseResult<AppleIAPPurchaseResponse>>();
-            NanooIAPIOS(receipt, productId, string.Empty, 0d, async status =>
+            NanooIAPIOS(receipt, productId, string.Empty, 0d, async (status, errorMessage, values) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
                 {
+                    LogNanooIAPFailure("iOS", productId, status, errorMessage, values);
                     tcs.SetResult(SupabaseResult<AppleIAPPurchaseResponse>.Fail("playnanoo_iap_ios_failed"));
                     return;
                 }
@@ -166,13 +172,15 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return await tcs.Task;
         });
 
-        SupabaseBridge.RegisterIAPGoogleInterceptor(async (purchaseToken, productId, priceAmount, priceCurrency, sdkVerify) =>
+        // rawReceipt(유니티 영수증 원문)를 넘긴다. PlayNANOO 는 purchaseToken 이 아니라 영수증을 받는다.
+        SupabaseBridge.RegisterIAPGoogleInterceptor(async (purchaseToken, productId, priceAmount, priceCurrency, rawReceipt, sdkVerify) =>
         {
             var tcs = new TaskCompletionSource<SupabaseResult<GooglePlayPurchaseResponse>>();
-            NanooIAPAndroid(purchaseToken, async status =>
+            NanooIAPAndroid(rawReceipt, async (status, errorMessage, values) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
                 {
+                    LogNanooIAPFailure("Android", productId, status, errorMessage, values);
                     tcs.SetResult(SupabaseResult<GooglePlayPurchaseResponse>.Fail("playnanoo_iap_android_failed"));
                     return;
                 }
@@ -481,6 +489,22 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 로그인 성공 시 호출. 서브클래스에서 응답 values를 추가로 처리할 수 있습니다.</summary>
     protected virtual void OnNanooLoginSuccess(Dictionary<string, object> values) { }
+
+    /// <summary>
+    /// PlayNANOO 결제 검증 실패를 사유까지 남깁니다. 이게 없으면 SDK 로그에는
+    /// playnanoo_iap_*_failed 만 남아, 나누가 왜 거절했는지 따로 찾아야 합니다.
+    /// </summary>
+    private static void LogNanooIAPFailure(
+        string platform, string productId, string status, string errorMessage, Dictionary<string, object> values)
+    {
+        string errorCode = null;
+        if (values != null && values.TryGetValue("ErrorCode", out var ecObj))
+            errorCode = ecObj?.ToString();
+
+        Debug.LogWarning(
+            $"[PlayNanooRuntime] PlayNANOO {platform} 결제 검증 실패 — product: {productId}, " +
+            $"status: {status}, ErrorCode: {errorCode}, Message: {errorMessage}");
+    }
 
     private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
     {

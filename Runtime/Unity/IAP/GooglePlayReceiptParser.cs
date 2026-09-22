@@ -4,7 +4,7 @@ using UnityEngine;
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// Unity IAP Google Play 영수증에서 purchaseToken을 추출합니다. v4/v5 공통 유틸리티.
+    /// Unity IAP Google Play 영수증에서 purchaseToken을 추출합니다.
     /// </summary>
     internal static class GooglePlayReceiptParser
     {

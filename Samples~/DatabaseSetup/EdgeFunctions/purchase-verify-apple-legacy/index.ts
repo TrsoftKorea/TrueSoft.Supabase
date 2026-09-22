@@ -1,6 +1,6 @@
 // purchase-verify-apple-legacy
 // SK1 (verifyReceipt) 기반 Apple IAP 서버 검증.
-// Unity IAP v4 또는 iOS 14 이하(forceStoreKit1)에서 생성된 receipt blob을 검증합니다.
+// iOS 14 이하 또는 forceStoreKit1 경로에서 생성된 receipt blob을 검증합니다.
 //
 // 필요 환경 변수:
 //   APPLE_SHARED_SECRET  — App Store Connect > 앱 정보 > 공유 암호 (shared secret)

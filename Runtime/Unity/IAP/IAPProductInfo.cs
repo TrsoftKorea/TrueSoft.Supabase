@@ -1,7 +1,7 @@
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// 스토어 카탈로그에서 조회한 상품 정보. Unity IAP v4/v5 공통 타입으로
+    /// 스토어 카탈로그에서 조회한 상품 정보.
     /// <see cref="BaseIAPFacade.GetProductInfo"/>가 반환합니다. <see cref="InitializeAsync"/> 이후에만 값이 채워집니다.
     /// </summary>
     public sealed class IAPProductInfo

@@ -6,8 +6,6 @@
     "TrueBase.Unity",
     "Unity.Purchasing",
     "Unity.Purchasing.Stores",
-    "UnityEngine.Purchasing",
-    "UnityEngine.Purchasing.Stores",
     "Unity.Services.Core"
   ],
   "includePlatforms": [],
@@ -22,13 +20,8 @@
   "versionDefines": [
     {
       "name": "com.unity.purchasing",
-      "expression": "4.0.0",
-      "define": "TRUESOFT_IAP_AVAILABLE"
-    },
-    {
-      "name": "com.unity.purchasing",
       "expression": "5.0.0",
-      "define": "UNITY_IAP_V5"
+      "define": "TRUESOFT_IAP_AVAILABLE"
     },
     {
       "name": "com.unity.purchasing",

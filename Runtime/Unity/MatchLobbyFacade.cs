@@ -7,7 +7,7 @@ using TrueBase.Core.Data;
 
 namespace TrueBase.Unity
 {
-    /// <summary>로그인 세션을 사용하는 매치 로비(친구 초대) API.</summary>
+    /// <summary>로그인 세션을 사용하는 매치 로비 API.</summary>
     internal sealed class MatchLobbyFacade
     {
         private readonly SupabaseMatchLobbyService _lobby;
@@ -21,13 +21,15 @@ namespace TrueBase.Unity
             _sessionGetter = sessionGetter;
         }
 
-        public async Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateAsync(string gameCode, IEnumerable<string> invitedAccountIds = null)
+        public async Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateAsync(
+            string gameCode, IEnumerable<string> invitedAccountIds = null,
+            string name = null, int? maxMembers = null, IReadOnlyDictionary<string, object> metadata = null)
         {
             var token = RequireToken(_sessionGetter?.Invoke());
             if (token == null)
                 return SupabaseResult<MatchLobbyCreateOutcome>.Fail(SupabaseErrorCode.NotSignedIn);
 
-            return await _lobby.CreateAsync(token, gameCode, invitedAccountIds);
+            return await _lobby.CreateAsync(token, gameCode, invitedAccountIds, name, maxMembers, metadata);
         }
 
         public async Task<SupabaseResult> InviteAsync(string lobbyId, string accountId)
@@ -57,13 +59,14 @@ namespace TrueBase.Unity
             return await _lobby.LeaveAsync(token, lobbyId);
         }
 
-        public async Task<SupabaseResult> SetRoleAsync(string lobbyId, string accountId, string roleTag)
+        public async Task<SupabaseResult> SetMemberMetaAsync(
+            string lobbyId, string accountId, IReadOnlyDictionary<string, object> metadata)
         {
             var token = RequireToken(_sessionGetter?.Invoke());
             if (token == null)
                 return SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn);
 
-            return await _lobby.SetRoleAsync(token, lobbyId, accountId, roleTag);
+            return await _lobby.SetMemberMetaAsync(token, lobbyId, accountId, metadata);
         }
 
         public async Task<SupabaseResult> StartAsync(string lobbyId)

@@ -14,7 +14,7 @@ using UnityEngine;
 ///   M — 아이템 구매 (IAP 초기화 완료 후 동작)
 ///
 /// 사전 준비:
-///   1. Window > Package Manager > com.unity.purchasing 설치 (최신 권장, 최소 4.0.0)
+///   1. Window > Package Manager > com.unity.purchasing 설치 (최신 권장, 최소 5.0.0)
 ///   2. Google Service Account / Apple Shared Secret → Supabase Secrets 등록
 ///   3. supabase functions deploy purchase-verify-google (또는 purchase-verify-apple)
 ///   4. SQL/player/install.sql 실행 (인앱 결제 절 포함)

@@ -42,7 +42,6 @@ var iap = result.Data;
 | `SupabaseReason.IapProductIdsEmpty` | `productIds`가 비어 있음 |
 | `SupabaseReason.IapServicesInitFailed` | Unity Services 초기화 실패 |
 | `SupabaseReason.IapInitTimeout` | 제한 시간 내 초기화 미완료 |
-| `SupabaseReason.IapInitFailed` | 스토어 연결·상품 조회 실패 |
 
 ::: warning 로그인 완료 후 호출
 `CreateIAPAsync`는 로그인 완료 후에 호출하세요. 자동 로그인 경로에서도 동일합니다. 초기화 도중 스토어에 남아있는 미처리 주문이 있으면 [구매 처리 흐름](#purchase-flow)이 곧바로 재시작되는데, 이때 세션이 없으면 서버 검증이 실패해 불필요한 재시도가 한 번 낍니다.
@@ -85,7 +84,7 @@ onGrant: async (productId, alreadyGranted) =>
 ::: info 다른 계정의 영수증
 다른 계정이 검증한 영수증을 보내면 `alreadyGranted`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내 계정이 이미 지급한 것"만을 뜻합니다.
 
-Google Play는 결제 시점의 계정도 서버가 대조합니다. 결제는 됐지만 아직 한 번도 검증되지 않은 주문을 다른 계정으로 검증하려 해도 거부됩니다 — 결제 시점 계정을 스토어에 심어 대조하기 때문입니다. Apple도 StoreKit 2(Unity IAP 5 이상)에서는 같은 방식으로 계정을 심어두지만, 이 값을 갱신하는 플랫폼 API에 알려진 버그가 있어 신뢰성이 확인될 때까지는 서버가 거부하지 않고 감사 로그만 남깁니다. Unity IAP 4.x의 Apple 경로는 StoreKit 1 레거시 영수증만 사용해 이 계정 바인딩 자체를 지원하지 않습니다. 두 경우 모두 앱이 강제 종료되는 등으로 검증 전에 계정을 바꾸면 미처리 주문이 새 계정으로 넘어갈 수 있습니다.
+Google Play는 결제 시점의 계정도 서버가 대조합니다. 결제는 됐지만 아직 한 번도 검증되지 않은 주문을 다른 계정으로 검증하려 해도 거부됩니다 — 결제 시점 계정을 스토어에 심어 대조하기 때문입니다. Apple도 StoreKit 2에서는 같은 방식으로 계정을 심어두지만, 이 값을 갱신하는 플랫폼 API에 알려진 버그가 있어 신뢰성이 확인될 때까지는 서버가 거부하지 않고 감사 로그만 남깁니다. StoreKit 1 폴백 경로는 레거시 영수증만 사용해 이 계정 바인딩 자체를 지원하지 않습니다. 두 경우 모두 앱이 강제 종료되는 등으로 검증 전에 계정을 바꾸면 미처리 주문이 새 계정으로 넘어갈 수 있습니다.
 :::
 
 구매창을 열기 전에 가격을 표시하려면 [상품 정보 조회](/guide/iap/product-info)를 참고하세요.

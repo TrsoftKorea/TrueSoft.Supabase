@@ -187,6 +187,26 @@ namespace TrueBase.Unity
             return await _chat.SendAsync(token, channelCode, content);
         }
 
+        /// <summary>로비 참가자끼리 보는 대화에 보냅니다. 초대를 수락해 방에 들어온 멤버만 가능합니다.</summary>
+        public async Task<SupabaseResult<ChatSendResult>> SendLobbyAsync(string lobbyId, string content)
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult<ChatSendResult>.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _chat.SendLobbyAsync(token, lobbyId, content);
+        }
+
+        /// <summary>로비 대화를 커서 조회합니다. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
+        public async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> FetchLobbyAsync(string lobbyId, long afterId = 0, int limit = 50)
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _chat.FetchLobbyAsync(token, lobbyId, afterId, limit);
+        }
+
         /// <summary>친구에게 귓속말을 보냅니다. 친구가 아니면 <see cref="SupabaseErrorCode.FriendNotFound"/>로 실패합니다.</summary>
         public async Task<SupabaseResult<ChatSendResult>> SendDirectAsync(string targetAccountId, string content)
         {

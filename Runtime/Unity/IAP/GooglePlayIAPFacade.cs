@@ -1,4 +1,3 @@
-#if UNITY_IAP_V5
 using System;
 using System.Threading.Tasks;
 using TrueBase.Core.Models;
@@ -28,18 +27,18 @@ namespace TrueBase.Unity
     /// </remarks>
     public sealed class GooglePlayIAPFacade : BaseIAPFacade
     {
-        private readonly Func<string, string, long, string, Task<(bool success, GooglePlayPurchaseResponse value)>> _verifyAsync;
+        private readonly Func<string, string, long, string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> _verifyAsync;
 
         protected override string LogTag => "[Supabase.IAP.Google]";
 
         // 생성자 (internal — SupabaseIAP.CreateGooglePlayIAP()로만 생성)
 
         /// <param name="verifyAsync">
-        /// Google Play 검증 함수. (purchaseToken, productId, priceAmount, priceCurrency) → (success, response).
+        /// Google Play 검증 함수. (purchaseToken, productId, priceAmount, priceCurrency, rawReceipt) → (success, response).
         /// priceAmount는 micros(주 단위 ×1,000,000) 정수, priceCurrency는 ISO 4217 코드. 필수.
         /// </param>
         internal GooglePlayIAPFacade(
-            Func<string, string, long, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)
+            Func<string, string, long, string, string, Task<(bool success, GooglePlayPurchaseResponse value)>> verifyAsync)
         {
             _verifyAsync = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
         }
@@ -91,7 +90,7 @@ namespace TrueBase.Unity
             var priceAmount   = (long)decimal.Round(cartItems[0].Product.metadata.localizedPrice * 1000000m);
             var priceCurrency = cartItems[0].Product.metadata.isoCurrencyCode;
 
-            var (success, response) = await _verifyAsync(purchaseToken, productId, priceAmount, priceCurrency);
+            var (success, response) = await _verifyAsync(purchaseToken, productId, priceAmount, priceCurrency, receipt);
 
             if (!success || response == null)
             {
@@ -109,4 +108,3 @@ namespace TrueBase.Unity
         }
     }
 }
-#endif

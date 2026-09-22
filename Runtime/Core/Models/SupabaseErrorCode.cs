@@ -224,9 +224,6 @@ namespace TrueBase.Core.Common
         /// <summary>IAP 초기화가 제한 시간 내에 완료되지 않았습니다.</summary>
         public const string IapInitTimeout = "iap_init_timeout";
 
-        /// <summary>IAP 초기화에 실패했습니다(스토어 연결·상품 조회 실패).</summary>
-        public const string IapInitFailed = "iap_init_failed";
-
         /// <summary>지급 완료 기록에 전달된 주문 ID가 비어 있습니다.</summary>
         public const string IapOrderIdEmpty = "iap_order_id_empty";
 
@@ -371,8 +368,14 @@ namespace TrueBase.Core.Common
         /// <summary>친구 제한값 설정 행이 없습니다. DB 설치가 깨진 상태입니다.</summary>
         public const string FriendSettingsMissing = "friend_settings_missing";
 
-        /// <summary>초대 대상이 내 친구가 아닙니다.</summary>
-        public const string MatchLobbyInviteNotFriend = "match_lobby_invite_not_friend";
+        /// <summary>상대가 떠안고 있는 대기 초대가 상한에 도달했습니다.</summary>
+        public const string MatchLobbyInviteLimitReached = "match_lobby_invite_limit_reached";
+
+        /// <summary>연속 초대 최소 간격을 지키지 않았습니다.</summary>
+        public const string MatchLobbyInviteTooFast = "match_lobby_invite_too_fast";
+
+        /// <summary>로비 초대 제한값 설정 행이 없습니다. DB 설치가 깨진 상태입니다.</summary>
+        public const string MatchLobbySettingsMissing = "match_lobby_settings_missing";
 
         /// <summary>해당 로비가 없거나 호스트가 아닙니다.</summary>
         public const string MatchLobbyNotFound = "match_lobby_not_found";
@@ -386,7 +389,13 @@ namespace TrueBase.Core.Common
         /// <summary>응답할 초대가 없습니다(이미 처리됐거나 초대받지 않음).</summary>
         public const string MatchLobbyInviteNotFound = "match_lobby_invite_not_found";
 
-        /// <summary>역할 태그를 지정하려는 멤버가 로비에 없습니다.</summary>
+        /// <summary>참가자 칸을 지정하려는 멤버가 로비에 없습니다.</summary>
         public const string MatchLobbyMemberNotFound = "match_lobby_member_not_found";
+
+        /// <summary>로비 정원이 허용 범위(2~64)를 벗어났습니다.</summary>
+        public const string MatchLobbyMaxMembersInvalid = "match_lobby_max_members_invalid";
+
+        /// <summary>방 이름이 40자를 넘었습니다.</summary>
+        public const string MatchLobbyNameTooLong = "match_lobby_name_too_long";
     }
 }

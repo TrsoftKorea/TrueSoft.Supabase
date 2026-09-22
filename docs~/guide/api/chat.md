@@ -7,6 +7,8 @@
 | [`SendChatAsync`](/guide/chat/send) | 메시지 발송 |
 | [`SendDirectChatAsync`](/guide/chat/send-direct) | 친구에게 귓속말 발송 |
 | [`GetDirectChatAsync`](/guide/chat/fetch-direct) | 친구와의 대화 조회 |
+| [`SendLobbyChatAsync`](/guide/chat/send-lobby) | 로비 대화 발송 |
+| [`GetLobbyChatAsync`](/guide/chat/fetch-lobby) | 로비 대화 조회 |
 
 채널 생성·설정, 대화 삭제, 채팅 차단은 Retool 어드민 전용이라 SDK에 없습니다.
 

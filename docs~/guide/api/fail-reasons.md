@@ -175,7 +175,6 @@ bool Handle(SupabaseResult result)
 | `IapDisposed` | 이미 Dispose된 IAP 파사드입니다 |
 | `IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
 | `IapInitTimeout` | IAP 초기화가 제한 시간 내에 완료되지 않았습니다 |
-| `IapInitFailed` | IAP 초기화에 실패했습니다 |
 | `IapOrderIdEmpty` | 지급 완료 기록에 전달된 주문 ID가 비어 있습니다. SDK 내부용이라 게임 코드에서 직접 만날 일은 없습니다 |
 
 ## 리더보드
@@ -227,12 +226,16 @@ bool Handle(SupabaseResult result)
 
 | Reason | 설명 |
 |--------|------|
-| `MatchLobbyInviteNotFriend` | 초대 대상이 내 친구가 아닙니다 |
+| `MatchLobbyInviteLimitReached` | 상대가 떠안고 있는 대기 초대가 상한에 도달했습니다 |
+| `MatchLobbyInviteTooFast` | 연속 초대 최소 간격을 지키지 않았습니다 |
+| `MatchLobbySettingsMissing` | 로비 초대 제한값 설정이 DB에 없습니다. 설치가 깨진 상태입니다 |
 | `MatchLobbyNotFound` | 해당 로비가 없거나 호스트가 아닙니다 |
 | `MatchLobbyNotOpen` | 로비가 이미 시작됐거나 취소·만료되었습니다 |
 | `MatchLobbyFull` | 로비 정원이 가득 찼습니다 |
 | `MatchLobbyInviteNotFound` | 응답할 초대가 없습니다 |
-| `MatchLobbyMemberNotFound` | 역할 태그를 지정하려는 멤버가 로비에 없습니다 |
+| `MatchLobbyMemberNotFound` | 참가자 칸을 지정하려는 멤버가 로비에 없습니다 |
+| `MatchLobbyMaxMembersInvalid` | 정원이 2~64를 벗어났습니다 |
+| `MatchLobbyNameTooLong` | 방 이름이 40자를 넘었습니다 |
 
 ## 쿠폰
 

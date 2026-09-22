@@ -1,7 +1,7 @@
 namespace TrueBase.Unity
 {
     /// <summary>
-    /// IAP 구매 실패 정보. Unity IAP v4/v5 공통 타입으로 <see cref="BaseIAPFacade.OnPurchaseFailed"/>에 사용됩니다.
+    /// IAP 구매 실패 정보. <see cref="BaseIAPFacade.OnPurchaseFailed"/>에 사용됩니다.
     /// </summary>
     public sealed class IAPPurchaseFailedInfo
     {

@@ -25,4 +25,5 @@ if (r.IsSuccess)
 |--------|------|
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 이미 시작됐거나 취소·만료되었습니다 |
 | `SupabaseReason.MatchLobbyInviteNotFound` | 응답할 초대가 없습니다 |
+| `SupabaseReason.MatchLobbyFull` | 기다리는 사이 자리가 다 찼습니다 |
 | `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

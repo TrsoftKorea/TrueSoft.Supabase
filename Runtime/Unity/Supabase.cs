@@ -445,6 +445,14 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetDirectChatAsync(string targetAccountId, long afterId = 0, int limit = 50) =>
             SupabaseSDK.TryGetDirectChatAsync(targetAccountId, afterId, limit);
 
+        /// <inheritdoc cref="SupabaseSDK.TrySendLobbyChatAsync"/>
+        public static Task<SupabaseResult<ChatSendResult>> SendLobbyChatAsync(string lobbyId, string content) =>
+            SupabaseSDK.TrySendLobbyChatAsync(lobbyId, content);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetLobbyChatAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetLobbyChatAsync(string lobbyId, long afterId = 0, int limit = 50) =>
+            SupabaseSDK.TryGetLobbyChatAsync(lobbyId, afterId, limit);
+
         // ── 친구 ──────────────────────────────────────────────────────────────
         //
         // 닉네임으로 검색해 요청을 보내고, 상대가 수락하면 친구가 됩니다. 새 요청·응답은
@@ -485,15 +493,17 @@ namespace TrueBase.Unity
 
         // ── 매치 로비(친구 초대) ─────────────────────────────────────────────────
         //
-        // 친구를 초대해 같은 대기방에 모읍니다. 팀·상대·같은 방인지는 게임마다 다르므로 이 API는
-        // "누가 로비에 있고 어떤 상태인지"만 다루고, 역할 해석과 실제 접속은 게임이 처리합니다.
+        // 사람을 초대해 같은 대기방에 모읍니다. 초대 대상은 친구가 아니어도 됩니다. 팀·상대·같은 방인지는
+        // 게임마다 다르므로 이 API는 "누가 로비에 있고 어떤 상태인지"만 다루고, 방 이름·참가자 칸(metadata)
+        // 해석과 실제 접속은 게임이 처리합니다.
         // CreateMatchLobbyAsync가 돌려주는 SessionId를 ReportMatchResultAsync의 sessionId로 그대로 쓸 수 있습니다.
         // 알림은 폴링 전제입니다 — ListMatchLobbiesAsync를 주기적으로 불러 상태 변화를 감지하세요.
 
         /// <inheritdoc cref="SupabaseSDK.TryCreateMatchLobbyAsync"/>
         public static Task<SupabaseResult<MatchLobbyCreateOutcome>> CreateMatchLobbyAsync(
-            string gameCode, IEnumerable<string> invitedAccountIds = null) =>
-            SupabaseSDK.TryCreateMatchLobbyAsync(gameCode, invitedAccountIds);
+            string gameCode, IEnumerable<string> invitedAccountIds = null,
+            string name = null, int? maxMembers = null, IReadOnlyDictionary<string, object> metadata = null) =>
+            SupabaseSDK.TryCreateMatchLobbyAsync(gameCode, invitedAccountIds, name, maxMembers, metadata);
 
         /// <inheritdoc cref="SupabaseSDK.TryInviteToMatchLobbyAsync"/>
         public static Task<SupabaseResult> InviteToMatchLobbyAsync(string lobbyId, string accountId) =>
@@ -507,9 +517,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> LeaveMatchLobbyAsync(string lobbyId) =>
             SupabaseSDK.TryLeaveMatchLobbyAsync(lobbyId);
 
-        /// <inheritdoc cref="SupabaseSDK.TrySetMatchLobbyMemberRoleAsync"/>
-        public static Task<SupabaseResult> SetMatchLobbyMemberRoleAsync(string lobbyId, string accountId, string roleTag) =>
-            SupabaseSDK.TrySetMatchLobbyMemberRoleAsync(lobbyId, accountId, roleTag);
+        /// <inheritdoc cref="SupabaseSDK.TrySetMatchLobbyMemberMetaAsync"/>
+        public static Task<SupabaseResult> SetMatchLobbyMemberMetaAsync(
+            string lobbyId, string accountId, IReadOnlyDictionary<string, object> metadata) =>
+            SupabaseSDK.TrySetMatchLobbyMemberMetaAsync(lobbyId, accountId, metadata);
 
         /// <inheritdoc cref="SupabaseSDK.TryStartMatchLobbyAsync"/>
         public static Task<SupabaseResult> StartMatchLobbyAsync(string lobbyId) =>

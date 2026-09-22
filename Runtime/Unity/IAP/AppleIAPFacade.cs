@@ -1,4 +1,3 @@
-#if UNITY_IAP_V5
 using System;
 using System.Threading.Tasks;
 using TrueBase.Core.Models;
@@ -142,4 +141,3 @@ namespace TrueBase.Unity
         private sealed class AppleReceiptWrapper { public string Payload; }
     }
 }
-#endif

@@ -20,7 +20,8 @@ import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
-import Social from './pages/Social'
+import Friends from './pages/Friends'
+import Lobbies from './pages/Lobbies'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
 import DataManagement from './pages/DataManagement'
@@ -120,7 +121,10 @@ export default function App() {
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
-        <Route path="/social" element={<Social target={target} onUnauthenticated={signOut} />} />
+        <Route path="/friends" element={<Friends target={target} onUnauthenticated={signOut} />} />
+        <Route path="/lobbies" element={<Lobbies target={target} onUnauthenticated={signOut} />} />
+        {/* 예전 주소를 북마크해 둔 운영자가 빈 화면을 보지 않도록 남겨 둔다. */}
+        <Route path="/social" element={<Navigate to="/friends" replace />} />
         <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />

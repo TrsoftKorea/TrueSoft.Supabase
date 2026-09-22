@@ -7,38 +7,25 @@ namespace TrueBase.Unity
 {
     /// <summary>
     /// IAP(인앱 결제) 관련 Supabase API.
-    /// Unity IAP v4 (<c>com.unity.purchasing</c> 4.x) 및 v5 (5.0 이상) 모두 지원합니다. (iOS SK1 강제는 5.1+)
+    /// Unity IAP 5.0 이상(<c>com.unity.purchasing</c>)이 필요합니다. iOS SK1 강제는 5.1 이상입니다.
     /// </summary>
     public static class SupabaseIAP
     {
 
         /// <summary>통합 IAP 파사드를 생성합니다. Android/iOS를 자동 감지합니다.</summary>
         private static IAPFacade CreateIAP()
-        {
-#if UNITY_IAP_V5
-            return new IAPFacade(VerifyForIAPFacadeAsync, VerifyReceiptForIAPFacadeAsync);
-#else
-            return new IAPFacade(VerifyGoogleForIAPFacadeV4Async, VerifyAppleForIAPFacadeV4Async);
-#endif
-        }
+            => new IAPFacade(VerifyForIAPFacadeAsync, VerifyReceiptForIAPFacadeAsync);
 
         /// <summary>Google Play IAP 파사드를 생성합니다.</summary>
         private static GooglePlayIAPFacade CreateGooglePlayIAP()
-            => new GooglePlayIAPFacade((token, productId, priceAmount, priceCurrency) =>
-                SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency));
+            => new GooglePlayIAPFacade((token, productId, priceAmount, priceCurrency, rawReceipt) =>
+                SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency, rawReceipt: rawReceipt));
 
         /// <summary>Apple App Store IAP 파사드를 생성합니다.</summary>
         private static AppleIAPFacade CreateAppleIAP()
-        {
-#if UNITY_IAP_V5
-            return new AppleIAPFacade(
+            => new AppleIAPFacade(
                 (jws, productId)     => SupabaseSDK.TryVerifyApplePurchaseAsync(jws, productId),
                 (receipt, productId) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
-#else
-            return new AppleIAPFacade(
-                (receipt, productId) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
-#endif
-        }
 
 
         /// <summary>
@@ -112,19 +99,19 @@ namespace TrueBase.Unity
 
         // 내부 검증 헬퍼 (IAPFacade 전용)
 
-#if UNITY_IAP_V5
         /// <summary>
-        /// v5 <see cref="IAPFacade"/>용 검증 헬퍼. 플랫폼별 Edge Function 검증 결과를 공통 <c>IAPPurchaseResponse</c>로 변환합니다.
+        /// <see cref="IAPFacade"/>용 검증 헬퍼. 플랫폼별 Edge Function 검증 결과를 공통 <c>IAPPurchaseResponse</c>로 변환합니다.
         /// </summary>
         /// <param name="token">Android는 Google Play purchaseToken, iOS는 StoreKit 2 JWS 토큰.</param>
         /// <param name="productId">스토어 상품 ID.</param>
         /// <param name="priceAmount">결제 금액. micros(주 단위 ×1,000,000) 정수. Android 가격 검증용, iOS 경로에서는 0.</param>
         /// <param name="priceCurrency">ISO 4217 통화 코드. Android 전용, iOS 경로에서는 null.</param>
+        /// <param name="rawReceipt">Unity IAP 영수증 원문. SDK 검증에는 쓰지 않고 외부 결제 서버 인터셉터에만 전달합니다.</param>
         private static async Task<(bool, IAPPurchaseResponse)> VerifyForIAPFacadeAsync(
-            string token, string productId, long priceAmount = 0, string priceCurrency = null)
+            string token, string productId, long priceAmount = 0, string priceCurrency = null, string rawReceipt = null)
         {
 #if UNITY_ANDROID
-            var (ok, r) = await SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
+            var (ok, r) = await SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency, rawReceipt: rawReceipt);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
@@ -154,7 +141,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// v5 iOS StoreKit 1 폴백 검증 헬퍼. iOS 14 이하 또는 <c>forceStoreKit1</c> 활성화 시 사용됩니다.
+        /// iOS StoreKit 1 폴백 검증 헬퍼. iOS 14 이하 또는 <c>forceStoreKit1</c> 활성화 시 사용됩니다.
         /// </summary>
         /// <param name="receipt">Unity IAP 영수증에서 추출한 base64 SK1 영수증 Payload.</param>
         /// <param name="productId">스토어 상품 ID.</param>
@@ -174,49 +161,5 @@ namespace TrueBase.Unity
             });
         }
 
-#else
-        /// <summary>
-        /// v4 <see cref="IAPFacade"/>용 Google Play 검증 헬퍼.
-        /// </summary>
-        /// <param name="token">Google Play purchaseToken.</param>
-        /// <param name="productId">스토어 상품 ID.</param>
-        /// <param name="priceAmount">결제 금액. micros(주 단위 ×1,000,000) 정수.</param>
-        /// <param name="priceCurrency">ISO 4217 통화 코드.</param>
-        private static async Task<(bool, IAPPurchaseResponse)> VerifyGoogleForIAPFacadeV4Async(
-            string token, string productId, long priceAmount = 0, string priceCurrency = null)
-        {
-            var (ok, r) = await SupabaseSDK.TryVerifyGooglePlayPurchaseAsync(token, productId, priceAmount: priceAmount, priceCurrency: priceCurrency);
-            if (!ok || r == null) return (false, default);
-            return (true, new IAPPurchaseResponse {
-                ok               = true,
-                already_verified = r.already_verified,
-                already_granted  = r.already_granted,
-                order_id         = r.order_id,
-                reason           = r.reason,
-                store            = "google_play"
-            });
-        }
-
-        /// <summary>
-        /// v4 <see cref="IAPFacade"/>용 Apple StoreKit 1 검증 헬퍼.
-        /// </summary>
-        /// <param name="receipt">Unity IAP 영수증에서 추출한 base64 SK1 영수증 Payload.</param>
-        /// <param name="productId">스토어 상품 ID.</param>
-        private static async Task<(bool, IAPPurchaseResponse)> VerifyAppleForIAPFacadeV4Async(
-            string receipt, string productId)
-        {
-            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
-            if (!ok || r == null) return (false, default);
-            return (true, new IAPPurchaseResponse {
-                ok               = true,
-                already_verified = r.already_verified,
-                already_granted  = r.already_granted,
-                order_id         = r.transaction_id,
-                product_id       = r.product_id,
-                reason           = r.reason,
-                store            = "apple_app_store"
-            });
-        }
-#endif
     }
 }

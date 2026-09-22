@@ -53,6 +53,10 @@ void CloseChatWindow()
 
 [친구](/guide/friend/) 사이의 1:1 대화입니다. 채널 구독 대상이 아니라 대화창을 열 때·주기적으로 [직접 조회](/guide/chat/fetch-direct)합니다. 친구가 아니면 보낼 수 없습니다.
 
+## 로비 안에서만 보이는 대화 {#lobby}
+
+[매치 로비](/guide/match-lobby/) 참가자끼리의 대화입니다. 로비 초대는 친구가 아니어도 되므로 귓속말로는 말이 안 통하는 조합이 생기는데, 그 자리를 이 대화가 채웁니다. 방이 취소·만료되면 함께 닫히고 하루 뒤 지워집니다.
+
 ## 메서드
 
 | 메서드 | 설명 |
@@ -62,6 +66,8 @@ void CloseChatWindow()
 | [`SendChatAsync`](/guide/chat/send) | 메시지 발송 |
 | [`SendDirectChatAsync`](/guide/chat/send-direct) | 친구에게 귓속말 발송 |
 | [`GetDirectChatAsync`](/guide/chat/fetch-direct) | 친구와의 대화 조회 |
+| [`SendLobbyChatAsync`](/guide/chat/send-lobby) | 로비 대화 발송 |
+| [`GetLobbyChatAsync`](/guide/chat/fetch-lobby) | 로비 대화 조회 |
 
 채널 생성·설정, 대화 삭제, 채팅 차단은 어드민 전용이라 SDK에 없습니다.
 

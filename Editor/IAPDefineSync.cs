@@ -6,19 +6,25 @@ using UnityEditor.Build;
 namespace TrueBase.Editor
 {
     /// <summary>
-    /// IAP 어셈블리(<c>TrueBase.Unity.IAP</c>) 컴파일 여부를 전역 Scripting Define
-    /// <c>TRUESOFT_IAP_AVAILABLE</c>로 자동 미러링합니다.
-    /// <para>게임 코드의 <c>#if TRUESOFT_IAP_AVAILABLE</c> 가드가 프로젝트별 추가 설정 없이 동작하도록 합니다.
-    /// 버전 게이트의 단일 소스는 IAP asmdef의 versionDefine(v4 4.x / v5 5.2.1+)이며,
-    /// 이 스크립트는 "IAP 어셈블리가 존재하는가"라는 결과만 전역 define으로 전파합니다.</para>
+    /// IAP 관련 심볼을 전역 Scripting Define으로 자동 미러링합니다.
+    /// <para>게임 코드와 샘플의 <c>#if</c> 가드가 프로젝트별 추가 설정 없이 동작하게 하려는 것입니다.
+    /// IAP asmdef의 versionDefine은 <b>그 어셈블리 안에서만</b> 유효해서, asmdef가 없는 코드
+    /// (<c>Assembly-CSharp</c>로 들어가는 게임 코드·<c>Samples~</c>)에는 닿지 않습니다.
+    /// 그래서 타입 존재 여부로 같은 사실을 다시 판정해 전역에 뿌립니다.</para>
     /// </summary>
     [InitializeOnLoad]
     internal static class IAPDefineSync
     {
-        private const string Symbol = "TRUESOFT_IAP_AVAILABLE";
+        // (전역에 뿌릴 심볼, 그 조건이 참일 때만 존재하는 타입).
+        // 어셈블리 한정 이름으로 찾으므로 버전 문자열을 파싱할 필요가 없다.
+        private static readonly (string Symbol, string ProbeType)[] Mirrored =
+        {
+            // IAP 어셈블리가 컴파일됐는가 = com.unity.purchasing 5.0 이상이 있는가.
+            ("TRUESOFT_IAP_AVAILABLE", "TrueBase.Unity.SupabaseIAP, TrueBase.Unity.IAP"),
 
-        // IAP 어셈블리가 컴파일됐으면 이 타입이 존재합니다(없으면 null).
-        private const string ProbeType = "TrueBase.Unity.SupabaseIAP, TrueBase.Unity.IAP";
+            // StoreKitSelector는 5.1에서 들어왔다. iOS SK1 강제(PlayNANOO 영수증 검증)에 필요하다.
+            ("UNITY_IAP_V5_1", "Purchasing.Utilities.StoreKitSelector, Unity.Purchasing.Utilities"),
+        };
 
         static IAPDefineSync()
         {
@@ -28,8 +34,6 @@ namespace TrueBase.Editor
 
         private static void Sync()
         {
-            var shouldDefine = Type.GetType(ProbeType) != null;
-
             foreach (BuildTargetGroup group in Enum.GetValues(typeof(BuildTargetGroup)))
             {
                 if (group == BuildTargetGroup.Unknown)
@@ -50,14 +54,22 @@ namespace TrueBase.Editor
 
                 var defines = new List<string>(
                     current.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries));
-                var has = defines.Contains(Symbol);
 
-                if (shouldDefine && !has)
-                    defines.Add(Symbol);
-                else if (!shouldDefine && has)
-                    defines.RemoveAll(s => s == Symbol);
-                else
-                    continue; // 변경 없음 → 불필요한 재컴파일/루프 방지
+                var changed = false;
+                foreach (var (symbol, probeType) in Mirrored)
+                {
+                    var shouldDefine = Type.GetType(probeType) != null;
+                    var has          = defines.Contains(symbol);
+
+                    if (shouldDefine == has) continue;
+
+                    if (shouldDefine) defines.Add(symbol);
+                    else              defines.RemoveAll(s => s == symbol);
+                    changed = true;
+                }
+
+                if (!changed)
+                    continue; // 불필요한 재컴파일/루프 방지
 
                 try { PlayerSettings.SetScriptingDefineSymbols(target, string.Join(";", defines)); }
                 catch { /* 일부 그룹은 미설치 모듈로 실패할 수 있음 — 무시 */ }

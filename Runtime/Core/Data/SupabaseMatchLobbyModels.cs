@@ -59,9 +59,9 @@ namespace TrueBase.Core.Data
         [JsonProperty("status")]
         public string StatusRaw { get; set; }
 
-        /// <summary>서버가 의미를 두지 않는 자유 문자열입니다 — 팀 이름이든 진영이든 게임이 정해서 씁니다. 미지정이면 null.</summary>
-        [JsonProperty("role_tag")]
-        public string RoleTag { get; set; }
+        /// <summary>서버가 의미를 두지 않는 자유 칸입니다 — 팀·진영·캐릭터·준비 상태 등 게임이 정해서 씁니다. 지정한 적이 없으면 빈 사전.</summary>
+        [JsonProperty("metadata")]
+        public Dictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();
 
         public MatchLobbyMemberState Status => StatusRaw switch
         {
@@ -84,6 +84,17 @@ namespace TrueBase.Core.Data
         [JsonProperty("game_code")]
         public string GameCode { get; set; }
 
+        /// <summary>방 이름. 만들 때 넘기지 않았으면 null.</summary>
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        /// <summary>서버가 의미를 두지 않는 자유 칸입니다 — 맵·규칙·모드 등 게임이 정해서 씁니다. 지정한 적이 없으면 빈 사전.</summary>
+        [JsonProperty("metadata")]
+        public Dictionary<string, object> Metadata { get; set; } = new Dictionary<string, object>();
+
+        [JsonProperty("max_members")]
+        public int MaxMembers { get; set; }
+
         [JsonProperty("host_account_id")]
         public string HostAccountId { get; set; }
 
@@ -92,6 +103,10 @@ namespace TrueBase.Core.Data
 
         [JsonProperty("created_at")]
         public DateTimeOffset CreatedAt { get; set; }
+
+        /// <summary>아무도 수락하지 않으면 이 시각에 자동으로 닫힙니다. 대기 시간은 운영 콘솔에서 정합니다.</summary>
+        [JsonProperty("expires_at")]
+        public DateTimeOffset ExpiresAt { get; set; }
 
         [JsonProperty("started_at")]
         public DateTimeOffset? StartedAt { get; set; }

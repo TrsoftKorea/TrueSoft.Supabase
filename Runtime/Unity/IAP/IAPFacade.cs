@@ -1,4 +1,3 @@
-#if UNITY_IAP_V5
 using System;
 using System.Threading.Tasks;
 using TrueBase.Core.Models;
@@ -30,7 +29,7 @@ namespace TrueBase.Unity
     /// </remarks>
     public sealed class IAPFacade : BaseIAPFacade
     {
-        private readonly Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
+        private readonly Func<string, string, long, string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyAsync;
         private readonly Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> _verifyReceiptAsync;
 
         // 생성자 (internal — SupabaseIAP.CreateIAP()로만 생성)
@@ -45,7 +44,7 @@ namespace TrueBase.Unity
         /// null이면 SK1 폴백 미지원으로 동작.
         /// </param>
         internal IAPFacade(
-            Func<string, string, long, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync,
+            Func<string, string, long, string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyAsync,
             Func<string, string, Task<(bool success, IAPPurchaseResponse value)>> verifyReceiptAsync = null)
         {
             _verifyAsync        = verifyAsync ?? throw new ArgumentNullException(nameof(verifyAsync));
@@ -109,7 +108,7 @@ namespace TrueBase.Unity
             priceAmount   = (long)decimal.Round(cartItems[0].Product.metadata.localizedPrice * 1000000m);
             priceCurrency = cartItems[0].Product.metadata.isoCurrencyCode;
 
-            var (success, response) = await _verifyAsync(token, productId, priceAmount, priceCurrency);
+            var (success, response) = await _verifyAsync(token, productId, priceAmount, priceCurrency, receipt);
             if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
             if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
             await GrantAndConfirmAsync(productId, response.order_id, response.already_granted, pendingOrder);
@@ -123,7 +122,7 @@ namespace TrueBase.Unity
                 // StoreKit 2 경로 (iOS 15+)
                 priceAmount   = 0;
                 priceCurrency = null;
-                var (success, response) = await _verifyAsync(jws, productId, priceAmount, priceCurrency);
+                var (success, response) = await _verifyAsync(jws, productId, priceAmount, priceCurrency, pendingOrder.Info?.Receipt);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
                 await GrantAndConfirmAsync(productId, response.order_id, response.already_granted, pendingOrder);
@@ -172,4 +171,3 @@ namespace TrueBase.Unity
         private sealed class AppleReceiptWrapper { public string Payload; }
     }
 }
-#endif
