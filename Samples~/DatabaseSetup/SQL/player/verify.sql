@@ -47,6 +47,7 @@ from (
       ('user_sessions'),
       ('anonymous_recovery_tokens'),
       ('account_closures'),
+      ('apple_auth_tokens'),
       ('remote_config'),
       ('mails'),
       ('mail_batches'),

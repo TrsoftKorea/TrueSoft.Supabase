@@ -74,6 +74,23 @@ Deno.serve(async (req) => {
     { onConflict: "user_id" },
   );
 
+  // Sign in with Apple 연결을 끊는다(애플 심사 기준). 보통은 탈퇴 신청 때 이미 끊었지만 그때 놓쳤을 수
+  // 있다. 계정이 지워지면 보관한 토큰도 함께 지워져 다시는 끊을 수 없으므로 여기가 마지막 기회다.
+  // 실패해도 삭제는 진행한다 — 삭제는 이용자가 요청한 일이라 이걸로 막지 않는다.
+  try {
+    const revokeRes = await fetch(`${SUPABASE_URL}/functions/v1/apple-token`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${jwt}`, "apikey": SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "revoke" }),
+      // 오래 걸리면 SDK 의 가드 호출이 먼저 시간 초과로 끝나 "삭제 안 함"으로 읽고 로그인을 이어 간다.
+      // 그 뒤에 서버가 계정을 지우면 지워진 계정의 세션으로 게임에 들어가게 된다.
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!revokeRes.ok) console.warn(`[withdrawal-guard] 애플 토큰 철회 실패: ${revokeRes.status} ${await revokeRes.text()}`);
+  } catch (e) {
+    console.warn(`[withdrawal-guard] 애플 토큰 철회 호출 실패: ${e}`);
+  }
+
   const deleteRes = await adminClient.auth.admin.deleteUser(user.id, false);
   if (deleteRes.error) {
     return new Response(

@@ -44,7 +44,7 @@ namespace TrueBase.Unity.Auth.Apple
 
         // 아래 OnApple* 메서드는 iOS 네이티브가 UnityPlayer.UnitySendMessage(...)로 호출하는 콜백입니다. 직접 호출하지 마세요.
 
-        /// <summary>네이티브 로그인 성공 콜백. payload는 <c>|||</c> 구분 필드(IdToken|AppleUserId|Email|GivenName|FamilyName).</summary>
+        /// <summary>네이티브 로그인 성공 콜백. payload는 <c>|||</c> 구분 필드(IdToken|AppleUserId|Email|GivenName|FamilyName|AuthorizationCode).</summary>
         public void OnAppleLoginSuccess(string payload)
         {
             try
@@ -57,6 +57,7 @@ namespace TrueBase.Unity.Auth.Apple
                     Email = Unescape(parts, 2),
                     GivenName = Unescape(parts, 3),
                     FamilyName = Unescape(parts, 4),
+                    AuthorizationCode = Unescape(parts, 5),
                 };
                 _onSuccess?.Invoke(result);
             }

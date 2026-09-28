@@ -19,6 +19,8 @@ SDK는 `com.unity.purchasing` **5.0.0 이상**이 필요합니다. 그보다 낮
 
 가격 정보는 StoreKit 2 경로에서만 자동으로 채워집니다.
 
+두 함수 모두 영수증의 번들 ID를 [시크릿](/guide/start/database-setup#secrets) `APPLE_BUNDLE_ID`와 대조합니다. 비워 두면 iOS 결제가 전부 거부됩니다 — 애플 영수증은 어느 앱의 것이든 진짜로 검증되므로, 대조하지 않으면 다른 앱에서 산 영수증으로 이 게임의 상품을 받을 수 있습니다.
+
 ::: warning SK1을 강제하려면 5.1 이상
 iOS 14 이하를 지원하거나, SK1 영수증만 받는 [플레이나누 검증](/guide/migration/iap)을 쓰려면 `forceStoreKit1`이 필요하고 이는 **Unity IAP 5.1 이상**입니다. 5.0.x에서는 SK1을 강제할 수 없습니다.
 :::

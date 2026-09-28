@@ -58,9 +58,10 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `purchase-verify-google` | 인앱 결제 · Android |
 | `purchase-verify-apple` | 인앱 결제 · iOS · SK2 |
 | `purchase-verify-apple-legacy` | 인앱 결제 · iOS · SK1 · forceStoreKit1 |
+| `apple-token` | Apple 로그인 · 탈퇴 시 Apple 연결 해제 |
 | `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
 
-## 4. 시크릿 설정
+## 4. 시크릿 설정 {#secrets}
 
 대시보드 **Edge Functions > Secrets**에 등록합니다.
 
@@ -68,6 +69,10 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 |----------|----|------|
 | `CANCEL_TOKEN_SECRET` | 탈퇴&nbsp;취소&nbsp;사용&nbsp;시 | 탈퇴 취소 토큰 서명·검증에 사용하는 비밀 키. 랜덤 문자열 32자 이상 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키 |
+| `APPLE_BUNDLE_ID` | iOS&nbsp;IAP·Apple&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 앱의 번들 ID. 여럿이면 쉼표로 구분. 없으면 iOS 결제 검증이 전부 거부됩니다 — 다른 앱의 영수증을 걸러 내는 기준이라 비워 둘 수 없습니다 |
 | `APPLE_SHARED_SECRET` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시 | App Store Connect > 앱 정보 > 공유 암호. `purchase-verify-apple-legacy` 함수에서 사용 |
+| `APPLE_TEAM_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Apple Developer 팀 ID. 10자 |
+| `APPLE_KEY_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Sign in with Apple 키의 Key ID. 10자 |
+| `APPLE_PRIVATE_KEY` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
 
 발급 절차는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)을 참고하세요.

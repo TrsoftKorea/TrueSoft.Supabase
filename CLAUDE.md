@@ -168,7 +168,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 2. 플레이어 프로필 — user_profiles + display_names + user_sessions
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
-5. 계정 관리 — server transfer RPCs + withdrawal RPCs
+5. 계정 관리 — server transfer RPCs + withdrawal RPCs + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
 6. 우편함 — mails + RPCs
 7. 인앱 결제 — purchases
 8. 원격 설정 — remote_config
@@ -197,13 +197,13 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
 
-`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
+`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
 
 ## Samples
 
 `Samples~/Examples/` — full feature showcase. Import via Package Manager > Samples tab. Key file: `ExampleSupabaseScenarios.cs` with keyboard-shortcut-driven test flows. Samples are not compiled until imported.
 
-`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `SupabaseBridge.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. **인터셉터·브리지 등록은 `Supabase` 파사드가 아니라 `SupabaseBridge`를 부른다** — 게임에 공개하는 API가 아니고, `SupabaseSDK`는 `internal`이라 어셈블리 밖인 `Samples~`에서는 보이지 않기 때문이다. Awake 시 인터셉터를 등록해 `Supabase.*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`LinkGoogleToGuestWithIdTokenAsync`·`LinkAppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. `updated_at` 기반 데이터 동기화 포함, 비교 필드는 `PlayerSave.UseNanooConverters(map => map.CompareBy(...))`로 커스터마이징 가능(기본값 `updated_at`, 시간대 정보 없는 값은 `fallbackUtcOffsetHours`로 보정). PlayNanoo 제거 시 이 파일만 삭제, 게임 코드 변경 없음.
+`Samples~/PlayNanooMigration/` — PlayNANOO + SDK 병행 운영 런타임. `PlayNanooRuntime`은 구체 클래스(`SupabaseRuntime` 상속)로 씬에 직접 배치. `SupabaseBridge.GetNanooSaveBridge()`를 통해 `StaticUserSave<TRow>`(`INanooSaveSyncable` 구현)와 자동 연결, 서브클래스 파일 불필요. **인터셉터·브리지 등록은 `Supabase` 파사드가 아니라 `SupabaseBridge`를 부른다** — 게임에 공개하는 API가 아니고, `SupabaseSDK`는 `internal`이라 어셈블리 밖인 `Samples~`에서는 보이지 않기 때문이다. Awake 시 인터셉터를 등록해 `Supabase.*` 호출이 PlayNanoo를 자동 경유. 게스트·구글·애플 로그인, 익명→구글·애플 연동(`LinkGoogleToGuestWithIdTokenAsync`·`LinkAppleToGuestWithIdTokenAsync`), 로그아웃, 탈퇴 예약·취소 포함 — 취소는 별도 메서드 없이 표준 `Supabase.RedeemWithdrawalCancelAsync()`를 인터셉터로 감싸 나누 복구(`WithDrawalRestore`)까지 자동 처리하고, `TrueBaseNanoo.OnWithdrawalPending`(파라미터 없음) 이벤트로 감지 시점을 알린다. 게임이 부르는 나누 API는 정적 진입점 `TrueBaseNanoo`(UserId·OpenId·OnWithdrawalPending·SaveNow·StartAppleSignInAndroid) 하나로 모았다. `updated_at` 기반 데이터 동기화 포함(수동·자동 로그인 모두) — **나누 쓰기는 이번 로그인의 동기화가 성공했을 때만 열린다**(기본은 차단, 나누 원본을 기본값으로 덮는 사고 방지). 비교 필드는 `PlayerSave.UseNanooConverters(map => map.CompareBy(...))`로 커스터마이징 가능(기본값 `updated_at`, 시간대 정보 없는 값은 `fallbackUtcOffsetHours`로 보정). PlayNanoo 제거 시 이 폴더를 통째로 삭제하고, 게임의 `TrueBaseNanoo.*` 호출도 지운다.
 
 ## Debug Logs
 

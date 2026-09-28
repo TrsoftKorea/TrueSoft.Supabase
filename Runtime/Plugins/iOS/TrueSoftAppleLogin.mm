@@ -69,10 +69,16 @@ static TrueSoftAppleLoginDelegate* _ts_appleDelegate = nil;
     NSString* given = cred.fullName.givenName ?: @"";
     NSString* family = cred.fullName.familyName ?: @"";
 
-    // payload: idToken|||appleUserId|||email|||givenName|||familyName
-    NSString* payload = [NSString stringWithFormat:@"%@|||%@|||%@|||%@|||%@",
+    // 탈퇴 때 애플 연결을 끊으려면(애플 심사 기준) 서버가 이 일회용 코드로 refresh token 을 받아 둬야 한다.
+    NSString* authCode = @"";
+    if (cred.authorizationCode != nil) {
+        authCode = [[NSString alloc] initWithData:cred.authorizationCode encoding:NSUTF8StringEncoding] ?: @"";
+    }
+
+    // payload: idToken|||appleUserId|||email|||givenName|||familyName|||authorizationCode
+    NSString* payload = [NSString stringWithFormat:@"%@|||%@|||%@|||%@|||%@|||%@",
                          TS_Escape(idToken), TS_Escape(appleUserId),
-                         TS_Escape(email), TS_Escape(given), TS_Escape(family)];
+                         TS_Escape(email), TS_Escape(given), TS_Escape(family), TS_Escape(authCode)];
 
     UnitySendMessage([target UTF8String], "OnAppleLoginSuccess", [payload UTF8String]);
     _ts_appleDelegate = nil;

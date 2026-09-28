@@ -1,13 +1,16 @@
 # Apple 게스트 연동 · 커스텀
 
 ```csharp
-Task<SupabaseResult> Supabase.LinkAppleToGuestWithIdTokenAsync(string idToken, string rawNonce = null)
+Task<SupabaseResult> Supabase.LinkAppleToGuestWithIdTokenAsync(
+    string idToken,
+    string rawNonce          = null,
+    string authorizationCode = null)
 ```
 
 이미 가진 Apple ID 토큰으로 익명(게스트) 계정에 Apple 계정을 연동합니다. 일반적으로는 [Apple 게스트 연동](./link)을 쓰세요. 기존 계정의 데이터는 그대로 이어집니다.
 
 ```csharp
-var result = await Supabase.LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce);
+var result = await Supabase.LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode);
 if (result.IsSuccess)
 {
     // 연동 완료 — 기존 게스트 데이터 그대로 유지
@@ -29,6 +32,7 @@ else
 |----------|------|
 | `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
 | `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) |
+| `authorizationCode` | 토큰과 함께 받은 일회용 인증 코드. 넘겨야 탈퇴할 때 Apple 연결이 끊깁니다 — [탈퇴 시 Apple 연결 해제](./index#revoke) 참고 (기본값: `null`) |
 
 **에러 코드**
 

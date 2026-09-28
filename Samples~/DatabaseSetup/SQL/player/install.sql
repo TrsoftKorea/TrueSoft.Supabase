@@ -2249,6 +2249,28 @@ comment on function public.ts_my_withdrawal_status() is
 
 grant execute on function public.ts_my_withdrawal_status() to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- apple_auth_tokens — Sign in with Apple 철회용 refresh token (클라이언트 직접 접근 없음)
+-- ---------------------------------------------------------------------------
+-- 애플은 계정을 지울 때 Sign in with Apple 토큰을 REST API 로 철회하라고 요구한다(심사 기준).
+-- 철회에는 refresh token 이 필요한데 로그인 결과(ID 토큰)에는 들어 있지 않아, 로그인 때 받은
+-- 일회용 authorization code 를 apple-token Edge Function 이 교환해 여기 보관한다.
+-- 탈퇴 신청 때와 withdrawal-guard 의 최종 삭제 직전에 철회하고 행을 지운다.
+-- 읽고 쓰는 쪽은 apple-token 함수(service_role)뿐이다.
+create table if not exists public.apple_auth_tokens (
+  account_id    uuid        primary key references auth.users(id) on delete cascade,
+  client_id     text        not null,   -- 교환에 쓴 App ID(번들 ID). 철회도 같은 값으로 해야 한다
+  refresh_token text        not null,
+  updated_at    timestamptz not null default now()
+);
+
+comment on table public.apple_auth_tokens is
+  'Sign in with Apple 철회용 refresh token. apple-token Edge Function(service_role) 전용.';
+
+alter table public.apple_auth_tokens enable row level security;
+-- [의도적] 정책 없음 — service_role 전용.
+revoke all on public.apple_auth_tokens from public, anon, authenticated;
+
 
 -- #############################################################################
 -- 06. 우편함
@@ -9644,7 +9666,7 @@ grant select, insert, update, delete on table public.user_sessions to authentica
 grant select, insert, update, delete on table public.user_data     to authenticated;
 
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
---   account_closures, anonymous_recovery_tokens, mail_batches, mail_categories,
+--   account_closures, apple_auth_tokens, anonymous_recovery_tokens, mail_batches, mail_categories,
 --   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
 --   match_reward_configs, match_results, friend_requests, friend_settings,
 --   match_lobbies, match_lobby_members, match_lobby_settings

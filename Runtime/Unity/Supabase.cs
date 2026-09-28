@@ -74,10 +74,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseSignInResult> SignInWithGoogleIdTokenAsync(string idToken) =>
             ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken));
 
-        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string)"/>
+        /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseSignInResult> SignInWithAppleIdTokenAsync(
-            string idToken, string rawNonce = null) =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce));
+            string idToken, string rawNonce = null, string authorizationCode = null) =>
+            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleAsync"/>
         public static Task<SupabaseSignInResult> SignInWithAppleAsync() =>
@@ -91,20 +91,20 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> LinkAppleNativeAsync() =>
             SupabaseSDK.TryLinkAppleNativeAsync();
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(string, string)"/>
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseResult> LinkAppleToGuestWithIdTokenAsync(
-            string idToken, string rawNonce = null) =>
-            SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce);
+            string idToken, string rawNonce = null, string authorizationCode = null) =>
+            SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode);
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseResult> LinkGoogleWithIdTokenAsync(
             string idToken, string googleAccessToken = null) =>
             SupabaseSDK.TryLinkGoogleWithIdTokenAsync(idToken, googleAccessToken);
 
-        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleWithIdTokenAsync(string, string)"/>
+        /// <inheritdoc cref="SupabaseSDK.TryLinkAppleWithIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseResult> LinkAppleWithIdTokenAsync(
-            string idToken, string rawNonce = null) =>
-            SupabaseSDK.TryLinkAppleWithIdTokenAsync(idToken, rawNonce);
+            string idToken, string rawNonce = null, string authorizationCode = null) =>
+            SupabaseSDK.TryLinkAppleWithIdTokenAsync(idToken, rawNonce, authorizationCode);
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleNativeAsync"/>
         public static Task<SupabaseResult> LinkGoogleNativeAsync() =>

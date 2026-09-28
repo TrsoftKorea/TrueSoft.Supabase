@@ -4,11 +4,14 @@
 //
 // 필요 환경 변수:
 //   APPLE_SHARED_SECRET  — App Store Connect > 앱 정보 > 공유 암호 (shared secret)
+//   APPLE_BUNDLE_ID      — 이 프로젝트가 받는 앱 번들 ID. 여럿이면 쉼표로 구분.
+//                          verifyReceipt 는 어느 앱의 영수증이든 진짜면 status 0 을 준다(소모성 상품은
+//                          공유 암호도 안 본다). 서버가 번들 ID를 대조하지 않으면 다른 앱 영수증이 통과한다.
 //
 // 요청 Body (JSON):
 //   receipt    string  — SK1 base64 encoded receipt blob (Unity IAP 영수증의 Payload 필드)
 //   product_id string  — 기대하는 상품 ID
-//   bundle_id  string  — 앱 Bundle ID (검증에 사용)
+//   bundle_id  string  — 앱 Bundle ID. 앱이 보내는 값이라 대조에는 쓰지 않는다(호환용으로만 받는다)
 //
 // 기록은 purchases.purchase_token UNIQUE 로 중복을 막습니다. 유저 직접 INSERT 정책은 없고
 // 이 함수가 service_role 로만 기록합니다(가짜 결제 기록 차단).
@@ -27,12 +30,19 @@ const SUPABASE_SECRET_KEY      = secretKeys.default;
 interface RequestBody {
   receipt:    string;
   product_id: string;
-  bundle_id:  string;
+  bundle_id?: string;
 }
 
+// 번들 ID와 거래 목록은 최상위가 아니라 receipt 안에 있다(애플 문서 responseBody.Receipt).
+// 거래는 latest_receipt_info 와 receipt.in_app 양쪽을 본다 — 어느 쪽에 오는지가 상품 종류·상태에 따라
+// 달라, 한쪽만 보면 소모성 상품을 못 찾을 수 있다.
 interface VerifyReceiptResponse {
   status:               number;
-  bundle_id?:           string;
+  environment?:         string;
+  receipt?: {
+    bundle_id?: string;
+    in_app?:    ReceiptInfo[];
+  };
   latest_receipt_info?: ReceiptInfo[];
 }
 
@@ -76,14 +86,21 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, reason: "invalid_json" }, 400);
   }
 
-  const { receipt, product_id, bundle_id } = body;
-  if (!receipt || !product_id || !bundle_id) {
+  const { receipt, product_id } = body;
+  if (!receipt || !product_id) {
     return jsonResponse({ ok: false, reason: "missing_fields" }, 400);
   }
 
   const sharedSecret = Deno.env.get("APPLE_SHARED_SECRET");
   if (!sharedSecret) {
     console.error("[purchase-verify-apple-legacy] APPLE_SHARED_SECRET 환경 변수가 없습니다.");
+    return jsonResponse({ ok: false, reason: "server_config_error" }, 500);
+  }
+
+  const allowedBundleIds = (Deno.env.get("APPLE_BUNDLE_ID") ?? "")
+    .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  if (allowedBundleIds.length === 0) {
+    console.error("[purchase-verify-apple-legacy] APPLE_BUNDLE_ID 환경 변수가 없습니다.");
     return jsonResponse({ ok: false, reason: "server_config_error" }, 500);
   }
 
@@ -112,20 +129,39 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // bundle_id 검증
-  if (verifyData.bundle_id && verifyData.bundle_id !== bundle_id) {
+  const receiptBundleId = verifyData.receipt?.bundle_id;
+  if (!receiptBundleId || !allowedBundleIds.includes(receiptBundleId)) {
+    console.warn(`[purchase-verify-apple-legacy] bundle_id_mismatch: receipt=${receiptBundleId}, caller=${user.id}`);
     return jsonResponse({ ok: false, reason: "bundle_id_mismatch" });
   }
 
-  // product_id 일치하는 최신 트랜잭션 추출
-  const receipts = verifyData.latest_receipt_info ?? [];
-  const match = receipts
-    .filter(r => r.product_id === product_id)
-    .sort((a, b) => Number(b.purchase_date_ms) - Number(a.purchase_date_ms))[0];
+  // product_id 일치하는 트랜잭션 중, 아직 기록되지 않은 가장 최근 것을 고른다.
+  // 영수증에는 같은 상품 거래가 여럿 들어 있을 수 있다. 무조건 최신 것만 고르면 같은 소모품이 두 건 대기 중일 때
+  // 두 번째 주문도 첫 거래로 풀려 already_granted 가 되고, 게임이 지급을 건너뛰어 한 건을 잃는다.
+  const receipts = [...(verifyData.latest_receipt_info ?? []), ...(verifyData.receipt?.in_app ?? [])];
+  const candidates = receipts
+    .filter(r => r.product_id === product_id && r.transaction_id)
+    .sort((a, b) => Number(b.purchase_date_ms) - Number(a.purchase_date_ms));
 
-  if (!match) {
+  if (candidates.length === 0) {
     return jsonResponse({ ok: false, reason: "product_not_found_in_receipt" });
   }
+
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: recorded, error: recordedError } = await adminClient
+    .from("purchases")
+    .select("purchase_token")
+    .in("purchase_token", candidates.map(r => r.transaction_id));
+  if (recordedError) {
+    console.error("[purchase-verify-apple-legacy] 기록 조회 오류:", recordedError.message);
+    return jsonResponse({ ok: false, reason: "db_error" }, 500);
+  }
+  const recordedIds = new Set((recorded ?? []).map(r => r.purchase_token as string));
+  // 전부 기록됐으면 최신 것으로 — 아래 UNIQUE 경로가 "이미 검증됨"(주인 확인 포함)으로 답한다.
+  const match = candidates.find(r => !recordedIds.has(r.transaction_id)) ?? candidates[0];
 
   const transactionId = match.transaction_id;
 
@@ -138,9 +174,6 @@ Deno.serve(async (req: Request) => {
   // (유저 직접 INSERT를 막아 가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
   // purchase_token UNIQUE — INSERT 성공은 새 검증, 23505는 이미 검증된 영수증.
   // SK1 영수증에는 가격이 없어 price_* 는 기록하지 않는다.
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const { error: insertError } = await adminClient
     .from("purchases")
     .insert({
@@ -149,7 +182,7 @@ Deno.serve(async (req: Request) => {
       product_id,
       purchase_token: transactionId,
       order_id:       transactionId,
-      package_name:   bundle_id,
+      package_name:   receiptBundleId,
       store:          "apple_app_store",
     });
 

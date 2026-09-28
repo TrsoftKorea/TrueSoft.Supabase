@@ -70,6 +70,7 @@ namespace TrueBase.Unity
         private const string _purchaseVerifyGoogleFunctionName       = "purchase-verify-google";
         private const string _purchaseVerifyAppleFunctionName        = "purchase-verify-apple";
         private const string _purchaseVerifyAppleLegacyFunctionName  = "purchase-verify-apple-legacy";
+        private const string _appleTokenFunctionName                 = "apple-token";
         private const string _getBanInfoFunctionName = "get-ban-info";
 
         // StaticUserSave<TRow> 생성 시 자동 등록됩니다. PlayNanooRuntime이 세이브 동기화에 사용합니다.
@@ -763,8 +764,16 @@ namespace TrueBase.Unity
             return r;
         }
 
-        /// <summary>현재 계정에서 Apple 연동을 해제합니다.</summary>
-        public static Task<SupabaseResult<bool>> UnlinkAppleAsync() => UnlinkProviderAsync("apple");
+        /// <summary>현재 계정에서 Apple 연동을 해제합니다. 해제에 성공하면 보관한 애플 토큰으로 애플 쪽 연결도 끊습니다.</summary>
+        public static async Task<SupabaseResult<bool>> UnlinkAppleAsync()
+        {
+            var r = await UnlinkProviderAsync("apple");
+            // 토큰을 남겨 두면, 이 애플 ID 가 나중에 다른 계정에 연동된 뒤 이 계정이 탈퇴할 때 그 토큰으로 철회해
+            // 다른 계정의 애플 연결까지 끊는다.
+            if (r.IsSuccess)
+                await TryRevokeAppleTokenAsync("보관한 토큰이 이 계정에 남습니다");
+            return r;
+        }
 
         /// <summary><see cref="UnlinkGoogleAsync"/>를 값 기반으로 호출합니다.</summary>
         public static async Task<SupabaseResult> TryUnlinkGoogleAsync()
@@ -786,7 +795,8 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<SupabaseSession>> SignInWithAppleIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
@@ -803,6 +813,9 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 SaveSessionToStorage();
 
+                // 탈퇴 게이트보다 먼저 — 게이트가 계정을 지우거나 세션을 정리하면 그 뒤로는 보관할 수 없다.
+                await StoreAppleAuthorizationCodeAsync(authorizationCode);
+
                 RememberLastSignInMethod(SignInMethodKind.Apple);
                 var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
                 if (gated != null)
@@ -817,7 +830,8 @@ namespace TrueBase.Unity
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(ID 토큰 직접 전달).</summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkAppleToGuestWithIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
@@ -835,13 +849,14 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.RefreshToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AnonymousSessionTokenMissing);
 
-            return await PerformLinkAppleAsync(s, idToken, rawNonce, deleteAnonymousRecovery: true);
+            return await PerformLinkAppleAsync(s, idToken, rawNonce, authorizationCode, deleteAnonymousRecovery: true);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(ID 토큰 직접 전달).</summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkAppleWithIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
@@ -856,18 +871,20 @@ namespace TrueBase.Unity
             if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.SessionRequired);
 
-            return await PerformLinkAppleAsync(s, idToken, rawNonce, deleteAnonymousRecovery: false);
+            return await PerformLinkAppleAsync(s, idToken, rawNonce, authorizationCode, deleteAnonymousRecovery: false);
         }
 
         /// <summary>Apple identity 연동 공통 처리. 연동 성공 후 세션 저장·탈퇴 가드·프로필 보장까지 수행합니다.</summary>
         /// <param name="session">연동 대상 세션. AccessToken이 유효해야 합니다(검증은 호출자 책임).</param>
         /// <param name="idToken">Apple ID 토큰. 앞뒤 공백은 내부에서 제거합니다.</param>
         /// <param name="rawNonce">토큰 발급 시 사용한 raw nonce. nonce 없이 발급된 토큰이면 null.</param>
+        /// <param name="authorizationCode">Sign in with Apple 일회용 인증 코드. 탈퇴 때 애플 연결을 끊는 데 쓴다. 없으면 null.</param>
         /// <param name="deleteAnonymousRecovery">true면 연동 성공 후 이 기기의 익명 복구 토큰을 삭제합니다. 익명→Apple 연동 경로에서만 true.</param>
         private static async Task<SupabaseResult<SupabaseSession>> PerformLinkAppleAsync(
             SupabaseSession session,
             string idToken,
             string rawNonce,
+            string authorizationCode,
             bool deleteAnonymousRecovery)
         {
             var linked = await Auth.LinkIdentityWithIdTokenAsync(session.AccessToken, "apple", idToken.Trim(), rawNonce, null);
@@ -879,6 +896,9 @@ namespace TrueBase.Unity
 
             SetSession(linked.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
             SaveSessionToStorage();
+
+            // 탈퇴 게이트보다 먼저 — 게이트가 계정을 지우거나 세션을 정리하면 그 뒤로는 보관할 수 없다.
+            await StoreAppleAuthorizationCodeAsync(authorizationCode);
 
             RememberLastSignInMethod(SignInMethodKind.Apple);
             if (deleteAnonymousRecovery)
@@ -892,45 +912,113 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="SignInWithAppleIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        /// <param name="idToken">Sign in with Apple 이 준 identityToken.</param>
+        /// <param name="rawNonce">요청에 해시해 넣은 nonce 의 원래 값. 안 썼으면 null.</param>
+        /// <param name="authorizationCode">
+        /// Sign in with Apple 이 함께 준 일회용 인증 코드. 넘기면 탈퇴할 때 SDK 가 애플 연결을 끊습니다(애플 심사 기준).
+        /// 외부 애플 로그인 플러그인을 쓴다면 그 플러그인이 주는 값을 넘기세요.
+        /// </param>
         public static async Task<SupabaseResult> TrySignInWithAppleIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (_interceptSignInWithAppleIdToken != null)
                 return await _interceptSignInWithAppleIdToken(idToken, async () => {
-                    var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce);
+                    var r = await SignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode);
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
-            var r2 = await SignInWithAppleIdTokenAsync(idToken, rawNonce);
+            var r2 = await SignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="LinkAppleToGuestWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        /// <param name="idToken">Sign in with Apple 이 준 identityToken.</param>
+        /// <param name="rawNonce">요청에 해시해 넣은 nonce 의 원래 값. 안 썼으면 null.</param>
+        /// <param name="authorizationCode"><inheritdoc cref="TrySignInWithAppleIdTokenAsync" path="/param[@name='authorizationCode']"/></param>
         public static async Task<SupabaseResult> TryLinkAppleToGuestWithIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (_interceptLinkAppleToGuestWithIdToken != null)
                 return await _interceptLinkAppleToGuestWithIdToken(idToken, async () => {
-                    var r = await LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce);
+                    var r = await LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode);
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
-            var r2 = await LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce);
+            var r2 = await LinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
         }
 
         /// <summary><see cref="LinkAppleWithIdTokenAsync"/>를 bool 기반으로 호출합니다.</summary>
+        /// <param name="idToken">Sign in with Apple 이 준 identityToken.</param>
+        /// <param name="rawNonce">요청에 해시해 넣은 nonce 의 원래 값. 안 썼으면 null.</param>
+        /// <param name="authorizationCode"><inheritdoc cref="TrySignInWithAppleIdTokenAsync" path="/param[@name='authorizationCode']"/></param>
         public static async Task<SupabaseResult> TryLinkAppleWithIdTokenAsync(
             string idToken,
-            string rawNonce = null)
+            string rawNonce = null,
+            string authorizationCode = null)
         {
             if (_interceptLinkAppleWithIdToken != null)
                 return await _interceptLinkAppleWithIdToken(idToken, async () => {
-                    var r = await LinkAppleWithIdTokenAsync(idToken, rawNonce);
+                    var r = await LinkAppleWithIdTokenAsync(idToken, rawNonce, authorizationCode);
                     return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
                 });
-            var r2 = await LinkAppleWithIdTokenAsync(idToken, rawNonce);
+            var r2 = await LinkAppleWithIdTokenAsync(idToken, rawNonce, authorizationCode);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r2);
+        }
+
+        /// <summary>
+        /// 애플 로그인 코드를 서버(<c>apple-token</c>)에 보내 철회용 토큰으로 바꿔 두게 합니다. 탈퇴 때 애플 연결을
+        /// 끊으려면(애플 심사 기준) 이 토큰이 있어야 합니다. 코드는 5분만 유효해 로그인 직후에 보낸다.
+        /// </summary>
+        /// <remarks>
+        /// 세션이 생긴 직후, 탈퇴 게이트보다 먼저 기다려 부른다. 유예 중 재로그인은 게이트가 세션을 정리하고,
+        /// 유예가 끝난 계정은 게이트가 지운다 — 그 뒤에 보내면 보관할 수 없고, 그 로그인이 애플에 다시 만든
+        /// 연결이 삭제 뒤에도 남는다. 애플 서버 왕복만큼 애플 로그인이 늦어지는 것은 감수한다.
+        /// 실패해도 로그인은 막지 않고 경고로 남긴다: 그 계정은 탈퇴해도 애플 연결이 남는다.
+        /// </remarks>
+        private static async Task StoreAppleAuthorizationCodeAsync(string authorizationCode)
+        {
+            if (string.IsNullOrWhiteSpace(authorizationCode))
+                return;
+
+            try
+            {
+                var req = new AppleAuthTokenRequest
+                {
+                    action = "store",
+                    authorization_code = authorizationCode.Trim(),
+                    client_id = Application.identifier,
+                };
+                var r = await Functions.InvokeAsync<AppleAuthTokenResponse>(_appleTokenFunctionName, req, requireAuth: true);
+                if (r == null || !r.IsSuccess || r.Data == null || !r.Data.ok)
+                    Debug.LogWarning($"[Supabase.Auth.AppleToken] 애플 연결 해제용 토큰을 보관하지 못했습니다 — 이 계정은 탈퇴해도 애플 연결이 남습니다: {r?.Data?.reason ?? r?.ErrorCode ?? "unknown"}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Supabase.Auth.AppleToken] 애플 연결 해제용 토큰 보관 중 예외: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 서버에 보관한 애플 토큰으로 Sign in with Apple 연결을 끊습니다(애플 심사 기준 — 계정 삭제 시 철회).
+        /// 탈퇴 신청 직후 부릅니다. 실패해도 탈퇴는 진행하고, 계정 최종 삭제 때 <c>withdrawal-guard</c> 가 한 번 더 시도합니다.
+        /// </summary>
+        /// <param name="onFailure">실패 경고에 덧붙일 다음 조치 안내.</param>
+        private static async Task TryRevokeAppleTokenAsync(string onFailure)
+        {
+            try
+            {
+                var req = new AppleAuthTokenRequest { action = "revoke" };
+                var r = await Functions.InvokeAsync<AppleAuthTokenResponse>(_appleTokenFunctionName, req, requireAuth: true);
+                if (r == null || !r.IsSuccess || r.Data == null || !r.Data.ok)
+                    Debug.LogWarning($"[Supabase.Auth.AppleToken] 애플 연결을 끊지 못했습니다 — {onFailure}: {r?.Data?.reason ?? r?.ErrorCode ?? "unknown"}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Supabase.Auth.AppleToken] 애플 연결 해제 중 예외: {e.Message}");
+            }
         }
 
         // Apple 네이티브 로그인 (iOS Sign in with Apple)
@@ -958,7 +1046,7 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AppleIdTokenEmpty);
 
-            var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
                 : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "apple_signin_failed");
@@ -981,7 +1069,7 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AppleIdTokenEmpty);
 
-            var ok = await TryLinkAppleToGuestWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            var ok = await TryLinkAppleToGuestWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
                 : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed);
@@ -1004,7 +1092,7 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(login.Data.IdToken))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AppleIdTokenEmpty);
 
-            var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce);
+            var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
                 : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed);
@@ -3071,6 +3159,13 @@ namespace TrueBase.Unity
 
             // 로컬 refresh_token을 지우기 전에 서버에 복구용 refresh를 남겨, 다음 익명 로그인 시 동일 auth 계정으로 복구되게 합니다.
             await TryUpsertAnonymousRecoveryTokenAsync(_currentSession);
+
+            // 애플은 탈퇴를 누른 그 자리에서 애플 연결이 끊기길 요구한다(심사자는 탈퇴 직후 설정 앱의 "Apple로 로그인"
+            // 목록을 본다). 유예 끝까지 미루지 않는다 — 탈퇴를 취소하려 애플로 다시 로그인하면 같은 계정으로 돌아온다.
+            // 세션을 지우기 전에 불러야 한다(서버가 누구의 토큰인지 JWT 로 안다).
+            // 로컬 세션의 연동 정보로 거르지 않는다 — 다른 기기에서 애플을 연동했으면 이 기기 정보가 낡았다.
+            // 보관한 토큰이 없으면 서버가 바로 no_token 으로 끝낸다.
+            await TryRevokeAppleTokenAsync("계정 최종 삭제 때 다시 시도합니다");
 
             // 유예 여부와 무관하게, "탈퇴 예약을 건 계정"은 항상 수동 로그인 UX를 타도록 즉시 로그아웃 처리합니다.
             ClearSession(clearStorage: true, deleteUserSessionRow: true);

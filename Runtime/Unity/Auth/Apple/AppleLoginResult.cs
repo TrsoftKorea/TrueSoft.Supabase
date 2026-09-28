@@ -16,5 +16,7 @@ namespace TrueBase.Unity.Auth.Apple
         public string GivenName;
         /// <summary>성. 최초 로그인 시에만 제공될 수 있습니다.</summary>
         public string FamilyName;
+        /// <summary>일회용 인증 코드(5분 유효). 서버가 탈퇴 때 애플 연결을 끊을 토큰으로 바꿔 보관합니다.</summary>
+        public string AuthorizationCode;
     }
 }

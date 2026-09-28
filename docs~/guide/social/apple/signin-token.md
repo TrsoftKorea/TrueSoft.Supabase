@@ -1,13 +1,16 @@
 # Apple 신규 로그인 · 커스텀
 
 ```csharp
-Task<SupabaseSignInResult> Supabase.SignInWithAppleIdTokenAsync(string idToken, string rawNonce = null)
+Task<SupabaseSignInResult> Supabase.SignInWithAppleIdTokenAsync(
+    string idToken,
+    string rawNonce          = null,
+    string authorizationCode = null)
 ```
 
 이미 가진 Apple ID 토큰으로 로그인합니다. 토큰을 직접 넘겨야 할 때만 쓰고, 일반적으로는 [Apple 신규 로그인](./signin)을 쓰세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
-var result = await Supabase.SignInWithAppleIdTokenAsync(idToken, rawNonce);
+var result = await Supabase.SignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode);
 if (result.IsSuccess)
 {
     ShowNickname(result.Profile.Name);   // 로그인 결과에 담긴 내 프로필
@@ -26,6 +29,7 @@ else
 |----------|------|
 | `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
 | `rawNonce` | 토큰과 함께 전달된 nonce. 일부 SDK에서 요구 (기본값: `null`) |
+| `authorizationCode` | 토큰과 함께 받은 일회용 인증 코드. 넘겨야 탈퇴할 때 Apple 연결이 끊깁니다 — [탈퇴 시 Apple 연결 해제](./index#revoke) 참고 (기본값: `null`) |
 
 **반환**
 
