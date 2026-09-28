@@ -43,20 +43,20 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
 
     protected override Task<NanooRead> LoadRawFromNanoo()
     {
+        // uuid 없이 읽으면 "ServerData_" 라는 남의(공용) 키를 읽게 된다.
+        if (string.IsNullOrEmpty(TrueBaseNanoo.UserId)) return Task.FromResult(NanooRead.Failed());
+
         var tcs = new TaskCompletionSource<NanooRead>();
         var key = $"ServerData_{TrueBaseNanoo.UserId}";
-        _plugin.Storage.Load(key, (status, _, _, values) =>
-        {
-            if (status != Configure.PN_API_STATE_SUCCESS) { tcs.SetResult(NanooRead.Failed()); return; }
-            tcs.SetResult(NanooRead.From(values["StorageValue"]?.ToString()));
-        });
+        _plugin.Storage.Load(key, (status, message, _, values) =>
+            tcs.SetResult(ToNanooRead(status, message, values)));
         return tcs.Task;
     }
 
-    public override void SaveToNanoo(string json)
+    protected override void SaveToNanoo(string json)
     {
         TraceNanooWrite("SaveToNanoo(Legacy)", json);
-        if (string.IsNullOrEmpty(json)) return;
+        if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(TrueBaseNanoo.UserId)) return;
         var key = $"ServerData_{TrueBaseNanoo.UserId}";
         _plugin.Storage.Save(key, json, false,
             (status, _, _, _) =>

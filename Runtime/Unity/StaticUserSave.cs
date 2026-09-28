@@ -295,8 +295,7 @@ namespace TrueBase.Unity
                 return false;
             }
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
-            if (ok) await ReloadFromServerAsync();
-            return ok;
+            return ok && await ReloadFromServerAsync();
         }
 
         async Task<bool> INanooSaveSyncable.NanooPatchFromLastLoadedAsync(string nanooJson)
@@ -310,8 +309,7 @@ namespace TrueBase.Unity
             }
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow);
-            if (ok) await ReloadFromServerAsync();
-            return ok;
+            return ok && await ReloadFromServerAsync();
         }
 
         /// <summary>
@@ -321,23 +319,25 @@ namespace TrueBase.Unity
         /// 덮여, DB 컬럼 DEFAULT로 채워진 값이 로컬에서 사라집니다. PATCH 이후의 서버 행이 정본이므로 그것을 읽어 적용합니다.
         /// </para>
         /// </summary>
-        private async Task ReloadFromServerAsync()
+        /// <returns>로컬이 서버 정본과 일치하게 됐으면 true. 호출부는 false 를 반영 실패로 취급해 플레이나누 쓰기를 열지 않는다.</returns>
+        private async Task<bool> ReloadFromServerAsync()
         {
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null);
 
             if (!success || !hasRow || row == null)
             {
-                // _hasLoadedOnce 를 올리지 않은 채 돌아간다 — 로컬은 아직 기본값일 수 있고,
-                // NanooHasServerData 가 false 로 남아 플레이나누 쓰기가 막힌다(기본값 유출 방지).
+                // 로컬이 서버와 어긋났다(기본값이거나, 로그아웃 없이 바꾼 이전 계정의 데이터일 수 있다).
+                // _hasLoadedOnce 를 여기서 올리지 않는다. 이미 true 였어도 false 를 돌려줘 이번 로그인의 플레이나누 쓰기를 막게 한다.
                 Debug.LogWarning($"{LogTag} 플레이나누 반영 후 재조회에 실패했습니다. 로컬이 서버와 어긋난 상태라 " +
-                                 $"플레이나누 저장을 막습니다 — 다음 로드에서 다시 맞춰집니다.");
-                return;
+                                 $"이번 로그인에서는 플레이나누 저장을 막습니다.");
+                return false;
             }
 
             _nanooLastLoaded = row;
             ApplyRow(row);
             _hasLoadedOnce = true;   // 로컬이 서버 정본과 일치 — 이 시점부터 자동 저장 허용
+            return true;
         }
 
         // 플레이나누 필드 변환 (선택적 편의)

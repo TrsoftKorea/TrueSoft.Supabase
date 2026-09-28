@@ -43,7 +43,13 @@ public static class TrueBaseNanoo
     /// </summary>
     public static event Action OnWithdrawalPending;
 
-    internal static void RaiseWithdrawalPending() => OnWithdrawalPending?.Invoke();
+    // 로그인 콜백 안에서 부른다. 구독자가 예외를 던지면(해제 안 된 구독자가 파괴된 UI 를 만지는 등) 로그인
+    // 결과 확정이 건너뛰어져 로그인이 영영 돌아오지 않으므로, 여기서 삼키고 남긴다.
+    internal static void RaiseWithdrawalPending()
+    {
+        try { OnWithdrawalPending?.Invoke(); }
+        catch (Exception e) { Debug.LogException(e); }
+    }
 
     // ── 기능 ─────────────────────────────────────────────────────────────────
 

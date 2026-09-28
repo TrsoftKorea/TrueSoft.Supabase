@@ -21,7 +21,7 @@
 // 1. PlayNANOO Migration 폴더를 통째로 삭제 (이 파일 · PlayNanooRuntime.cs ·
 //    PlayNanooLegacyRuntime.cs · TrueBaseNanoo.cs)
 // 2. 씬에 SupabaseRuntime 배치
-// 3. 게임 코드 변경 없음 (Supabase.* 호출은 그대로)
+// 3. 게임의 TrueBaseNanoo.* 호출을 지운다 (Supabase.* 호출은 그대로)
 // =============================================================================
 
 using System;
@@ -44,9 +44,12 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     protected Plugin _plugin;
     private string   _nanooAccessToken;    // 로그인 성공 시 저장, 로그아웃·롤백에 사용
 
-    // 이번 로그인에서 나누 읽기가 실패했는가. 실패했으면 나누 상태를 모르므로 쓰지 않는다.
-    // 다음 로그인의 동기화가 성공하면 풀린다.
-    private bool     _nanooWriteBlocked;
+    // 이번 로그인의 나누 동기화가 성공으로 끝났는가. 기본은 false(쓰기 금지)이고 성공한 갈래에서만 켠다.
+    // "SDK 세이브를 한 번이라도 읽었는가"만 보면 게임의 LoadUserSaveAsync 만으로 통과돼, 동기화가 도중에
+    // 실패했거나 아직 안 끝났을 때 기본값·이전 계정 데이터로 나누 원본을 덮는다.
+    private bool     _nanooSyncedThisLogin;
+
+    private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
     private string   _nanooNickname;       // 닉네임 변경 롤백용
 
     private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
@@ -129,6 +132,12 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     protected override void Awake()
     {
         base.Awake();
+
+        // 이미 살아 있는 런타임이 있으면 베이스가 이 쪽(새로 생긴 중복)을 지운다. 그런데도 여기서 등록하면
+        // 이 중복이 파괴될 때 OnDestroy 가 살아 있는 쪽의 인터셉터까지 해제한다(타이틀 씬 재로드 등).
+        if (Instance != null && !ReferenceEquals(Instance, this))
+            return;
+
         Instance = this;
         _plugin = Plugin.GetInstance();
 
@@ -194,9 +203,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private void OnDestroy()
     {
-        // 씬 전환으로 새 런타임이 먼저 Awake 를 탔을 수 있다. 그때 남의 등록을 지우지 않는다.
-        if (ReferenceEquals(Instance, this)) Instance = null;
+        // 등록한 적 없는 중복 런타임이면 아무것도 건드리지 않는다 — 살아 있는 쪽의 등록이다.
+        if (!ReferenceEquals(Instance, this)) return;
 
+        Instance = null;
         SupabaseBridge.UnregisterPlayNanooInterceptors();
         // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
     }
@@ -252,10 +262,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         var sdkResult = sdkTask.Result;
 
         if (nanoo.Ok && sdkResult.IsSuccess)
-        {
-            await SyncDataAfterLogin();
-            return sdkResult;
-        }
+            return await SyncOrFailLoginAsync(sdkResult);
 
         // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
         if (nanoo.Ok)
@@ -293,10 +300,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         var sdkResult = sdkTask.Result;
 
         if (nanoo.Ok && sdkResult.IsSuccess)
-        {
-            await SyncDataAfterLogin();
-            return sdkResult;
-        }
+            return await SyncOrFailLoginAsync(sdkResult);
 
         // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
         if (nanoo.Ok)
@@ -334,8 +338,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             if (HandleNanooCallback(status, values, loginType))
             {
-                await SyncDataAfterLogin();
-                tcs.TrySetResult(true);
+                // false 면 호출부가 양쪽을 로그아웃하고 실패로 돌린다.
+                tcs.TrySetResult(await SyncDataAfterLogin());
             }
             else
             {
@@ -346,8 +350,20 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return tcs.Task;
     }
 
+    /// <summary>로그인 성공 뒤 동기화를 돌리고, 계속하면 안 되는 경우 양쪽을 로그아웃하고 실패로 돌립니다.</summary>
+    private async Task<SupabaseResult> SyncOrFailLoginAsync(SupabaseResult sdkResult)
+    {
+        if (await SyncDataAfterLogin())
+            return sdkResult;
+
+        await Supabase.SignOutFullyAsync();
+        return SupabaseResult.Fail(NanooStorageReadFailedReason);
+    }
+
     private async Task<SupabaseResult> InterceptSignOutFully(Func<Task<SupabaseResult>> sdkSignOut)
     {
+        _nanooSyncedThisLogin = false;
+
         if (string.IsNullOrEmpty(_nanooAccessToken))
             return await sdkSignOut();
 
@@ -546,6 +562,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <summary>PlayNANOO 로그인 성공 후 Supabase 실패 시 PlayNANOO 로그아웃으로 되돌립니다.</summary>
     private Task RollbackNanooLoginAsync()
     {
+        _nanooSyncedThisLogin = false;
         if (string.IsNullOrEmpty(_nanooAccessToken)) return Task.CompletedTask;
         var token = _nanooAccessToken;
         _nanooAccessToken = null;
@@ -632,6 +649,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // 게임은 자동 로그인 실패로 받아 명시 로그인(게스트/소셜)으로 유도합니다.
         var nanooOk = !string.IsNullOrEmpty(storedToken)
                       && await RestoreNanooSessionAsync(storedToken);
+
+        // 수동 로그인과 같게 동기화한다. 빠지면 매일 자동 로그인만 타는 유저는 나누와 한 번도 맞추지
+        // 않은 채 플레이하게 되고, 나누 쓰기도 영영 열리지 않는다.
+        if (nanooOk && !await SyncDataAfterLogin())
+            nanooOk = false;
 
         if (!nanooOk)
             await Supabase.SignOutFullyAsync();
@@ -741,19 +763,33 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         public static NanooRead From(string json)   => new NanooRead(false, string.IsNullOrEmpty(json) ? null : json);
     }
 
-    private async Task SyncDataAfterLogin()
+    /// <summary>
+    /// 로그인 직후 SDK 와 나누 세이브를 맞춥니다. 성공한 갈래에서만 나누 쓰기를 엽니다.
+    /// </summary>
+    /// <returns>
+    /// 로그인을 계속해도 되면 true. 나누를 못 읽었는데 SDK 행도 없을 때만 false —
+    /// 그대로 진행하면 SDK 에 기본값 행이 생기고, 그 위에서 플레이한 기록이 다음 로그인에 나누 원본을 이긴다.
+    /// </returns>
+    private async Task<bool> SyncDataAfterLogin()
     {
+        // await 보다 먼저 닫는다 — 동기화가 도는 동안(로그아웃 없이 계정을 바꾼 경우 이전 계정 데이터가
+        // 로컬에 남아 있다) 게임이 SaveNow 를 불러도 나누에 쓰지 않게.
+        _nanooSyncedThisLogin = false;
+
         var save = Save;
         if (save == null)
         {
             Debug.LogWarning("[PlayNanooRuntime] StaticUserSave 인스턴스가 없습니다. 세이브 클래스를 초기화했는지 확인하세요.");
-            return;
+            return true;
         }
 
         var (ok, hasRow, sdkTime) = await save.NanooLoadWithStateAsync();
-        if (!ok) return;
+        if (!ok)
+        {
+            Debug.LogWarning("[PlayNanooRuntime] SDK 세이브를 읽지 못해 동기화를 건너뜁니다. 이번 로그인에서는 PlayNANOO 에 쓰지 않습니다.");
+            return true;
+        }
 
-        _nanooWriteBlocked = false;   // 이번 동기화 결과로 다시 판정한다
         var nanoo = await LoadRawFromNanoo();
 
         Trace($"동기화 시작 — SDK행={(hasRow ? "있음" : "없음")}, SDK시각={sdkTime:o}, " +
@@ -764,11 +800,18 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // 예전에는 못 읽은 것을 "나누가 낡음"으로 읽어 SDK 데이터로 원본을 덮어썼다.
         if (nanoo.ReadFailed)
         {
-            Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못해 동기화를 건너뜁니다. " +
-                             "이번 로그인에서는 나누에 쓰지 않습니다 — 다음 로그인에 다시 맞춥니다.");
-            _nanooWriteBlocked = true;
+            if (!hasRow)
+            {
+                // 여기서 행을 만들면 유저는 새 게임을 보고, 그 플레이가 다음 로그인에 나누 원본을 이긴다.
+                Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못했고 SDK 세이브도 없어 로그인을 실패로 돌립니다. " +
+                                 "다시 시도하세요 — 이대로 진행하면 새 게임 데이터가 기존 PlayNANOO 데이터를 덮게 됩니다.");
+                return false;
+            }
+
+            Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못해 SDK 세이브로 진행합니다. " +
+                             "이번 로그인에서는 PlayNANOO 에 쓰지 않습니다.");
             await save.TryLoadAsync();
-            return;
+            return true;
         }
 
         if (!hasRow)
@@ -776,28 +819,32 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             if (nanoo.HasData)
             {
                 Trace("판정: SDK행 없음 + 나누 데이터 있음 → 나누에서 가져옴(이관)");
-                await save.NanooPatchFromEmptyAsync(nanoo.Json);
+                _nanooSyncedThisLogin = await save.NanooPatchFromEmptyAsync(nanoo.Json);
             }
             else
             {
                 Trace("판정: SDK행 없음 + 나누도 비어 있음 → 새 게임으로 시작");
-                await save.TryLoadAsync();
+                _nanooSyncedThisLogin = await save.TryLoadAsync();
             }
-            return;
+            if (!_nanooSyncedThisLogin) Trace("동기화 실패 — 이번 로그인에서는 나누에 쓰지 않음");
+            return true;
         }
 
         var nanooTime = save.NanooParseCompareTimestamp(nanoo.Json);
         if (nanooTime > sdkTime)
         {
             Trace($"판정: 나누가 최신(나누={nanooTime:o} > SDK={sdkTime:o}) → 나누에서 가져옴");
-            await save.NanooPatchFromLastLoadedAsync(nanoo.Json);
+            _nanooSyncedThisLogin = await save.NanooPatchFromLastLoadedAsync(nanoo.Json);
+            if (!_nanooSyncedThisLogin) Trace("동기화 실패 — 이번 로그인에서는 나누에 쓰지 않음");
         }
         else
         {
             Trace($"판정: SDK가 최신(나누={nanooTime:o} <= SDK={sdkTime:o}) → 나누를 SDK 데이터로 덮어씀");
             save.NanooApplyLastLoaded();
             SaveToNanoo(save.NanooGetLastLoadedJson());
+            _nanooSyncedThisLogin = true;
         }
+        return true;
     }
 
     /// <summary>
@@ -821,23 +868,42 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     protected virtual Task<NanooRead> LoadRawFromNanoo()
     {
         var tcs = new TaskCompletionSource<NanooRead>();
-        _plugin.Storage.Load("Data", (status, _, _, values) =>
-        {
-            if (status != Configure.PN_API_STATE_SUCCESS)
-            {
-                Trace($"나누 읽기 실패 — status={status}");
-                tcs.SetResult(NanooRead.Failed());
-                return;
-            }
-            var raw = values["StorageValue"]?.ToString();
-            Trace($"나누 읽기 성공 — 길이={raw?.Length ?? 0}");
-            tcs.SetResult(NanooRead.From(raw));
-        });
+        _plugin.Storage.Load("Data", (status, message, _, values) =>
+            tcs.SetResult(ToNanooRead(status, message, values)));
         return tcs.Task;
     }
 
-    /// <summary>PlayNANOO에 JSON 데이터를 저장합니다.</summary>
-    public virtual void SaveToNanoo(string json)
+    /// <summary>
+    /// PlayNANOO 스토리지 읽기 결과를 분류합니다. 나누는 저장된 값이 없을 때도 실패 상태로 답하고
+    /// message 에 <c>10006</c> 을 싣습니다 — 이걸 읽기 실패로 보면 빈 저장소 유저는 매번 쓰기가 막혀
+    /// 나누가 영영 채워지지 않습니다(기존 게임 코드도 10006 을 "서버 데이터 없음"으로 처리합니다).
+    /// </summary>
+    protected NanooRead ToNanooRead(string status, string message, Dictionary<string, object> values)
+    {
+        if (status == Configure.PN_API_STATE_SUCCESS)
+        {
+            var raw = values != null && values.TryGetValue("StorageValue", out var v) ? v?.ToString() : null;
+            Trace($"나누 읽기 성공 — 길이={raw?.Length ?? 0}");
+            return NanooRead.From(raw);
+        }
+
+        if (message == NanooStorageNotFoundMessage)
+        {
+            Trace("나누 읽기 — 저장된 데이터 없음(10006)");
+            return NanooRead.From(null);
+        }
+
+        Trace($"나누 읽기 실패 — status={status}, message={message}");
+        return NanooRead.Failed();
+    }
+
+    private const string NanooStorageNotFoundMessage = "10006";
+
+    /// <summary>
+    /// PlayNANOO에 JSON 데이터를 그대로 저장합니다. 가드가 없어 게임에 열지 않습니다 — 게임은
+    /// <see cref="TrueBaseNanoo.SaveNow"/>(가드를 거치는 <see cref="SaveCurrentToNanoo"/>)를 씁니다.
+    /// </summary>
+    protected virtual void SaveToNanoo(string json)
     {
         TraceNanooWrite("SaveToNanoo", json);
         if (string.IsNullOrEmpty(json)) return;
@@ -863,14 +929,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     }
 
     /// <summary>
-    /// 지금 나누에 써도 되는 상태인지. 서버 정본을 한 번도 못 읽었거나 이번 로그인에서
-    /// 나누 읽기가 실패했으면 쓰지 않습니다. 기본값으로 원본을 덮는 사고를 막는 마지막 방어선입니다.
+    /// 지금 나누에 써도 되는 상태인지. 이번 로그인의 동기화가 성공으로 끝나지 않았거나 서버 정본을
+    /// 못 읽었으면 쓰지 않습니다. 기본값으로 원본을 덮는 사고를 막는 마지막 방어선입니다.
     /// </summary>
     private bool CanWriteToNanoo(string caller)
     {
-        if (_nanooWriteBlocked)
+        if (!_nanooSyncedThisLogin)
         {
-            Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 이번 로그인에서 PlayNANOO 읽기가 실패해 쓰기를 막았습니다.");
+            Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 이번 로그인의 PlayNANOO 동기화가 끝나지 않았거나 실패했습니다.");
             return false;
         }
 
