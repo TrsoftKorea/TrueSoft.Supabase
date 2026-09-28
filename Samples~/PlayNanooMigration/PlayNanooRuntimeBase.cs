@@ -683,12 +683,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 진단 로그 ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 플레이나누 읽기·쓰기와 동기화 판정을 콘솔에 남깁니다. <b>플레이나누 데이터가 언제 무엇에
-    /// 덮였는지 추적할 때 켭니다.</b> 원인을 확인한 뒤에는 <c>false</c>로 되돌리세요 — 로그인마다
-    /// 여러 줄이 남고, 쓰기 로그에는 호출 경로 전체가 붙습니다.
-    /// </summary>
-    public static bool NanooTrace = true;
+    // 인스펙터 값이라 씬에 저장돼 빌드까지 따라간다 — 실기기에서 쫓을 때도 체크만 하면 된다.
+    // 로그인마다 여러 줄이 남고 쓰기 로그에는 호출 경로 전체가 붙으므로 평소에는 끈다.
+    [Header("진단")]
+    [Tooltip("켜면 플레이나누 읽기·쓰기와 동기화 판정이 콘솔에 남습니다. 플레이나누 데이터가 언제 무엇에 덮였는지 추적할 때만 켜세요.")]
+    [SerializeField] private bool nanooTrace;
 
     private const string TraceTag = "[PlayNanooTrace]";
 
@@ -697,9 +696,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// 동기화의 SDK 승 갈래, 세이브 삭제(초기값 되돌리기), 게임이 직접 부르는 SaveCurrentToNanoo.
     /// 호출 경로를 함께 남겨야 셋 중 무엇이었는지 사후에 가릴 수 있습니다.
     /// </summary>
-    protected static void TraceNanooWrite(string caller, string json)
+    protected void TraceNanooWrite(string caller, string json)
     {
-        if (!NanooTrace) return;
+        if (!nanooTrace) return;
 
         var len  = json?.Length ?? -1;
         var head = string.IsNullOrEmpty(json)
@@ -711,9 +710,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                   $"  호출 경로:\n{StackTraceUtility.ExtractStackTrace()}");
     }
 
-    private static void Trace(string message)
+    private void Trace(string message)
     {
-        if (NanooTrace) Debug.Log($"{TraceTag} {message}");
+        if (nanooTrace) Debug.Log($"{TraceTag} {message}");
     }
 
     // ── 데이터 동기화 ─────────────────────────────────────────────────────────
