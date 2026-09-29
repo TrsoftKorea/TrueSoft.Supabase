@@ -23,7 +23,7 @@ else
 ::: tip Android 사용 시
 Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs에 `{패키지이름}://login-callback`만 등록하면 되고, 나머지는 자동 처리됩니다. 자세히는 [대시보드 설정](./setup)을 참고하세요.
 
-플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열립니다. [플레이나누 이관 중 로그인](/guide/migration/login#login-call)을 참고하세요.
+플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열립니다. [플레이나누 이관 중 로그인](/guide/migration/login#apple-android)을 참고하세요.
 :::
 
 **반환**
