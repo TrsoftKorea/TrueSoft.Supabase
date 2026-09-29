@@ -107,6 +107,12 @@ namespace TrueBase.Unity
         /// <summary>PlayNANOO Apple 로그인 인터셉터가 등록되어 있는지 여부. 브라우저 기반 Apple 로그인 가드에 사용합니다.</summary>
         internal static bool IsPlayNanooAppleInterceptionActive => _interceptSignInWithAppleIdToken != null;
 
+        /// <summary>
+        /// PlayNANOO 웹뷰로 Android Apple ID 토큰을 받아 오는 훅. 등록돼 있으면 Android 의 <see cref="TrySignInWithAppleAsync"/>가
+        /// 브라우저 대신 이것으로 토큰을 받아 ID 토큰 로그인 경로(나누 인터셉터 포함)로 넘긴다.
+        /// </summary>
+        internal static Func<Task<SupabaseResult<string>>> _nanooAppleAndroidIdToken;
+
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
         internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;
         // 인자 순서: purchaseToken, productId, priceAmount, priceCurrency, rawReceipt, sdkVerify.
@@ -168,6 +174,18 @@ namespace TrueBase.Unity
             _interceptIAPApple  = null;
             _interceptIAPGoogle = null;
             _nanooResetStorage  = null;
+            _nanooAppleAndroidIdToken = null;
+        }
+
+        /// <summary>
+        /// Android 에서 Apple ID 토큰을 받아 오는 방법을 등록합니다. PlayNANOO 이관 브릿지 전용.
+        /// <para>등록하면 Android 의 <c>Supabase.SignInWithAppleAsync()</c>가 브라우저 로그인 대신 이 방법으로 토큰을 받습니다.
+        /// 브라우저 로그인은 토큰이 앱을 거치지 않아 PlayNANOO 를 함께 로그인시킬 수 없기 때문입니다.</para>
+        /// </summary>
+        /// <param name="provider">토큰을 돌려주거나, 취소면 <c>apple_signin_cancelled</c> 등의 사유로 실패합니다.</param>
+        public static void RegisterNanooAppleAndroidIdToken(Func<Task<SupabaseResult<string>>> provider)
+        {
+            _nanooAppleAndroidIdToken = provider;
         }
 
         /// <summary>
@@ -1102,6 +1120,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 플랫폼에 맞는 Apple 로그인을 자동으로 수행합니다.
         /// iOS는 네이티브 Sign in with Apple, Android는 브라우저 기반 OAuth(설정의 딥링크 스킴 사용)로 분기합니다.
+        /// PlayNANOO 병행 중인 Android는 PlayNANOO 웹뷰로 토큰을 받아 ID 토큰 로그인으로 이어집니다.
         /// </summary>
         public static async Task<SupabaseResult> TrySignInWithAppleAsync()
         {
@@ -1109,6 +1128,9 @@ namespace TrueBase.Unity
             var r = await SignInWithAppleAsync();
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
 #elif UNITY_ANDROID && !UNITY_EDITOR
+            if (_nanooAppleAndroidIdToken != null)
+                return await TrySignInWithNanooAppleAndroidAsync();
+
             // 딥링크 스킴은 앱 패키지 이름을 그대로 사용합니다(전역 고유 → 충돌 없음). 매니페스트도 같은 값으로 자동 주입됩니다.
             return await AppleWebLogin.TrySignInAsync(Application.identifier, AppleAndroidRedirectHost);
 #else
@@ -1116,6 +1138,61 @@ namespace TrueBase.Unity
             LogApiResult(ApiLogTags.AuthAppleIdToken, false, SupabaseErrorCode.AppleSignInUnsupportedPlatform);
             return SupabaseResult.Fail(SupabaseErrorCode.AppleSignInUnsupportedPlatform);
 #endif
+        }
+
+        // 토큰을 받아 로그인(나누 포함)이 도는 동안만 켠다. 창 단계는 막지 않는다 — 닫힘을 놓친 창을 새로 여는 건 런타임이 정한다.
+        private static bool _nanooAppleSignInRunning;
+
+        /// <summary>PlayNANOO 웹뷰로 받은 Apple ID 토큰으로 로그인합니다(Android 전용 경로).</summary>
+        private static async Task<SupabaseResult> TrySignInWithNanooAppleAndroidAsync()
+        {
+            // 창을 띄우기 전에 거른다. 띄운 뒤 거절하면 유저가 마친 애플 로그인이 버려진다.
+            if (!await EnsureInitializedAsync())
+                return FailNanooApple(SupabaseErrorCode.NotInitialized);
+            if (IsAnonymousSession(_currentSession))
+                return FailNanooApple(SupabaseErrorCode.AnonymousRequiresLink);
+            // 로그인 중 재호출이 새 창을 열면 로그인이 두 번 겹쳐 세션·나누 동기화가 두 번 돈다.
+            if (_nanooAppleSignInRunning)
+                return FailNanooApple(SupabaseErrorCode.OAuthLoginInProgress);
+
+            SupabaseResult<string> token;
+            try
+            {
+                token = await _nanooAppleAndroidIdToken();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                return FailNanooApple("apple_token_provider_exception");
+            }
+
+            if (token == null || !token.IsSuccess || string.IsNullOrWhiteSpace(token.Data))
+            {
+                var reason = token != null && !token.IsSuccess && !string.IsNullOrEmpty(token.ErrorCode)
+                    ? token.ErrorCode
+                    : SupabaseErrorCode.AppleIdTokenEmpty;
+                return FailNanooApple(reason);
+            }
+
+            // 창이 닫힌 뒤 토큰이 오기까지의 사이에 다른 호출이 먼저 로그인을 시작했을 수 있다.
+            if (_nanooAppleSignInRunning)
+                return FailNanooApple(SupabaseErrorCode.OAuthLoginInProgress);
+
+            _nanooAppleSignInRunning = true;
+            try
+            {
+                return await TrySignInWithAppleIdTokenAsync(token.Data.Trim());
+            }
+            finally
+            {
+                _nanooAppleSignInRunning = false;
+            }
+        }
+
+        private static SupabaseResult FailNanooApple(string reason)
+        {
+            LogApiResult(ApiLogTags.AuthAppleIdToken, false, reason, errorOnFail: !IsExpectedFailureReason(reason));
+            return SupabaseResult.Fail(reason);
         }
 
         /// <summary>브라우저 기반 Apple 로그인 딥링크의 호스트(스킴은 앱 패키지 이름을 사용). 매니페스트 자동 주입·런타임이 공유합니다.</summary>

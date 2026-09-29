@@ -43,6 +43,10 @@ namespace TrueBase.Unity
         public static void RegisterNanooStorageReset(Func<string, Task> reset) =>
             SupabaseSDK.RegisterNanooStorageReset(reset);
 
+        /// <inheritdoc cref="SupabaseSDK.RegisterNanooAppleAndroidIdToken"/>
+        public static void RegisterNanooAppleAndroidIdToken(Func<Task<SupabaseResult<string>>> provider) =>
+            SupabaseSDK.RegisterNanooAppleAndroidIdToken(provider);
+
         /// <inheritdoc cref="SupabaseSDK.RegisterIAPAppleInterceptor"/>
         public static void RegisterIAPAppleInterceptor(
             Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor) =>

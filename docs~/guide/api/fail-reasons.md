@@ -106,7 +106,7 @@ bool Handle(SupabaseResult result)
 | `AppleSignInUnsupportedPlatform` | 현재 플랫폼에서는 Apple 로그인을 지원하지 않습니다 |
 | `AppleLinkFailed` | Supabase Apple identity 연동에 실패했습니다 |
 | `AppleLinkNotCleared` | Apple 연동 후 익명 플래그가 해제되지 않았습니다 |
-| `PlayNanooBrowserAppleUnsupported` | PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다 |
+| `PlayNanooBrowserAppleUnsupported` | PlayNANOO 연동 중인데 플레이나누 샘플이 오래돼 Android Apple 로그인 창을 열 수 없습니다. 샘플을 다시 가져오세요 |
 
 ## 웹 OAuth
 
@@ -114,7 +114,7 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 refresh_token이 없습니다 |
 | `OAuthRedirectSchemeEmpty` | OAuth 리다이렉트 스킴이 비어있습니다 |
-| `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다. 플레이나누 Android Apple 로그인은 창을 여는 중에 다시 누를 때만 돌려보냅니다 |
+| `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다. 플레이나누 Android Apple 로그인은 창을 여는 중이거나 로그인 처리 중에 다시 누를 때 돌려보냅니다 |
 
 ## 닉네임
 

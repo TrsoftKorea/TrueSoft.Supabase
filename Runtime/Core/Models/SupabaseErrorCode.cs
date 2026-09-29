@@ -125,7 +125,7 @@ namespace TrueBase.Core.Common
         /// <summary>다른 로그인이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다.</summary>
         public const string OAuthLoginInProgress = "oauth_login_already_in_progress";
 
-        /// <summary>PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. PlayNANOO WebView로 받은 토큰을 <c>SignInWithAppleIdTokenAsync</c>에 전달하세요.</summary>
+        /// <summary>PlayNANOO 연동 중인데 Android Apple 토큰을 받아 올 방법이 등록되지 않아 브라우저 로그인으로 갈 뻔했습니다. 런타임이 <c>SupabaseBridge.RegisterNanooAppleAndroidIdToken</c>을 불러야 합니다.</summary>
         public const string PlayNanooBrowserAppleUnsupported = "playnanoo_active_browser_apple_unsupported";
 
         /// <summary>Supabase Apple identity 연동에 실패했습니다.</summary>

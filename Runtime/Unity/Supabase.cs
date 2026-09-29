@@ -44,6 +44,10 @@ namespace TrueBase.Unity
         private static async Task<SupabaseSignInResult> ToSignInResultAsync(Task<SupabaseResult> loginTask)
         {
             var r = await loginTask;
+            // "이미 진행 중"으로 돌려보낸 호출은 슬롯을 건드리지 않는다 — 진행 중인 로그인이 채울 프로필을 가로채게 된다.
+            if (r.Reason == SupabaseReason.OAuthLoginInProgress)
+                return SupabaseSignInResult.Fail(r.ErrorCode);
+
             // 성공/실패 무관하게 전달 슬롯을 1회 소비해 다음 로그인으로 잔여 값이 새지 않게 한다.
             var profile = SupabaseSDK.ConsumePendingSignInProfile();
             if (r.IsSuccess)

@@ -11,6 +11,7 @@
 // [게임 코드에서 로그인 호출 — 런타임 유무와 무관하게 동일]
 //   await Supabase.SignInAnonymouslyAsync()
 //   await Supabase.SignInWithGoogleAsync()
+//   await Supabase.SignInWithAppleAsync()                     // Android 는 브라우저 대신 나누 웹뷰가 열린다
 //   await Supabase.SignInWithAppleIdTokenAsync(token)
 //   await Supabase.LinkGoogleToGuestWithIdTokenAsync(token)   // 익명 → Google 연동
 //   await Supabase.LinkAppleToGuestWithIdTokenAsync(token)    // 익명 → Apple 연동
@@ -60,7 +61,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const double NanooTokenRefreshLeadHours = 1.0;   // 만료 1시간 전부터 갱신
     private const float  NanooRefreshCheckInterval  = 600f;  // 10분마다 체크
 
-    // 로그인 정보(UserId·OpenId)·탈퇴 이벤트·애플 로그인은 TrueBaseNanoo(정적 진입점)로 옮겼다.
+    // 로그인 정보(UserId·OpenId)·탈퇴 이벤트는 TrueBaseNanoo(정적 진입점)로 옮겼다. 애플 로그인은 표준 Supabase.SignInWithAppleAsync() 를 쓴다.
     // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
 
     private INanooSaveSyncable Save => SupabaseBridge.GetNanooSaveBridge();
@@ -159,6 +160,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // 안 그러면 다음 로그인의 동기화가 옛 데이터를 다시 밀어 넣어 삭제가 무효가 됩니다.
         SupabaseBridge.RegisterNanooStorageReset(ResetNanooStorageAsync);
 
+        // Android 의 Supabase.SignInWithAppleAsync() 가 브라우저 대신 나누 웹뷰로 토큰을 받게 한다.
+        // 브라우저 로그인은 토큰이 앱을 거치지 않아 나누를 함께 로그인시킬 수 없다.
+        SupabaseBridge.RegisterNanooAppleAndroidIdToken(RequestAppleIdTokenAsync);
+
         // IAP: PlayNanooRuntime이 있으면 SK1을 강제하고 PlayNanoo IAP를 인터셉터로 등록합니다.
 #if UNITY_IAP_V5_1 && UNITY_IOS
         // 네임스페이스가 UnityEngine.Purchasing 이 아니다 — StoreKitSelector 는 Purchasing.Utilities 에 있다.
@@ -212,7 +217,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         // 애플 로그인을 기다리는 쪽이 영영 풀리지 않게 끝내 둔다.
         if (_appleRequest != null)
-            FinishAppleSignIn(_appleRequest, SupabaseSignInResult.Fail("playnanoo_runtime_destroyed"));
+            FinishAppleSignIn(_appleRequest, SupabaseResult<string>.Fail("playnanoo_runtime_destroyed"));
     }
 
     // ── PlayNANOO 로그인 Task 래퍼 (병렬 실행용) ──────────────────────────────
@@ -594,53 +599,46 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private sealed class AppleSignInRequest
     {
-        public readonly TaskCompletionSource<SupabaseSignInResult> Tcs =
-            new TaskCompletionSource<SupabaseSignInResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource<SupabaseResult<string>> Tcs =
+            new TaskCompletionSource<SupabaseResult<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
         public readonly float StartedAt = Time.realtimeSinceStartup;
-        public NanooAppleWebViewWatcher Watcher = null; // 대입이 안드로이드 판에만 있다(CS0649 방지)
-        public bool TokenReceived;
+        public NanooAppleWebViewWatcher Watcher;
         public bool Done;
     }
 
     private AppleSignInRequest _appleRequest;
     // 나누 OpenAppleID 를 부르는 동안만 켠다. 나누가 그 안에서 예외를 삼키고 LogError 로만 남기기 때문이다.
-    private bool _openingAppleView = false; // 대입이 안드로이드 판에만 있어, 초기값이 없으면 에디터 판에서 CS0649 가 난다
+    private bool _openingAppleView;
 
-    /// <summary>애플 로그인 웹뷰를 열고 Supabase 로그인 결과를 기다립니다. 게임은 TrueBaseNanoo.StartAppleSignInAndroid 로 부릅니다.</summary>
-    internal Task<SupabaseSignInResult> OpenAppleIdSignInAsync()
+    /// <summary>
+    /// 애플 로그인 웹뷰를 열고 ID 토큰을 받아 옵니다. SDK 가 Android 의 <c>Supabase.SignInWithAppleAsync()</c>에서 부르며,
+    /// 받은 토큰으로 하는 로그인(나누 포함)은 SDK 가 이어서 합니다.
+    /// </summary>
+    private Task<SupabaseResult<string>> RequestAppleIdTokenAsync()
     {
-#if !UNITY_ANDROID || UNITY_EDITOR
-        // 에디터·iOS 판 나누는 이 호출에 경고만 남기고 아무 신호도 주지 않는다 — 기다리면 영영 안 끝난다.
-        return Task.FromResult(SupabaseSignInResult.Fail("apple_signin_unsupported_platform"));
-#else
         var previous = _appleRequest;
         if (previous != null)
         {
             // 게임 화면에 포커스가 있으면 창은 이미 없다 — 닫힘을 놓친 것이니 앞 요청을 끝내고 새로 연다.
             // 그러지 않으면 한 번 놓친 닫힘이 앱을 다시 켤 때까지 애플 로그인을 막는다.
-            // 토큰을 받아 Supabase 로그인 중이면 창은 없어도 진행 중이다 — 끊으면 끝나 가던 로그인을 버린다.
             // 창이 한 번도 안 떴으면 나누가 아직 주소를 받는 중일 수 있다(최대 10초). 그때 새로 열면 창이 두 겹으로 뜨고
-            // 나누의 토큰 콜백 칸이 하나뿐이라 로그인이 엉뚱한 요청으로 간다 — 주소 요청 제한 시간이 지난 뒤에만 연다.
+            // 나누의 토큰 콜백 칸이 하나뿐이라 토큰이 엉뚱한 요청으로 간다 — 주소 요청 제한 시간이 지난 뒤에만 연다.
             var age = Time.realtimeSinceStartup - previous.StartedAt;
             var windowShown = previous.Watcher != null && previous.Watcher.LostFocus;
-            var stale = !previous.TokenReceived &&
-                        Application.isFocused &&
+            var stale = Application.isFocused &&
                         age > (windowShown ? AppleRetapGuardSeconds : AppleUrlRequestTimeoutSeconds);
             if (!stale)
-                return Task.FromResult(SupabaseSignInResult.Fail("oauth_login_already_in_progress"));
+                return Task.FromResult(SupabaseResult<string>.Fail("oauth_login_already_in_progress"));
 
-            FinishAppleSignIn(previous, SupabaseSignInResult.Fail("apple_signin_cancelled"));
+            FinishAppleSignIn(previous, SupabaseResult<string>.Fail("apple_signin_cancelled"));
         }
 
         var request = new AppleSignInRequest();
         _appleRequest = request;
         Application.logMessageReceived += OnNanooLogDuringAppleSignIn;
         request.Watcher = gameObject.AddComponent<NanooAppleWebViewWatcher>();
-        request.Watcher.Begin(AppleCloseGraceSeconds, () =>
-        {
-            if (!request.TokenReceived)
-                FinishAppleSignIn(request, SupabaseSignInResult.Fail("apple_signin_cancelled"));
-        });
+        request.Watcher.Begin(AppleCloseGraceSeconds,
+            () => FinishAppleSignIn(request, SupabaseResult<string>.Fail("apple_signin_cancelled")));
 
         _openingAppleView = true;
         try
@@ -653,10 +651,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         }
 
         return request.Tcs.Task;
-#endif
     }
 
-    private async void OnAppleTokenReceived(AppleSignInRequest request, string token)
+    private void OnAppleTokenReceived(AppleSignInRequest request, string token)
     {
         if (request.Done)
         {
@@ -665,25 +662,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
         }
 
-        request.TokenReceived = true;
-        SupabaseSignInResult result;
-        try
-        {
-            result = await Supabase.SignInWithAppleIdTokenAsync(token);
-        }
-        catch (Exception e)
-        {
-            Debug.LogException(e);
-            result = SupabaseSignInResult.Fail("playnanoo_apple_signin_failed");
-        }
-
-        FinishAppleSignIn(request, result);
+        FinishAppleSignIn(request, SupabaseResult<string>.Success(token));
     }
 
     private void OnNanooLogDuringAppleSignIn(string condition, string stackTrace, LogType type)
     {
         var request = _appleRequest;
-        if (request == null || request.TokenReceived)
+        if (request == null)
             return;
 
         // 여는 도중의 오류(나누 키 미설정 등)는 나누가 예외를 삼키고 문구 없이 남긴다. 연 뒤에는 주소 생성 실패 문구만 믿는다.
@@ -694,10 +679,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return;
 
         Debug.LogWarning("[PlayNanooRuntime] 애플 로그인 창을 열지 못했습니다: " + condition);
-        FinishAppleSignIn(request, SupabaseSignInResult.Fail("playnanoo_apple_webview_failed"));
+        FinishAppleSignIn(request, SupabaseResult<string>.Fail("playnanoo_apple_webview_failed"));
     }
 
-    private void FinishAppleSignIn(AppleSignInRequest request, SupabaseSignInResult result)
+    private void FinishAppleSignIn(AppleSignInRequest request, SupabaseResult<string> result)
     {
         if (request.Done) return;
         request.Done = true;

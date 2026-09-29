@@ -34,5 +34,5 @@ Apple은 계정을 삭제할 때 Sign in with Apple 연결도 끊도록 요구�
 서버에는 [시크릿](/guide/start/database-setup#secrets) `APPLE_TEAM_ID`·`APPLE_KEY_ID`·`APPLE_PRIVATE_KEY`·`APPLE_BUNDLE_ID`와 `apple-token` 함수가 있어야 합니다.
 
 ::: warning Android 브라우저 로그인은 연결을 끊지 못합니다
-Android의 [신규 로그인](./signin)은 브라우저로 Supabase가 대신 로그인하므로 인증 코드가 앱에 오지 않습니다. App Store 심사 대상은 iOS 앱이라 심사에는 영향이 없습니다.
+Android의 [신규 로그인](./signin)은 브라우저로 Supabase가 대신 로그인하므로 인증 코드가 앱에 오지 않습니다. 플레이나누 창으로 로그인해도 창이 토큰만 넘겨 주므로 같습니다. App Store 심사 대상은 iOS 앱이라 심사에는 영향이 없습니다.
 :::
