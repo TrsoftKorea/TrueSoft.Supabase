@@ -87,7 +87,9 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `GoogleSignInCancelled` | 사용자가 Google 로그인 화면을 직접 취소했습니다 |
 | `GoogleWebClientIdEmpty` | `SupabaseSettings.googleWebClientId`가 설정되지 않았습니다 |
-| `GoogleSignInFailed` | Play Services 내부 오류입니다 |
+| `GoogleIosClientIdInvalid` | `SupabaseSettings.googleIosClientId`가 비어 있거나, iOS 클라이언트 ID 형식이 아니거나, 웹 클라이언트 ID와 같습니다 |
+| `GoogleRevokeNoToken` | iOS에서 이번 실행 중 Google 로그인으로 받은 토큰이 없어 접근 권한을 회수하지 못했습니다 |
+| `GoogleSignInFailed` | Google 로그인 처리 중 오류가 났습니다 |
 | `GoogleIdTokenEmpty` | Google ID 토큰을 획득하지 못했습니다 |
 | `GoogleLinkFailed` | Supabase Google identity 연동에 실패했습니다 |
 | `GoogleLinkNotCleared` | Google 연동 후 익명 플래그가 해제되지 않았습니다 |
@@ -112,7 +114,7 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 refresh_token이 없습니다 |
 | `OAuthRedirectSchemeEmpty` | OAuth 리다이렉트 스킴이 비어있습니다 |
-| `OAuthLoginInProgress` | 이미 진행 중인 웹 OAuth 로그인이 있습니다 |
+| `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다 |
 
 ## 닉네임
 

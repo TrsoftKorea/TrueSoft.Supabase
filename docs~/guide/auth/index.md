@@ -20,7 +20,7 @@
 
 <div class="tb-cards">
 
-- [**Google**<br><small>Play Services OAuth</small>](/guide/social/google/)
+- [**Google**<br><small>Android·iOS 네이티브 로그인</small>](/guide/social/google/)
 - [**Apple**<br><small>Apple ID 토큰</small>](/guide/social/apple/)
 
 </div>

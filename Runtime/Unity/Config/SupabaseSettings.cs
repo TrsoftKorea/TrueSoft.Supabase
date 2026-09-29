@@ -9,7 +9,7 @@ namespace TrueBase.Unity
     /// 이 에셋은 프로젝트 전역에서 재사용되는 정적 값(서버 주소, 키, REST 테이블명, 기본 옵션)만 정의합니다.
     /// 씬 실행 정책(자동 복원, 폴링 주기 등)은 <see cref="Config.SupabaseRuntime"/>에서 제어합니다.
     /// 런타임에서는 <c>Resources/SupabaseSettings</c> 이름으로 로드되므로 경로·파일명을 맞춰야 합니다.
-    /// <see cref="Supabase.SignInWithGoogleAsync()"/> 호출 시 <see cref="googleWebClientId"/>를 읽습니다.
+    /// <see cref="Supabase.SignInWithGoogleAsync()"/> 호출 시 Android는 <see cref="googleWebClientId"/>, iOS는 <see cref="googleIosClientId"/>를 읽습니다.
     /// </remarks>
     [CreateAssetMenu(fileName = "SupabaseSettings", menuName = "TrueSoft/Supabase/Supabase 설정")]
     public sealed class SupabaseSettings : ScriptableObject
@@ -27,6 +27,10 @@ namespace TrueBase.Unity
         [Label("Google 웹 클라이언트 ID")]
         [Tooltip("Google Cloud Console의 웹 애플리케이션 OAuth 클라이언트 ID. Google 로그인 미사용 시 공란.")]
         public string googleWebClientId;
+
+        [Label("Google iOS 클라이언트 ID")]
+        [Tooltip("Google Cloud Console의 iOS OAuth 클라이언트 ID. iOS에서 Google 로그인을 쓸 때만 입력.")]
+        public string googleIosClientId;
 
         [Header("기본 옵션")]
         [Label("API 결과 로그 사용")]

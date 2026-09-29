@@ -1,10 +1,10 @@
-# Google 추가 연동 · iOS
+# Google 추가 연동 · 커스텀
 
 ```csharp
 Task<SupabaseResult> Supabase.LinkGoogleWithIdTokenAsync(string idToken, string googleAccessToken = null)
 ```
 
-이미 로그인된 계정에 외부 SDK로 발급받은 ID 토큰으로 Google 계정을 추가 연동합니다. 익명 계정도 가능합니다.
+이미 로그인된 계정에 다른 SDK로 이미 받은 ID 토큰으로 Google 계정을 추가 연동합니다. 익명 계정도 가능합니다.
 
 ```csharp
 var result = await Supabase.LinkGoogleWithIdTokenAsync(idToken);

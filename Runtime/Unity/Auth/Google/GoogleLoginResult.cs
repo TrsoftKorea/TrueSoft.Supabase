@@ -2,7 +2,7 @@ using System;
 
 namespace TrueBase.Unity.Auth.Google
 {
-    /// <summary>Android 네이티브 Google 로그인 성공 시 반환되는 계정 정보.</summary>
+    /// <summary>네이티브 Google 로그인(Android·iOS) 성공 시 반환되는 계정 정보.</summary>
     [Serializable]
     internal sealed class GoogleLoginResult
     {

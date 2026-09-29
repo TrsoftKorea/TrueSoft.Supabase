@@ -52,12 +52,12 @@ export default defineConfig({
                 collapsed: true,
                 items: [
                   { text: '대시보드 설정', link: '/guide/social/google/setup' },
-                  { text: '신규 로그인 · Android', link: '/guide/social/google/signin-android' },
-                  { text: '신규 로그인 · iOS', link: '/guide/social/google/signin-ios' },
-                  { text: '게스트 연동 · Android', link: '/guide/social/google/link-android' },
-                  { text: '게스트 연동 · iOS', link: '/guide/social/google/link-ios' },
-                  { text: '추가 연동 · Android', link: '/guide/social/google/add-android' },
-                  { text: '추가 연동 · iOS', link: '/guide/social/google/add-ios' },
+                  { text: '신규 로그인', link: '/guide/social/google/signin' },
+                  { text: '신규 로그인 · 커스텀', link: '/guide/social/google/signin-token' },
+                  { text: '게스트 연동', link: '/guide/social/google/link' },
+                  { text: '게스트 연동 · 커스텀', link: '/guide/social/google/link-token' },
+                  { text: '추가 연동', link: '/guide/social/google/add' },
+                  { text: '추가 연동 · 커스텀', link: '/guide/social/google/add-token' },
                   { text: '연동 해제', link: '/guide/social/google/unlink' }
                 ]
               },

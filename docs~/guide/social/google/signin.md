@@ -1,10 +1,10 @@
-# Google 신규 로그인 · Android
+# Google 신규 로그인
 
 ```csharp
 Task<SupabaseSignInResult> Supabase.SignInWithGoogleAsync()
 ```
 
-Play Services 계정 선택기를 표시하고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. [대시보드 설정](./setup)의 Android 항목이 선행되어야 합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
+Google 계정 선택 창을 띄우고, Google ID 토큰을 받아 Supabase 로그인까지 자동으로 처리합니다. Android는 Play Services 계정 선택 창을, iOS는 기본 로그인 창을 씁니다. [Android 설정](./setup#android)·[iOS 설정](./setup#ios) 중 쓰는 플랫폼 항목을 먼저 완료하세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithGoogleAsync();
@@ -28,10 +28,13 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.GoogleSignInCancelled` | 사용자가 계정 선택기 취소 (뒤로가기 포함) |
-| `SupabaseReason.GoogleSignInFailed` | Play Services 오류 |
+| `SupabaseReason.GoogleSignInCancelled` | 사용자가 계정 선택 창을 닫음 |
+| `SupabaseReason.GoogleSignInFailed` | Google 로그인 처리 오류 |
+| `SupabaseReason.OAuthLoginInProgress` | iOS · Google 로그인이 이미 진행 중. 이 호출만 실패하고 진행 중인 로그인은 그대로 이어짐 |
 | `SupabaseReason.GoogleIdTokenEmpty` | ID 토큰 획득 실패 |
-| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-android)을 사용 |
+| `SupabaseReason.GoogleWebClientIdEmpty` | Android · `googleWebClientId`가 비어 있음 |
+| `SupabaseReason.GoogleIosClientIdInvalid` | iOS · `googleIosClientId`가 비었거나, 형식이 틀리거나, 웹 클라이언트 ID와 같음 |
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link)을 사용 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
 | `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

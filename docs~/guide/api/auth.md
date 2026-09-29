@@ -7,8 +7,8 @@
 | 메서드 | 설명 |
 |--------|------|
 | [`SignInAnonymouslyAsync`](/guide/auth/anonymous) | 게스트 로그인 |
-| [`SignInWithGoogleAsync`](/guide/social/google/signin-android) | Google 로그인 · Android 네이티브 |
-| [`SignInWithGoogleIdTokenAsync`](/guide/social/google/signin-ios) | Google 로그인 · iOS 커스텀 토큰 |
+| [`SignInWithGoogleAsync`](/guide/social/google/signin) | Google 로그인 · Android·iOS 네이티브 |
+| [`SignInWithGoogleIdTokenAsync`](/guide/social/google/signin-token) | Google 로그인 · 커스텀 ID 토큰 |
 | [`SignInWithAppleAsync`](/guide/social/apple/signin) | Apple 로그인 · 플랫폼 자동 |
 | [`SignInWithAppleIdTokenAsync`](/guide/social/apple/signin-token) | Apple 로그인 · 커스텀 ID 토큰 |
 | [`TriggerAutoLoginAsync`](/guide/auth/auto-login) | 저장된 세션으로 자동 로그인 |
@@ -18,12 +18,12 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`LinkGoogleToGuestAsync`](/guide/social/google/link-android) | 익명 → Google 연동 · Android |
-| [`LinkGoogleToGuestWithIdTokenAsync`](/guide/social/google/link-ios) | 익명 → Google 연동 · ID 토큰 |
+| [`LinkGoogleToGuestAsync`](/guide/social/google/link) | 익명 → Google 연동 · Android·iOS 네이티브 |
+| [`LinkGoogleToGuestWithIdTokenAsync`](/guide/social/google/link-token) | 익명 → Google 연동 · 커스텀 ID 토큰 |
 | [`LinkAppleToGuestAsync`](/guide/social/apple/link) | 익명 → Apple 연동 · iOS 네이티브 |
 | [`LinkAppleToGuestWithIdTokenAsync`](/guide/social/apple/link-token) | 익명 → Apple 연동 · 커스텀 ID 토큰 |
-| [`LinkGoogleNativeAsync`](/guide/social/google/add-android) | 로그인된 계정에 Google 추가 연동 · Android |
-| [`LinkGoogleWithIdTokenAsync`](/guide/social/google/add-ios) | 로그인된 계정에 Google 추가 연동 · ID 토큰 |
+| [`LinkGoogleNativeAsync`](/guide/social/google/add) | 로그인된 계정에 Google 추가 연동 · Android·iOS 네이티브 |
+| [`LinkGoogleWithIdTokenAsync`](/guide/social/google/add-token) | 로그인된 계정에 Google 추가 연동 · 커스텀 ID 토큰 |
 | [`LinkAppleNativeAsync`](/guide/social/apple/add) | 로그인된 계정에 Apple 추가 연동 · iOS 네이티브 |
 | [`LinkAppleWithIdTokenAsync`](/guide/social/apple/add-token) | 로그인된 계정에 Apple 추가 연동 · 커스텀 ID 토큰 |
 | [`UnlinkGoogleAsync`](/guide/social/google/unlink) | 계정에서 Google 연동 해제 |

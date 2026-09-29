@@ -80,7 +80,13 @@ namespace TrueBase.Core.Common
         /// <summary><c>SupabaseSettings.googleWebClientId</c>가 설정되지 않았습니다.</summary>
         public const string GoogleWebClientIdEmpty = "google_web_client_id_empty";
 
-        /// <summary>Play Services 내부 오류입니다.</summary>
+        /// <summary><c>SupabaseSettings.googleIosClientId</c>가 비어 있거나, iOS 클라이언트 ID 형식이 아니거나, 웹 클라이언트 ID와 같습니다.</summary>
+        public const string GoogleIosClientIdInvalid = "google_ios_client_id_invalid";
+
+        /// <summary>iOS에서 이번 실행 중 Google 로그인으로 받은 토큰이 없어 접근 권한을 회수하지 못했습니다.</summary>
+        public const string GoogleRevokeNoToken = "google_revoke_no_token";
+
+        /// <summary>Google 로그인 처리 중 오류가 났습니다.</summary>
         public const string GoogleSignInFailed = "google_signin_failed";
 
         /// <summary>Google ID 토큰을 획득하지 못했습니다.</summary>
@@ -116,7 +122,7 @@ namespace TrueBase.Core.Common
         /// <summary>OAuth 리다이렉트 스킴이 비어있습니다.</summary>
         public const string OAuthRedirectSchemeEmpty = "oauth_redirect_scheme_empty";
 
-        /// <summary>이미 진행 중인 웹 OAuth 로그인이 있습니다.</summary>
+        /// <summary>다른 로그인이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다.</summary>
         public const string OAuthLoginInProgress = "oauth_login_already_in_progress";
 
         /// <summary>PlayNANOO 연동 중에는 브라우저 기반 Apple 로그인을 쓸 수 없습니다. PlayNANOO WebView로 받은 토큰을 <c>SignInWithAppleIdTokenAsync</c>에 전달하세요.</summary>

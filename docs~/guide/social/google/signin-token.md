@@ -1,10 +1,10 @@
-# Google 신규 로그인 · iOS
+# Google 신규 로그인 · 커스텀
 
 ```csharp
 Task<SupabaseSignInResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
 ```
 
-iOS 또는 커스텀 OAuth 흐름에서 외부 SDK로 발급받은 Google ID 토큰으로 Supabase에 로그인합니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
+다른 SDK나 직접 만든 OAuth 흐름으로 이미 받은 Google ID 토큰으로 Supabase에 로그인합니다. 계정 선택 창을 SDK가 띄우게 하려면 [신규 로그인](./signin)을 쓰세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
@@ -34,7 +34,7 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-ios)을 사용 |
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-token)을 사용 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
 | `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

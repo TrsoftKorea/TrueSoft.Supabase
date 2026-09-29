@@ -12,13 +12,15 @@ namespace TrueBase.Core.Http
     /// </summary>
     internal sealed class UnitySupabaseHttpClient : ISupabaseHttpClient
     {
-        private const int MaxRetries = 2;
         private readonly int _timeoutSeconds;
+        private readonly int _maxRetries;
 
         /// <param name="timeoutSeconds">요청 1회당 타임아웃(초). (기본값: 30)</param>
-        public UnitySupabaseHttpClient(int timeoutSeconds = 30)
+        /// <param name="maxRetries">첫 시도 뒤 재시도 횟수. 두 번 보내면 안 되는 요청(일회용 코드 교환 등)은 0. (기본값: 2)</param>
+        public UnitySupabaseHttpClient(int timeoutSeconds = 30, int maxRetries = 2)
         {
             _timeoutSeconds = timeoutSeconds;
+            _maxRetries = maxRetries;
         }
 
         /// <summary>HTTP 요청을 보내고, 재시도까지 모두 실패하면 <c>max_retries_exceeded</c> 실패를 반환합니다.</summary>
@@ -32,7 +34,7 @@ namespace TrueBase.Core.Http
             string jsonBody,
             Dictionary<string, string> headers)
         {
-            for (int attempt = 0; attempt <= MaxRetries; attempt++)
+            for (int attempt = 0; attempt <= _maxRetries; attempt++)
             {
                 var response = await SendOnceAsync(method, url, jsonBody, headers);
                 if (response.IsSuccess || !ShouldRetry(response, attempt))
@@ -102,8 +104,8 @@ namespace TrueBase.Core.Http
         /// 재시도 대상 판별. StatusCode 0(응답 자체를 못 받은 네트워크 오류)·429·500·502·503·504만 재시도합니다.
         /// </summary>
         /// <param name="attempt">0부터 시작하는 현재 시도 횟수.</param>
-        private static bool ShouldRetry(SupabaseHttpResponse response, int attempt) =>
-            attempt < MaxRetries &&
+        private bool ShouldRetry(SupabaseHttpResponse response, int attempt) =>
+            attempt < _maxRetries &&
             (response.StatusCode == 0   ||
              response.StatusCode == 429 ||
              response.StatusCode == 500 ||

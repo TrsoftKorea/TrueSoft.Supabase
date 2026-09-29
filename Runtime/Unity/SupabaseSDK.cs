@@ -19,7 +19,7 @@ namespace TrueBase.Unity
     /// </summary>
     /// <remarks>
     /// <b>구글 로그인 두 가지</b><br/>
-    /// • <see cref="SignInWithGoogleAsync()"/> — Android 네이티브 플러그인으로 계정 선택·ID 토큰 획득까지 포함한 끝단 흐름.<br/>
+    /// • <see cref="SignInWithGoogleAsync()"/> — Android·iOS 네이티브 로그인 창으로 계정 선택·ID 토큰 획득까지 포함한 끝단 흐름.<br/>
     /// • <see cref="SignInWithGoogleIdTokenAsync"/> — 이미 가진 Google ID 토큰 문자열만 넘겨 Supabase에만 맞출 때(iOS, 커스텀 OAuth, 테스트 등). 입력 형태가 달라 둘 다 유지합니다.
     /// </remarks>
     internal static class SupabaseSDK
@@ -467,7 +467,7 @@ namespace TrueBase.Unity
 
         /// <summary>이미 가진 Google ID 토큰 문자열로 Supabase에 로그인하고 SDK 세션을 맞춥니다.</summary>
         /// <remarks>
-        /// Android 네이티브 <see cref="SignInWithGoogleAsync"/>와 달리 «토큰 획득»은 호출자 책임입니다(iOS 플러그인, 웹 OAuth, 수동 입력 등).
+        /// 네이티브 <see cref="SignInWithGoogleAsync"/>와 달리 «토큰 획득»은 호출자 책임입니다(외부 플러그인, 웹 OAuth, 수동 입력 등).
         /// 익명(게스트) 세션에서는 자동 연동을 수행하지 않습니다. 연동은 <see cref="LinkGoogleToGuestWithIdTokenAsync"/>를 사용하세요.
         /// </remarks>
         public static async Task<SupabaseResult<SupabaseSession>> SignInWithGoogleIdTokenAsync(string idToken)
@@ -585,7 +585,8 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <c>Resources/SupabaseSettings</c>에 입력한 <c>googleWebClientId</c>로 Android 네이티브 Google 로그인을 수행합니다.
+        /// <c>Resources/SupabaseSettings</c>에 입력한 클라이언트 ID로 네이티브 Google 로그인을 수행합니다
+        /// (Android는 <c>googleWebClientId</c>, iOS는 <c>googleIosClientId</c>).
         /// </summary>
         /// <remarks>
         /// 인스펙터에 Web Client ID를 저장해 두고, 게임 코드에서는 인자 없이 호출할 때 쓰는 오버로드입니다.
@@ -616,7 +617,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 현재 익명 세션에 Google identity를 연동합니다(Android 네이티브 Google 로그인 사용).
+        /// 현재 익명 세션에 Google identity를 연동합니다(네이티브 Google 로그인 사용).
         /// </summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleToGuestAsync()
         {
@@ -635,7 +636,7 @@ namespace TrueBase.Unity
                 : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.GoogleLinkFailed);
         }
 
-        /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(Android 네이티브 Google 로그인 사용).</summary>
+        /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(네이티브 Google 로그인 사용).</summary>
         public static async Task<SupabaseResult<SupabaseSession>> LinkGoogleNativeAsync()
         {
             var ready = await EnsureGoogleNativeReadyAsync();
@@ -758,7 +759,7 @@ namespace TrueBase.Unity
             if (r != null && r.IsSuccess)
             {
                 // 다음 Google 연동 시 계정 선택창이 다시 나타나도록 네이티브 credential 상태를 정리합니다(베스트 에포트).
-                // Android 외 플랫폼에서는 네이티브 상태가 없어 실패할 수 있으나, 해제 자체는 이미 성공이므로 무시합니다.
+                // Android·iOS 외 플랫폼에서는 네이티브 상태가 없어 실패할 수 있으나, 해제 자체는 이미 성공이므로 무시합니다.
                 _ = await SignOutFromGoogleAsync();
             }
             return r;
@@ -1297,7 +1298,10 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.AuthAnonymous, r2);
         }
 
-        /// <summary>Android Play Services에서 Google 앱 접근 권한을 revoke합니다. 계정 삭제 시 호출하세요.</summary>
+        /// <summary>
+        /// Google 앱 접근 권한을 revoke합니다. 계정 삭제 시 호출하세요.
+        /// iOS는 이번 실행에서 로그인해 받은 토큰이 있을 때만 회수할 수 있고, 없으면 <c>GoogleRevokeNoToken</c>으로 실패합니다.
+        /// </summary>
         public static async Task<SupabaseResult<bool>> RevokeGoogleAccessAsync()
         {
             if (!await EnsureInitializedAsync())
@@ -1662,6 +1666,9 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.AutoLoginNoToken:
                 case SupabaseErrorCode.AutoLoginFailed:
 
+                // iOS에서 앱을 다시 켠 뒤라 회수할 Google 토큰이 없는 경우 — 플랫폼 한계라 게임이 고칠 것이 없다
+                case SupabaseErrorCode.GoogleRevokeNoToken:
+
                 // 유저 계정 상태 — 게임이 문구로 안내할 사유
                 case SupabaseErrorCode.UserBanned:
                 case SupabaseErrorCode.DuplicateLogin:
@@ -1807,7 +1814,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// Android 네이티브 Google 계정에서 로그아웃합니다. (Supabase 세션은 그대로이므로 필요하면 <see cref="ClearSession"/> 호출)
+        /// 네이티브 Google 계정에서 로그아웃합니다. iOS는 앱이 들고 있는 계정 상태가 없어 바로 성공합니다. (Supabase 세션은 그대로이므로 필요하면 <see cref="ClearSession"/> 호출)
         /// </summary>
         public static async Task<SupabaseResult<bool>> SignOutFromGoogleAsync()
         {
@@ -1944,13 +1951,23 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 네이티브 Google 로그인 전 공통 준비. 성공이면 <c>.Data</c>에 다듬은 Web Client ID가 담깁니다.
+        /// 네이티브 Google 로그인 전 공통 준비. 성공이면 <c>.Data</c>에 이 플랫폼의 클라이언트 ID가 담깁니다
+        /// (Android는 Web Client ID, iOS는 iOS Client ID).
         /// </summary>
         private static async Task<SupabaseResult<string>> EnsureGoogleNativeReadyAsync()
         {
-            var webClientId = TryGetGoogleWebClientIdFromSettings();
-            if (string.IsNullOrWhiteSpace(webClientId))
+#if UNITY_IOS && !UNITY_EDITOR
+            // 웹 클라이언트 ID도 같은 접미사로 끝나 형식만으로는 못 거른다. 웹 ID를 넣으면 구글이 창 안에 오류를 띄우고
+            // 앱으로 돌아오지 않아, 유저가 창을 닫으면 "취소"로 보고된다 — 설정 실수가 취소로 숨지 않게 여기서 막는다.
+            var clientId = TryGetGoogleIosClientIdFromSettings();
+            if (!GoogleIosOAuth.IsValidClientId(clientId) ||
+                string.Equals(clientId, TryGetGoogleWebClientIdFromSettings(), StringComparison.Ordinal))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.GoogleIosClientIdInvalid);
+#else
+            var clientId = TryGetGoogleWebClientIdFromSettings();
+            if (string.IsNullOrWhiteSpace(clientId))
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.GoogleWebClientIdEmpty);
+#endif
 
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized);
@@ -1958,13 +1975,13 @@ namespace TrueBase.Unity
             if (Auth == null)
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized);
 
-            return SupabaseResult<string>.Success(webClientId.Trim());
+            return SupabaseResult<string>.Success(clientId.Trim());
         }
 
-        /// <summary>준비된 Web Client ID로 네이티브 계정 선택 창을 띄우고 결과를 검증해 돌려줍니다.</summary>
-        private static async Task<SupabaseResult<GoogleLoginResult>> RequestNativeGoogleLoginAsync(string webClientId)
+        /// <summary>준비된 클라이언트 ID로 네이티브 계정 선택 창을 띄우고 결과를 검증해 돌려줍니다.</summary>
+        private static async Task<SupabaseResult<GoogleLoginResult>> RequestNativeGoogleLoginAsync(string clientId)
         {
-            var provider = new AndroidGoogleLoginProvider(EnsureGoogleLoginBridge(), webClientId);
+            var provider = new NativeGoogleLoginProvider(EnsureGoogleLoginBridge(), clientId);
             var loginResult = await RequestGoogleLoginResultAsync(provider);
             if (loginResult == null || !loginResult.IsSuccess || loginResult.Data == null)
                 return SupabaseResult<GoogleLoginResult>.Fail(loginResult?.ErrorCode ?? "google_signin_failed");
@@ -1972,9 +1989,9 @@ namespace TrueBase.Unity
             return SupabaseResult<GoogleLoginResult>.Success(loginResult.Data);
         }
 
-        /// <summary>Android 네이티브 Google 계정 선택 창을 띄우고 결과(ID 토큰 등)를 기다립니다.</summary>
+        /// <summary>네이티브 Google 계정 선택 창을 띄우고 결과(ID 토큰 등)를 기다립니다.</summary>
         /// <param name="provider">Web Client ID가 주입된 네이티브 로그인 프로바이더. null이면 즉시 실패.</param>
-        private static async Task<SupabaseResult<GoogleLoginResult>> RequestGoogleLoginResultAsync(AndroidGoogleLoginProvider provider)
+        private static async Task<SupabaseResult<GoogleLoginResult>> RequestGoogleLoginResultAsync(NativeGoogleLoginProvider provider)
         {
             if (provider == null)
                 return SupabaseResult<GoogleLoginResult>.Fail(SupabaseErrorCode.GoogleProviderNull);
@@ -3564,8 +3581,8 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// Android에서 네이티브 Google 계정 로그아웃을 시도한 뒤 <see cref="SignOutAsync"/>로 Supabase 세션을 정리합니다.
-        /// 에디터·비 Android에서는 Google 단계가 실패해도 Supabase 로그아웃은 진행합니다.
+        /// 네이티브 Google 계정 로그아웃을 시도한 뒤 <see cref="SignOutAsync"/>로 Supabase 세션을 정리합니다.
+        /// 에디터 등 네이티브 로그인이 없는 플랫폼에서는 Google 단계가 실패해도 Supabase 로그아웃은 진행합니다.
         /// 로그아웃 전 미전송 세이브를 자동으로 flush합니다.
         /// </summary>
         public static async Task SignOutFullyAsync()
@@ -3772,6 +3789,16 @@ namespace TrueBase.Unity
                 return null;
 
             return string.IsNullOrWhiteSpace(settings.googleWebClientId) ? null : settings.googleWebClientId.Trim();
+        }
+
+        /// <summary><c>Resources/SupabaseSettings</c>에서 Google iOS Client ID를 읽습니다.</summary>
+        private static string TryGetGoogleIosClientIdFromSettings()
+        {
+            var settings = Resources.Load<SupabaseSettings>("SupabaseSettings");
+            if (settings == null)
+                return null;
+
+            return string.IsNullOrWhiteSpace(settings.googleIosClientId) ? null : settings.googleIosClientId.Trim();
         }
 
         /// <summary>토큰이 유효한 익명 세션인지 판별합니다. null 세션·토큰 없는 세션은 false.</summary>

@@ -56,7 +56,7 @@ The SDK has three layers:
 - Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `LeaderboardFacade`, `CouponFacade`, `ChatFacade`, `ServerFunctionsFacade`) — high-level wrappers. **전부 `internal`**이며 `SupabaseSDK`의 `internal` 프로퍼티로만 접근한다 — 게임은 `Supabase` 파사드만 본다. `ChatFacade`는 구독 폴링(`ChatSubscription`)까지 들고 있다
 - **게임이 직접 쓰지 않는 타입은 `internal`로 둔다.** HTTP·JSON 구현, 부트스트랩, 로그인 브리지, 로그인 결과 DTO가 여기 해당한다. 게임에 남는 공개 타입은 게임이 **직접 인스턴스를 들고 있는 것**(`ChatSubscription`·`RemoteConfigListener`·IAP 파사드·`StaticUserSave`·`SupabaseSettings` 등)뿐이다
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
-- `Auth/Google/` — `GoogleLoginBridge`, `AndroidGoogleLoginProvider` for Play Services OAuth
+- `Auth/Google/` — `GoogleLoginBridge`, `NativeGoogleLoginProvider`. Android는 Play Services OAuth, iOS는 같은 브릿지가 `GoogleIosOAuth`(PKCE·토큰 교환) + `Plugins/iOS/TrueSoftGoogleLogin.mm`(기본 로그인 창)으로 처리
 - `Auth/Apple/` — `AppleLoginBridge`, `AppleLoginResult` for Sign in with Apple
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
 - `Json/UnitySupabaseJsonSerializer.cs` — Newtonsoft.Json implementation of `ISupabaseJsonSerializer`
@@ -146,7 +146,7 @@ The SDK has three layers:
 파사드 메서드에는 `Try` 접두어가 없다. `SupabaseSDK`의 동명 `Try*`는 내부 구현이다.
 
 - Anonymous sign-in: `Supabase.SignInAnonymouslyAsync()`
-- Google OAuth (Android): `SignInWithGoogleAsync()` via native Play Services (`GoogleLoginBridge`)
+- Google OAuth (Android·iOS): `SignInWithGoogleAsync()` via `GoogleLoginBridge` — Android는 Play Services(`googleWebClientId`), iOS는 기본 로그인 창 + PKCE(`googleIosClientId`, Supabase Google Client IDs에 iOS ID 추가 필요)
 - Google OAuth (iOS/custom): `SignInWithGoogleIdTokenAsync(idToken)`
 - Apple OAuth (ID token): `SignInWithAppleIdTokenAsync(idToken, rawNonce)` — 외부 SDK 없이 토큰 직접 전달
 - Guest → Google linking: `LinkGoogleToGuestAsync()` or `LinkGoogleToGuestWithIdTokenAsync()`. Must use these — calling plain `SignInWithGoogleAsync` from an anonymous session returns `anonymous_session_requires_explicit_link`.

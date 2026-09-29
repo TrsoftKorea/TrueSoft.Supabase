@@ -27,4 +27,6 @@ if (!r && r.Reason == SupabaseReason.CannotUnlinkLastIdentity)
 
 ::: info 계정 선택창·동의 화면
 연동 해제 시 네이티브 credential 상태가 정리되므로, 다음 연동 때 **계정 선택창**은 자동으로 다시 뜹니다. 권한 **동의 화면**까지 다시 띄우려면(OAuth grant 회수) `Supabase.RevokeGoogleAccessAsync()`를 별도로 호출하세요.
+
+iOS에서는 앱을 켠 뒤 Google로 로그인·연동한 그 실행 안에서만 회수할 수 있습니다. 저장된 세션으로 들어온 뒤라면 `SupabaseReason.GoogleRevokeNoToken`으로 실패합니다.
 :::
