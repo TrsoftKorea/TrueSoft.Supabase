@@ -34,14 +34,16 @@ namespace TrueBase.Editor
 
         private static void Sync()
         {
-            foreach (BuildTargetGroup group in Enum.GetValues(typeof(BuildTargetGroup)))
+            // 값이 아니라 이름으로 돈다. iOS(4)는 옛 이름 iPhone 과 값이 같아 값의 ToString() 이 Obsolete 인 "iPhone" 으로
+            // 나오고, 값으로 돌면 iOS 가 통째로 건너뛰어져 iOS 에만 심볼이 안 들어갔다(SDK Host 에서 확인, 2026-09-29).
+            foreach (var name in Enum.GetNames(typeof(BuildTargetGroup)))
             {
-                if (group == BuildTargetGroup.Unknown)
+                var field = typeof(BuildTargetGroup).GetField(name);
+                if (field == null || Attribute.IsDefined(field, typeof(ObsoleteAttribute)))
                     continue;
 
-                // Obsolete 빌드 타겟 그룹은 건너뜀.
-                var field = typeof(BuildTargetGroup).GetField(group.ToString());
-                if (field != null && Attribute.IsDefined(field, typeof(ObsoleteAttribute)))
+                var group = (BuildTargetGroup)field.GetValue(null);
+                if (group == BuildTargetGroup.Unknown)
                     continue;
 
                 NamedBuildTarget target;
