@@ -63,7 +63,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 
 ## 4. 시크릿 설정 {#secrets}
 
-대시보드 **Edge Functions > Secrets**에 등록합니다.
+대시보드 **Edge Functions > Secrets**에 등록합니다. 여러 개는 [한 번에 붙여넣기](#secrets-paste)로 몰아서 넣을 수 있습니다.
 
 | 시크릿 키 | 필수 | 용도 |
 |----------|----|------|
@@ -76,3 +76,25 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `APPLE_PRIVATE_KEY` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
 
 발급 절차는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)을 참고하세요.
+
+### 한 번에 붙여넣기 {#secrets-paste}
+
+대시보드 **Edge Functions > Secrets** 화면에는 여러 개를 한꺼번에 붙여넣을 수 있습니다. 아래 목록을 복사해 쓰는 기능의 값을 채운 뒤, 이름 칸에 통째로 붙여넣고 저장합니다. 저장하면 함수를 다시 배포하지 않아도 바로 적용됩니다.
+
+```ini
+CANCEL_TOKEN_SECRET=
+APPLE_BUNDLE_ID=
+APPLE_SHARED_SECRET=
+APPLE_TEAM_ID=
+APPLE_KEY_ID=
+```
+
+붙여넣은 뒤 목록에 이름이 모두 나타났는지 확인하세요. 값은 저장 후 다시 보이지 않습니다.
+
+::: warning 쓰지 않는 줄은 지우세요
+값을 비워 둔 줄도 그 이름으로 등록돼, 이미 넣어 둔 값을 빈 값으로 덮을 수 있습니다. 채우지 않은 줄은 지우고 붙여넣으세요.
+:::
+
+::: info 여러 줄짜리 값은 따로 넣습니다
+`APPLE_PRIVATE_KEY`의 `.p8` 내용과 `GOOGLE_SERVICE_ACCOUNT_JSON`은 여러 줄이라 목록에 섞으면 줄마다 다른 이름으로 잘릴 수 있습니다. 이 둘은 목록에서 빼고 하나씩 등록하세요 — 이름 칸에 이름을, 값 칸에 파일 내용을 그대로 붙여넣으면 됩니다.
+:::
