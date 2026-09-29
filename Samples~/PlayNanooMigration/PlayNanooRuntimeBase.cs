@@ -209,6 +209,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         Instance = null;
         SupabaseBridge.UnregisterPlayNanooInterceptors();
         // IAP 인터셉터는 UnregisterPlayNanooInterceptors 내부에서 함께 해제됩니다.
+
+        // 애플 로그인을 기다리는 쪽이 영영 풀리지 않게 끝내 둔다.
+        if (_appleRequest != null)
+            FinishAppleSignIn(_appleRequest, SupabaseSignInResult.Fail("playnanoo_runtime_destroyed"));
     }
 
     // ── PlayNANOO 로그인 Task 래퍼 (병렬 실행용) ──────────────────────────────
@@ -576,10 +580,189 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────
 
-    /// <summary>애플 로그인 웹뷰를 엽니다. 게임은 TrueBaseNanoo.StartAppleSignInAndroid 로 부릅니다.</summary>
-    internal void OpenAppleIdSignIn() =>
-        _plugin.OpenAppleID(
-            async token => await Supabase.SignInWithAppleIdTokenAsync(token));
+    // 나누 애플 웹뷰는 성공했을 때만 토큰을 보낸다. 애플 쪽 실패·닫기 버튼·뒤로가기는 창만 닫히고 아무 신호가 없다
+    // (PlayNANOOAndroid.dll · PlayNANOOPlugin.aar 를 풀어 확인, 2026-09-29). 그래서 창이 닫혀 앱으로 포커스가
+    // 돌아왔는데 잠시 기다려도 토큰이 없으면 취소로 본다. 포커스 신호가 안 오는 기기에서는 판정이 안 걸릴 뿐
+    // 로그인을 잘못 끊지는 않는다.
+    private const float AppleCloseGraceSeconds = 2f;
+    private const string AppleUrlFailedLog = "Apple Account URL Creation Failed"; // 나누 DLL 이 주소 생성 실패 때 남기는 유일한 흔적
+
+    // 창을 열자마자 다시 누른 연타만 막는 시간. 창은 전체 화면이라 창이 떠 있는 동안에는 게임 버튼을 누를 수 없다.
+    private const float AppleRetapGuardSeconds = 1f;
+    // 나누가 애플 로그인 주소를 받는 HTTP 제한(Common.WWW_TIMEOUT = 10초, DLL 디컴파일로 확인) + 여유.
+    private const float AppleUrlRequestTimeoutSeconds = 12f;
+
+    private sealed class AppleSignInRequest
+    {
+        public readonly TaskCompletionSource<SupabaseSignInResult> Tcs =
+            new TaskCompletionSource<SupabaseSignInResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly float StartedAt = Time.realtimeSinceStartup;
+        public NanooAppleWebViewWatcher Watcher = null; // 대입이 안드로이드 판에만 있다(CS0649 방지)
+        public bool TokenReceived;
+        public bool Done;
+    }
+
+    private AppleSignInRequest _appleRequest;
+    // 나누 OpenAppleID 를 부르는 동안만 켠다. 나누가 그 안에서 예외를 삼키고 LogError 로만 남기기 때문이다.
+    private bool _openingAppleView = false; // 대입이 안드로이드 판에만 있어, 초기값이 없으면 에디터 판에서 CS0649 가 난다
+
+    /// <summary>애플 로그인 웹뷰를 열고 Supabase 로그인 결과를 기다립니다. 게임은 TrueBaseNanoo.StartAppleSignInAndroid 로 부릅니다.</summary>
+    internal Task<SupabaseSignInResult> OpenAppleIdSignInAsync()
+    {
+#if !UNITY_ANDROID || UNITY_EDITOR
+        // 에디터·iOS 판 나누는 이 호출에 경고만 남기고 아무 신호도 주지 않는다 — 기다리면 영영 안 끝난다.
+        return Task.FromResult(SupabaseSignInResult.Fail("apple_signin_unsupported_platform"));
+#else
+        var previous = _appleRequest;
+        if (previous != null)
+        {
+            // 게임 화면에 포커스가 있으면 창은 이미 없다 — 닫힘을 놓친 것이니 앞 요청을 끝내고 새로 연다.
+            // 그러지 않으면 한 번 놓친 닫힘이 앱을 다시 켤 때까지 애플 로그인을 막는다.
+            // 토큰을 받아 Supabase 로그인 중이면 창은 없어도 진행 중이다 — 끊으면 끝나 가던 로그인을 버린다.
+            // 창이 한 번도 안 떴으면 나누가 아직 주소를 받는 중일 수 있다(최대 10초). 그때 새로 열면 창이 두 겹으로 뜨고
+            // 나누의 토큰 콜백 칸이 하나뿐이라 로그인이 엉뚱한 요청으로 간다 — 주소 요청 제한 시간이 지난 뒤에만 연다.
+            var age = Time.realtimeSinceStartup - previous.StartedAt;
+            var windowShown = previous.Watcher != null && previous.Watcher.LostFocus;
+            var stale = !previous.TokenReceived &&
+                        Application.isFocused &&
+                        age > (windowShown ? AppleRetapGuardSeconds : AppleUrlRequestTimeoutSeconds);
+            if (!stale)
+                return Task.FromResult(SupabaseSignInResult.Fail("oauth_login_already_in_progress"));
+
+            FinishAppleSignIn(previous, SupabaseSignInResult.Fail("apple_signin_cancelled"));
+        }
+
+        var request = new AppleSignInRequest();
+        _appleRequest = request;
+        Application.logMessageReceived += OnNanooLogDuringAppleSignIn;
+        request.Watcher = gameObject.AddComponent<NanooAppleWebViewWatcher>();
+        request.Watcher.Begin(AppleCloseGraceSeconds, () =>
+        {
+            if (!request.TokenReceived)
+                FinishAppleSignIn(request, SupabaseSignInResult.Fail("apple_signin_cancelled"));
+        });
+
+        _openingAppleView = true;
+        try
+        {
+            _plugin.OpenAppleID(token => OnAppleTokenReceived(request, token));
+        }
+        finally
+        {
+            _openingAppleView = false;
+        }
+
+        return request.Tcs.Task;
+#endif
+    }
+
+    private async void OnAppleTokenReceived(AppleSignInRequest request, string token)
+    {
+        if (request.Done)
+        {
+            // 이미 끝난 요청(취소 판정·재시도로 대체·런타임 파괴)에 온 토큰. 게임은 이미 결과를 받았으니 로그인하지 않는다.
+            Debug.LogWarning("[PlayNanooRuntime] 애플 로그인: 이미 끝난 요청에 토큰이 도착해 무시합니다. 다시 로그인하면 됩니다.");
+            return;
+        }
+
+        request.TokenReceived = true;
+        SupabaseSignInResult result;
+        try
+        {
+            result = await Supabase.SignInWithAppleIdTokenAsync(token);
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            result = SupabaseSignInResult.Fail("playnanoo_apple_signin_failed");
+        }
+
+        FinishAppleSignIn(request, result);
+    }
+
+    private void OnNanooLogDuringAppleSignIn(string condition, string stackTrace, LogType type)
+    {
+        var request = _appleRequest;
+        if (request == null || request.TokenReceived)
+            return;
+
+        // 여는 도중의 오류(나누 키 미설정 등)는 나누가 예외를 삼키고 문구 없이 남긴다. 연 뒤에는 주소 생성 실패 문구만 믿는다.
+        var failed = _openingAppleView
+            ? type == LogType.Error || type == LogType.Exception
+            : type == LogType.Error && condition == AppleUrlFailedLog;
+        if (!failed)
+            return;
+
+        Debug.LogWarning("[PlayNanooRuntime] 애플 로그인 창을 열지 못했습니다: " + condition);
+        FinishAppleSignIn(request, SupabaseSignInResult.Fail("playnanoo_apple_webview_failed"));
+    }
+
+    private void FinishAppleSignIn(AppleSignInRequest request, SupabaseSignInResult result)
+    {
+        if (request.Done) return;
+        request.Done = true;
+
+        if (ReferenceEquals(_appleRequest, request))
+        {
+            _appleRequest = null;
+            Application.logMessageReceived -= OnNanooLogDuringAppleSignIn;
+        }
+
+        if (request.Watcher != null)
+            Destroy(request.Watcher);
+
+        request.Tcs.TrySetResult(result);
+    }
+
+    /// <summary>
+    /// 애플 웹뷰가 떠 있는 동안만 붙는 감시 부품. 창이 뜨면 앱이 포커스를 잃고, 닫히면 되찾는다 — 되찾은 뒤
+    /// 유예 시간 안에 토큰이 없으면 닫힘으로 알린다.
+    /// </summary>
+    /// <remarks>
+    /// 다른 앱에 갔다 돌아올 때 게임 화면이 잠깐 포커스를 받더라도, 창이 아직 떠 있으면 곧 창이 포커스를 가져가
+    /// focus(false) 가 다시 오고 그때 유예를 멈춘다. 일시정지 신호로 따로 거르지 않는 건 재개 때 두 신호의 순서를
+    /// 확인하지 못했고, 켜 둔 표시가 나중의 진짜 닫힘을 삼킬 수 있어서다.
+    /// SupabaseRuntime 이 비공개 OnApplicationPause(백그라운드 저장)를 갖고 있어 런타임에 같은 이름의 메시지를 두지 않으려고
+    /// 따로 붙였다 떼는 부품으로 뺐다.
+    /// </remarks>
+    private sealed class NanooAppleWebViewWatcher : MonoBehaviour
+    {
+        private float _grace;
+        private Action _onClosed;
+        private bool _lostFocus;
+        private Coroutine _pending;
+
+        /// <summary>창이 한 번이라도 떠서 게임 화면이 포커스를 잃은 적이 있는지.</summary>
+        public bool LostFocus => _lostFocus;
+
+        public void Begin(float graceSeconds, Action onClosed)
+        {
+            _grace = graceSeconds;
+            _onClosed = onClosed;
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused)
+            {
+                _lostFocus = true;
+                if (_pending != null) { StopCoroutine(_pending); _pending = null; }
+                return;
+            }
+
+            if (!_lostFocus) return;
+            if (_pending != null) StopCoroutine(_pending);
+            _pending = StartCoroutine(WaitThenReport());
+        }
+
+        private System.Collections.IEnumerator WaitThenReport()
+        {
+            // 토큰 메시지는 창이 닫히기 직전에 보내지지만 포커스 변화와 도착 순서가 보장되지 않아 잠시 기다린다.
+            yield return new WaitForSecondsRealtime(_grace);
+            _pending = null;
+            _onClosed?.Invoke();
+        }
+    }
 
     // ── 탈퇴 취소 인터셉터 ─────────────────────────────────────────────────────
 

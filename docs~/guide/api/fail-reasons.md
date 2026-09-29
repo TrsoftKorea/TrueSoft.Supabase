@@ -114,7 +114,7 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 refresh_token이 없습니다 |
 | `OAuthRedirectSchemeEmpty` | OAuth 리다이렉트 스킴이 비어있습니다 |
-| `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다 |
+| `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다. 플레이나누 Android Apple 로그인은 창을 여는 중에 다시 누를 때만 돌려보냅니다 |
 
 ## 닉네임
 

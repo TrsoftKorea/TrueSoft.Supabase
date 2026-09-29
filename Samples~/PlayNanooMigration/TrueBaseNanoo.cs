@@ -4,7 +4,7 @@
 // 게임 코드가 부르는 자리입니다. Supabase 파사드와 같은 모양으로 씁니다.
 //
 //   TrueBaseNanoo.SaveNow();
-//   TrueBaseNanoo.StartAppleSignInAndroid();
+//   var result = await TrueBaseNanoo.StartAppleSignInAndroid();
 //   TrueBaseNanoo.OnWithdrawalPending += ShowCancelPopup;
 //   var uuid = TrueBaseNanoo.UserId;
 //
@@ -15,6 +15,8 @@
 // =============================================================================
 
 using System;
+using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using UnityEngine;
 
 /// <summary>
@@ -69,12 +71,16 @@ public static class TrueBaseNanoo
 
     /// <summary>
     /// 애플 로그인을 시작합니다. PlayNANOO 내장 웹뷰로 토큰을 받아
-    /// <c>Supabase.SignInWithAppleIdTokenAsync</c>까지 자동으로 이어집니다. Android 전용입니다.
+    /// <c>Supabase.SignInWithAppleIdTokenAsync</c>까지 자동으로 이어지고, 그 결과를 돌려줍니다. Android 전용입니다.
+    /// <para>창을 닫거나 뒤로가기로 나가면 창이 닫힌 뒤 약 2초 안에 <c>SupabaseReason.AppleSignInCancelled</c>로 끝납니다.
+    /// 창이 뜨는 중이거나 로그인 처리 중에 다시 부르면 <c>SupabaseReason.OAuthLoginInProgress</c>로 끝나고, 창이 닫힌 뒤
+    /// 다시 부르면 남은 요청을 취소로 끝내고 새로 엽니다(앞 호출의 취소 결과는 무시할 것). 게스트 연동은 지원하지 않습니다. Android 기기가 아니면 바로 <c>SupabaseReason.AppleSignInUnsupportedPlatform</c>.</para>
     /// </summary>
-    public static void StartAppleSignInAndroid()
+    public static Task<SupabaseSignInResult> StartAppleSignInAndroid()
     {
-        if (!TryGetRuntime(nameof(StartAppleSignInAndroid), out var runtime)) return;
-        runtime.OpenAppleIdSignIn();
+        if (!TryGetRuntime(nameof(StartAppleSignInAndroid), out var runtime))
+            return Task.FromResult(SupabaseSignInResult.Fail("playnanoo_runtime_missing"));
+        return runtime.OpenAppleIdSignInAsync();
     }
 
     private static bool TryGetRuntime(string caller, out PlayNanooRuntimeBase runtime)
