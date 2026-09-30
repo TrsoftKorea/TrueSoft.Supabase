@@ -49,7 +49,7 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.RegisterIAPAppleInterceptor"/>
         public static void RegisterIAPAppleInterceptor(
-            Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor) =>
+            Func<string, string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor) =>
             SupabaseSDK.RegisterIAPAppleInterceptor(interceptor);
 
         /// <inheritdoc cref="SupabaseSDK.RegisterIAPGoogleInterceptor"/>

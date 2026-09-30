@@ -60,6 +60,9 @@ namespace TrueBase.Unity
         private static string _initializedProjectUrl;
         private static bool _enableApiResultLogs = true;
 
+        /// <summary>SupabaseSettings 의 "API 결과 로그 사용". IAP 어셈블리가 진단 로그를 같은 스위치로 끄고 켜려고 읽는다.</summary>
+        internal static bool ApiResultLogsEnabled => _enableApiResultLogs;
+
         private static Task _remoteConfigKeyPollTickTask;
 
         private static float _duplicateSessionPollSeconds = 15f;
@@ -114,7 +117,9 @@ namespace TrueBase.Unity
         internal static Func<Task<SupabaseResult<string>>> _nanooAppleAndroidIdToken;
 
         // PlayNanooRuntime이 씬에 있을 때만 설정됩니다. null이면 SDK 직접 검증으로 동작합니다.
-        internal static Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>>         _interceptIAPApple;
+        // 인자 순서: receipt(SK1 base64 Payload), productId, rawReceipt(유니티 영수증 원문), sdkVerify.
+        // PlayNANOO iOS 검증(/iap/.../unity/ios)은 Payload 가 아니라 원문을 받는다 — Payload 만 넘기면 20004 로 거절된다.
+        internal static Func<string, string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> _interceptIAPApple;
         // 인자 순서: purchaseToken, productId, priceAmount, priceCurrency, rawReceipt, sdkVerify.
         // rawReceipt(유니티 영수증 원문)까지 주는 이유는, 외부 결제 서버가 토큰이 아니라 영수증 전체를
         // 받는 경우가 있기 때문이다 — PlayNANOO 가 그렇다. 토큰만 넘기면 "영수증을 못 찾았다"로 거절된다.
@@ -122,7 +127,7 @@ namespace TrueBase.Unity
 
         /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
         public static void RegisterIAPAppleInterceptor(
-            Func<string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor)
+            Func<string, string, string, Func<Task<SupabaseResult<AppleIAPPurchaseResponse>>>, Task<SupabaseResult<AppleIAPPurchaseResponse>>> interceptor)
             => _interceptIAPApple = interceptor;
 
         /// <summary>PlayNANOO IAP 인터셉터를 등록합니다. PlayNANOO 이관 브릿지 전용.</summary>
@@ -3534,10 +3539,12 @@ namespace TrueBase.Unity
         /// <param name="receipt">SK1 base64 encoded receipt blob (Unity IAP 영수증의 Payload 필드).</param>
         /// <param name="productId">상품 ID.</param>
         /// <param name="bundleId">앱 Bundle ID. <c>null</c>이면 <see cref="UnityEngine.Application.identifier"/>를 사용합니다.</param>
+        /// <param name="rawReceipt">Unity IAP 영수증 원문. 외부 검증 인터셉터(PlayNANOO)에만 넘기며, 서버 검증은 <paramref name="receipt"/>를 쓴다.</param>
         public static async Task<SupabaseResult<AppleIAPPurchaseResponse>> VerifyApplePurchaseLegacyAsync(
             string receipt,
             string productId,
-            string bundleId = null)
+            string bundleId = null,
+            string rawReceipt = null)
         {
             var req = new AppleIAPLegacyPurchaseRequest
             {
@@ -3547,7 +3554,7 @@ namespace TrueBase.Unity
             };
 
             if (_interceptIAPApple != null)
-                return await _interceptIAPApple(receipt, productId,
+                return await _interceptIAPApple(receipt, productId, rawReceipt,
                     () => Functions.InvokeAsync<AppleIAPPurchaseResponse>(_purchaseVerifyAppleLegacyFunctionName, req, requireAuth: true));
 
             return await Functions.InvokeAsync<AppleIAPPurchaseResponse>(
@@ -3558,10 +3565,11 @@ namespace TrueBase.Unity
         public static async Task<(bool success, AppleIAPPurchaseResponse value)> TryVerifyApplePurchaseLegacyAsync(
             string receipt,
             string productId,
-            string bundleId = null)
+            string bundleId = null,
+            string rawReceipt = null)
         {
             const string tag = "[Supabase.Purchase.VerifyAppleLegacy]";
-            var result = await VerifyApplePurchaseLegacyAsync(receipt, productId, bundleId);
+            var result = await VerifyApplePurchaseLegacyAsync(receipt, productId, bundleId, rawReceipt);
             if (!result.IsSuccess)
             {
                 if (_enableApiResultLogs)

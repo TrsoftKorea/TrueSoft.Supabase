@@ -101,6 +101,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// PlayNANOO iOS IAP 검증 호출. callback(status)로 결과를 반환합니다.
     /// 구/신버전 PlayNANOO 모두 동일 API이므로 일반적으로 override 불필요합니다.
     /// </summary>
+    /// <param name="receipt">
+    /// Unity IAP 영수증 <b>원문</b>. 그 안의 SK1 Payload 만 넘기면 서버가 "영수증 없음"(20004)으로 거절합니다.
+    /// </param>
     protected virtual void NanooIAPIOS(
         string receipt, string productId, string currency, double price,
         Func<string, string, Dictionary<string, object>, Task> callback)
@@ -168,14 +171,21 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 #if UNITY_IAP_V5_1 && UNITY_IOS
         // 네임스페이스가 UnityEngine.Purchasing 이 아니다 — StoreKitSelector 는 Purchasing.Utilities 에 있다.
         Purchasing.Utilities.StoreKitSelector.forceStoreKit1 = true;
+        Trace("iOS 결제: forceStoreKit1=true 로 SK1 강제 (나누 검증은 SK1 경로에서만 불린다)");
 #elif UNITY_IOS
         Debug.LogError("[PlayNanooRuntime] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
 #endif
 
-        SupabaseBridge.RegisterIAPAppleInterceptor(async (receipt, productId, sdkVerify) =>
+        // rawReceipt(유니티 영수증 원문)를 넘긴다. PlayNANOO iOS 검증(/iap/.../unity/ios)은 SK1 Payload 가 아니라 영수증 전체를 받는다
+        // — Payload 만 넘기면 "영수증 없음"(20004)으로 거절된다. Android 와 같은 이유다.
+        SupabaseBridge.RegisterIAPAppleInterceptor(async (receipt, productId, rawReceipt, sdkVerify) =>
         {
+            var toNanoo = rawReceipt ?? receipt;
+            Trace($"iOS 결제 1/3 나누 검증 요청 — product: {productId}, 넘기는 값: {(rawReceipt != null ? "영수증 원문" : "Payload(원문 없음 — 20004 날 수 있음)")}, " +
+                  DescribeUnityReceipt(toNanoo));
+
             var tcs = new TaskCompletionSource<SupabaseResult<AppleIAPPurchaseResponse>>();
-            NanooIAPIOS(receipt, productId, string.Empty, 0d, async (status, errorMessage, values) =>
+            NanooIAPIOS(toNanoo, productId, string.Empty, 0d, async (status, errorMessage, values) =>
             {
                 if (status != Configure.PN_API_STATE_SUCCESS)
                 {
@@ -183,7 +193,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                     tcs.SetResult(SupabaseResult<AppleIAPPurchaseResponse>.Fail("playnanoo_iap_ios_failed"));
                     return;
                 }
-                tcs.SetResult(await sdkVerify());
+
+                Trace($"iOS 결제 2/3 나누 검증 성공 — product: {productId}, 응답: {DescribeValues(values)}");
+                var sdk = await sdkVerify();
+                Trace(sdk != null && sdk.IsSuccess
+                    ? $"iOS 결제 3/3 SDK 검증 성공 — product: {productId}, ok: {sdk.Data?.ok}, reason: {sdk.Data?.reason}, 이미 지급: {sdk.Data?.already_granted}"
+                    : $"iOS 결제 3/3 SDK 검증 실패 — product: {productId}, ErrorCode: {sdk?.ErrorCode}");
+                tcs.SetResult(sdk);
             });
             return await tcs.Task;
         });
@@ -531,9 +547,58 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (values != null && values.TryGetValue("ErrorCode", out var ecObj))
             errorCode = ecObj?.ToString();
 
+        // errorMessage 자리에 에러 코드가 다시 오는 경우가 있어(20004 → "20004") 응답 전체를 함께 남긴다.
         Debug.LogWarning(
             $"[PlayNanooRuntime] PlayNANOO {platform} 결제 검증 실패 — product: {productId}, " +
-            $"status: {status}, ErrorCode: {errorCode}, Message: {errorMessage}");
+            $"status: {status}, ErrorCode: {errorCode}, Message: {errorMessage}, 응답: {DescribeValues(values)}");
+    }
+
+    /// <summary>나누 응답 값을 한 줄로. 값이 길면 앞부분만 남긴다.</summary>
+    private static string DescribeValues(Dictionary<string, object> values)
+    {
+        if (values == null || values.Count == 0) return "(없음)";
+
+        var parts = new List<string>();
+        foreach (var pair in values)
+        {
+            var text = pair.Value?.ToString() ?? "null";
+            if (text.Length > 80) text = text.Substring(0, 80) + $"…({text.Length}자)";
+            parts.Add($"{pair.Key}={text}");
+        }
+        return "{" + string.Join(", ", parts) + "}";
+    }
+
+    [Serializable]
+    private sealed class UnityReceiptShape
+    {
+        public string Store;
+        public string TransactionID;
+        public string Payload;
+    }
+
+    /// <summary>
+    /// 나누에 넘기는 영수증이 어떤 모양인지 한 줄로 — 내용은 남기지 않고 길이·필드만.
+    /// 나누 iOS 검증은 유니티 영수증 JSON({"Store","TransactionID","Payload"}) 전체를 받는다.
+    /// </summary>
+    private static string DescribeUnityReceipt(string receipt)
+    {
+        if (string.IsNullOrEmpty(receipt)) return "영수증: (비어 있음)";
+
+        var trimmed = receipt.TrimStart();
+        if (!trimmed.StartsWith("{"))
+            return $"영수증: 유니티 영수증 JSON 아님({receipt.Length}자) — Payload 만 넘어간 것으로 보임";
+
+        try
+        {
+            var shape = JsonUtility.FromJson<UnityReceiptShape>(receipt);
+            return $"영수증: 유니티 JSON {receipt.Length}자, Store={shape?.Store ?? "(없음)"}, " +
+                   $"TransactionID={(string.IsNullOrEmpty(shape?.TransactionID) ? "(없음)" : "있음")}, " +
+                   $"Payload={shape?.Payload?.Length ?? 0}자";
+        }
+        catch (Exception e)
+        {
+            return $"영수증: JSON 해석 실패({receipt.Length}자) — {e.Message}";
+        }
     }
 
     private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)

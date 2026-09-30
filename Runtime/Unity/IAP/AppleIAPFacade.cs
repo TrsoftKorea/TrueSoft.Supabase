@@ -29,7 +29,7 @@ namespace TrueBase.Unity
     public sealed class AppleIAPFacade : BaseIAPFacade
     {
         private readonly Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyJwsAsync;
-        private readonly Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyReceiptAsync;
+        private readonly Func<string, string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> _verifyReceiptAsync;
 
         protected override string LogTag => "[Supabase.IAP.Apple]";
 
@@ -37,12 +37,12 @@ namespace TrueBase.Unity
 
         /// <param name="verifyJwsAsync">StoreKit 2 검증 함수. (JWS 토큰, productId) → (success, response).</param>
         /// <param name="verifyReceiptAsync">
-        /// StoreKit 1 폴백 검증 함수. (base64 영수증 Payload, productId) → (success, response).
+        /// StoreKit 1 폴백 검증 함수. (base64 영수증 Payload, productId, 유니티 영수증 원문) → (success, response).
         /// null이면 SK1 폴백 미지원으로 동작.
         /// </param>
         internal AppleIAPFacade(
             Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyJwsAsync,
-            Func<string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyReceiptAsync = null)
+            Func<string, string, string, Task<(bool success, AppleIAPPurchaseResponse value)>> verifyReceiptAsync = null)
         {
             _verifyJwsAsync     = verifyJwsAsync;
             _verifyReceiptAsync = verifyReceiptAsync;
@@ -92,6 +92,9 @@ namespace TrueBase.Unity
                     return;
                 }
 
+                // 이 경로는 PlayNANOO 인터셉터를 거치지 않는다 — 나누 병행인데 여기로 오면 SK1 강제가 안 된 것이다.
+                if (SupabaseSDK.ApiResultLogsEnabled)
+                    Debug.Log($"{LogTag} iOS 검증 경로: SK2(JWS). jws={jws.Length}자, product={productId}");
                 var (success, response) = await _verifyJwsAsync(jws, productId);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} Apple이 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
@@ -106,7 +109,10 @@ namespace TrueBase.Unity
                 return;
             }
 
-            var receipt = ExtractAppleReceiptPayload(pendingOrder.Info?.Receipt);
+            var rawReceipt = pendingOrder.Info?.Receipt;
+            var receipt = ExtractAppleReceiptPayload(rawReceipt);
+            if (SupabaseSDK.ApiResultLogsEnabled)
+                Debug.Log($"{LogTag} iOS 검증 경로: SK1(영수증). 원문={rawReceipt?.Length ?? 0}자, Payload={receipt?.Length ?? 0}자, product={productId}");
             if (string.IsNullOrEmpty(receipt))
             {
                 Debug.LogWarning($"{LogTag} Apple 영수증 Payload를 추출할 수 없습니다. product={productId}");
@@ -114,7 +120,7 @@ namespace TrueBase.Unity
             }
 
             {
-                var (success, response) = await _verifyReceiptAsync(receipt, productId);
+                var (success, response) = await _verifyReceiptAsync(receipt, productId, rawReceipt);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증(SK1) 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} Apple이 구매를 거부했습니다(SK1). reason={response.reason}, product={productId}"); return; }
                 await GrantAndConfirmAsync(productId, response.transaction_id, response.already_granted, pendingOrder);

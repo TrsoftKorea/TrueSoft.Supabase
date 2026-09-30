@@ -25,7 +25,7 @@ namespace TrueBase.Unity
         private static AppleIAPFacade CreateAppleIAP()
             => new AppleIAPFacade(
                 (jws, productId)     => SupabaseSDK.TryVerifyApplePurchaseAsync(jws, productId),
-                (receipt, productId) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId));
+                (receipt, productId, rawReceipt) => SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId, rawReceipt: rawReceipt));
 
 
         /// <summary>
@@ -145,10 +145,11 @@ namespace TrueBase.Unity
         /// </summary>
         /// <param name="receipt">Unity IAP 영수증에서 추출한 base64 SK1 영수증 Payload.</param>
         /// <param name="productId">스토어 상품 ID.</param>
+        /// <param name="rawReceipt">Unity IAP 영수증 원문. 외부 검증 인터셉터(PlayNANOO)에 넘긴다.</param>
         private static async Task<(bool, IAPPurchaseResponse)> VerifyReceiptForIAPFacadeAsync(
-            string receipt, string productId)
+            string receipt, string productId, string rawReceipt)
         {
-            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId);
+            var (ok, r) = await SupabaseSDK.TryVerifyApplePurchaseLegacyAsync(receipt, productId, rawReceipt: rawReceipt);
             if (!ok || r == null) return (false, default);
             return (true, new IAPPurchaseResponse {
                 ok               = true,
