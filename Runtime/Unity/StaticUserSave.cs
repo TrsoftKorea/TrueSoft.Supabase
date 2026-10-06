@@ -76,6 +76,7 @@ namespace TrueBase.Unity
         private            float  _lastDeepCheckTime = float.MinValue;  // 값 비교 throttle 타임스탬프
         private            bool   _lastDeepResult;                      // 캐시된 값 비교 결과
         private            bool   _hasLoadedOnce;                       // 최초 로드 완료 여부(로드 전 auto-flush 차단용)
+        private            string _newUserCarriedForAccount;            // PlayNANOO 동기화가 행을 처음 만든 계정. 게임의 다음 로드에 IsNewUser 로 넘긴다
         private            TRow   _loadFallback;                        // 로드 전에 세팅한 초기값 스냅샷(1회 캡처)
         private            bool   _fallbackCaptured;                    // _loadFallback 캡처 여부
         protected readonly string _syncKey;
@@ -440,7 +441,15 @@ namespace TrueBase.Unity
         string INanooSaveSyncable.NanooGetLastLoadedJson()
             => _nanooLastLoaded != null ? NanooSerializeJson(_nanooLastLoaded) : null;
 
-        async Task<bool> INanooSaveSyncable.TryLoadAsync() => (await LoadAsync()).IsSuccess;
+        async Task<bool> INanooSaveSyncable.TryLoadAsync()
+        {
+            var r = await LoadAsync();
+            // 로그인 직후 동기화가 게임보다 먼저 행을 만들면, 게임의 첫 LoadAsync 는 행이 이미 있어 신규 유저를 못 본다.
+            // 이번 로드가 행을 처음 만든 것이었다면 그 사실을 이 계정에 묶어 게임의 다음 로드에 넘긴다.
+            if (r.IsSuccess && r.IsNewUser)
+                _newUserCarriedForAccount = SupabaseSDK.CurrentAccountId;
+            return r.IsSuccess;
+        }
 
         string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
 
@@ -620,6 +629,14 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
             _hasLoadedOnce = true;
+
+            // PlayNANOO 동기화가 이 계정의 행을 먼저 만든 경우 — 게임이 처음 부르는 로드에서 신규 유저로 알린다(1회).
+            // 계정에 묶어 둬서, 로그아웃 후 다른 계정으로 들어온 로드에는 넘어가지 않는다.
+            var carried = _newUserCarriedForAccount;
+            _newUserCarriedForAccount = null;
+            if (!isNewUser && carried != null && carried == SupabaseSDK.CurrentAccountId)
+                isNewUser = true;
+
             return SupabaseLoadResult.Success(isNewUser);
         }
 

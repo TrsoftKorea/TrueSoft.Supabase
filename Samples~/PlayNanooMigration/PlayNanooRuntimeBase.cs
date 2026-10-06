@@ -288,6 +288,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private async Task<SupabaseResult> InterceptSignInAnonymously(Func<Task<SupabaseResult>> sdkSignIn)
     {
+        var previous = SnapshotNanooSession();
         // PlayNANOO·Supabase 로그인은 서로 독립적(입력 토큰만 공유, 결과 의존 없음)이라 동시에 실행해 지연을 줄입니다.
         var nanooTask = NanooGuestSignInAsync();
         var sdkTask   = sdkSignIn();
@@ -301,7 +302,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
         if (nanoo.Ok)
         {
-            await RollbackNanooLoginAsync();
+            await RollbackNanooLoginAsync(previous);
             return sdkResult;
         }
 
@@ -326,6 +327,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         string token, string accountType, string loginType, string failReason,
         Func<Task<SupabaseResult>> sdkSignIn)
     {
+        var previous = SnapshotNanooSession();
         // 둘 다 같은 id token만 입력으로 쓰고 서로의 결과에 의존하지 않으므로 동시에 실행합니다(둘 다 성공 시 max(두 왕복)).
         var nanooTask = NanooSocialSignInAsync(token, accountType, loginType);
         var sdkTask   = sdkSignIn();
@@ -339,7 +341,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // PlayNANOO 성공·Supabase 실패 → PlayNANOO 롤백
         if (nanoo.Ok)
         {
-            await RollbackNanooLoginAsync();
+            await RollbackNanooLoginAsync(previous);
             return sdkResult;
         }
 
@@ -471,6 +473,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private async Task<SupabaseResult> InterceptLinkGoogleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
+        var previous = SnapshotNanooSession();
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
         {
@@ -480,7 +483,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 return;
             }
             var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -489,6 +492,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private async Task<SupabaseResult> InterceptLinkAppleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
+        var previous = SnapshotNanooSession();
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
         {
@@ -498,7 +502,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 return;
             }
             var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -509,6 +513,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private async Task<SupabaseResult> InterceptLinkGoogleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
+        var previous = SnapshotNanooSession();
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
         {
@@ -518,7 +523,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 return;
             }
             var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -527,6 +532,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private async Task<SupabaseResult> InterceptLinkAppleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
     {
+        var previous = SnapshotNanooSession();
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
         {
@@ -536,7 +542,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 return;
             }
             var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(); tcs.SetResult(result); return; }
+            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
@@ -641,18 +647,77 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // ── 롤백 헬퍼 ────────────────────────────────────────────────────────────
 
     /// <summary>PlayNANOO 로그인 성공 후 Supabase 실패 시 PlayNANOO 로그아웃으로 되돌립니다.</summary>
-    private Task RollbackNanooLoginAsync()
+    /// <summary>나누 로그인을 시도하기 직전의 세션. 실패하면 이것으로 되돌린다.</summary>
+    private readonly struct NanooSessionSnapshot
+    {
+        public readonly string AccessToken, RefreshToken, UserId, OpenId, Nickname;
+        public readonly bool   Synced;
+
+        public NanooSessionSnapshot(string access, string refresh, string userId, string openId, string nickname, bool synced)
+        {
+            AccessToken = access; RefreshToken = refresh; UserId = userId; OpenId = openId; Nickname = nickname; Synced = synced;
+        }
+
+        public bool HasSession => !string.IsNullOrEmpty(AccessToken) || !string.IsNullOrEmpty(RefreshToken);
+    }
+
+    // 나누 로그인 콜백(ApplyNanooSession)이 토큰·uuid 를 곧바로 새 계정 것으로 덮으므로, 호출 전에 떠 둬야 되돌릴 수 있다.
+    private NanooSessionSnapshot SnapshotNanooSession() => new NanooSessionSnapshot(
+        _nanooAccessToken, _nanooRefreshToken, TrueBaseNanoo.UserId, TrueBaseNanoo.OpenId, _nanooNickname, _nanooSyncedThisLogin);
+
+    /// <summary>
+    /// PlayNANOO 로그인 성공 후 Supabase 가 실패했을 때 되돌립니다. 새로 받은 나누 세션은 로그아웃하고,
+    /// 그 전에 로그인돼 있던 세션(게스트·이미 로그인한 계정)이 있으면 그 세션을 되살립니다.
+    /// </summary>
+    /// <remarks>
+    /// 예전에는 로그아웃만 해서, 플레이 중 연동이 실패하거나 게스트가 소셜 로그인 버튼을 눌러 Supabase 가 거절하면
+    /// 원래 나누 세션까지 사라졌다. 나누는 로그아웃 때 토큰을 비우므로 그 뒤 저장·결제가 앱을 다시 켤 때까지 30005 로
+    /// 실패했고, 저장된 토큰도 지워져 다음 자동 로그인까지 실패했다.
+    /// </remarks>
+    private async Task RollbackNanooLoginAsync(NanooSessionSnapshot previous)
     {
         _nanooSyncedThisLogin = false;
-        if (string.IsNullOrEmpty(_nanooAccessToken)) return Task.CompletedTask;
-        var token = _nanooAccessToken;
-        _nanooAccessToken = null;
+
+        var newToken = _nanooAccessToken;
+        // 나누가 같은 토큰을 돌려줬다면 로그아웃하는 순간 이전 세션도 같이 죽는다.
+        if (!string.IsNullOrEmpty(newToken) && newToken != previous.AccessToken)
+        {
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            NanooTokenSignOut(newToken, () => { tcs.TrySetResult(true); return Task.CompletedTask; });
+            await tcs.Task;
+        }
+
         ClearNanooTokens();
         TrueBaseNanoo.UserId = null;
         TrueBaseNanoo.OpenId = null;
-        var tcs = new TaskCompletionSource<bool>();
-        NanooTokenSignOut(token, async () => tcs.SetResult(true));
-        return tcs.Task;
+        if (!previous.HasSession)
+        {
+            Trace("나누 롤백 — 이전 세션 없음, 로그아웃만");
+            return;
+        }
+
+        // 이전 세션 되살리기. 로그아웃이 나누 내부 토큰을 비웠으므로 토큰 로그인(실패하면 refresh)으로 다시 채운다.
+        _nanooAccessToken    = previous.AccessToken;
+        _nanooRefreshToken   = previous.RefreshToken;
+        _nanooNickname       = previous.Nickname;
+        TrueBaseNanoo.UserId = previous.UserId;
+        TrueBaseNanoo.OpenId = previous.OpenId;
+        SaveNanooTokens();
+
+        var restored = (!string.IsNullOrEmpty(previous.AccessToken) && await NanooTokenSignInAsync(previous.AccessToken))
+                       || (!string.IsNullOrEmpty(previous.RefreshToken) && await RefreshNanooTokenAsync("롤백 — 이전 세션 복원"));
+        if (restored && TrueBaseNanoo.UserId == previous.UserId)
+        {
+            // 같은 계정으로 돌아왔으니 그 세션의 동기화 결과도 그대로 유효하다.
+            _nanooSyncedThisLogin = previous.Synced;
+            Trace($"나누 롤백 — 이전 세션 복원 성공(uuid {previous.UserId})");
+            return;
+        }
+
+        // 네트워크 등으로 못 되살렸으면 토큰은 남겨 두고 곧 다시 갱신을 시도한다. 그동안 나누 호출은 실패할 수 있다.
+        _nextNanooRefreshAt = Time.realtimeSinceStartup + NanooRefreshRetrySeconds;
+        Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 이전 세션 복원 실패 — {NanooRefreshRetrySeconds:0}초 뒤 토큰 갱신으로 다시 시도합니다. " +
+                         $"(복원됨: {restored}, 이전 uuid: {previous.UserId}, 현재 uuid: {TrueBaseNanoo.UserId})");
     }
 
     // ── Apple 로그인 (Android 전용) ───────────────────────────────────────────

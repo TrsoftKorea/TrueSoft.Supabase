@@ -19,6 +19,8 @@ SDK 행 있음 (기존 유저)
   └─ DB updated_at ≥ 플레이나누 updated_at → SDK 최신 → 로컬 반영 후 플레이나누 갱신
 ```
 
+동기화가 게임보다 먼저 세이브 행을 만들어도, SDK와 플레이나누가 모두 비어 새로 시작한 유저는 게임이 로그인 후 처음 부르는 `Supabase.LoadUserSaveAsync()`에서 [`IsNewUser`](/guide/user-data/load#new-user)가 `true`입니다. 탈퇴 후 재가입한 유저도 같습니다. 플레이나누 데이터를 이관해 온 유저는 기존 유저라 `false`입니다.
+
 ## 플레이나누에 쓰는 시점 {#write}
 
 **게임이 세이브를 저장해도 플레이나누에는 곧바로 가지 않습니다.** `Supabase.SaveNowAsync()`·`RequestSave()`는 SDK 서버에만 씁니다. 플레이나누에 반영되는 것은 **다음 로그인의 동기화**에서 SDK가 최신으로 판정될 때입니다. 자동 로그인도 동기화를 거치므로 매일 자동 로그인만 하는 유저도 반영됩니다.
