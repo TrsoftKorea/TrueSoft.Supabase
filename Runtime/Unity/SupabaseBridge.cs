@@ -43,6 +43,9 @@ namespace TrueBase.Unity
         public static void RegisterNanooStorageReset(Func<string, Task> reset) =>
             SupabaseSDK.RegisterNanooStorageReset(reset);
 
+        /// <inheritdoc cref="SupabaseSDK.WithdrawalRequestDelayWholeDays"/>
+        public static int WithdrawalRequestDelayDays => SupabaseSDK.WithdrawalRequestDelayWholeDays;
+
         /// <inheritdoc cref="SupabaseSDK.RegisterNanooAppleAndroidIdToken"/>
         public static void RegisterNanooAppleAndroidIdToken(Func<Task<SupabaseResult<string>>> provider) =>
             SupabaseSDK.RegisterNanooAppleAndroidIdToken(provider);

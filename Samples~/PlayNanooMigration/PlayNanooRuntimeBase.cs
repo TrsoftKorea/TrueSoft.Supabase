@@ -411,7 +411,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         var tcs = new TaskCompletionSource<SupabaseResult>();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
-        NanooWithDrawal(15, async status =>
+        // Supabase 에 예약하는 것과 같은 유예 일수(SupabaseSettings "탈퇴 유예 기간")를 쓴다 — 다르면 두 계정의 삭제일이 어긋난다.
+        var holdDays = SupabaseBridge.WithdrawalRequestDelayDays;
+        Trace($"탈퇴 신청 — 나누·Supabase 유예 {holdDays}일");
+        NanooWithDrawal(holdDays, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS)
             {

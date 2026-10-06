@@ -251,6 +251,12 @@ namespace TrueBase.Unity
         /// <summary><see cref="Config.SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
         public static float WithdrawalRequestDelayDays => _withdrawalRequestDelayDays;
 
+        /// <summary>
+        /// 서버에 실제로 예약하는 유예 일수(음수는 0, 반올림한 정수). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
+        /// </summary>
+        public static int WithdrawalRequestDelayWholeDays =>
+            Mathf.RoundToInt(_withdrawalRequestDelayDays < 0f ? 0f : _withdrawalRequestDelayDays);
+
         /// <summary>중복 로그인 감지용 <c>user_sessions</c> REST 서비스. 미초기화 시 null.</summary>
         public static SupabaseUserSessionService UserSessionService => _bootstrap?.UserSessionService;
 
@@ -3247,11 +3253,9 @@ namespace TrueBase.Unity
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
 
-            var delayDays = _withdrawalRequestDelayDays < 0f ? 0f : _withdrawalRequestDelayDays;
-            var delayInt = Mathf.RoundToInt(delayDays);
             var request = await _bootstrap.PublicProfileService.RequestWithdrawalByDelayDaysAsync(
                 _currentSession.AccessToken,
-                delayInt);
+                WithdrawalRequestDelayWholeDays);
 
             if (request == null || !request.IsSuccess)
                 return SupabaseResult<bool>.Fail(request?.ErrorCode ?? "withdrawal_request_failed");
