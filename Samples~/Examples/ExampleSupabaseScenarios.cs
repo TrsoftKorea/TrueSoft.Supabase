@@ -402,14 +402,14 @@ public sealed class ExampleSupabaseScenarios : MonoBehaviour
 
     // ─── 탈퇴 ────────────────────────────────────────────────────────────────
 
-    /// <summary>D — 탈퇴 신청 (15일 유예). 실제 테스트 시 주의.</summary>
+    /// <summary>D — 탈퇴 신청(SupabaseSettings "탈퇴 유예 기간"만큼 유예). 실제 테스트 시 주의.</summary>
     private async Task RequestWithdrawalAsync()
     {
         if (!Supabase.IsLoggedIn) { Debug.LogWarning("[Supabase] 로그인 필요."); return; }
 
         var ok = await Supabase.RequestWithdrawalAsync();
         if (!ok) Debug.LogWarning($"[Supabase] 탈퇴 신청 실패: {ok.ErrorCode}");
-        else     Debug.Log("[Supabase] 탈퇴 신청 완료. 15일 후 삭제됩니다.");
+        else     Debug.Log("[Supabase] 탈퇴 신청 완료. 설정한 유예 기간이 지나면 삭제됩니다.");
     }
 
     // ─── Update ──────────────────────────────────────────────────────────────
