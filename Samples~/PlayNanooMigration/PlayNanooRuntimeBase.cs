@@ -53,13 +53,19 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
     private string   _nanooNickname;       // 닉네임 변경 롤백용
 
-    private DateTime _nanooTokenRefreshedAt       = DateTime.MinValue;
-    private float    _lastNanooRefreshCheckTime   = float.MinValue;
+    // 나누 refresh 토큰. 액세스 토큰이 만료되면 이것으로 새 토큰을 받는다(TokenRefresh).
+    private string   _nanooRefreshToken;
+    // 다음 갱신 시각(Time.realtimeSinceStartup 기준 — 백그라운드에 있던 시간도 흐른다). 토큰을 받을 때마다 다시 잡는다.
+    private float    _nextNanooRefreshAt = float.MaxValue;
+    private bool     _nanooRefreshing;
 
-    private const string NanooAccessTokenKey        = "TrueBase.NanooAccessToken";
-    private const double NanooTokenLifetimeHours    = 24.0;
-    private const double NanooTokenRefreshLeadHours = 1.0;   // 만료 1시간 전부터 갱신
-    private const float  NanooRefreshCheckInterval  = 600f;  // 10분마다 체크
+    private const string NanooAccessTokenKey  = "TrueBase.NanooAccessToken";
+    private const string NanooRefreshTokenKey = "TrueBase.NanooRefreshToken";
+    // 나누는 토큰 수명을 클라이언트에 알려 주지 않는다(DLL 에 만료 정보 없음). 원래 게임이 1시간마다 refresh 토큰으로
+    // 갱신했으므로 같은 주기를 쓴다. 예전에는 수명을 24시간으로 가정해 23시간 뒤에야, 그것도 같은 액세스 토큰으로
+    // 다시 로그인하는 방식으로 "갱신"해서, 몇 시간 켜 두면 토큰이 만료돼 나누 호출이 실패했다(30005).
+    private const float  NanooRefreshIntervalSeconds = 3600f;
+    private const float  NanooRefreshRetrySeconds    = 300f;   // 갱신 실패 후 다시 시도할 간격
 
     // 로그인 정보(UserId·OpenId)·탈퇴 이벤트는 TrueBaseNanoo(정적 진입점)로 옮겼다. 애플 로그인은 표준 Supabase.SignInWithAppleAsync() 를 쓴다.
     // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
@@ -82,6 +88,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 토큰 로그아웃. 완료 후 callback()을 호출해야 합니다.</summary>
     protected abstract void NanooTokenSignOut(string accessToken, Func<Task> callback);
+
+    /// <summary>refresh 토큰으로 새 액세스·refresh 토큰을 받습니다. 성공 응답에는 uuid·openID 도 담깁니다.</summary>
+    protected abstract void NanooTokenRefresh(string refreshToken, Func<string, Dictionary<string, object>, Task> callback);
 
     /// <summary>PlayNANOO 탈퇴 신청. 완료 후 callback(status)을 호출해야 합니다.</summary>
     protected abstract void NanooWithDrawal(int holdDays, Func<string, Task> callback);
@@ -608,12 +617,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
-            _nanooAccessToken      = values["access_token"]?.ToString();
-            _nanooNickname         = values["nickname"]?.ToString();
-            TrueBaseNanoo.UserId   = values.TryGetValue("uuid",   out var uuidVal)   ? uuidVal?.ToString()   : null;
-            TrueBaseNanoo.OpenId   = values.TryGetValue("openID", out var openidVal) ? openidVal?.ToString() : null;
-            _nanooTokenRefreshedAt = DateTime.UtcNow;
-            SaveNanooTokens();
+            ApplyNanooSession(values, $"{loginType} 로그인");
             OnNanooLoginSuccess(values);
             return true;
         }
@@ -845,31 +849,67 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return await sdkRedeem();
     }
 
-    // ── PlayNANOO 토큰 독립 갱신 (24시간 주기) ───────────────────────────────────
+    // ── PlayNANOO 토큰 주기 갱신 (1시간) ──────────────────────────────────────
 
     protected override void Update()
     {
         base.Update();
-        TickNanooTokenRefresh(Time.realtimeSinceStartup);
+        TickNanooTokenRefresh();
     }
 
-    private void TickNanooTokenRefresh(float realtimeSinceStartup)
+    private void TickNanooTokenRefresh()
     {
-        if (_nanooTokenRefreshedAt == DateTime.MinValue) return;
-        if (realtimeSinceStartup - _lastNanooRefreshCheckTime < NanooRefreshCheckInterval) return;
-        _lastNanooRefreshCheckTime = realtimeSinceStartup;
+        if (_nanooRefreshing || string.IsNullOrEmpty(_nanooRefreshToken)) return;
+        if (Time.realtimeSinceStartup < _nextNanooRefreshAt) return;
+        _ = RefreshNanooTokenAsync("주기 갱신");
+    }
 
-        var hoursSinceRefresh = (DateTime.UtcNow - _nanooTokenRefreshedAt).TotalHours;
-        if (hoursSinceRefresh < NanooTokenLifetimeHours - NanooTokenRefreshLeadHours) return;
+    /// <summary>refresh 토큰으로 나누 토큰을 새로 받습니다. 실패해도 토큰을 지우지 않고 잠시 뒤 다시 시도합니다.</summary>
+    private Task<bool> RefreshNanooTokenAsync(string reason)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshToken = _nanooRefreshToken;
+        if (string.IsNullOrEmpty(refreshToken)) { tcs.TrySetResult(false); return tcs.Task; }
 
-        var storedToken = PlayerPrefs.GetString(NanooAccessTokenKey, null);
-        if (string.IsNullOrEmpty(storedToken)) return;
-
-        _ = RestoreNanooSessionAsync(storedToken).ContinueWith(t =>
+        _nanooRefreshing = true;
+        Trace($"나누 토큰 갱신 시도 — {reason}");
+        NanooTokenRefresh(refreshToken, async (status, values) =>
         {
-            if (!t.Result)
-                Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 토큰 갱신 실패. 재로그인이 필요할 수 있습니다.");
+            _nanooRefreshing = false;
+            if (status == Configure.PN_API_STATE_SUCCESS)
+            {
+                ApplyNanooSession(values, reason);
+                tcs.TrySetResult(true);
+            }
+            else
+            {
+                // 일시적인 네트워크 실패일 수 있어 토큰은 지우지 않는다. refresh 토큰까지 만료됐으면 재로그인이 필요하다.
+                _nextNanooRefreshAt = Time.realtimeSinceStartup + NanooRefreshRetrySeconds;
+                Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 토큰 갱신 실패({reason}) — status: {status}, " +
+                                 $"ErrorCode: {ExtractNanooErrorCode(values)}, {NanooRefreshRetrySeconds:0}초 뒤 다시 시도. 응답: {DescribeValues(values)}");
+                tcs.TrySetResult(false);
+            }
+            await Task.CompletedTask;
         });
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// 나누 로그인·토큰 로그인·토큰 갱신 성공 응답을 반영합니다. 두 토큰을 저장하고 다음 갱신 시각을 잡습니다.
+    /// </summary>
+    private void ApplyNanooSession(Dictionary<string, object> values, string source)
+    {
+        _nanooAccessToken = values.TryGetValue("access_token", out var at) ? at?.ToString() : _nanooAccessToken;
+        if (values.TryGetValue("refresh_token", out var rt) && !string.IsNullOrEmpty(rt?.ToString()))
+            _nanooRefreshToken = rt.ToString();
+        if (values.TryGetValue("nickname", out var nk)) _nanooNickname = nk?.ToString();
+        if (values.TryGetValue("uuid",   out var uv)) TrueBaseNanoo.UserId = uv?.ToString();
+        if (values.TryGetValue("openID", out var ov)) TrueBaseNanoo.OpenId = ov?.ToString();
+        SaveNanooTokens();
+
+        _nextNanooRefreshAt = Time.realtimeSinceStartup + NanooRefreshIntervalSeconds;
+        Trace($"나누 토큰 받음 — {source}, refresh 토큰 {(string.IsNullOrEmpty(_nanooRefreshToken) ? "없음(주기 갱신 불가)" : "있음")}, " +
+              $"다음 갱신 {NanooRefreshIntervalSeconds / 60f:0}분 뒤");
     }
 
     // ── 자동 로그인 후 PlayNANOO 세션 복원 ────────────────────────────────────
@@ -877,14 +917,12 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     protected override async Task<bool> OnAfterAutoLoginAsync(bool success)
     {
         if (!success) return false;
-        var storedToken = PlayerPrefs.GetString(NanooAccessTokenKey, null);
 
         // PlayNANOO 세션을 복원할 수 없으면(토큰 없음 또는 복원 실패) UserId/OpenId가 비어,
         // 이 상태로 자동 로그인을 성공 처리하면 게임이 빈 정체성으로 초기화에 진입합니다.
         // 두 세션을 lockstep으로 유지하기 위해 Supabase 세션까지 정리하고 실패를 반환 →
         // 게임은 자동 로그인 실패로 받아 명시 로그인(게스트/소셜)으로 유도합니다.
-        var nanooOk = !string.IsNullOrEmpty(storedToken)
-                      && await RestoreNanooSessionAsync(storedToken);
+        var nanooOk = await RestoreNanooSessionAsync();
 
         // 수동 로그인과 같게 동기화한다. 빠지면 매일 자동 로그인만 타는 유저는 나누와 한 번도 맞추지
         // 않은 채 플레이하게 되고, 나누 쓰기도 영영 열리지 않는다.
@@ -896,26 +934,44 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return nanooOk;
     }
 
-    private Task<bool> RestoreNanooSessionAsync(string accessToken)
+    /// <summary>
+    /// 저장된 토큰으로 나누 세션을 되살립니다. 액세스 토큰으로 먼저 토큰 로그인하고, 만료됐으면 refresh 토큰으로 새로 받습니다.
+    /// </summary>
+    private async Task<bool> RestoreNanooSessionAsync()
+    {
+        var storedAccess  = PlayerPrefs.GetString(NanooAccessTokenKey, null);
+        var storedRefresh = PlayerPrefs.GetString(NanooRefreshTokenKey, null);
+        if (!string.IsNullOrEmpty(storedRefresh)) _nanooRefreshToken = storedRefresh;
+
+        if (!string.IsNullOrEmpty(storedAccess) && await NanooTokenSignInAsync(storedAccess))
+            return true;
+
+        // 액세스 토큰은 수명이 짧아(원래 게임이 1시간마다 갱신) 앱을 오래 쉬었다 켜면 대개 만료돼 있다.
+        if (!string.IsNullOrEmpty(_nanooRefreshToken) && await RefreshNanooTokenAsync("자동 로그인 — 액세스 토큰 만료"))
+        {
+            Debug.Log("[PlayNanooRuntime] PlayNANOO 토큰 갱신으로 세션 복원.");
+            return true;
+        }
+
+        Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 세션 복원 실패(토큰 없음·만료). 재로그인이 필요합니다.");
+        ClearNanooTokens();
+        return false;
+    }
+
+    private Task<bool> NanooTokenSignInAsync(string accessToken)
     {
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         NanooTokenSignIn(accessToken, async (status, values) =>
         {
             if (status == Configure.PN_API_STATE_SUCCESS)
             {
-                _nanooAccessToken    = values["access_token"]?.ToString();
-                _nanooNickname      = values.TryGetValue("nickname", out var nk) ? nk?.ToString() : _nanooNickname;
-                TrueBaseNanoo.UserId = values.TryGetValue("uuid",   out var uv) ? uv?.ToString() : null;
-                TrueBaseNanoo.OpenId = values.TryGetValue("openID", out var ov) ? ov?.ToString() : null;
-                _nanooTokenRefreshedAt = DateTime.UtcNow;
-                SaveNanooTokens();
+                ApplyNanooSession(values, "자동 로그인 — 토큰 로그인");
                 Debug.Log("[PlayNanooRuntime] PlayNANOO 토큰 로그인 성공.");
                 tcs.TrySetResult(true);
             }
             else
             {
-                Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 토큰 로그인 실패 (토큰 만료 또는 오류). 재로그인이 필요합니다.");
-                ClearNanooTokens();
+                Trace($"토큰 로그인 실패 — status: {status}, ErrorCode: {ExtractNanooErrorCode(values)} (refresh 토큰으로 이어서 시도)");
                 tcs.TrySetResult(false);
             }
             await Task.CompletedTask;
@@ -929,13 +985,21 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             PlayerPrefs.SetString(NanooAccessTokenKey, _nanooAccessToken);
         else
             PlayerPrefs.DeleteKey(NanooAccessTokenKey);
+
+        if (!string.IsNullOrEmpty(_nanooRefreshToken))
+            PlayerPrefs.SetString(NanooRefreshTokenKey, _nanooRefreshToken);
+        else
+            PlayerPrefs.DeleteKey(NanooRefreshTokenKey);
         PlayerPrefs.Save();
     }
 
     private void ClearNanooTokens()
     {
-        _nanooAccessToken = null;
+        _nanooAccessToken   = null;
+        _nanooRefreshToken  = null;
+        _nextNanooRefreshAt = float.MaxValue;
         PlayerPrefs.DeleteKey(NanooAccessTokenKey);
+        PlayerPrefs.DeleteKey(NanooRefreshTokenKey);
         PlayerPrefs.Save();
     }
 

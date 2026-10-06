@@ -32,9 +32,13 @@ Android에서 달라지는 결과는 다음과 같습니다.
 `Supabase.TriggerAutoLoginAsync()`는 플레이나누 런타임이 있을 때 두 세션을 모두 복원합니다.
 
 1. Supabase 리프레시 토큰으로 세션 복원
-2. 저장된 플레이나누 액세스 토큰으로 `TokenSignIn` 호출
+2. 저장된 플레이나누 액세스 토큰으로 `TokenSignIn` 호출. 만료됐으면 저장된 플레이나누 refresh 토큰으로 새 토큰을 받음
 3. 둘 다 성공하면 `true` 반환
 
 저장된 플레이나누 토큰이 없거나 복원에 실패하면 Supabase 세션까지 로그아웃한 뒤 `false`를 반환합니다. 두 세션이 항상 동시에 유효하도록 보장하며, 이 경우 게임은 자동 로그인 실패로 받아 명시 로그인으로 유도합니다.
 
-`SignOutFullyAsync()`는 Supabase와 플레이나누 액세스 토큰을 모두 삭제합니다. 플레이나누 액세스 토큰 유효기간은 24시간이라, 그 이후에는 자동 로그인이 만료되어 플레이어가 직접 로그인합니다.
+`SignOutFullyAsync()`는 Supabase와 플레이나누 토큰을 모두 삭제합니다.
+
+## 플레이나누 토큰 갱신 {#nanoo-token-refresh}
+
+게임을 켜 두는 동안 `PlayNanooRuntime`이 1시간마다 플레이나누 refresh 토큰으로 새 토큰을 받습니다. 게임 코드가 할 일은 없습니다. 갱신에 실패하면 토큰을 지우지 않고 5분 뒤 다시 시도하며, `[PlayNanooRuntime] PlayNANOO 토큰 갱신 실패` 로그에 플레이나누 에러 코드를 남깁니다. 갱신이 언제 일어나는지 보려면 [진단 › Nanoo Trace](./sync#trace)를 켭니다.

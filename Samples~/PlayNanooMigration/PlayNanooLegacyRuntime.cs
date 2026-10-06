@@ -27,6 +27,9 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
     protected override void NanooTokenSignOut(string accessToken, Func<Task> cb)
         => _plugin.AccountTokenSignOut(accessToken, async (_, _, _, _) => await cb());
 
+    protected override void NanooTokenRefresh(string refreshToken, Func<string, Dictionary<string, object>, Task> cb)
+        => _plugin.AccountTokenRefresh(refreshToken, async (s, _, _, v) => await cb(s, v));
+
     protected override void NanooWithDrawal(int holdDays, Func<string, Task> cb)
         => _plugin.AccountManager.WithDrawal(holdDays, async (s, _, _, _) => await cb(s));
 
