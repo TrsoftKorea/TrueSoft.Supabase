@@ -21,11 +21,13 @@ await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.IsNewUser` | `bool` | DB에 본인 행이 없던 신규 유저의 최초 로드에서만 `true`. 값은 호출에 묶여 불변이며, 활용은 아래 [신규 유저 후처리](#new-user) |
+| `.IsNewUser` | `bool` | 신규 유저의 최초 로드에서만 `true`. 값은 호출에 묶여 불변이며, 판정 조건과 활용은 아래 [신규 유저 후처리](#new-user) |
 
 ## 신규 유저 후처리 {#new-user}
 
 `LoadAsync()`는 `SupabaseLoadResult`를 반환합니다. 그 `IsNewUser`로 신규 유저를 분기합니다. **DB에 본인 행이 없던 신규 유저의 최초 로드**에서만 `true`이고, 기존 유저 로드나 재로그인 시에는 `false`입니다. 값이 호출에 묶여 불변이므로, 이후 재로드해도 이 결과의 `IsNewUser`는 바뀌지 않습니다.
+
+플레이나누를 병행하면 로그인 직후 동기화가 게임보다 먼저 행을 만들어, 게임이 로드할 때는 이미 행이 있습니다. 그래도 SDK와 플레이나누 양쪽에 데이터가 없던 유저는 로그인 후 게임이 처음 부르는 로드에서 `true`를 받습니다. 자세한 조건은 [데이터 동기화](/guide/migration/sync#flow)를 참고하세요.
 
 ```csharp
 var result = await Supabase.LoadUserSaveAsync();

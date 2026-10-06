@@ -13,6 +13,8 @@
 
 ::: warning iOS SK1
 플레이나누 IAP는 StoreKit 1 영수증만 지원하므로, `PlayNanooRuntime`은 `Awake`에서 `forceStoreKit1`로 SK1을 강제합니다. 필요한 Unity IAP 버전은 [Unity IAP 버전](/guide/iap/versions#iap-versions)를 참고하세요.
+
+그래서 [시크릿](/guide/start/database-setup#secrets) `APPLE_SHARED_SECRET`이 꼭 필요합니다. 없으면 플레이나누 검증은 통과해도 SDK 검증이 `server_config_error`로 실패해 아이템이 지급되지 않습니다.
 :::
 
 ## iOS 결제 진단 {#ios-trace}
