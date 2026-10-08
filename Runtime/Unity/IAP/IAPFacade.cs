@@ -119,9 +119,7 @@ namespace TrueBase.Unity
 
             if (!string.IsNullOrEmpty(jws))
             {
-                // StoreKit 2 경로 (iOS 15+). 이 경로는 PlayNANOO 인터셉터를 거치지 않는다 — 나누 병행인데 여기로 오면 SK1 강제가 안 된 것이다.
-                if (SupabaseSDK.ApiResultLogsEnabled)
-                    Debug.Log($"{LogTag} iOS 검증 경로: SK2(JWS). jws={jws.Length}자, product={productId}");
+                // StoreKit 2 경로 (iOS 15+)
                 priceAmount   = 0;
                 priceCurrency = null;
                 var (success, response) = await _verifyAsync(jws, productId, priceAmount, priceCurrency, pendingOrder.Info?.Receipt);
@@ -139,8 +137,6 @@ namespace TrueBase.Unity
                 }
                 var rawReceipt = pendingOrder.Info?.Receipt;
                 var receiptPayload = ExtractAppleReceiptPayload(rawReceipt);
-                if (SupabaseSDK.ApiResultLogsEnabled)
-                    Debug.Log($"{LogTag} iOS 검증 경로: SK1(영수증). 원문={rawReceipt?.Length ?? 0}자, Payload={receiptPayload?.Length ?? 0}자, product={productId}");
                 if (string.IsNullOrEmpty(receiptPayload))
                 {
                     Debug.LogWarning($"{LogTag} Apple 영수증 Payload를 추출할 수 없습니다. product={productId}");

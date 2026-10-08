@@ -49,6 +49,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // "SDK 세이브를 한 번이라도 읽었는가"만 보면 게임의 LoadUserSaveAsync 만으로 통과돼, 동기화가 도중에
     // 실패했거나 아직 안 끝났을 때 기본값·이전 계정 데이터로 나누 원본을 덮는다.
     private bool     _nanooSyncedThisLogin;
+    // 이번 로그인의 나누 계정이 이 SDK 계정의 짝이 아니다(추가 연동한 소셜로 로그인). 쓰기가 막힌 이유를 경고 대신 일반 로그로 알리는 데만 쓴다.
+    private bool     _nanooAccountNotPaired;
+    // 동기화가 로그인을 실패로 돌린 사유. 로그인 인터셉터가 그대로 돌려준다.
+    private string   _syncFailReason;
+
+    // 게스트 연동에서 나누는 소셜로 바뀌었는데 Supabase 연동이 실패했다("uuid|계정 종류|소셜 sub"). 나누는 되돌릴 수 없고 같은 소셜로 다시 바꾸려 하면
+    // 거절될 수 있어, 다시 시도할 때는 Supabase 연동만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
+    private const string NanooPendingGuestLinkKey = "TrueBase.NanooPendingGuestLink";
 
     private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
     private string   _nanooNickname;       // 닉네임 변경 롤백용
@@ -71,7 +79,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const string NanooRefreshTokenKey = "TrueBase.NanooRefreshToken";
     // 나누는 토큰 수명을 클라이언트에 알려 주지 않는다(DLL 에 만료 정보 없음). 원래 게임이 1시간마다 refresh 토큰으로
     // 갱신했으므로 같은 주기를 쓴다. 예전에는 수명을 24시간으로 가정해 23시간 뒤에야, 그것도 같은 액세스 토큰으로
-    // 다시 로그인하는 방식으로 "갱신"해서, 몇 시간 켜 두면 토큰이 만료돼 나누 호출이 실패했다(30005).
+    // 다시 로그인하는 방식으로 "갱신"해 실제로는 새 토큰을 받지 못했다.
     private const float  NanooRefreshIntervalSeconds = 3600f;
     private const float  NanooRefreshRetrySeconds    = 300f;   // 네트워크 실패 후 다시 시도할 간격
     // 나누 HTTP 제한(Common.WWW_TIMEOUT = 10초, DLL 디컴파일로 확인) + 여유. 나누는 응답이 JSON 이 아니면 콜백을 부르지 않아
@@ -80,8 +88,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const int    NanooCallbackTimeoutMs      = 15000;
     // 토큰이 만료됐다(나누 30002 ExpiredTokenException).
     private const string NanooTokenExpiredCode       = "30002";
-    // 나누 DLL 안의 토큰이 비어 서버에 보내지도 않았다(나누 30005 NullTokenException). refresh 토큰이 있으면 갱신으로 다시 채운다.
-    private const string NanooTokenMissingCode       = "30005";
+    // 연동하려는 소셜이 이미 다른 나누 계정에 연동돼 있다(원래 게임 문구 "해당 계정은 이미 연동된 계정입니다").
+    private const string NanooAccountAlreadyLinkedCode   = "10008";
+    private const string NanooAccountAlreadyLinkedReason = "playnanoo_account_already_linked";
+    // 이 계정의 나누 짝을 확인·기록하지 못해 소셜 계정 추가 연동을 멈췄다.
+    private const string NanooAccountBindingFailedReason = "playnanoo_account_binding_failed";
 
     // 로그인 정보(UserId·OpenId)·탈퇴 이벤트는 TrueBaseNanoo(정적 진입점)로 옮겼다. 애플 로그인은 표준 Supabase.SignInWithAppleAsync() 를 쓴다.
     // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
@@ -99,6 +110,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 소셜 로그인. 완료 후 callback(status, values)을 호출해야 합니다.</summary>
     protected abstract void NanooSocialSignIn(
+        string token, string accountType,
+        Func<string, Dictionary<string, object>, Task> callback);
+
+    /// <summary>
+    /// 지금 나누 게스트 계정을 소셜 계정으로 바꿉니다(원래 게임의 AccountSocialChange). 성공 응답은 소셜 로그인과 같은 모양이고
+    /// 나누가 새 토큰을 내부에 설정한다. 완료 후 callback(status, values)을 호출해야 합니다.
+    /// </summary>
+    protected abstract void NanooSocialChange(
         string token, string accountType,
         Func<string, Dictionary<string, object>, Task> callback);
 
@@ -179,8 +198,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             linkGoogleToGuestWithIdToken: InterceptLinkGoogleToGuestWithIdToken,
             linkAppleToGuestWithIdToken:  InterceptLinkAppleToGuestWithIdToken,
             setMyName:                        InterceptSetName,
-            linkGoogleWithIdToken:                   InterceptLinkGoogleWithIdToken,
-            linkAppleWithIdToken:                    InterceptLinkAppleWithIdToken,
+            linkGoogleWithIdToken:                   InterceptAddGoogleLink,
+            linkAppleWithIdToken:                    InterceptAddAppleLink,
             redeemWithdrawalCancel:                  InterceptRedeemWithdrawalCancel
         );
 
@@ -196,7 +215,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 #if UNITY_IAP_V5_1 && UNITY_IOS
         // 네임스페이스가 UnityEngine.Purchasing 이 아니다 — StoreKitSelector 는 Purchasing.Utilities 에 있다.
         Purchasing.Utilities.StoreKitSelector.forceStoreKit1 = true;
-        Trace("iOS 결제: forceStoreKit1=true 로 SK1 강제 (나누 검증은 SK1 경로에서만 불린다)");
 #elif UNITY_IOS
         Debug.LogError("[PlayNanooRuntime] Unity IAP 5.0.x에서는 iOS 15+에서 PlayNanoo IAP가 작동하지 않습니다. Unity IAP 5.1+로 업그레이드하세요.");
 #endif
@@ -206,9 +224,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         SupabaseBridge.RegisterIAPAppleInterceptor(async (receipt, productId, rawReceipt, sdkVerify) =>
         {
             var toNanoo = rawReceipt ?? receipt;
-            Trace($"iOS 결제 1/3 나누 검증 요청 — product: {productId}, 넘기는 값: {(rawReceipt != null ? "영수증 원문" : "Payload(원문 없음 — 20004 날 수 있음)")}, " +
-                  DescribeUnityReceipt(toNanoo));
-
             var (status, errorMessage, values) = await CallNanooWithTokenRetryAsync(
                 cb => NanooIAPIOS(toNanoo, productId, string.Empty, 0d, cb), "iOS 결제 검증");
             if (status != Configure.PN_API_STATE_SUCCESS)
@@ -216,13 +231,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 LogNanooIAPFailure("iOS", productId, status, errorMessage, values);
                 return SupabaseResult<AppleIAPPurchaseResponse>.Fail("playnanoo_iap_ios_failed");
             }
-
-            Trace($"iOS 결제 2/3 나누 검증 성공 — product: {productId}, 응답: {DescribeValues(values)}");
-            var sdk = await sdkVerify();
-            Trace(sdk != null && sdk.IsSuccess
-                ? $"iOS 결제 3/3 SDK 검증 성공 — product: {productId}, ok: {sdk.Data?.ok}, reason: {sdk.Data?.reason}, 이미 지급: {sdk.Data?.already_granted}"
-                : $"iOS 결제 3/3 SDK 검증 실패 — product: {productId}, ErrorCode: {sdk?.ErrorCode}");
-            return sdk;
+            return await sdkVerify();
         });
 
         // rawReceipt(유니티 영수증 원문)를 넘긴다. PlayNANOO 는 purchaseToken 이 아니라 영수증을 받는다.
@@ -240,8 +249,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     }
 
     /// <summary>
-    /// 나누 호출을 토큰을 챙겨 부릅니다. 갱신 시각이 지났으면 먼저 갱신하고, 토큰 만료(30002)나
-    /// 토큰 없음(30005, refresh 토큰이 있을 때)으로 실패하면 갱신 후 한 번 다시 부릅니다.
+    /// 나누 호출을 토큰을 챙겨 부릅니다. 갱신 시각이 지났으면 먼저 갱신하고, 만료(30002)로 실패하면 갱신 후 한 번 다시 부릅니다.
     /// 원래 게임도 30002 를 받으면 그 자리에서 토큰을 갱신했다(ServerManager.RefreshToken).
     /// </summary>
     /// <remarks>
@@ -253,13 +261,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         await EnsureFreshNanooTokenAsync();
         var first = await InvokeNanooAsync(call, what);
-        if (first.status == Configure.PN_API_STATE_SUCCESS) return first;
-        var errorCode = ExtractNanooErrorCode(first.values);
-        var retryable = errorCode == NanooTokenExpiredCode
-                        || (errorCode == NanooTokenMissingCode && !string.IsNullOrEmpty(_nanooRefreshToken));
-        if (!retryable) return first;
+        if (first.status == Configure.PN_API_STATE_SUCCESS || ExtractNanooErrorCode(first.values) != NanooTokenExpiredCode)
+            return first;
 
-        Trace($"{what} — 토큰 만료·없음({errorCode}). 갱신 후 한 번 다시 시도");
+        Trace($"{what} — 토큰 만료(30002). 갱신 후 한 번 다시 시도");
         if (!await RefreshNanooTokenAsync($"{what} 중 토큰 만료"))
             return first;
         return await InvokeNanooAsync(call, what);
@@ -446,14 +451,17 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (await SyncDataAfterLogin())
             return sdkResult;
 
+        var reason = _syncFailReason ?? NanooStorageReadFailedReason;
         await Supabase.SignOutFullyAsync();
-        return SupabaseResult.Fail(NanooStorageReadFailedReason);
+        return SupabaseResult.Fail(reason);
     }
 
     private async Task<SupabaseResult> InterceptSignOutFully(Func<Task<SupabaseResult>> sdkSignOut)
     {
         using var sessionChange = await BeginNanooSessionChangeAsync();
-        _nanooSyncedThisLogin = false;
+        _nanooSyncedThisLogin  = false;
+        _nanooAccountNotPaired = false;
+        ClearPendingGuestLink();
 
         if (string.IsNullOrEmpty(_nanooAccessToken))
             return await sdkSignOut();
@@ -535,90 +543,135 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 익명 → 소셜 연동 인터셉터 ────────────────────────────────────────────────
 
-    private async Task<SupabaseResult> InterceptLinkGoogleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+    // 원래 게임처럼 나누 게스트 계정을 그 자리에서 소셜 계정으로 바꾼다(AccountSocialChange). 예전에는 소셜 로그인(SocialSignIn)을
+    // 불러 그 소셜의 나누 계정으로 갈아탔다 — 게스트 데이터가 든 나누 계정은 게스트로 남고, 세션은 새(또는 다른) 나누 계정으로 넘어갔다.
+    // 나누를 먼저 부르는 이유: 이미 다른 나누 계정에 연동된 소셜이면 나누가 10008 로 먼저 거절해 Supabase 를 건드리지 않는다.
+
+    private Task<SupabaseResult> InterceptLinkGoogleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+        => LinkGuestToSocialAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google", "playnanoo_google_link_failed", sdkLink);
+
+    private Task<SupabaseResult> InterceptLinkAppleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+        => LinkGuestToSocialAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple", "playnanoo_apple_link_failed", sdkLink);
+
+    private async Task<SupabaseResult> LinkGuestToSocialAsync(
+        string token, string accountType, string loginType, string failCode, Func<Task<SupabaseResult>> sdkLink)
     {
         var begin = await BeginNanooLoginAsync();
         using var sessionChange = begin.Scope;
         var previous = begin.Previous;
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
+
+        // 지난 시도에서 나누는 이미 바뀌었는데 Supabase 연동만 실패했다 — 같은 소셜 계정이면 이번에는 Supabase 연동만 한다.
+        // 소셜 계정(sub)까지 맞춰 본다. 다른 계정을 골라 다시 누르면 나누는 X, Supabase 는 Y 로 갈라진다.
+        var pendingMark = PendingGuestLinkMark(accountType, token);
+        if (pendingMark != null && PlayerPrefs.GetString(NanooPendingGuestLinkKey, "") == pendingMark)
         {
-            if (!HandleNanooCallback(status, values, "google"))
+            Trace($"게스트 {loginType} 연동 — 나누는 지난 시도에서 이미 바뀜, Supabase 연동만 다시 시도");
+            var retried = await sdkLink();
+            if (retried.IsSuccess)
             {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_google_link_failed"));
+                ClearPendingGuestLink();
+                await SyncDataAfterLogin();
+            }
+            return retried;
+        }
+
+        var tcs = new TaskCompletionSource<SupabaseResult>();
+        NanooSocialChange(token, accountType, async (status, values) =>
+        {
+            if (!HandleNanooCallback(status, values, loginType, "연동"))
+            {
+                tcs.SetResult(SupabaseResult.Fail(
+                    ExtractNanooErrorCode(values) == NanooAccountAlreadyLinkedCode ? NanooAccountAlreadyLinkedReason : failCode));
                 return;
             }
             var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
+            if (!result.IsSuccess)
+            {
+                // 나누에는 되돌리는 API 가 없어 나누 계정은 소셜로 바뀐 채 남는다. 다시 연동하면 Supabase 연동만 하도록 표시해 둔다.
+                Debug.LogWarning($"[PlayNanooRuntime] Supabase {loginType} 연동 실패 — PlayNANOO 계정(uuid {TrueBaseNanoo.UserId})은 " +
+                                 $"이미 {loginType} 계정으로 바뀌어 되돌릴 수 없습니다. 다시 연동하면 Supabase 연동만 시도합니다. 사유: {result.ErrorCode}");
+                var mark = PendingGuestLinkMark(accountType, token);
+                if (mark != null)
+                {
+                    PlayerPrefs.SetString(NanooPendingGuestLinkKey, mark);
+                    PlayerPrefs.Save();
+                }
+                await RollbackNanooLoginAsync(previous);
+                tcs.SetResult(result);
+                return;
+            }
+            // 짝은 여기서 다시 기록하지 않는다 — 동기화가 기존 짝과 대조한다. 신버전 나누는 세션이 아니라 이 기기의 게스트를
+            // 바꾸므로(요청에 토큰·uuid 가 없다, DLL 디컴파일로 확인) 드물게 다른 계정이 돌아올 수 있고, 그때 짝을 덮으면 안 된다.
+            ClearPendingGuestLink();
             await SyncDataAfterLogin();
             tcs.SetResult(result);
         });
         return await tcs.Task;
     }
 
-    private async Task<SupabaseResult> InterceptLinkAppleToGuestWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+    /// <summary>"나누 uuid|계정 종류|소셜 계정 sub". 셋 중 하나라도 모르면 null — 그때는 건너뛰지 않고 나누부터 다시 시도한다.</summary>
+    private static string PendingGuestLinkMark(string accountType, string idToken)
     {
-        var begin = await BeginNanooLoginAsync();
-        using var sessionChange = begin.Scope;
-        var previous = begin.Previous;
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
+        var sub = ReadIdTokenSubject(idToken);
+        if (string.IsNullOrEmpty(TrueBaseNanoo.UserId) || string.IsNullOrEmpty(sub)) return null;
+        return $"{TrueBaseNanoo.UserId}|{accountType}|{sub}";
+    }
+
+    /// <summary>ID 토큰(JWT) 본문의 sub. 서명은 보지 않는다 — 같은 계정인지 맞춰 보는 데만 쓴다.</summary>
+    private static string ReadIdTokenSubject(string idToken)
+    {
+        var parts = idToken?.Split('.');
+        if (parts == null || parts.Length < 2) return null;
+        try
         {
-            if (!HandleNanooCallback(status, values, "apple"))
-            {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_link_failed"));
-                return;
-            }
-            var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
-            await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(payload));
+            return Newtonsoft.Json.Linq.JObject.Parse(json)["sub"]?.ToString();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static void ClearPendingGuestLink()
+    {
+        if (!PlayerPrefs.HasKey(NanooPendingGuestLinkKey)) return;
+        PlayerPrefs.DeleteKey(NanooPendingGuestLinkKey);
+        PlayerPrefs.Save();
     }
 
     // ── 소셜 → 소셜 추가 연동 인터셉터 ───────────────────────────────────────────
 
-    private async Task<SupabaseResult> InterceptLinkGoogleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
-    {
-        var begin = await BeginNanooLoginAsync();
-        using var sessionChange = begin.Scope;
-        var previous = begin.Previous;
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_GOOGLE, async (status, values) =>
-        {
-            if (!HandleNanooCallback(status, values, "google"))
-            {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_google_link_failed"));
-                return;
-            }
-            var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
-            await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
-    }
+    // 소셜 계정에 다른 소셜을 더 붙이는 연동은 Supabase 에만 한다. 나누 병행은 나누를 단계적으로 걷어내기 위한 것이고 원래 게임에도
+    // 없던 기능이다. 나누 계정은 소셜 하나만 연결되므로 나누 쪽까지 맞추려면 기존 연결을 바꾸거나 다른 나누 계정으로 갈아타야 한다.
+    // 연동 전에 이 계정의 나누 짝을 기록해 둔다 — 추가한 소셜로 로그인하면 나누는 다른 계정으로 들어가는데, 짝 기록이 있어야
+    // 동기화가 그 계정 데이터를 가져오지 않는다. 기록하지 못하면 연동하지 않는다.
+    // 이 API 는 게스트도 부를 수 있다(SDK 가 익명 세션을 받는다) — 게스트면 게스트 연동과 같게 나누 게스트 계정을 바꾼다.
+    private Task<SupabaseResult> InterceptAddGoogleLink(string token, Func<Task<SupabaseResult>> sdkLink)
+        => AddSocialLinkAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google", "playnanoo_google_link_failed", sdkLink);
 
-    private async Task<SupabaseResult> InterceptLinkAppleWithIdToken(string token, Func<Task<SupabaseResult>> sdkLink)
+    private Task<SupabaseResult> InterceptAddAppleLink(string token, Func<Task<SupabaseResult>> sdkLink)
+        => AddSocialLinkAsync(token, Configure.PN_ACCOUNT_APPLE_ID, "apple", "playnanoo_apple_link_failed", sdkLink);
+
+    private async Task<SupabaseResult> AddSocialLinkAsync(
+        string token, string accountType, string loginType, string failCode, Func<Task<SupabaseResult>> sdkLink)
     {
-        var begin = await BeginNanooLoginAsync();
-        using var sessionChange = begin.Scope;
-        var previous = begin.Previous;
-        var tcs = new TaskCompletionSource<SupabaseResult>();
-        NanooSocialSignIn(token, Configure.PN_ACCOUNT_APPLE_ID, async (status, values) =>
+        // 로그인 전이면 SDK 가 자기 사유로 거절하게 그대로 넘긴다.
+        if (!Supabase.IsLoggedIn) return await sdkLink();
+        if (Supabase.IsAnonymous) return await LinkGuestToSocialAsync(token, accountType, loginType, failCode, sdkLink);
+
+        var binding = await SupabaseBridge.GetNanooAccountBindingAsync();
+        if (!binding.IsSuccess)
         {
-            if (!HandleNanooCallback(status, values, "apple"))
-            {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_apple_link_failed"));
-                return;
-            }
-            var result = await sdkLink();
-            if (!result.IsSuccess) { await RollbackNanooLoginAsync(previous); tcs.SetResult(result); return; }
-            await SyncDataAfterLogin();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
+            Debug.LogWarning($"[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못해 {loginType} 추가 연동을 멈춥니다. 사유: {binding.ErrorCode}");
+            return SupabaseResult.Fail(NanooAccountBindingFailedReason);
+        }
+        if (string.IsNullOrEmpty(binding.Data) && !await BindNanooAccountAsync($"{loginType} 추가 연동 전"))
+            return SupabaseResult.Fail(NanooAccountBindingFailedReason);
+
+        return await sdkLink();
     }
 
     // ── PlayNANOO 콜백 공통 처리 ──────────────────────────────────────────────
@@ -658,44 +711,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         return "{" + string.Join(", ", parts) + "}";
     }
 
-    [Serializable]
-    private sealed class UnityReceiptShape
-    {
-        public string Store;
-        public string TransactionID;
-        public string Payload;
-    }
-
-    /// <summary>
-    /// 나누에 넘기는 영수증이 어떤 모양인지 한 줄로 — 내용은 남기지 않고 길이·필드만.
-    /// 나누 iOS 검증은 유니티 영수증 JSON({"Store","TransactionID","Payload"}) 전체를 받는다.
-    /// </summary>
-    private static string DescribeUnityReceipt(string receipt)
-    {
-        if (string.IsNullOrEmpty(receipt)) return "영수증: (비어 있음)";
-
-        var trimmed = receipt.TrimStart();
-        if (!trimmed.StartsWith("{"))
-            return $"영수증: 유니티 영수증 JSON 아님({receipt.Length}자) — Payload 만 넘어간 것으로 보임";
-
-        try
-        {
-            var shape = JsonUtility.FromJson<UnityReceiptShape>(receipt);
-            return $"영수증: 유니티 JSON {receipt.Length}자, Store={shape?.Store ?? "(없음)"}, " +
-                   $"TransactionID={(string.IsNullOrEmpty(shape?.TransactionID) ? "(없음)" : "있음")}, " +
-                   $"Payload={shape?.Payload?.Length ?? 0}자";
-        }
-        catch (Exception e)
-        {
-            return $"영수증: JSON 해석 실패({receipt.Length}자) — {e.Message}";
-        }
-    }
-
-    private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType)
+    private bool HandleNanooCallback(string status, Dictionary<string, object> values, string loginType, string action = "로그인")
     {
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
-            ApplyNanooSession(values, $"{loginType} 로그인");
+            ApplyNanooSession(values, $"{loginType} {action}");
             OnNanooLoginSuccess(values);
             return true;
         }
@@ -711,7 +731,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         }
         else
         {
-            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO {loginType} 로그인 실패 — status: {status}, ErrorCode: {errorCode}");
+            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO {loginType} {action} 실패 — status: {status}, ErrorCode: {errorCode}" +
+                             (errorCode == NanooAccountAlreadyLinkedCode ? " (이미 다른 PlayNANOO 계정에 연동된 소셜 계정)" : ""));
         }
         return false;
     }
@@ -1359,6 +1380,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // await 보다 먼저 닫는다 — 동기화가 도는 동안(로그아웃 없이 계정을 바꾼 경우 이전 계정 데이터가
         // 로컬에 남아 있다) 게임이 SaveNow 를 불러도 나누에 쓰지 않게.
         _nanooSyncedThisLogin = false;
+        _nanooAccountNotPaired = false;
+        _syncFailReason = null;
 
         var save = Save;
         if (save == null)
@@ -1389,11 +1412,42 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 // 여기서 행을 만들면 유저는 새 게임을 보고, 그 플레이가 다음 로그인에 나누 원본을 이긴다.
                 Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못했고 SDK 세이브도 없어 로그인을 실패로 돌립니다. " +
                                  "다시 시도하세요 — 이대로 진행하면 새 게임 데이터가 기존 PlayNANOO 데이터를 덮게 됩니다.");
+                _syncFailReason = NanooStorageReadFailedReason;
                 return false;
             }
 
             Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못해 SDK 세이브로 진행합니다. " +
                              "이번 로그인에서는 PlayNANOO 에 쓰지 않습니다.");
+            await save.TryLoadAsync();
+            return true;
+        }
+
+        // 추가 연동한 소셜 계정으로 로그인하면 나누는 그 소셜의 다른 나누 계정으로 들어간다. 그 데이터는 이 SDK 계정의 세이브가 아니므로
+        // 이 계정에 짝으로 기록해 둔 나누 계정과 다르면 가져오지도, SDK 데이터로 덮지도 않는다(이관 전 기록이면 저장 시각이 없어 무조건 이겼다).
+        // SDK 행이 없을 때(세이브 삭제 뒤 등)도 같다 — 짝이 아닌 계정의 기록을 이관하고 짝을 바꿔 버리면 원래 짝이 영영 동기화되지 않는다.
+        var binding = await SupabaseBridge.GetNanooAccountBindingAsync();
+        if (!binding.IsSuccess)
+        {
+            if (!hasRow)
+            {
+                Debug.LogWarning("[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못했고 SDK 세이브도 없어 로그인을 실패로 돌립니다. " +
+                                 $"다시 시도하세요. 사유: {binding.ErrorCode}");
+                _syncFailReason = NanooAccountBindingFailedReason;
+                return false;
+            }
+            Debug.LogWarning("[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못해 SDK 세이브로 진행합니다. " +
+                             $"이번 로그인에서는 PlayNANOO 에 쓰지 않습니다. 사유: {binding.ErrorCode}");
+            await save.TryLoadAsync();
+            return true;
+        }
+
+        var pairedUuid = binding.Data;
+        if (!string.IsNullOrEmpty(pairedUuid) && pairedUuid != TrueBaseNanoo.UserId)
+        {
+            _nanooAccountNotPaired = true;
+            Debug.LogWarning($"[PlayNanooRuntime] 로그인한 PlayNANOO 계정(uuid {TrueBaseNanoo.UserId})이 이 계정의 짝(uuid {pairedUuid})이 아니라 " +
+                             "동기화하지 않고 SDK 세이브로 진행합니다. 추가 연동한 소셜 계정으로 로그인했을 때 생깁니다.");
+            Trace("판정: 짝이 아닌 나누 계정 → 가져오지도 덮지도 않음, 이번 로그인은 나누 쓰기 닫힘");
             await save.TryLoadAsync();
             return true;
         }
@@ -1411,8 +1465,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 _nanooSyncedThisLogin = await save.TryLoadAsync();
             }
             if (!_nanooSyncedThisLogin) Trace("동기화 실패 — 이번 로그인에서는 나누에 쓰지 않음");
+            else if (string.IsNullOrEmpty(pairedUuid)) await BindNanooAccountAsync("새 SDK 세이브");
             return true;
         }
+
+        // 짝 기록을 두기 전에 이관된 계정. 지금까지처럼 이 로그인의 나누 계정을 짝으로 기록한다.
+        if (string.IsNullOrEmpty(pairedUuid))
+            await BindNanooAccountAsync("기존 계정 첫 기록");
 
         var nanooTime = save.NanooParseCompareTimestamp(nanoo.Json);
         if (nanooTime > sdkTime)
@@ -1429,6 +1488,26 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             _nanooSyncedThisLogin = true;
         }
         return true;
+    }
+
+    /// <summary>지금 로그인한 나누 계정을 이 SDK 계정의 짝으로 기록합니다. 실패하면 다음 로그인 동기화가 다시 기록한다.</summary>
+    private async Task<bool> BindNanooAccountAsync(string reason)
+    {
+        var uuid = TrueBaseNanoo.UserId;
+        if (string.IsNullOrEmpty(uuid))
+        {
+            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 에 로그인돼 있지 않아 이 계정의 짝을 기록하지 못했습니다({reason}).");
+            return false;
+        }
+
+        var r = await SupabaseBridge.SetNanooAccountBindingAsync(uuid);
+        if (r.IsSuccess)
+        {
+            Trace($"나누 계정 짝 기록 — uuid {uuid} ({reason})");
+            return true;
+        }
+        Debug.LogWarning($"[PlayNanooRuntime] 이 계정의 PlayNANOO 짝(uuid {uuid})을 기록하지 못했습니다({reason}). 사유: {r.ErrorCode}");
+        return false;
     }
 
     /// <summary>
@@ -1518,6 +1597,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// </summary>
     private bool CanWriteToNanoo(string caller)
     {
+        if (_nanooAccountNotPaired)
+        {
+            Debug.Log($"[PlayNanooRuntime] {caller} 건너뜀 — 이 계정의 짝이 아닌 PlayNANOO 계정으로 로그인해 이번 로그인에서는 쓰지 않습니다.");
+            return false;
+        }
         if (!_nanooSyncedThisLogin)
         {
             Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 이번 로그인의 PlayNANOO 동기화가 끝나지 않았거나 실패했습니다.");

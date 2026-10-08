@@ -518,6 +518,79 @@ namespace TrueBase.Core.Auth
             return SupabaseResult<bool>.Success(true);
         }
 
+        /// <summary>
+        /// <c>GET /auth/v1/user</c>로 서버의 <c>user_metadata</c>에서 문자열 값 하나를 읽습니다. 키가 없으면 <c>Data == null</c>로 성공합니다.
+        /// 세션에 들고 있는 사용자 정보는 로그인 시점 것이라, 다른 기기에서 바꾼 값을 보려면 서버에서 읽어야 합니다.
+        /// </summary>
+        public async Task<SupabaseResult<string>> GetUserMetadataStringAsync(string accessToken, string key)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+            if (string.IsNullOrWhiteSpace(key))
+                return SupabaseResult<string>.Fail("metadata_key_empty");
+
+            var response = await _httpClient.SendAsync(
+                method: "GET",
+                url: $"{_supabaseUrl}/auth/v1/user",
+                jsonBody: null,
+                headers: new Dictionary<string, string>
+                {
+                    { "apikey", _publishableKey },
+                    { "Authorization", "Bearer " + accessToken.Trim() }
+                });
+
+            if (response == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<string>.Fail(
+                    ExtractErrorMessage(response.Body) ?? response.ErrorMessage ?? "auth_get_user_failed");
+
+            try
+            {
+                // user_metadata 가 JSON null 로 올 수 있어 객체일 때만 키를 찾는다(null 토큰에 인덱서를 쓰면 예외).
+                var value = (JObject.Parse(response.Body)["user_metadata"] as JObject)?[key];
+                return SupabaseResult<string>.Success(value == null || value.Type == JTokenType.Null ? null : value.ToString());
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<string>.Fail("auth_get_user_parse_exception:" + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// <c>PUT /auth/v1/user</c>로 <c>user_metadata</c>에 문자열 값 하나를 씁니다. 서버는 보낸 키만 바꾸고 다른 키는 그대로 둡니다
+        /// (GoTrue <c>UpdateUserMetaData</c>가 키 단위로 합친다).
+        /// </summary>
+        public async Task<SupabaseResult<bool>> UpdateUserMetadataStringAsync(string accessToken, string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+            if (string.IsNullOrWhiteSpace(key))
+                return SupabaseResult<bool>.Fail("metadata_key_empty");
+
+            var body = new JObject { ["data"] = new JObject { [key] = value } };
+            var response = await _httpClient.SendAsync(
+                method: "PUT",
+                url: $"{_supabaseUrl}/auth/v1/user",
+                jsonBody: body.ToString(Newtonsoft.Json.Formatting.None),
+                headers: new Dictionary<string, string>
+                {
+                    { "apikey", _publishableKey },
+                    { "Authorization", "Bearer " + accessToken.Trim() },
+                    { "Content-Type", "application/json" }
+                });
+
+            if (response == null)
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<bool>.Fail(
+                    ExtractErrorMessage(response.Body) ?? response.ErrorMessage ?? "auth_update_user_failed");
+
+            return SupabaseResult<bool>.Success(true);
+        }
+
         private static string ExtractStablePlayerUserId(JToken userToken)
         {
             if (userToken == null)

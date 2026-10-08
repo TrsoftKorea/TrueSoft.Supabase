@@ -92,9 +92,6 @@ namespace TrueBase.Unity
                     return;
                 }
 
-                // 이 경로는 PlayNANOO 인터셉터를 거치지 않는다 — 나누 병행인데 여기로 오면 SK1 강제가 안 된 것이다.
-                if (SupabaseSDK.ApiResultLogsEnabled)
-                    Debug.Log($"{LogTag} iOS 검증 경로: SK2(JWS). jws={jws.Length}자, product={productId}");
                 var (success, response) = await _verifyJwsAsync(jws, productId);
                 if (!success || response == null) { Debug.LogWarning($"{LogTag} 서버 검증 실패. product={productId}"); return; }
                 if (!response.ok) { Debug.LogWarning($"{LogTag} Apple이 구매를 거부했습니다. reason={response.reason}, product={productId}"); return; }
@@ -111,8 +108,6 @@ namespace TrueBase.Unity
 
             var rawReceipt = pendingOrder.Info?.Receipt;
             var receipt = ExtractAppleReceiptPayload(rawReceipt);
-            if (SupabaseSDK.ApiResultLogsEnabled)
-                Debug.Log($"{LogTag} iOS 검증 경로: SK1(영수증). 원문={rawReceipt?.Length ?? 0}자, Payload={receipt?.Length ?? 0}자, product={productId}");
             if (string.IsNullOrEmpty(receipt))
             {
                 Debug.LogWarning($"{LogTag} Apple 영수증 Payload를 추출할 수 없습니다. product={productId}");

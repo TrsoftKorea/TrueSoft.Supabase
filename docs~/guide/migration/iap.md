@@ -16,9 +16,3 @@
 
 그래서 [시크릿](/guide/start/database-setup#secrets) `APPLE_SHARED_SECRET`이 꼭 필요합니다. 없으면 플레이나누 검증은 통과해도 SDK 검증이 `server_config_error`로 실패해 아이템이 지급되지 않습니다.
 :::
-
-## iOS 결제 진단 {#ios-trace}
-
-iOS 결제가 실패하면 먼저 `[Supabase.IAP] iOS 검증 경로` 로그를 봅니다. 플레이나누 검증은 SK1 경로에서만 불리므로, `SK2(JWS)`로 나오면 플레이나누를 거치지 않은 것입니다. 이 로그는 `SupabaseSettings`의 **API 결과 로그 사용**을 따릅니다.
-
-더 자세히 보려면 `PlayNanooRuntime` 인스펙터에서 [진단 › Nanoo Trace](./sync#trace)를 켭니다. 결제 한 건마다 `[PlayNanooTrace] iOS 결제 1/3~3/3` 로그로 플레이나누에 넘긴 영수증의 모양, 플레이나누 응답, SDK 검증 결과가 차례로 남습니다. 영수증 내용은 남기지 않고 길이와 필드만 남깁니다.

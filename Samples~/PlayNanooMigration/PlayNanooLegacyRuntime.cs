@@ -24,6 +24,9 @@ public class PlayNanooLegacyRuntime : PlayNanooRuntimeBase
     protected override void NanooSocialSignIn(string token, string accountType, Func<string, Dictionary<string, object>, Task> cb)
         => _plugin.AccountSocialSignIn(token, accountType, async (s, _, _, v) => await cb(s, v));
 
+    protected override void NanooSocialChange(string token, string accountType, Func<string, Dictionary<string, object>, Task> cb)
+        => _plugin.AccountSocialChange(token, accountType, async (s, _, _, v) => await cb(s, v));
+
     protected override void NanooTokenSignOut(string accessToken, Func<Task> cb)
         => _plugin.AccountTokenSignOut(accessToken, async (_, _, _, _) => await cb());
 

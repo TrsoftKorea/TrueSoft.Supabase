@@ -60,9 +60,6 @@ namespace TrueBase.Unity
         private static string _initializedProjectUrl;
         private static bool _enableApiResultLogs = true;
 
-        /// <summary>SupabaseSettings 의 "API 결과 로그 사용". IAP 어셈블리가 진단 로그를 같은 스위치로 끄고 켜려고 읽는다.</summary>
-        internal static bool ApiResultLogsEnabled => _enableApiResultLogs;
-
         private static Task _remoteConfigKeyPollTickTask;
 
         private static float _duplicateSessionPollSeconds = 15f;
@@ -84,6 +81,37 @@ namespace TrueBase.Unity
         /// 생성 시 자동 등록되므로 게임 코드에서 호출할 일이 없습니다.
         /// </summary>
         public static INanooSaveSyncable GetNanooSaveBridge() => _nanooSaveBridge;
+
+        // user_metadata 키. 이 SDK 계정의 세이브와 짝인 플레이나누 계정 uuid 를 둔다.
+        private const string NanooAccountBindingMetadataKey = "playnanoo_uuid";
+
+        /// <summary>
+        /// PlayNanooRuntime 전용. 이 SDK 계정에 묶인 플레이나누 계정 uuid 를 서버에서 읽습니다. 아직 묶이지 않았으면 <c>Data == null</c>.
+        /// 추가 연동한 소셜 계정으로 로그인하면 플레이나누는 다른 계정으로 들어가므로, 동기화가 그 계정 데이터를 가져오지 않게 대조할 때 쓴다.
+        /// </summary>
+        internal static async Task<SupabaseResult<string>> TryGetNanooAccountBindingAsync()
+        {
+            if (!await EnsureInitializedAsync() || Auth == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized);
+            var s = _currentSession;
+            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NotSignedIn);
+            return await Auth.GetUserMetadataStringAsync(s.AccessToken, NanooAccountBindingMetadataKey);
+        }
+
+        /// <summary>PlayNanooRuntime 전용. 이 SDK 계정에 플레이나누 계정 uuid 를 묶습니다.</summary>
+        internal static async Task<SupabaseResult> TrySetNanooAccountBindingAsync(string nanooUserId)
+        {
+            if (string.IsNullOrWhiteSpace(nanooUserId))
+                return SupabaseResult.Fail("nanoo_user_id_empty");
+            if (!await EnsureInitializedAsync() || Auth == null)
+                return SupabaseResult.Fail(SupabaseErrorCode.NotInitialized);
+            var s = _currentSession;
+            if (s == null || string.IsNullOrWhiteSpace(s.AccessToken))
+                return SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn);
+            var r = await Auth.UpdateUserMetadataStringAsync(s.AccessToken, NanooAccountBindingMetadataKey, nanooUserId.Trim());
+            return r != null && r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.NetworkError);
+        }
 
         /// <summary>등록된 유일한 <see cref="StaticUserSave{TRow}"/> 인스턴스. 생성자에서 스스로 등록합니다.</summary>
         internal static IUserSaveOperations _userSave;

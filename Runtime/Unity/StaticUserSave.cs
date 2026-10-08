@@ -292,7 +292,7 @@ namespace TrueBase.Unity
             try { nanooRow = NanooDeserializeJson(nanooJson); }
             catch (Exception e)
             {
-                Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 (NanooPatchFromEmptyAsync): {e.Message}");
+                LogNanooConvertFailure("NanooPatchFromEmptyAsync", e, nanooJson);
                 return false;
             }
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
@@ -305,12 +305,33 @@ namespace TrueBase.Unity
             try { nanooRow = NanooDeserializeJson(nanooJson); }
             catch (Exception e)
             {
-                Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 (NanooPatchFromLastLoadedAsync): {e.Message}");
+                LogNanooConvertFailure("NanooPatchFromLastLoadedAsync", e, nanooJson);
                 return false;
             }
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow);
             return ok && await ReloadFromServerAsync();
+        }
+
+        // 기기 로그는 한 줄이 길면 잘릴 수 있어 원문을 조각내 남긴다. 조각 크기는 여유를 둔 값이다.
+        private const int NanooJsonLogChunkLength = 1000;
+
+        /// <summary>
+        /// 플레이나누 데이터를 세이브로 바꾸지 못했을 때, 실패한 키(예외 메시지)와 받은 JSON 원문 전체를 남긴다.
+        /// 다른 사람 기기에서 난 오류는 나중에 재현할 길이 없어, 실패한 순간의 원문이 유일한 단서다. 성공하면 아무것도 남기지 않는다.
+        /// </summary>
+        private void LogNanooConvertFailure(string where, Exception e, string json)
+        {
+            var length = json?.Length ?? 0;
+            var chunks = length == 0 ? 0 : (length + NanooJsonLogChunkLength - 1) / NanooJsonLogChunkLength;
+            Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 ({where}): {e.Message}\n" +
+                           $"받은 JSON 원문 {length}자를 아래 {chunks}개 로그로 남깁니다.");
+            for (var i = 0; i < chunks; i++)
+            {
+                var start = i * NanooJsonLogChunkLength;
+                var part  = json.Substring(start, Math.Min(NanooJsonLogChunkLength, length - start));
+                Debug.LogWarning($"{LogTag} 플레이나누 JSON 원문 ({i + 1}/{chunks}): {part}");
+            }
         }
 
         /// <summary>
@@ -392,7 +413,18 @@ namespace TrueBase.Unity
         private TRow NanooDeserializeJson(string json)
         {
             var map = GetNanooMap();
-            return map != null ? map.Deserialize(json) : Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
+            if (map != null) return map.Deserialize(json);
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<TRow>(json);
+            }
+            catch (Exception e)
+            {
+                // 예외 메시지에 키가 없을 때가 있어("Input string was not in a correct format") 어느 키인지 찾아 붙인다.
+                var detail = NanooFieldMap<TRow>.DescribeFailingField(Newtonsoft.Json.Linq.JObject.Parse(json));
+                if (detail == null) throw;
+                throw new FormatException(detail, e);
+            }
         }
 
         /// <summary>

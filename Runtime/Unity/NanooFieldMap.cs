@@ -133,9 +133,75 @@ namespace TrueBase.Unity
         {
             var jo = JObject.Parse(json);
             foreach (var f in _fields)
-                if (jo.TryGetValue(f.key, out var tok) && tok.Type != JTokenType.Null)
+            {
+                if (!jo.TryGetValue(f.key, out var tok) || tok.Type == JTokenType.Null) continue;
+                try
+                {
                     jo[f.key] = f.fromNanoo(tok);
-            return jo.ToObject<TRow>();
+                }
+                catch (Exception e)
+                {
+                    // 예외 메시지만으로는 어느 필드인지 알 수 없다("Input string was not in a correct format" 등).
+                    throw new FormatException(
+                        $"플레이나누 키 '{f.key}'를 UseNanooConverters 의 Field 변환으로 복원하지 못했습니다. 값: {PreviewToken(tok)} — {e.Message}", e);
+                }
+            }
+            return ToRowWithFieldDiagnosis(jo);
+        }
+
+        /// <summary>
+        /// JSON 을 Row 로 바꿉니다. 실패하면 키를 하나씩 따로 바꿔 보고 실패한 키·값·대상 타입을 예외 메시지에 담습니다.
+        /// 기본 변환의 예외 메시지에는 키가 빠지는 경우가 있어(Convert 계열 FormatException) 원인 추적이 어렵다.
+        /// </summary>
+        internal static TRow ToRowWithFieldDiagnosis(JObject jo)
+        {
+            try
+            {
+                return jo.ToObject<TRow>();
+            }
+            catch (Exception e)
+            {
+                var detail = DescribeFailingField(jo);
+                if (detail == null) throw;
+                throw new FormatException(detail, e);
+            }
+        }
+
+        /// <summary>키를 하나씩 따로 Row 로 바꿔 보고, 처음 실패한 키를 설명합니다. 모두 바뀌면 null.</summary>
+        internal static string DescribeFailingField(JObject jo)
+        {
+            foreach (var prop in jo.Properties())
+            {
+                try
+                {
+                    new JObject(new JProperty(prop.Name, prop.Value)).ToObject<TRow>();
+                }
+                catch (Exception fieldError)
+                {
+                    return $"플레이나누 키 '{prop.Name}'를 {typeof(TRow).Name} 의 {DescribeMemberType(prop.Name)} 멤버로 바꾸지 못했습니다. " +
+                           $"값: {PreviewToken(prop.Value)} — {fieldError.Message}";
+                }
+            }
+            return null;
+        }
+
+        private static string DescribeMemberType(string key)
+        {
+            foreach (var m in typeof(TRow).GetMembers(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (m is not FieldInfo && m is not PropertyInfo) continue;
+                var jp = m.GetCustomAttribute<JsonPropertyAttribute>();
+                var name = string.IsNullOrEmpty(jp?.PropertyName) ? m.Name : jp.PropertyName;
+                if (!string.Equals(name, key, StringComparison.OrdinalIgnoreCase)) continue;
+                return (m as FieldInfo)?.FieldType.Name ?? (m as PropertyInfo)?.PropertyType.Name;
+            }
+            return "대응하는 멤버 없음";
+        }
+
+        private static string PreviewToken(JToken token)
+        {
+            var text = token?.ToString(Formatting.None) ?? "null";
+            return text.Length > 80 ? text.Substring(0, 80) + $"…({text.Length}자)" : text;
         }
 
         // 선택식의 멤버명(또는 [JsonProperty] 이름)을 JSON 키로 사용.
