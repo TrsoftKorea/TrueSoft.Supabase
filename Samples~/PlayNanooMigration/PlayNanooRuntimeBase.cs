@@ -49,10 +49,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // "SDK 세이브를 한 번이라도 읽었는가"만 보면 게임의 LoadUserSaveAsync 만으로 통과돼, 동기화가 도중에
     // 실패했거나 아직 안 끝났을 때 기본값·이전 계정 데이터로 나누 원본을 덮는다.
     private bool     _nanooSyncedThisLogin;
-    // 이번 로그인의 나누 계정이 이 SDK 계정의 짝이 아니다(추가 연동한 소셜로 로그인). 쓰기가 막힌 이유를 경고 대신 일반 로그로 알리는 데만 쓴다.
-    private bool     _nanooAccountNotPaired;
-    // 동기화가 로그인을 실패로 돌린 사유. 로그인 인터셉터가 그대로 돌려준다.
-    private string   _syncFailReason;
 
     // 게스트 연동에서 나누는 소셜로 바뀌었는데 Supabase 연동이 실패했다("uuid|계정 종류|소셜 sub"). 나누는 되돌릴 수 없고 같은 소셜로 다시 바꾸려 하면
     // 거절될 수 있어, 다시 시도할 때는 Supabase 연동만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
@@ -91,8 +87,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // 연동하려는 소셜이 이미 다른 나누 계정에 연동돼 있다(원래 게임 문구 "해당 계정은 이미 연동된 계정입니다").
     private const string NanooAccountAlreadyLinkedCode   = "10008";
     private const string NanooAccountAlreadyLinkedReason = "playnanoo_account_already_linked";
-    // 이 계정의 나누 짝을 확인·기록하지 못해 소셜 계정 추가 연동을 멈췄다.
-    private const string NanooAccountBindingFailedReason = "playnanoo_account_binding_failed";
+    // 나누 병행 중에는 소셜 계정 추가 연동을 막는다(AddSocialLinkAsync 참고).
+    private const string NanooAddLinkUnsupportedReason = "playnanoo_add_link_unsupported";
 
     // 로그인 정보(UserId·OpenId)·탈퇴 이벤트는 TrueBaseNanoo(정적 진입점)로 옮겼다. 애플 로그인은 표준 Supabase.SignInWithAppleAsync() 를 쓴다.
     // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
@@ -451,16 +447,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (await SyncDataAfterLogin())
             return sdkResult;
 
-        var reason = _syncFailReason ?? NanooStorageReadFailedReason;
         await Supabase.SignOutFullyAsync();
-        return SupabaseResult.Fail(reason);
+        return SupabaseResult.Fail(NanooStorageReadFailedReason);
     }
 
     private async Task<SupabaseResult> InterceptSignOutFully(Func<Task<SupabaseResult>> sdkSignOut)
     {
         using var sessionChange = await BeginNanooSessionChangeAsync();
-        _nanooSyncedThisLogin  = false;
-        _nanooAccountNotPaired = false;
+        _nanooSyncedThisLogin = false;
         ClearPendingGuestLink();
 
         if (string.IsNullOrEmpty(_nanooAccessToken))
@@ -600,8 +594,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 tcs.SetResult(result);
                 return;
             }
-            // 짝은 여기서 다시 기록하지 않는다 — 동기화가 기존 짝과 대조한다. 신버전 나누는 세션이 아니라 이 기기의 게스트를
-            // 바꾸므로(요청에 토큰·uuid 가 없다, DLL 디컴파일로 확인) 드물게 다른 계정이 돌아올 수 있고, 그때 짝을 덮으면 안 된다.
             ClearPendingGuestLink();
             await SyncDataAfterLogin();
             tcs.SetResult(result);
@@ -644,10 +636,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     // ── 소셜 → 소셜 추가 연동 인터셉터 ───────────────────────────────────────────
 
-    // 소셜 계정에 다른 소셜을 더 붙이는 연동은 Supabase 에만 한다. 나누 병행은 나누를 단계적으로 걷어내기 위한 것이고 원래 게임에도
-    // 없던 기능이다. 나누 계정은 소셜 하나만 연결되므로 나누 쪽까지 맞추려면 기존 연결을 바꾸거나 다른 나누 계정으로 갈아타야 한다.
-    // 연동 전에 이 계정의 나누 짝을 기록해 둔다 — 추가한 소셜로 로그인하면 나누는 다른 계정으로 들어가는데, 짝 기록이 있어야
-    // 동기화가 그 계정 데이터를 가져오지 않는다. 기록하지 못하면 연동하지 않는다.
+    // 나누 병행 중에는 소셜 계정에 다른 소셜을 더 붙이는 연동을 막는다. 나누 계정은 소셜 하나만 연결되므로, Supabase 에만 붙이면
+    // 그 소셜로 로그인할 때 나누는 이 유저의 것이 아닌 다른 나누 계정으로 들어가 결제·리더보드·길드 등이 엉뚱한 계정으로 간다.
+    // 원래 게임에도 없던 기능이라 유저가 느끼는 차이는 없고, 나누 런타임을 걷어내면 SDK 기본 동작으로 다시 쓸 수 있다.
     // 이 API 는 게스트도 부를 수 있다(SDK 가 익명 세션을 받는다) — 게스트면 게스트 연동과 같게 나누 게스트 계정을 바꾼다.
     private Task<SupabaseResult> InterceptAddGoogleLink(string token, Func<Task<SupabaseResult>> sdkLink)
         => AddSocialLinkAsync(token, Configure.PN_ACCOUNT_GOOGLE, "google", "playnanoo_google_link_failed", sdkLink);
@@ -662,16 +653,9 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (!Supabase.IsLoggedIn) return await sdkLink();
         if (Supabase.IsAnonymous) return await LinkGuestToSocialAsync(token, accountType, loginType, failCode, sdkLink);
 
-        var binding = await SupabaseBridge.GetNanooAccountBindingAsync();
-        if (!binding.IsSuccess)
-        {
-            Debug.LogWarning($"[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못해 {loginType} 추가 연동을 멈춥니다. 사유: {binding.ErrorCode}");
-            return SupabaseResult.Fail(NanooAccountBindingFailedReason);
-        }
-        if (string.IsNullOrEmpty(binding.Data) && !await BindNanooAccountAsync($"{loginType} 추가 연동 전"))
-            return SupabaseResult.Fail(NanooAccountBindingFailedReason);
-
-        return await sdkLink();
+        Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 병행 중에는 소셜 계정에 {loginType} 을(를) 추가로 연동할 수 없습니다. " +
+                         "게임에서 추가 연동 버튼을 숨기세요.");
+        return SupabaseResult.Fail(NanooAddLinkUnsupportedReason);
     }
 
     // ── PlayNANOO 콜백 공통 처리 ──────────────────────────────────────────────
@@ -1380,8 +1364,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         // await 보다 먼저 닫는다 — 동기화가 도는 동안(로그아웃 없이 계정을 바꾼 경우 이전 계정 데이터가
         // 로컬에 남아 있다) 게임이 SaveNow 를 불러도 나누에 쓰지 않게.
         _nanooSyncedThisLogin = false;
-        _nanooAccountNotPaired = false;
-        _syncFailReason = null;
 
         var save = Save;
         if (save == null)
@@ -1412,42 +1394,11 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 // 여기서 행을 만들면 유저는 새 게임을 보고, 그 플레이가 다음 로그인에 나누 원본을 이긴다.
                 Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못했고 SDK 세이브도 없어 로그인을 실패로 돌립니다. " +
                                  "다시 시도하세요 — 이대로 진행하면 새 게임 데이터가 기존 PlayNANOO 데이터를 덮게 됩니다.");
-                _syncFailReason = NanooStorageReadFailedReason;
                 return false;
             }
 
             Debug.LogWarning("[PlayNanooRuntime] PlayNANOO 스토리지를 읽지 못해 SDK 세이브로 진행합니다. " +
                              "이번 로그인에서는 PlayNANOO 에 쓰지 않습니다.");
-            await save.TryLoadAsync();
-            return true;
-        }
-
-        // 추가 연동한 소셜 계정으로 로그인하면 나누는 그 소셜의 다른 나누 계정으로 들어간다. 그 데이터는 이 SDK 계정의 세이브가 아니므로
-        // 이 계정에 짝으로 기록해 둔 나누 계정과 다르면 가져오지도, SDK 데이터로 덮지도 않는다(이관 전 기록이면 저장 시각이 없어 무조건 이겼다).
-        // SDK 행이 없을 때(세이브 삭제 뒤 등)도 같다 — 짝이 아닌 계정의 기록을 이관하고 짝을 바꿔 버리면 원래 짝이 영영 동기화되지 않는다.
-        var binding = await SupabaseBridge.GetNanooAccountBindingAsync();
-        if (!binding.IsSuccess)
-        {
-            if (!hasRow)
-            {
-                Debug.LogWarning("[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못했고 SDK 세이브도 없어 로그인을 실패로 돌립니다. " +
-                                 $"다시 시도하세요. 사유: {binding.ErrorCode}");
-                _syncFailReason = NanooAccountBindingFailedReason;
-                return false;
-            }
-            Debug.LogWarning("[PlayNanooRuntime] 이 계정의 PlayNANOO 짝을 확인하지 못해 SDK 세이브로 진행합니다. " +
-                             $"이번 로그인에서는 PlayNANOO 에 쓰지 않습니다. 사유: {binding.ErrorCode}");
-            await save.TryLoadAsync();
-            return true;
-        }
-
-        var pairedUuid = binding.Data;
-        if (!string.IsNullOrEmpty(pairedUuid) && pairedUuid != TrueBaseNanoo.UserId)
-        {
-            _nanooAccountNotPaired = true;
-            Debug.LogWarning($"[PlayNanooRuntime] 로그인한 PlayNANOO 계정(uuid {TrueBaseNanoo.UserId})이 이 계정의 짝(uuid {pairedUuid})이 아니라 " +
-                             "동기화하지 않고 SDK 세이브로 진행합니다. 추가 연동한 소셜 계정으로 로그인했을 때 생깁니다.");
-            Trace("판정: 짝이 아닌 나누 계정 → 가져오지도 덮지도 않음, 이번 로그인은 나누 쓰기 닫힘");
             await save.TryLoadAsync();
             return true;
         }
@@ -1465,13 +1416,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
                 _nanooSyncedThisLogin = await save.TryLoadAsync();
             }
             if (!_nanooSyncedThisLogin) Trace("동기화 실패 — 이번 로그인에서는 나누에 쓰지 않음");
-            else if (string.IsNullOrEmpty(pairedUuid)) await BindNanooAccountAsync("새 SDK 세이브");
             return true;
         }
-
-        // 짝 기록을 두기 전에 이관된 계정. 지금까지처럼 이 로그인의 나누 계정을 짝으로 기록한다.
-        if (string.IsNullOrEmpty(pairedUuid))
-            await BindNanooAccountAsync("기존 계정 첫 기록");
 
         var nanooTime = save.NanooParseCompareTimestamp(nanoo.Json);
         if (nanooTime > sdkTime)
@@ -1488,26 +1434,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             _nanooSyncedThisLogin = true;
         }
         return true;
-    }
-
-    /// <summary>지금 로그인한 나누 계정을 이 SDK 계정의 짝으로 기록합니다. 실패하면 다음 로그인 동기화가 다시 기록한다.</summary>
-    private async Task<bool> BindNanooAccountAsync(string reason)
-    {
-        var uuid = TrueBaseNanoo.UserId;
-        if (string.IsNullOrEmpty(uuid))
-        {
-            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 에 로그인돼 있지 않아 이 계정의 짝을 기록하지 못했습니다({reason}).");
-            return false;
-        }
-
-        var r = await SupabaseBridge.SetNanooAccountBindingAsync(uuid);
-        if (r.IsSuccess)
-        {
-            Trace($"나누 계정 짝 기록 — uuid {uuid} ({reason})");
-            return true;
-        }
-        Debug.LogWarning($"[PlayNanooRuntime] 이 계정의 PlayNANOO 짝(uuid {uuid})을 기록하지 못했습니다({reason}). 사유: {r.ErrorCode}");
-        return false;
     }
 
     /// <summary>
@@ -1597,11 +1523,6 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// </summary>
     private bool CanWriteToNanoo(string caller)
     {
-        if (_nanooAccountNotPaired)
-        {
-            Debug.Log($"[PlayNanooRuntime] {caller} 건너뜀 — 이 계정의 짝이 아닌 PlayNANOO 계정으로 로그인해 이번 로그인에서는 쓰지 않습니다.");
-            return false;
-        }
         if (!_nanooSyncedThisLogin)
         {
             Debug.LogWarning($"[PlayNanooRuntime] {caller} 건너뜀 — 이번 로그인의 PlayNANOO 동기화가 끝나지 않았거나 실패했습니다.");

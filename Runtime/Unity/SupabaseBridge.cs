@@ -62,12 +62,5 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.GetNanooSaveBridge"/>
         public static INanooSaveSyncable GetNanooSaveBridge() => SupabaseSDK.GetNanooSaveBridge();
-
-        /// <inheritdoc cref="SupabaseSDK.TryGetNanooAccountBindingAsync"/>
-        public static Task<SupabaseResult<string>> GetNanooAccountBindingAsync() => SupabaseSDK.TryGetNanooAccountBindingAsync();
-
-        /// <inheritdoc cref="SupabaseSDK.TrySetNanooAccountBindingAsync"/>
-        public static Task<SupabaseResult> SetNanooAccountBindingAsync(string nanooUserId) =>
-            SupabaseSDK.TrySetNanooAccountBindingAsync(nanooUserId);
     }
 }
