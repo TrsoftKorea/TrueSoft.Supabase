@@ -2250,6 +2250,60 @@ comment on function public.ts_my_withdrawal_status() is
 grant execute on function public.ts_my_withdrawal_status() to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- ts_after_sign_in — 로그인 직후 단계(탈퇴 예약 확인·프로필 보장·내 프로필·닉네임·서버 코드)를 한 번에
+-- ---------------------------------------------------------------------------
+-- 이 단계들을 따로 부르면 앞 단계 답을 기다리는 왕복이 서너 번 쌓이고, 서버가 쉬다 깨면 왕복마다 첫 연결
+-- 지연이 붙어 로그인이 10초를 넘긴다. 탈퇴 예약(withdrawn_at)이 있으면 프로필을 건드리지 않고 그 값만
+-- 돌려준다 — ts_ensure_my_profile 은 withdrawn_at 을 지우므로, 그런 계정은 SDK 가 탈퇴 가드·예약 게이트를
+-- 먼저 태운 뒤 기존 순서로 처리한다.
+create or replace function public.ts_after_sign_in(
+  p_user_id  text default null,
+  p_platform text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid       uuid := auth.uid();
+  v_withdrawn timestamptz;
+  v_profile   public.user_profiles%rowtype;
+  v_code      text;
+  v_name      text;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select p.withdrawn_at into v_withdrawn from public.user_profiles p where p.account_id = v_uid;
+  if v_withdrawn is not null then
+    return jsonb_build_object('withdrawn_at', v_withdrawn, 'profile', null);
+  end if;
+
+  perform public.ts_ensure_my_profile(p_user_id, p_platform);
+
+  select * into v_profile from public.user_profiles p where p.account_id = v_uid;
+  select gs.server_code into v_code from public.game_servers gs where gs.id = v_profile.server_id;
+  select dn.display_name into v_name from public.display_names dn where dn.account_id = v_uid;
+
+  return jsonb_build_object(
+    'withdrawn_at', null,
+    'profile', jsonb_build_object(
+      'id',           v_profile.id,
+      'user_id',      v_profile.user_id,
+      'display_name', coalesce(v_name, ''),
+      'server_code',  coalesce(v_code, '')));
+end;
+$$;
+
+comment on function public.ts_after_sign_in(text, text) is
+  '로그인 직후 탈퇴 예약 확인 + 본인 프로필 보장 + 프로필·닉네임·서버 코드 조회를 한 번에. 탈퇴 예약이 있으면 withdrawn_at 만 반환(프로필 미변경). SECURITY DEFINER.';
+
+revoke all on function public.ts_after_sign_in(text, text) from public, anon;
+grant execute on function public.ts_after_sign_in(text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- apple_auth_tokens — Sign in with Apple 철회용 refresh token (클라이언트 직접 접근 없음)
 -- ---------------------------------------------------------------------------
 -- 애플은 계정을 지울 때 Sign in with Apple 토큰을 REST API 로 철회하라고 요구한다(심사 기준).
@@ -10129,6 +10183,7 @@ grant execute on function public.ts_ensure_my_profile(text, text)          to au
 grant execute on function public.ts_ensure_my_row(text, text)              to authenticated;
 grant execute on function public.ts_my_server_id()                         to authenticated;
 grant execute on function public.ts_my_withdrawal_status()                 to authenticated;
+grant execute on function public.ts_after_sign_in(text, text)              to authenticated;
 grant execute on function public.ts_request_withdrawal(integer)            to authenticated;
 grant execute on function public.ts_transfer_my_server(text, text)         to authenticated;
 grant execute on function public.ts_delete_my_anon_recovery_tokens()       to authenticated;

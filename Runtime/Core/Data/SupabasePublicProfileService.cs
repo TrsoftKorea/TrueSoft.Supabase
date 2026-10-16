@@ -254,6 +254,64 @@ namespace TrueBase.Core.Data
             return SupabaseResult<bool>.Success(true);
         }
 
+        /// <summary>
+        /// 로그인 직후 단계(탈퇴 예약 확인·프로필 보장·내 프로필·닉네임·서버 코드)를 한 번 왕복으로 처리합니다. RPC <c>ts_after_sign_in</c>.
+        /// 탈퇴 예약이 있으면 프로필을 건드리지 않고 <see cref="AfterSignInSnapshot.WithdrawnAtIso"/>만 채워 돌려줍니다.
+        /// </summary>
+        internal async Task<SupabaseResult<AfterSignInSnapshot>> AfterSignInAsync(
+            string accessToken,
+            string accountId,
+            string playerUserId,
+            string platform)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<AfterSignInSnapshot>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            if (string.IsNullOrWhiteSpace(accountId))
+                return SupabaseResult<AfterSignInSnapshot>.Fail("account_id_empty");
+
+            var stable = string.IsNullOrWhiteSpace(playerUserId) ? accountId.Trim() : playerUserId.Trim();
+            var url = $"{_supabaseUrl}/rest/v1/rpc/ts_after_sign_in";
+            var bodyJson = _jsonSerializer.ToJson(new EnsureMyProfileRpcBody { p_user_id = stable, p_platform = platform });
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: url,
+                jsonBody: bodyJson,
+                headers: CreateUserHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<AfterSignInSnapshot>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<AfterSignInSnapshot>.Fail(response.ErrorMessage ?? response.Body ?? "after_sign_in_failed");
+
+            try
+            {
+                var parsed = _jsonSerializer.FromJson<AfterSignInRow>(response.Body);
+                if (parsed == null)
+                    return SupabaseResult<AfterSignInSnapshot>.Fail("after_sign_in_empty");
+
+                var withdrawnAt = string.IsNullOrWhiteSpace(parsed.withdrawn_at) ? null : parsed.withdrawn_at.Trim();
+                PublicProfile profile = null;
+                if (parsed.profile != null)
+                {
+                    profile = new PublicProfile(
+                        parsed.profile.id?.Trim(),
+                        string.IsNullOrWhiteSpace(parsed.profile.user_id) ? stable : parsed.profile.user_id.Trim(),
+                        parsed.profile.display_name,
+                        null,
+                        parsed.profile.server_code?.Trim());
+                }
+
+                return SupabaseResult<AfterSignInSnapshot>.Success(new AfterSignInSnapshot(withdrawnAt, profile));
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<AfterSignInSnapshot>.Fail("after_sign_in_parse_failed:" + e.Message);
+            }
+        }
+
         /// <summary>현재 로그인 계정의 서버 식별자를 조회합니다. RPC <c>ts_my_server_id</c>.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         public async Task<SupabaseResult<ServerInfo>> GetMyServerIdAsync(string accessToken)
@@ -523,5 +581,35 @@ namespace TrueBase.Core.Data
             public bool is_scheduled;
             public long seconds_remaining;
         }
+
+        [Serializable]
+        private sealed class AfterSignInRow
+        {
+            public string withdrawn_at;
+            public AfterSignInProfileRow profile;
+        }
+
+        [Serializable]
+        private sealed class AfterSignInProfileRow
+        {
+            public string id;
+            public string user_id;
+            public string display_name;
+            public string server_code;
+        }
+    }
+
+    /// <summary><c>ts_after_sign_in</c> 결과. 탈퇴 예약이 있으면 <see cref="WithdrawnAtIso"/>가 차고 <see cref="Profile"/>은 null입니다.</summary>
+    internal sealed class AfterSignInSnapshot
+    {
+        public AfterSignInSnapshot(string withdrawnAtIso, PublicProfile profile)
+        {
+            WithdrawnAtIso = withdrawnAtIso;
+            Profile = profile;
+        }
+
+        public string WithdrawnAtIso { get; }
+
+        public PublicProfile Profile { get; }
     }
 }

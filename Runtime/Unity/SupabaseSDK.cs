@@ -517,12 +517,22 @@ namespace TrueBase.Unity
                 SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Google);
-                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
-                if (gated != null)
-                    return gated;
+                if (_currentSession.likely_brand_new_google_signup)
+                {
+                    // 신규 가입은 닉네임을 덮어쓴 뒤에 프로필을 읽어야 로그인 결과에 바뀐 닉네임이 실린다 — 묶음 호출을 쓰지 않는다.
+                    var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
+                    if (gated != null)
+                        return gated;
 
-                await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
-                await TryEnsureProfileRowAfterSignInAsync();
+                    await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
+                    await TryEnsureProfileRowAfterSignInAsync();
+                }
+                else
+                {
+                    var gated = await RunPostSignInStepsAsync(SignInMethodKind.Google);
+                    if (gated != null)
+                        return gated;
+                }
             }
 
             return result;
@@ -605,11 +615,10 @@ namespace TrueBase.Unity
             RememberLastSignInMethod(SignInMethodKind.Google);
             if (deleteAnonymousRecovery)
                 await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-            var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
+            var gated = await RunPostSignInStepsAsync(SignInMethodKind.Google);
             if (gated != null)
                 return gated;
 
-            await TryEnsureProfileRowAfterSignInAsync();
             return SupabaseResult<SupabaseSession>.Success(_currentSession);
         }
 
@@ -847,11 +856,9 @@ namespace TrueBase.Unity
                 await StoreAppleAuthorizationCodeAsync(authorizationCode);
 
                 RememberLastSignInMethod(SignInMethodKind.Apple);
-                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+                var gated = await RunPostSignInStepsAsync(SignInMethodKind.Apple);
                 if (gated != null)
                     return gated;
-
-                await TryEnsureProfileRowAfterSignInAsync();
             }
 
             return result;
@@ -933,11 +940,10 @@ namespace TrueBase.Unity
             RememberLastSignInMethod(SignInMethodKind.Apple);
             if (deleteAnonymousRecovery)
                 await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
-            var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+            var gated = await RunPostSignInStepsAsync(SignInMethodKind.Apple);
             if (gated != null)
                 return gated;
 
-            await TryEnsureProfileRowAfterSignInAsync();
             return SupabaseResult<SupabaseSession>.Success(_currentSession);
         }
 
@@ -1330,11 +1336,9 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
                 SaveSessionToStorage();
 
-                var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Apple);
+                var gated = await RunPostSignInStepsAsync(SignInMethodKind.Apple);
                 if (gated != null)
                     return gated;
-
-                await TryEnsureProfileRowAfterSignInAsync();
             }
 
             return result;
@@ -1976,7 +1980,7 @@ namespace TrueBase.Unity
                         // 복구로 들어온 것도 로그인이다 — 아래 일반 경로와 같은 뒷정리를 해야 한다.
                         // 빠뜨리면 last_activity_at 이 안 찍히고(재설치 복구가 "접속"으로 안 잡힌다),
                         // _pendingSignInProfile 이 비어 로그인 결과의 닉네임·서버 코드가 빈 채로 나간다.
-                        await TryEnsureProfileRowAfterSignInAsync();
+                        await EnsureProfileAfterSignInAsync();
 
                         SaveSessionToStorage();
                         return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -1994,7 +1998,7 @@ namespace TrueBase.Unity
                     if (reserved != null)
                         return reserved;
 
-                    await TryEnsureProfileRowAfterSignInAsync();
+                    await EnsureProfileAfterSignInAsync();
 
                     SaveSessionToStorage();
                     return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -2031,7 +2035,7 @@ namespace TrueBase.Unity
                     ClearStoredWithdrawalCancelToken();
                 }
 
-                await TryEnsureProfileRowAfterSignInAsync();
+                await EnsureProfileAfterSignInAsync();
                 await recoveryTask;
             }
 
@@ -3855,15 +3859,13 @@ namespace TrueBase.Unity
                 SetSession(result.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
                 SetAutoLoginBlocked(false);
 
+                // 복원 경로는 SignIn* 를 거치지 않으므로 탈퇴 게이트·프로필 보장을 여기서 함께 한다(빠지면 ts_my_server_id 가 빈다).
                 var method = ReadLastSignInMethod();
-                var gated = await RunWithdrawalGatesAfterSignInAsync(
+                var gated = await RunPostSignInStepsAsync(
                     method == SignInMethodKind.Unknown ? SignInMethodKind.Anonymous : method,
                     allowRecreateOnDeletion);
                 if (gated != null)
                     return gated.IsSuccess;
-
-                // TryStartAsync / TryRestoreSessionAsync 경로는 SignIn* 를 거치지 않아 프로필 보장이 빠질 수 있음 → ts_my_server_id 빈 결과 방지
-                await TryEnsureProfileRowAfterSignInAsync();
 
                 return true;
             }
@@ -4616,23 +4618,103 @@ namespace TrueBase.Unity
                     _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, _pendingSignInProfile.Name,
                     _pendingSignInProfile.WithdrawnAtIso, mine.Data.ServerCode);
 
-                var selectedCode = GetCurrentServerCode();
-                if (string.IsNullOrWhiteSpace(selectedCode) ||
-                    string.Equals(mine.Data.ServerCode, selectedCode, StringComparison.OrdinalIgnoreCase))
-                    return;
-
-                var moved = await svc.TransferServerAsync(s.AccessToken, selectedCode, "sdk_signin_server_sync");
-                if (moved == null || !moved.IsSuccess)
-                    Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorCode ?? "unknown"));
-                else
-                    _pendingSignInProfile = new PublicProfile(
-                        _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, _pendingSignInProfile.Name,
-                        _pendingSignInProfile.WithdrawnAtIso, selectedCode);
+                await SyncSelectedServerAfterSignInAsync(svc, s.AccessToken, mine.Data.ServerCode);
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[Supabase] 프로필 행 생성 중 예외: " + e.Message);
             }
+        }
+
+        /// <summary>DB 서버 코드가 로컬에서 고른 서버와 다르면 이주시키고 전달 슬롯의 서버 코드를 맞춥니다(best-effort).</summary>
+        private static async Task SyncSelectedServerAfterSignInAsync(
+            SupabasePublicProfileService svc, string accessToken, string dbServerCode)
+        {
+            var selectedCode = GetCurrentServerCode();
+            if (string.IsNullOrWhiteSpace(selectedCode) ||
+                string.Equals(dbServerCode, selectedCode, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var moved = await svc.TransferServerAsync(accessToken, selectedCode, "sdk_signin_server_sync");
+            if (moved == null || !moved.IsSuccess)
+                Debug.LogWarning("[Supabase] 로그인 후 서버 이주 실패: " + (moved?.ErrorCode ?? "unknown"));
+            else if (_pendingSignInProfile != null)
+                _pendingSignInProfile = new PublicProfile(
+                    _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, _pendingSignInProfile.Name,
+                    _pendingSignInProfile.WithdrawnAtIso, selectedCode);
+        }
+
+        /// <summary>
+        /// 로그인 직후 단계(탈퇴 예약 확인·프로필 보장·프로필·닉네임·서버 코드)를 <c>ts_after_sign_in</c> 한 번으로 끝냅니다.
+        /// 탈퇴 예약이 없을 때만 끝까지 처리하고 true 를 돌려줍니다. 예약이 있거나 호출이 실패하면 아무것도 바꾸지 않고
+        /// false — 호출자가 기존 순서(탈퇴 가드·예약 게이트 → 프로필 보장)로 처리합니다.
+        /// <para>
+        /// 단계마다 따로 부르면 앞 단계 답을 기다리는 왕복이 서너 번 쌓이고, 서버가 쉬다 깨면 왕복마다 첫 연결
+        /// 지연이 붙어 자동 로그인이 10초를 넘겼다(2026-10-16 DefenceR 실측).
+        /// </para>
+        /// </summary>
+        private static async Task<bool> TryCompleteSignInInOneCallAsync()
+        {
+            var svc = _bootstrap?.PublicProfileService;
+            var s = _currentSession;
+            if (svc == null || s == null || s.User == null)
+                return false;
+            if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.User.Id))
+                return false;
+
+            try
+            {
+                var r = await svc.AfterSignInAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
+                if (r == null || !r.IsSuccess || r.Data == null)
+                {
+                    Debug.LogWarning("[Supabase] 로그인 후처리 묶음 호출 실패 — 단계별로 다시 처리합니다: " + (r?.ErrorCode ?? "unknown"));
+                    return false;
+                }
+
+                if (!string.IsNullOrEmpty(r.Data.WithdrawnAtIso) || r.Data.Profile == null)
+                    return false;
+
+                // 탈퇴 예약이 없음이 확인됐다 — 예약 게이트가 not-scheduled 일 때 하던 로컬 정리와 같다.
+                ClearStoredWithdrawalGateStatus();
+                ClearStoredWithdrawalCancelToken();
+
+                _pendingSignInProfile = r.Data.Profile;
+                if (r.Data.Profile.ServerCode.Length > 0)
+                    await SyncSelectedServerAfterSignInAsync(svc, s.AccessToken, r.Data.Profile.ServerCode);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Supabase] 로그인 후처리 묶음 호출 중 예외 — 단계별로 다시 처리합니다: " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 로그인 직후 공통 단계. 탈퇴 게이트가 걸리면 그 결과를, 통과했으면 null 을 돌려줍니다.
+        /// 보통은 <see cref="TryCompleteSignInInOneCallAsync"/> 한 번으로 끝나고, 탈퇴 예약이 있는 계정만 기존 순서를 탑니다.
+        /// </summary>
+        private static async Task<SupabaseResult<SupabaseSession>> RunPostSignInStepsAsync(
+            SignInMethodKind method,
+            bool allowRecreateOnDeletion = true)
+        {
+            if (await TryCompleteSignInInOneCallAsync())
+                return null;
+
+            var gated = await RunWithdrawalGatesAfterSignInAsync(method, allowRecreateOnDeletion);
+            if (gated != null)
+                return gated;
+
+            await TryEnsureProfileRowAfterSignInAsync();
+            return null;
+        }
+
+        /// <summary>탈퇴 게이트를 이미 거친 경로의 프로필 보장. 한 번 왕복으로 끝내고, 안 되면 단계별로 처리합니다.</summary>
+        private static async Task EnsureProfileAfterSignInAsync()
+        {
+            if (!await TryCompleteSignInInOneCallAsync())
+                await TryEnsureProfileRowAfterSignInAsync();
         }
 
         /// <summary>현재 Unity 런타임 플랫폼을 소문자 문자열로 반환합니다 (android, ios, windows, macos, webgl 등).</summary>
