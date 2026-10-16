@@ -7529,6 +7529,11 @@ notify pgrst, 'reload schema';
 -- 상대의 신고와 상호 지목·승패(또는 협동 결과)가 맞아야만 지급합니다. 지급 금액도 클라가 보내지 않고,
 -- game_code 별로 이 절에서 만드는 match_reward_configs 를 서버가 읽어 계산해 우편함으로 보냅니다.
 -- game_code 로 프로젝트·모드를 구분하므로 여러 게임이 이 한 벌의 테이블·RPC 를 함께 씁니다.
+--
+-- 상대가 없는 판(봇·혼자 하는 판)은 ts_match_report_solo_result 로 기록만 남깁니다(status='solo', 지급 없음).
+-- 쌓인 기록은 본인 것만 ts_match_stats(승·패·점수 요약)·ts_match_history(최근 목록)로 읽습니다.
+-- 확인 단계(verified·pending·solo)를 나눠 돌려주므로, 어디까지 믿을지는 게임이 고릅니다.
+-- 랭킹·시즌은 15절 리더보드가 맡습니다.
 
 create table if not exists public.match_reward_configs (
   game_code         text primary key,
@@ -7553,28 +7558,35 @@ create table if not exists public.match_results (
   user_id               text not null,
   is_win                boolean not null,
   opponent_account_id   uuid null,
+  score                 double precision null,
   status                text not null default 'pending',
   paid_mail_id          uuid null references public.mails (id) on delete set null,
   reported_at           timestamptz not null default now(),
   resolved_at           timestamptz null
 );
 
--- 봇 판(status='bot')은 상대 계정이 없다. 이미 설치된 프로젝트는 아래 alter 로 같은 모양에 수렴한다.
+-- 상대 없는 판(status='solo')은 상대 계정이 없다. 이미 설치된 프로젝트는 아래 alter 로 같은 모양에 수렴한다.
+alter table public.match_results add column if not exists score double precision;
 alter table public.match_results alter column opponent_account_id drop not null;
 alter table public.match_results drop constraint if exists match_results_status_check;
 alter table public.match_results
-  add constraint match_results_status_check check (status in ('pending', 'paid', 'mismatch', 'bot'));
+  add constraint match_results_status_check check (status in ('pending', 'paid', 'mismatch', 'solo'));
 alter table public.match_results drop constraint if exists match_results_bot_opponent_check;
+alter table public.match_results drop constraint if exists match_results_solo_opponent_check;
 alter table public.match_results
-  add constraint match_results_bot_opponent_check check ((status = 'bot') = (opponent_account_id is null));
+  add constraint match_results_solo_opponent_check check ((status = 'solo') = (opponent_account_id is null));
 
 comment on table public.match_results is
-  '참가자별 매치 결과 신고. (session_id, account_id) 유니크로 재신고를 멱등하게 만듭니다. status=bot 은 봇 상대 판으로, 교차검증·지급 없이 기록만 남깁니다.';
+  '참가자별 매치 기록. (session_id, account_id) 유니크로 재신고를 멱등하게 만듭니다. status=solo 는 상대 없는 판(봇·혼자)으로, 교차검증·지급 없이 기록만 남깁니다.';
+comment on column public.match_results.score is
+  '게임이 정하는 판 점수(웨이브·점수·시간 등). 선택. 상대 신고와 맞춰 보지 않으므로 믿을 수 있는 정도는 그 판의 status 를 따릅니다.';
 
 create unique index if not exists match_results_session_account_key
   on public.match_results (session_id, account_id);
 create index if not exists match_results_session_idx on public.match_results (session_id);
-create index if not exists match_results_account_game_idx on public.match_results (account_id, game_code);
+drop index if exists public.match_results_account_game_idx;
+create index if not exists match_results_account_game_reported_idx
+  on public.match_results (account_id, game_code, reported_at desc);
 
 alter table public.match_reward_configs enable row level security;
 alter table public.match_results        enable row level security;
@@ -7583,11 +7595,15 @@ alter table public.match_results        enable row level security;
 revoke all on table public.match_reward_configs from anon, authenticated;
 revoke all on table public.match_results        from anon, authenticated;
 
+-- p_score 를 붙이며 인자 개수가 바뀌었다. 옛 4인자판이 남으면 PostgREST 가 어느 쪽을 부를지 헷갈린다.
+drop function if exists public.ts_match_report_result(text, text, boolean, uuid);
+
 create or replace function public.ts_match_report_result(
   p_session_id          text,
   p_game_code           text,
   p_is_win              boolean,
-  p_opponent_account_id uuid
+  p_opponent_account_id uuid,
+  p_score               double precision default null
 )
 returns jsonb
 language plpgsql
@@ -7632,9 +7648,9 @@ begin
   v_user := coalesce(v_user, v_uid::text);
 
   insert into public.match_results
-    (session_id, game_code, account_id, user_id, is_win, opponent_account_id)
+    (session_id, game_code, account_id, user_id, is_win, opponent_account_id, score)
   values
-    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, p_opponent_account_id)
+    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, p_opponent_account_id, p_score)
   on conflict (session_id, account_id) do nothing;
 
   select * into v_mine from public.match_results
@@ -7645,8 +7661,8 @@ begin
   if v_mine.status = 'paid' then
     return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.paid_mail_id is not null);
   end if;
-  -- 봇 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 신고와 맞춰 지급받는 길이 열린다.
-  if v_mine.status in ('mismatch', 'bot') then
+  -- 상대 없는 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 신고와 맞춰 지급받는 길이 열린다.
+  if v_mine.status in ('mismatch', 'solo') then
     raise exception 'match_result_mismatch';
   end if;
 
@@ -7706,21 +7722,24 @@ begin
 end;
 $$;
 
-comment on function public.ts_match_report_result(text, text, boolean, uuid) is
-  '본인 매치 결과 신고. 상대 신고와 교차검증돼야 지급. 재신고는 멱등. SECURITY DEFINER.';
+comment on function public.ts_match_report_result(text, text, boolean, uuid, double precision) is
+  '본인 매치 결과 신고. 상대 신고와 교차검증돼야 지급. 재신고는 멱등(점수도 처음 값 유지). SECURITY DEFINER.';
 
-revoke all on function public.ts_match_report_result(text, text, boolean, uuid) from public, anon;
-grant execute on function public.ts_match_report_result(text, text, boolean, uuid) to authenticated;
+revoke all on function public.ts_match_report_result(text, text, boolean, uuid, double precision) from public, anon;
+grant execute on function public.ts_match_report_result(text, text, boolean, uuid, double precision) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_report_bot_result — 봇 상대 판을 기록한다. 맞춰 볼 상대 신고가 없어 검증할 수 없으므로
+-- ts_match_report_solo_result — 상대 없는 판(봇·혼자)을 기록한다. 맞춰 볼 상대 신고가 없어 검증할 수 없으므로
 -- 우편 지급은 하지 않는다. game_code 는 보상 설정에 등록된 것만 받는다(오타로 다른 코드에 쌓이지 않게).
 -- ---------------------------------------------------------------------------
 
-create or replace function public.ts_match_report_bot_result(
+drop function if exists public.ts_match_report_bot_result(text, text, boolean);
+
+create or replace function public.ts_match_report_solo_result(
   p_session_id text,
   p_game_code  text,
-  p_is_win     boolean
+  p_is_win     boolean,
+  p_score      double precision default null
 )
 returns void
 language plpgsql
@@ -7749,33 +7768,35 @@ begin
   v_user := coalesce(v_user, v_uid::text);
 
   insert into public.match_results
-    (session_id, game_code, account_id, user_id, is_win, opponent_account_id, status, resolved_at)
+    (session_id, game_code, account_id, user_id, is_win, opponent_account_id, score, status, resolved_at)
   values
-    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, null, 'bot', now())
+    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, null, p_score, 'solo', now())
   on conflict (session_id, account_id) do nothing;
 
   -- 재신고는 멱등. 같은 세션을 대인전으로 이미 신고했으면 두 신고가 서로 다른 판을 가리킨 것이다.
   select * into v_mine from public.match_results
   where session_id = btrim(p_session_id) and account_id = v_uid;
-  if v_mine.status <> 'bot' or v_mine.game_code is distinct from btrim(p_game_code) then
+  if v_mine.status <> 'solo' or v_mine.game_code is distinct from btrim(p_game_code) then
     raise exception 'match_result_mismatch';
   end if;
 end;
 $$;
 
-comment on function public.ts_match_report_bot_result(text, text, boolean) is
-  '봇 상대 판 기록. 교차검증·우편 지급 없음. 재신고는 멱등. SECURITY DEFINER.';
+comment on function public.ts_match_report_solo_result(text, text, boolean, double precision) is
+  '상대 없는 판(봇·혼자) 기록. 교차검증·우편 지급 없음. 재신고는 멱등. SECURITY DEFINER.';
 
-revoke all on function public.ts_match_report_bot_result(text, text, boolean) from public, anon;
-grant execute on function public.ts_match_report_bot_result(text, text, boolean) to authenticated;
+revoke all on function public.ts_match_report_solo_result(text, text, boolean, double precision) from public, anon;
+grant execute on function public.ts_match_report_solo_result(text, text, boolean, double precision) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_win_count — 내 승리 수를 검증 상태별로 나눠 돌려준다. 어디까지 셀지는 게임이 고른다:
--- verified 만 상대 신고와 맞춰 본 것이고, pending(상대 미신고)·bot 은 클라이언트 신고뿐이라 조작할 수 있다.
--- mismatch 는 세지 않는다.
+-- ts_match_stats — 내 승·패 수와 점수 최댓값·최솟값을 확인 단계별로 나눠 돌려준다. 어디까지 믿을지는 게임이 고른다:
+-- verified 만 상대 신고와 맞춰 본 판이고, pending(상대 미신고)·solo 는 본인 신고뿐이라 조작할 수 있다.
+-- 점수는 어느 단계든 본인이 보낸 값이다. mismatch 는 세지 않는다. 판이 없는 단계는 키가 빠진다.
 -- ---------------------------------------------------------------------------
 
-create or replace function public.ts_match_win_count(p_game_code text)
+drop function if exists public.ts_match_win_count(text);
+
+create or replace function public.ts_match_stats(p_game_code text)
 returns jsonb
 language plpgsql
 stable
@@ -7793,21 +7814,81 @@ begin
   end if;
 
   return (
-    select jsonb_build_object(
-      'verified', count(*) filter (where status = 'paid'),
-      'pending',  count(*) filter (where status = 'pending'),
-      'bot',      count(*) filter (where status = 'bot'))
-    from public.match_results
-    where account_id = v_uid and game_code = btrim(p_game_code) and is_win
+    select coalesce(jsonb_object_agg(b.trust, jsonb_build_object(
+             'wins', b.wins, 'losses', b.losses, 'max_score', b.max_score, 'min_score', b.min_score)), '{}'::jsonb)
+    from (
+      select case r.status when 'paid' then 'verified' else r.status end as trust,
+             count(*) filter (where r.is_win)     as wins,
+             count(*) filter (where not r.is_win) as losses,
+             max(r.score)                         as max_score,
+             min(r.score)                         as min_score
+      from public.match_results r
+      where r.account_id = v_uid and r.game_code = btrim(p_game_code)
+        and r.status in ('paid', 'pending', 'solo')
+      group by 1
+    ) b
   );
 end;
 $$;
 
-comment on function public.ts_match_win_count(text) is
-  '내 승리 수(verified·pending·bot). mismatch 제외. SECURITY DEFINER.';
+comment on function public.ts_match_stats(text) is
+  '내 매치 요약(verified·pending·solo 별 승·패·점수 최대·최소). mismatch 제외. SECURITY DEFINER.';
 
-revoke all on function public.ts_match_win_count(text) from public, anon;
-grant execute on function public.ts_match_win_count(text) to authenticated;
+revoke all on function public.ts_match_stats(text) from public, anon;
+grant execute on function public.ts_match_stats(text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ts_match_history — 내 매치 기록을 최근 순으로 돌려준다. p_game_code 가 비면 모든 게임 코드.
+-- 다음 쪽은 마지막 행의 reported_at 을 p_before 로 넘겨 받는다. 한 번에 최대 100개.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.ts_match_history(
+  p_game_code text        default null,
+  p_limit     int         default 20,
+  p_before    timestamptz default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_code  text := nullif(btrim(coalesce(p_game_code, '')), '');
+  v_limit int  := greatest(1, least(coalesce(p_limit, 20), 100));
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'session_id',          t.session_id,
+             'game_code',           t.game_code,
+             'is_win',              t.is_win,
+             'score',               t.score,
+             'status',              case t.status when 'paid' then 'verified' else t.status end,
+             'opponent_account_id', t.opponent_account_id,
+             'reported_at',         t.reported_at) order by t.reported_at desc), '[]'::jsonb)
+    from (
+      select r.session_id, r.game_code, r.is_win, r.score, r.status, r.opponent_account_id, r.reported_at
+      from public.match_results r
+      where r.account_id = v_uid
+        and (v_code is null or r.game_code = v_code)
+        and (p_before is null or r.reported_at < p_before)
+      order by r.reported_at desc
+      limit v_limit
+    ) t
+  );
+end;
+$$;
+
+comment on function public.ts_match_history(text, int, timestamptz) is
+  '내 매치 기록 최근 순(최대 100개, p_before 로 다음 쪽). status 는 verified·pending·mismatch·solo. SECURITY DEFINER.';
+
+revoke all on function public.ts_match_history(text, int, timestamptz) from public, anon;
+grant execute on function public.ts_match_history(text, int, timestamptz) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 운영 전용 — 보상 설정 조회·등록(Retool, service_role)
@@ -9855,9 +9936,10 @@ grant execute on function public.ts_chat_send_lobby(uuid, text)                 
 grant execute on function public.ts_chat_fetch_lobby(uuid, bigint, int)               to authenticated;
 
 -- 매치 결과
-grant execute on function public.ts_match_report_result(text, text, boolean, uuid)    to authenticated;
-grant execute on function public.ts_match_report_bot_result(text, text, boolean)      to authenticated;
-grant execute on function public.ts_match_win_count(text)                             to authenticated;
+grant execute on function public.ts_match_report_result(text, text, boolean, uuid, double precision) to authenticated;
+grant execute on function public.ts_match_report_solo_result(text, text, boolean, double precision) to authenticated;
+grant execute on function public.ts_match_stats(text)                                 to authenticated;
+grant execute on function public.ts_match_history(text, int, timestamptz)             to authenticated;
 
 -- 친구
 grant execute on function public.ts_friend_search(text)                              to authenticated;

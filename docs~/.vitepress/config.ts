@@ -213,8 +213,9 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '결과 신고', link: '/guide/match-result/report' },
-              { text: '봇 판 기록', link: '/guide/match-result/report-bot' },
-              { text: '승리 수 조회', link: '/guide/match-result/win-count' }
+              { text: '상대 없는 판 기록', link: '/guide/match-result/report-solo' },
+              { text: '전적 요약', link: '/guide/match-result/stats' },
+              { text: '최근 전적', link: '/guide/match-result/history' }
             ]
           },
           {

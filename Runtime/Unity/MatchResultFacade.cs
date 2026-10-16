@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using TrueBase.Core.Auth;
 using TrueBase.Core.Common;
@@ -6,7 +7,7 @@ using TrueBase.Core.Data;
 
 namespace TrueBase.Unity
 {
-    /// <summary>매치 결과 신고(<c>ts_match_report_result</c>). 보상 설정 등록·수정은 운영 전용입니다.</summary>
+    /// <summary>매치 기록 신고·조회. 보상 설정 등록·수정은 운영 전용입니다.</summary>
     internal sealed class MatchResultFacade
     {
         private readonly SupabaseMatchResultService _matchResult;
@@ -18,41 +19,48 @@ namespace TrueBase.Unity
             _sessionGetter = sessionGetter;
         }
 
-        public Task<SupabaseResult<MatchResultReportOutcome>> ReportResultAsync(
-            string sessionId, string gameCode, bool isWin, string opponentAccountId) =>
-            ReportResultAsync(_sessionGetter?.Invoke(), sessionId, gameCode, isWin, opponentAccountId);
-
         public async Task<SupabaseResult<MatchResultReportOutcome>> ReportResultAsync(
-            SupabaseSession session, string sessionId, string gameCode, bool isWin, string opponentAccountId)
+            string sessionId, string gameCode, bool isWin, string opponentAccountId, double? score)
         {
-            var token = RequireToken(session);
+            var token = RequireToken();
             if (token == null)
                 return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.NotSignedIn);
 
-            return await _matchResult.ReportResultAsync(token, sessionId, gameCode, isWin, opponentAccountId);
+            return await _matchResult.ReportResultAsync(token, sessionId, gameCode, isWin, opponentAccountId, score);
         }
 
-        public async Task<SupabaseResult> ReportBotResultAsync(string sessionId, string gameCode, bool isWin)
+        public async Task<SupabaseResult> ReportSoloResultAsync(string sessionId, string gameCode, bool isWin, double? score)
         {
-            var token = RequireToken(_sessionGetter?.Invoke());
+            var token = RequireToken();
             if (token == null)
                 return SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn);
 
-            return await _matchResult.ReportBotResultAsync(token, sessionId, gameCode, isWin);
+            return await _matchResult.ReportSoloResultAsync(token, sessionId, gameCode, isWin, score);
         }
 
-        public async Task<SupabaseResult<MatchWinCount>> GetWinCountAsync(string gameCode)
+        public async Task<SupabaseResult<MatchStats>> GetStatsAsync(string gameCode)
         {
-            var token = RequireToken(_sessionGetter?.Invoke());
+            var token = RequireToken();
             if (token == null)
-                return SupabaseResult<MatchWinCount>.Fail(SupabaseErrorCode.NotSignedIn);
+                return SupabaseResult<MatchStats>.Fail(SupabaseErrorCode.NotSignedIn);
 
-            return await _matchResult.GetWinCountAsync(token, gameCode);
+            return await _matchResult.GetStatsAsync(token, gameCode);
         }
 
-        /// <summary>세션에서 액세스 토큰을 추출합니다. 세션이 null이거나 토큰이 비어 있으면 null.</summary>
-        private static string RequireToken(SupabaseSession session)
+        public async Task<SupabaseResult<IReadOnlyList<MatchRecord>>> GetHistoryAsync(
+            string gameCode, int limit, DateTimeOffset? before)
         {
+            var token = RequireToken();
+            if (token == null)
+                return SupabaseResult<IReadOnlyList<MatchRecord>>.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _matchResult.GetHistoryAsync(token, gameCode, limit, before);
+        }
+
+        /// <summary>현재 세션의 액세스 토큰. 세션이 없거나 토큰이 비어 있으면 null.</summary>
+        private string RequireToken()
+        {
+            var session = _sessionGetter?.Invoke();
             if (session == null || string.IsNullOrWhiteSpace(session.AccessToken))
                 return null;
 

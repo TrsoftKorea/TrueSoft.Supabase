@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using TrueBase.Core.Common;
@@ -7,8 +8,8 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// 매치 결과 RPC. 대인전 신고(<c>ts_match_report_result</c>)는 신고·상호 교차검증·보상 지급(우편함 경유)을
-    /// 서버가 한 번에 처리하므로 별도의 "검증 요청"·"지급 요청" API가 없습니다. 봇 판 기록과 승리 수 조회는 지급과 무관합니다.
+    /// 매치 기록 RPC. 대인전 신고(<c>ts_match_report_result</c>)는 신고·상호 교차검증·보상 지급(우편함 경유)을
+    /// 서버가 한 번에 처리하므로 별도의 "검증 요청"·"지급 요청" API가 없습니다. 상대 없는 판 기록과 본인 기록 조회는 지급과 무관합니다.
     /// </summary>
     public sealed class SupabaseMatchResultService
     {
@@ -36,12 +37,14 @@ namespace TrueBase.Core.Data
         /// <param name="gameCode">보상 설정을 구분하는 코드. 운영이 <c>match_reward_configs</c>에 미리 등록해야 합니다.</param>
         /// <param name="isWin">본인 기준 승패.</param>
         /// <param name="opponentAccountId">상대로 지목하는 계정 ID.</param>
+        /// <param name="score">게임이 정하는 판 점수. 상대 신고와 맞춰 보지 않습니다. 재신고하면 처음 값이 남습니다.</param>
         public async Task<SupabaseResult<MatchResultReportOutcome>> ReportResultAsync(
             string accessToken,
             string sessionId,
             string gameCode,
             bool isWin,
-            string opponentAccountId)
+            string opponentAccountId,
+            double? score = null)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
                 return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchSessionIdEmpty);
@@ -57,7 +60,8 @@ namespace TrueBase.Core.Data
                 p_session_id = sessionId.Trim(),
                 p_game_code = gameCode.Trim(),
                 p_is_win = isWin,
-                p_opponent_account_id = opponentAccountId.Trim()
+                p_opponent_account_id = opponentAccountId.Trim(),
+                p_score = score
             });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
@@ -77,14 +81,15 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 봇 상대 판을 기록합니다. 맞춰 볼 상대 신고가 없으므로 보상은 지급하지 않습니다. 같은 세션 재신고는 멱등입니다.
+        /// 상대 없는 판(봇·혼자)을 기록합니다. 맞춰 볼 상대 신고가 없으므로 보상은 지급하지 않습니다. 같은 세션 재신고는 멱등입니다.
         /// 같은 세션을 대인전으로 이미 신고했으면 <see cref="SupabaseErrorCode.MatchResultMismatch"/>로 실패합니다.
         /// </summary>
-        public async Task<SupabaseResult> ReportBotResultAsync(
+        public async Task<SupabaseResult> ReportSoloResultAsync(
             string accessToken,
             string sessionId,
             string gameCode,
-            bool isWin)
+            bool isWin,
+            double? score = null)
         {
             if (string.IsNullOrWhiteSpace(sessionId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchSessionIdEmpty);
@@ -96,38 +101,70 @@ namespace TrueBase.Core.Data
             {
                 p_session_id = sessionId.Trim(),
                 p_game_code = gameCode.Trim(),
-                p_is_win = isWin
+                p_is_win = isWin,
+                p_score = score
             });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
-                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_report_bot_result", body,
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_report_solo_result", body,
                 allowEmptyBody: true);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
-        /// <summary>본인의 <paramref name="gameCode"/> 승리 수를 검증 상태별로 돌려줍니다.</summary>
-        public async Task<SupabaseResult<MatchWinCount>> GetWinCountAsync(string accessToken, string gameCode)
+        /// <summary>본인의 <paramref name="gameCode"/> 승·패 수와 점수 최댓값·최솟값을 확인 단계별로 돌려줍니다.</summary>
+        public async Task<SupabaseResult<MatchStats>> GetStatsAsync(string accessToken, string gameCode)
         {
             if (string.IsNullOrWhiteSpace(gameCode))
-                return SupabaseResult<MatchWinCount>.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
+                return SupabaseResult<MatchStats>.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
 
             var body = JsonConvert.SerializeObject(new { p_game_code = gameCode.Trim() });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
-                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_win_count", body);
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_stats", body);
             if (!r.IsSuccess)
-                return SupabaseResult<MatchWinCount>.Fail(r.ErrorCode);
+                return SupabaseResult<MatchStats>.Fail(r.ErrorCode);
 
             try
             {
-                var count = JsonConvert.DeserializeObject<MatchWinCount>(r.Data);
-                return count != null
-                    ? SupabaseResult<MatchWinCount>.Success(count)
-                    : SupabaseResult<MatchWinCount>.Fail("match_win_count_parse:empty");
+                var stats = JsonConvert.DeserializeObject<MatchStats>(r.Data);
+                return SupabaseResult<MatchStats>.Success(stats ?? new MatchStats());
             }
             catch (Exception e)
             {
-                return SupabaseResult<MatchWinCount>.Fail("match_win_count_parse:" + e.Message);
+                return SupabaseResult<MatchStats>.Fail("match_stats_parse:" + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// 본인의 매치 기록을 최근 순으로 돌려줍니다. <paramref name="gameCode"/>가 비면 모든 게임 코드입니다.
+        /// 다음 쪽은 마지막 기록의 <see cref="MatchRecord.ReportedAt"/>을 <paramref name="before"/>로 넘깁니다. 서버가 1~100개로 자릅니다.
+        /// </summary>
+        public async Task<SupabaseResult<IReadOnlyList<MatchRecord>>> GetHistoryAsync(
+            string accessToken,
+            string gameCode = null,
+            int limit = 20,
+            DateTimeOffset? before = null)
+        {
+            var body = JsonConvert.SerializeObject(new
+            {
+                p_game_code = string.IsNullOrWhiteSpace(gameCode) ? null : gameCode.Trim(),
+                p_limit = limit,
+                p_before = before
+            });
+
+            var r = await SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_history", body);
+            if (!r.IsSuccess)
+                return SupabaseResult<IReadOnlyList<MatchRecord>>.Fail(r.ErrorCode);
+
+            try
+            {
+                var list = JsonConvert.DeserializeObject<List<MatchRecord>>(r.Data) ?? new List<MatchRecord>();
+                return SupabaseResult<IReadOnlyList<MatchRecord>>.Success(list);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<IReadOnlyList<MatchRecord>>.Fail("match_history_parse:" + e.Message);
             }
         }
     }

@@ -1,6 +1,6 @@
 # 매치 결과
 
-2인 매치의 승패에 따라 영구 재화를 지급하는 기능입니다. 클라이언트가 신고하는 결과를 그대로 믿지 않고, 참가자 양쪽이 신고한 결과가 서로 맞을 때만 지급합니다. 게임은 [결과 신고](/guide/match-result/report)만 합니다. 봇과 한 판은 [봇 판 기록](/guide/match-result/report-bot)으로 남기며 지급되지 않습니다.
+대전·협동 판의 결과를 남기고 읽는 기능입니다. 2인 판은 참가자 양쪽이 신고한 결과가 서로 맞을 때만 보상을 지급합니다. 봇을 상대했거나 혼자 한 판은 [상대 없는 판 기록](/guide/match-result/report-solo)으로 남기며 지급되지 않습니다. 쌓인 기록은 [전적 요약](/guide/match-result/stats)과 [최근 전적](/guide/match-result/history)으로 읽습니다.
 
 ## 교차검증 흐름 {#cross-check}
 
@@ -12,18 +12,36 @@
 
 같은 세션을 다시 신고해도 중복 지급되지 않습니다.
 
+## 기록의 확인 단계 {#trust}
+
+모든 기록은 어디까지 확인됐는지에 따라 넷으로 나뉩니다. 조회 결과도 이 단계별로 나눠 오므로, 어디까지 믿을지는 게임이 고릅니다.
+
+| 단계 | 뜻 | 조작 가능 |
+|------|-----|-----------|
+| `Verified` | 상대 신고와 맞춰 봤습니다 | 아니요 |
+| `Pending` | 상대가 아직 신고하지 않았습니다 | 예 |
+| `Solo` | 상대 없는 판입니다 | 예 |
+| `Mismatch` | 상대 신고와 맞지 않아 무효입니다. 요약에서는 빠집니다 | 아니요 |
+
+판마다 함께 보내는 점수는 단계와 상관없이 각자 보낸 값이라 상대와 맞춰 보지 않습니다.
+
 ## 보상은 게임 코드 단위로 설정합니다 {#reward-config}
 
-승리 보상 아이템·검증 정책은 game_code별로 Retool 어드민에 등록합니다. 클라이언트는 승패 여부만 보낼 뿐 지급 액수를 정하지 않으므로, 신고 값을 조작해도 서버가 정한 것만 나갑니다.
+승리 보상 아이템·검증 정책은 game_code별로 Retool 어드민에 등록합니다. 클라이언트는 승패 여부만 보낼 뿐 지급 액수를 정하지 않으므로, 신고 값을 조작해도 서버가 정한 것만 나갑니다. 상대 없는 판을 기록할 때도 등록된 게임 코드만 받습니다.
 
 ## 메서드
 
 | 메서드 | 설명 |
 |--------|------|
-| [`ReportMatchResultAsync`](/guide/match-result/report) | 본인이 겪은 매치 결과 신고 |
-| [`ReportBotMatchResultAsync`](/guide/match-result/report-bot) | 봇 상대 판 기록. 지급 없음 |
-| [`GetMatchWinCountAsync`](/guide/match-result/win-count) | 내 승리 수를 검증 상태별로 조회 |
+| [`ReportMatchResultAsync`](/guide/match-result/report) | 본인이 겪은 2인 판 결과 신고 |
+| [`ReportSoloMatchResultAsync`](/guide/match-result/report-solo) | 상대 없는 판 기록. 지급 없음 |
+| [`GetMatchStatsAsync`](/guide/match-result/stats) | 내 승·패 수와 점수 최댓값·최솟값 |
+| [`GetMatchHistoryAsync`](/guide/match-result/history) | 내 기록을 최근 순으로 |
 
 ::: info 보상은 우편으로 옵니다
 지급 내역은 [우편](/guide/mailbox/)으로 오므로, 지급이 이루어지면 우편함을 새로 조회하세요.
+:::
+
+::: info 랭킹·시즌은 리더보드로
+다른 유저와 순위를 겨루거나 시즌마다 초기화하는 기록은 [리더보드](/guide/leaderboard/)가 맡습니다.
 :::

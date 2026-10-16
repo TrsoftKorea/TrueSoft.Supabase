@@ -395,19 +395,27 @@ namespace TrueBase.Unity
         // 참가자 각자가 자기 쪽 결과를 신고하면, 서버가 상대의 신고와 교차검증한 뒤에만 보상을 지급합니다.
         // 클라이언트가 결과를 그대로 신뢰하지 않으므로 지급액도 클라가 보내지 않습니다 — game_code별로
         // 운영이 등록한 보상 설정을 서버가 읽어 계산하고, 우편함으로 지급합니다.
+        // 상대 없는 판(봇·혼자)은 기록만 남고 지급되지 않습니다. 조회는 본인 기록만 되며, 확인 단계별로 나눠
+        // 돌려주므로 어디까지 믿을지는 게임이 고릅니다. 랭킹·시즌은 리더보드가 맡습니다.
 
         /// <inheritdoc cref="SupabaseSDK.TryReportMatchResultAsync"/>
         public static Task<SupabaseResult<MatchResultReportOutcome>> ReportMatchResultAsync(
-            string sessionId, string gameCode, bool isWin, string opponentAccountId) =>
-            SupabaseSDK.TryReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId);
+            string sessionId, string gameCode, bool isWin, string opponentAccountId, double? score = null) =>
+            SupabaseSDK.TryReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId, score);
 
-        /// <inheritdoc cref="SupabaseSDK.TryReportBotMatchResultAsync"/>
-        public static Task<SupabaseResult> ReportBotMatchResultAsync(string sessionId, string gameCode, bool isWin) =>
-            SupabaseSDK.TryReportBotMatchResultAsync(sessionId, gameCode, isWin);
+        /// <inheritdoc cref="SupabaseSDK.TryReportSoloMatchResultAsync"/>
+        public static Task<SupabaseResult> ReportSoloMatchResultAsync(
+            string sessionId, string gameCode, bool isWin, double? score = null) =>
+            SupabaseSDK.TryReportSoloMatchResultAsync(sessionId, gameCode, isWin, score);
 
-        /// <inheritdoc cref="SupabaseSDK.TryGetMatchWinCountAsync"/>
-        public static Task<SupabaseResult<MatchWinCount>> GetMatchWinCountAsync(string gameCode) =>
-            SupabaseSDK.TryGetMatchWinCountAsync(gameCode);
+        /// <inheritdoc cref="SupabaseSDK.TryGetMatchStatsAsync"/>
+        public static Task<SupabaseResult<MatchStats>> GetMatchStatsAsync(string gameCode) =>
+            SupabaseSDK.TryGetMatchStatsAsync(gameCode);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetMatchHistoryAsync"/>
+        public static Task<SupabaseResult<IReadOnlyList<MatchRecord>>> GetMatchHistoryAsync(
+            string gameCode = null, int limit = 20, DateTimeOffset? before = null) =>
+            SupabaseSDK.TryGetMatchHistoryAsync(gameCode, limit, before);
 
         // ── 쿠폰 ──────────────────────────────────────────────────────────────
         //

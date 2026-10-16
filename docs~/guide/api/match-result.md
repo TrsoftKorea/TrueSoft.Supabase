@@ -2,9 +2,10 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`ReportMatchResultAsync`](/guide/match-result/report) | 본인이 겪은 매치 결과 신고 |
-| [`ReportBotMatchResultAsync`](/guide/match-result/report-bot) | 봇 상대 판 기록. 지급 없음 |
-| [`GetMatchWinCountAsync`](/guide/match-result/win-count) | 내 승리 수를 검증 상태별로 조회 |
+| [`ReportMatchResultAsync`](/guide/match-result/report) | 본인이 겪은 2인 판 결과 신고 |
+| [`ReportSoloMatchResultAsync`](/guide/match-result/report-solo) | 상대 없는 판 기록. 지급 없음 |
+| [`GetMatchStatsAsync`](/guide/match-result/stats) | 내 승·패 수와 점수 최댓값·최솟값 |
+| [`GetMatchHistoryAsync`](/guide/match-result/history) | 내 기록을 최근 순으로 |
 
 매치 결과가 게임마다 갖는 보상 정책은 Retool 어드민에서 등록·수정합니다.
 
