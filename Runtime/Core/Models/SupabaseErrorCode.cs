@@ -332,6 +332,9 @@ namespace TrueBase.Core.Common
         /// <summary>점수가 NaN 이거나 무한대입니다.</summary>
         public const string MatchScoreInvalid = "match_score_invalid";
 
+        /// <summary>서버가 이 SDK가 모르는 신고 결과를 돌려줬습니다. SDK를 갱신해야 하며, 다시 시도해도 같은 결과입니다.</summary>
+        public const string MatchResultStatusUnknown = "match_result_status_unknown";
+
         /// <summary>검색할 닉네임이 비어 있습니다.</summary>
         public const string FriendNicknameEmpty = "friend_nickname_empty";
 

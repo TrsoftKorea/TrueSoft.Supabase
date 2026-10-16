@@ -47,11 +47,15 @@ export default function MatchRecordsTab({
   const [error, setError] = useState('')
   const [gameCode, setGameCode] = useState('')
   const [page, setPage] = useState(1)
+  // 선택지는 마지막으로 성공한 요약에서 만든다 — 불러오기가 실패해도 고른 코드가 드롭다운에서 사라지지 않게.
+  const [codes, setCodes] = useState<string[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setData(await callAdmin<Data>(target, 'matchRecords.player', { accountId, gameCode, page }))
+      const d = await callAdmin<Data>(target, 'matchRecords.player', { accountId, gameCode, page })
+      setData(d)
+      setCodes(Array.from(new Set(d.summary.map((s) => s.game_code))))
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
       setError(e instanceof Error ? e.message : '대전 기록을 불러오지 못했습니다.')
@@ -68,8 +72,10 @@ export default function MatchRecordsTab({
   const total = data?.total ?? 0
   const pageSize = data?.pageSize ?? 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const codes = Array.from(new Set(summary.map((s) => s.game_code)))
+  const codeOptions = gameCode && !codes.includes(gameCode) ? [...codes, gameCode] : codes
   const shownSummary = gameCode ? summary.filter((s) => s.game_code === gameCode) : summary
+  // 요약은 쪽 번호와 무관하다 — 쪽을 넘길 때는 이미 보이는 요약을 그대로 둔다.
+  const summaryLoading = loading && summary.length === 0
 
   return (
     <div className="space-y-4">
@@ -82,7 +88,7 @@ export default function MatchRecordsTab({
           onChange={(e) => { setGameCode(e.target.value); setPage(1) }}
         >
           <option value="">모든 게임 코드</option>
-          {codes.map((c) => (<option key={c} value={c}>{c}</option>))}
+          {codeOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
         </select>
         <button
           onClick={() => void load()}
@@ -109,8 +115,8 @@ export default function MatchRecordsTab({
               </tr>
             </thead>
             <tbody>
-              {loading || shownSummary.length === 0 ? (
-                <TableStatusRow loading={loading} empty={shownSummary.length === 0} colSpan={6} emptyText="대전 기록이 없습니다." />
+              {summaryLoading || shownSummary.length === 0 ? (
+                <TableStatusRow loading={summaryLoading} empty={shownSummary.length === 0} colSpan={6} emptyText="대전 기록이 없습니다." />
               ) : (
                 shownSummary.map((s) => (
                   <tr key={`${s.game_code}/${s.status}`} className="border-t border-neutral-100">

@@ -76,9 +76,19 @@ namespace TrueBase.Core.Data
             try
             {
                 var outcome = JsonConvert.DeserializeObject<MatchResultReportOutcome>(r.Data);
-                if (outcome?.StatusRaw == "mismatch")
-                    return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchResultMismatch);
-                return SupabaseResult<MatchResultReportOutcome>.Success(outcome ?? new MatchResultReportOutcome { StatusRaw = "pending" });
+                switch (outcome?.StatusRaw)
+                {
+                    case "pending":
+                    case "paid":
+                    case "already_paid":
+                        return SupabaseResult<MatchResultReportOutcome>.Success(outcome);
+                    case "mismatch":
+                        return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchResultMismatch);
+                    default:
+                        // 서버가 이 SDK보다 새 상태를 돌려준 것이다. 대기로 읽으면 게임이 실패를 성공으로 받는다.
+                        // 이름 붙은 사유로 내보내야 게임이 재시도할 일이 아님을 가를 수 있다.
+                        return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchResultStatusUnknown);
+                }
             }
             catch (Exception e)
             {

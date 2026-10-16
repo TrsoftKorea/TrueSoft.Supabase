@@ -49,11 +49,12 @@ function itemsText(items: ItemRow[], catalog: GameItem[]): string {
   return items.map((it) => `${name(it.key)} ×${Number(it.count).toLocaleString()}`).join(', ')
 }
 
-function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, catalogFailed, onClose, onSaved }: {
+function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByCode, catalog, catalogFailed, onClose, onSaved }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   row: RewardRow | null
   existingCodes: Set<string>
+  pendingByCode: Map<string, number>
   catalog: GameItem[]
   catalogFailed: boolean
   onClose: () => void
@@ -89,7 +90,9 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, c
   const canSubmit = codeValid && !codeTaken && daysValid && itemsValid && !saving
   const modeChanged = !!cfg && cfg.mode !== mode
   // 설정을 지운 뒤 다시 만드는 코드는 비교할 이전 방식이 없다. 기다리는 판이 있으면 그것만으로 경고한다.
-  const pendingAtRisk = (row?.pending_count ?? 0) > 0 && (modeChanged || !cfg)
+  // "게임 코드 추가"로 기록만 남은 코드를 적어도 같다.
+  const pendingCount = pendingByCode.get(code) ?? 0
+  const pendingAtRisk = pendingCount > 0 && (modeChanged || !cfg)
 
   const save = async () => {
     setSaving(true)
@@ -125,7 +128,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, c
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg my-6">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">{isNew ? '게임 코드 추가' : `${row.game_code} 보상 설정`}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} disabled={saving} className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -166,7 +169,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, c
               <p className="mt-1 text-xs text-amber-600">방식을 바꾸면 게임이 그에 맞게 결과를 보내기 전까지 이 코드의 모든 판이 무효가 됩니다.</p>
             )}
             {pendingAtRisk && (
-              <p className="mt-1 text-xs text-amber-600">상대 신고를 기다리는 판 {row!.pending_count.toLocaleString()}건도 이 방식으로 확인합니다.</p>
+              <p className="mt-1 text-xs text-amber-600">상대 신고를 기다리는 판 {pendingCount.toLocaleString()}건도 이 방식으로 확인합니다.</p>
             )}
           </div>
 
@@ -222,7 +225,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, c
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white whitespace-nowrap">취소</button>
+          <button onClick={onClose} disabled={saving} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white disabled:opacity-40 whitespace-nowrap">취소</button>
           <button onClick={submit} disabled={!canSubmit} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60 whitespace-nowrap">
             {saving ? '저장 중…' : '저장'}
           </button>
@@ -243,7 +246,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, catalog, c
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="font-mono text-neutral-800">{code}</div>
             <div className="text-xs text-neutral-500 mt-1">
-              {MODE_LABEL[cfg.mode]} → {MODE_LABEL[mode]} · 상대 신고를 기다리는 판 {(row?.pending_count ?? 0).toLocaleString()}건
+              {MODE_LABEL[cfg.mode]} → {MODE_LABEL[mode]} · 상대 신고를 기다리는 판 {pendingCount.toLocaleString()}건
             </div>
           </div>
         )}
@@ -286,6 +289,8 @@ export default function MatchRewards({
       setRows(list.value)
       setListFailed(false)
     } else {
+      // 이전 목록을 남기면 프로젝트를 바꾼 직후 실패했을 때 다른 프로젝트의 행을 이 프로젝트에 저장하게 된다.
+      setRows([])
       setListFailed(true)
       report(list.reason, '매치 보상 설정을 불러오지 못했습니다.')
     }
@@ -293,6 +298,7 @@ export default function MatchRewards({
       setCatalog(items.value)
       setCatalogFailed(false)
     } else {
+      setCatalog([])
       setCatalogFailed(true)
       report(items.reason, '아이템 카탈로그를 불러오지 못했습니다.')
     }
@@ -317,6 +323,7 @@ export default function MatchRewards({
 
   const modalRow = creating ? null : editRow
   const existingCodes = new Set(rows.filter((r) => r.config).map((r) => r.game_code))
+  const pendingByCode = new Map(rows.map((r) => [r.game_code, r.pending_count]))
 
   return (
     <div className="space-y-4">
@@ -410,6 +417,7 @@ export default function MatchRewards({
           onUnauthenticated={onUnauthenticated}
           row={modalRow}
           existingCodes={existingCodes}
+          pendingByCode={pendingByCode}
           catalog={catalog}
           catalogFailed={catalogFailed}
           onClose={() => { setCreating(false); setEditRow(null) }}

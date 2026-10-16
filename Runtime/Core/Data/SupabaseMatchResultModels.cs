@@ -40,7 +40,7 @@ namespace TrueBase.Core.Data
         /// <summary>상대 신고와 맞춰 봤습니다.</summary>
         Verified,
 
-        /// <summary>상대가 아직 신고하지 않았습니다. 상대가 다르게 신고하면 <see cref="Mismatch"/>가 됩니다.</summary>
+        /// <summary>상대가 아직 신고하지 않았습니다. 상대가 승패·게임 코드를 다르게 신고하거나, 다른 사람을 지목하거나, 상대 없는 판으로 기록하면 <see cref="Mismatch"/>가 됩니다.</summary>
         Pending,
 
         /// <summary>상대 신고와 맞지 않아 무효가 됐습니다.</summary>
@@ -48,6 +48,9 @@ namespace TrueBase.Core.Data
 
         /// <summary>상대 없는 판(봇·혼자)이라 맞춰 볼 수 없습니다.</summary>
         Solo,
+
+        /// <summary>이 SDK가 모르는 상태입니다. 서버가 SDK보다 새로울 때 나옵니다.</summary>
+        Unknown,
     }
 
     /// <summary>
@@ -138,9 +141,10 @@ namespace TrueBase.Core.Data
         public MatchRecordStatus Status => StatusRaw switch
         {
             "verified" => MatchRecordStatus.Verified,
+            "pending" => MatchRecordStatus.Pending,
             "mismatch" => MatchRecordStatus.Mismatch,
             "solo" => MatchRecordStatus.Solo,
-            _ => MatchRecordStatus.Pending,
+            _ => MatchRecordStatus.Unknown,
         };
     }
 }

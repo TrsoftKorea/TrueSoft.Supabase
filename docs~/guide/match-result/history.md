@@ -43,6 +43,6 @@ if (page.Data.Count > 0)
 | `.GameCode` | `string` | 게임 코드 |
 | `.IsWin` | `bool` | 본인 기준 승패 |
 | `.Score` | `double?` | 신고할 때 보낸 점수. 보내지 않았으면 `null` |
-| `.Status` | `MatchRecordStatus` | `Verified`·`Pending`·`Mismatch`·`Solo` |
+| `.Status` | `MatchRecordStatus` | `Verified`·`Pending`·`Mismatch`·`Solo`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `.OpponentAccountId` | `string` | 상대 계정 ID. 상대 없는 판이면 `null` |
 | `.ReportedAt` | `DateTimeOffset` | 신고한 시각 |

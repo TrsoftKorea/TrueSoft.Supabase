@@ -65,6 +65,7 @@ switch (result.Data.Status)
 | `SupabaseReason.MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다 |
 | `SupabaseReason.MatchResultMismatch` | 상호 지목이 어긋났거나 승패가 검증 정책과 맞지 않아 그 판이 무효가 됐습니다. 같은 세션을 다른 상대·게임 코드로, 또는 상대 없는 판으로 이미 신고했을 때도 나옵니다. 지급되지 않습니다 |
 | `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
+| `SupabaseReason.MatchResultStatusUnknown` | 서버가 이 SDK가 모르는 결과를 돌려줬습니다. SDK를 갱신해야 하며, 다시 시도해도 같습니다 |
 
 ::: info 대기 상태는 폴링하지 않습니다
 `Pending`은 오류가 아니라 상대의 신고를 기다리는 정상 상태입니다. 상대가 신고하면 그 호출에서 양쪽 모두 함께 처리되므로, 게임이 따로 재확인 요청을 보낼 필요가 없습니다.

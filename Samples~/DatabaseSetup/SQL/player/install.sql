@@ -7543,7 +7543,8 @@ create table if not exists public.match_reward_configs (
   mail_content      text not null default '',
   mail_expires_days int not null default 7,
   created_at        timestamptz not null default now(),
-  updated_at        timestamptz not null default now()
+  updated_at        timestamptz not null default now(),
+  updated_by        text null
 );
 
 alter table public.match_reward_configs add column if not exists updated_by text;
@@ -7563,6 +7564,7 @@ create table if not exists public.match_results (
   score                 double precision null,
   status                text not null default 'pending',
   paid_mail_id          uuid null references public.mails (id) on delete set null,
+  rewarded_at           timestamptz null,
   reported_at           timestamptz not null default now(),
   resolved_at           timestamptz null
 );
@@ -7650,25 +7652,34 @@ begin
     raise exception 'match_score_invalid';
   end if;
 
-  if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
-    raise exception 'match_reward_config_not_found';
-  end if;
-
   -- 세션 단위 직렬화 — 두 참가자가 거의 동시에 불러도 한 쪽씩 처리되어 이중 지급이 나지 않는다.
   perform pg_advisory_xact_lock(hashtextextended(btrim(p_session_id), 0));
-
-  select p.user_id into v_user from public.user_profiles p where p.account_id = v_uid;
-  v_user := coalesce(v_user, v_uid::text);
-
-  insert into public.match_results
-    (session_id, game_code, account_id, user_id, is_win, opponent_account_id, score)
-  values
-    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, p_opponent_account_id, p_score)
-  on conflict (session_id, account_id) do nothing;
 
   select * into v_mine from public.match_results
   where session_id = btrim(p_session_id) and account_id = v_uid
   for update;
+
+  -- 보상 설정은 새로 기록할 때만 본다 — 이미 끝난 판의 재시도는 그사이 설정이 지워져도 같은 답을 받아야 한다.
+  if not found then
+    if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
+      raise exception 'match_reward_config_not_found';
+    end if;
+
+    select p.user_id into v_user from public.user_profiles p where p.account_id = v_uid;
+    v_user := coalesce(v_user, v_uid::text);
+
+    insert into public.match_results
+      (session_id, game_code, account_id, user_id, is_win, opponent_account_id, score)
+    values
+      (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, p_opponent_account_id, p_score)
+    returning * into v_mine;
+
+    -- 이 세션에서 나를 지목하고 기다리던 다른 사람의 기록은, 내가 다른 상대를 지목했으므로 맞춰 볼 신고가
+    -- 영영 오지 않는다 — 무효로 끝낸다. 내가 지목한 상대의 기록은 아래에서 맞춰 본다.
+    update public.match_results set status = 'mismatch', resolved_at = v_now
+    where session_id = btrim(p_session_id) and opponent_account_id = v_uid
+      and account_id <> p_opponent_account_id and status = 'pending';
+  end if;
 
   -- 상대 없는 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 신고와 맞춰 지급받는 길이 열린다.
   -- 처음과 다른 상대·게임 코드로 재신고하는 것도 같다 — 지급은 처음 신고를 기준으로만 한다.
@@ -7695,13 +7706,18 @@ begin
   end if;
 
   -- 무효는 예외 대신 상태로 돌려준다 — raise 하면 같은 호출의 쓰기가 전부 되돌려져 무효 표시가 남지 않는다.
-  -- 상호 지목 확인 — 상대가 나를 지목하지 않았거나 다른 game_code 로 신고했거나, 상대 기록이 이미
-  -- 다른 판정으로 끝났으면(지급·무효·상대 없는 판) 두 신고가 같은 판을 가리키지 않는 것이다.
-  if v_opp.opponent_account_id is distinct from v_uid
-     or v_opp.game_code is distinct from v_mine.game_code
-     or v_opp.status <> 'pending' then
+  -- 상대가 나를 지목하지 않았거나 상대 기록이 이미 다른 판정으로 끝났으면(지급·무효·상대 없는 판)
+  -- 상대 기록은 다른 판의 것이다 — 내 기록만 무효로 한다.
+  if v_opp.opponent_account_id is distinct from v_uid or v_opp.status <> 'pending' then
     update public.match_results set status = 'mismatch', resolved_at = v_now
     where id = v_mine.id;
+    return jsonb_build_object('status', 'mismatch', 'rewarded', false);
+  end if;
+  -- 서로 지목했는데 게임 코드가 다르면 같은 판에 대한 엇갈린 신고다 — 둘 다 무효로 해야 먼저 신고한 쪽이
+  -- 대기로 영영 남지 않는다(승패가 엇갈릴 때와 같다).
+  if v_opp.game_code is distinct from v_mine.game_code then
+    update public.match_results set status = 'mismatch', resolved_at = v_now
+    where id in (v_mine.id, v_opp.id);
     return jsonb_build_object('status', 'mismatch', 'rewarded', false);
   end if;
 
@@ -7792,6 +7808,21 @@ begin
   if p_score is not null and (p_score = 'NaN'::float8 or p_score in ('Infinity'::float8, '-Infinity'::float8)) then
     raise exception 'match_score_invalid';
   end if;
+
+  -- 대인전 신고와 같은 세션 잠금 — 상대의 대기 기록을 무효로 바꾸는 아래 처리가 그 신고와 엇갈리지 않게.
+  perform pg_advisory_xact_lock(hashtextextended(btrim(p_session_id), 0));
+
+  -- 재신고는 멱등. 같은 세션을 대인전으로 이미 신고했으면 두 신고가 서로 다른 판을 가리킨 것이다.
+  select * into v_mine from public.match_results
+  where session_id = btrim(p_session_id) and account_id = v_uid;
+  if found then
+    if v_mine.status <> 'solo' or v_mine.game_code is distinct from btrim(p_game_code) then
+      raise exception 'match_result_mismatch';
+    end if;
+    return;
+  end if;
+
+  -- 보상 설정은 새로 기록할 때만 본다 — 이미 남긴 판의 재시도는 그사이 설정이 지워져도 성공해야 한다.
   if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
     raise exception 'match_reward_config_not_found';
   end if;
@@ -7802,15 +7833,11 @@ begin
   insert into public.match_results
     (session_id, game_code, account_id, user_id, is_win, opponent_account_id, score, status, resolved_at)
   values
-    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, null, p_score, 'solo', now())
-  on conflict (session_id, account_id) do nothing;
+    (btrim(p_session_id), btrim(p_game_code), v_uid, v_user, p_is_win, null, p_score, 'solo', now());
 
-  -- 재신고는 멱등. 같은 세션을 대인전으로 이미 신고했으면 두 신고가 서로 다른 판을 가리킨 것이다.
-  select * into v_mine from public.match_results
-  where session_id = btrim(p_session_id) and account_id = v_uid;
-  if v_mine.status <> 'solo' or v_mine.game_code is distinct from btrim(p_game_code) then
-    raise exception 'match_result_mismatch';
-  end if;
+  -- 이 세션에서 나를 상대로 지목하고 기다리는 기록은 맞춰 볼 신고가 영영 오지 않는다 — 무효로 끝낸다.
+  update public.match_results set status = 'mismatch', resolved_at = now()
+  where session_id = btrim(p_session_id) and opponent_account_id = v_uid and status = 'pending';
 end;
 $$;
 
@@ -7992,8 +8019,19 @@ begin
     end if;
   end loop;
 
-  if p_create_only and exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
-    raise exception 'match_reward_config_exists: %', btrim(p_game_code);
+  -- 추가는 확인과 저장을 한 문장으로 한다 — 둘이 거의 동시에 같은 코드를 추가해도 뒤쪽이 덮어쓰지 않는다.
+  if p_create_only then
+    insert into public.match_reward_configs
+      (game_code, mode, win_items, mail_title, mail_content, mail_expires_days, updated_at, updated_by)
+    values
+      (btrim(p_game_code), p_mode, p_win_items, coalesce(p_mail_title, '매치 보상'),
+       coalesce(p_mail_content, ''), coalesce(p_mail_expires_days, 7), now(), p_by)
+    on conflict (game_code) do nothing
+    returning * into v_row;
+    if not found then
+      raise exception 'match_reward_config_exists: %', btrim(p_game_code);
+    end if;
+    return v_row;
   end if;
 
   insert into public.match_reward_configs
