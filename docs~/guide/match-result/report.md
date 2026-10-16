@@ -43,7 +43,7 @@ switch (result.Data.Status)
 | `gameCode` | 보상 설정을 구분하는 코드. 운영이 어드민에 미리 등록해야 합니다 |
 | `isWin` | 본인 기준 승패 |
 | `opponentAccountId` | 상대로 지목하는 계정 ID. 봇·혼자 하는 판이면 [상대 없는 판 기록](/guide/match-result/report-solo)을 씁니다 |
-| `score` | 웨이브·점수·시간처럼 게임이 정하는 판 점수. 상대와 맞춰 보지 않으며, 재신고하면 처음 값이 남습니다 (기본값: `null`) |
+| `score` | 웨이브·점수·시간처럼 게임이 정하는 판 점수. 상대와 맞춰 보지 않으며, 재신고하면 처음 값이 남습니다. NaN·무한대는 보낼 수 없습니다 (기본값: `null`) |
 
 **반환**
 
@@ -63,7 +63,8 @@ switch (result.Data.Status)
 | `SupabaseReason.MatchOpponentRequired` | 상대 계정이 지정되지 않았습니다 |
 | `SupabaseReason.MatchOpponentInvalid` | 상대 계정으로 본인을 지목했습니다 |
 | `SupabaseReason.MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다 |
-| `SupabaseReason.MatchResultMismatch` | 상호 지목이 어긋났거나 승패가 검증 정책과 맞지 않습니다. 지급되지 않습니다 |
+| `SupabaseReason.MatchResultMismatch` | 상호 지목이 어긋났거나 승패가 검증 정책과 맞지 않아 그 판이 무효가 됐습니다. 같은 세션을 다른 상대·게임 코드로, 또는 상대 없는 판으로 이미 신고했을 때도 나옵니다. 지급되지 않습니다 |
+| `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
 ::: info 대기 상태는 폴링하지 않습니다
 `Pending`은 오류가 아니라 상대의 신고를 기다리는 정상 상태입니다. 상대가 신고하면 그 호출에서 양쪽 모두 함께 처리되므로, 게임이 따로 재확인 요청을 보낼 필요가 없습니다.

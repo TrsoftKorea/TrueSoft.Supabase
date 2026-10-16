@@ -22,6 +22,7 @@ import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
 import Friends from './pages/Friends'
 import Lobbies from './pages/Lobbies'
+import MatchRewards from './pages/MatchRewards'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
 import DataManagement from './pages/DataManagement'
@@ -123,6 +124,7 @@ export default function App() {
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
         <Route path="/friends" element={<Friends target={target} onUnauthenticated={signOut} />} />
         <Route path="/lobbies" element={<Lobbies target={target} onUnauthenticated={signOut} />} />
+        <Route path="/match-rewards" element={<MatchRewards target={target} onUnauthenticated={signOut} />} />
         {/* 예전 주소를 북마크해 둔 운영자가 빈 화면을 보지 않도록 남겨 둔다. */}
         <Route path="/social" element={<Navigate to="/friends" replace />} />
         <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />

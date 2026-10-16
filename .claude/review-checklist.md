@@ -4,7 +4,7 @@
 - 함수·테이블 권한을 회수(revoke)할 때 `from public`만 쓰지 않았는가 — Supabase 기본 권한이 `anon`·`authenticated`에 **직접** 부여하는 EXECUTE/ALL은 `public` 회수로는 안 빠진다. 반드시 `from public, anon, authenticated` 세 개 다. (실제로 이 실수로 SECURITY DEFINER 관리 함수 여러 개가 anon에 뚫려 있었음 — 에러 없이 조용히 뚫림.)
 - 새 테이블·함수를 추가했으면 **grant를 명시적으로 넣었는가.** 안 넣으면 클라이언트 접근 시 PostgREST 권한 오류(이건 눈에 보임) — 하지만 반대로 **grant를 과하게 주는 실수**는 에러 없이 조용히 새어나간다.
 - `install.sql` 파일만 고치고 **라이브 프로젝트(ProjectR/DefenceR·DevilSlayer)에 MCP로 적용하는 걸 빠뜨리지 않았는가.** 파일과 라이브가 갈라지면 다음 신규 프로젝트 온보딩 때까지 아무도 모른다(`mails.localized`·`ts_coupon_redeem`에서 실제로 두 번 발생).
-- `install.sql` 절 순서를 건드렸다면 **20절(권한 최소화)이 여전히 맨 마지막인가** — 앞 절 함수를 이름으로 grant하므로 순서가 바뀌면 "함수 없음" 오류로 설치 자체가 깨진다.
+- `install.sql` 절 순서를 건드렸다면 **권한 최소화 절(지금 22절)이 여전히 맨 마지막인가** — 앞 절 함수를 이름으로 grant하므로 순서가 바뀌면 "함수 없음" 오류로 설치 자체가 깨진다.
 
 **IAP(결제) 코드를 건드렸다면:**
 - 지급 확인(`ConfirmPurchase`/grant 경로)이 **계정 전환·Dispose 같은 비동기 경합 중에도 컨트롤러 참조를 잃지 않는가.** 예전에 계정전환 자동 Dispose 중 참조를 놓쳐 `ConfirmPurchase`가 아무 오류 없이 조용히 스킵된 적이 있다 — 결제는 성공했는데 지급 확인만 안 되는 상태.

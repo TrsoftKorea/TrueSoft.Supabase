@@ -9,8 +9,9 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import UserDataTab from './UserDataTab'
 import FriendsTab from './FriendsTab'
+import MatchRecordsTab from './MatchRecordsTab'
 
-type Tab = 'info' | 'userData' | 'friends'
+type Tab = 'info' | 'userData' | 'friends' | 'matches'
 
 const PERMANENT_UNTIL = '2999-12-31T23:59:59.000Z'
 
@@ -185,13 +186,14 @@ export default function PlayerDetail({
             ['info', '기본 정보'],
             ['userData', '유저 데이터'],
             ['friends', '친구'],
+            ['matches', '대전 기록'],
           ] as const
         ).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
             className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors',
+              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
               tab === key
                 ? 'border-[#1677ff] text-[#1677ff] font-medium'
                 : 'border-transparent text-neutral-600 hover:text-neutral-900',
@@ -211,6 +213,12 @@ export default function PlayerDetail({
         />
       ) : tab === 'friends' ? (
         <FriendsTab
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={accountId}
+        />
+      ) : tab === 'matches' ? (
+        <MatchRecordsTab
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={accountId}

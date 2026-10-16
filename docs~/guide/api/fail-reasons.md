@@ -202,7 +202,8 @@ bool Handle(SupabaseResult result)
 | `MatchOpponentRequired` | 상대 계정이 지정되지 않았습니다 |
 | `MatchOpponentInvalid` | 상대 계정으로 본인을 지목했습니다 |
 | `MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다 |
-| `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 지급되지 않았습니다 |
+| `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 지급되지 않았습니다. 같은 세션을 다른 상대·게임 코드·종류로 이미 신고했을 때도 나옵니다 |
+| `MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
 ## 친구
 

@@ -31,6 +31,7 @@ namespace TrueBase.Core.Data
         /// 본인이 겪은 매치 결과를 신고합니다. 같은 (세션 ID, 본인 계정)을 다시 신고해도 중복 지급되지 않습니다(멱등).
         /// 상대가 아직 신고하지 않았으면 <see cref="MatchResultStatus.Pending"/>으로 성공합니다 — 오류가 아닙니다.
         /// 상호 지목이 어긋나거나 승패 결과가 게임 코드의 검증 정책과 맞지 않으면 <see cref="SupabaseErrorCode.MatchResultMismatch"/>로 실패합니다.
+        /// 이때 서버는 그 판을 무효로 저장한 뒤 상태로 알려 주므로(예외로 알리면 무효 기록까지 되돌려진다) 여기서 실패로 바꾼다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="sessionId">게임이 부여한 매치 세션 식별자(예: Photon 룸 이름). 서버는 형식을 검증하지 않습니다.</param>
@@ -55,6 +56,9 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(opponentAccountId))
                 return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchOpponentRequired);
 
+            if (!IsValidScore(score))
+                return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchScoreInvalid);
+
             var body = JsonConvert.SerializeObject(new
             {
                 p_session_id = sessionId.Trim(),
@@ -72,6 +76,8 @@ namespace TrueBase.Core.Data
             try
             {
                 var outcome = JsonConvert.DeserializeObject<MatchResultReportOutcome>(r.Data);
+                if (outcome?.StatusRaw == "mismatch")
+                    return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchResultMismatch);
                 return SupabaseResult<MatchResultReportOutcome>.Success(outcome ?? new MatchResultReportOutcome { StatusRaw = "pending" });
             }
             catch (Exception e)
@@ -96,6 +102,9 @@ namespace TrueBase.Core.Data
 
             if (string.IsNullOrWhiteSpace(gameCode))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
+
+            if (!IsValidScore(score))
+                return SupabaseResult.Fail(SupabaseErrorCode.MatchScoreInvalid);
 
             var body = JsonConvert.SerializeObject(new
             {
@@ -167,5 +176,9 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<IReadOnlyList<MatchRecord>>.Fail("match_history_parse:" + e.Message);
             }
         }
+
+        // NaN 이 한 판이라도 저장되면 그 단계의 max·min 이 영영 NaN 이 된다(Postgres 는 NaN 을 가장 큰 값으로 친다).
+        private static bool IsValidScore(double? score) =>
+            !score.HasValue || !(double.IsNaN(score.Value) || double.IsInfinity(score.Value));
     }
 }

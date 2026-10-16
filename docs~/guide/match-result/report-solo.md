@@ -34,6 +34,7 @@ else
 | `SupabaseReason.MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
 | `SupabaseReason.MatchRewardConfigNotFound` | 해당 게임 코드가 어드민에 등록돼 있지 않습니다 |
 | `SupabaseReason.MatchResultMismatch` | 같은 세션을 대인전이나 다른 게임 코드로 이미 신고했습니다 |
+| `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
 ::: warning 같은 세션 ID를 다시 쓰면 기록되지 않습니다
 같은 세션을 다시 신고하면 처음 기록이 그대로 남고 이번 결과는 무시됩니다. 실패 없이 넘어가므로, 판마다 세션 ID를 새로 만들지 않으면 두 번째 판부터 조용히 빠집니다.

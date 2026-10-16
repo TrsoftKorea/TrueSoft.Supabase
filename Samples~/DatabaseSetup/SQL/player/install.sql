@@ -7546,8 +7546,10 @@ create table if not exists public.match_reward_configs (
   updated_at        timestamptz not null default now()
 );
 
+alter table public.match_reward_configs add column if not exists updated_by text;
+
 comment on table public.match_reward_configs is
-  'game_code 별 매치 보상 정책. mode=competitive 는 승패가 반대여야, coop 는 결과가 같아야 검증 통과. Retool 에서 값만 바꿉니다(코드 변경 불필요).';
+  'game_code 별 매치 보상 정책. mode=competitive 는 승패가 반대여야, coop 는 결과가 같아야 검증 통과. 운영 콘솔 매치 보상 화면에서 값만 바꿉니다(코드 변경 불필요).';
 comment on column public.match_reward_configs.win_items is '승리 보상 아이템 배열 [{key,count}, ...]. mails.items 와 같은 형식.';
 
 create table if not exists public.match_results (
@@ -7567,6 +7569,10 @@ create table if not exists public.match_results (
 
 -- 상대 없는 판(status='solo')은 상대 계정이 없다. 이미 설치된 프로젝트는 아래 alter 로 같은 모양에 수렴한다.
 alter table public.match_results add column if not exists score double precision;
+-- 보상 우편은 기한이 지나면 지워져 paid_mail_id 가 null 이 된다. 지급 여부는 이 칸으로 남긴다.
+alter table public.match_results add column if not exists rewarded_at timestamptz;
+update public.match_results set rewarded_at = resolved_at
+ where paid_mail_id is not null and rewarded_at is null;
 alter table public.match_results alter column opponent_account_id drop not null;
 alter table public.match_results drop constraint if exists match_results_status_check;
 alter table public.match_results
@@ -7580,6 +7586,8 @@ comment on table public.match_results is
   '참가자별 매치 기록. (session_id, account_id) 유니크로 재신고를 멱등하게 만듭니다. status=solo 는 상대 없는 판(봇·혼자)으로, 교차검증·지급 없이 기록만 남깁니다.';
 comment on column public.match_results.score is
   '게임이 정하는 판 점수(웨이브·점수·시간 등). 선택. 상대 신고와 맞춰 보지 않으므로 믿을 수 있는 정도는 그 판의 status 를 따릅니다.';
+comment on column public.match_results.rewarded_at is
+  '이 참가자에게 보상 우편을 보낸 시각. 우편이 만료돼 지워져도 남는다(paid_mail_id 는 null 이 된다).';
 
 create unique index if not exists match_results_session_account_key
   on public.match_results (session_id, account_id);
@@ -7587,6 +7595,8 @@ create index if not exists match_results_session_idx on public.match_results (se
 drop index if exists public.match_results_account_game_idx;
 create index if not exists match_results_account_game_reported_idx
   on public.match_results (account_id, game_code, reported_at desc);
+create index if not exists match_results_game_account_idx
+  on public.match_results (game_code, account_id);
 
 alter table public.match_reward_configs enable row level security;
 alter table public.match_results        enable row level security;
@@ -7635,9 +7645,12 @@ begin
   if p_opponent_account_id = v_uid then
     raise exception 'match_opponent_invalid';
   end if;
+  -- NaN 이 한 판이라도 들어가면 그 단계의 최댓값이 영영 NaN 이 된다(Postgres 는 NaN 을 가장 큰 값으로 친다).
+  if p_score is not null and (p_score = 'NaN'::float8 or p_score in ('Infinity'::float8, '-Infinity'::float8)) then
+    raise exception 'match_score_invalid';
+  end if;
 
-  select * into v_cfg from public.match_reward_configs where game_code = btrim(p_game_code);
-  if not found then
+  if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
     raise exception 'match_reward_config_not_found';
   end if;
 
@@ -7657,65 +7670,81 @@ begin
   where session_id = btrim(p_session_id) and account_id = v_uid
   for update;
 
-  -- 이미 끝난 처리는 재신고해도 그대로 반환한다 — 멱등.
-  if v_mine.status = 'paid' then
-    return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.paid_mail_id is not null);
-  end if;
   -- 상대 없는 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 신고와 맞춰 지급받는 길이 열린다.
-  if v_mine.status in ('mismatch', 'solo') then
+  -- 처음과 다른 상대·게임 코드로 재신고하는 것도 같다 — 지급은 처음 신고를 기준으로만 한다.
+  if v_mine.status = 'solo'
+     or v_mine.opponent_account_id is distinct from p_opponent_account_id
+     or v_mine.game_code is distinct from btrim(p_game_code) then
     raise exception 'match_result_mismatch';
   end if;
 
+  -- 이미 끝난 처리는 재신고해도 그대로 반환한다 — 멱등.
+  if v_mine.status = 'paid' then
+    return jsonb_build_object('status', 'already_paid', 'rewarded', v_mine.rewarded_at is not null);
+  end if;
+  if v_mine.status = 'mismatch' then
+    return jsonb_build_object('status', 'mismatch', 'rewarded', false);
+  end if;
+
   select * into v_opp from public.match_results
-  where session_id = btrim(p_session_id) and account_id = p_opponent_account_id
+  where session_id = btrim(p_session_id) and account_id = v_mine.opponent_account_id
   for update;
 
   if not found then
     return jsonb_build_object('status', 'pending', 'rewarded', false);
   end if;
 
-  -- 상호 지목 확인 — 상대가 나를 상대로 지목하지 않았거나 서로 다른 game_code로 신고했으면
-  -- 신고가 서로 다른 매치를 가리킨 것이다(game_code가 다르면 보상 설정도 달라 지급액이 갈린다).
-  if v_opp.opponent_account_id is distinct from v_uid or v_opp.game_code is distinct from v_mine.game_code then
+  -- 무효는 예외 대신 상태로 돌려준다 — raise 하면 같은 호출의 쓰기가 전부 되돌려져 무효 표시가 남지 않는다.
+  -- 상호 지목 확인 — 상대가 나를 지목하지 않았거나 다른 game_code 로 신고했거나, 상대 기록이 이미
+  -- 다른 판정으로 끝났으면(지급·무효·상대 없는 판) 두 신고가 같은 판을 가리키지 않는 것이다.
+  if v_opp.opponent_account_id is distinct from v_uid
+     or v_opp.game_code is distinct from v_mine.game_code
+     or v_opp.status <> 'pending' then
     update public.match_results set status = 'mismatch', resolved_at = v_now
-    where session_id = btrim(p_session_id) and account_id = v_uid;
-    raise exception 'match_result_mismatch';
+    where id = v_mine.id;
+    return jsonb_build_object('status', 'mismatch', 'rewarded', false);
+  end if;
+
+  -- 보상 설정은 저장된 기록의 game_code 로 읽는다(이번 호출 인자가 아니라).
+  select * into v_cfg from public.match_reward_configs where game_code = v_mine.game_code;
+  if not found then
+    raise exception 'match_reward_config_not_found';
   end if;
 
   -- 결과 일치 확인 — 경쟁은 승패가 반대, 협동은 결과가 같아야 한다.
   if (v_cfg.mode = 'competitive' and v_mine.is_win = v_opp.is_win)
      or (v_cfg.mode = 'coop' and v_mine.is_win is distinct from v_opp.is_win) then
     update public.match_results set status = 'mismatch', resolved_at = v_now
-    where session_id = btrim(p_session_id) and account_id in (v_uid, p_opponent_account_id);
-    raise exception 'match_result_mismatch';
+    where id in (v_mine.id, v_opp.id);
+    return jsonb_build_object('status', 'mismatch', 'rewarded', false);
   end if;
 
   -- 검증 통과 — 승리 쪽에만 우편으로 지급하고, 양쪽 모두 처리 완료로 표시한다.
   v_mine_mail_id := null;
   if v_mine.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
     insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
-    values (v_uid, v_user, 'system', v_cfg.mail_title, v_cfg.mail_content,
+    values (v_uid, v_mine.user_id, 'system', v_cfg.mail_title, v_cfg.mail_content,
             v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
     returning id into v_mine_mail_id;
   end if;
 
   update public.match_results
-  set status = 'paid', paid_mail_id = v_mine_mail_id, resolved_at = v_now
-  where session_id = btrim(p_session_id) and account_id = v_uid;
+  set status = 'paid', paid_mail_id = v_mine_mail_id, resolved_at = v_now,
+      rewarded_at = case when v_mine_mail_id is null then null else v_now end
+  where id = v_mine.id;
 
   v_mail_id := null;
   if v_opp.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
-    select p.user_id into v_user from public.user_profiles p where p.account_id = v_opp.account_id;
-    v_user := coalesce(v_user, v_opp.account_id::text);
     insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
-    values (v_opp.account_id, v_user, 'system', v_cfg.mail_title, v_cfg.mail_content,
+    values (v_opp.account_id, v_opp.user_id, 'system', v_cfg.mail_title, v_cfg.mail_content,
             v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
     returning id into v_mail_id;
   end if;
 
   update public.match_results
-  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now
-  where session_id = btrim(p_session_id) and account_id = p_opponent_account_id;
+  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now,
+      rewarded_at = case when v_mail_id is null then null else v_now end
+  where id = v_opp.id;
 
   -- rewarded는 승패가 아니라 실제로 우편이 갔는지를 반영한다(win_items가 비어 있으면 승리해도 우편 없음).
   return jsonb_build_object('status', 'paid', 'rewarded', v_mine_mail_id is not null);
@@ -7759,6 +7788,9 @@ begin
   end if;
   if p_game_code is null or btrim(p_game_code) = '' then
     raise exception 'match_game_code_empty';
+  end if;
+  if p_score is not null and (p_score = 'NaN'::float8 or p_score in ('Infinity'::float8, '-Infinity'::float8)) then
+    raise exception 'match_score_invalid';
   end if;
   if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
     raise exception 'match_reward_config_not_found';
@@ -7891,7 +7923,7 @@ revoke all on function public.ts_match_history(text, int, timestamptz) from publ
 grant execute on function public.ts_match_history(text, int, timestamptz) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 운영 전용 — 보상 설정 조회·등록(Retool, service_role)
+-- 운영 전용 — 보상 설정 조회·등록·삭제, 플레이어 대전 기록 조회(운영 콘솔, service_role)
 -- ---------------------------------------------------------------------------
 
 create or replace function public.ts_admin_match_reward_config_list()
@@ -7903,13 +7935,20 @@ as $$
   select * from public.match_reward_configs order by game_code;
 $$;
 
+-- p_create_only·p_by 를 붙이며 인자 개수가 바뀌었다. 옛 6인자판이 남으면 PostgREST 가 어느 쪽을 부를지 헷갈린다.
+drop function if exists public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int);
+
+-- p_create_only 가 true 면 이미 있는 코드에 대해 match_reward_config_exists 로 거절한다 —
+-- 콘솔의 "추가"가 목록이 낡았거나 불러오기에 실패한 채로 기존 설정을 덮어쓰지 않게.
 create or replace function public.ts_admin_match_reward_config_upsert(
   p_game_code         text,
   p_mode              text,
   p_win_items         jsonb,
-  p_mail_title        text default '매치 보상',
-  p_mail_content      text default '',
-  p_mail_expires_days int  default 7
+  p_mail_title        text    default '매치 보상',
+  p_mail_content      text    default '',
+  p_mail_expires_days int     default 7,
+  p_create_only       boolean default false,
+  p_by                text    default null
 )
 returns public.match_reward_configs
 language plpgsql
@@ -7918,29 +7957,58 @@ set search_path = public
 as $$
 declare
   v_row public.match_reward_configs%rowtype;
+  v_key text;
+  v_cnt text;
 begin
   if p_game_code is null or btrim(p_game_code) = '' then
     raise exception 'match_game_code_empty';
   end if;
+  -- 게임이 코드에 박아 넣는 값이라 공백·대문자가 섞이면 신고가 조용히 다른 코드로 간다.
+  if btrim(p_game_code) !~ '^[a-z0-9_]{1,64}$' then
+    raise exception 'match_game_code_invalid: %', p_game_code;
+  end if;
   if p_mode not in ('competitive', 'coop') then
     raise exception 'invalid_match_mode: %', p_mode;
+  end if;
+  if coalesce(p_mail_expires_days, 7) not between 1 and 365 then
+    raise exception 'invalid_mail_expires_days';
   end if;
   if p_win_items is null or jsonb_typeof(p_win_items) <> 'array' then
     raise exception 'items_not_array';
   end if;
+  -- 보상 아이템은 카탈로그에 있는 키만 허용한다. 수량은 SDK 가 int 로 읽으므로 int 범위로 자른다
+  -- (넘으면 그 플레이어의 우편함 목록 해석이 통째로 실패한다).
+  for v_key, v_cnt in
+    select e->>'key', e->>'count' from jsonb_array_elements(p_win_items) e
+  loop
+    if coalesce(btrim(v_key), '') = '' then
+      raise exception 'item_key_empty';
+    end if;
+    if v_cnt is null or v_cnt !~ '^[0-9]{1,10}$' or v_cnt::bigint not between 1 and 2147483647 then
+      raise exception 'item_count_invalid: %', v_key;
+    end if;
+    if not exists (select 1 from public.game_items g where g.key = v_key) then
+      raise exception 'unknown_item_key: %', v_key;
+    end if;
+  end loop;
+
+  if p_create_only and exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
+    raise exception 'match_reward_config_exists: %', btrim(p_game_code);
+  end if;
 
   insert into public.match_reward_configs
-    (game_code, mode, win_items, mail_title, mail_content, mail_expires_days, updated_at)
+    (game_code, mode, win_items, mail_title, mail_content, mail_expires_days, updated_at, updated_by)
   values
     (btrim(p_game_code), p_mode, p_win_items, coalesce(p_mail_title, '매치 보상'),
-     coalesce(p_mail_content, ''), coalesce(p_mail_expires_days, 7), now())
+     coalesce(p_mail_content, ''), coalesce(p_mail_expires_days, 7), now(), p_by)
   on conflict (game_code) do update set
     mode              = excluded.mode,
     win_items         = excluded.win_items,
     mail_title        = excluded.mail_title,
     mail_content      = excluded.mail_content,
     mail_expires_days = excluded.mail_expires_days,
-    updated_at        = now()
+    updated_at        = now(),
+    updated_by        = excluded.updated_by
   returning * into v_row;
 
   return v_row;
@@ -7948,12 +8016,144 @@ end;
 $$;
 
 comment on function public.ts_admin_match_reward_config_list() is '매치 보상 설정 전체 조회. service_role 전용.';
-comment on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) is '매치 보상 설정 등록·수정. service_role 전용.';
+comment on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int, boolean, text) is
+  '매치 보상 설정 등록·수정. p_create_only 면 이미 있는 코드를 거절. service_role 전용.';
 
 revoke all on function public.ts_admin_match_reward_config_list() from public, anon, authenticated;
-revoke all on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) from public, anon, authenticated;
+revoke all on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int, boolean, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_match_reward_config_list() to service_role;
-grant execute on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int) to service_role;
+grant execute on function public.ts_admin_match_reward_config_upsert(text, text, jsonb, text, text, int, boolean, text) to service_role;
+
+-- ts_admin_match_reward_overview — 보상 설정과 게임 코드별 기록 수를 함께 돌려준다.
+-- 설정을 지운 뒤에도 기록이 남은 코드는 config 가 null 인 줄로 나온다(그 코드의 신고는 지금 실패한다).
+create or replace function public.ts_admin_match_reward_overview()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'game_code',        coalesce(c.game_code, s.game_code),
+           'config',           case when c.game_code is null then null else jsonb_build_object(
+                                 'mode', c.mode, 'win_items', c.win_items, 'mail_title', c.mail_title,
+                                 'mail_content', c.mail_content, 'mail_expires_days', c.mail_expires_days,
+                                 'updated_at', c.updated_at, 'updated_by', c.updated_by) end,
+           'record_count',     coalesce(s.record_count, 0),
+           'player_count',     coalesce(s.player_count, 0),
+           'pending_count',    coalesce(s.pending_count, 0),
+           'last_reported_at', s.last_reported_at)
+         order by coalesce(c.game_code, s.game_code)), '[]'::jsonb)
+  from public.match_reward_configs c
+  full outer join (
+    select game_code, count(*) as record_count, count(distinct account_id) as player_count,
+           count(*) filter (where status = 'pending') as pending_count,
+           max(reported_at) as last_reported_at
+    from public.match_results
+    group by game_code
+  ) s on s.game_code = c.game_code;
+$$;
+
+comment on function public.ts_admin_match_reward_overview() is
+  '매치 보상 설정 + 게임 코드별 기록 수·플레이어 수·상대 미신고 수·최근 신고 시각. service_role 전용.';
+
+revoke all on function public.ts_admin_match_reward_overview() from public, anon, authenticated;
+grant execute on function public.ts_admin_match_reward_overview() to service_role;
+
+-- ts_admin_match_reward_config_delete — 설정만 지운다. 쌓인 기록은 남고, 이 코드로 오는 신고는 그때부터 실패한다.
+create or replace function public.ts_admin_match_reward_config_delete(p_game_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted int;
+begin
+  delete from public.match_reward_configs where game_code = btrim(coalesce(p_game_code, ''));
+  get diagnostics v_deleted = row_count;
+  return jsonb_build_object('deleted', v_deleted > 0);
+end;
+$$;
+
+comment on function public.ts_admin_match_reward_config_delete(text) is
+  '매치 보상 설정 삭제. 기록은 남는다. service_role 전용.';
+
+revoke all on function public.ts_admin_match_reward_config_delete(text) from public, anon, authenticated;
+grant execute on function public.ts_admin_match_reward_config_delete(text) to service_role;
+
+-- ts_admin_match_player_records — 플레이어 한 명의 대전 기록. 요약은 게임 코드·확인 단계별(무효 포함),
+-- 목록은 최근 순으로 p_offset 부터 p_limit 개(1~100). p_game_code 가 비면 모든 코드.
+create or replace function public.ts_admin_match_player_records(
+  p_account_id uuid,
+  p_game_code  text default null,
+  p_limit      int  default 20,
+  p_offset     int  default 0
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_code   text := nullif(btrim(coalesce(p_game_code, '')), '');
+  v_limit  int  := greatest(1, least(coalesce(p_limit, 20), 100));
+  v_offset int  := greatest(0, coalesce(p_offset, 0));
+begin
+  return jsonb_build_object(
+    'summary', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'game_code', b.game_code, 'status', b.status,
+               'wins', b.wins, 'losses', b.losses, 'max_score', b.max_score, 'min_score', b.min_score)
+             order by b.game_code, b.status)
+      from (
+        select r.game_code,
+               case r.status when 'paid' then 'verified' else r.status end as status,
+               count(*) filter (where r.is_win)     as wins,
+               count(*) filter (where not r.is_win) as losses,
+               max(r.score) as max_score,
+               min(r.score) as min_score
+        from public.match_results r
+        where r.account_id = p_account_id
+        group by 1, 2
+      ) b
+    ), '[]'::jsonb),
+    'total', (
+      select count(*) from public.match_results r
+      where r.account_id = p_account_id and (v_code is null or r.game_code = v_code)
+    ),
+    'rows', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'session_id',          t.session_id,
+               'game_code',           t.game_code,
+               'is_win',              t.is_win,
+               'score',               t.score,
+               'status',              case t.status when 'paid' then 'verified' else t.status end,
+               'rewarded',            t.rewarded_at is not null,
+               'opponent_account_id', t.opponent_account_id,
+               'opponent_exists',     exists (select 1 from auth.users u where u.id = t.opponent_account_id),
+               'opponent_name',       coalesce(d.display_name, ''),
+               'reported_at',         t.reported_at,
+               'resolved_at',         t.resolved_at)
+             order by t.reported_at desc)
+      from (
+        select r.* from public.match_results r
+        where r.account_id = p_account_id and (v_code is null or r.game_code = v_code)
+        order by r.reported_at desc
+        limit v_limit offset v_offset
+      ) t
+      left join public.display_names d on d.account_id = t.opponent_account_id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+comment on function public.ts_admin_match_player_records(uuid, text, int, int) is
+  '플레이어 대전 기록(게임 코드·확인 단계별 요약 + 최근 순 목록). service_role 전용.';
+
+revoke all on function public.ts_admin_match_player_records(uuid, text, int, int) from public, anon, authenticated;
+grant execute on function public.ts_admin_match_player_records(uuid, text, int, int) to service_role;
 
 notify pgrst, 'reload schema';
 

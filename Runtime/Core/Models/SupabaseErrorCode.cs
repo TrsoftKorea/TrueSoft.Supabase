@@ -326,8 +326,11 @@ namespace TrueBase.Core.Common
         /// <summary>해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다.</summary>
         public const string MatchRewardConfigNotFound = "match_reward_config_not_found";
 
-        /// <summary>양쪽이 신고한 결과가 서로 맞지 않습니다(상호 지목 불일치 또는 승패 불일치). 지급되지 않습니다.</summary>
+        /// <summary>양쪽이 신고한 결과가 서로 맞지 않거나(상호 지목·승패 불일치), 같은 세션을 다른 상대·게임 코드·종류로 이미 신고했습니다. 지급되지 않습니다.</summary>
         public const string MatchResultMismatch = "match_result_mismatch";
+
+        /// <summary>점수가 NaN 이거나 무한대입니다.</summary>
+        public const string MatchScoreInvalid = "match_score_invalid";
 
         /// <summary>검색할 닉네임이 비어 있습니다.</summary>
         public const string FriendNicknameEmpty = "friend_nickname_empty";

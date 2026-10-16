@@ -873,6 +873,77 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: { rows: result.rows ?? [], total: result.total ?? 0, pageSize } });
       }
 
+      case "matchRewards.list": {
+        const { data, error } = await db.rpc("ts_admin_match_reward_overview");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "matchRewards.upsert": {
+        // 형식·범위는 ts_admin_match_reward_config_upsert 와 같게 둔다. 아이템 키가 카탈로그에
+        // 있는지는 DB 만 본다(카탈로그를 여기서 다시 읽지 않는다).
+        const gameCode = str(params, "gameCode").trim();
+        if (!/^[a-z0-9_]{1,64}$/.test(gameCode)) {
+          throw new Error("게임 코드는 영문 소문자·숫자·밑줄로 64자 이내여야 합니다.");
+        }
+        const mode = str(params, "mode");
+        if (mode !== "competitive" && mode !== "coop") throw new Error("판정 방식이 올바르지 않습니다.");
+        const items = params["winItems"];
+        if (!Array.isArray(items)) throw new Error("보상 아이템 형식이 올바르지 않습니다.");
+        for (const it of items as Array<{ key?: unknown; count?: unknown }>) {
+          if (typeof it?.key !== "string" || it.key.trim() === "") throw new Error("보상 아이템을 고르세요.");
+          // SDK 가 수량을 int 로 읽는다 — 넘으면 그 플레이어의 우편함이 통째로 안 열린다.
+          if (!Number.isInteger(it.count) || (it.count as number) <= 0 || (it.count as number) > 2147483647) {
+            throw new Error("보상 아이템 수량은 1 이상 2,147,483,647 이하의 정수여야 합니다.");
+          }
+        }
+        const { error } = await db.rpc("ts_admin_match_reward_config_upsert", {
+          p_game_code: gameCode,
+          p_mode: mode,
+          p_win_items: items,
+          p_mail_title: optStr(params, "mailTitle").trim() || "매치 보상",
+          p_mail_content: optStr(params, "mailContent"),
+          p_mail_expires_days: intInRange(params, "mailExpiresDays", "우편 수령 기한", 1, 365),
+          p_create_only: params["createOnly"] === true,
+          p_by: email,
+        });
+        if (error) {
+          if (error.message.startsWith("match_reward_config_exists")) {
+            throw new Error("이미 등록된 게임 코드입니다. 목록에서 그 코드를 수정하세요.");
+          }
+          throw new Error(error.message);
+        }
+        return json({ ok: true, data: null });
+      }
+
+      case "matchRewards.delete": {
+        const { data, error } = await db.rpc("ts_admin_match_reward_config_delete", {
+          p_game_code: str(params, "gameCode"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "matchRecords.player": {
+        const page = typeof params["page"] === "number" ? params["page"] : 1;
+        const pageSize = 20;
+        const gameCode = optStr(params, "gameCode").trim();
+
+        const { data, error } = await db.rpc("ts_admin_match_player_records", {
+          p_account_id: str(params, "accountId"),
+          p_game_code: gameCode === "" ? null : gameCode,
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        });
+        if (error) throw new Error(error.message);
+
+        const result = (data ?? {}) as { summary?: unknown[]; rows?: unknown[]; total?: number };
+        return json({
+          ok: true,
+          data: { summary: result.summary ?? [], rows: result.rows ?? [], total: result.total ?? 0, pageSize },
+        });
+      }
+
       case "coupons.list": {
         const { data, error } = await db.rpc("ts_admin_coupon_list", { p_search: optStr(params, "search") });
         if (error) throw new Error(error.message);
