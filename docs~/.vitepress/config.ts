@@ -212,7 +212,9 @@ export default defineConfig({
             link: '/guide/match-result/',
             collapsed: true,
             items: [
-              { text: '결과 신고', link: '/guide/match-result/report' }
+              { text: '결과 신고', link: '/guide/match-result/report' },
+              { text: '봇 판 기록', link: '/guide/match-result/report-bot' },
+              { text: '승리 수 조회', link: '/guide/match-result/win-count' }
             ]
           },
           {

@@ -32,6 +32,24 @@ namespace TrueBase.Unity
             return await _matchResult.ReportResultAsync(token, sessionId, gameCode, isWin, opponentAccountId);
         }
 
+        public async Task<SupabaseResult> ReportBotResultAsync(string sessionId, string gameCode, bool isWin)
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _matchResult.ReportBotResultAsync(token, sessionId, gameCode, isWin);
+        }
+
+        public async Task<SupabaseResult<MatchWinCount>> GetWinCountAsync(string gameCode)
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult<MatchWinCount>.Fail(SupabaseErrorCode.NotSignedIn);
+
+            return await _matchResult.GetWinCountAsync(token, gameCode);
+        }
+
         /// <summary>세션에서 액세스 토큰을 추출합니다. 세션이 null이거나 토큰이 비어 있으면 null.</summary>
         private static string RequireToken(SupabaseSession session)
         {

@@ -32,4 +32,26 @@ namespace TrueBase.Core.Data
             _ => MatchResultStatus.Pending,
         };
     }
+
+    /// <summary>
+    /// <c>ts_match_win_count</c> 결과. 무효 판정(mismatch)된 판은 어디에도 세지 않습니다.
+    /// <see cref="Verified"/>만 상대 신고와 맞춰 본 값이고, <see cref="Pending"/>·<see cref="Bot"/>은 본인 신고뿐이라 조작할 수 있습니다.
+    /// </summary>
+    public sealed class MatchWinCount
+    {
+        /// <summary>상대 신고와 맞춰 본 승리.</summary>
+        [JsonProperty("verified")]
+        public int Verified { get; set; }
+
+        /// <summary>상대가 아직 신고하지 않은 승리. 상대가 다르게 신고하면 빠집니다.</summary>
+        [JsonProperty("pending")]
+        public int Pending { get; set; }
+
+        /// <summary>봇에게 이긴 판.</summary>
+        [JsonProperty("bot")]
+        public int Bot { get; set; }
+
+        /// <summary>세 값의 합.</summary>
+        public int Total => Verified + Pending + Bot;
+    }
 }

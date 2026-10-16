@@ -7,8 +7,8 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// 매치 결과 신고 RPC. <c>ts_match_report_result</c> 하나뿐입니다 — 신고·상호 교차검증·보상 지급(우편함 경유)을
-    /// 서버가 한 번에 처리하므로 별도의 "검증 요청"·"지급 요청" API가 없습니다.
+    /// 매치 결과 RPC. 대인전 신고(<c>ts_match_report_result</c>)는 신고·상호 교차검증·보상 지급(우편함 경유)을
+    /// 서버가 한 번에 처리하므로 별도의 "검증 요청"·"지급 요청" API가 없습니다. 봇 판 기록과 승리 수 조회는 지급과 무관합니다.
     /// </summary>
     public sealed class SupabaseMatchResultService
     {
@@ -73,6 +73,61 @@ namespace TrueBase.Core.Data
             catch (Exception e)
             {
                 return SupabaseResult<MatchResultReportOutcome>.Fail("match_report_result_parse:" + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// 봇 상대 판을 기록합니다. 맞춰 볼 상대 신고가 없으므로 보상은 지급하지 않습니다. 같은 세션 재신고는 멱등입니다.
+        /// 같은 세션을 대인전으로 이미 신고했으면 <see cref="SupabaseErrorCode.MatchResultMismatch"/>로 실패합니다.
+        /// </summary>
+        public async Task<SupabaseResult> ReportBotResultAsync(
+            string accessToken,
+            string sessionId,
+            string gameCode,
+            bool isWin)
+        {
+            if (string.IsNullOrWhiteSpace(sessionId))
+                return SupabaseResult.Fail(SupabaseErrorCode.MatchSessionIdEmpty);
+
+            if (string.IsNullOrWhiteSpace(gameCode))
+                return SupabaseResult.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
+
+            var body = JsonConvert.SerializeObject(new
+            {
+                p_session_id = sessionId.Trim(),
+                p_game_code = gameCode.Trim(),
+                p_is_win = isWin
+            });
+
+            var r = await SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_report_bot_result", body,
+                allowEmptyBody: true);
+            return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
+        }
+
+        /// <summary>본인의 <paramref name="gameCode"/> 승리 수를 검증 상태별로 돌려줍니다.</summary>
+        public async Task<SupabaseResult<MatchWinCount>> GetWinCountAsync(string accessToken, string gameCode)
+        {
+            if (string.IsNullOrWhiteSpace(gameCode))
+                return SupabaseResult<MatchWinCount>.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
+
+            var body = JsonConvert.SerializeObject(new { p_game_code = gameCode.Trim() });
+
+            var r = await SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_win_count", body);
+            if (!r.IsSuccess)
+                return SupabaseResult<MatchWinCount>.Fail(r.ErrorCode);
+
+            try
+            {
+                var count = JsonConvert.DeserializeObject<MatchWinCount>(r.Data);
+                return count != null
+                    ? SupabaseResult<MatchWinCount>.Success(count)
+                    : SupabaseResult<MatchWinCount>.Fail("match_win_count_parse:empty");
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<MatchWinCount>.Fail("match_win_count_parse:" + e.Message);
             }
         }
     }

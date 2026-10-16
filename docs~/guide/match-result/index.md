@@ -1,6 +1,6 @@
 # 매치 결과
 
-2인 매치의 승패에 따라 영구 재화를 지급하는 기능입니다. 클라이언트가 신고하는 결과를 그대로 믿지 않고, 참가자 양쪽이 신고한 결과가 서로 맞을 때만 지급합니다. 게임은 [결과 신고](/guide/match-result/report)만 합니다.
+2인 매치의 승패에 따라 영구 재화를 지급하는 기능입니다. 클라이언트가 신고하는 결과를 그대로 믿지 않고, 참가자 양쪽이 신고한 결과가 서로 맞을 때만 지급합니다. 게임은 [결과 신고](/guide/match-result/report)만 합니다. 봇과 한 판은 [봇 판 기록](/guide/match-result/report-bot)으로 남기며 지급되지 않습니다.
 
 ## 교차검증 흐름 {#cross-check}
 
@@ -21,6 +21,8 @@
 | 메서드 | 설명 |
 |--------|------|
 | [`ReportMatchResultAsync`](/guide/match-result/report) | 본인이 겪은 매치 결과 신고 |
+| [`ReportBotMatchResultAsync`](/guide/match-result/report-bot) | 봇 상대 판 기록. 지급 없음 |
+| [`GetMatchWinCountAsync`](/guide/match-result/win-count) | 내 승리 수를 검증 상태별로 조회 |
 
 ::: info 보상은 우편으로 옵니다
 지급 내역은 [우편](/guide/mailbox/)으로 오므로, 지급이 이루어지면 우편함을 새로 조회하세요.

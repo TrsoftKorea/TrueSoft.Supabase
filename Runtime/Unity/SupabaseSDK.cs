@@ -304,6 +304,8 @@ namespace TrueBase.Unity
             public const string LeaderboardSetPlayerData = "Supabase.Leaderboard.SetPlayerData";
             public const string LeaderboardDeleteMyScore = "Supabase.Leaderboard.DeleteMyScore";
             public const string MatchResultReport = "Supabase.MatchResult.Report";
+            public const string MatchResultReportBot = "Supabase.MatchResult.ReportBot";
+            public const string MatchResultWinCount = "Supabase.MatchResult.WinCount";
             public const string CouponRedeem = "Supabase.Coupon.Redeem";
             public const string ChatChannels = "Supabase.Chat.Channels";
             public const string ChatSend = "Supabase.Chat.Send";
@@ -2475,6 +2477,33 @@ namespace TrueBase.Unity
             return await MatchResult.ReportResultAsync(sessionId, gameCode, isWin, opponentAccountId);
         }
 
+        /// <summary>
+        /// <c>ts_match_report_bot_result</c> — 봇 상대 판을 기록합니다. 맞춰 볼 상대 신고가 없어 보상은 지급하지 않고,
+        /// <see cref="GetMatchWinCountAsync"/>의 <see cref="MatchWinCount.Bot"/>에만 셉니다. 같은 세션 재신고는 멱등입니다.
+        /// </summary>
+        /// <param name="sessionId">게임이 부여한 매치 세션 식별자. 대인전과 겹치지 않아야 합니다.</param>
+        /// <param name="gameCode">운영이 보상 설정에 등록한 코드.</param>
+        /// <param name="isWin">본인 기준 승패.</param>
+        public static async Task<SupabaseResult> ReportBotMatchResultAsync(string sessionId, string gameCode, bool isWin)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchResult.ReportBotResultAsync(sessionId, gameCode, isWin);
+        }
+
+        /// <summary><c>ts_match_win_count</c> — 본인의 승리 수를 검증 상태별로 돌려줍니다. 무효 판정된 판은 세지 않습니다.</summary>
+        /// <param name="gameCode">셀 게임 코드.</param>
+        public static async Task<SupabaseResult<MatchWinCount>> GetMatchWinCountAsync(string gameCode)
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<MatchWinCount>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
+
+            return await MatchResult.GetWinCountAsync(gameCode);
+        }
+
         /// <inheritdoc cref="GetLeaderboardTablesAsync"/>
         public static async Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> TryGetLeaderboardTablesAsync()
         {
@@ -2536,6 +2565,21 @@ namespace TrueBase.Unity
         {
             var r = await ReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId);
             return LogAndReturnResult(ApiLogTags.MatchResultReport, r);
+        }
+
+        /// <inheritdoc cref="ReportBotMatchResultAsync"/>
+        public static async Task<SupabaseResult> TryReportBotMatchResultAsync(string sessionId, string gameCode, bool isWin)
+        {
+            var r = await ReportBotMatchResultAsync(sessionId, gameCode, isWin);
+            LogApiResult(ApiLogTags.MatchResultReportBot, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
+            return r;
+        }
+
+        /// <inheritdoc cref="GetMatchWinCountAsync"/>
+        public static async Task<SupabaseResult<MatchWinCount>> TryGetMatchWinCountAsync(string gameCode)
+        {
+            var r = await GetMatchWinCountAsync(gameCode);
+            return LogAndReturnResult(ApiLogTags.MatchResultWinCount, r);
         }
 
         /// <summary><c>ts_coupon_redeem</c> — 쿠폰 사용. 보상은 우편으로 지급됩니다.</summary>

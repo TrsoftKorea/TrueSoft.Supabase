@@ -401,6 +401,14 @@ namespace TrueBase.Unity
             string sessionId, string gameCode, bool isWin, string opponentAccountId) =>
             SupabaseSDK.TryReportMatchResultAsync(sessionId, gameCode, isWin, opponentAccountId);
 
+        /// <inheritdoc cref="SupabaseSDK.TryReportBotMatchResultAsync"/>
+        public static Task<SupabaseResult> ReportBotMatchResultAsync(string sessionId, string gameCode, bool isWin) =>
+            SupabaseSDK.TryReportBotMatchResultAsync(sessionId, gameCode, isWin);
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetMatchWinCountAsync"/>
+        public static Task<SupabaseResult<MatchWinCount>> GetMatchWinCountAsync(string gameCode) =>
+            SupabaseSDK.TryGetMatchWinCountAsync(gameCode);
+
         // ── 쿠폰 ──────────────────────────────────────────────────────────────
         //
         // 쿠폰 정의·발급은 운영(Retool) 전용입니다. 게임은 코드를 보내 사용하는 것만 합니다.
