@@ -188,7 +188,8 @@ export default defineConfig({
               { text: '삭제', link: '/guide/mailbox/delete' },
               { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' },
               { text: '미수령 수', link: '/guide/mailbox/counts-unclaimed' },
-              { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' }
+              { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' },
+              { text: '우편 설정 조회', link: '/guide/mailbox/settings' }
             ]
           },
           {

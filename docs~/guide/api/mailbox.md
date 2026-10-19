@@ -10,6 +10,7 @@
 | [`DeleteClaimedMailsAsync`](/guide/mailbox/delete-claimed) | 수령한 우편 일괄 삭제 · 분류 필터 |
 | [`GetUnclaimedMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 메일 수 |
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미수령 + 분류별 세부 내역 |
+| [`GetMailSettingsAsync`](/guide/mailbox/settings) | 만료 우편 보관 일수 |
 | [`RegisterMailItemHandler`](/guide/mailbox/item-handler) | 보상 지급 핸들러 등록 |
 
 언어별 제목·본문은 [다국어 메시지](/guide/mailbox/localized)의 `Mail.TitleFor`·`ContentFor`로 읽습니다.

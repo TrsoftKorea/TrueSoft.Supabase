@@ -170,7 +170,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
 5. 계정 관리 — server transfer RPCs + withdrawal RPCs + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
-6. 우편함 — mails + RPCs
+6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "우편 설정"에서 바꾼다). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
 7. 인앱 결제 — purchases
 8. 원격 설정 — remote_config
 9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)

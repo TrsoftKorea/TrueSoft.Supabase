@@ -296,6 +296,7 @@ namespace TrueBase.Unity
             public const string MailboxDeleteClaimedBulk = "Supabase.Mailbox.Delete.ClaimedBulk";
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
             public const string MailboxCountsDetail = "Supabase.Mailbox.Counts.Detail";
+            public const string MailboxSettings = "Supabase.Mailbox.Settings";
             public const string LeaderboardTables = "Supabase.Leaderboard.Tables";
             public const string LeaderboardTable = "Supabase.Leaderboard.Table";
             public const string LeaderboardSubmit = "Supabase.Leaderboard.Submit";
@@ -2276,14 +2277,38 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>우편함 목록(RLS: 숨김·만료 제외, 현재 프로필 서버). <paramref name="category"/> 지정 시 그 분류만.</summary>
+        /// <summary>
+        /// 우편함 목록(현재 프로필 서버). 숨긴 우편은 빠지고, 기한이 지난 우편은 보관 기간 동안 함께 온다 —
+        /// <see cref="Mail.IsExpired"/> 로 가른다. <paramref name="category"/> 지정 시 그 분류만.
+        /// </summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
+            // Mail.IsExpired 가 서버 시각으로 판정하도록 기준점을 미리 받아 둔다(이미 있으면 요청 없음).
+            if (!TryReadCachedServerNow(out _))
+                _ = GetServerNowAsync();
+
             return await Mailbox.GetMailsAsync(limit, offset, category);
+        }
+
+        /// <summary><c>ts_mail_client_settings</c> — 우편 설정(만료 우편 보관 일수)을 읽습니다.</summary>
+        public static async Task<SupabaseResult<MailSettings>> GetMailSettingsAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<MailSettings>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await Mailbox.GetSettingsAsync();
+        }
+
+        /// <inheritdoc cref="GetMailSettingsAsync"/>
+        public static async Task<SupabaseResult<MailSettings>> TryGetMailSettingsAsync()
+        {
+            var r = await GetMailSettingsAsync();
+            return LogAndReturnResult(ApiLogTags.MailboxSettings, r);
         }
 
         /// <summary>우편함 메일 한 건(<c>ts_view_mail_for_user</c>: 보상 items 없으면 조회 시 읽음).</summary>
@@ -3909,7 +3934,13 @@ namespace TrueBase.Unity
             // 프로젝트가 바뀌면 서버 시각 기준점을 버린다. 같은 프로젝트 재초기화에서는 유지해
             // Resources 부트스트랩 뒤 Runtime Awake 로 이어질 때 불필요한 재조회를 하지 않는다.
             if (!sameProject)
+            {
                 ResetServerTimeCache();
+                _afterSignInRpcMissing = false;
+            }
+
+            // 우편 만료 판정(Mail.IsExpired)을 서버 시각 기준으로. 기준점이 없으면 기기 시계로 대신한다.
+            MailClock.UtcNow = () => TryReadCachedServerNow(out var serverNow, ignoreAge: true) ? serverNow : DateTimeOffset.UtcNow;
 
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;

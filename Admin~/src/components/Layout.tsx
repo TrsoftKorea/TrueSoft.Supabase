@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
-  UsersRound, Swords, Medal,
+  UsersRound, Swords, Medal, SlidersHorizontal,
   ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
@@ -151,6 +151,7 @@ export function Layout({
                 { to: '/mails/records', label: '우편 내역', icon: Inbox },
                 { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
                 { to: '/mails/categories', label: '우편 분류', icon: Tags },
+                { to: '/mails/settings', label: '우편 설정', icon: SlidersHorizontal },
               ]}
             />
           </NavSection>

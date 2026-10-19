@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.DeleteMailAsync(string mailId)
 ```
 
-우편 1건을 소프트 삭제로 우편함에서 숨깁니다. 미수령 보상이 남아 있으면 서버가 거부합니다.
+우편 1건을 소프트 삭제로 우편함에서 숨깁니다. 기한 안의 미수령 보상이 남아 있으면 서버가 거부합니다. 기한이 지난 우편은 보상이 남아 있어도 지울 수 있습니다.
 
 ```csharp
 var result = await Supabase.DeleteMailAsync(mailId);

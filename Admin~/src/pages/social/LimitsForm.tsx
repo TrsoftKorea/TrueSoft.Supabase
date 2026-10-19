@@ -40,6 +40,7 @@ export function LimitsForm({
   getAction,
   updateAction,
   fields,
+  confirmTitle = '제한값을 바꿀까요?',
 }: {
   target: ProjectTarget
   report: (e: unknown, fallback: string) => void
@@ -47,6 +48,7 @@ export function LimitsForm({
   getAction: string
   updateAction: string
   fields: LimitField[]
+  confirmTitle?: string
 }) {
   const [current, setCurrent] = useState<LimitsResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
@@ -140,7 +142,7 @@ export function LimitsForm({
 
       <ConfirmDialog
         open={confirming}
-        title="제한값을 바꿀까요?"
+        title={confirmTitle}
         description="모든 플레이어에게 곧바로 적용됩니다."
         confirmLabel="저장"
         busy={saving}

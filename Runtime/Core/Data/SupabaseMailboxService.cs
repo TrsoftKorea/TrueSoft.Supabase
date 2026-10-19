@@ -280,6 +280,45 @@ namespace TrueBase.Core.Data
             }
         }
 
+        /// <summary>우편 설정(만료 우편 보관 일수)을 읽습니다. RPC <c>ts_mail_client_settings</c>.</summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        public async Task<SupabaseResult<MailSettings>> GetSettingsAsync(string accessToken)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<MailSettings>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var url = $"{_supabaseUrl}/rest/v1/rpc/ts_mail_client_settings";
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: url,
+                jsonBody: "{}",
+                headers: CreateAuthHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<MailSettings>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<MailSettings>.Fail(
+                    response.ErrorMessage ?? response.Body ?? "mail_settings_failed");
+
+            var body = response.Body?.Trim();
+            if (string.IsNullOrEmpty(body) || body == "null")
+                return SupabaseResult<MailSettings>.Fail("mail_settings_null");
+
+            try
+            {
+                var settings = JsonConvert.DeserializeObject<MailSettings>(body);
+                if (settings == null)
+                    return SupabaseResult<MailSettings>.Fail("mail_settings_parse_null");
+
+                return SupabaseResult<MailSettings>.Success(settings);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<MailSettings>.Fail("mail_settings_parse:" + e.Message);
+            }
+        }
+
         private async Task<SupabaseResult<IReadOnlyList<Mail>>> FetchMailListAsync(string accessToken, string url)
         {
             var response = await _httpClient.SendAsync(

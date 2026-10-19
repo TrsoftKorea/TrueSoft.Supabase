@@ -108,6 +108,7 @@ from (
       ('ts_delete_claimed_mails_for_user'),
       ('ts_cleanup_expired_mails'),
       ('ts_mail_inbox_counts'),
+      ('ts_mail_client_settings'),
       ('ts_admin_send_mail'),
       ('ts_admin_upsert_game_item'),
       ('ts_admin_delete_game_item'),
@@ -276,6 +277,7 @@ from (
       ('ts_delete_mail_for_user',         'auth'),
       ('ts_delete_claimed_mails_for_user','auth'),
       ('ts_mail_inbox_counts',            'auth'),
+      ('ts_mail_client_settings',         'auth'),
       -- 리더보드
       ('ts_leaderboard_tables',           'auth'),
       ('ts_leaderboard_table',            'auth'),
@@ -331,7 +333,7 @@ from (
       'ts_my_withdrawal_status', 'ts_after_sign_in', 'ts_request_withdrawal', 'ts_transfer_my_server',
       'ts_delete_my_anon_recovery_tokens', 'ts_view_mail_for_user', 'ts_claim_mail_items',
       'ts_claim_all_mail_items', 'ts_delete_mail_for_user',
-      'ts_delete_claimed_mails_for_user', 'ts_mail_inbox_counts',
+      'ts_delete_claimed_mails_for_user', 'ts_mail_inbox_counts', 'ts_mail_client_settings',
       'ts_leaderboard_tables', 'ts_leaderboard_table', 'ts_leaderboard_submit_score',
       'ts_leaderboard_range', 'ts_leaderboard_player', 'ts_leaderboard_set_player_data',
       'ts_leaderboard_delete_my_score'

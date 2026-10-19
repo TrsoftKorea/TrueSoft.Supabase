@@ -2417,21 +2417,86 @@ create index if not exists mails_account_id_category_created_idx on public.mails
 -- 어드민 우편 내역은 계정으로 좁히지 않고 삭제된 우편도 보므로 그 인덱스들을 탈 수 없어, 전체 정렬용을 따로 둔다.
 create index if not exists mails_created_at_idx on public.mails (created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- mail_settings — 우편 설정. 행 하나만 두고 운영자가 값만 바꾼다(운영 콘솔 "우편 설정").
+--   expired_retention_days: 기한이 지난 우편을 목록에 남겨 두는 일수. 그동안 게임은 "기한 만료"로
+--   보여 주고(받기는 막힌다), 지나면 목록에서 빠지고 정리 크론이 지운다. 0 이면 만료 즉시 빠진다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.mail_settings (
+  id                     int primary key default 1 check (id = 1),
+  expired_retention_days int not null default 3 check (expired_retention_days >= 0),
+  updated_at             timestamptz not null default now(),
+  updated_by             text
+);
+
+insert into public.mail_settings (id) values (1) on conflict (id) do nothing;
+
+comment on table public.mail_settings is
+  '우편 설정(행 하나). expired_retention_days=만료 우편을 목록에 남겨 두는 일수(0이면 즉시 숨김). 기본값은 여기 한 곳에만 둔다.';
+
+alter table public.mail_settings enable row level security;
+
+revoke all on table public.mail_settings from anon, authenticated;
+
+-- 기본값을 여기 다시 적지 않는다(테이블 DEFAULT 와 두 벌이 된다). 행이 없으면 설치가 깨진 것이라 곧바로 실패시킨다.
+create or replace function public.ts_mail_settings()
+returns public.mail_settings
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare v_cfg public.mail_settings%rowtype;
+begin
+  select * into v_cfg from public.mail_settings where id = 1;
+  if not found then
+    raise exception 'mail_settings_missing';
+  end if;
+  return v_cfg;
+end;
+$$;
+
+comment on function public.ts_mail_settings() is
+  '우편 설정 행 읽기. 내부·운영 전용 — 클라이언트는 ts_mail_client_settings 를 쓴다.';
+
+revoke all on function public.ts_mail_settings() from public, anon, authenticated;
+
+-- 클라이언트용 읽기. 게임 안내 문구("만료된 우편은 N일 후 자동 삭제")의 N 을 여기서 받는다 —
+-- 게임에 박아 두면 운영 콘솔에서 바꾸는 순간 문구가 틀려진다. 아래 mails_select_own 정책도 이 값을 쓴다.
+create or replace function public.ts_mail_client_settings()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('expired_retention_days', c.expired_retention_days)
+    from public.ts_mail_settings() c;
+$$;
+
+comment on function public.ts_mail_client_settings() is
+  '우편 설정 읽기(클라이언트용). 만료 우편 보관 일수만 돌려준다. 수정은 운영 전용.';
+
+revoke all on function public.ts_mail_client_settings() from public, anon;
+grant execute on function public.ts_mail_client_settings() to authenticated;
+
 alter table public.mails enable row level security;
 
 drop policy if exists "mails_select_own" on public.mails;
 drop policy if exists "mails_update_own" on public.mails;
 
--- 본인 + profiles.user_id 일치 + 현재 세션 서버 일치 + 숨김 아님 + 기한 안 지남
--- 만료 조건은 ts_mail_inbox_counts·ts_claim_all_mail_items 와 같은 기준이다.
--- 여기만 빠지면 배지 숫자에는 안 잡히는 우편이 목록에는 보이고, 수령하면 mail_expired 로 실패한다.
+-- 본인 + profiles.user_id 일치 + 현재 세션 서버 일치 + 숨김 아님 + 기한 지난 지 보관 일수 안
+-- 목록만 만료 우편을 보관 기간 동안 더 보여 준다(게임이 "기한 만료"로 그린다). 배지 숫자(ts_mail_inbox_counts)·
+-- 받기(ts_claim_mail_items·ts_claim_all_mail_items)는 지금처럼 expires_at > now() 로 만료 우편을 뺀다 —
+-- 그래서 목록에 보이는 만료 우편은 배지에 안 잡히고, 받으면 mail_expired 로 막힌다. 게임은 Mail.IsExpired 로 가른다.
+-- 보관 일수는 (select ...) 로 감싸 쿼리당 한 번만 읽는다.
 create policy "mails_select_own"
 on public.mails for select
 using (
   account_id is not null
   and account_id = auth.uid()
   and deleted_at is null
-  and expires_at > now()
+  and expires_at > now() - make_interval(days => (select (public.ts_mail_client_settings()->>'expired_retention_days')::int))
   and exists (
     select 1
     from public.user_profiles p
@@ -2737,7 +2802,9 @@ begin
     and jsonb_typeof(m.items) = 'array'
     and jsonb_array_length(m.items) > 0;
 
-  if has_reward and m.items_claimed_at is null then
+  -- 기한이 지난 우편은 받을 수 없으니 보상이 남아 있어도 지울 수 있다. 막으면 보관 기간 동안
+  -- 받지도 지우지도 못하는 줄이 목록에 남는다.
+  if has_reward and m.items_claimed_at is null and m.expires_at > now() then
     raise exception 'cannot_delete_unclaimed';
   end if;
 
@@ -2746,7 +2813,7 @@ end;
 $$;
 
 comment on function public.ts_delete_mail_for_user(uuid) is
-  '우편함에서 숨김. 보상 미수령이면 거부. SECURITY DEFINER.';
+  '우편함에서 숨김. 기한 안의 보상 미수령이면 거부(만료 우편은 허용). SECURITY DEFINER.';
 
 revoke all on function public.ts_delete_mail_for_user(uuid) from public;
 grant execute on function public.ts_delete_mail_for_user(uuid) to authenticated;
@@ -2779,7 +2846,8 @@ begin
     from public.mails m
     where m.account_id = auth.uid()
       and m.deleted_at is null
-      and m.items_claimed_at is not null
+      -- 기한이 지난 우편도 함께 치운다 — 더는 받을 수 없어 수령한 우편과 처지가 같다.
+      and (m.items_claimed_at is not null or m.expires_at <= now())
       and (v_category is null or m.category = v_category)
       and exists (
         select 1 from public.user_profiles p
@@ -2800,7 +2868,7 @@ end;
 $$;
 
 comment on function public.ts_delete_claimed_mails_for_user(text) is
-  '수령한(items_claimed_at) 메일만 일괄 숨김. 미수령은 제외. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
+  '수령한(items_claimed_at) 메일과 기한이 지난 메일을 일괄 숨김. 기한 안의 미수령은 제외. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
 
 revoke all on function public.ts_delete_claimed_mails_for_user(text) from public;
 grant execute on function public.ts_delete_claimed_mails_for_user(text) to authenticated;
@@ -2816,6 +2884,7 @@ set search_path = public
 as $$
 declare
   n int;
+  v_cutoff timestamptz;
 begin
   if p_batch is null or p_batch < 1 then
     p_batch := 500;
@@ -2824,11 +2893,16 @@ begin
     p_batch := 10000;
   end if;
 
+  -- 보관 기간이 지난 것만 지운다. 크론이 하루 한 번이라 실제 삭제는 최대 하루 늦지만, 그 사이에도
+  -- mails_select_own 이 같은 기준으로 목록에서 빼므로 게임에는 보관 일수대로 보인다.
+  select now() - make_interval(days => c.expired_retention_days) into v_cutoff
+    from public.ts_mail_settings() c;
+
   delete from public.mails
   where id in (
     select m.id
     from public.mails m
-    where m.expires_at < now()
+    where m.expires_at < v_cutoff
     limit p_batch
   );
 
@@ -2838,7 +2912,7 @@ end;
 $$;
 
 comment on function public.ts_cleanup_expired_mails(int) is
-  'expires_at < now() 인 메일을 배치 삭제. service_role 전용 호출 권장.';
+  '만료 후 보관 기간(mail_settings.expired_retention_days)이 지난 메일을 배치 삭제. service_role 전용 호출 권장.';
 
 revoke all on function public.ts_cleanup_expired_mails(int) from public;
 grant execute on function public.ts_cleanup_expired_mails(int) to service_role;
@@ -3976,6 +4050,67 @@ revoke all on function public.ts_admin_mail_batch_detail(uuid) from public, anon
 grant execute on function public.ts_admin_mail_batch_detail(uuid) to service_role;
 revoke all on function public.ts_admin_search_mails(text,text,text,date,date,uuid,int,int) from public, anon, authenticated;
 grant execute on function public.ts_admin_search_mails(text,text,text,date,date,uuid,int,int) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 우편 설정(6절 mail_settings) — 운영 콘솔 "우편 설정" 전용 조회·수정
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_mail_settings_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+           'expired_retention_days', c.expired_retention_days,
+           'updated_at',             c.updated_at,
+           'updated_by',             c.updated_by)
+    from public.ts_mail_settings() c;
+$$;
+
+comment on function public.ts_admin_mail_settings_get() is
+  '우편 설정 조회. service_role 전용.';
+
+revoke all on function public.ts_admin_mail_settings_get() from public, anon, authenticated;
+grant execute on function public.ts_admin_mail_settings_get() to service_role;
+
+create or replace function public.ts_admin_mail_settings_update(
+  p_expired_retention_days int,
+  p_by                     text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_row public.mail_settings%rowtype;
+begin
+  -- 테이블 CHECK 는 하한만 본다. 상한은 여기서 막는다 — 보관 일수를 늘리면 그만큼 지워지지 않은 우편이
+  -- 쌓이고 목록 조회가 무거워진다. 0~30일(0은 만료 즉시 숨김). 더 키워야 하면 이 줄과 콘솔·엣지 함수를 함께 고친다.
+  if p_expired_retention_days is null or p_expired_retention_days not between 0 and 30 then
+    raise exception 'mail_settings_out_of_range';
+  end if;
+
+  insert into public.mail_settings (id, expired_retention_days, updated_at, updated_by)
+  values (1, p_expired_retention_days, now(), p_by)
+  on conflict (id) do update
+    set expired_retention_days = excluded.expired_retention_days,
+        updated_at             = now(),
+        updated_by             = excluded.updated_by
+  returning * into v_row;
+
+  return jsonb_build_object(
+           'expired_retention_days', v_row.expired_retention_days,
+           'updated_at',             v_row.updated_at,
+           'updated_by',             v_row.updated_by);
+end;
+$$;
+
+comment on function public.ts_admin_mail_settings_update(int, text) is
+  '우편 설정 수정(만료 우편 보관 일수 0~30). 범위를 벗어나면 mail_settings_out_of_range. service_role 전용.';
+
+revoke all on function public.ts_admin_mail_settings_update(int, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_mail_settings_update(int, text) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -10193,6 +10328,7 @@ grant execute on function public.ts_claim_all_mail_items(text)             to au
 grant execute on function public.ts_delete_mail_for_user(uuid)             to authenticated;
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;
 grant execute on function public.ts_mail_inbox_counts()                    to authenticated;
+grant execute on function public.ts_mail_client_settings()                 to authenticated;
 
 -- 본인 우편 RPC는 auth.uid() 기반이라 service_role로는 동작하지 않는다.
 -- 프로젝트 기본 권한 차이와 무관하게 같은 상태가 되도록 명시적으로 회수한다.

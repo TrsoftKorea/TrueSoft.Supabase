@@ -817,6 +817,22 @@ Deno.serve(async (req) => {
         return json({ ok: true, data });
       }
 
+      case "mails.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_mail_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "mails.settingsUpdate": {
+        // 범위는 ts_admin_mail_settings_update 와 같게 둔다.
+        const { data, error } = await db.rpc("ts_admin_mail_settings_update", {
+          p_expired_retention_days: intInRange(params, "expiredRetentionDays", "만료 우편 보관 일수", 0, 30),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "friends.settingsGet": {
         const { data, error } = await db.rpc("ts_admin_friend_settings_get");
         if (error) throw new Error(error.message);

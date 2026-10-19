@@ -24,6 +24,7 @@
 | [`DeleteClaimedMailsAsync`](/guide/mailbox/delete-claimed) | 수령한 우편 일괄 삭제, 분류 필터 |
 | [`GetUnclaimedMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 메일 수 |
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미수령 수 + 분류별 세부 내역 |
+| [`GetMailSettingsAsync`](/guide/mailbox/settings) | 만료 우편 보관 일수 |
 
 ::: tip
 보상이 첨부된 우편을 수령하려면 먼저 [아이템 핸들러 등록](/guide/mailbox/item-handler)을 완료하세요.

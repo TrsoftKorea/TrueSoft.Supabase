@@ -290,6 +290,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync() =>
             SupabaseSDK.TryGetMailInboxCountsAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.TryGetMailSettingsAsync"/>
+        public static Task<SupabaseResult<MailSettings>> GetMailSettingsAsync() =>
+            SupabaseSDK.TryGetMailSettingsAsync();
+
         // ── 리더보드 ──────────────────────────────────────────────────────────
         // 대상은 코드 문자열이 아니라 생성 클래스 타입으로 지정합니다:
         //   Supabase.SubmitScoreAsync<ArenaLeaderboard>(1250)

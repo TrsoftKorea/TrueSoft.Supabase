@@ -7,14 +7,14 @@ Task<SupabaseResult<IReadOnlyList<Mail>>> Supabase.GetMailsAsync(
     string category = null)
 ```
 
-내 우편함 목록을 최신순으로 조회합니다. 삭제됐거나 만료된 우편, 다른 서버의 우편은 제외됩니다.
+내 우편함 목록을 최신순으로 조회합니다. 삭제한 우편과 다른 서버의 우편은 제외됩니다. 기한이 지난 우편은 [보관 기간](./settings) 동안 함께 오므로 `IsExpired`로 "기한 만료"를 표시하고 받기 버튼을 막습니다.
 
 ```csharp
 var result = await Supabase.GetMailsAsync();
 if (result.IsSuccess)
 {
     foreach (var mail in result.Data)
-        AddMailRow(mail.Title, mail.IsClaimed);
+        AddMailRow(mail.Title, mail.IsClaimed, expired: mail.IsExpired);
 }
 ```
 
@@ -37,7 +37,9 @@ if (result.IsSuccess)
 | `.Content` | `string` | 본문(기본 언어) |
 | `.IsClaimed` | `bool` | 수령 여부. 텍스트 우편은 열람, 보상 우편은 수령 시 `true` |
 | `.Items` | `IReadOnlyList<MailItemPayload>` | 첨부 보상 |
-| `.HasUnclaimedItems` | `bool` | 미수령 보상 여부 |
+| `.HasUnclaimedItems` | `bool` | 받을 수 있는 보상이 남았는지. 기한이 지났으면 `false` |
+| `.IsExpired` | `bool` | 기한이 지났는지. 서버 시각을 받아 둔 뒤면 서버 시각으로 판정합니다 |
+| `.ExpiresAt` | `DateTimeOffset` | 받을 수 있는 기한 |
 | `.Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
 **에러 코드**

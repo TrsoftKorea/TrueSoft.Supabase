@@ -13,6 +13,7 @@ import Players from './pages/Players'
 import Mails from './pages/Mails'
 import MailRecords from './pages/MailRecords'
 import MailCategories from './pages/MailCategories'
+import MailSettings from './pages/MailSettings'
 import MailSchedules from './pages/MailSchedules'
 import Leaderboard from './pages/Leaderboard'
 import SchemaChanges from './pages/SchemaChanges'
@@ -117,6 +118,7 @@ export default function App() {
         <Route path="/mails/records" element={<MailRecords target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/categories" element={<MailCategories target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/schedules" element={<MailSchedules target={target} onUnauthenticated={signOut} />} />
+        <Route path="/mails/settings" element={<MailSettings target={target} onUnauthenticated={signOut} />} />
         <Route path="/leaderboard" element={<Leaderboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />

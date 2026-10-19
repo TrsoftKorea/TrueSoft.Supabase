@@ -74,7 +74,11 @@ namespace TrueBase.Core.Data
             return Content;
         }
 
-        public bool IsExpired => DateTimeOffset.UtcNow > ExpiresAt;
+        /// <summary>
+        /// 기한이 지났는지. 만료 우편도 보관 기간(<see cref="MailSettings.ExpiredRetentionDays"/>) 동안 목록에 오므로
+        /// 이 값으로 "기한 만료" 표시와 받기 버튼을 가른다. 서버 시각을 받아 둔 뒤면 서버 시각으로, 그 전엔 기기 시계로 판정한다.
+        /// </summary>
+        public bool IsExpired => MailClock.UtcNow() > ExpiresAt;
 
         /// <summary>수령(첨부 없는 텍스트는 열람, 보상은 수령) 완료 여부. <c>items_claimed_at</c>이 채워졌으면 true.</summary>
         public bool IsClaimed => ItemsClaimedAt != null;
@@ -86,6 +90,23 @@ namespace TrueBase.Core.Data
             && !IsExpired;
 
         public bool CanDeleteFromInbox => !HasUnclaimedItems;
+    }
+
+    /// <summary>
+    /// <see cref="Mail.IsExpired"/> 가 쓰는 시계. Unity 계층이 서버 시각 기준점으로 바꿔 끼운다 —
+    /// 기기 시계를 그대로 쓰면 시간을 바꾼 기기에서 만료 표시와 서버 판정(<c>mail_expired</c>)이 어긋난다.
+    /// </summary>
+    internal static class MailClock
+    {
+        internal static Func<DateTimeOffset> UtcNow = () => DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>우편 설정(<c>ts_mail_client_settings</c>). 운영 콘솔 "우편 설정"에서 바꾼다.</summary>
+    public sealed class MailSettings
+    {
+        /// <summary>기한이 지난 우편을 목록에 남겨 두는 일수. 지나면 목록에서 빠지고 서버가 지운다. 0이면 만료 즉시 빠진다.</summary>
+        [JsonProperty("expired_retention_days")]
+        public int ExpiredRetentionDays { get; set; }
     }
 
     /// <summary>메일 보상 수령 핸들러가 반환하는 한 줄 결과(로그·UI용).</summary>

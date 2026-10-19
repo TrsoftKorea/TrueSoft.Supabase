@@ -57,6 +57,16 @@ namespace TrueBase.Unity
             return await _mailbox.GetMailByIdAsync(token, mailId);
         }
 
+        /// <summary>우편 설정(만료 우편 보관 일수)을 반환합니다.</summary>
+        public async Task<SupabaseResult<MailSettings>> GetSettingsAsync()
+        {
+            var token = RequireToken(_sessionGetter?.Invoke());
+            if (token == null)
+                return SupabaseResult<MailSettings>.Fail("auth_not_signed_in");
+
+            return await _mailbox.GetSettingsAsync(token);
+        }
+
         /// <summary>미수령 개수와 분류별 세부 내역을 함께 반환합니다.</summary>
         public Task<SupabaseResult<MailInboxCounts>> GetInboxCountsAsync() =>
             GetInboxCountsAsync(_sessionGetter?.Invoke());
