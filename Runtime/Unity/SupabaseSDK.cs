@@ -519,13 +519,16 @@ namespace TrueBase.Unity
                 RememberLastSignInMethod(SignInMethodKind.Google);
                 if (_currentSession.likely_brand_new_google_signup)
                 {
-                    // 신규 가입은 닉네임을 덮어쓴 뒤에 프로필을 읽어야 로그인 결과에 바뀐 닉네임이 실린다 — 묶음 호출을 쓰지 않는다.
+                    // 신규 가입은 닉네임을 덮어쓴 뒤에 프로필을 만들어야 로그인 결과에 바뀐 닉네임이 실린다 — 묶음 호출은 덮어쓰기 뒤에 한다.
+                    // 게이트를 먼저 타는 건 신규 가입 판정이 틀렸을 때(예약 중인 기존 계정)를 대비한 것이다.
                     var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
                     if (gated != null)
                         return gated;
 
                     await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
-                    await TryEnsureProfileRowAfterSignInAsync();
+                    var ensured = await EnsureProfileAfterSignInAsync();
+                    if (ensured != null)
+                        return ensured;
                 }
                 else
                 {
@@ -1949,8 +1952,16 @@ namespace TrueBase.Unity
             }
 
             // RestoreSessionOnStart가 꺼져 있어도, 저장된 refresh_token이 있으면 동일 계정을 이어갑니다.
+            // 복원이 로그인 후처리(탈퇴 게이트·프로필 보장)까지 끝냈으면 아래에서 다시 하지 않는다.
+            var postSignInDone = false;
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
-                await RestoreSessionAsyncCore(allowRecreateOnDeletion: true);
+            {
+                var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: true);
+                // 탈퇴 예약 확인을 못 끝내 멈춘 경우 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
+                if (restored != null && restored.ErrorCode == SupabaseErrorCode.WithdrawalStatusUnconfirmed)
+                    return restored;
+                postSignInDone = restored != null && restored.IsSuccess && IsLoggedIn;
+            }
 
             // 로컬 토큰이 사라진(재설치/로그아웃/탈퇴 예약 후 ClearSession) 경우를 위해 서버의 best-effort 복구 토큰을 1회 시도합니다.
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
@@ -1980,7 +1991,9 @@ namespace TrueBase.Unity
                         // 복구로 들어온 것도 로그인이다 — 아래 일반 경로와 같은 뒷정리를 해야 한다.
                         // 빠뜨리면 last_activity_at 이 안 찍히고(재설치 복구가 "접속"으로 안 잡힌다),
                         // _pendingSignInProfile 이 비어 로그인 결과의 닉네임·서버 코드가 빈 채로 나간다.
-                        await EnsureProfileAfterSignInAsync();
+                        var ensured = await EnsureProfileAfterSignInAsync();
+                        if (ensured != null)
+                            return ensured;
 
                         SaveSessionToStorage();
                         return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -1994,11 +2007,16 @@ namespace TrueBase.Unity
                 {
                     RememberLastSignInMethod(SignInMethodKind.Anonymous);
 
-                    var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                    if (reserved != null)
-                        return reserved;
+                    if (!postSignInDone)
+                    {
+                        var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
+                        if (reserved != null)
+                            return reserved;
 
-                    await EnsureProfileAfterSignInAsync();
+                        var ensured = await EnsureProfileAfterSignInAsync();
+                        if (ensured != null)
+                            return ensured;
+                    }
 
                     SaveSessionToStorage();
                     return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -2026,17 +2044,16 @@ namespace TrueBase.Unity
                 // 크리티컬 패스에서 순차 대기하지 않고 병렬로 실행한 뒤 반환 전에 함께 완료를 기다린다.
                 var recoveryTask = RunAnonymousRecoveryWritesAsync(result.Data);
 
-                if (!_isRecreatingAfterWithdrawalDelete)
-                {
-                    // 방금 생성한 신규 익명 계정은 탈퇴 예약·삭제 대상일 수 없다(계정 복구·세션 복원은 이 지점 이전에 처리됨).
-                    // 따라서 withdrawal-guard(Edge Function)·예약 게이트(RPC) 호출은 항상 no-op이므로 생략해 로그인 지연을 줄인다.
-                    // 단, 게이트가 not-scheduled일 때 수행하던 로컬 정리(직전 세션의 탈퇴 게이트 상태·취소 토큰 제거)는 그대로 수행한다.
-                    ClearStoredWithdrawalGateStatus();
-                    ClearStoredWithdrawalCancelToken();
-                }
+                // 방금 생성한 신규 익명 계정은 탈퇴 예약·삭제 대상일 수 없다(계정 복구·세션 복원은 이 지점 이전에 처리됨).
+                // 따라서 withdrawal-guard(Edge Function)·예약 게이트(RPC) 호출은 항상 no-op이므로 생략해 로그인 지연을 줄인다.
+                // 남아 있는 탈퇴 게이트 상태·취소 토큰은 직전 계정 것이라 지운다(탈퇴 삭제 뒤 재생성 중이어도 삭제된 계정 것이다).
+                ClearStoredWithdrawalGateStatus();
+                ClearStoredWithdrawalCancelToken();
 
-                await EnsureProfileAfterSignInAsync();
+                var ensured = await EnsureProfileAfterSignInAsync();
                 await recoveryTask;
+                if (ensured != null)
+                    return ensured;
             }
 
             return result;
@@ -3834,24 +3851,25 @@ namespace TrueBase.Unity
         /// 자동 로그인 정책(로그아웃 상태 여부)과 무관하게 "명시적으로" 복원을 시도할 때 사용합니다.
         /// 앱 시작 자동 복원은 <see cref="TryAutoLoginOnStartAsync"/>를 사용하세요.
         /// </remarks>
-        public static Task<bool> RestoreSessionAsync() =>
-            RestoreSessionAsyncCore(allowRecreateOnDeletion: false);
+        public static async Task<bool> RestoreSessionAsync() =>
+            (await RestoreSessionAsyncCore(allowRecreateOnDeletion: false))?.IsSuccess == true;
 
         /// <summary>저장된 refresh_token으로 세션 복원 후 탈퇴 가드·예약 게이트·프로필 보장을 수행합니다. 갱신 실패 시 저장 토큰을 삭제합니다.</summary>
         /// <param name="allowRecreateOnDeletion">탈퇴 유예 만료로 계정이 삭제 대상일 때 같은 방식으로 새 계정을 자동 생성할지 여부.
         /// 사용자가 직접 누른 로그인 흐름에서만 true, 앱 시작 자동 복원에서는 false(자동 재가입 방지).</param>
-        private static async Task<bool> RestoreSessionAsyncCore(bool allowRecreateOnDeletion)
+        /// <returns>복원할 토큰이 없거나 토큰 갱신에 실패하면 null. 복원했으면 후처리 결과(게이트가 막았으면 그 실패).</returns>
+        private static async Task<SupabaseResult<SupabaseSession>> RestoreSessionAsyncCore(bool allowRecreateOnDeletion)
         {
             if (!await EnsureInitializedAsync())
-                return false;
+                return null;
 
             if (_bootstrap?.AuthService == null)
-                return false;
+                return null;
 
             var refreshToken = PlayerPrefs.GetString(RefreshTokenKey, null);
 
             if (string.IsNullOrWhiteSpace(refreshToken))
-                return false;
+                return null;
 
             var result = await _bootstrap.AuthService.RefreshSessionAsync(refreshToken);
             if (result.IsSuccess && result.Data != null)
@@ -3864,14 +3882,11 @@ namespace TrueBase.Unity
                 var gated = await RunPostSignInStepsAsync(
                     method == SignInMethodKind.Unknown ? SignInMethodKind.Anonymous : method,
                     allowRecreateOnDeletion);
-                if (gated != null)
-                    return gated.IsSuccess;
-
-                return true;
+                return gated ?? SupabaseResult<SupabaseSession>.Success(_currentSession);
             }
 
             PlayerPrefs.DeleteKey(RefreshTokenKey);
-            return false;
+            return null;
         }
 
         /// <summary><see cref="SupabaseUnityBootstrap.Initialize"/>에서 호출합니다. 서비스 인스턴스를 묶고 캐시를 초기화합니다.</summary>
@@ -4157,14 +4172,15 @@ namespace TrueBase.Unity
         /// </summary>
         private static async Task<SupabaseResult<SupabaseSession>> RunWithdrawalGatesAfterSignInAsync(
             SignInMethodKind method,
-            bool allowRecreateOnDeletion = true)
+            bool allowRecreateOnDeletion = true,
+            bool knownScheduled = false)
         {
             if (_isRecreatingAfterWithdrawalDelete)
                 return null;
 
             // 탈퇴 예약이 아예 없으면 가드도 게이트도 no-op 이다. 상태 조회 한 번으로 갈라
-            // 로그인마다 withdrawal-guard(Edge Function)를 부르지 않는다.
-            if (await HasNoWithdrawalScheduleAsync())
+            // 로그인마다 withdrawal-guard(Edge Function)를 부르지 않는다. 예약이 있다고 이미 알면 묻지 않는다.
+            if (!knownScheduled && await HasNoWithdrawalScheduleAsync())
             {
                 ClearStoredWithdrawalGateStatus();
                 ClearStoredWithdrawalCancelToken();
@@ -4644,51 +4660,92 @@ namespace TrueBase.Unity
                     _pendingSignInProfile.WithdrawnAtIso, selectedCode);
         }
 
+        private enum OneCallSignInOutcome
+        {
+            /// <summary>탈퇴 예약 없음 — 프로필 보장·조회까지 끝났다.</summary>
+            Completed,
+
+            /// <summary>탈퇴 예약이 있다 — 서버는 아무것도 바꾸지 않았다. 탈퇴 가드·예약 게이트로 넘긴다.</summary>
+            WithdrawalScheduled,
+
+            /// <summary>호출 자체가 실패해 아무것도 모른다 — 단계별 순서로 처음부터 처리한다.</summary>
+            Failed,
+        }
+
+        /// <summary>이 프로젝트 DB 에 <c>ts_after_sign_in</c> 이 없음을 확인했다. 이번 실행 동안 묶음 호출을 건너뛴다.</summary>
+        private static bool _afterSignInRpcMissing;
+
         /// <summary>
         /// 로그인 직후 단계(탈퇴 예약 확인·프로필 보장·프로필·닉네임·서버 코드)를 <c>ts_after_sign_in</c> 한 번으로 끝냅니다.
-        /// 탈퇴 예약이 없을 때만 끝까지 처리하고 true 를 돌려줍니다. 예약이 있거나 호출이 실패하면 아무것도 바꾸지 않고
-        /// false — 호출자가 기존 순서(탈퇴 가드·예약 게이트 → 프로필 보장)로 처리합니다.
+        /// <see cref="OneCallSignInOutcome.Completed"/> 가 아니면 호출자가 기존 순서(탈퇴 가드·예약 게이트 → 프로필 보장)로
+        /// 처리합니다. 서버 쪽 처리가 반영된 뒤 응답만 유실돼도 기존 순서가 같은 일을 다시 할 뿐이라 결과는 같습니다.
         /// <para>
         /// 단계마다 따로 부르면 앞 단계 답을 기다리는 왕복이 서너 번 쌓이고, 서버가 쉬다 깨면 왕복마다 첫 연결
         /// 지연이 붙어 자동 로그인이 10초를 넘겼다(2026-10-16 DefenceR 실측).
         /// </para>
         /// </summary>
-        private static async Task<bool> TryCompleteSignInInOneCallAsync()
+        private static async Task<OneCallSignInOutcome> TryCompleteSignInInOneCallAsync()
         {
+            if (_afterSignInRpcMissing)
+                return OneCallSignInOutcome.Failed;
+
             var svc = _bootstrap?.PublicProfileService;
             var s = _currentSession;
             if (svc == null || s == null || s.User == null)
-                return false;
+                return OneCallSignInOutcome.Failed;
             if (string.IsNullOrWhiteSpace(s.AccessToken) || string.IsNullOrWhiteSpace(s.User.Id))
-                return false;
+                return OneCallSignInOutcome.Failed;
 
+            SupabaseResult<AfterSignInSnapshot> r;
             try
             {
-                var r = await svc.AfterSignInAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
-                if (r == null || !r.IsSuccess || r.Data == null)
-                {
-                    Debug.LogWarning("[Supabase] 로그인 후처리 묶음 호출 실패 — 단계별로 다시 처리합니다: " + (r?.ErrorCode ?? "unknown"));
-                    return false;
-                }
-
-                if (!string.IsNullOrEmpty(r.Data.WithdrawnAtIso) || r.Data.Profile == null)
-                    return false;
-
-                // 탈퇴 예약이 없음이 확인됐다 — 예약 게이트가 not-scheduled 일 때 하던 로컬 정리와 같다.
-                ClearStoredWithdrawalGateStatus();
-                ClearStoredWithdrawalCancelToken();
-
-                _pendingSignInProfile = r.Data.Profile;
-                if (r.Data.Profile.ServerCode.Length > 0)
-                    await SyncSelectedServerAfterSignInAsync(svc, s.AccessToken, r.Data.Profile.ServerCode);
-
-                return true;
+                r = await svc.AfterSignInAsync(s.AccessToken, s.User.Id, s.User.PlayerUserId, GetPlatformString());
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[Supabase] 로그인 후처리 묶음 호출 중 예외 — 단계별로 다시 처리합니다: " + e.Message);
-                return false;
+                return OneCallSignInOutcome.Failed;
             }
+
+            if (r == null || !r.IsSuccess || r.Data == null)
+            {
+                if (r?.ErrorCode == SupabasePublicProfileService.AfterSignInRpcMissing)
+                {
+                    _afterSignInRpcMissing = true;
+                    Debug.LogWarning("[Supabase] DB 에 ts_after_sign_in 이 없어 로그인 후처리를 단계별로 합니다(느림). install.sql 을 다시 적용하세요.");
+                }
+                else
+                {
+                    Debug.LogWarning("[Supabase] 로그인 후처리 묶음 호출 실패 — 단계별로 다시 처리합니다: " + (r?.ErrorCode ?? "unknown"));
+                }
+                return OneCallSignInOutcome.Failed;
+            }
+
+            if (!string.IsNullOrEmpty(r.Data.WithdrawnAtIso))
+                return OneCallSignInOutcome.WithdrawalScheduled;
+            if (r.Data.Profile == null)
+                return OneCallSignInOutcome.Failed;
+
+            // 탈퇴 예약이 없음이 확인됐다 — 예약 게이트가 not-scheduled 일 때 하던 로컬 정리와 같다.
+            ClearStoredWithdrawalGateStatus();
+            ClearStoredWithdrawalCancelToken();
+
+            _pendingSignInProfile = r.Data.Profile;
+
+            // 서버 이주는 덤이다(best-effort). 여기서 실패해도 후처리는 끝난 것이다.
+            if (r.Data.Profile.ServerCode.Length > 0)
+            {
+                try
+                {
+                    await SyncSelectedServerAfterSignInAsync(svc, s.AccessToken, r.Data.Profile.ServerCode);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[Supabase] 로그인 후 서버 이주 중 예외: " + e.Message);
+                }
+            }
+
+            return OneCallSignInOutcome.Completed;
         }
 
         /// <summary>
@@ -4699,22 +4756,49 @@ namespace TrueBase.Unity
             SignInMethodKind method,
             bool allowRecreateOnDeletion = true)
         {
-            if (await TryCompleteSignInInOneCallAsync())
+            var outcome = await TryCompleteSignInInOneCallAsync();
+            if (outcome == OneCallSignInOutcome.Completed)
                 return null;
 
-            var gated = await RunWithdrawalGatesAfterSignInAsync(method, allowRecreateOnDeletion);
+            var knownScheduled = outcome == OneCallSignInOutcome.WithdrawalScheduled;
+            var gated = await RunWithdrawalGatesAfterSignInAsync(method, allowRecreateOnDeletion, knownScheduled);
             if (gated != null)
                 return gated;
+
+            if (knownScheduled)
+                return StopSignInWithdrawalUnconfirmed();
 
             await TryEnsureProfileRowAfterSignInAsync();
             return null;
         }
 
-        /// <summary>탈퇴 게이트를 이미 거친 경로의 프로필 보장. 한 번 왕복으로 끝내고, 안 되면 단계별로 처리합니다.</summary>
-        private static async Task EnsureProfileAfterSignInAsync()
+        /// <summary>
+        /// 탈퇴 게이트를 이미 거친 경로의 프로필 보장. 한 번 왕복으로 끝내고, 안 되면 단계별로 처리합니다.
+        /// 그런데도 탈퇴 예약이 남아 있으면(앞선 게이트가 상태 조회에 실패해 통과시킨 경우) 로그인을 멈춘 결과를, 아니면 null 을 돌려줍니다.
+        /// </summary>
+        private static async Task<SupabaseResult<SupabaseSession>> EnsureProfileAfterSignInAsync()
         {
-            if (!await TryCompleteSignInInOneCallAsync())
-                await TryEnsureProfileRowAfterSignInAsync();
+            var outcome = await TryCompleteSignInInOneCallAsync();
+            if (outcome == OneCallSignInOutcome.Completed)
+                return null;
+            if (outcome == OneCallSignInOutcome.WithdrawalScheduled)
+                return StopSignInWithdrawalUnconfirmed();
+
+            await TryEnsureProfileRowAfterSignInAsync();
+            return null;
+        }
+
+        /// <summary>
+        /// 탈퇴 예약이 있는 계정인데 가드·게이트가 막지도 지우지도 못했을 때(상태 조회·가드 호출 실패) 로그인을 멈춥니다.
+        /// 통과시키면 예약 중인 계정으로 본편에 들어가 버린다. 저장 토큰은 남겨 다음 로그인·자동 로그인에서 게이트를 다시 탄다.
+        /// </summary>
+        private static SupabaseResult<SupabaseSession> StopSignInWithdrawalUnconfirmed()
+        {
+            Debug.LogWarning("[Supabase] 탈퇴 예약 계정의 상태 확인을 끝내지 못해 로그인을 멈춥니다. 다시 로그인하면 이어서 처리합니다.");
+            SaveSessionToStorage();
+            ClearSession(clearStorage: false, deleteUserSessionRow: false);
+            SetAutoLoginBlocked(false);
+            return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.WithdrawalStatusUnconfirmed);
         }
 
         /// <summary>현재 Unity 런타임 플랫폼을 소문자 문자열로 반환합니다 (android, ios, windows, macos, webgl 등).</summary>

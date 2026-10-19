@@ -409,9 +409,10 @@ begin
 
   insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform, last_activity_at)
   values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''), now())
+  -- withdrawn_at 은 갱신하지 않는다. 예전엔 null 로 지웠는데, SDK 의 탈퇴 확인이 통신 실패로 통과된 로그인이
+  -- 여기 오면 이용자 모르게 탈퇴 예약이 사라졌다. 예약 취소는 취소 토큰(ts_withdrawal_cancel_redeem)으로만 한다.
   on conflict (account_id) do update set
     user_id          = excluded.user_id,
-    withdrawn_at     = excluded.withdrawn_at,
     server_id        = coalesce(user_profiles.server_id, excluded.server_id),
     country_code     = coalesce(user_profiles.country_code, excluded.country_code),
     platform         = excluded.platform,
@@ -2254,8 +2255,7 @@ grant execute on function public.ts_my_withdrawal_status() to authenticated;
 -- ---------------------------------------------------------------------------
 -- 이 단계들을 따로 부르면 앞 단계 답을 기다리는 왕복이 서너 번 쌓이고, 서버가 쉬다 깨면 왕복마다 첫 연결
 -- 지연이 붙어 로그인이 10초를 넘긴다. 탈퇴 예약(withdrawn_at)이 있으면 프로필을 건드리지 않고 그 값만
--- 돌려준다 — ts_ensure_my_profile 은 withdrawn_at 을 지우므로, 그런 계정은 SDK 가 탈퇴 가드·예약 게이트를
--- 먼저 태운 뒤 기존 순서로 처리한다.
+-- 돌려준다 — 그런 계정은 SDK 가 탈퇴 가드(유예 만료 삭제)·예약 게이트(로그인 차단)를 태워야 한다.
 create or replace function public.ts_after_sign_in(
   p_user_id  text default null,
   p_platform text default null

@@ -140,6 +140,7 @@ bool Handle(SupabaseResult result)
 | `WithdrawalCancelJwtVerifyMustBeOff` | 재사용 검증을 위해 Supabase JWT 검증 설정이 꺼져 있어야 합니다 |
 | `WithdrawalCancelIssueFailed` | 탈퇴 취소 토큰 발급에 실패했습니다 |
 | `WithdrawalDeletedRecreateFailed` | 탈퇴 계정 재가입에 실패했습니다 |
+| `WithdrawalStatusUnconfirmed` | 탈퇴 예약이 있는 계정인데 확인 중 통신이 실패해 로그인을 멈췄습니다. 다시 로그인하면 이어서 처리합니다 |
 
 ## 유저 데이터
 

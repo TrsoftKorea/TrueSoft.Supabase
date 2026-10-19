@@ -164,6 +164,9 @@ namespace TrueBase.Core.Common
         /// <summary>탈퇴 계정 재가입에 실패했습니다.</summary>
         public const string WithdrawalDeletedRecreateFailed = "withdrawal_deleted_recreate_failed";
 
+        /// <summary>탈퇴 예약이 있는 계정인데 예약 확인·삭제 처리를 끝내지 못해 로그인을 멈췄습니다. 다시 로그인하면 이어서 처리합니다.</summary>
+        public const string WithdrawalStatusUnconfirmed = "withdrawal_status_unconfirmed";
+
         /// <summary>지원하지 않는 로그인 방식입니다(내부 오류).</summary>
         public const string InvalidSignInMethod = "invalid_signin_method";
 

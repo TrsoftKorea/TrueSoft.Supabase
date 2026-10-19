@@ -18,6 +18,9 @@ namespace TrueBase.Core.Data
     {
         private const int NameMaxLength = 64;
 
+        /// <summary><see cref="AfterSignInAsync"/> 가 DB 에 <c>ts_after_sign_in</c> 이 없을 때 돌려주는 사유. SDK 내부에서만 쓴다.</summary>
+        internal const string AfterSignInRpcMissing = "after_sign_in_rpc_missing";
+
         /// <summary>PostgREST <c>IS NOT NULL</c> — 활성 행만 (<c>account_id</c>가 있는 프로필).</summary>
         private const string ActiveProfileFilter = "account_id=is.not_null";
 
@@ -211,7 +214,7 @@ namespace TrueBase.Core.Data
 
         /// <summary>
         /// 로그인 직후, 현재 계정(account_id)에 대응하는 profiles 행이 항상 존재하도록 합니다.
-        /// RPC <c>ts_ensure_my_profile</c>(SECURITY DEFINER)로 upsert하며, <c>withdrawn_at</c>은 null로 정리합니다.
+        /// RPC <c>ts_ensure_my_profile</c>(SECURITY DEFINER)로 upsert합니다. 탈퇴 예약(<c>withdrawn_at</c>)은 건드리지 않습니다 — 취소는 취소 토큰으로만 합니다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). 필수.</param>
@@ -257,6 +260,7 @@ namespace TrueBase.Core.Data
         /// <summary>
         /// 로그인 직후 단계(탈퇴 예약 확인·프로필 보장·내 프로필·닉네임·서버 코드)를 한 번 왕복으로 처리합니다. RPC <c>ts_after_sign_in</c>.
         /// 탈퇴 예약이 있으면 프로필을 건드리지 않고 <see cref="AfterSignInSnapshot.WithdrawnAtIso"/>만 채워 돌려줍니다.
+        /// DB 에 함수가 없으면 <see cref="AfterSignInRpcMissing"/> 으로 실패합니다.
         /// </summary>
         internal async Task<SupabaseResult<AfterSignInSnapshot>> AfterSignInAsync(
             string accessToken,
@@ -271,7 +275,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<AfterSignInSnapshot>.Fail("account_id_empty");
 
             var stable = string.IsNullOrWhiteSpace(playerUserId) ? accountId.Trim() : playerUserId.Trim();
-            var url = $"{_supabaseUrl}/rest/v1/rpc/ts_after_sign_in";
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_after_sign_in";
             var bodyJson = _jsonSerializer.ToJson(new EnsureMyProfileRpcBody { p_user_id = stable, p_platform = platform });
 
             var response = await _httpClient.SendAsync(
@@ -282,6 +286,10 @@ namespace TrueBase.Core.Data
 
             if (response == null)
                 return SupabaseResult<AfterSignInSnapshot>.Fail(SupabaseErrorCode.NetworkError);
+
+            // RPC 엔드포인트의 404 는 함수가 없다는 뜻이다 — SDK 만 먼저 올리고 install.sql 을 다시 돌리지 않은 프로젝트.
+            if (response.StatusCode == 404)
+                return SupabaseResult<AfterSignInSnapshot>.Fail(AfterSignInRpcMissing);
 
             if (response.IsSuccess == false)
                 return SupabaseResult<AfterSignInSnapshot>.Fail(response.ErrorMessage ?? response.Body ?? "after_sign_in_failed");
