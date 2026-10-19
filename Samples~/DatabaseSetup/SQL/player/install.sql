@@ -2846,8 +2846,10 @@ begin
     from public.mails m
     where m.account_id = auth.uid()
       and m.deleted_at is null
-      -- 기한이 지난 우편도 함께 치운다 — 더는 받을 수 없어 수령한 우편과 처지가 같다.
-      and (m.items_claimed_at is not null or m.expires_at <= now())
+      -- 받은 우편만. 기한이 지난 미수령 우편은 넣지 않는다 — 게임이 우편함을 열 때마다 이 함수를 부르면
+      -- 보관 기간 동안 "기한 만료"로 보여야 할 줄이 열자마자 사라진다(2026-10-19 DefenceR 에서 실제로 그랬다).
+      -- 만료 우편은 보관 기간이 끝나면 ts_cleanup_expired_mails 가 지운다.
+      and m.items_claimed_at is not null
       and (v_category is null or m.category = v_category)
       and exists (
         select 1 from public.user_profiles p
@@ -2868,7 +2870,7 @@ end;
 $$;
 
 comment on function public.ts_delete_claimed_mails_for_user(text) is
-  '수령한(items_claimed_at) 메일과 기한이 지난 메일을 일괄 숨김. 기한 안의 미수령은 제외. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
+  '수령한(items_claimed_at) 메일만 일괄 숨김. 미수령(만료 포함)은 제외. p_category=null이면 전체 분류. 반환: 처리 행 수. SECURITY DEFINER.';
 
 revoke all on function public.ts_delete_claimed_mails_for_user(text) from public;
 grant execute on function public.ts_delete_claimed_mails_for_user(text) to authenticated;

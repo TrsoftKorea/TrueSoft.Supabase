@@ -4,7 +4,7 @@
 Task<SupabaseResult<int>> Supabase.DeleteClaimedMailsAsync(string category = null)
 ```
 
-수령한 우편과 기한이 지난 우편을 일괄로 숨깁니다. 기한 안의 미수령 우편은 남습니다.
+수령한 우편만 일괄로 숨깁니다. 미수령 우편은 기한이 지났어도 남습니다. 기한이 지난 우편은 보관 기간이 끝나면 서버가 지웁니다.
 
 ```csharp
 var result = await Supabase.DeleteClaimedMailsAsync();
