@@ -140,7 +140,7 @@ bool Handle(SupabaseResult result)
 | `WithdrawalCancelJwtVerifyMustBeOff` | 재사용 검증을 위해 Supabase JWT 검증 설정이 꺼져 있어야 합니다 |
 | `WithdrawalCancelIssueFailed` | 탈퇴 취소 토큰 발급에 실패했습니다 |
 | `WithdrawalDeletedRecreateFailed` | 탈퇴 계정 재가입에 실패했습니다 |
-| `WithdrawalStatusUnconfirmed` | 탈퇴 예약이 있는 계정인데 확인 중 통신이 실패해 로그인을 멈췄습니다. 다시 로그인하면 이어서 처리합니다 |
+| `WithdrawalStatusUnconfirmed` | 탈퇴 예약 상태를 확인하지 못했거나, 유예가 끝난 계정을 삭제하지 못해 로그인을 멈췄습니다. 통신 실패면 다시 로그인할 때 이어서 처리합니다. 계속 반복되면 콘솔의 Error 로그를 보고 `withdrawal-guard` 배포와 시크릿을 확인하세요 |
 
 ## 유저 데이터
 
@@ -164,8 +164,9 @@ bool Handle(SupabaseResult result)
 | `MailNotFound` | 해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다 |
 | `MailDeleted` | 이미 삭제한 우편입니다 |
 | `MailExpired` | 수령 기간이 지난 우편입니다 |
+| `MailSettingsMissing` | 우편 설정이 DB에 없습니다. 설치가 깨진 상태로, 우편 목록 조회도 함께 실패합니다 |
 | `AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
-| `CannotDeleteUnclaimed` | 보상을 수령하지 않은 우편은 삭제할 수 없습니다 |
+| `CannotDeleteUnclaimed` | 기한 안의 보상을 수령하지 않은 우편은 삭제할 수 없습니다 |
 | `Forbidden` | 내 우편이 아닙니다 |
 | `ForbiddenServer` | 지금 접속한 서버의 우편이 아닙니다 |
 | `InvalidItemsPayload` | 우편의 보상 아이템 형식이 올바르지 않습니다 |

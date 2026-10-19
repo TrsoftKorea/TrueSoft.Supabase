@@ -166,18 +166,28 @@ namespace TrueBase.Unity
             if (token == null)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("auth_not_signed_in");
 
-            var list = await _mailbox.GetMailsAsync(token, limit: 200, offset: 0, category: category);
-            if (!list.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(list.ErrorCode ?? "mail_list_failed");
-
-            foreach (var m in list.Data ?? Array.Empty<Mail>())
+            // 수령 RPC 는 개수 제한 없이 전부 받으므로 검증도 목록 끝까지 본다. 한 쪽만 보면 만료 우편(보관 기간 동안
+            // 목록에 남음)이 자리를 차지해 뒤쪽 우편의 핸들러 누락을 놓치고, 그 보상은 지급 없이 수령 처리된다.
+            const int pageSize = 200;
+            for (var offset = 0; ; offset += pageSize)
             {
-                if (!m.HasUnclaimedItems)
-                    continue;
+                var list = await _mailbox.GetMailsAsync(token, limit: pageSize, offset: offset, category: category);
+                if (!list.IsSuccess)
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(list.ErrorCode ?? "mail_list_failed");
 
-                var pre = ValidateHandlers(m.Items);
-                if (!pre.IsSuccess)
-                    return pre;
+                var page = list.Data ?? Array.Empty<Mail>();
+                foreach (var m in page)
+                {
+                    if (!m.HasUnclaimedItems)
+                        continue;
+
+                    var pre = ValidateHandlers(m.Items);
+                    if (!pre.IsSuccess)
+                        return pre;
+                }
+
+                if (page.Count < pageSize)
+                    break;
             }
 
             var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category);

@@ -4,7 +4,7 @@
 Task<SupabaseResult<Mail>> Supabase.GetMailAsync(string mailId)
 ```
 
-우편 한 건의 상세 내용을 조회합니다. 첨부 보상이 없는 우편은 조회하는 순간 읽음 처리됩니다.
+우편 한 건의 상세 내용을 조회합니다. 첨부 보상이 없는 우편은 조회하는 순간 읽음 처리됩니다. 기한이 지난 우편은 조회해도 읽음 처리되지 않습니다.
 
 ```csharp
 var result = await Supabase.GetMailAsync(mailId);

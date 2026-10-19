@@ -2553,7 +2553,8 @@ begin
     or jsonb_array_length(m.items) = 0;
 
   -- 첨부 없는 텍스트 메일은 열람 시 수령 처리(items_claimed_at). 보상 메일은 수령 시에만 처리.
-  if no_attachment and m.items_claimed_at is null then
+  -- 기한이 지난 우편은 보관 기간 동안 목록에 보이지만 수령으로 바꾸지 않는다 — "만료 후엔 받을 수 없다"와 어긋난다.
+  if no_attachment and m.items_claimed_at is null and m.expires_at > now() then
     update public.mails set items_claimed_at = now() where id = p_mail_id;
   end if;
 

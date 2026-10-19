@@ -1549,13 +1549,11 @@ namespace TrueBase.Unity
             UserSaveStaticSyncRegistry.Tick(realtimeNow);
         }
 
-        /// <summary><see cref="RestoreSessionAsync"/>를 bool 기반으로 호출합니다.</summary>
+        /// <summary><see cref="RestoreSessionAsync"/>를 result 로 호출합니다. 복원 단계가 정한 실패 사유는 그대로 넘깁니다.</summary>
         public static async Task<SupabaseResult> TryRestoreSessionAsync()
         {
-            var ok = await RestoreSessionAsync();
-            var code = ok ? null : SupabaseErrorCode.RestoreSessionFailed;
-            LogApiResult(ApiLogTags.AuthRestoreSession, ok, code, errorOnFail: !IsExpectedFailureReason(code));
-            return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseErrorCode.RestoreSessionFailed);
+            var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: false);
+            return ToRestoreFacadeResult(restored, SupabaseErrorCode.RestoreSessionFailed);
         }
 
         /// <summary>
@@ -1567,11 +1565,22 @@ namespace TrueBase.Unity
             if (IsAutoLoginBlocked() || HasStoredRefreshToken() == false)
                 return SupabaseResult.Fail(SupabaseErrorCode.AutoLoginNoToken);
 
-            var ok = await RestoreSessionAsync();
+            var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: false);
+            return ToRestoreFacadeResult(restored, SupabaseErrorCode.AutoLoginFailed);
+        }
 
-            var code = ok ? null : SupabaseErrorCode.AutoLoginFailed;
+        /// <summary>
+        /// 복원 결과를 파사드 결과로 바꿉니다. 복원 단계(탈퇴 게이트 등)가 정한 사유는 그대로 넘기고,
+        /// 토큰이 없거나 갱신에 실패해 사유가 없을 때만 <paramref name="fallbackCode"/> 를 씁니다.
+        /// 예전엔 전부 fallback 하나로 뭉쳐 탈퇴 예약 안내(WithdrawalGateBlocked)를 자동 로그인에서 띄울 수 없었다.
+        /// </summary>
+        private static SupabaseResult ToRestoreFacadeResult(SupabaseResult<SupabaseSession> restored, string fallbackCode)
+        {
+            var ok = restored != null && restored.IsSuccess;
+            var code = ok ? null
+                : string.IsNullOrEmpty(restored?.ErrorCode) ? fallbackCode : restored.ErrorCode;
             LogApiResult(ApiLogTags.AuthRestoreSession, ok, code, errorOnFail: !IsExpectedFailureReason(code));
-            return ok ? SupabaseResult.Ok : SupabaseResult.Fail(SupabaseErrorCode.AutoLoginFailed);
+            return ok ? SupabaseResult.Ok : SupabaseResult.Fail(code, restored?.BanInfo);
         }
 
         /// <summary>
@@ -1958,8 +1967,10 @@ namespace TrueBase.Unity
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
             {
                 var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: true);
-                // 탈퇴 예약 확인을 못 끝내 멈춘 경우 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
-                if (restored != null && restored.ErrorCode == SupabaseErrorCode.WithdrawalStatusUnconfirmed)
+                // 탈퇴 예약 확인을 못 끝내 멈췄거나 차단된 계정 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
+                if (restored != null
+                    && (restored.ErrorCode == SupabaseErrorCode.WithdrawalStatusUnconfirmed
+                        || restored.ErrorCode == SupabaseErrorCode.UserBanned))
                     return restored;
                 postSignInDone = restored != null && restored.IsSuccess && IsLoggedIn;
             }
@@ -2287,11 +2298,13 @@ namespace TrueBase.Unity
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            // Mail.IsExpired 가 서버 시각으로 판정하도록 기준점을 미리 받아 둔다(이미 있으면 요청 없음).
-            if (!TryReadCachedServerNow(out _))
-                _ = GetServerNowAsync();
-
-            return await Mailbox.GetMailsAsync(limit, offset, category);
+            // Mail.IsExpired 가 서버 시각으로 판정하도록 기준점을 목록과 같이 받아 온다(이미 있으면 요청 없음).
+            // 목록 조회와 동시에 보내고 반환 전에 기다리므로, 대개 지연이 더 붙지 않는다. 실패하면 기기 시계로 판정된다.
+            var timeSync = TryReadCachedServerNow(out _) ? null : GetServerNowAsync();
+            var mails = await Mailbox.GetMailsAsync(limit, offset, category);
+            if (timeSync != null)
+                await timeSync;
+            return mails;
         }
 
         /// <summary><c>ts_mail_client_settings</c> — 우편 설정(만료 우편 보관 일수)을 읽습니다.</summary>
@@ -3446,6 +3459,12 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="RedeemWithdrawalCancelAsync"/>
         public static async Task<SupabaseResult> TryRedeemWithdrawalCancelAsync(string cancelToken = null)
         {
+            // 취소할 토큰이 없으면 인터셉터(나누 복구)도 부르지 않는다. 먼저 부르면 나누만 취소되고
+            // Supabase 예약은 WithdrawalCancelTokenEmpty 로 남아 양쪽이 갈라진다(로그인을 멈춘 경로는 토큰을 발급하지 않는다).
+            if (string.IsNullOrWhiteSpace(cancelToken) && string.IsNullOrWhiteSpace(ReadStoredWithdrawalCancelToken()))
+                return LogAndReturn(ApiLogTags.ProfileWithdrawalCancelRedeem,
+                    SupabaseResult<bool>.Fail(SupabaseErrorCode.WithdrawalCancelTokenEmpty));
+
             if (_interceptRedeemWithdrawalCancel != null)
                 return await _interceptRedeemWithdrawalCancel(async () => {
                     var r = await RedeemWithdrawalCancelAsync(cancelToken);
@@ -3900,7 +3919,10 @@ namespace TrueBase.Unity
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
-                SetAutoLoginBlocked(false);
+                // 갱신으로 받은 새 refresh 를 곧바로 저장한다. 안 하면 다음 실행이 이미 쓴 토큰으로 복원하는데,
+                // 토큰 회전(Supabase 기본값)을 켠 프로젝트는 그걸 거절해 자동 로그인이 실패하고 저장 토큰까지 지운다.
+                // 게이트가 막으면 그쪽 ClearSession 이 다시 지운다.
+                SaveSessionToStorage();
 
                 // 복원 경로는 SignIn* 를 거치지 않으므로 탈퇴 게이트·프로필 보장을 여기서 함께 한다(빠지면 ts_my_server_id 가 빈다).
                 var method = ReadLastSignInMethod();
@@ -3910,7 +3932,18 @@ namespace TrueBase.Unity
                 return gated ?? SupabaseResult<SupabaseSession>.Success(_currentSession);
             }
 
-            PlayerPrefs.DeleteKey(RefreshTokenKey);
+            // 차단된 계정은 차단 정보를 실어 돌려준다 — 뭉개면 게임이 자동 로그인에서 차단 안내를 못 띄운다.
+            if (result.ErrorCode?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var accountId = PlayerPrefs.GetString(AccountIdPlayerPrefsKey, null);
+                var banInfo = string.IsNullOrWhiteSpace(accountId) ? null : await FetchBanInfoAsync(accountId);
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.UserBanned, banInfo);
+            }
+
+            // 서버가 토큰을 거절했다고 확정될 때만 지운다. 네트워크 오류에 지우면 다음 실행도 자동 로그인을 못 하고,
+            // 복구 쪽지가 없는 게스트는 계정을 잃는다.
+            if (IsRefreshRejectedByServer(result.ErrorCode))
+                PlayerPrefs.DeleteKey(RefreshTokenKey);
             return null;
         }
 
@@ -3939,8 +3972,9 @@ namespace TrueBase.Unity
                 _afterSignInRpcMissing = false;
             }
 
-            // 우편 만료 판정(Mail.IsExpired)을 서버 시각 기준으로. 기준점이 없으면 기기 시계로 대신한다.
-            MailClock.UtcNow = () => TryReadCachedServerNow(out var serverNow, ignoreAge: true) ? serverNow : DateTimeOffset.UtcNow;
+            // 우편 만료 판정(Mail.IsExpired)을 서버 시각 기준으로. 기준점이 없거나 낡았으면(앱 복귀 직후 등) 기기 시계로 대신한다 —
+            // 절전 중 단조 시계가 멈춘 낡은 기준점은 실제보다 뒤처져 만료 우편을 "받기 가능"으로 그리게 한다.
+            MailClock.UtcNow = () => TryReadCachedServerNow(out var serverNow) ? serverNow : DateTimeOffset.UtcNow;
 
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;
@@ -4102,7 +4136,10 @@ namespace TrueBase.Unity
         /// 로그인 직후 탈퇴 예약(유예) 게이트를 처리합니다.
         /// 예약 중이면 게이트 상태 저장 → 철회 토큰 발급 → 복구 토큰 upsert → 세션 정리 후 실패 결과를 반환합니다.
         /// </summary>
-        /// <returns>게이트 미해당(예약 없음·상태 조회 불가)이면 null — 호출자는 로그인 흐름을 계속 진행하면 됩니다.</returns>
+        /// <returns>
+        /// 탈퇴 예약이 없음을 <b>확인했을 때만</b> null — 호출자는 로그인 흐름을 계속 진행하면 됩니다.
+        /// 상태를 모르거나(조회 실패) 유예가 지났는데 삭제되지 않은 계정이면 로그인을 멈춘 결과를 돌려줍니다.
+        /// </returns>
         private static async Task<SupabaseResult<SupabaseSession>> HandleWithdrawalReservationGateAfterSignInAsync()
         {
             if (_bootstrap?.PublicProfileService == null)
@@ -4111,13 +4148,22 @@ namespace TrueBase.Unity
             if (_currentSession == null || string.IsNullOrWhiteSpace(_currentSession.AccessToken))
                 return null;
 
+            // 조회 실패를 "예약 없음"으로 읽지 않는다. 통과시키면 예약 중인 계정이 안내 없이 본편에 들어간다.
             var statusResult = await _bootstrap.PublicProfileService.GetWithdrawalStatusAsync(_currentSession.AccessToken);
             if (statusResult == null || !statusResult.IsSuccess || statusResult.Data == null)
-                return null;
+                return StopSignInWithdrawalUnconfirmed(
+                    "탈퇴 예약 상태 조회 실패: " + (statusResult?.ErrorCode ?? "unknown"), configProblem: false);
 
             var status = statusResult.Data;
             if (!status.IsScheduled)
             {
+                // is_scheduled 는 유예 기간 안일 때만 참이다. 유예가 지났는데 withdrawn_at 이 남았으면
+                // 앞의 탈퇴 가드가 지우지 못한 것(호출 실패·미배포·시크릿 오류) — 통과시키면 삭제를 요청한 계정으로 들어간다.
+                if (!string.IsNullOrEmpty(status.WithdrawnAtIso))
+                    return StopSignInWithdrawalUnconfirmed(
+                        "탈퇴 유예가 지난 계정을 삭제하지 못했습니다. withdrawal-guard 엣지 함수 배포와 시크릿을 확인하세요.",
+                        configProblem: true);
+
                 ClearStoredWithdrawalGateStatus();
                 ClearStoredWithdrawalCancelToken();
                 return null;
@@ -4791,13 +4837,12 @@ namespace TrueBase.Unity
             if (outcome == OneCallSignInOutcome.Completed)
                 return null;
 
+            // 게이트는 "예약 없음"을 확인했을 때만 null 을 돌려준다(모르면 스스로 로그인을 멈춘다).
+            // 그래서 묶음 호출이 예약을 알렸어도, 그 사이 취소돼 게이트가 없음을 확인했으면 그대로 진행한다.
             var knownScheduled = outcome == OneCallSignInOutcome.WithdrawalScheduled;
             var gated = await RunWithdrawalGatesAfterSignInAsync(method, allowRecreateOnDeletion, knownScheduled);
             if (gated != null)
                 return gated;
-
-            if (knownScheduled)
-                return StopSignInWithdrawalUnconfirmed();
 
             await TryEnsureProfileRowAfterSignInAsync();
             return null;
@@ -4805,7 +4850,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 탈퇴 게이트를 이미 거친 경로의 프로필 보장. 한 번 왕복으로 끝내고, 안 되면 단계별로 처리합니다.
-        /// 그런데도 탈퇴 예약이 남아 있으면(앞선 게이트가 상태 조회에 실패해 통과시킨 경우) 로그인을 멈춘 결과를, 아니면 null 을 돌려줍니다.
+        /// 그런데도 탈퇴 예약이 보이면(게이트 뒤에 예약이 생긴 경합) 로그인을 멈춘 결과를, 아니면 null 을 돌려줍니다.
         /// </summary>
         private static async Task<SupabaseResult<SupabaseSession>> EnsureProfileAfterSignInAsync()
         {
@@ -4813,19 +4858,28 @@ namespace TrueBase.Unity
             if (outcome == OneCallSignInOutcome.Completed)
                 return null;
             if (outcome == OneCallSignInOutcome.WithdrawalScheduled)
-                return StopSignInWithdrawalUnconfirmed();
+                return StopSignInWithdrawalUnconfirmed("게이트 통과 뒤 탈퇴 예약이 보임", configProblem: false);
 
             await TryEnsureProfileRowAfterSignInAsync();
             return null;
         }
 
         /// <summary>
-        /// 탈퇴 예약이 있는 계정인데 가드·게이트가 막지도 지우지도 못했을 때(상태 조회·가드 호출 실패) 로그인을 멈춥니다.
+        /// 탈퇴 예약 상태를 확인하지 못했거나(조회 실패), 예약 계정을 막지도 지우지도 못했을 때 로그인을 멈춥니다.
         /// 통과시키면 예약 중인 계정으로 본편에 들어가 버린다. 저장 토큰은 남겨 다음 로그인·자동 로그인에서 게이트를 다시 탄다.
         /// </summary>
-        private static SupabaseResult<SupabaseSession> StopSignInWithdrawalUnconfirmed()
+        /// <param name="why">로그에 남길 원인.</param>
+        /// <param name="configProblem">
+        /// true 면 다시 로그인해도 풀리지 않는 설정 문제(유예가 지났는데 삭제 실패 등)라 Error 로 남긴다.
+        /// false 면 통신 실패처럼 재시도로 풀리는 경우라 경고로 남긴다.
+        /// </param>
+        private static SupabaseResult<SupabaseSession> StopSignInWithdrawalUnconfirmed(string why, bool configProblem)
         {
-            Debug.LogWarning("[Supabase] 탈퇴 예약 계정의 상태 확인을 끝내지 못해 로그인을 멈춥니다. 다시 로그인하면 이어서 처리합니다.");
+            var message = "[Supabase] 탈퇴 예약 계정의 처리를 끝내지 못해 로그인을 멈춥니다: " + why;
+            if (configProblem)
+                Debug.LogError(message);
+            else
+                Debug.LogWarning(message + " — 다시 로그인하면 이어서 처리합니다.");
             SaveSessionToStorage();
             ClearSession(clearStorage: false, deleteUserSessionRow: false);
             SetAutoLoginBlocked(false);

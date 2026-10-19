@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": "dotnet run --project Tools~/SdkAudit -- --if-changed"
+          },
+          {
+            "type": "command",
+            "command": "dotnet run --project Tools~/FailReasonCheck -- --if-changed"
           }
         ]
       }

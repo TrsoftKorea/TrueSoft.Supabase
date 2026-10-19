@@ -212,6 +212,9 @@ namespace TrueBase.Core.Common
         /// <summary>수령 기간이 지난 우편입니다.</summary>
         public const string MailExpired = "mail_expired";
 
+        /// <summary>우편 설정 행이 없습니다. DB 설치가 깨진 상태입니다.</summary>
+        public const string MailSettingsMissing = "mail_settings_missing";
+
         /// <summary>이미 보상을 수령한 우편입니다.</summary>
         public const string AlreadyClaimed = "already_claimed";
 

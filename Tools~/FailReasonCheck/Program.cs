@@ -6,6 +6,11 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using TrueBase.Core.Common;
 
+// 훅에서 매 턴 부르기 위한 모드 — 사유 카탈로그·SQL·문서가 바뀌지 않았으면 아무 일도 하지 않는다(SdkAudit --if-changed 와 같은 방식).
+// 사람이 기억해 돌리던 때는 install.sql 에 raise 를 넣고 이 검사를 잊어 그대로 커밋됐다(2026-10-19 mail_settings_missing).
+if (args.Length > 0 && args[0] == "--if-changed" && !HasRelevantChange(FindRepoRoot()))
+    return 0;
+
 var errors = new List<string>();
 var warnings = new List<string>();
 
@@ -218,6 +223,60 @@ static IEnumerable<(string Name, string Body)> EnumerateFunctionBodies(string sq
             continue;
 
         yield return (m.Groups[1].Value, sql.Substring(bodyStart, end - bodyStart));
+    }
+}
+
+/// <summary>
+/// 이 검사의 결과를 바꿀 수 있는 경로에 커밋 안 한 변경이 있는지. git 을 못 부르면 검사하는 쪽(true)으로 둔다.
+/// </summary>
+static bool HasRelevantChange(string root)
+{
+    if (root == null)
+        return true;
+
+    string[] watched =
+    {
+        "Runtime/",
+        "Editor/",
+        "Samples~/DatabaseSetup/",
+        "docs~/guide/api/fail-reasons.md",
+        "Tools~/FailReasonCheck/",
+    };
+
+    try
+    {
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", "status --porcelain")
+        {
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+        if (p == null)
+            return true;
+
+        var output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit(10_000);
+        if (p.ExitCode != 0)
+            return true;
+
+        foreach (var line in output.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (line.Length <= 3)
+                continue;
+            var path = line.Substring(3).Trim().Trim('"');
+            var arrow = path.LastIndexOf("->", StringComparison.Ordinal);
+            if (arrow >= 0)
+                path = path.Substring(arrow + 2).Trim().Trim('"');
+            if (watched.Any(w => path.StartsWith(w, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+        return false;
+    }
+    catch
+    {
+        return true;
     }
 }
 
