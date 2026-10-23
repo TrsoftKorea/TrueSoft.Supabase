@@ -392,6 +392,29 @@ async function handleAction(
         return json({ ok: true, data: { id: data } });
       }
 
+      case "bannedWords.list": {
+        const { data, error } = await db.rpc("ts_admin_banned_words_list");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "bannedWords.add": {
+        const kind = str(params, "kind");
+        const words = Array.isArray(params["words"]) ? (params["words"] as unknown[]).map(String) : [];
+        if (words.length === 0) throw new Error("추가할 단어를 입력하세요.");
+        const { data, error } = await db.rpc("ts_admin_banned_words_add", { p_kind: kind, p_words: words, p_by: email });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { added: data } });
+      }
+
+      case "bannedWords.delete": {
+        const kind = str(params, "kind");
+        const words = Array.isArray(params["words"]) ? (params["words"] as unknown[]).map(String) : [];
+        const { data, error } = await db.rpc("ts_admin_banned_words_delete", { p_kind: kind, p_words: words });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { deleted: data } });
+      }
+
       case "players.coupons": {
         const { data, error } = await db.rpc("ts_admin_player_coupons", {
           p_account_id: str(params, "accountId"),
@@ -643,35 +666,71 @@ async function handleAction(
       }
 
       case "purchases.list": {
+        const search = sanitizeSearchTerm(optStr(params, "search").trim());
+        const startDate = params["startDate"];
+        const endDate = params["endDate"];
+        const filtered = (from: number, to: number) => {
+          let query = db
+            .from("purchases")
+            .select(
+              "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at, refunded_at, refund_reason",
+              { count: "exact" },
+            )
+            .order("verified_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to);
+          if (bool(params, "refundedOnly")) query = query.not("refunded_at", "is", null);
+          if (search) {
+            query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
+          }
+          if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
+          if (typeof endDate === "string" && endDate) {
+            const next = nextDayExclusive(endDate);
+            if (next) query = query.lt("verified_at", next);
+          }
+          return query;
+        };
+
+        // all: CSV 내려받기 — 같은 조건 전체. PostgREST 는 한 번에 1000행까지만 주므로 나눠 받는다.
+        if (bool(params, "all")) {
+          const CHUNK = 1000;
+          const MAX = 100_000;
+          const rows: unknown[] = [];
+          for (let from = 0; from < MAX; from += CHUNK) {
+            const { data, error } = await filtered(from, from + CHUNK - 1);
+            if (error) throw new Error(error.message);
+            rows.push(...(data ?? []));
+            if (!data || data.length < CHUNK) break;
+          }
+          return json({ ok: true, data: { rows, total: rows.length, truncated: rows.length >= MAX } });
+        }
+
         const page = typeof params["page"] === "number" ? params["page"] : 1;
         const pageSize = 20;
         const from = (page - 1) * pageSize;
-        const to = from + pageSize - 1;
-
-        let query = db
-          .from("purchases")
-          .select(
-            "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at",
-            { count: "exact" },
-          )
-          .order("verified_at", { ascending: false })
-          .range(from, to);
-
-        const search = sanitizeSearchTerm(optStr(params, "search").trim());
-        if (search) {
-          query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
-        }
-        const startDate = params["startDate"];
-        const endDate = params["endDate"];
-        if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
-        if (typeof endDate === "string" && endDate) {
-          const next = nextDayExclusive(endDate);
-          if (next) query = query.lt("verified_at", next);
-        }
-
-        const { data, error, count } = await query;
+        const { data, error, count } = await filtered(from, from + pageSize - 1);
         if (error) throw new Error(error.message);
         return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+      }
+
+      case "purchases.getRefundStatus": {
+        const { data, error } = await db
+          .from("purchase_refund_sync")
+          .select("store, last_started_at, last_finished_at, last_ok, last_message, last_marked");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      // 구글 환불을 지금 확인한다. 함수가 10분 안의 재호출을 건너뛰므로 연타해도 구글에 한 번만 묻는다.
+      case "purchases.syncRefunds": {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/purchase-refund-sync-google`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        const body = await res.json().catch(() => null);
+        if (res.status === 404) throw new Error("이 게임에는 구글 환불 확인 기능이 설치되어 있지 않습니다.");
+        return json({ ok: true, data: body ?? { ok: false, message: `HTTP ${res.status}` } });
       }
 
       case "remoteConfig.list": {
@@ -1052,7 +1111,11 @@ async function handleAction(
       }
 
       case "coupons.codes": {
-        const { data, error } = await db.rpc("ts_admin_coupon_codes", { p_coupon_id: str(params, "id") });
+        // all: CSV 내려받기 — 화면 목록(500개)과 달리 전부 준다. 상한은 일반 쿠폰 1회 발급량을 넉넉히 넘게 잡았다.
+        const { data, error } = await db.rpc("ts_admin_coupon_codes", {
+          p_coupon_id: str(params, "id"),
+          p_limit: bool(params, "all") ? 200_000 : 500,
+        });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: data ?? [] });
       }

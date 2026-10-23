@@ -612,11 +612,11 @@ begin
   v_default := 'Player_' || lower(left(replace(new.account_id::text, '-', ''), 8));
   v_name := coalesce(v_meta_name, v_default);
 
-  -- 이름 충돌 시 account_id 기반 기본값으로 폴백
+  -- 이름 충돌·금칙어(구글·애플 계정 이름에 섞인 경우) 시 account_id 기반 기본값으로 폴백
   if exists (
     select 1 from public.display_names d
     where lower(trim(d.display_name)) = lower(trim(v_name))
-  ) then
+  ) or public.ts_display_name_forbidden(v_name) then
     v_name := v_default;
   end if;
 
@@ -674,6 +674,209 @@ for each row execute function public.ts_seed_display_name_for_profile();
 --   and nullif(trim(u.raw_user_meta_data->>'displayName'),'') is null;
 
 -- ---------------------------------------------------------------------------
+-- 금칙어 — 채팅은 가려서 보내고, 닉네임은 거절한다
+-- ---------------------------------------------------------------------------
+-- kind = 'word' : 금칙어. 채팅에 들어 있으면 그 부분을 * 로 가리고, 닉네임에 들어 있으면 거절한다.
+-- kind = 'name' : 금지 닉네임. 닉네임 전체가 이것과 같을 때만 거절한다("운영자"·"GM" 등).
+-- 비교는 소문자로 바꾸고 공백·기호를 뺀 글자로 한다 — "시 발"·"시.발" 같은 우회를 잡는다.
+-- 그래서 word 는 그 꼴로 정규화해 저장한다(ts_filter_normalize). 운영자가 콘솔에서 관리한다(16절 운영 기록에 남는다).
+-- 이미 쓰고 있는 닉네임은 소급하지 않는다 — 새로 정하거나 바꿀 때만 본다. 운영자의 닉네임 변경은 검사하지 않는다.
+create table if not exists public.banned_words (
+  kind       text        not null check (kind in ('word', 'name')),
+  word       text        not null check (word <> ''),
+  created_at timestamptz not null default now(),
+  created_by text,
+  primary key (kind, word)
+);
+
+alter table public.banned_words enable row level security;
+-- [의도적] 정책 없음 — 클라이언트는 목록을 읽지 못한다(우회 단어를 찾는 데 쓰인다). 검사는 아래 함수가 서버에서 한다.
+
+comment on table public.banned_words is
+  '금칙어(word)·금지 닉네임(name). word 는 ts_filter_normalize 를 거친 값으로 저장한다.';
+
+create or replace function public.ts_filter_normalize(p_text text)
+returns text
+language sql
+immutable
+set search_path = public
+as $$
+  select regexp_replace(lower(coalesce(p_text, '')), '[[:space:][:punct:]]+', '', 'g');
+$$;
+
+-- 금칙어가 걸린 글자를 * 로 바꾼다. 공백·기호를 건너뛰고 찾으므로 "시 발" 은 "* *" 가 된다(공백은 남긴다).
+create or replace function public.ts_mask_banned_words(p_text text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_chars text[];
+  v_map   int[] := '{}';
+  v_norm  text  := '';
+  v_mask  boolean[];
+  v_word  text;
+  v_from  int;
+  v_pos   int;
+  n       int;
+  i       int;
+begin
+  if p_text is null or p_text = '' then
+    return p_text;
+  end if;
+  if not exists (select 1 from public.banned_words where kind = 'word') then
+    return p_text;
+  end if;
+
+  v_chars := regexp_split_to_array(p_text, '');
+  n := array_length(v_chars, 1);
+  -- 공백·기호를 뺀 글자열과, 그 글자가 원문 몇 번째였는지를 함께 만든다.
+  for i in 1 .. n loop
+    if v_chars[i] !~ '^[[:space:][:punct:]]$' then
+      v_norm := v_norm || lower(v_chars[i]);
+      v_map  := v_map || i;
+    end if;
+  end loop;
+  v_mask := array_fill(false, array[n]);
+
+  for v_word in select b.word from public.banned_words b where b.kind = 'word' loop
+    v_from := 1;
+    loop
+      v_pos := strpos(substr(v_norm, v_from), v_word);
+      exit when v_pos = 0;
+      v_pos := v_from + v_pos - 1;
+      for i in v_map[v_pos] .. v_map[v_pos + char_length(v_word) - 1] loop
+        v_mask[i] := true;
+      end loop;
+      v_from := v_pos + 1;
+    end loop;
+  end loop;
+
+  if not (true = any (v_mask)) then
+    return p_text;
+  end if;
+  for i in 1 .. n loop
+    if v_mask[i] and v_chars[i] !~ '^[[:space:]]$' then
+      v_chars[i] := '*';
+    end if;
+  end loop;
+  return array_to_string(v_chars, '');
+end;
+$$;
+
+create or replace function public.ts_display_name_forbidden(p_display_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+      from public.banned_words b
+     where (b.kind = 'word' and strpos(public.ts_filter_normalize(p_display_name), b.word) > 0)
+        or (b.kind = 'name' and b.word = public.ts_filter_normalize(p_display_name))
+  );
+$$;
+
+comment on function public.ts_mask_banned_words(text) is '채팅 본문의 금칙어를 * 로 가린다. 채팅 발송 RPC 가 내부에서 부른다.';
+comment on function public.ts_display_name_forbidden(text) is '닉네임이 금칙어를 포함하거나 금지 닉네임과 같은지.';
+
+revoke all on function public.ts_filter_normalize(text)       from public, anon, authenticated;
+revoke all on function public.ts_mask_banned_words(text)      from public, anon, authenticated;
+revoke all on function public.ts_display_name_forbidden(text) from public, anon, authenticated;
+-- displayname-set Edge Function(secret key)이 닉네임 저장 전에 부른다.
+grant execute on function public.ts_display_name_forbidden(text) to service_role;
+
+-- 닉네임 표에서 직접 막는다 — 유저는 RLS 로 display_names 에 직접 쓸 수 있어 Edge Function 검사만으로는 우회된다.
+-- 유저 요청(JWT role authenticated·anon)일 때만 본다. 운영 콘솔(service_role)·SQL 편집기는 통과시킨다.
+create or replace function public.ts_display_names_block_forbidden()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.role(), '') in ('authenticated', 'anon')
+     and (tg_op = 'INSERT' or new.display_name is distinct from old.display_name)
+     and public.ts_display_name_forbidden(new.display_name) then
+    raise exception 'display_name_forbidden';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.ts_display_names_block_forbidden() from public, anon, authenticated;
+
+drop trigger if exists trg_display_names_block_forbidden on public.display_names;
+create trigger trg_display_names_block_forbidden
+  before insert or update of display_name on public.display_names
+  for each row execute function public.ts_display_names_block_forbidden();
+
+-- 운영 콘솔 전용 — 목록·추가·삭제
+create or replace function public.ts_admin_banned_words_list()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'kind', b.kind, 'word', b.word, 'created_at', b.created_at, 'created_by', b.created_by
+         ) order by b.kind, b.word), '[]'::jsonb)
+    from public.banned_words b;
+$$;
+
+-- 정규화해서 비는 값(공백·기호뿐)은 버린다. 이미 있는 단어는 건너뛴다. 새로 들어간 개수를 돌려준다.
+create or replace function public.ts_admin_banned_words_add(p_kind text, p_words text[], p_by text default null)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int;
+begin
+  if p_kind not in ('word', 'name') then
+    raise exception 'banned_word_kind_invalid';
+  end if;
+  insert into public.banned_words (kind, word, created_by)
+  select distinct p_kind, public.ts_filter_normalize(w), p_by
+    from unnest(coalesce(p_words, '{}'::text[])) w
+   where public.ts_filter_normalize(w) <> ''
+  on conflict (kind, word) do nothing;
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+create or replace function public.ts_admin_banned_words_delete(p_kind text, p_words text[])
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int;
+begin
+  delete from public.banned_words
+   where kind = p_kind
+     and word = any (coalesce(p_words, '{}'::text[]));
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.ts_admin_banned_words_list()                  from public, anon, authenticated;
+revoke all on function public.ts_admin_banned_words_add(text, text[], text) from public, anon, authenticated;
+revoke all on function public.ts_admin_banned_words_delete(text, text[])    from public, anon, authenticated;
+grant execute on function public.ts_admin_banned_words_list()                  to service_role;
+grant execute on function public.ts_admin_banned_words_add(text, text[], text) to service_role;
+grant execute on function public.ts_admin_banned_words_delete(text, text[])    to service_role;
+
+-- ---------------------------------------------------------------------------
 -- ts_is_display_name_available
 -- RLS를 우회(SECURITY DEFINER)하여 닉네임 사용 가능 여부를 전역 기준으로 확인합니다.
 -- display_names SELECT RLS 에 의존하지 않으므로 RLS 설정과 무관하게 정확한 결과를 반환합니다.
@@ -703,6 +906,27 @@ comment on function public.ts_is_display_name_available(text, uuid) is
   '닉네임 사용 가능 여부(전역 고유). SECURITY DEFINER로 RLS 우회, 대소문자 무시 비교.';
 
 grant execute on function public.ts_is_display_name_available(text, uuid) to authenticated;
+
+-- ts_display_name_check — 'available' · 'taken' · 'forbidden'.
+-- 금지 닉네임을 중복과 구분해 알려준다. SDK 의 닉네임 확인이 이것을 쓴다(옛 SDK 는 위 함수를 계속 쓴다).
+create or replace function public.ts_display_name_check(
+  p_display_name      text,
+  p_ignore_account_id uuid default null
+)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+           when public.ts_display_name_forbidden(p_display_name) then 'forbidden'
+           when public.ts_is_display_name_available(p_display_name, p_ignore_account_id) then 'available'
+           else 'taken'
+         end;
+$$;
+
+grant execute on function public.ts_display_name_check(text, uuid) to authenticated;
 
 
 -- =============================================================================
@@ -3136,6 +3360,156 @@ comment on function public.ts_mark_purchase_granted(text) is
 revoke all on function public.ts_mark_purchase_granted(text) from public, anon, authenticated;
 grant execute on function public.ts_mark_purchase_granted(text) to authenticated;
 
+-- =============================================================================
+-- 환불 기록
+--
+-- 스토어가 환불한 결제를 표시한다. 애플은 purchase-notify-apple 이 환불 알림을 받아서,
+-- 구글은 purchase-refund-sync-google 이 하루 한 번 환불 목록을 가져와서 ts_purchase_set_refund 를 부른다.
+-- 기록만 한다 — 차단·아이템 회수는 운영자가 보고 정한다. 행을 지우지 않으므로 환불이 다시
+-- 취소되면(애플 REFUND_REVERSED) refunded_at 만 비운다.
+-- =============================================================================
+
+alter table public.purchases
+  add column if not exists refunded_at   timestamptz,  -- 스토어가 환불한 시각. null = 환불 안 됨
+  add column if not exists refund_reason text;          -- 스토어가 준 사유 원문(애플 revocationReason · 구글 voidedReason)
+
+create index if not exists purchases_refunded_idx on public.purchases (account_id) where refunded_at is not null;
+
+-- 누적 결제액은 환불분을 뺀 값이다. 환불 취소면 되돌린다.
+create or replace function public.ts_after_purchase_refund()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_delta bigint;
+begin
+  if new.account_id is null or coalesce(new.price_amount_krw, 0) <= 0 then
+    return new;
+  end if;
+  if old.refunded_at is null and new.refunded_at is not null then
+    v_delta := -new.price_amount_krw;
+  elsif old.refunded_at is not null and new.refunded_at is null then
+    v_delta := new.price_amount_krw;
+  else
+    return new;
+  end if;
+  update public.user_profiles
+     set total_paid_krw = greatest(total_paid_krw + v_delta, 0)
+   where account_id = new.account_id;
+  return new;
+end;
+$$;
+
+revoke all on function public.ts_after_purchase_refund() from public, anon, authenticated;
+
+drop trigger if exists tr_after_purchase_refund on public.purchases;
+create trigger tr_after_purchase_refund
+  after update of refunded_at on public.purchases
+  for each row execute function public.ts_after_purchase_refund();
+
+-- 스토어별 마지막 확인 상태. 애플은 알림을 받은 시각, 구글은 목록을 가져온 시각.
+-- 실패도 남긴다 — 조용히 멈춘 것과 환불이 없는 것을 운영 콘솔에서 구분하려는 것.
+create table if not exists public.purchase_refund_sync (
+  store            text primary key,      -- 'google_play' | 'apple_app_store'
+  last_started_at  timestamptz,
+  last_finished_at timestamptz,
+  last_ok          boolean,
+  last_message     text,
+  last_marked      int not null default 0  -- 이번에 새로 환불로 표시한 건수
+);
+
+alter table public.purchase_refund_sync enable row level security;
+revoke all on table public.purchase_refund_sync from anon, authenticated;
+
+-- 반환: 실제로 바뀐 행이 있는지. 우리 기록에 없는 결제(다른 앱·기록 전 결제)면 false.
+create or replace function public.ts_purchase_set_refund(
+  p_store       text,
+  p_token       text,
+  p_refunded_at timestamptz,
+  p_reason      text default null)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int;
+begin
+  if p_refunded_at is null then
+    update public.purchases
+       set refunded_at = null, refund_reason = null
+     where store = p_store and purchase_token = p_token and refunded_at is not null;
+  else
+    -- 이미 표시된 건 다시 쓰지 않는다 — 구글 목록은 30일치를 매번 다시 받는다.
+    update public.purchases
+       set refunded_at = p_refunded_at, refund_reason = p_reason
+     where store = p_store and purchase_token = p_token and refunded_at is null;
+  end if;
+  get diagnostics v_count = row_count;
+  return v_count > 0;
+end;
+$$;
+
+comment on function public.ts_purchase_set_refund(text, text, timestamptz, text) is
+  '결제를 환불로 표시하거나(p_refunded_at) 환불 취소로 되돌린다(null). purchase-notify-apple·purchase-refund-sync-google 전용.';
+
+revoke all on function public.ts_purchase_set_refund(text, text, timestamptz, text) from public, anon, authenticated;
+grant execute on function public.ts_purchase_set_refund(text, text, timestamptz, text) to service_role;
+
+-- 'start' 는 마지막 시작이 p_min_gap_seconds 안이면 기록하지 않고 false 를 돌려준다(겹친 호출 건너뛰기).
+-- 'finish' 는 항상 기록하고 true.
+create or replace function public.ts_purchase_refund_sync_mark(
+  p_store           text,
+  p_phase           text,              -- 'start' | 'finish'
+  p_ok              boolean default null,
+  p_message         text    default null,
+  p_marked          int     default 0,
+  p_min_gap_seconds int     default 0)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_phase = 'start' then
+    insert into public.purchase_refund_sync as s (store, last_started_at)
+    values (p_store, now())
+    on conflict (store) do update set last_started_at = now()
+      where s.last_started_at is null
+         or s.last_started_at < now() - make_interval(secs => greatest(coalesce(p_min_gap_seconds, 0), 0));
+    return found;
+  end if;
+
+  insert into public.purchase_refund_sync (store, last_finished_at, last_ok, last_message, last_marked)
+  values (p_store, now(), p_ok, p_message, coalesce(p_marked, 0))
+  on conflict (store) do update
+    set last_finished_at = now(), last_ok = p_ok, last_message = p_message, last_marked = coalesce(p_marked, 0);
+  return true;
+end;
+$$;
+
+revoke all on function public.ts_purchase_refund_sync_mark(text, text, boolean, text, int, int) from public, anon, authenticated;
+grant execute on function public.ts_purchase_refund_sync_mark(text, text, boolean, text, int, int) to service_role;
+
+-- 환불을 물어볼 앱 목록. REST 로 읽으면 1000행에서 잘려 앱이 빠질 수 있어 DB 에서 고른다.
+create or replace function public.ts_purchase_recent_packages(p_store text, p_days int)
+returns text[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(distinct package_name order by package_name), '{}')
+    from public.purchases
+   where store = p_store
+     and verified_at >= now() - make_interval(days => greatest(coalesce(p_days, 0), 1));
+$$;
+
+revoke all on function public.ts_purchase_recent_packages(text, int) from public, anon, authenticated;
+grant execute on function public.ts_purchase_recent_packages(text, int) to service_role;
+
 
 -- #############################################################################
 -- 08. 원격 설정
@@ -3343,6 +3717,52 @@ select cron.schedule(
   'select public.ts_withdrawal_cleanup_batch(100)'
 );
 
+-- 3. 구글 환불 확인 — 매일 새벽 4시. DB 에서 엣지 함수를 부르려면 pg_net 과 Vault 의 project_url 이 필요하다.
+--    project_url 은 프로젝트마다 다르므로 이 파일에 넣지 않는다. 설치 후 한 번 등록한다:
+--      select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+--    없으면 확인하지 않고 그 사실을 purchase_refund_sync 에 남긴다(운영 콘솔 구매 내역에 보인다).
+create extension if not exists pg_net with schema extensions;
+
+create or replace function public.ts_purchase_refund_sync_kick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    perform public.ts_purchase_refund_sync_mark('google_play', 'finish', false, 'project_url_missing', 0, 0);
+    return;
+  end if;
+  -- 함수 쪽이 10분 안의 재호출을 건너뛰므로 인증 없이 부른다(verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/purchase-refund-sync-google',
+    body                 := '{}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 60000);
+end;
+$$;
+
+comment on function public.ts_purchase_refund_sync_kick() is
+  '구글 환불 확인 엣지 함수를 부른다. cron 이 매일 부른다.';
+
+revoke all on function public.ts_purchase_refund_sync_kick() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'purchase-refund-sync-google') then
+    perform cron.unschedule('purchase-refund-sync-google');
+  end if;
+end $$;
+select cron.schedule(
+  'purchase-refund-sync-google',
+  '0 4 * * *',
+  'select public.ts_purchase_refund_sync_kick()'
+);
+
 -- ---------------------------------------------------------------------------
 -- 관리용 명령어 (필요 시 SQL Editor에서 직접 실행)
 -- ---------------------------------------------------------------------------
@@ -3458,6 +3878,9 @@ begin
     'platform',         p.platform,
     'country_code',     p.country_code,
     'total_paid_krw',   p.total_paid_krw,
+    -- total_paid_krw 는 환불분을 이미 뺀 값이다.
+    'refund_count',     (select count(*) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null),
+    'refund_krw',       (select coalesce(sum(r.price_amount_krw), 0) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null),
     'created_at',       u.created_at,
     'last_activity_at', p.last_activity_at,
     'last_sign_in_at',  u.last_sign_in_at,
@@ -7356,6 +7779,51 @@ revoke all on function public.ts_admin_coupon_delete(uuid) from public, anon, au
 grant execute on function public.ts_admin_coupon_delete(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- ts_admin_coupon_list · ts_admin_coupon_codes — 운영 콘솔 쿠폰 목록·발급 코드
+-- ---------------------------------------------------------------------------
+-- 라이브 DB 에만 있고 이 파일에 빠져 있던 것을 옮겨 왔다(2026-10-23) — 없으면 새 프로젝트에서 콘솔 쿠폰 화면이 안 열린다.
+create or replace function public.ts_admin_coupon_list(p_search text default '')
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', c.id, 'kind', c.kind, 'title', c.title, 'content', c.content,
+    'category', c.category, 'items', c.items, 'localized', c.localized,
+    'expires_at', c.expires_at, 'mail_expires_days', c.mail_expires_days,
+    'max_uses', c.max_uses, 'used_count', c.used_count, 'is_active', c.is_active,
+    'created_by', c.created_by, 'created_at', c.created_at,
+    'code', (select cc.code from public.coupon_codes cc where cc.coupon_id = c.id and c.kind = 'keyword' limit 1),
+    'issued_count', (select count(*) from public.coupon_codes cc where cc.coupon_id = c.id)
+  ) order by c.created_at desc), '[]'::jsonb)
+  from public.coupons c
+  where coalesce(btrim(p_search), '') = '' or c.title ilike '%' || btrim(p_search) || '%';
+$$;
+
+-- 코드마다 사용 이력을 붙인다. 키워드 쿠폰은 코드 하나를 여러 명이 쓰므로 사용한 사람 수만큼 줄이 나온다.
+-- p_limit 는 "코드" 개수 기준이다(CSV 내려받기는 크게 넘긴다).
+create or replace function public.ts_admin_coupon_codes(p_coupon_id uuid, p_limit int default 500)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'code', cc.code, 'redeemed_at', r.redeemed_at, 'account_id', r.account_id, 'user_id', r.user_id
+  ) order by cc.code, r.redeemed_at), '[]'::jsonb)
+  from (
+    select code from public.coupon_codes where coupon_id = p_coupon_id order by code limit p_limit
+  ) cc
+  left join public.coupon_redemptions r on r.code = cc.code and r.coupon_id = p_coupon_id;
+$$;
+
+revoke all on function public.ts_admin_coupon_list(text)       from public, anon, authenticated;
+revoke all on function public.ts_admin_coupon_codes(uuid, int) from public, anon, authenticated;
+grant execute on function public.ts_admin_coupon_list(text)       to service_role;
+grant execute on function public.ts_admin_coupon_codes(uuid, int) to service_role;
+
+-- ---------------------------------------------------------------------------
 -- ts_admin_player_coupons — 플레이어 1명의 쿠폰 사용 이력(최근 순)
 -- ---------------------------------------------------------------------------
 -- 쿠폰을 지우면 이력도 함께 사라진다(cascade) — 여기 안 보이면 지운 쿠폰일 수 있다.
@@ -7612,6 +8080,7 @@ begin
   if char_length(v_text) > c.max_length then
     raise exception 'chat_message_too_long';
   end if;
+  v_text := public.ts_mask_banned_words(v_text);
 
   if exists (
     select 1 from public.chat_mutes m
@@ -9194,6 +9663,7 @@ begin
   if char_length(v_text) > c.max_length then
     raise exception 'chat_message_too_long';
   end if;
+  v_text := public.ts_mask_banned_words(v_text);
 
   if exists (
     select 1 from public.chat_mutes m
@@ -9377,6 +9847,7 @@ begin
   if char_length(v_text) > c.max_length then
     raise exception 'chat_message_too_long';
   end if;
+  v_text := public.ts_mask_banned_words(v_text);
 
   if exists (
     select 1 from public.chat_mutes m
@@ -10508,6 +10979,7 @@ grant execute on function public.auth_user_server_id()                          
 grant execute on function public.ts_default_server_id()                                      to anon, authenticated;
 grant execute on function public.ts_server_now()                                             to anon, authenticated;
 grant execute on function public.ts_is_display_name_available(text, uuid)                    to anon, authenticated;
+grant execute on function public.ts_display_name_check(text, uuid)                           to authenticated;
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text)              to anon, authenticated;
 grant execute on function public.ts_anon_recovery_delete_by_fingerprint(text, text)          to anon, authenticated;
 grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, uuid, text) to anon, authenticated;

@@ -1781,6 +1781,7 @@ namespace TrueBase.Unity
 
                 // 유저가 입력한 닉네임이 거절된 경우
                 case SupabaseErrorCode.NameTaken:
+                case SupabaseErrorCode.NameForbidden:
                 case SupabaseErrorCode.NameTooLong:
 
                 // 보낼 변경분이 없어 건너뛴 경우 — 오류가 아니다
@@ -3230,8 +3231,8 @@ namespace TrueBase.Unity
             var r = await SetNameAsync(displayName);
             if (!r.IsSuccess)
             {
-                if (_enableApiResultLogs)
-                    Debug.LogError($"[{ApiLogTags.ProfileMyNameSet}] Failed: {FormatLogDetail(r.ErrorCode?.Trim() ?? "unknown_error")}");
+                var code = r.ErrorCode?.Trim() ?? "unknown_error";
+                LogApiResult(ApiLogTags.ProfileMyNameSet, false, code, errorOnFail: !IsExpectedFailureReason(code));
                 return SupabaseResult.Fail(r.ErrorCode);
             }
             if (_enableApiResultLogs)
@@ -3272,8 +3273,9 @@ namespace TrueBase.Unity
             var r = await IsNameAvailableAsync(displayName);
             if (r == null || !r.IsSuccess)
             {
-                LogApiResult(ApiLogTags.ProfileNameAvailable, false, r?.ErrorCode ?? "unknown");
-                return SupabaseResult.Fail(r?.ErrorCode ?? "unknown");
+                var code = r?.ErrorCode ?? "unknown";
+                LogApiResult(ApiLogTags.ProfileNameAvailable, false, code, errorOnFail: !IsExpectedFailureReason(code));
+                return SupabaseResult.Fail(code);
             }
 
             if (!r.Data)

@@ -146,6 +146,9 @@ namespace TrueBase.Core.Common
         /// <summary>이미 사용 중인 닉네임입니다.</summary>
         public const string NameTaken = "display_name_taken";
 
+        /// <summary>금칙어가 들어 있거나 금지된 닉네임입니다.</summary>
+        public const string NameForbidden = "display_name_forbidden";
+
         /// <summary>닉네임이 허용 길이를 초과합니다.</summary>
         public const string NameTooLong = "display_name_too_long";
 

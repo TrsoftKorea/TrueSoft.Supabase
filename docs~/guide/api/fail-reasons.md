@@ -121,6 +121,7 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `NameTaken` | 이미 사용 중인 닉네임입니다 |
+| `NameForbidden` | 금칙어가 들어 있거나 금지된 닉네임입니다 |
 | `NameTooLong` | 닉네임이 허용 길이를 초과합니다 |
 
 ## 서버

@@ -19,7 +19,9 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: 'players', label: '플레이어' },
   { key: 'userData', label: '유저 데이터' },
   { key: 'coupons', label: '쿠폰' },
+  { key: 'purchases', label: '결제' },
   { key: 'chat', label: '채팅' },
+  { key: 'bannedWords', label: '금칙어' },
   { key: 'gameItems', label: '아이템 카탈로그' },
   { key: 'servers', label: '게임 서버' },
   { key: 'leaderboard', label: '리더보드' },
@@ -35,6 +37,9 @@ const CATEGORIES: { key: string; label: string }[] = [
 // 여기 없는 이름은 원문 그대로 둔다(새 기능이 생겨도 기록이 숨지 않게).
 const ACTION_LABELS: Record<string, string> = {
   'servers.upsert': '게임 서버 추가·수정',
+  'bannedWords.add': '금칙어 추가',
+  'bannedWords.delete': '금칙어 삭제',
+  'purchases.syncRefunds': '구글 환불 지금 확인',
   'operators.upsert': '운영자 추가·수정',
   'operators.setPassword': '운영자 비밀번호 설정',
   'operators.setDisabled': '운영자 사용 중지·복구',

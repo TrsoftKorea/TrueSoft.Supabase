@@ -29,6 +29,7 @@ import DataLogs from './pages/DataLogs'
 import DataManagement from './pages/DataManagement'
 import GameServers from './pages/GameServers'
 import AuditLogs from './pages/AuditLogs'
+import BannedWords from './pages/BannedWords'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -118,6 +119,7 @@ export default function App() {
         <Route path="/items" element={<GameItems target={target} onUnauthenticated={signOut} />} />
         <Route path="/servers" element={<GameServers target={target} onUnauthenticated={signOut} />} />
         <Route path="/audit" element={<AuditLogs target={target} onUnauthenticated={signOut} />} />
+        <Route path="/banned-words" element={<BannedWords target={target} onUnauthenticated={signOut} />} />
         <Route path="/players" element={<Players target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/send" element={<Mails target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/records" element={<MailRecords target={target} onUnauthenticated={signOut} />} />

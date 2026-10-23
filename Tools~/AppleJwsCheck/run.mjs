@@ -1,4 +1,4 @@
-// purchase-verify-apple 의 영수증(JWS) 검증을 Node 로 시험한다.
+// purchase-verify-apple 의 영수증(JWS) 검증을 Node 로 시험한다. purchase-notify-apple 의 복사본이 같은지도 본다.
 //
 //   node Tools~/AppleJwsCheck/run.mjs
 //
@@ -24,11 +24,25 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const indexTs = path.join(here, "..", "..", "Samples~", "DatabaseSetup", "EdgeFunctions", "purchase-verify-apple", "index.ts");
 
-const src = fs.readFileSync(indexTs, "utf8");
-const begin = src.indexOf("BEGIN apple-jws");
-const end = src.indexOf("END apple-jws");
-if (begin < 0 || end < 0) throw new Error("index.ts 에서 apple-jws 구간 표시를 찾지 못했습니다.");
-const block = src.slice(src.indexOf("\n", begin) + 1, src.lastIndexOf("\n", end));
+function extractBlock(file) {
+  const src = fs.readFileSync(file, "utf8");
+  const begin = src.indexOf("BEGIN apple-jws");
+  const end = src.indexOf("END apple-jws");
+  if (begin < 0 || end < 0) throw new Error(`${file} 에서 apple-jws 구간 표시를 찾지 못했습니다.`);
+  return src.slice(src.indexOf("\n", begin) + 1, src.lastIndexOf("\n", end));
+}
+const block = extractBlock(indexTs);
+
+// 엣지 함수는 따로 배포돼 코드를 나눠 쓸 수 없어, 같은 구간을 복사해 둔 함수가 있다.
+// 여기서 시험하는 것은 위 파일 하나뿐이므로 복사본이 글자 그대로 같은지 먼저 본다.
+const copies = ["purchase-notify-apple"].map((name) =>
+  path.join(here, "..", "..", "Samples~", "DatabaseSetup", "EdgeFunctions", name, "index.ts"));
+let copyMismatch = 0;
+for (const file of copies) {
+  const same = extractBlock(file).replace(/\r\n/g, "\n") === block.replace(/\r\n/g, "\n");
+  if (!same) copyMismatch++;
+  console.log(`${same ? "OK  " : "FAIL"} 복사본 일치: ${path.basename(path.dirname(file))}`);
+}
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "apple-jws-check-"));
 fs.writeFileSync(path.join(work, "apple-jws.mts"), block);
@@ -130,5 +144,6 @@ await expect("부모 경계를 넘는 자식 길이", makeJws([0, 1, 2].map(() =
 await expect("헤더도 못 채우는 자투리", makeJws([0, 1, 2].map(() => rawB64([0x30, 0x01, 0x02])), good), "der_truncated");
 
 fs.rmSync(work, { recursive: true, force: true });
+failed += copyMismatch;
 console.log(failed ? `\n${failed}건 실패` : "\n전부 통과");
 process.exit(failed ? 1 : 0);

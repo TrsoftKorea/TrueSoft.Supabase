@@ -166,12 +166,12 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 절 구성은 다음과 같습니다. 1~21은 기능별 스키마이고 **22는 반드시 마지막**입니다.
 
 1. 게임 서버 — game_servers + ts_default_server_id + ts_server_now
-2. 플레이어 프로필 — user_profiles + display_names + user_sessions
+2. 플레이어 프로필 — user_profiles + display_names + user_sessions + 금칙어(banned_words: 채팅은 ts_mask_banned_words 로 가리고 닉네임은 display_names 트리거로 거절, 운영 콘솔 "금칙어"에서 관리)
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
 5. 계정 관리 — server transfer RPCs + withdrawal RPCs + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
 6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "우편 설정"에서 바꾼다). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
-7. 인앱 결제 — purchases
+7. 인앱 결제 — purchases + 환불 기록(refunded_at, total_paid_krw 에서 차감. 애플은 `purchase-notify-apple` 알림, 구글은 9절 cron → pg_net → `purchase-refund-sync-google`. 마지막 확인 상태는 purchase_refund_sync. cron 은 Vault 의 `project_url` 이 있어야 돈다 — 프로젝트마다 손으로 등록)
 8. 원격 설정 — remote_config
 9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
 10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만) + 게임 서버 관리 RPC(ts_admin_game_servers_list·ts_admin_game_server_upsert, 코드는 추가 때만·삭제 없음)
@@ -198,7 +198,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
 
-`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
+`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-notify-apple`, `purchase-refund-sync-google`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
 
 ## Samples
 

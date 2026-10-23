@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Pencil, Trash2, X, Loader2, List } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Loader2, List, Download } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
+import { downloadCsv, todayStamp } from '../lib/csv'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -31,7 +32,7 @@ type Coupon = {
   issued_count: number
 }
 
-type CodeRow = { code: string; redeemed_at: string | null }
+type CodeRow = { code: string; redeemed_at: string | null; account_id: string | null; user_id: string | null }
 
 const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
@@ -56,12 +57,39 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
     })()
   }, [target, coupon.id, onUnauthenticated])
 
+  const [exporting, setExporting] = useState(false)
+  const exportCsv = async () => {
+    setExporting(true)
+    try {
+      const all = await callAdmin<CodeRow[]>(target, 'coupons.codes', { id: coupon.id, all: true })
+      downloadCsv(
+        `쿠폰코드_${coupon.title}_${todayStamp()}.csv`,
+        ['코드', '상태', '사용 시각', '플레이어', '계정 ID'],
+        all.map((r) => [
+          r.code,
+          r.redeemed_at ? '사용함' : '사용하지 않음',
+          r.redeemed_at ? formatDateTime(r.redeemed_at) : '',
+          r.user_id,
+          r.account_id,
+        ]),
+      )
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setError(e instanceof Error ? e.message : '내려받지 못했습니다.')
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-          <h3 className="text-base font-semibold">발급 코드 — {coupon.title}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          <h3 className="text-base font-semibold truncate">발급 코드 — {coupon.title}</h3>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" onClick={() => void exportCsv()} disabled={exporting || loading || rows.length === 0}>
+              {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}CSV 내려받기
+            </Button>
+            <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          </div>
         </div>
         <div className="overflow-auto flex-1">
           {loading ? (
@@ -79,12 +107,12 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.code} className="border-t border-neutral-100">
+                {rows.map((r, i) => (
+                  <tr key={`${r.code}-${i}`} className="border-t border-neutral-100">
                     <td className="px-4 py-2 font-mono">{r.code}</td>
                     <td className="px-4 py-2">
                       {r.redeemed_at ? (
-                        <span className="text-xs text-neutral-500">사용됨 · {formatDateTime(r.redeemed_at)}</span>
+                        <span className="text-xs text-neutral-500">사용됨 · {formatDateTime(r.redeemed_at)}{r.user_id ? ` · ${r.user_id}` : ''}</span>
                       ) : (
                         <span className="text-xs text-emerald-600">미사용</span>
                       )}
@@ -95,6 +123,11 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
             </table>
           )}
         </div>
+        {coupon.issued_count > 500 && (
+          <div className="border-t px-5 py-2.5 text-xs text-neutral-500 shrink-0">
+            코드 {coupon.issued_count.toLocaleString('ko-KR')}개 중 앞의 500개만 보입니다. 전체는 CSV로 내려받으세요.
+          </div>
+        )}
       </div>
     </div>
   )

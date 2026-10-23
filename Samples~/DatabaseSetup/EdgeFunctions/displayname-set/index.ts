@@ -99,12 +99,16 @@ Deno.serve(async (req) => {
 
   if (upsert.error) {
     const msg = upsert.error.message ?? "";
-    const reason = msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")
+    // display_name_forbidden 은 display_names 트리거(금칙어·금지 닉네임)가 낸다.
+    const reason = msg.includes("display_name_forbidden")
+      ? "display_name_forbidden"
+      : msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")
       ? "display_name_taken"
       : "display_name_upsert_failed";
+    const status = reason === "display_name_taken" ? 409 : reason === "display_name_forbidden" ? 400 : 500;
     return new Response(
       JSON.stringify({ ok: false, reason } satisfies SetResponse),
-      { status: reason === "display_name_taken" ? 409 : 500, headers: { "Content-Type": "application/json" } },
+      { status, headers: { "Content-Type": "application/json" } },
     );
   }
 

@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
-  UsersRound, Swords, Medal, SlidersHorizontal, Server, ClipboardList,
+  UsersRound, Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
   ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
 import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
@@ -102,15 +102,7 @@ export function Layout({
   const project = getProject(target)
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* 지금 어느 게임을 다루는지 — 화면 어디서든 보이게 맨 위에 게임 색으로 띄운다. */}
-      <div
-        className="h-7 shrink-0 flex items-center justify-center text-xs font-medium text-white"
-        style={{ backgroundColor: project.color }}
-      >
-        {project.label}
-      </div>
-      <div className="flex-1 min-h-0 flex">
+    <div className="h-screen flex overflow-hidden">
       {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
           화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
       <aside className="w-56 shrink-0 h-full bg-white border-r border-neutral-200 flex flex-col">
@@ -166,6 +158,7 @@ export function Layout({
           <NavSection label="소셜">
             <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
             <NavLinkRow to="/friends" label="친구" icon={UsersRound} />
+            <NavLinkRow to="/banned-words" label="금칙어" icon={ShieldBan} />
           </NavSection>
 
           <NavSection label="매치">
@@ -227,7 +220,6 @@ export function Layout({
           )}
           {children}
         </main>
-      </div>
       </div>
     </div>
   )

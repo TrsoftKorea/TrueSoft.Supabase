@@ -26,6 +26,8 @@ type Profile = {
   platform: string | null
   country_code: string | null
   total_paid_krw: string | number | null
+  refund_count: number | null
+  refund_krw: string | number | null
   created_at: string | null
   last_activity_at: string | null
   last_sign_in_at: string | null
@@ -312,6 +314,11 @@ export default function PlayerDetail({
         <InfoRow label="플랫폼">{profile?.platform ?? '-'}</InfoRow>
         <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>
         <InfoRow label="총 결제금액">{formatKRW(profile?.total_paid_krw ?? null)}</InfoRow>
+        <InfoRow label="환불">
+          {profile?.refund_count
+            ? <span className="text-red-600">{profile.refund_count}건 · {formatKRW(profile.refund_krw ?? null)}</span>
+            : '없음'}
+        </InfoRow>
         <InfoRow label="마지막 로그인">{formatDateTime(profile?.last_sign_in_at ?? null)}</InfoRow>
         <InfoRow label="마지막 활동">{formatDateTime(profile?.last_activity_at ?? null)}</InfoRow>
       </WhiteCard>

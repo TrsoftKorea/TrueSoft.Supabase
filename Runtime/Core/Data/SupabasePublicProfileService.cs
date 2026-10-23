@@ -91,7 +91,8 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// displayName이 사용 가능한지 조회합니다(현재 로그인 서버 기준). RPC <c>ts_is_display_name_available</c>.
+        /// displayName이 사용 가능한지 조회합니다(전역 기준). RPC <c>ts_display_name_check</c>.
+        /// 중복이면 <c>false</c>, 금칙어·금지 닉네임이면 <see cref="SupabaseErrorCode.NameForbidden"/> 실패입니다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="displayName">검사할 표시 이름. 앞뒤 공백 제거 후 최대 64자.</param>
@@ -116,7 +117,7 @@ namespace TrueBase.Core.Data
             var ignoreUuid = string.IsNullOrWhiteSpace(ignoreAccountIdForSelf) ? null : ignoreAccountIdForSelf.Trim();
             var bodyJson = BuildIsNameAvailableBody(norm, ignoreUuid);
 
-            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_is_display_name_available";
+            var url = $"{_supabaseUrl.TrimEnd('/')}/rest/v1/rpc/ts_display_name_check";
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
@@ -129,15 +130,13 @@ namespace TrueBase.Core.Data
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");
 
-            try
+            // RPC가 text 를 JSON 문자열로 반환 → "\"available\"" / "\"taken\"" / "\"forbidden\""
+            switch (response.Body?.Trim().Trim('"'))
             {
-                // RPC가 boolean을 직접 반환 → "true" / "false"
-                var available = string.Equals(response.Body?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
-                return SupabaseResult<bool>.Success(available);
-            }
-            catch (Exception e)
-            {
-                return SupabaseResult<bool>.Fail("display_name_check_parse_failed:" + e.Message);
+                case "available": return SupabaseResult<bool>.Success(true);
+                case "taken": return SupabaseResult<bool>.Success(false);
+                case "forbidden": return SupabaseResult<bool>.Fail(SupabaseErrorCode.NameForbidden);
+                default: return SupabaseResult<bool>.Fail("display_name_check_parse_failed:" + response.Body);
             }
         }
 
@@ -495,7 +494,7 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// <c>ts_is_display_name_available</c> RPC 호출용 JSON 바디를 직접 구성합니다.
+        /// <c>ts_display_name_check</c> RPC 호출용 JSON 바디를 직접 구성합니다.
         /// IL2CPP 빌드에서 <c>JsonUtility</c>가 private 중첩 클래스를 <c>{}</c>로 직렬화하는 문제를 우회합니다.
         /// </summary>
         private static string BuildIsNameAvailableBody(string displayName, string ignoreAccountId)

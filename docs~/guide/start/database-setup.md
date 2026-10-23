@@ -26,7 +26,8 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | 9~11 | 크론 잡 · 계정 차단 · 유저 데이터 변경 로그 |
 | 12~14 | 어드민 우편 발송 · 예약 · 분류 |
 | 15~17 | 리더보드 · 운영자 스키마 버전관리 · 쿠폰 |
-| 18 | 클라이언트 권한 최소화 |
+| 18~21 | 채팅 · 매치 결과 · 친구 · 매치 로비 |
+| 22 | 클라이언트 권한 최소화 |
 
 설치 후 `verify.sql`을 실행하면 빠진 것이 없는지 확인할 수 있습니다.
 
@@ -58,8 +59,14 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `purchase-verify-google` | 인앱 결제 · Android |
 | `purchase-verify-apple` | 인앱 결제 · iOS · SK2 |
 | `purchase-verify-apple-legacy` | 인앱 결제 · iOS · SK1 · forceStoreKit1 |
+| `purchase-notify-apple` | 인앱 결제 · iOS · 환불 기록 |
+| `purchase-refund-sync-google` | 인앱 결제 · Android · 환불 기록 |
 | `apple-token` | Apple 로그인 · 탈퇴 시 Apple 연결 해제 |
 | `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
+
+::: warning 환불 기록 함수는 Verify JWT를 끕니다
+`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`은 DB 정기 작업이 로그인 없이 부릅니다. 두 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않습니다.
+:::
 
 ## 4. 시크릿 설정 {#secrets}
 
@@ -98,3 +105,13 @@ APPLE_KEY_ID=
 ::: info 여러 줄짜리 값은 따로 넣습니다
 `APPLE_PRIVATE_KEY`의 `.p8` 내용과 `GOOGLE_SERVICE_ACCOUNT_JSON`은 여러 줄이라 목록에 섞으면 줄마다 다른 이름으로 잘릴 수 있습니다. 이 둘은 목록에서 빼고 하나씩 등록하세요 — 이름 칸에 이름을, 값 칸에 파일 내용을 그대로 붙여넣으면 됩니다.
 :::
+
+## 5. 프로젝트 주소 등록 {#project-url}
+
+구글 환불은 DB가 하루 한 번 `purchase-refund-sync-google`을 불러 확인합니다. 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. SQL Editor에서 한 번 실행하세요.
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+```
+
+`<project-ref>`는 대시보드 주소창의 `/project/` 뒤에 오는 문자열입니다. 등록하지 않으면 운영 콘솔 구매 내역에 구글 환불 확인이 실패로 표시됩니다.
