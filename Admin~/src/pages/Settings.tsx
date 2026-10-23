@@ -107,7 +107,7 @@ function StoreStatusCard({
   }
 
   return (
-    <WhiteCard className="p-5 space-y-3 xl:col-span-2">
+    <WhiteCard className="p-5 space-y-3">
       <div>
         <h2 className="text-sm font-medium text-neutral-900">스토어 연결</h2>
         <p className="mt-1 text-xs text-neutral-500">
@@ -243,6 +243,15 @@ const LOBBY_FIELDS: LimitField[] = [
   },
 ]
 
+type Tab = 'store' | 'mail' | 'friend' | 'lobby'
+
+const TABS: readonly (readonly [Tab, string])[] = [
+  ['store', '스토어 연결'],
+  ['mail', '우편'],
+  ['friend', '친구'],
+  ['lobby', '매치 로비'],
+]
+
 export default function Settings({
   target,
   onUnauthenticated,
@@ -251,6 +260,7 @@ export default function Settings({
   onUnauthenticated: () => void
 }) {
   const [error, setError] = useState('')
+  const [tab, setTab] = useState<Tab>('store')
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -262,8 +272,25 @@ export default function Settings({
       <PageHeader title="설정" description="게임 기능의 제한값과 동작 값을 조정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="grid gap-4 xl:grid-cols-2 items-start">
-        <StoreStatusCard target={target} report={report} />
+      <div className="border-b border-neutral-200 flex gap-1">
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={[
+              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
+              tab === key
+                ? 'border-[#1677ff] text-[#1677ff] font-medium'
+                : 'border-transparent text-neutral-600 hover:text-neutral-900',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'store' && <StoreStatusCard target={target} report={report} />}
+      {tab === 'mail' && (
         <LimitsForm
           target={target}
           report={report}
@@ -273,6 +300,8 @@ export default function Settings({
           fields={MAIL_FIELDS}
           confirmTitle="우편 설정을 바꿀까요?"
         />
+      )}
+      {tab === 'friend' && (
         <LimitsForm
           target={target}
           report={report}
@@ -282,6 +311,8 @@ export default function Settings({
           fields={FRIEND_FIELDS}
           confirmTitle="친구 설정을 바꿀까요?"
         />
+      )}
+      {tab === 'lobby' && (
         <LimitsForm
           target={target}
           report={report}
@@ -291,7 +322,7 @@ export default function Settings({
           fields={LOBBY_FIELDS}
           confirmTitle="매치 로비 설정을 바꿀까요?"
         />
-      </div>
+      )}
     </div>
   )
 }

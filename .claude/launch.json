@@ -10,7 +10,8 @@
     {
       "name": "admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "../TrueBase.Admin", "run", "dev"],
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "Admin~",
       "port": 5273
     }
   ]
