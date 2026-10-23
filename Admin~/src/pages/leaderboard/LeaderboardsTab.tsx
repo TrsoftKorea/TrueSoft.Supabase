@@ -10,6 +10,7 @@ import { PendingChanges, type PendingItem } from '../../components/ui/PendingCha
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { Button } from '../../components/ui/Button'
 
 type LeaderboardRow = {
   code: string
@@ -355,12 +356,11 @@ export default function LeaderboardsTab({
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={discarding} />
 
       <div className="flex justify-end">
-        <button
+        <Button variant="primary" size="compact"
           onClick={openAdd}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90"
         >
           <Plus className="w-3.5 h-3.5" />리더보드 추가
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>
@@ -665,23 +665,21 @@ export default function LeaderboardsTab({
             </div>
 
             <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-              <button
+              <Button variant="outline"
                 onClick={closeModal}
-                className="inline-flex items-center gap-1 h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white"
               >
                 <X className="w-3.5 h-3.5" />
                 취소
-              </button>
-              <button
+              </Button>
+              <Button variant="primary"
                 onClick={() => { void handleSave() }}
                 disabled={saving}
-                className="inline-flex items-center gap-1 h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
               >
                 {saving
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <Plus className="w-3.5 h-3.5" />}
                 {editCode ? '저장' : '추가'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

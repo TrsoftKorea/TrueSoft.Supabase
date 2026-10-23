@@ -7,6 +7,7 @@ import { WhiteCard } from '../../components/ui/Card'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
+import { Button } from '../../components/ui/Button'
 
 type LbRow = { code: string; display_name: string; columns: string }
 type Col = {
@@ -306,19 +307,17 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button
+          <Button variant="outline"
             onClick={onClose}
-            className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white"
           >
             취소
-          </button>
-          <button
+          </Button>
+          <Button variant="primary"
             onClick={() => { void handleSubmit() }}
             disabled={loading || !name.trim() || missingDefault}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? '추가 중…' : '추가'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -391,19 +390,17 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button
+          <Button variant="outline"
             onClick={onClose}
-            className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white"
           >
             취소
-          </button>
-          <button
+          </Button>
+          <Button variant="primary"
             onClick={() => { void handleSubmit() }}
             disabled={loading || missingDefault}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? '저장 중…' : '저장'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -468,12 +465,11 @@ function DeleteFieldModal({ target, col, onClose, onDeleted }: {
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button
+          <Button variant="outline"
             onClick={onClose}
-            className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white"
           >
             취소
-          </button>
+          </Button>
           <button
             onClick={() => { void handleDelete() }}
             disabled={loading || confirm !== col.column_name}
@@ -689,20 +685,18 @@ export default function ColumnsTab({
           </div>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button variant="primary" size="compact"
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90"
           >
             <Plus className="w-4 h-4" />
             필드 추가
-          </button>
-          <button
+          </Button>
+          <Button variant="outline" size="compact"
             onClick={refresh}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${colsLoading ? 'animate-spin' : ''}`} />
             새로고침
-          </button>
+          </Button>
         </div>
       </div>
 

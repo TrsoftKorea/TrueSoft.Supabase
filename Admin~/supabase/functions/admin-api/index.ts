@@ -322,10 +322,83 @@ Deno.serve(async (req) => {
     return fail("운영자 관리는 마스터만 할 수 있습니다.", 403);
   }
 
+  const res = await handleAction(db, action, params, email, isMaster);
+
+  // ── 6. 운영 기록 ─────────────────────────────────────────────────────────────
+  // 성공한 변경만 남긴다. 기록이 실패해도 이미 끝난 변경을 되돌릴 수는 없으므로 응답은 그대로 둔다.
+  if (res.ok && !READ_ACTION.test(action)) {
+    const { error } = await db.rpc("ts_admin_audit_write", {
+      p_email: email,
+      p_action: action,
+      p_params: redactParams(params),
+    });
+    if (error) console.error(`[admin-api] 운영 기록 실패 (${action}, ${email}): ${error.message}`);
+  }
+  return res;
+});
+
+// 조회 요청 이름. 여기 안 걸리는 action 은 전부 변경으로 보고 기록한다 — 새 조회를 추가하면서
+// 이름을 이 꼴로 안 지으면 기록이 늘 뿐 빠지지는 않는 쪽으로 틀리게 해 둔다.
+const READ_ACTION =
+  /^session\.me$|\.(list|get[A-Z]\w*|columns|profile|banInfo|logs|channels|messages|mutes|overview|settingsGet|codes|scores|searchPlayers|stats|player|coupons|get)$/;
+
+const SECRET_PARAM = /password|secret|token/i;
+
+function redactParams(params: Params): Params {
+  const out: Params = {};
+  for (const [k, v] of Object.entries(params)) out[k] = SECRET_PARAM.test(k) ? "***" : v;
+  return out;
+}
+
+async function handleAction(
+  db: SupabaseClient,
+  action: string,
+  params: Params,
+  email: string,
+  isMaster: boolean,
+): Promise<Response> {
   try {
     switch (action) {
       case "session.me":
         return json({ ok: true, data: { email, isMaster } });
+
+      case "audit.list": {
+        const { data, error } = await db.rpc("ts_admin_audit_list", {
+          p_search: optStr(params, "search") || null,
+          p_category: optStr(params, "category") || null,
+          p_start_date: optStr(params, "startDate") || null,
+          p_end_date: optStr(params, "endDate") || null,
+          p_page: typeof params["page"] === "number" ? params["page"] : 1,
+          p_page_size: typeof params["pageSize"] === "number" ? params["pageSize"] : 50,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "servers.list": {
+        const { data, error } = await db.rpc("ts_admin_game_servers_list");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "servers.upsert": {
+        const { data, error } = await db.rpc("ts_admin_game_server_upsert", {
+          p_id: optStr(params, "id") || null,
+          p_server_code: optStr(params, "serverCode"),
+          p_display_name: str(params, "displayName"),
+          p_allow_transfers: bool(params, "allowTransfers"),
+        });
+        if (error) throw new Error(SERVER_ERRORS[error.message] ?? error.message);
+        return json({ ok: true, data: { id: data } });
+      }
+
+      case "players.coupons": {
+        const { data, error } = await db.rpc("ts_admin_player_coupons", {
+          p_account_id: str(params, "accountId"),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
 
       case "operators.list": {
         const { data, error } = await db.rpc("ts_admin_list_operators");
@@ -1280,4 +1353,11 @@ Deno.serve(async (req) => {
     console.error(`[admin-api] ${action} 실패 (${email}): ${e}`);
     return fail(e instanceof Error ? e.message : "처리에 실패했습니다.", 400);
   }
-});
+}
+
+const SERVER_ERRORS: Record<string, string> = {
+  server_display_name_empty: "서버 이름을 입력하세요.",
+  server_code_invalid: "서버 코드는 영문·숫자·_·- 로 32자 이내여야 합니다.",
+  server_code_taken: "이미 있는 서버 코드입니다.",
+  server_not_found: "서버를 찾을 수 없습니다.",
+};

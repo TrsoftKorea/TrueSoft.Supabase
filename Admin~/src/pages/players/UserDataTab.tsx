@@ -9,6 +9,7 @@ import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime, diffSummary } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
+import { Button } from '../../components/ui/Button'
 
 type LogRow = { id: number; diff: Record<string, unknown>; source: string | null; created_at: string }
 
@@ -97,16 +98,15 @@ function EditValueModal({
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">
+          <Button variant="outline" onClick={onClose}>
             취소
-          </button>
-          <button
+          </Button>
+          <Button variant="primary"
             onClick={() => { void handleSubmit() }}
             disabled={loading}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? '저장 중…' : '저장'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -219,13 +219,12 @@ export default function UserDataTab({
             <ExternalLink className="w-3.5 h-3.5" />
             데이터 관리에서 열기
           </Link>
-          <button
+          <Button variant="outline" size="compact"
             onClick={() => { void reload(); void reloadLogs() }}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             새로고침
-          </button>
+          </Button>
         </div>
       </div>
 

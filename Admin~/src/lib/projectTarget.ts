@@ -9,13 +9,15 @@ export type ProjectConfig = {
   key: ProjectTarget
   label: string
   url: string
+  /** 화면 상단 띠·확인 창에 쓰는 게임 색. 게임끼리 확실히 달라야 한다 — 엉뚱한 게임에 발송하는 사고를 막는 표시다. */
+  color: string
 }
 
 const env = import.meta.env as Record<string, string | undefined>
 
 export const PROJECTS: ProjectConfig[] = [
-  { key: 'defencer', label: '마왕은 힘들어', url: env['VITE_DEFENCER_URL'] ?? '' },
-  { key: 'devilslayer', label: '데빌 슬레이어', url: env['VITE_DEVILSLAYER_URL'] ?? '' },
+  { key: 'defencer', label: '마왕은 힘들어', url: env['VITE_DEFENCER_URL'] ?? '', color: '#7c3aed' },
+  { key: 'devilslayer', label: '데빌 슬레이어', url: env['VITE_DEVILSLAYER_URL'] ?? '', color: '#ea580c' },
 ]
 
 const STORAGE_KEY = 'tb_project_target'

@@ -7,6 +7,7 @@ import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
+import { Button } from '../../components/ui/Button'
 
 type FriendRow = { account_id: string; display_name: string; since: string | null }
 type RequestRow = { request_id: string; account_id: string; display_name: string; created_at: string }
@@ -70,14 +71,13 @@ export default function FriendsTab({
           친구 {data?.friend_count ?? 0}명
           {data ? <span className="text-neutral-400"> / 상한 {data.max_friends}명</span> : null}
         </div>
-        <button
+        <Button variant="outline" size="compact"
           onClick={() => void load()}
           disabled={loading}
-          className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>

@@ -8,6 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
@@ -225,10 +226,10 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} disabled={saving} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white disabled:opacity-40 whitespace-nowrap">취소</button>
-          <button onClick={submit} disabled={!canSubmit} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60 whitespace-nowrap">
+          <Button variant="outline" onClick={onClose} disabled={saving}>취소</Button>
+          <Button variant="primary" onClick={submit} disabled={!canSubmit}>
             {saving ? '저장 중…' : '저장'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -331,22 +332,20 @@ export default function MatchRewards({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex items-center gap-2">
-        <button
+        <Button variant="primary" size="compact"
           onClick={() => setCreating(true)}
           disabled={loading || listFailed}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60 whitespace-nowrap"
         >
           <Plus className="w-3.5 h-3.5" />
           게임 코드 추가
-        </button>
-        <button
+        </Button>
+        <Button variant="outline" size="compact"
           onClick={() => void load()}
           disabled={loading}
-          className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>

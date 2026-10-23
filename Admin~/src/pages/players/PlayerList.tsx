@@ -6,6 +6,7 @@ import { WhiteCard } from '../../components/ui/Card'
 import { formatDateTime, formatKRW } from '../../components/ui/format'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { Button } from '../../components/ui/Button'
 
 type PlayerRow = {
   account_id: string
@@ -170,10 +171,9 @@ export default function PlayerList({
             placeholder="닉네임을 입력 후 Enter 또는 검색 버튼을 누르세요."
             className="flex-1 min-w-[260px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
           />
-          <button
+          <Button variant="primary" size="compact"
             onClick={submitSearch}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -181,13 +181,12 @@ export default function PlayerList({
               <Search className="w-3.5 h-3.5" />
             )}
             검색
-          </button>
-          <button
+          </Button>
+          <Button variant="outline" size="compact"
             onClick={resetSearch}
-            className="h-9 px-3 rounded-md border border-neutral-300 bg-white text-sm hover:bg-neutral-50"
           >
             초기화
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 

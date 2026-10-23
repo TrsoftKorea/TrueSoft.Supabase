@@ -10,6 +10,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { Button } from '../components/ui/Button'
 
 type VersionRow = {
   id: number
@@ -224,21 +225,19 @@ export default function SchemaChanges({
           <span className="text-sm font-medium text-neutral-800">대기 중 변경</span>
           <span className="text-xs text-neutral-400">{drafts.length}건</span>
           <div className="ml-auto flex items-center gap-2">
-            <button
+            <Button variant="outline" size="compact"
               onClick={() => setAskDiscardAll(true)}
               disabled={busy || drafts.length === 0}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-200 text-sm text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
             >
               전체 취소
-            </button>
-            <button
+            </Button>
+            <Button variant="primary" size="compact"
               onClick={() => setShowPublish(true)}
               disabled={busy || drafts.length === 0}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5" />
               게시
-            </button>
+            </Button>
           </div>
         </div>
         {hasDestructiveDraft && (
@@ -341,14 +340,13 @@ export default function SchemaChanges({
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
+                        <Button variant="outline" size="sm"
                           onClick={() => setRevertTarget(v)}
                           disabled={busy || reverted || !v.reversible}
                           title={!v.reversible ? '삭제 작업이 포함돼 되돌릴 수 없습니다' : reverted ? '이미 되돌림' : '되돌리기'}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
                         >
                           <RotateCcw className="w-3 h-3" /> 되돌리기
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   )
@@ -399,21 +397,19 @@ export default function SchemaChanges({
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-              <button
+              <Button variant="outline"
                 onClick={() => setShowPublish(false)}
                 disabled={busy}
-                className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white disabled:opacity-50"
               >
                 취소
-              </button>
-              <button
+              </Button>
+              <Button variant="primary"
                 onClick={() => { void doPublish() }}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-50"
               >
                 {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 게시
-              </button>
+              </Button>
             </div>
           </div>
         </div>

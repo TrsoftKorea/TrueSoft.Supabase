@@ -1,17 +1,21 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { ArrowLeft, Pencil, Check, X, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { formatDateTime, formatKRW, formatBanUntil } from '../../components/ui/format'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
+import { Button } from '../../components/ui/Button'
 import UserDataTab from './UserDataTab'
 import FriendsTab from './FriendsTab'
 import MatchRecordsTab from './MatchRecordsTab'
+import MailsTab from './MailsTab'
+import CouponsTab from './CouponsTab'
 
-type Tab = 'info' | 'userData' | 'friends' | 'matches'
+type Tab = 'info' | 'userData' | 'mails' | 'coupons' | 'friends' | 'matches'
 
 const PERMANENT_UNTIL = '2999-12-31T23:59:59.000Z'
 
@@ -25,6 +29,8 @@ type Profile = {
   created_at: string | null
   last_activity_at: string | null
   last_sign_in_at: string | null
+  withdrawn_at: string | null
+  server_code: string | null
 }
 
 type BanInfo = {
@@ -52,6 +58,7 @@ export default function PlayerDetail({
   initialName: string
   onBack: () => void
 }) {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('info')
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -66,6 +73,7 @@ export default function PlayerDetail({
   const [permanent, setPermanent] = useState(false)
   const [applying, setApplying] = useState(false)
   const [askUnban, setAskUnban] = useState(false)
+  const [askBan, setAskBan] = useState(false)
   const [unbanLoading, setUnbanLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -126,20 +134,27 @@ export default function PlayerDetail({
     }
   }
 
-  const handleBan = async () => {
+  const banUntil = permanent
+    ? PERMANENT_UNTIL
+    : banUntilInput
+      ? new Date(banUntilInput).toISOString()
+      : ''
+
+  const requestBan = () => {
     setError('')
-    const until = permanent
-      ? PERMANENT_UNTIL
-      : banUntilInput
-        ? new Date(banUntilInput).toISOString()
-        : ''
-    if (!until) {
+    if (!banUntil) {
       setError('종료 기한을 입력하거나 영구 차단을 선택하세요.')
       return
     }
+    setAskBan(true)
+  }
+
+  const handleBan = async () => {
+    if (!banUntil || applying) return
     setApplying(true)
     try {
-      await callAdmin(target, 'players.ban', { accountId, bannedUntil: until, banMessage })
+      await callAdmin(target, 'players.ban', { accountId, bannedUntil: banUntil, banMessage })
+      setAskBan(false)
       setBanMessage('')
       setBanUntilInput('')
       setPermanent(false)
@@ -171,13 +186,21 @@ export default function PlayerDetail({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-neutral-900">플레이어</h2>
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 bg-white text-sm hover:bg-neutral-50"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          플레이어 목록
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => {
+              const name = profile?.display_name ?? initialName
+              navigate(`/mails/send?account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`)
+            }}
+          >
+            <Send className="w-3.5 h-3.5" />
+            우편 보내기
+          </Button>
+          <Button onClick={onBack}>
+            <ArrowLeft className="w-3.5 h-3.5" />
+            플레이어 목록
+          </Button>
+        </div>
       </div>
 
       <div className="border-b border-neutral-200 flex gap-1">
@@ -185,6 +208,8 @@ export default function PlayerDetail({
           [
             ['info', '기본 정보'],
             ['userData', '유저 데이터'],
+            ['mails', '받은 우편'],
+            ['coupons', '쿠폰 사용'],
             ['friends', '친구'],
             ['matches', '대전 기록'],
           ] as const
@@ -211,6 +236,10 @@ export default function PlayerDetail({
           accountId={accountId}
           displayName={profile?.display_name ?? initialName}
         />
+      ) : tab === 'mails' ? (
+        <MailsTab target={target} onUnauthenticated={onUnauthenticated} accountId={accountId} />
+      ) : tab === 'coupons' ? (
+        <CouponsTab target={target} onUnauthenticated={onUnauthenticated} accountId={accountId} />
       ) : tab === 'friends' ? (
         <FriendsTab
           target={target}
@@ -278,6 +307,8 @@ export default function PlayerDetail({
             </div>
           )}
         </InfoRow>
+        <InfoRow label="서버">{profile?.server_code ?? '-'}</InfoRow>
+        <InfoRow label="탈퇴">{withdrawalText(profile?.withdrawn_at ?? null)}</InfoRow>
         <InfoRow label="플랫폼">{profile?.platform ?? '-'}</InfoRow>
         <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>
         <InfoRow label="총 결제금액">{formatKRW(profile?.total_paid_krw ?? null)}</InfoRow>
@@ -289,21 +320,13 @@ export default function PlayerDetail({
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold">차단 정보</h3>
           {ban?.isBanned ? (
-            <button
-              onClick={() => setAskUnban(true)}
-              disabled={applying || unbanLoading}
-              className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
-            >
+            <Button variant="primary" onClick={() => setAskUnban(true)} disabled={applying || unbanLoading}>
               {applying || unbanLoading ? '처리 중…' : '차단 해제'}
-            </button>
+            </Button>
           ) : (
-            <button
-              onClick={handleBan}
-              disabled={applying}
-              className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
-            >
+            <Button variant="primary" onClick={requestBan} disabled={applying}>
               {applying ? '처리 중…' : '차단'}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -375,6 +398,25 @@ export default function PlayerDetail({
       )}
 
       <ConfirmDialog
+        open={askBan}
+        title="플레이어 차단"
+        confirmLabel="차단"
+        danger
+        busy={applying}
+        onConfirm={() => void handleBan()}
+        onCancel={() => setAskBan(false)}
+        description="차단하면 바로 접속이 끊기고 기한까지 다시 들어올 수 없습니다."
+      >
+        <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
+          <div className="text-neutral-800">{profile?.display_name ?? initialName}</div>
+          <div className="text-xs text-neutral-500 font-mono">{accountId.slice(0, 8)}</div>
+          <div className="text-xs text-neutral-500">
+            {permanent ? '영구 차단' : `${formatBanUntil(banUntil)}까지`}
+          </div>
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
         open={askUnban}
         title="차단 풀기"
         confirmLabel="차단 풀기"
@@ -390,6 +432,13 @@ export default function PlayerDetail({
       </ConfirmDialog>
     </div>
   )
+}
+
+function withdrawalText(withdrawnAt: string | null): ReactNode {
+  if (!withdrawnAt) return '-'
+  return new Date(withdrawnAt).getTime() > Date.now()
+    ? <span className="text-red-600 font-medium">탈퇴 예약 · {formatDateTime(withdrawnAt)}에 삭제</span>
+    : <span className="text-red-600 font-medium">탈퇴 처리 대기 · 곧 삭제</span>
 }
 
 function InfoRow({ label, children }: { label: string; children: ReactNode }) {

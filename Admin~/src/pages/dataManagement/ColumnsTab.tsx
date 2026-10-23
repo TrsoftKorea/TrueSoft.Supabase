@@ -9,6 +9,7 @@ import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
+import { Button } from '../../components/ui/Button'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
 
@@ -200,7 +201,7 @@ function DeleteColumnModal({
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
+          <Button variant="outline" onClick={onClose}>취소</Button>
           <button
             onClick={() => { void handleDelete() }}
             disabled={loading || confirm !== col.column_name}
@@ -276,14 +277,13 @@ function EditColumnModal({
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary"
             onClick={() => { void handleSubmit() }}
             disabled={!csharpType || loading || missingDefault}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? '담는 중…' : '변경 관리에 담기'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -365,14 +365,13 @@ function AddColumnModal({
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary"
             onClick={() => { void handleSubmit() }}
             disabled={loading || !name.trim() || missingDefault}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? '담는 중…' : '변경 관리에 담기'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -467,18 +466,16 @@ export default function ColumnsTab({
           />
         </div>
         <div className="flex gap-2">
-          <button
+          <Button variant="primary" size="compact"
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90"
           >
             <Plus className="w-4 h-4" />필드 추가
-          </button>
-          <button
+          </Button>
+          <Button variant="outline" size="compact"
             onClick={() => { void reloadCols(); void reloadDrafts() }}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />새로고침
-          </button>
+          </Button>
         </div>
       </div>
 

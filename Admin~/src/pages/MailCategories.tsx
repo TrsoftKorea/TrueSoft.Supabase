@@ -7,6 +7,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type Category = { key: string; display_name: string; created_at: string }
 type FormCategory = { key: string; display_name: string }
@@ -140,14 +141,13 @@ export default function MailCategories({
               className={inputCls}
             />
           </div>
-          <button
+          <Button variant="primary"
             onClick={add}
             disabled={adding || !form.key.trim()}
-            className="inline-flex items-center justify-center gap-1 h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-50"
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             추가
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 

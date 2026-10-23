@@ -27,6 +27,8 @@ import MatchRewards from './pages/MatchRewards'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
 import DataManagement from './pages/DataManagement'
+import GameServers from './pages/GameServers'
+import AuditLogs from './pages/AuditLogs'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -112,7 +114,10 @@ export default function App() {
       onSignOut={signOut}
     >
       <Routes>
-        <Route path="/" element={<GameItems target={target} onUnauthenticated={signOut} />} />
+        <Route path="/" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
+        <Route path="/items" element={<GameItems target={target} onUnauthenticated={signOut} />} />
+        <Route path="/servers" element={<GameServers target={target} onUnauthenticated={signOut} />} />
+        <Route path="/audit" element={<AuditLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/players" element={<Players target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/send" element={<Mails target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/records" element={<MailRecords target={target} onUnauthenticated={signOut} />} />
@@ -129,7 +134,7 @@ export default function App() {
         <Route path="/match-rewards" element={<MatchRewards target={target} onUnauthenticated={signOut} />} />
         {/* 예전 주소를 북마크해 둔 운영자가 빈 화면을 보지 않도록 남겨 둔다. */}
         <Route path="/social" element={<Navigate to="/friends" replace />} />
-        <Route path="/dashboard" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />

@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { callAdminPublic } from '../lib/api'
 import { storeToken } from '../lib/googleAuth'
 import type { ProjectTarget } from '../lib/projectTarget'
+import { Button } from './ui/Button'
 
 /**
  * 이메일 + 비밀번호 로그인. 구글 계정이 없는 운영자용 대안 로그인 경로다.
@@ -12,8 +13,6 @@ import type { ProjectTarget } from '../lib/projectTarget'
  */
 
 const inputCls = 'h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white'
-const primaryBtnCls =
-  'w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-50'
 
 export default function PasswordLoginForm({
   target,
@@ -67,10 +66,10 @@ export default function PasswordLoginForm({
         />
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <button onClick={() => void login()} disabled={busy || !email.trim() || !password} className={primaryBtnCls}>
+      <Button variant="primary" onClick={() => void login()} disabled={busy || !email.trim() || !password} className="w-full">
         {busy && <Loader2 className="w-4 h-4 animate-spin" />}
         로그인
-      </button>
+      </Button>
       <p className="text-xs text-neutral-400">비밀번호를 모르면 마스터에게 문의하세요.</p>
     </div>
   )

@@ -9,6 +9,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatKRW } from '../components/ui/format'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { Button } from '../components/ui/Button'
 
 type PurchaseRow = {
   id: string
@@ -100,13 +101,12 @@ export default function Purchases({
             placeholder="상품 ID / 유저 ID / 주문번호"
             className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
           />
-          <button
+          <Button variant="primary" size="compact"
             onClick={submitSearch}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 

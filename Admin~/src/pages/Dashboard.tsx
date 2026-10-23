@@ -6,6 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatKRW } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type Stats = {
   total_players: number
@@ -81,13 +82,12 @@ export default function Dashboard({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex justify-end">
-        <button
+        <Button variant="outline" size="compact"
           onClick={() => void load()}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       {loading && !stats ? (

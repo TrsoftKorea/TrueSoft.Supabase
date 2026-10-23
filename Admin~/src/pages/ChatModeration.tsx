@@ -9,6 +9,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type ChannelRow = { id: string; kind: string; code: string; display_name: string; is_active: boolean }
 type MessageRow = {
@@ -144,10 +145,10 @@ function MuteModal({
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button onClick={() => { void submit() }} disabled={loading || !canSubmit} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
             {loading ? '처리 중…' : '차단'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -313,9 +314,9 @@ export default function ChatModeration({
                 <input type="checkbox" checked={includeDeleted} onChange={(e) => { setIncludeDeleted(e.target.checked); setPage(1) }} className="rounded" />
                 삭제된 메시지 포함
               </label>
-              <button onClick={submitSearch} disabled={msgLoading} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+              <Button variant="primary" size="compact" onClick={submitSearch} disabled={msgLoading}>
                 {msgLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </button>
+              </Button>
             </div>
           </WhiteCard>
 
@@ -390,9 +391,9 @@ export default function ChatModeration({
       {tab === 'mutes' && (
         <>
           <div className="flex justify-end">
-            <button onClick={() => setShowMuteAdd(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90">
+            <Button variant="primary" size="compact" onClick={() => setShowMuteAdd(true)}>
               <ShieldOff className="w-4 h-4" />차단 추가
-            </button>
+            </Button>
           </div>
           <WhiteCard>
             <div className="overflow-auto">
@@ -421,7 +422,7 @@ export default function ChatModeration({
                         <td className="px-4 py-3 text-neutral-700">{m.reason || '-'}</td>
                         <td className="px-4 py-3 text-neutral-600">{m.created_by ?? '-'}</td>
                         <td className="px-3 py-3 text-right">
-                          <button onClick={() => setUnmuteTarget(m)} className="text-xs px-2 py-1 rounded border border-neutral-200 text-neutral-600 hover:bg-neutral-50">해제</button>
+                          <Button variant="outline" size="sm" onClick={() => setUnmuteTarget(m)}>해제</Button>
                         </td>
                       </tr>
                     ))

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Send, X, Plus, Check, ChevronDown } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import type { ProjectTarget } from '../lib/projectTarget'
+import { useSearchParams } from 'react-router-dom'
+import { getProject, type ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -98,8 +99,14 @@ export default function Mails({
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>('day')
   const [repeatDow, setRepeatDow] = useState(1)
   const [repeatDom, setRepeatDom] = useState(1)
+  const project = getProject(target)
+  // 플레이어 상세의 "우편 보내기"가 ?account=&name= 으로 넘겨 그 사람을 미리 골라 둔다.
+  const [params] = useSearchParams()
+  const presetAccount = params.get('account')
   const [mode, setMode] = useState<Mode>('players')
-  const [selected, setSelected] = useState<Record<string, string>>({})
+  const [selected, setSelected] = useState<Record<string, string>>(() =>
+    presetAccount ? { [presetAccount]: params.get('name') || presetAccount.slice(0, 8) } : {},
+  )
   const [serverId, setServerId] = useState('')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -450,6 +457,9 @@ export default function Mails({
             <span className="text-sm text-neutral-500">일</span>
           </div>
 
+          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: project.color }}>
+            대상 게임: {project.label}
+          </div>
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-neutral-600">
             <span className="font-medium text-neutral-800">{schedSummary}</span> · 대상 <span className="font-medium text-neutral-800">{targetSummary}</span> · 분류 <span className="font-medium text-neutral-800">{catLabel(category)}</span>
             {items.length > 0 && <> · 보상 {items.length}종</>}

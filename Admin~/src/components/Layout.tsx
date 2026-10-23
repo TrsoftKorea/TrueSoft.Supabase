@@ -3,10 +3,10 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
-  UsersRound, Swords, Medal, SlidersHorizontal,
+  UsersRound, Swords, Medal, SlidersHorizontal, Server, ClipboardList,
   ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
-import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
+import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
 
 const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
@@ -99,9 +99,18 @@ export function Layout({
   const pendingCount = drafts?.length ?? null
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
+  const project = getProject(target)
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* 지금 어느 게임을 다루는지 — 화면 어디서든 보이게 맨 위에 게임 색으로 띄운다. */}
+      <div
+        className="h-7 shrink-0 flex items-center justify-center text-xs font-medium text-white"
+        style={{ backgroundColor: project.color }}
+      >
+        {project.label}
+      </div>
+      <div className="flex-1 min-h-0 flex">
       {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
           화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
       <aside className="w-56 shrink-0 h-full bg-white border-r border-neutral-200 flex flex-col">
@@ -113,7 +122,8 @@ export function Layout({
           <select
             value={target}
             onChange={(e) => switchTarget(e.target.value as ProjectTarget)}
-            className="w-full h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white"
+            className="w-full h-9 px-2 rounded-md border-2 text-sm bg-white font-medium"
+            style={{ borderColor: project.color }}
           >
             {PROJECTS.map((p) => (
               <option key={p.key} value={p.key}>
@@ -125,7 +135,7 @@ export function Layout({
 
         <nav className="flex-1 overflow-y-auto px-3 py-3">
           <NavSection>
-            <NavLinkRow to="/dashboard" label="대시보드" icon={LayoutDashboard} />
+            <NavLinkRow to="/" label="대시보드" icon={LayoutDashboard} end />
           </NavSection>
 
           <NavSection label="빌드">
@@ -137,12 +147,25 @@ export function Layout({
           <NavSection label="운영">
             <NavLinkRow to="/players" label="플레이어" icon={Users} />
             <NavLinkRow to="/purchases" label="구매 내역" icon={ReceiptText} />
-            <NavLinkRow to="/" label="아이템 카탈로그" icon={Package} end />
+            <NavLinkRow to="/items" label="아이템 카탈로그" icon={Package} />
             <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} />
-            <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
-            <NavLinkRow to="/friends" label="친구" icon={UsersRound} />
-            <NavLinkRow to="/lobbies" label="매치 로비" icon={Swords} />
-            <NavLinkRow to="/match-rewards" label="매치 보상" icon={Medal} />
+            <NavLinkRow to="/servers" label="게임 서버" icon={Server} />
+            <NavGroupBlock
+              label="소셜"
+              icon={UsersRound}
+              items={[
+                { to: '/chat', label: '채팅 관리', icon: MessageSquare },
+                { to: '/friends', label: '친구', icon: UsersRound },
+              ]}
+            />
+            <NavGroupBlock
+              label="매치"
+              icon={Swords}
+              items={[
+                { to: '/lobbies', label: '매치 로비', icon: Swords },
+                { to: '/match-rewards', label: '매치 보상', icon: Medal },
+              ]}
+            />
             <NavGroupBlock
               label="우편함"
               icon={Mail}
@@ -158,6 +181,7 @@ export function Layout({
 
           <NavSection label="모니터링">
             <NavLinkRow to="/data-logs" label="데이터 로그" icon={ScrollText} />
+            <NavLinkRow to="/audit" label="운영 기록" icon={ClipboardList} />
           </NavSection>
         </nav>
 
@@ -209,6 +233,7 @@ export function Layout({
           )}
           {children}
         </main>
+      </div>
       </div>
     </div>
   )

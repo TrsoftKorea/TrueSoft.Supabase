@@ -9,6 +9,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
 import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
+import { Button } from '../components/ui/Button'
 
 type Meta = Record<string, unknown>
 type LobbyMember = {
@@ -155,14 +156,13 @@ function LobbyList({
             <option value="cancelled">취소됨</option>
             <option value="expired">만료됨</option>
           </select>
-          <button
+          <Button variant="outline" size="compact"
             onClick={() => void load()}
             disabled={loading}
-            className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             새로고침
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 

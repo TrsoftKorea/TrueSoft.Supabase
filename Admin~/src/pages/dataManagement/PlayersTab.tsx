@@ -9,6 +9,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
+import { Button } from '../../components/ui/Button'
 
 type Row = { account_id: string; display_name: string; updated_at: string }
 
@@ -91,13 +92,12 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary"
             onClick={handleApply}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90"
           >
             적용
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -231,14 +231,13 @@ function PlayerEditModal({
           )}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={requestClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button
+          <Button variant="outline" onClick={requestClose}>취소</Button>
+          <Button variant="primary"
             onClick={() => { void handleSave() }}
             disabled={pendingCount === 0 || saving}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {saving ? '저장 중…' : `저장 (${pendingCount})`}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -313,14 +312,13 @@ function PasteConfirmModal({
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} disabled={loading} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50">취소</button>
-          <button
+          <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+          <Button variant="primary"
             onClick={onConfirm}
             disabled={loading || compareLoading || noChanges}
-            className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-blue-600 disabled:opacity-50 inline-flex items-center gap-1.5"
           >
             {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}덮어쓰기
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -473,19 +471,17 @@ export default function PlayersTab({
             onKeyDown={(e) => e.key === 'Enter' && void search(searchInput)}
             className="flex-1 min-w-[240px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
           />
-          <button
+          <Button variant="primary" size="compact"
             onClick={() => void search(searchInput)}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </button>
-          <button
+          </Button>
+          <Button variant="outline" size="compact"
             onClick={() => { setSearchInput(''); void search('') }}
-            className="h-9 px-3 rounded-md border border-neutral-300 bg-white text-sm hover:bg-neutral-50"
           >
             초기화
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 

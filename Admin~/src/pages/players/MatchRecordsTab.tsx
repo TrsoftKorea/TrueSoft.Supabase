@@ -7,6 +7,7 @@ import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
+import { Button } from '../../components/ui/Button'
 
 type Status = 'verified' | 'pending' | 'solo' | 'mismatch'
 
@@ -90,14 +91,13 @@ export default function MatchRecordsTab({
           <option value="">모든 게임 코드</option>
           {codeOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
         </select>
-        <button
+        <Button variant="outline" size="compact"
           onClick={() => void load()}
           disabled={loading}
-          className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-neutral-200 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 whitespace-nowrap"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>

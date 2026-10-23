@@ -7,6 +7,7 @@ import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime } from '../../components/ui/format'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
+import { Button } from '../../components/ui/Button'
 
 type LbRow = { code: string; display_name: string; rotation: string; scope: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
@@ -332,14 +333,13 @@ export default function ScoresTab({
             placeholder="닉네임 / 계정 ID"
             className={inp + ' flex-1 min-w-[180px]'}
           />
-          <button
+          <Button variant="primary" size="compact"
             onClick={submitSearch}
             disabled={!selectedCode || scoresLoading}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-60"
           >
             {scoresLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             검색
-          </button>
+          </Button>
         </div>
       </WhiteCard>
 
@@ -523,19 +523,17 @@ export default function ScoresTab({
               )}
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button
+              <Button variant="outline" size="compact"
                 onClick={() => setDataEditRow(null)}
-                className="h-9 px-3 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50"
               >
                 취소
-              </button>
-              <button
+              </Button>
+              <Button variant="primary" size="compact"
                 onClick={() => void saveData()}
                 disabled={saving}
-                className="h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-60"
               >
                 저장
-              </button>
+              </Button>
             </div>
           </div>
         </div>

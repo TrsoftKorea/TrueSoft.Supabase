@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
+import { Button } from '../../components/ui/Button'
 
 export const inputCls =
   'h-9 px-3 rounded-md border border-neutral-200 text-sm outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]'
@@ -123,14 +124,13 @@ export function LimitsForm({
       ))}
 
       <div className="flex items-center gap-3 pt-1">
-        <button
+        <Button variant="primary"
           onClick={() => setConfirming(true)}
           disabled={saving || loading || !current || invalid || !changed}
-          className="h-9 px-4 inline-flex items-center gap-1.5 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-40 whitespace-nowrap"
         >
           <Save className="w-3.5 h-3.5" />
           저장
-        </button>
+        </Button>
         {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
         {typeof current?.updated_at === 'string' && (
           <span className="text-xs text-neutral-400">

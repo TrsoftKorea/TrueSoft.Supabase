@@ -11,6 +11,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } from '../components/ui/TypedValueField'
 import { opLabel } from '../lib/schemaLabels'
+import { Button } from '../components/ui/Button'
 
 type ConfigRow = {
   key: string
@@ -71,10 +72,10 @@ function NewConfigModal({ target, onUnauthenticated, onClose, onCreated }: {
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button onClick={() => { void submit() }} disabled={loading || !key.trim()} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
             {loading ? '추가 중…' : '추가'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -151,10 +152,10 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button onClick={() => { void submit() }} disabled={loading || !key.trim()} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
             {loading ? '저장 중…' : '저장'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -292,9 +293,9 @@ export default function RemoteConfig({
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={busy} />
 
       <div className="flex justify-end">
-        <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90">
+        <Button variant="primary" size="compact" onClick={() => setShowNew(true)}>
           <Plus className="w-4 h-4" />설정 추가
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>

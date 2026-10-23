@@ -9,7 +9,7 @@ import type { ButtonHTMLAttributes } from 'react'
  */
 
 type Variant = 'primary' | 'outline' | 'danger'
-type Size = 'md' | 'sm'
+type Size = 'md' | 'compact' | 'sm'
 
 const VARIANT_CLS: Record<Variant, string> = {
   primary: 'border border-transparent bg-[#1677ff] text-white hover:bg-[#1677ff]/90 disabled:opacity-50',
@@ -19,6 +19,7 @@ const VARIANT_CLS: Record<Variant, string> = {
 
 const SIZE_CLS: Record<Size, string> = {
   md: 'h-9 px-4 gap-1.5 text-sm rounded-md',
+  compact: 'h-9 px-3 gap-1.5 text-sm rounded-md',
   sm: 'px-2 py-1 gap-1 text-xs rounded',
 }
 

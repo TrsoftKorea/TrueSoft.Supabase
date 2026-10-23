@@ -8,6 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type MailRow = {
   id: string
@@ -214,9 +215,9 @@ export default function MailRecords({
                 {renderCategoryOptions()}
               </select>
               <input value={batchSearchInput} onChange={(e) => setBatchSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitBatchSearch()} placeholder="제목 검색" className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm" />
-              <button onClick={submitBatchSearch} disabled={batchLoading} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm disabled:opacity-60">
+              <Button variant="primary" size="compact" onClick={submitBatchSearch} disabled={batchLoading}>
                 {batchLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </button>
+              </Button>
             </div>
           </WhiteCard>
 
@@ -288,9 +289,9 @@ export default function MailRecords({
                 {renderCategoryOptions()}
               </select>
               <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 계정 ID" className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
-              <button onClick={submitSearch} disabled={recLoading} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+              <Button variant="primary" size="compact" onClick={submitSearch} disabled={recLoading}>
                 {recLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </button>
+              </Button>
             </div>
           </WhiteCard>
 

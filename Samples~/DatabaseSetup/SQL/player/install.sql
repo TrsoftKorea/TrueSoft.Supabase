@@ -3460,12 +3460,16 @@ begin
     'total_paid_krw',   p.total_paid_krw,
     'created_at',       u.created_at,
     'last_activity_at', p.last_activity_at,
-    'last_sign_in_at',  u.last_sign_in_at
+    'last_sign_in_at',  u.last_sign_in_at,
+    -- 미래 시각이면 탈퇴 예약(그 시각에 삭제), 지났으면 삭제 대기.
+    'withdrawn_at',     p.withdrawn_at,
+    'server_code',      gs.server_code
   )
   into v_row
   from public.user_profiles p
   join auth.users u on u.id = p.account_id
   left join public.display_names d on d.account_id = p.account_id
+  left join public.game_servers gs on gs.id = p.server_id
   where p.account_id = p_account_id;
 
   if v_row is null then
@@ -3512,6 +3516,86 @@ revoke all on function public.ts_admin_player_ban_info(uuid) from public, anon, 
 grant execute on function public.ts_admin_search_players(text, boolean, int, int) to service_role;
 grant execute on function public.ts_admin_player_profile(uuid) to service_role;
 grant execute on function public.ts_admin_player_ban_info(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 게임 서버 관리 — TrueBase.Admin 전용
+-- ---------------------------------------------------------------------------
+-- allow_new_signups 는 다루지 않는다 — 가입 경로 어디에서도 읽지 않아 바꿔도 아무 일이 없다.
+-- 서버 코드는 추가할 때만 정한다. 게임이 코드로 서버를 고르므로 나중에 바꾸면 이전 요청이 깨진다.
+-- 삭제도 두지 않는다 — 프로필·세이브가 server_id 를 restrict 로 물고 있다.
+create or replace function public.ts_admin_game_servers_list()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id',              gs.id,
+           'server_code',     gs.server_code,
+           'display_name',    gs.display_name,
+           'allow_transfers', gs.allow_transfers,
+           'is_default',      gs.id = public.ts_default_server_id(),
+           'player_count',    (select count(*) from public.user_profiles p where p.server_id = gs.id),
+           'created_at',      gs.created_at
+         ) order by gs.created_at, gs.id), '[]'::jsonb)
+    from public.game_servers gs;
+$$;
+
+create or replace function public.ts_admin_game_server_upsert(
+  p_id              uuid,
+  p_server_code     text,
+  p_display_name    text,
+  p_allow_transfers boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_code text := btrim(coalesce(p_server_code, ''));
+  v_name text := btrim(coalesce(p_display_name, ''));
+  v_id   uuid;
+begin
+  if v_name = '' then
+    raise exception 'server_display_name_empty';
+  end if;
+
+  if p_id is null then
+    if v_code !~ '^[A-Za-z0-9_-]{1,32}$' then
+      raise exception 'server_code_invalid';
+    end if;
+    if exists (select 1 from public.game_servers where server_code = v_code) then
+      raise exception 'server_code_taken';
+    end if;
+    insert into public.game_servers (server_code, display_name, allow_transfers)
+    values (v_code, v_name, coalesce(p_allow_transfers, true))
+    returning id into v_id;
+    return v_id;
+  end if;
+
+  update public.game_servers
+     set display_name    = v_name,
+         allow_transfers = coalesce(p_allow_transfers, allow_transfers)
+   where id = p_id
+  returning id into v_id;
+
+  if v_id is null then
+    raise exception 'server_not_found';
+  end if;
+  return v_id;
+end;
+$$;
+
+comment on function public.ts_admin_game_servers_list() is '게임 서버 목록(플레이어 수·기본 서버 표시 포함). service_role 전용.';
+comment on function public.ts_admin_game_server_upsert(uuid,text,text,boolean) is
+  '게임 서버 추가(p_id null)·이름·이전 허용 수정. 코드는 추가 때만 정한다. service_role 전용.';
+
+revoke all on function public.ts_admin_game_servers_list()                         from public, anon, authenticated;
+revoke all on function public.ts_admin_game_server_upsert(uuid,text,text,boolean)  from public, anon, authenticated;
+grant execute on function public.ts_admin_game_servers_list()                      to service_role;
+grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,boolean) to service_role;
 
 notify pgrst, 'reload schema';
 
@@ -6690,6 +6774,92 @@ grant execute on function public.ts_admin_list_operators()                      
 grant execute on function public.ts_admin_upsert_operator(text,text,text)           to service_role;
 grant execute on function public.ts_admin_set_operator_disabled(text,boolean,text)  to service_role;
 
+-- ---------------------------------------------------------------------------
+-- 운영 기록 — 운영 도구에서 누가 언제 무엇을 바꿨는지
+-- ---------------------------------------------------------------------------
+-- 운영 도구 백엔드(admin-api)가 조회가 아닌 요청이 성공할 때마다 한 줄씩 남긴다.
+-- 지우거나 고치는 함수는 두지 않는다 — 고칠 수 있는 기록은 근거가 못 된다.
+create table if not exists public.ts_admin_audit_logs (
+  id         bigserial   primary key,
+  email      text        not null,
+  action     text        not null,
+  params     jsonb       not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists ts_admin_audit_logs_created_idx on public.ts_admin_audit_logs (created_at desc);
+
+alter table public.ts_admin_audit_logs enable row level security;
+-- [의도적] 정책 없음 — service_role 전용. 클라이언트는 이 표에 닿지 않는다.
+
+comment on table public.ts_admin_audit_logs is
+  '운영 도구의 변경 요청 기록. admin-api 가 성공한 변경마다 남긴다. 비밀번호 값은 남기지 않는다.';
+
+create or replace function public.ts_admin_audit_write(
+  p_email  text,
+  p_action text,
+  p_params jsonb default '{}'::jsonb
+)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into public.ts_admin_audit_logs (email, action, params)
+  values (lower(coalesce(p_email, '')), coalesce(p_action, ''), coalesce(p_params, '{}'::jsonb));
+$$;
+
+create or replace function public.ts_admin_audit_list(
+  p_search     text default null,
+  p_category   text default null,
+  p_start_date date default null,
+  p_end_date   date default null,
+  p_page       int  default 1,
+  p_page_size  int  default 50
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_search   text := nullif(btrim(coalesce(p_search, '')), '');
+  v_category text := nullif(btrim(coalesce(p_category, '')), '');
+  v_page     int  := greatest(1, coalesce(p_page, 1));
+  v_size     int  := least(200, greatest(1, coalesce(p_page_size, 50)));
+  v_total    int;
+  v_rows     jsonb;
+begin
+  select coalesce(jsonb_agg(to_jsonb(t) - 'total' order by t.created_at desc, t.id desc), '[]'::jsonb),
+         coalesce(max(t.total), 0)
+    into v_rows, v_total
+  from (
+    select l.id, l.email, l.action, l.params, l.created_at, count(*) over() as total
+      from public.ts_admin_audit_logs l
+     where (v_search is null
+            or l.email ilike '%' || v_search || '%'
+            or l.params::text ilike '%' || v_search || '%')
+       and (v_category is null or l.action like v_category || '.%')
+       and (p_start_date is null or l.created_at >= p_start_date::timestamptz)
+       and (p_end_date   is null or l.created_at <  (p_end_date + 1)::timestamptz)
+     order by l.created_at desc, l.id desc
+     limit v_size offset (v_page - 1) * v_size
+  ) t;
+
+  return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
+end;
+$$;
+
+comment on function public.ts_admin_audit_write(text,text,jsonb) is '운영 기록 한 줄 추가. admin-api 전용.';
+comment on function public.ts_admin_audit_list(text,text,date,date,int,int) is
+  '운영 기록 검색. p_category 는 action 앞부분(mails·players 등). service_role 전용.';
+
+revoke all on function public.ts_admin_audit_write(text,text,jsonb)               from public, anon, authenticated;
+revoke all on function public.ts_admin_audit_list(text,text,date,date,int,int)    from public, anon, authenticated;
+grant execute on function public.ts_admin_audit_write(text,text,jsonb)            to service_role;
+grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int) to service_role;
+
 notify pgrst, 'reload schema';
 
 
@@ -7184,6 +7354,32 @@ comment on function public.ts_admin_coupon_delete(uuid) is
 
 revoke all on function public.ts_admin_coupon_delete(uuid) from public, anon, authenticated;
 grant execute on function public.ts_admin_coupon_delete(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- ts_admin_player_coupons — 플레이어 1명의 쿠폰 사용 이력(최근 순)
+-- ---------------------------------------------------------------------------
+-- 쿠폰을 지우면 이력도 함께 사라진다(cascade) — 여기 안 보이면 지운 쿠폰일 수 있다.
+create or replace function public.ts_admin_player_coupons(p_account_id uuid, p_limit int default 100)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(to_jsonb(t) order by t.redeemed_at desc), '[]'::jsonb)
+    from (
+      select r.code, r.kind, c.title, r.mail_id, r.redeemed_at
+        from public.coupon_redemptions r
+        join public.coupons c on c.id = r.coupon_id
+       where r.account_id = p_account_id
+       order by r.redeemed_at desc
+       limit least(500, greatest(1, coalesce(p_limit, 100)))
+    ) t;
+$$;
+
+comment on function public.ts_admin_player_coupons(uuid,int) is '플레이어 1명의 쿠폰 사용 이력. service_role 전용.';
+revoke all on function public.ts_admin_player_coupons(uuid,int) from public, anon, authenticated;
+grant execute on function public.ts_admin_player_coupons(uuid,int) to service_role;
 
 
 notify pgrst, 'reload schema';

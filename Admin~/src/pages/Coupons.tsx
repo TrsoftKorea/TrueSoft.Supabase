@@ -8,6 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
+import { Button } from '../components/ui/Button'
 
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
@@ -281,10 +282,10 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <button onClick={onClose} className="h-9 px-4 rounded-md border border-neutral-300 text-sm hover:bg-white">취소</button>
-          <button onClick={() => { void submit() }} disabled={loading || !canSubmit} className="h-9 px-4 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90 disabled:opacity-60">
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
             {loading ? '저장 중…' : isEdit ? '저장' : '발급'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -364,9 +365,9 @@ export default function Coupons({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex justify-end">
-        <button onClick={() => setShowModal(true)} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#1677ff] text-white text-sm hover:bg-[#1677ff]/90">
+        <Button variant="primary" size="compact" onClick={() => setShowModal(true)}>
           <Plus className="w-4 h-4" />쿠폰 추가
-        </button>
+        </Button>
       </div>
 
       <WhiteCard>

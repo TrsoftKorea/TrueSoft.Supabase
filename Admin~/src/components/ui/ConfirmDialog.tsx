@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { WhiteCard } from './Card'
 import { PageHeader } from './PageHeader'
+import { getProject, getTarget } from '../../lib/projectTarget'
 
 /**
  * 되돌리기 어려운 동작 앞에 띄우는 확인 창.
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   confirmLabel = '확인',
   danger = false,
   busy = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
   children,
@@ -26,6 +28,7 @@ export function ConfirmDialog({
   confirmLabel?: string
   danger?: boolean
   busy?: boolean
+  confirmDisabled?: boolean
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
@@ -41,6 +44,9 @@ export function ConfirmDialog({
   }, [open, busy, onCancel])
 
   if (!open) return null
+
+  // 확인 창은 어느 화면에서 열리든 지금 선택된 게임이 대상이다 — 화면마다 넘겨받지 않고 여기서 읽는다.
+  const project = getProject(getTarget())
 
   return (
     <div
@@ -63,6 +69,13 @@ export function ConfirmDialog({
             </button>
           </div>
 
+          <div
+            className="rounded-md px-3 py-2 text-sm font-medium text-white"
+            style={{ backgroundColor: project.color }}
+          >
+            대상 게임: {project.label}
+          </div>
+
           {children}
 
           {description && <div className="text-sm text-neutral-600">{description}</div>}
@@ -77,7 +90,7 @@ export function ConfirmDialog({
             </button>
             <button
               onClick={onConfirm}
-              disabled={busy}
+              disabled={busy || confirmDisabled}
               className={[
                 'ml-auto inline-flex items-center gap-1.5 h-9 px-5 rounded-md text-white text-sm font-medium disabled:opacity-50',
                 danger ? 'bg-red-600 hover:bg-red-700' : 'bg-[#1677ff] hover:bg-[#1677ff]/90',
