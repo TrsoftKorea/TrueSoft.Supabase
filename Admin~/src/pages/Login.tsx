@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { renderGoogleButton, storeToken } from '../lib/googleAuth'
 import { callAdminPublic } from '../lib/api'
+import { useProjectColor } from '../lib/projectColors'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
 
@@ -27,6 +28,7 @@ export default function Login({
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const project = getProject(target)
+  const colorOf = useProjectColor()
 
   // 버튼은 한 번만 그리므로 콜백이 보는 target 은 ref 로 최신값을 읽는다.
   const targetRef = useRef(target)
@@ -68,12 +70,15 @@ export default function Login({
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <WhiteCard className="w-full max-w-sm p-6">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[#161a2b]">
+      <WhiteCard className="w-full max-w-sm overflow-hidden">
+        <div className="h-1.5" style={{ backgroundColor: colorOf(target) }} />
+        <div className="p-6">
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
 
         <div ref={pickerRef} className="relative mt-1 flex items-center gap-2">
-          <p className="text-sm text-neutral-500">{project.label}</p>
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorOf(target) }} />
+          <p className="text-sm text-neutral-600">{project.label}</p>
           <button
             type="button"
             onClick={() => setPickerOpen((v) => !v)}
@@ -88,10 +93,11 @@ export default function Login({
                   key={p.key}
                   type="button"
                   onClick={() => pick(p.key)}
-                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 ${
-                    p.key === target ? 'text-[#1677ff] font-medium' : 'text-neutral-700'
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 ${
+                    p.key === target ? 'text-neutral-900 font-medium' : 'text-neutral-700'
                   }`}
                 >
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorOf(p.key) }} />
                   {p.label}
                 </button>
               ))}
@@ -112,7 +118,8 @@ export default function Login({
         <div ref={buttonRef} className="flex justify-center" />
         {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
-        <p className="mt-4 text-xs text-neutral-400">허용된 운영자 계정만 들어올 수 있습니다.</p>
+        <p className="mt-4 text-xs text-neutral-500">허용된 운영자 계정만 들어올 수 있습니다.</p>
+        </div>
       </WhiteCard>
     </div>
   )

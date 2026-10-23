@@ -293,6 +293,13 @@ Deno.serve(async (req) => {
           return json({ ok: true, data: { token } });
         }
 
+        // 로그인 화면·게임 고르는 칸이 로그인 전에도 게임마다 색을 보여 줘야 해서 인증 없이 연다. 색 말고는 내보내지 않는다.
+        case "auth.consoleColor": {
+          const { data, error } = await db.rpc("ts_admin_console_settings_get");
+          if (error) throw new Error(error.message);
+          return json({ ok: true, data: { color: (data as { color?: string | null } | null)?.color ?? null } });
+        }
+
         default:
           return fail(`알 수 없는 action: ${action}`, 400);
       }
@@ -1024,6 +1031,21 @@ async function handleAction(
         const { error } = await db.rpc("ts_admin_server_config_set", { p_key: key, p_value: value, p_by: email });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
+      }
+
+      case "settings.getConsole": {
+        const { data, error } = await db.rpc("ts_admin_console_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "settings.setConsoleColor": {
+        const { data, error } = await db.rpc("ts_admin_console_settings_update", {
+          p_color: optStr(params, "color"),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message === "console_color_invalid" ? "색은 #rrggbb 형식이어야 합니다." : error.message);
+        return json({ ok: true, data });
       }
 
       case "mails.settingsGet": {

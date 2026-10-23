@@ -7383,6 +7383,76 @@ revoke all on function public.ts_admin_audit_list(text,text,date,date,int,int)  
 grant execute on function public.ts_admin_audit_write(text,text,jsonb)            to service_role;
 grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- 콘솔 표시 — 운영 콘솔에서 이 게임을 나타내는 색
+-- ---------------------------------------------------------------------------
+-- 운영자가 엉뚱한 게임에서 작업하지 않도록 메뉴·상단 띠·확인 창에 게임마다 다른 색을 쓴다.
+-- color 가 null 이면 콘솔 코드에 적힌 기본색을 쓴다(새 게임은 따로 정하지 않아도 된다).
+create table if not exists public.ts_admin_console_settings (
+  id         int primary key default 1 check (id = 1),
+  color      text check (color ~ '^#[0-9a-f]{6}$'),
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+
+insert into public.ts_admin_console_settings (id) values (1) on conflict (id) do nothing;
+
+alter table public.ts_admin_console_settings enable row level security;
+-- [의도적] 정책 없음 — service_role 전용.
+
+comment on table public.ts_admin_console_settings is
+  '운영 콘솔 표시 설정(행 하나). color=이 게임의 콘솔 색(#rrggbb 소문자, null 이면 콘솔 기본색).';
+
+create or replace function public.ts_admin_console_settings_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+           (select jsonb_build_object('color', c.color, 'updated_at', c.updated_at, 'updated_by', c.updated_by)
+              from public.ts_admin_console_settings c where c.id = 1),
+           jsonb_build_object('color', null, 'updated_at', null, 'updated_by', null));
+$$;
+
+create or replace function public.ts_admin_console_settings_update(
+  p_color text,
+  p_by    text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_color text := nullif(lower(btrim(coalesce(p_color, ''))), '');
+begin
+  if v_color is not null and v_color !~ '^#[0-9a-f]{6}$' then
+    raise exception 'console_color_invalid';
+  end if;
+
+  insert into public.ts_admin_console_settings (id, color, updated_at, updated_by)
+  values (1, v_color, now(), p_by)
+  on conflict (id) do update
+    set color      = excluded.color,
+        updated_at = now(),
+        updated_by = excluded.updated_by;
+
+  return public.ts_admin_console_settings_get();
+end;
+$$;
+
+comment on function public.ts_admin_console_settings_get() is
+  '콘솔 표시 설정 조회. admin-api 가 로그인 전 화면에도 색을 보여 주려고 인증 없이 부른다. service_role 전용.';
+comment on function public.ts_admin_console_settings_update(text, text) is
+  '콘솔 색 변경(#rrggbb, 빈 값이면 기본색으로). 형식이 틀리면 console_color_invalid. service_role 전용.';
+
+revoke all on table    public.ts_admin_console_settings from anon, authenticated;
+revoke all on function public.ts_admin_console_settings_get()                 from public, anon, authenticated;
+revoke all on function public.ts_admin_console_settings_update(text, text)    from public, anon, authenticated;
+grant execute on function public.ts_admin_console_settings_get()              to service_role;
+grant execute on function public.ts_admin_console_settings_update(text, text) to service_role;
+
 notify pgrst, 'reload schema';
 
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import type { ProjectTarget } from '../lib/projectTarget'
+import { getProject, PROJECTS, type ProjectTarget } from '../lib/projectTarget'
+import { setProjectColor, useProjectColor } from '../lib/projectColors'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { WhiteCard } from '../components/ui/Card'
@@ -243,13 +244,178 @@ const LOBBY_FIELDS: LimitField[] = [
   },
 ]
 
-type Tab = 'store' | 'mail' | 'friend' | 'lobby'
+// 흰 글자가 얹히는 색이라 전부 흰색과 4.5:1 이상 대비가 나는 진한 색으로 골랐다.
+const CONSOLE_PALETTE: { name: string; hex: string }[] = [
+  { name: '보라', hex: '#7c3aed' },
+  { name: '남색', hex: '#4338ca' },
+  { name: '파랑', hex: '#1d4ed8' },
+  { name: '청록', hex: '#0f766e' },
+  { name: '초록', hex: '#15803d' },
+  { name: '주황', hex: '#c2410c' },
+  { name: '빨강', hex: '#b91c1c' },
+  { name: '분홍', hex: '#be185d' },
+  { name: '갈색', hex: '#92400e' },
+  { name: '회색', hex: '#475569' },
+]
+
+const HEX_RE = /^#[0-9a-f]{6}$/
+
+function rgbOf(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+}
+
+/** WCAG 대비 — 흰 글자와 이 색 바탕. */
+function contrastWithWhite(hex: string): number {
+  const lum = rgbOf(hex)
+    .map((v) => v / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+  const l = 0.2126 * lum[0]! + 0.7152 * lum[1]! + 0.0722 * lum[2]!
+  return 1.05 / (l + 0.05)
+}
+
+function colorDistance(a: string, b: string): number {
+  const [x, y] = [rgbOf(a), rgbOf(b)]
+  return Math.sqrt(x.reduce((s, v, i) => s + (v - y[i]!) ** 2, 0))
+}
+
+type ConsoleSettings = { color: string | null; updated_at: string | null; updated_by: string | null }
+
+function ConsoleColorCard({
+  target,
+  report,
+}: {
+  target: ProjectTarget
+  report: (e: unknown, fallback: string) => void
+}) {
+  const colorOf = useProjectColor()
+  const [current, setCurrent] = useState<ConsoleSettings | null>(null)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setCurrent(null)
+    setSaved(false)
+    callAdmin<ConsoleSettings>(target, 'settings.getConsole')
+      .then((s) => {
+        setCurrent(s)
+        setValue(s.color ?? getProject(target).color)
+      })
+      .catch((e: unknown) => report(e, '콘솔 표시 설정을 불러오지 못했습니다.'))
+  }, [target, report])
+
+  const hex = value.trim().toLowerCase()
+  const valid = HEX_RE.test(hex)
+  const readable = valid && contrastWithWhite(hex) >= 4.5
+  const similar = valid
+    ? PROJECTS.filter((p) => p.key !== target && colorDistance(colorOf(p.key), hex) < 90)
+    : []
+  const changed = !!current && valid && hex !== (current.color ?? getProject(target).color)
+
+  const save = async (color: string | null) => {
+    setSaving(true)
+    setSaved(false)
+    try {
+      const s = await callAdmin<ConsoleSettings>(target, 'settings.setConsoleColor', { color: color ?? '' })
+      setCurrent(s)
+      setValue(s.color ?? getProject(target).color)
+      setProjectColor(target, s.color)
+      setSaved(true)
+    } catch (e: unknown) {
+      report(e, '색을 저장하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+      <div>
+        <h2 className="text-sm font-medium text-neutral-900">게임 색</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          {getProject(target).label}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2.5" role="group" aria-label="색 고르기">
+        {CONSOLE_PALETTE.map((c) => {
+          const on = c.hex === hex
+          return (
+            <button
+              key={c.hex}
+              type="button"
+              aria-label={c.name}
+              aria-pressed={on}
+              disabled={!current}
+              onClick={() => { setValue(c.hex); setSaved(false) }}
+              className="w-11 h-11 rounded-xl border-[3px] border-white disabled:opacity-40"
+              style={{ backgroundColor: c.hex, boxShadow: on ? '0 0 0 2px #161a2b' : '0 0 0 1px #d4d4d4' }}
+            />
+          )
+        })}
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="console-color" className="block text-sm font-medium text-neutral-800">직접 입력</label>
+        <input
+          id="console-color"
+          className={`${inputCls} w-40 font-mono ${valid && readable ? '' : 'border-red-400 focus:border-red-400 focus:ring-red-200'}`}
+          value={value}
+          disabled={!current}
+          onChange={(e) => { setValue(e.target.value); setSaved(false) }}
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <p className={`text-xs ${valid && readable ? 'text-neutral-500' : 'text-red-600'}`}>
+          {!valid
+            ? '#과 16진수 6자리로 적어 주세요.'
+            : !readable
+              ? '너무 밝아 흰 글자가 잘 안 보입니다. 더 진한 색을 골라 주세요.'
+              : '#과 16진수 6자리.'}
+        </p>
+      </div>
+
+      {similar.length > 0 && (
+        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {similar.map((p) => p.label).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 게임에서 작업하지 않도록 확실히 다른 색을 고르세요.
+        </div>
+      )}
+
+      <div className="rounded-lg overflow-hidden border border-neutral-200">
+        <div className="px-4 py-3 text-white font-bold" style={{ backgroundColor: valid ? hex : '#9ca3af' }}>
+          {getProject(target).label}
+        </div>
+        <div className="px-4 py-2 text-xs text-neutral-500">미리보기</div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" onClick={() => void save(hex)} disabled={saving || !changed || !readable}>
+          저장
+        </Button>
+        {current?.color && (
+          <Button onClick={() => void save(null)} disabled={saving}>
+            기본색으로
+          </Button>
+        )}
+        {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
+        {current?.updated_at && current.color && (
+          <span className="text-xs text-neutral-400">
+            마지막 수정 {formatDateTime(current.updated_at)}{current.updated_by ? ` · ${current.updated_by}` : ''}
+          </span>
+        )}
+      </div>
+    </WhiteCard>
+  )
+}
+
+type Tab = 'store' | 'mail' | 'friend' | 'lobby' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '스토어 연결'],
   ['mail', '우편'],
   ['friend', '친구'],
   ['lobby', '매치 로비'],
+  ['console', '콘솔 표시'],
 ]
 
 export default function Settings({
@@ -290,6 +456,7 @@ export default function Settings({
       </div>
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
+      {tab === 'console' && <ConsoleColorCard target={target} report={report} />}
       {tab === 'mail' && (
         <LimitsForm
           target={target}

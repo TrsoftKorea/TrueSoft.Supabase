@@ -3,6 +3,7 @@ import { Loader2, Send, X, Plus, Check, ChevronDown } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { useSearchParams } from 'react-router-dom'
 import { getProject, type ProjectTarget } from '../lib/projectTarget'
+import { useProjectColor } from '../lib/projectColors'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -100,6 +101,7 @@ export default function Mails({
   const [repeatDow, setRepeatDow] = useState(1)
   const [repeatDom, setRepeatDom] = useState(1)
   const project = getProject(target)
+  const colorOf = useProjectColor()
   // 플레이어 상세의 "우편 보내기"가 ?account=&name= 으로 넘겨 그 사람을 미리 골라 둔다.
   const [params] = useSearchParams()
   const presetAccount = params.get('account')
@@ -457,7 +459,7 @@ export default function Mails({
             <span className="text-sm text-neutral-500">일</span>
           </div>
 
-          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: project.color }}>
+          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: colorOf(target) }}>
             대상 게임: {project.label}
           </div>
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-neutral-600">

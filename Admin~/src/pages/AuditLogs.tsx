@@ -30,7 +30,7 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: 'matchRewards', label: '매치 보상' },
   { key: 'friends', label: '친구 설정' },
   { key: 'matchLobby', label: '매치 로비 설정' },
-  { key: 'settings', label: '스토어 연결' },
+  { key: 'settings', label: '설정' },
   { key: 'operators', label: '운영자' },
 ]
 
@@ -63,6 +63,7 @@ const ACTION_LABELS: Record<string, string> = {
   'friends.settingsUpdate': '친구 설정 변경',
   'matchLobby.settingsUpdate': '매치 로비 설정 변경',
   'settings.setServerConfig': '스토어 연결값 변경',
+  'settings.setConsoleColor': '콘솔 색 변경',
   'matchRewards.upsert': '매치 보상 추가·수정',
   'matchRewards.delete': '매치 보상 삭제',
   'coupons.create': '쿠폰 생성',

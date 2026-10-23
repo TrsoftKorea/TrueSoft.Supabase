@@ -3,6 +3,7 @@ import { Loader2, X } from 'lucide-react'
 import { WhiteCard } from './Card'
 import { PageHeader } from './PageHeader'
 import { getProject, getTarget } from '../../lib/projectTarget'
+import { useProjectColor } from '../../lib/projectColors'
 
 /**
  * 되돌리기 어려운 동작 앞에 띄우는 확인 창.
@@ -43,6 +44,8 @@ export function ConfirmDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, busy, onCancel])
 
+  const colorOf = useProjectColor()
+
   if (!open) return null
 
   // 확인 창은 어느 화면에서 열리든 지금 선택된 게임이 대상이다 — 화면마다 넘겨받지 않고 여기서 읽는다.
@@ -71,7 +74,7 @@ export function ConfirmDialog({
 
           <div
             className="rounded-md px-3 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: project.color }}
+            style={{ backgroundColor: colorOf(project.key) }}
           >
             대상 게임: {project.label}
           </div>

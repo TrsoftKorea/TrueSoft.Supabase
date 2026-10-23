@@ -13,6 +13,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "Admin~",
       "port": 5273
+    },
+    {
+      "name": "admin-build",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
+      "cwd": "Admin~",
+      "port": 4173
     }
   ]
 }
