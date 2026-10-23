@@ -55,10 +55,7 @@ export function clearToken(): void {
   window.google?.accounts.id.disableAutoSelect()
 }
 
-/**
- * 로그인 토큰을 저장한다. 구글이 발급했든(renderGoogleButton 내부) 비밀번호 로그인이
- * 발급했든 형태(JWT)가 같아 저장·만료 판단(getToken)을 그대로 공유한다.
- */
+/** 백엔드가 발급한 로그인 세션 토큰을 저장한다(구글·비밀번호 로그인 공용). */
 export function storeToken(token: string): void {
   window.sessionStorage.setItem(STORAGE_KEY, token)
 }
@@ -95,7 +92,8 @@ function loadGsi(): Promise<void> {
 }
 
 /**
- * 구글 로그인 버튼을 그린다. 로그인에 성공하면 토큰을 저장하고 onToken 을 부른다.
+ * 구글 로그인 버튼을 그린다. 로그인에 성공하면 구글 ID 토큰으로 onCredential 을 부른다.
+ * 저장하지 않는다 — 구글 토큰은 1시간짜리라, 호출 쪽이 백엔드에서 세션 토큰으로 바꿔 저장한다.
  * 반환값은 정리 함수가 아니라, 스크립트 로딩 실패를 알리기 위한 Promise 다.
  *
  * isCancelled 는 React StrictMode 의 effect 이중 실행을 막는 용도다 — 그게 없으면
@@ -104,7 +102,7 @@ function loadGsi(): Promise<void> {
  */
 export async function renderGoogleButton(
   parent: HTMLElement,
-  onToken: (token: string) => void,
+  onCredential: (idToken: string) => void,
   isCancelled: () => boolean = () => false,
 ): Promise<void> {
   if (!GOOGLE_CLIENT_ID) throw new Error('VITE_GOOGLE_CLIENT_ID 가 비어 있습니다.')
@@ -117,9 +115,7 @@ export async function renderGoogleButton(
   api.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: (res) => {
-      if (!res.credential) return
-      storeToken(res.credential)
-      onToken(res.credential)
+      if (res.credential) onCredential(res.credential)
     },
     auto_select: false,
     cancel_on_tap_outside: true,

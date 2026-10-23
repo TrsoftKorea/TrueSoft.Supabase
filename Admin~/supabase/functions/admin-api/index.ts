@@ -36,7 +36,9 @@ const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth
 // verifyIdentity() 가 시도 순서로 둘을 구분한다.
 const SESSION_SECRET = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const SESSION_KEY = SESSION_SECRET ? new TextEncoder().encode(SESSION_SECRET) : null;
-const SESSION_TTL = "12h";
+// 구글 로그인도 이 토큰으로 바꿔 준다(auth.googleLogin) — 구글 ID 토큰은 1시간이면 끝나
+// 그대로 쓰면 운영자가 한 시간마다 다시 로그인해야 했다.
+const SESSION_TTL = "24h";
 
 // 비어 있으면 마스터가 없는 상태 — 표에 등록된 운영자만 들어온다.
 const MASTER_EMAILS = new Set(
@@ -151,7 +153,7 @@ async function isAllowedIdentity(db: SupabaseClient, email: string): Promise<boo
   return MASTER_EMAILS.has(email) || (await isEnabledOperator(db, email));
 }
 
-/** 비밀번호 로그인 세션 토큰을 발급한다. 구글 ID 토큰과 같은 JWT 형태라 프런트가 만료를 그대로 읽는다. */
+/** 로그인 세션 토큰을 발급한다(비밀번호·구글 공용). 구글 ID 토큰과 같은 JWT 형태라 프런트가 만료를 그대로 읽는다. */
 async function issueSessionToken(email: string): Promise<string> {
   if (!SESSION_KEY) throw new Error("ADMIN_SESSION_SECRET 가 설정되지 않았습니다.");
   return await new SignJWT({ email })
@@ -278,6 +280,16 @@ Deno.serve(async (req) => {
             return fail("운영자 권한이 없습니다.", 403);
           }
           const token = await issueSessionToken(loginEmail);
+          return json({ ok: true, data: { token } });
+        }
+
+        case "auth.googleLogin": {
+          const googleEmail = await verifyGoogleIdToken(str(params, "idToken"));
+          if (!googleEmail) return fail("구글 로그인을 확인하지 못했습니다.", 401);
+          if (!(await isAllowedIdentity(db, googleEmail))) {
+            return fail("운영자 권한이 없습니다.", 403);
+          }
+          const token = await issueSessionToken(googleEmail);
           return json({ ok: true, data: { token } });
         }
 

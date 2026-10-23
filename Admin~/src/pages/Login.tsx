@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
-import { renderGoogleButton } from '../lib/googleAuth'
+import { renderGoogleButton, storeToken } from '../lib/googleAuth'
+import { callAdminPublic } from '../lib/api'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
 
@@ -27,11 +28,25 @@ export default function Login({
 
   const project = getProject(target)
 
+  // 버튼은 한 번만 그리므로 콜백이 보는 target 은 ref 로 최신값을 읽는다.
+  const targetRef = useRef(target)
+  targetRef.current = target
+
   useEffect(() => {
     const el = buttonRef.current
     if (!el) return
     let cancelled = false
-    renderGoogleButton(el, onToken, () => cancelled).catch((e: unknown) => {
+    const onCredential = async (idToken: string) => {
+      setError('')
+      try {
+        const { token } = await callAdminPublic<{ token: string }>(targetRef.current, 'auth.googleLogin', { idToken })
+        storeToken(token)
+        onToken(token)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
+      }
+    }
+    renderGoogleButton(el, (idToken) => void onCredential(idToken), () => cancelled).catch((e: unknown) => {
       if (!cancelled) setError(e instanceof Error ? e.message : '구글 로그인을 준비하지 못했습니다.')
     })
     return () => { cancelled = true }

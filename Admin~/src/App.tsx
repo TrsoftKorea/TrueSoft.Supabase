@@ -42,7 +42,7 @@ export default function App() {
     setMe(null)
   }, [])
 
-  // 구글 ID 토큰은 1시간이면 만료된다. 만료되면 로그인 화면으로 돌려보낸다.
+  // 로그인 세션 토큰(24시간)이 만료되면 로그인 화면으로 돌려보낸다.
   useEffect(() => {
     if (!token) return
     const id = window.setInterval(() => {
