@@ -151,22 +151,6 @@ export function Layout({
             <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} />
             <NavLinkRow to="/servers" label="게임 서버" icon={Server} />
             <NavGroupBlock
-              label="소셜"
-              icon={UsersRound}
-              items={[
-                { to: '/chat', label: '채팅 관리', icon: MessageSquare },
-                { to: '/friends', label: '친구', icon: UsersRound },
-              ]}
-            />
-            <NavGroupBlock
-              label="매치"
-              icon={Swords}
-              items={[
-                { to: '/lobbies', label: '매치 로비', icon: Swords },
-                { to: '/match-rewards', label: '매치 보상', icon: Medal },
-              ]}
-            />
-            <NavGroupBlock
               label="우편함"
               icon={Mail}
               items={[
@@ -177,6 +161,16 @@ export function Layout({
                 { to: '/mails/settings', label: '우편 설정', icon: SlidersHorizontal },
               ]}
             />
+          </NavSection>
+
+          <NavSection label="소셜">
+            <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
+            <NavLinkRow to="/friends" label="친구" icon={UsersRound} />
+          </NavSection>
+
+          <NavSection label="매치">
+            <NavLinkRow to="/lobbies" label="매치 로비" icon={Swords} />
+            <NavLinkRow to="/match-rewards" label="매치 보상" icon={Medal} />
           </NavSection>
 
           <NavSection label="모니터링">
