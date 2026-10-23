@@ -125,6 +125,7 @@ namespace SdkAudit
             CodeRules.Consumers(ctx);
             CodeRules.StructureLists(ctx);
             SqlRules.Run(ctx);
+            EdgeFunctionRules.Run(ctx);
         }
     }
 }

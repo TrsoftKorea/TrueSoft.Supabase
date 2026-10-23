@@ -2,7 +2,7 @@
 // SK1 (verifyReceipt) 기반 Apple IAP 서버 검증.
 // iOS 14 이하 또는 forceStoreKit1 경로에서 생성된 receipt blob을 검증합니다.
 //
-// 필요 환경 변수:
+// 필요한 값(운영 콘솔 "설정" 또는 Edge Function Secrets):
 //   APPLE_SHARED_SECRET  — App Store Connect > 앱 정보 > 공유 암호 (shared secret)
 //   APPLE_BUNDLE_ID      — 이 프로젝트가 받는 앱 번들 ID. 여럿이면 쉼표로 구분.
 //                          verifyReceipt 는 어느 앱의 영수증이든 진짜면 status 0 을 준다(소모성 상품은
@@ -17,6 +17,29 @@
 // 이 함수가 service_role 로만 기록합니다(가짜 결제 기록 차단).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
 
 const PRODUCTION_URL = "https://buy.itunes.apple.com/verifyReceipt";
 const SANDBOX_URL    = "https://sandbox.itunes.apple.com/verifyReceipt";
@@ -91,16 +114,15 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ ok: false, reason: "missing_fields" }, 400);
   }
 
-  const sharedSecret = Deno.env.get("APPLE_SHARED_SECRET");
+  const sharedSecret = await serverConfig("APPLE_SHARED_SECRET");
   if (!sharedSecret) {
-    console.error("[purchase-verify-apple-legacy] APPLE_SHARED_SECRET 환경 변수가 없습니다.");
+    console.error("[purchase-verify-apple-legacy] APPLE_SHARED_SECRET 가 콘솔 설정에도 Secrets 에도 없습니다.");
     return jsonResponse({ ok: false, reason: "server_config_error" }, 500);
   }
 
-  const allowedBundleIds = (Deno.env.get("APPLE_BUNDLE_ID") ?? "")
-    .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const allowedBundleIds = await serverConfigList("APPLE_BUNDLE_ID");
   if (allowedBundleIds.length === 0) {
-    console.error("[purchase-verify-apple-legacy] APPLE_BUNDLE_ID 환경 변수가 없습니다.");
+    console.error("[purchase-verify-apple-legacy] APPLE_BUNDLE_ID 가 콘솔 설정에도 Secrets 에도 없습니다.");
     return jsonResponse({ ok: false, reason: "server_config_error" }, 500);
   }
 

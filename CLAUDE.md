@@ -34,7 +34,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 - The SDK has no test runner. Validation is done via `Samples~/Examples/ExampleSupabaseScenarios.cs` (keyboard-shortcut-driven test flows in Play Mode).
 - **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
 - **플랫폼 전용 코드 컴파일 검증**: 유니티 에디터 컴파일은 빌드 대상과 무관하게 `UNITY_EDITOR`가 켜져 `#if UNITY_IOS && !UNITY_EDITOR` 안쪽을 **한 번도 컴파일하지 않는다**(에디터 "오류 0"은 그 코드를 본 것이 아니다). 플랫폼 분기·IAP·`Samples~/PlayNanooMigration`을 고쳤으면 `bash "Tools~/PlayerCompileCheck/run.sh"`로 Android·iOS 플레이어 조건 컴파일을 돌린다. 사용 조건은 `Tools~/PlayerCompileCheck/README.md`.
-- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어·코드 우선), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴) 누락을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
+- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어·코드 우선), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, Edge Function 끼리 복사해 둔 공통 구간(`═══ BEGIN 이름 ═══`)의 일치, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴) 누락을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
 
 ## Architecture
 
@@ -170,8 +170,8 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
 5. 계정 관리 — server transfer RPCs + withdrawal RPCs + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
-6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "우편 설정"에서 바꾼다). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
-7. 인앱 결제 — purchases + 환불 기록(refunded_at, total_paid_krw 에서 차감. 애플은 `purchase-notify-apple` 알림, 구글은 9절 cron → pg_net → `purchase-refund-sync-google`. 마지막 확인 상태는 purchase_refund_sync. cron 은 Vault 의 `project_url` 이 있어야 돈다 — 프로젝트마다 손으로 등록)
+6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "설정"에서 바꾼다 — 친구·매치 로비 제한값도 같은 화면). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
+7. 인앱 결제 — purchases + 환불 기록(refunded_at, total_paid_krw 에서 차감. 애플은 `purchase-notify-apple` 알림, 구글은 9절 cron → pg_net → `purchase-refund-sync-google`. 마지막 확인 상태는 purchase_refund_sync. cron 은 Vault 의 `project_url` 이 있어야 돈다 — 프로젝트마다 손으로 등록) + 서버 연결값(스토어·애플 키 6종을 운영 콘솔 "설정"에서 넣어 Vault `ts_cfg:<키>` 에 암호화 저장. ts_server_config_get·ts_admin_server_config_status·ts_admin_server_config_set, service_role 전용. 엣지 함수는 공통 구간 `server-config` 로 콘솔 값 → Edge Function Secrets 순으로 읽고 1분 캐시. 키 목록 네 곳의 일치는 SdkAudit R16 이 본다)
 8. 원격 설정 — remote_config
 9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
 10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만) + 게임 서버 관리 RPC(ts_admin_game_servers_list·ts_admin_game_server_upsert, 코드는 추가 때만·삭제 없음)

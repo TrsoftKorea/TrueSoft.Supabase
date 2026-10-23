@@ -6,12 +6,35 @@
 // 애플은 인증 헤더를 보내지 않으므로 verify_jwt 를 끄고 배포한다. 대신 알림 자체가 애플 서명이라
 // purchase-verify-apple 과 같은 검증을 통과한 것만 믿는다.
 //
-// 필요 환경 변수: APPLE_BUNDLE_ID (purchase-verify-apple 과 같은 값)
+// 필요한 값: APPLE_BUNDLE_ID (운영 콘솔 "설정" 또는 Edge Function Secrets, purchase-verify-apple 과 같은 값)
 //
 // 응답: 처리했거나 처리할 것이 없으면 200. DB 오류면 500 — 애플이 운영 환경에서는 1·12·24·48·72시간 뒤
 // 다시 보낸다(샌드박스는 다시 보내지 않는다).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
 
 // ═══ BEGIN apple-jws ═══ (Tools~/AppleJwsCheck 가 이 구간만 떼어 내 Node 로 시험한다 — 구간 밖의 것을 참조하지 말 것)
 // StoreKit 2 JWS(signedTransactionInfo) 검증.
@@ -283,9 +306,6 @@ const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
 const secretKeys          = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY = secretKeys.default;
 
-const ALLOWED_BUNDLE_IDS = (Deno.env.get("APPLE_BUNDLE_ID") ?? "")
-  .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-
 const ACCEPTED_ENVIRONMENTS = new Set(["Production", "Sandbox"]);
 
 const STORE = "apple_app_store";
@@ -326,8 +346,9 @@ Deno.serve(async (req) => {
 
   // 서명 검사를 먼저 하는 이유: 설정이 빠졌다는 기록은 진짜 애플 알림이 왔을 때만 남겨야
   // 아무나 보낸 요청이 운영 콘솔의 상태를 덮어쓰지 못한다.
+  const ALLOWED_BUNDLE_IDS = await serverConfigList("APPLE_BUNDLE_ID");
   if (ALLOWED_BUNDLE_IDS.length === 0) {
-    console.error("[purchase-notify-apple] APPLE_BUNDLE_ID 환경 변수가 없습니다.");
+    console.error("[purchase-notify-apple] APPLE_BUNDLE_ID 가 콘솔 설정에도 Secrets 에도 없습니다.");
     await db.rpc("ts_purchase_refund_sync_mark", {
       p_store: STORE, p_phase: "finish", p_ok: false, p_message: "APPLE_BUNDLE_ID 없음", p_marked: 0,
     });

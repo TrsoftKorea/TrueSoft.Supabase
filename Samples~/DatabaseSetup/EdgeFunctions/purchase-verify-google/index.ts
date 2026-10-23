@@ -1,5 +1,28 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
+
 type VerifyRequest = {
   purchase_token?: string;
   product_id?: string;
@@ -30,16 +53,11 @@ const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!);
 const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY = secretKeys.default;
-const GOOGLE_SERVICE_ACCOUNT_JSON = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")!;
-
-if (!GOOGLE_SERVICE_ACCOUNT_JSON) {
-  throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is required");
-}
-
+// ═══ BEGIN google-token ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
 // Google 서비스 계정 JSON → OAuth2 액세스 토큰 발급
 // RS256 JWT를 서명해 google token endpoint에 교환 요청합니다.
-async function getGoogleAccessToken(): Promise<string> {
-  const sa = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON);
+async function getGoogleAccessToken(serviceAccountJson: string): Promise<string> {
+  const sa = JSON.parse(serviceAccountJson);
   const scope = "https://www.googleapis.com/auth/androidpublisher";
   const aud = "https://oauth2.googleapis.com/token";
 
@@ -101,6 +119,7 @@ async function getGoogleAccessToken(): Promise<string> {
   }
   return tokenJson.access_token as string;
 }
+// ═══ END google-token ═══
 
 // price_amount(micros = 주 단위 ×1,000,000)를 KRW 정수(원)로 환산합니다 (frankfurter.app — 무료, ECB 일 1회 갱신).
 // KRW이면 환율 없이, 그 외는 환율 API. 실패 시 null 반환.
@@ -159,9 +178,15 @@ Deno.serve(async (req) => {
   }
 
   // Google Play Developer API 호출
+  const serviceAccountJson = await serverConfig("GOOGLE_SERVICE_ACCOUNT_JSON");
+  if (!serviceAccountJson) {
+    console.error("[purchase-verify-google] GOOGLE_SERVICE_ACCOUNT_JSON 이 콘솔 설정에도 Secrets 에도 없습니다.");
+    return json({ ok: false, reason: "server_config_error" } satisfies VerifyResponse, 500);
+  }
+
   let googlePurchase: GoogleProductPurchase;
   try {
-    const accessToken = await getGoogleAccessToken();
+    const accessToken = await getGoogleAccessToken(serviceAccountJson);
     const apiUrl =
       `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${encodeURIComponent(package_name)}/purchases/products/${encodeURIComponent(product_id)}/tokens/${encodeURIComponent(purchase_token)}`;
 

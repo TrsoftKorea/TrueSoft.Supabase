@@ -13,7 +13,6 @@ import Players from './pages/Players'
 import Mails from './pages/Mails'
 import MailRecords from './pages/MailRecords'
 import MailCategories from './pages/MailCategories'
-import MailSettings from './pages/MailSettings'
 import MailSchedules from './pages/MailSchedules'
 import Leaderboard from './pages/Leaderboard'
 import SchemaChanges from './pages/SchemaChanges'
@@ -21,7 +20,7 @@ import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
 import ChatModeration from './pages/ChatModeration'
-import Friends from './pages/Friends'
+import Settings from './pages/Settings'
 import Lobbies from './pages/Lobbies'
 import MatchRewards from './pages/MatchRewards'
 import Dashboard from './pages/Dashboard'
@@ -125,17 +124,18 @@ export default function App() {
         <Route path="/mails/records" element={<MailRecords target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/categories" element={<MailCategories target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/schedules" element={<MailSchedules target={target} onUnauthenticated={signOut} />} />
-        <Route path="/mails/settings" element={<MailSettings target={target} onUnauthenticated={signOut} />} />
+        <Route path="/mails/settings" element={<Navigate to="/settings" replace />} />
         <Route path="/leaderboard" element={<Leaderboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
-        <Route path="/friends" element={<Friends target={target} onUnauthenticated={signOut} />} />
+        <Route path="/settings" element={<Settings target={target} onUnauthenticated={signOut} />} />
+        <Route path="/friends" element={<Navigate to="/settings" replace />} />
         <Route path="/lobbies" element={<Lobbies target={target} onUnauthenticated={signOut} />} />
         <Route path="/match-rewards" element={<MatchRewards target={target} onUnauthenticated={signOut} />} />
         {/* 예전 주소를 북마크해 둔 운영자가 빈 화면을 보지 않도록 남겨 둔다. */}
-        <Route path="/social" element={<Navigate to="/friends" replace />} />
+        <Route path="/social" element={<Navigate to="/settings" replace />} />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />

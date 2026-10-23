@@ -1,13 +1,36 @@
 // purchase-verify-apple
 // StoreKit 2 (JWS) 기반 Apple IAP 서버 검증.
 //
-// 필요 환경 변수:
+// 필요한 값(운영 콘솔 "설정" 또는 Edge Function Secrets):
 //   APPLE_BUNDLE_ID  — 이 프로젝트가 받는 앱 번들 ID. 여럿이면 쉼표로 구분.
 //                      영수증은 그 안에 모든 정보가 들어 있어, 서버가 번들 ID를 따로 알고 있지 않으면
 //                      다른 앱(샌드박스에서 공짜로 산 것 포함)의 진짜 영수증을 우리 결제로 인정하게 된다.
 //                      앱이 보내는 bundle_id 는 위조할 수 있어 대조에 쓰지 않는다. 없으면 검증을 거부한다.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
 
 // ═══ BEGIN apple-jws ═══ (Tools~/AppleJwsCheck 가 이 구간만 떼어 내 Node 로 시험한다 — 구간 밖의 것을 참조하지 말 것)
 // StoreKit 2 JWS(signedTransactionInfo) 검증.
@@ -288,9 +311,6 @@ const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const secretKeys          = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY = secretKeys.default;
 
-const ALLOWED_BUNDLE_IDS = (Deno.env.get("APPLE_BUNDLE_ID") ?? "")
-  .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-
 // 앱 심사와 TestFlight 는 Sandbox 로 결제한다 — 막으면 심사가 결제를 못 해 거절된다.
 // Xcode 로컬 StoreKit 시험 영수증은 애플 체인이 아니라 여기까지 오지도 못한다.
 const ACCEPTED_ENVIRONMENTS = new Set(["Production", "Sandbox"]);
@@ -348,8 +368,9 @@ Deno.serve(async (req) => {
 
   const { jws_token, product_id } = body;
 
+  const ALLOWED_BUNDLE_IDS = await serverConfigList("APPLE_BUNDLE_ID");
   if (ALLOWED_BUNDLE_IDS.length === 0) {
-    console.error("[purchase-verify-apple] APPLE_BUNDLE_ID 환경 변수가 없습니다.");
+    console.error("[purchase-verify-apple] APPLE_BUNDLE_ID 가 콘솔 설정에도 Secrets 에도 없습니다.");
     return json({ ok: false, reason: "server_config_error" } satisfies VerifyResponse, 500);
   }
 

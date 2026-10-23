@@ -3510,6 +3510,106 @@ $$;
 revoke all on function public.ts_purchase_recent_packages(text, int) from public, anon, authenticated;
 grant execute on function public.ts_purchase_recent_packages(text, int) to service_role;
 
+-- =============================================================================
+-- 서버 기능 연결값 — 스토어·애플 연동 비밀값을 운영 콘솔에서 넣는다
+--
+-- 운영자가 Supabase 대시보드에 들어가지 않고 콘솔 "설정"에서 값을 넣도록, 값을 Vault 에 암호화해 둔다
+-- (이름 'ts_cfg:<키>', 설명 칸에 넣은 운영자). 엣지 함수는 ts_server_config_get 으로 읽고, 없는 키는
+-- 예전처럼 Edge Function Secrets 에서 읽는다 — 콘솔 값이 이긴다.
+-- 값을 다시 꺼내는 함수는 ts_server_config_get 하나이고 service_role 전용이다. 콘솔에는 넣은 시각·사람만 돌려준다.
+-- =============================================================================
+
+create or replace function public.ts_server_config_keys()
+returns text[]
+language sql
+immutable
+as $$
+  select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_SERVICE_ACCOUNT_JSON',
+               'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'];
+$$;
+
+revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
+
+create or replace function public.ts_server_config_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_object_agg(substr(s.name, 8), s.decrypted_secret), '{}'::jsonb)
+    from vault.decrypted_secrets s
+   where s.name like 'ts\_cfg:%'
+     and substr(s.name, 8) = any(public.ts_server_config_keys());
+$$;
+
+comment on function public.ts_server_config_get() is
+  '운영 콘솔에서 넣은 서버 기능 연결값(복호화). 엣지 함수 전용 — service_role 만.';
+
+revoke all on function public.ts_server_config_get() from public, anon, authenticated;
+grant execute on function public.ts_server_config_get() to service_role;
+
+create or replace function public.ts_admin_server_config_status()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'key',        substr(s.name, 8),
+           'updated_at', s.updated_at,
+           'updated_by', nullif(s.description, ''))
+           order by s.name), '[]'::jsonb)
+    from vault.secrets s
+   where s.name like 'ts\_cfg:%'
+     and substr(s.name, 8) = any(public.ts_server_config_keys());
+$$;
+
+comment on function public.ts_admin_server_config_status() is
+  '운영 콘솔에서 넣은 연결값의 키·수정 시각·수정자. 값은 돌려주지 않는다. service_role 전용.';
+
+revoke all on function public.ts_admin_server_config_status() from public, anon, authenticated;
+grant execute on function public.ts_admin_server_config_status() to service_role;
+
+-- 빈 값이면 콘솔 값을 지운다 — 그 뒤로는 Edge Function Secrets 값을 쓴다.
+create or replace function public.ts_admin_server_config_set(p_key text, p_value text, p_by text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := 'ts_cfg:' || coalesce(p_key, '');
+  v_id   uuid;
+begin
+  if p_key is null or not (p_key = any(public.ts_server_config_keys())) then
+    raise exception 'server_config_unknown_key: %', p_key;
+  end if;
+
+  select id into v_id from vault.secrets where name = v_name;
+
+  if p_value is null or btrim(p_value) = '' then
+    if v_id is not null then
+      delete from vault.secrets where id = v_id;
+    end if;
+    return;
+  end if;
+
+  if v_id is null then
+    perform vault.create_secret(btrim(p_value), v_name, coalesce(p_by, ''));
+  else
+    perform vault.update_secret(v_id, btrim(p_value), v_name, coalesce(p_by, ''));
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_server_config_set(text, text, text) is
+  '서버 기능 연결값을 넣거나 바꾼다(빈 값이면 지운다). 형식 검사는 admin-api 몫. service_role 전용.';
+
+revoke all on function public.ts_admin_server_config_set(text, text, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_server_config_set(text, text, text) to service_role;
+
 
 -- #############################################################################
 -- 08. 원격 설정

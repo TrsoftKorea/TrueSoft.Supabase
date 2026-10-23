@@ -6,7 +6,7 @@
 // 받은 일회용 authorization code(5분 유효)를 여기서 refresh token 으로 바꿔 apple_auth_tokens 에
 // 보관해 두고, 탈퇴할 때 그 토큰으로 철회한다.
 //
-// 필요 환경 변수:
+// 필요한 값(운영 콘솔 "설정" 또는 Edge Function Secrets):
 //   APPLE_BUNDLE_ID    — 앱 번들 ID(purchase-verify-apple 과 같은 값). 여럿이면 쉼표로 구분
 //   APPLE_TEAM_ID      — Apple Developer 팀 ID(10자)
 //   APPLE_KEY_ID       — Sign in with Apple 용 키의 Key ID(10자)
@@ -20,6 +20,29 @@
 //             withdrawal-guard(계정 최종 삭제 직전 revoke — 신청 때 놓친 경우를 막는다).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
 
 type TokenRequest = {
   action?: string;
@@ -40,11 +63,7 @@ const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const secretKeys               = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY      = secretKeys.default;
 
-const ALLOWED_CLIENT_IDS = (Deno.env.get("APPLE_BUNDLE_ID") ?? "")
-  .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-const APPLE_TEAM_ID     = Deno.env.get("APPLE_TEAM_ID") ?? "";
-const APPLE_KEY_ID      = Deno.env.get("APPLE_KEY_ID") ?? "";
-const APPLE_PRIVATE_KEY = Deno.env.get("APPLE_PRIVATE_KEY") ?? "";
+type AppleKeys = { teamId: string; keyId: string; privateKey: string };
 
 const APPLE_TOKEN_URL  = "https://appleid.apple.com/auth/token";
 const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
@@ -70,16 +89,16 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
 
 // 애플 문서 "Creating a client secret": ES256, kid=Key ID, iss=팀 ID, sub=client_id, aud=https://appleid.apple.com.
 // 요청 한 번에 쓰고 버리므로 만료는 짧게 둔다(최대 6개월까지 허용된다).
-async function createClientSecret(clientId: string): Promise<string> {
+async function createClientSecret(keys: AppleKeys, clientId: string): Promise<string> {
   // 대시보드에 붙여넣다 줄바꿈이 글자 그대로의 "\n" 으로 들어가는 경우가 있어 그것도 걷어 낸다.
-  const pem = APPLE_PRIVATE_KEY.replace(/-----[^-]+-----/g, "").replace(/\\n/g, "").replace(/\s+/g, "");
+  const pem = keys.privateKey.replace(/-----[^-]+-----/g, "").replace(/\\n/g, "").replace(/\s+/g, "");
   const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
 
   const now = Math.floor(Date.now() / 1000);
   const signingInput =
-    b64urlText(JSON.stringify({ alg: "ES256", kid: APPLE_KEY_ID })) + "." +
-    b64urlText(JSON.stringify({ iss: APPLE_TEAM_ID, iat: now, exp: now + 300, aud: "https://appleid.apple.com", sub: clientId }));
+    b64urlText(JSON.stringify({ alg: "ES256", kid: keys.keyId })) + "." +
+    b64urlText(JSON.stringify({ iss: keys.teamId, iat: now, exp: now + 300, aud: "https://appleid.apple.com", sub: clientId }));
 
   // WebCrypto ECDSA 서명은 JWS 가 요구하는 r||s(64바이트) 형식 그대로다.
   const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(signingInput)));
@@ -96,10 +115,10 @@ async function postForm(url: string, form: Record<string, string>): Promise<Resp
   });
 }
 
-async function revokeRefreshToken(clientId: string, refreshToken: string): Promise<{ ok: boolean; detail?: string }> {
+async function revokeRefreshToken(keys: AppleKeys, clientId: string, refreshToken: string): Promise<{ ok: boolean; detail?: string }> {
   const res = await postForm(APPLE_REVOKE_URL, {
     client_id: clientId,
-    client_secret: await createClientSecret(clientId),
+    client_secret: await createClientSecret(keys, clientId),
     token: refreshToken,
     token_type_hint: "refresh_token",
   });
@@ -140,7 +159,13 @@ async function handle(req: Request): Promise<Response> {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const configured = ALLOWED_CLIENT_IDS.length > 0 && APPLE_TEAM_ID && APPLE_KEY_ID && APPLE_PRIVATE_KEY;
+  const ALLOWED_CLIENT_IDS = await serverConfigList("APPLE_BUNDLE_ID");
+  const keys: AppleKeys = {
+    teamId: await serverConfig("APPLE_TEAM_ID"),
+    keyId: await serverConfig("APPLE_KEY_ID"),
+    privateKey: await serverConfig("APPLE_PRIVATE_KEY"),
+  };
+  const configured = ALLOWED_CLIENT_IDS.length > 0 && keys.teamId && keys.keyId && keys.privateKey;
 
   // ── 철회 ─────────────────────────────────────────────────────────────────
   if (body.action === "revoke") {
@@ -150,11 +175,11 @@ async function handle(req: Request): Promise<Response> {
     if (!row) return json({ ok: true, revoked: false, reason: "no_token" });
 
     if (!configured) {
-      console.error("[apple-token] APPLE_* 환경 변수가 없어 철회하지 못했습니다.");
+      console.error("[apple-token] APPLE_* 값이 없어 철회하지 못했습니다.");
       return json({ ok: false, reason: "server_config_error" }, 500);
     }
 
-    const r = await revokeRefreshToken(row.client_id, row.refresh_token);
+    const r = await revokeRefreshToken(keys, row.client_id, row.refresh_token);
     if (!r.ok) {
       console.warn(`[apple-token] 철회 실패: ${r.detail}, account=${user.id}`);
       return json({ ok: false, reason: `apple_revoke_failed: ${r.detail}` }, 502);
@@ -170,7 +195,7 @@ async function handle(req: Request): Promise<Response> {
     if (!code) return json({ ok: false, reason: "missing_authorization_code" }, 400);
 
     if (!configured) {
-      console.error("[apple-token] APPLE_* 환경 변수가 없어 토큰을 보관하지 못했습니다.");
+      console.error("[apple-token] APPLE_* 값이 없어 토큰을 보관하지 못했습니다.");
       return json({ ok: false, reason: "server_config_error" }, 500);
     }
 
@@ -179,7 +204,7 @@ async function handle(req: Request): Promise<Response> {
 
     const res = await postForm(APPLE_TOKEN_URL, {
       client_id: clientId,
-      client_secret: await createClientSecret(clientId),
+      client_secret: await createClientSecret(keys, clientId),
       code,
       grant_type: "authorization_code",
     });
@@ -200,7 +225,7 @@ async function handle(req: Request): Promise<Response> {
       .flatMap((i) => [i.identity_data?.sub, i.id])
       .filter((s): s is string => typeof s === "string" && s.length > 0);
     if (typeof appleSub !== "string" || !linkedSubs.includes(appleSub)) {
-      await revokeRefreshToken(clientId, tokens.refresh_token);
+      await revokeRefreshToken(keys, clientId, tokens.refresh_token);
       console.warn(`[apple-token] 연동된 애플 계정과 다른 코드: account=${user.id}`);
       return json({ ok: false, reason: "apple_identity_mismatch" }, 403);
     }

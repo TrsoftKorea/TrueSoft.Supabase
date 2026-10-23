@@ -8,7 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
-import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
+import { inputCls } from './social/LimitsForm'
 import { Button } from '../components/ui/Button'
 
 type Meta = Record<string, unknown>
@@ -30,24 +30,6 @@ const LOBBY_STATUS_LABEL: Record<string, string> = {
 const MEMBER_STATUS_LABEL: Record<string, string> = {
   invited: '초대됨', accepted: '수락', declined: '거절', left: '나감',
 }
-
-const LOBBY_FIELDS: LimitField[] = [
-  {
-    param: 'maxPendingInvitesReceived', field: 'max_pending_invites_received', min: 1, max: 200,
-    label: '받는 쪽 대기 초대 상한',
-    hint: '한 사람이 동시에 받아 둘 수 있는 초대의 최대 개수. 넘으면 그 사람에게는 초대가 들어가지 않습니다. 1~200 사이.',
-  },
-  {
-    param: 'inviteCooldownSeconds', field: 'invite_cooldown_seconds', min: 0, max: 300,
-    label: '연속 초대 최소 간격',
-    hint: '같은 사람이 초대를 연달아 보낼 때 기다려야 하는 시간. 초 단위로 최대 300까지, 0이면 제한 없음.',
-  },
-  {
-    param: 'lobbyExpireMinutes', field: 'lobby_expire_minutes', min: 1, max: 1440,
-    label: '방이 닫히기까지의 시간',
-    hint: '아무도 시작하지 않은 방이 저절로 닫히기까지의 시간. 분 단위로 최대 1440까지.',
-  },
-]
 
 /**
  * 게임이 담아 둔 자유 칸. 키 이름도 값도 게임마다 달라서 콘솔은 해석하지 않고 그대로 보여준다.
@@ -71,7 +53,6 @@ export default function Lobbies({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const [tab, setTab] = useState<'list' | 'settings'>('list')
   const [error, setError] = useState('')
 
   const report = useCallback((e: unknown, fallback: string) => {
@@ -79,31 +60,11 @@ export default function Lobbies({
     setError(e instanceof Error ? e.message : fallback)
   }, [onUnauthenticated])
 
-  const tabCls = (active: boolean) =>
-    ['h-8 px-3 rounded-md text-sm transition-colors', active ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-600 hover:text-neutral-900'].join(' ')
-
   return (
     <div className="space-y-4">
-      <PageHeader title="매치 로비" description="플레이어가 모인 대기방의 현황을 확인하고 초대·만료 기준을 조정합니다." />
+      <PageHeader title="매치 로비" description="플레이어가 모인 대기방의 현황을 확인합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-
-      <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-        <button className={tabCls(tab === 'list')} onClick={() => setTab('list')}>로비 목록</button>
-        <button className={tabCls(tab === 'settings')} onClick={() => setTab('settings')}>로비 설정</button>
-      </div>
-
-      {tab === 'list'
-        ? <LobbyList target={target} report={report} />
-        : (
-          <LimitsForm
-            target={target}
-            report={report}
-            title="로비 설정"
-            getAction="matchLobby.settingsGet"
-            updateAction="matchLobby.settingsUpdate"
-            fields={LOBBY_FIELDS}
-          />
-        )}
+      <LobbyList target={target} report={report} />
     </div>
   )
 }

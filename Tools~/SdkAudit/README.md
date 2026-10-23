@@ -92,6 +92,8 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R13 | 하드 오류 | 주석에 cron 이 부른다고 적힌 함수가 실제로 `cron.schedule` 됨 |
 | R14 | 하드 오류 | `CLAUDE.md`의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴)에 실제 파일이 다 있음 |
 | R15 | 하드 오류 | 단일 함수 페이지는 H1 다음에 바로 시그니처가 옴 |
+| R16 | 하드 오류 | Edge Function 끼리 복사해 둔 같은 이름의 `═══ BEGIN 이름 ═══` 구간이 글자 그대로 같음 |
+| R16 | 하드 오류 | 서버 연결값 키 목록이 `install.sql`(`ts_server_config_keys`)·콘솔 서버(`SERVER_CONFIG_VALID`)·콘솔 화면(`STORE_KEYS`)·엣지 함수의 `serverConfig("…")` 호출에서 서로 맞음 |
 
 ## 검사 대상 파일
 
@@ -101,6 +103,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10·R15 |
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
 | `install.sql` | R9·R13 |
+| `Samples~/DatabaseSetup/EdgeFunctions/**/*.ts`·`Admin~`의 admin-api·설정 화면 | R16 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
 
 규칙 파일을 보는 이유는 게임 문서보다 위험하기 때문입니다. **문서가 틀리면 게임 개발자가 고생하지만, `CLAUDE.md`가 틀리면 Claude가 읽고 그대로 코드를 고칩니다.** 실제로 "SupabaseSDK는 MonoBehaviour singleton"이라는 한 줄 때문에 샘플 컴파일이 깨진 적이 있습니다.
@@ -139,7 +142,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | 축 | 자동화 | 방법 |
 |----|--------|------|
 | 규칙의 모순·모호 제거 | ✕ | `CLAUDE.md`를 코드와 대조 |
-| 규칙 위반 수정 | 일부 | R1~R15가 기계적 위반 담당. 로그 레벨 분류는 수동 |
+| 규칙 위반 수정 | 일부 | R1~R16이 기계적 위반 담당. 로그 레벨 분류는 수동 |
 | 미사용 코드 제거 | 일부 | R7은 파사드만. 전체는 선언 이름 × 참조 수 전수 조사 |
 | 중복 코드 제거 | ✕ | 판단 필요 |
 | 비효율 코드 개선 | ✕ | 판단 필요 |

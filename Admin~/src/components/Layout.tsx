@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
-  UsersRound, Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
+  Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
   ChevronDown, LogOut, AlertTriangle, BookOpen,
 } from 'lucide-react'
 import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
@@ -150,14 +150,12 @@ export function Layout({
                 { to: '/mails/records', label: '우편 내역', icon: Inbox },
                 { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
                 { to: '/mails/categories', label: '우편 분류', icon: Tags },
-                { to: '/mails/settings', label: '우편 설정', icon: SlidersHorizontal },
               ]}
             />
           </NavSection>
 
           <NavSection label="소셜">
             <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} />
-            <NavLinkRow to="/friends" label="친구" icon={UsersRound} />
             <NavLinkRow to="/banned-words" label="금칙어" icon={ShieldBan} />
           </NavSection>
 
@@ -174,6 +172,7 @@ export function Layout({
 
         {/* 스크롤 영역 밖에 고정 — 메뉴가 길어져도 변경 관리는 항상 보인다. */}
         <div className="border-t border-neutral-200 p-3 space-y-0.5">
+          <NavLinkRow to="/settings" label="설정" icon={SlidersHorizontal} />
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
           {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} />}

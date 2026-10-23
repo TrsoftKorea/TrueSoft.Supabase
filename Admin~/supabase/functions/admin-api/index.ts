@@ -350,6 +350,32 @@ function redactParams(params: Params): Params {
   return out;
 }
 
+// 스토어·애플 연동 값의 형식 검사. 키 목록은 install.sql 의 ts_server_config_keys() 와 같아야 한다 —
+// 거기 없는 키는 ts_admin_server_config_set 이 거절한다.
+const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
+  APPLE_BUNDLE_ID: (v) => v.split(",").every((s) => /^[A-Za-z0-9.-]+$/.test(s.trim())),
+  APPLE_SHARED_SECRET: () => true,
+  GOOGLE_SERVICE_ACCOUNT_JSON: (v) => {
+    try {
+      const sa = JSON.parse(v);
+      return typeof sa.client_email === "string" && typeof sa.private_key === "string";
+    } catch {
+      return false;
+    }
+  },
+  APPLE_TEAM_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
+  APPLE_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
+  APPLE_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
+};
+
+const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
+  APPLE_BUNDLE_ID: "번들 ID 는 영문·숫자·점·하이픈만 씁니다. 여럿이면 쉼표로 나눕니다.",
+  GOOGLE_SERVICE_ACCOUNT_JSON: "서비스 계정 키 JSON 파일 내용 전체를 붙여 넣으세요(client_email·private_key 가 있어야 합니다).",
+  APPLE_TEAM_ID: "팀 ID 는 영문 대문자·숫자 10자입니다.",
+  APPLE_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
+  APPLE_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
+};
+
 async function handleAction(
   db: SupabaseClient,
   action: string,
@@ -959,6 +985,45 @@ async function handleAction(
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
+      }
+
+      // 스토어·애플 연동 값이 어디에 등록돼 있고 형식이 맞는지만 돌려준다. 값은 절대 내보내지 않는다.
+      // 엣지 함수와 같은 순서로 고른다 — 콘솔에서 넣은 값(Vault)이 먼저, 없으면 Edge Function Secrets.
+      case "settings.getStoreStatus": {
+        const [{ data: values, error: valuesError }, { data: meta, error: metaError }] = await Promise.all([
+          db.rpc("ts_server_config_get"),
+          db.rpc("ts_admin_server_config_status"),
+        ]);
+        if (valuesError) throw new Error(valuesError.message);
+        if (metaError) throw new Error(metaError.message);
+        const fromConsole = (values ?? {}) as Record<string, string>;
+        const metaByKey = new Map(((meta ?? []) as Array<{ key: string; updated_at: string; updated_by: string }>).map((m) => [m.key, m]));
+        const rows = Object.entries(SERVER_CONFIG_VALID).map(([key, valid]) => {
+          const consoleValue = (fromConsole[key] ?? "").trim();
+          const envValue = (Deno.env.get(key) ?? "").trim();
+          const value = consoleValue || envValue;
+          const m = consoleValue ? metaByKey.get(key) : undefined;
+          return {
+            key,
+            source: consoleValue ? "console" : envValue ? "supabase" : null,
+            status: value === "" ? "missing" : valid(value) ? "ok" : "invalid",
+            updatedAt: m?.updated_at ?? null,
+            updatedBy: m?.updated_by || null,
+          };
+        });
+        return json({ ok: true, data: { rows } });
+      }
+
+      // 값은 secretValue 로 받는다 — 운영 기록에서 가려지는 이름이다(SECRET_PARAM). 빈 값이면 콘솔 값을 지운다.
+      case "settings.setServerConfig": {
+        const key = str(params, "key");
+        if (!Object.hasOwn(SERVER_CONFIG_VALID, key)) throw new Error("모르는 항목입니다.");
+        const valid = SERVER_CONFIG_VALID[key];
+        const value = optStr(params, "secretValue").trim();
+        if (value !== "" && !valid(value)) throw new Error(SERVER_CONFIG_FORMAT_HINT[key] ?? "형식이 맞지 않습니다.");
+        const { error } = await db.rpc("ts_admin_server_config_set", { p_key: key, p_value: value, p_by: email });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
       }
 
       case "mails.settingsGet": {
