@@ -878,6 +878,57 @@ grant execute on function public.ts_admin_banned_words_list()                  t
 grant execute on function public.ts_admin_banned_words_add(text, text[], text) to service_role;
 grant execute on function public.ts_admin_banned_words_delete(text, text[])    to service_role;
 
+-- 기본 금칙어 — 표가 비어 있을 때만 넣는다(운영자가 지운 단어가 이 파일을 다시 돌려도 되살아나지 않게).
+-- 출처: LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise Bad Words" ko·en
+--       https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words (CC BY 4.0)
+-- 검사가 "공백·기호를 뺀 글자 안에 들어 있으면" 걸리므로, 멀쩡한 말을 가리는 단어는 뺐다
+-- (예: ass→class, butt→button, 보지→"보지 마", 미친→"이미 친구", 염병→전염병, hardcore·domination 같은 게임 용어).
+do $$
+begin
+  if not exists (select 1 from public.banned_words) then
+    insert into public.banned_words (kind, word, created_by)
+    select 'word', public.ts_filter_normalize(w), '기본 목록'
+      from unnest(array[
+    '2g1c', '2girls1cup', 'acrotomophilia', 'alabamahotpocket', 'alaskanpipeline', 'anilingus', 'apeshit', 'arsehole', 'asshole', 'assmunch',
+    'autoerotic', 'babeland', 'babybatter', 'babyjuice', 'ballgag', 'ballgravy', 'ballkicking', 'balllicking', 'ballsack', 'ballsucking',
+    'bangbros', 'bangbus', 'barelylegal', 'bastard', 'bastardo', 'bbw', 'bdsm', 'beaner', 'beaners', 'beastiality',
+    'beavercleaver', 'beaverlips', 'bestiality', 'bigbreasts', 'bigknockers', 'bigtits', 'bimbos', 'bitch', 'bitches', 'blackcock',
+    'blondeaction', 'blondeonblondeaction', 'blowjob', 'blowyourload', 'bluewaffle', 'blumpkin', 'bollocks', 'boner', 'boob', 'boobs',
+    'bootycall', 'brownshowers', 'brunetteaction', 'bukkake', 'bulldyke', 'bulletvibe', 'bullshit', 'bunghole', 'busty', 'buttcheeks',
+    'butthole', 'cameltoe', 'camgirl', 'camslut', 'camwhore', 'carpetmuncher', 'chocolaterosebuds', 'circlejerk', 'clevelandsteamer', 'clit',
+    'clitoris', 'cloverclamps', 'clusterfuck', 'cocks', 'coprolagnia', 'coprophilia', 'cornhole', 'creampie', 'cumming', 'cumshot',
+    'cumshots', 'cunnilingus', 'cunt', 'darkie', 'daterape', 'deepthroat', 'dendrophilia', 'dick', 'dildo', 'dingleberries',
+    'dingleberry', 'dirtypillows', 'dirtysanchez', 'doggiestyle', 'doggystyle', 'dogstyle', 'dolcett', 'dominatrix', 'dommes', 'donkeypunch',
+    'doubledong', 'doublepenetration', 'dpaction', 'dryhump', 'dvda', 'eatmyass', 'ecchi', 'ejaculation', 'erotic', 'erotism',
+    'faggot', 'felch', 'fellatio', 'feltch', 'femalesquirting', 'femdom', 'figging', 'fingerbang', 'fisting', 'footfetish',
+    'footjob', 'frotting', 'fuck', 'fuckbuttons', 'fuckin', 'fucking', 'fucktards', 'fudgepacker', 'futanari', 'gangbang',
+    'gaysex', 'giantcock', 'girlontop', 'girlsgonewild', 'goatcx', 'goatse', 'goddamn', 'gokkun', 'goldenshower', 'googirl',
+    'goregasm', 'gspot', 'guro', 'handjob', 'hentai', 'homoerotic', 'honkey', 'hotcarl', 'hugefat', 'humping',
+    'jackoff', 'jailbait', 'jerkoff', 'jigaboo', 'jiggaboo', 'jiggerboo', 'jizz', 'juggs', 'kike', 'kinbaku',
+    'kinkster', 'knobbing', 'leatherrestraint', 'leatherstraightjacket', 'lemonparty', 'livesex', 'makemecome', 'malesquirting', 'masturbate', 'masturbating',
+    'masturbation', 'milf', 'missionaryposition', 'motherfucker', 'moundofvenus', 'mrhands', 'muffdiver', 'muffdiving', 'nambla', 'nawashi',
+    'neonazi', 'nigga', 'nigger', 'nignog', 'nimphomania', 'nipple', 'nipples', 'nsfw', 'nsfwimages', 'nude',
+    'nudity', 'nutten', 'nympho', 'nymphomania', 'omorashi', 'onecuptwogirls', 'oneguyonejar', 'orgasm', 'orgy', 'paedophile',
+    'panties', 'pedobear', 'pedophile', 'pegging', 'phonesex', 'pieceofshit', 'pissing', 'pisspig', 'pleasurechest', 'polesmoker',
+    'ponyplay', 'poontang', 'poopchute', 'porn', 'porno', 'pornography', 'princealbertpiercing', 'pthc', 'pubes', 'punany',
+    'pussy', 'queaf', 'queef', 'quim', 'raghead', 'ragingboner', 'raping', 'reversecowgirl', 'rimjob', 'rimming',
+    'rosypalmandher5sisters', 'rustytrombone', 'schlong', 'sexcam', 'sexo', 'shavedbeaver', 'shavedpussy', 'shemale', 'shibari', 'shitblimp',
+    'shitty', 'shota', 'slanteye', 'slut', 'smut', 'sodomize', 'sodomy', 'splooge', 'sploogemoose', 'spooge',
+    'spreadlegs', 'spunk', 'strapon', 'stripclub', 'styledoggy', 'suicidegirls', 'swastika', 'teabagging', 'throating', 'thumbzilla',
+    'titties', 'titty', 'tosser', 'towelhead', 'tranny', 'tribadism', 'tubgirl', 'tushy', 'twogirlsonecup', 'upskirt',
+    'urethraplay', 'urophilia', 'vagina', 'venusmound', 'viagra', 'vibrator', 'violetwand', 'vorarephilia', 'voyeur', 'voyeurweb',
+    'voyuer', 'vulva', 'wank', 'wetback', 'wetdream', 'worldsex', 'wrinkledstarfish', 'xxx', 'yaoi', 'yellowshowers',
+    'yiffy', 'zoophilia', '개새끼', '개자식', '개좆', '개차반', '계집년', '니기미', '딸딸이', '때씹',
+    '또라이', '뙤놈', '로리타', '몰카', '미친새끼', '바바리맨', '병신', '빠구리', '사까시', '섹스',
+    '스와핑', '쌍놈', '씨발', '씨발놈', '씨팔', '씹물', '씹빨', '씹새끼', '씹알', '씹창',
+    '씹팔', '암캐', '야애니', '엄창', '옘병', '육갑', '은꼴', '잡년', '종간나', '좆',
+    '좆만', '죽일년', '쥐좆', '직촬', '짱깨', '쪽바리', '창녀', '포르노', '화냥년', '후레아들',
+    '희쭈그리'
+      ]) as w
+    on conflict (kind, word) do nothing;
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- ts_is_display_name_available
 -- RLS를 우회(SECURITY DEFINER)하여 닉네임 사용 가능 여부를 전역 기준으로 확인합니다.
@@ -4492,6 +4543,10 @@ alter table public.mail_batches add column if not exists created_at      timesta
 alter table public.mail_batches add column if not exists category        text not null default 'default';
 -- 언어별 제목·본문 오버라이드. ts_admin_send_mail 이 INSERT 하므로 컬럼이 없으면 발송이 실패한다.
 alter table public.mail_batches add column if not exists localized       jsonb;
+-- 받는 플랫폼(user_profiles.platform 값). null 이면 플랫폼을 가리지 않는다.
+alter table public.mail_batches add column if not exists platform        text;
+-- 이 시각까지 나중에 대상이 된 플레이어에게도 보낸다(ts_deliver_open_mail_batches). null 이면 보낸 순간의 대상만.
+alter table public.mail_batches add column if not exists open_until      timestamptz;
 
 create index if not exists mail_batches_created_idx on public.mail_batches (created_at desc);
 
@@ -4520,7 +4575,9 @@ begin
       foreign key (batch_id) references public.mail_batches (id) on delete set null;
   end if;
 end $$;
-create index if not exists mails_batch_id_idx on public.mails (batch_id) where batch_id is not null;
+-- (batch_id, user_id) — 발송별 조회와 ts_deliver_open_mail_batches 의 "이미 받았나" 확인을 함께 받친다.
+drop index if exists public.mails_batch_id_idx;
+create index if not exists mails_batch_user_idx on public.mails (batch_id, user_id) where batch_id is not null;
 
 -- mails 도 service_role DML 제거(발송은 ts_admin_send_mail RPC(owner) 경유). 프로젝트 간 동일 상태 보장.
 revoke select, insert, update, delete on table public.mails from service_role;
@@ -4535,6 +4592,8 @@ revoke select, insert, update, delete on table public.mails from service_role;
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean);
 drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text,jsonb);
+drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb);
+drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text);
 
 create or replace function public.ts_admin_send_mail(
   p_target_mode          text,
@@ -4547,7 +4606,9 @@ create or replace function public.ts_admin_send_mail(
   p_created_by           text    default null,
   p_skip_item_validation boolean default false,
   p_category             text    default 'default',
-  p_localized            jsonb   default null
+  p_localized            jsonb   default null,
+  p_platform             text    default null,
+  p_open_for_new         boolean default false
 )
 returns jsonb
 language plpgsql
@@ -4561,6 +4622,8 @@ declare
   v_key         text;
   v_account_ids uuid[];
   v_category    text;
+  -- 플레이어를 직접 고른 발송에는 플랫폼을 걸지 않는다 — 고른 사람이 곧 대상이다.
+  v_platform    text := case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end;
 begin
   if p_target_mode not in ('all','server','players') then
     raise exception 'invalid_target_mode: %', p_target_mode;
@@ -4609,12 +4672,14 @@ begin
   end if;
 
   insert into public.mail_batches
-    (target_mode, server_id, title, content, items, expires_at, created_by, category, localized)
+    (target_mode, server_id, title, content, items, expires_at, created_by, category, localized, platform, open_until)
   values
     (p_target_mode,
      case when p_target_mode = 'server' then p_server_id else null end,
      p_title, coalesce(p_content, ''),
-     p_items, p_expires_at, p_created_by, v_category, p_localized)
+     p_items, p_expires_at, p_created_by, v_category, p_localized, v_platform,
+     -- 고른 플레이어에게 보내는 우편은 나중에 들어올 사람이 없다.
+     case when p_open_for_new and p_target_mode <> 'players' then p_expires_at end)
   returning id into v_batch_id;
 
   insert into public.mails
@@ -4629,7 +4694,8 @@ begin
       p_target_mode = 'all'
       or (p_target_mode = 'server'  and p.server_id = p_server_id)
       or (p_target_mode = 'players' and p.account_id = any (v_account_ids))
-    );
+    )
+    and (v_platform is null or p.platform = v_platform);
 
   get diagnostics v_count = row_count;
   update public.mail_batches set recipient_count = v_count where id = v_batch_id;
@@ -4638,8 +4704,56 @@ begin
 end;
 $$;
 
-comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb) is
-  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback).';
+comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) is
+  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback). p_platform 은 all/server 대상을 그 플랫폼으로 좁힌다(players 대상에는 무시). p_open_for_new 면 수령 기한까지 나중에 대상이 된 플레이어에게도 ts_deliver_open_mail_batches 가 보낸다(players 대상에는 무시).';
+
+-- ---------------------------------------------------------------------------
+-- ts_deliver_open_mail_batches — "나중에 들어온 플레이어도 받기"로 보낸 우편을 아직 없는 대상에게 넣는다(크론 매분).
+-- 받았는지는 그 사람에게 이 발송의 우편 행이 있는지로 본다. 플레이어가 지운 우편도 숨김일 뿐 행은 남고,
+-- 행이 지워지는 건 수령 기한(= open_until)이 지나 보관 기간까지 끝난 뒤라 다시 보내지 않는다.
+-- 탈퇴 후 재가입은 새 user_id 라 다시 받는다 — 새로 가입한 사람과 구분할 수 없다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_deliver_open_mail_batches()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b       record;
+  v_n     int;
+  v_total int := 0;
+begin
+  for b in
+    select * from public.mail_batches
+    where open_until is not null and open_until > now()
+  loop
+    insert into public.mails
+      (account_id, user_id, sender_type, title, content,
+       expires_at, created_at, items, batch_id, category, localized)
+    select p.account_id, p.user_id, 'system',
+           b.title, b.content, b.expires_at, now(), b.items, b.id, b.category, b.localized
+    from public.user_profiles p
+    where p.account_id is not null
+      and p.withdrawn_at is null
+      and (b.target_mode = 'all' or (b.target_mode = 'server' and p.server_id = b.server_id))
+      and (b.platform is null or p.platform = b.platform)
+      and not exists (
+        select 1 from public.mails m where m.batch_id = b.id and m.user_id = p.user_id
+      );
+    get diagnostics v_n = row_count;
+    if v_n > 0 then
+      update public.mail_batches set recipient_count = recipient_count + v_n where id = b.id;
+      v_total := v_total + v_n;
+    end if;
+  end loop;
+  return v_total;
+end;
+$$;
+
+comment on function public.ts_deliver_open_mail_batches() is
+  '수령 기한이 남은 "나중에 들어온 플레이어도 받기" 우편을 아직 받지 않은 대상에게 넣는다. 크론 전용.';
+revoke all on function public.ts_deliver_open_mail_batches() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
@@ -4757,7 +4871,7 @@ begin
     into v_rows, v_total
   from (
     select
-      b.id, b.target_mode, gs.server_code, b.title, b.items,
+      b.id, b.target_mode, gs.server_code, b.platform, b.open_until, b.title, b.items,
       b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at,
       count(*) over() as total
     from public.mail_batches b
@@ -4869,8 +4983,8 @@ comment on function public.ts_admin_search_mails(text,text,text,date,date,uuid,i
 -- ---------------------------------------------------------------------------
 -- 어드민 RPC EXECUTE — service_role 전용(클라이언트 금지)
 -- ---------------------------------------------------------------------------
-revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb) from public, anon, authenticated;
-grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb) to service_role;
+revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) from public, anon, authenticated;
+grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) to service_role;
 revoke all on function public.ts_admin_upsert_game_item(text,text) from public, anon, authenticated;
 grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;
@@ -4985,6 +5099,7 @@ create table if not exists public.mail_schedules (
   repeat_unit   text not null default 'day' check (repeat_unit in ('day','week','month')),
   repeat_dow    int null,                               -- week: 0=일 ~ 6=토
   repeat_dom    int null,                               -- month: 1~31 (말일 초과 시 말일)
+  platform      text null,                              -- 받는 플랫폼. null 이면 가리지 않는다
   next_run_at   timestamptz not null,                   -- 러너 판단 기준(두 타입 통일)
   is_active     boolean not null default true,
   last_run_at   timestamptz null,
@@ -5006,6 +5121,8 @@ alter table public.mail_schedules add column if not exists repeat_dom   int;
 alter table public.mail_schedules add column if not exists last_run_at  timestamptz;
 alter table public.mail_schedules add column if not exists run_count    int not null default 0;
 alter table public.mail_schedules add column if not exists created_by   text;
+alter table public.mail_schedules add column if not exists platform     text;
+alter table public.mail_schedules add column if not exists open_for_new boolean not null default false;
 
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'mail_schedules_repeat_unit_chk') then
@@ -5149,7 +5266,9 @@ begin
         s.created_by,
         false,
         s.category,
-        s.localized
+        s.localized,
+        s.platform,
+        s.open_for_new
       );
 
       if s.schedule_type = 'scheduled' then
@@ -5187,6 +5306,9 @@ revoke all on function public.ts_run_due_mail_schedules() from public;
 -- service_role에도 테이블 grant가 없으므로(19_20절 회수) RPC로 감싼다.
 -- ---------------------------------------------------------------------------
 
+drop function if exists public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text);
+drop function if exists public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text);
+
 create or replace function public.ts_admin_create_mail_schedule(
   p_schedule_type text,
   p_target_mode   text,
@@ -5203,7 +5325,9 @@ create or replace function public.ts_admin_create_mail_schedule(
   p_repeat_unit   text        default 'day',
   p_repeat_dow    int         default null,
   p_repeat_dom    int         default null,
-  p_created_by    text        default null
+  p_created_by    text        default null,
+  p_platform      text        default null,
+  p_open_for_new  boolean     default false
 )
 returns uuid
 language plpgsql
@@ -5262,11 +5386,13 @@ begin
   insert into public.mail_schedules
     (schedule_type, target_mode, server_id, account_ids, title, content, items, localized,
      category, expires_days, scheduled_at, repeat_time, repeat_unit, repeat_dow, repeat_dom,
-     next_run_at, created_by)
+     next_run_at, created_by, platform, open_for_new)
   values
     (p_schedule_type, p_target_mode, p_server_id, p_account_ids, p_title, coalesce(p_content, ''), p_items, p_localized,
      v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
-     v_next, p_created_by)
+     v_next, p_created_by,
+     case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end,
+     coalesce(p_open_for_new, false) and p_target_mode <> 'players')
   returning id into v_id;
 
   return v_id;
@@ -5284,7 +5410,7 @@ as $$
     select
       s.id, s.schedule_type, s.target_mode, gs.server_code, s.title, s.items, s.category,
       s.scheduled_at, s.repeat_time, s.repeat_unit, s.repeat_dow, s.repeat_dom,
-      s.next_run_at, s.is_active, s.run_count, s.created_by
+      s.next_run_at, s.is_active, s.run_count, s.created_by, s.platform, s.open_for_new
     from public.mail_schedules s
     left join public.game_servers gs on gs.id = s.server_id
   ) t;
@@ -5308,13 +5434,13 @@ as $$
   delete from public.mail_schedules where id = p_id;
 $$;
 
-comment on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) is '우편 예약·반복 발송 등록. service_role 전용.';
+comment on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) is '우편 예약·반복 발송 등록. service_role 전용.';
 comment on function public.ts_admin_list_mail_schedules() is '우편 예약 목록. service_role 전용.';
 comment on function public.ts_admin_set_mail_schedule_active(uuid,boolean) is '우편 예약 활성/비활성 전환. service_role 전용.';
 comment on function public.ts_admin_delete_mail_schedule(uuid) is '우편 예약 삭제. service_role 전용.';
 
-revoke all on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) from public, anon, authenticated;
-grant execute on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text) to service_role;
+revoke all on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) from public, anon, authenticated;
+grant execute on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) to service_role;
 revoke all on function public.ts_admin_list_mail_schedules() from public, anon, authenticated;
 grant execute on function public.ts_admin_list_mail_schedules() to service_role;
 revoke all on function public.ts_admin_set_mail_schedule_active(uuid,boolean) from public, anon, authenticated;
@@ -5335,6 +5461,19 @@ select cron.schedule(
   'run-mail-schedules',
   '* * * * *',
   'select public.ts_run_due_mail_schedules()'
+);
+
+-- "나중에 들어온 플레이어도 받기" 우편 배달(12절 ts_deliver_open_mail_batches) — 매분
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'deliver-open-mail-batches') then
+    perform cron.unschedule('deliver-open-mail-batches');
+  end if;
+end $$;
+select cron.schedule(
+  'deliver-open-mail-batches',
+  '* * * * *',
+  'select public.ts_deliver_open_mail_batches()'
 );
 
 notify pgrst, 'reload schema';
@@ -8504,6 +8643,8 @@ alter table public.chat_messages add column if not exists user_id      text not 
 alter table public.chat_messages add column if not exists display_name text not null default '';
 alter table public.chat_messages add column if not exists deleted_at   timestamptz;
 alter table public.chat_messages add column if not exists deleted_by   text;
+-- 운영자 공지. 보낸 사람이 없어 account_id 는 0 UUID, 닉네임은 빈 값 — 게임은 is_notice 로 구분해 표시한다.
+alter table public.chat_messages add column if not exists is_notice    boolean not null default false;
 
 -- 쓰기가 잦은 테이블이라 인덱스를 최소로 둔다.
 --   커서 조회는 항상 (채널, 범위, id > 커서) 형태고, 정리 작업은 채널별 created_at 범위다.
@@ -8743,7 +8884,7 @@ begin
       from (
         select m.id, m.account_id, m.user_id, m.display_name,
                case when m.deleted_at is null then m.content else null end as content,
-               (m.deleted_at is not null) as deleted, m.created_at
+               (m.deleted_at is not null) as deleted, m.created_at, m.is_notice
           from public.chat_messages m
          where m.channel_id = c.id and m.scope_key = v_scope
          order by m.id desc limit v_limit
@@ -8753,7 +8894,7 @@ begin
       from (
         select m.id, m.account_id, m.user_id, m.display_name,
                case when m.deleted_at is null then m.content else null end as content,
-               (m.deleted_at is not null) as deleted, m.created_at
+               (m.deleted_at is not null) as deleted, m.created_at, m.is_notice
           from public.chat_messages m
          where m.channel_id = c.id and m.scope_key = v_scope and m.id > v_after
          order by m.id limit v_limit
@@ -8834,6 +8975,61 @@ comment on function public.ts_admin_chat_delete_message(bigint, text) is
 
 revoke all on function public.ts_admin_chat_delete_message(bigint, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_chat_delete_message(bigint, text) to service_role;
+
+-- 공지는 전체·서버 채널에만 보낸다(귓속말·로비는 대상이 정해진 대화라 뺀다).
+-- 서버 채널에서 p_server_id 가 null 이면 모든 서버에 한 줄씩 넣는다. 넣은 줄 수를 돌려준다.
+create or replace function public.ts_admin_chat_notice(
+  p_channel_id uuid,
+  p_content    text,
+  p_server_id  uuid default null
+)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  c       public.chat_channels%rowtype;
+  v_body  text := btrim(coalesce(p_content, ''));
+  v_count int;
+begin
+  select * into c from public.chat_channels where id = p_channel_id;
+  if not found then
+    raise exception 'chat_channel_not_found';
+  end if;
+  if c.kind not in ('global', 'server') then
+    raise exception 'chat_kind_unsupported: %', c.kind;
+  end if;
+  if v_body = '' then
+    raise exception 'chat_empty';
+  end if;
+  if char_length(v_body) > 1000 then
+    raise exception 'chat_too_long';
+  end if;
+
+  if c.kind = 'global' then
+    insert into public.chat_messages (channel_id, scope_key, account_id, content, is_notice)
+    values (c.id, '', '00000000-0000-0000-0000-000000000000', v_body, true);
+    v_count := 1;
+  else
+    insert into public.chat_messages (channel_id, scope_key, account_id, content, is_notice)
+    select c.id, gs.id::text, '00000000-0000-0000-0000-000000000000', v_body, true
+      from public.game_servers gs
+     where p_server_id is null or gs.id = p_server_id;
+    get diagnostics v_count = row_count;
+    if v_count = 0 then
+      raise exception 'server_not_found';
+    end if;
+  end if;
+  return v_count;
+end;
+$$;
+
+comment on function public.ts_admin_chat_notice(uuid, text, uuid) is
+  '채팅 공지(어드민). 전체·서버 채널에 운영자 공지를 넣는다. service_role 전용.';
+
+revoke all on function public.ts_admin_chat_notice(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_chat_notice(uuid, text, uuid) to service_role;
 
 drop function if exists public.ts_admin_chat_mute(uuid, uuid, int, text, text);
 

@@ -53,6 +53,8 @@ ShowToast(r.Reason switch
 
 ::: info 금칙어는 가려져서 저장됩니다
 운영 콘솔의 금칙어 목록에 든 단어는 서버가 `***`로 바꿔 저장합니다. 발송은 실패하지 않습니다. 친구 1:1 채팅과 로비 대화도 같습니다.
+
+처음 설치하면 한국어·영어 욕설 341개가 기본으로 들어갑니다. 출처는 [LDNOOBW 목록](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)이고 CC BY 4.0 라이선스입니다. 띄어쓰기를 빼고 비교하므로 멀쩡한 말을 가리는 단어는 뺐습니다. 운영 콘솔 "금칙어"에서 더하거나 뺄 수 있습니다.
 :::
 
 ::: info 보낸 메시지는 구독으로 돌아옵니다

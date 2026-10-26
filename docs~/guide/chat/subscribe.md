@@ -26,7 +26,10 @@ void OpenChatWindow()
 void OnMessages(IReadOnlyList<ChatMessage> messages)
 {
     foreach (var m in messages)
-        AppendBubble(m.ChannelCode, m.DisplayName, m.Deleted ? "(삭제된 메시지)" : m.Content);
+    {
+        if (m.IsNotice) AppendNotice(m.ChannelCode, m.Content);
+        else AppendBubble(m.ChannelCode, m.DisplayName, m.Deleted ? "(삭제된 메시지)" : m.Content);
+    }
 }
 
 void OnDestroy() { _sub?.Dispose(); _sub = null; }
@@ -67,6 +70,7 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 | `DisplayName` | string | 보낸 시점의 닉네임 |
 | `Content` | string | 본문. `Deleted`가 true면 null |
 | `Deleted` | bool | 운영자가 지운 채팅입니다 |
+| `IsNotice` | bool | 운영 콘솔에서 보낸 공지입니다. 보낸 사람이 없어 `DisplayName`·`UserId`는 빈 값입니다 |
 | `CreatedAt` | DateTimeOffset | 보낸 시각 |
 
 내가 보낸 메시지도 이 콜백으로 되돌아옵니다. 발송 직후 화면에 직접 넣지 말고 콜백에서 한 번만 그리세요. 그러지 않으면 같은 말이 두 번 보입니다.

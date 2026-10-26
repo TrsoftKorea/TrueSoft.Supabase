@@ -938,7 +938,7 @@ async function handleAction(
 
         let query = db
           .from("chat_messages")
-          .select("id, channel_id, scope_key, account_id, user_id, display_name, content, created_at, deleted_at, deleted_by", { count: "exact" })
+          .select("id, channel_id, scope_key, account_id, user_id, display_name, content, created_at, deleted_at, deleted_by, is_notice", { count: "exact" })
           .order("id", { ascending: false })
           .range(from, to);
 
@@ -1014,6 +1014,16 @@ async function handleAction(
           .range(from, to);
         if (error) throw new Error(error.message);
         return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize } });
+      }
+
+      case "chat.notice": {
+        const { data, error } = await db.rpc("ts_admin_chat_notice", {
+          p_channel_id: str(params, "channelId"),
+          p_content: str(params, "content"),
+          p_server_id: optStr(params, "serverId") || null,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { count: data } });
       }
 
       case "chat.mute": {
@@ -1352,6 +1362,8 @@ async function handleAction(
           p_skip_item_validation: false,
           p_category: optStr(params, "category") || "default",
           p_localized: params["localized"] ?? null,
+          p_platform: optStr(params, "platform") || null,
+          p_open_for_new: params["openForNew"] === true,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
@@ -1375,6 +1387,8 @@ async function handleAction(
           p_repeat_dow: params["repeatDow"] ?? null,
           p_repeat_dom: params["repeatDom"] ?? null,
           p_created_by: email,
+          p_platform: optStr(params, "platform") || null,
+          p_open_for_new: params["openForNew"] === true,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
@@ -1572,6 +1586,10 @@ const SERVER_ERRORS: Record<string, string> = {
   server_code_invalid: "서버 코드는 영문·숫자·_·- 로 32자 이내여야 합니다.",
   server_code_taken: "이미 있는 서버 코드입니다.",
   server_not_found: "서버를 찾을 수 없습니다.",
+  chat_empty: "보낼 내용을 입력하세요.",
+  chat_too_long: "공지는 1,000자까지 보낼 수 있습니다.",
+  chat_channel_not_found: "채널을 찾을 수 없습니다.",
+  chat_kind_unsupported: "공지는 전체·서버 채널에만 보낼 수 있습니다.",
   coupon_code_taken: "이미 있는 쿠폰 코드입니다.",
   coupon_code_required: "쿠폰 코드를 입력하세요.",
   invalid_coupon_code: "쿠폰 코드는 영문 대문자·숫자·_·- 만 쓸 수 있습니다.",

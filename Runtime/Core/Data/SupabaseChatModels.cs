@@ -57,6 +57,13 @@ namespace TrueBase.Core.Data
         [JsonProperty("deleted")]
         public bool Deleted { get; set; }
 
+        /// <summary>
+        /// 운영자 공지입니다. 보낸 사람이 없어 <see cref="DisplayName"/>·<see cref="UserId"/>는 빈 값이니
+        /// 공지 모양으로 따로 표시하세요. 친구 1:1·로비 대화에서는 항상 false입니다.
+        /// </summary>
+        [JsonProperty("is_notice")]
+        public bool IsNotice { get; set; }
+
         [JsonProperty("created_at")]
         public DateTimeOffset CreatedAt { get; set; }
     }

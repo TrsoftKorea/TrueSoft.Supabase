@@ -37,6 +37,14 @@ type CodeRow = { code: string; redeemed_at: string | null; account_id: string | 
 
 const KEYWORD_RE = /^[A-Z0-9_-]+$/
 
+/** "12 / 100 (12%)". 코드 발급은 발급 수 대비, 키워드는 최대 사용 횟수 대비. 키워드 무제한은 횟수만. */
+function usageText(c: Coupon): string {
+  const cap = c.kind === 'keyword' ? c.max_uses : c.issued_count
+  if (cap == null) return `${formatCount(c.used_count)}회`
+  const rate = cap > 0 ? Math.round((c.used_count / cap) * 1000) / 10 : 0
+  return `${formatCount(c.used_count)} / ${formatCount(cap)} (${rate}%)`
+}
+
 const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
@@ -435,7 +443,7 @@ export default function Coupons({
                 <th className="text-left px-5 py-2.5 font-medium">제목</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">종류</th>
                 <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28">사용</th>
+                <th className="text-left px-4 py-2.5 font-medium w-40">사용률</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
                 <th className="text-left px-4 py-2.5 font-medium w-40">사용 마감</th>
                 <th className="px-3 py-2.5 w-28" />
@@ -453,7 +461,7 @@ export default function Coupons({
                       {c.kind === 'keyword' ? c.code : `발급 ${formatCount(c.issued_count)}개`}
                     </td>
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
-                      {formatCount(c.used_count)}{c.kind === 'keyword' && c.max_uses != null ? ` / ${formatCount(c.max_uses)}` : ''}
+                      {usageText(c)}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded ${c.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>

@@ -9,6 +9,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatCount, itemsText } from '../components/ui/format'
+import { PLATFORMS, platformLabel } from '../lib/platforms'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -116,6 +117,8 @@ export default function Mails({
     presetAccount ? { [presetAccount]: params.get('name') || presetAccount.slice(0, 8) } : {},
   )
   const [serverId, setServerId] = useState('')
+  const [platform, setPlatform] = useState('')
+  const [openForNew, setOpenForNew] = useState(false)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [category, setCategory] = useState('default')
@@ -227,9 +230,12 @@ export default function Mails({
     const c = categories.find((x) => x.key === key)
     return c ? (c.display_name ? `${c.display_name}` : c.key) : key
   }
-  const targetSummary = mode === 'all' ? '전체 플레이어'
+  // 플레이어를 직접 고른 발송에는 플랫폼이 걸리지 않는다(서버도 무시한다).
+  const platformPart = mode !== 'players' && platform ? ` · ${platformLabel(platform)}만` : ''
+  const openPart = mode !== 'players' && openForNew ? ' · 나중에 들어온 플레이어도' : ''
+  const targetSummary = (mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
-    : `플레이어 ${formatCount(playerIds.length)}명`
+    : `플레이어 ${formatCount(playerIds.length)}명`) + platformPart + openPart
   const repeatDesc = repeatUnit === 'day' ? `매일 ${repeatTime}`
     : repeatUnit === 'week' ? `매주 ${DOW_LABEL[repeatDow]}요일 ${repeatTime}`
     : `매월 ${repeatDom}일 ${repeatTime}`
@@ -243,7 +249,7 @@ export default function Mails({
     setTitle(''); setContent(''); setItems([]); setSelected({}); setLangRows([])
     setSched('immediate'); setMode('players'); setScheduledAt('')
     setRepeatUnit('day'); setRepeatTime('12:00'); setRepeatDow(1); setRepeatDom(1)
-    setCategory('default'); setExpiresDays(7); setServerId('')
+    setCategory('default'); setExpiresDays(7); setServerId(''); setPlatform(''); setOpenForNew(false)
     setActive(0); setReached(0)
   }
 
@@ -262,6 +268,8 @@ export default function Mails({
         mode,
         accountIds: mode === 'players' ? playerIds : [],
         serverId: mode === 'server' ? serverId : null,
+        platform: mode === 'players' ? null : platform || null,
+        openForNew: mode !== 'players' && openForNew,
         title, content, category: category.trim() || 'default',
         items: items.map((it) => ({ key: it.key, count: Number(it.count) })),
         localized,
@@ -344,7 +352,9 @@ export default function Mails({
             options={[{ v: 'all', label: '전체' }, { v: 'server', label: '서버' }, { v: 'players', label: '플레이어' }]} />
 
           {mode === 'all' && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">모든 플레이어에게 발송됩니다.</div>
+            <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
+              {platform ? `${platformLabel(platform)} 플레이어 모두에게 발송됩니다.` : '모든 플레이어에게 발송됩니다.'}
+            </div>
           )}
 
           {mode === 'server' && (
@@ -354,6 +364,23 @@ export default function Mails({
                 {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name} ({s.server_code})</option>))}
               </select>
             </Field>
+          )}
+
+          {mode !== 'players' && (
+            <Field label="플랫폼">
+              <Segmented value={platform} onChange={setPlatform}
+                options={[{ v: '', label: '전체' }, ...PLATFORMS.map((p) => ({ v: p.v as string, label: p.label }))]} />
+            </Field>
+          )}
+
+          {mode !== 'players' && (
+            <div>
+              <label className="inline-flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+                <input type="checkbox" checked={openForNew} onChange={(e) => setOpenForNew(e.target.checked)} />
+                나중에 들어온 플레이어도 받기
+              </label>
+              <p className="text-xs text-neutral-400 mt-1">수령 기한까지 새로 가입하거나 이 대상이 된 플레이어에게도 1분 안에 보냅니다.</p>
+            </div>
           )}
 
           {mode === 'players' && (

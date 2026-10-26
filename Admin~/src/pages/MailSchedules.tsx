@@ -3,6 +3,7 @@ import { Trash2, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { useServerName } from '../lib/serverNames'
+import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
@@ -15,7 +16,7 @@ type ScheduleRow = {
   items: { key: string; count: number }[] | null; category: string; scheduled_at: string | null
   repeat_time: string | null; repeat_unit: string | null; repeat_dow: number | null; repeat_dom: number | null
   next_run_at: string; is_active: boolean; run_count: number
-  created_by: string | null; server_code: string | null
+  created_by: string | null; server_code: string | null; platform: string | null; open_for_new: boolean
 }
 type GameItem = { key: string; display_name: string }
 
@@ -157,7 +158,7 @@ export default function MailSchedules({
                       {r.schedule_type === 'repeat' && <div className="text-xs text-neutral-500">{repeatText(r)}</div>}
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.next_run_at)}</td>
-                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}</td>
+                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}{r.platform ? ` · ${platformLabel(r.platform)}` : ''}{r.open_for_new ? ' · 나중에 들어온 플레이어도' : ''}</td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                     <td className="px-4 py-3 text-neutral-600">{r.created_by ?? '-'}</td>

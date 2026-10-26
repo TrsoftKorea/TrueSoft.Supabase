@@ -57,6 +57,7 @@ const ACTION_LABELS: Record<string, string> = {
   'remoteConfig.stageItemDelete': '원격 설정 값 삭제(대기)',
   'remoteConfig.stageDelete': '원격 설정 삭제(대기)',
   'chat.deleteMessage': '채팅 메시지 삭제',
+  'chat.notice': '채팅 공지',
   'chat.mute': '채팅 금지',
   'chat.unmute': '채팅 금지 해제',
   'mails.settingsUpdate': '우편 설정 변경',
