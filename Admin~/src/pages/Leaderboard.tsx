@@ -36,7 +36,7 @@ export default function Leaderboard({
             key={key}
             onClick={() => setTab(key)}
             className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors',
+              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
               tab === key
                 ? 'border-[#1677ff] text-[#1677ff] font-medium'
                 : 'border-transparent text-neutral-600 hover:text-neutral-900',

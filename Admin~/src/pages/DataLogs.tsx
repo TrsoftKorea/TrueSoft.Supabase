@@ -8,8 +8,10 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { formatDateTime, diffSummary } from '../components/ui/format'
+import { formatDateTime, diffSummary, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type LogRow = { id: number; account_id: string; diff: Record<string, unknown>; source: string | null; created_at: string }
 type LogData = { rows: LogRow[]; total: number; pageSize: number }
@@ -30,8 +32,10 @@ export default function DataLogs({
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<LogData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [idHint, setIdHint] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -43,6 +47,7 @@ export default function DataLogs({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       setData(await callAdmin<LogData>(target, 'dataLogs.list', {
         accountId, source, startDate: dateFrom || null, endDate: dateTo || null, page,
@@ -50,6 +55,7 @@ export default function DataLogs({
     } catch (e: unknown) {
       report(e, '데이터 로그를 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -62,7 +68,13 @@ export default function DataLogs({
   const pageSize = data?.pageSize ?? 30
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const submitSearch = () => { setAccountId(accountIdInput.trim()); setSource(sourceInput.trim()); setPage(1) }
+  const submitSearch = () => {
+    const id = accountIdInput.trim()
+    // 계정 ID 는 전체가 맞아야 걸린다 — 일부만 넣으면 조용히 0건이 나와 "기록이 없다"로 오해한다.
+    if (id && !UUID_RE.test(id)) { setIdHint('계정 ID 전체를 넣으세요.'); return }
+    setIdHint('')
+    setAccountId(id); setSource(sourceInput.trim()); setPage(1)
+  }
 
   const goPlayer = (id: string) => navigate(`/players?account=${encodeURIComponent(id)}&name=`)
 
@@ -78,7 +90,7 @@ export default function DataLogs({
           <span className="text-xs text-neutral-500">계정 ID</span>
           <input
             value={accountIdInput}
-            onChange={(e) => setAccountIdInput(e.target.value)}
+            onChange={(e) => { setAccountIdInput(e.target.value); setIdHint('') }}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
             className="h-9 px-3 rounded-md border border-neutral-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] w-64"
           />
@@ -96,6 +108,7 @@ export default function DataLogs({
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
           </Button>
         </div>
+        {idHint && <p className="mt-2 text-xs text-red-600">{idHint}</p>}
       </WhiteCard>
 
       <WhiteCard>
@@ -106,12 +119,12 @@ export default function DataLogs({
                 <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
                 <th className="text-left px-4 py-2.5 font-medium w-32">계정</th>
                 <th className="text-left px-4 py-2.5 font-medium w-32">출처</th>
-                <th className="text-left px-4 py-2.5 font-medium">바뀐 값</th>
+                <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
               </tr>
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={4} emptyText="데이터 로그가 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="데이터 로그가 없습니다." />
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
@@ -132,7 +145,7 @@ export default function DataLogs({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total} result{total === 1 ? '' : 's'}</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
             <span className="px-2">{page} / {totalPages}</span>

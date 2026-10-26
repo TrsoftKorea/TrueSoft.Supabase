@@ -1,9 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { WhiteCard } from './Card'
-import { PageHeader } from './PageHeader'
 import { getProject, getTarget } from '../../lib/projectTarget'
-import { useProjectColor } from '../../lib/projectColors'
+import { useProjectLook } from '../../lib/projectLook'
 
 /**
  * 되돌리기 어려운 동작 앞에 띄우는 확인 창.
@@ -19,6 +18,7 @@ export function ConfirmDialog({
   danger = false,
   busy = false,
   confirmDisabled = false,
+  error,
   onConfirm,
   onCancel,
   children,
@@ -30,6 +30,8 @@ export function ConfirmDialog({
   danger?: boolean
   busy?: boolean
   confirmDisabled?: boolean
+  // 확인 뒤 실패한 사유. 페이지 위 배너는 이 창의 어두운 배경에 가려 보이지 않으므로 창 안에 띄운다.
+  error?: string | undefined
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
@@ -44,7 +46,7 @@ export function ConfirmDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, busy, onCancel])
 
-  const colorOf = useProjectColor()
+  const look = useProjectLook()
 
   if (!open) return null
 
@@ -61,7 +63,7 @@ export function ConfirmDialog({
       <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <WhiteCard className="p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <PageHeader title={title} />
+            <h3 className="text-base font-semibold text-neutral-900">{title}</h3>
             <button
               onClick={onCancel}
               disabled={busy}
@@ -74,14 +76,18 @@ export function ConfirmDialog({
 
           <div
             className="rounded-md px-3 py-2 text-sm font-medium text-white"
-            style={{ backgroundColor: colorOf(project.key) }}
+            style={{ backgroundColor: look.color(project.key) }}
           >
-            대상 게임: {project.label}
+            대상 게임: {look.name(project.key)}
           </div>
 
           {children}
 
           {description && <div className="text-sm text-neutral-600">{description}</div>}
+
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          )}
 
           <div className="flex items-center gap-2 pt-1">
             <button

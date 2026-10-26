@@ -79,7 +79,7 @@ function MonthGrid({
                 isEndpoint
                   ? 'bg-[#1677ff] text-white font-medium'
                   : inRange
-                    ? 'bg-[#e8f0fe]'
+                    ? 'bg-brand-soft'
                     : 'hover:bg-neutral-100',
                 !isEndpoint && isToday ? 'ring-1 ring-[#1677ff]/40' : '',
               ].join(' ')}
@@ -156,7 +156,7 @@ export function DateRangePicker({ start, end, onApply }: Props) {
   const leftYear = view.getFullYear()
   const leftMonth = view.getMonth()
   const right = new Date(leftYear, leftMonth + 1, 1)
-  const label = start && end ? `${fmtSlash(start)} - ${fmtSlash(end)}` : '검색기간'
+  const label = start && end ? `${fmtSlash(start)} - ${fmtSlash(end)}` : '전체 기간'
   const footerText = draftStart
     ? `${fmtSlash(draftStart)} - ${fmtSlash(draftEnd ?? draftStart)}`
     : '기간을 선택하세요'
@@ -183,7 +183,7 @@ export function DateRangePicker({ start, end, onApply }: Props) {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-medium text-neutral-800">{leftMonth + 1}월 {leftYear}</span>
+                <span className="text-sm font-medium text-neutral-800">{leftYear}년 {leftMonth + 1}월</span>
                 <span className="w-6" />
               </div>
               <MonthGrid
@@ -198,7 +198,7 @@ export function DateRangePicker({ start, end, onApply }: Props) {
             <div>
               <div className="flex items-center justify-between mb-2 px-1">
                 <span className="w-6" />
-                <span className="text-sm font-medium text-neutral-800">{right.getMonth() + 1}월 {right.getFullYear()}</span>
+                <span className="text-sm font-medium text-neutral-800">{right.getFullYear()}년 {right.getMonth() + 1}월</span>
                 <button
                   type="button"
                   onClick={() => setView(new Date(leftYear, leftMonth + 1, 1))}

@@ -7,8 +7,9 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
-import { formatDateTime } from '../components/ui/format'
+import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 
 type MailRow = {
   id: string
@@ -34,6 +35,7 @@ type BatchRow = {
 }
 type BatchData = { rows: BatchRow[]; total: number; pageSize: number }
 type CategoryRow = { key: string; display_name: string }
+type GameItem = { key: string; display_name: string }
 type BatchDetail = { batch: BatchRow; stats: { claimed_count: number; deleted_count: number } }
 
 const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어' }
@@ -42,7 +44,7 @@ const STATUS_OPTIONS = ['전체', '미수령', '수령', '삭제']
 function statusOf(r: MailRow): { label: string; cls: string } {
   if (r.deleted_at) return { label: '삭제', cls: 'bg-neutral-200 text-neutral-600' }
   if (r.items_claimed_at) return { label: '수령', cls: 'bg-emerald-100 text-emerald-700' }
-  return { label: '미수령', cls: 'bg-[#e8f0fe] text-[#1677ff]' }
+  return { label: '미수령', cls: 'bg-brand-soft text-[#1677ff]' }
 }
 
 export default function MailRecords({
@@ -63,6 +65,7 @@ export default function MailRecords({
   const [batchPage, setBatchPage] = useState(1)
   const [batchData, setBatchData] = useState<BatchData | null>(null)
   const [batchLoading, setBatchLoading] = useState(false)
+  const [batchFailed, setBatchFailed] = useState(false)
 
   // 개별 우편 탭
   const [dateFrom, setDateFrom] = useState('')
@@ -74,8 +77,10 @@ export default function MailRecords({
   const [page, setPage] = useState(1)
   const [recData, setRecData] = useState<MailData | null>(null)
   const [recLoading, setRecLoading] = useState(false)
+  const [recFailed, setRecFailed] = useState(false)
 
   const [categories, setCategories] = useState<CategoryRow[]>([])
+  const [catalog, setCatalog] = useState<GameItem[]>([])
 
   // 드릴다운: 선택된 배치(개별 우편을 이 배치로 필터)
   const [selectedBatch, setSelectedBatch] = useState<{ id: string; title: string } | null>(null)
@@ -95,10 +100,14 @@ export default function MailRecords({
   useEffect(() => {
     void (async () => {
       try {
-        const res = await callAdmin<{ rows: CategoryRow[] }>(target, 'mails.getCategories')
+        const [res, items] = await Promise.all([
+          callAdmin<{ rows: CategoryRow[] }>(target, 'mails.getCategories'),
+          callAdmin<GameItem[]>(target, 'gameItems.list'),
+        ])
         setCategories(res.rows)
+        setCatalog(items)
       } catch (e: unknown) {
-        report(e, '분류를 불러오지 못했습니다.')
+        report(e, '분류와 아이템 목록을 불러오지 못했습니다.')
       }
     })()
   }, [target, report])
@@ -108,9 +117,12 @@ export default function MailRecords({
     try {
       const res = await callAdmin<BatchData>(target, 'mails.getBatches', { page: batchPage, search: batchSearch, category: batchCategory })
       setBatchData(res)
+      setBatchFailed(false)
+      setError('')
     } catch (e: unknown) {
       report(e, '발송 단위를 불러오지 못했습니다.')
       setBatchData(null)
+      setBatchFailed(true)
     } finally {
       setBatchLoading(false)
     }
@@ -124,9 +136,12 @@ export default function MailRecords({
         search, status, category, startDate: dateFrom || null, endDate: dateTo || null, batchId: selectedBatch?.id ?? null, page,
       })
       setRecData(res)
+      setRecFailed(false)
+      setError('')
     } catch (e: unknown) {
       report(e, '우편 내역을 불러오지 못했습니다.')
       setRecData(null)
+      setRecFailed(true)
     } finally {
       setRecLoading(false)
     }
@@ -142,7 +157,7 @@ export default function MailRecords({
       try {
         setDetail(await callAdmin<BatchDetail>(target, 'mails.getBatchDetail', { batchId: selectedBatch.id }))
       } catch (e: unknown) {
-        report(e, '배치 상세를 불러오지 못했습니다.')
+        report(e, '발송 단위 상세를 불러오지 못했습니다.')
       }
     })()
   }, [target, selectedBatch, report])
@@ -185,9 +200,9 @@ export default function MailRecords({
   const renderCategoryOptions = () => (
     <>
       <option value="">전체 분류</option>
-      {!categories.some((c) => c.key === 'default') && <option value="default">기본 (default)</option>}
+      {!categories.some((c) => c.key === 'default') && <option value="default">기본</option>}
       {categories.map((c) => (
-        <option key={c.key} value={c.key}>{c.display_name ? `${c.display_name} (${c.key})` : c.key}</option>
+        <option key={c.key} value={c.key}>{c.display_name || c.key}</option>
       ))}
     </>
   )
@@ -196,11 +211,7 @@ export default function MailRecords({
     <div className="space-y-4">
       <PageHeader title="우편 내역" description="발송한 우편 내역을 조회합니다." />
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
         <button type="button" onClick={() => setTab('batches')} className={tabCls(tab === 'batches')}>발송 단위</button>
@@ -237,15 +248,15 @@ export default function MailRecords({
                 </thead>
                 <tbody>
                   {batchLoading || batches.length === 0 ? (
-                    <TableStatusRow loading={batchLoading} empty={batches.length === 0} colSpan={7} emptyText="발송 이력이 없습니다." />
+                    <TableStatusRow loading={batchLoading} empty={batches.length === 0} failed={batchFailed} colSpan={7} emptyText="발송 이력이 없습니다." />
                   ) : (
                     batches.map((b) => (
                       <tr key={b.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openBatch(b)}>
                         <td className="px-4 py-3 whitespace-nowrap">{MODE_LABEL[b.target_mode] ?? b.target_mode}{b.server_code ? ` (${b.server_code})` : ''}</td>
                         <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(b.category)}</td>
                         <td className="px-4 py-3">{b.title}</td>
-                        <td className="px-4 py-3">{b.recipient_count}</td>
-                        <td className="px-4 py-3 text-neutral-600">{(b.items ?? []).map((it) => `${it.key}×${it.count}`).join(', ') || '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{formatCount(b.recipient_count)}</td>
+                        <td className="px-4 py-3 text-neutral-600">{itemsText(b.items, catalog)}</td>
                         <td className="px-4 py-3 text-neutral-600">{b.created_by ?? '-'}</td>
                         <td className="px-4 py-3 text-neutral-600">{formatDateTime(b.created_at)}</td>
                       </tr>
@@ -255,7 +266,7 @@ export default function MailRecords({
               </table>
             </div>
             <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{batchTotal} result{batchTotal === 1 ? '' : 's'}</span>
+              <span>{formatTotal(batchTotal)}</span>
               <div className="flex items-center gap-1">
                 <button disabled={batchPage <= 1} onClick={() => setBatchPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
                 <span className="px-2">{batchPage} / {batchTotalPages}</span>
@@ -269,12 +280,12 @@ export default function MailRecords({
       {tab === 'records' && (
         <>
           {selectedBatch && (
-            <div className="flex items-center gap-2 rounded-md bg-[#e8f0fe] border border-[#1677ff]/20 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 rounded-md bg-brand-soft border border-[#1677ff]/20 px-3 py-2 text-sm">
               <span className="text-[#1677ff] font-medium truncate">발송: {selectedBatch.title}</span>
               {detail?.stats && (
-                <span className="text-neutral-600 shrink-0">· 대상 {detail.batch?.recipient_count ?? 0}명 · 수령 {detail.stats.claimed_count} · 삭제 {detail.stats.deleted_count}</span>
+                <span className="text-neutral-600 shrink-0">· 대상 {formatCount(detail.batch?.recipient_count ?? 0)}명 · 수령 {formatCount(detail.stats.claimed_count)} · 삭제 {formatCount(detail.stats.deleted_count)}</span>
               )}
-              <button onClick={clearBatch} className="ml-auto text-neutral-400 hover:text-neutral-700 shrink-0" title="배치 필터 해제"><X className="w-4 h-4" /></button>
+              <button onClick={clearBatch} className="ml-auto text-neutral-400 hover:text-neutral-700 shrink-0" title="이 발송 단위만 보기 해제" aria-label="이 발송 단위만 보기 해제"><X className="w-4 h-4" /></button>
             </div>
           )}
 
@@ -312,7 +323,7 @@ export default function MailRecords({
                 </thead>
                 <tbody>
                   {recLoading || rows.length === 0 ? (
-                    <TableStatusRow loading={recLoading} empty={rows.length === 0} colSpan={8} emptyText="우편 내역이 없습니다." />
+                    <TableStatusRow loading={recLoading} empty={rows.length === 0} failed={recFailed} colSpan={8} emptyText="우편 내역이 없습니다." />
                   ) : (
                     rows.map((r) => {
                       const st = statusOf(r)
@@ -325,7 +336,7 @@ export default function MailRecords({
                               <button onClick={() => goPlayer(r)} className="text-[#1677ff] hover:underline">{r.display_name ?? '(이름 없음)'}</button>
                             ) : (<span className="text-neutral-400">{r.user_id ?? '-'}</span>)}
                           </td>
-                          <td className="px-4 py-3 text-neutral-600">{(r.items ?? []).map((it) => `${it.key}×${it.count}`).join(', ') || '-'}</td>
+                          <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                           <td className="px-4 py-3 text-neutral-700">{r.title || '-'}</td>
                           <td className="px-4 py-3 text-neutral-600">{r.items_claimed_at ? formatDateTime(r.items_claimed_at) : '-'}</td>
                           <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.expires_at)}</td>
@@ -338,7 +349,7 @@ export default function MailRecords({
               </table>
             </div>
             <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{total} result{total === 1 ? '' : 's'}</span>
+              <span>{formatTotal(total)}</span>
               <div className="flex items-center gap-1">
                 <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
                 <span className="px-2">{page} / {totalPages}</span>

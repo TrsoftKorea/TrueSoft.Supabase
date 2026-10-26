@@ -7,7 +7,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { formatDateTime } from '../components/ui/format'
+import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { inputCls } from './social/LimitsForm'
 import { Button } from '../components/ui/Button'
 
@@ -79,6 +79,7 @@ function LobbyList({
   const navigate = useNavigate()
   const [data, setData] = useState<LobbyData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -87,9 +88,11 @@ function LobbyList({
     setLoading(true)
     try {
       setData(await callAdmin<LobbyData>(target, 'matchLobby.list', { status, page }))
+      setFailed(false)
     } catch (e: unknown) {
       report(e, '로비 목록을 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -136,13 +139,13 @@ function LobbyList({
                 <th className="text-left px-4 py-2.5 font-medium w-40">방</th>
                 <th className="text-left px-4 py-2.5 font-medium w-32">게임 코드</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">인원</th>
+                <th className="text-left px-4 py-2.5 font-medium w-28 whitespace-nowrap">참가·초대 / 최대</th>
                 <th className="text-left px-4 py-2.5 font-medium">참가자</th>
               </tr>
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={6} emptyText="로비가 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={6} emptyText="로비가 없습니다." />
               ) : (
                 rows.map((l) => {
                   const active = l.members.filter((m) => m.status === 'invited' || m.status === 'accepted').length
@@ -159,7 +162,7 @@ function LobbyList({
                           onClick={() => setOpenId(expanded ? null : l.lobby_id)}
                           className="text-[#1677ff] hover:underline text-xs whitespace-nowrap"
                         >
-                          {expanded ? '접기' : `참가자 ${l.members.length}명 보기`}
+                          {expanded ? '접기' : `참가자 ${formatCount(l.members.length)}명 보기`}
                         </button>
                         {expanded && (
                           <div className="mt-2 space-y-1">
@@ -188,7 +191,7 @@ function LobbyList({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total} result{total === 1 ? '' : 's'}</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>

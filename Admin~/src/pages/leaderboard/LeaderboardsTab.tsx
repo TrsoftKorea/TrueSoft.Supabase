@@ -5,7 +5,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatDateTime } from '../../components/ui/format'
+import { formatCount, formatDateTime } from '../../components/ui/format'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
@@ -194,6 +194,8 @@ export default function LeaderboardsTab({
   const [rotateTarget, setRotateTarget] = useState<LeaderboardRow | null>(null)
   const [acting, setActing] = useState(false)
   const [error, setError] = useState('')
+  // 모달·확인 창 안에서 난 실패. 페이지 배너는 창의 어두운 배경에 가려 보이지 않는다.
+  const [dialogError, setDialogError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const [rows, setRows] = useState<LeaderboardRow[]>([])
@@ -212,6 +214,11 @@ export default function LeaderboardsTab({
     },
     [onUnauthenticated],
   )
+
+  const reportInDialog = (e: unknown, fallback: string) => {
+    if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+    setDialogError(e instanceof Error ? e.message : fallback)
+  }
 
   // 대기 중 변경 조회 실패(인증 실패 제외)는 공유 컨텍스트가 조용히 삼키므로, 여기로 넘어오면
   // 기존 에러 배너에 실어 보여준다.
@@ -237,6 +244,7 @@ export default function LeaderboardsTab({
   const pendingItems: PendingItem[] = drafts
     .filter((d) => d.feature === 'leaderboard_table')
     .map((d) => ({ id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name }))
+  const draftOf = (code: string) => drafts.find((d) => d.feature === 'leaderboard_table' && d.object_name === code)
 
   const discardOne = async (id: number) => {
     setDiscarding(true)
@@ -251,9 +259,10 @@ export default function LeaderboardsTab({
   }
 
   const openAdd = () => {
-    setEditCode(null); setForm(DEFAULT_FORM); setTouched(false); setModalOpen(true)
+    setEditCode(null); setForm(DEFAULT_FORM); setTouched(false); setDialogError(''); setModalOpen(true)
   }
   const openEdit = (r: LeaderboardRow) => {
+    setDialogError('')
     setEditCode(r.code)
     setForm({
       code: r.code, displayName: r.display_name, scope: r.scope,
@@ -286,6 +295,7 @@ export default function LeaderboardsTab({
     setTouched(true)
     if (!valid || saving) return
     setSaving(true)
+    setDialogError('')
     try {
       const code = editCode ?? form.code.trim()
       await callAdmin(target, 'schema.stage', {
@@ -309,7 +319,7 @@ export default function LeaderboardsTab({
       closeModal()
       await reloadDrafts()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      reportInDialog(e, '실패했습니다.')
     } finally {
       setSaving(false)
     }
@@ -318,6 +328,7 @@ export default function LeaderboardsTab({
   const confirmDelete = async () => {
     if (!delTarget || acting) return
     setActing(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'schema.stage', {
         feature: 'leaderboard_table',
@@ -329,19 +340,20 @@ export default function LeaderboardsTab({
       setDelTarget(null)
       await reloadDrafts()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      reportInDialog(e, '실패했습니다.')
     } finally { setActing(false) }
   }
 
   const confirmRotate = async () => {
     if (!rotateTarget || acting) return
     setActing(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'leaderboard.rotate', { code: rotateTarget.code })
       setRotateTarget(null)
       await reloadRows()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      reportInDialog(e, '실패했습니다.')
     } finally { setActing(false) }
   }
 
@@ -390,21 +402,31 @@ export default function LeaderboardsTab({
                   emptyText="등록된 리더보드가 없습니다."
                 />
               ) : (
-                rows.map((r) => (
+                rows.map((r) => {
+                  const draft = draftOf(r.code)
+                  const noCycle = r.rotation === 'none'
+                  return (
                   <tr
                     key={r.code}
                     className={
                       'border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer' +
-                      (selectedCode === r.code ? ' bg-[#e8f0fe]' : '')
+                      (selectedCode === r.code ? ' bg-brand-soft' : '')
                     }
                     onClick={() => onSelect(selectedCode === r.code ? '' : r.code)}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {r.is_ended ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-neutral-100 text-neutral-600">종료</span>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700">진행 중</span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {r.is_ended ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-neutral-100 text-neutral-600">종료</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700">진행 중</span>
+                        )}
+                        {draft?.action === 'delete' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">삭제 대기</span>
+                        ) : draft ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700" title="게시하면 적용됩니다">대기 중</span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{r.code}</td>
                     <td className="px-4 py-3">{r.display_name}</td>
@@ -412,8 +434,8 @@ export default function LeaderboardsTab({
                     <td className="px-4 py-3 whitespace-nowrap">{RECORD_LABEL[r.record_type] ?? r.record_type}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{SORT_LABEL[r.sort_type] ?? r.sort_type}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{ROTATION_LABEL[r.rotation] ?? r.rotation}</td>
-                    <td className="px-4 py-3 text-right">{r.rotation_count}</td>
-                    <td className="px-4 py-3 text-right">{r.current_entries}</td>
+                    <td className="px-4 py-3 text-right">{formatCount(r.rotation_count)}</td>
+                    <td className="px-4 py-3 text-right">{formatCount(r.current_entries)}</td>
                     <td className="px-4 py-3">{formatDateTime(r.next_rotation_at)}</td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
@@ -424,15 +446,18 @@ export default function LeaderboardsTab({
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        {/* 주기 없는 리더보드는 기록 탭에 회차 선택이 없어, 넘기면 이전 기록을 다시 볼 길이 없다. */}
                         <button
-                          onClick={() => setRotateTarget(r)}
-                          title="회차 넘기기"
-                          className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
+                          onClick={() => { setDialogError(''); setRotateTarget(r) }}
+                          disabled={noCycle}
+                          title={noCycle ? '초기화 주기가 없는 리더보드는 회차를 넘길 수 없습니다' : '회차 넘기기'}
+                          aria-label="회차 넘기기"
+                          className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                         >
                           <RotateCw className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => setDelTarget(r)}
+                          onClick={() => { setDialogError(''); setDelTarget(r) }}
                           title="삭제"
                           className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
                         >
@@ -441,7 +466,8 @@ export default function LeaderboardsTab({
                       </div>
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -455,7 +481,7 @@ export default function LeaderboardsTab({
               <h3 className="text-base font-semibold">
                 {editCode ? '리더보드 수정' : '리더보드 추가'}
               </h3>
-              <button onClick={closeModal} className="text-neutral-400 hover:text-neutral-700">
+              <button onClick={closeModal} disabled={saving} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -471,7 +497,6 @@ export default function LeaderboardsTab({
                     value={form.code}
                     onChange={setF('code')}
                     disabled={editCode !== null}
-                    placeholder="예: weekly_score"
                     className={inp + (editCode ? ' opacity-50 cursor-not-allowed' : '')}
                   />
                   {editCode ? (
@@ -479,7 +504,7 @@ export default function LeaderboardsTab({
                   ) : touched && !codeValid ? (
                     <p className={err}>영문 소문자로 시작하고 소문자·숫자·_ 만 사용하세요.</p>
                   ) : (
-                    <p className={hint}>게임 코드에서 이 리더보드를 부르는 이름입니다.</p>
+                    <p className={hint}>게임 코드에서 이 리더보드를 부르는 이름입니다. 예: weekly_score</p>
                   )}
                 </div>
 
@@ -490,7 +515,6 @@ export default function LeaderboardsTab({
                   <input
                     value={form.displayName}
                     onChange={setF('displayName')}
-                    placeholder="예: 주간 점수 랭킹"
                     className={inp}
                   />
                   {touched && !nameValid
@@ -552,16 +576,15 @@ export default function LeaderboardsTab({
                           step="0.5"
                           value={form.periodHours}
                           onChange={setF('periodHours')}
-                          placeholder="예: 168"
                           className={inp + ' pr-12'}
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400 pointer-events-none">
                           시간
                         </span>
                       </div>
-                      {touched && !periodValid && (
-                        <p className={err}>0보다 큰 숫자를 입력해주세요.</p>
-                      )}
+                      {touched && !periodValid
+                        ? <p className={err}>0보다 큰 숫자를 입력해주세요.</p>
+                        : <p className={hint}>일주일은 168시간입니다.</p>}
                     </div>
                   )}
 
@@ -664,9 +687,13 @@ export default function LeaderboardsTab({
               )}
             </div>
 
+            {dialogError && (
+              <div className="mx-5 mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
+            )}
             <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
               <Button variant="outline"
                 onClick={closeModal}
+                disabled={saving}
               >
                 <X className="w-3.5 h-3.5" />
                 취소
@@ -678,7 +705,7 @@ export default function LeaderboardsTab({
                 {saving
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <Plus className="w-3.5 h-3.5" />}
-                {editCode ? '저장' : '추가'}
+                변경 담기
               </Button>
             </div>
           </div>
@@ -687,13 +714,14 @@ export default function LeaderboardsTab({
 
       <ConfirmDialog
         open={!!delTarget}
-        title="리더보드 지우기"
-        confirmLabel="지우기"
+        title="리더보드 삭제"
+        confirmLabel="삭제"
         danger
         busy={acting}
+        error={dialogError}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDelTarget(null)}
-        description="지난 회차까지 포함해 이 리더보드의 기록이 모두 사라집니다. 되돌릴 수 없습니다."
+        description="게시하면 지난 회차까지 포함해 이 리더보드의 기록이 모두 사라집니다. 게시 전에는 변경 관리에서 취소할 수 있습니다."
       >
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
@@ -709,6 +737,7 @@ export default function LeaderboardsTab({
         confirmLabel="회차 넘기기"
         danger
         busy={acting}
+        error={dialogError}
         onConfirm={() => void confirmRotate()}
         onCancel={() => setRotateTarget(null)}
         description="현재 순위가 지난 회차로 넘어가고 새 회차가 시작됩니다. 즉시 적용되며 변경 관리·롤백 대상이 아닙니다."

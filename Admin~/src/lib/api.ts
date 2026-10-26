@@ -23,14 +23,20 @@ async function postAdmin<T>(
   const project = getProject(target)
   if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
 
-  const res = await fetch(`${project.url}/functions/v1/admin-api`, {
-    method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ action, params }),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${project.url}/functions/v1/admin-api`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, params }),
+    })
+  } catch {
+    // 브라우저가 주는 원문("Failed to fetch")은 운영자가 읽을 수 없다.
+    throw new Error(`${project.label} 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.`)
+  }
 
   const body = (await res.json().catch(() => null)) as
     | { ok?: boolean; data?: T; error?: string }

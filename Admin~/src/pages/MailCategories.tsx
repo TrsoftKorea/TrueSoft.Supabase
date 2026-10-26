@@ -8,6 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 
 type Category = { key: string; display_name: string; created_at: string }
 type FormCategory = { key: string; display_name: string }
@@ -22,6 +23,7 @@ export default function MailCategories({
 }) {
   const [rows, setRows] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
   const [error, setError] = useState('')
 
   const [form, setForm] = useState<FormCategory>(EMPTY)
@@ -45,13 +47,15 @@ export default function MailCategories({
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError('')
     try {
       const res = await callAdmin<{ rows: Category[] }>(target, 'mails.getCategories')
       setRows(res.rows)
+      setFailed(false)
+      setError('')
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setRows([])
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -74,8 +78,11 @@ export default function MailCategories({
     }
   }
 
+  // 같은 코드로 추가하면 기존 분류 이름이 조용히 바뀌므로 막는다. 이름 변경은 목록의 수정으로.
+  const keyTaken = rows.some((r) => r.key === form.key.trim())
+
   const add = () => {
-    if (!form.key.trim() || adding) return
+    if (!form.key.trim() || keyTaken || adding) return
     void run(async () => {
       await callAdmin(target, 'mails.upsertCategory', { key: form.key.trim(), displayName: form.display_name })
       setForm(EMPTY)
@@ -114,11 +121,7 @@ export default function MailCategories({
     <div className="space-y-4">
       <PageHeader title="우편 분류" description="우편 발송 시 선택할 분류 목록입니다." />
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard className="p-4">
         <div className="text-xs font-medium text-neutral-500 mb-2">새 분류 추가</div>
@@ -129,7 +132,7 @@ export default function MailCategories({
               value={form.key}
               onChange={(e) => setForm({ ...form, key: e.target.value })}
               onKeyDown={(e) => e.key === 'Enter' && add()}
-              className={inputCls}
+              className={inputCls + (keyTaken ? ' border-red-400' : '')}
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -143,12 +146,13 @@ export default function MailCategories({
           </div>
           <Button variant="primary"
             onClick={add}
-            disabled={adding || !form.key.trim()}
+            disabled={adding || !form.key.trim() || keyTaken}
           >
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             추가
           </Button>
         </div>
+        {keyTaken && <p className="mt-1.5 text-xs text-red-600">이미 있는 분류 코드입니다.</p>}
       </WhiteCard>
 
       <WhiteCard>
@@ -166,6 +170,7 @@ export default function MailCategories({
               <TableStatusRow
                 loading={loading}
                 empty={rows.length === 0}
+                failed={failed}
                 colSpan={4}
                 emptyText="등록된 분류가 없습니다."
               />
@@ -201,7 +206,8 @@ export default function MailCategories({
                               onClick={() => saveEdit(c.key)}
                               disabled={rowSaving}
                               className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
-                              aria-label="확인"
+                              title="저장"
+                              aria-label="저장"
                             >
                               {rowSaving ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -209,17 +215,17 @@ export default function MailCategories({
                                 <Check className="w-4 h-4" />
                               )}
                             </button>
-                            <button onClick={cancelEdit} className="text-neutral-400 hover:text-neutral-700" aria-label="취소">
+                            <button onClick={cancelEdit} className="text-neutral-400 hover:text-neutral-700" title="취소" aria-label="취소">
                               <X className="w-4 h-4" />
                             </button>
                           </>
                         ) : (
                           <>
-                            <button onClick={() => startEdit(c)} className="text-neutral-400 hover:text-[#1677ff]" aria-label="수정">
+                            <button onClick={() => startEdit(c)} className="text-neutral-400 hover:text-[#1677ff]" title="이름 수정" aria-label="이름 수정">
                               <Pencil className="w-4 h-4" />
                             </button>
                             {!isDefault && (
-                              <button onClick={() => setDelTarget(c)} className="text-neutral-400 hover:text-red-500" aria-label="삭제">
+                              <button onClick={() => { setError(''); setDelTarget(c) }} className="text-neutral-400 hover:text-red-500" title="삭제" aria-label="삭제">
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             )}
@@ -237,10 +243,11 @@ export default function MailCategories({
 
       <ConfirmDialog
         open={!!delTarget}
-        title="분류 지우기"
-        confirmLabel="지우기"
+        title="분류 삭제"
+        confirmLabel="삭제"
         danger
         busy={deleting}
+        error={error || undefined}
         onConfirm={confirmDelete}
         onCancel={() => setDelTarget(null)}
         description="이 분류로 이미 발송된 우편은 그대로 남고, 앞으로 발송할 때 고를 수 없게 됩니다."

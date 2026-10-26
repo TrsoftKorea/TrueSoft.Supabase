@@ -8,7 +8,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { formatDateTime } from '../components/ui/format'
+import { formatDateTime, formatCount, toDatetimeLocal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 
 type ItemRow = { key: string; count: number }
@@ -34,6 +34,8 @@ type Coupon = {
 
 type CodeRow = { code: string; redeemed_at: string | null; account_id: string | null; user_id: string | null }
 
+const KEYWORD_RE = /^[A-Z0-9_-]+$/
+
 const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
@@ -58,13 +60,16 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
   }, [target, coupon.id, onUnauthenticated])
 
   const [exporting, setExporting] = useState(false)
+  // 내려받기 실패가 목록 자리를 덮지 않도록 목록 오류와 따로 둔다.
+  const [exportError, setExportError] = useState('')
   const exportCsv = async () => {
     setExporting(true)
+    setExportError('')
     try {
       const all = await callAdmin<CodeRow[]>(target, 'coupons.codes', { id: coupon.id, all: true })
       downloadCsv(
         `쿠폰코드_${coupon.title}_${todayStamp()}.csv`,
-        ['코드', '상태', '사용 시각', '플레이어', '계정 ID'],
+        ['코드', '상태', '사용 시각', '유저 ID', '계정 ID'],
         all.map((r) => [
           r.code,
           r.redeemed_at ? '사용함' : '사용하지 않음',
@@ -75,7 +80,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
       )
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
-      setError(e instanceof Error ? e.message : '내려받지 못했습니다.')
+      setExportError(e instanceof Error ? e.message : '내려받지 못했습니다.')
     } finally { setExporting(false) }
   }
 
@@ -88,9 +93,12 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
             <Button size="sm" onClick={() => void exportCsv()} disabled={exporting || loading || rows.length === 0}>
               {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}CSV 내려받기
             </Button>
-            <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+            <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
           </div>
         </div>
+        {exportError && (
+          <div className="px-5 py-2 border-b text-xs text-red-600 shrink-0">CSV를 내려받지 못했습니다. {exportError}</div>
+        )}
         <div className="overflow-auto flex-1">
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
@@ -112,7 +120,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
                     <td className="px-4 py-2 font-mono">{r.code}</td>
                     <td className="px-4 py-2">
                       {r.redeemed_at ? (
-                        <span className="text-xs text-neutral-500">사용됨 · {formatDateTime(r.redeemed_at)}{r.user_id ? ` · ${r.user_id}` : ''}</span>
+                        <span className="text-xs text-neutral-500">사용됨 · {formatDateTime(r.redeemed_at)}{r.user_id ? ` · 유저 ID ${r.user_id}` : ''}</span>
                       ) : (
                         <span className="text-xs text-emerald-600">미사용</span>
                       )}
@@ -140,7 +148,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
   categories: CategoryRow[]
   catalog: GameItem[]
   onClose: () => void
-  onSaved: () => void
+  onSaved: (message: string) => void
 }) {
   const isEdit = !!coupon
   const [kind, setKind] = useState<'normal' | 'keyword'>(coupon?.kind ?? 'normal')
@@ -148,7 +156,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
   const [content, setContent] = useState(coupon?.content ?? '')
   const [category, setCategory] = useState(coupon?.category ?? 'default')
   const [items, setItems] = useState<ItemRow[]>(coupon?.items ?? [])
-  const [expiresAt, setExpiresAt] = useState(coupon?.expires_at ? coupon.expires_at.slice(0, 16) : '')
+  const [expiresAt, setExpiresAt] = useState(toDatetimeLocal(coupon?.expires_at))
   const [mailExpiresDays, setMailExpiresDays] = useState(coupon?.mail_expires_days ?? 7)
   const [isActive, setIsActive] = useState(coupon?.is_active ?? true)
   const [maxUses, setMaxUses] = useState(coupon?.max_uses != null ? String(coupon.max_uses) : '')
@@ -164,11 +172,13 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
   const setItem = (i: number, patch: Partial<ItemRow>) => setItems((x) => x.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   const delItem = (i: number) => setItems((x) => x.filter((_, j) => j !== i))
 
+  // 수정 화면의 코드는 잠겨 있어 검사하지 않는다(이미 만들어진 코드).
+  const codeInvalid = kind === 'keyword' && !isEdit && code.trim() !== '' && !KEYWORD_RE.test(code.trim())
   const canSubmit = title.trim() !== '' && mailExpiresDays > 0 &&
-    (kind === 'normal' || (kind === 'keyword' && code.trim() !== ''))
+    (kind === 'normal' || (kind === 'keyword' && code.trim() !== '' && !codeInvalid))
 
   const submit = async () => {
-    if (!canSubmit || loading) return
+    if (!canSubmit || loading || issuedMsg) return
     setError('')
     let maxUsesValue: number | null = null
     if (maxUses.trim() !== '') {
@@ -192,7 +202,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
     try {
       if (isEdit) {
         await callAdmin(target, 'coupons.update', { id: coupon.id, ...common })
-        onSaved()
+        onSaved(`"${common.title}" 쿠폰을 저장했습니다.`)
       } else {
         const res = await callAdmin<{ code?: string; issued: number }>(target, 'coupons.create', {
           ...common,
@@ -202,8 +212,10 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           randomLen,
           quantity,
         })
-        setIssuedMsg(kind === 'keyword' ? `발급 완료 — 코드 ${res.code}` : `발급 완료 — ${res.issued}개`)
-        setTimeout(onSaved, 900)
+        const msg = kind === 'keyword' ? `발급 완료 — 코드 ${res.code}` : `발급 완료 — ${formatCount(res.issued)}개`
+        // 이 메시지가 서 있는 동안 발급 버튼은 계속 잠근다 — 닫히기 전 다시 누르면 한 번 더 발급된다.
+        setIssuedMsg(msg)
+        setTimeout(() => onSaved(`"${common.title}" 쿠폰 ${msg}`), 900)
       }
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -216,7 +228,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg my-6">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">{isEdit ? '쿠폰 수정' : '쿠폰 추가'}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           {!isEdit && (
@@ -236,8 +248,8 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           <div>
             <label className="block text-xs text-neutral-500 mb-1">분류</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls + ' w-full'}>
-              {!categories.some((c) => c.key === 'default') && <option value="default">기본 (default)</option>}
-              {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name ? `${c.display_name} (${c.key})` : c.key}</option>))}
+              {!categories.some((c) => c.key === 'default') && <option value="default">기본</option>}
+              {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
             </select>
           </div>
           <div>
@@ -260,14 +272,14 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
                   {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
                 </select>
                 <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
-                <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+                <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
               </div>
             ))}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-neutral-500 mb-1">쿠폰 사용 마감</label>
+              <label className="block text-xs text-neutral-500 mb-1">사용 마감</label>
               <input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={inputCls + ' w-full'} />
             </div>
             <div>
@@ -280,7 +292,8 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">코드</label>
-                <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} disabled={isEdit} className={inputCls + ' w-full font-mono disabled:bg-neutral-50 disabled:text-neutral-400'} />
+                <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} disabled={isEdit} className={inputCls + ' w-full font-mono disabled:bg-neutral-50 disabled:text-neutral-400' + (codeInvalid ? ' border-red-400' : '')} />
+                {codeInvalid && <p className="mt-1 text-xs text-red-600">영문·숫자·밑줄(_)·하이픈(-)만 쓸 수 있습니다. 띄어쓰기는 안 됩니다.</p>}
               </div>
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">최대 사용 횟수(빈칸=무제한)</label>
@@ -316,7 +329,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
           <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
+          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit || !!issuedMsg}>
             {loading ? '저장 중…' : isEdit ? '저장' : '발급'}
           </Button>
         </div>
@@ -337,11 +350,14 @@ export default function Coupons({
   const [categories, setCategories] = useState<CategoryRow[]>([])
   const [catalog, setCatalog] = useState<GameItem[]>([])
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [notice, setNotice] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editTarget, setEditTarget] = useState<Coupon | null>(null)
   const [codesTarget, setCodesTarget] = useState<Coupon | null>(null)
   const [delTarget, setDelTarget] = useState<Coupon | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [delError, setDelError] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -355,8 +371,10 @@ export default function Coupons({
     setLoading(true)
     try {
       setRows(await callAdmin<Coupon[]>(target, 'coupons.list'))
+      setFailed(false)
     } catch (e: unknown) {
       report(e, '쿠폰 목록을 불러오지 못했습니다.')
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -381,12 +399,15 @@ export default function Coupons({
   const confirmDelete = async () => {
     if (!delTarget) return
     setDeleting(true)
+    setDelError('')
+    setNotice('')
     try {
       await callAdmin(target, 'coupons.delete', { id: delTarget.id })
       setDelTarget(null)
       await load()
     } catch (e: unknown) {
-      report(e, '삭제에 실패했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDelError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
     } finally {
       setDeleting(false)
     }
@@ -396,9 +417,10 @@ export default function Coupons({
     <div className="space-y-4">
       <PageHeader title="쿠폰" description="코드를 입력하면 보상을 지급하는 쿠폰을 관리합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
+      {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
       <div className="flex justify-end">
-        <Button variant="primary" size="compact" onClick={() => setShowModal(true)}>
+        <Button variant="primary" size="compact" onClick={() => { setNotice(''); setShowModal(true) }}>
           <Plus className="w-4 h-4" />쿠폰 추가
         </Button>
       </div>
@@ -413,23 +435,23 @@ export default function Coupons({
                 <th className="text-left px-4 py-2.5 font-medium">코드</th>
                 <th className="text-left px-4 py-2.5 font-medium w-28">사용</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">만료일</th>
+                <th className="text-left px-4 py-2.5 font-medium w-40">사용 마감</th>
                 <th className="px-3 py-2.5 w-28" />
               </tr>
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={7} emptyText="쿠폰이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={7} emptyText="쿠폰이 없습니다." />
               ) : (
                 rows.map((c) => (
                   <tr key={c.id} className="border-t border-neutral-100">
                     <td className="px-5 py-3">{c.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{c.kind === 'normal' ? '코드 발급' : '키워드'}</td>
                     <td className="px-4 py-3 font-mono text-xs">
-                      {c.kind === 'keyword' ? c.code : `발급 ${c.issued_count}개`}
+                      {c.kind === 'keyword' ? c.code : `발급 ${formatCount(c.issued_count)}개`}
                     </td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {c.used_count}{c.kind === 'keyword' && c.max_uses != null ? ` / ${c.max_uses}` : ''}
+                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
+                      {formatCount(c.used_count)}{c.kind === 'keyword' && c.max_uses != null ? ` / ${formatCount(c.max_uses)}` : ''}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded ${c.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
@@ -440,14 +462,14 @@ export default function Coupons({
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {c.kind === 'normal' && (
-                          <button onClick={() => setCodesTarget(c)} title="코드 보기" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                          <button onClick={() => setCodesTarget(c)} title="코드 보기" aria-label="코드 보기" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                             <List className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button onClick={() => setEditTarget(c)} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                        <button onClick={() => { setNotice(''); setEditTarget(c) }} title="수정" aria-label="수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => setDelTarget(c)} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                        <button onClick={() => { setDelError(''); setDelTarget(c) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -462,11 +484,11 @@ export default function Coupons({
 
       {showModal && (
         <CouponModal target={target} onUnauthenticated={onUnauthenticated} coupon={null} categories={categories} catalog={catalog}
-          onClose={() => setShowModal(false)} onSaved={() => { setShowModal(false); void load() }} />
+          onClose={() => setShowModal(false)} onSaved={(msg) => { setShowModal(false); setNotice(msg); void load() }} />
       )}
       {editTarget && (
         <CouponModal target={target} onUnauthenticated={onUnauthenticated} coupon={editTarget} categories={categories} catalog={catalog}
-          onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); void load() }} />
+          onClose={() => setEditTarget(null)} onSaved={(msg) => { setEditTarget(null); setNotice(msg); void load() }} />
       )}
       {codesTarget && (
         <CodesModal target={target} onUnauthenticated={onUnauthenticated} coupon={codesTarget} onClose={() => setCodesTarget(null)} />
@@ -478,6 +500,7 @@ export default function Coupons({
         confirmLabel="삭제"
         danger
         busy={deleting}
+        error={delError || undefined}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDelTarget(null)}
         description="발급된 코드와 사용 이력이 함께 삭제됩니다. 이미 지급된 보상은 그대로 남습니다."

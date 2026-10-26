@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { opLabel } from '../../lib/schemaLabels'
+import { fieldTypeLabel, opLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { formatCount, formatTotal } from '../../components/ui/format'
 
 type LbRow = { code: string; display_name: string; columns: string }
 type Col = {
@@ -100,6 +103,20 @@ function fromPgDefault(pgDefault: string | null, type: CSharpType): string {
   return pgDefault
 }
 
+/** 표에 보일 기본값. DB 표현(`'abc'::text`, now())을 운영자가 읽는 말로. */
+function defaultText(col: Col): string {
+  const t = PG_TO_CSHARP[col.data_type] ?? 'string'
+  const v = fromPgDefault(col.column_default, t)
+  if (v === 'now()') return '저장되는 시각'
+  if (v === 'CURRENT_DATE') return '저장되는 날짜'
+  if (t === 'bool') return v === 'true' ? '참' : v === 'false' ? '거짓' : v
+  if (isDateTimeType(t)) return v.replace('T', ' ')
+  return v
+}
+
+/** DB 타입을 게임 코드 타입 표시로. 기록 탭의 플레이어 데이터 수정 창도 같은 표기를 쓴다. */
+const typeText = pgTypeLabel
+
 function toPgDefault(v: string, t: CSharpType): string | null {
   if (!v) return null
   if (isDateTimeType(t) && v !== 'now()') return `'${v.replace('T', ' ')}'`
@@ -126,8 +143,8 @@ function DefaultValueInput({
         className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
       >
         <option value="">지정 안 함</option>
-        <option value="true">true</option>
-        <option value="false">false</option>
+        <option value="true">참</option>
+        <option value="false">거짓</option>
       </select>
     )
   }
@@ -161,7 +178,7 @@ function DefaultValueInput({
             onChange={(e) => onChange(e.target.checked ? 'now()' : '')}
             className="rounded"
           />
-          now() 사용
+          저장되는 시각으로
         </label>
       </div>
     )
@@ -184,7 +201,7 @@ function DefaultValueInput({
             onChange={(e) => onChange(e.target.checked ? 'CURRENT_DATE' : '')}
             className="rounded"
           />
-          CURRENT_DATE 사용
+          저장되는 날짜로
         </label>
       </div>
     )
@@ -266,7 +283,7 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">필드 추가</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -288,11 +305,10 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
             >
               {ALL_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {fieldTypeLabel(t)}
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-neutral-400">DB 타입: {TYPE_TO_PG[type]}</p>
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">기본값</label>
@@ -367,14 +383,14 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">필드 수정 — {col.column_name}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
             <span className="font-medium text-neutral-700">{col.column_name}</span>
-            <span className="text-xs text-neutral-400">{col.data_type}</span>
+            <span className="text-xs text-neutral-400">{typeText(col.data_type)}</span>
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">기본값</label>
@@ -407,9 +423,10 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
   )
 }
 
-function DeleteFieldModal({ target, col, onClose, onDeleted }: {
+function DeleteFieldModal({ target, col, onUnauthenticated, onClose, onDeleted }: {
   target: ProjectTarget
   col: Col
+  onUnauthenticated: () => void
   onClose: () => void
   onDeleted: () => void
 }) {
@@ -430,6 +447,7 @@ function DeleteFieldModal({ target, col, onClose, onDeleted }: {
       })
       onDeleted()
     } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
       setError(e instanceof Error ? e.message : '실패했습니다.')
     } finally {
       setLoading(false)
@@ -437,49 +455,37 @@ function DeleteFieldModal({ target, col, onClose, onDeleted }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold text-red-600">필드 삭제</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
-            <X className="w-4 h-4" />
-          </button>
+    <ConfirmDialog
+      open
+      title="필드 삭제"
+      confirmLabel="삭제"
+      danger
+      busy={loading}
+      confirmDisabled={confirm !== col.column_name}
+      error={error}
+      onConfirm={() => void handleDelete()}
+      onCancel={onClose}
+      description="게시하면 이 필드와 모든 리더보드에 쌓인 그 값이 영구 삭제됩니다. 게시 전에는 변경 관리에서 취소할 수 있습니다."
+    >
+      <div className="space-y-3">
+        <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+          <div className="font-mono text-neutral-800">{col.column_name}</div>
+          <div className="text-xs text-neutral-500 mt-1">{typeText(col.data_type)}</div>
         </div>
-        <div className="p-5 space-y-4">
-          <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <p className="font-medium">이 작업은 되돌릴 수 없습니다.</p>
-            <p className="mt-1 text-red-600">
-              <span className="font-mono font-semibold">{col.column_name}</span> 필드와 모든 리더보드에 쌓인 그 값이 영구 삭제됩니다.
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">
-              확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
-            </label>
-            <input
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
-            />
-          </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline"
-            onClick={onClose}
-          >
-            취소
-          </Button>
-          <button
-            onClick={() => { void handleDelete() }}
-            disabled={loading || confirm !== col.column_name}
-            className="h-9 px-4 rounded-md bg-red-500 text-white text-sm hover:bg-red-600 disabled:opacity-60"
-          >
-            {loading ? '삭제 중…' : '삭제'}
-          </button>
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">
+            확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
+          </label>
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void handleDelete()}
+            autoFocus
+            className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+          />
         </div>
       </div>
-    </div>
+    </ConfirmDialog>
   )
 }
 
@@ -505,6 +511,7 @@ export default function ColumnsTab({
   const [listLoading, setListLoading] = useState(true)
   const [colsData, setColsData] = useState<ColsData | undefined>(undefined)
   const [colsLoading, setColsLoading] = useState(false)
+  const [colsFailed, setColsFailed] = useState(false)
   const { drafts: allDrafts, error: draftsError, reload: reloadDrafts } = usePendingChanges()
   const drafts = allDrafts ?? []
   const [busy, setBusy] = useState(false)
@@ -543,10 +550,12 @@ export default function ColumnsTab({
       return
     }
     setColsLoading(true)
+    setColsFailed(false)
     try {
       setColsData(await callAdmin<ColsData>(target, 'leaderboard.columns', { code: selectedCode }))
     } catch (e: unknown) {
       report(e, '필드를 불러오지 못했습니다.')
+      setColsFailed(true)
     } finally {
       setColsLoading(false)
     }
@@ -637,7 +646,10 @@ export default function ColumnsTab({
   const filtered = useMemo(
     () =>
       q
-        ? all.filter((c) => c.column_name.toLowerCase().includes(q) || c.data_type.toLowerCase().includes(q))
+        ? all.filter((c) =>
+            c.column_name.toLowerCase().includes(q) ||
+            c.data_type.toLowerCase().includes(q) ||
+            typeText(c.data_type).toLowerCase().includes(q))
         : all,
     [all, q],
   )
@@ -712,24 +724,28 @@ export default function ColumnsTab({
             </tr>
           </thead>
           <tbody>
-            {colsLoading ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-14 text-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" />
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-sm text-neutral-500">
-                  {!selectedCode
-                    ? '리더보드를 선택하면 필드가 표시됩니다.'
-                    : all.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
-                </td>
-              </tr>
+            {colsLoading || filtered.length === 0 || colsFailed ? (
+              <TableStatusRow
+                loading={colsLoading}
+                empty={filtered.length === 0}
+                failed={colsFailed}
+                colSpan={5}
+                emptyText={!selectedCode
+                  ? '리더보드를 선택하면 필드가 표시됩니다.'
+                  : all.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
+              />
             ) : (
               pageRows.map((c) => {
-                const att = isAttached(c.column_name) // 라이브 상태만 표시
+                const att = isAttached(c.column_name)
                 const pend = pendingByCol[c.column_name]
+                // 담아 둔 변경이 있으면 그 상태를 보여준다 — 라이브만 보이면 다시 눌러 취소한 줄 모른다.
+                const toggleView = pend?.action === 'attach'
+                  ? { text: '사용 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
+                  : pend?.action === 'detach'
+                    ? { text: '해제 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
+                    : att
+                      ? { text: '사용 중', cls: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' }
+                      : { text: '사용 안 함', cls: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' }
                 const inUse = usedFields.has(c.column_name)
                 return (
                   <tr key={c.column_name} className="border-t border-neutral-100">
@@ -737,30 +753,31 @@ export default function ColumnsTab({
                       <button
                         onClick={() => { void handleToggle(c, att, pend) }}
                         disabled={!selectedCode || busy}
+                        title={pend ? '다시 누르면 담아 둔 변경을 취소합니다' : att ? '누르면 사용 해제를 담습니다' : '누르면 사용을 담습니다'}
                         className={[
                           'inline-flex items-center px-2.5 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap',
-                          att
-                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200',
+                          toggleView.cls,
                           !selectedCode || busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
                         ].join(' ')}
                       >
-                        {att ? '사용 중' : '사용 안 함'}
+                        {toggleView.text}
                       </button>
                     </td>
                     <td className="px-5 py-3 font-medium">{c.column_name}</td>
                     <td className="px-5 py-3">
-                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">
-                        {c.data_type}
+                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
+                        {typeText(c.data_type)}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-neutral-600 font-mono text-xs">
-                      {c.column_default ?? ''}
+                    <td className="px-5 py-3 text-neutral-600 text-xs">
+                      {defaultText(c)}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setEditCol(c)}
+                          title="기본값 수정"
+                          aria-label="기본값 수정"
                           className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -782,7 +799,7 @@ export default function ColumnsTab({
           </tbody>
         </table>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>Showing {start}-{end} of {total}</span>
+          <span>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}
@@ -814,7 +831,7 @@ export default function ColumnsTab({
         <EditFieldModal target={target} col={editCol} onClose={() => setEditCol(null)} onSaved={() => { setEditCol(null); refresh() }} />
       )}
       {deleteCol && (
-        <DeleteFieldModal target={target} col={deleteCol} onClose={() => setDeleteCol(null)} onDeleted={() => { setDeleteCol(null); refresh() }} />
+        <DeleteFieldModal target={target} col={deleteCol} onUnauthenticated={onUnauthenticated} onClose={() => setDeleteCol(null)} onDeleted={() => { setDeleteCol(null); refresh() }} />
       )}
     </div>
   )

@@ -7,7 +7,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { formatDateTime } from '../components/ui/format'
+import { formatDateTime, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 
 type ItemRow = { key: string; count: number }
@@ -43,12 +43,6 @@ const MODE_HINT: Record<Mode, string> = {
 }
 
 const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
-
-function itemsText(items: ItemRow[], catalog: GameItem[]): string {
-  if (items.length === 0) return ''
-  const name = (key: string) => catalog.find((c) => c.key === key)?.display_name || key
-  return items.map((it) => `${name(it.key)} ×${Number(it.count).toLocaleString()}`).join(', ')
-}
 
 function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByCode, catalog, catalogFailed, onClose, onSaved }: {
   target: ProjectTarget
@@ -129,7 +123,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg my-6">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">{isNew ? '게임 코드 추가' : `${row.game_code} 보상 설정`}</h3>
-          <button onClick={onClose} disabled={saving} className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -190,10 +184,10 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
                     {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
                   </select>
                   <input type="number" min={1} max={MAX_COUNT} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-28'} />
-                  <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+                  <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
                 </div>
                 {!inCatalog(it.key) && !catalogFailed && (
-                  <p className="mt-1 text-xs text-red-500">카탈로그에서 지워진 아이템입니다. 다른 아이템을 고르거나 지우세요.</p>
+                  <p className="mt-1 text-xs text-red-500">카탈로그에서 삭제된 아이템입니다. 다른 아이템을 고르거나 이 줄을 삭제하세요.</p>
                 )}
                 {!countValid(it.count) && (
                   <p className="mt-1 text-xs text-red-500">수량은 1 이상 {MAX_COUNT.toLocaleString()} 이하의 정수여야 합니다.</p>
@@ -273,6 +267,7 @@ export default function MatchRewards({
   const [creating, setCreating] = useState(false)
   const [delRow, setDelRow] = useState<RewardRow | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [delError, setDelError] = useState('')
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -311,12 +306,14 @@ export default function MatchRewards({
   const confirmDelete = async () => {
     if (!delRow || deleting) return
     setDeleting(true)
+    setDelError('')
     try {
       await callAdmin(target, 'matchRewards.delete', { gameCode: delRow.game_code })
       setDelRow(null)
       await load()
     } catch (e: unknown) {
-      report(e, '삭제하지 못했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDelError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
     } finally {
       setDeleting(false)
     }
@@ -367,8 +364,9 @@ export default function MatchRewards({
                 <TableStatusRow
                   loading={loading}
                   empty={rows.length === 0}
+                  failed={listFailed}
                   colSpan={7}
-                  emptyText={listFailed ? '목록을 불러오지 못했습니다. 새로고침하세요.' : '등록된 게임 코드가 없습니다.'}
+                  emptyText="등록된 게임 코드가 없습니다."
                 />
               ) : (
                 rows.map((r) => (
@@ -378,7 +376,9 @@ export default function MatchRewards({
                       <>
                         <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{MODE_LABEL[r.config.mode] ?? r.config.mode}</td>
                         <td className="px-4 py-3 text-neutral-700">
-                          {itemsText(r.config.win_items ?? [], catalog) || <span className="text-neutral-400">우편 없음</span>}
+                          {(r.config.win_items ?? []).length > 0
+                            ? itemsText(r.config.win_items, catalog)
+                            : <span className="text-neutral-400">우편 없음</span>}
                         </td>
                       </>
                     ) : (
@@ -391,11 +391,11 @@ export default function MatchRewards({
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.last_reported_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setEditRow(r)} title={r.config ? '수정' : '설정 만들기'} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                        <button onClick={() => setEditRow(r)} title={r.config ? '수정' : '설정 만들기'} aria-label={r.config ? '수정' : '설정 만들기'} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                           {r.config ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                         </button>
                         {r.config && (
-                          <button onClick={() => setDelRow(r)} title="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                          <button onClick={() => { setDelError(''); setDelRow(r) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -430,6 +430,7 @@ export default function MatchRewards({
         confirmLabel="삭제"
         danger
         busy={deleting}
+        error={delError || undefined}
         onConfirm={() => { void confirmDelete() }}
         onCancel={() => setDelRow(null)}
         description="이 게임 코드로 오는 대전 신고가 지금부터 모두 실패합니다. 이미 쌓인 기록은 남습니다."

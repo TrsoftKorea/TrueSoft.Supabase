@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, X, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -139,12 +139,21 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
             <label className="block text-xs text-neutral-500 mb-1">타입</label>
             <select
               value={type}
-              onChange={(e) => { setType(e.target.value as ValueType); setText('') }}
+              onChange={(e) => {
+                const next = e.target.value as ValueType
+                setType(next)
+                // 새 타입으로도 읽히는 값이면 남긴다 — 타입만 고치려다 값을 다시 치게 하지 않는다.
+                if (next === 'boolean') {
+                  if (text.trim() === 'true' || text.trim() === 'false') setBoolValue(text.trim() === 'true')
+                } else if (!parseTypedValue(next, text, boolValue).ok) {
+                  setText('')
+                }
+              }}
               className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
             >
               <option value="string">문자열</option>
               <option value="number">숫자</option>
-              <option value="boolean">불리언</option>
+              <option value="boolean">참/거짓</option>
               <option value="json">JSON</option>
             </select>
           </div>
@@ -179,6 +188,9 @@ export default function RemoteConfig({
   const [itemModal, setItemModal] = useState<{ itemKey: string | null; value: unknown } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [dialogError, setDialogError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [deleteItemTarget, setDeleteItemTarget] = useState<{ itemKey: string; value: unknown } | null>(null)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -200,8 +212,10 @@ export default function RemoteConfig({
     try {
       const cfg = await callAdmin<{ rows: ConfigRow[] }>(target, 'remoteConfig.list')
       setRows(cfg.rows)
+      setLoadFailed(false)
     } catch (e: unknown) {
       report(e, '원격 설정을 불러오지 못했습니다.')
+      setLoadFailed(true)
     }
   }, [target, report])
 
@@ -265,21 +279,33 @@ export default function RemoteConfig({
     finally { setBusy(false) }
   }
 
+  // 확인 창에서 난 실패는 창 안에 띄운다 — 페이지 배너는 창 뒤에 가려 보이지 않는다.
+  const reportInDialog = (e: unknown, fallback: string) => {
+    if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+    setDialogError(e instanceof Error ? e.message : fallback)
+  }
+
   const confirmDelete = async () => {
     setBusy(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'remoteConfig.stageDelete', { key: deleteKey })
       setDeleteKey('')
       if (selectedKey === deleteKey) setSelectedKey('')
       await reloadDrafts()
-    } catch (e: unknown) { report(e, '실패했습니다.') }
+    } catch (e: unknown) { reportInDialog(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
 
-  const deleteItem = async (key: string, itemKey: string) => {
+  const confirmDeleteItem = async () => {
+    if (!deleteItemTarget || !selectedKey) return
     setBusy(true)
-    try { await callAdmin(target, 'remoteConfig.stageItemDelete', { key, itemKey }); await reloadDrafts() }
-    catch (e: unknown) { report(e, '실패했습니다.') }
+    setDialogError('')
+    try {
+      await callAdmin(target, 'remoteConfig.stageItemDelete', { key: selectedKey, itemKey: deleteItemTarget.itemKey })
+      setDeleteItemTarget(null)
+      await reloadDrafts()
+    } catch (e: unknown) { reportInDialog(e, '실패했습니다.') }
     finally { setBusy(false) }
   }
 
@@ -310,7 +336,7 @@ export default function RemoteConfig({
           </thead>
           <tbody>
             {loading || keys.length === 0 ? (
-              <TableStatusRow loading={loading} empty={keys.length === 0} colSpan={4} emptyText="설정이 없습니다." />
+              <TableStatusRow loading={loading} empty={keys.length === 0} failed={loadFailed && keys.length === 0} colSpan={4} emptyText="설정이 없습니다." />
             ) : (
               keys.map((key) => {
                 const eff = effectiveOf(key)
@@ -319,7 +345,7 @@ export default function RemoteConfig({
                   <tr
                     key={key}
                     onClick={() => setSelectedKey(key)}
-                    className={`border-t border-neutral-100 cursor-pointer hover:bg-neutral-50 ${selectedKey === key ? 'bg-[#e8f0fe]' : ''}`}
+                    className={`border-t border-neutral-100 cursor-pointer hover:bg-neutral-50 ${selectedKey === key ? 'bg-brand-soft' : ''}`}
                   >
                     <td className="px-5 py-3 font-medium font-mono">{key}</td>
                     <td className="px-4 py-3">
@@ -331,14 +357,16 @@ export default function RemoteConfig({
                             {eff.enabled ? '활성' : '비활성'}
                           </span>
                         )}
-                        {eff.requires_auth && <span className="px-2 py-0.5 text-xs rounded bg-[#e8f0fe] text-[#1677ff]">인증 필요</span>}
+                        {eff.requires_auth && <span className="px-2 py-0.5 text-xs rounded bg-brand-soft text-[#1677ff]">인증 필요</span>}
                         {eff.pendingId != null && !eff.deleted && <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">대기 중</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{itemCount}</td>
                     <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => setDeleteKey(key)}
+                        onClick={() => { setDialogError(''); setDeleteKey(key) }}
+                        title="설정 삭제"
+                        aria-label="설정 삭제"
                         className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -356,7 +384,7 @@ export default function RemoteConfig({
         <WhiteCard className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold font-mono">{selectedKey}</h3>
-            <button onClick={() => void reload()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50">
+            <button onClick={() => void Promise.all([reload(), reloadDrafts()])} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50">
               <RefreshCw className="w-3.5 h-3.5" />새로고침
             </button>
           </div>
@@ -393,7 +421,7 @@ export default function RemoteConfig({
             </thead>
             <tbody>
               {selectedItems.length === 0 ? (
-                <tr><td colSpan={3} className="px-4 py-6 text-center text-neutral-500">필드가 없습니다.</td></tr>
+                <TableStatusRow loading={false} empty colSpan={3} emptyText="필드가 없습니다." />
               ) : (
                 selectedItems.map(([k, v]) => (
                   <tr key={k} className="border-t border-neutral-100">
@@ -401,10 +429,10 @@ export default function RemoteConfig({
                     <td className="px-4 py-2.5 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatItemValue(v)}>{formatItemValue(v)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => setItemModal({ itemKey: k, value: v })} disabled={selected.deleted} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 disabled:opacity-40">
+                        <button onClick={() => setItemModal({ itemKey: k, value: v })} disabled={selected.deleted} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 disabled:opacity-40">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => void deleteItem(selectedKey, k)} disabled={selected.deleted || busy} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40">
+                        <button onClick={() => { setDialogError(''); setDeleteItemTarget({ itemKey: k, value: v }) }} disabled={selected.deleted || busy} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -439,6 +467,7 @@ export default function RemoteConfig({
         confirmLabel="삭제"
         danger
         busy={busy}
+        error={dialogError}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteKey('')}
         description="게시하면 이 키와 모든 필드가 삭제됩니다. 변경 관리에서 게시 전까지는 되돌릴 수 있습니다."
@@ -446,9 +475,25 @@ export default function RemoteConfig({
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm font-mono">{deleteKey}</div>
       </ConfirmDialog>
 
-      {loading && rows.length === 0 && (
-        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
-      )}
+      <ConfirmDialog
+        open={!!deleteItemTarget}
+        title="필드 삭제"
+        confirmLabel="삭제"
+        danger
+        busy={busy}
+        error={dialogError}
+        onConfirm={() => void confirmDeleteItem()}
+        onCancel={() => setDeleteItemTarget(null)}
+        description="게시하면 이 필드가 삭제됩니다. 변경 관리에서 게시 전까지는 되돌릴 수 있습니다."
+      >
+        {deleteItemTarget && (
+          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+            <div className="text-xs text-neutral-500 font-mono">{selectedKey}</div>
+            <div className="mt-1 font-mono text-neutral-800">{deleteItemTarget.itemKey}</div>
+            <div className="mt-1 font-mono text-xs text-neutral-600 break-all">{formatItemValue(deleteItemTarget.value)}</div>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

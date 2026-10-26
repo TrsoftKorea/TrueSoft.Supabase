@@ -4,7 +4,8 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatDateTime } from '../../components/ui/format'
+import { formatCount, formatDateTime, formatTotal } from '../../components/ui/format'
+import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
@@ -80,6 +81,9 @@ export default function ScoresTab({
   const [deleting, setDeleting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [editError, setEditError] = useState('')
+  // 창 안에서 난 실패. 페이지 배너는 창의 어두운 배경에 가려 보이지 않는다.
+  const [dialogError, setDialogError] = useState('')
 
   const [leaderboards, setLeaderboards] = useState<LbRow[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -99,6 +103,11 @@ export default function ScoresTab({
     },
     [onUnauthenticated],
   )
+
+  const messageOf = (e: unknown, fallback: string, set: (m: string) => void) => {
+    if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+    set(e instanceof Error ? e.message : fallback)
+  }
 
   useEffect(() => {
     void (async () => {
@@ -122,6 +131,11 @@ export default function ScoresTab({
   const isServerScoped = selectedBoard?.scope === 'server'
   // 초기화 주기가 없는 리더보드는 회차가 1개뿐이라 선택할 것이 없습니다.
   const hasRotation = !!selectedBoard && selectedBoard.rotation !== 'none'
+  const serverName = (code: string | null) => {
+    if (!code) return '-'
+    const sv = servers.find((s) => s.server_code === code)
+    return sv?.display_name || code
+  }
 
   const typeByName = new Map<string, string>(
     (colsData?.all ?? []).map((c) => [c.column_name, c.data_type] as [string, string]),
@@ -196,23 +210,31 @@ export default function ScoresTab({
   const startEdit = (row: ScoreRow) => {
     setEditingId(row.account_id)
     setEditScore(String(row.score))
+    setEditError('')
   }
-  const cancelEdit = () => setEditingId(null)
+  const cancelEdit = () => { setEditingId(null); setEditError('') }
 
   const confirmEdit = async (accountId: string) => {
     if (!selectedCode || displayedRotation === null || saving) return
+    // Number('') 는 0 이라 칸을 비운 채 저장하면 점수가 0 으로 바뀐다.
+    const score = Number(editScore)
+    if (editScore.trim() === '' || !Number.isFinite(score)) {
+      setEditError('점수를 숫자로 넣어 주세요.')
+      return
+    }
     setSaving(true)
+    setEditError('')
     try {
       await callAdmin(target, 'leaderboard.setScore', {
         code: selectedCode,
         accountId,
         rotationCount: displayedRotation,
-        score: Number(editScore),
+        score,
       })
       setEditingId(null)
       await loadScores()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      messageOf(e, '실패했습니다.', setEditError)
     } finally {
       setSaving(false)
     }
@@ -222,6 +244,7 @@ export default function ScoresTab({
     if (!delTarget || deleting) return
     if (!selectedCode || displayedRotation === null) return
     setDeleting(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'leaderboard.deleteScore', {
         code: selectedCode,
@@ -231,7 +254,7 @@ export default function ScoresTab({
       setDelTarget(null)
       await loadScores()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      messageOf(e, '실패했습니다.', setDialogError)
     } finally { setDeleting(false) }
   }
 
@@ -242,6 +265,7 @@ export default function ScoresTab({
       form[c.name] = v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)
     }
     setDataForm(form)
+    setDialogError('')
     setDataEditRow(row)
   }
 
@@ -250,6 +274,7 @@ export default function ScoresTab({
     const payload: Record<string, unknown> = {}
     for (const c of attachedCols) payload[c.name] = coerce(c.dataType, dataForm[c.name] ?? '')
     setSaving(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'leaderboard.setPlayerData', {
         code: selectedCode,
@@ -260,7 +285,7 @@ export default function ScoresTab({
       setDataEditRow(null)
       await loadScores()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      messageOf(e, '실패했습니다.', setDialogError)
     } finally {
       setSaving(false)
     }
@@ -372,20 +397,22 @@ export default function ScoresTab({
               ) : (
                 rows.map((r) => (
                   <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-4 py-3 text-right">{r.rank}</td>
+                    <td className="px-4 py-3 text-right">{formatCount(r.rank)}</td>
                     <td className="px-4 py-3">
                       {r.display_name ?? (
                         <span className="font-mono text-xs text-neutral-500">{r.account_id}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{r.server_code ?? '-'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{serverName(r.server_code)}</td>
                     <td className="px-4 py-3 text-right">
                       {editingId === r.account_id ? (
+                        <div className="space-y-1">
                         <div className="flex items-center justify-end gap-1">
                           <input
                             type="number"
                             value={editScore}
-                            onChange={(e) => setEditScore(e.target.value)}
+                            onChange={(e) => { setEditScore(e.target.value); setEditError('') }}
+                            disabled={saving}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') void confirmEdit(r.account_id)
                               if (e.key === 'Escape') cancelEdit()
@@ -395,24 +422,28 @@ export default function ScoresTab({
                           />
                           <button
                             onClick={() => void confirmEdit(r.account_id)}
-                            title="확인"
-                            className="p-1 rounded hover:bg-emerald-50 text-emerald-600"
+                            disabled={saving}
+                            title="저장"
+                            className="p-1 rounded hover:bg-emerald-50 text-emerald-600 disabled:opacity-40"
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                           </button>
                           <button
                             onClick={cancelEdit}
+                            disabled={saving}
                             title="취소"
-                            className="p-1 rounded hover:bg-neutral-100 text-neutral-500"
+                            className="p-1 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-40"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                        {editError && <p className="text-xs text-red-600 text-right">{editError}</p>}
+                        </div>
                       ) : (
-                        r.score
+                        formatCount(r.score)
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">{r.score_count}</td>
+                    <td className="px-4 py-3 text-right">{formatCount(r.score_count)}</td>
                     <td className="px-4 py-3">{formatDateTime(r.score_achieved_at)}</td>
                     {attachedCols.map((c) => (
                       <td key={c.name} className="px-4 py-3 whitespace-nowrap">{cell(r[c.name])}</td>
@@ -438,7 +469,7 @@ export default function ScoresTab({
                           </button>
                         )}
                         <button
-                          onClick={() => setDelTarget(r)}
+                          onClick={() => { setDialogError(''); setDelTarget(r) }}
                           title="삭제"
                           className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
                         >
@@ -455,7 +486,7 @@ export default function ScoresTab({
 
         {/* 페이지네이션 */}
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total} result{total === 1 ? '' : 's'}</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}
@@ -480,24 +511,25 @@ export default function ScoresTab({
       {dataEditRow && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-          onClick={() => setDataEditRow(null)}
+          onClick={() => { if (!saving) setDataEditRow(null) }}
         >
           <div className="w-[420px] max-w-[92vw] rounded-lg bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold">플레이어 데이터 수정</h3>
-              <button onClick={() => setDataEditRow(null)} className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
+              <button onClick={() => setDataEditRow(null)} disabled={saving} title="닫기" aria-label="닫기" className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <p className="mb-3 text-xs text-neutral-500">
-              {dataEditRow.display_name ?? dataEditRow.account_id} · {displayedRotation}회차
+              {dataEditRow.display_name ?? dataEditRow.account_id}
+              {hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}
             </p>
             <div className="space-y-2.5">
               {attachedCols.map((c) => (
                 <div key={c.name} className="flex items-center gap-3">
                   <label className="w-32 shrink-0 text-xs text-neutral-600">
                     {c.name}
-                    <span className="ml-1 text-neutral-400">{c.dataType}</span>
+                    <span className="block text-neutral-400">{typeText(c.dataType)}</span>
                   </label>
                   {c.dataType.toLowerCase() === 'boolean' ? (
                     <select
@@ -506,8 +538,8 @@ export default function ScoresTab({
                       className={inp + ' flex-1'}
                     >
                       <option value="">-</option>
-                      <option value="true">true</option>
-                      <option value="false">false</option>
+                      <option value="true">참</option>
+                      <option value="false">거짓</option>
                     </select>
                   ) : (
                     <input
@@ -522,9 +554,13 @@ export default function ScoresTab({
                 <p className="text-xs text-neutral-500">등록된 플레이어 데이터 컬럼이 없습니다.</p>
               )}
             </div>
+            {dialogError && (
+              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <Button variant="outline" size="compact"
                 onClick={() => setDataEditRow(null)}
+                disabled={saving}
               >
                 취소
               </Button>
@@ -532,6 +568,7 @@ export default function ScoresTab({
                 onClick={() => void saveData()}
                 disabled={saving}
               >
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 저장
               </Button>
             </div>
@@ -541,18 +578,21 @@ export default function ScoresTab({
 
       <ConfirmDialog
         open={!!delTarget}
-        title="기록 지우기"
-        confirmLabel="지우기"
+        title="기록 삭제"
+        confirmLabel="삭제"
         danger
         busy={deleting}
+        error={dialogError}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDelTarget(null)}
-        description={`${displayedRotation}회차에서만 지웁니다. 다른 회차 기록은 그대로 남습니다.`}
+        description={hasRotation && displayedRotation !== null
+          ? `${displayedRotation}회차 기록만 삭제합니다. 다른 회차 기록은 그대로 남습니다.`
+          : undefined}
       >
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="text-neutral-800">{delTarget.display_name ?? delTarget.account_id}</div>
-            <div className="text-xs text-neutral-500 mt-1">{delTarget.rank}위 · {delTarget.score}점</div>
+            <div className="text-xs text-neutral-500 mt-1">{formatCount(delTarget.rank)}위 · {formatCount(delTarget.score)}점</div>
           </div>
         )}
       </ConfirmDialog>

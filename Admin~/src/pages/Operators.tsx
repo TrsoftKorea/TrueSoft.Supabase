@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { KeyRound, Loader2, Plus, RotateCcw, Trash2, UserMinus } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import { getProject, type ProjectTarget } from '../lib/projectTarget'
+import { type ProjectTarget } from '../lib/projectTarget'
+import { projectName } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 
@@ -21,6 +23,8 @@ type Operator = {
 // admin-api/index.ts 의 MIN_PASSWORD_LENGTH 와 같은 값이어야 한다 — 프런트와 백엔드가
 // 런타임이 달라(Vite 번들 vs Deno 함수) 상수를 공유할 수 없다.
 const MIN_PASSWORD_LENGTH = 8
+// 오타를 보내기 전에 거르는 정도만 본다 — 최종 판정은 DB 가 한다.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function SetPasswordModal({
   target,
@@ -68,6 +72,8 @@ function SetPasswordModal({
       title="비밀번호 설정"
       confirmLabel="설정"
       busy={busy}
+      confirmDisabled={!canSubmit}
+      error={error}
       onConfirm={() => void submit()}
       onCancel={onClose}
     >
@@ -97,7 +103,6 @@ function SetPasswordModal({
           {mismatch && <p className="mt-1 text-xs text-amber-600">비밀번호가 서로 다릅니다.</p>}
         </div>
         <p className="text-xs text-neutral-400">이 비밀번호는 이메일로 전달되지 않습니다. 직접 알려주세요.</p>
-        {error && <div className="text-sm text-red-500">{error}</div>}
       </div>
     </ConfirmDialog>
   )
@@ -123,8 +128,11 @@ export default function Operators({
   const [deleteTarget, setDeleteTarget] = useState<Operator | null>(null)
   const [passwordTarget, setPasswordTarget] = useState<Operator | null>(null)
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [emailHint, setEmailHint] = useState('')
+  // 확인 창이 떠 있는 동안 실패하면 창 안에 보여준다 — 페이지 배너는 창 배경에 가린다.
+  const [dialogError, setDialogError] = useState('')
 
-  const project = getProject(target)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -140,11 +148,13 @@ export default function Operators({
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
+    setFailed(false)
     try {
       setRows(await callAdmin<Operator[]>(target, 'operators.list'))
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setRows([])
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -156,6 +166,8 @@ export default function Operators({
 
   const add = async () => {
     if (!email.trim() || adding) return
+    if (!EMAIL_RE.test(email.trim())) { setEmailHint('이메일 형식이 아닙니다.'); return }
+    setEmailHint('')
     setAdding(true)
     setError('')
     try {
@@ -177,12 +189,15 @@ export default function Operators({
     if (busy) return
     setBusy(true)
     setError('')
+    setDialogError('')
     try {
       await callAdmin(target, 'operators.setDisabled', { email: op.email, disabled })
       setDisableTarget(null)
       await load()
     } catch (e: unknown) {
-      report(e, '변경하지 못했습니다.')
+      // 복구는 확인 창 없이 바로 부르므로 배너로, 비활성화는 창 안으로.
+      if (disabled && !(e instanceof NotAuthenticatedError)) setDialogError(e instanceof Error ? e.message : '변경하지 못했습니다.')
+      else report(e, '변경하지 못했습니다.')
     } finally {
       setBusy(false)
     }
@@ -192,12 +207,14 @@ export default function Operators({
     if (busy) return
     setBusy(true)
     setError('')
+    setDialogError('')
     try {
       await callAdmin(target, 'operators.delete', { email: op.email })
       setDeleteTarget(null)
       await load()
     } catch (e: unknown) {
-      report(e, '삭제하지 못했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDialogError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
     } finally {
       setBusy(false)
     }
@@ -209,7 +226,7 @@ export default function Operators({
     <div className="space-y-4">
       <PageHeader
         title="운영자 관리"
-        description={`${project.label}의 운영 도구에 들어올 수 있는 계정입니다. 게임 계정과는 별개입니다.`}
+        description={`${projectName(target)}의 운영 콘솔에 들어올 수 있는 계정입니다. 게임 계정과는 별개입니다.`}
       />
 
       <div className="rounded-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-600">
@@ -217,11 +234,7 @@ export default function Operators({
         지울 수도 없습니다. 목록이 비어도 잠기지 않도록 남겨둔 계정입니다.
       </div>
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard className="p-4">
         <div className="text-xs font-medium text-neutral-500 mb-2">운영자 추가</div>
@@ -230,7 +243,7 @@ export default function Operators({
             <span className="text-xs text-neutral-500">이메일</span>
             <input
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setEmailHint('') }}
               onKeyDown={(e) => e.key === 'Enter' && void add()}
               className={inputCls}
             />
@@ -249,6 +262,7 @@ export default function Operators({
             추가
           </Button>
         </div>
+        {emailHint && <p className="mt-1 text-xs text-red-600">{emailHint}</p>}
         <p className="mt-2 text-xs text-neutral-400">
           구글 계정으로 바로 로그인할 수 있습니다. 비밀번호 로그인이 필요하면 추가 후 "비밀번호 설정"으로 정해서 알려주세요. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
         </p>
@@ -271,6 +285,7 @@ export default function Operators({
               <TableStatusRow
                 loading={loading}
                 empty={rows.length === 0}
+                failed={failed}
                 colSpan={5}
                 emptyText="등록된 운영자가 없습니다. 마스터만 들어올 수 있는 상태입니다."
               />
@@ -305,12 +320,12 @@ export default function Operators({
                           <Button variant="outline" size="sm" onClick={() => void setDisabled(op, false)} disabled={busy}>
                             <RotateCcw className="w-3 h-3" /> 복구
                           </Button>
-                          <Button variant="danger" size="sm" onClick={() => setDeleteTarget(op)} disabled={busy}>
+                          <Button variant="danger" size="sm" onClick={() => { setDialogError(''); setDeleteTarget(op) }} disabled={busy}>
                             <Trash2 className="w-3 h-3" /> 삭제
                           </Button>
                         </>
                       ) : (
-                        <Button variant="danger" size="sm" onClick={() => setDisableTarget(op)} disabled={busy}>
+                        <Button variant="danger" size="sm" onClick={() => { setDialogError(''); setDisableTarget(op) }} disabled={busy}>
                           <UserMinus className="w-3 h-3" /> 비활성화
                         </Button>
                       )}
@@ -330,6 +345,7 @@ export default function Operators({
         confirmLabel="비활성화"
         danger
         busy={busy}
+        error={disableTarget ? dialogError : ''}
         onConfirm={() => {
           if (disableTarget) void setDisabled(disableTarget, true)
         }}
@@ -350,6 +366,7 @@ export default function Operators({
         confirmLabel="삭제"
         danger
         busy={busy}
+        error={deleteTarget ? dialogError : ''}
         onConfirm={() => {
           if (deleteTarget) void deleteOperator(deleteTarget)
         }}

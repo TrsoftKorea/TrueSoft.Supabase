@@ -6,7 +6,8 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatDateTime, diffSummary } from '../../components/ui/format'
+import { formatDateTime, diffSummary, formatTotal } from '../../components/ui/format'
+import { pgTypeLabel } from '../../lib/schemaLabels'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
@@ -78,14 +79,14 @@ function EditValueModal({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">값 수정 — {field.column_name}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
             <span className="font-medium text-neutral-700">{field.column_name}</span>
-            <span className="text-xs text-neutral-400">{field.data_type}</span>
+            <span className="text-xs text-neutral-400">{pgTypeLabel(field.data_type)}</span>
           </div>
           <TypedValueInput
             type={type}
@@ -136,6 +137,8 @@ export default function UserDataTab({
   const [page, setPage] = useState(1)
   const [editField, setEditField] = useState<UserDataField | null>(null)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [logsFailed, setLogsFailed] = useState(false)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -150,12 +153,15 @@ export default function UserDataTab({
 
   const reload = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       const { fields: f, row } = await fetchUserDataFields(target, accountId)
       setFields(f)
       setHasRow(row !== null)
       setUpdatedAt(row?.['updated_at'] != null ? String(row['updated_at']) : null)
     } catch (e: unknown) {
+      setFields([])
+      setFailed(true)
       report(e, '유저 데이터를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -164,9 +170,11 @@ export default function UserDataTab({
 
   const reloadLogs = useCallback(async () => {
     setLogsLoading(true)
+    setLogsFailed(false)
     try {
       setLogs(await callAdmin<LogRow[]>(target, 'userData.logs', { accountId, limit: 20 }))
     } catch (e: unknown) {
+      setLogsFailed(true)
       report(e, '변경 이력을 불러오지 못했습니다.')
     } finally {
       setLogsLoading(false)
@@ -228,6 +236,12 @@ export default function UserDataTab({
         </div>
       </div>
 
+      {!loading && !hasRow && !failed && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          이 플레이어는 아직 저장된 데이터가 없습니다. 아래 값은 비어 있습니다.
+        </div>
+      )}
+
       <WhiteCard>
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-neutral-500 text-xs">
@@ -243,16 +257,17 @@ export default function UserDataTab({
               <TableStatusRow
                 loading={loading}
                 empty={pageRows.length === 0}
+                failed={failed}
                 colSpan={4}
-                emptyText={!hasRow ? '이 플레이어의 저장된 데이터가 없습니다.' : '검색 결과가 없습니다.'}
+                emptyText={q ? '검색 결과가 없습니다.' : '필드가 없습니다.'}
               />
             ) : (
               pageRows.map((f) => (
                 <tr key={f.column_name} className="border-t border-neutral-100">
                   <td className="px-5 py-3 font-medium">{f.column_name}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">
-                      {f.data_type}
+                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
+                      {pgTypeLabel(f.data_type)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatValue(f.value, f.data_type)}>
@@ -261,6 +276,8 @@ export default function UserDataTab({
                   <td className="px-3 py-3 text-right">
                     <button
                       onClick={() => setEditField(f)}
+                      title="값 수정"
+                      aria-label="값 수정"
                       className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -273,7 +290,7 @@ export default function UserDataTab({
         </table>
         {total > 0 && (
           <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-            <span>Showing {start}-{end} of {total}</span>
+            <span>{start}–{end} / {formatTotal(total)}</span>
             <div className="flex items-center gap-1">
               <button
                 disabled={page <= 1}
@@ -305,12 +322,12 @@ export default function UserDataTab({
               <tr>
                 <th className="text-left px-5 py-2.5 font-medium whitespace-nowrap">시각</th>
                 <th className="text-left px-4 py-2.5 font-medium">출처</th>
-                <th className="text-left px-4 py-2.5 font-medium">바뀐 값</th>
+                <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
               </tr>
             </thead>
             <tbody>
               {logsLoading || logs.length === 0 ? (
-                <TableStatusRow loading={logsLoading} empty={logs.length === 0} colSpan={3} emptyText="변경 이력이 없습니다." />
+                <TableStatusRow loading={logsLoading} empty={logs.length === 0} failed={logsFailed} colSpan={3} emptyText="변경 이력이 없습니다." />
               ) : (
                 logs.map((l) => (
                   <tr key={l.id} className="border-t border-neutral-100">

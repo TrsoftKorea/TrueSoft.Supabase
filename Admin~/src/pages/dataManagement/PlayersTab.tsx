@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle } from 'lucide-react'
+import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle, Check } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
@@ -7,7 +7,8 @@ import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { formatDateTime } from '../../components/ui/format'
+import { formatDateTime, formatTotal } from '../../components/ui/format'
+import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
 
@@ -67,7 +68,7 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <h3 className="text-base font-semibold">필드 값 수정</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
           <div>
@@ -76,7 +77,7 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">타입</label>
-            <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{field.data_type}</span>
+            <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(field.data_type)}</span>
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">값</label>
@@ -124,13 +125,16 @@ function PlayerEditModal({
   const [edits, setEdits] = useState<Record<string, unknown>>({})
   const [colSearch, setColSearch] = useState('')
   const [askDiscard, setAskDiscard] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadFailed(false)
     try {
       setRows(await fetchFields(target, accountId))
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setLoadFailed(true)
       setError(e instanceof Error ? e.message : '불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -170,7 +174,7 @@ function PlayerEditModal({
             <h3 className="text-base font-semibold">데이터 수정</h3>
             <p className="text-xs text-neutral-500 mt-0.5">{displayName}</p>
           </div>
-          <button onClick={requestClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+          <button onClick={requestClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기"><X className="w-4 h-4" /></button>
         </div>
         {!loading && (
           <div className="px-5 pt-3 pb-3 border-b">
@@ -206,25 +210,28 @@ function PlayerEditModal({
                     <tr key={r.column_name} className="border-t border-neutral-100">
                       <td className="px-5 py-3 font-medium">{r.column_name}</td>
                       <td className="px-5 py-3">
-                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{r.data_type}</span>
+                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 truncate max-w-full">{pgTypeLabel(r.data_type)}</span>
                       </td>
                       <td className={`px-5 py-3 font-mono text-xs truncate ${isEdited ? 'text-amber-700' : 'text-neutral-700'}`}>
-                        {displayValue || <span className="text-neutral-400">null</span>}
+                        {displayValue || <span className="text-neutral-400">—</span>}
                         {isEdited && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded ml-1">수정됨</span>}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <button onClick={() => setEditField(r)} className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]">
+                        <button onClick={() => setEditField(r)} title="값 수정" aria-label="값 수정" className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     </tr>
                   )
                 })}
-                {!loading && rows.length === 0 && (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-neutral-500">편집 가능한 필드가 없습니다.</td></tr>
-                )}
-                {rows.length > 0 && filteredRows.length === 0 && (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-neutral-500">검색 결과가 없습니다.</td></tr>
+                {filteredRows.length === 0 && (
+                  <TableStatusRow
+                    loading={false}
+                    empty
+                    failed={loadFailed}
+                    colSpan={4}
+                    emptyText={rows.length === 0 ? '편집 가능한 필드가 없습니다.' : '검색 결과가 없습니다.'}
+                  />
                 )}
               </tbody>
             </table>
@@ -272,7 +279,7 @@ function PlayerEditModal({
 }
 
 function PasteConfirmModal({
-  clipboard, targetRow, onConfirm, onClose, loading, compareLoading, changedCount, sourceStale,
+  clipboard, targetRow, onConfirm, onClose, loading, compareLoading, compareFailed, changedCount, sourceStale, error,
 }: {
   clipboard: DataClipboard
   targetRow: Row
@@ -280,48 +287,51 @@ function PasteConfirmModal({
   onClose: () => void
   loading: boolean
   compareLoading: boolean
+  compareFailed: boolean
   changedCount: number
   sourceStale: boolean
+  error: string
 }) {
   const fieldCount = Object.keys(clipboard.data).length
-  const noChanges = !compareLoading && changedCount === 0
+  // 비교에 실패했으면 "변경점 없음"이 아니라 모르는 것이다.
+  const compared = !compareLoading && !compareFailed
+  const noChanges = compared && changedCount === 0
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-neutral-800">데이터 덮어쓰기</p>
-          <button onClick={onClose} className="p-1 rounded hover:bg-neutral-100"><X className="w-4 h-4" /></button>
-        </div>
+    <ConfirmDialog
+      open
+      title="데이터 덮어쓰기"
+      confirmLabel="덮어쓰기"
+      danger
+      busy={loading}
+      confirmDisabled={!compared || noChanges}
+      error={error}
+      onConfirm={onConfirm}
+      onCancel={onClose}
+    >
+      <div className="space-y-4">
         <div className="text-sm text-neutral-600 space-y-1">
           <p>클립보드 출처: <span className="font-medium text-neutral-800">{clipboard.sourceLabel}</span></p>
           <p>대상 플레이어: <span className="font-medium text-neutral-800">{targetRow.display_name}</span></p>
           <p>필드 수: <span className="font-medium">{fieldCount}개</span></p>
-          {compareLoading ? <p className="text-neutral-500">비교 중…</p> : <p>변경될 필드: <span className="font-medium">{changedCount}개</span></p>}
+          {compareLoading
+            ? <p className="text-neutral-500">비교 중…</p>
+            : compared && <p>변경될 필드: <span className="font-medium">{changedCount}개</span></p>}
         </div>
         {noChanges ? (
           <p className="text-xs text-neutral-600 bg-neutral-100 rounded-md px-3 py-2">현재 데이터와 동일하여 변경점이 없습니다.</p>
-        ) : (
+        ) : compared && (
           <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-3 py-2">
             위 플레이어의 {fieldCount}개 필드를 클립보드 데이터로 일괄 덮어씁니다. 이 작업은 되돌릴 수 없습니다.
           </p>
         )}
-        {!compareLoading && sourceStale && (
+        {compared && sourceStale && (
           <p className="flex items-start gap-1.5 text-xs text-red-700 bg-red-50 rounded-md px-3 py-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             복사한 뒤 원본 플레이어의 데이터가 바뀌었습니다. 지금 붙여넣으면 그 사이의 변경분은 반영되지 않습니다.
           </p>
         )}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
-          <Button variant="primary"
-            onClick={onConfirm}
-            disabled={loading || compareLoading || noChanges}
-          >
-            {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}덮어쓰기
-          </Button>
-        </div>
       </div>
-    </div>
+    </ConfirmDialog>
   )
 }
 
@@ -336,15 +346,19 @@ export default function PlayersTab({
   const [mode, setMode] = useState<'nickname' | 'id'>('nickname')
   const [searchInput, setSearchInput] = useState('')
   const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
   const [selected, setSelected] = useState<Row | null>(null)
 
   const [clipboard, setClipboard] = useState<DataClipboard | null>(() => readClipboard())
   const [copyingId, setCopyingId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [pasteTarget, setPasteTarget] = useState<Row | null>(null)
   const [pasting, setPasting] = useState(false)
+  const [pasteError, setPasteError] = useState('')
   const [compareLoading, setCompareLoading] = useState(false)
+  const [compareFailed, setCompareFailed] = useState(false)
   const [changedCount, setChangedCount] = useState(0)
   const [sourceStale, setSourceStale] = useState(false)
   const copyTimerRef = useRef<number | null>(null)
@@ -360,9 +374,12 @@ export default function PlayersTab({
 
   const search = useCallback(async (q: string) => {
     setLoading(true)
+    setFailed(false)
     try {
       setRows(await callAdmin<Row[]>(target, 'dataManagement.searchPlayers', { search: q, mode }))
     } catch (e: unknown) {
+      setRows([])
+      setFailed(true)
       report(e, '검색에 실패했습니다.')
     } finally {
       setLoading(false)
@@ -381,6 +398,7 @@ export default function PlayersTab({
 
   const handleCopy = useCallback(async (row: Row) => {
     setCopyingId(row.account_id)
+    setCopiedId(null)
     try {
       const fields = await fetchFields(target, row.account_id)
       const data = Object.fromEntries(fields.map((f) => [f.column_name, f.value]))
@@ -390,19 +408,24 @@ export default function PlayersTab({
       }
       localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(cb))
       setClipboard(cb)
+      // 체크표시는 다 받아 온 뒤에만 켠다 — 받는 중에 켜면 실패해도 복사된 것처럼 보인다.
+      setCopiedId(row.account_id)
       // 연속으로 다른 행을 복사하면 이전 타이머가 방금 켠 체크표시를 꺼버릴 수 있어 — 새로 잡기 전에 지운다.
       if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
-      copyTimerRef.current = window.setTimeout(() => setCopyingId(null), 1500)
+      copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1500)
     } catch (e: unknown) {
       report(e, '복사에 실패했습니다.')
+    } finally {
       setCopyingId(null)
     }
   }, [target, report])
 
   useEffect(() => {
-    if (!pasteTarget || !clipboard) { setCompareLoading(false); setChangedCount(0); setSourceStale(false); return }
+    if (!pasteTarget || !clipboard) { setCompareLoading(false); setCompareFailed(false); setChangedCount(0); setSourceStale(false); return }
     let cancelled = false
     setCompareLoading(true)
+    setCompareFailed(false)
+    setPasteError('')
     void (async () => {
       try {
         // 대상과의 차이뿐 아니라, 복사한 뒤 원본 쪽이 바뀌었는지도 함께 확인한다 —
@@ -416,26 +439,33 @@ export default function PlayersTab({
         const sourceNow = Object.fromEntries(sourceFields.map((f) => [f.column_name, f.value]))
         const stale = Object.keys(clipboard.data).some((k) => JSON.stringify(clipboard.data[k]) !== JSON.stringify(sourceNow[k]))
         if (!cancelled) { setChangedCount(changed); setSourceStale(stale) }
+      } catch (e: unknown) {
+        if (cancelled) return
+        if (e instanceof NotAuthenticatedError) { setPasteTarget(null); onUnauthenticated(); return }
+        setCompareFailed(true)
+        setPasteError(e instanceof Error ? e.message : '현재 데이터와 비교하지 못했습니다.')
       } finally {
         if (!cancelled) setCompareLoading(false)
       }
     })()
     return () => { cancelled = true }
-  }, [target, pasteTarget, clipboard])
+  }, [target, pasteTarget, clipboard, onUnauthenticated])
 
   const handlePaste = useCallback(async () => {
-    if (!pasteTarget || !clipboard || clipboardMismatch || changedCount === 0) return
+    if (!pasteTarget || !clipboard || clipboardMismatch || compareFailed || changedCount === 0) return
     setPasting(true)
+    setPasteError('')
     try {
       await callAdmin(target, 'userData.update', { accountId: pasteTarget.account_id, patch: clipboard.data })
       setPasteTarget(null)
       void search(searchInput)
     } catch (e: unknown) {
-      report(e, '붙여넣기에 실패했습니다.')
+      if (e instanceof NotAuthenticatedError) { setPasteTarget(null); onUnauthenticated(); return }
+      setPasteError(e instanceof Error ? e.message : '붙여넣기에 실패했습니다.')
     } finally {
       setPasting(false)
     }
-  }, [target, pasteTarget, clipboard, clipboardMismatch, changedCount, search, searchInput, report])
+  }, [target, pasteTarget, clipboard, clipboardMismatch, compareFailed, changedCount, search, searchInput, onUnauthenticated])
 
   const clearClipboard = () => {
     localStorage.removeItem(CLIPBOARD_KEY)
@@ -489,13 +519,13 @@ export default function PlayersTab({
         <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
           <ClipboardPaste className="w-4 h-4 shrink-0" />
           <span className="flex-1">클립보드: <span className="font-medium">{clipboard.sourceLabel}</span> — 다른 프로젝트에서 복사된 데이터라 붙여넣을 수 없습니다.</span>
-          <button onClick={clearClipboard} className="p-0.5 rounded hover:bg-red-100"><X className="w-4 h-4" /></button>
+          <button onClick={clearClipboard} className="p-0.5 rounded hover:bg-red-100" title="클립보드 비우기" aria-label="클립보드 비우기"><X className="w-4 h-4" /></button>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
           <ClipboardPaste className="w-4 h-4 shrink-0" />
-          <span className="flex-1">클립보드: <span className="font-medium">{clipboard.sourceLabel}</span> ({formatDateTime(clipboard.updatedAt ?? clipboard.copiedAt)})</span>
-          <button onClick={clearClipboard} className="p-0.5 rounded hover:bg-blue-100"><X className="w-4 h-4" /></button>
+          <span className="flex-1">클립보드: <span className="font-medium">{clipboard.sourceLabel}</span> (복사: {formatDateTime(clipboard.copiedAt)})</span>
+          <button onClick={clearClipboard} className="p-0.5 rounded hover:bg-blue-100" title="클립보드 비우기" aria-label="클립보드 비우기"><X className="w-4 h-4" /></button>
         </div>
       ))}
 
@@ -511,7 +541,7 @@ export default function PlayersTab({
           </thead>
           <tbody>
             {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={4} emptyText="결과가 없습니다." />
+              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="결과가 없습니다." />
             ) : (
               rows.map((r) => (
                 <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
@@ -522,10 +552,16 @@ export default function PlayersTab({
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => void handleCopy(r)}
-                        className={`inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 ${copyingId === r.account_id ? 'text-green-600' : 'text-neutral-500 hover:text-[#1677ff]'}`}
+                        disabled={copyingId === r.account_id}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 ${copiedId === r.account_id ? 'text-green-600' : 'text-neutral-500 hover:text-[#1677ff]'}`}
                         title="클립보드에 복사"
+                        aria-label="클립보드에 복사"
                       >
-                        {copyingId === r.account_id ? <span className="text-[10px] font-bold">✓</span> : <Copy className="w-3.5 h-3.5" />}
+                        {copyingId === r.account_id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : copiedId === r.account_id
+                            ? <Check className="w-3.5 h-3.5" />
+                            : <Copy className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={() => { if (clipboard && !clipboardMismatch) setPasteTarget(r) }}
@@ -537,6 +573,8 @@ export default function PlayersTab({
                       </button>
                       <button
                         onClick={() => setSelected(r)}
+                        title="데이터 수정"
+                        aria-label="데이터 수정"
                         className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]"
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -549,7 +587,7 @@ export default function PlayersTab({
           </tbody>
         </table>
         <div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          {rows.length} result{rows.length === 1 ? '' : 's'}
+          {formatTotal(rows.length)}
         </div>
       </WhiteCard>
 
@@ -572,8 +610,10 @@ export default function PlayersTab({
           onClose={() => setPasteTarget(null)}
           loading={pasting}
           compareLoading={compareLoading}
+          compareFailed={compareFailed}
           changedCount={changedCount}
           sourceStale={sourceStale}
+          error={pasteError}
         />
       )}
     </div>

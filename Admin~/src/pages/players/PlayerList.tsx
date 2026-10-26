@@ -3,7 +3,8 @@ import { Search, Copy, ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
-import { formatDateTime, formatKRW } from '../../components/ui/format'
+import { formatDateTime, formatKRW, formatTotal } from '../../components/ui/format'
+import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
@@ -64,6 +65,7 @@ export default function PlayerList({
   const [data, setData] = useState<ListResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -79,6 +81,7 @@ export default function PlayerList({
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
+    setFailed(false)
     try {
       setData(
         await callAdmin<ListResult>(target, 'players.list', {
@@ -90,6 +93,7 @@ export default function PlayerList({
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -128,11 +132,7 @@ export default function PlayerList({
     <div className="space-y-4">
       <PageHeader title="플레이어" description="게임에 접속한 플레이어 목록입니다." />
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="border-b border-neutral-200 flex gap-1">
         {(
@@ -168,7 +168,7 @@ export default function PlayerList({
             onKeyDown={(e) => {
               if (e.key === 'Enter') submitSearch()
             }}
-            placeholder="닉네임을 입력 후 Enter 또는 검색 버튼을 누르세요."
+            placeholder="닉네임"
             className="flex-1 min-w-[260px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
           />
           <Button variant="primary" size="compact"
@@ -207,7 +207,7 @@ export default function PlayerList({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={8} emptyText="결과가 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={8} emptyText="결과가 없습니다." />
               ) : (
                 rows.map((r) => (
                   <tr
@@ -227,6 +227,7 @@ export default function PlayerList({
                                 : 'text-neutral-400 hover:text-neutral-700',
                             ].join(' ')}
                             aria-label="ID 복사"
+                            title="ID 복사"
                           >
                             {copiedId === r.account_id ? (
                               <Check className="w-3 h-3" />
@@ -270,9 +271,7 @@ export default function PlayerList({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>
-            {total} result{total === 1 ? '' : 's'}
-          </span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}

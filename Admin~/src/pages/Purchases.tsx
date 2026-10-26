@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronLeft, ChevronRight, Loader2, Download, RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import { getProject, type ProjectTarget } from '../lib/projectTarget'
+import { type ProjectTarget } from '../lib/projectTarget'
+import { projectName } from '../lib/projectLook'
 import { downloadCsv, todayStamp } from '../lib/csv'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
-import { formatDateTime, formatKRW } from '../components/ui/format'
+import { formatCount, formatDateTime, formatKRW, formatTotal } from '../components/ui/format'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 
@@ -51,11 +52,20 @@ function refundStatusText(store: string, s: RefundStatus | undefined): { text: s
   }
   if (!s?.last_finished_at) return { text: '구글: 아직 확인 안 함', bad: false }
   if (s.last_ok === false) {
-    const why = s.last_message === 'project_url_missing' ? '설치가 끝나지 않음' : s.last_message ?? ''
-    return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 실패 · ${why}`, bad: true }
+    return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 실패 · ${refundFailText(s.last_message)}`, bad: true }
   }
-  return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 · 새 환불 ${s.last_marked}건`, bad: false }
+  return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 · 새 환불 ${formatCount(s.last_marked)}건`, bad: false }
 }
+
+// 실패 사유는 엣지 함수가 남긴 원문이다(purchase-refund-sync-google). 운영자가 손쓸 수 있는 것만 풀어 쓴다.
+function refundFailText(message: string | null | undefined): string {
+  if (message === 'project_url_missing') return '설치가 끝나지 않음'
+  if (message === 'GOOGLE_SERVICE_ACCOUNT_JSON 없음') return '설정 › 스토어 연결에 Google Play 서비스 계정 값이 없습니다.'
+  return message ? `환불 확인에 실패했습니다. (${message})` : '환불 확인에 실패했습니다.'
+}
+
+// price_amount 는 1/1,000,000 단위(micros)로 저장돼 있다.
+const priceFromMicros = (v: string | number | null) => (v != null ? Number(v) / 1_000_000 : null)
 
 export default function Purchases({
   target,
@@ -74,8 +84,10 @@ export default function Purchases({
   const [data, setData] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
   const [refundStatus, setRefundStatus] = useState<RefundStatus[]>([])
   const [syncing, setSyncing] = useState(false)
+  const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -90,6 +102,7 @@ export default function Purchases({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadFailed(false)
     try {
       setData(await callAdmin<PurchaseData>(target, 'purchases.list', {
         search, startDate: dateFrom || null, endDate: dateTo || null, page, refundedOnly,
@@ -97,6 +110,7 @@ export default function Purchases({
     } catch (e: unknown) {
       report(e, '구매 내역을 불러오지 못했습니다.')
       setData(null)
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -123,9 +137,14 @@ export default function Purchases({
 
   const syncRefunds = async () => {
     setSyncing(true)
+    setNotice(null)
     try {
-      const res = await callAdmin<{ ok?: boolean; skipped?: string }>(target, 'purchases.syncRefunds', {})
-      if (res.skipped === 'recently_run') setError('방금 확인했습니다. 10분 뒤에 다시 확인할 수 있습니다.')
+      const res = await callAdmin<{ ok?: boolean; skipped?: string; message?: string; reason?: string; marked?: number }>(
+        target, 'purchases.syncRefunds', {},
+      )
+      if (res.skipped === 'recently_run') setNotice({ text: '방금 확인했습니다. 10분 뒤에 다시 확인할 수 있습니다.', ok: false })
+      else if (res.ok) setNotice({ text: `구글 환불을 확인했습니다. 새 환불 ${formatCount(res.marked ?? 0)}건.`, ok: true })
+      else setError(refundFailText(res.message ?? res.reason))
       await Promise.all([loadRefundStatus(), load()])
     } catch (e: unknown) {
       report(e, '환불을 확인하지 못했습니다.')
@@ -142,7 +161,7 @@ export default function Purchases({
         search, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, all: true,
       })
       downloadCsv(
-        `구매내역_${getProject(target).label}_${todayStamp()}.csv`,
+        `구매내역_${projectName(target)}_${todayStamp()}.csv`,
         ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일'],
         res.rows.map((r) => [
           formatDateTime(r.verified_at),
@@ -151,8 +170,7 @@ export default function Purchases({
           r.order_id,
           r.user_id,
           r.account_id,
-          // price_amount 는 1/1,000,000 단위(micros)로 저장돼 있다.
-          r.price_amount != null ? Number(r.price_amount) / 1_000_000 : null,
+          priceFromMicros(r.price_amount),
           r.price_currency,
           r.price_amount_krw,
           r.refunded_at ? formatDateTime(r.refunded_at) : null,
@@ -178,6 +196,14 @@ export default function Purchases({
       <PageHeader title="구매 내역" description="검증된 인앱 결제 내역을 조회합니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
+      {notice && (
+        <div className={notice.ok
+          ? 'rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700'
+          : 'rounded-md border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm text-neutral-600'}
+        >
+          {notice.text}
+        </div>
+      )}
 
       <WhiteCard className="p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -187,7 +213,7 @@ export default function Purchases({
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            placeholder="상품 ID / 유저 ID / 주문번호"
+            placeholder="상품 ID / 플레이어 / 주문번호"
             className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
           />
           <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer whitespace-nowrap">
@@ -230,7 +256,7 @@ export default function Purchases({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={6} emptyText="구매 내역이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={6} emptyText="구매 내역이 없습니다." failed={loadFailed} />
               ) : (
                 rows.map((r) => {
                   const refunded = !!r.refunded_at
@@ -255,7 +281,11 @@ export default function Purchases({
                       </td>
                       <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{STORE_LABEL[r.store] ?? r.store}</td>
                       <td className={`px-4 py-3 whitespace-nowrap ${strike}`}>
-                        {r.price_amount_krw != null ? formatKRW(r.price_amount_krw) : `${r.price_amount ?? '-'} ${r.price_currency ?? ''}`}
+                        {r.price_amount_krw != null
+                          ? formatKRW(r.price_amount_krw)
+                          : r.price_amount != null
+                            ? `${(priceFromMicros(r.price_amount) ?? 0).toLocaleString('ko-KR', { maximumFractionDigits: 2 })} ${r.price_currency ?? ''}`
+                            : '-'}
                       </td>
                       <td className="px-4 py-3 text-neutral-600 font-mono text-xs">{r.order_id ?? '-'}</td>
                     </tr>
@@ -266,7 +296,7 @@ export default function Purchases({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total} result{total === 1 ? '' : 's'}</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
             <span className="px-2">{page} / {totalPages}</span>

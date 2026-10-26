@@ -4,10 +4,12 @@ import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
   Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
-  ChevronDown, LogOut, AlertTriangle, BookOpen,
+  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid,
 } from 'lucide-react'
-import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
-import { useProjectColor } from '../lib/projectColors'
+import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
+import { useProjectLook } from '../lib/projectLook'
+import { ProjectIcon } from './ui/ProjectIcon'
+import { ThemeToggle } from './ThemeToggle'
 import { signedInTargets } from '../lib/googleAuth'
 import { usePendingChanges } from '../lib/pendingChanges'
 
@@ -82,6 +84,7 @@ export function Layout({
   email,
   isMaster,
   onSignOut,
+  onBackToList,
   children,
 }: {
   target: ProjectTarget
@@ -89,10 +92,12 @@ export function Layout({
   email: string
   isMaster: boolean
   onSignOut: () => void
+  onBackToList: () => void
   children: ReactNode
 }) {
   const location = useLocation()
-  const colorOf = useProjectColor()
+  const look = useProjectLook()
+  const colorOf = look.color
   const switchTarget = (t: ProjectTarget) => {
     setTarget(t)
     onTargetChange(t)
@@ -105,7 +110,6 @@ export function Layout({
   const pendingCount = drafts?.length ?? null
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
-  const project = getProject(target)
   const accent = colorOf(target)
   // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 이 계정이 운영자가 아닌 게임이다.
   const allowedTargets = new Set(signedInTargets())
@@ -144,8 +148,8 @@ export function Layout({
                 }`}
                 style={on ? { borderColor: c } : undefined}
               >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c, opacity: allowed ? 1 : 0.5 }} />
-                <span className="truncate">{p.label}</span>
+                <ProjectIcon target={p.key} size={20} dim={!allowed} />
+                <span className="truncate">{look.name(p.key)}</span>
                 {!allowed && <span className="ml-auto text-[11px] whitespace-nowrap">권한 없음</span>}
               </button>
             )
@@ -216,16 +220,27 @@ export function Layout({
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 overflow-y-auto bg-[#f4f5f8]">
+      <div className="flex-1 min-w-0 overflow-y-auto bg-neutral-100">
         {/* 상단 띠 — 지금 어느 게임에서 작업 중인지 화면 어디서든 보이게 그 게임 색으로 깐다. */}
         <header className="text-white" style={{ backgroundColor: accent }}>
-          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-4">
-            <span className="text-lg font-bold tracking-tight truncate">{project.label}</span>
+          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBackToList}
+              title="게임 목록으로"
+              className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              게임 목록
+            </button>
+            <ProjectIcon target={target} size={32} className="ring-2 ring-white/70" />
+            <span className="text-lg font-bold tracking-tight truncate">{look.name(target)}</span>
             <div className="ml-auto flex items-center gap-3 text-sm min-w-0">
               <span className="truncate">
                 {email}
                 {isMaster && <span className="ml-1.5 font-semibold">· 마스터</span>}
               </span>
+              <ThemeToggle compact className="shrink-0 border-white/60 text-white hover:bg-white/10" />
               <button
                 onClick={onSignOut}
                 className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"

@@ -4,10 +4,11 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
 import { opLabel } from '../lib/schemaLabels'
+import { pgTypeLabel as typeText } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
 import { WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
-import { formatDateTime } from '../components/ui/format'
+import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
@@ -39,14 +40,24 @@ const ROTATION_TEXT: Record<string, string> = {
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v))
 
+// 기본값 SQL(`'abc'`, now())을 운영자가 읽는 말로.
+function defaultSqlText(def: string): string {
+  if (def === 'now()') return '저장되는 시각'
+  if (def === 'CURRENT_DATE') return '저장되는 날짜'
+  if (def === 'true') return '참'
+  if (def === 'false') return '거짓'
+  const quoted = def.match(/^'([\s\S]*)'(?:::\S+)?$/)
+  return quoted?.[1] !== undefined ? quoted[1].replace(/''/g, "'") : def
+}
+
 // 필드 추가·수정 — 타입과 기본값만 보여주면 충분하다.
 function fieldSummary(params: Record<string, unknown>, action: string): string {
   const def = params['default_sql']
-  const defText = def === null || def === undefined || def === '' ? '기본값 없음' : `기본값 ${str(def)}`
+  const defText = def === null || def === undefined || def === '' ? '기본값 없음' : `기본값 ${defaultSqlText(str(def))}`
   if (action === 'update') return `${defText}으로 변경`
 
   const parts: string[] = []
-  if (params['coltype']) parts.push(`${str(params['coltype'])} 타입`)
+  if (params['coltype']) parts.push(typeText(str(params['coltype'])))
   parts.push(defText)
   return parts.join(' · ')
 }
@@ -129,6 +140,13 @@ export default function SchemaChanges({
   const [askDiscardAll, setAskDiscardAll] = useState(false)
   const [revertTarget, setRevertTarget] = useState<VersionRow | null>(null)
   const [error, setError] = useState('')
+  // 확인 창 안에서 난 실패. 페이지 배너는 창의 어두운 배경에 가려 보이지 않는다.
+  const [dialogError, setDialogError] = useState('')
+
+  const reportInDialog = (e: unknown, fallback: string) => {
+    if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+    setDialogError(e instanceof Error ? e.message : fallback)
+  }
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -168,14 +186,21 @@ export default function SchemaChanges({
   const doPublish = async () => {
     if (drafts.length === 0) return
     setBusy(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'schema.publish', { label: label.trim() || null })
       setLabel('')
       setShowPublish(false)
       await Promise.all([reloadDrafts(), reloadVersions()])
     } catch (e: unknown) {
-      report(e, '게시에 실패했습니다.')
+      reportInDialog(e, '게시에 실패했습니다.')
     } finally { setBusy(false) }
+  }
+
+  const openPublish = () => {
+    setLabel(draftSummary)
+    setDialogError('')
+    setShowPublish(true)
   }
 
   const discardOne = async (id: number) => {
@@ -190,24 +215,26 @@ export default function SchemaChanges({
 
   const confirmDiscardAll = async () => {
     setBusy(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'schema.discardDraft', {})
       setAskDiscardAll(false)
       await reloadDrafts()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      reportInDialog(e, '실패했습니다.')
     } finally { setBusy(false) }
   }
 
   const confirmRevert = async () => {
     if (!revertTarget) return
     setBusy(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'schema.revertVersion', { versionId: revertTarget.id })
       setRevertTarget(null)
       await Promise.all([reloadDrafts(), reloadVersions()])
     } catch (e: unknown) {
-      report(e, '되돌리기에 실패했습니다.')
+      reportInDialog(e, '되돌리기에 실패했습니다.')
     } finally { setBusy(false) }
   }
 
@@ -215,7 +242,7 @@ export default function SchemaChanges({
     <div className="space-y-4">
       <PageHeader
         title="변경 관리"
-        description="스키마 변경을 모아 검토한 뒤 한 번에 게시하고, 버전 단위로 되돌립니다."
+        description="리더보드·원격 설정·유저 데이터 필드 변경을 모아 게시하고 되돌립니다."
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -226,13 +253,13 @@ export default function SchemaChanges({
           <span className="text-xs text-neutral-400">{drafts.length}건</span>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="compact"
-              onClick={() => setAskDiscardAll(true)}
+              onClick={() => { setDialogError(''); setAskDiscardAll(true) }}
               disabled={busy || drafts.length === 0}
             >
               전체 취소
             </Button>
             <Button variant="primary" size="compact"
-              onClick={() => setShowPublish(true)}
+              onClick={openPublish}
               disabled={busy || drafts.length === 0}
             >
               <Send className="w-3.5 h-3.5" />
@@ -305,6 +332,7 @@ export default function SchemaChanges({
                 <th className="text-left px-5 py-2.5 font-medium">버전</th>
                 <th className="text-left px-4 py-2.5 font-medium">게시 시각</th>
                 <th className="text-left px-4 py-2.5 font-medium">이름</th>
+                <th className="text-left px-4 py-2.5 font-medium">게시자</th>
                 <th className="text-right px-4 py-2.5 font-medium">변경 수</th>
                 <th className="text-left px-4 py-2.5 font-medium">상태</th>
                 <th className="px-4 py-2.5 w-28"></th>
@@ -315,7 +343,7 @@ export default function SchemaChanges({
                 <TableStatusRow
                   loading={versionsLoading}
                   empty={versions.length === 0}
-                  colSpan={6}
+                  colSpan={7}
                   emptyText="게시된 버전이 없습니다."
                 />
               ) : (
@@ -329,10 +357,16 @@ export default function SchemaChanges({
                       <td className="px-4 py-3 max-w-[220px] truncate" title={v.label || opsSummary}>
                         {v.label || opsSummary || <span className="text-neutral-400">(이름 없음)</span>}
                       </td>
-                      <td className="px-4 py-3 text-right">{v.op_count}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-xs text-neutral-600">{v.operator ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{formatCount(v.op_count)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
                         {reverted ? (
-                          <span className="text-xs text-neutral-500">되돌림</span>
+                          <span
+                            className="text-xs text-neutral-500"
+                            title={v.reverted_at ? `${formatDateTime(v.reverted_at)}${v.reverted_by ? ` · ${v.reverted_by}` : ''}` : undefined}
+                          >
+                            되돌림
+                          </span>
                         ) : v.reversible ? (
                           <span className="text-xs text-emerald-600">게시됨</span>
                         ) : (
@@ -341,7 +375,7 @@ export default function SchemaChanges({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button variant="outline" size="sm"
-                          onClick={() => setRevertTarget(v)}
+                          onClick={() => { setDialogError(''); setRevertTarget(v) }}
                           disabled={busy || reverted || !v.reversible}
                           title={!v.reversible ? '삭제 작업이 포함돼 되돌릴 수 없습니다' : reverted ? '이미 되돌림' : '되돌리기'}
                         >
@@ -369,6 +403,8 @@ export default function SchemaChanges({
               <button
                 onClick={() => setShowPublish(false)}
                 disabled={busy}
+                title="닫기"
+                aria-label="닫기"
                 className="text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
@@ -389,12 +425,14 @@ export default function SchemaChanges({
                 <input
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  placeholder={draftSummary}
                   autoFocus
                   className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
                 />
-                <p className="mt-1 text-xs text-neutral-400">비우면 회색으로 표시된 이름이 이력에 자동으로 기록됩니다.</p>
+                <p className="mt-1 text-xs text-neutral-400">게시 이력에 이 이름으로 남습니다.</p>
               </div>
+              {dialogError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
+              )}
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
               <Button variant="outline"
@@ -421,6 +459,7 @@ export default function SchemaChanges({
         confirmLabel="모두 취소"
         danger
         busy={busy}
+        error={dialogError}
         onConfirm={() => void confirmDiscardAll()}
         onCancel={() => setAskDiscardAll(false)}
         description={`아직 게시하지 않은 변경 ${drafts.length}건이 사라집니다. 이미 게시된 것은 그대로입니다.`}
@@ -438,6 +477,7 @@ export default function SchemaChanges({
         confirmLabel="되돌리기"
         danger
         busy={busy}
+        error={dialogError}
         onConfirm={() => void confirmRevert()}
         onCancel={() => setRevertTarget(null)}
         description="이 버전에서 적용한 변경을 되돌립니다. 되돌린 뒤에는 다시 게시해야 원래대로 돌아갑니다."
@@ -448,8 +488,18 @@ export default function SchemaChanges({
               버전 #{revertTarget.id}{revertTarget.label ? ` · ${revertTarget.label}` : ''}
             </div>
             <div className="text-xs text-neutral-500 mt-1">
-              {formatDateTime(revertTarget.published_at)} · 변경 {revertTarget.op_count}건
+              {formatDateTime(revertTarget.published_at)}{revertTarget.operator ? ` · ${revertTarget.operator}` : ''} · 변경 {formatCount(revertTarget.op_count)}건
             </div>
+            {(revertTarget.ops ?? []).length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-xs text-neutral-700 max-h-48 overflow-auto">
+                {revertTarget.ops.map((o, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="shrink-0">{opLabel(o.feature, o.action)}</span>
+                    <span className="font-mono text-neutral-500 truncate">{o.object_name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </ConfirmDialog>

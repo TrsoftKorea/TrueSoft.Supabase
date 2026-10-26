@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Send, X, Plus, Check, ChevronDown } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { useSearchParams } from 'react-router-dom'
-import { getProject, type ProjectTarget } from '../lib/projectTarget'
-import { useProjectColor } from '../lib/projectColors'
+import { type ProjectTarget } from '../lib/projectTarget'
+import { useProjectLook } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { formatCount, itemsText } from '../components/ui/format'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -100,8 +101,7 @@ export default function Mails({
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>('day')
   const [repeatDow, setRepeatDow] = useState(1)
   const [repeatDom, setRepeatDom] = useState(1)
-  const project = getProject(target)
-  const colorOf = useProjectColor()
+  const look = useProjectLook()
   // 플레이어 상세의 "우편 보내기"가 ?account=&name= 으로 넘겨 그 사람을 미리 골라 둔다.
   const [params] = useSearchParams()
   const presetAccount = params.get('account')
@@ -119,8 +119,9 @@ export default function Mails({
   const [scheduledAt, setScheduledAt] = useState('')
   const [repeatTime, setRepeatTime] = useState('12:00')
   const [sending, setSending] = useState(false)
-  const [askSendAll, setAskSendAll] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  const [askSend, setAskSend] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [playerQuery, setPlayerQuery] = useState('')
   const [playerInput, setPlayerInput] = useState('')
@@ -222,7 +223,7 @@ export default function Mails({
   }
   const targetSummary = mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
-    : `플레이어 ${playerIds.length}명`
+    : `플레이어 ${formatCount(playerIds.length)}명`
   const repeatDesc = repeatUnit === 'day' ? `매일 ${repeatTime}`
     : repeatUnit === 'week' ? `매주 ${DOW_LABEL[repeatDow]}요일 ${repeatTime}`
     : `매월 ${repeatDom}일 ${repeatTime}`
@@ -235,20 +236,21 @@ export default function Mails({
   const resetForm = () => {
     setTitle(''); setContent(''); setItems([]); setSelected({}); setLangRows([])
     setSched('immediate'); setMode('players'); setScheduledAt('')
-    setRepeatUnit('day'); setCategory('default')
+    setRepeatUnit('day'); setRepeatTime('12:00'); setRepeatDow(1); setRepeatDom(1)
+    setCategory('default'); setExpiresDays(7); setServerId('')
     setActive(0); setReached(0)
   }
 
+  // 보낸 우편은 회수할 수 없어, 대상과 상관없이 매번 확인 창을 거친다.
   const requestSubmit = () => {
     if (!canSend || sending) return
-    if (mode === 'all') { setAskSendAll(true); return }
-    void submit()
+    setSendError('')
+    setAskSend(true)
   }
 
   const submit = async () => {
     if (!canSend || sending) return
-    setAskSendAll(false)
-    setSending(true); setResult(null); setError('')
+    setSending(true); setSendError(''); setNotice(''); setError('')
     try {
       const common = {
         mode,
@@ -260,21 +262,22 @@ export default function Mails({
       }
       if (sched === 'immediate') {
         const expiresAt = new Date(Date.now() + expiresDays * 86400000).toISOString()
-        const res = await callAdmin<{ recipient_count: number }>(target, 'mails.send', { ...common, expiresAt, createdBy: null })
-        setResult(res ? `발송 완료 — ${res.recipient_count}명` : '발송 실패')
+        const res = await callAdmin<{ recipient_count: number }>(target, 'mails.send', { ...common, expiresAt })
+        setNotice(`발송 완료 — ${formatCount(res?.recipient_count ?? 0)}명에게 보냈습니다.`)
       } else {
         await callAdmin(target, 'mails.createSchedule', {
           ...common, scheduleType: sched, expiresDays,
           scheduledAt: sched === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
           repeatTime: sched === 'repeat' ? repeatTime : null,
           repeatUnit, repeatDow, repeatDom,
-          createdBy: null,
         })
-        setResult(sched === 'scheduled' ? '예약 등록 완료' : '반복 예약 등록 완료')
+        setNotice(sched === 'scheduled' ? '예약 등록을 마쳤습니다.' : '반복 예약 등록을 마쳤습니다.')
       }
+      setAskSend(false)
       resetForm()
     } catch (e: unknown) {
-      report(e, '실패했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setSendError(e instanceof Error ? e.message : '실패했습니다.')
     } finally { setSending(false) }
   }
 
@@ -283,6 +286,7 @@ export default function Mails({
       <PageHeader title="우편 발송" description="플레이어에게 우편을 발송합니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
+      {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
       {/* 1. 발송 시점 */}
       <Step n={1} title="발송 시점" state={stepState(0)} summary={schedSummary} onEdit={() => setActive(0)}>
@@ -350,7 +354,7 @@ export default function Mails({
               <Field label="닉네임·ID 검색">
                 <div className="flex items-center gap-2">
                   <input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPlayerQuery(playerInput)}
-                    placeholder="닉네임 또는 계정 ID 입력 후 Enter" className={inputBase + ' flex-1'} />
+                    placeholder="닉네임 / 계정 ID" className={inputBase + ' flex-1'} />
                   <button onClick={() => setPlayerQuery(playerInput)} className="h-9 px-3 shrink-0 rounded-md bg-[#1677ff] text-white text-sm">검색</button>
                 </div>
               </Field>
@@ -388,8 +392,8 @@ export default function Mails({
         <Step n={3} title="메시지" state={stepState(2)} summary={title || '제목 없음'} onEdit={() => setActive(2)}>
           <Field label="분류">
             <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
-              {!categories.some((c) => c.key === 'default') && <option value="default">기본 (default)</option>}
-              {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name ? `${c.display_name} (${c.key})` : c.key}</option>))}
+              {!categories.some((c) => c.key === 'default') && <option value="default">기본</option>}
+              {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
             </select>
           </Field>
           <Field label="제목"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} /></Field>
@@ -402,7 +406,7 @@ export default function Mails({
               <Plus className="w-3 h-3" />언어 추가
             </button>
           </div>
-          {langRows.length === 0 && <p className="text-xs text-neutral-400">지정한 언어만 오버라이드됩니다. 없으면 기본 제목·본문이 사용됩니다.</p>}
+          {langRows.length === 0 && <p className="text-xs text-neutral-400">추가한 언어를 쓰는 플레이어에게는 이 제목·본문이 보입니다. 나머지 플레이어에게는 위의 제목·본문이 보입니다.</p>}
           {langRows.map((r, i) => (
             <div key={i} className="border border-neutral-200 rounded-md p-2.5 space-y-2 bg-neutral-50/50">
               <div className="flex items-center gap-2">
@@ -411,10 +415,10 @@ export default function Mails({
                     .map((l) => (<option key={l} value={l}>{LANG_LABEL[l] ?? l} ({l})</option>))}
                 </select></div>
                 <div className="flex-1" />
-                <button onClick={() => delLang(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+                <button onClick={() => delLang(i)} title="이 언어 삭제" aria-label="이 언어 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
               </div>
-              <input value={r.title} onChange={(e) => setLang(i, { title: e.target.value })} placeholder="제목" className={inputCls} />
-              <textarea value={r.content} onChange={(e) => setLang(i, { content: e.target.value })} placeholder="본문" rows={2} className={areaCls} />
+              <Field label="제목"><input value={r.title} onChange={(e) => setLang(i, { title: e.target.value })} className={inputCls} /></Field>
+              <Field label="본문"><textarea value={r.content} onChange={(e) => setLang(i, { content: e.target.value })} rows={2} className={areaCls} /></Field>
             </div>
           ))}
           {!langFilled && (
@@ -459,8 +463,8 @@ export default function Mails({
             <span className="text-sm text-neutral-500">일</span>
           </div>
 
-          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: colorOf(target) }}>
-            대상 게임: {project.label}
+          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
+            대상 게임: {look.name(target)}
           </div>
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-neutral-600">
             <span className="font-medium text-neutral-800">{schedSummary}</span> · 대상 <span className="font-medium text-neutral-800">{targetSummary}</span> · 분류 <span className="font-medium text-neutral-800">{catLabel(category)}</span>
@@ -469,7 +473,6 @@ export default function Mails({
           </div>
 
           <div className="flex items-center gap-3">
-            {result && <div className="text-sm text-neutral-700">{result}</div>}
             <button onClick={requestSubmit} disabled={!canSend || sending}
               className="ml-auto inline-flex items-center gap-1.5 h-10 px-6 rounded-md bg-[#1677ff] text-white text-sm font-medium disabled:opacity-50">
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{sched === 'immediate' ? '발송' : '예약 등록'}
@@ -479,23 +482,25 @@ export default function Mails({
       )}
 
       <ConfirmDialog
-        open={askSendAll}
-        title={sched === 'immediate' ? '전체 플레이어에게 발송' : '전체 플레이어 대상으로 예약'}
+        open={askSend}
+        title={sched === 'immediate' ? '우편 발송' : '우편 예약 등록'}
         confirmLabel={sched === 'immediate' ? '발송' : '예약 등록'}
-        danger
+        danger={mode === 'all'}
         busy={sending}
+        error={sendError || undefined}
         onConfirm={() => { void submit() }}
-        onCancel={() => setAskSendAll(false)}
+        onCancel={() => setAskSend(false)}
         description="보낸 우편은 회수할 수 없습니다. 대상과 아이템을 다시 확인하세요."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
           <div className="text-neutral-800">{title || '제목 없음'}</div>
           <div className="text-xs text-neutral-500">
-            {items.length > 0
-              ? items.map((it) => `${it.key}×${it.count}`).join(', ')
-              : '첨부 아이템 없음'}
+            {schedSummary} · 대상 <span className={mode === 'all' ? 'font-semibold text-red-600' : 'font-medium text-neutral-700'}>{targetSummary}</span>
           </div>
-          <div className="text-xs text-neutral-500">수령 기한 {expiresDays}일</div>
+          <div className="text-xs text-neutral-500">
+            {items.length > 0 ? itemsText(items, catalog) : '첨부 아이템 없음'}
+          </div>
+          <div className="text-xs text-neutral-500">수령 기한 {formatCount(expiresDays)}일</div>
         </div>
       </ConfirmDialog>
     </div>

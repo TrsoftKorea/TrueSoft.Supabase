@@ -1,7 +1,27 @@
+@import './theme.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-soft: 232 240 254;
+  --surface: 255 255 255;
+}
+
+html.dark {
+  --brand-soft: 27 42 74;
+  --surface: 23 24 29;
+  color-scheme: dark;
+}
+
 body {
   @apply bg-neutral-50 text-neutral-900 antialiased;
+}
+
+/* 카드·입력칸의 흰 바탕은 화면 코드 곳곳에 bg-white 로 적혀 있다. 어두운 화면에서만 카드 바탕으로 바꾼다
+   (text-white 는 색 바탕 위 글자라 건드리지 않는다). */
+html.dark .bg-white,
+html.dark .hover\:bg-white:hover {
+  background-color: rgb(var(--surface));
 }

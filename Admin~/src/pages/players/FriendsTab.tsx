@@ -32,8 +32,9 @@ export default function FriendsTab({
 }) {
   const navigate = useNavigate()
   const [data, setData] = useState<Overview | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -42,11 +43,13 @@ export default function FriendsTab({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       setData(await callAdmin<Overview>(target, 'friends.overview', { accountId }))
     } catch (e: unknown) {
       report(e, '친구 관계를 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -93,7 +96,7 @@ export default function FriendsTab({
             </thead>
             <tbody>
               {loading || friends.length === 0 ? (
-                <TableStatusRow loading={loading} empty={friends.length === 0} colSpan={3} emptyText="친구가 없습니다." />
+                <TableStatusRow loading={loading} empty={friends.length === 0} failed={failed} colSpan={3} emptyText="친구가 없습니다." />
               ) : (
                 friends.map((f) => (
                   <tr key={f.account_id} className="border-t border-neutral-100">
@@ -113,8 +116,8 @@ export default function FriendsTab({
       </WhiteCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PendingCard title="받은 요청" rows={incoming} loading={loading} onPlayer={goPlayer} />
-        <PendingCard title="보낸 요청" rows={outgoing} loading={loading} onPlayer={goPlayer} />
+        <PendingCard title="받은 요청" rows={incoming} loading={loading} failed={failed} onPlayer={goPlayer} />
+        <PendingCard title="보낸 요청" rows={outgoing} loading={loading} failed={failed} onPlayer={goPlayer} />
       </div>
     </div>
   )
@@ -124,11 +127,13 @@ function PendingCard({
   title,
   rows,
   loading,
+  failed,
   onPlayer,
 }: {
   title: string
   rows: RequestRow[]
   loading: boolean
+  failed: boolean
   onPlayer: (id: string, name: string) => void
 }) {
   return (
@@ -146,7 +151,7 @@ function PendingCard({
           </thead>
           <tbody>
             {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={2} emptyText="대기 중인 요청이 없습니다." />
+              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={2} emptyText="대기 중인 요청이 없습니다." />
             ) : (
               rows.map((r) => (
                 <tr key={r.request_id} className="border-t border-neutral-100">

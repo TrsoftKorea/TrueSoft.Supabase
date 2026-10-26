@@ -8,7 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
-import { formatDateTime } from '../components/ui/format'
+import { formatDateTime, formatTotal } from '../components/ui/format'
 
 type AuditRow = { id: number; email: string; action: string; params: Record<string, unknown>; created_at: string }
 type AuditData = { rows: AuditRow[]; total: number; pageSize: number }
@@ -43,7 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
   'purchases.syncRefunds': '구글 환불 지금 확인',
   'operators.upsert': '운영자 추가·수정',
   'operators.setPassword': '운영자 비밀번호 설정',
-  'operators.setDisabled': '운영자 사용 중지·복구',
+  'operators.setDisabled': '운영자 비활성화·복구',
   'operators.delete': '운영자 삭제',
   'gameItems.upsert': '아이템 추가·수정',
   'gameItems.delete': '아이템 삭제',
@@ -64,6 +64,7 @@ const ACTION_LABELS: Record<string, string> = {
   'matchLobby.settingsUpdate': '매치 로비 설정 변경',
   'settings.setServerConfig': '스토어 연결값 변경',
   'settings.setConsoleColor': '콘솔 색 변경',
+  'settings.setConsoleIdentity': '콘솔 이름·아이콘 변경',
   'matchRewards.upsert': '매치 보상 추가·수정',
   'matchRewards.delete': '매치 보상 삭제',
   'coupons.create': '쿠폰 생성',
@@ -85,13 +86,39 @@ const ACTION_LABELS: Record<string, string> = {
   'leaderboard.setPlayerData': '리더보드 플레이어 데이터 수정',
 }
 
+// 요청 인자 이름도 같은 원칙 — 아는 것만 바꾸고 모르는 이름은 그대로 둔다.
+const PARAM_LABELS: Record<string, string> = {
+  accountId: '계정 ID', accountIds: '받는 플레이어', bannedUntil: '차단 종료', banMessage: '차단 메시지',
+  displayName: '이름', title: '제목', content: '내용', code: '코드', key: '키', email: '이메일',
+  id: '번호', kind: '종류', words: '단어', channelId: '채널', minutes: '분', reason: '사유',
+  serverCode: '서버 코드', serverId: '서버', allowTransfers: '이전 받기', disabled: '비활성화',
+  category: '분류', items: '보상', expiresAt: '만료', expiresDays: '보관 일수', mailExpiresDays: '우편 보관 일수',
+  isActive: '켜짐', maxUses: '최대 사용 횟수', mode: '방식', localized: '다국어',
+  scheduleType: '예약 방식', scheduledAt: '예약 시각', repeatTime: '반복 시각', repeatUnit: '반복 단위',
+  repeatDow: '반복 요일', repeatDom: '반복 날짜', patch: '바꾼 값', score: '점수', rotationCount: '회차',
+  data: '데이터', gameCode: '게임 코드', winItems: '승리 보상', mailTitle: '우편 제목', mailContent: '우편 내용',
+  createOnly: '새로 추가만', label: '메모', versionId: '버전', feature: '대상', action: '작업',
+  objectName: '이름', params: '세부', itemKey: '항목 키', itemValue: '항목 값', enabled: '켜짐',
+  requiresAuth: '로그인 필요', color: '색', icon: '아이콘', secretValue: '값', newPassword: '새 비밀번호',
+}
+const paramLabel = (k: string) => PARAM_LABELS[k] ?? k
+
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+
+function scalarText(v: unknown): string {
+  if (typeof v === 'string' && ISO_RE.test(v)) return formatDateTime(v)
+  if (typeof v === 'boolean') return v ? '예' : '아니오'
+  if (v === null || v === undefined || v === '') return '—'
+  return String(v)
+}
+
 /** 상세 칸 한 줄 요약. 전체 값은 행을 펼쳐서 본다. */
 function paramsSummary(p: Record<string, unknown>): string {
   return Object.entries(p)
     .map(([k, v]) => {
-      if (Array.isArray(v)) return `${k}: ${v.length}개`
-      if (v !== null && typeof v === 'object') return `${k}: {…}`
-      return `${k}: ${String(v)}`
+      if (Array.isArray(v)) return `${paramLabel(k)}: ${v.length}개`
+      if (v !== null && typeof v === 'object') return `${paramLabel(k)}: {…}`
+      return `${paramLabel(k)}: ${scalarText(v)}`
     })
     .join(' · ')
 }
@@ -110,8 +137,9 @@ export default function AuditLogs({
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<AuditData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
   const [openId, setOpenId] = useState<number | null>(null)
 
   const report = useCallback(
@@ -124,6 +152,7 @@ export default function AuditLogs({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       setData(await callAdmin<AuditData>(target, 'audit.list', {
         search, category, startDate: dateFrom || null, endDate: dateTo || null, page,
@@ -131,6 +160,7 @@ export default function AuditLogs({
     } catch (e: unknown) {
       report(e, '운영 기록을 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -188,7 +218,7 @@ export default function AuditLogs({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={4} emptyText="운영 기록이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="운영 기록이 없습니다." />
               ) : (
                 rows.map((r) => (
                   <Fragment key={r.id}>
@@ -204,9 +234,18 @@ export default function AuditLogs({
                     {openId === r.id && (
                       <tr className="bg-neutral-50/60">
                         <td colSpan={4} className="px-4 py-3">
-                          <pre className="text-xs text-neutral-700 whitespace-pre-wrap break-all font-mono">
-                            {JSON.stringify(r.params, null, 2)}
-                          </pre>
+                          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
+                            {Object.entries(r.params).map(([k, v]) => (
+                              <Fragment key={k}>
+                                <dt className="text-neutral-500 whitespace-nowrap" title={k}>{paramLabel(k)}</dt>
+                                <dd className="text-neutral-700 break-all">
+                                  {v !== null && typeof v === 'object'
+                                    ? <pre className="whitespace-pre-wrap font-mono">{JSON.stringify(v, null, 2)}</pre>
+                                    : scalarText(v)}
+                                </dd>
+                              </Fragment>
+                            ))}
+                          </dl>
                         </td>
                       </tr>
                     )}
@@ -217,7 +256,7 @@ export default function AuditLogs({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total}건</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
             <span className="px-2">{page} / {totalPages}</span>

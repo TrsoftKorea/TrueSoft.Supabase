@@ -5,7 +5,9 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { formatDateTime } from '../../components/ui/format'
+import { formatDateTime, formatTotal, itemsText } from '../../components/ui/format'
+
+type GameItem = { key: string; display_name: string }
 
 type MailRow = {
   id: string
@@ -24,7 +26,7 @@ function statusOf(r: MailRow): { label: string; cls: string } {
   if (r.deleted_at) return { label: '삭제', cls: 'bg-neutral-200 text-neutral-600' }
   if (r.items_claimed_at) return { label: '수령', cls: 'bg-emerald-100 text-emerald-700' }
   if (new Date(r.expires_at).getTime() <= Date.now()) return { label: '기한 만료', cls: 'bg-amber-100 text-amber-700' }
-  return { label: '미수령', cls: 'bg-[#e8f0fe] text-[#1677ff]' }
+  return { label: '미수령', cls: 'bg-brand-soft text-[#1677ff]' }
 }
 
 export default function MailsTab({
@@ -38,8 +40,10 @@ export default function MailsTab({
 }) {
   const [page, setPage] = useState(1)
   const [data, setData] = useState<MailData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [catalog, setCatalog] = useState<GameItem[]>([])
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -48,18 +52,26 @@ export default function MailsTab({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       // 검색어 칸이 계정 ID 도 찾는다. 전체 ID 를 넣으므로 이 사람 것만 걸린다.
       setData(await callAdmin<MailData>(target, 'mails.getRecords', { search: accountId, page }))
     } catch (e: unknown) {
       report(e, '받은 우편을 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
   }, [target, accountId, page, report])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    callAdmin<GameItem[]>(target, 'gameItems.list')
+      .then(setCatalog)
+      .catch((e: unknown) => report(e, '아이템 목록을 불러오지 못했습니다.'))
+  }, [target, report])
 
   const rows = data?.rows ?? []
   const total = data?.total ?? 0
@@ -82,7 +94,7 @@ export default function MailsTab({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={5} emptyText="받은 우편이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="받은 우편이 없습니다." />
               ) : (
                 rows.map((r) => {
                   const st = statusOf(r)
@@ -91,7 +103,7 @@ export default function MailsTab({
                       <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                       <td className="px-4 py-3 text-neutral-800">{r.title}</td>
                       <td className="px-4 py-3 text-neutral-600 text-xs">
-                        {r.items && r.items.length > 0 ? r.items.map((it) => `${it.key}×${it.count}`).join(', ') : '-'}
+                        {itemsText(r.items, catalog)}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs ${st.cls}`}>{st.label}</span>
@@ -105,7 +117,7 @@ export default function MailsTab({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total}건 · 보관 기간이 지나 정리된 우편은 나오지 않습니다</span>
+          <span>{formatTotal(total)} · 보관 기간이 지나 정리된 우편은 나오지 않습니다</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
             <span className="px-2">{page} / {totalPages}</span>

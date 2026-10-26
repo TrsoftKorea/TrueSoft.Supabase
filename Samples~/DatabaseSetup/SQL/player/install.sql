@@ -4626,8 +4626,9 @@ begin
            or (p_status = '미수령' and m.deleted_at is null and m.items_claimed_at is null)
            or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
            or (p_status = '삭제'   and m.deleted_at is not null))
-      and (p_start_date is null or m.created_at >= p_start_date::timestamptz)
-      and (p_end_date   is null or m.created_at <  (p_end_date + 1)::timestamptz)
+      -- 콘솔의 날짜는 한국 날짜다. ::timestamptz 는 세션 시간대(UTC) 자정이라 0~9시 기록이 전날로 빠진다.
+      and (p_start_date is null or m.created_at >= (p_start_date::timestamp at time zone 'Asia/Seoul'))
+      and (p_end_date   is null or m.created_at <  ((p_end_date + 1)::timestamp at time zone 'Asia/Seoul'))
       and (p_batch_id is null or m.batch_id = p_batch_id)
     order by m.created_at desc
     limit v_size offset (v_page - 1) * v_size
@@ -7364,8 +7365,9 @@ begin
             or l.email ilike '%' || v_search || '%'
             or l.params::text ilike '%' || v_search || '%')
        and (v_category is null or l.action like v_category || '.%')
-       and (p_start_date is null or l.created_at >= p_start_date::timestamptz)
-       and (p_end_date   is null or l.created_at <  (p_end_date + 1)::timestamptz)
+       -- 콘솔의 날짜는 한국 날짜다(ts_admin_search_mails 와 같은 이유).
+       and (p_start_date is null or l.created_at >= (p_start_date::timestamp at time zone 'Asia/Seoul'))
+       and (p_end_date   is null or l.created_at <  ((p_end_date + 1)::timestamp at time zone 'Asia/Seoul'))
      order by l.created_at desc, l.id desc
      limit v_size offset (v_page - 1) * v_size
   ) t;
@@ -7384,16 +7386,24 @@ grant execute on function public.ts_admin_audit_write(text,text,jsonb)          
 grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 콘솔 표시 — 운영 콘솔에서 이 게임을 나타내는 색
+-- 콘솔 표시 — 운영 콘솔에서 이 게임을 나타내는 색·이름·아이콘
 -- ---------------------------------------------------------------------------
 -- 운영자가 엉뚱한 게임에서 작업하지 않도록 메뉴·상단 띠·확인 창에 게임마다 다른 색을 쓴다.
--- color 가 null 이면 콘솔 코드에 적힌 기본색을 쓴다(새 게임은 따로 정하지 않아도 된다).
+-- 셋 다 null 이면 콘솔 코드에 적힌 기본값을 쓴다(새 게임은 따로 정하지 않아도 된다).
+-- icon 은 콘솔이 128px 로 줄여 보낸 그림(data URL)이다. 로그인 전 화면에서도 읽으므로 파일 저장소를 두지 않았다.
 create table if not exists public.ts_admin_console_settings (
-  id         int primary key default 1 check (id = 1),
-  color      text check (color ~ '^#[0-9a-f]{6}$'),
-  updated_at timestamptz not null default now(),
-  updated_by text
+  id           int primary key default 1 check (id = 1),
+  color        text check (color ~ '^#[0-9a-f]{6}$'),
+  display_name text check (char_length(display_name) between 1 and 40),
+  icon         text check (icon ~ '^data:image/(png|jpeg|webp);base64,' and length(icon) <= 120000),
+  updated_at   timestamptz not null default now(),
+  updated_by   text
 );
+
+-- 색만 있던 시절에 만든 표에 칸을 더한다.
+alter table public.ts_admin_console_settings
+  add column if not exists display_name text check (char_length(display_name) between 1 and 40),
+  add column if not exists icon         text check (icon ~ '^data:image/(png|jpeg|webp);base64,' and length(icon) <= 120000);
 
 insert into public.ts_admin_console_settings (id) values (1) on conflict (id) do nothing;
 
@@ -7401,7 +7411,7 @@ alter table public.ts_admin_console_settings enable row level security;
 -- [의도적] 정책 없음 — service_role 전용.
 
 comment on table public.ts_admin_console_settings is
-  '운영 콘솔 표시 설정(행 하나). color=이 게임의 콘솔 색(#rrggbb 소문자, null 이면 콘솔 기본색).';
+  '운영 콘솔 표시 설정(행 하나). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 게임 이름, icon=게임 아이콘(data URL). null 이면 콘솔 기본값.';
 
 create or replace function public.ts_admin_console_settings_get()
 returns jsonb
@@ -7411,9 +7421,43 @@ security definer
 set search_path = public
 as $$
   select coalesce(
-           (select jsonb_build_object('color', c.color, 'updated_at', c.updated_at, 'updated_by', c.updated_by)
+           (select jsonb_build_object('color', c.color, 'display_name', c.display_name, 'icon', c.icon,
+                                      'updated_at', c.updated_at, 'updated_by', c.updated_by)
               from public.ts_admin_console_settings c where c.id = 1),
-           jsonb_build_object('color', null, 'updated_at', null, 'updated_by', null));
+           jsonb_build_object('color', null, 'display_name', null, 'icon', null, 'updated_at', null, 'updated_by', null));
+$$;
+
+create or replace function public.ts_admin_console_identity_update(
+  p_display_name text,
+  p_icon         text,
+  p_by           text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name text := nullif(btrim(coalesce(p_display_name, '')), '');
+  v_icon text := nullif(btrim(coalesce(p_icon, '')), '');
+begin
+  if v_name is not null and char_length(v_name) > 40 then
+    raise exception 'console_name_too_long';
+  end if;
+  if v_icon is not null and (v_icon !~ '^data:image/(png|jpeg|webp);base64,' or length(v_icon) > 120000) then
+    raise exception 'console_icon_invalid';
+  end if;
+
+  insert into public.ts_admin_console_settings (id, display_name, icon, updated_at, updated_by)
+  values (1, v_name, v_icon, now(), p_by)
+  on conflict (id) do update
+    set display_name = excluded.display_name,
+        icon         = excluded.icon,
+        updated_at   = now(),
+        updated_by   = excluded.updated_by;
+
+  return public.ts_admin_console_settings_get();
+end;
 $$;
 
 create or replace function public.ts_admin_console_settings_update(
@@ -7446,12 +7490,16 @@ comment on function public.ts_admin_console_settings_get() is
   '콘솔 표시 설정 조회. admin-api 가 로그인 전 화면에도 색을 보여 주려고 인증 없이 부른다. service_role 전용.';
 comment on function public.ts_admin_console_settings_update(text, text) is
   '콘솔 색 변경(#rrggbb, 빈 값이면 기본색으로). 형식이 틀리면 console_color_invalid. service_role 전용.';
+comment on function public.ts_admin_console_identity_update(text, text, text) is
+  '콘솔에 보이는 게임 이름·아이콘 변경(빈 값이면 기본값으로). 이름 40자 초과는 console_name_too_long, 그림 형식·크기가 틀리면 console_icon_invalid. service_role 전용.';
 
 revoke all on table    public.ts_admin_console_settings from anon, authenticated;
-revoke all on function public.ts_admin_console_settings_get()                 from public, anon, authenticated;
-revoke all on function public.ts_admin_console_settings_update(text, text)    from public, anon, authenticated;
-grant execute on function public.ts_admin_console_settings_get()              to service_role;
-grant execute on function public.ts_admin_console_settings_update(text, text) to service_role;
+revoke all on function public.ts_admin_console_settings_get()                       from public, anon, authenticated;
+revoke all on function public.ts_admin_console_settings_update(text, text)          from public, anon, authenticated;
+revoke all on function public.ts_admin_console_identity_update(text, text, text)    from public, anon, authenticated;
+grant execute on function public.ts_admin_console_settings_get()                    to service_role;
+grant execute on function public.ts_admin_console_settings_update(text, text)       to service_role;
+grant execute on function public.ts_admin_console_identity_update(text, text, text) to service_role;
 
 notify pgrst, 'reload schema';
 

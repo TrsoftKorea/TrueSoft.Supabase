@@ -18,8 +18,9 @@ export default function CouponsTab({
   accountId: string
 }) {
   const [rows, setRows] = useState<RedemptionRow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -29,9 +30,10 @@ export default function CouponsTab({
   useEffect(() => {
     let alive = true
     setLoading(true)
+    setFailed(false)
     callAdmin<RedemptionRow[]>(target, 'players.coupons', { accountId })
       .then((d) => { if (alive) setRows(d) })
-      .catch((e: unknown) => { if (alive) report(e, '쿠폰 사용 이력을 불러오지 못했습니다.') })
+      .catch((e: unknown) => { if (alive) { setFailed(true); report(e, '쿠폰 사용 이력을 불러오지 못했습니다.') } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [target, accountId, report])
@@ -52,7 +54,7 @@ export default function CouponsTab({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={4} emptyText="사용한 쿠폰이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="사용한 쿠폰이 없습니다." />
               ) : (
                 rows.map((r, i) => (
                   <tr key={`${r.code}-${r.redeemed_at}-${i}`} className="border-t border-neutral-100">

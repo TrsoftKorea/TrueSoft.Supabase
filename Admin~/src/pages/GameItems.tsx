@@ -7,6 +7,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 
 type Item = { key: string; display_name: string; created_at: string }
@@ -31,6 +32,8 @@ export default function GameItems({
   const [rowSaving, setRowSaving] = useState(false)
   const [delTarget, setDelTarget] = useState<Item | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
 
   // 토큰 만료는 화면에 오류로 띄우지 않고 로그인으로 돌려보낸다.
   const report = useCallback(
@@ -47,11 +50,13 @@ export default function GameItems({
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
+    setLoadFailed(false)
     try {
       setRows(await callAdmin<Item[]>(target, 'gameItems.list'))
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setRows([])
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -76,6 +81,11 @@ export default function GameItems({
 
   const add = () => {
     if (!form.key.trim() || adding) return
+    // 서버는 같은 코드면 이름을 덮어쓴다 — 추가 칸에서 기존 아이템 이름이 몰래 바뀌지 않게 막는다.
+    if (rows.some((r) => r.key === form.key.trim())) {
+      setError('이미 있는 아이템 코드입니다.')
+      return
+    }
     void run(async () => {
       await callAdmin(target, 'gameItems.upsert', {
         key: form.key.trim(),
@@ -101,14 +111,22 @@ export default function GameItems({
     }, setRowSaving)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!delTarget || deleting) return
     const key = delTarget.key
-    void run(async () => {
+    setDeleting(true)
+    setDeleteError('')
+    try {
       await callAdmin(target, 'gameItems.delete', { key })
       if (editingKey === key) cancelEdit()
       setDelTarget(null)
-    }, setDeleting)
+      await load()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) onUnauthenticated()
+      else setDeleteError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const inputCls = 'h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white'
@@ -120,11 +138,7 @@ export default function GameItems({
         description="우편·쿠폰 등 아이템을 지급하는 기능에서 공통으로 사용하는 아이템 목록입니다."
       />
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard className="p-4">
         <div className="text-xs font-medium text-neutral-500 mb-2">새 아이템 추가</div>
@@ -172,6 +186,7 @@ export default function GameItems({
               <TableStatusRow
                 loading={loading}
                 empty={rows.length === 0}
+                failed={loadFailed}
                 colSpan={4}
                 emptyText="등록된 아이템이 없습니다."
               />
@@ -207,6 +222,7 @@ export default function GameItems({
                               disabled={rowSaving}
                               className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
                               aria-label="확인"
+                              title="저장"
                             >
                               {rowSaving ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -216,8 +232,10 @@ export default function GameItems({
                             </button>
                             <button
                               onClick={cancelEdit}
-                              className="text-neutral-400 hover:text-neutral-700"
+                              disabled={rowSaving}
+                              className="text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
                               aria-label="취소"
+                              title="취소"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -228,6 +246,7 @@ export default function GameItems({
                               onClick={() => startEdit(it)}
                               className="text-neutral-400 hover:text-[#1677ff]"
                               aria-label="수정"
+                              title="이름 수정"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
@@ -235,6 +254,7 @@ export default function GameItems({
                               onClick={() => setDelTarget(it)}
                               className="text-neutral-400 hover:text-red-500"
                               aria-label="삭제"
+                              title="삭제"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -252,12 +272,13 @@ export default function GameItems({
 
       <ConfirmDialog
         open={!!delTarget}
-        title="아이템 지우기"
-        confirmLabel="지우기"
+        title="아이템 삭제"
+        confirmLabel="삭제"
         danger
         busy={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => setDelTarget(null)}
+        error={deleteError}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => { setDelTarget(null); setDeleteError('') }}
         description="이미 발송된 우편·쿠폰의 아이템은 그대로 남고, 앞으로 이 코드를 고를 수 없게 됩니다."
       >
         {delTarget && (

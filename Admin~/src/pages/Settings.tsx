@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, PROJECTS, type ProjectTarget } from '../lib/projectTarget'
-import { setProjectColor, useProjectColor } from '../lib/projectColors'
+import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
+import { ProjectIcon } from '../components/ui/ProjectIcon'
+import { setThemeMode, useThemeMode, type ThemeMode } from '../lib/theme'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { WhiteCard } from '../components/ui/Card'
@@ -66,6 +68,7 @@ function StoreStatusCard({
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedKey, setSavedKey] = useState('')
+  const [saveError, setSaveError] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -88,12 +91,14 @@ function StoreStatusCard({
   const open = (key: string, clear: boolean) => {
     setValue('')
     setSavedKey('')
+    setSaveError('')
     setEditing({ key, clear })
   }
 
   const save = async () => {
     if (!editing) return
     setSaving(true)
+    setSaveError('')
     try {
       await callAdmin(target, 'settings.setServerConfig', { key: editing.key, secretValue: editing.clear ? '' : value })
       setSavedKey(editing.key)
@@ -101,7 +106,8 @@ function StoreStatusCard({
       setValue('')
       await load()
     } catch (e: unknown) {
-      report(e, '값을 저장하지 못했습니다.')
+      if (e instanceof NotAuthenticatedError) report(e, '')
+      else setSaveError(e instanceof Error ? e.message : '값을 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -130,7 +136,7 @@ function StoreStatusCard({
                   {row?.source === 'console' && row.updatedAt && (
                     <span>수정 {formatDateTime(row.updatedAt)}{row.updatedBy ? ` · ${row.updatedBy}` : ''}</span>
                   )}
-                  {row?.source === 'supabase' && <span>Supabase 에 등록된 값을 쓰는 중</span>}
+                  {row?.source === 'supabase' && <span>기본 설정 값을 쓰는 중</span>}
                   {savedKey === k.key && <span className="ml-2 text-green-600 whitespace-nowrap">저장했습니다.</span>}
                 </td>
                 <td className="py-2 pr-3 text-right">
@@ -147,7 +153,7 @@ function StoreStatusCard({
                     {row?.source === 'console' && (
                       <Button size="sm" variant="danger" onClick={() => open(k.key, true)}>
                         <Trash2 className="w-3 h-3" />
-                        지우기
+                        삭제
                       </Button>
                     )}
                   </div>
@@ -160,13 +166,14 @@ function StoreStatusCard({
 
       <ConfirmDialog
         open={!!editing}
-        title={editing?.clear ? `${editingDef?.label} 지우기` : `${editingDef?.label} ${byKey.get(editing?.key ?? '')?.status === 'missing' ? '입력' : '바꾸기'}`}
+        title={editing?.clear ? `${editingDef?.label} 삭제` : `${editingDef?.label} ${byKey.get(editing?.key ?? '')?.status === 'missing' ? '입력' : '바꾸기'}`}
         description={editing?.clear
-          ? '콘솔에 넣은 값을 지웁니다. Supabase 에 따로 등록된 값이 있으면 1분 안에 그 값으로 돌아가고, 없으면 이 값이 필요한 기능이 멈춥니다.'
+          ? '삭제하면 1분 안에 기본 설정 값으로 돌아갑니다. 기본 설정 값도 없으면 이 기능이 멈춥니다.'
           : '저장하면 1분 안에 적용됩니다. 저장한 값은 다시 볼 수 없습니다.'}
-        confirmLabel={editing?.clear ? '지우기' : '저장'}
+        confirmLabel={editing?.clear ? '삭제' : '저장'}
         danger={!!editing?.clear}
         busy={saving}
+        error={saveError}
         confirmDisabled={!editing?.clear && value.trim() === ''}
         onConfirm={() => void save()}
         onCancel={() => setEditing(null)}
@@ -278,31 +285,237 @@ function colorDistance(a: string, b: string): number {
   return Math.sqrt(x.reduce((s, v, i) => s + (v - y[i]!) ** 2, 0))
 }
 
-type ConsoleSettings = { color: string | null; updated_at: string | null; updated_by: string | null }
+type ConsoleSettings = {
+  color: string | null
+  display_name: string | null
+  icon: string | null
+  updated_at: string | null
+  updated_by: string | null
+}
 
-function ConsoleColorCard({
+const ICON_PX = 128
+const ICON_MAX_CHARS = 120_000 // install.sql ts_admin_console_settings.icon 검사와 같은 값
+
+/** 올린 그림을 가운데 기준 정사각형으로 잘라 128px 로 줄인다. 투명 배경을 살리려 WebP, 안 되는 브라우저는 PNG. */
+function shrinkIcon(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const side = Math.min(img.naturalWidth, img.naturalHeight)
+      const canvas = document.createElement('canvas')
+      canvas.width = ICON_PX
+      canvas.height = ICON_PX
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('그림을 처리하지 못했습니다.')); return }
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, ICON_PX, ICON_PX)
+      let out = canvas.toDataURL('image/webp', 0.9)
+      if (!out.startsWith('data:image/webp')) out = canvas.toDataURL('image/png')
+      resolve(out)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('그림 파일을 열지 못했습니다. PNG·JPG·WebP 파일을 골라 주세요.')) }
+    img.src = url
+  })
+}
+
+/** 콘솔에 보이는 게임 이름과 아이콘. */
+function ConsoleIdentityCard({
   target,
+  current,
+  onSaved,
   report,
 }: {
   target: ProjectTarget
+  current: ConsoleSettings | null
+  onSaved: (s: ConsoleSettings) => void
   report: (e: unknown, fallback: string) => void
 }) {
-  const colorOf = useProjectColor()
+  const [name, setName] = useState('')
+  const [icon, setIcon] = useState<string | null>(null)
+  const [iconError, setIconError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (!current) return
+    setName(current.display_name ?? '')
+    setIcon(current.icon)
+    setIconError('')
+  }, [current])
+
+  const defaultName = getProject(target).label
+  const trimmed = name.trim()
+  const tooLong = trimmed.length > 40
+  const changed = !!current && (trimmed !== (current.display_name ?? '') || icon !== current.icon)
+
+  const pick = async (file: File | undefined) => {
+    setIconError('')
+    setSaved(false)
+    if (!file) return
+    try {
+      const data = await shrinkIcon(file)
+      if (data.length > ICON_MAX_CHARS) { setIconError('그림이 너무 복잡해 줄여도 큽니다. 다른 그림을 골라 주세요.'); return }
+      setIcon(data)
+    } catch (e: unknown) {
+      setIconError(e instanceof Error ? e.message : '그림을 처리하지 못했습니다.')
+    }
+  }
+
+  const save = async () => {
+    setSaving(true)
+    setSaved(false)
+    try {
+      const s = await callAdmin<ConsoleSettings>(target, 'settings.setConsoleIdentity', { displayName: trimmed, icon: icon ?? '' })
+      onSaved(s)
+      setSaved(true)
+    } catch (e: unknown) {
+      report(e, '이름·아이콘을 저장하지 못했습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+      <div>
+        <h2 className="text-sm font-medium text-neutral-900">게임 이름 · 아이콘</h2>
+        <p className="mt-1 text-xs text-neutral-500">게임 목록·메뉴·상단 띠·확인 창에 보입니다. 모든 운영자에게 같게 보입니다.</p>
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="console-name" className="block text-sm font-medium text-neutral-800">게임 이름</label>
+        <input
+          id="console-name"
+          className={`${inputCls} w-72 ${tooLong ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
+          value={name}
+          disabled={!current}
+          onChange={(e) => { setName(e.target.value); setSaved(false) }}
+          autoComplete="off"
+        />
+        <p className={`text-xs ${tooLong ? 'text-red-600' : 'text-neutral-500'}`}>
+          {tooLong ? '40자 이내로 적어 주세요.' : `비워 두면 "${defaultName}"으로 보입니다.`}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <span className="block text-sm font-medium text-neutral-800">아이콘</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {icon
+            ? <img src={icon} alt="" className="w-14 h-14 rounded-xl object-cover border border-neutral-200" />
+            : <ProjectIcon target={target} size={56} />}
+          <label className={`inline-flex items-center h-9 px-3 rounded-md border border-neutral-300 text-sm text-neutral-700 hover:bg-neutral-50 whitespace-nowrap ${current ? 'cursor-pointer' : 'opacity-40 pointer-events-none'}`}>
+            그림 고르기
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              disabled={!current}
+              onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = '' }}
+            />
+          </label>
+          {icon && (
+            <Button onClick={() => { setIcon(null); setSaved(false) }} disabled={saving}>
+              그림 빼기
+            </Button>
+          )}
+        </div>
+        <p className={`text-xs ${iconError ? 'text-red-600' : 'text-neutral-500'}`}>
+          {iconError || '정사각형 그림이 좋습니다. 가운데를 기준으로 잘라 작게 줄여 저장합니다. 그림이 없으면 게임 색 바탕에 이름 첫 글자가 보입니다.'}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" onClick={() => void save()} disabled={saving || !changed || tooLong}>
+          저장
+        </Button>
+        {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
+      </div>
+    </WhiteCard>
+  )
+}
+
+function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
   const [current, setCurrent] = useState<ConsoleSettings | null>(null)
+
+  useEffect(() => {
+    setCurrent(null)
+    callAdmin<ConsoleSettings>(target, 'settings.getConsole')
+      .then(setCurrent)
+      .catch((e: unknown) => report(e, '콘솔 표시 설정을 불러오지 못했습니다.'))
+  }, [target, report])
+
+  const onSaved = (s: ConsoleSettings) => {
+    setCurrent(s)
+    setProjectLook(target, toProjectLook(s))
+  }
+
+  return (
+    <div className="space-y-4">
+      <ConsoleIdentityCard target={target} current={current} onSaved={onSaved} report={report} />
+      <ConsoleColorCard target={target} current={current} onSaved={onSaved} report={report} />
+      <ThemeModeCard />
+    </div>
+  )
+}
+
+const THEME_OPTIONS: readonly (readonly [ThemeMode, string])[] = [
+  ['system', '기기 설정 따름'],
+  ['light', '밝은 화면'],
+  ['dark', '어두운 화면'],
+]
+
+/** 화면 모드는 운영자마다 다르게 쓴다 — 이 카드만 게임과 상관없이 지금 브라우저에 적용된다. */
+function ThemeModeCard() {
+  const mode = useThemeMode()
+  return (
+    <WhiteCard className="p-5 space-y-3 max-w-2xl">
+      <div>
+        <h2 className="text-sm font-medium text-neutral-900">화면 모드</h2>
+        <p className="mt-1 text-xs text-neutral-500">나에게만 적용됩니다. 다른 운영자의 화면은 바뀌지 않습니다.</p>
+      </div>
+      <div className="inline-flex rounded-md border border-neutral-300 overflow-hidden" role="radiogroup" aria-label="화면 모드">
+        {THEME_OPTIONS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="radio"
+            aria-checked={mode === key}
+            onClick={() => setThemeMode(key)}
+            className={`h-9 px-4 text-sm whitespace-nowrap border-l first:border-l-0 border-neutral-300 ${
+              mode === key ? 'bg-[#1677ff] text-white font-medium' : 'text-neutral-700 hover:bg-neutral-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </WhiteCard>
+  )
+}
+
+function ConsoleColorCard({
+  target,
+  current,
+  onSaved,
+  report,
+}: {
+  target: ProjectTarget
+  current: ConsoleSettings | null
+  onSaved: (s: ConsoleSettings) => void
+  report: (e: unknown, fallback: string) => void
+}) {
+  const look = useProjectLook()
+  const colorOf = look.color
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    setCurrent(null)
     setSaved(false)
-    callAdmin<ConsoleSettings>(target, 'settings.getConsole')
-      .then((s) => {
-        setCurrent(s)
-        setValue(s.color ?? getProject(target).color)
-      })
-      .catch((e: unknown) => report(e, '콘솔 표시 설정을 불러오지 못했습니다.'))
-  }, [target, report])
+    if (current) setValue(current.color ?? getProject(target).color)
+  }, [target, current])
 
   const hex = value.trim().toLowerCase()
   const valid = HEX_RE.test(hex)
@@ -317,9 +530,7 @@ function ConsoleColorCard({
     setSaved(false)
     try {
       const s = await callAdmin<ConsoleSettings>(target, 'settings.setConsoleColor', { color: color ?? '' })
-      setCurrent(s)
-      setValue(s.color ?? getProject(target).color)
-      setProjectColor(target, s.color)
+      onSaved(s)
       setSaved(true)
     } catch (e: unknown) {
       report(e, '색을 저장하지 못했습니다.')
@@ -333,7 +544,7 @@ function ConsoleColorCard({
       <div>
         <h2 className="text-sm font-medium text-neutral-900">게임 색</h2>
         <p className="mt-1 text-xs text-neutral-500">
-          {getProject(target).label}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.
+          {look.name(target)}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.
         </p>
       </div>
 
@@ -377,13 +588,13 @@ function ConsoleColorCard({
 
       {similar.length > 0 && (
         <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {similar.map((p) => p.label).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 게임에서 작업하지 않도록 확실히 다른 색을 고르세요.
+          {similar.map((p) => look.name(p.key)).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 게임에서 작업하지 않도록 확실히 다른 색을 고르세요.
         </div>
       )}
 
       <div className="rounded-lg overflow-hidden border border-neutral-200">
         <div className="px-4 py-3 text-white font-bold" style={{ backgroundColor: valid ? hex : '#9ca3af' }}>
-          {getProject(target).label}
+          {look.name(target)}
         </div>
         <div className="px-4 py-2 text-xs text-neutral-500">미리보기</div>
       </div>
@@ -456,7 +667,7 @@ export default function Settings({
       </div>
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
-      {tab === 'console' && <ConsoleColorCard target={target} report={report} />}
+      {tab === 'console' && <ConsoleCards target={target} report={report} />}
       {tab === 'mail' && (
         <LimitsForm
           target={target}

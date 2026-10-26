@@ -36,6 +36,7 @@ export default function GameServers({
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -61,13 +62,15 @@ export default function GameServers({
   const save = async () => {
     if (!draft) return
     setSaving(true)
+    setSaveError('')
     try {
       await callAdmin(target, 'servers.upsert', draft)
       setDraft(null)
       await load()
     } catch (e: unknown) {
-      setDraft(null)
-      report(e, '저장하지 못했습니다.')
+      // 창은 열어 둔다 — 닫으면 입력이 사라지고 실패 사유도 배경에 가려 안 보인다.
+      if (e instanceof NotAuthenticatedError) { setDraft(null); onUnauthenticated(); return }
+      setSaveError(e instanceof Error ? e.message : '저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -111,7 +114,7 @@ export default function GameServers({
                     <td className="px-4 py-3 font-mono text-neutral-800 whitespace-nowrap">
                       {s.server_code}
                       {s.is_default && (
-                        <span className="ml-2 rounded bg-[#e8f0fe] px-1.5 py-0.5 text-[11px] font-sans text-[#1677ff]">기본</span>
+                        <span className="ml-2 rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-sans text-[#1677ff]">기본</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-neutral-800">{s.display_name}</td>
@@ -148,8 +151,9 @@ export default function GameServers({
         confirmLabel={isNew ? '추가' : '저장'}
         busy={saving}
         confirmDisabled={!canSave}
+        error={saveError}
         onConfirm={() => void save()}
-        onCancel={() => setDraft(null)}
+        onCancel={() => { setDraft(null); setSaveError('') }}
       >
         {draft && (
           <div className="space-y-3">

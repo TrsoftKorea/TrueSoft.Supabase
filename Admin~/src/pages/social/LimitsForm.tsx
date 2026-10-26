@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
-import { callAdmin } from '../../lib/api'
+import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -57,6 +57,7 @@ export function LimitsForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const apply = useCallback((s: LimitsResponse) => {
     setCurrent(s)
@@ -96,12 +97,14 @@ export function LimitsForm({
     if (invalid) return
     setSaving(true)
     setSaved(false)
+    setSaveError('')
     try {
       apply(await callAdmin<LimitsResponse>(target, updateAction, parsed))
       setSaved(true)
       setConfirming(false)
     } catch (e: unknown) {
-      report(e, '설정을 저장하지 못했습니다.')
+      if (e instanceof NotAuthenticatedError) report(e, '')
+      else setSaveError(e instanceof Error ? e.message : '설정을 저장하지 못했습니다.')
     } finally {
       setSaving(false)
     }
@@ -125,7 +128,7 @@ export function LimitsForm({
 
       <div className="flex items-center gap-3 pt-1">
         <Button variant="primary"
-          onClick={() => setConfirming(true)}
+          onClick={() => { setSaveError(''); setConfirming(true) }}
           disabled={saving || loading || !current || invalid || !changed}
         >
           <Save className="w-3.5 h-3.5" />
@@ -146,6 +149,7 @@ export function LimitsForm({
         description="모든 플레이어에게 곧바로 적용됩니다."
         confirmLabel="저장"
         busy={saving}
+        error={saveError}
         onConfirm={() => void save()}
         onCancel={() => setConfirming(false)}
       >

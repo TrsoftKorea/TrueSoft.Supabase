@@ -89,12 +89,19 @@ const intInRange = (p: Params, k: string, label: string, min: number, max: numbe
 // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
 const sanitizeSearchTerm = (s: string): string => s.replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
 
-// endDate 는 'YYYY-MM-DD' 뿐이라 그대로 lte 하면 그날 00:00:00 까지만 걸려 당일 데이터가
-// 거의 다 빠진다 — 다음날 자정 미만(<)으로 바꿔 그날 전체를 포함한다.
+// 화면의 날짜('YYYY-MM-DD')는 한국 날짜다. 시간대 없이 비교하면 DB(UTC) 자정으로 읽혀
+// 한국 시각 0~9시 기록이 전날로 빠진다 — 경계를 +09:00 시각으로 만들어 비교한다.
+const kstDayStart = (dateStr: string): string | null => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d) - 9 * 3600_000).toISOString();
+};
+
+// endDate 는 그날 하루 전체를 포함해야 한다 — 다음날 자정 미만(<)으로 바꾼다.
 const nextDayExclusive = (dateStr: string): string | null => {
   const [y, m, d] = dateStr.split("-").map(Number);
   if (!y || !m || !d) return null;
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  return new Date(Date.UTC(y, m - 1, d + 1) - 9 * 3600_000).toISOString();
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -293,11 +300,17 @@ Deno.serve(async (req) => {
           return json({ ok: true, data: { token } });
         }
 
-        // 로그인 화면·게임 고르는 칸이 로그인 전에도 게임마다 색을 보여 줘야 해서 인증 없이 연다. 색 말고는 내보내지 않는다.
-        case "auth.consoleColor": {
+        // 로그인 화면·게임 목록이 로그인 전에도 게임마다 색·이름·아이콘을 보여 줘야 해서 인증 없이 연다.
+        // 누가 언제 바꿨는지(운영자 이메일)는 내보내지 않는다.
+        case "auth.consoleLook":
+        case "auth.consoleColor": { // 옛 이름 — 배포 전 콘솔 화면이 아직 부른다
           const { data, error } = await db.rpc("ts_admin_console_settings_get");
           if (error) throw new Error(error.message);
-          return json({ ok: true, data: { color: (data as { color?: string | null } | null)?.color ?? null } });
+          const s = (data ?? {}) as { color?: string | null; display_name?: string | null; icon?: string | null };
+          return json({
+            ok: true,
+            data: { color: s.color ?? null, display_name: s.display_name ?? null, icon: s.icon ?? null },
+          });
         }
 
         default:
@@ -353,7 +366,12 @@ const SECRET_PARAM = /password|secret|token/i;
 
 function redactParams(params: Params): Params {
   const out: Params = {};
-  for (const [k, v] of Object.entries(params)) out[k] = SECRET_PARAM.test(k) ? "***" : v;
+  for (const [k, v] of Object.entries(params)) {
+    if (SECRET_PARAM.test(k)) out[k] = "***";
+    // 그림(data URL)은 기록을 수십 KB씩 불린다 — 바꿨다는 사실만 남긴다.
+    else if (typeof v === "string" && v.startsWith("data:image/")) out[k] = "(그림)";
+    else out[k] = v;
+  }
   return out;
 }
 
@@ -716,7 +734,8 @@ async function handleAction(
           if (search) {
             query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
           }
-          if (typeof startDate === "string" && startDate) query = query.gte("verified_at", startDate);
+          const start = typeof startDate === "string" ? kstDayStart(startDate) : null;
+          if (start) query = query.gte("verified_at", start);
           if (typeof endDate === "string" && endDate) {
             const next = nextDayExclusive(endDate);
             if (next) query = query.lt("verified_at", next);
@@ -852,7 +871,8 @@ async function handleAction(
         if (source) query = query.ilike("source", `%${source}%`);
 
         const startDate = params["startDate"];
-        if (typeof startDate === "string" && startDate) query = query.gte("created_at", startDate);
+        const start = typeof startDate === "string" ? kstDayStart(startDate) : null;
+        if (start) query = query.gte("created_at", start);
         const endDate = params["endDate"];
         if (typeof endDate === "string" && endDate) {
           const next = nextDayExclusive(endDate);
@@ -1045,6 +1065,16 @@ async function handleAction(
           p_by: email,
         });
         if (error) throw new Error(error.message === "console_color_invalid" ? "색은 #rrggbb 형식이어야 합니다." : error.message);
+        return json({ ok: true, data });
+      }
+
+      case "settings.setConsoleIdentity": {
+        const { data, error } = await db.rpc("ts_admin_console_identity_update", {
+          p_display_name: optStr(params, "displayName"),
+          p_icon: optStr(params, "icon"),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
         return json({ ok: true, data });
       }
 
@@ -1287,7 +1317,8 @@ async function handleAction(
           p_server_id: params["serverId"] ?? null,
           p_content: optStr(params, "content"),
           p_items: params["items"] ?? null,
-          p_created_by: params["createdBy"] ?? null,
+          // 보낸 사람은 화면이 넘기는 값이 아니라 로그인한 운영자로 남긴다 — 다른 변경 기록과 같은 기준.
+          p_created_by: email,
           p_skip_item_validation: false,
           p_category: optStr(params, "category") || "default",
           p_localized: params["localized"] ?? null,
@@ -1313,7 +1344,7 @@ async function handleAction(
           p_repeat_unit: optStr(params, "repeatUnit") || "day",
           p_repeat_dow: params["repeatDow"] ?? null,
           p_repeat_dom: params["repeatDom"] ?? null,
-          p_created_by: params["createdBy"] ?? null,
+          p_created_by: email,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
@@ -1501,13 +1532,61 @@ async function handleAction(
   } catch (e) {
     // 운영자에게는 사유를 그대로 보여준다 — 이 함수에 닿은 시점에 이미 인가된 사람이다.
     console.error(`[admin-api] ${action} 실패 (${email}): ${e}`);
-    return fail(e instanceof Error ? e.message : "처리에 실패했습니다.", 400);
+    return fail(e instanceof Error ? friendlyError(e.message) : "처리에 실패했습니다.", 400);
   }
 }
 
+// DB 함수가 raise 하는 사유 코드를 운영자 문구로. 표에 없는 사유는 원문 그대로 둔다 — 지우면 원인을 잃는다.
 const SERVER_ERRORS: Record<string, string> = {
   server_display_name_empty: "서버 이름을 입력하세요.",
   server_code_invalid: "서버 코드는 영문·숫자·_·- 로 32자 이내여야 합니다.",
   server_code_taken: "이미 있는 서버 코드입니다.",
   server_not_found: "서버를 찾을 수 없습니다.",
+  coupon_code_taken: "이미 있는 쿠폰 코드입니다.",
+  coupon_code_required: "쿠폰 코드를 입력하세요.",
+  invalid_coupon_code: "쿠폰 코드는 영문 대문자·숫자·_·- 만 쓸 수 있습니다.",
+  invalid_coupon_prefix: "접두어는 영문 대문자·숫자·_·- 만 쓸 수 있습니다.",
+  coupon_code_space_exhausted: "이 길이로는 더 만들 수 있는 코드가 없습니다. 코드 길이를 늘리세요.",
+  coupon_not_found: "쿠폰을 찾을 수 없습니다. 이미 삭제됐을 수 있습니다.",
+  unknown_item_key: "아이템 카탈로그에 없는 아이템이 들어 있습니다",
+  reserved_item_key: "이 아이템 코드는 쓸 수 없습니다",
+  item_key_empty: "아이템을 고르세요.",
+  item_count_invalid: "아이템 수량이 올바르지 않습니다.",
+  invalid_mail_expires_days: "수령 기한(일)이 올바르지 않습니다.",
+  mail_batch_not_found: "발송 내역을 찾을 수 없습니다.",
+  leaderboard_score_not_found: "기록을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.",
+  leaderboard_column_not_allowed: "이 리더보드에서 쓰지 않는 필드입니다",
+  leaderboard_invalid_code: "리더보드 코드는 영문 소문자로 시작하고 영문 소문자·숫자·_ 만 쓸 수 있습니다.",
+  leaderboard_code_required: "리더보드 코드를 입력하세요.",
+  leaderboard_rotation_period_required: "초기화 주기를 입력하세요.",
+  leaderboard_invalid_rotation: "초기화 설정이 올바르지 않습니다.",
+  leaderboard_rotation_not_found: "해당 회차를 찾을 수 없습니다.",
+  leaderboard_rotation_closed: "이미 끝난 회차입니다.",
+  leaderboard_ended: "이미 종료된 리더보드입니다.",
+  remote_config_key_not_found: "원격 설정을 찾을 수 없습니다.",
+  schema_draft_empty: "게시할 변경이 없습니다.",
+  schema_version_not_found: "해당 버전을 찾을 수 없습니다.",
+  schema_version_already_reverted: "이미 되돌린 버전입니다.",
+  schema_version_not_reversible: "이 버전은 되돌릴 수 없습니다.",
+  match_reward_config_exists: "이미 등록된 게임 코드입니다.",
+  match_reward_config_not_found: "매치 보상 설정을 찾을 수 없습니다.",
+  match_game_code_invalid: "게임 코드 형식이 올바르지 않습니다.",
+  operator_email_invalid: "이메일 형식이 올바르지 않습니다.",
+  operator_not_found: "운영자를 찾을 수 없습니다.",
+  mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
+  friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
+  match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
+  console_name_too_long: "게임 이름은 40자 이내여야 합니다.",
+  console_icon_invalid: "아이콘은 PNG·JPG·WebP 그림이어야 하고 너무 크면 안 됩니다.",
 };
+
+/** "code" 또는 "code: 상세" 꼴의 DB 사유를 운영자 문구로. 상세(대개 문제된 값)는 괄호로 붙인다. */
+function friendlyError(message: string): string {
+  const m = /^([a-z][a-z0-9_]*)(?::\s*(.+))?$/s.exec(message.trim());
+  if (!m) return message;
+  const text = SERVER_ERRORS[m[1]];
+  if (!text) return message;
+  // "abc (must match ^…$)" 처럼 개발자용 설명이 붙은 상세는 값만 남긴다.
+  const detail = m[2]?.replace(/\s*\(must match .*\)$/, "").trim();
+  return detail ? `${text.replace(/[.]$/, "")} (${detail})` : text;
+}

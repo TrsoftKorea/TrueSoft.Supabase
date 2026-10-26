@@ -87,6 +87,7 @@ export default function BannedWords({
   const remove = async () => {
     if (!toDelete) return
     setDeleting(true)
+    setNotice('')
     try {
       await callAdmin(target, 'bannedWords.delete', { kind: toDelete.kind, words: [toDelete.word] })
       setToDelete(null)

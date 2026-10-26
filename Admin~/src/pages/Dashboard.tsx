@@ -65,6 +65,7 @@ export default function Dashboard({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError('')
     try {
       setStats(await callAdmin<Stats>(target, 'dashboard.stats'))
     } catch (e: unknown) {
@@ -84,6 +85,7 @@ export default function Dashboard({
       <div className="flex justify-end">
         <Button variant="outline" size="compact"
           onClick={() => void load()}
+          disabled={loading}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침

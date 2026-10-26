@@ -5,7 +5,7 @@ import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
 import { clearToken, getToken, signedInEmail, signedInTargets } from './lib/googleAuth'
 import { callAdmin, NotAuthenticatedError } from './lib/api'
 import { PendingChangesProvider } from './lib/pendingChanges'
-import { refreshProjectColors } from './lib/projectColors'
+import { refreshProjectLooks } from './lib/projectLook'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import ProjectSelect from './pages/ProjectSelect'
@@ -61,14 +61,21 @@ export default function App() {
     setEntered(true)
   }, [])
 
+  // 로그인은 그대로 두고 게임 목록으로만 돌아간다.
+  const backToList = useCallback(() => {
+    window.sessionStorage.removeItem(ENTERED_KEY)
+    setEntered(false)
+    setMe(null)
+  }, [])
+
   const onSignedIn = useCallback(() => {
     window.sessionStorage.removeItem(ENTERED_KEY)
     setEntered(false)
     setSignedIn(true)
   }, [])
 
-  // 게임 색은 로그인 화면에서도 쓰므로 로그인 여부와 관계없이 처음 한 번 받는다.
-  useEffect(() => { void refreshProjectColors() }, [])
+  // 게임 색·이름·아이콘은 로그인 화면에서도 쓰므로 로그인 여부와 관계없이 처음 한 번 받는다.
+  useEffect(() => { void refreshProjectLooks() }, [])
 
   // 로그인 세션 토큰(24시간)이 모든 게임에서 만료되면 로그인 화면으로 돌려보낸다.
   useEffect(() => {
@@ -139,6 +146,7 @@ export default function App() {
       email={me.email}
       isMaster={me.isMaster}
       onSignOut={signOut}
+      onBackToList={backToList}
     >
       <Routes>
         <Route path="/" element={<Dashboard target={target} onUnauthenticated={signOut} />} />

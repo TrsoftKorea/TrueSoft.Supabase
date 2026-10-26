@@ -5,7 +5,8 @@ import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
-import { formatDateTime, formatKRW, formatBanUntil } from '../../components/ui/format'
+import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
+import { PageHeader } from '../../components/ui/PageHeader'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
@@ -66,6 +67,8 @@ export default function PlayerDetail({
   const [profileLoading, setProfileLoading] = useState(true)
   const [ban, setBan] = useState<BanInfo | null>(null)
   const [banLoading, setBanLoading] = useState(false)
+  // 차단 정보를 못 읽었으면 "정상"으로 보이면 안 된다 — 차단 중인 플레이어를 정상으로 믿고 다시 차단하게 된다.
+  const [banFailed, setBanFailed] = useState(false)
 
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(initialName)
@@ -78,6 +81,8 @@ export default function PlayerDetail({
   const [askBan, setAskBan] = useState(false)
   const [unbanLoading, setUnbanLoading] = useState(false)
   const [error, setError] = useState('')
+  const [banInputError, setBanInputError] = useState('')
+  const [dialogError, setDialogError] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -103,9 +108,12 @@ export default function PlayerDetail({
 
   const reloadBan = useCallback(async () => {
     setBanLoading(true)
+    setBanFailed(false)
     try {
       setBan(await callAdmin<BanInfo>(target, 'players.banInfo', { accountId }))
     } catch (e: unknown) {
+      setBan(null)
+      setBanFailed(true)
       report(e, '차단 정보를 불러오지 못했습니다.')
     } finally {
       setBanLoading(false)
@@ -144,16 +152,24 @@ export default function PlayerDetail({
 
   const requestBan = () => {
     setError('')
+    setBanInputError('')
     if (!banUntil) {
-      setError('종료 기한을 입력하거나 영구 차단을 선택하세요.')
+      setBanInputError('종료 기한을 입력하거나 영구 차단을 선택하세요.')
       return
     }
+    // 지난 시각은 서버가 "차단 없음"으로 받아 성공으로 끝난다 — 차단했다고 믿게 되므로 보내기 전에 막는다.
+    if (!permanent && new Date(banUntil).getTime() <= Date.now()) {
+      setBanInputError('종료 기한이 이미 지났습니다. 지금 이후 시각을 넣으세요.')
+      return
+    }
+    setDialogError('')
     setAskBan(true)
   }
 
   const handleBan = async () => {
     if (!banUntil || applying) return
     setApplying(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'players.ban', { accountId, bannedUntil: banUntil, banMessage })
       setAskBan(false)
@@ -162,7 +178,8 @@ export default function PlayerDetail({
       setPermanent(false)
       await reloadBan()
     } catch (e: unknown) {
-      report(e, '차단에 실패했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDialogError(e instanceof Error ? e.message : '차단에 실패했습니다.')
     } finally {
       setApplying(false)
     }
@@ -172,38 +189,47 @@ export default function PlayerDetail({
     if (applying || unbanLoading) return
     setApplying(true)
     setUnbanLoading(true)
+    setDialogError('')
     try {
       await callAdmin(target, 'players.unban', { accountId })
       setAskUnban(false)
       await reloadBan()
     } catch (e: unknown) {
-      report(e, '차단 해제에 실패했습니다.')
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDialogError(e instanceof Error ? e.message : '차단 해제에 실패했습니다.')
     } finally {
       setApplying(false)
       setUnbanLoading(false)
     }
   }
 
+  const shownName = profile?.display_name || initialName
+  const cancelNameEdit = () => {
+    setEditingName(false)
+    setNameDraft(profile?.display_name ?? initialName)
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold text-neutral-900">플레이어</h2>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => {
-              const name = profile?.display_name ?? initialName
-              navigate(`/mails/send?account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`)
-            }}
-          >
-            <Send className="w-3.5 h-3.5" />
-            우편 보내기
-          </Button>
-          <Button onClick={onBack}>
-            <ArrowLeft className="w-3.5 h-3.5" />
-            플레이어 목록
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={shownName ? `플레이어 · ${shownName}` : '플레이어'}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => {
+                navigate(`/mails/send?account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(shownName)}`)
+              }}
+            >
+              <Send className="w-3.5 h-3.5" />
+              우편 보내기
+            </Button>
+            <Button onClick={onBack}>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              플레이어 목록
+            </Button>
+          </div>
+        }
+      />
 
       <div className="border-b border-neutral-200 flex gap-1">
         {(
@@ -275,23 +301,27 @@ export default function PlayerDetail({
               <input
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleNameSave()
+                  else if (e.key === 'Escape') cancelNameEdit()
+                }}
+                autoFocus
                 className="h-8 px-2 rounded border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
               />
               <button
-                onClick={handleNameSave}
-                disabled={savingName}
+                onClick={() => void handleNameSave()}
+                disabled={savingName || !nameDraft.trim()}
                 className="inline-flex items-center justify-center w-7 h-7 rounded bg-[#1677ff] text-white hover:bg-[#1677ff]/90 disabled:opacity-60"
-                aria-label="확인"
+                aria-label="저장"
+                title="저장"
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => {
-                  setEditingName(false)
-                  setNameDraft(profile?.display_name ?? initialName)
-                }}
+                onClick={cancelNameEdit}
                 className="inline-flex items-center justify-center w-7 h-7 rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-50"
                 aria-label="취소"
+                title="취소"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -303,6 +333,7 @@ export default function PlayerDetail({
                 onClick={() => setEditingName(true)}
                 className="text-neutral-400 hover:text-[#1677ff]"
                 aria-label="닉네임 수정"
+                title="닉네임 수정"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -326,8 +357,8 @@ export default function PlayerDetail({
       <WhiteCard className="relative overflow-hidden p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold">차단 정보</h3>
-          {ban?.isBanned ? (
-            <Button variant="primary" onClick={() => setAskUnban(true)} disabled={applying || unbanLoading}>
+          {!ban ? null : ban.isBanned ? (
+            <Button variant="primary" onClick={() => { setDialogError(''); setAskUnban(true) }} disabled={applying || unbanLoading}>
               {applying || unbanLoading ? '처리 중…' : '차단 해제'}
             </Button>
           ) : (
@@ -341,7 +372,12 @@ export default function PlayerDetail({
           현재 상태:{' '}
           {banLoading && !ban ? (
             <span className="text-neutral-400">확인 중…</span>
-          ) : ban?.isBanned ? (
+          ) : banFailed || !ban ? (
+            <span className="text-red-600">
+              차단 상태를 확인하지 못했습니다.{' '}
+              <button onClick={() => void reloadBan()} className="underline hover:text-red-700">다시 확인</button>
+            </span>
+          ) : ban.isBanned ? (
             <span className="text-red-600 font-medium">
               차단{isPermanent(ban.bannedUntil) ? ' (영구)' : ban.bannedUntil ? ` (${formatBanUntil(ban.bannedUntil)}까지)` : ''}
             </span>
@@ -350,7 +386,13 @@ export default function PlayerDetail({
           )}
         </div>
 
-        {!ban?.isBanned && (
+        {ban?.isBanned && (
+          <div className="text-sm text-neutral-700 whitespace-pre-wrap">
+            차단 메시지: {ban.banMessage?.trim() ? ban.banMessage : <span className="text-neutral-400">없음</span>}
+          </div>
+        )}
+
+        {ban && !ban.isBanned && (
           <>
             <div className="flex flex-wrap items-end gap-6">
               <div className="w-64">
@@ -358,7 +400,8 @@ export default function PlayerDetail({
                 <input
                   type="datetime-local"
                   value={banUntilInput}
-                  onChange={(e) => setBanUntilInput(e.target.value)}
+                  min={toDatetimeLocal(new Date().toISOString())}
+                  onChange={(e) => { setBanUntilInput(e.target.value); setBanInputError('') }}
                   disabled={permanent}
                   className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm disabled:bg-neutral-100 disabled:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
                 />
@@ -369,23 +412,24 @@ export default function PlayerDetail({
                   type="button"
                   role="switch"
                   aria-checked={permanent}
-                  onClick={() => setPermanent((v) => !v)}
+                  onClick={() => { setPermanent((v) => !v); setBanInputError('') }}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${permanent ? 'bg-[#1677ff]' : 'bg-neutral-300'}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${permanent ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
               </div>
             </div>
+            {banInputError && <p className="text-xs text-red-600">{banInputError}</p>}
 
             <div>
-              <label className="block text-xs text-neutral-500 mb-1">차단 사유/메시지</label>
+              <label className="block text-xs text-neutral-500 mb-1">차단 메시지</label>
               <textarea
                 value={banMessage}
                 onChange={(e) => setBanMessage(e.target.value)}
                 rows={4}
-                placeholder="차단된 유저에게 보여줄 메시지를 입력하세요"
                 className="w-full px-3 py-2 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
               />
+              <p className="mt-1 text-xs text-neutral-400">차단된 플레이어가 게임에서 보게 됩니다.</p>
             </div>
           </>
         )}
@@ -410,12 +454,13 @@ export default function PlayerDetail({
         confirmLabel="차단"
         danger
         busy={applying}
+        error={askBan ? dialogError : ''}
         onConfirm={() => void handleBan()}
         onCancel={() => setAskBan(false)}
         description="차단하면 바로 접속이 끊기고 기한까지 다시 들어올 수 없습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
-          <div className="text-neutral-800">{profile?.display_name ?? initialName}</div>
+          <div className="text-neutral-800">{shownName}</div>
           <div className="text-xs text-neutral-500 font-mono">{accountId.slice(0, 8)}</div>
           <div className="text-xs text-neutral-500">
             {permanent ? '영구 차단' : `${formatBanUntil(banUntil)}까지`}
@@ -425,15 +470,16 @@ export default function PlayerDetail({
 
       <ConfirmDialog
         open={askUnban}
-        title="차단 풀기"
-        confirmLabel="차단 풀기"
+        title="차단 해제"
+        confirmLabel="차단 해제"
         busy={applying || unbanLoading}
-        onConfirm={confirmUnban}
+        error={askUnban ? dialogError : ''}
+        onConfirm={() => void confirmUnban()}
         onCancel={() => setAskUnban(false)}
         description="바로 다시 접속할 수 있게 됩니다. 필요하면 다시 차단할 수 있습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
-          <div className="text-neutral-800">{initialName}</div>
+          <div className="text-neutral-800">{shownName}</div>
           <div className="text-xs text-neutral-500 mt-1 font-mono">{accountId.slice(0, 8)}</div>
         </div>
       </ConfirmDialog>

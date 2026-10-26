@@ -180,7 +180,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송 + TrueBase.Admin 전용 관리 RPC(등록·목록·on/off·삭제, service_role만)
 14. 우편 분류 — mail_categories
 15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
-16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음. 운영자 계정(ts_admin_operators)과 운영 기록(ts_admin_audit_logs — admin-api 가 성공한 변경 요청마다 남김, 지우는 함수 없음), 콘솔 표시 설정(ts_admin_console_settings — 이 게임의 콘솔 색, null 이면 콘솔 코드의 기본색. admin-api `auth.consoleColor` 로 로그인 전에도 읽힌다)도 여기
+16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음. 운영자 계정(ts_admin_operators)과 운영 기록(ts_admin_audit_logs — admin-api 가 성공한 변경 요청마다 남김, 지우는 함수 없음), 콘솔 표시 설정(ts_admin_console_settings — 이 게임의 콘솔 색·이름·아이콘(128px data URL), null 이면 콘솔 코드의 기본값. admin-api `auth.consoleLook` 으로 로그인 전에도 읽힌다)도 여기
 17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem + ts_admin_player_coupons(플레이어별 사용 이력)
 18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many
 19. 매치 결과 신고 — match_reward_configs + match_results + ts_match_report_result(신고·교차검증·우편 지급 한 번에) + ts_match_report_solo_result(상대 없는 판 기록, status='solo', 지급 없음) + ts_match_stats(내 승·패·점수 최대·최소, verified·pending·solo 별) + ts_match_history(내 기록 최근 순). 판마다 선택 점수(score) — 상대와 맞춰 보지 않음. 랭킹·시즌은 15절 리더보드 몫. 무효(mismatch)는 예외가 아니라 상태로 돌려준다 — raise 하면 무효 표시까지 되돌려진다. 보상 지급 여부는 rewarded_at(우편이 만료돼 지워져도 남음). 운영 RPC는 ts_admin_match_reward_config_*(upsert 는 p_create_only 로 추가 시 덮어쓰기 차단)·ts_admin_match_reward_overview·ts_admin_match_player_records

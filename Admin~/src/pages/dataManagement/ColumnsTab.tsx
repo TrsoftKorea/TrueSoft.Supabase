@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { SYSTEM_COLS } from '../../lib/userData'
@@ -8,7 +8,9 @@ import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { opLabel } from '../../lib/schemaLabels'
+import { opLabel, fieldTypeLabel, pgTypeLabel } from '../../lib/schemaLabels'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
@@ -56,6 +58,7 @@ const ALL_TYPES: CSharpType[] = [
   'bool', 'DateTimeOffset', 'DateTime', 'DateOnly', 'TimeOnly', 'JSON',
 ]
 
+
 const isIntegerType = (t: CSharpType) => (['short', 'int', 'long'] as CSharpType[]).includes(t)
 const isDecimalType = (t: CSharpType) => (['float', 'double', 'decimal'] as CSharpType[]).includes(t)
 const isDateTimeType = (t: CSharpType) => (['DateTimeOffset', 'DateTime'] as CSharpType[]).includes(t)
@@ -78,6 +81,20 @@ function fromPgDefault(pgDefault: string | null, type: CSharpType): string {
   return pgDefault
 }
 
+// 목록의 기본값 칸 — DB 표기('abc'::text, now())를 운영자가 읽는 값으로.
+function defaultLabel(col: Col): string {
+  const t = PG_TO_CSHARP[col.data_type]
+  if (!col.column_default) return '—'
+  if (!t) return col.column_default
+  const v = fromPgDefault(col.column_default, t)
+  if (v === 'now()') return '저장되는 시각'
+  if (v === 'CURRENT_DATE') return '저장되는 날짜'
+  if (t === 'bool') return v === 'true' ? '참' : v === 'false' ? '거짓' : v
+  if (t === 'string' && v === '') return '(빈 글자)'
+  if (isDateTimeType(t)) return v.replace('T', ' ')
+  return v
+}
+
 function toPgDefault(v: string, t: CSharpType): string | null {
   if (!v) return null
   if (isDateTimeType(t) && v !== 'now()') return `'${v.replace('T', ' ')}'`
@@ -93,9 +110,9 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
   if (type === 'bool') {
     return (
       <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} bg-white`}>
-        <option value="">지정 안 함</option>
-        <option value="true">true</option>
-        <option value="false">false</option>
+        {value === '' && <option value="" disabled>선택하세요</option>}
+        <option value="true">참</option>
+        <option value="false">거짓</option>
       </select>
     )
   }
@@ -114,7 +131,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input type="checkbox" checked={value === 'now()'} onChange={(e) => onChange(e.target.checked ? 'now()' : '')} className="rounded" />
-          now() 사용
+          저장되는 시각으로
         </label>
       </div>
     )
@@ -131,7 +148,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input type="checkbox" checked={value === 'CURRENT_DATE'} onChange={(e) => onChange(e.target.checked ? 'CURRENT_DATE' : '')} className="rounded" />
-          CURRENT_DATE 사용
+          저장되는 날짜로
         </label>
       </div>
     )
@@ -177,41 +194,35 @@ function DeleteColumnModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold text-red-600">필드 삭제</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
+    <ConfirmDialog
+      open
+      title="필드 삭제"
+      confirmLabel="변경 관리에 담기"
+      danger
+      busy={loading}
+      confirmDisabled={confirm !== col.column_name}
+      error={error}
+      onConfirm={() => { void handleDelete() }}
+      onCancel={onClose}
+    >
+      <div className="space-y-4">
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          <p className="font-medium">게시하면 되돌릴 수 없습니다.</p>
+          <p className="mt-1 text-red-600"><span className="font-mono font-semibold">{col.column_name}</span> 필드와 모든 데이터가 영구 삭제됩니다.</p>
         </div>
-        <div className="p-5 space-y-4">
-          <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <p className="font-medium">게시하면 되돌릴 수 없습니다.</p>
-            <p className="mt-1 text-red-600"><span className="font-mono font-semibold">{col.column_name}</span> 필드와 모든 데이터가 영구 삭제됩니다.</p>
-          </div>
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">
-              확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
-            </label>
-            <input
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
-            />
-          </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <button
-            onClick={() => { void handleDelete() }}
-            disabled={loading || confirm !== col.column_name}
-            className="h-9 px-4 rounded-md bg-red-500 text-white text-sm hover:bg-red-600 disabled:opacity-60"
-          >
-            {loading ? '담는 중…' : '변경 관리에 담기'}
-          </button>
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">
+            확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
+          </label>
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void handleDelete() }}
+            className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+          />
         </div>
       </div>
-    </div>
+    </ConfirmDialog>
   )
 }
 
@@ -225,14 +236,17 @@ function EditColumnModal({
   onSaved: () => void
 }) {
   const csharpType = PG_TO_CSHARP[col.data_type]
-  const [defaultValue, setDefaultValue] = useState(() => (csharpType ? fromPgDefault(col.column_default, csharpType) : ''))
+  const [initialDefault] = useState(() => (csharpType ? fromPgDefault(col.column_default, csharpType) : ''))
+  const [defaultValue, setDefaultValue] = useState(initialDefault)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const missingDefault = csharpType ? scalarDefaultMissing(csharpType, defaultValue) : false
+  // 바꿀 수 있는 건 기본값뿐이라, 그대로면 담을 변경이 없다(JSON 필드는 기본값을 여기서 고치지 않는다).
+  const unchanged = defaultValue === initialDefault
 
   const handleSubmit = async () => {
-    if (!csharpType || missingDefault || loading) return
+    if (!csharpType || missingDefault || unchanged || loading) return
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'schema.stage', {
@@ -263,7 +277,7 @@ function EditColumnModal({
         <div className="p-5 space-y-4">
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
             <span className="font-medium text-neutral-700">{col.column_name}</span>
-            <span className="text-xs text-neutral-400">{col.data_type}</span>
+            <span className="text-xs text-neutral-400">{pgTypeLabel(col.data_type)}</span>
           </div>
           {csharpType ? (
             <div>
@@ -280,7 +294,7 @@ function EditColumnModal({
           <Button variant="outline" onClick={onClose}>취소</Button>
           <Button variant="primary"
             onClick={() => { void handleSubmit() }}
-            disabled={!csharpType || loading || missingDefault}
+            disabled={!csharpType || loading || missingDefault || unchanged}
           >
             {loading ? '담는 중…' : '변경 관리에 담기'}
           </Button>
@@ -308,7 +322,7 @@ function AddColumnModal({
 
   const handleTypeChange = (t: CSharpType) => {
     setType(t)
-    setDefaultValue('')
+    setDefaultValue(t === 'bool' ? 'false' : '')
   }
 
   const handleSubmit = async () => {
@@ -354,7 +368,7 @@ function AddColumnModal({
               onChange={(e) => handleTypeChange(e.target.value as CSharpType)}
               className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
             >
-              {ALL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {ALL_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
             </select>
           </div>
           <div>
@@ -395,6 +409,7 @@ export default function ColumnsTab({
   const [deleteCol, setDeleteCol] = useState<Col | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -412,6 +427,7 @@ export default function ColumnsTab({
 
   const reloadCols = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       // 시스템 컬럼은 필드 목록에서 뺀다 — 게임 데이터가 아니다. userData.columns 는 대부분
       // 이미 서버에서 걸러 주지만(created_at 만 남는다), 판단 기준은 여기 하나(SYSTEM_COLS)로 통일한다.
@@ -419,6 +435,7 @@ export default function ColumnsTab({
       setCols(rows.filter((c) => !SYSTEM_COLS.has(c.column_name)))
     } catch (e: unknown) {
       report(e, '필드 목록을 불러오지 못했습니다.')
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -494,6 +511,7 @@ export default function ColumnsTab({
               <TableStatusRow
                 loading={loading}
                 empty={filtered.length === 0}
+                failed={failed}
                 colSpan={4}
                 emptyText={cols.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
               />
@@ -502,15 +520,15 @@ export default function ColumnsTab({
                 <tr key={c.column_name} className="border-t border-neutral-100">
                   <td className="px-5 py-3 font-medium">{c.column_name}</td>
                   <td className="px-5 py-3">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{c.data_type}</span>
+                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">{pgTypeLabel(c.data_type)}</span>
                   </td>
-                  <td className="px-5 py-3 text-neutral-600 font-mono text-xs">{c.column_default ?? ''}</td>
+                  <td className="px-5 py-3 text-neutral-600 text-xs" title={c.column_default ?? undefined}>{defaultLabel(c)}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setEditCol(c)} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                      <button onClick={() => setEditCol(c)} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => setDeleteCol(c)} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                      <button onClick={() => setDeleteCol(c)} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -522,7 +540,7 @@ export default function ColumnsTab({
         </table>
         {total > 0 && (
           <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-            <span>Showing {start}-{end} of {total}</span>
+            <span>{start}–{end} / {formatTotal(total)}</span>
             <div className="flex items-center gap-1">
               <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50">
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -535,10 +553,6 @@ export default function ColumnsTab({
           </div>
         )}
       </WhiteCard>
-
-      {loading && cols.length === 0 && (
-        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
-      )}
 
       {showAdd && (
         <AddColumnModal

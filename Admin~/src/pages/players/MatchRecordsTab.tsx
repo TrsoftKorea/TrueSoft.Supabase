@@ -6,7 +6,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { formatDateTime } from '../../components/ui/format'
+import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 
 type Status = 'verified' | 'pending' | 'solo' | 'mismatch'
@@ -46,6 +46,7 @@ export default function MatchRecordsTab({
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [failed, setFailed] = useState(false)
   const [gameCode, setGameCode] = useState('')
   const [page, setPage] = useState(1)
   // 선택지는 마지막으로 성공한 요약에서 만든다 — 불러오기가 실패해도 고른 코드가 드롭다운에서 사라지지 않게.
@@ -53,6 +54,7 @@ export default function MatchRecordsTab({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setFailed(false)
     try {
       const d = await callAdmin<Data>(target, 'matchRecords.player', { accountId, gameCode, page })
       setData(d)
@@ -61,6 +63,7 @@ export default function MatchRecordsTab({
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
       setError(e instanceof Error ? e.message : '대전 기록을 불러오지 못했습니다.')
       setData(null)
+      setFailed(true)
     } finally {
       setLoading(false)
     }
@@ -116,7 +119,7 @@ export default function MatchRecordsTab({
             </thead>
             <tbody>
               {summaryLoading || shownSummary.length === 0 ? (
-                <TableStatusRow loading={summaryLoading} empty={shownSummary.length === 0} colSpan={6} emptyText="대전 기록이 없습니다." />
+                <TableStatusRow loading={summaryLoading} empty={shownSummary.length === 0} failed={failed} colSpan={6} emptyText="대전 기록이 없습니다." />
               ) : (
                 shownSummary.map((s) => (
                   <tr key={`${s.game_code}/${s.status}`} className="border-t border-neutral-100">
@@ -151,7 +154,7 @@ export default function MatchRecordsTab({
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={7} emptyText="대전 기록이 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={7} emptyText="대전 기록이 없습니다." />
               ) : (
                 rows.map((r) => (
                   <tr key={r.session_id} className="border-t border-neutral-100" title={`세션 ${r.session_id}`}>
@@ -182,7 +185,7 @@ export default function MatchRecordsTab({
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{total} result{total === 1 ? '' : 's'}</span>
+          <span>{formatTotal(total)}</span>
           <div className="flex items-center gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
