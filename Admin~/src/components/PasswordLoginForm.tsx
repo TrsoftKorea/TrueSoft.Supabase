@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { callAdminPublic } from '../lib/api'
-import { storeToken } from '../lib/googleAuth'
-import type { ProjectTarget } from '../lib/projectTarget'
+import { signInAllProjects } from '../lib/api'
 import { Button } from './ui/Button'
 
 /**
@@ -14,13 +12,7 @@ import { Button } from './ui/Button'
 
 const inputCls = 'h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white'
 
-export default function PasswordLoginForm({
-  target,
-  onToken,
-}: {
-  target: ProjectTarget
-  onToken: (token: string) => void
-}) {
+export default function PasswordLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,12 +23,9 @@ export default function PasswordLoginForm({
     setBusy(true)
     setError('')
     try {
-      const { token } = await callAdminPublic<{ token: string }>(target, 'auth.passwordLogin', {
-        email: email.trim(),
-        password,
-      })
-      storeToken(token)
-      onToken(token)
+      // 비밀번호는 게임마다 따로 저장돼 있다 — 이 비밀번호가 맞는 게임만 목록에서 들어갈 수 있다.
+      await signInAllProjects('auth.passwordLogin', { email: email.trim(), password })
+      onSignedIn()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
     } finally {

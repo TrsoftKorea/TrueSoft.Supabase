@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import { getTarget, type ProjectTarget } from './lib/projectTarget'
-import { clearToken, emailOf, getToken } from './lib/googleAuth'
+import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
+import { clearToken, getToken, signedInEmail, signedInTargets } from './lib/googleAuth'
 import { callAdmin, NotAuthenticatedError } from './lib/api'
 import { PendingChangesProvider } from './lib/pendingChanges'
 import { refreshProjectColors } from './lib/projectColors'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
+import ProjectSelect from './pages/ProjectSelect'
 import GameItems from './pages/GameItems'
 import Operators from './pages/Operators'
 import Players from './pages/Players'
@@ -33,33 +34,54 @@ import BannedWords from './pages/BannedWords'
 
 type Me = { email: string; isMaster: boolean }
 
+const ENTERED_KEY = 'tb_admin_entered'
+
 export default function App() {
   const [target, setTargetState] = useState<ProjectTarget>(() => getTarget())
-  const [token, setToken] = useState<string | null>(() => getToken())
+  const [signedIn, setSignedIn] = useState(() => signedInTargets().length > 0)
+  // 게임 목록에서 하나를 골라 들어갔는지. 새로고침해도 같은 게임 안에 머물도록 탭 단위로 기억한다.
+  const [entered, setEntered] = useState(() => window.sessionStorage.getItem(ENTERED_KEY) === '1')
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState('')
 
+  const inside = signedIn && entered && getToken(target) !== null
+
   const signOut = useCallback(() => {
     clearToken()
-    setToken(null)
+    window.sessionStorage.removeItem(ENTERED_KEY)
+    setSignedIn(false)
+    setEntered(false)
     setMe(null)
+  }, [])
+
+  const enter = useCallback((t: ProjectTarget) => {
+    setTarget(t)
+    setTargetState(t)
+    window.sessionStorage.setItem(ENTERED_KEY, '1')
+    setEntered(true)
+  }, [])
+
+  const onSignedIn = useCallback(() => {
+    window.sessionStorage.removeItem(ENTERED_KEY)
+    setEntered(false)
+    setSignedIn(true)
   }, [])
 
   // 게임 색은 로그인 화면에서도 쓰므로 로그인 여부와 관계없이 처음 한 번 받는다.
   useEffect(() => { void refreshProjectColors() }, [])
 
-  // 로그인 세션 토큰(24시간)이 만료되면 로그인 화면으로 돌려보낸다.
+  // 로그인 세션 토큰(24시간)이 모든 게임에서 만료되면 로그인 화면으로 돌려보낸다.
   useEffect(() => {
-    if (!token) return
+    if (!signedIn) return
     const id = window.setInterval(() => {
-      if (!getToken()) signOut()
+      if (signedInTargets().length === 0) signOut()
     }, 30_000)
     return () => window.clearInterval(id)
-  }, [token, signOut])
+  }, [signedIn, signOut])
 
   // 인가 결과(마스터 여부)는 서버가 정한다. 여기서 토큰을 뜯어 판단하지 않는다.
   useEffect(() => {
-    if (!token) return
+    if (!inside) return
     let alive = true
     setMe(null)
     setMeError('')
@@ -78,9 +100,10 @@ export default function App() {
     return () => {
       alive = false
     }
-  }, [token, target, signOut])
+  }, [inside, target, signOut])
 
-  if (!token) return <Login target={target} onTargetChange={setTargetState} onToken={setToken} />
+  if (!signedIn) return <Login onSignedIn={onSignedIn} />
+  if (!inside) return <ProjectSelect onEnter={enter} onSignOut={signOut} />
 
   // 권한 확인에 실패하면(대개 403) 화면 대신 사유를 보여준다.
   if (meError) {
@@ -88,7 +111,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-3 text-center">
           <p className="text-sm text-red-600">{meError}</p>
-          <p className="text-xs text-neutral-500">{emailOf(token)}</p>
+          <p className="text-xs text-neutral-500">{signedInEmail()}</p>
           <button
             onClick={signOut}
             className="h-9 px-4 rounded-md border border-neutral-300 text-sm text-neutral-700"

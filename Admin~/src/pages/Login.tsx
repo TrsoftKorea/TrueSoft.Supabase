@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
-import { renderGoogleButton, storeToken } from '../lib/googleAuth'
-import { callAdminPublic } from '../lib/api'
-import { useProjectColor } from '../lib/projectColors'
+import { renderGoogleButton } from '../lib/googleAuth'
+import { signInAllProjects } from '../lib/api'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
 
@@ -11,28 +9,12 @@ import PasswordLoginForm from '../components/PasswordLoginForm'
  *
  * 게임의 Supabase Auth 를 쓰지 않는다 — 운영자 계정이 플레이어 풀에 섞이면
  * 게임의 탈퇴·차단 흐름이 운영자 접근을 건드릴 수 있다.
- * 구글이 신원만 증명하고, 운영자인지는 백엔드의 허용목록이 판단한다.
+ * 구글이 신원만 증명하고, 운영자인지는 게임마다 백엔드의 허용목록이 판단한다.
+ * 어느 게임에 들어갈지는 로그인 뒤 게임 목록에서 고른다.
  */
-export default function Login({
-  target,
-  onTargetChange,
-  onToken,
-}: {
-  target: ProjectTarget
-  onTargetChange: (t: ProjectTarget) => void
-  onToken: (token: string) => void
-}) {
+export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const buttonRef = useRef<HTMLDivElement>(null)
-  const pickerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
-  const [pickerOpen, setPickerOpen] = useState(false)
-
-  const project = getProject(target)
-  const colorOf = useProjectColor()
-
-  // 버튼은 한 번만 그리므로 콜백이 보는 target 은 ref 로 최신값을 읽는다.
-  const targetRef = useRef(target)
-  targetRef.current = target
 
   useEffect(() => {
     const el = buttonRef.current
@@ -41,9 +23,8 @@ export default function Login({
     const onCredential = async (idToken: string) => {
       setError('')
       try {
-        const { token } = await callAdminPublic<{ token: string }>(targetRef.current, 'auth.googleLogin', { idToken })
-        storeToken(token)
-        onToken(token)
+        await signInAllProjects('auth.googleLogin', { idToken })
+        onSignedIn()
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
       }
@@ -52,66 +33,21 @@ export default function Login({
       if (!cancelled) setError(e instanceof Error ? e.message : '구글 로그인을 준비하지 못했습니다.')
     })
     return () => { cancelled = true }
-  }, [onToken])
-
-  useEffect(() => {
-    if (!pickerOpen) return
-    const onDown = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [pickerOpen])
-
-  const pick = (t: ProjectTarget) => {
-    setTarget(t)
-    onTargetChange(t)
-    setPickerOpen(false)
-  }
+  }, [onSignedIn])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-[#161a2b]">
-      <WhiteCard className="w-full max-w-sm overflow-hidden">
-        <div className="h-1.5" style={{ backgroundColor: colorOf(target) }} />
-        <div className="p-6">
+      <WhiteCard className="w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold text-neutral-900">TrueBase 운영 도구</h1>
-
-        <div ref={pickerRef} className="relative mt-1 flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorOf(target) }} />
-          <p className="text-sm text-neutral-600">{project.label}</p>
-          <button
-            type="button"
-            onClick={() => setPickerOpen((v) => !v)}
-            className="text-xs text-[#1677ff] hover:underline"
-          >
-            변경
-          </button>
-          {pickerOpen && (
-            <div className="absolute left-0 top-full mt-1 z-30 min-w-[160px] rounded-lg border border-neutral-200 bg-white py-1 shadow-xl">
-              {PROJECTS.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  onClick={() => pick(p.key)}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 ${
-                    p.key === target ? 'text-neutral-900 font-medium' : 'text-neutral-700'
-                  }`}
-                >
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorOf(p.key) }} />
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <p className="mt-1 text-sm text-neutral-600">로그인하면 들어갈 수 있는 게임 목록이 나옵니다.</p>
 
         <div className="mt-6">
-          <PasswordLoginForm target={target} onToken={onToken} />
+          <PasswordLoginForm onSignedIn={onSignedIn} />
         </div>
 
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-neutral-200" />
-          <span className="text-xs text-neutral-400">또는</span>
+          <span className="text-xs text-neutral-500">또는</span>
           <div className="h-px flex-1 bg-neutral-200" />
         </div>
 
@@ -119,7 +55,6 @@ export default function Login({
         {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
         <p className="mt-4 text-xs text-neutral-500">허용된 운영자 계정만 들어올 수 있습니다.</p>
-        </div>
       </WhiteCard>
     </div>
   )

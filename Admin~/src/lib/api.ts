@@ -1,5 +1,5 @@
-import { getProject, type ProjectTarget } from './projectTarget'
-import { getToken } from './googleAuth'
+import { getProject, PROJECTS, type ProjectTarget } from './projectTarget'
+import { getToken, storeTokens } from './googleAuth'
 
 /** 토큰이 없거나 만료돼 로그인 화면으로 돌려보내야 하는 경우. */
 export class NotAuthenticatedError extends Error {
@@ -55,9 +55,39 @@ export async function callAdmin<T>(
   action: string,
   params: Record<string, unknown> = {},
 ): Promise<T> {
-  const token = getToken()
+  const token = getToken(target)
   if (!token) throw new NotAuthenticatedError()
   return postAdmin<T>(target, action, params, token)
+}
+
+/** 게임별 로그인 결과. 실패한 게임은 사유를 들고 있다(대개 "운영자 권한이 없습니다"). */
+export type SignInOutcome = { target: ProjectTarget; ok: boolean; error?: string }
+
+/**
+ * 모든 게임 서버에 같은 로그인을 한꺼번에 보내고, 통과한 게임의 표만 저장한다.
+ * 한 게임도 통과하지 못하면 첫 실패 사유로 던진다 — 로그인 화면이 그 문구를 그대로 보여 준다.
+ */
+export async function signInAllProjects(
+  action: 'auth.googleLogin' | 'auth.passwordLogin',
+  params: Record<string, unknown>,
+): Promise<SignInOutcome[]> {
+  const results = await Promise.all(
+    PROJECTS.filter((p) => p.url).map(async (p) => {
+      try {
+        const { token } = await postAdmin<{ token: string }>(p.key, action, params, null)
+        return { target: p.key, ok: true, token }
+      } catch (e: unknown) {
+        return { target: p.key, ok: false, error: e instanceof Error ? e.message : '로그인하지 못했습니다.' }
+      }
+    }),
+  )
+  const tokens: Partial<Record<ProjectTarget, string>> = {}
+  for (const r of results) if (r.ok && r.token) tokens[r.target] = r.token
+  if (Object.keys(tokens).length === 0) {
+    throw new Error(results.find((r) => r.error)?.error ?? '로그인하지 못했습니다.')
+  }
+  storeTokens(tokens)
+  return results.map(({ target, ok, error }) => (error ? { target, ok, error } : { target, ok }))
 }
 
 /**

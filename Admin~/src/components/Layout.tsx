@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getProject, PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { useProjectColor } from '../lib/projectColors'
+import { signedInTargets } from '../lib/googleAuth'
 import { usePendingChanges } from '../lib/pendingChanges'
 
 // 사이드바는 어두운 남색 바탕이다. 글자색은 바탕 위에서 4.5:1 이상이 되게 골랐다.
@@ -106,6 +107,8 @@ export function Layout({
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
   const project = getProject(target)
   const accent = colorOf(target)
+  // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 이 계정이 운영자가 아닌 게임이다.
+  const allowedTargets = new Set(signedInTargets())
 
   return (
     <div className="h-screen flex overflow-hidden">
@@ -127,20 +130,23 @@ export function Layout({
           <div className="px-1 pb-0.5 text-[11px] font-medium text-[#8d93b0]">게임</div>
           {PROJECTS.map((p) => {
             const on = p.key === target
+            const allowed = allowedTargets.has(p.key)
             const c = colorOf(p.key)
             return (
               <button
                 key={p.key}
                 type="button"
+                disabled={!allowed}
                 onClick={() => { if (!on) switchTarget(p.key) }}
                 aria-pressed={on}
-                className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors ${
-                  on ? 'bg-[#262c45] text-white font-semibold' : 'border-[#2c3250] hover:bg-white/5 hover:text-white'
+                className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors disabled:cursor-not-allowed disabled:text-[#8d93b0] ${
+                  on ? 'bg-[#262c45] text-white font-semibold' : 'border-[#2c3250] hover:enabled:bg-white/5 hover:enabled:text-white'
                 }`}
                 style={on ? { borderColor: c } : undefined}
               >
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c, opacity: allowed ? 1 : 0.5 }} />
                 <span className="truncate">{p.label}</span>
+                {!allowed && <span className="ml-auto text-[11px] whitespace-nowrap">권한 없음</span>}
               </button>
             )
           })}
