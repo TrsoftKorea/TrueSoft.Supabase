@@ -3,7 +3,6 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from '../components/ui/ProjectIcon'
-import { setThemeMode, useThemeMode, type ThemeMode } from '../lib/theme'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { WhiteCard } from '../components/ui/Card'
@@ -455,43 +454,7 @@ function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: u
     <div className="space-y-4">
       <ConsoleIdentityCard target={target} current={current} onSaved={onSaved} report={report} />
       <ConsoleColorCard target={target} current={current} onSaved={onSaved} report={report} />
-      <ThemeModeCard />
     </div>
-  )
-}
-
-const THEME_OPTIONS: readonly (readonly [ThemeMode, string])[] = [
-  ['system', '기기 설정 따름'],
-  ['light', '밝은 화면'],
-  ['dark', '어두운 화면'],
-]
-
-/** 화면 모드는 운영자마다 다르게 쓴다 — 이 카드만 게임과 상관없이 지금 브라우저에 적용된다. */
-function ThemeModeCard() {
-  const mode = useThemeMode()
-  return (
-    <WhiteCard className="p-5 space-y-3 max-w-2xl">
-      <div>
-        <h2 className="text-sm font-medium text-neutral-900">화면 모드</h2>
-        <p className="mt-1 text-xs text-neutral-500">나에게만 적용됩니다. 다른 운영자의 화면은 바뀌지 않습니다.</p>
-      </div>
-      <div className="inline-flex rounded-md border border-neutral-300 overflow-hidden" role="radiogroup" aria-label="화면 모드">
-        {THEME_OPTIONS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="radio"
-            aria-checked={mode === key}
-            onClick={() => setThemeMode(key)}
-            className={`h-9 px-4 text-sm whitespace-nowrap border-l first:border-l-0 border-neutral-300 ${
-              mode === key ? 'bg-[#1677ff] text-white font-medium' : 'text-neutral-700 hover:bg-neutral-50'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </WhiteCard>
   )
 }
 
