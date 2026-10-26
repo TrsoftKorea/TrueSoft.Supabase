@@ -5,11 +5,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dotnet run --project Tools~/SdkAudit -- --if-changed"
+            "command": "dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/SdkAudit\" -- --if-changed"
           },
           {
             "type": "command",
-            "command": "dotnet run --project Tools~/FailReasonCheck -- --if-changed"
+            "command": "dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/FailReasonCheck\" -- --if-changed"
           }
         ]
       }

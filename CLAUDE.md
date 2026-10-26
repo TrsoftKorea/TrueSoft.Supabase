@@ -19,19 +19,11 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 
 `Samples~/DatabaseSetup/SQL/player/install.sql`이 유일한 캐노니컬 소스다. 프로젝트별 분기 SQL을 만들지 않고, 라이브 DB와 파일이 어긋나면 파일을 기준으로 수렴시킨다.
 
-## Retool 수정 규칙
-
-- Retool 파일 수정 요청 시 **반드시 `retool_read_react_app_files`로 실제 파일을 먼저 읽은 후** 작업한다.
-- 분량은 **고칠 곳의 개수로 정한다** — 3곳 이상이면 전체 코드, 1~2곳이면 파일 경로와 줄 번호를 짚어 부분 코드. 전역 규칙과 같고, 판단 표는 `memory/feedback_code_delivery.md` 에 있다.
-- 코드 제공 시 **파일 경로(예: `/frontend/pages/data/ColumnManagementTab.tsx`)를 반드시 명시**한다.
-- **기존 파일 수정** 시 전체 코드를 제공해 사용자가 붙여넣도록 한다. `retool_create_or_append_react_app_thread_message`를 사용하지 않는다.
-- **신규 파일 생성** 시 `retool_create_or_append_react_app_thread_message`를 사용해 직접 생성한다. (AI 크레딧 소모를 최소화하기 위해 생성 목적으로만 사용하고, 코드 생성은 Claude가 직접 작성한다.)
-
 ## Unity-Specific Rules
 
 - **Never create `.meta` files manually.** Unity auto-generates them for every asset. Adding them by hand causes conflicts.
-- No build commands exist in this repo. Unity compiles C# source directly when the package is imported into a Unity project.
-- The SDK has no test runner. Validation is done via `Samples~/Examples/ExampleSupabaseScenarios.cs` (keyboard-shortcut-driven test flows in Play Mode).
+- 패키지 빌드 스크립트는 없다 — Unity가 임포트 시 C# 소스를 직접 컴파일한다. 컴파일·규칙 검사는 아래 `Tools~` 도구(CoreCompileCheck·PlayerCompileCheck·SdkAudit·FailReasonCheck)로 한다.
+- 동작 시험 러너는 없다. 동작 확인은 `Samples~/Examples/ExampleSupabaseScenarios.cs`(Play Mode 단축키 시나리오)로 한다.
 - **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
 - **플랫폼 전용 코드 컴파일 검증**: 유니티 에디터 컴파일은 빌드 대상과 무관하게 `UNITY_EDITOR`가 켜져 `#if UNITY_IOS && !UNITY_EDITOR` 안쪽을 **한 번도 컴파일하지 않는다**(에디터 "오류 0"은 그 코드를 본 것이 아니다). 플랫폼 분기·IAP·`Samples~/PlayNanooMigration`을 고쳤으면 `bash "Tools~/PlayerCompileCheck/run.sh"`로 Android·iOS 플레이어 조건 컴파일을 돌린다. 사용 조건은 `Tools~/PlayerCompileCheck/README.md`.
 - **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어·코드 우선), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, Edge Function 끼리 복사해 둔 공통 구간(`═══ BEGIN 이름 ═══`)의 일치, 콘솔 서버·엣지 함수가 부르는 DB 함수·표가 `install.sql`에 있는지와 `verify.sql` 허용 목록의 일치, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴) 누락을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
@@ -84,7 +76,7 @@ The SDK has three layers:
 - **값·데이터를 돌려주는 호출** → `SupabaseResult<T>` (`.IsSuccess`·`.Data`로 분기)
 - **성공/실패만 알리는 액션** → `SupabaseResult` (암묵적 `bool` 변환 제공 → `if (await Supabase.Xxx())` 패턴 동작, 실패 사유 포함)
 
-실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseReason` enum, `Runtime/Core/Models/SupabaseReason.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseReasonMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseReason` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). **`SupabaseErrorCode` 상수는 `internal`(SDK 전용)** — 게임은 `SupabaseReason` enum(`.Reason`)으로만 분기하고, 실패 원문은 `.ErrorCode` 문자열로 읽는다. Core 밖 SDK 계층(TrueBase.Unity·TrueBase.Unity.IAP)은 `InternalsVisibleTo`로 `SupabaseErrorCode`에 접근한다(`Runtime/Core/Models/SupabaseErrorCode.cs` 상단). 새 사유는 **`SupabaseErrorCode` 상수 + `SupabaseReason` enum 멤버** 두 곳만 추가하면 된다 — `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseReason.X`)하므로 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다. 새 사유는 `docs~/guide/api/fail-reasons.md`(에러코드 전체 카탈로그)에도 추가한다.
+실패 사유는 두 가지로 노출된다: **타입 안전 분기는 `.Reason`(`SupabaseReason` enum, `Runtime/Core/Models/SupabaseReason.cs`)**, **원문·로깅은 `.ErrorCode`(string)**. `Reason`은 `ErrorCode` 문자열에서 `SupabaseReasonMap.FromErrorCode`로 매핑되며(문자열 값 기준이라 호출부가 상수든 raw든 인식됨), 카탈로그 밖 동적 사유는 `Unknown`. `.Fail(...)`에 넘기는 인자는 여전히 문자열(`ErrorCode` 원문)이다. 카탈로그는 전부 Core에 있다(`SupabaseErrorCode` 상수·`SupabaseReason` enum·`FromErrorCode` 모두 `Runtime/Core/Models/`). **`SupabaseErrorCode` 상수는 `internal`(SDK 전용)** — 게임은 `SupabaseReason` enum(`.Reason`)으로만 분기하고, 실패 원문은 `.ErrorCode` 문자열로 읽는다. Core 밖 SDK 계층(TrueBase.Unity·TrueBase.Unity.IAP)은 `InternalsVisibleTo`로 `SupabaseErrorCode`에 접근한다(`Runtime/Core/Models/SupabaseErrorCode.cs` 상단). 새 사유를 추가할 때 할 일은 넷이다 — ① `SupabaseErrorCode` 상수 ② `SupabaseReason` enum 멤버 ③ `docs~/guide/api/fail-reasons.md` 카탈로그 ④ 아래 로그 레벨 분류 판단(`IsExpectedFailureReason`). `FromErrorCode` 스위치는 상수를 직접 참조(`SupabaseErrorCode.X => SupabaseReason.X`)하므로 손댈 필요가 없고, 에러코드 문자열은 상수에만 존재한다. 상수가 Core에 있어 Core 서비스도 raw 문자열 대신 `SupabaseErrorCode.X`를 쓴다(카탈로그 밖 저수준 검증 사유만 raw 문자열 유지). 갱신 후 `dotnet run --project Tools~/FailReasonCheck`로 정합성·죽은 사유를 자동 검증한다.
 
 **실패의 로그 레벨은 "누구 탓인가"로 정한다.** `SupabaseSDK.IsExpectedFailureReason`에 등록된 사유는 `Debug.Log`(일반)로, 나머지는 `Debug.LogError`로 나간다. 게임이 문구로 안내할 사유를 콘솔에 빨갛게 띄우면 진짜 오류가 묻히기 때문이다.
 
@@ -208,7 +200,11 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 ## Debug Logs
 
-Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace root** (`d:\Project\TrueSoft.Supabase`), never under `Runtime/`, `Sql/`, or `Samples~/`. Do not commit them.
+Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace root** (`d:\Project\TrueSoft.Supabase`), never under `Runtime/` or `Samples~/`. Do not commit them.
+
+## 문서
+
+기능을 추가·변경·삭제하면 **같은 작업 안에서** `docs~/guide/`의 해당 페이지를 고친다 — 새 API·동작은 페이지 추가·갱신, 지운 API·파일·Secret 키는 모든 문서에서 언급 제거, 바뀐 파라미터·시그니처는 문서 예제까지 갱신. (문서 작성 형식은 아래 `docs.md`가 정한다. 이 항목만 여기 둔 이유는 코드를 고칠 때 보여야 해서다.)
 
 ## 경로별 규칙
 
@@ -225,5 +221,5 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 자동 메모리는 기본 위치인 **`~/.claude/projects/D--Project-TrueSoft-Supabase/memory/`**에 둔다. 리포지토리 안(`.claude/memory/`)에 두고 `autoMemoryDirectory`로 가리키던 방식은 폐기했다 — 그 설정을 **다시 넣지 않는다**.
 
-이 리포지토리에는 안 들어가지만 **`claude-config` 저장소(`~/.claude`)가 그 폴더를 추적한다.** 커밋·푸시하면 다른 PC에 그대로 따라오므로 **손으로 복사하지 않는다** — 복사하면 오히려 덮어쓴다. 커밋은 그 저장소에서 사용자가 한다.
+이 리포지토리에는 안 들어가지만 **`claude-config` 저장소(`~/.claude`)가 그 폴더를 추적한다.** 커밋·푸시하면 다른 PC에 그대로 따라오므로 **손으로 복사하지 않는다** — 복사하면 오히려 덮어쓴다. 메모리를 고쳤으면 일단락 때 사용자 승인을 받아 이 세션이 그 저장소에 커밋·푸시한다(전역 규칙 「자기 메모리 커밋」).
 

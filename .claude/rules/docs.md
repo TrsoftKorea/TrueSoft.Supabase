@@ -2,6 +2,7 @@
 paths:
   - "docs~/**/*.md"
   - "docs~/.vitepress/config.ts"
+  - "package.json"
 ---
 
 ## Documentation Rules
@@ -25,10 +26,7 @@ All user-facing docs live in `docs~/guide/`. Apply these rules on every code cha
 
 ### 1. Update docs alongside code
 
-When adding, changing, or removing a feature, update the corresponding `docs~/guide/*.md` in the **same task**:
-- New API or behavior → add/update the relevant guide page.
-- Removed API, file, or Secret key → remove every reference to it across all doc files.
-- Changed parameter names or signatures → update code examples in the docs.
+프로젝트 `CLAUDE.md`의 「문서」 절에 있다 — 코드를 고칠 때 보여야 하는데 이 파일은 `docs~`를 열 때만 실려서 옮겼다.
 
 ### 2. Dead link prevention
 
@@ -196,7 +194,7 @@ API 색인이 링크하는 기능 페이지들은 **어느 페이지를 열어�
 
 1. **함수 블록 순서** (Rule 9): 헤딩 → ```csharp 시그니처(`반환타입 메서드(...)`, `public`/`static`/`async` 등 수식어 제외) → **한 줄 설명(코드 아래)** → 파라미터 표 → 반환 → 에러 코드. 코드 앞에 도입문/설명을 두지 않는다.
 2. **단일 함수 페이지**: `# 기능명` 직후 바로 시그니처. 부가 맥락(왜 쓰는지·주의사항)은 코드 아래 설명에 합치거나 `:::` 콜아웃으로 페이지 끝에 둔다.
-3. **다중 함수 페이지**: 함수가 여러 개라 코드가 많아지면 **폴더로 쪼갠다** — `<기능>/index.md`(개요 + 메서드 나열 표·결정 표로 각 페이지에 링크) + **메서드마다 별도 페이지(코드 블록 1개)**. 한 페이지에 시그니처를 2개 이상 두지 않는다. 예: `social/google/{index,setup,signin,signin-token,link,...}`. 사이드바는 `기능`을 접이식 그룹으로 만들고 하위에 각 메서드 페이지를 둔다.
+3. **다중 함수 페이지**: 함수가 여러 개라 코드가 많아지면 **폴더로 쪼갠다** — `<기능>/index.md`(개요 + 메서드 나열 표·결정 표로 각 페이지에 링크) + **메서드마다 별도 페이지(시그니처 코드 블록 1개)**. 한 페이지에 시그니처를 2개 이상 두지 않는다 — 호출 예제 코드 블록은 시그니처가 아니라 별개다. 예: `social/google/{index,setup,signin,signin-token,link,...}`. 사이드바는 `기능`을 접이식 그룹으로 만들고 하위에 각 메서드 페이지를 둔다.
 4. 한 페이지 안에서 함수마다 같은 요소(파라미터/반환/에러 코드)는 **있으면 모두, 없으면 모두** 일관되게.
 5. **본문에 장식용 수평선(`---`)을 쓰지 않는다** — H1 도입문과 본문 사이, `##` 섹션들 사이 모두. `##`와 여백이 구분 역할을 한다. (예외: 이미지가 많은 단계별 절차 페이지의 단계 구분 `---`은 허용.)
 

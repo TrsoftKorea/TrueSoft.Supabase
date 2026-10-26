@@ -14,10 +14,7 @@
 
 **IAP(결제) 코드를 건드렸다면:**
 - 지급 확인(`ConfirmPurchase`/grant 경로)이 **계정 전환·Dispose 같은 비동기 경합 중에도 컨트롤러 참조를 잃지 않는가.** 예전에 계정전환 자동 Dispose 중 참조를 놓쳐 `ConfirmPurchase`가 아무 오류 없이 조용히 스킵된 적이 있다 — 결제는 성공했는데 지급 확인만 안 되는 상태.
-- `already_granted`/`alreadyGranted` 플래그가 **실제 지급 여부를 반영하는가** — v4/v5 두 엔진 모두 따로 확인(과거 v4 통합 경로에서 이 값이 항상 `false`로 고정돼 있던 적이 있음).
-
-**Retool 백엔드(pg 래퍼) SQL을 건드렸다면:**
-- `$N` placeholder 번호가 **SQL에 등장하는 순서와 일치하는가.** 이 프로젝트의 `getDb(target).query(sql, valuesArray)`는 `$N` 번호가 아니라 **등장 순서대로** 값을 바인딩한다 — 번호가 등장 순서와 어긋나면(예: `$2`가 `$1`보다 먼저 나오는 SQL) 값이 뒤바뀐 채로 들어가고, 각 값 자체는 유효해서 타입 오류로만 드러나거나 최악의 경우 조용히 잘못된 값이 저장된다.
+- `already_granted`/`alreadyGranted` 플래그가 **실제 지급 여부를 반영하는가** (지금은 없앤 v4 통합 경로에서 한때 이 값이 항상 `false`로 고정돼 있던 적이 있음).
 
 **`SupabaseResult`/`Try` 반환 패턴을 건드렸다면:**
 - 실패 사유(`Reason`)가 있는데 `IsSuccess = true`로 반환하지 않는가 — 호출자가 실패를 놓친다.
