@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Trash2, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
+import { useServerName } from '../lib/serverNames'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
@@ -12,13 +13,23 @@ import { formatDateTime, itemsText } from '../components/ui/format'
 type ScheduleRow = {
   id: string; schedule_type: string; target_mode: string; title: string
   items: { key: string; count: number }[] | null; category: string; scheduled_at: string | null
-  repeat_time: string | null; next_run_at: string; is_active: boolean; run_count: number
+  repeat_time: string | null; repeat_unit: string | null; repeat_dow: number | null; repeat_dom: number | null
+  next_run_at: string; is_active: boolean; run_count: number
   created_by: string | null; server_code: string | null
 }
 type GameItem = { key: string; display_name: string }
 
 const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어' }
 const SCHED_LABEL: Record<string, string> = { scheduled: '예약 발송', repeat: '반복 발송' }
+const DOW_LABEL = ['일', '월', '화', '수', '목', '금', '토']
+
+/** "매일 09:00", "매주 월요일 09:00", "매월 30일 09:00" */
+function repeatText(r: ScheduleRow): string {
+  const time = r.repeat_time ? ` ${r.repeat_time.slice(0, 5)}` : ''
+  if (r.repeat_unit === 'week' && r.repeat_dow != null) return `매주 ${DOW_LABEL[r.repeat_dow] ?? '?'}요일${time}`
+  if (r.repeat_unit === 'month' && r.repeat_dom != null) return `매월 ${r.repeat_dom}일${time}`
+  return `매일${time}`
+}
 
 export default function MailSchedules({
   target,
@@ -27,6 +38,7 @@ export default function MailSchedules({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
+  const serverName = useServerName(target)
   const [rows, setRows] = useState<ScheduleRow[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -140,12 +152,12 @@ export default function MailSchedules({
                         {r.is_active ? '켜짐' : '꺼짐'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-neutral-600">
+                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
                       {SCHED_LABEL[r.schedule_type] ?? r.schedule_type}
-                      {r.schedule_type === 'repeat' && r.repeat_time ? ` (${r.repeat_time.slice(0, 5)})` : ''}
+                      {r.schedule_type === 'repeat' && <div className="text-xs text-neutral-500">{repeatText(r)}</div>}
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.next_run_at)}</td>
-                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${r.server_code})` : ''}</td>
+                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}</td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                     <td className="px-4 py-3 text-neutral-600">{r.created_by ?? '-'}</td>
@@ -185,7 +197,7 @@ export default function MailSchedules({
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="text-neutral-800">{delTarget.title}</div>
             <div className="text-xs text-neutral-500 mt-1">
-              {SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type} · 다음 실행 {formatDateTime(delTarget.next_run_at)}
+              {delTarget.schedule_type === 'repeat' ? `반복 발송 · ${repeatText(delTarget)}` : SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type} · 다음 실행 {formatDateTime(delTarget.next_run_at)}
             </div>
           </div>
         )}

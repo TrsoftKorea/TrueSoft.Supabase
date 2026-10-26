@@ -24,15 +24,28 @@ export default function Players({
         onUnauthenticated={onUnauthenticated}
         accountId={account}
         initialName={name}
-        onBack={() => setParams({})}
+        onBack={() =>
+          setParams((p) => {
+            p.delete('account')
+            p.delete('name')
+            return p
+          })
+        }
       />
     )
   }
+  // 목록의 탭·검색어·쪽은 주소에 남겨 둔다 — 상세에서 돌아오면 보던 그 쪽으로 돌아온다.
   return (
     <PlayerList
       target={target}
       onUnauthenticated={onUnauthenticated}
-      onSelect={(id, n) => setParams({ account: id, name: n })}
+      onSelect={(id, n) =>
+        setParams((p) => {
+          p.set('account', id)
+          p.set('name', n)
+          return p
+        })
+      }
     />
   )
 }

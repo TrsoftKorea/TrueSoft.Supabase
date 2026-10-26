@@ -13,7 +13,7 @@ import { Button } from '../components/ui/Button'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-type LogRow = { id: number; account_id: string; diff: Record<string, unknown>; source: string | null; created_at: string }
+type LogRow = { id: number; account_id: string; display_name: string | null; diff: Record<string, unknown>; source: string | null; created_at: string }
 type LogData = { rows: LogRow[]; total: number; pageSize: number }
 
 export default function DataLogs({
@@ -76,7 +76,8 @@ export default function DataLogs({
     setAccountId(id); setSource(sourceInput.trim()); setPage(1)
   }
 
-  const goPlayer = (id: string) => navigate(`/players?account=${encodeURIComponent(id)}&name=`)
+  const goPlayer = (id: string, name: string) =>
+    navigate(`/players?account=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`)
 
   return (
     <div className="space-y-4">
@@ -130,8 +131,8 @@ export default function DataLogs({
                   <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => goPlayer(r.account_id)} className="text-[#1677ff] hover:underline font-mono text-xs">
-                        {r.account_id.slice(0, 8)}
+                      <button onClick={() => goPlayer(r.account_id, r.display_name ?? '')} className="text-[#1677ff] hover:underline text-xs">
+                        {r.display_name || <span className="font-mono">{r.account_id.slice(0, 8)}</span>}
                       </button>
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{r.source ?? '-'}</td>

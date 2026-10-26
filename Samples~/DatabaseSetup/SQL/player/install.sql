@@ -5283,7 +5283,8 @@ as $$
   from (
     select
       s.id, s.schedule_type, s.target_mode, gs.server_code, s.title, s.items, s.category,
-      s.scheduled_at, s.repeat_time, s.next_run_at, s.is_active, s.run_count, s.created_by
+      s.scheduled_at, s.repeat_time, s.repeat_unit, s.repeat_dow, s.repeat_dom,
+      s.next_run_at, s.is_active, s.run_count, s.created_by
     from public.mail_schedules s
     left join public.game_servers gs on gs.id = s.server_id
   ) t;

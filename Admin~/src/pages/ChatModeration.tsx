@@ -20,8 +20,7 @@ type MessageRow = {
   to_account_id: string | null; to_display_name: string | null
 }
 type MessageData = { rows: MessageRow[]; total: number; pageSize: number }
-// display_name 은 지금 서버가 주지 않는다 — 실리면 화면이 바로 쓴다.
-type MuteRow = { id: number; account_id: string; channel_id: string | null; until: string; reason: string; created_by: string | null; created_at: string; display_name?: string | null }
+type MuteRow = { id: number; account_id: string; channel_id: string | null; until: string; reason: string; created_by: string | null; created_at: string; display_name: string | null }
 type MuteData = { rows: MuteRow[]; total: number; pageSize: number }
 type PlayerRow = { account_id: string; display_name: string }
 
@@ -451,8 +450,7 @@ export default function ChatModeration({
                         <tr key={m.id} className={`border-t border-neutral-100 ${ended ? 'text-neutral-400' : ''}`}>
                           <td className="px-5 py-3">
                             <button onClick={() => goPlayer(m.account_id, m.display_name ?? '')} className="text-[#1677ff] hover:underline text-xs">
-                              {m.display_name && <span className="mr-1.5">{m.display_name}</span>}
-                              <span className="font-mono">{m.account_id.slice(0, 8)}</span>
+                              {m.display_name || <span className="font-mono">{m.account_id.slice(0, 8)}</span>}
                             </button>
                           </td>
                           <td className="px-4 py-3 text-neutral-600">{m.channel_id ? channelLabel(m.channel_id) : '전체'}</td>

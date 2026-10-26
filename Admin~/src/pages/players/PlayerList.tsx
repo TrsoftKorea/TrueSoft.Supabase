@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search, Copy, ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
@@ -57,10 +58,29 @@ export default function PlayerList({
   onUnauthenticated: () => void
   onSelect: (accountId: string, displayName: string) => void
 }) {
-  const [tab, setTab] = useState<Tab>('all')
-  const [input, setInput] = useState('')
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = params.get('tab') === 'banned' ? 'banned' : 'all'
+  const search = params.get('q') ?? ''
+  const page = Math.max(1, Number(params.get('page')) || 1)
+  const [input, setInput] = useState(search)
+
+  const setListState = (next: { tab?: Tab; search?: string; page?: number }) =>
+    setParams(
+      (p) => {
+        const t = next.tab ?? tab
+        const q = next.search ?? search
+        const pg = next.page ?? page
+        if (t === 'banned') p.set('tab', t)
+        else p.delete('tab')
+        if (q) p.set('q', q)
+        else p.delete('q')
+        if (pg > 1) p.set('page', String(pg))
+        else p.delete('page')
+        return p
+      },
+      { replace: true },
+    )
+  const setPage = (pg: number) => setListState({ page: pg })
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [data, setData] = useState<ListResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -108,15 +128,11 @@ export default function PlayerList({
   const pageSize = data?.pageSize ?? 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const submitSearch = () => {
-    setSearch(input)
-    setPage(1)
-  }
+  const submitSearch = () => setListState({ search: input, page: 1 })
 
   const resetSearch = () => {
     setInput('')
-    setSearch('')
-    setPage(1)
+    setListState({ search: '', page: 1 })
   }
 
   const copyId = async (e: React.MouseEvent, id: string) => {
@@ -143,10 +159,7 @@ export default function PlayerList({
         ).map(([k, label]) => (
           <button
             key={k}
-            onClick={() => {
-              setTab(k)
-              setPage(1)
-            }}
+            onClick={() => setListState({ tab: k, page: 1 })}
             className={[
               'h-10 px-4 text-sm border-b-2 -mb-px transition-colors',
               tab === k
@@ -275,7 +288,7 @@ export default function PlayerList({
           <div className="flex items-center gap-1">
             <button
               disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(Math.max(1, page - 1))}
               className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
@@ -285,7 +298,7 @@ export default function PlayerList({
             </span>
             <button
               disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
               className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
             >
               <ChevronRight className="w-3.5 h-3.5" />

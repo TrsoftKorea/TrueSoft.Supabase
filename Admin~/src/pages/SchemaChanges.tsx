@@ -86,22 +86,54 @@ function genericSummary(params: Record<string, unknown>): string {
     .join(' · ')
 }
 
-// 원격 설정 — 스테이징이 키 단위 스냅샷이라 개별 항목 대신 게시 후 상태를 요약한다.
-function configSummary(params: Record<string, unknown>): string {
-  const vj = (params['value_json'] ?? {}) as Record<string, unknown>
-  const itemCount = Object.keys(vj).filter((k) => k !== '__meta').length
-  return [
-    itemCount === 0 ? '필드 없음' : `필드 ${itemCount}개`,
-    params['enabled'] === false ? '비활성' : '활성',
-    params['requires_auth'] ? '인증 필요' : '인증 불필요',
-  ].join(' · ')
+type LiveConfig = { key: string; value_json: Record<string, unknown>; enabled: boolean; requires_auth: boolean }
+
+const configItems = (vj: unknown) =>
+  Object.entries((vj ?? {}) as Record<string, unknown>).filter(([k]) => k !== '__meta')
+
+function valueText(v: unknown): string {
+  const s = typeof v === 'string' ? v : JSON.stringify(v)
+  return s.length > 40 ? `${s.slice(0, 40)}…` : s
 }
 
-function formatSummary(feature: string, action: string, params: Record<string, unknown>): string {
+// 원격 설정 — 스테이징이 키 단위 스냅샷이라, 지금 게임에 나가는 값과 비교해 바뀌는 필드만 보여 준다.
+// 지금 값을 못 받았으면(live === undefined) 게시 후 상태만 요약한다.
+function configSummary(params: Record<string, unknown>, live: LiveConfig | null | undefined): string {
+  const next = configItems(params['value_json'])
+  const enabled = params['enabled'] !== false
+  const requiresAuth = !!params['requires_auth']
+  if (live === undefined) {
+    return [
+      next.length === 0 ? '필드 없음' : `필드 ${next.length}개`,
+      enabled ? '활성' : '비활성',
+      requiresAuth ? '인증 필요' : '인증 불필요',
+    ].join(' · ')
+  }
+
+  const before = new Map(configItems(live?.value_json))
+  const parts: string[] = []
+  if (!live) parts.push('새 설정')
+  for (const [k, v] of next) {
+    if (!before.has(k)) parts.push(`${k} 추가: ${valueText(v)}`)
+    else if (JSON.stringify(before.get(k)) !== JSON.stringify(v)) parts.push(`${k}: ${valueText(before.get(k))} → ${valueText(v)}`)
+    before.delete(k)
+  }
+  for (const k of before.keys()) parts.push(`${k} 삭제`)
+  if (live && live.enabled !== enabled) parts.push(enabled ? '활성으로' : '비활성으로')
+  if (live && live.requires_auth !== requiresAuth) parts.push(requiresAuth ? '인증 필요로' : '인증 불필요로')
+  return parts.length === 0 ? '바뀌는 값 없음' : parts.join(' · ')
+}
+
+function formatSummary(
+  feature: string,
+  action: string,
+  params: Record<string, unknown>,
+  liveConfig?: LiveConfig | null,
+): string {
   const p = params ?? {}
   if (feature === 'remote_config') {
     if (action === 'delete') return '설정과 모든 필드 삭제'
-    return configSummary(p)
+    return configSummary(p, liveConfig)
   }
   if (feature === 'leaderboard_field') {
     if (action === 'attach') return `${str(p['code'])} 리더보드에서 사용으로 변경`
@@ -183,6 +215,20 @@ export default function SchemaChanges({
   }, [target, report])
 
   useEffect(() => { void reloadVersions() }, [reloadVersions])
+
+  // 원격 설정 대기 변경을 지금 값과 비교하려고 받는다. 못 받으면 비교 없이 요약만 보인다.
+  const hasConfigDraft = drafts.some((d) => d.feature === 'remote_config')
+  const [liveConfigs, setLiveConfigs] = useState<Map<string, LiveConfig> | null>(null)
+  useEffect(() => {
+    if (!hasConfigDraft) return
+    let alive = true
+    callAdmin<{ rows: LiveConfig[] }>(target, 'remoteConfig.list')
+      .then((r) => { if (alive) setLiveConfigs(new Map(r.rows.map((c) => [c.key, c]))) })
+      .catch(() => { if (alive) setLiveConfigs(null) })
+    return () => { alive = false }
+  }, [target, hasConfigDraft, drafts])
+  const liveConfigOf = (key: string): LiveConfig | null | undefined =>
+    liveConfigs ? liveConfigs.get(key) ?? null : undefined
 
   const hasDestructiveDraft = drafts.some((d) => isDestructive(d.feature, d.action))
   // 이름을 비우고 게시하면 이력에 이 작업 요약이 이름으로 자동 표시된다.
@@ -306,9 +352,15 @@ export default function SchemaChanges({
                       </span>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{d.object_name}</td>
-                    <td className="px-4 py-3 text-xs text-neutral-500 max-w-[360px] truncate" title={formatSummary(d.feature, d.action, d.params)}>
-                      {formatSummary(d.feature, d.action, d.params)}
-                    </td>
+                    {d.feature === 'remote_config' ? (
+                      <td className="px-4 py-3 text-xs text-neutral-500 max-w-[360px] break-words">
+                        {formatSummary(d.feature, d.action, d.params, liveConfigOf(d.object_name))}
+                      </td>
+                    ) : (
+                      <td className="px-4 py-3 text-xs text-neutral-500 max-w-[360px] truncate" title={formatSummary(d.feature, d.action, d.params)}>
+                        {formatSummary(d.feature, d.action, d.params)}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => void discardOne(d.id)}

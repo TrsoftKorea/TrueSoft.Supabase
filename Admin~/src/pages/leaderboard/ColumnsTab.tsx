@@ -575,8 +575,25 @@ export default function ColumnsTab({
     setPage(1)
   }, [reloadCols])
 
-  const all: Col[] = colsData?.all ?? []
+  const liveCols: Col[] = colsData?.all ?? []
   const attached: AttachedRow[] = colsData?.attached ?? []
+  // 추가만 담아 둔 필드도 표에 "추가 예정"으로 보인다 — 안 보이면 담긴 줄 모르고 또 추가한다.
+  const pendingAddNames = new Set<string>()
+  const pendingAdds: Col[] = []
+  if (colsData) {
+    for (const d of drafts) {
+      if (d.feature !== 'leaderboard_field' || d.action !== 'add') continue
+      if (liveCols.some((c) => c.column_name === d.object_name) || pendingAddNames.has(d.object_name)) continue
+      pendingAddNames.add(d.object_name)
+      pendingAdds.push({
+        column_name: d.object_name,
+        data_type: String(d.params?.['coltype'] ?? ''),
+        is_nullable: d.params?.['nullable'] ? 'YES' : 'NO',
+        column_default: (d.params?.['default_sql'] as string | null | undefined) ?? null,
+      })
+    }
+  }
+  const all: Col[] = [...liveCols, ...pendingAdds]
 
   const usedFields = new Set<string>()
   leaderboards.forEach((lb) => {
@@ -748,6 +765,28 @@ export default function ColumnsTab({
                       ? { text: '사용 중', cls: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' }
                       : { text: '사용 안 함', cls: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' }
                 const inUse = usedFields.has(c.column_name)
+                if (pendingAddNames.has(c.column_name)) {
+                  return (
+                    <tr key={c.column_name} className="border-t border-neutral-100 bg-amber-50/40">
+                      <td className="px-5 py-3">
+                        <span
+                          title="게시한 뒤 이 리더보드에서 사용으로 켤 수 있습니다"
+                          className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap"
+                        >
+                          추가 예정
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 font-medium">{c.column_name}</td>
+                      <td className="px-5 py-3">
+                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
+                          {typeText(c.data_type)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-neutral-600 text-xs">{c.column_default == null ? '-' : defaultText(c)}</td>
+                      <td className="px-3 py-3" />
+                    </tr>
+                  )
+                }
                 return (
                   <tr key={c.column_name} className="border-t border-neutral-100">
                     <td className="px-5 py-3">

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { useServerName } from '../../lib/serverNames'
 import { WhiteCard } from '../../components/ui/Card'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -70,6 +71,7 @@ export default function PlayerDetail({
   onBack: () => void
 }) {
   const navigate = useNavigate()
+  const serverName = useServerName(target)
   const [tab, setTab] = useState<Tab>('info')
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
@@ -352,7 +354,7 @@ export default function PlayerDetail({
             </div>
           )}
         </InfoRow>
-        <InfoRow label="서버">{profile?.server_code ?? '-'}</InfoRow>
+        <InfoRow label="서버">{serverName(profile?.server_code)}</InfoRow>
         <InfoRow label="탈퇴">{withdrawalText(profile?.withdrawn_at ?? null)}</InfoRow>
         <InfoRow label="플랫폼">{profile?.platform ?? '-'}</InfoRow>
         <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>

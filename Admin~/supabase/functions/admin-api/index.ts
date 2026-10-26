@@ -160,6 +160,21 @@ async function isEnabledOperator(db: SupabaseClient, email: string): Promise<boo
   return rows.some((r) => r.email === email && r.disabled_at == null);
 }
 
+/** 행마다 account_id 의 닉네임을 display_name 으로 붙인다. 닉네임이 없는 계정은 null. */
+async function withDisplayNames<T extends { account_id?: unknown }>(
+  db: SupabaseClient,
+  rows: T[],
+): Promise<Array<T & { display_name: string | null }>> {
+  const ids = [...new Set(rows.map((r) => r.account_id).filter((v): v is string => typeof v === "string"))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data, error } = await db.from("display_names").select("account_id, display_name").in("account_id", ids);
+    if (error) throw new Error(error.message);
+    for (const n of data ?? []) names.set(n.account_id as string, (n.display_name as string) ?? "");
+  }
+  return rows.map((r) => ({ ...r, display_name: names.get(r.account_id as string) || null }));
+}
+
 /** 마스터이거나, 표에 등록되고 비활성화되지 않은 운영자인지. 비밀번호 로그인·재설정에서 공용으로 쓴다. */
 async function isAllowedIdentity(db: SupabaseClient, email: string): Promise<boolean> {
   return MASTER_EMAILS.has(email) || (await isEnabledOperator(db, email));
@@ -896,7 +911,7 @@ async function handleAction(
 
         const { data, error, count } = await query;
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+        return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize } });
       }
 
       case "dashboard.stats": {
@@ -998,7 +1013,7 @@ async function handleAction(
           .order("created_at", { ascending: false })
           .range(from, to);
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+        return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize } });
       }
 
       case "chat.mute": {
