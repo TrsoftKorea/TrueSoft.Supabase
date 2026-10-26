@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { renderGoogleButton } from '../lib/googleAuth'
-import { signInAllProjects } from '../lib/api'
+import { signInAllProjects, type SignInOutcome } from '../lib/api'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
 
@@ -12,7 +12,7 @@ import PasswordLoginForm from '../components/PasswordLoginForm'
  * 구글이 신원만 증명하고, 운영자인지는 게임마다 백엔드의 허용목록이 판단한다.
  * 어느 게임에 들어갈지는 로그인 뒤 게임 목록에서 고른다.
  */
-export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
+export default function Login({ onSignedIn }: { onSignedIn: (outcomes: SignInOutcome[]) => void }) {
   const buttonRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
 
@@ -23,8 +23,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
     const onCredential = async (idToken: string) => {
       setError('')
       try {
-        await signInAllProjects('auth.googleLogin', { idToken })
-        onSignedIn()
+        onSignedIn(await signInAllProjects('auth.googleLogin', { idToken }))
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
       }

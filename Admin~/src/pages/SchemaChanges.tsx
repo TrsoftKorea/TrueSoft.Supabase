@@ -10,6 +10,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 
@@ -133,6 +134,8 @@ export default function SchemaChanges({
   const draftLoading = draftsOrNull === null && !draftsError
   const [versions, setVersions] = useState<VersionRow[]>([])
   const [versionsLoading, setVersionsLoading] = useState(true)
+  const [versionsFailed, setVersionsFailed] = useState(false)
+  const draftFailed = draftsOrNull === null && !!draftsError
 
   const [label, setLabel] = useState('')
   const [busy, setBusy] = useState(false)
@@ -170,7 +173,9 @@ export default function SchemaChanges({
     try {
       const v = await callAdmin<{ rows: VersionRow[] }>(target, 'schema.getVersions')
       setVersions(v.rows)
+      setVersionsFailed(false)
     } catch (e: unknown) {
+      setVersionsFailed(true)
       report(e, '불러오지 못했습니다.')
     } finally {
       setVersionsLoading(false)
@@ -284,9 +289,10 @@ export default function SchemaChanges({
               </tr>
             </thead>
             <tbody>
-              {draftLoading || drafts.length === 0 ? (
+              {draftLoading || draftFailed || drafts.length === 0 ? (
                 <TableStatusRow
                   loading={draftLoading}
+                  failed={draftFailed}
                   empty={drafts.length === 0}
                   colSpan={4}
                   emptyText="대기 중 변경이 없습니다. 각 관리 화면에서 변경을 담으세요."
@@ -339,9 +345,10 @@ export default function SchemaChanges({
               </tr>
             </thead>
             <tbody>
-              {versionsLoading || versions.length === 0 ? (
+              {versionsLoading || versionsFailed || versions.length === 0 ? (
                 <TableStatusRow
                   loading={versionsLoading}
+                  failed={versionsFailed}
                   empty={versions.length === 0}
                   colSpan={7}
                   emptyText="게시된 버전이 없습니다."
@@ -411,6 +418,7 @@ export default function SchemaChanges({
               </button>
             </div>
             <div className="p-5 space-y-4">
+              <TargetGameStrip />
               <p className="text-sm text-neutral-700">
                 대기 중 변경 <b>{drafts.length}건</b>을 라이브에 적용합니다.
               </p>

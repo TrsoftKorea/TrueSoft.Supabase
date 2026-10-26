@@ -11,6 +11,7 @@ import { pgTypeLabel } from '../../lib/schemaLabels'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
+import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 
 type LogRow = { id: number; diff: Record<string, unknown>; source: string | null; created_at: string }
 
@@ -84,6 +85,7 @@ function EditValueModal({
           </button>
         </div>
         <div className="p-5 space-y-4">
+          <TargetGameStrip />
           <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
             <span className="font-medium text-neutral-700">{field.column_name}</span>
             <span className="text-xs text-neutral-400">{pgTypeLabel(field.data_type)}</span>

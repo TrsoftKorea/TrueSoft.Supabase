@@ -38,6 +38,7 @@ export default function BannedWords({
 }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [drafts, setDrafts] = useState<Record<Kind, string>>({ word: '', name: '' })
@@ -57,7 +58,9 @@ export default function BannedWords({
     setLoading(true)
     try {
       setRows(await callAdmin<Row[]>(target, 'bannedWords.list'))
+      setLoadFailed(false)
     } catch (e: unknown) {
+      setLoadFailed(true)
       report(e, '금칙어를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -112,7 +115,7 @@ export default function BannedWords({
           <WhiteCard key={s.kind} className="p-5 space-y-3">
             <div>
               <h3 className="text-base font-semibold text-neutral-900">
-                {s.title} <span className="ml-1 text-sm font-normal text-neutral-400">{list.length}개</span>
+                {s.title} {!loadFailed && <span className="ml-1 text-sm font-normal text-neutral-400">{list.length}개</span>}
               </h3>
               <p className="mt-1 text-xs text-neutral-500">{s.hint}</p>
             </div>
@@ -136,6 +139,8 @@ export default function BannedWords({
 
             {loading && rows.length === 0 ? (
               <div className="py-6 text-center"><Loader2 className="w-5 h-5 animate-spin text-neutral-300 mx-auto" /></div>
+            ) : loadFailed && !loading ? (
+              <div className="py-4 text-center text-sm text-red-600">목록을 불러오지 못했습니다. 새로고침해 주세요.</div>
             ) : list.length === 0 ? (
               <div className="py-4 text-center text-sm text-neutral-400">아직 없습니다.</div>
             ) : (

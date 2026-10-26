@@ -81,3 +81,11 @@ export function diffSummary(diff: Record<string, unknown> | null | undefined): s
     .map(([k, v]) => `${k}: 이전값 ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
     .join(' · ')
 }
+
+/** 점수를 천 단위 쉼표로. formatCount 는 소수 3자리에서 반올림해 12.34567 이 12.346 으로 보이므로 따로 둔다. */
+export function formatScore(n: number | string | null | undefined): string {
+  if (n === null || n === undefined || n === '') return '-'
+  const num = typeof n === 'string' ? Number(n) : n
+  if (!Number.isFinite(num)) return '-'
+  return num.toLocaleString('ko-KR', { maximumFractionDigits: 20 })
+}

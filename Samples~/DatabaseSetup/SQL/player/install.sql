@@ -691,6 +691,7 @@ create table if not exists public.banned_words (
 
 alter table public.banned_words enable row level security;
 -- [의도적] 정책 없음 — 클라이언트는 목록을 읽지 못한다(우회 단어를 찾는 데 쓰인다). 검사는 아래 함수가 서버에서 한다.
+revoke all on table public.banned_words from anon, authenticated;
 
 comment on table public.banned_words is
   '금칙어(word)·금지 닉네임(name). word 는 ts_filter_normalize 를 거친 값으로 저장한다.';
@@ -787,7 +788,8 @@ comment on function public.ts_display_name_forbidden(text) is '닉네임이 금�
 revoke all on function public.ts_filter_normalize(text)       from public, anon, authenticated;
 revoke all on function public.ts_mask_banned_words(text)      from public, anon, authenticated;
 revoke all on function public.ts_display_name_forbidden(text) from public, anon, authenticated;
--- displayname-set Edge Function(secret key)이 닉네임 저장 전에 부른다.
+-- 닉네임 금칙어 검사는 아래 표 트리거가 한다. displayname-set Edge Function 은 유저 토큰으로 저장하므로
+-- 트리거에 걸린다 — 저장을 secret key 로 바꾸면 트리거가 통과시켜 검사가 빠지니 주의.
 grant execute on function public.ts_display_name_forbidden(text) to service_role;
 
 -- 닉네임 표에서 직접 막는다 — 유저는 RLS 로 display_names 에 직접 쓸 수 있어 Edge Function 검사만으로는 우회된다.
@@ -3294,7 +3296,8 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.price_amount_krw is not null and new.price_amount_krw > 0 then
+  -- 기록될 때 이미 환불된 결제(환불 알림이 먼저 온 경우)는 누적 결제액에 넣지 않는다.
+  if new.price_amount_krw is not null and new.price_amount_krw > 0 and new.refunded_at is null then
     update public.user_profiles
        set total_paid_krw = total_paid_krw + new.price_amount_krw
      where account_id = new.account_id;
@@ -3318,6 +3321,7 @@ create trigger tr_after_purchase_insert
 --      FROM public.purchases pu
 --      WHERE pu.account_id = p.account_id
 --        AND pu.price_amount_krw IS NOT NULL
+--        AND pu.refunded_at IS NULL
 --    ), 0);
 
 -- =============================================================================
@@ -3423,12 +3427,66 @@ create table if not exists public.purchase_refund_sync (
 alter table public.purchase_refund_sync enable row level security;
 revoke all on table public.purchase_refund_sync from anon, authenticated;
 
+-- 애플 환불 알림은 한 번만 온다(200 을 받으면 다시 안 보낸다). 유저가 결제하고 게임을 열기 전에 환불되면
+-- 알림이 결제 기록보다 먼저 와서 바꿀 행이 없다. 그래서 알림의 마지막 상태를 여기 남겨 두고, 결제가
+-- 기록될 때(tr_before_purchase_insert_refund) 붙인다. event_at 은 애플이 서명한 시각 — 재전송으로 순서가
+-- 뒤바뀐 알림(환불 → 환불 취소 → 늦게 다시 온 환불)이 최종 상태를 거꾸로 만들지 않게 비교한다.
+create table if not exists public.purchase_refund_events (
+  store          text        not null,
+  purchase_token text        not null,
+  refunded_at    timestamptz,           -- null = 환불 취소
+  refund_reason  text,
+  event_at       timestamptz not null,
+  updated_at     timestamptz not null default now(),
+  primary key (store, purchase_token)
+);
+
+alter table public.purchase_refund_events enable row level security;
+revoke all on table public.purchase_refund_events from anon, authenticated;
+
+comment on table public.purchase_refund_events is
+  '스토어 환불 알림의 거래별 마지막 상태. 알림이 결제 기록보다 먼저 와도 잃지 않게 한다. ts_purchase_set_refund 전용.';
+
+create or replace function public.ts_before_purchase_insert_refund()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_event record;
+begin
+  if new.refunded_at is null then
+    select refunded_at, refund_reason into v_event
+      from public.purchase_refund_events
+     where store = new.store and purchase_token = new.purchase_token;
+    if found and v_event.refunded_at is not null then
+      new.refunded_at   := v_event.refunded_at;
+      new.refund_reason := v_event.refund_reason;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.ts_before_purchase_insert_refund() from public, anon, authenticated;
+
+drop trigger if exists tr_before_purchase_insert_refund on public.purchases;
+create trigger tr_before_purchase_insert_refund
+  before insert on public.purchases
+  for each row execute function public.ts_before_purchase_insert_refund();
+
+-- 인자가 늘어 예전 4인자 판을 지운다(남겨 두면 이름으로 부를 때 어느 쪽인지 모호해진다).
+drop function if exists public.ts_purchase_set_refund(text, text, timestamptz, text);
+
 -- 반환: 실제로 바뀐 행이 있는지. 우리 기록에 없는 결제(다른 앱·기록 전 결제)면 false.
+-- p_event_at(애플 알림의 서명 시각)을 넘기면 알림 상태를 남기고, 이미 남은 것보다 오래된 알림은 무시한다.
 create or replace function public.ts_purchase_set_refund(
   p_store       text,
   p_token       text,
   p_refunded_at timestamptz,
-  p_reason      text default null)
+  p_reason      text default null,
+  p_event_at    timestamptz default null)
 returns boolean
 language plpgsql
 security definer
@@ -3437,6 +3495,18 @@ as $$
 declare
   v_count int;
 begin
+  if p_event_at is not null then
+    insert into public.purchase_refund_events (store, purchase_token, refunded_at, refund_reason, event_at)
+    values (p_store, p_token, p_refunded_at, p_reason, p_event_at)
+    on conflict (store, purchase_token) do update
+      set refunded_at = excluded.refunded_at, refund_reason = excluded.refund_reason,
+          event_at = excluded.event_at, updated_at = now()
+      where purchase_refund_events.event_at < excluded.event_at;
+    if not found then
+      return false;   -- 더 새 알림이 이미 반영됐다
+    end if;
+  end if;
+
   if p_refunded_at is null then
     update public.purchases
        set refunded_at = null, refund_reason = null
@@ -3452,11 +3522,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_purchase_set_refund(text, text, timestamptz, text) is
+comment on function public.ts_purchase_set_refund(text, text, timestamptz, text, timestamptz) is
   '결제를 환불로 표시하거나(p_refunded_at) 환불 취소로 되돌린다(null). purchase-notify-apple·purchase-refund-sync-google 전용.';
 
-revoke all on function public.ts_purchase_set_refund(text, text, timestamptz, text) from public, anon, authenticated;
-grant execute on function public.ts_purchase_set_refund(text, text, timestamptz, text) to service_role;
+revoke all on function public.ts_purchase_set_refund(text, text, timestamptz, text, timestamptz) from public, anon, authenticated;
+grant execute on function public.ts_purchase_set_refund(text, text, timestamptz, text, timestamptz) to service_role;
 
 -- 'start' 는 마지막 시작이 p_min_gap_seconds 안이면 기록하지 않고 false 를 돌려준다(겹친 호출 건너뛰기).
 -- 'finish' 는 항상 기록하고 true.
@@ -4194,6 +4264,160 @@ SELECT cron.schedule(
   '0 3 * * *',
   $$DELETE FROM public.user_data_logs WHERE created_at < now() - interval '7 days'$$
 );
+
+-- ── 운영 콘솔 — 플레이어 유저 데이터 보기·고치기 (service_role 전용) ───────────
+-- 게임이 컬럼을 늘리면 콘솔이 따라오도록 컬럼 목록은 표에서 읽는다. 아래 다섯 칸은 SDK 가
+-- 관리하는 칸이라 콘솔에서 고치지 않는다.
+create or replace function public.ts_admin_user_data_columns()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'column_name', c.column_name, 'data_type', c.data_type,
+    'is_nullable', c.is_nullable, 'column_default', c.column_default
+  ) order by c.ordinal_position), '[]'::jsonb)
+  from information_schema.columns c
+  where c.table_schema = 'public' and c.table_name = 'user_data'
+    and c.column_name not in ('id','account_id','user_id','server_id','updated_at');
+$$;
+
+create or replace function public.ts_admin_user_data_get(p_account_id uuid)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select to_jsonb(d) from public.user_data d where d.account_id = p_account_id;
+$$;
+
+create or replace function public.ts_admin_user_data_logs(p_account_id uuid, p_limit integer default 20)
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', l.id, 'diff', l.diff, 'source', l.source, 'created_at', l.created_at
+  ) order by l.created_at desc), '[]'::jsonb)
+  from (
+    select * from public.user_data_logs
+    where account_id = p_account_id
+    order by created_at desc
+    limit p_limit
+  ) l;
+$$;
+
+-- 보낸 칸만 바꾼다. 값의 형 변환은 jsonb_populate_record 가 표의 컬럼 형에 맞춰 한다.
+-- 변경 로그에는 'admin:<운영자>' 로 남는다.
+create or replace function public.ts_admin_user_data_update(p_account_id uuid, p_patch jsonb, p_operator text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_cols text[];
+  v_key  text;
+  v_set  text := '';
+  v_n    int;
+  v_row  jsonb;
+begin
+  if p_patch is null or jsonb_typeof(p_patch) <> 'object' or p_patch = '{}'::jsonb then
+    raise exception 'patch_required';
+  end if;
+
+  select array_agg(c.column_name) into v_cols
+  from information_schema.columns c
+  where c.table_schema = 'public' and c.table_name = 'user_data'
+    and c.column_name not in ('id','account_id','user_id','server_id','updated_at');
+
+  for v_key in select jsonb_object_keys(p_patch) loop
+    if not (v_key = any(v_cols)) then
+      raise exception 'user_data_column_not_allowed: %', v_key;
+    end if;
+    v_set := v_set || format(', %1$I = d.%1$I', v_key);
+  end loop;
+
+  perform set_config(
+    'app.log_source',
+    'admin' || case when p_operator is not null and p_operator <> '' then ':' || p_operator else '' end,
+    true
+  );
+
+  begin
+    execute format($f$
+      update public.user_data u
+      set updated_at = now() %s
+      from jsonb_populate_record(null::public.user_data, $1) d
+      where u.account_id = $2
+    $f$, v_set)
+    using p_patch, p_account_id;
+  exception when check_violation then
+    raise exception 'protected_field_violation: %', sqlerrm;
+  end;
+
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'user_data_not_found';
+  end if;
+
+  select to_jsonb(d) into v_row from public.user_data d where d.account_id = p_account_id;
+  return v_row;
+end;
+$$;
+
+-- 데이터 관리 화면의 플레이어 찾기. 유저 데이터 행이 있는 플레이어만, 최근 저장 순 20명.
+create or replace function public.ts_admin_search_user_data_players(p_search text default null, p_mode text default 'nickname')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_search text := coalesce(p_search, '');
+  v_rows jsonb;
+begin
+  if p_mode = 'id' then
+    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) into v_rows
+    from (
+      select ud.account_id,
+             coalesce(dn.display_name, 'Player_' || left(ud.account_id::text, 8)) as display_name,
+             ud.updated_at
+      from public.user_data ud
+      left join public.display_names dn on dn.account_id = ud.account_id
+      where v_search = '' or ud.account_id::text ilike v_search || '%'
+      order by ud.updated_at desc
+      limit 20
+    ) t;
+  else
+    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) into v_rows
+    from (
+      select ud.account_id,
+             coalesce(dn.display_name, 'Player_' || left(ud.account_id::text, 8)) as display_name,
+             ud.updated_at
+      from public.user_data ud
+      left join public.display_names dn on dn.account_id = ud.account_id
+      where v_search = '' or dn.display_name ilike '%' || v_search || '%'
+      order by ud.updated_at desc
+      limit 20
+    ) t;
+  end if;
+  return v_rows;
+end;
+$$;
+
+revoke all on function public.ts_admin_user_data_columns()                       from public, anon, authenticated;
+revoke all on function public.ts_admin_user_data_get(uuid)                       from public, anon, authenticated;
+revoke all on function public.ts_admin_user_data_logs(uuid, integer)             from public, anon, authenticated;
+revoke all on function public.ts_admin_user_data_update(uuid, jsonb, text)       from public, anon, authenticated;
+revoke all on function public.ts_admin_search_user_data_players(text, text)      from public, anon, authenticated;
+grant execute on function public.ts_admin_user_data_columns()                    to service_role;
+grant execute on function public.ts_admin_user_data_get(uuid)                    to service_role;
+grant execute on function public.ts_admin_user_data_logs(uuid, integer)          to service_role;
+grant execute on function public.ts_admin_user_data_update(uuid, jsonb, text)    to service_role;
+grant execute on function public.ts_admin_search_user_data_players(text, text)   to service_role;
 
 
 -- #############################################################################
@@ -6777,6 +7001,19 @@ begin
     return v_id;
   end if;
 
+  -- 이미 있는 코드로 "만들기"를 받으면 게시 때 기존 리더보드 설정을 덮어쓴다. 삭제 대기 중인 코드만 다시 만들 수 있다.
+  if p_feature = 'leaderboard_table' and p_action = 'create' then
+    if exists (select 1 from public.ts_schema_draft
+                where status = 'pending' and feature = 'leaderboard_table'
+                  and action in ('create','update') and object_name = p_object_name)
+       or (exists (select 1 from public.leaderboard_tables where code = p_object_name)
+           and not exists (select 1 from public.ts_schema_draft
+                            where status = 'pending' and feature = 'leaderboard_table'
+                              and action = 'delete' and object_name = p_object_name)) then
+      raise exception 'leaderboard_code_exists: %', p_object_name;
+    end if;
+  end if;
+
   select coalesce(max(sort_order), 0) + 1 into v_sort
   from public.ts_schema_draft where status = 'pending';
 
@@ -6890,6 +7127,10 @@ begin
 
     -- ── 리더보드 테이블(정의) ────────────────────────────────────────
     elsif v_key = 'leaderboard_table.create' then
+      -- 대기 중에 다른 경로로 같은 코드가 생겼을 수 있다. 같은 묶음의 삭제는 정렬상 먼저 돌아 이미 지워져 있다.
+      if exists (select 1 from public.leaderboard_tables where code = d.params->>'code') then
+        raise exception 'leaderboard_code_exists: %', d.params->>'code';
+      end if;
       perform public.ts_admin_leaderboard_upsert_table(
         d.params->>'code', d.params->>'display_name',
         coalesce(d.params->>'scope','global'), coalesce(d.params->>'record_type','highest'),
@@ -7120,7 +7361,15 @@ end; $$;
 create or replace function public.ts_admin_schema_stage_config_new(
   p_key text, p_enabled boolean, p_requires_auth boolean, p_operator text default null)
 returns bigint language plpgsql security definer set search_path = public as $$
+declare v_pending_action text;
 begin
+  -- 이미 있는 키를 "새로 만들기"로 받으면 그 값이 빈 값으로 덮인다. 삭제 대기 중인 키만 새로 만들 수 있다.
+  select action into v_pending_action from public.ts_schema_draft
+   where status='pending' and feature='remote_config' and object_name=p_key order by id limit 1;
+  if v_pending_action in ('add','update')
+     or (v_pending_action is null and exists(select 1 from public.remote_config where key=p_key)) then
+    raise exception 'remote_config_key_exists: %', p_key;
+  end if;
   return public._ts_stage_config_row(p_key, '{}'::jsonb, coalesce(p_enabled,true), coalesce(p_requires_auth,false), null, p_operator);
 end; $$;
 
@@ -7144,7 +7393,16 @@ begin
   if p_item_key = '__meta' then raise exception 'reserved_item_key'; end if;
   vj := coalesce(b->'value_json','{}'::jsonb) || jsonb_build_object(p_item_key, p_item_value);
   if p_meta_type is null then
-    meta := coalesce(vj->'__meta','{}'::jsonb) - p_item_key;
+    -- 콘솔은 값의 종류(숫자·문자·참거짓)까지만 알고 int·long 같은 C# 타입은 모른다. 값을 고칠 때 힌트를
+    -- 지우면 클래스 생성기가 long 을 다시 "애매함"으로 본다 — 새 값과 종류가 맞으면 기존 힌트를 남긴다.
+    meta := coalesce(vj->'__meta','{}'::jsonb);
+    if not coalesce(case jsonb_typeof(p_item_value)
+         when 'number'  then meta->>p_item_key in ('int','short','long','ulong','float','double')
+         when 'boolean' then meta->>p_item_key = 'bool'
+         when 'string'  then meta->>p_item_key in ('string','DateTimeOffset','DateTime','DateOnly','TimeOnly')
+         else false end, false) then
+      meta := meta - p_item_key;
+    end if;
   else
     meta := coalesce(vj->'__meta','{}'::jsonb) || jsonb_build_object(p_item_key, to_jsonb(p_meta_type));
   end if;
@@ -7298,6 +7556,76 @@ grant execute on function public.ts_admin_list_operators()                      
 grant execute on function public.ts_admin_upsert_operator(text,text,text)           to service_role;
 grant execute on function public.ts_admin_set_operator_disabled(text,boolean,text)  to service_role;
 
+-- 비밀번호로 들어오는 운영자의 비밀번호. 해시는 admin-api 가 만들고 검사한다 — DB 는 보관만 한다.
+-- 구글로만 들어오는 운영자는 행이 없다.
+create table if not exists public.ts_admin_passwords (
+  email         text        primary key,
+  password_hash text        not null,
+  updated_at    timestamptz not null default now(),
+  updated_by    text
+);
+
+alter table public.ts_admin_passwords enable row level security;
+-- [의도적] 정책 없음 — service_role 전용.
+revoke all on table public.ts_admin_passwords from anon, authenticated;
+
+comment on table public.ts_admin_passwords is
+  '운영자 비밀번호 해시. admin-api 전용. 운영자를 지우면 함께 지워진다(ts_admin_delete_operator).';
+
+-- 비활성화와 달리 기록을 남기지 않고 지운다 — 잘못 추가한 이메일을 치울 때 쓴다.
+create or replace function public.ts_admin_delete_operator(p_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := lower(btrim(coalesce(p_email, '')));
+begin
+  delete from public.ts_admin_passwords where email = v_email;
+  delete from public.ts_admin_operators where email = v_email;
+
+  if not found then
+    raise exception 'operator_not_found';
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_delete_operator(text) is '운영자 삭제(비밀번호 포함). service_role 전용.';
+
+revoke all on function public.ts_admin_delete_operator(text) from public, anon, authenticated;
+grant execute on function public.ts_admin_delete_operator(text) to service_role;
+
+-- 콘솔 첫 화면의 숫자. 매출은 환불을 뺀다 — 플레이어별 누적 결제액(total_paid_krw)과 같은 기준이다.
+create or replace function public.ts_admin_dashboard_stats()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  with bounds as (
+    select
+      (date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul') as today_start,
+      now() - interval '7 days' as seven_days_ago
+  )
+  select jsonb_build_object(
+    'total_players', (select count(*) from auth.users),
+    'new_today', (select count(*) from auth.users, bounds where created_at >= bounds.today_start),
+    'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
+    'active_today', (select count(*) from public.user_profiles, bounds where last_activity_at >= bounds.today_start),
+    'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
+    'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
+    'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
+    'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null),
+    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null)
+  );
+$$;
+
+comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫자(가입·활동·차단·매출). 날짜는 한국 기준. service_role 전용.';
+
+revoke all on function public.ts_admin_dashboard_stats() from public, anon, authenticated;
+grant execute on function public.ts_admin_dashboard_stats() to service_role;
+
 -- ---------------------------------------------------------------------------
 -- 운영 기록 — 운영 도구에서 누가 언제 무엇을 바꿨는지
 -- ---------------------------------------------------------------------------
@@ -7315,6 +7643,7 @@ create index if not exists ts_admin_audit_logs_created_idx on public.ts_admin_au
 
 alter table public.ts_admin_audit_logs enable row level security;
 -- [의도적] 정책 없음 — service_role 전용. 클라이언트는 이 표에 닿지 않는다.
+revoke all on table public.ts_admin_audit_logs from anon, authenticated;
 
 comment on table public.ts_admin_audit_logs is
   '운영 도구의 변경 요청 기록. admin-api 가 성공한 변경마다 남긴다. 비밀번호 값은 남기지 않는다.';
@@ -8020,7 +8349,8 @@ as $$
 $$;
 
 -- 코드마다 사용 이력을 붙인다. 키워드 쿠폰은 코드 하나를 여러 명이 쓰므로 사용한 사람 수만큼 줄이 나온다.
--- p_limit 는 "코드" 개수 기준이다(CSV 내려받기는 크게 넘긴다).
+-- p_limit 는 돌려주는 줄 수 상한이다 — 코드만 세면 키워드 쿠폰은 쓴 사람 수만큼(수만 줄) 나온다.
+-- CSV 내려받기는 크게 넘긴다.
 create or replace function public.ts_admin_coupon_codes(p_coupon_id uuid, p_limit int default 500)
 returns jsonb
 language sql
@@ -8028,12 +8358,17 @@ security definer
 set search_path = public
 as $$
   select coalesce(jsonb_agg(jsonb_build_object(
-    'code', cc.code, 'redeemed_at', r.redeemed_at, 'account_id', r.account_id, 'user_id', r.user_id
-  ) order by cc.code, r.redeemed_at), '[]'::jsonb)
+    'code', t.code, 'redeemed_at', t.redeemed_at, 'account_id', t.account_id, 'user_id', t.user_id
+  ) order by t.code, t.redeemed_at), '[]'::jsonb)
   from (
-    select code from public.coupon_codes where coupon_id = p_coupon_id order by code limit p_limit
-  ) cc
-  left join public.coupon_redemptions r on r.code = cc.code and r.coupon_id = p_coupon_id;
+    select cc.code, r.redeemed_at, r.account_id, r.user_id
+      from (
+        select code from public.coupon_codes where coupon_id = p_coupon_id order by code limit p_limit
+      ) cc
+      left join public.coupon_redemptions r on r.code = cc.code and r.coupon_id = p_coupon_id
+     order by cc.code, r.redeemed_at
+     limit p_limit
+  ) t;
 $$;
 
 revoke all on function public.ts_admin_coupon_list(text)       from public, anon, authenticated;
@@ -8528,6 +8863,25 @@ comment on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) is
 
 revoke all on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_chat_mute(uuid, uuid, int, text, text) to service_role;
+
+create or replace function public.ts_admin_chat_unmute(p_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.chat_mutes where id = p_id;
+  if not found then
+    raise exception 'chat_mute_not_found';
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_chat_unmute(bigint) is '채팅 차단 해제(행 삭제). service_role 전용.';
+
+revoke all on function public.ts_admin_chat_unmute(bigint) from public, anon, authenticated;
+grant execute on function public.ts_admin_chat_unmute(bigint) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- ts_chat_cleanup — 보존 기간이 지난 메시지 삭제. 크론이 부른다.

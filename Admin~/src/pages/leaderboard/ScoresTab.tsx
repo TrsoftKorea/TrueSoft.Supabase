@@ -4,7 +4,8 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatCount, formatDateTime, formatTotal } from '../../components/ui/format'
+import { formatCount, formatDateTime, formatScore, formatTotal } from '../../components/ui/format'
+import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
@@ -91,6 +92,7 @@ export default function ScoresTab({
   const [colsData, setColsData] = useState<ColsData | undefined>(undefined)
   const [data, setData] = useState<ScoresData | undefined>(undefined)
   const [scoresLoading, setScoresLoading] = useState(false)
+  const [scoresFailed, setScoresFailed] = useState(false)
   const scoresReqRef = useRef(0)
 
   const report = useCallback(
@@ -165,9 +167,10 @@ export default function ScoresTab({
   }, [target, selectedCode, report])
 
   const loadScores = useCallback(async () => {
-    if (!selectedCode) { setData(undefined); return }
+    if (!selectedCode) { ++scoresReqRef.current; setData(undefined); setScoresFailed(false); setScoresLoading(false); return }
     const reqId = ++scoresReqRef.current
     setScoresLoading(true)
+    setScoresFailed(false)
     try {
       const result = await callAdmin<ScoresData>(target, 'leaderboard.scores', {
         code: selectedCode,
@@ -182,6 +185,7 @@ export default function ScoresTab({
       if (reqId !== scoresReqRef.current) return
       report(e, '기록을 불러오지 못했습니다.')
       setData(undefined)
+      setScoresFailed(true)
     } finally {
       if (reqId === scoresReqRef.current) setScoresLoading(false)
     }
@@ -387,9 +391,10 @@ export default function ScoresTab({
               </tr>
             </thead>
             <tbody>
-              {scoresLoading || rows.length === 0 ? (
+              {scoresLoading || scoresFailed || rows.length === 0 ? (
                 <TableStatusRow
                   loading={scoresLoading}
+                  failed={scoresFailed}
                   empty={rows.length === 0}
                   colSpan={colSpan}
                   emptyText={selectedCode ? '기록이 없습니다.' : '리더보드를 선택하세요.'}
@@ -440,7 +445,7 @@ export default function ScoresTab({
                         {editError && <p className="text-xs text-red-600 text-right">{editError}</p>}
                         </div>
                       ) : (
-                        formatCount(r.score)
+                        formatScore(r.score)
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">{formatCount(r.score_count)}</td>
@@ -520,6 +525,7 @@ export default function ScoresTab({
                 <X className="w-4 h-4" />
               </button>
             </div>
+            <div className="mb-3"><TargetGameStrip /></div>
             <p className="mb-3 text-xs text-neutral-500">
               {dataEditRow.display_name ?? dataEditRow.account_id}
               {hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}
@@ -592,7 +598,7 @@ export default function ScoresTab({
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="text-neutral-800">{delTarget.display_name ?? delTarget.account_id}</div>
-            <div className="text-xs text-neutral-500 mt-1">{formatCount(delTarget.rank)}위 · {formatCount(delTarget.score)}점</div>
+            <div className="text-xs text-neutral-500 mt-1">{formatCount(delTarget.rank)}위 · {formatScore(delTarget.score)}점</div>
           </div>
         )}
       </ConfirmDialog>

@@ -200,6 +200,7 @@ export default function LeaderboardsTab({
 
   const [rows, setRows] = useState<LeaderboardRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const { drafts: allDrafts, error: draftsError, reload: reloadDrafts } = usePendingChanges()
   const drafts = allDrafts ?? []
   const [discarding, setDiscarding] = useState(false)
@@ -228,10 +229,12 @@ export default function LeaderboardsTab({
 
   const reloadRows = useCallback(async () => {
     setLoading(true)
+    setLoadFailed(false)
     try {
       const lb = await callAdmin<{ rows: LeaderboardRow[] }>(target, 'leaderboard.list')
       setRows(lb.rows)
     } catch (e: unknown) {
+      setLoadFailed(true)
       report(e, '불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -244,7 +247,12 @@ export default function LeaderboardsTab({
   const pendingItems: PendingItem[] = drafts
     .filter((d) => d.feature === 'leaderboard_table')
     .map((d) => ({ id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name }))
-  const draftOf = (code: string) => drafts.find((d) => d.feature === 'leaderboard_table' && d.object_name === code)
+  // 같은 리더보드에 변경이 여러 개 담길 수 있다 — 삭제가 하나라도 있으면 그게 게시 결과이므로 우선 표시한다.
+  const draftStateOf = (code: string): 'delete' | 'pending' | null => {
+    const mine = drafts.filter((d) => d.feature === 'leaderboard_table' && d.object_name === code)
+    if (mine.length === 0) return null
+    return mine.some((d) => d.action === 'delete') ? 'delete' : 'pending'
+  }
 
   const discardOne = async (id: number) => {
     setDiscarding(true)
@@ -294,10 +302,25 @@ export default function LeaderboardsTab({
   const handleSave = async () => {
     setTouched(true)
     if (!valid || saving) return
+    const code = editCode ?? form.code.trim()
+    // 이미 있는 코드로 "추가"를 게시하면 기존 리더보드 설정을 덮어쓰고, 되돌리면 기존 기록까지 지워진다.
+    if (!editCode) {
+      if (loading || loadFailed || allDrafts === null) {
+        setDialogError('목록을 불러오지 못해 코드가 겹치는지 확인할 수 없습니다. 새로고침한 뒤 다시 시도해 주세요.')
+        return
+      }
+      if (rows.some((r) => r.code === code)) {
+        setDialogError('이미 있는 리더보드 코드입니다. 다른 코드를 입력하거나, 목록에서 그 리더보드를 수정하세요.')
+        return
+      }
+      if (drafts.some((d) => d.feature === 'leaderboard_table' && d.action === 'create' && d.object_name === code)) {
+        setDialogError('같은 코드의 리더보드 추가가 이미 게시를 기다리고 있습니다.')
+        return
+      }
+    }
     setSaving(true)
     setDialogError('')
     try {
-      const code = editCode ?? form.code.trim()
       await callAdmin(target, 'schema.stage', {
         feature: 'leaderboard_table',
         action: editCode ? 'update' : 'create',
@@ -394,16 +417,17 @@ export default function LeaderboardsTab({
               </tr>
             </thead>
             <tbody>
-              {loading || rows.length === 0 ? (
+              {loading || loadFailed || rows.length === 0 ? (
                 <TableStatusRow
                   loading={loading}
+                  failed={loadFailed}
                   empty={rows.length === 0}
                   colSpan={11}
                   emptyText="등록된 리더보드가 없습니다."
                 />
               ) : (
                 rows.map((r) => {
-                  const draft = draftOf(r.code)
+                  const draftState = draftStateOf(r.code)
                   const noCycle = r.rotation === 'none'
                   return (
                   <tr
@@ -421,9 +445,9 @@ export default function LeaderboardsTab({
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700">진행 중</span>
                         )}
-                        {draft?.action === 'delete' ? (
+                        {draftState === 'delete' ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">삭제 대기</span>
-                        ) : draft ? (
+                        ) : draftState ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700" title="게시하면 적용됩니다">대기 중</span>
                         ) : null}
                       </div>

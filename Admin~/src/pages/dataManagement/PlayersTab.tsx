@@ -11,6 +11,7 @@ import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
+import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 
 type Row = { account_id: string; display_name: string; updated_at: string }
 
@@ -176,6 +177,7 @@ function PlayerEditModal({
           </div>
           <button onClick={requestClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기"><X className="w-4 h-4" /></button>
         </div>
+        <div className="px-5 pt-3"><TargetGameStrip /></div>
         {!loading && (
           <div className="px-5 pt-3 pb-3 border-b">
             <div className="relative">
@@ -396,11 +398,16 @@ export default function PlayersTab({
 
   const clipboardMismatch = !!clipboard && clipboard.appKey !== target
 
+  // 연달아 다른 행을 복사하면 응답이 늦게 온 쪽이 클립보드를 차지하고, 먼저 끝난 쪽이 다른 행의 로딩 표시를 끈다.
+  // 마지막으로 누른 복사만 반영한다.
+  const copyReqRef = useRef(0)
   const handleCopy = useCallback(async (row: Row) => {
+    const reqId = ++copyReqRef.current
     setCopyingId(row.account_id)
     setCopiedId(null)
     try {
       const fields = await fetchFields(target, row.account_id)
+      if (reqId !== copyReqRef.current) return
       const data = Object.fromEntries(fields.map((f) => [f.column_name, f.value]))
       const cb: DataClipboard = {
         sourceLabel: row.display_name, sourceAccountId: row.account_id, data,
@@ -414,9 +421,10 @@ export default function PlayersTab({
       if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
       copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1500)
     } catch (e: unknown) {
+      if (reqId !== copyReqRef.current) return
       report(e, '복사에 실패했습니다.')
     } finally {
-      setCopyingId(null)
+      if (reqId === copyReqRef.current) setCopyingId(null)
     }
   }, [target, report])
 

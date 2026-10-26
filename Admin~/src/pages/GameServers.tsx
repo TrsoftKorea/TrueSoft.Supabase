@@ -33,6 +33,7 @@ export default function GameServers({
 }) {
   const [rows, setRows] = useState<ServerRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [error, setError] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -50,7 +51,9 @@ export default function GameServers({
     setLoading(true)
     try {
       setRows(await callAdmin<ServerRow[]>(target, 'servers.list'))
+      setLoadFailed(false)
     } catch (e: unknown) {
+      setLoadFailed(true)
       report(e, '서버 목록을 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -106,8 +109,8 @@ export default function GameServers({
               </tr>
             </thead>
             <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} colSpan={6} emptyText="서버가 없습니다." />
+              {loading || loadFailed || rows.length === 0 ? (
+                <TableStatusRow loading={loading} failed={loadFailed} empty={rows.length === 0} colSpan={6} emptyText="서버가 없습니다." />
               ) : (
                 rows.map((s) => (
                   <tr key={s.id} className="border-t border-neutral-100">

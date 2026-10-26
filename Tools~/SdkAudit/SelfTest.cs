@@ -34,6 +34,7 @@ namespace SdkAudit
             "[R14 구조누락]",
             "[R15 코드우선]",
             "[R16 공통구간]", "[R16 연결값키]",
+            "[R17 설치누락]", "[R17 검증목록]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -190,6 +191,15 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             // 엣지 함수 공통 구간 — R16(두 사본이 한 줄 다름).
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/a/index.ts", "// ═══ BEGIN shared ═══\nconst x = 1;\n// ═══ END shared ═══\n");
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/b/index.ts", "// ═══ BEGIN shared ═══\nconst x = 2;\n// ═══ END shared ═══\nawait serverConfig(\"NOT_IN_DB\");\n");
+
+            // R17 — 없는 함수·표를 부르고, 있는 것(late_table·ts_never_scheduled)은 안 잡는지 본다.
+            // 대문자 CREATE TABLE 도 인식해야 한다(install.sql 에 섞여 있다).
+            Write(root, "Admin~/supabase/functions/admin-api/index.ts",
+                "await db.rpc(\"ts_ghost_fn\");\nawait db.rpc(\"ts_never_scheduled\");\nawait db.from(\"ghost_table\").select();\nawait db.from(\"late_table\").select();\nawait db.from(\"UPPER_TABLE\").select();\nawait db.storage.from(\"bucket\");\n");
+            File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"),
+                "\nCREATE TABLE IF NOT EXISTS public.UPPER_TABLE (id int);\ngrant execute on function public.ts_properly_scheduled() to authenticated;\n");
+            Write(root, "Samples~/DatabaseSetup/SQL/player/verify.sql",
+                "select 'grant:function'::text where p.proname not in ('ts_not_granted')");
 
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");

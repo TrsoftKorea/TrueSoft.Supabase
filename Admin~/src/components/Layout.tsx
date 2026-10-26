@@ -11,6 +11,7 @@ import { useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from './ui/ProjectIcon'
 import { ThemeToggle } from './ThemeToggle'
 import { signedInTargets } from '../lib/googleAuth'
+import { blockedReason, type SignInOutcome } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
 
 // 사이드바는 어두운 남색 바탕이다. 글자색은 바탕 위에서 4.5:1 이상이 되게 골랐다.
@@ -81,6 +82,7 @@ function NavSection({ label, children }: { label?: string; children: ReactNode }
 export function Layout({
   target,
   onTargetChange,
+  outcomes,
   email,
   isMaster,
   onSignOut,
@@ -89,6 +91,7 @@ export function Layout({
 }: {
   target: ProjectTarget
   onTargetChange: (t: ProjectTarget) => void
+  outcomes: SignInOutcome[]
   email: string
   isMaster: boolean
   onSignOut: () => void
@@ -111,7 +114,7 @@ export function Layout({
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
   const accent = colorOf(target)
-  // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 이 계정이 운영자가 아닌 게임이다.
+  // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 그 게임에서 받은 실패 사유를 붙인다.
   const allowedTargets = new Set(signedInTargets())
 
   return (
@@ -135,12 +138,14 @@ export function Layout({
           {PROJECTS.map((p) => {
             const on = p.key === target
             const allowed = allowedTargets.has(p.key)
+            const reason = allowed ? null : blockedReason(outcomes.find((o) => o.target === p.key))
             const c = colorOf(p.key)
             return (
               <button
                 key={p.key}
                 type="button"
                 disabled={!allowed}
+                title={reason?.full}
                 onClick={() => { if (!on) switchTarget(p.key) }}
                 aria-pressed={on}
                 className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors disabled:cursor-not-allowed disabled:text-[#8d93b0] ${
@@ -150,7 +155,7 @@ export function Layout({
               >
                 <ProjectIcon target={p.key} size={20} dim={!allowed} />
                 <span className="truncate">{look.name(p.key)}</span>
-                {!allowed && <span className="ml-auto text-[11px] whitespace-nowrap">권한 없음</span>}
+                {reason && <span className="ml-auto text-[11px] whitespace-nowrap">{reason.short}</span>}
               </button>
             )
           })}

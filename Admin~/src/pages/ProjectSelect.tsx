@@ -2,17 +2,20 @@ import { ChevronRight, LogOut } from 'lucide-react'
 import { PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { signedInEmail, signedInTargets } from '../lib/googleAuth'
+import { blockedReason, type SignInOutcome } from '../lib/api'
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { ThemeToggle } from '../components/ThemeToggle'
 
 /**
  * 로그인 뒤 게임 고르기. 로그인 때 모든 게임 서버에 한꺼번에 확인했으므로,
- * 표를 받은 게임만 들어갈 수 있고 나머지는 "권한 없음"으로 보인다.
+ * 표를 받은 게임만 들어갈 수 있고 나머지는 그 게임에서 받은 실패 사유를 보여 준다.
  */
 export default function ProjectSelect({
+  outcomes,
   onEnter,
   onSignOut,
 }: {
+  outcomes: SignInOutcome[]
   onEnter: (t: ProjectTarget) => void
   onSignOut: () => void
 }) {
@@ -42,6 +45,7 @@ export default function ProjectSelect({
           {PROJECTS.map((p) => {
             const ok = allowed.has(p.key)
             const color = look.color(p.key)
+            const reason = ok ? null : blockedReason(outcomes.find((o) => o.target === p.key))
             return (
               <li key={p.key}>
                 <button
@@ -52,12 +56,17 @@ export default function ProjectSelect({
                   style={ok ? { boxShadow: `inset 6px 0 0 ${color}` } : undefined}
                 >
                   <ProjectIcon target={p.key} size={40} dim={!ok} />
-                  <span className={`flex-1 min-w-0 truncate text-base font-semibold ${ok ? 'text-neutral-900' : 'text-[#8d93b0]'}`}>
-                    {look.name(p.key)}
+                  <span className="flex-1 min-w-0">
+                    <span className={`block truncate text-base font-semibold ${ok ? 'text-neutral-900' : 'text-[#8d93b0]'}`}>
+                      {look.name(p.key)}
+                    </span>
+                    {reason && reason.full !== reason.short && (
+                      <span className="block mt-0.5 text-xs text-[#8d93b0] break-words">{reason.full}</span>
+                    )}
                   </span>
                   {ok
                     ? <ChevronRight className="w-5 h-5 text-neutral-400 shrink-0" />
-                    : <span className="text-xs text-[#8d93b0] whitespace-nowrap">권한 없음</span>}
+                    : <span className="text-xs text-[#8d93b0] whitespace-nowrap">{reason?.short}</span>}
                 </button>
               </li>
             )

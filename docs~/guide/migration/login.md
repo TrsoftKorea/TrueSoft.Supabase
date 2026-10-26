@@ -11,6 +11,14 @@
 | `TrueBaseNanoo.UserId` | 플레이나누 uuid. 로그인 전에는 null |
 | `TrueBaseNanoo.OpenId` | 플레이나누 openid. SDK가 반환하지 않으면 null |
 
+## 닉네임 {#nickname}
+
+로그인할 때마다 플레이나누 닉네임을 Supabase 닉네임에 덮어씁니다. 수동·자동 로그인 모두 같고, 두 이름이 이미 같으면 아무것도 보내지 않습니다. 게임 코드가 할 일은 없습니다.
+
+Supabase가 그 이름을 거절하면 로그인은 그대로 성공하고 `[PlayNanooRuntime] PlayNANOO 닉네임 … 을 Supabase 에 넣지 못했습니다` 경고만 남깁니다. 다른 유저가 이미 쓰는 이름이거나 금칙어가 든 이름이 이런 경우입니다. 다음 로그인에 다시 시도합니다.
+
+게임에서 `Supabase.SetNameAsync()`로 닉네임을 바꾸면 플레이나누와 Supabase를 함께 바꿉니다. 운영 콘솔에서 바꾼 닉네임은 플레이나누에 반영되지 않으므로, 다음 로그인 때 플레이나누 닉네임으로 되돌아갑니다.
+
 ## Android Apple 로그인 {#apple-android}
 
 [Apple 신규 로그인](/guide/social/apple/signin)과 같은 `Supabase.SignInWithAppleAsync()`를 부릅니다. 플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열리고, 받은 토큰으로 Supabase와 플레이나누에 함께 로그인합니다. iOS는 달라지는 점이 없습니다.

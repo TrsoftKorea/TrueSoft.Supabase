@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
@@ -336,9 +336,14 @@ function ConsoleIdentityCard({
   const [iconError, setIconError] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const filled = useRef(false)
 
+  // 서버 값은 처음 받을 때만 채운다(게임을 바꾸면 current 가 null 로 돌아갔다가 다시 온다).
+  // current 가 바뀔 때마다 채우면 색 카드에서 저장할 때 여기서 고치던 이름·아이콘이 서버 값으로 돌아간다.
   useEffect(() => {
-    if (!current) return
+    if (!current) { filled.current = false; setSaved(false); return }
+    if (filled.current) return
+    filled.current = true
     setName(current.display_name ?? '')
     setIcon(current.icon)
     setIconError('')
@@ -474,10 +479,14 @@ function ConsoleColorCard({
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const filled = useRef(false)
 
+  // 이름·아이콘 카드와 같은 이유로 처음 받을 때만 채우고, 저장 표시도 그때만 끈다.
   useEffect(() => {
-    setSaved(false)
-    if (current) setValue(current.color ?? getProject(target).color)
+    if (!current) { filled.current = false; setSaved(false); return }
+    if (filled.current) return
+    filled.current = true
+    setValue(current.color ?? getProject(target).color)
   }, [target, current])
 
   const hex = value.trim().toLowerCase()
@@ -494,6 +503,7 @@ function ConsoleColorCard({
     try {
       const s = await callAdmin<ConsoleSettings>(target, 'settings.setConsoleColor', { color: color ?? '' })
       onSaved(s)
+      setValue(s.color ?? getProject(target).color)
       setSaved(true)
     } catch (e: unknown) {
       report(e, '색을 저장하지 못했습니다.')
@@ -523,7 +533,11 @@ function ConsoleColorCard({
               disabled={!current}
               onClick={() => { setValue(c.hex); setSaved(false) }}
               className="w-11 h-11 rounded-xl border-[3px] border-white disabled:opacity-40"
-              style={{ backgroundColor: c.hex, boxShadow: on ? '0 0 0 2px #161a2b' : '0 0 0 1px #d4d4d4' }}
+              // 테두리 색은 neutral 변수로 — 고정 색이면 어두운 화면에서 선택 표시가 안 보인다.
+              style={{
+                backgroundColor: c.hex,
+                boxShadow: on ? '0 0 0 2px rgb(var(--neutral-900))' : '0 0 0 1px rgb(var(--neutral-300))',
+              }}
             />
           )
         })}

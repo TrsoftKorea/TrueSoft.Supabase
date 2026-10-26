@@ -57,6 +57,6 @@ else
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Data.IsPermanentBan` | `bool` | 영구 차단 여부 |
-| `.Data.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 의미 없음 |
+| `.Data.IsPermanentBan` | `bool` | 영구 차단 여부. 운영 콘솔의 영구 차단처럼 해제까지 50년 넘게 남은 차단도 영구로 봅니다 |
+| `.Data.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 `null` |
 | `.Data.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |

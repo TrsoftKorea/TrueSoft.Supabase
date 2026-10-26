@@ -72,10 +72,17 @@ Deno.serve(async (req) => {
     .eq("account_id", accountId)
     .maybeSingle();
 
+  // 인증 서버는 기간 없는 차단을 두지 않아, 운영 콘솔의 영구 차단은 100년 뒤 해제로 들어간다.
+  // 50년 넘게 남았으면 영구로 보고 null 로 돌려준다 — SDK 는 null 을 영구 차단(IsPermanentBan)으로 읽는다.
+  // 콘솔 화면의 영구 표시(PlayerDetail isPermanent)와 같은 기준이다.
+  const permanentAfter = new Date(now);
+  permanentAfter.setFullYear(permanentAfter.getFullYear() + 50);
+  const isPermanent = bannedUntilDate !== null && bannedUntilDate >= permanentAfter;
+
   return json<BanInfoResponse>({
     ok: true,
     is_banned: true,
-    banned_until: bannedUntilRaw ?? null,
+    banned_until: isPermanent ? null : bannedUntilRaw ?? null,
     ban_message: msgRow?.ban_message ?? null,
   }, 200);
 });

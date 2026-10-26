@@ -144,12 +144,17 @@ async function verifyGoogleIdToken(idToken: string): Promise<string | null> {
   }
 }
 
-/** 표에 등록되고 비활성화되지 않은 운영자인지. */
+const OPERATOR_LOOKUP_FAILED = "운영자 목록을 읽지 못했습니다. 잠시 뒤 다시 시도해 주세요.";
+
+/**
+ * 표에 등록되고 비활성화되지 않은 운영자인지. 목록을 못 읽으면 던진다 — false 로 돌려주면
+ * 서버 고장이 콘솔에 "권한 없음"으로 보여 운영자가 엉뚱한 곳을 찾는다.
+ */
 async function isEnabledOperator(db: SupabaseClient, email: string): Promise<boolean> {
   const { data, error } = await db.rpc("ts_admin_list_operators");
   if (error) {
     console.error(`[admin-api] 운영자 목록 조회 실패: ${error.message}`);
-    return false;
+    throw new Error(OPERATOR_LOOKUP_FAILED);
   }
   const rows = (data ?? []) as Array<{ email?: unknown; disabled_at?: unknown }>;
   return rows.some((r) => r.email === email && r.disabled_at == null);
@@ -318,7 +323,8 @@ Deno.serve(async (req) => {
       }
     } catch (e) {
       console.error(`[admin-api] ${action} 실패: ${e}`);
-      return fail(e instanceof Error ? e.message : "처리에 실패했습니다.", 400);
+      const message = e instanceof Error ? e.message : "처리에 실패했습니다.";
+      return fail(message, message === OPERATOR_LOOKUP_FAILED ? 503 : 400);
     }
   }
 
@@ -332,8 +338,14 @@ Deno.serve(async (req) => {
 
   // ── 4. 인가 ────────────────────────────────────────────────────────────────
   const isMaster = MASTER_EMAILS.has(email);
-  if (!isMaster && !(await isEnabledOperator(db, email))) {
-    return fail("운영자 권한이 없습니다.", 403);
+  if (!isMaster) {
+    let enabled: boolean;
+    try {
+      enabled = await isEnabledOperator(db, email);
+    } catch {
+      return fail(OPERATOR_LOOKUP_FAILED, 503);
+    }
+    if (!enabled) return fail("운영자 권한이 없습니다.", 403);
   }
 
   // ── 5. 처리 ────────────────────────────────────────────────────────────────
@@ -608,7 +620,10 @@ async function handleAction(
         const untilMs = Date.parse(bannedUntil);
         if (Number.isNaN(untilMs)) throw new Error("bannedUntil 형식이 올바르지 않습니다.");
         const seconds = Math.ceil((untilMs - Date.now()) / 1000);
-        const banDuration = seconds <= 0 ? "none" : `${seconds}s`;
+        // 인증 서버는 기간을 Go duration 으로 읽어 약 292년을 넘기면 넘친다. 공식 문서의 "영구" 예시인
+        // 876000h(100년)를 상한으로 둔다 — 콘솔의 영구 차단도 이 값으로 들어간다.
+        const MAX_BAN_SECONDS = 876000 * 3600;
+        const banDuration = seconds <= 0 ? "none" : `${Math.min(seconds, MAX_BAN_SECONDS)}s`;
 
         const { error: banError } = await db.auth.admin.updateUserById(accountId, { ban_duration: banDuration });
         if (banError) throw new Error(banError.message);
@@ -1564,6 +1579,11 @@ const SERVER_ERRORS: Record<string, string> = {
   leaderboard_rotation_closed: "이미 끝난 회차입니다.",
   leaderboard_ended: "이미 종료된 리더보드입니다.",
   remote_config_key_not_found: "원격 설정을 찾을 수 없습니다.",
+  remote_config_key_exists: "이미 있는 키입니다. 목록에서 그 설정을 골라 필드를 추가하세요.",
+  leaderboard_code_exists: "이미 있는 리더보드 코드입니다.",
+  chat_mute_not_found: "이미 해제된 채팅 차단입니다.",
+  user_data_not_found: "이 플레이어는 유저 데이터가 없습니다.",
+  patch_required: "바꿀 값이 없습니다.",
   schema_draft_empty: "게시할 변경이 없습니다.",
   schema_version_not_found: "해당 버전을 찾을 수 없습니다.",
   schema_version_already_reverted: "이미 되돌린 버전입니다.",

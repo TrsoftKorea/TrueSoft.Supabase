@@ -6,6 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
@@ -126,6 +127,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
           <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
+          <TargetGameStrip />
           <div>
             <label className="block text-xs text-neutral-500 mb-1">게임 코드</label>
             <input

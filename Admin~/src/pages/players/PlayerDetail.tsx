@@ -18,7 +18,14 @@ import CouponsTab from './CouponsTab'
 
 type Tab = 'info' | 'userData' | 'mails' | 'coupons' | 'friends' | 'matches'
 
-const PERMANENT_UNTIL = '2999-12-31T23:59:59.000Z'
+// 인증 서버는 차단 기간 상한이 있어 "영구"는 100년으로 넣는다(서버 admin-api 도 같은 상한으로 자른다).
+const PERMANENT_YEARS = 100
+
+function permanentUntil(): string {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() + PERMANENT_YEARS)
+  return d.toISOString()
+}
 
 type Profile = {
   account_id: string
@@ -45,7 +52,8 @@ type BanInfo = {
 function isPermanent(iso: string | null): boolean {
   if (!iso) return false
   const d = new Date(iso)
-  return !Number.isNaN(d.getTime()) && d.getFullYear() >= 2900
+  // 영구 차단은 지금부터 100년이라 시간이 지나면 남은 기간이 줄어든다 — 50년 넘게 남았으면 영구로 본다.
+  return !Number.isNaN(d.getTime()) && d.getFullYear() >= new Date().getFullYear() + 50
 }
 
 export default function PlayerDetail({
@@ -66,7 +74,8 @@ export default function PlayerDetail({
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [ban, setBan] = useState<BanInfo | null>(null)
-  const [banLoading, setBanLoading] = useState(false)
+  // 첫 조회 전에도 "불러오는 중"이어야 한다 — false 로 시작하면 잠깐 "정상"이 보인다.
+  const [banLoading, setBanLoading] = useState(true)
   // 차단 정보를 못 읽었으면 "정상"으로 보이면 안 된다 — 차단 중인 플레이어를 정상으로 믿고 다시 차단하게 된다.
   const [banFailed, setBanFailed] = useState(false)
 
@@ -144,15 +153,18 @@ export default function PlayerDetail({
     }
   }
 
-  const banUntil = permanent
-    ? PERMANENT_UNTIL
-    : banUntilInput
-      ? new Date(banUntilInput).toISOString()
-      : ''
+  // 손으로 친 다섯 자리 연도처럼 날짜로 못 바꾸는 값은 toISOString 이 예외를 던져 화면이 깨진다 — 빈 값으로 받고 입력 오류로 알린다.
+  const typedUntil = banUntilInput ? new Date(banUntilInput) : null
+  const typedValid = !!typedUntil && !Number.isNaN(typedUntil.getTime()) && typedUntil.getFullYear() <= 9999
+  const banUntil = permanent ? permanentUntil() : typedValid ? typedUntil.toISOString() : ''
 
   const requestBan = () => {
     setError('')
     setBanInputError('')
+    if (!permanent && banUntilInput && !typedValid) {
+      setBanInputError('종료 기한을 날짜로 읽을 수 없습니다. 다시 입력하세요.')
+      return
+    }
     if (!banUntil) {
       setBanInputError('종료 기한을 입력하거나 영구 차단을 선택하세요.')
       return
@@ -344,11 +356,13 @@ export default function PlayerDetail({
         <InfoRow label="탈퇴">{withdrawalText(profile?.withdrawn_at ?? null)}</InfoRow>
         <InfoRow label="플랫폼">{profile?.platform ?? '-'}</InfoRow>
         <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>
-        <InfoRow label="총 결제금액">{formatKRW(profile?.total_paid_krw ?? null)}</InfoRow>
+        <InfoRow label="총 결제금액">{profile ? formatKRW(profile.total_paid_krw ?? null) : '-'}</InfoRow>
         <InfoRow label="환불">
-          {profile?.refund_count
-            ? <span className="text-red-600">{profile.refund_count}건 · {formatKRW(profile.refund_krw ?? null)}</span>
-            : '없음'}
+          {!profile
+            ? '-'
+            : profile.refund_count
+              ? <span className="text-red-600">{profile.refund_count}건 · {formatKRW(profile.refund_krw ?? null)}</span>
+              : '없음'}
         </InfoRow>
         <InfoRow label="마지막 로그인">{formatDateTime(profile?.last_sign_in_at ?? null)}</InfoRow>
         <InfoRow label="마지막 활동">{formatDateTime(profile?.last_activity_at ?? null)}</InfoRow>
@@ -401,6 +415,7 @@ export default function PlayerDetail({
                   type="datetime-local"
                   value={banUntilInput}
                   min={toDatetimeLocal(new Date().toISOString())}
+                  max="9999-12-31T23:59"
                   onChange={(e) => { setBanUntilInput(e.target.value); setBanInputError('') }}
                   disabled={permanent}
                   className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm disabled:bg-neutral-100 disabled:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"

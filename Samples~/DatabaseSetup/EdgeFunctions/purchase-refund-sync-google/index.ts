@@ -125,8 +125,9 @@ async function getGoogleAccessToken(serviceAccountJson: string): Promise<string>
 }
 // ═══ END google-token ═══
 
-async function listVoided(accessToken: string, packageName: string): Promise<VoidedPurchase[]> {
-  const out: VoidedPurchase[] = [];
+// 뒤 쪽이 실패해도 이미 받은 쪽은 돌려준다 — 통째로 버리면 환불이 많은 날마다 한 건도 표시되지 않는다.
+async function listVoided(accessToken: string, packageName: string): Promise<{ items: VoidedPurchase[]; error?: string }> {
+  const items: VoidedPurchase[] = [];
   let pageToken: string | undefined;
   for (let i = 0; i < MAX_PAGES; i++) {
     const url = new URL(
@@ -135,14 +136,18 @@ async function listVoided(accessToken: string, packageName: string): Promise<Voi
     url.searchParams.set("startTime", String(Date.now() - 30 * 24 * 3600 * 1000 + 60_000));
     url.searchParams.set("type", "0");   // 인앱 상품만. 구독은 SDK 가 다루지 않는다.
     if (pageToken) url.searchParams.set("pageSelection.token", pageToken);
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
-    const body = (await res.json()) as VoidedList;
-    out.push(...(body.voidedPurchases ?? []));
-    pageToken = body.tokenPagination?.nextPageToken;
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!res.ok) return { items, error: `HTTP ${res.status} ${(await res.text()).slice(0, 200)}` };
+      const body = (await res.json()) as VoidedList;
+      items.push(...(body.voidedPurchases ?? []));
+      pageToken = body.tokenPagination?.nextPageToken;
+    } catch (e) {
+      return { items, error: String(e instanceof Error ? e.message : e) };
+    }
     if (!pageToken) break;
   }
-  return out;
+  return { items };
 }
 
 Deno.serve(async () => {
@@ -156,14 +161,18 @@ Deno.serve(async () => {
   const { data: started, error: startError } = await db.rpc("ts_purchase_refund_sync_mark", {
     p_store: STORE, p_phase: "start", p_min_gap_seconds: MIN_GAP_SECONDS,
   });
-  if (startError) return reply(500, { ok: false, reason: startError.message });
-  if (!started) return reply(200, { ok: true, skipped: "recently_run" });
+  // 이 함수는 인증 없이 열려 있다 — 응답에는 성공 여부만 싣고, 자세한 내용은 purchase_refund_sync 표(운영 콘솔)에만 남긴다.
+  if (startError) {
+    console.error(`[purchase-refund-sync-google] 시작 기록 실패: ${startError.message}`);
+    return reply(500, { ok: false });
+  }
+  if (!started) return reply(200, { ok: true, skipped: true });
 
   const finish = async (ok: boolean, message: string, marked: number) => {
     await db.rpc("ts_purchase_refund_sync_mark", {
       p_store: STORE, p_phase: "finish", p_ok: ok, p_message: message, p_marked: marked,
     });
-    return reply(ok ? 200 : 500, { ok, message, marked });
+    return reply(ok ? 200 : 500, { ok });
   };
 
   const serviceAccountJson = await serverConfig("GOOGLE_SERVICE_ACCOUNT_JSON");
@@ -187,13 +196,11 @@ Deno.serve(async () => {
   const notes: string[] = [];
   let allOk = true;
   for (const pkg of packages) {
-    let voided: VoidedPurchase[];
-    try {
-      voided = await listVoided(accessToken, pkg);
-    } catch (e) {
+    const { items: voided, error: listError } = await listVoided(accessToken, pkg);
+    if (listError) {
       allOk = false;
-      notes.push(`${pkg}: ${e instanceof Error ? e.message : e}`);
-      continue;
+      notes.push(`${pkg}: ${listError}${voided.length > 0 ? ` (받은 ${voided.length}건은 처리)` : ""}`);
+      if (voided.length === 0) continue;
     }
     let pkgMarked = 0;
     const unmatched: string[] = [];

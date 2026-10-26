@@ -7,6 +7,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
@@ -100,6 +101,7 @@ function MuteModal({
           <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
+          <TargetGameStrip />
           {fixedAccount ? (
             <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
               <div className="text-neutral-800">{accountLabel}</div>

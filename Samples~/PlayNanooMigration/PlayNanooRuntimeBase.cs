@@ -55,7 +55,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const string NanooPendingGuestLinkKey = "TrueBase.NanooPendingGuestLink";
 
     private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
-    private string   _nanooNickname;       // 닉네임 변경 롤백용
+    private string   _nanooNickname;       // 나누 로그인 응답의 닉네임. 로그인 후 Supabase 로 옮기고, 변경 실패 시 롤백에 쓴다
+    private bool     _applyingNanooNickname;
 
     // 나누 refresh 토큰. 액세스 토큰이 만료되면 이것으로 새 토큰을 받는다(TokenRefresh).
     private string   _nanooRefreshToken;
@@ -433,7 +434,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             if (HandleNanooCallback(status, values, loginType))
             {
                 // false 면 호출부가 양쪽을 로그아웃하고 실패로 돌린다.
-                tcs.TrySetResult(await SyncDataAfterLogin());
+                tcs.TrySetResult(await SyncAfterLoginAsync());
             }
             else
             {
@@ -447,7 +448,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     /// <summary>로그인 성공 뒤 동기화를 돌리고, 계속하면 안 되는 경우 양쪽을 로그아웃하고 실패로 돌립니다.</summary>
     private async Task<SupabaseResult> SyncOrFailLoginAsync(SupabaseResult sdkResult)
     {
-        if (await SyncDataAfterLogin())
+        if (await SyncAfterLoginAsync())
             return sdkResult;
 
         await Supabase.SignOutFullyAsync();
@@ -515,6 +516,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     private Task<SupabaseResult> InterceptSetName(string nickname, Func<Task<SupabaseResult>> sdkSet)
     {
+        // 나누에서 받은 닉네임을 Supabase 에 옮기는 중이면 나누는 이미 그 이름이다 — 다시 쓰지 않는다.
+        if (_applyingNanooNickname)
+            return sdkSet();
+
         var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooSetNickname(nickname, async status =>
         {
@@ -1207,7 +1212,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         // 수동 로그인과 같게 동기화한다. 빠지면 매일 자동 로그인만 타는 유저는 나누와 한 번도 맞추지
         // 않은 채 플레이하게 되고, 나누 쓰기도 영영 열리지 않는다.
-        if (nanooOk && !await SyncDataAfterLogin())
+        if (nanooOk && !await SyncAfterLoginAsync())
             nanooOk = false;
 
         if (!nanooOk)
@@ -1353,6 +1358,42 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
         public static NanooRead Failed()            => new NanooRead(true, null);
         public static NanooRead From(string json)   => new NanooRead(false, string.IsNullOrEmpty(json) ? null : json);
+    }
+
+    /// <summary>로그인 직후 할 일 — 세이브를 맞추고, 닉네임을 나누 쪽으로 맞춥니다. 수동·자동 로그인 모두 여기를 지난다.</summary>
+    private async Task<bool> SyncAfterLoginAsync()
+    {
+        if (!await SyncDataAfterLogin())
+            return false;
+        await ApplyNanooNicknameAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// 나누 닉네임을 Supabase 닉네임으로 덮어씁니다. 나누가 원본이다 — 이관 전 유저의 닉네임은 나누에만 있다.
+    /// <para>같은 이름이면 SDK 가 네트워크 없이 넘긴다. Supabase 가 거절해도(이미 쓰는 이름·금칙어·길이) 로그인은 막지 않는다 —
+    /// 닉네임 때문에 게임에 못 들어가면 안 되고, 다음 로그인에 다시 시도한다.</para>
+    /// </summary>
+    private async Task ApplyNanooNicknameAsync()
+    {
+        var nickname = _nanooNickname?.Trim();
+        if (string.IsNullOrEmpty(nickname))
+            return;
+
+        _applyingNanooNickname = true;
+        try
+        {
+            var r = await Supabase.SetNameAsync(nickname);
+            if (r.IsSuccess)
+                Trace($"닉네임을 나누 쪽으로 맞춤 — \"{nickname}\"");
+            else
+                Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO 닉네임 \"{nickname}\" 을 Supabase 에 넣지 못했습니다({r.ErrorCode}). " +
+                                 "로그인은 계속하고 다음 로그인에 다시 시도합니다.");
+        }
+        finally
+        {
+            _applyingNanooNickname = false;
+        }
     }
 
     /// <summary>

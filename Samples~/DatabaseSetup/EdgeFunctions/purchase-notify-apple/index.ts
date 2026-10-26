@@ -380,11 +380,13 @@ Deno.serve(async (req) => {
     : null;
   const reason = type === "REFUND" && typeof tx.revocationReason === "number" ? String(tx.revocationReason) : null;
 
+  // 서명 시각을 같이 넘겨 결제 기록 전에 온 환불도 남기고, 재전송으로 늦게 온 옛 알림은 버린다.
   const { data: changed, error } = await db.rpc("ts_purchase_set_refund", {
     p_store: STORE,
     p_token: transactionId,
     p_refunded_at: refundedAt,
     p_reason: reason,
+    p_event_at: new Date(note.signedDate ?? Date.now()).toISOString(),
   });
   if (error) {
     console.error(`[purchase-notify-apple] 기록 실패: ${error.message}, transaction=${transactionId}`);
@@ -394,8 +396,8 @@ Deno.serve(async (req) => {
     return reply(500, { ok: false, reason: "db_error" });
   }
 
-  // 우리 기록에 없는 거래(다른 앱·검증 전 거래)는 changed=false 다. 실패가 아니다.
-  const message = `${type} ${transactionId}${changed ? "" : " (기록에 없거나 이미 반영됨)"}`;
+  // 아직 기록 전인 거래는 changed=false 지만 알림 상태는 남아 결제가 기록될 때 붙는다. 실패가 아니다.
+  const message = `${type} ${transactionId}${changed ? "" : " (아직 기록 전이거나 이미 반영됨)"}`;
   await db.rpc("ts_purchase_refund_sync_mark", {
     p_store: STORE, p_phase: "finish", p_ok: true, p_message: message, p_marked: changed ? 1 : 0,
   });

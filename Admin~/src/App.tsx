@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
 import { clearToken, getToken, signedInEmail, signedInTargets } from './lib/googleAuth'
-import { callAdmin, NotAuthenticatedError } from './lib/api'
+import { callAdmin, NotAuthenticatedError, type SignInOutcome } from './lib/api'
 import { PendingChangesProvider } from './lib/pendingChanges'
 import { refreshProjectLooks } from './lib/projectLook'
 import { Layout } from './components/Layout'
@@ -35,6 +35,17 @@ import BannedWords from './pages/BannedWords'
 type Me = { email: string; isMaster: boolean }
 
 const ENTERED_KEY = 'tb_admin_entered'
+// 게임별 로그인 결과(실패 사유 포함). 로그인 표와 같이 탭 단위로 기억해 새로고침 뒤에도 사유가 남게 한다.
+const OUTCOMES_KEY = 'tb_admin_signin_outcomes'
+
+function readOutcomes(): SignInOutcome[] {
+  try {
+    const raw = window.sessionStorage.getItem(OUTCOMES_KEY)
+    return raw ? (JSON.parse(raw) as SignInOutcome[]) : []
+  } catch {
+    return []
+  }
+}
 
 export default function App() {
   const [target, setTargetState] = useState<ProjectTarget>(() => getTarget())
@@ -43,12 +54,15 @@ export default function App() {
   const [entered, setEntered] = useState(() => window.sessionStorage.getItem(ENTERED_KEY) === '1')
   const [me, setMe] = useState<Me | null>(null)
   const [meError, setMeError] = useState('')
+  const [outcomes, setOutcomes] = useState<SignInOutcome[]>(readOutcomes)
 
   const inside = signedIn && entered && getToken(target) !== null
 
   const signOut = useCallback(() => {
     clearToken()
     window.sessionStorage.removeItem(ENTERED_KEY)
+    window.sessionStorage.removeItem(OUTCOMES_KEY)
+    setOutcomes([])
     setSignedIn(false)
     setEntered(false)
     setMe(null)
@@ -68,7 +82,9 @@ export default function App() {
     setMe(null)
   }, [])
 
-  const onSignedIn = useCallback(() => {
+  const onSignedIn = useCallback((results: SignInOutcome[]) => {
+    window.sessionStorage.setItem(OUTCOMES_KEY, JSON.stringify(results))
+    setOutcomes(results)
     window.sessionStorage.removeItem(ENTERED_KEY)
     setEntered(false)
     setSignedIn(true)
@@ -110,7 +126,7 @@ export default function App() {
   }, [inside, target, signOut])
 
   if (!signedIn) return <Login onSignedIn={onSignedIn} />
-  if (!inside) return <ProjectSelect onEnter={enter} onSignOut={signOut} />
+  if (!inside) return <ProjectSelect outcomes={outcomes} onEnter={enter} onSignOut={signOut} />
 
   // 권한 확인에 실패하면(대개 403) 화면 대신 사유를 보여준다.
   if (meError) {
@@ -143,6 +159,7 @@ export default function App() {
     <Layout
       target={target}
       onTargetChange={setTargetState}
+      outcomes={outcomes}
       email={me.email}
       isMaster={me.isMaster}
       onSignOut={signOut}

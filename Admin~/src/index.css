@@ -20,8 +20,10 @@ body {
 }
 
 /* 카드·입력칸의 흰 바탕은 화면 코드 곳곳에 bg-white 로 적혀 있다. 어두운 화면에서만 카드 바탕으로 바꾼다
-   (text-white 는 색 바탕 위 글자라 건드리지 않는다). */
-html.dark .bg-white,
-html.dark .hover\:bg-white:hover {
+   (text-white 는 색 바탕 위 글자라 건드리지 않는다).
+   html.dark 를 :where() 로 감싸 우선순위를 .bg-white 와 같게 둔다 — 그냥 쓰면 hover:·disabled: 바탕보다 세져서
+   마우스를 올려도·비활성이어도 바탕이 안 바뀐다. */
+:where(html.dark) .bg-white,
+:where(html.dark) .hover\:bg-white:hover {
   background-color: rgb(var(--surface));
 }

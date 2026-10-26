@@ -547,6 +547,7 @@ export default function ColumnsTab({
   const reloadCols = useCallback(async () => {
     if (!selectedCode) {
       setColsData(undefined)
+      setColsFailed(false)
       return
     }
     setColsLoading(true)

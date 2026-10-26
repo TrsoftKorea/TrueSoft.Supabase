@@ -50,11 +50,12 @@ export default function MailSchedules({
 
   const load = useCallback(async () => {
     setLoading(true)
+    // 시작할 때 지운다 — 성공했을 때 지우면 함께 나간 아이템 조회의 실패 표시까지 사라진다.
+    setError('')
     try {
       const res = await callAdmin<{ rows: ScheduleRow[] }>(target, 'mails.getSchedules')
       setRows(res.rows)
       setFailed(false)
-      setError('')
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setRows([])

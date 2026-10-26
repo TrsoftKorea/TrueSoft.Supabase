@@ -114,11 +114,12 @@ export default function MailRecords({
 
   const loadBatches = useCallback(async () => {
     setBatchLoading(true)
+    // 시작할 때 지운다 — 성공했을 때 지우면 함께 나간 분류·아이템 조회의 실패 표시까지 사라진다.
+    setError('')
     try {
       const res = await callAdmin<BatchData>(target, 'mails.getBatches', { page: batchPage, search: batchSearch, category: batchCategory })
       setBatchData(res)
       setBatchFailed(false)
-      setError('')
     } catch (e: unknown) {
       report(e, '발송 단위를 불러오지 못했습니다.')
       setBatchData(null)
@@ -131,13 +132,13 @@ export default function MailRecords({
 
   const loadRecords = useCallback(async () => {
     setRecLoading(true)
+    setError('')
     try {
       const res = await callAdmin<MailData>(target, 'mails.getRecords', {
         search, status, category, startDate: dateFrom || null, endDate: dateTo || null, batchId: selectedBatch?.id ?? null, page,
       })
       setRecData(res)
       setRecFailed(false)
-      setError('')
     } catch (e: unknown) {
       report(e, '우편 내역을 불러오지 못했습니다.')
       setRecData(null)

@@ -2022,9 +2022,10 @@ namespace TrueBase.Unity
 
                     if (!postSignInDone)
                     {
-                        var reserved = await HandleWithdrawalReservationGateAfterSignInAsync();
-                        if (reserved != null)
-                            return reserved;
+                        // 예약 게이트만 부르면 유예가 지난 계정을 지우지 못한 채 "가드 설정 확인" 오류로 멈춘다 — 가드부터 태운다.
+                        var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Anonymous);
+                        if (gated != null)
+                            return gated;
 
                         var ensured = await EnsureProfileAfterSignInAsync();
                         if (ensured != null)
@@ -3200,6 +3201,13 @@ namespace TrueBase.Unity
                 _currentSession.User.user_metadata.displayName = norm;
             }
 
+            // 로그인 도중(결과를 게임에 넘기기 전) 바꾼 경우 — 나누 런타임이 로그인 직후 나누 닉네임으로 덮어쓴다.
+            // 로그인 결과의 프로필은 그보다 먼저 담겨 있어, 고치지 않으면 게임이 옛 이름을 받는다.
+            if (!ReferenceEquals(_pendingSignInProfile, PublicProfile.Empty))
+                _pendingSignInProfile = new PublicProfile(
+                    _pendingSignInProfile.ProfileRowId, _pendingSignInProfile.PlayerUserId, norm,
+                    _pendingSignInProfile.WithdrawnAtIso, _pendingSignInProfile.ServerCode);
+
             return SupabaseResult<bool>.Success(true); // true = 실제 변경됨
         }
 
@@ -4243,7 +4251,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 로그인 직후 탈퇴 가드와 예약 게이트를 차례로 통과시킵니다.
-        /// 게이트가 하나라도 걸리면 그 결과를, 모두 통과했거나 삭제 후 재생성 중이면 null 을 돌려줍니다.
+        /// 게이트가 하나라도 걸리면 그 결과를, 모두 통과했거나 삭제 후 재생성 중(예약을 이미 알면 제외)이면 null 을 돌려줍니다.
         /// <para>
         /// 로그인 경로마다 이 순서를 손으로 적으면 한 곳을 빠뜨렸을 때 그 경로만 가드를 건너뛴다.
         /// 순서를 한 곳에 모아 둔다.
@@ -4254,7 +4262,9 @@ namespace TrueBase.Unity
             bool allowRecreateOnDeletion = true,
             bool knownScheduled = false)
         {
-            if (_isRecreatingAfterWithdrawalDelete)
+            // 재생성 중 예외는 가드의 재귀 삭제를 막으려는 것이다. 예약이 보인 계정까지 통과시키면 예약 계정으로 본편에 들어간다.
+            // 가드는 재생성 중이라 스스로 건너뛰고, 예약 게이트가 막는다.
+            if (_isRecreatingAfterWithdrawalDelete && !knownScheduled)
                 return null;
 
             // 탈퇴 예약이 아예 없으면 가드도 게이트도 no-op 이다. 상태 조회 한 번으로 갈라

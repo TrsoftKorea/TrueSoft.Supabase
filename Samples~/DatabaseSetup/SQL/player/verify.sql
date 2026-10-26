@@ -325,18 +325,26 @@ from (
   where p.prorettype <> 'trigger'::regtype
     and (has_function_privilege('anon', p.oid, 'EXECUTE')
       or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+    -- install.sql 이 authenticated·anon 에 grant 하는 함수 전부. 둘의 일치는 SdkAudit R17 이 본다.
     and p.proname not in (
-      'auth_user_server_id', 'ts_default_server_id', 'ts_server_now',
-      'ts_is_display_name_available', 'ts_anon_recovery_get_refresh_token',
-      'ts_anon_recovery_upsert_refresh_token', 'ts_anon_recovery_delete_by_fingerprint',
-      'ts_ensure_my_profile', 'ts_ensure_my_row', 'ts_my_server_id',
-      'ts_my_withdrawal_status', 'ts_after_sign_in', 'ts_request_withdrawal', 'ts_transfer_my_server',
-      'ts_delete_my_anon_recovery_tokens', 'ts_view_mail_for_user', 'ts_claim_mail_items',
-      'ts_claim_all_mail_items', 'ts_delete_mail_for_user',
-      'ts_delete_claimed_mails_for_user', 'ts_mail_inbox_counts', 'ts_mail_client_settings',
-      'ts_leaderboard_tables', 'ts_leaderboard_table', 'ts_leaderboard_submit_score',
-      'ts_leaderboard_range', 'ts_leaderboard_player', 'ts_leaderboard_set_player_data',
-      'ts_leaderboard_delete_my_score'
+      'auth_user_server_id', 'ts_after_sign_in', 'ts_anon_recovery_delete_by_fingerprint',
+      'ts_anon_recovery_get_refresh_token', 'ts_anon_recovery_upsert_refresh_token',
+      'ts_chat_channels', 'ts_chat_fetch_direct', 'ts_chat_fetch_lobby', 'ts_chat_fetch_many',
+      'ts_chat_send', 'ts_chat_send_direct', 'ts_chat_send_lobby',
+      'ts_claim_all_mail_items', 'ts_claim_mail_items', 'ts_coupon_redeem', 'ts_default_server_id',
+      'ts_delete_claimed_mails_for_user', 'ts_delete_mail_for_user', 'ts_delete_my_anon_recovery_tokens',
+      'ts_display_name_check', 'ts_ensure_my_profile', 'ts_ensure_my_row',
+      'ts_friend_limits', 'ts_friend_remove', 'ts_friend_request_cancel', 'ts_friend_request_respond',
+      'ts_friend_request_send', 'ts_friend_requests_list', 'ts_friend_search', 'ts_friends_list',
+      'ts_is_display_name_available', 'ts_leaderboard_columns_meta', 'ts_leaderboard_delete_my_score',
+      'ts_leaderboard_list_meta', 'ts_leaderboard_player', 'ts_leaderboard_range',
+      'ts_leaderboard_set_player_data', 'ts_leaderboard_submit_score', 'ts_leaderboard_table',
+      'ts_leaderboard_tables', 'ts_mail_client_settings', 'ts_mail_inbox_counts', 'ts_mark_purchase_granted',
+      'ts_match_history', 'ts_match_lobby_cancel', 'ts_match_lobby_create', 'ts_match_lobby_invite',
+      'ts_match_lobby_leave', 'ts_match_lobby_list_my', 'ts_match_lobby_respond',
+      'ts_match_lobby_set_member_meta', 'ts_match_lobby_start', 'ts_match_report_result',
+      'ts_match_report_solo_result', 'ts_match_stats', 'ts_my_server_id', 'ts_my_withdrawal_status',
+      'ts_request_withdrawal', 'ts_server_now', 'ts_transfer_my_server', 'ts_view_mail_for_user'
     )
 
   union all

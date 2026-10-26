@@ -9,6 +9,14 @@ export class NotAuthenticatedError extends Error {
   }
 }
 
+/** 서버가 응답은 했지만 실패를 돌려준 경우. 연결 자체가 안 된 경우는 일반 Error 다. */
+export class AdminRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+    this.name = 'AdminRequestError'
+  }
+}
+
 /**
  * 어드민 백엔드에 POST 하나를 보낸다. token 이 있으면 Authorization 헤더를 실어 보내고
  * 401 을 NotAuthenticatedError 로 바꾼다 — callAdmin/callAdminPublic 이 공유하는 실제 요청 로직은
@@ -44,7 +52,7 @@ async function postAdmin<T>(
 
   if (token && res.status === 401) throw new NotAuthenticatedError()
   if (!res.ok || !body?.ok) {
-    throw new Error(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`)
+    throw new AdminRequestError(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`, res.status)
   }
   return body.data as T
 }
@@ -66,8 +74,11 @@ export async function callAdmin<T>(
   return postAdmin<T>(target, action, params, token)
 }
 
-/** 게임별 로그인 결과. 실패한 게임은 사유를 들고 있다(대개 "운영자 권한이 없습니다"). */
-export type SignInOutcome = { target: ProjectTarget; ok: boolean; error?: string }
+/**
+ * 게임별 로그인 결과. 실패한 게임은 사유를 들고 있다.
+ * status 는 서버가 준 응답 코드 — 403 일 때만 "권한 없음"이고, 연결 실패면 비어 있다.
+ */
+export type SignInOutcome = { target: ProjectTarget; ok: boolean; error?: string; status?: number }
 
 /**
  * 모든 게임 서버에 같은 로그인을 한꺼번에 보내고, 통과한 게임의 표만 저장한다.
@@ -83,7 +94,12 @@ export async function signInAllProjects(
         const { token } = await postAdmin<{ token: string }>(p.key, action, params, null)
         return { target: p.key, ok: true, token }
       } catch (e: unknown) {
-        return { target: p.key, ok: false, error: e instanceof Error ? e.message : '로그인하지 못했습니다.' }
+        return {
+          target: p.key,
+          ok: false,
+          error: e instanceof Error ? e.message : '로그인하지 못했습니다.',
+          status: e instanceof AdminRequestError ? e.status : undefined,
+        }
       }
     }),
   )
@@ -93,7 +109,20 @@ export async function signInAllProjects(
     throw new Error(results.find((r) => r.error)?.error ?? '로그인하지 못했습니다.')
   }
   storeTokens(tokens)
-  return results.map(({ target, ok, error }) => (error ? { target, ok, error } : { target, ok }))
+  return results.map(({ target, ok, error, status }) =>
+    ok ? { target, ok } : { target, ok, error: error ?? '로그인하지 못했습니다.', ...(status !== undefined ? { status } : {}) },
+  )
+}
+
+/**
+ * 들어갈 수 없는 게임 옆에 붙일 사유. short 는 사이드바처럼 좁은 자리용이다.
+ * "권한 없음"은 서버가 403 을 준 게임에만 쓴다 — 연결 실패·서버 오류까지 권한 문제로 보이면
+ * 운영자가 엉뚱하게 권한을 요청하게 된다.
+ */
+export function blockedReason(outcome: SignInOutcome | undefined): { short: string; full: string } {
+  if (outcome?.status === 403) return { short: '권한 없음', full: '권한 없음' }
+  if (!outcome || outcome.ok) return { short: '다시 로그인', full: '로그인이 만료됐습니다. 다시 로그인해 주세요.' }
+  return { short: '들어갈 수 없음', full: outcome.error ?? '로그인하지 못했습니다.' }
 }
 
 /**

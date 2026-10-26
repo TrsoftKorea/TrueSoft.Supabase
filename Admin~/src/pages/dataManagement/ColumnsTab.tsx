@@ -456,7 +456,12 @@ export default function ColumnsTab({
 
   const q = search.trim().toLowerCase()
   const filtered = useMemo(
-    () => (q ? cols.filter((c) => c.column_name.toLowerCase().includes(q) || c.data_type.toLowerCase().includes(q)) : cols),
+    () => (q
+      ? cols.filter((c) =>
+          c.column_name.toLowerCase().includes(q)
+          || c.data_type.toLowerCase().includes(q)
+          || pgTypeLabel(c.data_type).toLowerCase().includes(q))
+      : cols),
     [cols, q],
   )
 

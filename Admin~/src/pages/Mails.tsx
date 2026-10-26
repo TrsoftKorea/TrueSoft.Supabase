@@ -32,6 +32,12 @@ const inputBase = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-wh
 const inputCls = inputBase + ' w-full'
 const areaCls = 'w-full px-2.5 py-2 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
+/** datetime-local 값("YYYY-MM-DDTHH:mm", 초가 붙기도 함)을 한국 시간으로 읽어 ISO 로 바꾼다. */
+function kstLocalToIso(local: string): string {
+  const withSeconds = local.length === 16 ? `${local}:00` : local
+  return new Date(`${withSeconds}+09:00`).toISOString()
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -267,7 +273,8 @@ export default function Mails({
       } else {
         await callAdmin(target, 'mails.createSchedule', {
           ...common, scheduleType: sched, expiresDays,
-          scheduledAt: sched === 'scheduled' ? new Date(scheduledAt).toISOString() : null,
+          // 입력칸 값에는 시간대가 없다 — 운영자 PC 시간대가 아니라 안내대로 한국 시간으로 읽는다.
+          scheduledAt: sched === 'scheduled' ? kstLocalToIso(scheduledAt) : null,
           repeatTime: sched === 'repeat' ? repeatTime : null,
           repeatUnit, repeatDow, repeatDom,
         })

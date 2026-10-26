@@ -25,13 +25,30 @@ export const PROJECTS: ProjectConfig[] = [
 
 const STORAGE_KEY = 'tb_project_target'
 
+const isTarget = (v: string | null): v is ProjectTarget => PROJECTS.some((p) => p.key === v)
+
+// 탭마다 다른 게임을 열 수 있으므로 지금 게임은 탭 저장소(sessionStorage)가 정한다.
+// 브라우저 공용 저장소는 "새 탭을 열 때 처음 고를 게임"으로만 쓴다 — 공용 값을 읽으면
+// 다른 탭에서 고른 게임이 이 탭의 확인 창·새로고침에 섞여 든다.
 export function getTarget(): ProjectTarget {
-  const v = window.localStorage.getItem(STORAGE_KEY)
-  return v === 'devilslayer' ? 'devilslayer' : 'defencer'
+  try {
+    const tab = window.sessionStorage.getItem(STORAGE_KEY)
+    if (isTarget(tab)) return tab
+    const last = window.localStorage.getItem(STORAGE_KEY)
+    if (isTarget(last)) return last
+  } catch {
+    // 저장소가 막힌 브라우저는 첫 게임으로.
+  }
+  return PROJECTS[0]!.key
 }
 
 export function setTarget(t: ProjectTarget): void {
-  window.localStorage.setItem(STORAGE_KEY, t)
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, t)
+    window.localStorage.setItem(STORAGE_KEY, t)
+  } catch {
+    // 저장이 막혀도 이번 화면에서는 App 상태가 게임을 들고 있다.
+  }
 }
 
 export function getProject(t: ProjectTarget): ProjectConfig {

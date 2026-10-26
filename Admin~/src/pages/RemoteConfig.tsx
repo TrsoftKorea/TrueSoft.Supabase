@@ -25,9 +25,13 @@ type Effective = { value_json: Record<string, unknown>; enabled: boolean; requir
 
 const formatItemValue = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v))
 
-function NewConfigModal({ target, onUnauthenticated, onClose, onCreated }: {
+function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, onClose, onCreated }: {
   target: ProjectTarget
   onUnauthenticated: () => void
+  /** 라이브 키 + 게시 대기 중인 키. */
+  existingKeys: string[]
+  /** 라이브 목록과 대기 목록을 둘 다 불러왔는지. 못 불러왔으면 겹치는지 알 수 없다. */
+  keysReady: boolean
   onClose: () => void
   onCreated: () => void
 }) {
@@ -39,6 +43,15 @@ function NewConfigModal({ target, onUnauthenticated, onClose, onCreated }: {
 
   const submit = async () => {
     if (!key.trim() || loading) return
+    // 이미 있는 키로 "추가"를 게시하면 그 키의 필드가 전부 비워진다.
+    if (!keysReady) {
+      setError('설정 목록을 불러오지 못해 키가 겹치는지 확인할 수 없습니다. 새로고침한 뒤 다시 시도해 주세요.')
+      return
+    }
+    if (existingKeys.includes(key.trim())) {
+      setError('이미 있는 키입니다. 목록에서 그 설정을 골라 필드를 추가하세요.')
+      return
+    }
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'remoteConfig.stageNew', { key: key.trim(), enabled, requiresAuth })
@@ -446,7 +459,12 @@ export default function RemoteConfig({
       )}
 
       {showNew && (
-        <NewConfigModal target={target} onUnauthenticated={onUnauthenticated} onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); void reloadDrafts() }} />
+        <NewConfigModal
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          existingKeys={keys}
+          keysReady={!loading && !loadFailed && allDrafts !== null}
+          onClose={() => setShowNew(false)} onCreated={() => { setShowNew(false); void reloadDrafts() }} />
       )}
 
       {itemModal && selectedKey && (
