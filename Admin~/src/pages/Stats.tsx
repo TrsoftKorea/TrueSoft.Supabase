@@ -23,6 +23,14 @@ const RANGES = [
   { days: 365, label: '1년' },
 ] as const
 
+type Tab = 'users' | 'comeback' | 'retention'
+// 매출·채팅 통계가 생기면 여기에 탭을 더한다.
+const TABS: [Tab, string][] = [
+  ['users', '일일 사용자'],
+  ['comeback', '복귀 유저'],
+  ['retention', '리텐션'],
+]
+
 const NEW_COLOR = '#1677ff'
 const RETURNING_COLOR = '#94a3b8'
 const COMEBACK_COLOR = '#f59e0b'
@@ -95,7 +103,42 @@ function RetentionCell({ kept, size }: { kept: number | null; size: number }) {
   )
 }
 
+function DailyTable({ days }: { days: Day[] }) {
+  return (
+    <WhiteCard>
+      <div className="border-b border-neutral-100 px-5 py-3">
+        <span className="text-sm font-medium text-neutral-800">날짜별 숫자</span>
+      </div>
+      <div className="overflow-x-auto max-h-96">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-surface">
+            <tr className="text-xs text-neutral-500 border-b border-neutral-100">
+              <th className="px-5 py-2 text-left font-medium">날짜</th>
+              <th className="px-3 py-2 text-right font-medium">전체</th>
+              <th className="px-3 py-2 text-right font-medium">신규</th>
+              <th className="px-3 py-2 text-right font-medium">재방문</th>
+              <th className="px-5 py-2 text-right font-medium">복귀</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d) => (
+              <tr key={d.day} className="border-b border-neutral-100 last:border-0">
+                <td className="px-5 py-1.5 whitespace-nowrap text-neutral-700">{d.day}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums font-medium">{n(d.total)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{n(d.new)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{n(d.returning)}</td>
+                <td className="px-5 py-1.5 text-right tabular-nums">{n(d.comeback)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </WhiteCard>
+  )
+}
+
 export default function Stats({ target, onUnauthenticated }: { target: ProjectTarget; onUnauthenticated: () => void }) {
+  const [tab, setTab] = useState<Tab>('users')
   const [days, setDays] = useState<number>(30)
   const [data, setData] = useState<ActivityStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -124,6 +167,24 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
       <PageHeader title="통계" description="날짜별 접속자, 복귀 유저, 가입일별 리텐션을 봅니다. 날짜는 한국 시간 기준입니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
+      <div className="border-b border-neutral-200 flex gap-1 overflow-x-auto">
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={[
+              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
+              tab === key
+                ? 'border-[#1677ff] text-[#1677ff] font-medium'
+                : 'border-transparent text-neutral-600 hover:text-neutral-900',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-1">
           {RANGES.map((r) => (
@@ -149,6 +210,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
             <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
           )}
 
+          {tab === 'users' && (<>
           <WhiteCard>
             <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-neutral-800">일일 사용자</span>
@@ -161,7 +223,10 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
               ]} />
             </div>
           </WhiteCard>
+          <DailyTable days={recent} />
+          </>)}
 
+          {tab === 'comeback' && (
           <WhiteCard>
             <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-neutral-800">복귀 유저</span>
@@ -171,7 +236,9 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
               <DayBars days={data.daily} series={[{ key: 'comeback', color: COMEBACK_COLOR, label: '복귀' }]} />
             </div>
           </WhiteCard>
+          )}
 
+          {tab === 'retention' && (
           <WhiteCard>
             <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
               <span className="text-sm font-medium text-neutral-800">리텐션</span>
@@ -202,36 +269,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
               </div>
             )}
           </WhiteCard>
-
-          <WhiteCard>
-            <div className="border-b border-neutral-100 px-5 py-3">
-              <span className="text-sm font-medium text-neutral-800">날짜별 숫자</span>
-            </div>
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-surface">
-                  <tr className="text-xs text-neutral-500 border-b border-neutral-100">
-                    <th className="px-5 py-2 text-left font-medium">날짜</th>
-                    <th className="px-3 py-2 text-right font-medium">전체</th>
-                    <th className="px-3 py-2 text-right font-medium">신규</th>
-                    <th className="px-3 py-2 text-right font-medium">재방문</th>
-                    <th className="px-5 py-2 text-right font-medium">복귀</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((d) => (
-                    <tr key={d.day} className="border-b border-neutral-100 last:border-0">
-                      <td className="px-5 py-1.5 whitespace-nowrap text-neutral-700">{d.day}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums font-medium">{n(d.total)}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{n(d.new)}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{n(d.returning)}</td>
-                      <td className="px-5 py-1.5 text-right tabular-nums">{n(d.comeback)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </WhiteCard>
+          )}
         </>
       )}
     </div>
