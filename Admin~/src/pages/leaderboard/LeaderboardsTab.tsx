@@ -11,6 +11,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Button } from '../../components/ui/Button'
+import { DEFAULT_TIME_ZONE, isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone, wallClockToIso, zonedParts } from '../../lib/gameTime'
 
 type LeaderboardRow = {
   code: string
@@ -21,6 +22,7 @@ type LeaderboardRow = {
   rotation: string
   rotation_period_seconds: number | null
   rotation_anchor_at: string | null
+  rotation_tz: string | null
   rotation_count: number
   next_rotation_at: string | null
   ends_at: string | null
@@ -45,13 +47,14 @@ type FormState = {
   hasEndsAt: boolean
   endsAt: string
   isActive: boolean
+  tz: string              // 이 리더보드의 시간대 — 입력칸 시각을 이것으로 읽는다
 }
 
 const DEFAULT_FORM: FormState = {
   code: '', displayName: '', scope: 'global', recordType: 'highest',
   sortType: 'desc', rotation: 'none', periodHours: '',
   anchorTime: '', anchorWeekday: '1', anchorDay: '1', anchorAt: '',
-  hasEndsAt: false, endsAt: '', isActive: true,
+  hasEndsAt: false, endsAt: '', isActive: true, tz: DEFAULT_TIME_ZONE,
 }
 
 const SCOPE_LABEL: Record<string, string> = { global: '전체 통합', server: '서버별' }
@@ -75,84 +78,44 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
-function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-}
+// ── 회전 기준시각·종료 시각은 그 리더보드의 시간대(form.tz)로 읽고 쓴다 ──────────────
+// 서버가 앵커의 그 시간대 벽시계(시각·요일·일)를 기준으로 회차 경계를 잡으므로,
+// 운영자 브라우저 시간대와 무관하게 같은 시간대로 만들고 되읽어야 어긋나지 않는다.
+// 새 리더보드는 게임 시간대, 이미 있는 리더보드는 만들 때 정해진 자기 시간대를 쓴다.
 
-// ── 회전 기준시각은 항상 KST(UTC+9, 서머타임 없음)로 해석한다 ──────────────
-// 서버가 앵커의 KST 벽시계(시각·요일·일)를 기준으로 회차 경계를 잡으므로,
-// 운영자 브라우저 타임존과 무관하게 KST 기준으로 만들고 되읽어야 어긋나지 않는다.
-
-/** KST 벽시계(연·월·일·시·분)를 그 시각의 절대 instant(ISO)로. 브라우저 타임존 무관. */
-function kstWallClockToIso(y: number, mo: number, d: number, hh: number, mm: number): string {
-  return new Date(`${y}-${pad2(mo)}-${pad2(d)}T${pad2(hh)}:${pad2(mm)}:00+09:00`).toISOString()
-}
-
-/** ISO instant을 KST 벽시계 구성요소로 분해. */
-function kstParts(iso: string): { hh: number; mm: number; dow: number; day: number } | null {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Seoul', hour12: false,
-    weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).formatToParts(d)
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
-  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
-  let hh = Number(get('hour'))
-  if (hh === 24) hh = 0 // 일부 환경에서 자정을 24로 반환
-  return { hh, mm: Number(get('minute')), dow: dowMap[get('weekday')] ?? 1, day: Number(get('day')) }
-}
-
-/** ISO를 KST datetime-local 문자열('YYYY-MM-DDTHH:MM')로. custom 시작 일시 표시용. */
-function toDatetimeLocalKst(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).formatToParts(d)
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
-  let hh = get('hour')
-  if (hh === '24') hh = '00'
-  return `${get('year')}-${get('month')}-${get('day')}T${hh}:${get('minute')}`
-}
-
-/** 저장된 앵커(timestamptz)를 KST 기준 입력값으로 되돌립니다. */
-function anchorToFields(iso: string | null | undefined) {
-  const p = iso ? kstParts(iso) : null
-  if (!p) return { anchorTime: '', anchorWeekday: '1', anchorDay: '1', anchorAt: '' }
+/** 저장된 앵커(timestamptz)를 tz 기준 입력값으로 되돌립니다. */
+function anchorToFields(iso: string | null | undefined, tz: string) {
+  const d = iso ? new Date(iso) : null
+  if (!d || Number.isNaN(d.getTime())) return { anchorTime: '', anchorWeekday: '1', anchorDay: '1', anchorAt: '' }
+  const p = zonedParts(d, tz)
   return {
     anchorTime: `${pad2(p.hh)}:${pad2(p.mm)}`,
     anchorWeekday: String(p.dow),
-    anchorDay: String(p.day),
-    anchorAt: toDatetimeLocalKst(iso),
+    anchorDay: String(p.d),
+    anchorAt: isoToLocalInput(iso, tz),
   }
 }
 
-/** 주기별 입력값을 서버에 보낼 앵커(ISO)로 조립합니다. KST 기준. 지정하지 않았으면 null. */
+/** 주기별 입력값을 서버에 보낼 앵커(ISO)로 조립합니다. form.tz 기준. 지정하지 않았으면 null. */
 function fieldsToAnchorIso(form: FormState): string | null {
   if (form.rotation === 'none') return null
   if (form.rotation === 'custom') {
-    return form.anchorAt ? new Date(`${form.anchorAt}:00+09:00`).toISOString() : null
+    return form.anchorAt ? localInputToIso(form.anchorAt, form.tz) : null
   }
   if (!form.anchorTime) return null
 
   const [hh = 0, mm = 0] = form.anchorTime.split(':').map(Number)
 
   if (form.rotation === 'weekly') {
-    // 2000-01-02 = 일요일(KST). 목표 요일(0~6)만큼 더한다(전부 1월 내: 2~8일).
-    return kstWallClockToIso(2000, 1, 2 + Number(form.anchorWeekday), hh, mm)
+    // 2000-01-02 = 일요일. 목표 요일(0~6)만큼 더한다(전부 1월 내: 2~8일).
+    return wallClockToIso(form.tz, 2000, 1, 2 + Number(form.anchorWeekday), hh, mm)
   }
   if (form.rotation === 'monthly') {
     // 31일까지 있는 1월에 지정 날짜로.
-    return kstWallClockToIso(2000, 1, Number(form.anchorDay), hh, mm)
+    return wallClockToIso(form.tz, 2000, 1, Number(form.anchorDay), hh, mm)
   }
   // daily — 시각만 의미. 고정 날짜 사용.
-  return kstWallClockToIso(2000, 1, 3, hh, mm)
+  return wallClockToIso(form.tz, 2000, 1, 3, hh, mm)
 }
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -190,6 +153,7 @@ export default function LeaderboardsTab({
   const [editCode, setEditCode] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
   const [touched, setTouched] = useState(false)
+  const gameTz = useGameTimeZone(target)
   const [delTarget, setDelTarget] = useState<LeaderboardRow | null>(null)
   const [rotateTarget, setRotateTarget] = useState<LeaderboardRow | null>(null)
   const [acting, setActing] = useState(false)
@@ -267,19 +231,21 @@ export default function LeaderboardsTab({
   }
 
   const openAdd = () => {
-    setEditCode(null); setForm(DEFAULT_FORM); setTouched(false); setDialogError(''); setModalOpen(true)
+    setEditCode(null); setForm({ ...DEFAULT_FORM, tz: gameTz ?? DEFAULT_TIME_ZONE }); setTouched(false); setDialogError(''); setModalOpen(true)
   }
   const openEdit = (r: LeaderboardRow) => {
     setDialogError('')
     setEditCode(r.code)
+    const tz = r.rotation_tz || gameTz || DEFAULT_TIME_ZONE
     setForm({
       code: r.code, displayName: r.display_name, scope: r.scope,
       recordType: r.record_type, sortType: r.sort_type, rotation: r.rotation,
       periodHours: r.rotation_period_seconds ? String(r.rotation_period_seconds / 3600) : '',
-      ...anchorToFields(r.rotation_anchor_at),
+      ...anchorToFields(r.rotation_anchor_at, tz),
       hasEndsAt: !!r.ends_at,
-      endsAt: toDatetimeLocal(r.ends_at),
+      endsAt: isoToLocalInput(r.ends_at, tz),
       isActive: r.is_active,
+      tz,
     })
     setTouched(false)
     setModalOpen(true)
@@ -334,8 +300,8 @@ export default function LeaderboardsTab({
           rotation: form.rotation,
           period_seconds: form.rotation === 'custom' && form.periodHours ? Math.round(Number(form.periodHours) * 3600) : null,
           anchor_at: fieldsToAnchorIso(form),
-          tz: 'Asia/Seoul',
-          ends_at: form.hasEndsAt && form.endsAt ? new Date(form.endsAt).toISOString() : null,
+          tz: form.tz,
+          ends_at: form.hasEndsAt && form.endsAt ? localInputToIso(form.endsAt, form.tz) : null,
           is_active: form.isActive,
         },
       })
@@ -393,6 +359,7 @@ export default function LeaderboardsTab({
       <div className="flex justify-end">
         <Button variant="primary" size="compact"
           onClick={openAdd}
+          disabled={!gameTz}
         >
           <Plus className="w-3.5 h-3.5" />리더보드 추가
         </Button>
@@ -660,7 +627,7 @@ export default function LeaderboardsTab({
                 </div>
                 <p className={hint}>{ROTATION_HINT[form.rotation] ?? ROTATION_HINT['none']}</p>
                 {form.rotation !== 'none' && (
-                  <p className={hint}>기준 시각은 한국 시간(KST)으로 저장됩니다.</p>
+                  <p className={hint}>기준 시각은 {timeZoneName(form.tz)}으로 저장됩니다.</p>
                 )}
                 {form.rotation !== 'none' && !fieldsToAnchorIso(form) && (
                   <p className={hint}>기준을 비우면 저장하는 시각이 기준이 됩니다.</p>
@@ -690,7 +657,7 @@ export default function LeaderboardsTab({
                   <p className={err}>종료 시각을 지정해주세요.</p>
                 )}
                 <p className={hint}>
-                  리더보드가 완전히 끝나는 시점입니다. 초기화 주기와는 따로 동작하며, 종료 후에는 순위 조회만 됩니다.
+                  리더보드가 완전히 끝나는 시점입니다. 초기화 주기와는 따로 동작하며, 종료 후에는 순위 조회만 됩니다. 시각은 {timeZoneName(form.tz)} 기준입니다.
                 </p>
               </div>
 

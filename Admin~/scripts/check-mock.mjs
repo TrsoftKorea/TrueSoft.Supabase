@@ -43,6 +43,28 @@ const dash = await call('dashboard.stats')
 const today = a30.daily[a30.daily.length - 1]
 ok(dash.new_today === today.new && dash.active_today === today.total, '[4] 대시보드 오늘 값 != 통계 오늘 값')
 
+// 1·2 국가별 매출 — 긴 기간이 짧은 기간보다 작을 수 없고, 나라별 합 = 합계, 결제자 ≤ 건수
+const r30 = await call('revenue.stats', { days: 30 })
+const r90 = await call('revenue.stats', { days: 90 })
+const sumOf = (rows, k) => rows.reduce((s, r) => s + r[k], 0)
+for (const r of [r30, r90]) {
+  ok(sumOf(r.countries, 'revenue_krw') === r.total_krw && sumOf(r.countries, 'purchases') === r.purchases, `[2] 나라별 합 != 합계 (${r.days}일)`)
+  for (const c of r.countries) ok(c.payers <= c.purchases, `[2] 결제자 > 건수 ${c.country}`)
+}
+for (const c of r30.countries) {
+  const long = r90.countries.find((x) => x.country === c.country)
+  ok(long && long.revenue_krw >= c.revenue_krw && long.purchases >= c.purchases, `[1] 90일 매출이 30일보다 작음 ${c.country}`)
+}
+
+// 1·2 일일 채팅 — 같은 날짜는 기간이 달라도 같고, 종류별 합 = total
+const ch30 = await call('chat.stats', { days: 30 })
+const ch90 = await call('chat.stats', { days: 90 })
+for (const d of ch30.daily) {
+  ok(Object.values(d.by_kind).reduce((s, v) => s + v, 0) === d.total, `[2] 채팅 종류별 합 != total ${d.day}`)
+  const long = ch90.daily.find((x) => x.day === d.day)
+  ok(long && long.total === d.total, `[1] 채팅 30일·90일 값이 다름 ${d.day}`)
+}
+
 // 2·5 동시접속자
 const c24 = await call('ccu.stats', { hours: 24 })
 const c7 = await call('ccu.stats', { hours: 168 })

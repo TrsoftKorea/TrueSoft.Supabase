@@ -66,6 +66,7 @@ const ACTION_LABELS: Record<string, string> = {
   'friends.settingsUpdate': '친구 설정 변경',
   'matchLobby.settingsUpdate': '매치 로비 설정 변경',
   'withdrawal.settingsUpdate': '탈퇴 기준 시간대 변경',
+  'game.settingsUpdate': '게임 시간대 변경',
   'settings.setServerConfig': '스토어 연결값 변경',
   'settings.setConsoleColor': '콘솔 색 변경',
   'settings.setConsoleIdentity': '콘솔 이름·아이콘 변경',

@@ -89,19 +89,44 @@ const intInRange = (p: Params, k: string, label: string, min: number, max: numbe
 // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
 const sanitizeSearchTerm = (s: string): string => s.replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
 
-// 화면의 날짜('YYYY-MM-DD')는 한국 날짜다. 시간대 없이 비교하면 DB(UTC) 자정으로 읽혀
-// 한국 시각 0~9시 기록이 전날로 빠진다 — 경계를 +09:00 시각으로 만들어 비교한다.
-const kstDayStart = (dateStr: string): string | null => {
+// 화면의 날짜('YYYY-MM-DD')는 게임 시간대(설정 › 시간대)의 날짜다. 시간대 없이 비교하면 DB(UTC) 자정으로 읽혀
+// 그 나라 새벽 기록이 전날로 빠진다 — 경계를 그 시간대의 자정 시각으로 만들어 비교한다.
+// deno-lint-ignore no-explicit-any
+const gameTimeZoneOf = async (db: any): Promise<string> => {
+  const { data, error } = await db.rpc("ts_admin_game_settings_get");
+  if (error) throw new Error(error.message);
+  return (data?.time_zone as string) || "Asia/Seoul";
+};
+
+/** tz 의 그 날짜 자정이 가리키는 instant. 서머타임 경계도 맞추려고 시차를 두 번 잰다. */
+const zonedMidnight = (tz: string, y: number, m: number, d: number): string => {
+  const target = Date.UTC(y, m - 1, d);
+  let t = target;
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }).formatToParts(new Date(t)).map((x) => [x.type, x.value]),
+    );
+    const wall = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute), Number(p.second));
+    t += target - wall;
+  }
+  return new Date(t).toISOString();
+};
+
+const dayStartIn = (tz: string, dateStr: string): string | null => {
   const [y, m, d] = dateStr.split("-").map(Number);
   if (!y || !m || !d) return null;
-  return new Date(Date.UTC(y, m - 1, d) - 9 * 3600_000).toISOString();
+  return zonedMidnight(tz, y, m, d);
 };
 
 // endDate 는 그날 하루 전체를 포함해야 한다 — 다음날 자정 미만(<)으로 바꾼다.
-const nextDayExclusive = (dateStr: string): string | null => {
+const nextDayExclusiveIn = (tz: string, dateStr: string): string | null => {
   const [y, m, d] = dateStr.split("-").map(Number);
   if (!y || !m || !d) return null;
-  return new Date(Date.UTC(y, m - 1, d + 1) - 9 * 3600_000).toISOString();
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return zonedMidnight(tz, next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -777,6 +802,7 @@ async function handleAction(
         const search = sanitizeSearchTerm(optStr(params, "search").trim());
         const startDate = params["startDate"];
         const endDate = params["endDate"];
+        const tz = startDate || endDate ? await gameTimeZoneOf(db) : "";
         const filtered = (from: number, to: number) => {
           let query = db
             .from("purchases")
@@ -791,10 +817,10 @@ async function handleAction(
           if (search) {
             query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
           }
-          const start = typeof startDate === "string" ? kstDayStart(startDate) : null;
+          const start = typeof startDate === "string" ? dayStartIn(tz, startDate) : null;
           if (start) query = query.gte("verified_at", start);
           if (typeof endDate === "string" && endDate) {
-            const next = nextDayExclusive(endDate);
+            const next = nextDayExclusiveIn(tz, endDate);
             if (next) query = query.lt("verified_at", next);
           }
           return query;
@@ -928,11 +954,12 @@ async function handleAction(
         if (source) query = query.ilike("source", `%${source}%`);
 
         const startDate = params["startDate"];
-        const start = typeof startDate === "string" ? kstDayStart(startDate) : null;
-        if (start) query = query.gte("created_at", start);
         const endDate = params["endDate"];
+        const tz = startDate || endDate ? await gameTimeZoneOf(db) : "";
+        const start = typeof startDate === "string" ? dayStartIn(tz, startDate) : null;
+        if (start) query = query.gte("created_at", start);
         if (typeof endDate === "string" && endDate) {
-          const next = nextDayExclusive(endDate);
+          const next = nextDayExclusiveIn(tz, endDate);
           if (next) query = query.lt("created_at", next);
         }
 
@@ -943,6 +970,18 @@ async function handleAction(
 
       case "dashboard.stats": {
         const { data, error } = await db.rpc("ts_admin_dashboard_stats");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "chat.stats": {
+        const { data, error } = await db.rpc("ts_admin_chat_stats", { p_days: intInRange(params, "days", "기간", 1, 365) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "revenue.stats": {
+        const { data, error } = await db.rpc("ts_admin_revenue_by_country", { p_days: intInRange(params, "days", "기간", 1, 365) });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
       }
@@ -1173,14 +1212,14 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
-      case "withdrawal.settingsGet": {
-        const { data, error } = await db.rpc("ts_admin_withdrawal_settings_get");
+      case "game.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_game_settings_get");
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
       }
 
-      case "withdrawal.settingsUpdate": {
-        const { data, error } = await db.rpc("ts_admin_withdrawal_settings_update", {
+      case "game.settingsUpdate": {
+        const { data, error } = await db.rpc("ts_admin_game_settings_update", {
           p_time_zone: str(params, "timeZone"),
           p_by: email,
         });
@@ -1697,7 +1736,7 @@ const SERVER_ERRORS: Record<string, string> = {
   operator_email_invalid: "이메일 형식이 올바르지 않습니다.",
   operator_not_found: "운영자를 찾을 수 없습니다.",
   operator_not_disabled: "먼저 비활성화한 운영자만 삭제할 수 있습니다.",
-  withdrawal_time_zone_invalid: "알 수 없는 시간대입니다.",
+  game_time_zone_invalid: "알 수 없는 시간대입니다.",
   mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",

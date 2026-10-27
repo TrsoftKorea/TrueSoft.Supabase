@@ -6,6 +6,8 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
+import { formatKRW } from '../components/ui/format'
+import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
 
 type Day = { day: string; total: number; new: number; returning: number; comeback: number }
 type Cohort = { day: string; size: number; kept: (number | null)[] }
@@ -23,13 +25,154 @@ const RANGES = [
   { days: 365, label: '1년' },
 ] as const
 
-type Tab = 'users' | 'comeback' | 'retention'
-// 매출·채팅 통계가 생기면 여기에 탭을 더한다.
+type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'chat'
 const TABS: [Tab, string][] = [
   ['users', '일일 사용자'],
   ['comeback', '복귀 유저'],
   ['retention', '리텐션'],
+  ['revenue', '국가별 매출'],
+  ['chat', '일일 채팅'],
 ]
+
+type ChatDay = { day: string; total: number; by_kind: Record<string, number> }
+type ChatStats = { daily: ChatDay[]; first_day: string | null }
+// 채널 종류 — 서버의 chat_channels.kind 값. 앞에 둔 것이 막대 아래에 쌓인다.
+const CHAT_KINDS: { key: string; label: string; color: string }[] = [
+  { key: 'global', label: '전체 채널', color: '#1677ff' },
+  { key: 'server', label: '서버 채널', color: '#60a5fa' },
+  { key: 'group', label: '로비 대화', color: '#f59e0b' },
+  { key: 'direct', label: '1:1', color: '#94a3b8' },
+]
+
+function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
+  target: ProjectTarget; days: number; reloadKey: number
+  onUnauthenticated: () => void; onError: (m: string) => void
+}) {
+  const [data, setData] = useState<ChatStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    callAdmin<ChatStats>(target, 'chat.stats', { days })
+      .then((r) => { if (alive) setData(r) })
+      .catch((e: unknown) => {
+        if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+        onError(e instanceof Error ? e.message : '채팅 통계를 불러오지 못했습니다.')
+      })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [target, days, reloadKey, onUnauthenticated, onError])
+
+  if (loading && !data) {
+    return <WhiteCard className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" /></WhiteCard>
+  }
+  if (!data) return null
+  // 막대는 종류별로 쌓는다 — 날짜 행에 종류별 숫자를 펼쳐 둔다.
+  const rows: DayRow[] = data.daily.map((d) => ({ day: d.day, ...Object.fromEntries(CHAT_KINDS.map((k) => [k.key, d.by_kind[k.key] ?? 0])) }))
+  const today = data.daily[data.daily.length - 1]
+  const sum = data.daily.reduce((s, d) => s + d.total, 0)
+
+  return (
+    <>
+      {data.first_day && data.daily[0] && data.first_day > data.daily[0].day && (
+        <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
+      )}
+      <WhiteCard>
+        <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium text-neutral-800">일일 채팅 개수</span>
+          <span className="text-xs text-neutral-500">
+            {today && <>오늘 {n(today.total)}개 · </>}기간 합계 {n(sum)}개 · 운영자 공지 제외
+          </span>
+        </div>
+        <div className="p-5">
+          <DayBars days={rows} series={CHAT_KINDS} unit="개" />
+        </div>
+      </WhiteCard>
+    </>
+  )
+}
+
+type CountryRow = { country: string; revenue_krw: number; purchases: number; payers: number }
+type RevenueStats = { days: number; total_krw: number; purchases: number; payers: number; countries: CountryRow[] }
+
+const regionNames = (() => {
+  try { return new Intl.DisplayNames(['ko'], { type: 'region' }) } catch { return null }
+})()
+const countryName = (code: string) =>
+  code === 'unknown' ? '알 수 없음' : `${regionNames?.of(code) ?? code} (${code})`
+
+function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
+  target: ProjectTarget; days: number; reloadKey: number
+  onUnauthenticated: () => void; onError: (m: string) => void
+}) {
+  const [data, setData] = useState<RevenueStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    callAdmin<RevenueStats>(target, 'revenue.stats', { days })
+      .then((r) => { if (alive) setData(r) })
+      .catch((e: unknown) => {
+        if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+        onError(e instanceof Error ? e.message : '매출을 불러오지 못했습니다.')
+      })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [target, days, reloadKey, onUnauthenticated, onError])
+
+  if (loading && !data) {
+    return <WhiteCard className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" /></WhiteCard>
+  }
+  if (!data) return null
+  const max = Math.max(1, ...data.countries.map((c) => c.revenue_krw))
+
+  return (
+    <WhiteCard>
+      <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium text-neutral-800">국가별 매출</span>
+        <span className="text-xs text-neutral-500">
+          합계 {formatKRW(data.total_krw)} · {n(data.purchases)}건 · 결제자 {n(data.payers)}명 · 가입 국가 기준, 환불 제외
+        </span>
+      </div>
+      {data.countries.length === 0 ? (
+        <div className="p-8 text-center text-sm text-neutral-400">이 기간에 결제가 없습니다.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-neutral-500 border-b border-neutral-100">
+                <th className="px-5 py-2 text-left font-medium">국가</th>
+                <th className="px-3 py-2 text-left font-medium w-2/5">매출</th>
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">금액</th>
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">비율</th>
+                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">건수</th>
+                <th className="px-5 py-2 text-right font-medium whitespace-nowrap">결제자</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.countries.map((c) => (
+                <tr key={c.country} className="border-b border-neutral-100 last:border-0">
+                  <td className="px-5 py-2 whitespace-nowrap text-neutral-800">{countryName(c.country)}</td>
+                  <td className="px-3 py-2">
+                    <div className="h-2.5 rounded-full bg-[#1677ff]" style={{ width: `${Math.max(1, (c.revenue_krw / max) * 100)}%` }} />
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatKRW(c.revenue_krw)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                    {data.total_krw > 0 ? `${((c.revenue_krw / data.total_krw) * 100).toFixed(1)}%` : '-'}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{n(c.purchases)}</td>
+                  <td className="px-5 py-2 text-right tabular-nums">{n(c.payers)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </WhiteCard>
+  )
+}
 
 const NEW_COLOR = '#1677ff'
 const RETURNING_COLOR = '#94a3b8'
@@ -41,8 +184,10 @@ const md = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10
 const W = 600
 const H = 150
 
+type DayRow = { day: string } & Record<string, number | string>
+
 /** 날짜별 막대. 계열을 아래부터 쌓는다(신규 + 재방문 = 전체). */
-function DayBars({ days, series }: { days: Day[]; series: { key: keyof Day; color: string; label: string }[] }) {
+function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; series: { key: keyof R & string; color: string; label: string }[]; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const max = Math.max(1, ...days.map((d) => series.reduce((s, x) => s + (d[x.key] as number), 0)))
   const slot = W / Math.max(1, days.length)
@@ -63,7 +208,7 @@ function DayBars({ days, series }: { days: Day[]; series: { key: keyof Day; colo
           <span className="text-neutral-800 whitespace-nowrap">
             {md(hd.day)} · {series.map((s) => `${s.label} ${n(hd[s.key] as number)}`).join(' · ')}
           </span>
-        ) : <span>최대 {n(max)}명</span>}
+        ) : <span>최대 {n(max)}{unit}</span>}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-36" onMouseLeave={() => setHover(null)}>
         <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} className="stroke-neutral-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />
@@ -140,6 +285,7 @@ function DailyTable({ days }: { days: Day[] }) {
 export default function Stats({ target, onUnauthenticated }: { target: ProjectTarget; onUnauthenticated: () => void }) {
   const [tab, setTab] = useState<Tab>('users')
   const [days, setDays] = useState<number>(30)
+  const [reloadKey, setReloadKey] = useState(0)
   const [data, setData] = useState<ActivityStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -161,10 +307,14 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
   const today = data?.daily[data.daily.length - 1]
   const recent = data ? [...data.daily].reverse() : []
+  const tz = useGameTimeZone(target)
 
   return (
     <div className="space-y-4">
-      <PageHeader title="통계" description="날짜별 접속자, 복귀 유저, 가입일별 리텐션을 봅니다. 날짜는 한국 시간 기준입니다." />
+      <PageHeader
+        title="통계"
+        description={`접속자, 복귀 유저, 리텐션, 국가별 매출, 채팅 개수를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="border-b border-neutral-200 flex gap-1">
@@ -194,7 +344,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
             </button>
           ))}
         </div>
-        <Button variant="outline" size="compact" onClick={() => void load()} disabled={loading}>
+        <Button variant="outline" size="compact" onClick={() => { void load(); setReloadKey((k) => k + 1) }} disabled={loading}>
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
         </Button>
@@ -206,8 +356,17 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
         </WhiteCard>
       ) : data && (
         <>
-          {data.first_day && data.first_day > data.daily[0]!.day && (
+          {/* 접속 기록은 통계를 만든 날부터 쌓였다. 매출은 결제 기록이 원래 있어 이 안내가 맞지 않는다. */}
+          {tab !== 'revenue' && tab !== 'chat' && data.first_day && data.first_day > data.daily[0]!.day && (
             <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
+          )}
+
+          {tab === 'revenue' && (
+            <RevenueTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
+          )}
+
+          {tab === 'chat' && (
+            <ChatTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
           )}
 
           {tab === 'users' && (<>

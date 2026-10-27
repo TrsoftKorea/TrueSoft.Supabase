@@ -15,7 +15,7 @@ export function mockToken(): string {
 // 1. 같은 날짜·시각은 어느 기간으로 봐도 같은 값 — 값은 기간이 아니라 날짜·시각에서만 나온다(hash).
 // 2. 나눈 값의 합 = 전체(신규+재방문 = 전체, 서버별·플랫폼별 합 = 지금 접속자).
 // 3. 복귀 ≤ 재방문, 리텐션 가입 인원 = 그날 신규, 다시 온 사람 ≤ 가입 인원이고 날이 갈수록 줄어든다.
-// 4. 같은 숫자는 화면끼리 같다(대시보드 오늘 신규·활동 = 통계의 오늘 값).
+// 4. 같은 숫자는 화면끼리 같다(대시보드 오늘 신규·활동 = 통계의 오늘 값). 매출은 긴 기간 합 ≥ 짧은 기간 합.
 // 5. 동시접속자 긴 기간의 점 = 그 구간 5분 값의 최고치, 기간 최고치 = 그래프의 최고 점.
 
 /** 문자열 → [0,1) 고정 난수. 같은 입력이면 언제나 같은 값. */
@@ -54,9 +54,55 @@ function activityStats(days: number) {
   const retention = [...daily].reverse().map((d, age) => ({
     day: d.day,
     size: d.new,
-    kept: offsets.map((o) => (o > age ? null : keptOf(d.day, d.new, o, offsets))),
+    kept: offsets.map((o) => (o >= age ? null : keptOf(d.day, d.new, o, offsets))),
   }))
   return { today, daily, offsets, retention, first_day: daily[0]?.day ?? null }
+}
+
+// ── 국가별 매출 ── 하루·나라별 결제는 날짜에서만 나온다(규칙 1) → 긴 기간 합은 짧은 기간 합보다 작아질 수 없다.
+const COUNTRIES: [string, number][] = [['KR', 1], ['JP', 0.35], ['US', 0.25], ['TW', 0.15], ['DE', 0.06], ['unknown', 0.03]]
+const PRICES = [1100, 3300, 5500, 9900, 33000, 119000]
+
+function revenueStats(days: number) {
+  const today = kstToday()
+  const rows = COUNTRIES.map(([country, weight]) => {
+    let purchases = 0
+    let krw = 0
+    for (let i = 0; i < days; i++) {
+      const day = addDays(today, -i)
+      const count = Math.floor(hash(`pay:${country}:${day}`) * 6 * weight)
+      for (let k = 0; k < count; k++) krw += PRICES[Math.floor(hash(`price:${country}:${day}:${k}`) * PRICES.length)]!
+      purchases += count
+    }
+    // 결제자는 건수보다 적다(한 사람이 여러 번 산다).
+    return { country, revenue_krw: krw, purchases, payers: Math.ceil(purchases * 0.6) }
+  }).filter((r) => r.purchases > 0).sort((a, b) => b.revenue_krw - a.revenue_krw)
+  return {
+    days,
+    total_krw: rows.reduce((s, r) => s + r.revenue_krw, 0),
+    purchases: rows.reduce((s, r) => s + r.purchases, 0),
+    payers: rows.reduce((s, r) => s + r.payers, 0),
+    countries: rows,
+  }
+}
+
+// ── 일일 채팅 ── 종류별 개수는 날짜에서만 나오고 total 은 그 합이다.
+const CHAT_KINDS: [string, number][] = [['global', 900], ['server', 500], ['group', 160], ['direct', 220]]
+
+function chatStats(days: number) {
+  const today = kstToday()
+  const daily = Array.from({ length: days }, (_, i) => {
+    const day = addDays(today, i - days + 1)
+    const by_kind = Object.fromEntries(CHAT_KINDS.map(([k, base]) => [k, Math.round(base * (0.6 + hash(`chat:${k}:${day}`) * 0.8))]))
+    return { day, total: Object.values(by_kind).reduce((s, v) => s + v, 0), by_kind }
+  })
+  return { daily, first_day: daily[0]?.day ?? null }
+}
+
+// ── 게임 시간대 ── 화면에서 바꿔 볼 수 있게 메모리에만 둔다(새로고침하면 처음 값).
+let gameSettings = {
+  time_zone: 'Asia/Seoul', updated_at: null as string | null, updated_by: null as string | null,
+  example_deadline: addDays(kstToday(), 8) + 'T00:00:00+09:00',
 }
 
 // ── 동시접속자 ──
@@ -127,6 +173,13 @@ const HANDLERS: Record<string, Handler> = {
   },
   'ccu.stats': (_t, p) => ccuStats(Number(p['hours'] ?? 24)),
   'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30)),
+  'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
+  'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
+  'game.settingsGet': () => gameSettings,
+  'game.settingsUpdate': (_t, p) => {
+    gameSettings = { ...gameSettings, time_zone: String(p['timeZone'] ?? gameSettings.time_zone), updated_at: new Date().toISOString(), updated_by: 'mock@local' }
+    return gameSettings
+  },
 }
 
 export async function mockAdmin<T>(target: ProjectTarget, action: string, params: Record<string, unknown>): Promise<T> {

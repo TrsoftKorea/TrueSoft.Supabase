@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatCount, itemsText } from '../components/ui/format'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
+import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -32,12 +33,6 @@ const LANG_LABEL: Record<string, string> = {
 const inputBase = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 const inputCls = inputBase + ' w-full'
 const areaCls = 'w-full px-2.5 py-2 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
-
-/** datetime-local 값("YYYY-MM-DDTHH:mm", 초가 붙기도 함)을 한국 시간으로 읽어 ISO 로 바꾼다. */
-function kstLocalToIso(local: string): string {
-  const withSeconds = local.length === 16 ? `${local}:00` : local
-  return new Date(`${withSeconds}+09:00`).toISOString()
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -245,7 +240,11 @@ export default function Mails({
     : sched === 'scheduled' ? `예약 · ${scheduledAt ? scheduledAt.replace('T', ' ') : ''}`
     : `반복 · ${repeatDesc}`
 
-  const canSend = msgOk && expiresDays > 0 && targetOk && schedOk && items.every((it) => it.key && Number(it.count) > 0)
+  // 예약 시각은 게임 시간대로 읽는다 — 시간대를 받기 전에는 예약을 보내지 않는다.
+  const tz = useGameTimeZone(target)
+  const tzText = tz ? `${timeZoneName(tz)} 기준` : ''
+  const canSend = msgOk && expiresDays > 0 && targetOk && schedOk && (sched === 'immediate' || !!tz)
+    && items.every((it) => it.key && Number(it.count) > 0)
 
   const resetForm = () => {
     setTitle(''); setContent(''); setItems([]); setSelected({}); setLangRows([])
@@ -283,8 +282,8 @@ export default function Mails({
       } else {
         await callAdmin(target, 'mails.createSchedule', {
           ...common, scheduleType: sched, expiresDays,
-          // 입력칸 값에는 시간대가 없다 — 운영자 PC 시간대가 아니라 안내대로 한국 시간으로 읽는다.
-          scheduledAt: sched === 'scheduled' ? kstLocalToIso(scheduledAt) : null,
+          // 입력칸 값에는 시간대가 없다 — 운영자 PC 시간대가 아니라 안내대로 게임 시간대로 읽는다.
+          scheduledAt: sched === 'scheduled' && tz ? localInputToIso(scheduledAt, tz) : null,
           repeatTime: sched === 'repeat' ? repeatTime : null,
           repeatUnit, repeatDow, repeatDom,
         })
@@ -312,7 +311,7 @@ export default function Mails({
         {sched === 'scheduled' && (
           <Field label="예약 시각">
             <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls + ' max-w-xs'} />
-            <p className="text-xs text-neutral-400 mt-1">한국 시간(KST) 기준</p>
+            <p className="text-xs text-neutral-400 mt-1">{tzText}</p>
           </Field>
         )}
         {sched === 'repeat' && (
@@ -338,7 +337,7 @@ export default function Mails({
               )}
               <Field label="발송 시각"><input type="time" value={repeatTime} onChange={(e) => setRepeatTime(e.target.value)} className={inputBase + ' w-32'} /></Field>
             </div>
-            <p className="text-xs text-neutral-400">발송 시각은 한국 시간(KST) 기준입니다.</p>
+            <p className="text-xs text-neutral-400">{tz ? `발송 시각은 ${timeZoneName(tz)} 기준입니다.` : ''}</p>
             {repeatUnit === 'month' && repeatDom > 28 && (
               <p className="text-xs text-amber-600">해당 일이 없는 달에는 말일에 발송됩니다.</p>
             )}

@@ -8,6 +8,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { formatDateTime, formatCount } from '../components/ui/format'
+import { DEFAULT_TIME_ZONE, useGameTimeZone, zonedParts } from '../lib/gameTime'
 
 type Job = {
   jobname: string
@@ -40,8 +41,8 @@ const JOB_LABELS: Record<string, string> = {
   'purchase-refund-sync-google': '구글 환불 확인',
 }
 
-// pg_cron 일정은 UTC 다. 화면에는 한국 시간으로 보인다.
-function scheduleInfo(s: string): { text: string; minutes: number | null } {
+// pg_cron 일정은 UTC 다. 화면에는 게임 시간대로 보인다(서머타임이 있으면 오늘 기준 시차).
+function scheduleInfo(s: string, tz: string): { text: string; minutes: number | null } {
   const p = s.trim().split(/\s+/)
   if (p.length !== 5 || p[2] !== '*' || p[3] !== '*' || p[4] !== '*') return { text: s, minutes: null }
   const m = p[0] ?? ''
@@ -51,8 +52,9 @@ function scheduleInfo(s: string): { text: string; minutes: number | null } {
   if (every && h === '*') return { text: `${every[1]}분마다`, minutes: Number(every[1]) }
   if (/^\d+$/.test(m) && h === '*') return { text: `매시 ${m}분`, minutes: 60 }
   if (/^\d+$/.test(m) && /^\d+$/.test(h)) {
-    const kst = (Number(h) + 9) % 24
-    return { text: `매일 ${String(kst).padStart(2, '0')}:${m.padStart(2, '0')}`, minutes: 1440 }
+    const now = new Date()
+    const local = zonedParts(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), Number(h), Number(m))), tz)
+    return { text: `매일 ${String(local.hh).padStart(2, '0')}:${String(local.mm).padStart(2, '0')}`, minutes: 1440 }
   }
   return { text: s, minutes: null }
 }
@@ -64,7 +66,7 @@ function healthOf(j: Job, now: number): Health {
   if (j.last_status === 'failed') return { label: '실패', cls: 'bg-red-100 text-red-700', bad: true }
   if (!j.last_start) return { label: '최근 기록 없음', cls: 'bg-amber-100 text-amber-700', bad: true }
   // 일정 간격의 두 배가 넘도록 안 돌았으면 작업이 멈춘 것이다. 실패 기록도 안 남아 가장 놓치기 쉽다.
-  const { minutes } = scheduleInfo(j.schedule)
+  const { minutes } = scheduleInfo(j.schedule, 'UTC')
   if (minutes !== null && now - new Date(j.last_start).getTime() > (minutes * 2 + 2) * 60_000) {
     return { label: '멈춤', cls: 'bg-red-100 text-red-700', bad: true }
   }
@@ -106,7 +108,8 @@ export default function CronJobs({
 
   useEffect(() => { void load() }, [load])
 
-  const rows = jobs.map((j) => ({ j, h: healthOf(j, loadedAt), s: scheduleInfo(j.schedule) }))
+  const tz = useGameTimeZone(target) ?? DEFAULT_TIME_ZONE
+  const rows = jobs.map((j) => ({ j, h: healthOf(j, loadedAt), s: scheduleInfo(j.schedule, tz) }))
   const badCount = rows.filter((r) => r.h.bad).length
 
   return (

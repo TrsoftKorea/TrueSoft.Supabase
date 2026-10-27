@@ -57,9 +57,18 @@ function publish() {
   const files = pendingFiles()
   if (files.length === 0) return { ok: false, error: '게시할 변경이 없습니다.' }
 
+  // 푸시는 브랜치 전체를 올린다 — 아직 안 올린 다른 커밋(SDK 등)이 있으면 함께 나가므로 게시하지 않는다.
+  const ahead = Number(git('rev-list', '--count', '@{u}..HEAD'))
+  if (ahead > 0) return { ok: false, error: `아직 올리지 않은 커밋 ${ahead}개가 있어 게시하지 않았습니다. 그 커밋을 먼저 정리해 주세요.` }
+
   const message = (fs.existsSync(MESSAGE_FILE) ? fs.readFileSync(MESSAGE_FILE, 'utf8').trim() : '') || '콘솔 화면 게시'
   const paths = files.map((f) => f.file)
-  git('add', '-A', '--', ...paths)
+  // 저장소 .gitignore 의 `supabase/` 가 Admin~/supabase 도 덮는다. 그 안의 admin-api 는 추적 중인 파일이라 고친 건 올려야 하는데,
+  // `add -A` 는 무시 목록 폴더 안의 경로를 받으면 추적 중이어도 오류로 멈춘다 — 추적 중인 파일은 -u 로, 새 파일만 따로 담는다.
+  const fresh = files.filter((f) => f.status === '??').map((f) => f.file)
+  const tracked = files.filter((f) => f.status !== '??').map((f) => f.file)
+  if (tracked.length) git('add', '-u', '--', ...tracked)
+  if (fresh.length) git('add', '--', ...fresh)
   // 이 파일들만 커밋한다 — 다른 곳(SDK 등)에 담겨 있던 변경은 섞지 않는다.
   git('commit', '-q', '-m', message, '--', ...paths)
   const commit = git('rev-parse', '--short', 'HEAD')
@@ -85,8 +94,12 @@ function serveStatic(req, res) {
   res.end(body)
 }
 
+// 주소창 이름(Host)이 이 PC 가 아니면 거절한다 — 남의 도메인을 127.0.0.1 로 돌려 화면에 심은 암호값을 읽는 공격(DNS rebinding) 차단.
+const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`])
+
 http.createServer((req, res) => {
   try {
+    if (!ALLOWED_HOSTS.has(req.headers.host ?? '')) return json(res, 403, { ok: false, error: 'forbidden host' })
     if (req.url === '/__publish/status' && req.method === 'GET') {
       if (!checkCaller(req)) return json(res, 403, { ok: false, error: 'forbidden' })
       return json(res, 200, { ok: true, files: pendingFiles(), message: fs.existsSync(MESSAGE_FILE) ? fs.readFileSync(MESSAGE_FILE, 'utf8').trim() : '' })

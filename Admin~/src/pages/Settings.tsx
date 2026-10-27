@@ -9,6 +9,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
+import { forgetGameTimeZone, TIME_ZONES, type GameSettings } from '../lib/gameTime'
 import { Pencil, Trash2 } from 'lucide-react'
 import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
 
@@ -596,29 +597,6 @@ function ConsoleColorCard({
   )
 }
 
-// 고를 수 있는 시간대. DB 가 아는 이름(pg_timezone_names)만 받는다 — 목록 밖 값이 이미 저장돼 있으면 그것도 보인다.
-const TIME_ZONES: readonly (readonly [string, string])[] = [
-  ['Asia/Seoul', '한국 (UTC+9)'],
-  ['Asia/Tokyo', '일본 (UTC+9)'],
-  ['Asia/Shanghai', '중국 (UTC+8)'],
-  ['Asia/Taipei', '대만 (UTC+8)'],
-  ['Asia/Singapore', '싱가포르 (UTC+8)'],
-  ['Asia/Bangkok', '태국 (UTC+7)'],
-  ['Asia/Jakarta', '인도네시아 서부 (UTC+7)'],
-  ['Asia/Kolkata', '인도 (UTC+5:30)'],
-  ['Europe/Moscow', '러시아 모스크바 (UTC+3)'],
-  ['Europe/Berlin', '중부 유럽 (UTC+1, 서머타임)'],
-  ['Europe/London', '영국 (UTC+0, 서머타임)'],
-  ['UTC', '협정 세계시 (UTC)'],
-  ['America/Sao_Paulo', '브라질 (UTC-3)'],
-  ['America/New_York', '미국 동부 (UTC-5, 서머타임)'],
-  ['America/Chicago', '미국 중부 (UTC-6, 서머타임)'],
-  ['America/Los_Angeles', '미국 서부 (UTC-8, 서머타임)'],
-  ['Australia/Sydney', '호주 동부 (UTC+10, 서머타임)'],
-]
-
-type WithdrawalSettings = { time_zone: string; updated_at: string | null; updated_by: string | null; example_deadline: string | null }
-
 function zonedText(iso: string | null, tz: string): string {
   if (!iso) return '-'
   try {
@@ -630,8 +608,8 @@ function zonedText(iso: string | null, tz: string): string {
   }
 }
 
-function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
-  const [current, setCurrent] = useState<WithdrawalSettings | null>(null)
+function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const [current, setCurrent] = useState<GameSettings | null>(null)
   const [tz, setTz] = useState('')
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -640,11 +618,11 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
   useEffect(() => {
     void (async () => {
       try {
-        const s = await callAdmin<WithdrawalSettings>(target, 'withdrawal.settingsGet')
+        const s = await callAdmin<GameSettings>(target, 'game.settingsGet')
         setCurrent(s)
         setTz(s.time_zone)
       } catch (e: unknown) {
-        report(e, '탈퇴 설정을 불러오지 못했습니다.')
+        report(e, '시간대 설정을 불러오지 못했습니다.')
       }
     })()
   }, [target, report])
@@ -652,7 +630,8 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
   const save = async () => {
     setBusy(true); setSaveError('')
     try {
-      const s = await callAdmin<WithdrawalSettings>(target, 'withdrawal.settingsUpdate', { timeZone: tz })
+      const s = await callAdmin<GameSettings>(target, 'game.settingsUpdate', { timeZone: tz })
+      forgetGameTimeZone(target)
       setCurrent(s); setTz(s.time_zone); setAsking(false)
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { report(e, ''); return }
@@ -670,11 +649,13 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <div>
-        <h3 className="text-sm font-semibold text-neutral-900">탈퇴</h3>
-        <p className="text-xs text-neutral-500 mt-1">탈퇴를 예약한 계정은 유예가 끝난 다음 자정에 삭제됩니다. 그 자정을 어느 나라 시간으로 셀지 정합니다.</p>
+        <h3 className="text-sm font-semibold text-neutral-900">게임 시간대</h3>
+        <p className="text-xs text-neutral-500 mt-1">
+          통계의 하루, 대시보드의 오늘, 날짜 검색, 탈퇴 계정이 삭제되는 자정, 새로 만드는 우편 예약·리더보드 회차를 이 시간대로 셉니다.
+        </p>
       </div>
       <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-neutral-700">기준 시간대</label>
+        <label className="block text-sm font-medium text-neutral-700">시간대</label>
         <select value={tz} onChange={(e) => setTz(e.target.value)} className={inputCls + ' max-w-sm'} disabled={!current}>
           {options.map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
         </select>
@@ -683,7 +664,9 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
             지금 7일 유예로 탈퇴하면 <span className="font-medium text-neutral-700">{zonedText(current.example_deadline, current.time_zone)}</span>({label(current.time_zone)})에 삭제됩니다.
           </p>
         )}
-        <p className="text-xs text-neutral-400">바꿔도 이미 예약된 계정의 삭제 시각은 그대로입니다.</p>
+        <p className="text-xs text-neutral-400">
+          바꾸면 그 뒤로 쌓이는 기록부터 새 시간대로 셉니다. 지난 날짜별 통계, 이미 예약된 탈퇴, 이미 만든 우편 예약과 리더보드는 그대로입니다.
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Button variant="primary" onClick={() => { setSaveError(''); setAsking(true) }} disabled={!current || tz === current.time_zone}>
@@ -697,13 +680,13 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
       </div>
       <ConfirmDialog
         open={asking}
-        title="탈퇴 기준 시간대를 바꿀까요?"
+        title="게임 시간대를 바꿀까요?"
         confirmLabel="바꾸기"
         busy={busy}
         error={saveError || undefined}
         onConfirm={() => { void save() }}
         onCancel={() => setAsking(false)}
-        description="앞으로 탈퇴를 예약하는 계정부터 새 시간대의 자정에 삭제됩니다."
+        description="통계의 하루가 바뀌는 시각이 달라져, 바꾼 날의 숫자는 두 기준이 섞입니다. 지난 기록은 다시 세지 않습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
           {current ? label(current.time_zone) : ''} → <span className="font-medium">{label(tz)}</span>
@@ -713,14 +696,14 @@ function WithdrawalCard({ target, report }: { target: ProjectTarget; report: (e:
   )
 }
 
-type Tab = 'store' | 'mail' | 'friend' | 'lobby' | 'withdrawal' | 'console'
+type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '스토어 연결'],
+  ['time', '시간대'],
   ['mail', '우편'],
   ['friend', '친구'],
   ['lobby', '매치 로비'],
-  ['withdrawal', '탈퇴'],
   ['console', '콘솔 표시'],
 ]
 
@@ -763,7 +746,7 @@ export default function Settings({
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
       {tab === 'console' && <ConsoleCards target={target} report={report} />}
-      {tab === 'withdrawal' && <WithdrawalCard target={target} report={report} />}
+      {tab === 'time' && <TimeZoneCard target={target} report={report} />}
       {tab === 'mail' && (
         <LimitsForm
           target={target}
