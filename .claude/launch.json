@@ -20,6 +20,13 @@
       "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
       "cwd": "Admin~",
       "port": 4173
+    },
+    {
+      "name": "admin-mock",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview:mock"],
+      "cwd": "Admin~",
+      "port": 4174
     }
   ]
 }

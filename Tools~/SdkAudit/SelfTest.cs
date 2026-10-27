@@ -67,6 +67,12 @@ namespace SdkAudit
 
                 var found = ctx.Report.Errors.Concat(ctx.Report.Warnings).ToList();
                 var missing = ExpectedTags.Where(tag => !found.Any(f => f.StartsWith(tag, StringComparison.Ordinal))).ToList();
+                // 같은 태그를 다른 경로도 내므로 태그만으로는 SQL 본문 검사가 살아 있는지 모른다 — 함수 이름으로 본다.
+                // plpgsql 본문은 설치 때 해석되지 않으므로 잡히면 오탐이다.
+                if (!found.Any(f => f.Contains("ts_early_sql ")))
+                    missing.Add("[R9 설치순서] language sql 본문(ts_early_sql)");
+                if (found.Any(f => f.Contains("ts_early_plpgsql")))
+                    missing.Add("[R9 설치순서] plpgsql 본문 오탐(ts_early_plpgsql)");
 
                 Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개 · 변경 게이트 {GateCases.Length}건");
                 Console.WriteLine();
@@ -167,6 +173,12 @@ SupabaseResult Supabase.RealApiAsync(int wrongParam)
             // 제대로 스케줄된 함수도 같이 둬서 R13 이 그건 안 잡는지 본다.
             Write(root, "Samples~/DatabaseSetup/SQL/player/install.sql", @"
 create index if not exists early_idx on public.late_table (id);
+
+create or replace function public.ts_early_sql()
+returns bigint language sql stable as $$ select count(*) from public.late_sql_table; $$;
+create or replace function public.ts_early_plpgsql()
+returns void language plpgsql as $$ begin perform 1 from public.late_sql_table; end; $$;
+create table if not exists public.late_sql_table (id int);
 
 create table if not exists public.late_table (
   id uuid primary key

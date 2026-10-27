@@ -404,7 +404,7 @@ namespace TrueBase.Core.Data
         /// RPC: <c>ts_request_withdrawal</c>. 성공 시 예약된 시각(ISO 8601)을 반환합니다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="delayDays">탈퇴까지 유예 일수. 음수는 0으로 보정됩니다.</param>
+        /// <param name="delayDays">탈퇴까지 유예 일수. 서버가 최소 1일로 맞춥니다(바로 지우는 건 즉시 탈퇴).</param>
         public async Task<SupabaseResult<string>> RequestWithdrawalByDelayDaysAsync(
             string accessToken,
             int delayDays)
@@ -431,7 +431,12 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
+            {
+                // 서버가 raise 한 사유는 본문에만 있다 — ErrorMessage 는 "HTTP/1.1 400 Bad Request" 같은 통신 문구다.
+                if (response.Body != null && response.Body.Contains(SupabaseErrorCode.WithdrawalSettingsMissing))
+                    return SupabaseResult<string>.Fail(SupabaseErrorCode.WithdrawalSettingsMissing);
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_request_failed");
+            }
 
             try
             {

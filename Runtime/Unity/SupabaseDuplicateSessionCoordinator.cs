@@ -248,12 +248,13 @@ namespace TrueBase.Unity
         /// <summary>
         /// 주기적으로 접속 중 신호를 보내며 서버 <c>session_token</c>을 받아 로컬 값과 대조합니다.
         /// 불일치가 감지되면 <c>RaiseDuplicateLoginDetected</c>를 발생시키고 루프를 종료합니다.
-        /// 조회 실패는 무시하고 다음 주기에 재시도합니다.
+        /// 조회 실패는 연속 실패의 첫 번만 경고로 남기고 다음 주기에 재시도합니다.
         /// </summary>
         /// <param name="intervalSeconds">폴링 주기(초).</param>
         /// <param name="detectDuplicate">false면 신호만 보내고 토큰 대조는 하지 않습니다.</param>
         private IEnumerator PollLoop(string accountId, float intervalSeconds, bool detectDuplicate)
         {
+            var heartbeatFailing = false;
             while (SupabaseSDK.IsLoggedIn && SupabaseSDK.Session != null)
             {
                 // 게임 시간(timeScale)을 따르면 일시정지 화면에서 신호가 끊겨 접속자에서 빠진다.
@@ -274,7 +275,13 @@ namespace TrueBase.Unity
                 var t = svc.HeartbeatAsync(token, Mathf.RoundToInt(intervalSeconds));
                 yield return new WaitUntil(() => t.IsCompleted);
 
-                if (!detectDuplicate || t.Result == null || !t.Result.IsSuccess)
+                // 실패가 이어지면 중복 감지와 접속자 집계가 함께 멈춘다 — 연속 실패의 첫 번만 알린다(주기마다 찍으면 콘솔이 덮인다).
+                var ok = t.Result != null && t.Result.IsSuccess;
+                if (!ok && !heartbeatFailing)
+                    Debug.LogWarning("[Supabase] 접속 신호 실패 — 중복 로그인 감지가 멈춥니다(DB 에 ts_session_heartbeat 가 있는지 확인): " + (t.Result?.ErrorCode ?? "unknown"));
+                heartbeatFailing = !ok;
+
+                if (!detectDuplicate || !ok)
                     continue;
 
                 var server = t.Result.Data;

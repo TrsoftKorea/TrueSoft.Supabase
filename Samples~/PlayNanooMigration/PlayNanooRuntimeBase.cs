@@ -54,6 +54,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // 거절될 수 있어, 다시 시도할 때는 Supabase 연동만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
     private const string NanooPendingGuestLinkKey = "TrueBase.NanooPendingGuestLink";
 
+    // 나누 탈퇴는 됐는데 Supabase 탈퇴·삭제가 실패했다(값 = Supabase 계정 id). 나누는 탈퇴하면 토큰을 비워 다시 부를 수 없으니,
+    // 다시 시도할 때는 Supabase 쪽만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
+    private const string NanooWithdrawnKey = "TrueBase.NanooWithdrawn";
+
     private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
     private string   _nanooNickname;       // 나누 로그인 응답의 닉네임. 로그인 후 Supabase 로 옮기고, 변경 실패 시 롤백에 쓴다
     private bool     _applyingNanooNickname;
@@ -479,11 +483,28 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private async Task<SupabaseResult> InterceptRequestWithdrawal(Func<Task<SupabaseResult>> sdkWithdrawal)
     {
         using var sessionChange = await BeginNanooSessionChangeAsync();
-        var tcs = new TaskCompletionSource<SupabaseResult>();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
         // Supabase 에 예약하는 것과 같은 유예 일수(SupabaseSettings "탈퇴 유예 기간")를 쓴다 — 다르면 두 계정의 삭제일이 어긋난다.
         var holdDays = SupabaseBridge.WithdrawalRequestDelayDays;
         Trace($"탈퇴 신청 — 나누·Supabase 유예 {holdDays}일");
+        return await WithdrawNanooThenAsync(holdDays, sdkWithdrawal, isGoogle, "Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨 — 다시 시도하면 Supabase 탈퇴만 합니다.");
+    }
+
+    /// <summary>
+    /// 나누 탈퇴 → Supabase 탈퇴·삭제. 나누만 되고 Supabase 가 실패했으면 그 사실을 저장해 두고,
+    /// 다시 시도할 때는 나누를 건너뛴다 — 토큰이 비워진 나누를 다시 부르면 실패해 Supabase 쪽까지 영영 못 간다.
+    /// </summary>
+    private async Task<SupabaseResult> WithdrawNanooThenAsync(
+        int holdDays, Func<Task<SupabaseResult>> sdkStep, bool isGoogle, string sdkFailLog)
+    {
+        var accountId = Supabase.UserId;
+        if (!string.IsNullOrEmpty(accountId) && PlayerPrefs.GetString(NanooWithdrawnKey, "") == accountId)
+        {
+            Trace("나누 탈퇴는 이미 끝남 — Supabase 쪽만 다시 시도");
+            return await FinishSupabaseWithdrawalAsync(sdkStep, isGoogle, sdkFailLog);
+        }
+
+        var tcs = new TaskCompletionSource<SupabaseResult>();
         NanooWithDrawal(holdDays, async status =>
         {
             if (status != Configure.PN_API_STATE_SUCCESS)
@@ -498,15 +519,32 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             ClearNanooTokens();
             TrueBaseNanoo.UserId = null;
             TrueBaseNanoo.OpenId = null;
+            if (!string.IsNullOrEmpty(accountId))
+            {
+                PlayerPrefs.SetString(NanooWithdrawnKey, accountId);
+                PlayerPrefs.Save();
+            }
 
-            var result = await sdkWithdrawal();
-            if (!result.IsSuccess)
-                Debug.LogWarning("[PlayNanooRuntime] Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨.");
-            if (isGoogle)
-                await Supabase.RevokeGoogleAccessAsync();
-            tcs.SetResult(result);
+            tcs.SetResult(await FinishSupabaseWithdrawalAsync(sdkStep, isGoogle, sdkFailLog));
         });
         return await tcs.Task;
+    }
+
+    private static async Task<SupabaseResult> FinishSupabaseWithdrawalAsync(
+        Func<Task<SupabaseResult>> sdkStep, bool isGoogle, string sdkFailLog)
+    {
+        var result = await sdkStep();
+        if (!result.IsSuccess)
+        {
+            Debug.LogWarning("[PlayNanooRuntime] " + sdkFailLog);
+            return result;
+        }
+
+        PlayerPrefs.DeleteKey(NanooWithdrawnKey);
+        PlayerPrefs.Save();
+        if (isGoogle)
+            await Supabase.RevokeGoogleAccessAsync();
+        return result;
     }
 
     // 즉시 탈퇴. 나누에는 즉시 탈퇴가 없다 — 탈퇴 요청의 유예(period)는 1일 이상만 전달된다(나누 문서 예제 `if (period > 0)`).
@@ -517,31 +555,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private async Task<SupabaseResult> InterceptDeleteAccountNow(Func<Task<SupabaseResult>> sdkDelete)
     {
         using var sessionChange = await BeginNanooSessionChangeAsync();
-        var tcs = new TaskCompletionSource<SupabaseResult>();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkDelete()가 세션을 정리하므로 미리 확인
         Trace($"즉시 탈퇴 — 나누 유예 {NanooImmediateHoldDays}일, Supabase 즉시 삭제");
-        NanooWithDrawal(NanooImmediateHoldDays, async status =>
-        {
-            if (status != Configure.PN_API_STATE_SUCCESS)
-            {
-                tcs.SetResult(SupabaseResult.Fail("playnanoo_withdrawal_request_failed"));
-                return;
-            }
-
-            // InterceptRequestWithdrawal 과 같다 — 탈퇴한 나누 계정의 토큰으로 갱신·롤백이 돌지 않게 비운다.
-            _nanooSyncedThisLogin = false;
-            ClearNanooTokens();
-            TrueBaseNanoo.UserId = null;
-            TrueBaseNanoo.OpenId = null;
-
-            var result = await sdkDelete();
-            if (!result.IsSuccess)
-                Debug.LogWarning("[PlayNanooRuntime] Supabase 계정 삭제 실패. PlayNANOO 탈퇴(1일 유예)는 완료됨.");
-            if (isGoogle)
-                await Supabase.RevokeGoogleAccessAsync();
-            tcs.SetResult(result);
-        });
-        return await tcs.Task;
+        return await WithdrawNanooThenAsync(NanooImmediateHoldDays, sdkDelete, isGoogle,
+            "Supabase 계정 삭제 실패. PlayNANOO 탈퇴(1일 유예)는 완료됨 — 다시 시도하면 Supabase 삭제만 합니다.");
     }
 
     // ── 닉네임 변경 인터셉터 ──────────────────────────────────────────────────────

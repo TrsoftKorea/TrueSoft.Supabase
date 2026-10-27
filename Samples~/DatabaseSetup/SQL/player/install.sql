@@ -1118,14 +1118,44 @@ create index if not exists user_sessions_updated_at_idx on public.user_sessions 
 -- 접속 중 판정. 신호는 2분에 한 번만 기록되므로(아래 heartbeat) 기록은 최대 "2분 + 신호 주기" 묵어 있다.
 -- 그보다 넉넉히, 최소 5분으로 잡는다 — 요청 하나가 늦는 일로 숫자가 출렁이지 않게. 대신 앱을 끈 사람은 2~5분 뒤에 빠진다.
 -- 로그인 직후 첫 신호 전에는 로그인 때 찍힌 updated_at 을 쓴다.
+-- 미래 시각은 버린다 — 아래 트리거 전에 기기 시계로 찍힌 옛 행이 앱을 꺼도 접속 중으로 남지 않게.
 create or replace function public.ts_session_is_online(p_last_seen timestamptz, p_updated timestamptz, p_heartbeat integer)
 returns boolean
 language sql
 stable
 as $$
-  select greatest(p_last_seen, p_updated)
+  select greatest(case when p_last_seen <= now() + interval '1 minute' then p_last_seen end,
+                  case when p_updated   <= now() + interval '1 minute' then p_updated end)
          >= now() - make_interval(secs => greatest(300, coalesce(p_heartbeat, 60) * 2 + 150));
 $$;
+
+-- 게임이 표에 직접 쓸 때(로그인 시 토큰 저장): 시각은 기기 시계가 아니라 서버 시각으로, 생존 신호 칸은 못 바꾼다.
+-- 생존 신호는 ts_session_heartbeat(security definer — current_user 가 소유자)만 쓴다.
+create or replace function public.ts_user_sessions_guard()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if current_user in ('authenticated', 'anon') then
+    new.updated_at := now();
+    if tg_op = 'INSERT' then
+      new.last_seen_at := null;
+      new.heartbeat_seconds := null;
+    else
+      new.last_seen_at := old.last_seen_at;
+      new.heartbeat_seconds := old.heartbeat_seconds;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.ts_user_sessions_guard() from public, anon, authenticated;
+
+drop trigger if exists trg_user_sessions_guard on public.user_sessions;
+create trigger trg_user_sessions_guard
+before insert or update on public.user_sessions
+for each row execute function public.ts_user_sessions_guard();
 revoke all on function public.ts_session_is_online(timestamptz, timestamptz, integer) from public, anon, authenticated;
 
 -- 일별 접속 기록 — 계정마다 하루(한국 날짜) 한 줄. 일일 사용자·복귀 유저·리텐션을 여기서 센다. 지우지 않는다.
@@ -4189,13 +4219,14 @@ as $$
 declare
   v_url text;
 begin
-  if not exists (select 1 from public.user_profiles
-                  where withdrawn_at is not null and withdrawn_at <= now() and account_id is not null) then
-    return;
-  end if;
+  -- 주소 확인을 먼저 한다 — 지울 계정이 생긴 뒤에야 실패하면 첫 탈퇴 마감 때까지 설정 누락이 안 보인다.
   select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
   if v_url is null or btrim(v_url) = '' then
     raise exception 'project_url_missing';
+  end if;
+  if not exists (select 1 from public.user_profiles
+                  where withdrawn_at is not null and withdrawn_at <= now() and account_id is not null) then
+    return;
   end if;
   -- 함수 쪽이 유예 지난 계정만 지우므로 인증 없이 부른다(verify_jwt 끔).
   perform net.http_post(
@@ -8410,9 +8441,10 @@ as $$
   )
   select jsonb_build_object(
     'total_players', (select count(*) from auth.users),
-    'new_today', (select count(*) from auth.users, bounds where created_at >= bounds.today_start),
+    -- 오늘 신규·활동은 통계 화면과 같은 기록(일별 접속)에서 센다 — 두 화면의 "오늘" 숫자가 어긋나지 않게.
+    'new_today', (select count(*) from public.user_daily_activity where day = (now() at time zone 'Asia/Seoul')::date and is_new),
     'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
-    'active_today', (select count(*) from public.user_profiles, bounds where last_activity_at >= bounds.today_start),
+    'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone 'Asia/Seoul')::date),
     'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
     'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
     'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
@@ -8515,7 +8547,8 @@ as $$
   ),
   kept as (
     select c.day, o.n,
-           case when c.day + o.n > p.today then null
+           -- 오늘 칸은 아직 하루가 끝나지 않아 반나절 숫자다 — 확정값처럼 보이지 않게 비운다.
+           case when c.day + o.n >= p.today then null
                 else (select count(*) from cohort_members m
                       join public.user_daily_activity a on a.account_id = m.account_id and a.day = c.day + o.n
                       where m.day = c.day) end as kept
@@ -8534,6 +8567,54 @@ as $$
     'first_day', (select min(day) from public.user_daily_activity)
   );
 $$;
+
+
+-- 콘솔 "통계 › 매출" — 최근 p_days 일(한국 날짜) 결제를 가입 국가별로 더한다. 환불은 뺀다(대시보드와 같은 기준).
+-- 국가는 가입할 때 IP 로 정한 user_profiles.country_code. 탈퇴로 계정이 지워진 결제(account_id 없음)는 user_id 로 잇는다.
+create or replace function public.ts_admin_revenue_by_country(p_days integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with params as (
+    select least(365, greatest(1, coalesce(p_days, 30))) as days,
+           (((now() at time zone 'Asia/Seoul')::date - (least(365, greatest(1, coalesce(p_days, 30))) - 1))::timestamp
+             at time zone 'Asia/Seoul') as since
+  ),
+  paid as (
+    select coalesce(nullif(prof.country_code, ''), 'unknown') as country,
+           coalesce(pu.price_amount_krw, 0) as krw,
+           coalesce(pu.account_id::text, pu.user_id) as payer
+    from public.purchases pu
+    cross join params p
+    left join lateral (
+      select pr.country_code from public.user_profiles pr
+      where (pu.account_id is not null and pr.account_id = pu.account_id)
+         or (pu.account_id is null and pr.user_id = pu.user_id)
+      limit 1
+    ) prof on true
+    where pu.verified_at >= p.since and pu.refunded_at is null
+  ),
+  by_country as (
+    select country, sum(krw)::bigint as revenue_krw, count(*) as purchases, count(distinct payer) as payers
+    from paid group by country
+  )
+  select jsonb_build_object(
+    'days', (select days from params),
+    'total_krw', coalesce((select sum(krw) from paid), 0)::bigint,
+    'purchases', (select count(*) from paid),
+    'payers', (select count(distinct payer) from paid),
+    'countries', coalesce((select jsonb_agg(jsonb_build_object(
+                     'country', country, 'revenue_krw', revenue_krw, 'purchases', purchases, 'payers', payers)
+                   order by revenue_krw desc, country) from by_country), '[]'::jsonb)
+  );
+$$;
+
+comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통계 — 최근 p_days 일(한국 날짜) 결제를 가입 국가별로(금액 KRW·건수·결제자 수). 환불 제외. service_role 전용.';
+revoke all on function public.ts_admin_revenue_by_country(integer) from public, anon, authenticated;
+grant execute on function public.ts_admin_revenue_by_country(integer) to service_role;
 
 comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 한국 날짜. service_role 전용.';
 revoke all on function public.ts_admin_activity_stats(integer) from public, anon, authenticated;
@@ -9472,6 +9553,94 @@ alter table public.chat_messages add column if not exists is_notice    boolean n
 --   커서 조회는 항상 (채널, 범위, id > 커서) 형태고, 정리 작업은 채널별 created_at 범위다.
 create index if not exists chat_messages_cursor_idx  on public.chat_messages (channel_id, scope_key, id);
 create index if not exists chat_messages_cleanup_idx on public.chat_messages (channel_id, created_at);
+
+-- 일일 채팅 개수 — 날짜(한국)·채널 종류별 보낸 메시지 수. 메시지는 채널 보관 기간이 지나면 지워지므로
+-- 보낼 때 세어 둔다. 운영자 공지는 세지 않는다. 지우지 않는다.
+-- shard: 같은 날·종류를 8줄로 나눠 센다 — 한 줄에 모든 메시지가 +1 하면 채팅이 몰릴 때 그 줄을 기다리느라 보내기가 밀린다.
+create table if not exists public.chat_daily_stats (
+  day      date     not null,
+  kind     text     not null,
+  shard    smallint not null default 0,
+  messages integer  not null default 0,
+  primary key (day, kind, shard)
+);
+alter table public.chat_daily_stats add column if not exists shard smallint not null default 0;
+do $$
+begin
+  if not exists (select 1 from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
+                  where i.indrelid = 'public.chat_daily_stats'::regclass and i.indisprimary and a.attname = 'shard') then
+    alter table public.chat_daily_stats drop constraint chat_daily_stats_pkey;
+    alter table public.chat_daily_stats add primary key (day, kind, shard);
+  end if;
+end $$;
+alter table public.chat_daily_stats enable row level security;
+-- [의도적] 정책 없음 — 운영 콘솔이 ts_admin_chat_stats 로만 읽는다.
+revoke all on table public.chat_daily_stats from anon, authenticated;
+
+create or replace function public.ts_chat_count_daily()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.is_notice then return null; end if;
+  insert into public.chat_daily_stats (day, kind, shard, messages)
+  select (new.created_at at time zone 'Asia/Seoul')::date, c.kind, (new.id % 8)::smallint, 1
+    from public.chat_channels c where c.id = new.channel_id
+  on conflict (day, kind, shard) do update set messages = public.chat_daily_stats.messages + 1;
+  return null;
+end;
+$$;
+revoke all on function public.ts_chat_count_daily() from public, anon, authenticated;
+
+drop trigger if exists trg_chat_count_daily on public.chat_messages;
+create trigger trg_chat_count_daily
+after insert on public.chat_messages
+for each row execute function public.ts_chat_count_daily();
+
+-- 처음 설치할 때 이미 남아 있던 메시지도 센다(보관 기간 안의 것만 남아 있다). 이미 센 날·종류는 건드리지 않는다.
+insert into public.chat_daily_stats (day, kind, shard, messages)
+select x.day, x.kind, 0, x.n
+  from (select (m.created_at at time zone 'Asia/Seoul')::date as day, c.kind, count(*) as n
+          from public.chat_messages m join public.chat_channels c on c.id = m.channel_id
+         where not m.is_notice
+         group by 1, 2) x
+ where not exists (select 1 from public.chat_daily_stats s where s.day = x.day and s.kind = x.kind);
+
+-- 콘솔 "통계 › 채팅" — 최근 p_days 일(한국 날짜)의 일일 채팅 개수, 채널 종류별(global·server·group·direct).
+create or replace function public.ts_admin_chat_stats(p_days integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with params as (
+    select least(365, greatest(1, coalesce(p_days, 30))) as days, (now() at time zone 'Asia/Seoul')::date as today
+  ),
+  days as (
+    select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
+  ),
+  per_kind as (
+    select s.day, s.kind, sum(s.messages)::bigint as messages
+      from public.chat_daily_stats s, params p
+     where s.day > p.today - p.days
+     group by s.day, s.kind
+  )
+  select jsonb_build_object(
+    'daily', coalesce((select jsonb_agg(jsonb_build_object(
+                 'day', d.day,
+                 'total', coalesce((select sum(k.messages) from per_kind k where k.day = d.day), 0),
+                 'by_kind', coalesce((select jsonb_object_agg(k.kind, k.messages) from per_kind k where k.day = d.day), '{}'::jsonb))
+               order by d.day) from days d), '[]'::jsonb),
+    'first_day', (select min(day) from public.chat_daily_stats)
+  );
+$$;
+
+comment on function public.ts_admin_chat_stats(integer) is '콘솔 통계 — 일일 채팅 개수(공지 제외), 채널 종류별. 한국 날짜. service_role 전용.';
+revoke all on function public.ts_admin_chat_stats(integer) from public, anon, authenticated;
+grant execute on function public.ts_admin_chat_stats(integer) to service_role;
 
 comment on table public.chat_messages is
   '채팅 메시지. id 가 조회 커서. scope_key 로 전체·서버·길드·귓속말이 갈린다.';

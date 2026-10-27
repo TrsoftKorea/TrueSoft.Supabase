@@ -60,6 +60,7 @@ from (
       ('ccu_snapshots'),
       ('ccu_daily'),
       ('user_daily_activity'),
+      ('chat_daily_stats'),
       ('user_ban_messages'),
       ('leaderboard_tables'),
       ('leaderboard_scores'),

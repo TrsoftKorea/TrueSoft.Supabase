@@ -54,7 +54,8 @@ namespace SdkAudit
                 .OrderBy(x => x.Offset)
                 .ToList();
 
-            // 함수 본문은 설치 시점에 해석되지 않는다(런타임 해석). 본문 안의 참조는 순서와 무관하므로 지운다.
+            // plpgsql 본문은 설치 시점에 해석되지 않는다(런타임 해석). 본문 안의 참조는 순서와 무관하므로 지운다.
+            // language sql 본문은 만들 때 해석되므로 따로 본다(SqlBodies).
             var sql = MaskComments(MaskDollarBodies(raw));
 
             var defs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -101,7 +102,43 @@ namespace SdkAudit
                 }
             }
 
+            SqlBodies(ctx, rel, raw, sections, defs);
             CronScheduled(ctx, rel, raw);
+        }
+
+        /// <summary>
+        /// language sql 함수 본문의 참조. plpgsql 과 달리 만들 때 본문을 해석하므로(check_function_bodies 기본 켜짐)
+        /// 뒤 절의 표·함수를 읽으면 "relation does not exist" 로 설치가 멈춘다 — 콘솔 채팅 통계 함수가 그랬다(16절 → 18절 표).
+        /// </summary>
+        private static void SqlBodies(AuditContext ctx, string rel, string raw, List<(int Offset, string Label)> sections, Dictionary<string, int> defs)
+        {
+            var text = MaskComments(raw);
+            foreach (Match fn in Regex.Matches(text, @"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(?<fn>\w+)", RegexOptions.IgnoreCase))
+            {
+                var open = Regex.Match(text.Substring(fn.Index), @"\$\w*\$");
+                if (!open.Success)
+                    continue;
+                var bodyStart = fn.Index + open.Index + open.Length;
+                var bodyEnd = text.IndexOf(open.Value, bodyStart, StringComparison.Ordinal);
+                if (bodyEnd < 0)
+                    continue;
+                var semi = text.IndexOf(';', bodyEnd + open.Length);
+                var header = text.Substring(fn.Index, bodyStart - fn.Index);
+                var trailer = text.Substring(bodyEnd, (semi < 0 ? text.Length : semi) - bodyEnd);
+                if (!Regex.IsMatch(header + trailer, @"\blanguage\s+sql\b", RegexOptions.IgnoreCase))
+                    continue;
+
+                var self = fn.Groups["fn"].Value;
+                foreach (Match r in Regex.Matches(text.Substring(bodyStart, bodyEnd - bodyStart), @"\bpublic\.(?<obj>\w+)", RegexOptions.IgnoreCase))
+                {
+                    var name = r.Groups["obj"].Value;
+                    var at = bodyStart + r.Index;
+                    if (string.Equals(name, self, StringComparison.OrdinalIgnoreCase) || !defs.TryGetValue(name, out var defAt))
+                        continue;
+                    if (defAt > at)
+                        ctx.Report.Error($"[R9 설치순서] {SectionOf(sections, at)} 의 SQL 함수 {self} 본문이 {SectionOf(sections, defAt)} 에서 만드는 {name} 을 참조합니다. language sql 은 만들 때 본문을 확인하므로 신규 프로젝트 설치가 실패합니다. ({rel}:{LineOf(raw, at)})");
+                }
+            }
         }
 
         /// <summary>

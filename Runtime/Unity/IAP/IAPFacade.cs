@@ -87,7 +87,6 @@ namespace TrueBase.Unity
 
             var productId = cartItems[0].Product.definition.id;
 
-            string token;
             long   priceAmount;
             string priceCurrency;
 
@@ -98,7 +97,7 @@ namespace TrueBase.Unity
                 Debug.LogWarning($"{LogTag} Receipt가 비어 있습니다. product={productId}");
                 return;
             }
-            token = GooglePlayReceiptParser.ExtractPurchaseToken(receipt);
+            var token = GooglePlayReceiptParser.ExtractPurchaseToken(receipt);
             if (string.IsNullOrEmpty(token))
             {
                 Debug.LogWarning($"{LogTag} purchaseToken 추출 실패. product={productId}");
