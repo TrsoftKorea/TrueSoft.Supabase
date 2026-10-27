@@ -35,6 +35,7 @@ namespace SdkAudit
             "[R15 코드우선]",
             "[R16 공통구간]", "[R16 연결값키]",
             "[R17 설치누락]", "[R17 검증목록]",
+            "[R19 시간대고정]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -73,6 +74,9 @@ namespace SdkAudit
                     missing.Add("[R9 설치순서] language sql 본문(ts_early_sql)");
                 if (found.Any(f => f.Contains("ts_early_plpgsql")))
                     missing.Add("[R9 설치순서] plpgsql 본문 오탐(ts_early_plpgsql)");
+                // game_settings 의 기본값은 허용 — 이게 잡히면 오탐이다.
+                if (found.Any(f => f.StartsWith("[R19", StringComparison.Ordinal) && f.Contains("'Asia/Seoul'")))
+                    missing.Add("[R19 시간대고정] game_settings 기본값 오탐");
 
                 Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개 · 변경 게이트 {GateCases.Length}건");
                 Console.WriteLine();
@@ -179,6 +183,10 @@ returns bigint language sql stable as $$ select count(*) from public.late_sql_ta
 create or replace function public.ts_early_plpgsql()
 returns void language plpgsql as $$ begin perform 1 from public.late_sql_table; end; $$;
 create table if not exists public.late_sql_table (id int);
+
+create table if not exists public.game_settings (time_zone text not null default 'Asia/Seoul');
+create or replace function public.ts_fixed_tz()
+returns date language plpgsql as $$ begin return (now() at time zone 'Asia/Tokyo')::date; end; $$;
 
 create table if not exists public.late_table (
   id uuid primary key

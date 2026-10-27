@@ -104,6 +104,25 @@ namespace SdkAudit
 
             SqlBodies(ctx, rel, raw, sections, defs);
             CronScheduled(ctx, rel, raw);
+            FixedTimeZones(ctx, rel, raw);
+        }
+
+        /// <summary>
+        /// R19 시간대 고정. 날짜를 자르는 곳은 게임 시간대(ts_game_time_zone)를 써야 한다 — 게임마다 나라가 다르다.
+        /// 통계·탈퇴·우편 예약 37곳이 'Asia/Seoul' 로 박혀 있었다(2026-10-27). 허용은 game_settings 를 다루는 문장(기본값·대체값)뿐.
+        /// </summary>
+        private static void FixedTimeZones(AuditContext ctx, string rel, string raw)
+        {
+            var text = MaskComments(raw);
+            foreach (Match m in Regex.Matches(text, @"'(?:Asia|Europe|America|Australia|Africa|Pacific|Atlantic|Indian)/\w+'"))
+            {
+                var start = text.LastIndexOf(';', m.Index) + 1;
+                var end = text.IndexOf(';', m.Index);
+                var stmt = text.Substring(start, (end < 0 ? text.Length : end) - start);
+                if (stmt.Contains("public.game_settings", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                ctx.Report.Error($"[R19 시간대고정] {m.Value} 를 직접 씁니다. 게임 시간대는 public.ts_game_time_zone() 으로 읽으세요. ({rel}:{LineOf(raw, m.Index)})");
+            }
         }
 
         /// <summary>

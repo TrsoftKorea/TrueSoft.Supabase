@@ -143,6 +143,106 @@ comment on function public.ts_server_now() is
 
 grant execute on function public.ts_server_now() to anon, authenticated;
 
+-- ---------------------------------------------------------------------------
+-- game_settings — 게임 시간대(1행). 운영 콘솔 "설정 › 시간대"에서 바꾼다.
+-- 통계의 "하루"(일별 접속·채팅 수·동시접속 일별 요약), 대시보드 "오늘", 탈퇴 삭제 자정, 콘솔 날짜 검색,
+-- 새로 만드는 우편 예약·리더보드 회차의 기본 시간대가 전부 이것을 따른다.
+-- 날짜별 기록은 쌓을 때 날짜가 정해지므로, 바꾸면 그 뒤 기록부터 새 기준이다(지난 기록·이미 만든 예약은 그대로).
+-- ---------------------------------------------------------------------------
+create table if not exists public.game_settings (
+  id         int primary key default 1 check (id = 1),
+  time_zone  text not null default 'Asia/Seoul',
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+insert into public.game_settings (id) values (1) on conflict (id) do nothing;
+alter table public.game_settings enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.game_settings from anon, authenticated;
+
+-- 예전 판의 탈퇴 전용 시간대(withdrawal_settings)를 옮기고 지운다 — 그 값이 게임 시간대가 됐다.
+do $$
+begin
+  if to_regclass('public.withdrawal_settings') is not null then
+    execute $m$
+      update public.game_settings g
+         set time_zone = w.time_zone, updated_at = w.updated_at, updated_by = w.updated_by
+        from public.withdrawal_settings w
+       where g.id = 1 and w.id = 1 and g.updated_by is null and w.updated_by is not null
+    $m$;
+    drop function if exists public.ts_admin_withdrawal_settings_get();
+    drop function if exists public.ts_admin_withdrawal_settings_update(text, text);
+    drop table public.withdrawal_settings;
+  end if;
+end $$;
+
+create or replace function public.ts_game_time_zone()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select time_zone from public.game_settings where id = 1), 'Asia/Seoul');
+$$;
+
+comment on function public.ts_game_time_zone() is '게임 시간대(game_settings). 날짜를 자르는 모든 곳이 이것을 쓴다.';
+revoke all on function public.ts_game_time_zone() from public, anon, authenticated;
+
+-- 게임 시간대의 오늘 날짜.
+create or replace function public.ts_game_today()
+returns date
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select (now() at time zone public.ts_game_time_zone())::date;
+$$;
+
+revoke all on function public.ts_game_today() from public, anon, authenticated;
+
+-- 콘솔 "설정 › 시간대". example_deadline 은 5절 탈퇴 함수를 부르므로 plpgsql(실행할 때 해석)로 둔다.
+create or replace function public.ts_admin_game_settings_get()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return (select jsonb_build_object('time_zone', s.time_zone, 'updated_at', s.updated_at, 'updated_by', s.updated_by,
+                                    'example_deadline', public.ts_withdrawal_deadline(7))
+            from public.game_settings s where s.id = 1);
+end;
+$$;
+
+create or replace function public.ts_admin_game_settings_update(p_time_zone text, p_by text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tz text := btrim(coalesce(p_time_zone, ''));
+begin
+  if not exists (select 1 from pg_timezone_names where name = v_tz) then
+    raise exception 'game_time_zone_invalid: %', v_tz;
+  end if;
+  update public.game_settings
+     set time_zone = v_tz, updated_at = now(), updated_by = p_by
+   where id = 1;
+  return public.ts_admin_game_settings_get();
+end;
+$$;
+
+comment on function public.ts_admin_game_settings_get() is '게임 시간대 조회. service_role 전용.';
+comment on function public.ts_admin_game_settings_update(text, text) is '게임 시간대 변경. 지난 날짜별 기록·예약된 탈퇴·이미 만든 예약은 그대로다. service_role 전용.';
+revoke all on function public.ts_admin_game_settings_get() from public, anon, authenticated;
+revoke all on function public.ts_admin_game_settings_update(text, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_game_settings_get() to service_role;
+grant execute on function public.ts_admin_game_settings_update(text, text) to service_role;
+
 
 -- #############################################################################
 -- 02. 플레이어 프로필 · 닉네임 · 세션
@@ -1188,7 +1288,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_day     date := (now() at time zone 'Asia/Seoul')::date;
+  v_day     date := (now() at time zone public.ts_game_time_zone())::date;
   v_signup  date;
   v_prev    date;
   v_profile public.user_profiles%rowtype;
@@ -1198,11 +1298,11 @@ begin
     return;
   end if;
 
-  select (u.created_at at time zone 'Asia/Seoul')::date into v_signup from auth.users u where u.id = p_account_id;
+  select (u.created_at at time zone public.ts_game_time_zone())::date into v_signup from auth.users u where u.id = p_account_id;
   select * into v_profile from public.user_profiles p where p.account_id = p_account_id;
   select max(day) into v_prev from public.user_daily_activity where account_id = p_account_id and day < v_day;
   if v_prev is null and v_profile.last_activity_at is not null then
-    v_prev := (v_profile.last_activity_at at time zone 'Asia/Seoul')::date;
+    v_prev := (v_profile.last_activity_at at time zone public.ts_game_time_zone())::date;
     -- 프로필 시각이 이미 오늘이면(오늘 저장이 먼저 있었으면) 그 전 접속일을 알 수 없다 — 복귀로 세지 않는다.
     if v_prev >= v_day then v_prev := null; end if;
   end if;
@@ -1244,7 +1344,7 @@ begin
           or last_seen_at < now() - interval '2 minutes'
           or heartbeat_seconds is distinct from v_interval);
 
-  if v_last is null or (v_last at time zone 'Asia/Seoul')::date < (now() at time zone 'Asia/Seoul')::date then
+  if v_last is null or (v_last at time zone public.ts_game_time_zone())::date < (now() at time zone public.ts_game_time_zone())::date then
     perform public.ts_record_daily_activity(v_uid);
   end if;
 
@@ -2583,22 +2683,11 @@ revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from authenticat
 grant execute on function public.ts_withdrawal_cancel_redeem(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
--- withdrawal_settings — 탈퇴 기준 시간대(1행). 운영 콘솔 "설정 › 탈퇴"에서 바꾼다.
--- 삭제 시각을 그 시간대의 자정에 맞춘다 — 9절 정리 작업이 자정 직후에 지우므로, 시각이 하루 중 아무 때나면
+-- 탈퇴 삭제 시각 — 게임 시간대(1절 game_settings)의 자정에 맞춘다.
+-- 9절 정리 작업이 자정 직후에 지우므로, 시각이 하루 중 아무 때나면
 -- 그 사이에 로그인한 사람이 로그인 중에 계정이 지워져 새로 만들어지는 길을 탄다.
 -- ---------------------------------------------------------------------------
-create table if not exists public.withdrawal_settings (
-  id         int primary key default 1 check (id = 1),
-  time_zone  text not null default 'Asia/Seoul',
-  updated_at timestamptz not null default now(),
-  updated_by text
-);
-insert into public.withdrawal_settings (id) values (1) on conflict (id) do nothing;
-alter table public.withdrawal_settings enable row level security;
--- [의도적] 정책 없음 — 아래 함수만 쓴다.
-revoke all on table public.withdrawal_settings from anon, authenticated;
-
--- 유예 일수 → 삭제 시각. 신청한 날(기준 시간대)로부터 N일이 지난 다음 자정이라 최소 N일이 보장된다.
+-- 유예 일수 → 삭제 시각. 신청한 날(게임 시간대)로부터 N일이 지난 다음 자정이라 최소 N일이 보장된다.
 -- 예: 10/27 15:00 에 7일 → 11/4 00:00. 유예는 최소 1일 — 바로 지우는 건 즉시 탈퇴(withdrawal-now)가 한다.
 create or replace function public.ts_withdrawal_deadline(p_delay_days integer)
 returns timestamptz
@@ -2607,51 +2696,12 @@ stable
 security definer
 set search_path = public
 as $$
-  select ((date_trunc('day', now() at time zone s.time_zone)
-           + make_interval(days => greatest(1, coalesce(p_delay_days, 1)) + 1)) at time zone s.time_zone)
-  from public.withdrawal_settings s
-  where s.id = 1;
+  select ((date_trunc('day', now() at time zone tz)
+           + make_interval(days => greatest(1, coalesce(p_delay_days, 1)) + 1)) at time zone tz)
+  from (select public.ts_game_time_zone() as tz) z;
 $$;
 
 revoke all on function public.ts_withdrawal_deadline(integer) from public, anon, authenticated;
-
-create or replace function public.ts_admin_withdrawal_settings_get()
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select jsonb_build_object('time_zone', s.time_zone, 'updated_at', s.updated_at, 'updated_by', s.updated_by,
-                            'example_deadline', public.ts_withdrawal_deadline(7))
-  from public.withdrawal_settings s where s.id = 1;
-$$;
-
-create or replace function public.ts_admin_withdrawal_settings_update(p_time_zone text, p_by text default null)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_tz text := btrim(coalesce(p_time_zone, ''));
-begin
-  if not exists (select 1 from pg_timezone_names where name = v_tz) then
-    raise exception 'withdrawal_time_zone_invalid: %', v_tz;
-  end if;
-  update public.withdrawal_settings
-     set time_zone = v_tz, updated_at = now(), updated_by = p_by
-   where id = 1;
-  return public.ts_admin_withdrawal_settings_get();
-end;
-$$;
-
-comment on function public.ts_admin_withdrawal_settings_get() is '탈퇴 기준 시간대 조회. service_role 전용.';
-comment on function public.ts_admin_withdrawal_settings_update(text, text) is '탈퇴 기준 시간대 변경. 이미 예약된 계정의 삭제 시각은 그대로다. service_role 전용.';
-revoke all on function public.ts_admin_withdrawal_settings_get() from public, anon, authenticated;
-revoke all on function public.ts_admin_withdrawal_settings_update(text, text) from public, anon, authenticated;
-grant execute on function public.ts_admin_withdrawal_settings_get() to service_role;
-grant execute on function public.ts_admin_withdrawal_settings_update(text, text) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- ts_request_withdrawal — 탈퇴 예약
@@ -2794,7 +2844,7 @@ begin
   -- 첫 로그인이면 기록할 때 프로필이 없어 서버·플랫폼이 비었다 — 방금 만든 프로필로 채운다.
   update public.user_daily_activity a
      set server_id = v_profile.server_id, platform = nullif(v_profile.platform, '')
-   where a.day = (now() at time zone 'Asia/Seoul')::date and a.account_id = v_uid and a.platform is null;
+   where a.day = (now() at time zone public.ts_game_time_zone())::date and a.account_id = v_uid and a.platform is null;
 
   select gs.server_code into v_code from public.game_servers gs where gs.id = v_profile.server_id;
   select dn.display_name into v_name from public.display_names dn where dn.account_id = v_uid;
@@ -4364,8 +4414,8 @@ security definer
 set search_path = public
 as $$
   with bounds as (
-    select (p_day::timestamp at time zone 'Asia/Seoul') as s,
-           ((p_day + 1)::timestamp at time zone 'Asia/Seoul') as e
+    select (p_day::timestamp at time zone public.ts_game_time_zone()) as s,
+           ((p_day + 1)::timestamp at time zone public.ts_game_time_zone()) as e
   ), rows_of_day as (
     select c.* from public.ccu_snapshots c, bounds b where c.at >= b.s and c.at < b.e
   ), top as (
@@ -4398,7 +4448,7 @@ begin
   on conflict (at) do update
     set total = excluded.total, by_server = excluded.by_server, by_platform = excluded.by_platform;
 
-  perform public.ts_ccu_daily_refresh((v_at at time zone 'Asia/Seoul')::date);
+  perform public.ts_ccu_daily_refresh((v_at at time zone public.ts_game_time_zone())::date);
 
   delete from public.ccu_snapshots where at < now() - interval '90 days';
 end;
@@ -5584,8 +5634,8 @@ begin
            or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
            or (p_status = '삭제'   and m.deleted_at is not null))
       -- 콘솔의 날짜는 한국 날짜다. ::timestamptz 는 세션 시간대(UTC) 자정이라 0~9시 기록이 전날로 빠진다.
-      and (p_start_date is null or m.created_at >= (p_start_date::timestamp at time zone 'Asia/Seoul'))
-      and (p_end_date   is null or m.created_at <  ((p_end_date + 1)::timestamp at time zone 'Asia/Seoul'))
+      and (p_start_date is null or m.created_at >= (p_start_date::timestamp at time zone public.ts_game_time_zone()))
+      and (p_end_date   is null or m.created_at <  ((p_end_date + 1)::timestamp at time zone public.ts_game_time_zone()))
       and (p_batch_id is null or m.batch_id = p_batch_id)
     order by m.created_at desc
     limit v_size offset (v_page - 1) * v_size
@@ -5714,7 +5764,7 @@ create table if not exists public.mail_schedules (
   expires_days  int  not null default 7 check (expires_days >= 1),
   scheduled_at  timestamptz null,                       -- scheduled(1회) 대상 시각
   repeat_time   time null,                              -- repeat 대상 시각
-  repeat_tz     text not null default 'Asia/Seoul',
+  repeat_tz     text not null default public.ts_game_time_zone(),
   repeat_unit   text not null default 'day' check (repeat_unit in ('day','week','month')),
   repeat_dow    int null,                               -- week: 0=일 ~ 6=토
   repeat_dom    int null,                               -- month: 1~31 (말일 초과 시 말일)
@@ -5733,7 +5783,8 @@ alter table public.mail_schedules add column if not exists category     text not
 alter table public.mail_schedules add column if not exists expires_days int not null default 7;
 alter table public.mail_schedules add column if not exists scheduled_at timestamptz;
 alter table public.mail_schedules add column if not exists repeat_time  time;
-alter table public.mail_schedules add column if not exists repeat_tz    text not null default 'Asia/Seoul';
+alter table public.mail_schedules add column if not exists repeat_tz    text not null default public.ts_game_time_zone();
+alter table public.mail_schedules alter column repeat_tz set default public.ts_game_time_zone();
 alter table public.mail_schedules add column if not exists repeat_unit  text not null default 'day';
 alter table public.mail_schedules add column if not exists repeat_dow   int;
 alter table public.mail_schedules add column if not exists repeat_dom   int;
@@ -5773,7 +5824,7 @@ create or replace function public.ts_mail_schedule_next_run(
   p_type         text,
   p_scheduled_at timestamptz,
   p_repeat_time  time,
-  p_repeat_tz    text default 'Asia/Seoul',
+  p_repeat_tz    text default null,
   p_repeat_unit  text default 'day',
   p_repeat_dow   int  default null,
   p_repeat_dom   int  default null
@@ -5783,7 +5834,7 @@ language plpgsql
 stable
 as $$
 declare
-  v_tz        text := coalesce(p_repeat_tz, 'Asia/Seoul');
+  v_tz        text := coalesce(p_repeat_tz, public.ts_game_time_zone());
   v_unit      text := coalesce(p_repeat_unit, 'day');
   v_now       timestamp;
   v_today     date;
@@ -6000,15 +6051,16 @@ begin
   end if;
 
   v_next := public.ts_mail_schedule_next_run(
-    p_schedule_type, p_scheduled_at, p_repeat_time, 'Asia/Seoul', p_repeat_unit, p_repeat_dow, p_repeat_dom);
+    p_schedule_type, p_scheduled_at, p_repeat_time, public.ts_game_time_zone(), p_repeat_unit, p_repeat_dow, p_repeat_dom);
 
+  -- 반복 시각은 만들 때의 게임 시간대로 고정한다 — 나중에 게임 시간대를 바꿔도 이미 만든 예약은 그대로 돈다.
   insert into public.mail_schedules
     (schedule_type, target_mode, server_id, account_ids, title, content, items, localized,
-     category, expires_days, scheduled_at, repeat_time, repeat_unit, repeat_dow, repeat_dom,
+     category, expires_days, scheduled_at, repeat_time, repeat_tz, repeat_unit, repeat_dow, repeat_dom,
      next_run_at, created_by, platform, open_for_new)
   values
     (p_schedule_type, p_target_mode, p_server_id, p_account_ids, p_title, coalesce(p_content, ''), p_items, p_localized,
-     v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
+     v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, public.ts_game_time_zone(), coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
      v_next, p_created_by,
      case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end,
      -- 반복 발송은 회차마다 열려 있어, 나중에 가입한 사람이 수령 기한 안의 지난 회차를 한꺼번에 받게 된다.
@@ -6161,7 +6213,7 @@ create table if not exists public.leaderboard_tables (
   rotation                text        not null default 'none',
   rotation_period_seconds int,
   rotation_anchor_at      timestamptz not null default now(),
-  rotation_tz             text        not null default 'Asia/Seoul',
+  rotation_tz             text        not null default public.ts_game_time_zone(),
   rotation_count          int         not null default 1,
   rotation_started_at     timestamptz not null default now(),
   next_rotation_at        timestamptz,
@@ -6173,6 +6225,7 @@ create table if not exists public.leaderboard_tables (
 
 alter table public.leaderboard_tables
   add column if not exists ends_at timestamptz;
+alter table public.leaderboard_tables alter column rotation_tz set default public.ts_game_time_zone();
 
 do $$
 begin
@@ -6281,7 +6334,7 @@ create or replace function public.ts_leaderboard_next_rotation_at(
   p_rotation       text,
   p_period_seconds int,
   p_anchor_at      timestamptz,
-  p_tz             text        default 'Asia/Seoul',
+  p_tz             text        default null,
   p_from           timestamptz default now()
 )
 returns timestamptz
@@ -6289,7 +6342,7 @@ language plpgsql
 stable
 as $$
 declare
-  v_tz     text        := coalesce(nullif(btrim(p_tz), ''), 'Asia/Seoul');
+  v_tz     text        := coalesce(nullif(btrim(p_tz), ''), public.ts_game_time_zone());
   v_from   timestamptz := coalesce(p_from, now());
   v_anchor timestamptz := coalesce(p_anchor_at, v_from);
   v_la     timestamp;
@@ -7026,7 +7079,7 @@ create or replace function public.ts_admin_leaderboard_upsert_table(
   p_rotation        text        default 'none',
   p_period_seconds  int         default null,
   p_anchor_at       timestamptz default null,
-  p_tz              text        default 'Asia/Seoul',
+  p_tz              text        default null,
   p_ends_at         timestamptz default null,
   p_is_active       boolean     default true
 )
@@ -7057,7 +7110,7 @@ begin
      rotation_anchor_at, rotation_tz, next_rotation_at, ends_at, is_active)
   values
     (v_code, coalesce(p_display_name, ''), p_scope, p_record_type, p_sort_type, p_rotation, p_period_seconds,
-     v_anchor, coalesce(nullif(btrim(p_tz), ''), 'Asia/Seoul'), v_next, p_ends_at, coalesce(p_is_active, true))
+     v_anchor, coalesce(nullif(btrim(p_tz), ''), public.ts_game_time_zone()), v_next, p_ends_at, coalesce(p_is_active, true))
   on conflict (code) do update set
     display_name            = excluded.display_name,
     scope                   = excluded.scope,
@@ -7495,7 +7548,7 @@ as $$
   from (
     select
       lt.code, lt.display_name, lt.scope, lt.record_type, lt.sort_type, lt.rotation,
-      lt.rotation_period_seconds, lt.rotation_anchor_at, lt.rotation_count,
+      lt.rotation_period_seconds, lt.rotation_anchor_at, lt.rotation_tz, lt.rotation_count,
       lt.next_rotation_at, lt.ends_at, lt.is_active,
       (lt.ends_at is not null and now() >= lt.ends_at) as is_ended,
       coalesce((
@@ -7921,7 +7974,7 @@ begin
         coalesce(d.params->>'scope','global'), coalesce(d.params->>'record_type','highest'),
         coalesce(d.params->>'sort_type','desc'), coalesce(d.params->>'rotation','none'),
         (d.params->>'period_seconds')::int, (d.params->>'anchor_at')::timestamptz,
-        coalesce(d.params->>'tz','Asia/Seoul'), (d.params->>'ends_at')::timestamptz,
+        coalesce(d.params->>'tz', public.ts_game_time_zone()), (d.params->>'ends_at')::timestamptz,
         coalesce((d.params->>'is_active')::boolean, true));
 
     elsif v_key = 'leaderboard_table.update' then
@@ -7931,7 +7984,8 @@ begin
         coalesce(d.params->>'scope','global'), coalesce(d.params->>'record_type','highest'),
         coalesce(d.params->>'sort_type','desc'), coalesce(d.params->>'rotation','none'),
         (d.params->>'period_seconds')::int, (d.params->>'anchor_at')::timestamptz,
-        coalesce(d.params->>'tz','Asia/Seoul'), (d.params->>'ends_at')::timestamptz,
+        -- 고칠 때 시간대를 안 보냈으면 그 리더보드의 시간대를 지킨다 — 게임 시간대로 바뀌면 회차 경계가 옮겨 간다.
+        coalesce(d.params->>'tz', v_before->>'rotation_tz', public.ts_game_time_zone()), (d.params->>'ends_at')::timestamptz,
         coalesce((d.params->>'is_active')::boolean, true));
 
     elsif v_key = 'leaderboard_table.delete' then
@@ -8436,15 +8490,15 @@ set search_path = public
 as $$
   with bounds as (
     select
-      (date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul') as today_start,
+      (date_trunc('day', now() at time zone public.ts_game_time_zone()) at time zone public.ts_game_time_zone()) as today_start,
       now() - interval '7 days' as seven_days_ago
   )
   select jsonb_build_object(
     'total_players', (select count(*) from auth.users),
     -- 오늘 신규·활동은 통계 화면과 같은 기록(일별 접속)에서 센다 — 두 화면의 "오늘" 숫자가 어긋나지 않게.
-    'new_today', (select count(*) from public.user_daily_activity where day = (now() at time zone 'Asia/Seoul')::date and is_new),
+    'new_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date and is_new),
     'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
-    'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone 'Asia/Seoul')::date),
+    'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date),
     'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
     'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
     'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
@@ -8477,10 +8531,10 @@ as $$
     from params
   ),
   daily as (
-    select (d.day::timestamp at time zone 'Asia/Seoul') as at, d.peak as total, d.peak_at
+    select (d.day::timestamp at time zone public.ts_game_time_zone()) as at, d.peak as total, d.peak_at
     from public.ccu_daily d, bucket b
     where b.minutes = 1440
-      and d.day >= ((now() - make_interval(hours => b.hours)) at time zone 'Asia/Seoul')::date
+      and d.day >= ((now() - make_interval(hours => b.hours)) at time zone public.ts_game_time_zone())::date
   ),
   series as (
     select date_bin(make_interval(mins => b.minutes), c.at, timestamptz '2000-01-01') as at, max(c.total) as total
@@ -8507,7 +8561,7 @@ as $$
     'series', coalesce((select jsonb_agg(jsonb_build_object('at', at, 'total', total) order by at) from series), '[]'::jsonb),
     'peak', (select jsonb_build_object('at', at, 'total', total) from peak),
     'first_at', least((select min(at) from public.ccu_snapshots),
-                      (select min(day)::timestamp at time zone 'Asia/Seoul' from public.ccu_daily))
+                      (select min(day)::timestamp at time zone public.ts_game_time_zone() from public.ccu_daily))
   );
 $$;
 
@@ -8521,7 +8575,7 @@ security definer
 set search_path = public
 as $$
   with params as (
-    select least(365, greatest(7, coalesce(p_days, 30))) as days, (now() at time zone 'Asia/Seoul')::date as today
+    select least(365, greatest(7, coalesce(p_days, 30))) as days, (now() at time zone public.ts_game_time_zone())::date as today
   ),
   days as (
     select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
@@ -8580,8 +8634,8 @@ set search_path = public
 as $$
   with params as (
     select least(365, greatest(1, coalesce(p_days, 30))) as days,
-           (((now() at time zone 'Asia/Seoul')::date - (least(365, greatest(1, coalesce(p_days, 30))) - 1))::timestamp
-             at time zone 'Asia/Seoul') as since
+           (((now() at time zone public.ts_game_time_zone())::date - (least(365, greatest(1, coalesce(p_days, 30))) - 1))::timestamp
+             at time zone public.ts_game_time_zone()) as since
   ),
   paid as (
     select coalesce(nullif(prof.country_code, ''), 'unknown') as country,
@@ -8738,8 +8792,8 @@ begin
             or l.params::text ilike '%' || v_search || '%')
        and (v_category is null or l.action like v_category || '.%')
        -- 콘솔의 날짜는 한국 날짜다(ts_admin_search_mails 와 같은 이유).
-       and (p_start_date is null or l.created_at >= (p_start_date::timestamp at time zone 'Asia/Seoul'))
-       and (p_end_date   is null or l.created_at <  ((p_end_date + 1)::timestamp at time zone 'Asia/Seoul'))
+       and (p_start_date is null or l.created_at >= (p_start_date::timestamp at time zone public.ts_game_time_zone()))
+       and (p_end_date   is null or l.created_at <  ((p_end_date + 1)::timestamp at time zone public.ts_game_time_zone()))
      order by l.created_at desc, l.id desc
      limit v_size offset (v_page - 1) * v_size
   ) t;
@@ -9586,7 +9640,7 @@ as $$
 begin
   if new.is_notice then return null; end if;
   insert into public.chat_daily_stats (day, kind, shard, messages)
-  select (new.created_at at time zone 'Asia/Seoul')::date, c.kind, (new.id % 8)::smallint, 1
+  select (new.created_at at time zone public.ts_game_time_zone())::date, c.kind, (new.id % 8)::smallint, 1
     from public.chat_channels c where c.id = new.channel_id
   on conflict (day, kind, shard) do update set messages = public.chat_daily_stats.messages + 1;
   return null;
@@ -9602,7 +9656,7 @@ for each row execute function public.ts_chat_count_daily();
 -- 처음 설치할 때 이미 남아 있던 메시지도 센다(보관 기간 안의 것만 남아 있다). 이미 센 날·종류는 건드리지 않는다.
 insert into public.chat_daily_stats (day, kind, shard, messages)
 select x.day, x.kind, 0, x.n
-  from (select (m.created_at at time zone 'Asia/Seoul')::date as day, c.kind, count(*) as n
+  from (select (m.created_at at time zone public.ts_game_time_zone())::date as day, c.kind, count(*) as n
           from public.chat_messages m join public.chat_channels c on c.id = m.channel_id
          where not m.is_notice
          group by 1, 2) x
@@ -9617,7 +9671,7 @@ security definer
 set search_path = public
 as $$
   with params as (
-    select least(365, greatest(1, coalesce(p_days, 30))) as days, (now() at time zone 'Asia/Seoul')::date as today
+    select least(365, greatest(1, coalesce(p_days, 30))) as days, (now() at time zone public.ts_game_time_zone())::date as today
   ),
   days as (
     select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
