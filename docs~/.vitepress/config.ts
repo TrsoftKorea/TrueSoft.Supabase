@@ -102,7 +102,8 @@ export default defineConfig({
             items: [
               { text: '탈퇴 신청', link: '/guide/withdrawal/submit' },
               { text: '예약 상태 확인', link: '/guide/withdrawal/status' },
-              { text: '탈퇴 취소', link: '/guide/withdrawal/cancel' }
+              { text: '탈퇴 취소', link: '/guide/withdrawal/cancel' },
+              { text: '즉시 탈퇴', link: '/guide/withdrawal/delete-now' }
             ]
           },
           {

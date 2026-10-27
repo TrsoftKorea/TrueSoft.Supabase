@@ -197,7 +197,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             setMyName:                        InterceptSetName,
             linkGoogleWithIdToken:                   InterceptAddGoogleLink,
             linkAppleWithIdToken:                    InterceptAddAppleLink,
-            redeemWithdrawalCancel:                  InterceptRedeemWithdrawalCancel
+            redeemWithdrawalCancel:                  InterceptRedeemWithdrawalCancel,
+            deleteAccountNow:                        InterceptDeleteAccountNow
         );
 
         // 세이브 삭제 시 PlayNANOO 스토리지도 초기값으로 되돌립니다.
@@ -505,6 +506,41 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             var result = await sdkWithdrawal();
             if (!result.IsSuccess)
                 Debug.LogWarning("[PlayNanooRuntime] Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨.");
+            if (isGoogle)
+                await Supabase.RevokeGoogleAccessAsync();
+            tcs.SetResult(result);
+        });
+        return await tcs.Task;
+    }
+
+    // 즉시 탈퇴. 나누에는 즉시 탈퇴가 없다 — 탈퇴 요청의 유예(period)는 1일 이상만 전달된다(나누 문서 예제 `if (period > 0)`).
+    // 그래서 나누는 가장 짧은 1일 유예로 탈퇴시키고 Supabase 계정은 바로 지운다. 그 하루 동안 같은 소셜 계정으로 다시
+    // 로그인하면 나누가 "탈퇴 신청 중"(30007)을 돌려 로그인이 막힌다(InterceptSocialSignInAsync).
+    private const int NanooImmediateHoldDays = 1;
+
+    private async Task<SupabaseResult> InterceptDeleteAccountNow(Func<Task<SupabaseResult>> sdkDelete)
+    {
+        using var sessionChange = await BeginNanooSessionChangeAsync();
+        var tcs = new TaskCompletionSource<SupabaseResult>();
+        var isGoogle = Supabase.IsLinkedWithGoogle; // sdkDelete()가 세션을 정리하므로 미리 확인
+        Trace($"즉시 탈퇴 — 나누 유예 {NanooImmediateHoldDays}일, Supabase 즉시 삭제");
+        NanooWithDrawal(NanooImmediateHoldDays, async status =>
+        {
+            if (status != Configure.PN_API_STATE_SUCCESS)
+            {
+                tcs.SetResult(SupabaseResult.Fail("playnanoo_withdrawal_request_failed"));
+                return;
+            }
+
+            // InterceptRequestWithdrawal 과 같다 — 탈퇴한 나누 계정의 토큰으로 갱신·롤백이 돌지 않게 비운다.
+            _nanooSyncedThisLogin = false;
+            ClearNanooTokens();
+            TrueBaseNanoo.UserId = null;
+            TrueBaseNanoo.OpenId = null;
+
+            var result = await sdkDelete();
+            if (!result.IsSuccess)
+                Debug.LogWarning("[PlayNanooRuntime] Supabase 계정 삭제 실패. PlayNANOO 탈퇴(1일 유예)는 완료됨.");
             if (isGoogle)
                 await Supabase.RevokeGoogleAccessAsync();
             tcs.SetResult(result);

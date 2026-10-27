@@ -87,8 +87,8 @@ namespace TrueBase.Unity
 
         [Header("탈퇴")]
         [Label("탈퇴 유예 기간")]
-        [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수.")]
-        [Min(0f)]
+        [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수(최소 1일). 유예가 끝난 다음 자정(운영 콘솔에서 정한 시간대)에 삭제됩니다. 바로 지우려면 즉시 탈퇴를 쓰세요.")]
+        [Min(1f)]
         public float withdrawalRequestDelayDays = 7f;
 
 
@@ -108,8 +108,8 @@ namespace TrueBase.Unity
                 DuplicateSessionActionCheckCooldownSeconds = duplicateSessionActionCheckCooldownSeconds < 0f
                     ? 0f
                     : duplicateSessionActionCheckCooldownSeconds,
-                WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 0f
-                    ? 0f
+                WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 1f
+                    ? 1f
                     : withdrawalRequestDelayDays,
             };
         }

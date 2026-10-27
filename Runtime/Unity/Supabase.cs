@@ -236,6 +236,10 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult> RequestWithdrawalAsync() =>
             SupabaseSDK.TryRequestWithdrawalAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.TryDeleteAccountNowAsync"/>
+        public static Task<SupabaseResult> DeleteAccountNowAsync() =>
+            SupabaseSDK.TryDeleteAccountNowAsync();
+
         /// <inheritdoc cref="SupabaseSDK.TryRedeemWithdrawalCancelAsync(string)"/>
         public static Task<SupabaseResult> RedeemWithdrawalCancelAsync(string cancelToken = null) =>
             SupabaseSDK.TryRedeemWithdrawalCancelAsync(cancelToken);

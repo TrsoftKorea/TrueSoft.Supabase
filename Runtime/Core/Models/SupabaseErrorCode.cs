@@ -167,6 +167,12 @@ namespace TrueBase.Core.Common
         /// <summary>탈퇴 계정 재가입에 실패했습니다.</summary>
         public const string WithdrawalDeletedRecreateFailed = "withdrawal_deleted_recreate_failed";
 
+        /// <summary>즉시 탈퇴(계정 삭제)에 실패했습니다. 계정은 그대로이며 다시 시도할 수 있습니다.</summary>
+        public const string AccountDeleteFailed = "account_delete_failed";
+
+        /// <summary>서버에 탈퇴 설정 행이 없어 탈퇴를 예약하지 못했습니다. install.sql 5절이 덜 설치된 상태입니다.</summary>
+        public const string WithdrawalSettingsMissing = "withdrawal_settings_missing";
+
         /// <summary>탈퇴 예약이 있는 계정인데 예약 확인·삭제 처리를 끝내지 못해 로그인을 멈췄습니다. 다시 로그인하면 이어서 처리합니다.</summary>
         public const string WithdrawalStatusUnconfirmed = "withdrawal_status_unconfirmed";
 

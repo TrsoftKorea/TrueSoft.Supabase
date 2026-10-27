@@ -2433,10 +2433,81 @@ revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from authenticat
 grant execute on function public.ts_withdrawal_cancel_redeem(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- withdrawal_settings — 탈퇴 기준 시간대(1행). 운영 콘솔 "설정 › 탈퇴"에서 바꾼다.
+-- 삭제 시각을 그 시간대의 자정에 맞춘다 — 9절 정리 작업이 자정 직후에 지우므로, 시각이 하루 중 아무 때나면
+-- 그 사이에 로그인한 사람이 로그인 중에 계정이 지워져 새로 만들어지는 길을 탄다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.withdrawal_settings (
+  id         int primary key default 1 check (id = 1),
+  time_zone  text not null default 'Asia/Seoul',
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+insert into public.withdrawal_settings (id) values (1) on conflict (id) do nothing;
+alter table public.withdrawal_settings enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.withdrawal_settings from anon, authenticated;
+
+-- 유예 일수 → 삭제 시각. 신청한 날(기준 시간대)로부터 N일이 지난 다음 자정이라 최소 N일이 보장된다.
+-- 예: 10/27 15:00 에 7일 → 11/4 00:00. 유예는 최소 1일 — 바로 지우는 건 즉시 탈퇴(withdrawal-now)가 한다.
+create or replace function public.ts_withdrawal_deadline(p_delay_days integer)
+returns timestamptz
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select ((date_trunc('day', now() at time zone s.time_zone)
+           + make_interval(days => greatest(1, coalesce(p_delay_days, 1)) + 1)) at time zone s.time_zone)
+  from public.withdrawal_settings s
+  where s.id = 1;
+$$;
+
+revoke all on function public.ts_withdrawal_deadline(integer) from public, anon, authenticated;
+
+create or replace function public.ts_admin_withdrawal_settings_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('time_zone', s.time_zone, 'updated_at', s.updated_at, 'updated_by', s.updated_by,
+                            'example_deadline', public.ts_withdrawal_deadline(7))
+  from public.withdrawal_settings s where s.id = 1;
+$$;
+
+create or replace function public.ts_admin_withdrawal_settings_update(p_time_zone text, p_by text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_tz text := btrim(coalesce(p_time_zone, ''));
+begin
+  if not exists (select 1 from pg_timezone_names where name = v_tz) then
+    raise exception 'withdrawal_time_zone_invalid: %', v_tz;
+  end if;
+  update public.withdrawal_settings
+     set time_zone = v_tz, updated_at = now(), updated_by = p_by
+   where id = 1;
+  return public.ts_admin_withdrawal_settings_get();
+end;
+$$;
+
+comment on function public.ts_admin_withdrawal_settings_get() is '탈퇴 기준 시간대 조회. service_role 전용.';
+comment on function public.ts_admin_withdrawal_settings_update(text, text) is '탈퇴 기준 시간대 변경. 이미 예약된 계정의 삭제 시각은 그대로다. service_role 전용.';
+revoke all on function public.ts_admin_withdrawal_settings_get() from public, anon, authenticated;
+revoke all on function public.ts_admin_withdrawal_settings_update(text, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_withdrawal_settings_get() to service_role;
+grant execute on function public.ts_admin_withdrawal_settings_update(text, text) to service_role;
+
+-- ---------------------------------------------------------------------------
 -- ts_request_withdrawal — 탈퇴 예약
 -- ---------------------------------------------------------------------------
--- p_delay_days 일 후 탈퇴가 실행되도록 user_profiles.withdrawn_at을 설정합니다.
--- 0이면 즉시 탈퇴 예약. 탈퇴 예약 시 익명 복구 토큰도 함께 삭제합니다.
+-- 삭제 시각(user_profiles.withdrawn_at)은 ts_withdrawal_deadline — 유예 N일 뒤 기준 시간대 자정.
+-- 탈퇴 예약 시 익명 복구 토큰도 함께 삭제합니다.
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_request_withdrawal(p_delay_days integer)
 returns table(scheduled_at timestamptz)
@@ -2455,14 +2526,15 @@ begin
     raise exception 'not_authenticated';
   end if;
 
-  v_delay_days  := greatest(0, coalesce(p_delay_days, 0));
+  v_delay_days  := greatest(1, coalesce(p_delay_days, 1));
   v_account_id  := auth.uid();
   v_user_id     := auth.uid()::text;
 
-  v_scheduled_at := case
-    when v_delay_days <= 0 then now()
-    else now() + make_interval(days => v_delay_days)
-  end;
+  v_scheduled_at := public.ts_withdrawal_deadline(v_delay_days);
+  -- 설정 행이 없으면 null 이 되고, null 은 "탈퇴 예약 없음"이라 신청이 성공한 듯 보이고 아무 일도 안 일어난다.
+  if v_scheduled_at is null then
+    raise exception 'withdrawal_settings_missing';
+  end if;
 
   insert into public.user_profiles (user_id, account_id, withdrawn_at)
   values (v_user_id, v_account_id, v_scheduled_at)
@@ -2482,7 +2554,7 @@ end;
 $$;
 
 comment on function public.ts_request_withdrawal(integer) is
-  '탈퇴 예약. p_delay_days일 후 탈퇴. 0이면 즉시 예약. 익명 복구 토큰도 함께 삭제.';
+  '탈퇴 예약. 유예 p_delay_days일(최소 1) 뒤 기준 시간대 자정에 삭제. 익명 복구 토큰도 함께 삭제.';
 
 grant execute on function public.ts_request_withdrawal(integer) to authenticated;
 
@@ -3832,8 +3904,8 @@ create policy remote_config_all_service_role
 
 -- 주기적인 정리 작업을 pg_cron으로 자동화합니다.
 -- · 만료된 우편 삭제          매일 03:00  ts_cleanup_expired_mails(500)
--- · 탈퇴 예약 만료 계정 삭제  매일 02:00  ts_withdrawal_sweep_kick() → 엣지 함수 withdrawal-sweep
--- · 그 결과 확인              매일 03:30  ts_withdrawal_overdue_check()
+-- · 탈퇴 예약 만료 계정 삭제  30분마다   ts_withdrawal_sweep_kick() → 엣지 함수 withdrawal-sweep
+-- · 그 결과 확인              매시 15분  ts_withdrawal_overdue_check()
 -- · 실행 기록 정리            매일 03:40  cron.job_run_details 7일치만 남김
 -- (시각은 모두 UTC)
 --
@@ -3976,7 +4048,9 @@ select cron.schedule(
   'select public.ts_purchase_refund_sync_kick()'
 );
 
--- 4. 탈퇴 계정 정리 — 매일 02:00(UTC). 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
+-- 4. 탈퇴 계정 정리 — 30분마다. 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
+--    삭제 시각은 게임마다 정한 시간대의 자정(ts_withdrawal_deadline)이라 UTC 로는 게임마다 다르다 — 30분마다 돌면
+--    어느 시간대든(30분 단위 시차까지) 자정 직후에 지운다. 지울 계정이 없으면 엣지 함수를 부르지 않는다.
 --    project_url 이 없으면 실패로 끝내 "자동 작업" 화면에 보이게 한다 — 조용히 넘기면 탈퇴자가 안 지워진 채 쌓인다.
 create or replace function public.ts_withdrawal_sweep_kick()
 returns void
@@ -3987,6 +4061,10 @@ as $$
 declare
   v_url text;
 begin
+  if not exists (select 1 from public.user_profiles
+                  where withdrawn_at is not null and withdrawn_at <= now() and account_id is not null) then
+    return;
+  end if;
   select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
   if v_url is null or btrim(v_url) = '' then
     raise exception 'project_url_missing';
@@ -4000,11 +4078,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_withdrawal_sweep_kick() is '탈퇴 계정 정리 엣지 함수를 부른다. cron 이 매일 부른다.';
+comment on function public.ts_withdrawal_sweep_kick() is '탈퇴 계정 정리 엣지 함수를 부른다(지울 계정이 있을 때만). cron 이 30분마다 부른다.';
 revoke all on function public.ts_withdrawal_sweep_kick() from public, anon, authenticated;
 
--- 위 호출은 요청을 넣기만 해서, 엣지 함수가 실패해도 이 작업은 성공으로 남는다. 그래서 하루 뒤 결과를 따로 본다 —
--- 유예가 하루 넘게 지났는데 남은 계정이 있으면 실패로 끝내 "자동 작업" 화면에 빨갛게 보이게 한다.
+-- 위 호출은 요청을 넣기만 해서, 엣지 함수가 실패해도 이 작업은 성공으로 남는다. 그래서 결과를 따로 본다 —
+-- 유예가 2시간 넘게 지났는데 남은 계정이 있으면(30분 정리가 네 번 넘게 못 지움) 실패로 끝내 "자동 작업" 화면에 빨갛게 보이게 한다.
 create or replace function public.ts_withdrawal_overdue_check()
 returns int
 language plpgsql
@@ -4017,16 +4095,16 @@ begin
   select count(*) into v_n
   from public.user_profiles
   where withdrawn_at is not null
-    and withdrawn_at < now() - interval '1 day'
+    and withdrawn_at < now() - interval '2 hours'
     and account_id is not null;
   if v_n > 0 then
-    raise exception 'withdrawal_overdue: 탈퇴 유예가 하루 넘게 지났는데 지워지지 않은 계정 %개 — withdrawal-sweep 배포·로그를 확인하세요', v_n;
+    raise exception 'withdrawal_overdue: 탈퇴 유예가 2시간 넘게 지났는데 지워지지 않은 계정 %개 — withdrawal-sweep 배포·로그를 확인하세요', v_n;
   end if;
   return 0;
 end;
 $$;
 
-comment on function public.ts_withdrawal_overdue_check() is '탈퇴 계정 정리가 실제로 됐는지 확인한다. cron 이 매일 부른다.';
+comment on function public.ts_withdrawal_overdue_check() is '탈퇴 계정 정리가 실제로 됐는지 확인한다(마감 2시간이 지나도 남은 계정이 있으면 실패). cron 이 매시 15분에 부른다.';
 revoke all on function public.ts_withdrawal_overdue_check() from public, anon, authenticated;
 
 do $$
@@ -4040,12 +4118,12 @@ begin
 end $$;
 select cron.schedule(
   'withdrawal-cleanup',
-  '0 2 * * *',
+  '0,30 * * * *',
   'select public.ts_withdrawal_sweep_kick()'
 );
 select cron.schedule(
   'withdrawal-overdue-check',
-  '30 3 * * *',
+  '15 * * * *',
   'select public.ts_withdrawal_overdue_check()'
 );
 
@@ -7835,13 +7913,16 @@ begin
       return p_hint = 'bool';
     when 'string' then
       if p_hint = 'string' then return true; end if;
-      -- 'now'·'infinity'·'today' 같은 Postgres 특수 글자는 날짜로 읽히지만 C# 은 못 읽는다 — 숫자로 시작하는 것만 본다.
-      if v_text !~ '^\d' then return false; end if;
+      -- 'now'·'today' 같은 Postgres 특수 글자나 '1/2/2024' 같은 지역 형식은 날짜로 읽히지만 C# 이 다르게 읽거나 못 읽는다.
+      -- ISO 모양(날짜 yyyy-MM-dd, 시각 HH:mm)으로 시작하는 것만 본다.
       begin
         case p_hint
-          when 'DateTimeOffset', 'DateTime' then perform v_text::timestamptz;
-          when 'DateOnly' then perform v_text::date;
-          when 'TimeOnly' then perform v_text::time;
+          when 'DateTimeOffset', 'DateTime', 'DateOnly' then
+            if v_text !~ '^\d{4}-\d{2}-\d{2}' then return false; end if;
+            if p_hint = 'DateOnly' then perform v_text::date; else perform v_text::timestamptz; end if;
+          when 'TimeOnly' then
+            if v_text !~ '^([01]\d|2[0-3]):\d{2}' then return false; end if;
+            perform v_text::time;
           else return false;
         end case;
         return true;

@@ -161,11 +161,11 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 2. 플레이어 프로필 — user_profiles + display_names + user_sessions + 금칙어(banned_words: 채팅은 ts_mask_banned_words 로 가리고 닉네임은 display_names 트리거로 거절, 운영 콘솔 "금칙어"에서 관리)
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
-5. 계정 관리 — server transfer RPCs + withdrawal RPCs + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
+5. 계정 관리 — server transfer RPCs + withdrawal RPCs(예약 삭제 시각 = 유예 N일 뒤 withdrawal_settings.time_zone 자정, 운영 콘솔 "설정 › 탈퇴") + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)
 6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "설정"에서 바꾼다 — 친구·매치 로비 제한값도 같은 화면). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
 7. 인앱 결제 — purchases + 환불 기록(refunded_at, total_paid_krw 에서 차감. 애플은 `purchase-notify-apple` 알림, 구글은 9절 cron → pg_net → `purchase-refund-sync-google`. 마지막 확인 상태는 purchase_refund_sync. 결제 기록보다 먼저 온 애플 환불은 purchase_refund_events 에 남았다가 결제가 기록될 때 붙고, 알림의 서명 시각으로 늦게 온 옛 알림을 버린다. cron 은 Vault 의 `project_url` 이 있어야 돈다 — 프로젝트마다 손으로 등록) + 서버 연결값(스토어·애플 키 6종을 운영 콘솔 "설정"에서 넣어 Vault `ts_cfg:<키>` 에 암호화 저장. ts_server_config_get·ts_admin_server_config_status·ts_admin_server_config_set, service_role 전용. 엣지 함수는 공통 구간 `server-config` 로 콘솔 값 → Edge Function Secrets 순으로 읽고 1분 캐시. 키 목록 네 곳의 일치는 SdkAudit R16 이 본다)
 8. 원격 설정 — remote_config
-9. 크론 잡 — 만료 우편 정리 + 탈퇴 유예 지난 계정 삭제(ts_withdrawal_sweep_kick → `withdrawal-sweep` Edge Function, 결과는 ts_withdrawal_overdue_check 가 하루 뒤 확인해 남은 계정이 있으면 실패로 끝낸다) + 구글 환불 확인 + 실행 기록(cron.job_run_details) 7일 정리 (pg_cron·pg_net required, Vault `project_url` 필요)
+9. 크론 잡 — 만료 우편 정리 + 탈퇴 유예 지난 계정 삭제(30분마다 ts_withdrawal_sweep_kick → `withdrawal-sweep` Edge Function. 삭제 시각은 5절 ts_withdrawal_deadline 이 게임별 시간대(withdrawal_settings)의 자정으로 맞춘다. 2시간 넘게 남은 계정이 있으면 ts_withdrawal_overdue_check 가 실패로 끝낸다) + 구글 환불 확인 + 실행 기록(cron.job_run_details) 7일 정리 (pg_cron·pg_net required, Vault `project_url` 필요)
 10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만) + 게임 서버 관리 RPC(ts_admin_game_servers_list·ts_admin_game_server_upsert, 코드는 추가 때만·삭제 없음)
 11. 유저 데이터 로그 — user_data_logs + change-diff trigger + 운영 콘솔 세이브 되돌리기(ts_admin_user_data_restore_preview·ts_admin_user_data_restore — 로그는 바뀌기 전 값만 남기므로 최신부터 그 로그까지 거꾸로 덧씌워 그 변경 직전 상태를 만든다. 로그 보관 7일이 되돌릴 수 있는 범위)
 12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail(대상 플랫폼 지정, "나중에 들어온 플레이어도 받기"는 mail_batches.open_until 까지 ts_deliver_open_mail_batches 크론이 매분 배달. 발송 실수는 ts_admin_mail_batch_recall(안 받은 우편 지움 + 배달 멈춤)·ts_admin_mail_batch_close(배달만 멈춤)) + TrueBase.Admin 전용 조회 RPC(배치·개별 우편, service_role만)
@@ -190,7 +190,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
 
-`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-notify-apple`, `purchase-refund-sync-google`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`, `withdrawal-sweep`.
+`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-notify-apple`, `purchase-refund-sync-google`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`, `withdrawal-now`, `withdrawal-sweep`.
 
 ## Samples
 

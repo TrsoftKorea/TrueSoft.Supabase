@@ -37,7 +37,7 @@ else
 | `SupabaseReason.AfterAutoLoginFailed` | 자동 로그인 후처리 훅이 실패를 반환했습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalGateBlocked` | 탈퇴 예약 중인 계정 — [탈퇴 취소](/guide/withdrawal/cancel) 참고 |
-| `SupabaseReason.WithdrawalDeleted` | 탈퇴 유예가 끝난 계정을 이번 자동 로그인에서 삭제했습니다. 서버의 매일 정리가 아직 돌기 전일 때만 옵니다. 로그인 화면을 띄우세요 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 유예가 끝난 계정을 이번 자동 로그인에서 삭제했습니다. 삭제 시각(자정)이 지났는데 서버 정리가 아직 돌기 전일 때만 옵니다. 로그인 화면을 띄우세요 |
 | `SupabaseReason.WithdrawalStatusUnconfirmed` | 탈퇴 예약 상태를 확인하지 못해 로그인을 멈췄습니다. 다시 시도하면 이어서 처리합니다 |
 
 첫 실행이나 로그아웃 직후에는 `AutoLoginNoToken`이 정상입니다. 오류로 안내하지 말고 로그인 화면을 띄우세요.

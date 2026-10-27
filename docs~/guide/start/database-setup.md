@@ -56,7 +56,8 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `withdrawal-cancel-issue` | 공개 프로필 · 탈퇴 취소 토큰 발급 |
 | `withdrawal-cancel-redeem` | 공개 프로필 · 탈퇴 취소 토큰 사용 |
 | `withdrawal-guard` | 공개 프로필 · 탈퇴 계정 자동 처리 |
-| `withdrawal-sweep` | 공개 프로필 · 탈퇴 유예가 지난 계정을 매일 삭제 |
+| `withdrawal-sweep` | 공개 프로필 · 탈퇴 유예가 지난 계정을 자정 직후 삭제 |
+| `withdrawal-now` | 공개 프로필 · 즉시 탈퇴 |
 | `purchase-verify-google` | 인앱 결제 · Android |
 | `purchase-verify-apple` | 인앱 결제 · iOS · SK2 |
 | `purchase-verify-apple-legacy` | 인앱 결제 · iOS · SK1 · forceStoreKit1 |
@@ -113,7 +114,7 @@ APPLE_KEY_ID=
 
 ## 5. 프로젝트 주소 등록 {#project-url}
 
-DB가 하루 한 번 엣지 함수를 직접 부르는 작업이 둘 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)와 구글 환불 확인(`purchase-refund-sync-google`). 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
+DB가 엣지 함수를 직접 부르는 자동 작업이 둘 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)와 구글 환불 확인(`purchase-refund-sync-google`). 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
 
 ```sql
 select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');

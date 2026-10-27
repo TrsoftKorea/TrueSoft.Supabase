@@ -4,9 +4,9 @@
 // 예전에는 그 계정이 다시 로그인할 때 withdrawal-guard 만 지웠다 — 다시 안 들어온 탈퇴자는 영영 남았다.
 // 절차는 withdrawal-guard 와 같다: account_closures 기록 → 애플 철회(실패해도 삭제는 진행) → auth 계정 삭제.
 //
-// 부르는 곳: install.sql 9절 cron(매일 02:00 UTC, pg_net). 지우는 대상은 서버가 정하고(유예가 지난 계정만,
+// 부르는 곳: install.sql 9절 cron(30분마다, 지울 계정이 있을 때만, pg_net). 지우는 대상은 서버가 정하고(유예가 지난 계정만,
 // 유예가 지나면 취소도 막힌다) 10분 안의 재호출은 건너뛰므로 인증 없이 받는다(verify_jwt 끔). cron 이 키 없이 부를 수 있게 하려는 것이다.
-// 응답에는 성공 여부만 싣는다. 실패는 로그에 남기고, 하루 뒤 ts_withdrawal_overdue_check 가 남은 계정을 보고 실패로 끝낸다.
+// 응답에는 성공 여부만 싣는다. 실패는 로그에 남기고, 2시간 뒤 ts_withdrawal_overdue_check 가 남은 계정을 보고 실패로 끝낸다.
 //
 // 필요한 값: APPLE_TEAM_ID·APPLE_KEY_ID·APPLE_PRIVATE_KEY (운영 콘솔 "설정" 또는 Edge Function Secrets, apple-token 과 같은 값).
 // 없으면 애플 철회만 건너뛰고 삭제는 한다.
@@ -92,8 +92,10 @@ const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
 const secretKeys          = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY = secretKeys.default;
 
-// 한 번에 지우는 최대 수. 남으면 다음 날 이어서 한다(대개 하루치는 이보다 훨씬 적다).
-const BATCH = 100;
+// 같은 날 신청한 계정은 마감이 한 자정에 몰린다. 한 호출 안에서 시간이 허락하는 만큼 묶음을 이어 지우고,
+// 남으면 30분 뒤 다음 호출이 이어 간다. 엣지 함수 실행 시간 한도보다 넉넉히 짧게 끊는다(애플 철회는 건당 최대 8초).
+const BATCH = 50;
+const TIME_BUDGET_MS = 90_000;
 const MIN_GAP_SECONDS = 600;
 
 Deno.serve(async () => {
@@ -112,66 +114,83 @@ Deno.serve(async () => {
   }
   if (!started) return reply(200, { ok: true, skipped: true });
 
-  const { data: due, error: dueError } = await db.rpc("ts_withdrawal_due_accounts", { p_limit: BATCH });
-  if (dueError) {
-    console.error(`[withdrawal-sweep] 대상 조회 실패: ${dueError.message}`);
-    return reply(500, { ok: false });
-  }
-  const rows = (due ?? []) as { account_id: string; user_id: string }[];
-  if (rows.length === 0) return reply(200, { ok: true });
-
-  const keys: AppleKeys = {
-    teamId: await serverConfig("APPLE_TEAM_ID"),
-    keyId: await serverConfig("APPLE_KEY_ID"),
-    privateKey: await serverConfig("APPLE_PRIVATE_KEY"),
-  };
-  const appleConfigured = !!(keys.teamId && keys.keyId && keys.privateKey);
-
+  const startedAt = Date.now();
+  // 이번 호출에서 실패한 계정은 다시 집지 않는다 — 앞자리에 남아 같은 계정만 되풀이하지 않게.
+  const attempted = new Set<string>();
+  let keys: AppleKeys | null = null;
+  let appleConfigured = false;
   let deleted = 0;
   let failed = 0;
-  for (const row of rows) {
-    try {
-      await db.from("account_closures").upsert(
-        { user_id: row.user_id, account_id: row.account_id, closed_at: new Date().toISOString(), note: "withdrawal_sweep" },
-        { onConflict: "user_id" },
-      );
 
-      // 계정이 지워지면 보관한 애플 토큰도 함께 지워져 다시는 끊을 수 없다 — 여기가 마지막 기회다.
-      // 그래서 토큰을 읽지 못했으면 이번에는 지우지 않는다("토큰 없음"으로 읽고 지우면 영영 못 끊는다).
-      const { data: token, error: tokenError } = await db
-        .from("apple_auth_tokens").select("client_id, refresh_token").eq("account_id", row.account_id).maybeSingle();
-      if (tokenError) {
-        failed++;
-        console.error(`[withdrawal-sweep] 애플 토큰 조회 실패 — 다음 회차로 미룸: ${tokenError.message}, account=${row.account_id}`);
-        continue;
-      }
-      if (token) {
-        if (!appleConfigured) {
-          console.warn(`[withdrawal-sweep] APPLE_* 값이 없어 애플 연결을 끊지 못했습니다. account=${row.account_id}`);
-        } else {
-          // 철회는 이용자 요청인 삭제를 막지 않는다 — 키 형식 오류·시간 초과로 던져도 삭제는 진행한다(withdrawal-guard 와 같다).
-          try {
-            const r = await revokeRefreshToken(keys, token.client_id, token.refresh_token);
-            if (!r.ok) console.warn(`[withdrawal-sweep] 애플 철회 실패(삭제는 진행): ${r.detail}, account=${row.account_id}`);
-          } catch (e) {
-            console.warn(`[withdrawal-sweep] 애플 철회 중 예외(삭제는 진행): ${e instanceof Error ? e.message : e}, account=${row.account_id}`);
+  while (Date.now() - startedAt < TIME_BUDGET_MS) {
+    const { data: due, error: dueError } = await db.rpc("ts_withdrawal_due_accounts", {
+      p_limit: Math.min(200, BATCH + attempted.size),
+    });
+    if (dueError) {
+      console.error(`[withdrawal-sweep] 대상 조회 실패: ${dueError.message}`);
+      return reply(500, { ok: false });
+    }
+    const rows = ((due ?? []) as { account_id: string; user_id: string }[])
+      .filter((r) => !attempted.has(r.account_id))
+      .slice(0, BATCH);
+    if (rows.length === 0) break;
+
+    if (!keys) {
+      keys = {
+        teamId: await serverConfig("APPLE_TEAM_ID"),
+        keyId: await serverConfig("APPLE_KEY_ID"),
+        privateKey: await serverConfig("APPLE_PRIVATE_KEY"),
+      };
+      appleConfigured = !!(keys.teamId && keys.keyId && keys.privateKey);
+    }
+
+    for (const row of rows) {
+      if (Date.now() - startedAt >= TIME_BUDGET_MS) break;
+      attempted.add(row.account_id);
+      try {
+        await db.from("account_closures").upsert(
+          { user_id: row.user_id, account_id: row.account_id, closed_at: new Date().toISOString(), note: "withdrawal_sweep" },
+          { onConflict: "user_id" },
+        );
+
+        // 계정이 지워지면 보관한 애플 토큰도 함께 지워져 다시는 끊을 수 없다 — 여기가 마지막 기회다.
+        // 그래서 토큰을 읽지 못했으면 이번에는 지우지 않는다("토큰 없음"으로 읽고 지우면 영영 못 끊는다).
+        const { data: token, error: tokenError } = await db
+          .from("apple_auth_tokens").select("client_id, refresh_token").eq("account_id", row.account_id).maybeSingle();
+        if (tokenError) {
+          failed++;
+          console.error(`[withdrawal-sweep] 애플 토큰 조회 실패 — 다음 회차로 미룸: ${tokenError.message}, account=${row.account_id}`);
+          continue;
+        }
+        if (token) {
+          if (!appleConfigured) {
+            console.warn(`[withdrawal-sweep] APPLE_* 값이 없어 애플 연결을 끊지 못했습니다. account=${row.account_id}`);
+          } else {
+            // 철회는 이용자 요청인 삭제를 막지 않는다 — 키 형식 오류·시간 초과로 던져도 삭제는 진행한다(withdrawal-guard 와 같다).
+            try {
+              const r = await revokeRefreshToken(keys!, token.client_id, token.refresh_token);
+              if (!r.ok) console.warn(`[withdrawal-sweep] 애플 철회 실패(삭제는 진행): ${r.detail}, account=${row.account_id}`);
+            } catch (e) {
+              console.warn(`[withdrawal-sweep] 애플 철회 중 예외(삭제는 진행): ${e instanceof Error ? e.message : e}, account=${row.account_id}`);
+            }
           }
         }
-      }
 
-      const del = await db.auth.admin.deleteUser(row.account_id, false);
-      if (del.error) {
+        const del = await db.auth.admin.deleteUser(row.account_id, false);
+        // 그 사이 재로그인의 withdrawal-guard 가 먼저 지웠으면 결과는 같다.
+        if (del.error && !/not.?found/i.test(del.error.message)) {
+          failed++;
+          console.error(`[withdrawal-sweep] 삭제 실패: ${del.error.message}, account=${row.account_id}`);
+        } else {
+          deleted++;
+        }
+      } catch (e) {
         failed++;
-        console.error(`[withdrawal-sweep] 삭제 실패: ${del.error.message}, account=${row.account_id}`);
-      } else {
-        deleted++;
+        console.error(`[withdrawal-sweep] 처리 중 예외: ${e instanceof Error ? e.message : e}, account=${row.account_id}`);
       }
-    } catch (e) {
-      failed++;
-      console.error(`[withdrawal-sweep] 처리 중 예외: ${e instanceof Error ? e.message : e}, account=${row.account_id}`);
     }
   }
 
-  console.log(`[withdrawal-sweep] 대상 ${rows.length} · 삭제 ${deleted} · 실패 ${failed}`);
+  console.log(`[withdrawal-sweep] 시도 ${attempted.size} · 삭제 ${deleted} · 실패 ${failed} · ${Date.now() - startedAt}ms`);
   return reply(failed > 0 ? 500 : 200, { ok: failed === 0, deleted, failed });
 });

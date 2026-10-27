@@ -1161,6 +1161,21 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "withdrawal.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_withdrawal_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "withdrawal.settingsUpdate": {
+        const { data, error } = await db.rpc("ts_admin_withdrawal_settings_update", {
+          p_time_zone: str(params, "timeZone"),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "friends.settingsGet": {
         const { data, error } = await db.rpc("ts_admin_friend_settings_get");
         if (error) throw new Error(error.message);
@@ -1670,6 +1685,7 @@ const SERVER_ERRORS: Record<string, string> = {
   operator_email_invalid: "이메일 형식이 올바르지 않습니다.",
   operator_not_found: "운영자를 찾을 수 없습니다.",
   operator_not_disabled: "먼저 비활성화한 운영자만 삭제할 수 있습니다.",
+  withdrawal_time_zone_invalid: "알 수 없는 시간대입니다.",
   mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",

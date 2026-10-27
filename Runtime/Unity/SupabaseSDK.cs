@@ -66,6 +66,7 @@ namespace TrueBase.Unity
         private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
         private const string _withdrawalGuardFunctionName = "withdrawal-guard";
+        private const string _withdrawalNowFunctionName = "withdrawal-now";
         private static bool _isRecreatingAfterWithdrawalDelete;
         private const string _purchaseVerifyGoogleFunctionName       = "purchase-verify-google";
         private const string _purchaseVerifyAppleFunctionName        = "purchase-verify-apple";
@@ -91,6 +92,7 @@ namespace TrueBase.Unity
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptSignInWithAppleIdToken;
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptSignOutFully;
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptRequestWithdrawal;
+        internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptDeleteAccountNow;
         internal static Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         _interceptRedeemWithdrawalCancel;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkGoogleToGuestWithIdToken;
         internal static Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> _interceptLinkAppleToGuestWithIdToken;
@@ -144,8 +146,10 @@ namespace TrueBase.Unity
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> setMyName                       = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkGoogleWithIdToken                  = null,
             Func<string, Func<Task<SupabaseResult>>, Task<SupabaseResult>> linkAppleWithIdToken                   = null,
-            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         redeemWithdrawalCancel                 = null)
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         redeemWithdrawalCancel                 = null,
+            Func<Func<Task<SupabaseResult>>, Task<SupabaseResult>>         deleteAccountNow                       = null)
         {
+            _interceptDeleteAccountNow                      = deleteAccountNow;
             _interceptSignInAnonymously                       = signInAnonymously;
             _interceptSignInWithGoogleIdToken                 = signInWithGoogleIdToken;
             _interceptSignInWithAppleIdToken                  = signInWithAppleIdToken;
@@ -167,6 +171,7 @@ namespace TrueBase.Unity
             _interceptSignInWithAppleIdToken                  = null;
             _interceptSignOutFully                            = null;
             _interceptRequestWithdrawal                     = null;
+            _interceptDeleteAccountNow                      = null;
             _interceptRedeemWithdrawalCancel                = null;
             _interceptLinkGoogleToGuestWithIdToken = null;
             _interceptLinkAppleToGuestWithIdToken  = null;
@@ -249,10 +254,10 @@ namespace TrueBase.Unity
         public static float WithdrawalRequestDelayDays => _withdrawalRequestDelayDays;
 
         /// <summary>
-        /// 서버에 실제로 예약하는 유예 일수(음수는 0, 반올림한 정수). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
+        /// 서버에 실제로 예약하는 유예 일수(최소 1, 반올림한 정수). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
         /// </summary>
         public static int WithdrawalRequestDelayWholeDays =>
-            Mathf.RoundToInt(_withdrawalRequestDelayDays < 0f ? 0f : _withdrawalRequestDelayDays);
+            Mathf.Max(1, Mathf.RoundToInt(_withdrawalRequestDelayDays));
 
         /// <summary>중복 로그인 감지용 <c>user_sessions</c> REST 서비스. 미초기화 시 null.</summary>
         public static SupabaseUserSessionService UserSessionService => _bootstrap?.UserSessionService;
@@ -286,6 +291,7 @@ namespace TrueBase.Unity
             public const string ProfileServerSelect = "Supabase.Profile.Server.Select";
             public const string ProfileSnapshotGet = "Supabase.Profile.Snapshot.Get";
             public const string ProfileWithdrawnRequest = "Supabase.Profile.Withdrawn.Request";
+            public const string ProfileDeleteNow = "Supabase.Profile.DeleteNow";
             public const string ProfileWithdrawalCancelRedeem = "Supabase.Profile.Withdrawal.Cancel.Redeem";
             public const string ServerTime = "Supabase.Server.Time";
             public const string MailboxList = "Supabase.Mailbox.List";
@@ -1064,7 +1070,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 서버에 보관한 애플 토큰으로 Sign in with Apple 연결을 끊습니다(애플 심사 기준 — 계정 삭제 시 철회).
-        /// 탈퇴 신청 직후 부릅니다. 실패해도 탈퇴는 진행하고, 계정 최종 삭제 때(<c>withdrawal-sweep</c> 매일 정리 또는 그 전 재로그인의 <c>withdrawal-guard</c>) 한 번 더 시도합니다.
+        /// 탈퇴 신청 직후 부릅니다. 실패해도 탈퇴는 진행하고, 계정 최종 삭제 때(<c>withdrawal-sweep</c> 자정 정리 또는 그 전 재로그인의 <c>withdrawal-guard</c>) 한 번 더 시도합니다.
         /// </summary>
         /// <param name="onFailure">실패 경고에 덧붙일 다음 조치 안내.</param>
         private static async Task TryRevokeAppleTokenAsync(string onFailure)
@@ -3396,11 +3402,12 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 설정(<see cref="WithdrawalRequestDelayDays"/>)에 정의된 유예 기간(일)으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
+        /// 설정(<see cref="WithdrawalRequestDelayDays"/>, 최소 1일)에 정의된 유예 기간으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
+        /// 삭제 시각은 유예가 끝난 다음 자정(운영 콘솔에서 정한 시간대)이고, 서버가 그 직후 지웁니다.
         /// 요청이 성공하면 앱에서도 즉시 로그아웃 상태로 전환합니다(자동 로그인 방지).
         /// 철회용 <c>cancel_token</c>은 여기서 발급하지 않습니다. <b>탈퇴 예약(유예) 중인 계정으로 로그인</b>하면 SDK가 Edge Function으로 토큰을 발급·로컬에 저장한 뒤 세션을 정리합니다(게이트).
         /// 그 다음 <see cref="RedeemWithdrawalCancelAsync"/>로 철회할 수 있습니다. 다른 기기에서 로그인해도 그 기기에 토큰이 저장됩니다.
-        /// 즉시 탈퇴처럼 예약이 아닌 경우(<c>IsScheduled == false</c>)에는 철회 토큰이 발급되지 않습니다.
+        /// 바로 지우려면 <see cref="DeleteAccountNowAsync"/>를 씁니다.
         /// </summary>
         public static async Task<SupabaseResult<bool>> RequestWithdrawalAsync()
         {
@@ -3444,6 +3451,63 @@ namespace TrueBase.Unity
                 });
             var r2 = await RequestWithdrawalAsync();
             return LogAndReturn(ApiLogTags.ProfileWithdrawnRequest, r2);
+        }
+
+        /// <summary>
+        /// 로그인한 계정을 그 자리에서 삭제합니다(즉시 탈퇴). 유예·취소가 없어 되돌릴 수 없습니다.
+        /// 서버(<c>withdrawal-now</c>)가 Sign in with Apple 연결을 끊고 계정을 지운 뒤, 앱도 로그아웃 상태로 바꿉니다.
+        /// 유예를 두는 탈퇴는 <see cref="RequestWithdrawalAsync"/>를 씁니다.
+        /// </summary>
+        public static async Task<SupabaseResult<bool>> DeleteAccountNowAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            if (_bootstrap?.EdgeFunctionsService == null)
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
+
+            // 게스트면 이 기기의 복구 쪽지가 지금 계정 것이다 — 남기면 다음 게스트 로그인이 지워진 계정으로 복구를 시도한다.
+            // 게스트가 아니면 지우지 않는다: 이 함수는 기기 단위라, 같은 기기의 다른 게스트 쪽지까지 지운다.
+            // 직전 복구가 실패해 쪽지를 지키는 중이면 그 쪽지는 이전 게스트 것이라 손대지 않는다.
+            var removedRecoveryNote = false;
+            if (IsAnonymousSession(_currentSession) && !KeepExistingAnonymousRecoveryNote)
+            {
+                await TryDeleteAnonymousRecoveryForCurrentDeviceAsync();
+                removedRecoveryNote = true;
+            }
+
+            var result = await _bootstrap.EdgeFunctionsService.InvokeAsync<WithdrawalNowResponse>(
+                _withdrawalNowFunctionName,
+                _currentSession.AccessToken,
+                new WithdrawalNowRequest());
+
+            if (result == null || !result.IsSuccess || result.Data == null || !result.Data.deleted)
+            {
+                Debug.LogWarning("[Supabase] 즉시 탈퇴 실패: " + (result?.Data?.reason ?? result?.ErrorCode ?? "unknown"));
+                // 계정이 그대로 남았다 — 지운 복구 쪽지를 바로 되살린다(안 그러면 다음 토큰 갱신까지 이 게스트를 복구할 수 없다).
+                if (removedRecoveryNote)
+                    await TryUpsertAnonymousRecoveryTokenAsync(_currentSession);
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccountDeleteFailed);
+            }
+
+            // 계정이 이미 없다 — 서버 세션 행·로그아웃 요청은 보내지 않고 로컬만 정리한다.
+            ClearStoredWithdrawalGateStatus();
+            ClearStoredWithdrawalCancelToken();
+            ClearSession(clearStorage: true, deleteUserSessionRow: false);
+            return SupabaseResult<bool>.Success(true);
+        }
+
+        /// <inheritdoc cref="DeleteAccountNowAsync"/>
+        public static async Task<SupabaseResult> TryDeleteAccountNowAsync()
+        {
+            if (_interceptDeleteAccountNow != null)
+                return await _interceptDeleteAccountNow(async () => {
+                    var r = await DeleteAccountNowAsync();
+                    return LogAndReturn(ApiLogTags.ProfileDeleteNow, r);
+                });
+            var r2 = await DeleteAccountNowAsync();
+            return LogAndReturn(ApiLogTags.ProfileDeleteNow, r2);
         }
 
 
@@ -4407,6 +4471,13 @@ namespace TrueBase.Unity
                             return SupabaseResult<SupabaseSession>.Fail(picked.ErrorCode);
                         if (string.IsNullOrWhiteSpace(picked.Data.IdToken))
                             return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleIdTokenEmpty);
+                        // 창에서 다른 구글 계정을 고르면 탈퇴한 사람이 아닌 계정으로 들어가게 된다 — 이 흐름은 "같은 사람의 재가입"이다.
+                        var originalSub = GoogleIdTokenSub(googleToken);
+                        if (originalSub != null && originalSub != GoogleIdTokenSub(picked.Data.IdToken))
+                        {
+                            Debug.Log("[Supabase] 탈퇴 계정 정리 후 다른 구글 계정이 선택되어 재가입을 멈춥니다.");
+                            return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.WithdrawalDeletedRecreateFailed);
+                        }
                         return await SignInWithGoogleIdTokenAsync(picked.Data.IdToken.Trim());
                     }
 
@@ -4422,6 +4493,27 @@ namespace TrueBase.Unity
 
                 default:
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.InvalidSignInMethod);
+            }
+        }
+
+        /// <summary>ID 토큰 본문의 sub(구글 계정 ID). 서명은 Supabase 가 검증하므로 여기서는 읽기만 한다. 못 읽으면 null.</summary>
+        private static string GoogleIdTokenSub(string idToken)
+        {
+            if (string.IsNullOrWhiteSpace(idToken))
+                return null;
+            try
+            {
+                var parts = idToken.Trim().Split('.');
+                if (parts.Length < 2)
+                    return null;
+                var b64 = parts[1].Replace('-', '+').Replace('_', '/');
+                b64 += new string('=', (4 - b64.Length % 4) % 4);
+                var claims = Newtonsoft.Json.Linq.JObject.Parse(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(b64)));
+                return (string)claims["sub"];
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 
@@ -5023,6 +5115,18 @@ namespace TrueBase.Unity
         private sealed class WithdrawalGuardRequest
         {
             public string trigger;
+        }
+
+        [Serializable]
+        private sealed class WithdrawalNowRequest
+        {
+        }
+
+        [Serializable]
+        private sealed class WithdrawalNowResponse
+        {
+            public bool deleted;
+            public string reason;
         }
 
         [Serializable]

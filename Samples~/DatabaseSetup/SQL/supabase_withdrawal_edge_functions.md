@@ -53,7 +53,7 @@ CANCEL_TOKEN_TTL_SECONDS=900
 |------|----------|----------|
 | `cleanup-expired-mails` | **삭제** → `pg_cron` 직접 RPC | 불필요 |
 | `withdrawal-cleanup` | **삭제** → `pg_cron` 이 `withdrawal-sweep` 를 부름 | 불필요 |
-| `withdrawal-sweep` | 유예가 지난 계정을 매일 삭제(애플 연결 끊기 포함). `install.sql` 9절 cron 이 pg_net 으로 부름, verify_jwt 끔 | `SUPABASE_SECRET_KEYS`, `APPLE_*` |
+| `withdrawal-sweep` | 유예가 지난 계정을 삭제(애플 연결 끊기 포함). `install.sql` 9절 cron 이 지울 계정이 있을 때 30분마다 pg_net 으로 부름, verify_jwt 끔 | `SUPABASE_SECRET_KEYS`, `APPLE_*` |
 | `withdrawal-cancel-redeem` | 비로그인 취소 → 토큰 sub로 `SECRET_KEY` 호출 | `SECRET_KEY` |
 | `withdrawal-cancel-issue` | `service_role` 제거 | `SUPABASE_ANON_KEY`만 |
 | `withdrawal-guard` | `service_role` → `SECRET_KEY` | `SECRET_KEY` |
