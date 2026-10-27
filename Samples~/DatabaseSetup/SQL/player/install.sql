@@ -1128,27 +1128,98 @@ as $$
 $$;
 revoke all on function public.ts_session_is_online(timestamptz, timestamptz, integer) from public, anon, authenticated;
 
--- 생존 신호 + 현재 세션 토큰 조회를 요청 하나로. 행이 없으면(로그아웃 직후 등) null.
--- 집계는 5분 단위라 매 신호마다 쓸 필요가 없다 — 2분이 지났을 때만 쓰고 나머지는 읽기만 한다(쓰기·트리거 부담을 줄인다).
-create or replace function public.ts_session_heartbeat(p_interval_seconds integer)
-returns uuid
-language sql
+-- 일별 접속 기록 — 계정마다 하루(한국 날짜) 한 줄. 일일 사용자·복귀 유저·리텐션을 여기서 센다. 지우지 않는다.
+-- 계정이 지워져도 기록은 남긴다(외래 키 없음) — 지난 리텐션 숫자가 탈퇴로 바뀌면 안 된다.
+-- is_new: 그날 가입한 계정. is_comeback: 직전 14일 동안 한 번도 접속하지 않았다가 들어온 계정.
+create table if not exists public.user_daily_activity (
+  day         date        not null,
+  account_id  uuid        not null,
+  signup_day  date,
+  is_new      boolean     not null default false,
+  is_comeback boolean     not null default false,
+  server_id   uuid,
+  platform    text,
+  first_at    timestamptz not null default now(),
+  primary key (day, account_id)
+);
+create index if not exists user_daily_activity_account_idx on public.user_daily_activity (account_id, day desc);
+create index if not exists user_daily_activity_signup_idx on public.user_daily_activity (signup_day) where is_new;
+alter table public.user_daily_activity enable row level security;
+-- [의도적] 정책 없음 — 운영 콘솔이 ts_admin_activity_stats 로만 읽는다.
+revoke all on table public.user_daily_activity from anon, authenticated;
+
+-- 오늘 첫 접속이면 한 줄 남긴다. 이미 있으면 아무것도 하지 않는다(로그인·접속 신호가 여러 번 불러도 하루 한 줄).
+-- 직전 접속일은 이 표에서 찾고, 표에 기록이 없던 시절의 계정은 프로필의 마지막 활동 시각으로 대신한다
+-- — 그래서 ts_after_sign_in 은 프로필을 갱신하기 전에 이것부터 부른다.
+create or replace function public.ts_record_daily_activity(p_account_id uuid)
+returns void
+language plpgsql
 security definer
 set search_path = public
 as $$
-  with cur as (
-    select session_token from public.user_sessions where account_id = auth.uid()
-  ), touched as (
-    update public.user_sessions
-       set last_seen_at = now(),
-           heartbeat_seconds = least(600, greatest(5, coalesce(p_interval_seconds, 60)))
-     where account_id = auth.uid()
-       and (last_seen_at is null
-            or last_seen_at < now() - interval '2 minutes'
-            or heartbeat_seconds is distinct from least(600, greatest(5, coalesce(p_interval_seconds, 60))))
-    returning 1
-  )
-  select session_token from cur;
+declare
+  v_day     date := (now() at time zone 'Asia/Seoul')::date;
+  v_signup  date;
+  v_prev    date;
+  v_profile public.user_profiles%rowtype;
+begin
+  if p_account_id is null then return; end if;
+  if exists (select 1 from public.user_daily_activity where day = v_day and account_id = p_account_id) then
+    return;
+  end if;
+
+  select (u.created_at at time zone 'Asia/Seoul')::date into v_signup from auth.users u where u.id = p_account_id;
+  select * into v_profile from public.user_profiles p where p.account_id = p_account_id;
+  select max(day) into v_prev from public.user_daily_activity where account_id = p_account_id and day < v_day;
+  if v_prev is null and v_profile.last_activity_at is not null then
+    v_prev := (v_profile.last_activity_at at time zone 'Asia/Seoul')::date;
+    -- 프로필 시각이 이미 오늘이면(오늘 저장이 먼저 있었으면) 그 전 접속일을 알 수 없다 — 복귀로 세지 않는다.
+    if v_prev >= v_day then v_prev := null; end if;
+  end if;
+
+  insert into public.user_daily_activity (day, account_id, signup_day, is_new, is_comeback, server_id, platform)
+  values (v_day, p_account_id, v_signup, v_signup = v_day,
+          v_signup is distinct from v_day and v_prev is not null and v_prev <= v_day - 15,
+          v_profile.server_id, nullif(v_profile.platform, ''))
+  on conflict (day, account_id) do nothing;
+end;
+$$;
+
+comment on function public.ts_record_daily_activity(uuid) is
+  '그 계정의 오늘(한국 날짜) 첫 접속을 일별 접속 기록에 남긴다. 로그인(ts_after_sign_in)·접속 신호(ts_session_heartbeat)가 부른다.';
+revoke all on function public.ts_record_daily_activity(uuid) from public, anon, authenticated;
+
+-- 생존 신호 + 현재 세션 토큰 조회를 요청 하나로. 행이 없으면(로그아웃 직후 등) null.
+-- 집계는 5분 단위라 매 신호마다 쓸 필요가 없다 — 2분이 지났을 때만 쓰고 나머지는 읽기만 한다(쓰기·트리거 부담을 줄인다).
+-- 날짜가 바뀐 뒤 첫 기록이면 일별 접속도 남긴다 — 로그인 없이 자정을 넘겨 계속 켜 둔 사람을 다음 날 사용자로 센다.
+create or replace function public.ts_session_heartbeat(p_interval_seconds integer)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid      uuid := auth.uid();
+  v_token    uuid;
+  v_last     timestamptz;
+  v_interval integer := least(600, greatest(5, coalesce(p_interval_seconds, 60)));
+begin
+  select session_token, last_seen_at into v_token, v_last from public.user_sessions where account_id = v_uid;
+  if v_token is null then return null; end if;
+
+  update public.user_sessions
+     set last_seen_at = now(), heartbeat_seconds = v_interval
+   where account_id = v_uid
+     and (last_seen_at is null
+          or last_seen_at < now() - interval '2 minutes'
+          or heartbeat_seconds is distinct from v_interval);
+
+  if v_last is null or (v_last at time zone 'Asia/Seoul')::date < (now() at time zone 'Asia/Seoul')::date then
+    perform public.ts_record_daily_activity(v_uid);
+  end if;
+
+  return v_token;
+end;
 $$;
 
 comment on function public.ts_session_heartbeat(integer) is
@@ -2685,9 +2756,16 @@ begin
     return jsonb_build_object('withdrawn_at', v_withdrawn, 'profile', null);
   end if;
 
+  -- 프로필이 마지막 활동 시각을 오늘로 덮기 전에 남겨야 복귀 여부를 판단할 수 있다.
+  perform public.ts_record_daily_activity(v_uid);
   perform public.ts_ensure_my_profile(p_user_id, p_platform);
 
   select * into v_profile from public.user_profiles p where p.account_id = v_uid;
+  -- 첫 로그인이면 기록할 때 프로필이 없어 서버·플랫폼이 비었다 — 방금 만든 프로필로 채운다.
+  update public.user_daily_activity a
+     set server_id = v_profile.server_id, platform = nullif(v_profile.platform, '')
+   where a.day = (now() at time zone 'Asia/Seoul')::date and a.account_id = v_uid and a.platform is null;
+
   select gs.server_code into v_code from public.game_servers gs where gs.id = v_profile.server_id;
   select dn.display_name into v_name from public.display_names dn where dn.account_id = v_uid;
 
@@ -8400,6 +8478,66 @@ as $$
                       (select min(day)::timestamp at time zone 'Asia/Seoul' from public.ccu_daily))
   );
 $$;
+
+-- 콘솔 "통계" 화면 — 최근 p_days 일의 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션.
+-- 재방문 = 그날 신규가 아닌 접속자. 리텐션은 가입한 날(D0)로부터 N일째에 다시 접속한 비율이고, 아직 오지 않은 날은 null.
+create or replace function public.ts_admin_activity_stats(p_days integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with params as (
+    select least(365, greatest(7, coalesce(p_days, 30))) as days, (now() at time zone 'Asia/Seoul')::date as today
+  ),
+  days as (
+    select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
+  ),
+  daily as (
+    select d.day,
+           count(a.account_id) as total,
+           count(a.account_id) filter (where a.is_new) as new_users,
+           count(a.account_id) filter (where a.is_comeback) as comeback
+    from days d left join public.user_daily_activity a on a.day = d.day
+    group by d.day
+  ),
+  offsets as (
+    select unnest(array[1,2,3,4,5,6,7,8,9,10,11,12,13,14,21,30,45,60]) as n
+  ),
+  cohort_members as (
+    select a.day, a.account_id
+    from public.user_daily_activity a, params p
+    where a.is_new and a.day >= p.today - p.days + 1
+  ),
+  cohorts as (
+    select day, count(*) as size from cohort_members group by day
+  ),
+  kept as (
+    select c.day, o.n,
+           case when c.day + o.n > p.today then null
+                else (select count(*) from cohort_members m
+                      join public.user_daily_activity a on a.account_id = m.account_id and a.day = c.day + o.n
+                      where m.day = c.day) end as kept
+    from cohorts c cross join offsets o cross join params p
+  )
+  select jsonb_build_object(
+    'today', (select today from params),
+    'daily', coalesce((select jsonb_agg(jsonb_build_object(
+                 'day', day, 'total', total, 'new', new_users, 'returning', total - new_users, 'comeback', comeback) order by day)
+               from daily), '[]'::jsonb),
+    'offsets', (select jsonb_agg(n order by n) from offsets),
+    'retention', coalesce((select jsonb_agg(jsonb_build_object(
+                     'day', c.day, 'size', c.size,
+                     'kept', (select jsonb_agg(k.kept order by k.n) from kept k where k.day = c.day)) order by c.day desc)
+                   from cohorts c), '[]'::jsonb),
+    'first_day', (select min(day) from public.user_daily_activity)
+  );
+$$;
+
+comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 한국 날짜. service_role 전용.';
+revoke all on function public.ts_admin_activity_stats(integer) from public, anon, authenticated;
+grant execute on function public.ts_admin_activity_stats(integer) to service_role;
 
 comment on function public.ts_admin_ccu(integer) is '콘솔 동시접속자 — 지금 접속 중(전체·서버별·플랫폼별)과 최근 p_hours 시간 추이·최고치. 90일 넘는 기간은 일별 요약으로 그린다. service_role 전용.';
 revoke all on function public.ts_admin_ccu(integer) from public, anon, authenticated;

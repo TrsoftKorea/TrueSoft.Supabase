@@ -158,7 +158,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 절 구성은 다음과 같습니다. 1~21은 기능별 스키마이고 **22는 반드시 마지막**입니다.
 
 1. 게임 서버 — game_servers + ts_default_server_id + ts_server_now
-2. 플레이어 프로필 — user_profiles + display_names + user_sessions(중복 로그인 토큰 + 동시접속자용 생존 신호 last_seen_at — SDK 중복 감지 폴링이 ts_session_heartbeat 로 찍는다) + 금칙어(banned_words: 채팅은 ts_mask_banned_words 로 가리고 닉네임은 display_names 트리거로 거절, 운영 콘솔 "금칙어"에서 관리)
+2. 플레이어 프로필 — user_profiles + display_names + user_sessions(중복 로그인 토큰 + 동시접속자용 생존 신호 last_seen_at — SDK 중복 감지 폴링이 ts_session_heartbeat 로 찍는다) + user_daily_activity(계정마다 하루 한 줄, 신규·복귀 표시, 영구 보관 — 로그인 ts_after_sign_in 과 날짜가 바뀐 뒤 첫 접속 신호가 ts_record_daily_activity 로 남긴다. 콘솔 "통계"가 ts_admin_activity_stats 로 일일 사용자·복귀·리텐션을 센다) + 금칙어(banned_words: 채팅은 ts_mask_banned_words 로 가리고 닉네임은 display_names 트리거로 거절, 운영 콘솔 "금칙어"에서 관리)
 3. 익명 계정 복구 — recovery tokens + auth triggers
 4. 유저 데이터 — save infra (set_updated_at, ts_ensure_my_row) + user_data + field protection
 5. 계정 관리 — server transfer RPCs + withdrawal RPCs(예약 삭제 시각 = 유예 N일 뒤 withdrawal_settings.time_zone 자정, 운영 콘솔 "설정 › 탈퇴") + apple_auth_tokens(탈퇴 시 Sign in with Apple 철회용 refresh token, `apple-token` Edge Function 전용)

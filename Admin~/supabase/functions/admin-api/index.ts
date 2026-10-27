@@ -947,6 +947,12 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "activity.stats": {
+        const { data, error } = await db.rpc("ts_admin_activity_stats", { p_days: intInRange(params, "days", "기간", 7, 365) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "ccu.stats": {
         const { data, error } = await db.rpc("ts_admin_ccu", { p_hours: intInRange(params, "hours", "기간", 1, 24 * 3650) });
         if (error) throw new Error(error.message);
