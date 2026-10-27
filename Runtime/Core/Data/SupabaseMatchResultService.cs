@@ -59,13 +59,13 @@ namespace TrueBase.Core.Data
             if (!IsValidScore(score))
                 return SupabaseResult<MatchResultReportOutcome>.Fail(SupabaseErrorCode.MatchScoreInvalid);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_session_id = sessionId.Trim(),
-                p_game_code = gameCode.Trim(),
-                p_is_win = isWin,
-                p_opponent_account_id = opponentAccountId.Trim(),
-                p_score = score
+                ["p_session_id"] = sessionId.Trim(),
+                ["p_game_code"] = gameCode.Trim(),
+                ["p_is_win"] = isWin,
+                ["p_opponent_account_id"] = opponentAccountId.Trim(),
+                ["p_score"] = score
             });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
@@ -116,12 +116,12 @@ namespace TrueBase.Core.Data
             if (!IsValidScore(score))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchScoreInvalid);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_session_id = sessionId.Trim(),
-                p_game_code = gameCode.Trim(),
-                p_is_win = isWin,
-                p_score = score
+                ["p_session_id"] = sessionId.Trim(),
+                ["p_game_code"] = gameCode.Trim(),
+                ["p_is_win"] = isWin,
+                ["p_score"] = score
             });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
@@ -136,7 +136,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(gameCode))
                 return SupabaseResult<MatchStats>.Fail(SupabaseErrorCode.MatchGameCodeEmpty);
 
-            var body = JsonConvert.SerializeObject(new { p_game_code = gameCode.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_game_code"] = gameCode.Trim() });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(
                 _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_match_stats", body);
@@ -164,11 +164,11 @@ namespace TrueBase.Core.Data
             int limit = 20,
             DateTimeOffset? before = null)
         {
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_game_code = string.IsNullOrWhiteSpace(gameCode) ? null : gameCode.Trim(),
-                p_limit = limit,
-                p_before = before
+                ["p_game_code"] = string.IsNullOrWhiteSpace(gameCode) ? null : gameCode.Trim(),
+                ["p_limit"] = limit,
+                ["p_before"] = before
             });
 
             var r = await SupabaseRestHelpers.CallRpcAsync(

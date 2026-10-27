@@ -948,7 +948,7 @@ async function handleAction(
       }
 
       case "ccu.stats": {
-        const { data, error } = await db.rpc("ts_admin_ccu", { p_hours: intInRange(params, "hours", "기간", 1, 24 * 90) });
+        const { data, error } = await db.rpc("ts_admin_ccu", { p_hours: intInRange(params, "hours", "기간", 1, 24 * 3650) });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
       }

@@ -33,7 +33,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(nickname))
                 return SupabaseResult<FriendSearchResult>.Fail(SupabaseErrorCode.FriendNicknameEmpty);
 
-            var body = JsonConvert.SerializeObject(new { p_nickname = nickname.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_nickname"] = nickname.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_friend_search", body);
             if (!r.IsSuccess)
                 return SupabaseResult<FriendSearchResult>.Fail(r.ErrorCode);
@@ -58,7 +58,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(targetAccountId))
                 return SupabaseResult<FriendRequestSendOutcome>.Fail(SupabaseErrorCode.FriendTargetRequired);
 
-            var body = JsonConvert.SerializeObject(new { p_target_account_id = targetAccountId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_target_account_id"] = targetAccountId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_friend_request_send", body);
             if (!r.IsSuccess)
                 return SupabaseResult<FriendRequestSendOutcome>.Fail(r.ErrorCode);
@@ -78,9 +78,9 @@ namespace TrueBase.Core.Data
         public async Task<SupabaseResult<IReadOnlyList<FriendRequestSummary>>> ListRequestsAsync(
             string accessToken, FriendRequestDirection direction = FriendRequestDirection.Incoming)
         {
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_direction = direction == FriendRequestDirection.Outgoing ? "outgoing" : "incoming"
+                ["p_direction"] = direction == FriendRequestDirection.Outgoing ? "outgoing" : "incoming"
             });
             var r = await CallRpcAsync(accessToken, "ts_friend_requests_list", body);
             if (!r.IsSuccess)
@@ -104,7 +104,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(requestId))
                 return SupabaseResult.Fail(SupabaseErrorCode.FriendRequestNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_request_id = requestId.Trim(), p_accept = accept });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_request_id"] = requestId.Trim(), ["p_accept"] = accept });
             var r = await CallRpcAsync(accessToken, "ts_friend_request_respond", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -115,7 +115,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(requestId))
                 return SupabaseResult.Fail(SupabaseErrorCode.FriendRequestNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_request_id = requestId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_request_id"] = requestId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_friend_request_cancel", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -145,7 +145,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(friendAccountId))
                 return SupabaseResult.Fail(SupabaseErrorCode.FriendNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_friend_account_id = friendAccountId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_friend_account_id"] = friendAccountId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_friend_remove", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }

@@ -19,6 +19,7 @@ const RANGES = [
   { hours: 24, label: '24시간' },
   { hours: 24 * 7, label: '7일' },
   { hours: 24 * 30, label: '30일' },
+  { hours: 24 * 365, label: '1년' },
 ] as const
 
 const n = (v: number) => v.toLocaleString('ko-KR')

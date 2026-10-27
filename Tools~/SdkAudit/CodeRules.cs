@@ -31,6 +31,32 @@ namespace SdkAudit
             PublicSurface(ctx);
             ResetSymmetry(ctx);
             Samples(ctx);
+            AnonymousSerialization(ctx);
+        }
+
+        // ── R18 익명 객체 직렬화 금지 ─────────────────────────────────────────
+        // IL2CPP 기기 빌드에서 익명 형식의 속성이 빠져 "{}" 로 나간다 — 2026-10-27 아이폰에서 RPC 인자가 통째로 빠져
+        // PGRST202(404)가 났다(지급 완료 기록·접속 신호). 에디터·dotnet 에서는 멀쩡해 컴파일 검사로는 안 잡힌다.
+        private static void AnonymousSerialization(AuditContext ctx)
+        {
+            foreach (var src in ctx.RuntimeSources.Concat(ctx.SampleSources))
+            {
+                var root = CSharpSyntaxTree.ParseText(src.Text).GetRoot();
+                foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    var callee = call.Expression switch
+                    {
+                        MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
+                        IdentifierNameSyntax i => i.Identifier.ValueText,
+                        _ => null,
+                    };
+                    if (callee != "SerializeObject" && callee != "ToJson")
+                        continue;
+                    if (call.ArgumentList.Arguments.Any(a => a.Expression is AnonymousObjectCreationExpressionSyntax))
+                        ctx.Report.Error($"[R18 익명 직렬화] {callee}(new {{ ... }}) — IL2CPP 기기 빌드에서 \"{{}}\" 로 나갑니다. " +
+                                         $"Dictionary<string, object> 나 이름 있는 클래스를 쓰세요. ({ctx.Where(src, call)})");
+                }
+            }
         }
 
         // ── R1 ─────────────────────────────────────────────────────────────

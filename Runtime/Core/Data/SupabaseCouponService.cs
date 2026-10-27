@@ -40,7 +40,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult.Fail(SupabaseErrorCode.CouponNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_code = code.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_code"] = code.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_coupon_redeem", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }

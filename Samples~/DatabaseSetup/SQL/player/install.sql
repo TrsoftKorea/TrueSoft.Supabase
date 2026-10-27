@@ -3956,7 +3956,7 @@ create policy remote_config_all_service_role
 -- · 탈퇴 예약 만료 계정 삭제  30분마다   ts_withdrawal_sweep_kick() → 엣지 함수 withdrawal-sweep
 -- · 그 결과 확인              매시 15분  ts_withdrawal_overdue_check()
 -- · 실행 기록 정리            매일 03:40  cron.job_run_details 7일치만 남김
--- · 동시접속자 기록          5분마다     ts_ccu_snapshot() → ccu_snapshots(90일 보관)
+-- · 동시접속자 기록          5분마다     ts_ccu_snapshot() → ccu_snapshots(90일 보관) + ccu_daily(일별 요약, 영구)
 -- (시각은 모두 UTC)
 --
 -- =============================================================================
@@ -4232,6 +4232,48 @@ $$;
 comment on function public.ts_ccu_now() is '지금 접속 중인 플레이어 수(전체·서버별·플랫폼별). service_role 전용.';
 revoke all on function public.ts_ccu_now() from public, anon, authenticated;
 
+-- 일별 요약 — 지우지 않고 영구 보관한다. 5분 기록은 90일 뒤 지워지므로 긴 기간 추이는 이것으로 본다.
+-- 날짜는 한국 기준(대시보드의 다른 숫자와 같다). 최고치 순간의 서버별·플랫폼별도 함께 남긴다.
+create table if not exists public.ccu_daily (
+  day         date primary key,
+  peak        integer       not null,
+  peak_at     timestamptz   not null,
+  avg_total   numeric(10,1) not null,
+  samples     integer       not null,
+  by_server   jsonb         not null default '{}'::jsonb,
+  by_platform jsonb         not null default '{}'::jsonb
+);
+alter table public.ccu_daily enable row level security;
+-- [의도적] 정책 없음 — 운영 콘솔이 ts_admin_ccu 로만 읽는다.
+revoke all on table public.ccu_daily from anon, authenticated;
+
+-- 그날의 5분 기록으로 요약을 다시 계산한다. 5분마다 그날 것만 다시 쓰므로 하루 마지막 기록까지 반영된다.
+create or replace function public.ts_ccu_daily_refresh(p_day date)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  with bounds as (
+    select (p_day::timestamp at time zone 'Asia/Seoul') as s,
+           ((p_day + 1)::timestamp at time zone 'Asia/Seoul') as e
+  ), rows_of_day as (
+    select c.* from public.ccu_snapshots c, bounds b where c.at >= b.s and c.at < b.e
+  ), top as (
+    select at, total, by_server, by_platform from rows_of_day order by total desc, at desc limit 1
+  )
+  insert into public.ccu_daily (day, peak, peak_at, avg_total, samples, by_server, by_platform)
+  select p_day, t.total, t.at, (select round(avg(total), 1) from rows_of_day), (select count(*) from rows_of_day),
+         t.by_server, t.by_platform
+  from top t
+  on conflict (day) do update
+    set peak = excluded.peak, peak_at = excluded.peak_at, avg_total = excluded.avg_total,
+        samples = excluded.samples, by_server = excluded.by_server, by_platform = excluded.by_platform;
+$$;
+
+comment on function public.ts_ccu_daily_refresh(date) is '그날(한국 날짜)의 동시접속자 일별 요약을 5분 기록으로 다시 계산한다. ts_ccu_snapshot 이 부른다.';
+revoke all on function public.ts_ccu_daily_refresh(date) from public, anon, authenticated;
+
 create or replace function public.ts_ccu_snapshot()
 returns void
 language plpgsql
@@ -4240,17 +4282,20 @@ set search_path = public
 as $$
 declare
   v_now jsonb := public.ts_ccu_now();
+  v_at  timestamptz := date_trunc('minute', now());
 begin
   insert into public.ccu_snapshots (at, total, by_server, by_platform)
-  values (date_trunc('minute', now()), (v_now->>'total')::int, v_now->'by_server', v_now->'by_platform')
+  values (v_at, (v_now->>'total')::int, v_now->'by_server', v_now->'by_platform')
   on conflict (at) do update
     set total = excluded.total, by_server = excluded.by_server, by_platform = excluded.by_platform;
+
+  perform public.ts_ccu_daily_refresh((v_at at time zone 'Asia/Seoul')::date);
 
   delete from public.ccu_snapshots where at < now() - interval '90 days';
 end;
 $$;
 
-comment on function public.ts_ccu_snapshot() is '지금 접속 중인 플레이어 수를 분 단위로 남긴다(전체·서버별·플랫폼별). cron 이 매분 부른다.';
+comment on function public.ts_ccu_snapshot() is '지금 접속 중인 플레이어 수를 남기고(전체·서버별·플랫폼별) 그날 일별 요약을 갱신한다. cron 이 5분마다 부른다.';
 revoke all on function public.ts_ccu_snapshot() from public, anon, authenticated;
 
 do $$
@@ -8305,6 +8350,7 @@ grant execute on function public.ts_admin_dashboard_stats() to service_role;
 
 -- 콘솔 첫 화면의 동시접속자. now 는 기록을 기다리지 않고 지금 센다. 그래프 점은 기간에 따라 묶어(묶음 안 최댓값)
 -- 24시간 288개·7일 168개·30일 180개 안팎으로 맞춘다 — 기록 그대로면 30일이 8천 점이 넘어 그래프가 뭉개진다.
+-- 90일이 넘는 기간은 5분 기록이 없으므로 일별 요약(ccu_daily)의 하루 최고치로 그린다.
 create or replace function public.ts_admin_ccu(p_hours integer)
 returns jsonb
 language sql
@@ -8313,24 +8359,36 @@ security definer
 set search_path = public
 as $$
   with params as (
-    select least(24 * 90, greatest(1, coalesce(p_hours, 24))) as hours
+    select least(24 * 3650, greatest(1, coalesce(p_hours, 24))) as hours
   ),
   bucket as (
     select hours,
-           case when hours <= 24 then 5 when hours <= 24 * 7 then 60 else 240 end as minutes
+           case when hours <= 24 then 5 when hours <= 24 * 7 then 60 when hours <= 24 * 90 then 240 else 1440 end as minutes
     from params
+  ),
+  daily as (
+    select (d.day::timestamp at time zone 'Asia/Seoul') as at, d.peak as total, d.peak_at
+    from public.ccu_daily d, bucket b
+    where b.minutes = 1440
+      and d.day >= ((now() - make_interval(hours => b.hours)) at time zone 'Asia/Seoul')::date
   ),
   series as (
     select date_bin(make_interval(mins => b.minutes), c.at, timestamptz '2000-01-01') as at, max(c.total) as total
     from public.ccu_snapshots c, bucket b
-    where c.at >= now() - make_interval(hours => b.hours)
+    where b.minutes < 1440 and c.at >= now() - make_interval(hours => b.hours)
     group by 1
+    union all
+    select at, total from daily
   ),
   peak as (
-    select c.at, c.total
-    from public.ccu_snapshots c, bucket b
-    where c.at >= now() - make_interval(hours => b.hours)
-    order by c.total desc, c.at desc
+    select at, total from (
+      select c.at, c.total
+      from public.ccu_snapshots c, bucket b
+      where b.minutes < 1440 and c.at >= now() - make_interval(hours => b.hours)
+      union all
+      select peak_at, total from daily
+    ) x
+    order by total desc, at desc
     limit 1
   )
   select jsonb_build_object(
@@ -8338,11 +8396,12 @@ as $$
     'bucket_minutes', (select minutes from bucket),
     'series', coalesce((select jsonb_agg(jsonb_build_object('at', at, 'total', total) order by at) from series), '[]'::jsonb),
     'peak', (select jsonb_build_object('at', at, 'total', total) from peak),
-    'first_at', (select min(at) from public.ccu_snapshots)
+    'first_at', least((select min(at) from public.ccu_snapshots),
+                      (select min(day)::timestamp at time zone 'Asia/Seoul' from public.ccu_daily))
   );
 $$;
 
-comment on function public.ts_admin_ccu(integer) is '콘솔 동시접속자 — 지금 접속 중(전체·서버별·플랫폼별)과 최근 p_hours 시간 추이·최고치. service_role 전용.';
+comment on function public.ts_admin_ccu(integer) is '콘솔 동시접속자 — 지금 접속 중(전체·서버별·플랫폼별)과 최근 p_hours 시간 추이·최고치. 90일 넘는 기간은 일별 요약으로 그린다. service_role 전용.';
 revoke all on function public.ts_admin_ccu(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_ccu(integer) to service_role;
 

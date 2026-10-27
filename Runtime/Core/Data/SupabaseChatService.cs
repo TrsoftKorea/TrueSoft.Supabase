@@ -54,10 +54,10 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(channelCode))
                 return SupabaseResult<ChatSendResult>.Fail(SupabaseErrorCode.ChatChannelNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = channelCode.Trim(),
-                p_content = content ?? string.Empty
+                ["p_code"] = channelCode.Trim(),
+                ["p_content"] = content ?? string.Empty
             });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_send", body);
@@ -89,7 +89,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<IReadOnlyDictionary<string, IReadOnlyList<ChatMessage>>>.Fail(
                     SupabaseErrorCode.ChatChannelsEmpty);
 
-            var body = JsonConvert.SerializeObject(new { p_cursors = cursors, p_limit = limit });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_cursors"] = cursors, ["p_limit"] = limit });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_fetch_many", body);
             if (!r.IsSuccess)
@@ -126,10 +126,10 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult<ChatSendResult>.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_lobby_id = lobbyId.Trim(),
-                p_content = content ?? string.Empty
+                ["p_lobby_id"] = lobbyId.Trim(),
+                ["p_content"] = content ?? string.Empty
             });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_send_lobby", body);
@@ -154,11 +154,11 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_lobby_id = lobbyId.Trim(),
-                p_after_id = afterId,
-                p_limit = limit
+                ["p_lobby_id"] = lobbyId.Trim(),
+                ["p_after_id"] = afterId,
+                ["p_limit"] = limit
             });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_fetch_lobby", body);
@@ -185,10 +185,10 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(targetAccountId))
                 return SupabaseResult<ChatSendResult>.Fail(SupabaseErrorCode.FriendTargetRequired);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_target_account_id = targetAccountId.Trim(),
-                p_content = content ?? string.Empty
+                ["p_target_account_id"] = targetAccountId.Trim(),
+                ["p_content"] = content ?? string.Empty
             });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_send_direct", body);
@@ -213,11 +213,11 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(targetAccountId))
                 return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(SupabaseErrorCode.FriendTargetRequired);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_target_account_id = targetAccountId.Trim(),
-                p_after_id = afterId,
-                p_limit = limit
+                ["p_target_account_id"] = targetAccountId.Trim(),
+                ["p_after_id"] = afterId,
+                ["p_limit"] = limit
             });
 
             var r = await CallRpcAsync(accessToken, "ts_chat_fetch_direct", body);

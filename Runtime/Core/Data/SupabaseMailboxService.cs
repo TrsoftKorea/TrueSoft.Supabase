@@ -76,7 +76,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<Mail>.Fail("mail_id_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_view_mail_for_user";
-            var bodyJson = JsonConvert.SerializeObject(new { p_mail_id = mailId.Trim() });
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_mail_id"] = mailId.Trim() });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -125,7 +125,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail("mail_id_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_mail_items";
-            var bodyJson = JsonConvert.SerializeObject(new { p_mail_id = mailId.Trim() });
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_mail_id"] = mailId.Trim() });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -155,7 +155,7 @@ namespace TrueBase.Core.Data
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_all_mail_items";
             var bodyJson = JsonConvert.SerializeObject(
-                new { p_category = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
+                new Dictionary<string, object> { ["p_category"] = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
@@ -184,7 +184,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail("mail_id_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_mail_for_user";
-            var bodyJson = JsonConvert.SerializeObject(new { p_mail_id = mailId.Trim() });
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_mail_id"] = mailId.Trim() });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -213,7 +213,7 @@ namespace TrueBase.Core.Data
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_delete_claimed_mails_for_user";
             var bodyJson = JsonConvert.SerializeObject(
-                new { p_category = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
+                new Dictionary<string, object> { ["p_category"] = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,

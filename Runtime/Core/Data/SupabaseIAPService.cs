@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using TrueBase.Core.Common;
@@ -40,7 +41,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(orderId))
                 return SupabaseResult.Fail(SupabaseErrorCode.IapOrderIdEmpty);
 
-            var body = JsonConvert.SerializeObject(new { p_order_id = orderId });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_order_id"] = orderId });
             var r = await CallRpcAsync(accessToken, "ts_mark_purchase_granted", body);
             if (!r.IsSuccess) return SupabaseResult.Fail(r.ErrorCode);
 

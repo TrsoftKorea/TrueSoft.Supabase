@@ -56,7 +56,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<LeaderboardTable>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_code = code.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_code"] = code.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_table", body);
             if (!r.IsSuccess)
                 return SupabaseResult<LeaderboardTable>.Fail(r.ErrorCode);
@@ -87,11 +87,11 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = code.Trim(),
-                p_score = score,
-                p_data = data
+                ["p_code"] = code.Trim(),
+                ["p_score"] = score,
+                ["p_data"] = data
             });
 
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_submit_score", body);
@@ -123,12 +123,12 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<IReadOnlyList<LeaderboardEntry>>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = code.Trim(),
-                p_start = start,
-                p_end = end,
-                p_rotation_count = rotationCount
+                ["p_code"] = code.Trim(),
+                ["p_start"] = start,
+                ["p_end"] = end,
+                ["p_rotation_count"] = rotationCount
             });
 
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_range", body);
@@ -162,11 +162,11 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<LeaderboardPlayerEntry>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = code.Trim(),
-                p_account_id = string.IsNullOrWhiteSpace(accountId) ? null : accountId.Trim(),
-                p_rotation_count = rotationCount
+                ["p_code"] = code.Trim(),
+                ["p_account_id"] = string.IsNullOrWhiteSpace(accountId) ? null : accountId.Trim(),
+                ["p_rotation_count"] = rotationCount
             });
 
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_player", body);
@@ -194,10 +194,10 @@ namespace TrueBase.Core.Data
                 return SupabaseResult.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
             // 현재 회차에만 적용 — p_rotation_count를 보내지 않으면 서버가 현재 회차를 씁니다.
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = code.Trim(),
-                p_data = data
+                ["p_code"] = code.Trim(),
+                ["p_data"] = data
             });
 
             // returns void — 성공해도 본문이 비어 온다.
@@ -214,9 +214,9 @@ namespace TrueBase.Core.Data
                 return SupabaseResult.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
             // 현재 회차에만 적용 — p_rotation_count를 보내지 않으면 서버가 현재 회차를 씁니다.
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_code = code.Trim()
+                ["p_code"] = code.Trim()
             });
 
             // returns void — 성공해도 본문이 비어 온다.

@@ -51,13 +51,13 @@ namespace TrueBase.Core.Data
                 .Select(id => id.Trim())
                 .ToArray();
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_game_code = gameCode.Trim(),
-                p_invited_account_ids = ids,
-                p_name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
-                p_max_members = maxMembers,
-                p_metadata = metadata
+                ["p_game_code"] = gameCode.Trim(),
+                ["p_invited_account_ids"] = ids,
+                ["p_name"] = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
+                ["p_max_members"] = maxMembers,
+                ["p_metadata"] = metadata
             });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_create", body);
             if (!r.IsSuccess)
@@ -82,7 +82,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult.Fail(SupabaseErrorCode.FriendTargetRequired);
 
-            var body = JsonConvert.SerializeObject(new { p_lobby_id = lobbyId.Trim(), p_account_id = accountId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_lobby_id"] = lobbyId.Trim(), ["p_account_id"] = accountId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_invite", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -93,7 +93,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_lobby_id = lobbyId.Trim(), p_accept = accept });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_lobby_id"] = lobbyId.Trim(), ["p_accept"] = accept });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_respond", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -104,7 +104,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_lobby_id = lobbyId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_lobby_id"] = lobbyId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_leave", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -121,11 +121,11 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyMemberNotFound);
 
-            var body = JsonConvert.SerializeObject(new
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
-                p_lobby_id = lobbyId.Trim(),
-                p_account_id = accountId.Trim(),
-                p_metadata = metadata
+                ["p_lobby_id"] = lobbyId.Trim(),
+                ["p_account_id"] = accountId.Trim(),
+                ["p_metadata"] = metadata
             });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_set_member_meta", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
@@ -137,7 +137,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_lobby_id = lobbyId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_lobby_id"] = lobbyId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_start", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
@@ -148,7 +148,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(lobbyId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyNotFound);
 
-            var body = JsonConvert.SerializeObject(new { p_lobby_id = lobbyId.Trim() });
+            var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_lobby_id"] = lobbyId.Trim() });
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_cancel", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }

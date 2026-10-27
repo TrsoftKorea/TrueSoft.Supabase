@@ -89,7 +89,7 @@ namespace TrueBase.Core.Data
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: $"{_supabaseUrl}/rest/v1/rpc/ts_session_heartbeat",
-                jsonBody: JsonConvert.SerializeObject(new { p_interval_seconds = intervalSeconds }),
+                jsonBody: JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_interval_seconds"] = intervalSeconds }),
                 headers: CreateAuthHeaders(accessToken, prefer: null));
 
             if (response == null)
