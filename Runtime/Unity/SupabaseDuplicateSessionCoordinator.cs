@@ -222,15 +222,19 @@ namespace TrueBase.Unity
             }
         }
 
+        // 중복 감지를 끈 게임도 동시접속자에는 잡혀야 하므로 신호만은 이 주기로 보낸다.
+        private const float HeartbeatOnlySeconds = 120f;
+
         /// <summary>
-        /// 세션 토큰 폴링을 시작합니다. <c>SupabaseSDK.DuplicateSessionPollSeconds</c>가 0 이하이면 폴링하지 않습니다.
-        /// 기존 폴링은 중지하고 새로 시작합니다.
+        /// 세션 토큰 폴링을 시작합니다. 주기는 <c>SupabaseSDK.DuplicateSessionPollSeconds</c>이고, 0 이하이면 중복 감지 없이
+        /// 접속 중 신호만 <see cref="HeartbeatOnlySeconds"/>마다 보냅니다. 기존 폴링은 중지하고 새로 시작합니다.
         /// </summary>
         private void StartPollingIfNeeded(string accountId)
         {
             var interval = SupabaseSDK.DuplicateSessionPollSeconds;
-            if (interval <= 0f)
-                return;
+            var detectDuplicate = interval > 0f;
+            if (!detectDuplicate)
+                interval = HeartbeatOnlySeconds;
 
             if (_pollRoutine != null)
             {
@@ -238,20 +242,22 @@ namespace TrueBase.Unity
                 _pollRoutine = null;
             }
 
-            _pollRoutine = StartCoroutine(PollLoop(accountId, interval));
+            _pollRoutine = StartCoroutine(PollLoop(accountId, interval, detectDuplicate));
         }
 
         /// <summary>
-        /// 주기적으로 서버 <c>session_token</c>을 조회해 로컬 값과 대조합니다.
+        /// 주기적으로 접속 중 신호를 보내며 서버 <c>session_token</c>을 받아 로컬 값과 대조합니다.
         /// 불일치가 감지되면 <c>RaiseDuplicateLoginDetected</c>를 발생시키고 루프를 종료합니다.
         /// 조회 실패는 무시하고 다음 주기에 재시도합니다.
         /// </summary>
         /// <param name="intervalSeconds">폴링 주기(초).</param>
-        private IEnumerator PollLoop(string accountId, float intervalSeconds)
+        /// <param name="detectDuplicate">false면 신호만 보내고 토큰 대조는 하지 않습니다.</param>
+        private IEnumerator PollLoop(string accountId, float intervalSeconds, bool detectDuplicate)
         {
             while (SupabaseSDK.IsLoggedIn && SupabaseSDK.Session != null)
             {
-                yield return new WaitForSeconds(intervalSeconds);
+                // 게임 시간(timeScale)을 따르면 일시정지 화면에서 신호가 끊겨 접속자에서 빠진다.
+                yield return new WaitForSecondsRealtime(intervalSeconds);
 
                 var svc = SupabaseSDK.UserSessionService;
                 if (svc == null)
@@ -265,10 +271,10 @@ namespace TrueBase.Unity
                 if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(token))
                     yield break;
 
-                var t = svc.GetSessionTokenAsync(token, uid);
+                var t = svc.HeartbeatAsync(token, Mathf.RoundToInt(intervalSeconds));
                 yield return new WaitUntil(() => t.IsCompleted);
 
-                if (!t.Result.IsSuccess)
+                if (!detectDuplicate || t.Result == null || !t.Result.IsSuccess)
                     continue;
 
                 var server = t.Result.Data;

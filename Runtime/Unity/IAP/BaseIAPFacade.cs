@@ -219,7 +219,7 @@ namespace TrueBase.Unity
         {
             if (OnGrantItemAsync == null)
             {
-                Debug.LogWarning($"{LogTag} OnGrantItemAsync가 설정되지 않았습니다. 구매가 Pending 상태로 남습니다.");
+                Debug.LogWarning($"{LogTag} OnGrantItemAsync가 설정되지 않았습니다. 구매가 Pending 상태로 남습니다. product={productId}, order={orderId}");
                 return;
             }
 
@@ -233,7 +233,7 @@ namespace TrueBase.Unity
             }
             catch (Exception e)
             {
-                Debug.LogError($"{LogTag} OnGrantItemAsync 예외: {e.Message}");
+                Debug.LogError($"{LogTag} OnGrantItemAsync 예외: {e.Message}, product={productId}, order={orderId}");
                 granted = false;
             }
 
@@ -242,10 +242,17 @@ namespace TrueBase.Unity
                 // 지급 완료 기록은 결과를 기다리지 않는다 — 실패해도(네트워크 등) 지급·소비 자체는 막지 않는다.
                 if (!string.IsNullOrEmpty(orderId))
                     _ = SupabaseSDK.TryMarkPurchaseGrantedAsync(orderId);
-                controller?.ConfirmPurchase(pendingOrder);
+                // 결제 한 건의 끝을 알리는 줄. 이 줄이 없으면 그 결제는 스토어에 대기로 남아 다음 실행 때 다시 온다.
+                if (controller != null)
+                {
+                    controller.ConfirmPurchase(pendingOrder);
+                    Debug.Log($"{LogTag} 지급·결제 확정 완료. product={productId}, order={orderId}, alreadyGranted={alreadyGranted}");
+                }
+                else
+                    Debug.LogWarning($"{LogTag} 지급은 했지만 스토어 연결이 없어 결제를 확정하지 못했습니다. product={productId}, order={orderId}");
             }
             else
-                Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략. product={productId} — Pending 유지.");
+                Debug.LogWarning($"{LogTag} 아이템 지급 실패 또는 생략(OnGrantItemAsync 가 false). product={productId}, order={orderId}, alreadyGranted={alreadyGranted} — Pending 유지.");
         }
 
         // Unity IAP v5 이벤트 핸들러 (공통)

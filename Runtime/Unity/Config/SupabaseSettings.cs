@@ -76,7 +76,7 @@ namespace TrueBase.Unity
 
         [Header("중복 로그인")]
         [Label("중복 감지 폴링 주기")]
-        [Tooltip("중복 로그인 감지 확인 주기(초). 0이면 폴링하지 않습니다.")]
+        [Tooltip("중복 로그인 감지 확인 주기(초). 같은 요청이 운영 콘솔의 동시접속자 집계에도 쓰입니다. 0이면 중복 감지를 끄고 접속 확인만 2분마다 보냅니다.")]
         [Min(0f)]
         public float duplicateSessionPollSeconds = 60f;
 

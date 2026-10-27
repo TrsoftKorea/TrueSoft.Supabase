@@ -4,7 +4,7 @@
 event Action Supabase.OnDuplicateLoginDetected
 ```
 
-다른 기기에서 같은 계정으로 로그인되면 발행됩니다. 앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록하세요. 60초 주기로 서버와 세션 토큰을 비교해 감지하며, 주기는 `SupabaseSettings`의 **중복 감지 폴링 주기**에서 조정합니다.
+다른 기기에서 같은 계정으로 로그인되면 발행됩니다. 앱 생명주기 전체를 관리하는 Manager에서 한 번만 등록하세요. 60초 주기로 서버와 세션 토큰을 비교해 감지하며, 주기는 `SupabaseSettings`의 **중복 감지 폴링 주기**에서 조정합니다. 같은 요청이 운영 콘솔 대시보드의 동시접속자 집계에도 쓰입니다. 주기를 0으로 두면 중복 감지만 꺼지고 접속 확인은 2분마다 계속 보냅니다.
 
 ```csharp
 void Awake()     => Supabase.OnDuplicateLoginDetected += OnDuplicateLogin;

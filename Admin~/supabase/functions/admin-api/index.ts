@@ -947,6 +947,12 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "ccu.stats": {
+        const { data, error } = await db.rpc("ts_admin_ccu", { p_hours: intInRange(params, "hours", "기간", 1, 24 * 90) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "chat.channels": {
         const { data, error } = await db
           .from("chat_channels")

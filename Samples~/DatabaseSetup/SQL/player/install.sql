@@ -1107,6 +1107,55 @@ using (account_id = auth.uid());
 
 grant select, insert, update, delete on public.user_sessions to authenticated;
 
+-- 동시접속자 집계용 생존 신호. SDK 의 중복 로그인 확인이 주기마다 ts_session_heartbeat 로 찍는다.
+alter table public.user_sessions add column if not exists last_seen_at      timestamptz;
+alter table public.user_sessions add column if not exists heartbeat_seconds integer;
+comment on column public.user_sessions.last_seen_at is '마지막 생존 신호 시각. 동시접속자 집계(ts_ccu_snapshot)가 본다.';
+comment on column public.user_sessions.heartbeat_seconds is '그 기기의 생존 신호 주기(초). 게임마다 달라 접속 중 판정 창을 이것으로 잡는다.';
+create index if not exists user_sessions_last_seen_at_idx on public.user_sessions (last_seen_at);
+create index if not exists user_sessions_updated_at_idx on public.user_sessions (updated_at);
+
+-- 접속 중 판정. 신호는 2분에 한 번만 기록되므로(아래 heartbeat) 기록은 최대 "2분 + 신호 주기" 묵어 있다.
+-- 그보다 넉넉히, 최소 5분으로 잡는다 — 요청 하나가 늦는 일로 숫자가 출렁이지 않게. 대신 앱을 끈 사람은 2~5분 뒤에 빠진다.
+-- 로그인 직후 첫 신호 전에는 로그인 때 찍힌 updated_at 을 쓴다.
+create or replace function public.ts_session_is_online(p_last_seen timestamptz, p_updated timestamptz, p_heartbeat integer)
+returns boolean
+language sql
+stable
+as $$
+  select greatest(p_last_seen, p_updated)
+         >= now() - make_interval(secs => greatest(300, coalesce(p_heartbeat, 60) * 2 + 150));
+$$;
+revoke all on function public.ts_session_is_online(timestamptz, timestamptz, integer) from public, anon, authenticated;
+
+-- 생존 신호 + 현재 세션 토큰 조회를 요청 하나로. 행이 없으면(로그아웃 직후 등) null.
+-- 집계는 5분 단위라 매 신호마다 쓸 필요가 없다 — 2분이 지났을 때만 쓰고 나머지는 읽기만 한다(쓰기·트리거 부담을 줄인다).
+create or replace function public.ts_session_heartbeat(p_interval_seconds integer)
+returns uuid
+language sql
+security definer
+set search_path = public
+as $$
+  with cur as (
+    select session_token from public.user_sessions where account_id = auth.uid()
+  ), touched as (
+    update public.user_sessions
+       set last_seen_at = now(),
+           heartbeat_seconds = least(600, greatest(5, coalesce(p_interval_seconds, 60)))
+     where account_id = auth.uid()
+       and (last_seen_at is null
+            or last_seen_at < now() - interval '2 minutes'
+            or heartbeat_seconds is distinct from least(600, greatest(5, coalesce(p_interval_seconds, 60))))
+    returning 1
+  )
+  select session_token from cur;
+$$;
+
+comment on function public.ts_session_heartbeat(integer) is
+  '접속 중 신호를 남기고 이 계정의 현재 세션 토큰을 돌려준다(중복 로그인 확인 겸용). SDK 가 주기마다 부른다.';
+revoke all on function public.ts_session_heartbeat(integer) from public, anon, authenticated;
+grant execute on function public.ts_session_heartbeat(integer) to authenticated;
+
 notify pgrst, 'reload schema';
 
 
@@ -3907,6 +3956,7 @@ create policy remote_config_all_service_role
 -- · 탈퇴 예약 만료 계정 삭제  30분마다   ts_withdrawal_sweep_kick() → 엣지 함수 withdrawal-sweep
 -- · 그 결과 확인              매시 15분  ts_withdrawal_overdue_check()
 -- · 실행 기록 정리            매일 03:40  cron.job_run_details 7일치만 남김
+-- · 동시접속자 기록          5분마다     ts_ccu_snapshot() → ccu_snapshots(90일 보관)
 -- (시각은 모두 UTC)
 --
 -- =============================================================================
@@ -4139,6 +4189,80 @@ select cron.schedule(
   'cleanup-cron-run-details',
   '40 3 * * *',
   $$delete from cron.job_run_details where end_time < now() - interval '7 days'$$
+);
+
+-- 6. 동시접속자 기록 — 5분마다. 접속 중 판정은 2절 ts_session_is_online(SDK 생존 신호 기준).
+--    5분에 한 줄(전체 + 서버별·플랫폼별 jsonb)이라 90일이면 약 2만 6천 줄이다. 그보다 오래된 줄은 같은 함수가 지운다.
+create table if not exists public.ccu_snapshots (
+  at          timestamptz primary key,
+  total       integer not null,
+  by_server   jsonb   not null default '{}'::jsonb,
+  by_platform jsonb   not null default '{}'::jsonb
+);
+alter table public.ccu_snapshots enable row level security;
+-- [의도적] 정책 없음 — 운영 콘솔이 ts_admin_ccu 로만 읽는다.
+revoke all on table public.ccu_snapshots from anon, authenticated;
+
+-- 지금 접속 중인 수. 기록(ts_ccu_snapshot)과 콘솔(ts_admin_ccu)이 같은 것을 쓴다.
+create or replace function public.ts_ccu_now()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with online as (
+    select s.server_id, coalesce(nullif(p.platform, ''), 'unknown') as platform
+    from public.user_sessions s
+    left join public.user_profiles p on p.account_id = s.account_id
+    -- 판정 창은 최대 22분 30초(신호 주기 상한 600초) — 색인으로 먼저 좁힌다.
+    where (s.last_seen_at >= now() - interval '23 minutes' or s.updated_at >= now() - interval '23 minutes')
+      and public.ts_session_is_online(s.last_seen_at, s.updated_at, s.heartbeat_seconds)
+  )
+  select jsonb_build_object(
+    'total', (select count(*) from online),
+    'by_server', coalesce((select jsonb_object_agg(code, n) from (
+                   select coalesce(gs.server_code, 'unknown') as code, count(*) as n
+                   from online o left join public.game_servers gs on gs.id = o.server_id
+                   group by 1) x), '{}'::jsonb),
+    'by_platform', coalesce((select jsonb_object_agg(platform, n) from (
+                   select platform, count(*) as n from online group by 1) y), '{}'::jsonb));
+$$;
+
+comment on function public.ts_ccu_now() is '지금 접속 중인 플레이어 수(전체·서버별·플랫폼별). service_role 전용.';
+revoke all on function public.ts_ccu_now() from public, anon, authenticated;
+
+create or replace function public.ts_ccu_snapshot()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_now jsonb := public.ts_ccu_now();
+begin
+  insert into public.ccu_snapshots (at, total, by_server, by_platform)
+  values (date_trunc('minute', now()), (v_now->>'total')::int, v_now->'by_server', v_now->'by_platform')
+  on conflict (at) do update
+    set total = excluded.total, by_server = excluded.by_server, by_platform = excluded.by_platform;
+
+  delete from public.ccu_snapshots where at < now() - interval '90 days';
+end;
+$$;
+
+comment on function public.ts_ccu_snapshot() is '지금 접속 중인 플레이어 수를 분 단위로 남긴다(전체·서버별·플랫폼별). cron 이 매분 부른다.';
+revoke all on function public.ts_ccu_snapshot() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'ccu-snapshot') then
+    perform cron.unschedule('ccu-snapshot');
+  end if;
+end $$;
+select cron.schedule(
+  'ccu-snapshot',
+  '*/5 * * * *',
+  'select public.ts_ccu_snapshot()'
 );
 
 -- ---------------------------------------------------------------------------
@@ -8179,6 +8303,49 @@ comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫�
 revoke all on function public.ts_admin_dashboard_stats() from public, anon, authenticated;
 grant execute on function public.ts_admin_dashboard_stats() to service_role;
 
+-- 콘솔 첫 화면의 동시접속자. now 는 기록을 기다리지 않고 지금 센다. 그래프 점은 기간에 따라 묶어(묶음 안 최댓값)
+-- 24시간 288개·7일 168개·30일 180개 안팎으로 맞춘다 — 기록 그대로면 30일이 8천 점이 넘어 그래프가 뭉개진다.
+create or replace function public.ts_admin_ccu(p_hours integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with params as (
+    select least(24 * 90, greatest(1, coalesce(p_hours, 24))) as hours
+  ),
+  bucket as (
+    select hours,
+           case when hours <= 24 then 5 when hours <= 24 * 7 then 60 else 240 end as minutes
+    from params
+  ),
+  series as (
+    select date_bin(make_interval(mins => b.minutes), c.at, timestamptz '2000-01-01') as at, max(c.total) as total
+    from public.ccu_snapshots c, bucket b
+    where c.at >= now() - make_interval(hours => b.hours)
+    group by 1
+  ),
+  peak as (
+    select c.at, c.total
+    from public.ccu_snapshots c, bucket b
+    where c.at >= now() - make_interval(hours => b.hours)
+    order by c.total desc, c.at desc
+    limit 1
+  )
+  select jsonb_build_object(
+    'now', public.ts_ccu_now(),
+    'bucket_minutes', (select minutes from bucket),
+    'series', coalesce((select jsonb_agg(jsonb_build_object('at', at, 'total', total) order by at) from series), '[]'::jsonb),
+    'peak', (select jsonb_build_object('at', at, 'total', total) from peak),
+    'first_at', (select min(at) from public.ccu_snapshots)
+  );
+$$;
+
+comment on function public.ts_admin_ccu(integer) is '콘솔 동시접속자 — 지금 접속 중(전체·서버별·플랫폼별)과 최근 p_hours 시간 추이·최고치. service_role 전용.';
+revoke all on function public.ts_admin_ccu(integer) from public, anon, authenticated;
+grant execute on function public.ts_admin_ccu(integer) to service_role;
+
 -- 콘솔 "자동 작업" 화면 — pg_cron 작업마다 마지막 실행·마지막 성공·최근 24시간 실패 수.
 -- cron.job_run_details 는 저절로 지워지지 않아 수십만 줄이 쌓이고 runid 말고는 색인이 없다.
 -- 그래서 최근 실행 5만 건(매분 작업 셋 기준 약 11일치) 안에서만 본다 — 그보다 오래 성공이 없으면 null.
@@ -12218,6 +12385,7 @@ grant execute on function public.ts_ensure_my_row(text, text)              to au
 grant execute on function public.ts_my_server_id()                         to authenticated;
 grant execute on function public.ts_my_withdrawal_status()                 to authenticated;
 grant execute on function public.ts_after_sign_in(text, text)              to authenticated;
+grant execute on function public.ts_session_heartbeat(integer)             to authenticated;
 grant execute on function public.ts_request_withdrawal(integer)            to authenticated;
 grant execute on function public.ts_transfer_my_server(text, text)         to authenticated;
 grant execute on function public.ts_delete_my_anon_recovery_tokens()       to authenticated;

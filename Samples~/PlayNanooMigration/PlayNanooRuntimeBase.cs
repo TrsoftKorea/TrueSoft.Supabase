@@ -90,6 +90,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     private const string NanooAccountAlreadyLinkedReason = "playnanoo_account_already_linked";
     // 나누 병행 중에는 소셜 계정 추가 연동을 막는다(AddSocialLinkAsync 참고).
     private const string NanooAddLinkUnsupportedReason = "playnanoo_add_link_unsupported";
+    // 이미 사용된 영수증(나누 20005 ExistsReceiptException). 나누는 이 결제를 이미 기록했다.
+    private const string NanooReceiptAlreadyUsedCode = "20005";
 
     // 로그인 정보(UserId·OpenId)·탈퇴 이벤트는 TrueBaseNanoo(정적 진입점)로 옮겼다. 애플 로그인은 표준 Supabase.SignInWithAppleAsync() 를 쓴다.
     // 게임이 씬에서 컴포넌트를 찾지 않고 부를 수 있게 하려는 것이다.
@@ -224,11 +226,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             var toNanoo = rawReceipt ?? receipt;
             var (status, errorMessage, values) = await CallNanooWithTokenRetryAsync(
                 cb => NanooIAPIOS(toNanoo, productId, string.Empty, 0d, cb), "iOS 결제 검증");
-            if (status != Configure.PN_API_STATE_SUCCESS)
-            {
-                LogNanooIAPFailure("iOS", productId, status, errorMessage, values);
+            if (!NanooIAPPassed("iOS", productId, toNanoo, status, errorMessage, values))
                 return SupabaseResult<AppleIAPPurchaseResponse>.Fail("playnanoo_iap_ios_failed");
-            }
             return await sdkVerify();
         });
 
@@ -237,11 +236,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             var (status, errorMessage, values) = await CallNanooWithTokenRetryAsync(
                 cb => NanooIAPAndroid(rawReceipt, cb), "Android 결제 검증");
-            if (status != Configure.PN_API_STATE_SUCCESS)
-            {
-                LogNanooIAPFailure("Android", productId, status, errorMessage, values);
+            if (!NanooIAPPassed("Android", productId, rawReceipt, status, errorMessage, values))
                 return SupabaseResult<GooglePlayPurchaseResponse>.Fail("playnanoo_iap_android_failed");
-            }
             return await sdkVerify();
         });
     }
@@ -706,6 +702,44 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
 
     /// <summary>PlayNANOO 로그인 성공 시 호출. 서브클래스에서 응답 values를 추가로 처리할 수 있습니다.</summary>
     protected virtual void OnNanooLoginSuccess(Dictionary<string, object> values) { }
+
+    /// <summary>
+    /// 나누 결제 검증 결과로 SDK 검증(우리 서버)으로 넘어갈지 정합니다.
+    /// "이미 사용된 영수증"(20005)도 넘긴다 — 나누는 이 결제를 이미 기록했고, 여기서 막으면 스토어에 완료를 못 알려
+    /// 결제가 대기로 남아 앱을 켤 때마다 같은 20005 를 받는다. 지급 여부와 중복 지급 방지는 우리 서버가 판단한다.
+    /// </summary>
+    private static bool NanooIAPPassed(
+        string platform, string productId, string receipt, string status, string errorMessage, Dictionary<string, object> values)
+    {
+        var transactionId = ReceiptTransactionId(receipt);
+        if (status == Configure.PN_API_STATE_SUCCESS)
+        {
+            Debug.Log($"[PlayNanooRuntime] PlayNANOO {platform} 결제 검증 통과 — product: {productId}, transaction: {transactionId}");
+            return true;
+        }
+
+        if (ExtractNanooErrorCode(values) == NanooReceiptAlreadyUsedCode)
+        {
+            // 나누 콘솔 결제 내역의 거래 번호와 이 transaction 이 다르면, 나누가 영수증 안의 다른(예전) 결제를 본 것이다.
+            Debug.LogWarning($"[PlayNanooRuntime] PlayNANOO {platform} 이미 사용된 영수증(20005) — 나누는 처리된 것으로 보고 SDK 검증으로 넘깁니다. " +
+                             $"product: {productId}, transaction: {transactionId}, 응답: {DescribeValues(values)}");
+            return true;
+        }
+
+        LogNanooIAPFailure(platform, productId, status, errorMessage, values);
+        return false;
+    }
+
+    /// <summary>유니티 영수증 원문의 TransactionID. 나누 콘솔 결제 내역과 맞춰 보는 용도라 못 읽으면 "(없음)".</summary>
+    private static string ReceiptTransactionId(string receipt)
+    {
+        if (string.IsNullOrEmpty(receipt)) return "(없음)";
+        var m = System.Text.RegularExpressions.Regex.Match(receipt, "\"TransactionID\"\\s*:\\s*\"([^\"]+)\"");
+        if (!m.Success) return "(없음)";
+        // 구글은 이 자리가 결제 토큰(긴 문자열)이다 — 로그에 통째로 남기지 않는다.
+        var id = m.Groups[1].Value;
+        return id.Length > 40 ? id.Substring(0, 12) + "…" : id;
+    }
 
     /// <summary>
     /// PlayNANOO 결제 검증 실패를 사유까지 남깁니다. 이게 없으면 SDK 로그에는

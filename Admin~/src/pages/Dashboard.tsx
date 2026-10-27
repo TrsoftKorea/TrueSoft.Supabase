@@ -7,6 +7,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatKRW } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import CcuSection from './dashboard/CcuSection'
 
 type Stats = {
   total_players: number
@@ -54,6 +55,7 @@ export default function Dashboard({
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -79,18 +81,20 @@ export default function Dashboard({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="대시보드" description="플레이어와 매출 현황을 한눈에 봅니다." />
+      <PageHeader title="대시보드" description="접속자·플레이어·매출 현황을 한눈에 봅니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex justify-end">
         <Button variant="outline" size="compact"
-          onClick={() => void load()}
+          onClick={() => { void load(); setReloadKey((k) => k + 1) }}
           disabled={loading}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           새로고침
         </Button>
       </div>
+
+      <CcuSection target={target} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
 
       {loading && !stats ? (
         <WhiteCard className="p-10 text-center">

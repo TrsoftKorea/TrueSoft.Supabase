@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using TrueBase.Core.Common;
 using TrueBase.Core.Http;
 
@@ -67,6 +68,40 @@ namespace TrueBase.Core.Data
                     return SupabaseResult<string>.Success(null);
 
                 return SupabaseResult<string>.Success(rows[0].session_token.Trim());
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<string>.Fail("user_session_parse_failed:" + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// 접속 중 신호를 남기고 현재 계정의 세션 토큰을 조회합니다(RPC <c>ts_session_heartbeat</c>). 동시접속자 집계가 이 신호를 셉니다.
+        /// 행이 없으면 성공 결과에 null을 담아 반환합니다.
+        /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        /// <param name="intervalSeconds">이 기기가 신호를 보내는 주기(초). 서버가 접속 중 판정 창을 이것으로 잡는다.</param>
+        public async Task<SupabaseResult<string>> HeartbeatAsync(string accessToken, int intervalSeconds)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: $"{_supabaseUrl}/rest/v1/rpc/ts_session_heartbeat",
+                jsonBody: JsonConvert.SerializeObject(new { p_interval_seconds = intervalSeconds }),
+                headers: CreateAuthHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_heartbeat_failed");
+
+            try
+            {
+                var token = JsonConvert.DeserializeObject<string>(response.Body ?? "null");
+                return SupabaseResult<string>.Success(string.IsNullOrWhiteSpace(token) ? null : token.Trim());
             }
             catch (Exception e)
             {

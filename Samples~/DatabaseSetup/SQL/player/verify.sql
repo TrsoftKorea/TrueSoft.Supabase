@@ -57,6 +57,7 @@ from (
       ('purchases'),
       ('withdrawal_sweep_state'),
       ('withdrawal_settings'),
+      ('ccu_snapshots'),
       ('user_ban_messages'),
       ('leaderboard_tables'),
       ('leaderboard_scores'),
@@ -126,6 +127,10 @@ from (
       ('ts_withdrawal_deadline'),
       ('ts_withdrawal_sweep_kick'),
       ('ts_withdrawal_overdue_check'),
+      ('ts_session_is_online'),
+      ('ts_session_heartbeat'),
+      ('ts_ccu_now'),
+      ('ts_ccu_snapshot'),
       ('ts_leaderboard_next_rotation_at'),
       ('ts_leaderboard_columns_of'),
       ('ts_leaderboard_columns_meta'),
@@ -273,6 +278,7 @@ from (
       ('ts_my_server_id',                 'auth'),
       ('ts_my_withdrawal_status',         'auth'),
       ('ts_after_sign_in',                'auth'),
+      ('ts_session_heartbeat',            'auth'),
       ('ts_request_withdrawal',           'auth'),
       ('ts_transfer_my_server',           'auth'),
       ('ts_delete_my_anon_recovery_tokens', 'auth'),
@@ -349,7 +355,7 @@ from (
       'ts_match_lobby_leave', 'ts_match_lobby_list_my', 'ts_match_lobby_respond',
       'ts_match_lobby_set_member_meta', 'ts_match_lobby_start', 'ts_match_report_result',
       'ts_match_report_solo_result', 'ts_match_stats', 'ts_my_server_id', 'ts_my_withdrawal_status',
-      'ts_request_withdrawal', 'ts_server_now', 'ts_transfer_my_server', 'ts_view_mail_for_user'
+      'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_transfer_my_server', 'ts_view_mail_for_user'
     )
 
   union all

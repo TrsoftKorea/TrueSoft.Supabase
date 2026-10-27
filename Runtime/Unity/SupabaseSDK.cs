@@ -1493,12 +1493,9 @@ namespace TrueBase.Unity
             bool setUpdatedAtIsoUtc = true)
         {
             var r = await PatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
-            // Data=false 는 "변경 없음, HTTP 미발송" 신호 — Success와 구분해 로그
-            if (r is { IsSuccess: true, Data: false })
-            {
-                LogApiResult(ApiLogTags.UserDataPatchDiff, true, "NoChanges");
+            // 자동 저장이 쿨다운마다 부르는 길이라 성공·변경 없음은 남기지 않는다(콘솔이 저장 줄로 덮인다). 실패만 남긴다.
+            if (r != null && r.IsSuccess)
                 return SupabaseResult.Ok;
-            }
             return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
         }
 
@@ -1690,6 +1687,9 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<DateTimeOffset>> TryGetServerNowAsync()
         {
             var r = await GetServerNowAsync();
+            // 대개 네트워크 없이 기준점에서 계산해 돌려준다 — 성공까지 남기면 게임이 부를 때마다 줄이 쌓인다. 실패만 남긴다.
+            if (r != null && r.IsSuccess)
+                return r;
             return LogAndReturnResult(ApiLogTags.ServerTime, r);
         }
 

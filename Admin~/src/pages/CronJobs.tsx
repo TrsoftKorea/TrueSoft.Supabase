@@ -36,6 +36,7 @@ const JOB_LABELS: Record<string, string> = {
   'withdrawal-cleanup': '탈퇴 기한이 지난 계정 삭제',
   'withdrawal-overdue-check': '탈퇴 계정이 실제로 지워졌는지 확인',
   'cleanup-cron-run-details': '7일 지난 자동 작업 기록 정리',
+  'ccu-snapshot': '동시접속자 기록',
   'purchase-refund-sync-google': '구글 환불 확인',
 }
 
