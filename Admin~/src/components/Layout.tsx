@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type ComponentType } from 'react'
+import { useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
@@ -13,12 +13,12 @@ import { ThemeToggle } from './ThemeToggle'
 import { signedInTargets } from '../lib/googleAuth'
 import { blockedReason, type SignInOutcome } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
+import { PublishBar } from '../mock/PublishBar'
 
-// 사이드바는 어두운 남색 바탕이다. 글자색은 바탕 위에서 4.5:1 이상이 되게 골랐다.
-const SIDEBAR_BG = '#161a2b'
+// 사이드바 색은 화면 모드를 따른다 — 값은 index.css 의 .sidebar 변수(--sb-*)에 있다.
 const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
-const NAV_IDLE = 'text-[#c7cbe0] hover:bg-white/5 hover:text-white'
-const NAV_ACTIVE = 'bg-[#262c45] text-white font-medium'
+const NAV_IDLE = 'text-[color:var(--sb-text)] hover:bg-[var(--sb-hover)] hover:text-[color:var(--sb-text-strong)]'
+const NAV_ACTIVE = 'bg-[var(--sb-active-bg)] text-[color:var(--sb-active-text)] font-medium'
 
 type Icon = ComponentType<{ className?: string }>
 type NavItem = { to: string; label: string; icon: Icon; end?: boolean }
@@ -53,7 +53,7 @@ function NavGroupBlock({ label, icon: Icon, items, accent }: { label: string; ic
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 w-full h-9 px-3 rounded-md text-sm transition-colors ${active ? 'text-white font-medium' : NAV_IDLE}`}
+        className={`flex items-center gap-2 w-full h-9 px-3 rounded-md text-sm transition-colors ${active ? 'text-[color:var(--sb-text-strong)] font-medium' : NAV_IDLE}`}
       >
         <Icon className="w-4 h-4" />
         <span>{label}</span>
@@ -73,7 +73,7 @@ function NavGroupBlock({ label, icon: Icon, items, accent }: { label: string; ic
 function NavSection({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <div className="pt-4 first:pt-0">
-      {label && <div className="px-3 pb-1 text-[11px] font-medium text-[#8d93b0]">{label}</div>}
+      {label && <div className="px-3 pb-1 text-[11px] font-medium text-[color:var(--sb-muted)]">{label}</div>}
       <div className="space-y-0.5">{children}</div>
     </div>
   )
@@ -121,7 +121,10 @@ export function Layout({
     <div className="h-screen flex overflow-hidden">
       {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
           화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
-      <aside className="w-56 shrink-0 h-full flex flex-col text-[#c7cbe0]" style={{ backgroundColor: SIDEBAR_BG }}>
+      <aside
+        className="sidebar w-56 shrink-0 h-full flex flex-col border-r border-[color:var(--sb-border)] text-[color:var(--sb-text)]"
+        style={{ backgroundColor: 'var(--sb-bg)', '--sb-accent': accent } as CSSProperties}
+      >
         <div className="h-14 flex items-center gap-2.5 px-4">
           <span
             className="w-7 h-7 rounded-md flex items-center justify-center text-white text-sm font-bold"
@@ -129,12 +132,12 @@ export function Layout({
           >
             T
           </span>
-          <span className="font-semibold text-white">트루베이스</span>
+          <span className="font-semibold text-[color:var(--sb-text-strong)]">트루베이스</span>
         </div>
 
         {/* 게임 고르기 — 색 점으로 게임을 구분한다. 지금 게임은 테두리도 그 색으로. */}
         <div className="px-3 pb-2 space-y-1">
-          <div className="px-1 pb-0.5 text-[11px] font-medium text-[#8d93b0]">게임</div>
+          <div className="px-1 pb-0.5 text-[11px] font-medium text-[color:var(--sb-muted)]">게임</div>
           {PROJECTS.map((p) => {
             const on = p.key === target
             const allowed = allowedTargets.has(p.key)
@@ -148,8 +151,10 @@ export function Layout({
                 title={reason?.full}
                 onClick={() => { if (!on) switchTarget(p.key) }}
                 aria-pressed={on}
-                className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors disabled:cursor-not-allowed disabled:text-[#8d93b0] ${
-                  on ? 'bg-[#262c45] text-white font-semibold' : 'border-[#2c3250] hover:enabled:bg-white/5 hover:enabled:text-white'
+                className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors disabled:cursor-not-allowed disabled:text-[color:var(--sb-muted)] ${
+                  on
+                    ? 'bg-[var(--sb-active-bg)] text-[color:var(--sb-text-strong)] font-semibold'
+                    : 'border-[color:var(--sb-border)] hover:enabled:bg-[var(--sb-hover)] hover:enabled:text-[color:var(--sb-text-strong)]'
                 }`}
                 style={on ? { borderColor: c } : undefined}
               >
@@ -210,7 +215,7 @@ export function Layout({
         </nav>
 
         {/* 스크롤 영역 밖에 고정 — 메뉴가 길어져도 변경 관리는 항상 보인다. */}
-        <div className="border-t border-[#2c3250] p-3 space-y-0.5">
+        <div className="border-t border-[color:var(--sb-border)] p-3 space-y-0.5">
           <NavLinkRow to="/settings" label="설정" icon={SlidersHorizontal} accent={accent} />
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} accent={accent} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
@@ -258,6 +263,8 @@ export function Layout({
             </div>
           </div>
         </header>
+
+        {__MOCK__ && <PublishBar />}
 
         <main className="max-w-6xl mx-auto px-6 py-6">
           {showPendingBanner && (

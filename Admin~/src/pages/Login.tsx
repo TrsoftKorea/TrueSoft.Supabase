@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { renderGoogleButton } from '../lib/googleAuth'
+import { renderGoogleButton, storeTokens } from '../lib/googleAuth'
 import { signInAllProjects, type SignInOutcome } from '../lib/api'
+import { PROJECTS } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import PasswordLoginForm from '../components/PasswordLoginForm'
+
+/** 가짜 데이터 모드에서만 — 모든 게임에 가짜 로그인 표를 넣고 들어간다. 일반 빌드에서는 빈 함수가 된다. */
+async function enterMock(onSignedIn: (outcomes: SignInOutcome[]) => void) {
+  if (!__MOCK__) return
+  const { mockToken } = await import('../mock/mockAdmin')
+  storeTokens(Object.fromEntries(PROJECTS.map((p) => [p.key, mockToken()])))
+  onSignedIn(PROJECTS.map((p) => ({ target: p.key, ok: true })))
+}
 
 /**
  * 운영자 로그인.
@@ -54,6 +63,16 @@ export default function Login({ onSignedIn }: { onSignedIn: (outcomes: SignInOut
         {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
         <p className="mt-4 text-xs text-neutral-500">허용된 운영자 계정만 들어올 수 있습니다.</p>
+
+        {__MOCK__ && (
+          <button
+            type="button"
+            onClick={() => void enterMock(onSignedIn)}
+            className="mt-4 w-full h-9 rounded-md border border-amber-400 bg-amber-50 text-sm font-medium text-amber-800 hover:bg-amber-100"
+          >
+            가짜 데이터로 들어가기
+          </button>
+        )}
       </WhiteCard>
     </div>
   )

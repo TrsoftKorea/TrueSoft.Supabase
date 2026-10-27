@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "preview:mock": "vite build --mode mock --outDir dist-mock && node scripts/mock-server.mjs",
+    "check:mock": "node scripts/check-mock.mjs"
   },
   "//": "버전은 Retool 앱(/frontend/package.json)과 메이저를 맞춘다. 화면 48개를 그대로 옮기기 위해서다.",
   "dependencies": {

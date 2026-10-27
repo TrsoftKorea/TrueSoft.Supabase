@@ -1,0 +1,139 @@
+// 가짜 데이터 모드 — 서버 대신 콘솔 요청에 답한다. 화면 모양을 확인하는 용도라 숫자는 그럴듯하게만 만든다.
+// 일반 빌드에는 들어가지 않는다(lib/api 가 __MOCK__ 일 때만 이 파일을 불러온다).
+// 새 화면을 가짜 데이터로 보려면 HANDLERS 에 그 화면의 action 을 더한다. 없는 action 은 빈 목록으로 답한다.
+import type { ProjectTarget } from '../lib/projectTarget'
+
+const MOCK_EMAIL = 'mock@local'
+
+/** 로그인 표 모양만 갖춘 가짜 토큰. 서버로 나가지 않는다 — 만료 시각·이메일을 읽는 코드가 그대로 돌게 하려는 것. */
+export function mockToken(): string {
+  const payload = btoa(JSON.stringify({ email: MOCK_EMAIL, exp: Math.floor(Date.now() / 1000) + 24 * 3600 }))
+  return `mock.${payload.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mock`
+}
+
+// ── 가짜 데이터의 규칙 ──────────────────────────────────────────────────────
+// 1. 같은 날짜·시각은 어느 기간으로 봐도 같은 값 — 값은 기간이 아니라 날짜·시각에서만 나온다(hash).
+// 2. 나눈 값의 합 = 전체(신규+재방문 = 전체, 서버별·플랫폼별 합 = 지금 접속자).
+// 3. 복귀 ≤ 재방문, 리텐션 가입 인원 = 그날 신규, 다시 온 사람 ≤ 가입 인원이고 날이 갈수록 줄어든다.
+// 4. 같은 숫자는 화면끼리 같다(대시보드 오늘 신규·활동 = 통계의 오늘 값).
+// 5. 동시접속자 긴 기간의 점 = 그 구간 5분 값의 최고치, 기간 최고치 = 그래프의 최고 점.
+
+/** 문자열 → [0,1) 고정 난수. 같은 입력이면 언제나 같은 값. */
+function hash(key: string): number {
+  let h = 2166136261
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619)
+  return ((h >>> 0) % 100000) / 100000
+}
+
+const kstToday = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10)
+const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400_000).toISOString().slice(0, 10)
+
+// ── 일별 접속 ──
+function dayStats(day: string) {
+  const isNew = Math.round(20 + hash(`new:${day}`) * 25)
+  const returning = Math.round(140 + hash(`ret:${day}`) * 60)
+  const comeback = Math.min(returning, Math.round(hash(`cb:${day}`) * 9))
+  return { day, total: isNew + returning, new: isNew, returning, comeback }
+}
+
+/** 가입일 day 의 신규 중 n 일째에 다시 온 사람. n 이 커질수록 줄어든다(앞 날 값을 넘지 않게 누적 최소). */
+function keptOf(day: string, size: number, n: number, offsets: number[]): number {
+  let kept = size
+  for (const o of offsets) {
+    if (o > n) break
+    const rate = Math.max(0.05, 0.55 * Math.pow(o, -0.35) + (hash(`kept:${day}:${o}`) - 0.5) * 0.06)
+    kept = Math.min(kept, Math.round(size * rate))
+  }
+  return kept
+}
+
+function activityStats(days: number) {
+  const today = kstToday()
+  const daily = Array.from({ length: days }, (_, i) => dayStats(addDays(today, i - days + 1)))
+  const offsets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 30, 45, 60]
+  const retention = [...daily].reverse().map((d, age) => ({
+    day: d.day,
+    size: d.new,
+    kept: offsets.map((o) => (o > age ? null : keptOf(d.day, d.new, o, offsets))),
+  }))
+  return { today, daily, offsets, retention, first_day: daily[0]?.day ?? null }
+}
+
+// ── 동시접속자 ──
+const SLOT = 5 * 60_000
+
+/** 5분 칸 하나의 접속자. 칸 시작 시각에서만 나온다. */
+function ccuAt(slotStart: number): number {
+  const h = new Date(slotStart + 9 * 3600_000).getUTCHours() + new Date(slotStart).getUTCMinutes() / 60
+  return Math.max(0, Math.round(45 + 35 * Math.cos(((h - 21) * Math.PI) / 12) + (hash(`ccu:${slotStart}`) - 0.5) * 12))
+}
+
+/** 합이 total 이 되게 비율대로 나눈다(남는 1명은 첫 칸으로). */
+function split(total: number, parts: [string, number][]): Record<string, number> {
+  const out: Record<string, number> = {}
+  let left = total
+  parts.forEach(([k, ratio], i) => {
+    const v = i === parts.length - 1 ? left : Math.floor(total * ratio)
+    out[k] = v
+    left -= v
+  })
+  return out
+}
+
+function ccuStats(hours: number) {
+  const bucketMin = hours <= 24 ? 5 : hours <= 24 * 7 ? 60 : hours <= 24 * 90 ? 240 : 1440
+  const bucket = bucketMin * 60_000
+  const nowSlot = Math.floor(Date.now() / SLOT) * SLOT
+  const from = nowSlot - hours * 3600_000
+  const series: { at: string; total: number }[] = []
+  let peak = { at: new Date(nowSlot).toISOString(), total: -1 }
+  for (let b = Math.floor(from / bucket) * bucket; b <= nowSlot; b += bucket) {
+    let best = -1
+    for (let s = Math.max(b, from); s < b + bucket && s <= nowSlot; s += SLOT) {
+      const v = ccuAt(s)
+      if (v > best) best = v
+      if (v > peak.total) peak = { at: new Date(s).toISOString(), total: v }
+    }
+    if (best >= 0) series.push({ at: new Date(b).toISOString(), total: best })
+  }
+  const total = ccuAt(nowSlot)
+  return {
+    now: {
+      total,
+      by_server: split(total, [['GLOBAL', 0.66], ['KR', 0.34]]),
+      by_platform: split(total, [['android', 0.64], ['ios', 0.34], ['windows', 0.02]]),
+    },
+    bucket_minutes: bucketMin,
+    series,
+    peak,
+    first_at: series[0]?.at ?? null,
+  }
+}
+
+type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
+
+const HANDLERS: Record<string, Handler> = {
+  'auth.consoleLook': () => ({ color: null, display_name: null, icon: null }),
+  'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
+  'schema.getDraft': () => ({ rows: [] }),
+  'dashboard.stats': () => {
+    const today = kstToday()
+    const week = Array.from({ length: 7 }, (_, i) => dayStats(addDays(today, -i)))
+    return {
+      total_players: 12840, new_today: week[0]!.new, new_7d: week.reduce((s, d) => s + d.new, 0),
+      active_today: week[0]!.total, banned_now: 4,
+      purchases_today: 23, revenue_today_krw: 412000, revenue_7d_krw: 3289000, revenue_total_krw: 48120000,
+    }
+  },
+  'ccu.stats': (_t, p) => ccuStats(Number(p['hours'] ?? 24)),
+  'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30)),
+}
+
+export async function mockAdmin<T>(target: ProjectTarget, action: string, params: Record<string, unknown>): Promise<T> {
+  // 실제 요청처럼 아주 잠깐 기다린다 — 불러오는 중 표시가 깜빡이는지도 볼 수 있게.
+  await new Promise((r) => setTimeout(r, 150))
+  const handler = HANDLERS[action]
+  if (handler) return handler(target, params) as T
+  // 모르는 조회는 빈 목록, 변경 요청은 성공으로 답한다. 화면이 깨지지 않고 "비어 있음"으로 보이게 하려는 것.
+  return { rows: [], total: 0, pageSize: 50 } as T
+}

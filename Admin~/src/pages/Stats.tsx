@@ -167,7 +167,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
       <PageHeader title="통계" description="날짜별 접속자, 복귀 유저, 가입일별 리텐션을 봅니다. 날짜는 한국 시간 기준입니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="border-b border-neutral-200 flex gap-1 overflow-x-auto">
+      <div className="border-b border-neutral-200 flex gap-1">
         {TABS.map(([key, label]) => (
           <button
             key={key}
@@ -217,9 +217,10 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
               {today && <span className="text-xs text-neutral-500">오늘 {n(today.total)}명 · 신규 {n(today.new)} · 재방문 {n(today.returning)}</span>}
             </div>
             <div className="p-5">
+              {/* 앞에 둔 계열이 막대 아래에 쌓인다 — 재방문을 바닥에, 신규를 위에. */}
               <DayBars days={data.daily} series={[
-                { key: 'new', color: NEW_COLOR, label: '신규' },
                 { key: 'returning', color: RETURNING_COLOR, label: '재방문' },
+                { key: 'new', color: NEW_COLOR, label: '신규' },
               ]} />
             </div>
           </WhiteCard>

@@ -28,6 +28,12 @@ async function postAdmin<T>(
   params: Record<string, unknown>,
   token: string | null,
 ): Promise<T> {
+  // 가짜 데이터 모드는 서버에 아무것도 보내지 않는다. 일반 빌드에서는 이 분기와 가짜 데이터 파일이 통째로 빠진다.
+  if (__MOCK__) {
+    const { mockAdmin } = await import('../mock/mockAdmin')
+    return mockAdmin<T>(target, action, params)
+  }
+
   const project = getProject(target)
   if (!project.url) throw new Error(`${project.label} 주소가 비어 있습니다. .env 를 확인하세요.`)
 

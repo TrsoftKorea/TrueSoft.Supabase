@@ -45,12 +45,42 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background-color: rgb(var(--neutral-400));
 }
-/* 진한 사이드바 위에서는 밝은 막대가 튄다. */
+/* 사이드바는 바탕에 맞춘 막대를 쓴다(진한 남색 위에서는 밝은 막대가 튄다). */
 .scroll-area-dark::-webkit-scrollbar-thumb {
-  background-color: #3a4166;
+  background-color: var(--sb-scroll);
 }
 .scroll-area-dark::-webkit-scrollbar-thumb:hover {
-  background-color: #525b8a;
+  background-color: var(--sb-scroll-hover);
+}
+
+/* 사이드바 색 — 화면 모드를 따른다. 밝은 화면은 흰 바탕, 어두운 화면은 진한 남색.
+   선택된 메뉴는 게임 색(--sb-accent, 사이드바에 인라인으로 준다)으로 표시한다. 게임 색은 흰 글자와 4.5:1 이상이
+   되게 저장을 막으므로 흰 바탕 위 글자로 써도 읽힌다. 파생 변수는 :root 가 아니라 .sidebar 에 둔다 —
+   :root 에 두면 --sb-accent 가 없는 자리에서 값이 굳어 게임 색을 못 받는다.
+   글자색은 바탕 위에서 4.5:1 이상. */
+.sidebar {
+  --sb-bg: #ffffff;
+  --sb-text: #4b5263;
+  --sb-text-strong: #111827;
+  --sb-muted: #6b7280;
+  --sb-hover: rgb(17 24 39 / 0.05);
+  --sb-border: #e5e7eb;
+  --sb-active-bg: color-mix(in srgb, var(--sb-accent) 12%, transparent);
+  --sb-active-text: var(--sb-accent);
+  --sb-scroll: #d4d4d8;
+  --sb-scroll-hover: #a1a1aa;
+}
+html.dark .sidebar {
+  --sb-bg: #161a2b;
+  --sb-text: #c7cbe0;
+  --sb-text-strong: #ffffff;
+  --sb-muted: #8d93b0;
+  --sb-hover: rgb(255 255 255 / 0.05);
+  --sb-border: #2c3250;
+  --sb-active-bg: #262c45;
+  --sb-active-text: #ffffff;
+  --sb-scroll: #3a4166;
+  --sb-scroll-hover: #525b8a;
 }
 
 /* 파이어폭스는 ::-webkit-scrollbar 가 없어 표준 속성으로 얇게만 맞춘다. */
@@ -60,7 +90,7 @@ body {
     scrollbar-color: rgb(var(--neutral-300)) transparent;
   }
   .scroll-area-dark {
-    scrollbar-color: #3a4166 transparent;
+    scrollbar-color: var(--sb-scroll) transparent;
   }
 }
 

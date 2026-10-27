@@ -21,6 +21,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   children,
+  showTarget = true,
 }: {
   open: boolean
   title: string
@@ -34,6 +35,8 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
+  // 게임과 무관한 동작(콘솔 전체 게시 등)이면 "대상 게임" 띠를 감춘다 — 한 게임에만 걸리는 일로 오해하지 않게.
+  showTarget?: boolean
 }) {
   // 진행 중에는 Esc 로 닫지 않는다. 요청은 이미 나갔는데 창만 사라지면 결과를 볼 수 없다.
   useEffect(() => {
@@ -69,7 +72,7 @@ export function ConfirmDialog({
             </button>
           </div>
 
-          <TargetGameStrip />
+          {showTarget && <TargetGameStrip />}
 
           {children}
 
