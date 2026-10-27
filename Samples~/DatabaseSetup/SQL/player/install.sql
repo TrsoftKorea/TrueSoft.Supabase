@@ -7154,6 +7154,31 @@ begin
     end if;
   end if;
 
+  -- 필드 추가는 게시 때 같은 이름의 칸이 있으면 실패하고, 그러면 함께 대기 중인 다른 변경까지 게시가 막힌다.
+  -- 게시 때 검사(admin_add_user_data_column·ts_admin_leaderboard_add_column)와 같은 기준으로 담을 때 거절한다.
+  if p_action = 'add' and p_feature in ('leaderboard_field', 'user_data_field') then
+    if p_object_name !~ '^[A-Za-z_][A-Za-z0-9_]*$' then
+      raise exception 'field_name_invalid: %', p_object_name;
+    end if;
+    if p_object_name = any (case p_feature
+         when 'leaderboard_field' then array['id','table_code','rotation_count','account_id','user_id','server_id',
+                                             'score','score_achieved_at','first_recorded_at','score_count','updated_at']
+         else array['id','user_id','account_id','server_id','updated_at'] end) then
+      raise exception 'field_name_reserved: %', p_object_name;
+    end if;
+    if exists (select 1 from public.ts_schema_draft
+                where status = 'pending' and feature = p_feature and action = 'add' and object_name = p_object_name)
+       or (exists (select 1 from information_schema.columns
+                    where table_schema = 'public'
+                      and table_name = case p_feature when 'leaderboard_field' then 'leaderboard_scores' else 'user_data' end
+                      and column_name = p_object_name)
+           and not exists (select 1 from public.ts_schema_draft
+                            where status = 'pending' and feature = p_feature
+                              and action = 'drop' and object_name = p_object_name)) then
+      raise exception 'field_name_exists: %', p_object_name;
+    end if;
+  end if;
+
   select coalesce(max(sort_order), 0) + 1 into v_sort
   from public.ts_schema_draft where status = 'pending';
 
@@ -11728,7 +11753,8 @@ grant select, insert, update, delete on table public.user_data     to authentica
 
 -- ---------------------------------------------------------------------------
 -- 3. 함수 — 전부 회수 후 SDK 가 실제로 호출하는 RPC 만 되돌려 준다
---    트리거 함수는 트리거가 실행하므로 EXECUTE 권한이 필요 없어 제외 대상이다.
+--    트리거 함수도 회수한다 — 트리거가 실행될 때는 EXECUTE 를 보지 않으므로 동작은 같고,
+--    빼 두면 프로젝트마다 기본 권한 차이가 그대로 남아 두 DB 가 갈라진다.
 -- ---------------------------------------------------------------------------
 do $$
 declare r record;
@@ -11736,7 +11762,7 @@ begin
   for r in
     select p.oid::regprocedure as sig
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-     where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype
+     where n.nspname = 'public'
   loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
   end loop;

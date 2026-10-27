@@ -21,6 +21,10 @@ export default {
         // 흰 카드 바탕. text-white(색 바탕 위 흰 글자)와 갈라 두어야 어두운 화면에서 글자가 같이 어두워지지 않는다.
         surface: 'rgb(var(--surface) / <alpha-value>)',
       },
+      // 색을 안 적은 border·divide 의 기본색. Tailwind 기본(고정 회색)이면 어두운 화면에서 선만 밝게 튄다.
+      borderColor: {
+        DEFAULT: 'rgb(var(--neutral-200) / <alpha-value>)',
+      },
     },
   },
   plugins: [],

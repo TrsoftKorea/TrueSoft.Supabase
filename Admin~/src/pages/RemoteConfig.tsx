@@ -95,12 +95,13 @@ function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, on
   )
 }
 
-function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue, onClose, onSaved }: {
+function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue, existingKeys, onClose, onSaved }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   configKey: string
   itemKey: string | null
   currentValue: unknown
+  existingKeys: string[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -119,6 +120,11 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   const submit = async () => {
     if (!key.trim() || loading) return
     setError('')
+    // 같은 이름으로 추가하면 서버는 그 필드의 값을 바꿔 버린다 — 추가 창에서는 막고 수정으로 보낸다.
+    if (isNew && (existingKeys.includes(key.trim()) || key.trim() === '__meta')) {
+      setError('이미 있는 필드명입니다. 목록에서 그 필드의 수정을 누르세요.')
+      return
+    }
     const parsed = parseTypedValue(type, text, boolValue)
     if (!parsed.ok) {
       setError(parsed.error)
@@ -474,6 +480,7 @@ export default function RemoteConfig({
           configKey={selectedKey}
           itemKey={itemModal.itemKey}
           currentValue={itemModal.value}
+          existingKeys={selectedItems.map(([k]) => k)}
           onClose={() => setItemModal(null)}
           onSaved={() => { setItemModal(null); void reloadDrafts() }}
         />
