@@ -12,6 +12,7 @@ import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
 type MailRow = {
   id: string
@@ -34,12 +35,15 @@ type BatchRow = {
   id: string; target_mode: string; title: string
   items: { key: string; count: number }[] | null; recipient_count: number
   category: string; expires_at: string; created_by: string | null; created_at: string; server_code: string | null
-  platform: string | null; open_until: string | null
+  platform: string | null; open_until: string | null; recalled_at?: string | null
 }
 type BatchData = { rows: BatchRow[]; total: number; pageSize: number }
 type CategoryRow = { key: string; display_name: string }
 type GameItem = { key: string; display_name: string }
-type BatchDetail = { batch: BatchRow; stats: { claimed_count: number; deleted_count: number } }
+type BatchDetail = {
+  batch: BatchRow & { recalled_at: string | null; recalled_count: number }
+  stats: { claimed_count: number; deleted_count: number; unclaimed_count: number }
+}
 
 const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어' }
 const STATUS_OPTIONS = ['전체', '미수령', '수령', '삭제']
@@ -89,6 +93,11 @@ export default function MailRecords({
   // 드릴다운: 선택된 배치(개별 우편을 이 배치로 필터)
   const [selectedBatch, setSelectedBatch] = useState<{ id: string; title: string } | null>(null)
   const [detail, setDetail] = useState<BatchDetail | null>(null)
+  const [detailTick, setDetailTick] = useState(0)
+  const [undo, setUndo] = useState<'recall' | 'close' | null>(null)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoError, setUndoError] = useState('')
+  const [notice, setNotice] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -165,7 +174,31 @@ export default function MailRecords({
         report(e, '발송 단위 상세를 불러오지 못했습니다.')
       }
     })()
-  }, [target, selectedBatch, report])
+  }, [target, selectedBatch, report, detailTick])
+
+  const runUndo = async () => {
+    if (!selectedBatch || !undo || undoBusy) return
+    setUndoBusy(true); setUndoError('')
+    try {
+      if (undo === 'recall') {
+        const res = await callAdmin<{ count: number }>(target, 'mails.recallBatch', { batchId: selectedBatch.id })
+        setNotice(`안 받은 우편 ${formatCount(res?.count ?? 0)}통을 거뒀습니다.`)
+      } else {
+        await callAdmin(target, 'mails.closeBatch', { batchId: selectedBatch.id })
+        setNotice('이 우편은 이제 새로 들어온 플레이어에게 가지 않습니다.')
+      }
+      setUndo(null)
+      setDetailTick((t) => t + 1)
+      void loadRecords()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setUndoError(e instanceof Error ? e.message : '실패했습니다.')
+    } finally {
+      setUndoBusy(false)
+    }
+  }
+
+  const stillOpen = !!detail?.batch.open_until && new Date(detail.batch.open_until).getTime() > Date.now()
 
   const batches = batchData?.rows ?? []
   const batchTotal = batchData?.total ?? 0
@@ -189,7 +222,7 @@ export default function MailRecords({
     setSearch(''); setSearchInput(''); setStatus('전체'); setCategory(''); setDateFrom(''); setDateTo(''); setPage(1)
     setTab('records')
   }
-  const clearBatch = () => { setSelectedBatch(null); setPage(1) }
+  const clearBatch = () => { setSelectedBatch(null); setPage(1); setNotice('') }
 
   const submitBatchSearch = () => { setBatchSearch(batchSearchInput); setBatchPage(1) }
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
@@ -257,7 +290,7 @@ export default function MailRecords({
                   ) : (
                     batches.map((b) => (
                       <tr key={b.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openBatch(b)}>
-                        <td className="px-4 py-3 whitespace-nowrap">{MODE_LABEL[b.target_mode] ?? b.target_mode}{b.server_code ? ` (${serverName(b.server_code)})` : ''}{b.platform ? ` · ${platformLabel(b.platform)}` : ''}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{MODE_LABEL[b.target_mode] ?? b.target_mode}{b.server_code ? ` (${serverName(b.server_code)})` : ''}{b.platform ? ` · ${platformLabel(b.platform)}` : ''}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
                         <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(b.category)}</td>
                         <td className="px-4 py-3">{b.title}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{formatCount(b.recipient_count)}</td>
@@ -290,9 +323,46 @@ export default function MailRecords({
               {detail?.stats && (
                 <span className="text-neutral-600 shrink-0">· 대상 {formatCount(detail.batch?.recipient_count ?? 0)}명 · 수령 {formatCount(detail.stats.claimed_count)} · 삭제 {formatCount(detail.stats.deleted_count)}</span>
               )}
-              <button onClick={clearBatch} className="ml-auto text-neutral-400 hover:text-neutral-700 shrink-0" title="이 발송 단위만 보기 해제" aria-label="이 발송 단위만 보기 해제"><X className="w-4 h-4" /></button>
+              {detail?.batch.recalled_at && (
+                <span className="text-amber-700 shrink-0 whitespace-nowrap">· {formatCount(detail.batch.recalled_count)}통 거둠</span>
+              )}
+              <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                {stillOpen && (
+                  <Button variant="outline" size="compact" onClick={() => { setUndoError(''); setUndo('close') }}>
+                    새로 들어온 플레이어에게 그만 보내기
+                  </Button>
+                )}
+                {(detail?.stats.unclaimed_count ?? 0) > 0 && (
+                  <Button variant="danger" size="compact" onClick={() => { setUndoError(''); setUndo('recall') }}>
+                    안 받은 우편 거두기
+                  </Button>
+                )}
+                <button onClick={clearBatch} className="text-neutral-400 hover:text-neutral-700" title="이 발송 단위만 보기 해제" aria-label="이 발송 단위만 보기 해제"><X className="w-4 h-4" /></button>
+              </div>
             </div>
           )}
+          {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
+
+          <ConfirmDialog
+            open={undo !== null}
+            title={undo === 'recall' ? '안 받은 우편 거두기' : '새로 들어온 플레이어에게 그만 보내기'}
+            confirmLabel={undo === 'recall' ? '거두기' : '그만 보내기'}
+            danger={undo === 'recall'}
+            busy={undoBusy}
+            error={undoError || undefined}
+            onConfirm={() => { void runUndo() }}
+            onCancel={() => setUndo(null)}
+            description={undo === 'recall'
+              ? '아직 받지 않은 플레이어의 우편함에서 이 우편이 사라집니다. 이미 받은 플레이어의 우편과 아이템은 그대로입니다. 새로 들어온 플레이어에게도 더 가지 않습니다.'
+              : '이미 받은 플레이어의 우편은 그대로 둡니다.'}
+          >
+            <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
+              <div className="text-neutral-800">{selectedBatch?.title}</div>
+              {undo === 'recall' && detail && (
+                <div className="text-xs text-neutral-500">거둘 우편 <span className="font-semibold text-red-600">{formatCount(detail.stats.unclaimed_count)}통</span> · 이미 받음 {formatCount(detail.stats.claimed_count)}통</div>
+              )}
+            </div>
+          </ConfirmDialog>
 
           <WhiteCard className="p-4">
             <div className="flex flex-wrap items-center gap-3">

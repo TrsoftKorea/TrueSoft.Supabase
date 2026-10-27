@@ -56,6 +56,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `withdrawal-cancel-issue` | 공개 프로필 · 탈퇴 취소 토큰 발급 |
 | `withdrawal-cancel-redeem` | 공개 프로필 · 탈퇴 취소 토큰 사용 |
 | `withdrawal-guard` | 공개 프로필 · 탈퇴 계정 자동 처리 |
+| `withdrawal-sweep` | 공개 프로필 · 탈퇴 유예가 지난 계정을 매일 삭제 |
 | `purchase-verify-google` | 인앱 결제 · Android |
 | `purchase-verify-apple` | 인앱 결제 · iOS · SK2 |
 | `purchase-verify-apple-legacy` | 인앱 결제 · iOS · SK1 · forceStoreKit1 |
@@ -64,8 +65,8 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `apple-token` | Apple 로그인 · 탈퇴 시 Apple 연결 해제 |
 | `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
 
-::: warning 환불 기록 함수는 Verify JWT를 끕니다
-`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`은 DB 정기 작업이 로그인 없이 부릅니다. 두 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않습니다.
+::: warning 세 함수는 Verify JWT를 끕니다
+`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`withdrawal-sweep`은 DB 정기 작업이 로그인 없이 부릅니다. 세 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 탈퇴 유예가 지난 계정이 지워지지 않습니다.
 :::
 
 ## 4. 시크릿 설정 {#secrets}
@@ -112,10 +113,10 @@ APPLE_KEY_ID=
 
 ## 5. 프로젝트 주소 등록 {#project-url}
 
-구글 환불은 DB가 하루 한 번 `purchase-refund-sync-google`을 불러 확인합니다. 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. SQL Editor에서 한 번 실행하세요.
+DB가 하루 한 번 엣지 함수를 직접 부르는 작업이 둘 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)와 구글 환불 확인(`purchase-refund-sync-google`). 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
 
 ```sql
 select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
 ```
 
-`<project-ref>`는 대시보드 주소창의 `/project/` 뒤에 오는 문자열입니다. 등록하지 않으면 운영 콘솔 구매 내역에 구글 환불 확인이 실패로 표시됩니다.
+`<project-ref>`는 대시보드 주소창의 `/project/` 뒤에 오는 문자열입니다. 등록하지 않으면 탈퇴 유예가 지난 계정이 지워지지 않고, 운영 콘솔 **자동 작업** 화면과 구매 내역에 실패로 표시됩니다.

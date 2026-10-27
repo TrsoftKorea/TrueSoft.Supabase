@@ -728,6 +728,33 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "userData.getRestorePreview": {
+        const { data, error } = await db.rpc("ts_admin_user_data_restore_preview", {
+          p_account_id: str(params, "accountId"),
+          p_log_id: params["logId"],
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "userData.restore": {
+        const columns = Array.isArray(params["columns"]) ? params["columns"].filter((c) => typeof c === "string") : [];
+        const { data, error } = await db.rpc("ts_admin_user_data_restore", {
+          p_account_id: str(params, "accountId"),
+          p_log_id: params["logId"],
+          p_columns: columns,
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "jobs.list": {
+        const { data, error } = await db.rpc("ts_admin_cron_jobs");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
       case "userData.logs": {
         const { data, error } = await db.rpc("ts_admin_user_data_logs", {
           p_account_id: str(params, "accountId"),
@@ -1413,6 +1440,18 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "mails.recallBatch": {
+        const { data, error } = await db.rpc("ts_admin_mail_batch_recall", { p_batch_id: str(params, "batchId") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { count: data ?? 0 } });
+      }
+
+      case "mails.closeBatch": {
+        const { error } = await db.rpc("ts_admin_mail_batch_close", { p_batch_id: str(params, "batchId") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "mails.getRecords": {
         const { data, error } = await db.rpc("ts_admin_search_mails", {
           p_search: optStr(params, "search"),
@@ -1619,6 +1658,7 @@ const SERVER_ERRORS: Record<string, string> = {
   field_name_invalid: "필드명은 영문자나 _ 로 시작하고 영문·숫자·_ 만 쓸 수 있습니다.",
   chat_mute_not_found: "이미 해제된 채팅 차단입니다.",
   user_data_not_found: "이 플레이어는 유저 데이터가 없습니다.",
+  user_data_log_not_found: "이 변경 기록을 찾을 수 없습니다. 7일이 지나 지워졌을 수 있습니다.",
   patch_required: "바꿀 값이 없습니다.",
   schema_draft_empty: "게시할 변경이 없습니다.",
   schema_version_not_found: "해당 버전을 찾을 수 없습니다.",
@@ -1629,6 +1669,7 @@ const SERVER_ERRORS: Record<string, string> = {
   match_game_code_invalid: "게임 코드 형식이 올바르지 않습니다.",
   operator_email_invalid: "이메일 형식이 올바르지 않습니다.",
   operator_not_found: "운영자를 찾을 수 없습니다.",
+  operator_not_disabled: "먼저 비활성화한 운영자만 삭제할 수 있습니다.",
   mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",

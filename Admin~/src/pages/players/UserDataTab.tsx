@@ -12,6 +12,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
+import { RestoreSaveModal } from './RestoreSaveModal'
 
 type LogRow = { id: number; diff: Record<string, unknown>; source: string | null; created_at: string }
 
@@ -138,6 +139,7 @@ export default function UserDataTab({
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [editField, setEditField] = useState<UserDataField | null>(null)
+  const [restoreLog, setRestoreLog] = useState<LogRow | null>(null)
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
   const [logsFailed, setLogsFailed] = useState(false)
@@ -325,11 +327,12 @@ export default function UserDataTab({
                 <th className="text-left px-5 py-2.5 font-medium whitespace-nowrap">시각</th>
                 <th className="text-left px-4 py-2.5 font-medium">출처</th>
                 <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
+                <th className="w-28" />
               </tr>
             </thead>
             <tbody>
               {logsLoading || logs.length === 0 ? (
-                <TableStatusRow loading={logsLoading} empty={logs.length === 0} failed={logsFailed} colSpan={3} emptyText="변경 이력이 없습니다." />
+                <TableStatusRow loading={logsLoading} empty={logs.length === 0} failed={logsFailed} colSpan={4} emptyText="변경 이력이 없습니다." />
               ) : (
                 logs.map((l) => (
                   <tr key={l.id} className="border-t border-neutral-100">
@@ -338,6 +341,9 @@ export default function UserDataTab({
                     <td className="px-4 py-3 text-xs text-neutral-500 max-w-[420px] truncate" title={diffSummary(l.diff)}>
                       {diffSummary(l.diff)}
                     </td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>이 변경 전으로</Button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -345,6 +351,18 @@ export default function UserDataTab({
           </table>
         </div>
       </WhiteCard>
+
+      {restoreLog && (
+        <RestoreSaveModal
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={accountId}
+          logId={restoreLog.id}
+          loggedAt={restoreLog.created_at}
+          onClose={() => setRestoreLog(null)}
+          onRestored={() => { setRestoreLog(null); void reload(); void reloadLogs() }}
+        />
+      )}
 
       {editField && (
         <EditValueModal

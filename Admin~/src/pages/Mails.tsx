@@ -232,7 +232,9 @@ export default function Mails({
   }
   // 플레이어를 직접 고른 발송에는 플랫폼이 걸리지 않는다(서버도 무시한다).
   const platformPart = mode !== 'players' && platform ? ` · ${platformLabel(platform)}만` : ''
-  const openPart = mode !== 'players' && openForNew ? ' · 나중에 들어온 플레이어도' : ''
+  // 반복 발송에는 걸 수 없다 — 회차마다 열려 있어 나중에 가입한 사람이 지난 회차를 한꺼번에 받는다.
+  const openApplies = mode !== 'players' && sched !== 'repeat' && openForNew
+  const openPart = openApplies ? ' · 나중에 들어온 플레이어도' : ''
   const targetSummary = (mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
     : `플레이어 ${formatCount(playerIds.length)}명`) + platformPart + openPart
@@ -269,7 +271,7 @@ export default function Mails({
         accountIds: mode === 'players' ? playerIds : [],
         serverId: mode === 'server' ? serverId : null,
         platform: mode === 'players' ? null : platform || null,
-        openForNew: mode !== 'players' && openForNew,
+        openForNew: openApplies,
         title, content, category: category.trim() || 'default',
         items: items.map((it) => ({ key: it.key, count: Number(it.count) })),
         localized,
@@ -373,7 +375,7 @@ export default function Mails({
             </Field>
           )}
 
-          {mode !== 'players' && (
+          {mode !== 'players' && sched !== 'repeat' && (
             <div>
               <label className="inline-flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
                 <input type="checkbox" checked={openForNew} onChange={(e) => setOpenForNew(e.target.checked)} />

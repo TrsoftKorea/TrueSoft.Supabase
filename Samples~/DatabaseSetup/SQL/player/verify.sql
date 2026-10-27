@@ -55,7 +55,7 @@ from (
       ('mail_categories'),
       ('game_items'),
       ('purchases'),
-      ('withdrawal_delete_queue'),
+      ('withdrawal_sweep_state'),
       ('user_ban_messages'),
       ('leaderboard_tables'),
       ('leaderboard_scores'),
@@ -120,7 +120,10 @@ from (
       ('ts_my_withdrawal_status'),
       ('ts_after_sign_in'),
       ('ts_withdrawal_cancel_redeem'),
-      ('ts_withdrawal_cleanup_batch'),
+      ('ts_withdrawal_due_accounts'),
+      ('ts_withdrawal_sweep_try_start'),
+      ('ts_withdrawal_sweep_kick'),
+      ('ts_withdrawal_overdue_check'),
       ('ts_leaderboard_next_rotation_at'),
       ('ts_leaderboard_columns_of'),
       ('ts_leaderboard_columns_meta'),
@@ -322,8 +325,8 @@ from (
       case when has_function_privilege('anon', p.oid, 'EXECUTE') then 'anon+auth' else 'auth' end
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-  where p.prorettype <> 'trigger'::regtype
-    and (has_function_privilege('anon', p.oid, 'EXECUTE')
+  -- 트리거 함수도 본다 — install.sql 22절이 트리거 함수 권한까지 회수한다(트리거 실행은 EXECUTE 를 보지 않는다).
+  where (has_function_privilege('anon', p.oid, 'EXECUTE')
       or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
     -- install.sql 이 authenticated·anon 에 grant 하는 함수 전부. 둘의 일치는 SdkAudit R17 이 본다.
     and p.proname not in (

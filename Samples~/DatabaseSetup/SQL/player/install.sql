@@ -417,6 +417,11 @@ begin
     country_code     = coalesce(user_profiles.country_code, excluded.country_code),
     platform         = excluded.platform,
     last_activity_at = now();  -- 로그인 시각도 활동으로 기록(데이터 저장 트리거와 별개)
+
+  -- 게스트가 구글·애플을 연동하면 user_id 가 그 계정 번호로 바뀐다. 우편 보기·받기는 user_id 로 묶여 있어
+  -- 함께 옮기지 않으면 연동 전에 받아 둔 우편이 안 보이고 받을 수도 없다(기간 우편은 같은 우편을 한 통 더 받는다).
+  update public.mails set user_id = v_stable
+   where account_id = v_uid and user_id is distinct from v_stable;
 end;
 $$;
 
@@ -882,7 +887,8 @@ grant execute on function public.ts_admin_banned_words_delete(text, text[])    t
 -- 출처: LDNOOBW "List of Dirty, Naughty, Obscene, and Otherwise Bad Words" ko·en
 --       https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words (CC BY 4.0)
 -- 검사가 "공백·기호를 뺀 글자 안에 들어 있으면" 걸리므로, 멀쩡한 말을 가리는 단어는 뺐다
--- (예: ass→class, butt→button, 보지→"보지 마", 미친→"이미 친구", 염병→전염병, hardcore·domination 같은 게임 용어).
+-- (예: ass→class, butt→button, raping→scraping, smut→"is mutual", 보지→"보지 마", 미친→"이미 친구", 염병→전염병,
+-- hardcore·domination 같은 게임 용어). 영어는 37만 단어 사전과 흔한 단어 두세 개를 붙인 꼴로 대조해 걸렀다.
 do $$
 begin
   if not exists (select 1 from public.banned_words) then
@@ -896,28 +902,28 @@ begin
     'blondeaction', 'blondeonblondeaction', 'blowjob', 'blowyourload', 'bluewaffle', 'blumpkin', 'bollocks', 'boner', 'boob', 'boobs',
     'bootycall', 'brownshowers', 'brunetteaction', 'bukkake', 'bulldyke', 'bulletvibe', 'bullshit', 'bunghole', 'busty', 'buttcheeks',
     'butthole', 'cameltoe', 'camgirl', 'camslut', 'camwhore', 'carpetmuncher', 'chocolaterosebuds', 'circlejerk', 'clevelandsteamer', 'clit',
-    'clitoris', 'cloverclamps', 'clusterfuck', 'cocks', 'coprolagnia', 'coprophilia', 'cornhole', 'creampie', 'cumming', 'cumshot',
-    'cumshots', 'cunnilingus', 'cunt', 'darkie', 'daterape', 'deepthroat', 'dendrophilia', 'dick', 'dildo', 'dingleberries',
+    'clitoris', 'cloverclamps', 'clusterfuck','coprolagnia', 'coprophilia', 'cornhole', 'creampie', 'cumming', 'cumshot',
+    'cumshots', 'cunnilingus', 'cunt', 'darkie', 'daterape', 'deepthroat', 'dendrophilia','dildo', 'dingleberries',
     'dingleberry', 'dirtypillows', 'dirtysanchez', 'doggiestyle', 'doggystyle', 'dogstyle', 'dolcett', 'dominatrix', 'dommes', 'donkeypunch',
-    'doubledong', 'doublepenetration', 'dpaction', 'dryhump', 'dvda', 'eatmyass', 'ecchi', 'ejaculation', 'erotic', 'erotism',
+    'doubledong', 'doublepenetration', 'dpaction', 'dryhump', 'dvda', 'eatmyass', 'ecchi', 'ejaculation','erotism',
     'faggot', 'felch', 'fellatio', 'feltch', 'femalesquirting', 'femdom', 'figging', 'fingerbang', 'fisting', 'footfetish',
     'footjob', 'frotting', 'fuck', 'fuckbuttons', 'fuckin', 'fucking', 'fucktards', 'fudgepacker', 'futanari', 'gangbang',
     'gaysex', 'giantcock', 'girlontop', 'girlsgonewild', 'goatcx', 'goatse', 'goddamn', 'gokkun', 'goldenshower', 'googirl',
-    'goregasm', 'gspot', 'guro', 'handjob', 'hentai', 'homoerotic', 'honkey', 'hotcarl', 'hugefat', 'humping',
+    'goregasm', 'gspot','handjob', 'hentai', 'homoerotic', 'honkey', 'hotcarl', 'hugefat',
     'jackoff', 'jailbait', 'jerkoff', 'jigaboo', 'jiggaboo', 'jiggerboo', 'jizz', 'juggs', 'kike', 'kinbaku',
     'kinkster', 'knobbing', 'leatherrestraint', 'leatherstraightjacket', 'lemonparty', 'livesex', 'makemecome', 'malesquirting', 'masturbate', 'masturbating',
     'masturbation', 'milf', 'missionaryposition', 'motherfucker', 'moundofvenus', 'mrhands', 'muffdiver', 'muffdiving', 'nambla', 'nawashi',
     'neonazi', 'nigga', 'nigger', 'nignog', 'nimphomania', 'nipple', 'nipples', 'nsfw', 'nsfwimages', 'nude',
-    'nudity', 'nutten', 'nympho', 'nymphomania', 'omorashi', 'onecuptwogirls', 'oneguyonejar', 'orgasm', 'orgy', 'paedophile',
+    'nudity', 'nutten', 'nympho', 'nymphomania', 'omorashi', 'onecuptwogirls', 'oneguyonejar', 'orgasm','paedophile',
     'panties', 'pedobear', 'pedophile', 'pegging', 'phonesex', 'pieceofshit', 'pissing', 'pisspig', 'pleasurechest', 'polesmoker',
     'ponyplay', 'poontang', 'poopchute', 'porn', 'porno', 'pornography', 'princealbertpiercing', 'pthc', 'pubes', 'punany',
-    'pussy', 'queaf', 'queef', 'quim', 'raghead', 'ragingboner', 'raping', 'reversecowgirl', 'rimjob', 'rimming',
+    'pussy', 'queaf', 'queef','raghead', 'ragingboner','reversecowgirl', 'rimjob',
     'rosypalmandher5sisters', 'rustytrombone', 'schlong', 'sexcam', 'sexo', 'shavedbeaver', 'shavedpussy', 'shemale', 'shibari', 'shitblimp',
-    'shitty', 'shota', 'slanteye', 'slut', 'smut', 'sodomize', 'sodomy', 'splooge', 'sploogemoose', 'spooge',
-    'spreadlegs', 'spunk', 'strapon', 'stripclub', 'styledoggy', 'suicidegirls', 'swastika', 'teabagging', 'throating', 'thumbzilla',
+    'shitty','slanteye', 'slut','sodomize', 'sodomy', 'splooge', 'sploogemoose', 'spooge',
+    'spreadlegs','strapon', 'stripclub', 'styledoggy', 'suicidegirls', 'swastika', 'teabagging', 'throating', 'thumbzilla',
     'titties', 'titty', 'tosser', 'towelhead', 'tranny', 'tribadism', 'tubgirl', 'tushy', 'twogirlsonecup', 'upskirt',
     'urethraplay', 'urophilia', 'vagina', 'venusmound', 'viagra', 'vibrator', 'violetwand', 'vorarephilia', 'voyeur', 'voyeurweb',
-    'voyuer', 'vulva', 'wank', 'wetback', 'wetdream', 'worldsex', 'wrinkledstarfish', 'xxx', 'yaoi', 'yellowshowers',
+    'voyuer', 'vulva','wetback', 'wetdream', 'worldsex', 'wrinkledstarfish', 'xxx', 'yaoi', 'yellowshowers',
     'yiffy', 'zoophilia', '개새끼', '개자식', '개좆', '개차반', '계집년', '니기미', '딸딸이', '때씹',
     '또라이', '뙤놈', '로리타', '몰카', '미친새끼', '바바리맨', '병신', '빠구리', '사까시', '섹스',
     '스와핑', '쌍놈', '씨발', '씨발놈', '씨팔', '씹물', '씹빨', '씹새끼', '씹알', '씹창',
@@ -3826,7 +3832,10 @@ create policy remote_config_all_service_role
 
 -- 주기적인 정리 작업을 pg_cron으로 자동화합니다.
 -- · 만료된 우편 삭제          매일 03:00  ts_cleanup_expired_mails(500)
--- · 탈퇴 예약 만료 계정 처리  매일 02:00  ts_withdrawal_cleanup_batch(100)
+-- · 탈퇴 예약 만료 계정 삭제  매일 02:00  ts_withdrawal_sweep_kick() → 엣지 함수 withdrawal-sweep
+-- · 그 결과 확인              매일 03:30  ts_withdrawal_overdue_check()
+-- · 실행 기록 정리            매일 03:40  cron.job_run_details 7일치만 남김
+-- (시각은 모두 UTC)
 --
 -- =============================================================================
 -- 크론 잡 — 만료 정리·탈퇴 배치 (pg_cron)
@@ -3842,71 +3851,65 @@ create policy remote_config_all_service_role
 create extension if not exists pg_cron;
 
 -- ---------------------------------------------------------------------------
--- withdrawal_delete_queue — 탈퇴 완료 계정 auth 삭제 대기 목록
+-- 탈퇴 유예가 지난 계정의 실제 삭제 — 엣지 함수 withdrawal-sweep 이 한다(애플 연결 끊기 → auth 계정 삭제).
+-- 예전에는 그 계정이 다시 로그인할 때만(withdrawal-guard) 지워져, 다시 안 들어온 탈퇴자가 영영 남았다.
+-- 옛 방식(삭제 대기 표에 넣기만 하는 ts_withdrawal_cleanup_batch)은 그 표를 읽는 곳이 없어 없앴다.
 -- ---------------------------------------------------------------------------
--- ts_withdrawal_cleanup_batch가 참조하므로 함수보다 먼저 생성합니다.
--- 관리자가 주기적으로 처리. 클라이언트 접근 없음 (RLS 활성화 + policy 없음).
--- ---------------------------------------------------------------------------
-create table if not exists public.withdrawal_delete_queue (
-  user_id      uuid        primary key references auth.users(id) on delete cascade,
-  queued_at    timestamptz not null default now(),
-  processed    boolean     not null default false,
-  processed_at timestamptz null
+drop function if exists public.ts_withdrawal_cleanup_batch(int);
+drop table if exists public.withdrawal_delete_queue;
+
+-- 유예가 지난 계정 목록. withdrawal-sweep 이 secret key 로 부른다.
+create or replace function public.ts_withdrawal_due_accounts(p_limit int default 50)
+returns table (account_id uuid, user_id text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.account_id, p.user_id
+  from public.user_profiles p
+  where p.withdrawn_at is not null
+    and p.withdrawn_at <= now()
+    and p.account_id is not null
+  order by p.withdrawn_at
+  limit greatest(1, least(coalesce(p_limit, 50), 200));
+$$;
+
+comment on function public.ts_withdrawal_due_accounts(int) is '탈퇴 유예가 지났는데 아직 지워지지 않은 계정. withdrawal-sweep 전용.';
+revoke all on function public.ts_withdrawal_due_accounts(int) from public, anon, authenticated;
+grant execute on function public.ts_withdrawal_due_accounts(int) to service_role;
+
+-- withdrawal-sweep 은 인증 없이 열려 있다 — 마지막 시작 시각으로 짧은 간격의 재호출을 건너뛴다.
+create table if not exists public.withdrawal_sweep_state (
+  id              int primary key default 1 check (id = 1),
+  last_started_at timestamptz
 );
+alter table public.withdrawal_sweep_state enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.withdrawal_sweep_state from anon, authenticated;
 
-comment on table public.withdrawal_delete_queue is
-  '탈퇴 완료 계정의 auth 삭제 대기 목록. 관리자가 주기적으로 처리.';
-
-alter table public.withdrawal_delete_queue enable row level security;
--- [의도적] 정책 없음 — service_role 전용.
-
--- ---------------------------------------------------------------------------
--- ts_withdrawal_cleanup_batch — 탈퇴 예약 만료 계정 일괄 처리
--- ---------------------------------------------------------------------------
--- withdrawn_at <= now()인 계정을 account_closures에 기록하고
--- withdrawal_delete_queue에 삭제 대기 등록합니다.
--- auth.admin.deleteUser()는 SQL에서 직접 불가 — 실제 삭제는 별도 워크플로우.
--- ---------------------------------------------------------------------------
-create or replace function public.ts_withdrawal_cleanup_batch(p_batch int default 100)
-returns jsonb
+create or replace function public.ts_withdrawal_sweep_try_start(p_min_gap_seconds int default 600)
+returns boolean
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  n   int := 0;
-  rec record;
+  v_ok boolean;
 begin
-  if p_batch is null or p_batch < 1 then p_batch := 100; end if;
-  if p_batch > 500 then p_batch := 500; end if;
-
-  for rec in
-    select user_id, account_id
-    from public.user_profiles
-    where withdrawn_at is not null
-      and withdrawn_at <= now()
-    limit p_batch
-  loop
-    -- account_closures 기록: user_id = 영구 플레이어 ID, account_id = auth UUID
-    insert into public.account_closures (user_id, account_id, closed_at, note)
-    values (rec.user_id, rec.account_id, now(), 'withdrawal_cleanup')
-    on conflict (user_id) do update
-    set closed_at = now(), note = 'withdrawal_cleanup';
-
-    -- 삭제 대기 큐에 추가 (별도 관리자 처리용)
-    insert into public.withdrawal_delete_queue (user_id, queued_at, processed)
-    values (rec.account_id, now(), false)
-    on conflict (user_id) do nothing;
-
-    n := n + 1;
-  end loop;
-
-  return jsonb_build_object('processed', n, 'queued_for_deletion', n);
+  insert into public.withdrawal_sweep_state as s (id, last_started_at) values (1, now())
+  on conflict (id) do update set last_started_at = now()
+   where s.last_started_at is null
+      or s.last_started_at < now() - make_interval(secs => greatest(coalesce(p_min_gap_seconds, 600), 0))
+  returning true into v_ok;
+  return coalesce(v_ok, false);
 end;
 $$;
 
-revoke all on function public.ts_withdrawal_cleanup_batch(int) from public;
--- pg_cron은 내부 실행이므로 authenticated grant 불필요
+comment on function public.ts_withdrawal_sweep_try_start(int) is '탈퇴 계정 정리 시작 기록. 간격 안의 재호출이면 false. withdrawal-sweep 전용.';
+revoke all on function public.ts_withdrawal_sweep_try_start(int) from public, anon, authenticated;
+grant execute on function public.ts_withdrawal_sweep_try_start(int) to service_role;
+
 
 -- ---------------------------------------------------------------------------
 -- 크론 잡 등록 (멱등: 기존 잡이 있으면 교체)
@@ -3925,18 +3928,7 @@ select cron.schedule(
   'select public.ts_cleanup_expired_mails(500)'
 );
 
--- 2. 탈퇴 계정 정리 — 매일 새벽 2시 (메일 정리 1시간 전, batch 100)
-do $$
-begin
-  if exists (select 1 from cron.job where jobname = 'withdrawal-cleanup') then
-    perform cron.unschedule('withdrawal-cleanup');
-  end if;
-end $$;
-select cron.schedule(
-  'withdrawal-cleanup',
-  '0 2 * * *',
-  'select public.ts_withdrawal_cleanup_batch(100)'
-);
+-- 2. 탈퇴 계정 정리는 pg_net 이 필요해 아래 4번에 있다.
 
 -- 3. 구글 환불 확인 — 매일 새벽 4시. DB 에서 엣지 함수를 부르려면 pg_net 과 Vault 의 project_url 이 필요하다.
 --    project_url 은 프로젝트마다 다르므로 이 파일에 넣지 않는다. 설치 후 한 번 등록한다:
@@ -3982,6 +3974,93 @@ select cron.schedule(
   'purchase-refund-sync-google',
   '0 4 * * *',
   'select public.ts_purchase_refund_sync_kick()'
+);
+
+-- 4. 탈퇴 계정 정리 — 매일 02:00(UTC). 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
+--    project_url 이 없으면 실패로 끝내 "자동 작업" 화면에 보이게 한다 — 조용히 넘기면 탈퇴자가 안 지워진 채 쌓인다.
+create or replace function public.ts_withdrawal_sweep_kick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    raise exception 'project_url_missing';
+  end if;
+  -- 함수 쪽이 유예 지난 계정만 지우므로 인증 없이 부른다(verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/withdrawal-sweep',
+    body                 := '{}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 60000);
+end;
+$$;
+
+comment on function public.ts_withdrawal_sweep_kick() is '탈퇴 계정 정리 엣지 함수를 부른다. cron 이 매일 부른다.';
+revoke all on function public.ts_withdrawal_sweep_kick() from public, anon, authenticated;
+
+-- 위 호출은 요청을 넣기만 해서, 엣지 함수가 실패해도 이 작업은 성공으로 남는다. 그래서 하루 뒤 결과를 따로 본다 —
+-- 유예가 하루 넘게 지났는데 남은 계정이 있으면 실패로 끝내 "자동 작업" 화면에 빨갛게 보이게 한다.
+create or replace function public.ts_withdrawal_overdue_check()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  select count(*) into v_n
+  from public.user_profiles
+  where withdrawn_at is not null
+    and withdrawn_at < now() - interval '1 day'
+    and account_id is not null;
+  if v_n > 0 then
+    raise exception 'withdrawal_overdue: 탈퇴 유예가 하루 넘게 지났는데 지워지지 않은 계정 %개 — withdrawal-sweep 배포·로그를 확인하세요', v_n;
+  end if;
+  return 0;
+end;
+$$;
+
+comment on function public.ts_withdrawal_overdue_check() is '탈퇴 계정 정리가 실제로 됐는지 확인한다. cron 이 매일 부른다.';
+revoke all on function public.ts_withdrawal_overdue_check() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'withdrawal-cleanup') then
+    perform cron.unschedule('withdrawal-cleanup');
+  end if;
+  if exists (select 1 from cron.job where jobname = 'withdrawal-overdue-check') then
+    perform cron.unschedule('withdrawal-overdue-check');
+  end if;
+end $$;
+select cron.schedule(
+  'withdrawal-cleanup',
+  '0 2 * * *',
+  'select public.ts_withdrawal_sweep_kick()'
+);
+select cron.schedule(
+  'withdrawal-overdue-check',
+  '30 3 * * *',
+  'select public.ts_withdrawal_overdue_check()'
+);
+
+-- 5. 자동 작업 실행 기록 정리 — 매일 03:40(UTC). cron.job_run_details 는 저절로 지워지지 않아 매분 작업만으로 하루
+--    수천 줄씩 쌓인다(Supabase 문서: 직접 정리해야 하고, 너무 크면 DB 업그레이드 때 부담). 7일치만 남긴다.
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'cleanup-cron-run-details') then
+    perform cron.unschedule('cleanup-cron-run-details');
+  end if;
+end $$;
+select cron.schedule(
+  'cleanup-cron-run-details',
+  '40 3 * * *',
+  $$delete from cron.job_run_details where end_time < now() - interval '7 days'$$
 );
 
 -- ---------------------------------------------------------------------------
@@ -4309,6 +4388,30 @@ CREATE TRIGGER trg_user_data_log
 AFTER UPDATE ON public.user_data
 FOR EACH ROW EXECUTE FUNCTION ts_log_user_data_diff();
 
+-- 세이브 행이 지워질 때 지워지기 직전의 모든 값을 남긴다. 없으면 콘솔의 "이 변경 전으로"가 삭제를 사이에 둔 기록에서
+-- 삭제 뒤 안 바뀐 칸을 새 행의 기본값으로 둔 채, 실제로 있었던 적 없는 섞인 상태를 만든다.
+CREATE OR REPLACE FUNCTION public.ts_log_user_data_delete()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  -- 계정 삭제가 세이브 행을 함께 지울 때(ON DELETE CASCADE)는 남기지 않는다 — 지워지는 계정을 가리키는 기록을 넣으면
+  -- 외래 키 위반으로 계정 삭제 자체가 실패한다. 그때는 부모 행이 이미 지워져 있어 아래 확인에 걸린다.
+  IF OLD.account_id IS NOT NULL AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = OLD.account_id) THEN
+    INSERT INTO public.user_data_logs (account_id, diff, source)
+    VALUES (OLD.account_id,
+            to_jsonb(OLD) - 'id' - 'account_id' - 'user_id' - 'server_id' - 'created_at' - 'updated_at',
+            coalesce(nullif(current_setting('app.log_source', true), ''), 'row_deleted'));
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ts_log_user_data_delete() FROM public, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_user_data_log_delete ON public.user_data;
+CREATE TRIGGER trg_user_data_log_delete
+AFTER DELETE ON public.user_data
+FOR EACH ROW EXECUTE FUNCTION public.ts_log_user_data_delete();
+
 -- ── 7일 초과 로그 자동 정리 (pg_cron 필요) ───────────────────────────────
 SELECT cron.schedule(
   'cleanup-user-data-logs',
@@ -4470,6 +4573,96 @@ grant execute on function public.ts_admin_user_data_logs(uuid, integer)         
 grant execute on function public.ts_admin_user_data_update(uuid, jsonb, text)    to service_role;
 grant execute on function public.ts_admin_search_user_data_players(text, text)   to service_role;
 
+-- ── 세이브 되돌리기 — 어떤 변경 직전 상태로 ────────────────────────────────
+-- 로그는 바뀌기 "전" 값만 남긴다. 지금 값에서 최신 로그부터 그 로그까지 거꾸로 덧씌우면 그 변경 직전 상태가 된다.
+-- 로그는 7일만 남으므로(cleanup-user-data-logs) 되돌릴 수 있는 범위도 7일이다.
+create or replace function public.ts_user_data_state_before_log(p_account_id uuid, p_log_id bigint)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_state jsonb;
+  v_diff  jsonb;
+begin
+  if not exists (select 1 from public.user_data_logs where id = p_log_id and account_id = p_account_id) then
+    raise exception 'user_data_log_not_found';
+  end if;
+  select to_jsonb(d) into v_state from public.user_data d where d.account_id = p_account_id;
+  if v_state is null then
+    raise exception 'user_data_not_found';
+  end if;
+  for v_diff in
+    select l.diff from public.user_data_logs l
+    where l.account_id = p_account_id and l.id >= p_log_id
+    order by l.id desc
+  loop
+    v_state := v_state || v_diff;
+  end loop;
+  return v_state;
+end;
+$$;
+
+-- 되돌리면 바뀌는 칸만: [{column, current, restored}]
+create or replace function public.ts_admin_user_data_restore_preview(p_account_id uuid, p_log_id bigint)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_cur      jsonb;
+  v_restored jsonb := public.ts_user_data_state_before_log(p_account_id, p_log_id);
+begin
+  select to_jsonb(d) into v_cur from public.user_data d where d.account_id = p_account_id;
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'column', c.column_name, 'data_type', c.data_type,
+             'current', v_cur -> c.column_name, 'restored', v_restored -> c.column_name
+           ) order by c.ordinal_position), '[]'::jsonb)
+    from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = 'user_data'
+      and c.column_name not in ('id','account_id','user_id','server_id','updated_at')
+      and (v_cur -> c.column_name) is distinct from (v_restored -> c.column_name)
+  );
+end;
+$$;
+
+-- 고른 칸만 그 변경 직전 값으로 쓴다. 칸 검사·로그 출처(admin:<운영자>)는 ts_admin_user_data_update 와 같다.
+create or replace function public.ts_admin_user_data_restore(
+  p_account_id uuid,
+  p_log_id     bigint,
+  p_columns    text[],
+  p_operator   text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_restored jsonb := public.ts_user_data_state_before_log(p_account_id, p_log_id);
+  v_patch    jsonb;
+begin
+  select jsonb_object_agg(c, v_restored -> c) into v_patch
+  from unnest(coalesce(p_columns, '{}'::text[])) c
+  where v_restored ? c;
+  if v_patch is null then
+    raise exception 'patch_required';
+  end if;
+  return public.ts_admin_user_data_update(p_account_id, v_patch, p_operator);
+end;
+$$;
+
+revoke all on function public.ts_user_data_state_before_log(uuid, bigint)                  from public, anon, authenticated;
+revoke all on function public.ts_admin_user_data_restore_preview(uuid, bigint)             from public, anon, authenticated;
+revoke all on function public.ts_admin_user_data_restore(uuid, bigint, text[], text)       from public, anon, authenticated;
+grant execute on function public.ts_admin_user_data_restore_preview(uuid, bigint)          to service_role;
+grant execute on function public.ts_admin_user_data_restore(uuid, bigint, text[], text)    to service_role;
+
 
 -- #############################################################################
 -- 12. 어드민 우편 발송 · 아이템 카탈로그
@@ -4547,6 +4740,9 @@ alter table public.mail_batches add column if not exists localized       jsonb;
 alter table public.mail_batches add column if not exists platform        text;
 -- 이 시각까지 나중에 대상이 된 플레이어에게도 보낸다(ts_deliver_open_mail_batches). null 이면 보낸 순간의 대상만.
 alter table public.mail_batches add column if not exists open_until      timestamptz;
+-- 운영자가 안 받은 우편을 거둔 시각·거둔 통수(ts_admin_mail_batch_recall).
+alter table public.mail_batches add column if not exists recalled_at     timestamptz;
+alter table public.mail_batches add column if not exists recalled_count  int not null default 0;
 
 create index if not exists mail_batches_created_idx on public.mail_batches (created_at desc);
 
@@ -4711,7 +4907,8 @@ comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,t
 -- ts_deliver_open_mail_batches — "나중에 들어온 플레이어도 받기"로 보낸 우편을 아직 없는 대상에게 넣는다(크론 매분).
 -- 받았는지는 그 사람에게 이 발송의 우편 행이 있는지로 본다. 플레이어가 지운 우편도 숨김일 뿐 행은 남고,
 -- 행이 지워지는 건 수령 기한(= open_until)이 지나 보관 기간까지 끝난 뒤라 다시 보내지 않는다.
--- 탈퇴 후 재가입은 새 user_id 라 다시 받는다 — 새로 가입한 사람과 구분할 수 없다.
+-- 탈퇴 후 재가입: 게스트는 새 user_id 라 다시 받는다(새로 가입한 사람과 구분할 수 없다). 구글·애플은 user_id 가
+-- 그 계정 번호라 그대로여서, 옛 우편 행이 남아 있는 동안은 다시 받지 않는다.
 -- ---------------------------------------------------------------------------
 create or replace function public.ts_deliver_open_mail_batches()
 returns int
@@ -4724,9 +4921,11 @@ declare
   v_n     int;
   v_total int := 0;
 begin
+  -- 거두기(ts_admin_mail_batch_recall)가 잡고 있는 발송은 이번 회차에 건너뛴다 — 겹치면 방금 넣은 우편이 거둬지지 않고 남는다.
   for b in
     select * from public.mail_batches
     where open_until is not null and open_until > now()
+    for update skip locked
   loop
     insert into public.mails
       (account_id, user_id, sender_type, title, content,
@@ -4738,6 +4937,8 @@ begin
       and p.withdrawn_at is null
       and (b.target_mode = 'all' or (b.target_mode = 'server' and p.server_id = b.server_id))
       and (b.platform is null or p.platform = b.platform)
+      -- user_id 로 본다 — 재인증으로 account_id 가 바뀌어도 그대로고, 연동으로 바뀌면 ts_ensure_my_profile 이
+      -- 그 계정의 우편도 함께 옮긴다. (batch_id, user_id) 색인으로 받친다.
       and not exists (
         select 1 from public.mails m where m.batch_id = b.id and m.user_id = p.user_id
       );
@@ -4754,6 +4955,66 @@ $$;
 comment on function public.ts_deliver_open_mail_batches() is
   '수령 기한이 남은 "나중에 들어온 플레이어도 받기" 우편을 아직 받지 않은 대상에게 넣는다. 크론 전용.';
 revoke all on function public.ts_deliver_open_mail_batches() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 발송 실수 되돌리기 — 운영 콘솔 "우편 내역" 전용(service_role)
+--   close  : "나중에 들어온 플레이어도 받기" 배달만 멈춘다. 이미 간 우편은 그대로.
+--   recall : 아직 받지 않은 우편을 지우고 배달도 멈춘다. 받은 우편·지급된 아이템은 되돌리지 않는다.
+--            배달을 함께 멈추지 않으면 지운 사람에게 1분 뒤 다시 간다(받았는지를 우편 행으로 보므로).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_mail_batch_close(p_batch_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.mail_batches where id = p_batch_id) then
+    raise exception 'mail_batch_not_found';
+  end if;
+  -- least(null, now()) 는 now() 라, 기간 우편이 아니던 발송까지 기간 우편으로 표시된다 — 열린 것만 닫는다.
+  update public.mail_batches
+     set open_until = least(open_until, now())
+   where id = p_batch_id and open_until is not null;
+end;
+$$;
+
+create or replace function public.ts_admin_mail_batch_recall(p_batch_id uuid)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  -- 배달 크론과 겹치지 않게 발송 행을 먼저 잡는다.
+  perform 1 from public.mail_batches where id = p_batch_id for update;
+  if not found then
+    raise exception 'mail_batch_not_found';
+  end if;
+
+  update public.mail_batches set open_until = least(open_until, now()) where id = p_batch_id and open_until is not null;
+
+  delete from public.mails
+   where batch_id = p_batch_id
+     and items_claimed_at is null;
+  get diagnostics v_n = row_count;
+
+  update public.mail_batches
+     set recalled_at = now(),
+         recalled_count = recalled_count + v_n
+   where id = p_batch_id;
+  return v_n;
+end;
+$$;
+
+comment on function public.ts_admin_mail_batch_close(uuid) is '"나중에 들어온 플레이어도 받기" 배달을 멈춘다. service_role 전용.';
+comment on function public.ts_admin_mail_batch_recall(uuid) is '발송의 안 받은 우편을 지우고 배달을 멈춘다. 지운 통수를 돌려준다. service_role 전용.';
+revoke all on function public.ts_admin_mail_batch_close(uuid)  from public, anon, authenticated;
+revoke all on function public.ts_admin_mail_batch_recall(uuid) from public, anon, authenticated;
+grant execute on function public.ts_admin_mail_batch_close(uuid)  to service_role;
+grant execute on function public.ts_admin_mail_batch_recall(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
@@ -4871,7 +5132,7 @@ begin
     into v_rows, v_total
   from (
     select
-      b.id, b.target_mode, gs.server_code, b.platform, b.open_until, b.title, b.items,
+      b.id, b.target_mode, gs.server_code, b.platform, b.open_until, b.recalled_at, b.title, b.items,
       b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at,
       count(*) over() as total
     from public.mail_batches b
@@ -4899,7 +5160,8 @@ begin
   select jsonb_build_object(
     'id', b.id, 'target_mode', b.target_mode, 'server_code', gs.server_code,
     'title', b.title, 'items', b.items, 'recipient_count', b.recipient_count,
-    'category', b.category, 'expires_at', b.expires_at, 'created_by', b.created_by, 'created_at', b.created_at
+    'category', b.category, 'expires_at', b.expires_at, 'created_by', b.created_by, 'created_at', b.created_at,
+    'open_until', b.open_until, 'recalled_at', b.recalled_at, 'recalled_count', b.recalled_count
   )
   into v_batch
   from public.mail_batches b
@@ -4912,7 +5174,8 @@ begin
 
   select jsonb_build_object(
     'claimed_count', count(*) filter (where m.items_claimed_at is not null),
-    'deleted_count', count(*) filter (where m.deleted_at is not null)
+    'deleted_count', count(*) filter (where m.deleted_at is not null),
+    'unclaimed_count', count(*) filter (where m.items_claimed_at is null)
   )
   into v_stats
   from public.mails m
@@ -5268,7 +5531,7 @@ begin
         s.category,
         s.localized,
         s.platform,
-        s.open_for_new
+        s.open_for_new and s.schedule_type <> 'repeat'
       );
 
       if s.schedule_type = 'scheduled' then
@@ -5392,7 +5655,8 @@ begin
      v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
      v_next, p_created_by,
      case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end,
-     coalesce(p_open_for_new, false) and p_target_mode <> 'players')
+     -- 반복 발송은 회차마다 열려 있어, 나중에 가입한 사람이 수령 기한 안의 지난 회차를 한꺼번에 받게 된다.
+     coalesce(p_open_for_new, false) and p_target_mode <> 'players' and p_schedule_type <> 'repeat')
   returning id into v_id;
 
   return v_id;
@@ -7548,6 +7812,49 @@ begin
   return public._ts_stage_config_row(p_key, b->'value_json', coalesce(p_enabled,true), coalesce(p_requires_auth,false), b->>'description', p_operator);
 end; $$;
 
+-- 기존 C# 타입 힌트가 새 값에도 맞는지. 종류만 보면 int 힌트에 1.5 가, 날짜 힌트에 아무 글자나 들어와도 힌트가 남아
+-- 클래스 생성기가 틀린 타입을 만든다.
+create or replace function public._ts_config_hint_fits(p_value jsonb, p_hint text)
+returns boolean language plpgsql stable set search_path = public as $$
+declare
+  v_text text := p_value #>> '{}';
+  v_num  numeric;
+begin
+  case jsonb_typeof(p_value)
+    when 'number' then
+      if p_hint in ('float', 'double') then return true; end if;
+      v_num := v_text::numeric;
+      if v_num <> trunc(v_num) then return false; end if;
+      return case p_hint
+        when 'short' then v_num between -32768 and 32767
+        when 'int'   then v_num between -2147483648 and 2147483647
+        when 'long'  then v_num between -9223372036854775808 and 9223372036854775807
+        when 'ulong' then v_num between 0 and 18446744073709551615
+        else false end;
+    when 'boolean' then
+      return p_hint = 'bool';
+    when 'string' then
+      if p_hint = 'string' then return true; end if;
+      -- 'now'·'infinity'·'today' 같은 Postgres 특수 글자는 날짜로 읽히지만 C# 은 못 읽는다 — 숫자로 시작하는 것만 본다.
+      if v_text !~ '^\d' then return false; end if;
+      begin
+        case p_hint
+          when 'DateTimeOffset', 'DateTime' then perform v_text::timestamptz;
+          when 'DateOnly' then perform v_text::date;
+          when 'TimeOnly' then perform v_text::time;
+          else return false;
+        end case;
+        return true;
+      exception when others then
+        return false;
+      end;
+    else
+      return false;
+  end case;
+end; $$;
+
+revoke all on function public._ts_config_hint_fits(jsonb, text) from public, anon, authenticated;
+
 -- 항목 추가·수정(값 세팅). 백엔드가 타입→jsonb 변환·검증을 하고 결과 jsonb와 C# 타입을 넘긴다.
 create or replace function public.ts_admin_schema_stage_config_item(
   p_key text, p_item_key text, p_item_value jsonb, p_meta_type text, p_operator text default null)
@@ -7561,11 +7868,7 @@ begin
     -- 콘솔은 값의 종류(숫자·문자·참거짓)까지만 알고 int·long 같은 C# 타입은 모른다. 값을 고칠 때 힌트를
     -- 지우면 클래스 생성기가 long 을 다시 "애매함"으로 본다 — 새 값과 종류가 맞으면 기존 힌트를 남긴다.
     meta := coalesce(vj->'__meta','{}'::jsonb);
-    if not coalesce(case jsonb_typeof(p_item_value)
-         when 'number'  then meta->>p_item_key in ('int','short','long','ulong','float','double')
-         when 'boolean' then meta->>p_item_key = 'bool'
-         when 'string'  then meta->>p_item_key in ('string','DateTimeOffset','DateTime','DateOnly','TimeOnly')
-         else false end, false) then
+    if not coalesce(public._ts_config_hint_fits(p_item_value, meta->>p_item_key), false) then
       meta := meta - p_item_key;
     end if;
   else
@@ -7747,12 +8050,16 @@ as $$
 declare
   v_email text := lower(btrim(coalesce(p_email, '')));
 begin
-  delete from public.ts_admin_passwords where email = v_email;
-  delete from public.ts_admin_operators where email = v_email;
-
-  if not found then
+  -- 되돌릴 수 없으니 먼저 비활성화한 운영자만 지운다. 화면도 막지만 서버가 다시 막는다.
+  if not exists (select 1 from public.ts_admin_operators where email = v_email) then
     raise exception 'operator_not_found';
   end if;
+  if exists (select 1 from public.ts_admin_operators where email = v_email and disabled_at is null) then
+    raise exception 'operator_not_disabled';
+  end if;
+
+  delete from public.ts_admin_passwords where email = v_email;
+  delete from public.ts_admin_operators where email = v_email;
 end;
 $$;
 
@@ -7790,6 +8097,51 @@ comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫�
 
 revoke all on function public.ts_admin_dashboard_stats() from public, anon, authenticated;
 grant execute on function public.ts_admin_dashboard_stats() to service_role;
+
+-- 콘솔 "자동 작업" 화면 — pg_cron 작업마다 마지막 실행·마지막 성공·최근 24시간 실패 수.
+-- cron.job_run_details 는 저절로 지워지지 않아 수십만 줄이 쌓이고 runid 말고는 색인이 없다.
+-- 그래서 최근 실행 5만 건(매분 작업 셋 기준 약 11일치) 안에서만 본다 — 그보다 오래 성공이 없으면 null.
+create or replace function public.ts_admin_cron_jobs()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, cron
+as $$
+  -- 최근 구간을 한 번만 훑어 작업별로 모은다(작업마다 다시 훑으면 작업 수만큼 느려진다).
+  with agg as (
+    select r.jobid,
+           max(r.runid) as last_runid,
+           max(r.end_time) filter (where r.status = 'succeeded') as last_ok,
+           count(*) filter (where r.start_time > now() - interval '24 hours') as total,
+           count(*) filter (where r.start_time > now() - interval '24 hours' and r.status = 'failed') as failed,
+           (array_agg(r.return_message order by r.runid desc)
+              filter (where r.start_time > now() - interval '24 hours' and r.status = 'failed'))[1] as last_failed_message
+    from cron.job_run_details r
+    where r.runid > (select coalesce(max(runid), 0) - 50000 from cron.job_run_details)
+    group by r.jobid
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'jobname',      j.jobname,
+           'schedule',     j.schedule,
+           'active',       j.active,
+           'last_start',   l.start_time,
+           'last_end',     l.end_time,
+           'last_status',  l.status,
+           'last_message', l.return_message,
+           'last_success', a.last_ok,
+           'runs_24h',     coalesce(a.total, 0),
+           'failures_24h', coalesce(a.failed, 0),
+           'last_failure_message', a.last_failed_message
+         ) order by j.jobname), '[]'::jsonb)
+  from cron.job j
+  left join agg a on a.jobid = j.jobid
+  left join cron.job_run_details l on l.runid = a.last_runid;
+$$;
+
+comment on function public.ts_admin_cron_jobs() is '자동 작업 상태(마지막 실행·마지막 성공·24시간 실패 수). 운영 콘솔 "자동 작업" 화면 전용. service_role 전용.';
+revoke all on function public.ts_admin_cron_jobs() from public, anon, authenticated;
+grant execute on function public.ts_admin_cron_jobs() to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 운영 기록 — 운영 도구에서 누가 언제 무엇을 바꿨는지
@@ -11747,7 +12099,7 @@ grant select, insert, update, delete on table public.user_data     to authentica
 
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
 --   account_closures, apple_auth_tokens, anonymous_recovery_tokens, mail_batches, mail_categories,
---   mail_schedules, user_ban_messages, user_data_logs, withdrawal_delete_queue,
+--   mail_schedules, user_ban_messages, user_data_logs,
 --   match_reward_configs, match_results, friend_requests, friend_settings,
 --   match_lobbies, match_lobby_members, match_lobby_settings
 
@@ -11860,7 +12212,7 @@ grant execute on function public.ts_match_lobby_list_my()                       
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
 --                                            열려 있으면 플레이어가 재화 최소값 보호를 해제할 수 있다.
---   ts_run_due_mail_schedules / ts_withdrawal_cleanup_batch / ts_cleanup_expired_mails
+--   ts_run_due_mail_schedules / ts_withdrawal_sweep_kick / ts_cleanup_expired_mails
 --   ts_admin_* (우편 발송·카탈로그·리더보드·매치 보상 설정·플레이어 조회), rls_auto_enable, ts_mail_schedule_next_run
 --   ts_leaderboard_rotate_due / ts_leaderboard_next_rotation_at / ts_leaderboard_columns_of
 --   ts_admin_leaderboard_*  ← 리더보드 정의·점수 정정·컬럼 DDL. 열리면 클라이언트가
@@ -11884,7 +12236,7 @@ grant execute on function public.ts_match_lobby_list_my()                       
 -- 2) 클라이언트가 호출 가능한 함수 (위 grant 목록과 일치해야 함)
 -- select p.proname, has_function_privilege('anon', p.oid, 'EXECUTE') as anon
 --   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
---  where n.nspname = 'public' and p.prorettype <> 'trigger'::regtype
+--  where n.nspname = 'public'
 --    and (has_function_privilege('anon', p.oid, 'EXECUTE')
 --         or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
 --  order by anon desc, p.proname;

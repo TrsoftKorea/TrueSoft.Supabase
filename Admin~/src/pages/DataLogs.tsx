@@ -10,6 +10,7 @@ import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, diffSummary, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { RestoreSaveModal } from './players/RestoreSaveModal'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -36,6 +37,8 @@ export default function DataLogs({
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
   const [idHint, setIdHint] = useState('')
+  const [restoreRow, setRestoreRow] = useState<LogRow | null>(null)
+  const [notice, setNotice] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -83,6 +86,23 @@ export default function DataLogs({
     <div className="space-y-4">
       <PageHeader title="데이터 로그" description="플레이어 세이브 데이터가 언제 어떻게 바뀌었는지 계정을 가로질러 조회합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
+      {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
+
+      {restoreRow && (
+        <RestoreSaveModal
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={restoreRow.account_id}
+          logId={restoreRow.id}
+          loggedAt={restoreRow.created_at}
+          onClose={() => setRestoreRow(null)}
+          onRestored={() => {
+            setNotice(`${restoreRow.display_name || restoreRow.account_id.slice(0, 8)}의 세이브를 ${formatDateTime(restoreRow.created_at)} 변경 전으로 되돌렸습니다.`)
+            setRestoreRow(null)
+            void load()
+          }}
+        />
+      )}
 
       <WhiteCard className="p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -121,11 +141,12 @@ export default function DataLogs({
                 <th className="text-left px-4 py-2.5 font-medium w-32">계정</th>
                 <th className="text-left px-4 py-2.5 font-medium w-32">출처</th>
                 <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
+                <th className="w-28" />
               </tr>
             </thead>
             <tbody>
               {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="데이터 로그가 없습니다." />
+                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="데이터 로그가 없습니다." />
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
@@ -138,6 +159,9 @@ export default function DataLogs({
                     <td className="px-4 py-3 text-neutral-600">{r.source ?? '-'}</td>
                     <td className="px-4 py-3 text-neutral-700 max-w-[480px] truncate" title={diffSummary(r.diff)}>
                       {diffSummary(r.diff)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Button variant="outline" size="sm" onClick={() => setRestoreRow(r)}>이 변경 전으로</Button>
                     </td>
                   </tr>
                 ))

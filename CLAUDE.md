@@ -165,14 +165,14 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 6. 우편함 — mails + RPCs + mail_settings(1행, 만료 우편을 목록에 남겨 두는 일수 — 목록 RLS·정리 크론이 같은 값을 쓴다. 클라이언트는 ts_mail_client_settings로 읽고 운영 콘솔 "설정"에서 바꾼다 — 친구·매치 로비 제한값도 같은 화면). 받기·전체 받기·배지 개수는 보관 기간과 무관하게 만료 우편을 뺀다
 7. 인앱 결제 — purchases + 환불 기록(refunded_at, total_paid_krw 에서 차감. 애플은 `purchase-notify-apple` 알림, 구글은 9절 cron → pg_net → `purchase-refund-sync-google`. 마지막 확인 상태는 purchase_refund_sync. 결제 기록보다 먼저 온 애플 환불은 purchase_refund_events 에 남았다가 결제가 기록될 때 붙고, 알림의 서명 시각으로 늦게 온 옛 알림을 버린다. cron 은 Vault 의 `project_url` 이 있어야 돈다 — 프로젝트마다 손으로 등록) + 서버 연결값(스토어·애플 키 6종을 운영 콘솔 "설정"에서 넣어 Vault `ts_cfg:<키>` 에 암호화 저장. ts_server_config_get·ts_admin_server_config_status·ts_admin_server_config_set, service_role 전용. 엣지 함수는 공통 구간 `server-config` 로 콘솔 값 → Edge Function Secrets 순으로 읽고 1분 캐시. 키 목록 네 곳의 일치는 SdkAudit R16 이 본다)
 8. 원격 설정 — remote_config
-9. 크론 잡 — withdrawal_delete_queue + cron (pg_cron required)
+9. 크론 잡 — 만료 우편 정리 + 탈퇴 유예 지난 계정 삭제(ts_withdrawal_sweep_kick → `withdrawal-sweep` Edge Function, 결과는 ts_withdrawal_overdue_check 가 하루 뒤 확인해 남은 계정이 있으면 실패로 끝낸다) + 구글 환불 확인 + 실행 기록(cron.job_run_details) 7일 정리 (pg_cron·pg_net required, Vault `project_url` 필요)
 10. 계정 차단 — user_ban_messages + ban RPCs + TrueBase.Admin 전용 플레이어 조회 RPC(auth.users 포함, service_role만) + 게임 서버 관리 RPC(ts_admin_game_servers_list·ts_admin_game_server_upsert, 코드는 추가 때만·삭제 없음)
-11. 유저 데이터 로그 — user_data_logs + change-diff trigger
-12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail(대상 플랫폼 지정, "나중에 들어온 플레이어도 받기"는 mail_batches.open_until 까지 ts_deliver_open_mail_batches 크론이 매분 배달) + TrueBase.Admin 전용 조회 RPC(배치·개별 우편, service_role만)
+11. 유저 데이터 로그 — user_data_logs + change-diff trigger + 운영 콘솔 세이브 되돌리기(ts_admin_user_data_restore_preview·ts_admin_user_data_restore — 로그는 바뀌기 전 값만 남기므로 최신부터 그 로그까지 거꾸로 덧씌워 그 변경 직전 상태를 만든다. 로그 보관 7일이 되돌릴 수 있는 범위)
+12. 어드민 우편 — game_items + mail_batches + ts_admin_send_mail(대상 플랫폼 지정, "나중에 들어온 플레이어도 받기"는 mail_batches.open_until 까지 ts_deliver_open_mail_batches 크론이 매분 배달. 발송 실수는 ts_admin_mail_batch_recall(안 받은 우편 지움 + 배달 멈춤)·ts_admin_mail_batch_close(배달만 멈춤)) + TrueBase.Admin 전용 조회 RPC(배치·개별 우편, service_role만)
 13. 우편 예약 — mail_schedules + cron 기반 예약·반복 발송 + TrueBase.Admin 전용 관리 RPC(등록·목록·on/off·삭제, service_role만)
 14. 우편 분류 — mail_categories
 15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
-16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음. 운영자 계정(ts_admin_operators·비밀번호 해시 ts_admin_passwords)과 콘솔 첫 화면 숫자(ts_admin_dashboard_stats, 매출은 환불 제외)와 운영 기록(ts_admin_audit_logs — admin-api 가 성공한 변경 요청마다 남김, 지우는 함수 없음), 콘솔 표시 설정(ts_admin_console_settings — 이 게임의 콘솔 색·이름·아이콘(128px data URL), null 이면 콘솔 코드의 기본값. admin-api `auth.consoleLook` 으로 로그인 전에도 읽힌다)도 여기
+16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음. 운영자 계정(ts_admin_operators·비밀번호 해시 ts_admin_passwords)과 콘솔 첫 화면 숫자(ts_admin_dashboard_stats, 매출은 환불 제외)와 자동 작업 상태(ts_admin_cron_jobs — cron.job_run_details 는 저절로 안 지워지고 색인이 runid 뿐이라 최근 5만 건만 본다)와 운영 기록(ts_admin_audit_logs — admin-api 가 성공한 변경 요청마다 남김, 지우는 함수 없음), 콘솔 표시 설정(ts_admin_console_settings — 이 게임의 콘솔 색·이름·아이콘(128px data URL), null 이면 콘솔 코드의 기본값. admin-api `auth.consoleLook` 으로 로그인 전에도 읽힌다)도 여기
 17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem + ts_admin_player_coupons(플레이어별 사용 이력)
 18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many
 19. 매치 결과 신고 — match_reward_configs + match_results + ts_match_report_result(신고·교차검증·우편 지급 한 번에) + ts_match_report_solo_result(상대 없는 판 기록, status='solo', 지급 없음) + ts_match_stats(내 승·패·점수 최대·최소, verified·pending·solo 별) + ts_match_history(내 기록 최근 순). 판마다 선택 점수(score) — 상대와 맞춰 보지 않음. 랭킹·시즌은 15절 리더보드 몫. 무효(mismatch)는 예외가 아니라 상태로 돌려준다 — raise 하면 무효 표시까지 되돌려진다. 보상 지급 여부는 rewarded_at(우편이 만료돼 지워져도 남음). 운영 RPC는 ts_admin_match_reward_config_*(upsert 는 p_create_only 로 추가 시 덮어쓰기 차단)·ts_admin_match_reward_overview·ts_admin_match_player_records
@@ -190,7 +190,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
 
-`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-notify-apple`, `purchase-refund-sync-google`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`.
+`Samples~/DatabaseSetup/EdgeFunctions/` — Deno Edge Function source for: `admin-ban-user`, `admin-displayname-set`, `apple-token`, `displayname-get`, `displayname-set`, `get-ban-info`, `purchase-notify-apple`, `purchase-refund-sync-google`, `purchase-verify-apple`, `purchase-verify-apple-legacy`, `purchase-verify-google`, `withdrawal-cancel-issue`, `withdrawal-cancel-redeem`, `withdrawal-guard`, `withdrawal-sweep`.
 
 ## Samples
 

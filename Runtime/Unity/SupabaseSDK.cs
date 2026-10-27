@@ -518,24 +518,34 @@ namespace TrueBase.Unity
                 SaveSessionToStorage();
 
                 RememberLastSignInMethod(SignInMethodKind.Google);
-                if (_currentSession.likely_brand_new_google_signup)
+                // 탈퇴 유예가 지난 계정이면 아래 게이트가 계정을 지우고 새로 만든다 — 그때 이 토큰을 다시 쓴다.
+                // 이 로그인 안에서만 쓰고 비운다. 남겨 두면 나중 다른 경로의 재생성이 옛 계정으로 들어간다.
+                _recreateGoogleIdToken = idToken;
+                try
                 {
-                    // 신규 가입은 닉네임을 덮어쓴 뒤에 프로필을 만들어야 로그인 결과에 바뀐 닉네임이 실린다 — 묶음 호출은 덮어쓰기 뒤에 한다.
-                    // 게이트를 먼저 타는 건 신규 가입 판정이 틀렸을 때(예약 중인 기존 계정)를 대비한 것이다.
-                    var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
-                    if (gated != null)
-                        return gated;
+                    if (_currentSession.likely_brand_new_google_signup)
+                    {
+                        // 신규 가입은 닉네임을 덮어쓴 뒤에 프로필을 만들어야 로그인 결과에 바뀐 닉네임이 실린다 — 묶음 호출은 덮어쓰기 뒤에 한다.
+                        // 게이트를 먼저 타는 건 신규 가입 판정이 틀렸을 때(예약 중인 기존 계정)를 대비한 것이다.
+                        var gated = await RunWithdrawalGatesAfterSignInAsync(SignInMethodKind.Google);
+                        if (gated != null)
+                            return gated;
 
-                    await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
-                    var ensured = await EnsureProfileAfterSignInAsync();
-                    if (ensured != null)
-                        return ensured;
+                        await TryApplyAnonymousNameAfterNewGoogleSignUpAsync();
+                        var ensured = await EnsureProfileAfterSignInAsync();
+                        if (ensured != null)
+                            return ensured;
+                    }
+                    else
+                    {
+                        var gated = await RunPostSignInStepsAsync(SignInMethodKind.Google);
+                        if (gated != null)
+                            return gated;
+                    }
                 }
-                else
+                finally
                 {
-                    var gated = await RunPostSignInStepsAsync(SignInMethodKind.Google);
-                    if (gated != null)
-                        return gated;
+                    _recreateGoogleIdToken = null;
                 }
             }
 
@@ -860,9 +870,20 @@ namespace TrueBase.Unity
                 await StoreAppleAuthorizationCodeAsync(authorizationCode);
 
                 RememberLastSignInMethod(SignInMethodKind.Apple);
-                var gated = await RunPostSignInStepsAsync(SignInMethodKind.Apple);
-                if (gated != null)
-                    return gated;
+                // 구글 쪽과 같다 — 유예 지난 계정을 지운 뒤 같은 토큰으로 새 계정을 만든다. 이 로그인 안에서만 쓴다.
+                _recreateAppleIdToken = idToken;
+                _recreateAppleRawNonce = rawNonce;
+                try
+                {
+                    var gated = await RunPostSignInStepsAsync(SignInMethodKind.Apple);
+                    if (gated != null)
+                        return gated;
+                }
+                finally
+                {
+                    _recreateAppleIdToken = null;
+                    _recreateAppleRawNonce = null;
+                }
             }
 
             return result;
@@ -1043,7 +1064,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 서버에 보관한 애플 토큰으로 Sign in with Apple 연결을 끊습니다(애플 심사 기준 — 계정 삭제 시 철회).
-        /// 탈퇴 신청 직후 부릅니다. 실패해도 탈퇴는 진행하고, 계정 최종 삭제 때 <c>withdrawal-guard</c> 가 한 번 더 시도합니다.
+        /// 탈퇴 신청 직후 부릅니다. 실패해도 탈퇴는 진행하고, 계정 최종 삭제 때(<c>withdrawal-sweep</c> 매일 정리 또는 그 전 재로그인의 <c>withdrawal-guard</c>) 한 번 더 시도합니다.
         /// </summary>
         /// <param name="onFailure">실패 경고에 덧붙일 다음 조치 안내.</param>
         private static async Task TryRevokeAppleTokenAsync(string onFailure)
@@ -4306,7 +4327,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>로그인 직후 탈퇴 가드(유예 만료 삭제)를 처리합니다. 삭제 대상이면 세션을 정리합니다.</summary>
-        /// <param name="method">삭제 후 재생성 시 사용할 로그인 방식. 재생성은 Google·Anonymous만 지원.</param>
+        /// <param name="method">삭제 후 재생성 시 사용할 로그인 방식. 재생성은 Google·Apple(방금 받은 ID 토큰 재사용)·Anonymous만 지원.</param>
         /// <param name="allowRecreateOnDeletion">true면 삭제 감지 시 <paramref name="method"/>로 새 계정을 자동 생성해 로그인합니다(수동 로그인 흐름).
         /// false면 <c>WithdrawalDeleted</c> 실패만 반환합니다(앱 시작 자동 복원 흐름).</param>
         /// <returns>가드 미해당(삭제 대상 아님)이면 null — 호출자는 로그인 흐름을 계속 진행하면 됩니다.</returns>
@@ -4345,16 +4366,63 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>탈퇴 삭제 감지 후 재로그인용. <paramref name="method"/>에 따라 새 로그인을 수행합니다(Google·Anonymous 외에는 실패).</summary>
+        // 방금 로그인에 쓴 토큰. 탈퇴 유예가 지난 계정을 지운 뒤 같은 토큰으로 새 계정을 만들어
+        // 로그인 창을 두 번 띄우지 않으려고 둔다. 재생성이 끝나면(성공·실패 모두) 비운다.
+        private static string _recreateGoogleIdToken;
+        private static string _recreateAppleIdToken;
+        private static string _recreateAppleRawNonce;
+
+        /// <summary>탈퇴 삭제 감지 후 재로그인용. <paramref name="method"/>에 따라 새 로그인을 수행합니다.</summary>
+        /// <remarks>
+        /// 나누 인터셉터를 거치지 않는 직접 경로를 쓴다 — 바깥 로그인 호출이 이미 인터셉터 안이고,
+        /// 인터셉터가 재가입을 보고 나누 재로그인까지 맡는다(<c>RetryNanooSignInAfterRecreateAsync</c>).
+        /// </remarks>
         private static async Task<SupabaseResult<SupabaseSession>> RecreateSessionByMethodAsync(
             SignInMethodKind method)
         {
-            return method switch
+            var googleToken = _recreateGoogleIdToken;
+            var appleToken = _recreateAppleIdToken;
+            var appleNonce = _recreateAppleRawNonce;
+            _recreateGoogleIdToken = _recreateAppleIdToken = _recreateAppleRawNonce = null;
+
+            switch (method)
             {
-                SignInMethodKind.Google => await SignInWithGoogleAsync(),
-                SignInMethodKind.Anonymous => await SignInAnonymouslyAsync(),
-                _ => SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.InvalidSignInMethod)
-            };
+                case SignInMethodKind.Google:
+                    if (!string.IsNullOrWhiteSpace(googleToken))
+                    {
+                        var reused = await SignInWithGoogleIdTokenAsync(googleToken);
+                        // 새 계정은 만들어졌고 그 뒤 단계에서 실패했다 — 창을 다시 띄우면 한 번 더 로그인시킬 뿐이다.
+                        if (reused.IsSuccess || IsLoggedIn)
+                            return reused;
+                        // 같은 토큰을 서버가 다시 받아 주지 않으면(만료 등) 예전처럼 로그인 창을 다시 띄운다.
+                        Debug.Log("[Supabase] 탈퇴 계정 정리 후 같은 구글 토큰으로 새 계정을 만들지 못해 로그인 창을 다시 엽니다: " + reused.ErrorCode);
+                    }
+                    {
+                        // SignInWithGoogleAsync 는 나누 인터셉터를 거친다 — 위 remarks 대로 직접 경로로 받는다.
+                        var ready = await EnsureGoogleNativeReadyAsync();
+                        if (!ready.IsSuccess)
+                            return SupabaseResult<SupabaseSession>.Fail(ready.ErrorCode);
+                        var picked = await RequestNativeGoogleLoginAsync(ready.Data);
+                        if (!picked.IsSuccess)
+                            return SupabaseResult<SupabaseSession>.Fail(picked.ErrorCode);
+                        if (string.IsNullOrWhiteSpace(picked.Data.IdToken))
+                            return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleIdTokenEmpty);
+                        return await SignInWithGoogleIdTokenAsync(picked.Data.IdToken.Trim());
+                    }
+
+                case SignInMethodKind.Apple:
+                    if (string.IsNullOrWhiteSpace(appleToken))
+                        return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.InvalidSignInMethod);
+                    // 애플 authorization code 는 일회용이라 옛 계정 몫으로 이미 썼다 — 새 계정에는 연결 해제용 토큰이 남지 않는다.
+                    // 옛 계정을 지울 때 연결은 이미 끊었으므로, 다음 애플 로그인에서 동의 화면이 다시 뜰 수 있다(추정).
+                    return await SignInWithAppleIdTokenAsync(appleToken, appleNonce);
+
+                case SignInMethodKind.Anonymous:
+                    return await SignInAnonymouslyAsync();
+
+                default:
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.InvalidSignInMethod);
+            }
         }
 
         /// <summary>Edge Function <c>withdrawal-guard</c>로 현재 계정이 유예 만료 삭제 대상인지 확인합니다. 호출 실패는 false(삭제 안 함)로 처리합니다.</summary>

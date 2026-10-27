@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
   Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
-  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid,
+  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid, Timer,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
@@ -204,6 +204,7 @@ export function Layout({
           <NavSection label="모니터링">
             <NavLinkRow to="/data-logs" label="데이터 로그" icon={ScrollText} accent={accent} />
             <NavLinkRow to="/audit" label="운영 기록" icon={ClipboardList} accent={accent} />
+            <NavLinkRow to="/jobs" label="자동 작업" icon={Timer} accent={accent} />
           </NavSection>
         </nav>
 

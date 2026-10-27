@@ -58,8 +58,10 @@ namespace TrueBase.Core.Data
         public bool Deleted { get; set; }
 
         /// <summary>
-        /// 운영자 공지입니다. 보낸 사람이 없어 <see cref="DisplayName"/>·<see cref="UserId"/>는 빈 값이니
-        /// 공지 모양으로 따로 표시하세요. 친구 1:1·로비 대화에서는 항상 false입니다.
+        /// 운영자 공지입니다. 보낸 사람이 없어 <see cref="DisplayName"/>·<see cref="UserId"/>는 빈 값이고
+        /// <see cref="AccountId"/>는 0으로만 된 ID(<c>00000000-0000-0000-0000-000000000000</c>)입니다.
+        /// 공지 모양으로 따로 표시하고, 프로필 열기·친구 요청처럼 보낸 사람을 쓰는 동작은 막으세요.
+        /// 친구 1:1·로비 대화에서는 항상 false입니다.
         /// </summary>
         [JsonProperty("is_notice")]
         public bool IsNotice { get; set; }

@@ -63,18 +63,10 @@ const SUPABASE_PUBLISHABLE_KEY = publishableKeys.default;
 const secretKeys               = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
 const SUPABASE_SECRET_KEY      = secretKeys.default;
 
-type AppleKeys = { teamId: string; keyId: string; privateKey: string };
-
-const APPLE_TOKEN_URL  = "https://appleid.apple.com/auth/token";
-const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
+const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
 
 const json = (body: TokenResponse, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-
-const b64url = (bytes: Uint8Array) =>
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-const b64urlText = (text: string) => b64url(new TextEncoder().encode(text));
 
 function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
   const part = jwt.split(".")[1];
@@ -86,6 +78,17 @@ function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
     return null;
   }
 }
+
+// ═══ BEGIN apple-revoke ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// Sign in with Apple 토큰 철회. apple-token(탈퇴 신청·계정 삭제 직전)과 withdrawal-sweep(유예 지난 계정 삭제)이 쓴다.
+type AppleKeys = { teamId: string; keyId: string; privateKey: string };
+
+const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
+
+const b64url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+const b64urlText = (text: string) => b64url(new TextEncoder().encode(text));
 
 // 애플 문서 "Creating a client secret": ES256, kid=Key ID, iss=팀 ID, sub=client_id, aud=https://appleid.apple.com.
 // 요청 한 번에 쓰고 버리므로 만료는 짧게 둔다(최대 6개월까지 허용된다).
@@ -126,6 +129,7 @@ async function revokeRefreshToken(keys: AppleKeys, clientId: string, refreshToke
   if (res.ok) return { ok: true };
   return { ok: false, detail: `${res.status} ${await res.text()}` };
 }
+// ═══ END apple-revoke ═══
 
 Deno.serve(async (req) => {
   try {

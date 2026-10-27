@@ -52,7 +52,8 @@ CANCEL_TOKEN_TTL_SECONDS=900
 | 함수 | 변경 내용 | 환경 변수 |
 |------|----------|----------|
 | `cleanup-expired-mails` | **삭제** → `pg_cron` 직접 RPC | 불필요 |
-| `withdrawal-cleanup` | **삭제** → `pg_cron` 직접 RPC | 불필요 |
+| `withdrawal-cleanup` | **삭제** → `pg_cron` 이 `withdrawal-sweep` 를 부름 | 불필요 |
+| `withdrawal-sweep` | 유예가 지난 계정을 매일 삭제(애플 연결 끊기 포함). `install.sql` 9절 cron 이 pg_net 으로 부름, verify_jwt 끔 | `SUPABASE_SECRET_KEYS`, `APPLE_*` |
 | `withdrawal-cancel-redeem` | 비로그인 취소 → 토큰 sub로 `SECRET_KEY` 호출 | `SECRET_KEY` |
 | `withdrawal-cancel-issue` | `service_role` 제거 | `SUPABASE_ANON_KEY`만 |
 | `withdrawal-guard` | `service_role` → `SECRET_KEY` | `SECRET_KEY` |
@@ -74,7 +75,7 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```bash
 # SQL 파일 순서대로 실행
 1. 08_withdrawal.sql      -- ts_withdrawal_cancel_redeem
-2. 13_cron_jobs.sql      -- ts_withdrawal_cleanup_batch + cron 설정
+2. install.sql 9절       -- ts_withdrawal_sweep_kick·ts_withdrawal_overdue_check + cron 설정
 ```
 
 또는 SQL Editor에서 각 파일 내용을 복사하여 실행합니다.
@@ -129,8 +130,8 @@ supabase functions deploy displayname-set
 -- 탈퇴 취소 RPC (Edge Function이 토큰 sub를 넘겨 service_role로 호출)
 SELECT ts_withdrawal_cancel_redeem('00000000-0000-0000-0000-000000000000');
 
--- 탈퇴 정리 RPC (pg_cron 내부용)
-SELECT ts_withdrawal_cleanup_batch(10);
+-- 탈퇴 정리 결과 확인(유예가 하루 넘게 지난 계정이 남아 있으면 오류)
+SELECT ts_withdrawal_overdue_check();
 ```
 
 ### Edge Function 테스트

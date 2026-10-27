@@ -158,7 +158,7 @@ export default function MailSchedules({
                       {r.schedule_type === 'repeat' && <div className="text-xs text-neutral-500">{repeatText(r)}</div>}
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.next_run_at)}</td>
-                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}{r.platform ? ` · ${platformLabel(r.platform)}` : ''}{r.open_for_new ? ' · 나중에 들어온 플레이어도' : ''}</td>
+                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}{r.platform ? ` · ${platformLabel(r.platform)}` : ''}{r.open_for_new && r.schedule_type !== 'repeat' ? ' · 나중에 들어온 플레이어도' : ''}</td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                     <td className="px-4 py-3 text-neutral-600">{r.created_by ?? '-'}</td>
