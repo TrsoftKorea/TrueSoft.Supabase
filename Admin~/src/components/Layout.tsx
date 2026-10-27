@@ -161,7 +161,7 @@ export function Layout({
           })}
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
+        <nav className="flex-1 overflow-y-auto px-3 py-3 scroll-area scroll-area-dark">
           <NavSection>
             <NavLinkRow to="/" label="대시보드" icon={LayoutDashboard} end accent={accent} />
             <NavLinkRow to="/stats" label="통계" icon={BarChart3} accent={accent} />
@@ -227,7 +227,7 @@ export function Layout({
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 overflow-y-auto bg-neutral-100">
+      <div className="flex-1 min-w-0 overflow-y-auto bg-neutral-100 scroll-area">
         {/* 상단 띠 — 지금 어느 게임에서 작업 중인지 화면 어디서든 보이게 그 게임 색으로 깐다. */}
         <header className="text-white" style={{ backgroundColor: accent }}>
           <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-3">
