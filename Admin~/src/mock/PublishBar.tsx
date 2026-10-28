@@ -1,7 +1,7 @@
 // 가짜 데이터 모드 맨 위 띠 + "게시" 버튼 + 실제 반영 상태.
 // 게시는 미리보기 서버(scripts/mock-server.mjs)가 콘솔 화면과 SDK·DB 변경을 커밋 두 개로 나눠 한 번에 푸시한다.
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { UploadCloud, ExternalLink, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { UploadCloud, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Check, X, Loader2 } from 'lucide-react'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
 type Pending = { status: string; file: string; orig?: string; hash: string }
@@ -83,11 +83,12 @@ function summarize(d: Deploy | null, failed: string, elapsed: string, finished: 
   }
 }
 
-const TONE: Record<Summary['tone'], string> = {
-  ok: 'bg-emerald-600 text-white',
-  busy: 'bg-amber-950/80 text-amber-50',
-  warn: 'bg-amber-950 text-amber-50',
-  bad: 'bg-red-600 text-white',
+// 띠의 상태 점. 진행 중이면 깜빡인다.
+const DOT: Record<Summary['tone'], string> = {
+  ok: 'bg-emerald-600',
+  busy: 'bg-blue-600 animate-pulse',
+  warn: 'bg-amber-950/50',
+  bad: 'bg-red-600',
 }
 
 function FileGroup({ title, note, group }: { title: string; note?: string | undefined; group: Group }) {
@@ -135,14 +136,25 @@ function FileGroup({ title, note, group }: { title: string; note?: string | unde
   )
 }
 
-function Step({ label, state, children }: { label: string; state: 'done' | 'busy' | 'todo' | 'bad'; children?: ReactNode }) {
-  const mark = state === 'done' ? '✓' : state === 'busy' ? '…' : state === 'bad' ? '✕' : '·'
-  const cls = state === 'done' ? 'text-emerald-700' : state === 'bad' ? 'text-red-600' : state === 'busy' ? 'text-amber-700' : 'text-neutral-400'
+type StepState = 'done' | 'busy' | 'todo' | 'bad'
+
+function StepMark({ state }: { state: StepState }) {
+  if (state === 'done') return <span className="w-5 h-5 rounded-full bg-emerald-600 text-white grid place-items-center shrink-0"><Check className="w-3 h-3" strokeWidth={3} /></span>
+  if (state === 'bad') return <span className="w-5 h-5 rounded-full bg-red-600 text-white grid place-items-center shrink-0"><X className="w-3 h-3" strokeWidth={3} /></span>
+  if (state === 'busy') return <span className="w-5 h-5 rounded-full border-2 border-blue-500 grid place-items-center shrink-0"><Loader2 className="w-3 h-3 text-blue-600 animate-spin" /></span>
+  return <span className="w-5 h-5 rounded-full border-2 border-neutral-300 shrink-0" />
+}
+
+/** 진행 표시의 한 칸 — 동그라미 + 이름 + 한 줄 설명. 마지막 칸이 아니면 오른쪽으로 이음선. */
+function Step({ label, state, last, children }: { label: string; state: StepState; last?: boolean; children?: ReactNode }) {
   return (
-    <li className="flex gap-2">
-      <span className={`w-4 shrink-0 font-semibold ${cls}`}>{mark}</span>
-      <span className="text-neutral-800 whitespace-nowrap">{label}</span>
-      <span className="text-neutral-500 min-w-0">{children}</span>
+    <li className="flex-1 min-w-0">
+      <div className="flex items-center gap-2">
+        <StepMark state={state} />
+        <span className="text-[13px] font-medium text-neutral-900 whitespace-nowrap">{label}</span>
+        {!last && <span className={`flex-1 h-px ${state === 'done' ? 'bg-emerald-500' : 'bg-neutral-200'}`} />}
+      </div>
+      <div className="pl-7 pr-3 mt-0.5 text-xs text-neutral-500 truncate">{children}</div>
     </li>
   )
 }
@@ -245,69 +257,70 @@ export function PublishBar() {
 
   return (
     <>
-      <div className="bg-amber-400 text-amber-950 text-xs font-medium">
-        <div className="max-w-6xl mx-auto px-6 py-1 flex items-center gap-3">
-          <span className="truncate">가짜 데이터 모드 — 서버에 연결하지 않습니다. 숫자는 모두 만든 값입니다.</span>
+      <div className="bg-amber-400 text-amber-950 text-xs">
+        <div className="max-w-6xl mx-auto px-6 h-8 flex items-center gap-3">
+          <span className="font-semibold whitespace-nowrap">미리보기</span>
+          <span className="text-amber-950/70 truncate hidden sm:inline">가짜 데이터로 보는 화면 · 실제 서버와 연결되지 않습니다</span>
           <button type="button" onClick={() => setExpanded((v) => !v)}
             title={deploy ? `마지막 확인 ${timeText(deploy.checkedAt)}` : undefined}
-            className={`ml-auto inline-flex items-center gap-1 h-6 px-2.5 rounded whitespace-nowrap ${TONE[summary.tone]}`}>
+            className="ml-auto inline-flex items-center gap-1.5 h-6 pl-2 pr-1.5 rounded-full hover:bg-amber-950/10 whitespace-nowrap font-medium">
+            <span className={`w-2 h-2 rounded-full ${DOT[summary.tone]}`} />
             {summary.text}
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {expanded ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
           </button>
           <button type="button" onClick={() => void openDialog()}
-            className="inline-flex items-center gap-1 h-6 px-2.5 rounded bg-amber-950 text-amber-50 hover:bg-amber-900 whitespace-nowrap">
+            className="inline-flex items-center gap-1 h-6 px-3 rounded-full bg-amber-950 text-amber-50 hover:bg-amber-900 whitespace-nowrap font-medium">
             <UploadCloud className="w-3.5 h-3.5" /> 게시
           </button>
         </div>
       </div>
 
       {expanded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-xs">
-          <div className="max-w-6xl mx-auto px-6 py-2.5 space-y-2">
-            {done?.commits && (
-              <p className="text-neutral-800">
-                방금 게시함 — 커밋 {done.commits.map((c) => `${c.hash}(${c.kind === 'console' ? '콘솔 화면' : 'SDK·DB'})`).join(', ')}
-                {done.alsoPushed ? ` · 앞서 쌓여 있던 커밋 ${done.alsoPushed}개도 함께 올림` : ''}
-              </p>
-            )}
-            {deployError && <p className="text-red-600">{deployError}</p>}
+        <div className="bg-white border-b border-neutral-200">
+          <div className="max-w-6xl mx-auto px-6 py-3 space-y-3">
+            {deployError && <p className="text-xs text-red-600">{deployError}</p>}
             {deploy && (
-              <ul className="space-y-1">
-                <Step label="콘솔 화면 마지막 변경" state="done">
-                  {deploy.console.sha} · {deploy.console.subject} · {timeText(deploy.console.committedAt)}
+              <ol className="flex gap-2">
+                <Step label="GitHub 에 올림" state={deploy.console.pushed ? 'done' : 'todo'}>
+                  {deploy.console.pushed ? `${deploy.console.sha} · ${timeText(deploy.console.committedAt)}` : '아직 안 올라감'}
                 </Step>
-                <Step label="GitHub 에 올라감" state={deploy.console.pushed ? 'done' : 'todo'}>
-                  {deploy.console.pushed ? '' : '아직 안 올라감'}
+                <Step label="배포" state={runState}>{runText}</Step>
+                <Step label="실제 콘솔 반영" state={liveState} last>
+                  {deploy.live?.error ? '판 정보를 읽지 못했습니다'
+                    : deploy.live?.current ? `반영됨 · ${timeText(deploy.live.builtAt)}`
+                    : phase === 'propagating' ? '새 판이 퍼지는 중'
+                    : `이전 판 (${deploy.live?.sha ?? '-'})`}
                 </Step>
-                <Step label="실제 콘솔 배포" state={runState}>
-                  {runText}
-                  {run?.url && (
-                    <a href={run.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 underline">
-                      기록 보기 <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-                </Step>
-                <Step label="실제 콘솔이 이 판인지" state={liveState}>
-                  {deploy.live?.error ? '실제 콘솔의 판 정보를 읽지 못했습니다'
-                    : deploy.live?.current ? `맞습니다 (${deploy.live.sha} · ${timeText(deploy.live.builtAt)} 빌드)`
-                    : phase === 'propagating' ? `새 판이 퍼지는 중 (지금 ${deploy.live?.sha ?? '-'})`
-                    : `아직 이전 판입니다 (${deploy.live?.sha ?? '-'})`}
-                  <a href={deploy.liveUrl} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 underline">
-                    실제 콘솔 열기 <ExternalLink className="w-3 h-3" />
-                  </a>
-                </Step>
-                <Step label="올릴 변경" state={deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed ? 'todo' : 'done'}>
-                  {deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed
-                    ? `콘솔 화면 ${deploy.waiting.console}개 · SDK·DB ${deploy.waiting.sdk}개${deploy.waiting.unpushed ? ` · 안 올린 커밋 ${deploy.waiting.unpushed}개` : ''}`
-                    : '없음'}
-                </Step>
-              </ul>
+              </ol>
             )}
-            <div className="flex items-center gap-3 text-neutral-500">
-              <span>마지막 확인 {timeText(deploy?.checkedAt)}</span>
-              <button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-1 underline">
-                <RefreshCw className="w-3 h-3" /> 지금 확인
-              </button>
+            <div className="flex items-center gap-4 text-xs text-neutral-500 border-t border-neutral-100 pt-2">
+              {deploy && (
+                <span className="min-w-0 flex-1 truncate">
+                  마지막 변경 <span className="text-neutral-700">{deploy.console.subject}</span>
+                </span>
+              )}
+              {deploy && (
+                <span className="whitespace-nowrap">
+                  올릴 변경 {deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed
+                    ? `${deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed}개`
+                    : '없음'}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-3 whitespace-nowrap">
+                {run?.url && (
+                  <a href={run.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-neutral-800">
+                    배포 기록 <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                {deploy && (
+                  <a href={deploy.liveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-neutral-800">
+                    실제 콘솔 <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-1 hover:text-neutral-800">
+                  <RefreshCw className="w-3 h-3" /> {timeText(deploy?.checkedAt)} 확인
+                </button>
+              </span>
             </div>
           </div>
         </div>
