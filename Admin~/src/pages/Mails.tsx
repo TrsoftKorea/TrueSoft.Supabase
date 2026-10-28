@@ -345,7 +345,7 @@ export default function Mails({
             <Field label="서버">
               <select value={serverId} onChange={(e) => setServerId(e.target.value)} className={inputCls + ' w-full max-w-sm'}>
                 <option value="">서버 선택…</option>
-                {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name} ({s.server_code})</option>))}
+                {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name || s.server_code}</option>))}
               </select>
             </Field>
           )}
@@ -432,7 +432,7 @@ export default function Mails({
               <div className="flex items-center gap-2">
                 <div className="w-28"><select value={r.lang} onChange={(e) => setLang(i, { lang: e.target.value })} className={inputCls + ' w-full'}>
                   {LANGS.filter((l) => l === r.lang || !langRows.some((x, j) => j !== i && x.lang === l))
-                    .map((l) => (<option key={l} value={l}>{LANG_LABEL[l] ?? l} ({l})</option>))}
+                    .map((l) => (<option key={l} value={l}>{LANG_LABEL[l] ?? l}</option>))}
                 </select></div>
                 <div className="flex-1" />
                 <button onClick={() => delLang(i)} title="이 언어 삭제" aria-label="이 언어 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
@@ -468,7 +468,7 @@ export default function Mails({
             {items.map((it, i) => (
               <div key={i} className="flex items-center gap-2">
                 <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
-                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
+                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
                 </select>
                 <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
                 <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>

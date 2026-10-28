@@ -7,6 +7,7 @@ import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
 import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, itemsText } from '../components/ui/format'
@@ -120,13 +121,21 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg my-6">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">{isNew ? '게임 코드 추가' : `${row.game_code} 보상 설정`}</h3>
-          <button onClick={onClose} disabled={saving} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <>
+    <EditDialog
+      error={error || undefined}
+      title={isNew ? '게임 코드 추가' : '보상 설정'}
+      description={isNew ? undefined : row.game_code}
+      size="lg"
+      busy={saving}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={saving}>취소</Button>
+        <Button variant="primary" onClick={submit} disabled={!canSubmit}>
+          {saving ? '저장 중…' : '저장'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
           <div>
             <label className="block text-xs text-neutral-500 mb-1">게임 코드</label>
@@ -179,8 +188,8 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
               <div key={i}>
                 <div className="flex items-center gap-2">
                   <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
-                    {!inCatalog(it.key) && (<option value={it.key}>(카탈로그에 없음) {it.key}</option>)}
-                    {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
+                    {!inCatalog(it.key) && (<option value={it.key}>{it.key} · 카탈로그에 없음</option>)}
+                    {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
                   </select>
                   <input type="number" min={1} max={MAX_COUNT} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-28'} />
                   <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
@@ -207,8 +216,11 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
             <textarea value={mailContent} onChange={(e) => setMailContent(e.target.value)} rows={3} className={inputCls + ' w-full h-auto py-2'} />
           </div>
           <div>
-            <label className="block text-xs text-neutral-500 mb-1">우편 수령 기한(일)</label>
-            <input type="number" min={1} max={365} value={mailExpiresDays} onChange={(e) => setMailExpiresDays(Number(e.target.value))} className={inputCls + ' w-40'} />
+            <label className="block text-xs text-neutral-500 mb-1">우편 수령 기한</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={1} max={365} value={mailExpiresDays} onChange={(e) => setMailExpiresDays(Number(e.target.value))} className={inputCls + ' w-40'} />
+              <span className="shrink-0 text-sm text-neutral-500">일</span>
+            </div>
             {!daysValid && <p className="mt-1 text-xs text-red-500">1일에서 365일 사이로 정합니다.</p>}
           </div>
 
@@ -216,15 +228,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
             <p className="text-xs text-neutral-400">마지막 변경: {cfg.updated_by} · {formatDateTime(cfg.updated_at)}</p>
           )}
 
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose} disabled={saving}>취소</Button>
-          <Button variant="primary" onClick={submit} disabled={!canSubmit}>
-            {saving ? '저장 중…' : '저장'}
-          </Button>
-        </div>
-      </div>
+    </EditDialog>
 
       <ConfirmDialog
         open={confirmMode}
@@ -245,7 +249,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
           </div>
         )}
       </ConfirmDialog>
-    </div>
+    </>
   )
 }
 

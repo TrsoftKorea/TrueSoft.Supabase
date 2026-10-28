@@ -8,6 +8,7 @@ import { inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
@@ -67,13 +68,16 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">필드 값 수정</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="필드 값 수정"
+      layer="top"
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose}>취소</Button>
+        <Button variant="primary" onClick={handleApply}>적용</Button>
+      </>}
+    >
           <div>
             <label className="block text-xs text-neutral-500 mb-1">필드명</label>
             <div className="text-sm font-medium">{field.column_name}</div>
@@ -93,18 +97,7 @@ function FieldValueModal({ field, initialValue, onClose, onApply }: {
               integer={isIntegerPgType(field.data_type)}
             />
           </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary"
-            onClick={handleApply}
-          >
-            적용
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -170,18 +163,30 @@ function PlayerEditModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl h-[600px] max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <div>
-            <h3 className="text-base font-semibold">데이터 수정</h3>
-            <p className="text-xs text-neutral-500 mt-0.5">{displayName}</p>
-          </div>
-          <button onClick={requestClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="px-5 pt-3"><TargetGameStrip /></div>
-        {!loading && (
-          <div className="px-5 pt-3 pb-3 border-b">
+    <>
+    {/* 본문 높이를 고정한다 — 필드를 검색해 줄이 줄어도 창 크기가 출렁이지 않게. 검색 줄은 위에 붙어 남는다. */}
+    <EditDialog
+      title="데이터 수정"
+      description={displayName}
+      size="xl"
+      flush
+      bodyClassName="h-[520px]"
+      busy={saving}
+      onClose={requestClose}
+      error={error || undefined}
+      footer={<>
+        <Button variant="outline" onClick={requestClose} disabled={saving}>취소</Button>
+        <Button variant="primary"
+          onClick={() => { void handleSave() }}
+          disabled={pendingCount === 0 || saving}
+        >
+          {saving ? '저장 중…' : pendingCount > 0 ? `${pendingCount}건 저장` : '저장'}
+        </Button>
+      </>}
+    >
+        <div className="sticky top-0 z-10 bg-white px-5 py-3 border-b border-neutral-200 space-y-3">
+          <TargetGameStrip />
+          {!loading && (
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -190,10 +195,8 @@ function PlayerEditModal({
                 className={inputCls + ' w-full pl-9'}
               />
             </div>
-          </div>
-        )}
-        {error && <div className="px-5 pt-3 text-sm text-red-500">{error}</div>}
-        <div className="flex-1 overflow-y-auto">
+          )}
+        </div>
           {loading ? (
             <div className="p-8 text-center text-sm text-neutral-500"><Loader2 className="w-5 h-5 animate-spin text-neutral-300 mx-auto" /></div>
           ) : (
@@ -240,17 +243,7 @@ function PlayerEditModal({
               </tbody>
             </table>
           )}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={requestClose}>취소</Button>
-          <Button variant="primary"
-            onClick={() => { void handleSave() }}
-            disabled={pendingCount === 0 || saving}
-          >
-            {saving ? '저장 중…' : `저장 (${pendingCount})`}
-          </Button>
-        </div>
-      </div>
+    </EditDialog>
 
       {editField && (
         <FieldValueModal
@@ -278,7 +271,7 @@ function PlayerEditModal({
         onCancel={() => setAskDiscard(false)}
         description={`저장하지 않은 변경 ${pendingCount}건이 사라집니다.`}
       />
-    </div>
+    </>
   )
 }
 

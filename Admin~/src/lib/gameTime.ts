@@ -8,30 +8,31 @@ import type { ProjectTarget } from './projectTarget'
 export const DEFAULT_TIME_ZONE = 'Asia/Seoul'
 
 // 고를 수 있는 시간대. DB 가 아는 이름(pg_timezone_names)만 받는다 — 목록 밖 값이 이미 저장돼 있으면 그것도 보인다.
+// 이름 뒤 시차는 괄호로 감싸지 않는다 — 항목 이름에 괄호 부연 금지(.claude/rules/console.md 「글」).
 export const TIME_ZONES: readonly (readonly [string, string])[] = [
-  ['Asia/Seoul', '한국 (UTC+9)'],
-  ['Asia/Tokyo', '일본 (UTC+9)'],
-  ['Asia/Shanghai', '중국 (UTC+8)'],
-  ['Asia/Taipei', '대만 (UTC+8)'],
-  ['Asia/Singapore', '싱가포르 (UTC+8)'],
-  ['Asia/Bangkok', '태국 (UTC+7)'],
-  ['Asia/Jakarta', '인도네시아 서부 (UTC+7)'],
-  ['Asia/Kolkata', '인도 (UTC+5:30)'],
-  ['Europe/Moscow', '러시아 모스크바 (UTC+3)'],
-  ['Europe/Berlin', '중부 유럽 (UTC+1, 서머타임)'],
-  ['Europe/London', '영국 (UTC+0, 서머타임)'],
-  ['UTC', '협정 세계시 (UTC)'],
-  ['America/Sao_Paulo', '브라질 (UTC-3)'],
-  ['America/New_York', '미국 동부 (UTC-5, 서머타임)'],
-  ['America/Chicago', '미국 중부 (UTC-6, 서머타임)'],
-  ['America/Los_Angeles', '미국 서부 (UTC-8, 서머타임)'],
-  ['Australia/Sydney', '호주 동부 (UTC+10, 서머타임)'],
+  ['Asia/Seoul', '한국 UTC+9'],
+  ['Asia/Tokyo', '일본 UTC+9'],
+  ['Asia/Shanghai', '중국 UTC+8'],
+  ['Asia/Taipei', '대만 UTC+8'],
+  ['Asia/Singapore', '싱가포르 UTC+8'],
+  ['Asia/Bangkok', '태국 UTC+7'],
+  ['Asia/Jakarta', '인도네시아 서부 UTC+7'],
+  ['Asia/Kolkata', '인도 UTC+5:30'],
+  ['Europe/Moscow', '러시아 모스크바 UTC+3'],
+  ['Europe/Berlin', '중부 유럽 UTC+1 서머타임'],
+  ['Europe/London', '영국 UTC+0 서머타임'],
+  ['UTC', '협정 세계시 UTC'],
+  ['America/Sao_Paulo', '브라질 UTC-3'],
+  ['America/New_York', '미국 동부 UTC-5 서머타임'],
+  ['America/Chicago', '미국 중부 UTC-6 서머타임'],
+  ['America/Los_Angeles', '미국 서부 UTC-8 서머타임'],
+  ['Australia/Sydney', '호주 동부 UTC+10 서머타임'],
 ]
 
-/** 화면 문구용 이름. "한국 (UTC+9)" → "한국 시간". 목록 밖이면 시간대 이름 그대로. */
+/** 화면 문구용 이름. "한국 UTC+9" → "한국 시간". 목록 밖이면 시간대 이름 그대로. */
 export function timeZoneName(tz: string): string {
   const label = TIME_ZONES.find(([v]) => v === tz)?.[1]
-  return label ? `${label.replace(/\s*\(.*\)$/, '')} 시간` : tz
+  return label ? `${label.replace(/\s+UTC.*$/, '')} 시간` : tz
 }
 
 export type GameSettings = { time_zone: string; updated_at: string | null; updated_by: string | null; example_deadline: string | null }

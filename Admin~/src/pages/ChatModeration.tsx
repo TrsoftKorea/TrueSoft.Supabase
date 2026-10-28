@@ -9,6 +9,7 @@ import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
 import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
@@ -28,7 +29,6 @@ type MuteRow = { id: number; account_id: string; channel_id: string | null; unti
 type MuteData = { rows: MuteRow[]; total: number; pageSize: number }
 type PlayerRow = { account_id: string; display_name: string }
 
-const KIND_LABEL: Record<string, string> = { global: '전체', server: '서버', group: '그룹', direct: '귓속말' }
 const NOTICE_MAX = 1000
 
 type ServerRow = { id: string; server_code: string; display_name: string | null }
@@ -88,13 +88,18 @@ function NoticeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">채팅 공지</h3>
-          <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="채팅 공지"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
+          {loading ? '보내는 중…' : '공지 보내기'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
           {targets.length === 0 ? (
             <p className="text-sm text-neutral-500">공지를 보낼 수 있는 채널이 없습니다. 전체·서버 채널만 공지를 받습니다.</p>
@@ -103,7 +108,7 @@ function NoticeModal({
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">채널</label>
                 <select value={channelId} onChange={(e) => { setChannelId(e.target.value); setServerId('') }} className={inputCls + ' w-full'}>
-                  {targets.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code} ({KIND_LABEL[c.kind] ?? c.kind})</option>))}
+                  {targets.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code}</option>))}
                 </select>
               </div>
               {isServer && (
@@ -124,16 +129,7 @@ function NoticeModal({
               </div>
             </>
           )}
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
-            {loading ? '보내는 중…' : '공지 보내기'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -204,13 +200,18 @@ function MuteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">채팅 차단</h3>
-          <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="채팅 차단"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
+          {loading ? '처리 중…' : '차단'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
           {fixedAccount ? (
             <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
@@ -259,27 +260,21 @@ function MuteModal({
             <label className="block text-xs text-neutral-500 mb-1">채널</label>
             <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className={inputCls + ' w-full'}>
               <option value="">전체 채널</option>
-              {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code} ({KIND_LABEL[c.kind] ?? c.kind})</option>))}
+              {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code}</option>))}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-neutral-500 mb-1">차단 시간(분)</label>
-            <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} className={inputCls + ' w-full'} />
+            <label className="block text-xs text-neutral-500 mb-1">차단 시간</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} className={inputCls + ' w-full'} />
+              <span className="shrink-0 text-sm text-neutral-500">분</span>
+            </div>
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">사유</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls + ' w-full'} />
           </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit}>
-            {loading ? '처리 중…' : '차단'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 

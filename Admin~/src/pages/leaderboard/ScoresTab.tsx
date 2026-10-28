@@ -10,6 +10,7 @@ import { formatCount, formatDateTime, formatScore, formatTotal } from '../../com
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
 
@@ -496,22 +497,21 @@ export default function ScoresTab({
 
       {/* 플레이어 데이터 수정 모달 */}
       {dataEditRow && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-          onClick={() => { if (!saving) setDataEditRow(null) }}
+        <EditDialog
+          title="플레이어 데이터 수정"
+          description={`${dataEditRow.display_name ?? dataEditRow.account_id}${hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}`}
+          busy={saving}
+          onClose={() => setDataEditRow(null)}
+          error={dialogError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setDataEditRow(null)} disabled={saving}>취소</Button>
+            <Button variant="primary" onClick={() => void saveData()} disabled={saving}>
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              저장
+            </Button>
+          </>}
         >
-          <div className="w-[420px] max-w-[92vw] rounded-lg bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">플레이어 데이터 수정</h3>
-              <button onClick={() => setDataEditRow(null)} disabled={saving} title="닫기" aria-label="닫기" className="p-1 rounded hover:bg-neutral-100 text-neutral-500">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="mb-3"><TargetGameStrip /></div>
-            <p className="mb-3 text-xs text-neutral-500">
-              {dataEditRow.display_name ?? dataEditRow.account_id}
-              {hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}
-            </p>
+            <TargetGameStrip />
             <div className="space-y-2.5">
               {attachedCols.map((c) => (
                 <div key={c.name} className="flex items-center gap-3">
@@ -542,26 +542,7 @@ export default function ScoresTab({
                 <p className="text-xs text-neutral-500">등록된 플레이어 데이터 컬럼이 없습니다.</p>
               )}
             </div>
-            {dialogError && (
-              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" size="compact"
-                onClick={() => setDataEditRow(null)}
-                disabled={saving}
-              >
-                취소
-              </Button>
-              <Button variant="primary" size="compact"
-                onClick={() => void saveData()}
-                disabled={saving}
-              >
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                저장
-              </Button>
-            </div>
-          </div>
-        </div>
+        </EditDialog>
       )}
 
       <ConfirmDialog

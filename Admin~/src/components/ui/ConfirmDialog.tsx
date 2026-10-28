@@ -1,7 +1,9 @@
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, X } from 'lucide-react'
 import { WhiteCard } from './Card'
 import { TargetGameStrip } from './TargetGameStrip'
+import { useEscapeToClose } from './useEscapeToClose'
 
 /**
  * 되돌리기 어려운 동작 앞에 띄우는 확인 창.
@@ -39,26 +41,16 @@ export function ConfirmDialog({
   showTarget?: boolean
 }) {
   // 진행 중에는 Esc 로 닫지 않는다. 요청은 이미 나갔는데 창만 사라지면 결과를 볼 수 없다.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, busy, onCancel])
+  useEscapeToClose(open, busy, onCancel)
 
   if (!open) return null
 
   // 대상 게임은 이 탭이 열고 있는 게임이다 — 화면마다 넘겨받지 않고 띠가 직접 읽는다.
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-6 overflow-auto"
-      onClick={() => {
-        if (!busy) onCancel()
-      }}
-    >
-      <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+  // 바깥(어두운 배경)을 눌러도 닫지 않는다 — 편집 창과 같은 규칙. 닫기는 X · 취소 · Esc.
+  // 배경 색·위치도 편집 창과 같게, 문서 맨 바깥(body)에 띄운다 — 부모의 간격이 배경에 붙지 않게.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto">
+      <div className="w-full max-w-md">
         <WhiteCard className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-neutral-900">{title}</h3>
@@ -104,6 +96,7 @@ export function ConfirmDialog({
           </div>
         </WhiteCard>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

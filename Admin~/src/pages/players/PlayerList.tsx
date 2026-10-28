@@ -149,7 +149,7 @@ export default function PlayerList({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="플레이어" description="게임에 접속한 플레이어 목록입니다." />
+      <PageHeader title="플레이어" description="플레이어를 찾아 계정 정보를 봅니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 

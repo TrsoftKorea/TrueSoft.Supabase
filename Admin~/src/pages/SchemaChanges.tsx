@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RotateCcw, Trash2, Send, Loader2, AlertTriangle, X } from 'lucide-react'
+import { RotateCcw, Trash2, Send, Loader2, AlertTriangle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -11,6 +11,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
 import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
@@ -453,24 +454,19 @@ export default function SchemaChanges({
 
       {/* 게시 확인 모달 — 이름은 여기서 선택 입력 */}
       {showPublish && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={() => { if (!busy) setShowPublish(false) }}
+        <EditDialog
+          title="변경 게시"
+          busy={busy}
+          onClose={() => setShowPublish(false)}
+          error={dialogError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setShowPublish(false)} disabled={busy}>취소</Button>
+            <Button variant="primary" onClick={() => { void doPublish() }} disabled={busy}>
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              게시
+            </Button>
+          </>}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h3 className="text-base font-semibold">변경 게시</h3>
-              <button
-                onClick={() => setShowPublish(false)}
-                disabled={busy}
-                title="닫기"
-                aria-label="닫기"
-                className="text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
               <TargetGameStrip />
               <p className="text-sm text-neutral-700">
                 대기 중 변경 <b>{drafts.length}건</b>을 라이브에 적용합니다.
@@ -491,27 +487,7 @@ export default function SchemaChanges({
                 />
                 <p className="mt-1 text-xs text-neutral-400">게시 이력에 이 이름으로 남습니다.</p>
               </div>
-              {dialogError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
-              )}
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-              <Button variant="outline"
-                onClick={() => setShowPublish(false)}
-                disabled={busy}
-              >
-                취소
-              </Button>
-              <Button variant="primary"
-                onClick={() => { void doPublish() }}
-                disabled={busy}
-              >
-                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                게시
-              </Button>
-            </div>
-          </div>
-        </div>
+        </EditDialog>
       )}
 
       <ConfirmDialog

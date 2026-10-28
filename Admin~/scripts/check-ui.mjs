@@ -43,7 +43,7 @@ const RULES = [
     bad: "'h-10 px-4 text-sm border-b-2 -mb-px transition-colors'", good: "'border-b border-neutral-200'",
   },
   {
-    id: 'U2', name: '화면을 덮는 창을 직접 짬', fix: 'ConfirmDialog 또는 공용 편집 창 부품을 쓴다',
+    id: 'U2', name: '화면을 덮는 창을 직접 짬', fix: '되돌리기 어려운 확인은 ConfirmDialog, 값을 넣는 창은 EditDialog 를 쓴다',
     find: (t) => matchAll(t, /fixed inset-0/g),
     bad: '<div className="fixed inset-0 z-50 bg-black/40">', good: '<div className="fixed top-0">',
   },
@@ -102,6 +102,17 @@ const RULES = [
     good: '<input value={v} className={inputCls + \' w-full\'} />',
   },
   {
+    id: 'U11', name: '이름·버튼·선택지에 괄호로 부연함', fix: '괄호를 빼고 단위는 입력칸 옆, 조건은 칸 아래 안내로 옮긴다',
+    // 입력칸 이름(label)·표 머리(th)·선택지(option)·버튼의 글자와, 탭·선택지·항목 이름 문자열(label:·name:)을 본다.
+    // 글자나 값({…}) 바로 뒤, 또는 한 칸 띄운 뒤의 "(" 만 잡는다 — formatCount(x) 같은 함수 호출은 앞에 공백이 없어 빠진다.
+    find: (t) => [
+      ...matchAll(t, /<(label|th|option|button|Button)\b[^>]*>([^<]*)<\/\1>/g).filter((m) => ASIDE_PAREN.test(m[2])),
+      ...matchAll(t, /\b(label|name): *'([^']*)'/g).filter((m) => ASIDE_PAREN.test(m[2])),
+    ],
+    bad: '<label className="block text-xs">차단 시간(분)</label>',
+    good: '<label className="block text-xs">차단 시간</label>',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',
@@ -113,6 +124,9 @@ const EXEMPT = {
   // 로그인 전 화면은 콘솔 틀(메뉴·머리) 밖의 전체 화면이라 자체 배치를 쓴다.
   U3: ['pages/Login.tsx', 'pages/ProjectSelect.tsx'],
 }
+
+// U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.
+const ASIDE_PAREN = /[가-힣]\s?\(|[A-Za-z0-9.%] \(|\} \(/
 
 function matchAll(text, re) {
   return [...text.matchAll(re)]

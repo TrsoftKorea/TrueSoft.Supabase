@@ -9,11 +9,13 @@ import { CardHeader, GroupBox, WhiteCard } from '../components/ui/Card'
 import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 import { colorDistance, contrastWithWhite } from '../lib/color'
-import { forgetGameTimeZone, TIME_ZONES, type GameSettings } from '../lib/gameTime'
-import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
+import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { LimitsForm, type LimitField } from './social/LimitsForm'
 import { areaCls, inputCls } from '../components/ui/Input'
 
@@ -109,7 +111,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키 (JSON)', needFor: 'Android 결제 확인 · 구글 환불 기록',
+    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키', needFor: 'Android 결제 확인 · 구글 환불 기록',
     multiline: true, hint: '내려받은 JSON 파일의 내용 전체를 넣습니다.',
     guide: {
       site: { name: 'Google Cloud 콘솔', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
@@ -154,7 +156,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key (.p8)', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key', needFor: '탈퇴 시 애플 로그인 연결 해제',
     multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
@@ -195,7 +197,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_IAP_PRIVATE_KEY', group: 'appstore', set: 'iap', name: 'Private key (.p8)',
+    key: 'APPLE_IAP_PRIVATE_KEY', group: 'appstore', set: 'iap', name: 'Private key',
     multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
@@ -317,7 +319,7 @@ function StoreStatusCard({
     <WhiteCard className="p-5 space-y-5">
       <CardHeader
         title="서비스 연결"
-        description="저장한 값은 다시 보이지 않습니다. 바꾸면 1분 안에 결제 확인·환불 기록·탈퇴 처리에 적용됩니다."
+        description="결제 확인·환불 기록·탈퇴 처리에 쓰는 스토어·애플 키를 넣습니다."
       />
       <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
       {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
@@ -400,21 +402,33 @@ function StoreStatusCard({
         ))}
       </div>
 
+      {/* 지우기는 되돌리기 어려운 확인이라 ConfirmDialog, 값 넣기는 편집 창. */}
       <ConfirmDialog
-        open={!!editing}
-        title={editing?.clear ? `${keyTitle(editingDef)} 삭제` : `${keyTitle(editingDef)} ${byKey.get(editing?.key ?? '')?.status === 'missing' ? '입력' : '바꾸기'}`}
-        description={editing?.clear
-          ? '삭제하면 1분 안에 콘솔 밖에서 넣은 값으로 돌아갑니다. 그 값도 없으면 이 기능이 멈춥니다.'
-          : '저장하면 1분 안에 적용됩니다. 저장한 값은 다시 볼 수 없습니다.'}
-        confirmLabel={editing?.clear ? '삭제' : '저장'}
-        danger={!!editing?.clear}
+        open={!!editing?.clear}
+        title={`${keyTitle(editingDef)} 삭제`}
+        description="삭제하면 1분 안에 콘솔 밖에서 넣은 값으로 돌아갑니다. 그 값도 없으면 이 기능이 멈춥니다."
+        confirmLabel="삭제"
+        danger
         busy={saving}
         error={saveError}
-        confirmDisabled={!editing?.clear && value.trim() === ''}
         onConfirm={() => void save()}
         onCancel={() => setEditing(null)}
-      >
-        {editing && !editing.clear && editingDef && (
+      />
+      {editing && !editing.clear && editingDef && (
+        <EditDialog
+          title={`${keyTitle(editingDef)} ${byKey.get(editing.key)?.status === 'missing' ? '입력' : '바꾸기'}`}
+          busy={saving}
+          onClose={() => setEditing(null)}
+          error={saveError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>취소</Button>
+            <Button variant="primary" onClick={() => void save()} disabled={saving || value.trim() === ''}>
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              저장
+            </Button>
+          </>}
+        >
+          <TargetGameStrip />
           <div className="space-y-1.5">
             <KeyGuideToggle key={editingDef.key} guide={editingDef.guide} />
             {editingDef.multiline
@@ -438,8 +452,9 @@ function StoreStatusCard({
               )}
             <p className="text-xs text-neutral-500">{editingDef.hint}</p>
           </div>
-        )}
-      </ConfirmDialog>
+          <p className="text-sm text-neutral-600">저장하면 1분 안에 적용됩니다. 저장한 값은 다시 볼 수 없습니다.</p>
+        </EditDialog>
+      )}
     </WhiteCard>
   )
 }
@@ -605,7 +620,7 @@ function ConsoleIdentityCard({
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
         title="게임 이름 · 아이콘"
-        description="게임 목록·메뉴·상단 띠·확인 창에 보입니다. 모든 운영자에게 같게 보입니다."
+        description="게임 목록·메뉴·상단 띠·확인 창에 보일 이 게임의 이름과 아이콘을 정합니다."
       />
 
       <div className="space-y-1">
@@ -737,7 +752,7 @@ function ConsoleColorCard({
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
         title="게임 색"
-        description={`${look.name(target)}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.`}
+        description="메뉴·상단 띠·확인 창에 쓸 이 게임의 색을 정합니다."
       />
 
       <div className="flex flex-wrap gap-2.5" role="group" aria-label="색 고르기">
@@ -868,7 +883,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
         title="게임 시간대"
-        description="통계의 하루, 대시보드의 오늘, 날짜 검색, 탈퇴 계정이 삭제되는 자정, 새로 만드는 우편 예약·리더보드 회차를 이 시간대로 셉니다."
+        description="날짜를 나누는 기준 시간대를 정합니다."
       />
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-neutral-700">시간대</label>
@@ -877,11 +892,11 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
         </select>
         {current && (
           <p className="text-xs text-neutral-500">
-            지금 7일 유예로 탈퇴하면 <span className="font-medium text-neutral-700">{zonedText(current.example_deadline, current.time_zone)}</span>({label(current.time_zone)})에 삭제됩니다.
+            지금 7일 유예로 탈퇴하면 {timeZoneName(current.time_zone)} <span className="font-medium text-neutral-700">{zonedText(current.example_deadline, current.time_zone)}</span>에 삭제됩니다.
           </p>
         )}
         <p className="text-xs text-neutral-400">
-          바꾸면 그 뒤로 쌓이는 기록부터 새 시간대로 셉니다. 지난 날짜별 통계, 이미 예약된 탈퇴, 이미 만든 우편 예약과 리더보드는 그대로입니다.
+          바꾸면 통계의 하루·대시보드의 오늘·날짜 검색·탈퇴 자정·새 우편 예약·새 리더보드 회차가 새 시간대로 셉니다. 지난 기록과 이미 만든 예약은 그대로입니다.
         </p>
       </div>
       <div className="flex items-center gap-3">
@@ -940,7 +955,7 @@ export default function Settings({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="설정" description="게임 기능의 제한값과 동작 값을 조정합니다." />
+      <PageHeader title="설정" description="게임 운영에 필요한 설정을 정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <Tabs value={tab} onChange={setTab} tabs={TABS} />

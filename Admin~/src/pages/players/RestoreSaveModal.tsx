@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { Button } from '../../components/ui/Button'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { formatDateTime } from '../../components/ui/format'
 
@@ -22,6 +23,7 @@ export function RestoreSaveModal({
   accountId,
   logId,
   loggedAt,
+  playerName,
   onClose,
   onRestored,
 }: {
@@ -30,6 +32,8 @@ export function RestoreSaveModal({
   accountId: string
   logId: number
   loggedAt: string
+  // 누구의 세이브인지 창에서 확인하게 — 여러 계정이 섞인 데이터 로그에서도 열린다.
+  playerName: string
   onClose: () => void
   onRestored: () => void
 }) {
@@ -70,15 +74,20 @@ export function RestoreSaveModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-6 overflow-auto" onClick={() => { if (!busy) onClose() }}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">이 변경 전으로 되돌리기</h3>
-          <button onClick={onClose} disabled={busy} className="text-neutral-400 hover:text-neutral-700 disabled:opacity-40" aria-label="닫기">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      title="이 변경 전으로 되돌리기"
+      description={playerName}
+      size="xl"
+      busy={busy}
+      onClose={onClose}
+      error={error || undefined}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={busy || picked.size === 0}>
+          {busy && <Loader2 className="w-4 h-4 animate-spin" />}{picked.size > 0 ? `${picked.size}칸 되돌리기` : '되돌리기'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
           <p className="text-sm text-neutral-600">
             {formatDateTime(loggedAt)} 변경 직전 값으로 돌아갑니다. 그 뒤에 바뀐 칸도 함께 돌아가므로, 돌리지 않을 칸은 체크를 끄세요.
@@ -116,15 +125,6 @@ export function RestoreSaveModal({
           <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
             플레이어가 게임을 하고 있으면 게임이 가진 값으로 다시 덮일 수 있습니다. 접속하지 않았을 때 하세요.
           </div>
-          {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={busy || picked.size === 0}>
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />}되돌리기{picked.size > 0 ? ` (${picked.size}칸)` : ''}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }

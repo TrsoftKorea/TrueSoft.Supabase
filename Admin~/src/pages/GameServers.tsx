@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Pencil } from 'lucide-react'
+import { Loader2, Plus, Pencil } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 import { inputCls } from '../components/ui/Input'
@@ -148,17 +149,21 @@ export default function GameServers({
         새로 가입한 플레이어는 "기본" 표시가 붙은 서버에 들어갑니다. 서버 코드는 게임이 서버를 고를 때 쓰므로 추가한 뒤에는 바꿀 수 없습니다.
       </p>
 
-      <ConfirmDialog
-        open={!!draft}
-        title={isNew ? '서버 추가' : '서버 수정'}
-        confirmLabel={isNew ? '추가' : '저장'}
-        busy={saving}
-        confirmDisabled={!canSave}
-        error={saveError}
-        onConfirm={() => void save()}
-        onCancel={() => { setDraft(null); setSaveError('') }}
-      >
         {draft && (
+        <EditDialog
+          title={isNew ? '서버 추가' : '서버 수정'}
+          busy={saving}
+          onClose={() => { setDraft(null); setSaveError('') }}
+          error={saveError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => { setDraft(null); setSaveError('') }} disabled={saving}>취소</Button>
+            <Button variant="primary" onClick={() => void save()} disabled={saving || !canSave}>
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isNew ? '추가' : '저장'}
+            </Button>
+          </>}
+        >
+          <TargetGameStrip />
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-neutral-500 mb-1">서버 코드</label>
@@ -187,8 +192,8 @@ export default function GameServers({
               다른 서버에서 이전해 오는 것을 허용
             </label>
           </div>
+        </EditDialog>
         )}
-      </ConfirmDialog>
     </div>
   )
 }

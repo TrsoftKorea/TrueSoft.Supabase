@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { RefreshCw, Search, Pencil, X, ExternalLink } from 'lucide-react'
+import { RefreshCw, Search, Pencil, ExternalLink } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
@@ -12,6 +12,7 @@ import { pgTypeLabel } from '../../lib/schemaLabels'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { RestoreSaveModal } from './RestoreSaveModal'
 
@@ -78,20 +79,20 @@ function EditValueModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">값 수정 — {field.column_name}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="값 수정"
+      description={`${field.column_name} · ${pgTypeLabel(field.data_type)}`}
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void handleSubmit() }} disabled={loading}>
+          {loading ? '저장 중…' : '저장'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
-            <span className="font-medium text-neutral-700">{field.column_name}</span>
-            <span className="text-xs text-neutral-400">{pgTypeLabel(field.data_type)}</span>
-          </div>
           <TypedValueInput
             type={type}
             text={text}
@@ -100,21 +101,7 @@ function EditValueModal({
             onBoolChange={setBoolValue}
             integer={isIntegerPgType(field.data_type)}
           />
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>
-            취소
-          </Button>
-          <Button variant="primary"
-            onClick={() => { void handleSubmit() }}
-            disabled={loading}
-          >
-            {loading ? '저장 중…' : '저장'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -360,6 +347,7 @@ export default function UserDataTab({
           accountId={accountId}
           logId={restoreLog.id}
           loggedAt={restoreLog.created_at}
+          playerName={displayName || accountId}
           onClose={() => setRestoreLog(null)}
           onRestored={() => { setRestoreLog(null); void reload(); void reloadLogs() }}
         />

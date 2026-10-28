@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Loader2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { useServerName } from '../lib/serverNames'
+import { serverTargetLabel, useServerName } from '../lib/serverNames'
 import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
@@ -288,7 +288,7 @@ export default function MailRecords({
                   ) : (
                     batches.map((b) => (
                       <tr key={b.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openBatch(b)}>
-                        <td className="px-4 py-3 whitespace-nowrap">{MODE_LABEL[b.target_mode] ?? b.target_mode}{b.server_code ? ` (${serverName(b.server_code)})` : ''}{b.platform ? ` · ${platformLabel(b.platform)}` : ''}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}{b.platform ? ` · ${platformLabel(b.platform)}` : ''}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
                         <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(b.category)}</td>
                         <td className="px-4 py-3">{b.title}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{formatCount(b.recipient_count)}</td>

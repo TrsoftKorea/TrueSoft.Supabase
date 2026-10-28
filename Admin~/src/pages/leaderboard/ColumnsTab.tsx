@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
@@ -11,6 +11,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { fieldTypeLabel, opLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatCount, formatTotal } from '../../components/ui/format'
 
@@ -281,15 +282,21 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">필드 추가</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="필드 추가"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary"
+          onClick={() => { void handleSubmit() }}
+          disabled={loading || !name.trim() || missingDefault}
+        >
+          {loading ? '추가 중…' : '추가'}
+        </Button>
+      </>}
+    >
           <div>
             <label className="block text-xs text-neutral-500 mb-1">필드명</label>
             <input
@@ -322,23 +329,7 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
           <p className="text-xs text-neutral-500">
             필드는 모든 리더보드가 공유하는 목록에 만들어집니다. 만든 뒤 목록에서 이 리더보드에 사용하도록 켜세요.
           </p>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline"
-            onClick={onClose}
-          >
-            취소
-          </Button>
-          <Button variant="primary"
-            onClick={() => { void handleSubmit() }}
-            disabled={loading || !name.trim() || missingDefault}
-          >
-            {loading ? '추가 중…' : '추가'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -381,19 +372,22 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">필드 수정 — {col.column_name}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
-            <span className="font-medium text-neutral-700">{col.column_name}</span>
-            <span className="text-xs text-neutral-400">{typeText(col.data_type)}</span>
-          </div>
+    <EditDialog
+      error={error || undefined}
+      title="필드 수정"
+      description={`${col.column_name} · ${typeText(col.data_type)}`}
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary"
+          onClick={() => { void handleSubmit() }}
+          disabled={loading || missingDefault}
+        >
+          {loading ? '저장 중…' : '저장'}
+        </Button>
+      </>}
+    >
           <div>
             <label className="block text-xs text-neutral-500 mb-1">기본값</label>
             <DefaultValueInput
@@ -405,23 +399,7 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
               <p className="mt-1 text-xs text-amber-600">기본값이 필요합니다.</p>
             )}
           </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline"
-            onClick={onClose}
-          >
-            취소
-          </Button>
-          <Button variant="primary"
-            onClick={() => { void handleSubmit() }}
-            disabled={loading || missingDefault}
-          >
-            {loading ? '저장 중…' : '저장'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 

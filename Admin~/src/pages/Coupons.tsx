@@ -8,6 +8,7 @@ import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
 import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, toDatetimeLocal } from '../components/ui/format'
@@ -17,6 +18,9 @@ import { Segmented } from '../components/ui/Segmented'
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
 type CategoryRow = { key: string; display_name: string }
+
+// 쿠폰 종류 이름 — 고르는 칸과 목록 표가 같은 이름을 쓴다.
+const KIND_NAME: Record<'normal' | 'keyword', string> = { normal: '1회용 코드', keyword: '공용 코드' }
 
 type Coupon = {
   id: string
@@ -95,21 +99,23 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 shrink-0">
-          <h3 className="text-base font-semibold truncate">발급 코드 — {coupon.title}</h3>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" onClick={() => void exportCsv()} disabled={exporting || loading || rows.length === 0}>
-              {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}CSV 내려받기
-            </Button>
-            <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-          </div>
-        </div>
-        {exportError && (
-          <div className="px-5 py-2 border-b border-neutral-200 text-xs text-red-600 shrink-0">CSV를 내려받지 못했습니다. {exportError}</div>
-        )}
-        <div className="overflow-auto flex-1">
+    <EditDialog
+      title="발급 코드"
+      description={coupon.title}
+      flush
+      error={exportError ? `CSV를 내려받지 못했습니다. ${exportError}` : undefined}
+      onClose={onClose}
+      actions={
+        <Button size="sm" onClick={() => void exportCsv()} disabled={exporting || loading || rows.length === 0}>
+          {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}CSV 내려받기
+        </Button>
+      }
+      footer={coupon.issued_count > 500 ? (
+        <p className="mr-auto text-xs text-neutral-500">
+          코드 {coupon.issued_count.toLocaleString('ko-KR')}개 중 앞의 500개만 보입니다. 전체는 CSV로 내려받으세요.
+        </p>
+      ) : undefined}
+    >
           {loading ? (
             <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
           ) : error ? (
@@ -140,14 +146,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
               </tbody>
             </table>
           )}
-        </div>
-        {coupon.issued_count > 500 && (
-          <div className="border-t border-neutral-200 px-5 py-2.5 text-xs text-neutral-500 shrink-0">
-            코드 {coupon.issued_count.toLocaleString('ko-KR')}개 중 앞의 500개만 보입니다. 전체는 CSV로 내려받으세요.
-          </div>
-        )}
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -234,13 +233,19 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-auto">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg my-6">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200">
-          <h3 className="text-base font-semibold">{isEdit ? '쿠폰 수정' : '쿠폰 추가'}</h3>
-          <button onClick={onClose} title="닫기" aria-label="닫기" className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title={isEdit ? '쿠폰 수정' : '쿠폰 추가'}
+      size="lg"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit || !!issuedMsg}>
+          {loading ? '저장 중…' : isEdit ? '저장' : '발급'}
+        </Button>
+      </>}
+    >
           <TargetGameStrip />
           {!isEdit && (
             <div>
@@ -248,7 +253,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
               <Segmented
                 value={kind}
                 onChange={setKind}
-                options={[{ v: 'normal', label: '코드 발급 (1회용 여러 개)' }, { v: 'keyword', label: '키워드 (공용 코드)' }]}
+                options={[{ v: 'normal', label: KIND_NAME.normal }, { v: 'keyword', label: KIND_NAME.keyword }]}
               />
             </div>
           )}
@@ -277,7 +282,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
             {items.map((it, i) => (
               <div key={i} className="flex items-center gap-2">
                 <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
-                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
+                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
                 </select>
                 <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
                 <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
@@ -291,8 +296,11 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
               <input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={inputCls + ' w-full'} />
             </div>
             <div>
-              <label className="block text-xs text-neutral-500 mb-1">우편 수령 기한(일)</label>
-              <input type="number" min={1} value={mailExpiresDays} onChange={(e) => setMailExpiresDays(Number(e.target.value))} className={inputCls + ' w-full'} />
+              <label className="block text-xs text-neutral-500 mb-1">우편 수령 기한</label>
+              <div className="flex items-center gap-2">
+                <input type="number" min={1} value={mailExpiresDays} onChange={(e) => setMailExpiresDays(Number(e.target.value))} className={inputCls + ' w-full'} />
+                <span className="shrink-0 text-sm text-neutral-500">일</span>
+              </div>
             </div>
           </div>
 
@@ -304,8 +312,9 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
                 {codeInvalid && <p className="mt-1 text-xs text-red-600">영문·숫자·밑줄(_)·하이픈(-)만 쓸 수 있습니다. 띄어쓰기는 안 됩니다.</p>}
               </div>
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">최대 사용 횟수(빈칸=무제한)</label>
+                <label className="block text-xs text-neutral-500 mb-1">최대 사용 횟수</label>
                 <input type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} className={inputCls + ' w-full'} />
+                <p className="mt-1 text-xs text-neutral-400">제한이 없으면 비워 둡니다.</p>
               </div>
             </div>
           )}
@@ -313,7 +322,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           {!isEdit && kind === 'normal' && (
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">접두어(선택)</label>
+                <label className="block text-xs text-neutral-500 mb-1">접두어</label>
                 <input value={prefix} onChange={(e) => setPrefix(e.target.value.toUpperCase())} className={inputCls + ' w-full font-mono'} />
               </div>
               <div>
@@ -333,16 +342,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           </label>
 
           {issuedMsg && <div className="text-sm text-emerald-600">{issuedMsg}</div>}
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-neutral-200 bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit || !!issuedMsg}>
-            {loading ? '저장 중…' : isEdit ? '저장' : '발급'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -454,7 +454,7 @@ export default function Coupons({
                 rows.map((c) => (
                   <tr key={c.id} className="border-t border-neutral-100">
                     <td className="px-5 py-3">{c.title}</td>
-                    <td className="px-4 py-3 text-neutral-600">{c.kind === 'normal' ? '코드 발급' : '키워드'}</td>
+                    <td className="px-4 py-3 text-neutral-600">{KIND_NAME[c.kind]}</td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {c.kind === 'keyword' ? c.code : `발급 ${formatCount(c.issued_count)}개`}
                     </td>

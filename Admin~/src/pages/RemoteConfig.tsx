@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -10,6 +10,7 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../components/ui/PendingChanges'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
 import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } from '../components/ui/TypedValueField'
 import { opLabel } from '../lib/schemaLabels'
 import { Button } from '../components/ui/Button'
@@ -64,13 +65,18 @@ function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, on
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">설정 추가</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="설정 추가"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
+          {loading ? '추가 중…' : '추가'}
+        </Button>
+      </>}
+    >
           <div>
             <label className="block text-xs text-neutral-500 mb-1">키</label>
             <input value={key} onChange={(e) => setKey(e.target.value)} className={inputCls + ' w-full'} />
@@ -83,16 +89,7 @@ function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, on
             <input type="checkbox" checked={requiresAuth} onChange={(e) => setRequiresAuth(e.target.checked)} className="rounded" />
             인증 필요
           </label>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
-            {loading ? '추가 중…' : '추가'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -142,13 +139,19 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">{isNew ? '필드 추가' : `필드 수정 — ${itemKey}`}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title={isNew ? '필드 추가' : '필드 수정'}
+      description={isNew ? undefined : itemKey}
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
+          {loading ? '저장 중…' : '저장'}
+        </Button>
+      </>}
+    >
           {isNew && (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">필드명</label>
@@ -178,16 +181,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
             </select>
           </div>
           <TypedValueInput type={type} text={text} onTextChange={setText} boolValue={boolValue} onBoolChange={setBoolValue} />
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !key.trim()}>
-            {loading ? '저장 중…' : '저장'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 

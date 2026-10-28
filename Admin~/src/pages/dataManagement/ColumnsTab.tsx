@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { SYSTEM_COLS } from '../../lib/userData'
@@ -11,6 +11,7 @@ import { PendingChanges, type PendingItem } from '../../components/ui/PendingCha
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel, fieldTypeLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
@@ -269,17 +270,22 @@ function EditColumnModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">필드 수정 — {col.column_name}</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm">
-            <span className="font-medium text-neutral-700">{col.column_name}</span>
-            <span className="text-xs text-neutral-400">{pgTypeLabel(col.data_type)}</span>
-          </div>
+    <EditDialog
+      error={error || undefined}
+      title="필드 수정"
+      description={`${col.column_name} · ${pgTypeLabel(col.data_type)}`}
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary"
+          onClick={() => { void handleSubmit() }}
+          disabled={!csharpType || loading || missingDefault || unchanged}
+        >
+          {loading ? '담는 중…' : '변경 관리에 담기'}
+        </Button>
+      </>}
+    >
           {csharpType ? (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">기본값</label>
@@ -289,19 +295,7 @@ function EditColumnModal({
           ) : (
             <p className="text-xs text-amber-600">이 타입({col.data_type})은 여기서 수정할 수 없습니다.</p>
           )}
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary"
-            onClick={() => { void handleSubmit() }}
-            disabled={!csharpType || loading || missingDefault || unchanged}
-          >
-            {loading ? '담는 중…' : '변경 관리에 담기'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 
@@ -347,13 +341,21 @@ function AddColumnModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b">
-          <h3 className="text-base font-semibold">필드 추가</h3>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
+    <EditDialog
+      error={error || undefined}
+      title="필드 추가"
+      busy={loading}
+      onClose={onClose}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="primary"
+          onClick={() => { void handleSubmit() }}
+          disabled={loading || !name.trim() || missingDefault}
+        >
+          {loading ? '담는 중…' : '변경 관리에 담기'}
+        </Button>
+      </>}
+    >
           <div>
             <label className="block text-xs text-neutral-500 mb-1">필드명</label>
             <input
@@ -377,19 +379,7 @@ function AddColumnModal({
             <DefaultValueInput type={type} value={defaultValue} onChange={setDefaultValue} />
             {missingDefault && <p className="mt-1 text-xs text-amber-600">기본값이 필요합니다.</p>}
           </div>
-          {error && <div className="text-sm text-red-500">{error}</div>}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button variant="primary"
-            onClick={() => { void handleSubmit() }}
-            disabled={loading || !name.trim() || missingDefault}
-          >
-            {loading ? '담는 중…' : '변경 관리에 담기'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </EditDialog>
   )
 }
 

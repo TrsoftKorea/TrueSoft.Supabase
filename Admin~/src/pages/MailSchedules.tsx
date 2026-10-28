@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Trash2, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { useServerName } from '../lib/serverNames'
+import { serverTargetLabel, useServerName } from '../lib/serverNames'
 import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -26,9 +26,9 @@ const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', pl
 const SCHED_LABEL: Record<string, string> = { scheduled: '예약 발송', repeat: '반복 발송' }
 const DOW_LABEL = ['일', '월', '화', '수', '목', '금', '토']
 
-/** "매일 09:00 (한국 시간)", "매주 월요일 09:00 (일본 시간)" — 반복 시각은 예약마다 만들 때의 시간대로 돈다. */
+/** "매일 한국 시간 09:00", "매주 월요일 일본 시간 09:00" — 반복 시각은 예약마다 만들 때의 시간대로 돈다. */
 function repeatText(r: ScheduleRow): string {
-  const time = r.repeat_time ? ` ${r.repeat_time.slice(0, 5)}${r.repeat_tz ? ` (${timeZoneName(r.repeat_tz)})` : ''}` : ''
+  const time = r.repeat_time ? `${r.repeat_tz ? ` ${timeZoneName(r.repeat_tz)}` : ''} ${r.repeat_time.slice(0, 5)}` : ''
   if (r.repeat_unit === 'week' && r.repeat_dow != null) return `매주 ${DOW_LABEL[r.repeat_dow] ?? '?'}요일${time}`
   if (r.repeat_unit === 'month' && r.repeat_dom != null) return `매월 ${r.repeat_dom}일${time}`
   return `매일${time}`
@@ -125,7 +125,7 @@ export default function MailSchedules({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="예약 목록" description="예약·반복 발송으로 등록된 우편 목록입니다." />
+      <PageHeader title="예약 목록" description="등록한 예약·반복 발송을 켜고 끄거나 지웁니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -163,7 +163,7 @@ export default function MailSchedules({
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.next_run_at)}</td>
                     <td className="px-4 py-3">
                       {/* 종류 칸처럼 주 대상 한 줄 + 조건은 작은 글씨 — 한 줄에 다 이으면 좁은 칸에서 글자 단위로 깨진다. */}
-                      <div className="whitespace-nowrap">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}</div>
+                      <div className="whitespace-nowrap">{r.server_code ? serverTargetLabel(serverName(r.server_code)) : MODE_LABEL[r.target_mode] ?? r.target_mode}</div>
                       {(() => {
                         const conds = [r.platform ? platformLabel(r.platform) : null, r.open_for_new && r.schedule_type !== 'repeat' ? '나중에 들어온 플레이어도' : null].filter(Boolean)
                         return conds.length > 0 && <div className="text-xs text-neutral-500">{conds.join(' · ')}</div>

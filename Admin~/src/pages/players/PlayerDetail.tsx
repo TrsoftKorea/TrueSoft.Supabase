@@ -387,7 +387,7 @@ export default function PlayerDetail({
             </span>
           ) : ban.isBanned ? (
             <span className="text-red-600 font-medium">
-              차단{isPermanent(ban.bannedUntil) ? ' (영구)' : ban.bannedUntil ? ` (${formatBanUntil(ban.bannedUntil)}까지)` : ''}
+              {isPermanent(ban.bannedUntil) ? '영구 차단' : ban.bannedUntil ? `${formatBanUntil(ban.bannedUntil)}까지 차단` : '차단'}
             </span>
           ) : (
             <span className="text-emerald-600 font-medium">정상</span>

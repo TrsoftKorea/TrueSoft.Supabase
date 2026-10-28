@@ -135,7 +135,7 @@ export default function GameItems({
     <div className="space-y-4">
       <PageHeader
         title="아이템 카탈로그"
-        description="우편·쿠폰 등 아이템을 지급하는 기능에서 공통으로 사용하는 아이템 목록입니다."
+        description="우편·쿠폰·매치 보상으로 지급할 아이템을 등록합니다."
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />

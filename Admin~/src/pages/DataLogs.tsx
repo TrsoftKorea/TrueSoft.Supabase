@@ -97,6 +97,7 @@ export default function DataLogs({
           accountId={restoreRow.account_id}
           logId={restoreRow.id}
           loggedAt={restoreRow.created_at}
+          playerName={restoreRow.display_name || restoreRow.account_id}
           onClose={() => setRestoreRow(null)}
           onRestored={() => {
             setNotice(`${restoreRow.display_name || restoreRow.account_id.slice(0, 8)}의 세이브를 ${formatDateTime(restoreRow.created_at)} 변경 전으로 되돌렸습니다.`)

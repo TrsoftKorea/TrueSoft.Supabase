@@ -119,7 +119,7 @@ export default function MailCategories({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="우편 분류" description="우편 발송 시 선택할 분류 목록입니다." />
+      <PageHeader title="우편 분류" description="우편을 보낼 때 고르는 분류를 관리합니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 

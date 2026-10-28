@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, type ChangeEvent } from 'react'
-import { Plus, Trash2, RotateCw, Pencil, Loader2, X } from 'lucide-react'
+import { Plus, Trash2, RotateCw, Pencil, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
@@ -10,6 +10,7 @@ import { PendingChanges, type PendingItem } from '../../components/ui/PendingCha
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { Button } from '../../components/ui/Button'
 import { inputCls } from '../../components/ui/Input'
 import { DEFAULT_TIME_ZONE, isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone, wallClockToIso, zonedParts } from '../../lib/gameTime'
@@ -466,18 +467,23 @@ export default function LeaderboardsTab({
       </WhiteCard>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h3 className="text-base font-semibold">
-                {editCode ? '리더보드 수정' : '리더보드 추가'}
-              </h3>
-              <button onClick={closeModal} disabled={saving} className="text-neutral-400 hover:text-neutral-700" title="닫기" aria-label="닫기">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-5 overflow-auto">
+        <EditDialog
+          title={editCode ? '리더보드 수정' : '리더보드 추가'}
+          size="xl"
+          busy={saving}
+          onClose={closeModal}
+          error={dialogError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={closeModal} disabled={saving}>취소</Button>
+            <Button variant="primary" onClick={() => { void handleSave() }} disabled={saving}>
+              {saving
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Plus className="w-3.5 h-3.5" />}
+              변경 담기
+            </Button>
+          </>}
+        >
+            <div className="space-y-5">
               {/* 1행 — 코드 · 표시 이름 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -677,30 +683,7 @@ export default function LeaderboardsTab({
                 </div>
               )}
             </div>
-
-            {dialogError && (
-              <div className="mx-5 mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{dialogError}</div>
-            )}
-            <div className="flex justify-end gap-2 px-5 py-3 border-t bg-neutral-50">
-              <Button variant="outline"
-                onClick={closeModal}
-                disabled={saving}
-              >
-                <X className="w-3.5 h-3.5" />
-                취소
-              </Button>
-              <Button variant="primary"
-                onClick={() => { void handleSave() }}
-                disabled={saving}
-              >
-                {saving
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <Plus className="w-3.5 h-3.5" />}
-                변경 담기
-              </Button>
-            </div>
-          </div>
-        </div>
+        </EditDialog>
       )}
 
       <ConfirmDialog

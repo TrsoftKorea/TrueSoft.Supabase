@@ -25,3 +25,8 @@ export function useServerName(target: ProjectTarget): (code: string | null | und
 
   return (code) => (code ? names.get(code) ?? code : '-')
 }
+
+/** 우편 대상 칸의 "Global 서버" — 이름이 이미 "서버"로 끝나면("1서버") 다시 붙이지 않는다. */
+export function serverTargetLabel(name: string): string {
+  return name.endsWith('서버') ? name : `${name} 서버`
+}

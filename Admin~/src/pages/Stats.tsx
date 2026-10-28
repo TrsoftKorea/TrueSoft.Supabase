@@ -191,7 +191,7 @@ const regionNames = (() => {
   try { return new Intl.DisplayNames(['ko'], { type: 'region' }) } catch { return null }
 })()
 const countryName = (code: string) =>
-  code === 'unknown' ? '알 수 없음' : `${regionNames?.of(code) ?? code} (${code})`
+  code === 'unknown' ? '알 수 없음' : regionNames?.of(code) ?? code
 
 function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
   target: ProjectTarget; days: number; reloadKey: number

@@ -8,6 +8,8 @@ import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { EditDialog } from '../components/ui/EditDialog'
+import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
@@ -68,29 +70,32 @@ function SetPasswordModal({
   }
 
   return (
-    <ConfirmDialog
-      open
+    <EditDialog
       title="비밀번호 설정"
-      confirmLabel="설정"
+      description={op.email}
       busy={busy}
-      confirmDisabled={!canSubmit}
-      error={error}
-      onConfirm={() => void submit()}
-      onCancel={onClose}
+      onClose={onClose}
+      error={error || undefined}
+      footer={<>
+        <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={busy || !canSubmit}>
+          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+          설정
+        </Button>
+      </>}
     >
+      <TargetGameStrip />
       <div className="space-y-3">
-        <div className="px-3 py-2 rounded-md bg-neutral-50 border border-neutral-200 text-sm font-mono">
-          {op.email}
-        </div>
         <div>
-          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 ({MIN_PASSWORD_LENGTH}자 이상)</label>
+          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호</label>
           <input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             className={inputCls + ' w-full'}
           />
-          {tooShort && <p className="mt-1 text-xs text-amber-600">{MIN_PASSWORD_LENGTH}자 이상이어야 합니다.</p>}
+          {/* 길이 조건은 이름 괄호가 아니라 칸 아래 안내로 — 짧으면 같은 글을 경고 색으로. */}
+          <p className={`mt-1 text-xs ${tooShort ? 'text-amber-600' : 'text-neutral-400'}`}>{MIN_PASSWORD_LENGTH}자 이상 넣습니다.</p>
         </div>
         <div>
           <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 확인</label>
@@ -105,7 +110,7 @@ function SetPasswordModal({
         </div>
         <p className="text-xs text-neutral-400">이 비밀번호는 이메일로 전달되지 않습니다. 직접 알려주세요.</p>
       </div>
-    </ConfirmDialog>
+    </EditDialog>
   )
 }
 
@@ -226,7 +231,7 @@ export default function Operators({
     <div className="space-y-4">
       <PageHeader
         title="운영자 관리"
-        description={`${projectName(target)}의 운영 콘솔에 들어올 수 있는 계정입니다. 게임 계정과는 별개입니다.`}
+        description={`${projectName(target)}의 운영 콘솔에 들어올 계정을 관리합니다.`}
       />
 
       <div className="rounded-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-600">
