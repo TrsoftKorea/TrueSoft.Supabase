@@ -3596,9 +3596,15 @@ alter table public.purchases
   add column if not exists granted_at       timestamptz, -- 게임이 실제로 아이템을 지급 완료한 시각. null = 아직 미지급
   -- 시험 결제. 애플 Sandbox(TestFlight·앱 심사 포함), 구글 라이선스 테스트 계정. null = 이 칸이 생기기 전 기록이라 모름(실제로 센다).
   -- 매출·대시보드·누적 결제액(total_paid_krw)에서 뺀다 — 진짜 돈이 아니다.
-  add column if not exists is_test          boolean;
+  add column if not exists is_test          boolean,
+  -- 무료 결제 — 구글 프로모션 코드·광고 보상(purchaseType 1·2). 시험은 아니지만 돈을 낸 게 아니라 매출·누적 결제액에서 뺀다.
+  add column if not exists is_free          boolean,
+  -- 시험 여부를 구글에 마지막으로 물어본 시각(purchase-refund-sync-google). 답을 못 받은 건을 한동안 뒤로 미루는 데 쓴다.
+  add column if not exists test_checked_at  timestamptz;
 
 create index if not exists purchases_is_test_idx on public.purchases (verified_at desc) where is_test;
+-- 시험 여부를 모르는 결제만 담은 색인 — 재확인이 다 끝나 0건이 된 뒤에도 매일 결제 표 전체를 훑지 않게.
+create index if not exists purchases_test_unknown_idx on public.purchases (test_checked_at nulls first, verified_at desc) where is_test is null;
 
 -- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
 alter table public.purchases drop column if exists purchase_state;
@@ -3633,8 +3639,9 @@ security definer
 set search_path = public
 as $$
 begin
-  -- 기록될 때 이미 환불된 결제(환불 알림이 먼저 온 경우)와 시험 결제는 누적 결제액에 넣지 않는다.
-  if new.price_amount_krw is not null and new.price_amount_krw > 0 and new.refunded_at is null and new.is_test is not true then
+  -- 기록될 때 이미 환불된 결제(환불 알림이 먼저 온 경우)·시험·무료 결제는 누적 결제액에 넣지 않는다.
+  -- 몫 계산은 기록된 뒤 바뀔 때(ts_after_purchase_paid_change)와 같은 함수를 쓴다.
+  if public.ts_purchase_paid_share(new.price_amount_krw, new.refunded_at, new.is_test, new.is_free) > 0 then
     update public.user_profiles
        set total_paid_krw = total_paid_krw + new.price_amount_krw
      where account_id = new.account_id;
@@ -3716,8 +3723,23 @@ alter table public.purchases
 
 create index if not exists purchases_refunded_idx on public.purchases (account_id) where refunded_at is not null;
 
--- 누적 결제액은 환불분을 뺀 값이다. 환불 취소면 되돌린다.
-create or replace function public.ts_after_purchase_refund()
+-- 결제 한 건이 누적 결제액(total_paid_krw)에 들어가는 몫. 환불·시험·무료면 0.
+-- 결제 기록·환불·시험 표시·무료 표시가 어떤 순서로, 한꺼번에 바뀌어도 "바뀐 뒤 몫 − 바뀌기 전 몫"만 더하면 맞는다.
+create or replace function public.ts_purchase_paid_share(p_krw bigint, p_refunded_at timestamptz, p_is_test boolean, p_is_free boolean)
+returns bigint
+language sql
+immutable
+as $$
+  select case when coalesce(p_krw, 0) > 0 and p_refunded_at is null and p_is_test is not true and p_is_free is not true
+              then p_krw else 0 end;
+$$;
+
+revoke all on function public.ts_purchase_paid_share(bigint, timestamptz, boolean, boolean) from public, anon, authenticated;
+
+-- 누적 결제액은 환불·시험·무료를 뺀 값이다. 기록된 뒤 그 칸들이 바뀌면 차이만큼 맞춘다.
+-- 탈퇴로 계정 연결이 끊긴 결제(account_id null)는 남은 탈퇴 프로필을 user_id 로 찾되, 딱 하나일 때만 맞춘다 —
+-- 같은 구글·애플 계정으로 탈퇴·재가입을 되풀이하면(QA 계정) 같은 user_id 의 탈퇴 프로필이 여럿 생겨 어느 쪽 결제인지 모른다.
+create or replace function public.ts_after_purchase_paid_change()
 returns trigger
 language plpgsql
 security definer
@@ -3725,31 +3747,40 @@ set search_path = public
 as $$
 declare
   v_delta bigint;
+  v_n     int;
 begin
-  -- 시험 결제는 처음부터 누적 결제액에 안 들어갔으니 환불돼도 빼지 않는다.
-  if new.account_id is null or coalesce(new.price_amount_krw, 0) <= 0 or new.is_test is true then
+  v_delta := public.ts_purchase_paid_share(new.price_amount_krw, new.refunded_at, new.is_test, new.is_free)
+           - public.ts_purchase_paid_share(old.price_amount_krw, old.refunded_at, old.is_test, old.is_free);
+  if v_delta = 0 then
     return new;
   end if;
-  if old.refunded_at is null and new.refunded_at is not null then
-    v_delta := -new.price_amount_krw;
-  elsif old.refunded_at is not null and new.refunded_at is null then
-    v_delta := new.price_amount_krw;
-  else
-    return new;
+  if new.account_id is not null then
+    update public.user_profiles
+       set total_paid_krw = greatest(total_paid_krw + v_delta, 0)
+     where account_id = new.account_id;
+  elsif new.user_id is not null then
+    select count(*) into v_n from public.user_profiles where account_id is null and user_id = new.user_id;
+    if v_n = 1 then
+      update public.user_profiles
+         set total_paid_krw = greatest(total_paid_krw + v_delta, 0)
+       where account_id is null and user_id = new.user_id;
+    end if;
   end if;
-  update public.user_profiles
-     set total_paid_krw = greatest(total_paid_krw + v_delta, 0)
-   where account_id = new.account_id;
   return new;
 end;
 $$;
 
-revoke all on function public.ts_after_purchase_refund() from public, anon, authenticated;
+revoke all on function public.ts_after_purchase_paid_change() from public, anon, authenticated;
 
+-- 예전에 환불·시험 표시를 따로 보던 트리거 둘을 하나로 합쳤다(둘이 한꺼번에 바뀌면 서로 몰라 계산이 어긋났다).
 drop trigger if exists tr_after_purchase_refund on public.purchases;
-create trigger tr_after_purchase_refund
-  after update of refunded_at on public.purchases
-  for each row execute function public.ts_after_purchase_refund();
+drop trigger if exists tr_after_purchase_test_change on public.purchases;
+drop function if exists public.ts_after_purchase_refund();
+drop function if exists public.ts_after_purchase_test_change();
+drop trigger if exists tr_after_purchase_paid_change on public.purchases;
+create trigger tr_after_purchase_paid_change
+  after update of refunded_at, is_test, is_free, price_amount_krw on public.purchases
+  for each row execute function public.ts_after_purchase_paid_change();
 
 -- 스토어별 마지막 확인 상태. 애플은 알림을 받은 시각, 구글은 목록을 가져온 시각.
 -- 실패도 남긴다 — 조용히 멈춘 것과 환불이 없는 것을 운영 콘솔에서 구분하려는 것.
@@ -4587,8 +4618,8 @@ begin
     'country_code',     p.country_code,
     'total_paid_krw',   p.total_paid_krw,
     -- total_paid_krw 는 환불분을 이미 뺀 값이다.
-    'refund_count',     (select count(*) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true),
-    'refund_krw',       (select coalesce(sum(r.price_amount_krw), 0) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true),
+    'refund_count',     (select count(*) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true and r.is_free is not true),
+    'refund_krw',       (select coalesce(sum(r.price_amount_krw), 0) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true and r.is_free is not true),
     'created_at',       u.created_at,
     'last_activity_at', p.last_activity_at,
     'last_sign_in_at',  u.last_sign_in_at,
@@ -8502,10 +8533,10 @@ as $$
     'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
     'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date),
     'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
-    'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true),
-    'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true),
-    'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null and is_test is not true),
-    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null and is_test is not true)
+    'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true and is_free is not true),
+    'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true and is_free is not true),
+    'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null and is_test is not true and is_free is not true),
+    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null and is_test is not true and is_free is not true)
   );
 $$;
 
@@ -8651,7 +8682,7 @@ as $$
          or (pu.account_id is null and pr.user_id = pu.user_id)
       limit 1
     ) prof on true
-    where pu.verified_at >= p.since and pu.refunded_at is null and pu.is_test is not true
+    where pu.verified_at >= p.since and pu.refunded_at is null and pu.is_test is not true and pu.is_free is not true
   ),
   by_country as (
     select country, sum(krw)::bigint as revenue_krw, count(*) as purchases, count(distinct payer) as payers
@@ -8709,8 +8740,8 @@ as $$
                    from tests t
                    left join public.display_names dn on dn.account_id = t.account_id
                   order by t.verified_at desc limit 50) r), '[]'::jsonb),
-    -- 이 칸이 생긴 뒤의 첫 결제 시각 — 그 전 결제는 시험인지 몰라 매출에 그대로 들어가 있다.
-    'tracking_since', (select min(verified_at) from public.purchases where is_test is not null)
+    -- 시험인지 모르는 결제(이 칸이 생기기 전 기록) — 매출에 그대로 들어가 있다. 구글 것은 환불 확인 때 하루 50건씩 다시 묻는다.
+    'unknown_count', (select count(*) from public.purchases where is_test is null)
   );
 $$;
 

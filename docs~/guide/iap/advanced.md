@@ -11,7 +11,10 @@
 | `price_amount` | bigint | 결제 원금. **micros** 단위로, 주 단위 ×1,000,000입니다. 정밀도 유지용 내부 값 |
 | `price_currency` | text | ISO 4217 통화 코드. 예: `"KRW"`, `"USD"` |
 | `price_amount_krw` | bigint | **KRW로 환산한 정수 금액.** 매출 확인은 이 값을 쓰세요. 환율은 결제 시점 frankfurter.app 기준. 환산 실패 시 null |
-| `is_test` | boolean | [테스트 결제](/guide/iap/prepare#test-purchases)면 true. 매출을 직접 셀 때는 `is_test is not true`로 거르세요. 이 칸이 생기기 전 기록은 null |
+| `is_test` | boolean | [테스트 결제](/guide/iap/prepare#test-purchases)면 true. 테스트인지 알 수 없으면 null이고, 실제 결제로 셉니다 |
+| `is_free` | boolean | Google&nbsp;Play 프로모션 코드·광고 보상처럼 돈을 내지 않은 결제면 true |
+
+매출을 직접 셀 때는 `is_test is not true and is_free is not true`로 거르세요.
 
 - **Android**: 클라이언트가 Unity IAP `Product.metadata.localizedPrice` / `isoCurrencyCode`를 서버로 전달합니다.
 - **iOS SK2**: StoreKit 2 경로에서는 JWS 토큰에 가격 정보가 포함되어 있어 서버가 자동으로 추출합니다.

@@ -130,12 +130,14 @@ Deno.serve(async (req: Request) => {
   const applePayload = { "receipt-data": receipt, password: sharedSecret };
 
   let verifyData: VerifyReceiptResponse;
+  let viaSandbox = false;
   try {
     verifyData = await callAppleVerifyReceipt(PRODUCTION_URL, applePayload);
 
     // 21007 = sandbox receipt가 production 서버로 전송됨 → sandbox로 재시도
     if (verifyData.status === 21007) {
       verifyData = await callAppleVerifyReceipt(SANDBOX_URL, applePayload);
+      viaSandbox = true;
     }
   } catch (e) {
     console.error("[purchase-verify-apple-legacy] Apple API 호출 실패:", e);
@@ -206,8 +208,10 @@ Deno.serve(async (req: Request) => {
       order_id:       transactionId,
       package_name:   receiptBundleId,
       store:          "apple_app_store",
-      // 시험 결제(TestFlight·앱 심사·샌드박스 계정)는 매출에서 뺀다. 응답에 environment 가 없으면 모름(null).
-      is_test:        verifyData.environment ? verifyData.environment === "Sandbox" : null,
+      // 시험 결제(TestFlight·앱 심사·샌드박스 계정)는 매출에서 뺀다. 샌드박스 주소로 다시 물어 통과했으면 시험이 확실하다.
+      // 응답에 environment 가 없고 운영 주소에서 통과했으면 모름(null).
+      is_test:        viaSandbox || verifyData.environment === "Sandbox" ? true
+                    : verifyData.environment ? false : null,
     });
 
   let alreadyVerified = false;

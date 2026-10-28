@@ -261,8 +261,9 @@ Deno.serve(async (req) => {
       price_amount: (price_amount && price_amount > 0) ? price_amount : null,
       price_currency: price_currency || null,
       price_amount_krw: priceAmountKrw,
-      // 라이선스 테스트 계정의 시험 결제는 매출에서 뺀다.
+      // 라이선스 테스트 계정의 시험 결제, 프로모션 코드·광고 보상(무료)은 매출에서 뺀다.
       is_test: googlePurchase.purchaseType === 0,
+      is_free: googlePurchase.purchaseType === 1 || googlePurchase.purchaseType === 2,
     });
 
   if (insertError) {
