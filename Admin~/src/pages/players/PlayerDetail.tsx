@@ -5,12 +5,14 @@ import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { useServerName } from '../../lib/serverNames'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
+import { areaCls, inputCls, inputCompactCls } from '../../components/ui/Input'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
+import { Tabs } from '../../components/ui/Tabs'
 import UserDataTab from './UserDataTab'
 import FriendsTab from './FriendsTab'
 import MatchRecordsTab from './MatchRecordsTab'
@@ -245,31 +247,18 @@ export default function PlayerDetail({
         }
       />
 
-      <div className="border-b border-neutral-200 flex gap-1">
-        {(
-          [
-            ['info', '기본 정보'],
-            ['userData', '유저 데이터'],
-            ['mails', '받은 우편'],
-            ['coupons', '쿠폰 사용'],
-            ['friends', '친구'],
-            ['matches', '대전 기록'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
-              tab === key
-                ? 'border-[#1677ff] text-[#1677ff] font-medium'
-                : 'border-transparent text-neutral-600 hover:text-neutral-900',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ['info', '기본 정보'],
+          ['userData', '유저 데이터'],
+          ['mails', '받은 우편'],
+          ['coupons', '쿠폰 사용'],
+          ['friends', '친구'],
+          ['matches', '대전 기록'],
+        ]}
+      />
 
       {tab === 'userData' ? (
         <UserDataTab
@@ -305,7 +294,7 @@ export default function PlayerDetail({
       ) : (
       <>
       <WhiteCard className="p-5 space-y-3">
-        <h3 className="text-base font-semibold mb-2">기본 정보</h3>
+        <CardHeader title="기본 정보" description="계정 · 결제 · 접속 기록 요약" />
         <InfoRow label="ID">
           <span className="font-mono text-xs">{accountId}</span>
         </InfoRow>
@@ -320,24 +309,26 @@ export default function PlayerDetail({
                   else if (e.key === 'Escape') cancelNameEdit()
                 }}
                 autoFocus
-                className="h-8 px-2 rounded border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                className={inputCompactCls}
               />
+              {/* 줄 안 편집 확인·취소 — 아이템 카탈로그·우편 분류와 같은 꼴 */}
               <button
                 onClick={() => void handleNameSave()}
                 disabled={savingName || !nameDraft.trim()}
-                className="inline-flex items-center justify-center w-7 h-7 rounded bg-[#1677ff] text-white hover:bg-[#1677ff]/90 disabled:opacity-60"
+                className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
                 aria-label="저장"
                 title="저장"
               >
-                <Check className="w-3.5 h-3.5" />
+                {savingName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button
                 onClick={cancelNameEdit}
-                className="inline-flex items-center justify-center w-7 h-7 rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-50"
+                disabled={savingName}
+                className="text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
                 aria-label="취소"
                 title="취소"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           ) : (
@@ -371,9 +362,10 @@ export default function PlayerDetail({
       </WhiteCard>
 
       <WhiteCard className="relative overflow-hidden p-5 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">차단 정보</h3>
-          {!ban ? null : ban.isBanned ? (
+        <CardHeader
+          title="차단 정보"
+          description="게임 접속 차단 여부와 차단 메시지"
+          actions={!ban ? null : ban.isBanned ? (
             <Button variant="primary" onClick={() => { setDialogError(''); setAskUnban(true) }} disabled={applying || unbanLoading}>
               {applying || unbanLoading ? '처리 중…' : '차단 해제'}
             </Button>
@@ -382,7 +374,7 @@ export default function PlayerDetail({
               {applying ? '처리 중…' : '차단'}
             </Button>
           )}
-        </div>
+        />
 
         <div className="text-sm">
           현재 상태:{' '}
@@ -420,7 +412,7 @@ export default function PlayerDetail({
                   max="9999-12-31T23:59"
                   onChange={(e) => { setBanUntilInput(e.target.value); setBanInputError('') }}
                   disabled={permanent}
-                  className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm disabled:bg-neutral-100 disabled:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                  className={inputCls + ' w-full disabled:bg-neutral-100 disabled:text-neutral-400'}
                 />
               </div>
               <div className="flex items-center gap-2 pb-1.5">
@@ -444,7 +436,7 @@ export default function PlayerDetail({
                 value={banMessage}
                 onChange={(e) => setBanMessage(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                className={areaCls + ' w-full'}
               />
               <p className="mt-1 text-xs text-neutral-400">차단된 플레이어가 게임에서 보게 됩니다.</p>
             </div>

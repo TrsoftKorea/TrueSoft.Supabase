@@ -2,13 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
-
-export const inputCls =
-  'h-9 px-3 rounded-md border border-neutral-200 text-sm outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]'
+import { inputCls } from '../../components/ui/Input'
 
 /** 제한값 한 칸. min·max 는 서버(admin-api·RPC)가 막는 범위와 같게 둔다. */
 export type LimitField = {
@@ -38,6 +36,7 @@ export function LimitsForm({
   target,
   report,
   title,
+  description,
   getAction,
   updateAction,
   fields,
@@ -46,6 +45,7 @@ export function LimitsForm({
   target: ProjectTarget
   report: (e: unknown, fallback: string) => void
   title: string
+  description: string
   getAction: string
   updateAction: string
   fields: LimitField[]
@@ -111,8 +111,8 @@ export function LimitsForm({
   }
 
   return (
-    <WhiteCard className="p-5 space-y-4 max-w-xl">
-      <h2 className="text-sm font-medium text-neutral-900">{title}</h2>
+    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+      <CardHeader title={title} description={description} />
 
       {fields.map((f) => (
         <Field

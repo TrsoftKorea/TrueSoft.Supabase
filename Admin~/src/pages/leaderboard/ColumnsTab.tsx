@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, X, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
+import { dangerInputCls, inputCls } from '../../components/ui/Input'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { fieldTypeLabel, opLabel, pgTypeLabel } from '../../lib/schemaLabels'
@@ -140,7 +142,7 @@ function DefaultValueInput({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+        className={inputCls + ' w-full'}
       >
         <option value="">지정 안 함</option>
         <option value="true">참</option>
@@ -156,7 +158,7 @@ function DefaultValueInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         step={isIntegerType(type) ? 1 : 'any'}
-        className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+        className={inputCls + ' w-full'}
       />
     )
   }
@@ -169,7 +171,7 @@ function DefaultValueInput({
           value={value === 'now()' ? '' : value}
           onChange={(e) => onChange(e.target.value)}
           disabled={value === 'now()'}
-          className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] disabled:bg-neutral-50 disabled:text-neutral-400"
+          className={inputCls + ' w-full disabled:bg-neutral-50 disabled:text-neutral-400'}
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input
@@ -192,7 +194,7 @@ function DefaultValueInput({
           value={value === 'CURRENT_DATE' ? '' : value}
           onChange={(e) => onChange(e.target.value)}
           disabled={value === 'CURRENT_DATE'}
-          className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] disabled:bg-neutral-50 disabled:text-neutral-400"
+          className={inputCls + ' w-full disabled:bg-neutral-50 disabled:text-neutral-400'}
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input
@@ -213,7 +215,7 @@ function DefaultValueInput({
         type="time"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+        className={inputCls + ' w-full'}
       />
     )
   }
@@ -233,7 +235,7 @@ function DefaultValueInput({
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+      className={inputCls + ' w-full'}
     />
   )
 }
@@ -293,7 +295,7 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full'}
             />
           </div>
           <div>
@@ -301,7 +303,7 @@ function AddFieldModal({ target, onClose, onAdded }: { target: ProjectTarget; on
             <select
               value={type}
               onChange={(e) => handleTypeChange(e.target.value as CSharpType)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full'}
             >
               {ALL_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -481,7 +483,7 @@ function DeleteFieldModal({ target, col, onUnauthenticated, onClose, onDeleted }
             onChange={(e) => setConfirm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void handleDelete()}
             autoFocus
-            className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+            className={dangerInputCls + ' w-full'}
           />
         </div>
       </div>
@@ -691,7 +693,7 @@ export default function ColumnsTab({
             value={selectedCode}
             onChange={(e) => onSelect(e.target.value)}
             disabled={listLoading}
-            className="h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] disabled:opacity-60 disabled:cursor-not-allowed"
+            className={inputCls + ' min-w-[180px] disabled:opacity-60 disabled:cursor-not-allowed'}
           >
             {listLoading ? (
               <option value={selectedCode}>불러오는 중…</option>
@@ -710,7 +712,7 @@ export default function ColumnsTab({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="필드 검색"
-              className="w-full h-9 pl-9 pr-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full pl-9'}
             />
           </div>
         </div>
@@ -838,26 +840,7 @@ export default function ColumnsTab({
             )}
           </tbody>
         </table>
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <TableFooter summary={<>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
 
       <p className="text-xs text-neutral-500">

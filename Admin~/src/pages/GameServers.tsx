@@ -9,6 +9,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
+import { inputCls } from '../components/ui/Input'
 
 type ServerRow = {
   id: string
@@ -22,7 +23,6 @@ type ServerRow = {
 
 type Draft = { id: string | null; serverCode: string; displayName: string; allowTransfers: boolean }
 
-const inputCls = 'h-9 w-full px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 export default function GameServers({
   target,
@@ -166,7 +166,7 @@ export default function GameServers({
                 value={draft.serverCode}
                 disabled={!isNew}
                 onChange={(e) => setDraft({ ...draft, serverCode: e.target.value })}
-                className={inputCls + ' font-mono disabled:bg-neutral-50 disabled:text-neutral-500'}
+                className={inputCls + ' w-full font-mono disabled:bg-neutral-50 disabled:text-neutral-500'}
               />
               {isNew && <p className="mt-1 text-xs text-neutral-400">영문·숫자·_·- 로 32자 이내. 추가한 뒤에는 바꿀 수 없습니다.</p>}
             </div>
@@ -175,7 +175,7 @@ export default function GameServers({
               <input
                 value={draft.displayName}
                 onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
-                className={inputCls}
+                className={inputCls + ' w-full'}
               />
             </div>
             <label className="flex items-center gap-2 text-sm text-neutral-700">

@@ -9,6 +9,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { Button } from '../components/ui/Button'
 import { formatDateTime, itemsText } from '../components/ui/format'
 import { timeZoneName } from '../lib/gameTime'
 
@@ -136,9 +137,10 @@ export default function MailSchedules({
                 <th className="text-left px-4 py-2.5 font-medium w-20">상태</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">종류</th>
                 <th className="text-left px-4 py-2.5 font-medium w-44">다음 실행</th>
-                <th className="text-left px-4 py-2.5 font-medium w-20">대상</th>
-                <th className="text-left px-4 py-2.5 font-medium">제목</th>
-                <th className="text-left px-4 py-2.5 font-medium">아이템</th>
+                <th className="text-left px-4 py-2.5 font-medium">대상</th>
+                {/* 글이 긴 두 칸은 최소 폭을 둔다 — 없으면 좁은 창에서 다른 칸에 밀려 한 글자씩 깨진다(그때는 표가 옆으로 넘어간다). */}
+                <th className="text-left px-4 py-2.5 font-medium min-w-[10rem]">제목</th>
+                <th className="text-left px-4 py-2.5 font-medium min-w-[7rem]">아이템</th>
                 <th className="text-left px-4 py-2.5 font-medium w-20">운영자</th>
                 <th className="px-4 py-2.5 w-28"></th>
               </tr>
@@ -149,8 +151,8 @@ export default function MailSchedules({
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-4 py-3">
-                      <span className={'inline-flex items-center px-2 py-0.5 rounded text-xs ' + (r.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-200 text-neutral-500')}>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={'inline-flex items-center px-2 py-0.5 rounded text-xs whitespace-nowrap ' + (r.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-200 text-neutral-500')}>
                         {r.is_active ? '켜짐' : '꺼짐'}
                       </span>
                     </td>
@@ -158,20 +160,23 @@ export default function MailSchedules({
                       {SCHED_LABEL[r.schedule_type] ?? r.schedule_type}
                       {r.schedule_type === 'repeat' && <div className="text-xs text-neutral-500">{repeatText(r)}</div>}
                     </td>
-                    <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.next_run_at)}</td>
-                    <td className="px-4 py-3">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}{r.platform ? ` · ${platformLabel(r.platform)}` : ''}{r.open_for_new && r.schedule_type !== 'repeat' ? ' · 나중에 들어온 플레이어도' : ''}</td>
+                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.next_run_at)}</td>
+                    <td className="px-4 py-3">
+                      {/* 종류 칸처럼 주 대상 한 줄 + 조건은 작은 글씨 — 한 줄에 다 이으면 좁은 칸에서 글자 단위로 깨진다. */}
+                      <div className="whitespace-nowrap">{MODE_LABEL[r.target_mode] ?? r.target_mode}{r.server_code ? ` (${serverName(r.server_code)})` : ''}</div>
+                      {(() => {
+                        const conds = [r.platform ? platformLabel(r.platform) : null, r.open_for_new && r.schedule_type !== 'repeat' ? '나중에 들어온 플레이어도' : null].filter(Boolean)
+                        return conds.length > 0 && <div className="text-xs text-neutral-500">{conds.join(' · ')}</div>
+                      })()}
+                    </td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                     <td className="px-4 py-3 text-neutral-600">{r.created_by ?? '-'}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => void toggleActive(r)}
-                        disabled={togglingId !== null}
-                        className="mr-3 inline-flex items-center gap-1 h-7 px-2.5 rounded border border-neutral-300 text-xs text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 whitespace-nowrap align-middle"
-                      >
+                      <Button size="sm" className="mr-3 align-middle" onClick={() => void toggleActive(r)} disabled={togglingId !== null}>
                         {togglingId === r.id && <Loader2 className="w-3 h-3 animate-spin" />}
                         {r.is_active ? '끄기' : '켜기'}
-                      </button>
+                      </Button>
                       <button onClick={() => { setDelError(''); setDelTarget(r) }} title="삭제" aria-label="삭제" className="text-neutral-400 hover:text-red-500 align-middle">
                         <Trash2 className="w-4 h-4 inline" />
                       </button>

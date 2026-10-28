@@ -4,6 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
+import { inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -11,6 +12,7 @@ import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
+import { Segmented } from '../../components/ui/Segmented'
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 
 type Row = { account_id: string; display_name: string; updated_at: string }
@@ -185,7 +187,7 @@ function PlayerEditModal({
               <input
                 value={colSearch}
                 onChange={(e) => setColSearch(e.target.value)}
-                className="w-full border border-neutral-300 rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                className={inputCls + ' w-full pl-9'}
               />
             </div>
           </div>
@@ -487,27 +489,12 @@ export default function PlayersTab({
       <WhiteCard className="p-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-neutral-500">검색 기준</span>
-          <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-            <button
-              type="button"
-              onClick={() => setMode('nickname')}
-              className={`px-3 py-1 rounded-md text-xs transition-colors ${mode === 'nickname' ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'}`}
-            >
-              닉네임
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('id')}
-              className={`px-3 py-1 rounded-md text-xs transition-colors ${mode === 'id' ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'}`}
-            >
-              ID
-            </button>
-          </div>
+          <Segmented value={mode} onChange={setMode} options={[{ v: 'nickname', label: '닉네임' }, { v: 'id', label: 'ID' }]} />
           <input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void search(searchInput)}
-            className="flex-1 min-w-[240px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+            className={inputCls + ' flex-1 min-w-[240px]'}
           />
           <Button variant="primary" size="compact"
             onClick={() => void search(searchInput)}

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, X, ChevronLeft, ChevronRight, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, RefreshCw, X, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { SYSTEM_COLS } from '../../lib/userData'
 import { usePendingChanges } from '../../lib/pendingChanges'
 import { WhiteCard } from '../../components/ui/Card'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
@@ -12,6 +13,7 @@ import { opLabel, fieldTypeLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
+import { dangerInputCls, inputCls } from '../../components/ui/Input'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
 
@@ -105,11 +107,10 @@ function toPgDefault(v: string, t: CSharpType): string | null {
 }
 
 function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value: string; onChange: (v: string) => void }) {
-  const inputCls = 'w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]'
 
   if (type === 'bool') {
     return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} bg-white`}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} w-full`}>
         {value === '' && <option value="" disabled>선택하세요</option>}
         <option value="true">참</option>
         <option value="false">거짓</option>
@@ -117,7 +118,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
     )
   }
   if (isIntegerType(type) || isDecimalType(type)) {
-    return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} step={isIntegerType(type) ? 1 : 'any'} className={inputCls} />
+    return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} step={isIntegerType(type) ? 1 : 'any'} className={`${inputCls} w-full`} />
   }
   if (isDateTimeType(type)) {
     return (
@@ -127,7 +128,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
           value={value === 'now()' ? '' : value}
           onChange={(e) => onChange(e.target.value)}
           disabled={value === 'now()'}
-          className={`${inputCls} disabled:bg-neutral-50 disabled:text-neutral-400`}
+          className={`${inputCls} w-full disabled:bg-neutral-50 disabled:text-neutral-400`}
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input type="checkbox" checked={value === 'now()'} onChange={(e) => onChange(e.target.checked ? 'now()' : '')} className="rounded" />
@@ -144,7 +145,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
           value={value === 'CURRENT_DATE' ? '' : value}
           onChange={(e) => onChange(e.target.value)}
           disabled={value === 'CURRENT_DATE'}
-          className={`${inputCls} disabled:bg-neutral-50 disabled:text-neutral-400`}
+          className={`${inputCls} w-full disabled:bg-neutral-50 disabled:text-neutral-400`}
         />
         <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
           <input type="checkbox" checked={value === 'CURRENT_DATE'} onChange={(e) => onChange(e.target.checked ? 'CURRENT_DATE' : '')} className="rounded" />
@@ -154,7 +155,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
     )
   }
   if (type === 'TimeOnly') {
-    return <input type="time" value={value} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+    return <input type="time" value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} w-full`} />
   }
   if (type === 'JSON') {
     return (
@@ -163,7 +164,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
       </div>
     )
   }
-  return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+  return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} w-full`} />
 }
 
 function DeleteColumnModal({
@@ -218,7 +219,7 @@ function DeleteColumnModal({
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') void handleDelete() }}
-            className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400"
+            className={dangerInputCls + ' w-full'}
           />
         </div>
       </div>
@@ -358,7 +359,7 @@ function AddColumnModal({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full'}
             />
           </div>
           <div>
@@ -366,7 +367,7 @@ function AddColumnModal({
             <select
               value={type}
               onChange={(e) => handleTypeChange(e.target.value as CSharpType)}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full'}
             >
               {ALL_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
             </select>
@@ -484,7 +485,7 @@ export default function ColumnsTab({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+            className={inputCls + ' w-full pl-9'}
           />
         </div>
         <div className="flex gap-2">
@@ -544,18 +545,7 @@ export default function ColumnsTab({
           </tbody>
         </table>
         {total > 0 && (
-          <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-            <span>{start}–{end} / {formatTotal(total)}</span>
-            <div className="flex items-center gap-1">
-              <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50">
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <span className="px-2">{page} / {totalPages}</span>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50">
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          <TableFooter summary={<>{start}–{end} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </WhiteCard>
 

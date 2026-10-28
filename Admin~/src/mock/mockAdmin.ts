@@ -77,11 +77,16 @@ function revenueStats(days: number) {
     // 결제자는 건수보다 적다(한 사람이 여러 번 산다).
     return { country, revenue_krw: krw, purchases, payers: Math.ceil(purchases * 0.6) }
   }).filter((r) => r.purchases > 0).sort((a, b) => b.revenue_krw - a.revenue_krw)
+  // 금액 모름 — 구매 내역 표본의 40일 전 옛 방식 iOS 결제 한 건. 실제 SQL 처럼 건수에는 들어가고 금액은 0원이다.
+  const unknownAmount = days > 40 ? 1 : 0
+  const kr = rows.find((r) => r.country === 'KR')
+  if (kr) kr.purchases += unknownAmount
   return {
     days,
     total_krw: rows.reduce((s, r) => s + r.revenue_krw, 0),
     purchases: rows.reduce((s, r) => s + r.purchases, 0),
     payers: rows.reduce((s, r) => s + r.payers, 0),
+    unknown_amount: kr ? unknownAmount : 0,
     countries: rows,
   }
 }
@@ -208,12 +213,60 @@ function purchaseRows() {
   ]
 }
 
+// ── 자동 작업 ── 설치 SQL 에 등록된 이름·주기 그대로(시각은 UTC). 하나는 실패 상태를 보여 준다.
+const CRON_SCHEDULES: [string, string][] = [
+  ['run-mail-schedules', '* * * * *'], ['deliver-open-mail-batches', '* * * * *'], ['ts_leaderboard_rotate_due', '* * * * *'],
+  ['ccu-snapshot', '*/5 * * * *'], ['ts_match_lobby_cleanup', '*/5 * * * *'], ['withdrawal-cleanup', '0,30 * * * *'],
+  ['withdrawal-overdue-check', '15 * * * *'], ['ts_chat_cleanup', '17 * * * *'], ['cleanup-expired-mails', '0 3 * * *'],
+  ['cleanup-user-data-logs', '0 3 * * *'], ['cleanup-cron-run-details', '40 3 * * *'], ['purchase-refund-sync-google', '0 4 * * *'],
+  ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'],
+]
+
+/** 분·시 칸만 읽어 마지막 실행 시각과 하루 실행 횟수를 낸다(여기 쓰는 꼴만). */
+function cronTimes(schedule: string, now: number): { last: number; prev: number; perDay: number } {
+  const [min = '*', hour = '*'] = schedule.split(' ')
+  const step = min === '*' ? 1 : min.startsWith('*/') ? Number(min.slice(2)) : 0
+  if (step) {
+    const last = Math.floor(now / (step * 60_000)) * step * 60_000
+    return { last, prev: last - step * 60_000, perDay: 1440 / step }
+  }
+  const mins = min.split(',').map(Number)
+  const hits: number[] = []
+  const base = Math.floor(now / 60_000) * 60_000
+  for (let back = 0; hits.length < 2 && back < 3 * 1440; back++) {
+    const t = new Date(base - back * 60_000)
+    if (mins.includes(t.getUTCMinutes()) && (hour === '*' || Number(hour) === t.getUTCHours())) hits.push(t.getTime())
+  }
+  return { last: hits[0] ?? now, prev: hits[1] ?? now, perDay:hour === '*' ? mins.length * 24 : 1 }
+}
+
+function cronJobs() {
+  const now = Date.now()
+  const iso = (ms: number) => new Date(ms).toISOString()
+  return CRON_SCHEDULES.map(([jobname, schedule]) => {
+    const { last, prev, perDay } = cronTimes(schedule, now)
+    const failed = jobname === 'withdrawal-overdue-check'
+    const message = 'ERROR:  withdrawal_overdue: 탈퇴 유예가 2시간 넘게 지났는데 지워지지 않은 계정 1개 — withdrawal-sweep 배포·로그를 확인하세요'
+    return {
+      jobname, schedule, active: true,
+      last_start: iso(last), last_end: iso(last + 400),
+      last_status: failed ? 'failed' : 'succeeded', last_message: failed ? message : '1 row',
+      last_success: iso(failed ? prev : last),
+      runs_24h: perDay, failures_24h: failed ? 1 : 0, last_failure_message: failed ? message : null,
+    }
+  })
+}
+
 function purchaseList(p: Record<string, unknown>) {
   let rows = purchaseRows()
   if (p['refundedOnly']) rows = rows.filter((r) => r.refunded_at)
   if (p['test'] === 'only') rows = rows.filter((r) => r.is_test === true)
   else if (p['test'] === 'exclude') rows = rows.filter((r) => r.is_test !== true)
-  return { rows, total: rows.length, pageSize: 50, truncated: false }
+  if (p['all']) return { rows, total: rows.length, pageSize: rows.length, truncated: false }
+  // 쪽을 실제로 나눠 돌려준다 — 표 바닥 줄의 쪽 넘김을 가짜 데이터로도 눌러 볼 수 있게.
+  const pageSize = 4
+  const page = Math.max(1, Number(p['page'] ?? 1))
+  return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, pageSize, truncated: false }
 }
 
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
@@ -236,7 +289,7 @@ const HANDLERS: Record<string, Handler> = {
   'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
   'testPurchases.stats': (_t, p) => testPurchaseStats(Number(p['days'] ?? 30)),
   'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
-  // 스토어 연결 — 몇 개는 등록됨·몇 개는 없음으로 보여 입력·바꾸기 버튼이 둘 다 보이게 한다.
+  // 서비스 연결 — 몇 개는 등록됨·몇 개는 없음으로 보여 입력·바꾸기 버튼이 둘 다 보이게 한다.
   'settings.getStoreStatus': () => ({
     rows: [
       { key: 'APPLE_BUNDLE_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -3) + 'T10:00:00+09:00', updatedBy: 'mock@local' },
@@ -245,8 +298,103 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APPLE_TEAM_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APPLE_IAP_ISSUER_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APPLE_IAP_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APPLE_IAP_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
     ],
   }),
+  // 데이터 관리 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
+  'dataManagement.searchPlayers': () => [
+    { account_id: 'a9', display_name: '용사김', updated_at: addDays(kstToday(), 0) + 'T10:12:00+09:00' },
+    { account_id: 'a8', display_name: '마법사이', updated_at: addDays(kstToday(), -1) + 'T21:40:00+09:00' },
+    { account_id: 'a7', display_name: '궁수박', updated_at: addDays(kstToday(), -3) + 'T08:05:00+09:00' },
+  ],
+  'userData.columns': () => [
+    { column_name: 'gold', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
+    { column_name: 'level', data_type: 'integer', is_nullable: 'NO', column_default: '1' },
+    { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
+  ],
+  // 쿠폰·매치 보상 — 이것도 목록(배열)을 받는 화면이다. 아이템 이름은 두 화면이 같이 쓴다.
+  'gameItems.list': () => [
+    { key: 'gem', display_name: '보석' },
+    { key: 'gold', display_name: '골드' },
+    { key: 'ticket', display_name: '입장권' },
+  ],
+  'coupons.list': () => [
+    {
+      id: 'c2', kind: 'keyword', title: '오픈 기념', content: '오픈을 축하합니다.', category: 'default',
+      items: [{ key: 'gem', count: 100 }], expires_at: addDays(kstToday(), 14) + 'T23:59:00+09:00', mail_expires_days: 7,
+      max_uses: null, used_count: 312, is_active: true, created_at: addDays(kstToday(), -6) + 'T10:00:00+09:00',
+      code: 'WELCOME2026', issued_count: 1,
+    },
+    {
+      id: 'c1', kind: 'normal', title: '사전 예약 보상', content: '사전 예약 감사 선물입니다.', category: 'default',
+      items: [{ key: 'gold', count: 5000 }, { key: 'ticket', count: 3 }], expires_at: null, mail_expires_days: 30,
+      max_uses: 1, used_count: 87, is_active: true, created_at: addDays(kstToday(), -20) + 'T09:00:00+09:00',
+      code: null, issued_count: 200,
+    },
+  ],
+  'coupons.codes': () => [],
+  'matchRewards.list': () => [
+    {
+      game_code: 'pvp_1v1', record_count: 1240, player_count: 380, pending_count: 4,
+      last_reported_at: addDays(kstToday(), 0) + 'T12:40:00+09:00',
+      config: {
+        mode: 'competitive', win_items: [{ key: 'gem', count: 10 }], mail_title: '승리 보상', mail_content: '승리를 축하합니다.',
+        mail_expires_days: 7, updated_at: addDays(kstToday(), -2) + 'T15:00:00+09:00', updated_by: 'mock@local',
+      },
+    },
+  ],
+  // 우편 › 예약 목록 — 켜진 반복 발송 하나, 꺼진 예약 발송 하나. 아이템 키는 아이템 카탈로그와 같다.
+  'mails.getSchedules': () => ({
+    rows: [
+      {
+        id: 'ms1', schedule_type: 'repeat', target_mode: 'all', title: '매일 출석 보상', items: [{ key: 'gold', count: 1000 }], category: 'default',
+        scheduled_at: null, repeat_time: '09:00:00', repeat_tz: 'Asia/Seoul', repeat_unit: 'day', repeat_dow: null, repeat_dom: null,
+        next_run_at: addDays(kstToday(), 1) + 'T09:00:00+09:00', is_active: true, run_count: 12,
+        created_by: MOCK_EMAIL, server_code: null, platform: null, open_for_new: false,
+      },
+      {
+        id: 'ms2', schedule_type: 'scheduled', target_mode: 'server', title: '점검 보상', items: [{ key: 'gem', count: 50 }], category: 'default',
+        scheduled_at: addDays(kstToday(), 3) + 'T12:00:00+09:00', repeat_time: null, repeat_tz: null, repeat_unit: null, repeat_dow: null, repeat_dom: null,
+        next_run_at: addDays(kstToday(), 3) + 'T12:00:00+09:00', is_active: false, run_count: 0,
+        created_by: MOCK_EMAIL, server_code: 'KR', platform: null, open_for_new: true,
+      },
+    ],
+  }),
+  'remoteConfig.list': () => ({
+    rows: [
+      { key: 'game', value_json: { stamina: { max: 120, regen_seconds: 300 }, notice_url: 'https://example.com/notice' }, enabled: true, requires_auth: false, description: null, version: 3 },
+    ],
+  }),
+  // 서버 코드는 동시접속자 서버별 나눔(GLOBAL·KR)과 같다.
+  'servers.list': () => [
+    { id: 's1', server_code: 'GLOBAL', display_name: '글로벌', allow_transfers: true, is_default: true, player_count: 8421, created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' },
+    { id: 's2', server_code: 'KR', display_name: '한국', allow_transfers: false, is_default: false, player_count: 4310, created_at: addDays(kstToday(), -60) + 'T10:00:00+09:00' },
+  ],
+  'bannedWords.list': () => [
+    { kind: 'word', word: '바보', created_at: addDays(kstToday(), -10) + 'T11:00:00+09:00', created_by: MOCK_EMAIL },
+    { kind: 'word', word: '광고', created_at: addDays(kstToday(), -3) + 'T15:20:00+09:00', created_by: MOCK_EMAIL },
+    { kind: 'name', word: '운영자', created_at: addDays(kstToday(), -30) + 'T09:00:00+09:00', created_by: null },
+  ],
+  'jobs.list': () => cronJobs(),
+  // 마스터(MOCK_EMAIL)는 목록에 나오지 않는다 — 화면 안내와 같게.
+  'operators.list': () => [
+    { email: 'ops1@local', display_name: '운영자1', disabled_at: null, created_at: addDays(kstToday(), -40) + 'T10:00:00+09:00', created_by: MOCK_EMAIL, hasPassword: true },
+    { email: 'ops2@local', display_name: '운영자2', disabled_at: addDays(kstToday(), -5) + 'T10:00:00+09:00', created_at: addDays(kstToday(), -20) + 'T10:00:00+09:00', created_by: MOCK_EMAIL, hasPassword: false },
+  ],
+  // 쿠폰 코드는 쿠폰 목록의 '오픈 기념'과 같다.
+  'players.coupons': () => [
+    { code: 'WELCOME2026', kind: 'keyword', title: '오픈 기념', mail_id: 'm1', redeemed_at: addDays(kstToday(), -2) + 'T20:15:00+09:00' },
+  ],
+  // 로그는 바뀌기 전 값만 남는다 — 칸 이름은 유저 데이터 칸 목록과 같다.
+  'userData.logs': () => [
+    { id: 2, diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
+    { id: 1, diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
+  ],
+  'userData.getRestorePreview': () => [
+    { column: 'level', data_type: 'integer', current: 12, restored: 11 },
+  ],
   'purchases.list': (_t, p) => purchaseList(p),
   // 구글은 옛 결제 재확인 결과가 붙은 정상 완료, 애플은 받은 알림 있음.
   'purchases.getRefundStatus': () => ({
@@ -255,9 +403,24 @@ const HANDLERS: Record<string, Handler> = {
         last_ok: true, last_message: '시험 결제 확인 12건(그중 시험 3건), 구글이 답하지 않은 2건', last_marked: 1 },
       { store: 'apple_app_store', last_started_at: addDays(kstToday(), -2) + 'T04:11:40+09:00', last_finished_at: addDays(kstToday(), -2) + 'T04:11:40+09:00',
         last_ok: true, last_message: null, last_marked: 1 },
+      { store: 'price_sync', last_started_at: addDays(kstToday(), 0) + 'T13:30:01+09:00', last_finished_at: addDays(kstToday(), 0) + 'T13:30:06+09:00',
+        last_ok: true, last_message: '환율 170개 통화 / 애플 결제 금액 확인 1건 / 원화 환산 1건', last_marked: 1 },
     ],
   }),
   'purchases.syncRefunds': () => ({ skipped: 'recently_run' }),
+  // 설정 › 우편·친구·매치 로비 — 저장하면 받은 값을 그대로 돌려준다(새로 고치면 처음 값으로 돌아간다).
+  'mails.settingsGet': () => ({ expired_retention_days: 3, updated_at: null, updated_by: null }),
+  'mails.settingsUpdate': (_t, p) => ({ expired_retention_days: p['expiredRetentionDays'], updated_at: new Date().toISOString(), updated_by: 'mock@local' }),
+  'friends.settingsGet': () => ({ max_friends: 100, max_pending_sent: 50, request_cooldown_seconds: 3, updated_at: null, updated_by: null }),
+  'friends.settingsUpdate': (_t, p) => ({
+    max_friends: p['maxFriends'], max_pending_sent: p['maxPendingSent'], request_cooldown_seconds: p['requestCooldownSeconds'],
+    updated_at: new Date().toISOString(), updated_by: 'mock@local',
+  }),
+  'matchLobby.settingsGet': () => ({ max_pending_invites_received: 20, invite_cooldown_seconds: 3, lobby_expire_minutes: 30, updated_at: null, updated_by: null }),
+  'matchLobby.settingsUpdate': (_t, p) => ({
+    max_pending_invites_received: p['maxPendingInvitesReceived'], invite_cooldown_seconds: p['inviteCooldownSeconds'],
+    lobby_expire_minutes: p['lobbyExpireMinutes'], updated_at: new Date().toISOString(), updated_by: 'mock@local',
+  }),
   'game.settingsGet': () => gameSettings,
   'game.settingsUpdate': (_t, p) => {
     gameSettings = { ...gameSettings, time_zone: String(p['timeZone'] ?? gameSettings.time_zone), updated_at: new Date().toISOString(), updated_by: 'mock@local' }

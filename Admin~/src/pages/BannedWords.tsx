@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { Plus, X, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
+import { areaCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -113,19 +114,17 @@ export default function BannedWords({
         const list = rows.filter((r) => r.kind === s.kind)
         return (
           <WhiteCard key={s.kind} className="p-5 space-y-3">
-            <div>
-              <h3 className="text-base font-semibold text-neutral-900">
-                {s.title} {!loadFailed && <span className="ml-1 text-sm font-normal text-neutral-400">{list.length}개</span>}
-              </h3>
-              <p className="mt-1 text-xs text-neutral-500">{s.hint}</p>
-            </div>
+            <CardHeader
+              title={<>{s.title} {!loadFailed && <span className="ml-1 font-normal text-neutral-400">{list.length}개</span>}</>}
+              description={s.hint}
+            />
 
             <div className="flex items-start gap-2">
               <textarea
                 value={drafts[s.kind]}
                 onChange={(e) => setDrafts((d) => ({ ...d, [s.kind]: e.target.value }))}
                 rows={2}
-                className="flex-1 px-2.5 py-2 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]"
+                className={areaCls + ' flex-1'}
               />
               <Button
                 variant="primary"

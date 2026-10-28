@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -10,6 +11,7 @@ import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { Segmented } from '../components/ui/Segmented'
 
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
@@ -42,8 +44,6 @@ const MODE_HINT: Record<Mode, string> = {
   competitive: '두 사람이 서로 반대 결과(한 명 승리, 한 명 패배)를 보내야 인정합니다.',
   coop: '두 사람이 같은 결과를 보내야 인정합니다.',
 }
-
-const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByCode, catalog, catalogFailed, onClose, onSaved }: {
   target: ProjectTarget
@@ -153,14 +153,11 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
 
           <div>
             <label className="block text-xs text-neutral-500 mb-1">결과 확인 방식</label>
-            <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-              {(['competitive', 'coop'] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setMode(m)}
-                  className={['px-4 py-1.5 rounded-md text-sm transition-colors whitespace-nowrap', mode === m ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'].join(' ')}>
-                  {MODE_LABEL[m]}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              value={mode}
+              onChange={setMode}
+              options={(['competitive', 'coop'] as const).map((m) => ({ v: m, label: MODE_LABEL[m] }))}
+            />
             <p className="mt-1 text-xs text-neutral-400">{MODE_HINT[mode]} 게임이 보내는 결과와 맞지 않으면 모든 판이 무효가 됩니다.</p>
             {modeChanged && (
               <p className="mt-1 text-xs text-amber-600">방식을 바꾸면 게임이 그에 맞게 결과를 보내기 전까지 이 코드의 모든 판이 무효가 됩니다.</p>

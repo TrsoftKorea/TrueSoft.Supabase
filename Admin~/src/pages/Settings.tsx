@@ -5,14 +5,17 @@ import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLoo
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, GroupBox, WhiteCard } from '../components/ui/Card'
+import { Segmented } from '../components/ui/Segmented'
+import { Tabs } from '../components/ui/Tabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, type GameSettings } from '../lib/gameTime'
-import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Pencil, Trash2 } from 'lucide-react'
-import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
+import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import { LimitsForm, type LimitField } from './social/LimitsForm'
+import { areaCls, inputCls } from '../components/ui/Input'
 
 type StoreKeyStatus = {
   key: string
@@ -25,72 +28,109 @@ type StoreKeyStatus = {
 // 화면에는 이 값이 없으면 무엇이 안 되는지만 적는다. 키 목록은 admin-api SERVER_CONFIG_VALID ·
 // install.sql ts_server_config_keys() 와 같아야 한다(SdkAudit R16 이 대조).
 /**
- * 값을 가져오는 방법. 발급처 화면은 영어라 메뉴·버튼 이름은 그 화면에 보이는 영어 그대로 따옴표로 적는다.
- * 각 단계는 2026-10-28 애플·구글 공식 도움말로 확인했다. 애플 로그인 키의 "Configure → Primary App ID" 만은
- * 그 도움말 페이지가 열리지 않아 일반 키 만들기 안내와 기억으로 적었다 — 화면이 다르면 여기를 고친다.
+ * 값을 가져오는 방법. 메뉴·버튼·항목 이름은 운영자가 보는 한국어 화면의 표기를 따옴표로 적는다.
+ * App Store Connect·Google Cloud 콘솔·Play Console 은 한국어 도움말(developer.apple.com/kr/help,
+ * docs.cloud.google.com ?hl=ko, Play Console 고객센터 hl=ko)의 표기로 2026-10-28 확인했다.
+ * Apple Developer 의 키 화면은 한국어 도움말도 버튼을 영어로 적어("Keys(키)", "Continue(계속)") 영어 그대로 둔다.
+ * 앱 내 구입 키 화면의 "Issuer ID"(영어 그대로)·"키 ID" 와, Apple Developer 화면이 영어라는 것은 운영자가 화면으로 확인했다.
+ * 줄 이름(name)은 운영자 요청으로 키 묶음 안에서 영어로 통일했다(Issuer ID · Key ID · Private key) — 단계 안의
+ * 따옴표 글자는 그 화면에 보이는 그대로 둔다.
+ * 확인 못 한 것 — 화면이 다르면 여기를 고친다: 애플 로그인 키의 "Configure → Primary App ID" 단계,
+ * Team ID 가 보이는 "Membership details" 위치.
  */
-type KeyGuide = { origin: string; site: { name: string; url: string }; steps: string[]; notes?: string[] }
+type KeyGuide = { site: { name: string; url: string }; steps: string[]; notes?: string[] }
 
-const STORE_KEYS: { key: string; label: string; needFor: string; multiline?: boolean; hint: string; guide: KeyGuide }[] = [
+type ServiceTab = 'store' | 'login'
+type StoreGroup = 'appstore' | 'googleplay' | 'signin'
+type KeySet = 'iap'
+
+const SERVICE_TABS: readonly (readonly [ServiceTab, string])[] = [
+  ['store', '스토어'],
+  ['login', '로그인'],
+]
+
+// 화면에 묶어 보이는 순서와 제목. 같은 묶음의 키는 STORE_KEYS 순서대로 나온다.
+// 묶음마다 제목 띠가 있는 상자 하나로 보인다(안쪽 탭에 묶음이 하나뿐이어도 같은 모양).
+const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
+  { id: 'appstore', tab: 'store', title: 'App Store' },
+  { id: 'googleplay', tab: 'store', title: 'Google Play' },
+  { id: 'signin', tab: 'login', title: 'Sign in with Apple' },
+]
+
+// 한 화면에서 함께 가져오는 값들(같은 키의 ID·파일 등). 줄마다 용도를 되풀이하지 않고 여기 한 번 적는다.
+// 가져오는 곳이 서로 다르면 묶지 않는다 — Sign in with Apple 은 Team ID 가 다른 화면이라 묶지 않았다.
+// 제목·이름은 발급처 화면에 적힌 그대로 쓴다 — 운영자가 그 화면에서 같은 글자를 찾는다.
+const KEY_SETS: Record<KeySet, { title: string; note: string }> = {
+  iap: {
+    title: '앱 내 구입 키',
+    note: 'iOS 옛 방식 결제의 금액 기록',
+  },
+}
+
+// name 은 발급처 화면의 이름. 홀로 보일 때(입력 창 제목)는 묶음 제목을 앞에 붙인다(keyTitle).
+// 설명은 두 갈래로 나눈다 — needFor·KEY_SETS.note(표): 무엇에 쓰는지만, 짧은 명사형.
+// hint(입력 창): 무엇을 어떤 형식으로 넣는지만, "~넣습니다"로 끝맺는다. 형식은 admin-api SERVER_CONFIG_VALID 와 맞춘다.
+type StoreKeyDef = {
+  key: string; group: StoreGroup; set?: KeySet; name: string; needFor?: string
+  multiline?: boolean; hint: string; guide: KeyGuide
+}
+
+const STORE_KEYS: StoreKeyDef[] = [
   {
-    key: 'APPLE_BUNDLE_ID', label: 'iOS 앱 번들 ID', needFor: 'iOS 결제 확인 · 애플 환불 기록',
-    hint: '앱이 여럿이면 쉼표로 나눠 적습니다.',
+    key: 'APPLE_BUNDLE_ID', group: 'appstore', name: '번들 ID', needFor: 'iOS 결제 확인 · 애플 환불 기록',
+    hint: '영문·숫자·점·하이픈으로 된 값을 넣습니다. 앱이 여럿이면 쉼표로 나눕니다.',
     guide: {
-      origin: 'Bundle ID',
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
       steps: [
-        '"Apps"에서 게임 앱을 고릅니다.',
-        '왼쪽 "General" 아래 "App Information"을 엽니다.',
-        '"Bundle ID"에 보이는 값을 복사합니다. 예: com.회사이름.게임이름',
+        '"앱"에서 게임 앱을 고릅니다.',
+        '사이드바의 "일반 정보" 아래 "앱 정보"를 엽니다.',
+        '"번들 ID"에 보이는 값을 복사합니다. 예: com.회사이름.게임이름',
       ],
       notes: ['유니티 Player Settings의 "Bundle Identifier"와 같은 값입니다.'],
     },
   },
   {
-    key: 'APPLE_SHARED_SECRET', label: 'App Store 앱 전용 공유 암호', needFor: 'iOS 옛 방식 결제 확인',
-    hint: '복사한 값을 그대로 붙여 넣습니다.',
+    key: 'APPLE_SHARED_SECRET', group: 'appstore', name: '앱 공유 암호', needFor: 'iOS 옛 방식 결제 확인',
+    hint: 'App Store Connect에서 복사한 값을 그대로 넣습니다.',
     guide: {
-      origin: 'App-Specific Shared Secret',
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
       steps: [
-        '"Apps"에서 게임 앱을 고릅니다.',
-        '왼쪽 "General" 아래 "App Information"을 엽니다.',
-        '"App-Specific Shared Secret" 칸의 "Manage"를 누릅니다.',
-        '처음이면 "Generate"를 누르고, 이미 있으면 보이는 값을 그대로 복사합니다.',
-        '"Done"을 눌러 닫습니다.',
+        '"앱"에서 게임 앱을 고릅니다.',
+        '사이드바의 "일반 정보" 아래 "앱 정보"를 엽니다.',
+        '"앱 공유 암호" 섹션에서 "관리"를 누릅니다.',
+        '처음이면 "생성"을 누르고, 이미 있으면 보이는 값을 그대로 복사합니다.',
+        '"완료"를 눌러 닫습니다.',
       ],
       notes: [
-        '"Regenerate"는 누르지 마세요. 누르는 순간 예전 값이 바로 못 쓰게 됩니다.',
-        'App Store Connect 계정 소유자(Account Holder)나 관리자(Admin)만 볼 수 있습니다.',
+        '"재생성"은 누르지 마세요. 누르는 순간 예전 값을 못 쓰게 됩니다.',
+        'App Store Connect 계정 소유자나 관리자만 볼 수 있습니다.',
         '새로 만든 값은 적용까지 최대 24시간 걸릴 수 있습니다.',
       ],
     },
   },
   {
-    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', label: 'Google Play 서비스 계정', needFor: 'Android 결제 확인 · 구글 환불 기록',
-    multiline: true, hint: '서비스 계정 키 JSON 파일 내용 전체를 붙여 넣습니다.',
+    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키 (JSON)', needFor: 'Android 결제 확인 · 구글 환불 기록',
+    multiline: true, hint: '내려받은 JSON 파일의 내용 전체를 넣습니다.',
     guide: {
-      origin: 'Service account key (JSON)',
-      site: { name: 'Google Cloud Console', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
+      site: { name: 'Google Cloud 콘솔', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
       steps: [
-        'Google Cloud Console에서 프로젝트를 고르고, "Google Play Android Developer API"를 찾아 "Enable"을 누릅니다.',
-        '"Service accounts"에서 "Create service account"를 눌러 계정을 만듭니다.',
-        '만든 계정의 이메일을 누르고 "Keys" 탭 → "Add key" → "Create new key" → "JSON" → "Create". JSON 파일이 내려받아집니다.',
-        'Google Play Console의 "Users and permissions"에서 "Invite new users"를 누르고 그 서비스 계정 이메일을 넣습니다.',
-        '권한은 "View financial data, orders, and cancellation survey responses"와 "Manage orders and subscriptions"를 켜고 "Invite user"를 누릅니다.',
+        'Google Cloud 콘솔에서 프로젝트를 고르고, "API 라이브러리"에서 "Google Play Android Developer API"를 찾아 "사용 설정"을 누릅니다.',
+        '"서비스 계정" 페이지에서 "서비스 계정 만들기"로 계정을 만들고 "완료"를 누릅니다.',
+        '만든 계정의 이메일을 누르고 "키" 탭 → "키 추가" → "새 키 만들기" → 키 유형 "JSON" → "만들기". JSON 파일이 내려받아집니다.',
+        'Google Play Console의 "사용자 및 권한"에서 "사용자 초대"를 누르고 그 서비스 계정 이메일을 넣습니다.',
+        '권한은 "재무 데이터, 주문, 취소 설문조사 응답 보기"와 "주문 및 정기 결제 관리"를 켜고 초대를 보냅니다.',
         '내려받은 JSON 파일을 메모장으로 열어 내용 전체를 여기 붙여 넣습니다.',
       ],
       notes: [
         'JSON 파일은 한 번만 내려받을 수 있습니다. 잃어버리면 새 키를 만듭니다.',
-        '"Create new key"가 막혀 있으면 회사 Google Cloud 조직 정책이 키 만들기를 막은 것입니다. 조직 관리자에게 이 프로젝트만 풀어 달라고 요청합니다.',
+        '"새 키 만들기"가 막혀 있으면 회사 Google Cloud 조직 정책이 키 만들기를 막은 것입니다. 조직 관리자에게 이 프로젝트만 풀어 달라고 요청합니다.',
       ],
     },
   },
   {
-    key: 'APPLE_TEAM_ID', label: 'Apple 팀 ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
-    hint: '영문 대문자·숫자 10자입니다.',
+    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    hint: '영문 대문자·숫자 10자를 넣습니다.',
     guide: {
-      origin: 'Team ID',
       site: { name: 'Apple Developer', url: 'https://developer.apple.com/account' },
       steps: [
         'Apple Developer 계정에 로그인합니다.',
@@ -100,38 +140,84 @@ const STORE_KEYS: { key: string; label: string; needFor: string; multiline?: boo
     },
   },
   {
-    key: 'APPLE_KEY_ID', label: 'Sign in with Apple 키 ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
-    hint: '영문 대문자·숫자 10자입니다.',
+    key: 'APPLE_KEY_ID', group: 'signin', name: 'Key ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
     guide: {
-      origin: 'Key ID',
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
       steps: [
-        '"Certificates, Identifiers & Profiles"의 "Keys"에서 왼쪽 위 "+"를 누릅니다.',
+        '"인증서, 식별자 및 프로파일"에서 사이드바의 "Keys"를 누르고, 왼쪽 위 추가 버튼(+)을 누릅니다.',
         '"Key Name"에 알아볼 이름을 넣고 "Sign in with Apple"에 체크한 뒤, 옆 "Configure"에서 게임 앱("Primary App ID")을 고르고 "Save"를 누릅니다.',
-        '"Continue" → 내용을 확인하고 "Confirm"을 누릅니다.',
-        '만든 키를 누르면 키 이름 아래에 보이는 값이 키 ID입니다.',
+        '"Continue"를 누르고, 내용을 확인한 뒤 "Confirm"을 누릅니다.',
+        '만든 키를 누르면 키 이름 아래에 보이는 값이 "Key ID"입니다.',
       ],
-      notes: ['이미 만든 애플 로그인 키가 있으면 "Keys" 목록에서 그 키를 눌러 확인합니다. 키 파일과 같은 키여야 합니다.'],
+      notes: ['이미 만든 애플 로그인 키가 있으면 "Keys" 목록에서 그 키를 눌러 확인합니다. 아래 "Private key"와 같은 키여야 합니다.'],
     },
   },
   {
-    key: 'APPLE_PRIVATE_KEY', label: 'Sign in with Apple 키 파일', needFor: '탈퇴 시 애플 로그인 연결 해제',
-    multiline: true, hint: '.p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣습니다.',
+    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key (.p8)', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
-      origin: 'Private key (.p8)',
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
       steps: [
-        '"Sign in with Apple 키 ID"를 만들 때 마지막 화면에서 "Download"를 누르면 .p8 파일이 내려받아집니다.',
+        '위 "Key ID"의 키를 만들 때 마지막 화면에서 "Download"를 누르면 .p8 파일이 내려받아집니다.',
         '그 파일을 메모장으로 열어 "-----BEGIN PRIVATE KEY-----"부터 "-----END PRIVATE KEY-----"까지 전부 복사해 붙여 넣습니다.',
       ],
       notes: [
-        '.p8 파일은 한 번만 내려받을 수 있습니다. "Download"가 회색이면 이미 받은 것입니다. 파일을 잃어버렸으면 새 키를 만들고, 키 ID도 새 키 것으로 바꿉니다.',
+        '.p8 파일은 한 번만 내려받을 수 있습니다. "Download"가 회색이면 이미 받은 것입니다. 파일을 잃어버렸으면 새 키를 만들고, "Key ID"도 새 키 것으로 바꿉니다.',
+      ],
+    },
+  },
+  {
+    key: 'APPLE_IAP_ISSUER_ID', group: 'appstore', set: 'iap', name: 'Issuer ID',
+    hint: '하이픈이 들어간 36자를 넣습니다.',
+    guide: {
+      site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
+      steps: [
+        'App Store Connect 위쪽에서 "사용자 및 액세스"를 엽니다.',
+        '"통합" 탭을 누르고, 사이드바의 "키" 아래 "앱 내 구입"을 누릅니다.',
+        '화면 위쪽에 보이는 "Issuer ID"를 복사합니다.',
+      ],
+      notes: ['App Store Connect 계정 소유자나 관리자만 볼 수 있습니다.'],
+    },
+  },
+  {
+    key: 'APPLE_IAP_KEY_ID', group: 'appstore', set: 'iap', name: 'Key ID',
+    hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
+    guide: {
+      site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
+      steps: [
+        'App Store Connect에서 "사용자 및 액세스" → "통합" 탭 → 사이드바의 "키" 아래 "앱 내 구입"을 엽니다.',
+        '"앱 내 구입 키 생성"을 누릅니다. 이미 "활성화됨"에 키가 있으면 추가 버튼(+)을 누릅니다.',
+        '알아볼 이름을 넣고 "생성"을 누릅니다.',
+        '목록에 생긴 키의 "키 ID"를 복사합니다.',
+      ],
+      notes: ['로그인 탭의 Sign in with Apple 키와는 다른 키입니다. 이 화면에서 만든 키의 "키 ID"를 넣습니다.'],
+    },
+  },
+  {
+    key: 'APPLE_IAP_PRIVATE_KEY', group: 'appstore', set: 'iap', name: 'Private key (.p8)',
+    multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
+    guide: {
+      site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
+      steps: [
+        '위 "키 ID"의 키가 있는 화면의 "활성화됨" 아래에서 그 키의 "키 다운로드"를 누르고, 대화창에서 "다운로드"를 누릅니다.',
+        '내려받은 .p8 파일을 메모장으로 열어 "-----BEGIN PRIVATE KEY-----"부터 "-----END PRIVATE KEY-----"까지 전부 복사해 붙여 넣습니다.',
+      ],
+      notes: [
+        '.p8 파일은 한 번만 내려받을 수 있습니다. "키 다운로드"가 안 보이면 이미 받은 것입니다. 파일을 잃어버렸으면 새 키를 만들고, "키 ID"도 새 키 것으로 바꿉니다.',
       ],
     },
   },
 ]
 
-/** 입력칸 옆 "가져오는 방법" — 누르면 발급처·원래 이름·단계가 펼쳐진다. */
+/** 입력 창 제목처럼 홀로 보일 때의 이름 — "Key ID" 만으로는 어느 키인지 모르니 묶음 제목을 앞에 붙인다. */
+function keyTitle(k: StoreKeyDef | undefined): string {
+  if (!k) return ''
+  const owner = k.set ? KEY_SETS[k.set].title : STORE_GROUPS.find((g) => g.id === k.group)?.title
+  return owner ? `${owner} › ${k.name}` : k.name
+}
+
+/** 입력칸 옆 "가져오는 방법" — 누르면 발급처 바로 가기·단계가 펼쳐진다. */
 function KeyGuideToggle({ guide }: { guide: KeyGuide }) {
   const [open, setOpen] = useState(false)
   return (
@@ -144,12 +230,9 @@ function KeyGuideToggle({ guide }: { guide: KeyGuide }) {
       </button>
       {open && (
         <div className="mt-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5 space-y-2 text-xs">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-neutral-500">발급처의 이름 <span className="font-mono text-neutral-800">{guide.origin}</span></span>
-            <a href={guide.site.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[#1677ff] hover:underline">
-              {guide.site.name} 열기 <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
+          <a href={guide.site.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[#1677ff] hover:underline">
+            {guide.site.name} 열기 <ExternalLink className="w-3 h-3" />
+          </a>
           <ol className="list-decimal pl-4 space-y-1 leading-relaxed text-neutral-700">
             {guide.steps.map((s, i) => <li key={i}>{s}</li>)}
           </ol>
@@ -183,13 +266,14 @@ function StoreStatusCard({
   const [saving, setSaving] = useState(false)
   const [savedKey, setSavedKey] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [tab, setTab] = useState<ServiceTab>('store')
 
   const load = useCallback(async () => {
     try {
       const res = await callAdmin<{ rows: StoreKeyStatus[] }>(target, 'settings.getStoreStatus', {})
       setRows(res.rows)
     } catch (e: unknown) {
-      report(e, '스토어 연결 상태를 불러오지 못했습니다.')
+      report(e, '서비스 연결 상태를 불러오지 못했습니다.')
     }
   }, [target, report])
 
@@ -227,62 +311,100 @@ function StoreStatusCard({
     }
   }
 
+  const groups = STORE_GROUPS.filter((g) => g.tab === tab)
+
   return (
-    <WhiteCard className="p-5 space-y-3">
-      <div>
-        <h2 className="text-sm font-medium text-neutral-900">스토어 연결</h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          저장한 값은 다시 보이지 않습니다. 바꾸면 1분 안에 결제 확인·환불 기록·탈퇴 처리에 적용됩니다.
-        </p>
+    <WhiteCard className="p-5 space-y-5">
+      <CardHeader
+        title="서비스 연결"
+        description="저장한 값은 다시 보이지 않습니다. 바꾸면 1분 안에 결제 확인·환불 기록·탈퇴 처리에 적용됩니다."
+      />
+      <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
+      {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <GroupBox key={g.id} title={g.title}>
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col className="w-[34%]" />
+                <col />
+                <col className="w-[76px]" />
+                <col className="w-[164px]" />
+              </colgroup>
+              <tbody>
+                {STORE_KEYS.filter((k) => k.group === g.id).flatMap((k, i, list) => {
+                  const row = byKey.get(k.key)
+                  const view = row ? STATUS_VIEW[row.status] : null
+                  // 한 키에서 나오는 값들은 묶음 제목 한 줄 아래에 들여 써서 함께 보인다.
+                  const startsSet = !!k.set && list[i - 1]?.set !== k.set
+                  const set = k.set ? KEY_SETS[k.set] : null
+                  return [
+                    ...(startsSet && set ? [
+                      <tr key={`${k.set}-head`} className="border-t border-neutral-100 first:border-t-0">
+                        <td colSpan={4} className="px-4 pt-2.5 pb-1">
+                          <div className="text-neutral-800">{set.title}</div>
+                          <div className="text-xs text-neutral-500">{set.note}</div>
+                        </td>
+                      </tr>,
+                    ] : []),
+                    <tr key={k.key} className={set ? '' : 'border-t border-neutral-100 first:border-t-0'}>
+                      <td className={`py-2 pr-4 ${set ? 'pl-8' : 'pl-4'}`}>
+                        <div className={set ? 'text-neutral-700' : 'text-neutral-800'}>{k.name}</div>
+                        {k.needFor && <div className="text-xs text-neutral-500">{k.needFor}</div>}
+                      </td>
+                      <td className="py-2 pr-4 text-xs text-neutral-400">
+                        {row?.source === 'console' && row.updatedAt && (
+                          <>
+                            <div className="whitespace-nowrap">수정 {formatDateTime(row.updatedAt)}</div>
+                            {row.updatedBy && <div className="truncate">{row.updatedBy}</div>}
+                          </>
+                        )}
+                        {row?.source === 'supabase' && <span>콘솔 밖에서 넣은 값 사용 중</span>}
+                        {savedKey === k.key && <span className="ml-2 text-green-600 whitespace-nowrap">저장했습니다.</span>}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {view
+                          ? <span className={`inline-flex rounded px-2 py-0.5 text-xs whitespace-nowrap ${view.cls}`}>{view.text}</span>
+                          : <span className="text-xs text-neutral-400">-</span>}
+                      </td>
+                      <td className="py-2 pr-4 text-right whitespace-nowrap">
+                        {/* 두 자리는 폭을 고정하고 삭제가 없는 줄도 빈자리를 남긴다 — 줄마다 버튼 위치가 흔들리지 않게. */}
+                        <div className="inline-flex gap-1.5">
+                          {row?.status === 'missing' ? (
+                            <Button size="sm" variant="primary" className="w-[76px]" onClick={() => open(k.key, false)} disabled={!rows}>
+                              <Plus className="w-3 h-3" />
+                              입력
+                            </Button>
+                          ) : (
+                            <Button size="sm" className="w-[76px]" onClick={() => open(k.key, false)} disabled={!rows}>
+                              <Pencil className="w-3 h-3" />
+                              바꾸기
+                            </Button>
+                          )}
+                          {row?.source === 'console' ? (
+                            <Button size="sm" variant="dangerOutline" className="w-[64px]" onClick={() => open(k.key, true)}>
+                              <Trash2 className="w-3 h-3" />
+                              삭제
+                            </Button>
+                          ) : (
+                            <span className="w-[64px]" aria-hidden />
+                          )}
+                        </div>
+                      </td>
+                    </tr>,
+                  ]
+                })}
+              </tbody>
+            </table>
+          </GroupBox>
+        ))}
       </div>
-      <table className="w-full text-sm">
-        <tbody>
-          {STORE_KEYS.map((k) => {
-            const row = byKey.get(k.key)
-            const view = row ? STATUS_VIEW[row.status] : null
-            return (
-              <tr key={k.key} className="border-t border-neutral-100">
-                <td className="py-2 pr-4">
-                  <div className="text-neutral-800">{k.label}</div>
-                  <div className="text-xs text-neutral-500">{k.needFor}</div>
-                </td>
-                <td className="py-2 pr-4 text-xs text-neutral-400">
-                  {row?.source === 'console' && row.updatedAt && (
-                    <span>수정 {formatDateTime(row.updatedAt)}{row.updatedBy ? ` · ${row.updatedBy}` : ''}</span>
-                  )}
-                  {row?.source === 'supabase' && <span>기본 설정 값을 쓰는 중</span>}
-                  {savedKey === k.key && <span className="ml-2 text-green-600 whitespace-nowrap">저장했습니다.</span>}
-                </td>
-                <td className="py-2 pr-3 text-right">
-                  {view
-                    ? <span className={`inline-flex rounded px-2 py-0.5 text-xs whitespace-nowrap ${view.cls}`}>{view.text}</span>
-                    : <span className="text-xs text-neutral-400">-</span>}
-                </td>
-                <td className="py-2 text-right whitespace-nowrap">
-                  <div className="inline-flex gap-1.5">
-                    <Button size="sm" onClick={() => open(k.key, false)} disabled={!rows}>
-                      <Pencil className="w-3 h-3" />
-                      {row?.status === 'missing' ? '입력' : '바꾸기'}
-                    </Button>
-                    {row?.source === 'console' && (
-                      <Button size="sm" variant="danger" onClick={() => open(k.key, true)}>
-                        <Trash2 className="w-3 h-3" />
-                        삭제
-                      </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
 
       <ConfirmDialog
         open={!!editing}
-        title={editing?.clear ? `${editingDef?.label} 삭제` : `${editingDef?.label} ${byKey.get(editing?.key ?? '')?.status === 'missing' ? '입력' : '바꾸기'}`}
+        title={editing?.clear ? `${keyTitle(editingDef)} 삭제` : `${keyTitle(editingDef)} ${byKey.get(editing?.key ?? '')?.status === 'missing' ? '입력' : '바꾸기'}`}
         description={editing?.clear
-          ? '삭제하면 1분 안에 기본 설정 값으로 돌아갑니다. 기본 설정 값도 없으면 이 기능이 멈춥니다.'
+          ? '삭제하면 1분 안에 콘솔 밖에서 넣은 값으로 돌아갑니다. 그 값도 없으면 이 기능이 멈춥니다.'
           : '저장하면 1분 안에 적용됩니다. 저장한 값은 다시 볼 수 없습니다.'}
         confirmLabel={editing?.clear ? '삭제' : '저장'}
         danger={!!editing?.clear}
@@ -298,7 +420,7 @@ function StoreStatusCard({
             {editingDef.multiline
               ? (
                 <textarea
-                  className="w-full h-40 px-3 py-2 rounded-md border border-neutral-200 font-mono text-xs outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                  className={areaCls + ' w-full h-40 font-mono'}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   spellCheck={false}
@@ -481,10 +603,10 @@ function ConsoleIdentityCard({
 
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
-      <div>
-        <h2 className="text-sm font-medium text-neutral-900">게임 이름 · 아이콘</h2>
-        <p className="mt-1 text-xs text-neutral-500">게임 목록·메뉴·상단 띠·확인 창에 보입니다. 모든 운영자에게 같게 보입니다.</p>
-      </div>
+      <CardHeader
+        title="게임 이름 · 아이콘"
+        description="게임 목록·메뉴·상단 띠·확인 창에 보입니다. 모든 운영자에게 같게 보입니다."
+      />
 
       <div className="space-y-1">
         <label htmlFor="console-name" className="block text-sm font-medium text-neutral-800">게임 이름</label>
@@ -613,12 +735,10 @@ function ConsoleColorCard({
 
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
-      <div>
-        <h2 className="text-sm font-medium text-neutral-900">게임 색</h2>
-        <p className="mt-1 text-xs text-neutral-500">
-          {look.name(target)}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.
-        </p>
-      </div>
+      <CardHeader
+        title="게임 색"
+        description={`${look.name(target)}을 고르면 메뉴·상단 띠·확인 창에 이 색이 쓰입니다. 모든 운영자에게 같은 색으로 보입니다.`}
+      />
 
       <div className="flex flex-wrap gap-2.5" role="group" aria-label="색 고르기">
         {CONSOLE_PALETTE.map((c) => {
@@ -746,12 +866,10 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
 
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
-      <div>
-        <h3 className="text-sm font-semibold text-neutral-900">게임 시간대</h3>
-        <p className="text-xs text-neutral-500 mt-1">
-          통계의 하루, 대시보드의 오늘, 날짜 검색, 탈퇴 계정이 삭제되는 자정, 새로 만드는 우편 예약·리더보드 회차를 이 시간대로 셉니다.
-        </p>
-      </div>
+      <CardHeader
+        title="게임 시간대"
+        description="통계의 하루, 대시보드의 오늘, 날짜 검색, 탈퇴 계정이 삭제되는 자정, 새로 만드는 우편 예약·리더보드 회차를 이 시간대로 셉니다."
+      />
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-neutral-700">시간대</label>
         <select value={tz} onChange={(e) => setTz(e.target.value)} className={inputCls + ' max-w-sm'} disabled={!current}>
@@ -797,7 +915,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
 type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
-  ['store', '스토어 연결'],
+  ['store', '서비스 연결'],
   ['time', '시간대'],
   ['mail', '우편'],
   ['friend', '친구'],
@@ -825,22 +943,7 @@ export default function Settings({
       <PageHeader title="설정" description="게임 기능의 제한값과 동작 값을 조정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="border-b border-neutral-200 flex gap-1">
-        {TABS.map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
-              tab === key
-                ? 'border-[#1677ff] text-[#1677ff] font-medium'
-                : 'border-transparent text-neutral-600 hover:text-neutral-900',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onChange={setTab} tabs={TABS} />
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
       {tab === 'console' && <ConsoleCards target={target} report={report} />}
@@ -850,6 +953,7 @@ export default function Settings({
           target={target}
           report={report}
           title="우편"
+          description="플레이어 우편함에서 기간이 지난 우편을 얼마 동안 보여 줄지 정합니다."
           getAction="mails.settingsGet"
           updateAction="mails.settingsUpdate"
           fields={MAIL_FIELDS}
@@ -861,6 +965,7 @@ export default function Settings({
           target={target}
           report={report}
           title="친구"
+          description="한 사람이 가질 수 있는 친구 수와 친구 요청을 보내는 빈도를 정합니다."
           getAction="friends.settingsGet"
           updateAction="friends.settingsUpdate"
           fields={FRIEND_FIELDS}
@@ -872,6 +977,7 @@ export default function Settings({
           target={target}
           report={report}
           title="매치 로비"
+          description="함께 할 사람을 초대하는 빈도와, 시작하지 않은 방이 닫히는 시간을 정합니다."
           getAction="matchLobby.settingsGet"
           updateAction="matchLobby.settingsUpdate"
           fields={LOBBY_FIELDS}

@@ -81,7 +81,7 @@ export default function Dashboard({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="대시보드" description="접속자·플레이어·매출 현황을 한눈에 봅니다." />
+      <PageHeader title="대시보드" description="게임 현황을 한눈에 봅니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex justify-end">

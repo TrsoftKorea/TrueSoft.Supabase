@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
+import { inputCls } from '../../components/ui/Input'
 
 type Status = 'verified' | 'pending' | 'solo' | 'mismatch'
 
@@ -28,8 +30,6 @@ const STATUS_LABEL: Record<Status, string> = {
 const STATUS_CLS: Record<Status, string> = {
   verified: 'text-emerald-600', pending: 'text-amber-600', solo: 'text-neutral-500', mismatch: 'text-red-600',
 }
-
-const selectCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 const fmtScore = (v: number | null) => (v == null ? '-' : v.toLocaleString())
 
@@ -87,7 +87,7 @@ export default function MatchRecordsTab({
 
       <div className="flex items-center gap-2">
         <select
-          className={selectCls}
+          className={inputCls}
           value={gameCode}
           onChange={(e) => { setGameCode(e.target.value); setPage(1) }}
         >
@@ -184,16 +184,7 @@ export default function MatchRecordsTab({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
     </div>
   )

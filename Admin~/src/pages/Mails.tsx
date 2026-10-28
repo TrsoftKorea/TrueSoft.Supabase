@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2, Send, X, Plus, Check, ChevronDown } from 'lucide-react'
+import { Loader2, Send, X, Plus, Check, ChevronDown, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { useSearchParams } from 'react-router-dom'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { Segmented } from '../components/ui/Segmented'
 import { formatCount, itemsText } from '../components/ui/format'
+import { areaCls, inputCls } from '../components/ui/Input'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
 import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 
@@ -30,10 +33,6 @@ const LANG_LABEL: Record<string, string> = {
   id: '인도네시아어', th: '태국어', vi: '베트남어',
 }
 
-const inputBase = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
-const inputCls = inputBase + ' w-full'
-const areaCls = 'w-full px-2.5 py-2 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
@@ -46,23 +45,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function StepNextButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
   return (
     <div className="pt-3 mt-1 border-t border-neutral-100">
-      <button onClick={onClick} disabled={disabled}
-        className="h-8 px-4 rounded-md bg-[#1677ff] text-white text-xs font-medium disabled:opacity-50">
-        {label}
-      </button>
-    </div>
-  )
-}
-
-function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { v: T; label: string }[] }) {
-  return (
-    <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-      {options.map((o) => (
-        <button key={o.v} type="button" onClick={() => onChange(o.v)}
-          className={['px-4 py-1.5 rounded-md text-sm transition-colors', value === o.v ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'].join(' ')}>
-          {o.label}
-        </button>
-      ))}
+      <Button variant="primary" onClick={onClick} disabled={disabled}>{label}</Button>
     </div>
   )
 }
@@ -310,7 +293,7 @@ export default function Mails({
           options={[{ v: 'immediate', label: '즉시' }, { v: 'scheduled', label: '예약' }, { v: 'repeat', label: '반복' }]} />
         {sched === 'scheduled' && (
           <Field label="예약 시각">
-            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls + ' max-w-xs'} />
+            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls + ' w-full max-w-xs'} />
             <p className="text-xs text-neutral-400 mt-1">{tzText}</p>
           </Field>
         )}
@@ -323,19 +306,19 @@ export default function Mails({
             <div className="flex flex-wrap items-end gap-3">
               {repeatUnit === 'week' && (
                 <Field label="요일">
-                  <select value={repeatDow} onChange={(e) => setRepeatDow(Number(e.target.value))} className={inputBase + ' w-28'}>
+                  <select value={repeatDow} onChange={(e) => setRepeatDow(Number(e.target.value))} className={inputCls + ' w-28'}>
                     {DOW_LABEL.map((d, i) => (<option key={i} value={i}>{d}요일</option>))}
                   </select>
                 </Field>
               )}
               {repeatUnit === 'month' && (
                 <Field label="일자">
-                  <select value={repeatDom} onChange={(e) => setRepeatDom(Number(e.target.value))} className={inputBase + ' w-28'}>
+                  <select value={repeatDom} onChange={(e) => setRepeatDom(Number(e.target.value))} className={inputCls + ' w-28'}>
                     {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (<option key={d} value={d}>{d}일</option>))}
                   </select>
                 </Field>
               )}
-              <Field label="발송 시각"><input type="time" value={repeatTime} onChange={(e) => setRepeatTime(e.target.value)} className={inputBase + ' w-32'} /></Field>
+              <Field label="발송 시각"><input type="time" value={repeatTime} onChange={(e) => setRepeatTime(e.target.value)} className={inputCls + ' w-32'} /></Field>
             </div>
             <p className="text-xs text-neutral-400">{tz ? `발송 시각은 ${timeZoneName(tz)} 기준입니다.` : ''}</p>
             {repeatUnit === 'month' && repeatDom > 28 && (
@@ -360,7 +343,7 @@ export default function Mails({
 
           {mode === 'server' && (
             <Field label="서버">
-              <select value={serverId} onChange={(e) => setServerId(e.target.value)} className={inputCls + ' max-w-sm'}>
+              <select value={serverId} onChange={(e) => setServerId(e.target.value)} className={inputCls + ' w-full max-w-sm'}>
                 <option value="">서버 선택…</option>
                 {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name} ({s.server_code})</option>))}
               </select>
@@ -389,8 +372,10 @@ export default function Mails({
               <Field label="닉네임·ID 검색">
                 <div className="flex items-center gap-2">
                   <input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPlayerQuery(playerInput)}
-                    placeholder="닉네임 / 계정 ID" className={inputBase + ' flex-1'} />
-                  <button onClick={() => setPlayerQuery(playerInput)} className="h-9 px-3 shrink-0 rounded-md bg-[#1677ff] text-white text-sm">검색</button>
+                    placeholder="닉네임 / 계정 ID" className={inputCls + ' flex-1'} />
+                  <Button variant="primary" size="compact" className="shrink-0" onClick={() => setPlayerQuery(playerInput)}>
+                    <Search className="w-3.5 h-3.5" />검색
+                  </Button>
                 </div>
               </Field>
               <div className="max-h-40 overflow-auto border border-neutral-200 rounded-md divide-y divide-neutral-100">
@@ -426,13 +411,13 @@ export default function Mails({
       {reached >= 2 && (
         <Step n={3} title="메시지" state={stepState(2)} summary={title || '제목 없음'} onEdit={() => setActive(2)}>
           <Field label="분류">
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls + ' w-full'}>
               {!categories.some((c) => c.key === 'default') && <option value="default">기본</option>}
               {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
             </select>
           </Field>
-          <Field label="제목"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} /></Field>
-          <Field label="본문"><textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls} /></Field>
+          <Field label="제목"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls + ' w-full'} /></Field>
+          <Field label="본문"><textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls + ' w-full'} /></Field>
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-neutral-500">다국어 메시지</span>
@@ -445,15 +430,15 @@ export default function Mails({
           {langRows.map((r, i) => (
             <div key={i} className="border border-neutral-200 rounded-md p-2.5 space-y-2 bg-neutral-50/50">
               <div className="flex items-center gap-2">
-                <div className="w-28"><select value={r.lang} onChange={(e) => setLang(i, { lang: e.target.value })} className={inputCls}>
+                <div className="w-28"><select value={r.lang} onChange={(e) => setLang(i, { lang: e.target.value })} className={inputCls + ' w-full'}>
                   {LANGS.filter((l) => l === r.lang || !langRows.some((x, j) => j !== i && x.lang === l))
                     .map((l) => (<option key={l} value={l}>{LANG_LABEL[l] ?? l} ({l})</option>))}
                 </select></div>
                 <div className="flex-1" />
                 <button onClick={() => delLang(i)} title="이 언어 삭제" aria-label="이 언어 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
               </div>
-              <Field label="제목"><input value={r.title} onChange={(e) => setLang(i, { title: e.target.value })} className={inputCls} /></Field>
-              <Field label="본문"><textarea value={r.content} onChange={(e) => setLang(i, { content: e.target.value })} rows={2} className={areaCls} /></Field>
+              <Field label="제목"><input value={r.title} onChange={(e) => setLang(i, { title: e.target.value })} className={inputCls + ' w-full'} /></Field>
+              <Field label="본문"><textarea value={r.content} onChange={(e) => setLang(i, { content: e.target.value })} rows={2} className={areaCls + ' w-full'} /></Field>
             </div>
           ))}
           {!langFilled && (
@@ -482,10 +467,10 @@ export default function Mails({
             {items.length === 0 && <p className="text-xs text-neutral-400">첨부할 보상이 없으면 비워 두세요.</p>}
             {items.map((it, i) => (
               <div key={i} className="flex items-center gap-2">
-                <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputBase + ' flex-1'}>
+                <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
                   {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name} ({c.key})</option>))}
                 </select>
-                <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputBase + ' w-24'} />
+                <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
                 <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
               </div>
             ))}
@@ -494,7 +479,7 @@ export default function Mails({
 
           <div className="flex items-center gap-2 border-t border-neutral-100 pt-3">
             <span className="text-sm text-neutral-600 shrink-0">수령 기한</span>
-            <input type="number" min={1} value={expiresDays} onChange={(e) => setExpiresDays(Number(e.target.value))} className={inputBase + ' w-20'} />
+            <input type="number" min={1} value={expiresDays} onChange={(e) => setExpiresDays(Number(e.target.value))} className={inputCls + ' w-20'} />
             <span className="text-sm text-neutral-500">일</span>
           </div>
 
@@ -508,10 +493,9 @@ export default function Mails({
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={requestSubmit} disabled={!canSend || sending}
-              className="ml-auto inline-flex items-center gap-1.5 h-10 px-6 rounded-md bg-[#1677ff] text-white text-sm font-medium disabled:opacity-50">
+            <Button variant="primary" className="ml-auto" onClick={requestSubmit} disabled={!canSend || sending}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{sched === 'immediate' ? '발송' : '예약 등록'}
-            </button>
+            </Button>
           </div>
         </WhiteCard>
       )}

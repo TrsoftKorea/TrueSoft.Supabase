@@ -4,6 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { downloadCsv, todayStamp } from '../lib/csv'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -11,6 +12,7 @@ import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, toDatetimeLocal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { Segmented } from '../components/ui/Segmented'
 
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
@@ -45,7 +47,6 @@ function usageText(c: Coupon): string {
   return `${formatCount(c.used_count)} / ${formatCount(cap)} (${rate}%)`
 }
 
-const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white outline-none focus:border-[#1677ff] focus:ring-1 focus:ring-[#1677ff]'
 
 function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
   target: ProjectTarget
@@ -244,14 +245,11 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           {!isEdit && (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">종류</label>
-              <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-                {(['normal', 'keyword'] as const).map((k) => (
-                  <button key={k} type="button" onClick={() => setKind(k)}
-                    className={['px-4 py-1.5 rounded-md text-sm transition-colors', kind === k ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'].join(' ')}>
-                    {k === 'normal' ? '코드 발급 (1회용 여러 개)' : '키워드 (공용 코드)'}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                value={kind}
+                onChange={setKind}
+                options={[{ v: 'normal', label: '코드 발급 (1회용 여러 개)' }, { v: 'keyword', label: '키워드 (공용 코드)' }]}
+              />
             </div>
           )}
 

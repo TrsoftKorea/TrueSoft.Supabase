@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronLeft, ChevronRight, Loader2, Download, RefreshCw } from 'lucide-react'
+import { Search, Loader2, Download, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { projectName } from '../lib/projectLook'
 import { downloadCsv, todayStamp } from '../lib/csv'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
+import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
@@ -43,25 +45,60 @@ type RefundStatus = {
 // DB 는 apple_app_store 로 저장한다(install.sql purchases.store). app_store 는 예전 값이 남아 있을 때를 위해 둔다.
 const STORE_LABEL: Record<string, string> = { google_play: 'Google Play', apple_app_store: 'App Store', app_store: 'App Store' }
 
-function refundStatusText(store: string, s: RefundStatus | undefined): { text: string; bad: boolean } {
-  if (store === 'apple_app_store') {
-    // 애플은 환불이 생길 때만 알림이 온다 — 오래 비어 있어도 고장이 아니다.
-    if (!s?.last_finished_at) return { text: '애플: 받은 환불 알림 없음', bad: false }
-    return {
-      text: `애플: 마지막 알림 ${formatDateTime(s.last_finished_at)}${s.last_ok ? '' : ' · 처리 실패'}`,
-      bad: s.last_ok === false,
-    }
+// 시작만 하고 끝을 못 남긴 채 10분이 지났는지 — 함수가 중간에 죽은 것. 도는 중(시작한 지 10분 안)은 멈춘 게 아니다.
+const stalled = (s: RefundStatus | undefined) =>
+  !!s?.last_started_at
+  && Date.parse(s.last_started_at) > Date.parse(s.last_finished_at ?? '1970-01-01')
+  && Date.now() - Date.parse(s.last_started_at) > 10 * 60_000
+
+// 하루 한 번 도는 작업이 마지막으로 끝난 지 36시간이 넘었는지 — 한 번 거르면 12시간 안에 드러난다.
+// 크론은 요청을 보내기만 하고 응답을 안 보므로, 함수가 아예 안 불려도(배포 안 됨·주소 틀림) 기록이 멈출 뿐 실패는 안 남는다.
+const STALE_MS = 36 * 3600_000
+const overdue = (s: RefundStatus) => Date.now() - Date.parse(s.last_finished_at!) > STALE_MS
+
+// 상태 줄 하나. 평소엔 문제(short)만 보이고, 시각·건수 같은 세부(detail)는 "자세히"를 눌러야 보인다.
+type JobState = { label: string; bad: boolean; short: string; detail: string }
+
+// 매일 도는 작업(구글 환불 확인·원화 환산)에 공통인 판정 — 멈춤·한 번도 안 돎·하루 넘게 안 돎.
+function dailyJobProblem(label: string, s: RefundStatus | undefined): JobState | null {
+  if (stalled(s)) {
+    return { label, bad: true, short: '중간에 멈춤', detail: `${formatDateTime(s!.last_started_at!)}에 시작한 작업이 끝나지 않았습니다.` }
   }
-  // 시작만 하고 끝을 못 남겼으면(함수가 중간에 죽음) 지난 결과를 그대로 보이면 안 된다. 한 번 도는 데 1분이 안 걸린다.
-  if (s?.last_started_at && Date.parse(s.last_started_at) - Date.parse(s.last_finished_at ?? '1970-01-01') > 10 * 60_000) {
-    return { text: `구글: ${formatDateTime(s.last_started_at)} 확인이 중간에 멈췄습니다. 다시 확인해 주세요.`, bad: true }
+  if (!s?.last_finished_at) return { label, bad: true, short: '한 번도 안 돎', detail: '아직 한 번도 돌지 않았습니다. 설치가 끝났는지 확인해 주세요.' }
+  if (s.last_message === 'project_url_missing') return { label, bad: true, short: '설치가 끝나지 않음', detail: '설치가 끝나지 않아 돌지 못했습니다.' }
+  if (overdue(s)) {
+    return { label, bad: true, short: '하루 넘게 안 돎', detail: `마지막 실행 ${formatDateTime(s.last_finished_at)}. 하루 한 번 도는 작업이 그 뒤로 돌지 않았습니다.` }
   }
-  if (!s?.last_finished_at) return { text: '구글: 아직 확인 안 함', bad: false }
-  const recheck = testRecheckText(s.last_message)
-  if (s.last_ok === false) {
-    return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 실패 · ${refundFailText(s.last_message)}${recheck}`, bad: true }
+  return null
+}
+
+function googleRefundState(s: RefundStatus | undefined): JobState {
+  const label = '구글 환불 확인'
+  const problem = dailyJobProblem(label, s)
+  if (problem) return problem
+  const recheck = testRecheckText(s!.last_message)
+  if (s!.last_ok === false) {
+    return { label, bad: true, short: '실패', detail: `${formatDateTime(s!.last_finished_at!)} 실패 · ${refundFailText(s!.last_message)}${recheck}` }
   }
-  return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 · 새 환불 ${formatCount(s.last_marked)}건${recheck}`, bad: false }
+  return { label, bad: false, short: '', detail: `${formatDateTime(s!.last_finished_at!)} 확인 · 새 환불 ${formatCount(s!.last_marked)}건${recheck}` }
+}
+
+// 애플은 환불이 생길 때만 알림이 온다 — 오래 비어 있어도 고장이 아니라 오래됐는지는 보지 않는다.
+function appleRefundState(s: RefundStatus | undefined): JobState {
+  const label = '애플 환불 알림'
+  if (!s?.last_finished_at) return { label, bad: false, short: '', detail: '받은 알림 없음' }
+  if (s.last_ok === false) return { label, bad: true, short: '처리 실패', detail: `마지막 알림 ${formatDateTime(s.last_finished_at)} · 처리 실패` }
+  return { label, bad: false, short: '', detail: `마지막 알림 ${formatDateTime(s.last_finished_at)}` }
+}
+
+// 환율표 저장·빈 금액 채우기(purchase-price-sync)의 마지막 실행. 메모는 함수가 운영자용 문장으로 남긴다.
+function priceSyncState(s: RefundStatus | undefined): JobState {
+  const label = '원화 환산'
+  const problem = dailyJobProblem(label, s)
+  if (problem) return problem
+  const memo = s!.last_message ? ` · ${s!.last_message}` : ''
+  if (s!.last_ok === false) return { label, bad: true, short: '실패', detail: `${formatDateTime(s!.last_finished_at!)} 실패${memo}` }
+  return { label, bad: false, short: '', detail: `${formatDateTime(s!.last_finished_at!)} 확인${memo}` }
 }
 
 // 같은 실행에서 시험 여부를 모르는 옛 결제를 구글에 다시 물은 결과(purchase-refund-sync-google 의 메모 꼴을 읽는다).
@@ -77,7 +114,7 @@ function refundFailText(raw: string | null | undefined): string {
   // 재확인 결과 메모는 testRecheckText 가 따로 보인다.
   const message = raw?.replace(/\s*(\/\s*)?시험 결제 확인 \d+건[\s\S]*$/, '').trim() || null
   if (message === 'project_url_missing') return '설치가 끝나지 않음'
-  if (message === 'GOOGLE_SERVICE_ACCOUNT_JSON 없음') return '설정 › 스토어 연결에 Google Play 서비스 계정 값이 없습니다.'
+  if (message === 'GOOGLE_SERVICE_ACCOUNT_JSON 없음') return '설정 › 서비스 연결 › 스토어에 Google Play 서비스 계정 값이 없습니다.'
   const noApp = /^(\S+): HTTP 404[\s\S]*No application was found/.exec(message ?? '')
   if (noApp) return `결제 기록의 앱 ${noApp[1]} 이 Google Play 에 없습니다. 시험용으로 넣은 결제일 수 있습니다.`
   if (message?.includes('권한 없음으로 거절')) return 'Google Play 서비스 계정에 결제 조회 권한이 없습니다. Play Console의 사용자 및 권한을 확인하세요.'
@@ -108,6 +145,8 @@ export default function Purchases({
   const [error, setError] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
   const [refundStatus, setRefundStatus] = useState<RefundStatus[]>([])
+  const [refundStatusState, setRefundStatusState] = useState<'loading' | 'ok' | 'failed'>('loading')
+  const [jobsOpen, setJobsOpen] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [notice, setNotice] = useState<{ text: string; ok: boolean } | null>(null)
 
@@ -142,7 +181,9 @@ export default function Purchases({
     try {
       const res = await callAdmin<{ rows: RefundStatus[] }>(target, 'purchases.getRefundStatus', {})
       setRefundStatus(res.rows)
+      setRefundStatusState('ok')
     } catch (e: unknown) {
+      setRefundStatusState('failed')
       report(e, '환불 확인 상태를 불러오지 못했습니다.')
     }
   }, [target, report])
@@ -213,6 +254,11 @@ export default function Purchases({
   }
 
   const statusByStore = new Map(refundStatus.map((s) => [s.store, s]))
+  // 상태를 못 불러왔으면(빈 목록) "한 번도 안 돎"·"모두 정상" 어느 쪽으로도 판정하지 않는다.
+  const jobs = refundStatusState === 'ok'
+    ? [googleRefundState(statusByStore.get('google_play')), appleRefundState(statusByStore.get('apple_app_store')), priceSyncState(statusByStore.get('price_sync'))]
+    : []
+  const problems = jobs.filter((j) => j.bad)
 
   return (
     <div className="space-y-4">
@@ -237,14 +283,14 @@ export default function Purchases({
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
             placeholder="상품 ID / 플레이어 / 주문번호"
-            className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+            className={inputCls + ' flex-1 min-w-[200px]'}
           />
           <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer whitespace-nowrap">
             <input type="checkbox" checked={refundedOnly} onChange={(e) => { setRefundedOnly(e.target.checked); setPage(1) }} className="rounded" />
             환불만
           </label>
           <select value={test} onChange={(e) => { setTest(e.target.value as typeof test); setPage(1) }}
-            className="h-9 px-2 rounded-md border border-neutral-300 text-xs bg-white"
+            className={inputCls}
             title="시험 결제는 애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정 결제입니다. 매출에 넣지 않습니다">
             <option value="all">시험 결제 포함</option>
             <option value="exclude">시험 결제 빼기</option>
@@ -260,14 +306,34 @@ export default function Purchases({
             {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}CSV 내려받기
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-100 pt-3 text-xs">
-          {(['google_play', 'apple_app_store'] as const).map((store) => {
-            const { text, bad } = refundStatusText(store, statusByStore.get(store))
-            return <span key={store} className={bad ? 'text-red-600' : 'text-neutral-500'}>{text}</span>
-          })}
-          <Button size="sm" className="ml-auto" onClick={() => void syncRefunds()} disabled={syncing} title="구글에 환불된 결제가 있는지 지금 확인합니다. 하루 한 번 자동으로도 확인합니다">
-            {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}구글 환불 지금 확인
-          </Button>
+        <div className="border-t border-neutral-100 pt-3 text-xs">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {refundStatusState === 'loading' && <span className="text-neutral-400">결제 자동 작업 상태 확인 중…</span>}
+            {refundStatusState === 'failed' && <span className="text-red-600">결제 자동 작업 상태를 불러오지 못했습니다.</span>}
+            {refundStatusState === 'ok' && (problems.length === 0
+              ? <span className="text-neutral-500">결제 자동 작업 모두 정상</span>
+              : problems.map((j) => <span key={j.label} className="text-red-600">{j.label}: {j.short}</span>))}
+            {refundStatusState === 'ok' && (
+              <button type="button" onClick={() => setJobsOpen((v) => !v)}
+                className="inline-flex items-center gap-0.5 text-[#1677ff] hover:underline">
+                {jobsOpen ? '접기' : '자세히'}
+                {jobsOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+            <Button size="sm" className="ml-auto" onClick={() => void syncRefunds()} disabled={syncing} title="구글에 환불된 결제가 있는지 지금 확인합니다. 하루 한 번 자동으로도 확인합니다">
+              {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}구글 환불 지금 확인
+            </Button>
+          </div>
+          {jobsOpen && (
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+              {jobs.map((j) => (
+                <div key={j.label} className="contents">
+                  <dt className="text-neutral-500 whitespace-nowrap">{j.label}</dt>
+                  <dd className={j.bad ? 'text-red-600' : 'text-neutral-600'}>{j.detail}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
       </WhiteCard>
 
@@ -335,14 +401,7 @@ export default function Purchases({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
     </div>
   )

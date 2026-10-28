@@ -1,16 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { Search, Loader2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { useServerName } from '../lib/serverNames'
 import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
+import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { Tabs } from '../components/ui/Tabs'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
@@ -232,8 +235,6 @@ export default function MailRecords({
     navigate(`/players?account=${encodeURIComponent(r.account_id)}&name=${encodeURIComponent(r.display_name ?? '')}`)
   }
 
-  const inputCls = 'h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white'
-  const tabCls = (on: boolean) => ['px-4 py-1.5 rounded-md text-sm transition-colors', on ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'].join(' ')
 
   const renderCategoryOptions = () => (
     <>
@@ -251,10 +252,7 @@ export default function MailRecords({
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-        <button type="button" onClick={() => setTab('batches')} className={tabCls(tab === 'batches')}>발송 단위</button>
-        <button type="button" onClick={() => setTab('records')} className={tabCls(tab === 'records')}>개별 우편</button>
-      </div>
+      <Tabs value={tab} onChange={setTab} tabs={[['batches', '발송 단위'], ['records', '개별 우편']]} />
 
       {tab === 'batches' && (
         <>
@@ -263,7 +261,7 @@ export default function MailRecords({
               <select value={batchCategory} onChange={(e) => { setBatchCategory(e.target.value); setBatchPage(1) }} className={inputCls + ' w-40'}>
                 {renderCategoryOptions()}
               </select>
-              <input value={batchSearchInput} onChange={(e) => setBatchSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitBatchSearch()} placeholder="제목 검색" className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm" />
+              <input value={batchSearchInput} onChange={(e) => setBatchSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitBatchSearch()} placeholder="제목 검색" className={inputCls + ' flex-1 min-w-[200px]'} />
               <Button variant="primary" size="compact" onClick={submitBatchSearch} disabled={batchLoading}>
                 {batchLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
               </Button>
@@ -303,14 +301,7 @@ export default function MailRecords({
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{formatTotal(batchTotal)}</span>
-              <div className="flex items-center gap-1">
-                <button disabled={batchPage <= 1} onClick={() => setBatchPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <span className="px-2">{batchPage} / {batchTotalPages}</span>
-                <button disabled={batchPage >= batchTotalPages} onClick={() => setBatchPage((p) => Math.min(batchTotalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
+            <TableFooter summary={formatTotal(batchTotal)} page={batchPage} totalPages={batchTotalPages} onPageChange={setBatchPage} />
           </WhiteCard>
         </>
       )}
@@ -374,7 +365,7 @@ export default function MailRecords({
               <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1) }} className={inputCls + ' w-40'}>
                 {renderCategoryOptions()}
               </select>
-              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 계정 ID" className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 계정 ID" className={inputCls + ' flex-1 min-w-[200px]'} />
               <Button variant="primary" size="compact" onClick={submitSearch} disabled={recLoading}>
                 {recLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
               </Button>
@@ -423,14 +414,7 @@ export default function MailRecords({
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{formatTotal(total)}</span>
-              <div className="flex items-center gap-1">
-                <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <span className="px-2">{page} / {totalPages}</span>
-                <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
+            <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
           </WhiteCard>
         </>
       )}

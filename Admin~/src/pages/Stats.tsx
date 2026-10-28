@@ -6,6 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
+import { Tabs } from '../components/ui/Tabs'
 import { formatDateTime, formatKRW } from '../components/ui/format'
 import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
 
@@ -184,7 +185,7 @@ function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
 }
 
 type CountryRow = { country: string; revenue_krw: number; purchases: number; payers: number }
-type RevenueStats = { days: number; total_krw: number; purchases: number; payers: number; countries: CountryRow[] }
+type RevenueStats = { days: number; total_krw: number; purchases: number; payers: number; unknown_amount?: number; countries: CountryRow[] }
 
 const regionNames = (() => {
   try { return new Intl.DisplayNames(['ko'], { type: 'region' }) } catch { return null }
@@ -226,6 +227,11 @@ function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
           합계 {formatKRW(data.total_krw)} · {n(data.purchases)}건 · 결제자 {n(data.payers)}명 · 가입 국가 기준, 환불 제외
         </span>
       </div>
+      {!!data.unknown_amount && (
+        <p className="border-b border-neutral-100 px-5 py-2 text-xs text-amber-700">
+          금액을 모르는 결제 {n(data.unknown_amount)}건은 합계에 들어가지 않았습니다. 채우는 상태는 구매 내역 화면 위쪽에 보입니다.
+        </p>
+      )}
       {data.countries.length === 0 ? (
         <div className="p-8 text-center text-sm text-neutral-400">이 기간에 결제가 없습니다.</div>
       ) : (
@@ -403,27 +409,11 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
     <div className="space-y-4">
       <PageHeader
         title="통계"
-        description={`접속자, 복귀 유저, 리텐션, 국가별 매출, 테스트 결제, 채팅 개수를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
+        description={`게임 운영 통계를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="border-b border-neutral-200 flex gap-1">
-        {TABS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
-              tab === key
-                ? 'border-[#1677ff] text-[#1677ff] font-medium'
-                : 'border-transparent text-neutral-600 hover:text-neutral-900',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onChange={setTab} tabs={TABS} />
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex gap-1">

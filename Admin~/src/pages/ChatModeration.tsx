@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Trash2, ShieldOff, ChevronLeft, ChevronRight, X, Loader2, Megaphone } from 'lucide-react'
+import { Search, Trash2, ShieldOff, X, Loader2, Megaphone } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { areaCls, inputCls } from '../components/ui/Input'
+import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -11,6 +13,7 @@ import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { Tabs } from '../components/ui/Tabs'
 
 type ChannelRow = { id: string; kind: string; code: string; display_name: string; is_active: boolean }
 type MessageRow = {
@@ -84,8 +87,6 @@ function NoticeModal({
     } finally { setLoading(false) }
   }
 
-  const fieldCls = 'w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]'
-
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
@@ -101,14 +102,14 @@ function NoticeModal({
             <>
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">채널</label>
-                <select value={channelId} onChange={(e) => { setChannelId(e.target.value); setServerId('') }} className={fieldCls}>
+                <select value={channelId} onChange={(e) => { setChannelId(e.target.value); setServerId('') }} className={inputCls + ' w-full'}>
                   {targets.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code} ({KIND_LABEL[c.kind] ?? c.kind})</option>))}
                 </select>
               </div>
               {isServer && (
                 <div>
                   <label className="block text-xs text-neutral-500 mb-1">서버</label>
-                  <select value={serverId} onChange={(e) => setServerId(e.target.value)} className={fieldCls}>
+                  <select value={serverId} onChange={(e) => setServerId(e.target.value)} className={inputCls + ' w-full'}>
                     <option value="">모든 서버</option>
                     {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name || s.server_code}</option>))}
                   </select>
@@ -116,7 +117,7 @@ function NoticeModal({
               )}
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">내용</label>
-                <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="w-full px-3 py-2 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+                <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls + ' w-full'} />
                 <p className={`mt-1 text-xs ${length > NOTICE_MAX ? 'text-red-600' : 'text-neutral-400'}`}>
                   {formatCount(length)} / {formatCount(NOTICE_MAX)}자 · 보내면 채팅을 보고 있는 모든 플레이어에게 바로 보입니다.
                 </p>
@@ -229,7 +230,7 @@ function MuteModal({
                   <input
                     value={playerQuery}
                     onChange={(e) => setPlayerQuery(e.target.value)}
-                    className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                    className={inputCls + ' w-full'}
                   />
                   {playerRows.length > 0 && (
                     <div className="mt-1.5 max-h-32 overflow-auto border border-neutral-200 rounded-md divide-y divide-neutral-100">
@@ -256,18 +257,18 @@ function MuteModal({
           )}
           <div>
             <label className="block text-xs text-neutral-500 mb-1">채널</label>
-            <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]">
+            <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className={inputCls + ' w-full'}>
               <option value="">전체 채널</option>
               {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code} ({KIND_LABEL[c.kind] ?? c.kind})</option>))}
             </select>
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">차단 시간(분)</label>
-            <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+            <input type="number" min={1} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} className={inputCls + ' w-full'} />
           </div>
           <div>
             <label className="block text-xs text-neutral-500 mb-1">사유</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls + ' w-full'} />
           </div>
           {error && <div className="text-sm text-red-500">{error}</div>}
         </div>
@@ -430,8 +431,6 @@ export default function ChatModeration({
     }
   }
 
-  const tabCls = (on: boolean) => ['px-4 py-1.5 rounded-md text-sm transition-colors', on ? 'bg-white shadow-sm text-[#1677ff] font-medium' : 'text-neutral-600 hover:text-neutral-800'].join(' ')
-  const inputCls = 'h-9 px-2.5 rounded-md border border-neutral-300 text-sm bg-white'
 
   return (
     <div className="space-y-4">
@@ -439,15 +438,16 @@ export default function ChatModeration({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-lg bg-neutral-100 p-0.5">
-          <button type="button" onClick={() => setTab('messages')} className={tabCls(tab === 'messages')}>메시지</button>
-          <button type="button" onClick={() => setTab('mutes')} className={tabCls(tab === 'mutes')}>차단 목록</button>
-        </div>
-        <Button variant="outline" size="compact" onClick={() => { setNotice(''); setShowNotice(true) }}>
-          <Megaphone className="w-4 h-4" />공지 보내기
-        </Button>
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[['messages', '메시지'], ['mutes', '차단 목록']]}
+        actions={
+          <Button variant="outline" size="compact" onClick={() => { setNotice(''); setShowNotice(true) }}>
+            <Megaphone className="w-4 h-4" />공지 보내기
+          </Button>
+        }
+      />
 
       {tab === 'messages' && (
         <>
@@ -457,7 +457,7 @@ export default function ChatModeration({
                 <option value="">전체 채널</option>
                 {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code}</option>))}
               </select>
-              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 내용 / 유저 ID" className="flex-1 min-w-[200px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 내용 / 유저 ID" className={inputCls + ' flex-1 min-w-[200px]'} />
               <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer">
                 <input type="checkbox" checked={includeDeleted} onChange={(e) => { setIncludeDeleted(e.target.checked); setPage(1) }} className="rounded" />
                 삭제된 메시지 포함
@@ -526,14 +526,7 @@ export default function ChatModeration({
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{formatTotal(total)}</span>
-              <div className="flex items-center gap-1">
-                <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <span className="px-2">{page} / {totalPages}</span>
-                <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
+            <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
           </WhiteCard>
         </>
       )}
@@ -589,14 +582,7 @@ export default function ChatModeration({
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-              <span>{formatTotal(muteTotal)}</span>
-              <div className="flex items-center gap-1">
-                <button disabled={mutePage <= 1} onClick={() => setMutePage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                <span className="px-2">{mutePage} / {muteTotalPages}</span>
-                <button disabled={mutePage >= muteTotalPages} onClick={() => setMutePage((p) => Math.min(muteTotalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-              </div>
-            </div>
+            <TableFooter summary={formatTotal(muteTotal)} page={mutePage} totalPages={muteTotalPages} onPageChange={setMutePage} />
           </WhiteCard>
         </>
       )}

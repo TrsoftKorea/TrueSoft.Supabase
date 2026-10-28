@@ -6,6 +6,7 @@ import { usePendingChanges } from '../lib/pendingChanges'
 import { opLabel } from '../lib/schemaLabels'
 import { pgTypeLabel as typeText } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
+import { inputCls } from '../components/ui/Input'
 import { WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
@@ -293,7 +294,7 @@ export default function SchemaChanges({
     <div className="space-y-4">
       <PageHeader
         title="변경 관리"
-        description="리더보드·원격 설정·유저 데이터 필드 변경을 모아 게시하고 되돌립니다."
+        description="다른 화면에서 준비한 변경을 모아 게시하고 되돌립니다."
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -486,7 +487,7 @@ export default function SchemaChanges({
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   autoFocus
-                  className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                  className={inputCls + ' w-full'}
                 />
                 <p className="mt-1 text-xs text-neutral-400">게시 이력에 이 이름으로 남습니다.</p>
               </div>

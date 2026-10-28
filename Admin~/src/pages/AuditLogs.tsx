@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Search, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
+import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
@@ -67,7 +69,7 @@ const ACTION_LABELS: Record<string, string> = {
   'matchLobby.settingsUpdate': '매치 로비 설정 변경',
   'withdrawal.settingsUpdate': '탈퇴 기준 시간대 변경',
   'game.settingsUpdate': '게임 시간대 변경',
-  'settings.setServerConfig': '스토어 연결값 변경',
+  'settings.setServerConfig': '서비스 연결값 변경',
   'settings.setConsoleColor': '콘솔 색 변경',
   'settings.setConsoleIdentity': '콘솔 이름·아이콘 변경',
   'matchRewards.upsert': '매치 보상 추가·수정',
@@ -195,7 +197,7 @@ export default function AuditLogs({
           <select
             value={category}
             onChange={(e) => { setCategory(e.target.value); setPage(1) }}
-            className="h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white"
+            className={inputCls}
           >
             {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
@@ -204,7 +206,7 @@ export default function AuditLogs({
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            className="h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff] w-56"
+            className={inputCls + ' w-56'}
           />
           <Button variant="primary" onClick={submitSearch} disabled={loading}>
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
@@ -262,14 +264,7 @@ export default function AuditLogs({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronLeft className="w-3.5 h-3.5" /></button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"><ChevronRight className="w-3.5 h-3.5" /></button>
-          </div>
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
     </div>
   )

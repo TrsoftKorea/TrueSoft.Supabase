@@ -5,6 +5,7 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
+import { inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime, diffSummary, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
@@ -216,7 +217,7 @@ export default function UserDataTab({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="필드 검색"
-              className="w-full h-9 pl-9 pr-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full pl-9'}
             />
           </div>
           {updatedAt && (

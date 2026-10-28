@@ -50,7 +50,9 @@ const sumOf = (rows, k) => rows.reduce((s, r) => s + r[k], 0)
 for (const r of [r30, r90]) {
   ok(sumOf(r.countries, 'revenue_krw') === r.total_krw && sumOf(r.countries, 'purchases') === r.purchases, `[2] 나라별 합 != 합계 (${r.days}일)`)
   for (const c of r.countries) ok(c.payers <= c.purchases, `[2] 결제자 > 건수 ${c.country}`)
+  ok((r.unknown_amount ?? 0) <= r.purchases, `[2] 금액 모름 > 건수 (${r.days}일)`)
 }
+ok((r90.unknown_amount ?? 0) >= (r30.unknown_amount ?? 0), '[1] 90일 금액 모름이 30일보다 작음')
 for (const c of r30.countries) {
   const long = r90.countries.find((x) => x.country === c.country)
   ok(long && long.revenue_krw >= c.revenue_krw && long.purchases >= c.purchases, `[1] 90일 매출이 30일보다 작음 ${c.country}`)

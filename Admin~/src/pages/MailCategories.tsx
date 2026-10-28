@@ -3,6 +3,7 @@ import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -115,7 +116,6 @@ export default function MailCategories({
     }, setDeleting)
   }
 
-  const inputCls = 'h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white'
 
   return (
     <div className="space-y-4">
@@ -191,7 +191,7 @@ export default function MailCategories({
                             if (e.key === 'Escape') cancelEdit()
                           }}
                           autoFocus
-                          className="h-8 px-2 rounded border border-neutral-300 text-sm w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+                          className={inputCompactCls + ' w-full max-w-xs'}
                         />
                       ) : (
                         <span className="text-neutral-800">{c.display_name || '-'}</span>

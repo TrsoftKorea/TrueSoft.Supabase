@@ -4,6 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { projectName } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -87,7 +88,7 @@ function SetPasswordModal({
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white"
+            className={inputCls + ' w-full'}
           />
           {tooShort && <p className="mt-1 text-xs text-amber-600">{MIN_PASSWORD_LENGTH}자 이상이어야 합니다.</p>}
         </div>
@@ -98,7 +99,7 @@ function SetPasswordModal({
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void submit()}
-            className="h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white"
+            className={inputCls + ' w-full'}
           />
           {mismatch && <p className="mt-1 text-xs text-amber-600">비밀번호가 서로 다릅니다.</p>}
         </div>
@@ -220,7 +221,6 @@ export default function Operators({
     }
   }
 
-  const inputCls = 'h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white'
 
   return (
     <div className="space-y-4">

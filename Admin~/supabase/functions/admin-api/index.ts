@@ -443,6 +443,9 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APPLE_TEAM_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
   APPLE_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
   APPLE_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
+  APPLE_IAP_ISSUER_ID: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
+  APPLE_IAP_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
+  APPLE_IAP_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -451,6 +454,9 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APPLE_TEAM_ID: "팀 ID 는 영문 대문자·숫자 10자입니다.",
   APPLE_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
   APPLE_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
+  APPLE_IAP_ISSUER_ID: "발급자 ID 는 하이픈이 들어간 36자입니다(예: 57246542-96fe-1a63-e053-0824d011072a).",
+  APPLE_IAP_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
+  APPLE_IAP_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
 };
 
 async function handleAction(

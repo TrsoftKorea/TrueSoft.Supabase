@@ -11,6 +11,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Button } from '../../components/ui/Button'
+import { inputCls } from '../../components/ui/Input'
 import { DEFAULT_TIME_ZONE, isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone, wallClockToIso, zonedParts } from '../../lib/gameTime'
 
 type LeaderboardRow = {
@@ -346,7 +347,6 @@ export default function LeaderboardsTab({
     } finally { setActing(false) }
   }
 
-  const inp = 'w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]'
   const lbl = 'block text-xs text-neutral-500 mb-1'
   const hint = 'text-xs text-neutral-400 mt-1'
   const err = 'text-xs text-red-500 mt-1'
@@ -488,7 +488,7 @@ export default function LeaderboardsTab({
                     value={form.code}
                     onChange={setF('code')}
                     disabled={editCode !== null}
-                    className={inp + (editCode ? ' opacity-50 cursor-not-allowed' : '')}
+                    className={inputCls + ' w-full' + (editCode ? ' opacity-50 cursor-not-allowed' : '')}
                   />
                   {editCode ? (
                     <p className={hint}>코드는 만든 뒤 바꿀 수 없습니다.</p>
@@ -506,7 +506,7 @@ export default function LeaderboardsTab({
                   <input
                     value={form.displayName}
                     onChange={setF('displayName')}
-                    className={inp}
+                    className={inputCls + ' w-full'}
                   />
                   {touched && !nameValid
                     ? <p className={err}>표시 이름을 입력해주세요.</p>
@@ -518,7 +518,7 @@ export default function LeaderboardsTab({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={lbl}>집계 범위</label>
-                  <select value={form.scope} onChange={setF('scope')} className={inp}>
+                  <select value={form.scope} onChange={setF('scope')} className={inputCls + ' w-full'}>
                     <option value="global">전체 통합</option>
                     <option value="server">서버별</option>
                   </select>
@@ -526,7 +526,7 @@ export default function LeaderboardsTab({
 
                 <div>
                   <label className={lbl}>점수 기록 방식</label>
-                  <select value={form.recordType} onChange={setF('recordType')} className={inp}>
+                  <select value={form.recordType} onChange={setF('recordType')} className={inputCls + ' w-full'}>
                     <option value="highest">최고</option>
                     <option value="lowest">최저</option>
                     <option value="last">최신</option>
@@ -536,7 +536,7 @@ export default function LeaderboardsTab({
 
                 <div>
                   <label className={lbl}>순위 정렬</label>
-                  <select value={form.sortType} onChange={setF('sortType')} className={inp}>
+                  <select value={form.sortType} onChange={setF('sortType')} className={inputCls + ' w-full'}>
                     <option value="desc">높은 순</option>
                     <option value="asc">낮은 순</option>
                   </select>
@@ -548,7 +548,7 @@ export default function LeaderboardsTab({
                 <div className={`grid grid-cols-1 gap-4 ${form.rotation === 'custom' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                   <div>
                     <label className={lbl}>초기화 주기</label>
-                    <select value={form.rotation} onChange={setF('rotation')} className={inp}>
+                    <select value={form.rotation} onChange={setF('rotation')} className={inputCls + ' w-full'}>
                       <option value="none">없음</option>
                       <option value="daily">일간</option>
                       <option value="weekly">주간</option>
@@ -567,7 +567,7 @@ export default function LeaderboardsTab({
                           step="0.5"
                           value={form.periodHours}
                           onChange={setF('periodHours')}
-                          className={inp + ' pr-12'}
+                          className={inputCls + ' w-full pr-12'}
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400 pointer-events-none">
                           시간
@@ -582,7 +582,7 @@ export default function LeaderboardsTab({
                   {form.rotation === 'weekly' && (
                     <div>
                       <label className={lbl}>기준 요일</label>
-                      <select value={form.anchorWeekday} onChange={setF('anchorWeekday')} className={inp}>
+                      <select value={form.anchorWeekday} onChange={setF('anchorWeekday')} className={inputCls + ' w-full'}>
                         {WEEKDAYS.map((w, i) => (
                           <option key={i} value={String(i)}>{w}요일</option>
                         ))}
@@ -593,7 +593,7 @@ export default function LeaderboardsTab({
                   {form.rotation === 'monthly' && (
                     <div>
                       <label className={lbl}>기준 날짜</label>
-                      <select value={form.anchorDay} onChange={setF('anchorDay')} className={inp}>
+                      <select value={form.anchorDay} onChange={setF('anchorDay')} className={inputCls + ' w-full'}>
                         {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                           <option key={d} value={String(d)}>{d}일</option>
                         ))}
@@ -608,7 +608,7 @@ export default function LeaderboardsTab({
                         type="time"
                         value={form.anchorTime}
                         onChange={setF('anchorTime')}
-                        className={inp}
+                        className={inputCls + ' w-full'}
                       />
                     </div>
                   )}
@@ -620,7 +620,7 @@ export default function LeaderboardsTab({
                         type="datetime-local"
                         value={form.anchorAt}
                         onChange={setF('anchorAt')}
-                        className={inp}
+                        className={inputCls + ' w-full'}
                       />
                     </div>
                   )}
@@ -649,7 +649,7 @@ export default function LeaderboardsTab({
                       type="datetime-local"
                       value={form.endsAt}
                       onChange={setF('endsAt')}
-                      className={inp + ' max-w-[240px]'}
+                      className={inputCls + ' w-full max-w-[240px]'}
                     />
                   )}
                 </div>

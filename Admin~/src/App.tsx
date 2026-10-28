@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { Button } from './components/ui/Button'
 import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
 import { clearToken, getToken, signedInEmail, signedInTargets } from './lib/googleAuth'
 import { callAdmin, NotAuthenticatedError, type SignInOutcome } from './lib/api'
@@ -137,12 +138,7 @@ export default function App() {
         <div className="w-full max-w-sm space-y-3 text-center">
           <p className="text-sm text-red-600">{meError}</p>
           <p className="text-xs text-neutral-500">{signedInEmail()}</p>
-          <button
-            onClick={signOut}
-            className="h-9 px-4 rounded-md border border-neutral-300 text-sm text-neutral-700"
-          >
-            다른 계정으로 로그인
-          </button>
+          <Button onClick={signOut}>다른 계정으로 로그인</Button>
         </div>
       </div>
     )

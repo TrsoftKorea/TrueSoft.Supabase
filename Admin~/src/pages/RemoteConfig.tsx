@@ -4,7 +4,8 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
 import { PageHeader } from '../components/ui/PageHeader'
-import { WhiteCard } from '../components/ui/Card'
+import { inputCls } from '../components/ui/Input'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../components/ui/PendingChanges'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -72,7 +73,7 @@ function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, on
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-xs text-neutral-500 mb-1">키</label>
-            <input value={key} onChange={(e) => setKey(e.target.value)} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+            <input value={key} onChange={(e) => setKey(e.target.value)} className={inputCls + ' w-full'} />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="rounded" />
@@ -151,7 +152,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
           {isNew && (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">필드명</label>
-              <input value={key} onChange={(e) => setKey(e.target.value)} className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]" />
+              <input value={key} onChange={(e) => setKey(e.target.value)} className={inputCls + ' w-full'} />
             </div>
           )}
           <div>
@@ -168,7 +169,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
                   setText('')
                 }
               }}
-              className="w-full h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+              className={inputCls + ' w-full'}
             >
               <option value="string">문자열</option>
               <option value="number">숫자</option>
@@ -401,12 +402,15 @@ export default function RemoteConfig({
 
       {selected && selectedKey && (
         <WhiteCard className="p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold font-mono">{selectedKey}</h3>
-            <button onClick={() => void Promise.all([reload(), reloadDrafts()])} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50">
-              <RefreshCw className="w-3.5 h-3.5" />새로고침
-            </button>
-          </div>
+          <CardHeader
+            title={<span className="font-mono">{selectedKey}</span>}
+            description="선택한 설정의 활성 · 인증 필요 여부와 필드"
+            actions={
+              <Button variant="outline" size="compact" onClick={() => void Promise.all([reload(), reloadDrafts()])}>
+                <RefreshCw className="w-3.5 h-3.5" />새로고침
+              </Button>
+            }
+          />
 
           <div className="flex flex-wrap items-center gap-6">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -421,13 +425,9 @@ export default function RemoteConfig({
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-neutral-800">필드</span>
-            <button
-              onClick={() => setItemModal({ itemKey: null, value: undefined })}
-              disabled={selected.deleted}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50 disabled:opacity-50"
-            >
+            <Button variant="primary" size="compact" onClick={() => setItemModal({ itemKey: null, value: undefined })} disabled={selected.deleted}>
               <Plus className="w-3.5 h-3.5" />필드 추가
-            </button>
+            </Button>
           </div>
 
           <table className="w-full text-sm">

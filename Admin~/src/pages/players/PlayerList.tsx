@@ -1,14 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Copy, ChevronLeft, ChevronRight, Check, Loader2 } from 'lucide-react'
+import { Search, Copy, Check, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
+import { inputCls } from '../../components/ui/Input'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { formatDateTime, formatKRW, formatTotal } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Button } from '../../components/ui/Button'
+import { Tabs } from '../../components/ui/Tabs'
 
 type PlayerRow = {
   account_id: string
@@ -150,27 +153,11 @@ export default function PlayerList({
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <div className="border-b border-neutral-200 flex gap-1">
-        {(
-          [
-            ['all', '전체 플레이어'],
-            ['banned', '차단 플레이어'],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setListState({ tab: k, page: 1 })}
-            className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors',
-              tab === k
-                ? 'border-[#1677ff] text-[#1677ff] font-medium'
-                : 'border-transparent text-neutral-600 hover:text-neutral-900',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onChange={(k) => setListState({ tab: k, page: 1 })}
+        tabs={[['all', '전체 플레이어'], ['banned', '차단 플레이어']]}
+      />
 
       <WhiteCard className="p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -182,7 +169,7 @@ export default function PlayerList({
               if (e.key === 'Enter') submitSearch()
             }}
             placeholder="닉네임"
-            className="flex-1 min-w-[260px] h-9 px-3 rounded-md border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#1677ff]/30 focus:border-[#1677ff]"
+            className={inputCls + ' flex-1 min-w-[260px]'}
           />
           <Button variant="primary" size="compact"
             onClick={submitSearch}
@@ -283,28 +270,7 @@ export default function PlayerList({
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage(Math.max(1, page - 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-2">
-              {page} / {totalPages}
-            </span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage(Math.min(totalPages, page + 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
     </div>
   )

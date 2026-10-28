@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { PageHeader } from '../components/ui/PageHeader'
+import { Tabs } from '../components/ui/Tabs'
 import LeaderboardsTab from './leaderboard/LeaderboardsTab'
 import ColumnsTab from './leaderboard/ColumnsTab'
 import ScoresTab from './leaderboard/ScoresTab'
@@ -24,28 +25,7 @@ export default function Leaderboard({
         description="게임에서 사용할 랭킹을 만들고 기록을 관리합니다."
       />
 
-      <div className="border-b border-neutral-200 flex gap-1">
-        {(
-          [
-            ['boards', '리더보드'],
-            ['columns', '필드'],
-            ['scores', '기록'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={[
-              'h-10 px-4 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap',
-              tab === key
-                ? 'border-[#1677ff] text-[#1677ff] font-medium'
-                : 'border-transparent text-neutral-600 hover:text-neutral-900',
-            ].join(' ')}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onChange={setTab} tabs={[['boards', '리더보드'], ['columns', '필드'], ['scores', '기록']]} />
 
       {tab === 'boards' && (
         <LeaderboardsTab target={target} onUnauthenticated={onUnauthenticated} selectedCode={selectedCode} onSelect={setSelectedCode} />

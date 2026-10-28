@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, ChevronLeft, ChevronRight, Pencil, Trash2, Check, X, Loader2, SlidersHorizontal } from 'lucide-react'
+import { Search, Pencil, Trash2, Check, X, Loader2, SlidersHorizontal } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
+import { inputCls, inputCompactCls } from '../../components/ui/Input'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatCount, formatDateTime, formatScore, formatTotal } from '../../components/ui/format'
 import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
@@ -295,7 +297,6 @@ export default function ScoresTab({
     }
   }
 
-  const inp = 'h-9 px-2 rounded-md border border-neutral-300 text-sm bg-white'
 
   // Dropdown value: use selectedRotation if set, otherwise fall back to maxRotation
   const rotVal = selectedRotation ?? maxRotation
@@ -315,7 +316,7 @@ export default function ScoresTab({
             value={selectedCode}
             onChange={(e) => onSelect(e.target.value)}
             disabled={listLoading}
-            className={inp + ' min-w-[160px] disabled:opacity-60 disabled:cursor-not-allowed'}
+            className={inputCls + ' min-w-[160px] disabled:opacity-60 disabled:cursor-not-allowed'}
           >
             {listLoading ? (
               <option value={selectedCode}>불러오는 중…</option>
@@ -332,7 +333,7 @@ export default function ScoresTab({
             <select
               value={selectedServerId}
               onChange={(e) => { setSelectedServerId(e.target.value); setPage(1) }}
-              className={inp + ' w-44'}
+              className={inputCls + ' w-44'}
             >
               {servers.length === 0 && <option value="">서버 없음</option>}
               {servers.map((sv) => (
@@ -345,7 +346,7 @@ export default function ScoresTab({
               value={rotVal ?? ''}
               onChange={(e) => { setSelectedRotation(Number(e.target.value)); setPage(1) }}
               disabled={maxRotation === null}
-              className={inp + ' w-36'}
+              className={inputCls + ' w-36'}
             >
               {maxRotation === null && <option value="">-</option>}
               {rotationOptions.map((n) => (
@@ -360,7 +361,7 @@ export default function ScoresTab({
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
             placeholder="닉네임 / 계정 ID"
-            className={inp + ' flex-1 min-w-[180px]'}
+            className={inputCls + ' flex-1 min-w-[180px]'}
           />
           <Button variant="primary" size="compact"
             onClick={submitSearch}
@@ -422,7 +423,7 @@ export default function ScoresTab({
                               if (e.key === 'Enter') void confirmEdit(r.account_id)
                               if (e.key === 'Escape') cancelEdit()
                             }}
-                            className="w-28 h-7 px-2 rounded border border-neutral-300 text-sm text-right"
+                            className={inputCompactCls + ' w-28 text-right'}
                             autoFocus
                           />
                           <button
@@ -490,26 +491,7 @@ export default function ScoresTab({
         </div>
 
         {/* 페이지네이션 */}
-        <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          <span>{formatTotal(total)}</span>
-          <div className="flex items-center gap-1">
-            <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-2">{page} / {totalPages}</span>
-            <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="w-7 h-7 inline-flex items-center justify-center rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
 
       {/* 플레이어 데이터 수정 모달 */}
@@ -541,7 +523,7 @@ export default function ScoresTab({
                     <select
                       value={dataForm[c.name] ?? ''}
                       onChange={(e) => setDataForm((f) => ({ ...f, [c.name]: e.target.value }))}
-                      className={inp + ' flex-1'}
+                      className={inputCls + ' flex-1'}
                     >
                       <option value="">-</option>
                       <option value="true">참</option>
@@ -551,7 +533,7 @@ export default function ScoresTab({
                     <input
                       value={dataForm[c.name] ?? ''}
                       onChange={(e) => setDataForm((f) => ({ ...f, [c.name]: e.target.value }))}
-                      className={inp + ' flex-1'}
+                      className={inputCls + ' flex-1'}
                     />
                   )}
                 </div>

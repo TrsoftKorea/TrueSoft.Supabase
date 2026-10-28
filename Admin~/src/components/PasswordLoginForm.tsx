@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { signInAllProjects, type SignInOutcome } from '../lib/api'
 import { Button } from './ui/Button'
+import { inputCls } from './ui/Input'
 
 /**
  * 이메일 + 비밀번호 로그인. 구글 계정이 없는 운영자용 대안 로그인 경로다.
@@ -9,8 +10,6 @@ import { Button } from './ui/Button'
  * 비밀번호는 마스터가 "운영자 관리" 화면에서 직접 정해서 알려준다 — 여기서는
  * 그렇게 받은 비밀번호로 로그인만 한다.
  */
-
-const inputCls = 'h-9 w-full px-2 rounded-md border border-neutral-300 text-sm bg-white'
 
 export default function PasswordLoginForm({ onSignedIn }: { onSignedIn: (outcomes: SignInOutcome[]) => void }) {
   const [email, setEmail] = useState('')
@@ -40,7 +39,7 @@ export default function PasswordLoginForm({ onSignedIn }: { onSignedIn: (outcome
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void login()}
-          className={inputCls}
+          className={inputCls + ' w-full'}
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -50,7 +49,7 @@ export default function PasswordLoginForm({ onSignedIn }: { onSignedIn: (outcome
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void login()}
-          className={inputCls}
+          className={inputCls + ' w-full'}
         />
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}

@@ -15,3 +15,26 @@ export function WhiteCard({
     </div>
   )
 }
+
+/** 카드 맨 위 제목과 한 줄 설명. 카드는 전부 이것을 쓴다 — 화면마다 굵기·설명 유무가 달라지지 않게. 오른쪽 버튼은 actions. */
+export function CardHeader({ title, description, actions }: { title: ReactNode; description: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-sm font-medium text-neutral-900">{title}</h2>
+        <p className="mt-1 text-xs text-neutral-500">{description}</p>
+      </div>
+      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+    </div>
+  )
+}
+
+/** 묶음 목록의 상자 하나 — 테두리 + 옅은 바탕 제목 띠(설정 › 서비스 연결 꼴). 상자끼리 칸 폭 맞추기는 안에 든 표가 한다. */
+export function GroupBox({ title, children }: { title: ReactNode; children: ReactNode }) {
+  return (
+    <section className="rounded-lg border border-neutral-200 overflow-hidden">
+      <h3 className="px-4 py-2 bg-neutral-50 border-b border-neutral-200 text-xs font-semibold text-neutral-700">{title}</h3>
+      {children}
+    </section>
+  )
+}
