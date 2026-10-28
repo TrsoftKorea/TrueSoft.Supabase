@@ -40,6 +40,13 @@ const gitOk = (...args) => {
 }
 const readMessage = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim() : '')
 
+/** 요약 글(첫 줄 제목 + 항목) → 커밋 메시지. git 은 빈 줄이 있어야 첫 줄만 제목으로 본다 — 없으면 항목까지 한 줄 제목이 된다. */
+function commitMessage(text) {
+  const [title = '', ...body] = text.split(/\r?\n/).map((l) => l.trimEnd())
+  const rest = body.filter((l) => l.trim())
+  return rest.length ? `${title}\n\n${rest.join('\n')}` : title
+}
+
 /**
  * 올라갈 변경(새 파일 포함). git status 경로는 저장소 기준이다.
  * -z 로 읽는다 — 줄 형식은 한글 경로를 "\355\225..." 로 감싸 내보내 그대로 쓰면 git 이 못 찾는다.
@@ -125,7 +132,7 @@ function commitFiles(files, message) {
   const fresh = files.filter((f) => f.status === '??').map((f) => f.file)
   if (fresh.length) git('add', '--', ...fresh)
   const paths = files.flatMap((f) => (f.orig ? [f.file, f.orig] : [f.file]))
-  git('commit', '-q', '-m', message, '--', ...paths)
+  git('commit', '-q', '-m', commitMessage(message), '--', ...paths)
   return git('rev-parse', '--short', 'HEAD')
 }
 
@@ -175,13 +182,36 @@ function readBody(req) {
 
 // ── 실제 반영 상태 ──
 // 실제 콘솔이 지금 화면 코드의 마지막 커밋을 담은 판인지 본다. 배포 작업 상태(GitHub)와 실제 콘솔의 version.json 을 함께 본다.
-// 외부에 묻는 일이라 20초 안의 재요청은 앞 결과를 쓴다.
+// 외부에 묻는 일이라 짧게(4초) 앞 결과를 쓴다 — 화면이 3초마다 물어도 GitHub 에는 그보다 드물게 묻는다.
 let deployCache = null
 
+// 배포 작업 단계 이름 → 화면 문구. 모르는 단계는 원래 이름.
+// 순서가 중요하다 — "Post Run actions/setup-node" 같은 정리 단계가 준비 규칙에 먼저 걸리지 않게 마무리를 맨 앞에 둔다.
+const STEP_LABEL = [
+  [/^post |complete job/i, '마무리'],
+  [/set up job|checkout|setup-node/i, '준비'],
+  [/npm ci/i, '부품 설치'],
+  [/npm run build/i, '화면 빌드'],
+  [/wrangler/i, '실제 콘솔에 올리는 중'],
+]
+const stepLabel = (name) => STEP_LABEL.find(([re]) => re.test(name))?.[1] ?? name
+
+/** 진행 중인 배포 작업의 단계 — 몇 번째 단계를 하고 있는지. */
+function runSteps(id) {
+  try {
+    const { jobs = [] } = JSON.parse(execFileSync('gh', ['run', 'view', String(id), '--json', 'jobs'], { cwd: REPO, encoding: 'utf8' }))
+    const steps = jobs.flatMap((j) => j.steps ?? [])
+    if (!steps.length) return null
+    const doneCount = steps.filter((s) => s.status === 'completed').length
+    const current = steps.find((s) => s.status === 'in_progress') ?? steps.find((s) => s.status !== 'completed')
+    return { done: doneCount, total: steps.length, current: current ? stepLabel(current.name) : null }
+  } catch { return null }
+}
+
 async function deployStatus() {
-  if (deployCache && Date.now() - deployCache.at < 20_000) return deployCache.body
+  if (deployCache && Date.now() - deployCache.at < 4_000) return deployCache.body
   const checkedAt = new Date().toISOString()
-  // 화면 코드(콘솔 서버 제외)를 마지막으로 바꾼 커밋.
+  // 화면 코드(콘솔 서버 제외)를 마지막으로 바꾼 커밋. %s 는 제목 한 줄(빈 줄 앞)만 준다.
   const last = git('log', '-1', '--format=%H%x09%cI%x09%s', 'HEAD', '--', 'Admin~', ':(exclude)Admin~/supabase')
   const [sha = '', committedAt = '', subject = ''] = last.split('\t')
   const pushed = !!sha && gitOk('merge-base', '--is-ancestor', sha, '@{u}')
@@ -189,10 +219,13 @@ async function deployStatus() {
   let run = null
   try {
     const runs = JSON.parse(execFileSync('gh', ['run', 'list', '--workflow', 'admin-deploy.yml', '--limit', '10',
-      '--json', 'headSha,status,conclusion,url,createdAt'], { cwd: REPO, encoding: 'utf8' }))
+      '--json', 'databaseId,headSha,status,conclusion,url,createdAt,updatedAt'], { cwd: REPO, encoding: 'utf8' }))
     // 그 커밋을 담은 가장 최근 배포 작업.
     const hit = runs.find((r) => gitOk('cat-file', '-e', r.headSha) && gitOk('merge-base', '--is-ancestor', sha, r.headSha))
-    if (hit) run = { status: hit.status, conclusion: hit.conclusion, url: hit.url, createdAt: hit.createdAt }
+    if (hit) {
+      run = { status: hit.status, conclusion: hit.conclusion, url: hit.url, createdAt: hit.createdAt, updatedAt: hit.updatedAt }
+      if (hit.status !== 'completed') run.steps = runSteps(hit.databaseId)
+    }
   } catch { run = { error: true } }
 
   let live = null
@@ -204,9 +237,19 @@ async function deployStatus() {
     live = { sha: liveSha.slice(0, 7), builtAt: v.builtAt ?? null, current: known && gitOk('merge-base', '--is-ancestor', sha, liveSha) }
   } catch { live = { error: true } } // 아직 version.json 이 없는 옛 판이거나 연결 실패
 
+  // 지금 어느 단계인지 한 단어로. 화면은 이것만 보고 문구를 고른다.
+  const phase = !pushed ? 'unpushed'
+    : live?.current ? 'live'
+    : run?.error ? 'unknown'
+    : !run ? 'starting'                                   // 푸시는 됐는데 GitHub 가 아직 배포 작업을 안 만들었다
+    : run.status !== 'completed' ? (run.status === 'in_progress' ? 'running' : 'starting')
+    : run.conclusion !== 'success' ? 'failed'
+    : live?.error ? 'unknown'
+    : 'propagating'                                       // 배포는 끝났고 실제 콘솔에 새 판이 퍼지는 중
+
   const { consoleFiles, sdkFiles } = groups()
   const body = {
-    ok: true, checkedAt,
+    ok: true, checkedAt, phase,
     console: { sha: sha.slice(0, 7), committedAt, subject, pushed },
     run, live,
     waiting: { console: consoleFiles.length, sdk: sdkFiles.length, unpushed: unpushed().length },

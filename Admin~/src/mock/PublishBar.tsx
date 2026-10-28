@@ -14,10 +14,14 @@ type PublishStatus = {
   blocked: string[]
 }
 type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; alsoPushed?: number; error?: string }
+type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'unknown'
 type Deploy = {
-  ok: boolean; error?: string; checkedAt: string
+  ok: boolean; error?: string; checkedAt: string; phase: Phase
   console: { sha: string; committedAt: string; subject: string; pushed: boolean }
-  run: { status?: string; conclusion?: string | null; url?: string; createdAt?: string; error?: boolean } | null
+  run: {
+    status?: string; conclusion?: string | null; url?: string; createdAt?: string; updatedAt?: string; error?: boolean
+    steps?: { done: number; total: number; current: string | null } | null
+  } | null
   live: { sha?: string; builtAt?: string | null; current?: boolean; error?: boolean } | null
   waiting: { console: number; sdk: number; unpushed: number }
   liveUrl: string; actionsUrl: string
@@ -48,17 +52,35 @@ const timeText = (iso: string | null | undefined) => {
 
 type Summary = { text: string; tone: 'ok' | 'busy' | 'warn' | 'bad' }
 
-/** 띠에 한 줄로 보일 실제 반영 상태. */
-function summarize(d: Deploy | null, failed: string): Summary {
+/** 몇 초·몇 분 걸렸는지. */
+const durationText = (ms: number) => {
+  const s = Math.max(0, Math.round(ms / 1000))
+  return s < 60 ? `${s}초` : `${Math.floor(s / 60)}분 ${s % 60}초`
+}
+
+const BUSY: Phase[] = ['starting', 'running', 'propagating']
+
+/** 띠에 한 줄로 보일 실제 반영 상태. elapsed 는 배포를 시작한 지 얼마나 됐는지(진행 중일 때만). */
+function summarize(d: Deploy | null, failed: string, elapsed: string, finished: string): Summary {
   if (failed) return { text: '반영 상태를 확인하지 못했습니다', tone: 'warn' }
   if (!d) return { text: '실제 반영 확인 중…', tone: 'busy' }
   const waiting = d.waiting.console + d.waiting.sdk + d.waiting.unpushed
   const tail = waiting ? ` · 올릴 변경 ${waiting}개` : ''
-  if (d.run?.status && d.run.status !== 'completed') return { text: `실제 콘솔에 배포하는 중…${tail}`, tone: 'busy' }
-  if (d.run?.conclusion && d.run.conclusion !== 'success') return { text: `실제 콘솔 배포 실패${tail}`, tone: 'bad' }
-  if (d.live?.current) return { text: waiting ? `실제 콘솔은 최신${tail}` : '실제 콘솔 최신 · 올릴 변경 없음', tone: waiting ? 'warn' : 'ok' }
-  if (d.live?.error) return { text: `실제 콘솔 판 확인 불가${tail}`, tone: 'warn' }
-  return { text: `실제 콘솔이 이전 판${tail}`, tone: 'warn' }
+  const since = elapsed ? ` · ${elapsed}째` : ''
+  switch (d.phase) {
+    case 'starting': return { text: `배포 시작 기다리는 중…${since}`, tone: 'busy' }
+    case 'running': {
+      const st = d.run?.steps
+      return { text: `배포 중${st ? ` · ${st.done + 1}/${st.total} 단계${st.current ? ` ${st.current}` : ''}` : ''}${since}`, tone: 'busy' }
+    }
+    case 'propagating': return { text: `배포 끝 · 실제 콘솔 반영 기다리는 중…${since}`, tone: 'busy' }
+    case 'failed': return { text: `실제 콘솔 배포 실패${tail}`, tone: 'bad' }
+    case 'live':
+      if (finished) return { text: `실제 콘솔 반영 완료 (${finished})${tail}`, tone: 'ok' }
+      return { text: waiting ? `실제 콘솔은 최신${tail}` : '실제 콘솔 최신 · 올릴 변경 없음', tone: waiting ? 'warn' : 'ok' }
+    case 'unpushed': return { text: `콘솔 화면이 아직 GitHub 에 안 올라감${tail}`, tone: 'warn' }
+    default: return { text: `실제 콘솔 판 확인 불가${tail}`, tone: 'warn' }
+  }
 }
 
 const TONE: Record<Summary['tone'], string> = {
@@ -145,13 +167,31 @@ export function PublishBar() {
     }
   }, [])
 
-  // 배포 중이거나 방금 게시했으면 자주, 아니면 1분마다 다시 본다.
-  const watching = (!!done && !deploy?.live?.current) || (!!deploy?.run?.status && deploy.run.status !== 'completed')
+  // 배포가 진행 중이거나 방금 게시해 아직 반영 전이면 3초마다, 아니면 1분마다 다시 본다.
+  const phase = deploy?.phase
+  const watching = (!!phase && BUSY.includes(phase)) || (!!done && phase !== 'live' && phase !== 'failed')
   useEffect(() => {
     void refresh()
-    const id = window.setInterval(() => void refresh(), watching ? 10_000 : 60_000)
+    const id = window.setInterval(() => void refresh(), watching ? 3_000 : 60_000)
     return () => window.clearInterval(id)
   }, [refresh, watching])
+
+  // 지난 시간 표시를 1초마다 다시 그린다(진행 중일 때만).
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!watching) return
+    const id = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(id)
+  }, [watching])
+
+  // 게시한 순간부터 실제 콘솔에 반영될 때까지 걸린 시간.
+  const [publishedAt, setPublishedAt] = useState<number | null>(null)
+  const [finished, setFinished] = useState('')
+  useEffect(() => {
+    if (publishedAt && phase === 'live' && !finished) setFinished(durationText(Date.now() - publishedAt))
+  }, [publishedAt, phase, finished])
+  const startedAt = publishedAt ?? (deploy?.run?.createdAt ? Date.parse(deploy.run.createdAt) : null)
+  const elapsed = watching && startedAt ? durationText(now - startedAt) : ''
 
   const openDialog = useCallback(async () => {
     setError('')
@@ -176,6 +216,8 @@ export function PublishBar() {
       const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.length })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
       setDone(r)
+      setPublishedAt(Date.now())
+      setFinished('')
       setOpen(false)
       setExpanded(true)
       void refresh()
@@ -186,11 +228,20 @@ export function PublishBar() {
     }
   }, [refresh, status])
 
-  const summary = summarize(deploy, deployError)
+  const summary = summarize(deploy, deployError, elapsed, finished)
   const empty = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
   const run = deploy?.run
-  const runState: 'done' | 'busy' | 'todo' | 'bad' = !run || run.error ? 'todo'
-    : run.status !== 'completed' ? 'busy' : run.conclusion === 'success' ? 'done' : 'bad'
+  const runState: 'done' | 'busy' | 'todo' | 'bad' = phase === 'starting' || phase === 'running' ? 'busy'
+    : phase === 'failed' ? 'bad'
+    : run?.conclusion === 'success' ? 'done' : 'todo'
+  const runText = phase === 'starting' ? '시작 기다리는 중'
+    : phase === 'running'
+      ? `진행 중${run?.steps ? ` · ${run.steps.done + 1}/${run.steps.total} 단계${run.steps.current ? ` ${run.steps.current}` : ''}` : ''}`
+    : phase === 'failed' ? '실패'
+    : run?.conclusion === 'success'
+      ? `성공${run.createdAt && run.updatedAt ? ` · ${durationText(Date.parse(run.updatedAt) - Date.parse(run.createdAt))} 걸림` : ''}`
+    : run?.error ? '배포 기록을 읽지 못했습니다' : '배포 기록 없음'
+  const liveState: 'done' | 'busy' | 'todo' = deploy?.live?.current ? 'done' : phase === 'propagating' ? 'busy' : 'todo'
 
   return (
     <>
@@ -229,17 +280,17 @@ export function PublishBar() {
                   {deploy.console.pushed ? '' : '아직 안 올라감'}
                 </Step>
                 <Step label="실제 콘솔 배포" state={runState}>
-                  {!run || run.error ? '배포 작업을 찾지 못했습니다'
-                    : run.status !== 'completed' ? '진행 중' : run.conclusion === 'success' ? '성공' : '실패'}
+                  {runText}
                   {run?.url && (
                     <a href={run.url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 underline">
                       기록 보기 <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
                 </Step>
-                <Step label="실제 콘솔이 이 판인지" state={deploy.live?.current ? 'done' : deploy.live?.error ? 'todo' : 'busy'}>
-                  {deploy.live?.error ? '실제 콘솔에 판 정보가 없습니다 — 다음 게시부터 보입니다'
+                <Step label="실제 콘솔이 이 판인지" state={liveState}>
+                  {deploy.live?.error ? '실제 콘솔의 판 정보를 읽지 못했습니다'
                     : deploy.live?.current ? `맞습니다 (${deploy.live.sha} · ${timeText(deploy.live.builtAt)} 빌드)`
+                    : phase === 'propagating' ? `새 판이 퍼지는 중 (지금 ${deploy.live?.sha ?? '-'})`
                     : `아직 이전 판입니다 (${deploy.live?.sha ?? '-'})`}
                   <a href={deploy.liveUrl} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 underline">
                     실제 콘솔 열기 <ExternalLink className="w-3 h-3" />
