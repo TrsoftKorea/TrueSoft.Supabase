@@ -807,13 +807,17 @@ async function handleAction(
           let query = db
             .from("purchases")
             .select(
-              "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at, refunded_at, refund_reason",
+              "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at, refunded_at, refund_reason, is_test",
               { count: "exact" },
             )
             .order("verified_at", { ascending: false })
             .order("id", { ascending: false })
             .range(from, to);
           if (bool(params, "refundedOnly")) query = query.not("refunded_at", "is", null);
+          // 시험 결제: only = 시험만, exclude = 시험 빼고(모름은 실제로 친다), 그 밖 = 전부.
+          const test = optStr(params, "test");
+          if (test === "only") query = query.eq("is_test", true);
+          else if (test === "exclude") query = query.not("is_test", "is", true);
           if (search) {
             query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
           }
@@ -846,6 +850,12 @@ async function handleAction(
         const { data, error, count } = await filtered(from, from + pageSize - 1);
         if (error) throw new Error(error.message);
         return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+      }
+
+      case "testPurchases.stats": {
+        const { data, error } = await db.rpc("ts_admin_test_purchase_stats", { p_days: intInRange(params, "days", "기간", 1, 365) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
       }
 
       case "purchases.getRefundStatus": {

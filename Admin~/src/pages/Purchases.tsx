@@ -26,6 +26,7 @@ type PurchaseRow = {
   price_amount_krw: string | number | null
   verified_at: string
   refunded_at: string | null
+  is_test: boolean | null
 }
 type PurchaseData = { rows: PurchaseRow[]; total: number; pageSize: number }
 
@@ -80,6 +81,8 @@ export default function Purchases({
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [refundedOnly, setRefundedOnly] = useState(false)
+  // 시험 결제 보기: all 전부 · exclude 시험 빼고 · only 시험만
+  const [test, setTest] = useState<'all' | 'exclude' | 'only'>('all')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -105,7 +108,7 @@ export default function Purchases({
     setLoadFailed(false)
     try {
       setData(await callAdmin<PurchaseData>(target, 'purchases.list', {
-        search, startDate: dateFrom || null, endDate: dateTo || null, page, refundedOnly,
+        search, startDate: dateFrom || null, endDate: dateTo || null, page, refundedOnly, test,
       }))
     } catch (e: unknown) {
       report(e, '구매 내역을 불러오지 못했습니다.')
@@ -114,7 +117,7 @@ export default function Purchases({
     } finally {
       setLoading(false)
     }
-  }, [target, search, dateFrom, dateTo, page, refundedOnly, report])
+  }, [target, search, dateFrom, dateTo, page, refundedOnly, test, report])
 
   const loadRefundStatus = useCallback(async () => {
     try {
@@ -158,11 +161,11 @@ export default function Purchases({
     setExporting(true)
     try {
       const res = await callAdmin<{ rows: PurchaseRow[]; truncated: boolean }>(target, 'purchases.list', {
-        search, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, all: true,
+        search, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, test, all: true,
       })
       downloadCsv(
         `구매내역_${projectName(target)}_${todayStamp()}.csv`,
-        ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일'],
+        ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일', '시험 결제'],
         res.rows.map((r) => [
           formatDateTime(r.verified_at),
           STORE_LABEL[r.store] ?? r.store,
@@ -174,6 +177,7 @@ export default function Purchases({
           r.price_currency,
           r.price_amount_krw,
           r.refunded_at ? formatDateTime(r.refunded_at) : null,
+          r.is_test == null ? null : r.is_test ? '예' : '아니요',
         ]),
       )
       if (res.truncated) setError('결제가 너무 많아 앞의 10만 건만 담았습니다. 기간을 나눠 내려받으세요.')
@@ -220,6 +224,13 @@ export default function Purchases({
             <input type="checkbox" checked={refundedOnly} onChange={(e) => { setRefundedOnly(e.target.checked); setPage(1) }} className="rounded" />
             환불만
           </label>
+          <select value={test} onChange={(e) => { setTest(e.target.value as typeof test); setPage(1) }}
+            className="h-9 px-2 rounded-md border border-neutral-300 text-xs bg-white"
+            title="시험 결제는 애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정 결제입니다. 매출에 넣지 않습니다">
+            <option value="all">시험 결제 포함</option>
+            <option value="exclude">시험 결제 빼기</option>
+            <option value="only">시험 결제만</option>
+          </select>
           <Button variant="primary" size="compact"
             onClick={submitSearch}
             disabled={loading}
@@ -276,6 +287,11 @@ export default function Purchases({
                         {refunded && (
                           <span className="ml-2 inline-flex items-center rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-600 whitespace-nowrap" title={`환불 ${formatDateTime(r.refunded_at)}`}>
                             환불
+                          </span>
+                        )}
+                        {r.is_test && (
+                          <span className="ml-2 inline-flex items-center rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600 whitespace-nowrap" title="시험 결제 — 매출에 넣지 않습니다">
+                            테스트
                           </span>
                         )}
                       </td>

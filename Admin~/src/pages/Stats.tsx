@@ -6,7 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
-import { formatKRW } from '../components/ui/format'
+import { formatDateTime, formatKRW } from '../components/ui/format'
 import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
 
 type Day = { day: string; total: number; new: number; returning: number; comeback: number }
@@ -25,14 +25,104 @@ const RANGES = [
   { days: 365, label: '1년' },
 ] as const
 
-type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'chat'
+type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'test' | 'chat'
 const TABS: [Tab, string][] = [
   ['users', '일일 사용자'],
   ['comeback', '복귀 유저'],
   ['retention', '리텐션'],
   ['revenue', '국가별 매출'],
+  ['test', '테스트 결제'],
   ['chat', '일일 채팅'],
 ]
+
+type TestPurchaseStats = {
+  daily: { day: string; count: number; krw: number }[]
+  by_store: Record<string, number>
+  total_count: number
+  total_krw: number
+  recent: { verified_at: string; store: string; product_id: string; price_amount_krw: number | null; display_name: string | null; account_id: string | null }[]
+  tracking_since: string | null
+}
+const STORE_NAME: Record<string, string> = { google_play: 'Google Play', apple_app_store: 'App Store' }
+
+function TestPurchaseTab({ target, days, reloadKey, onUnauthenticated, onError }: {
+  target: ProjectTarget; days: number; reloadKey: number
+  onUnauthenticated: () => void; onError: (m: string) => void
+}) {
+  const [data, setData] = useState<TestPurchaseStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    callAdmin<TestPurchaseStats>(target, 'testPurchases.stats', { days })
+      .then((r) => { if (alive) setData(r) })
+      .catch((e: unknown) => {
+        if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+        onError(e instanceof Error ? e.message : '테스트 결제를 불러오지 못했습니다.')
+      })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [target, days, reloadKey, onUnauthenticated, onError])
+
+  if (loading && !data) {
+    return <WhiteCard className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" /></WhiteCard>
+  }
+  if (!data) return null
+  const rows: DayRow[] = data.daily.map((d) => ({ day: d.day, count: d.count }))
+  const stores = Object.entries(data.by_store).map(([s, c]) => `${STORE_NAME[s] ?? s} ${n(c)}건`).join(' · ')
+
+  return (
+    <>
+      <div className="text-xs text-neutral-500">
+        애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정의 결제입니다. 매출·대시보드·누적 결제액에 넣지 않습니다.
+        {data.tracking_since && <> {data.tracking_since.slice(0, 10)} 이전 결제는 시험인지 알 수 없어 매출에 그대로 들어가 있습니다.</>}
+      </div>
+      <WhiteCard>
+        <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium text-neutral-800">테스트 결제</span>
+          <span className="text-xs text-neutral-500">
+            기간 합계 {n(data.total_count)}건 · {formatKRW(data.total_krw)}{stores && ` · ${stores}`}
+          </span>
+        </div>
+        <div className="p-5">
+          <DayBars days={rows} series={[{ key: 'count', color: '#94a3b8', label: '테스트 결제' }]} unit="건" />
+        </div>
+      </WhiteCard>
+      <WhiteCard>
+        <div className="border-b border-neutral-100 px-5 py-3 text-sm font-medium text-neutral-800">최근 테스트 결제</div>
+        {data.recent.length === 0 ? (
+          <div className="p-8 text-center text-sm text-neutral-400">이 기간에 테스트 결제가 없습니다.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-neutral-500 border-b border-neutral-100">
+                  <th className="px-5 py-2 text-left font-medium whitespace-nowrap">결제 시각</th>
+                  <th className="px-3 py-2 text-left font-medium">플레이어</th>
+                  <th className="px-3 py-2 text-left font-medium">상품</th>
+                  <th className="px-3 py-2 text-left font-medium whitespace-nowrap">스토어</th>
+                  <th className="px-5 py-2 text-right font-medium whitespace-nowrap">금액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recent.map((r, i) => (
+                  <tr key={i} className="border-b border-neutral-100 last:border-0">
+                    <td className="px-5 py-2 whitespace-nowrap text-neutral-600">{formatDateTime(r.verified_at)}</td>
+                    <td className="px-3 py-2 text-neutral-800">{r.display_name ?? '-'}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{r.product_id}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-neutral-600">{STORE_NAME[r.store] ?? r.store}</td>
+                    <td className="px-5 py-2 text-right tabular-nums whitespace-nowrap">{r.price_amount_krw != null ? formatKRW(r.price_amount_krw) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </WhiteCard>
+    </>
+  )
+}
 
 type ChatDay = { day: string; total: number; by_kind: Record<string, number> }
 type ChatStats = { daily: ChatDay[]; first_day: string | null }
@@ -313,7 +403,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
     <div className="space-y-4">
       <PageHeader
         title="통계"
-        description={`접속자, 복귀 유저, 리텐션, 국가별 매출, 채팅 개수를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
+        description={`접속자, 복귀 유저, 리텐션, 국가별 매출, 테스트 결제, 채팅 개수를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -357,12 +447,16 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
       ) : data && (
         <>
           {/* 접속 기록은 통계를 만든 날부터 쌓였다. 매출은 결제 기록이 원래 있어 이 안내가 맞지 않는다. */}
-          {tab !== 'revenue' && tab !== 'chat' && data.first_day && data.first_day > data.daily[0]!.day && (
+          {tab !== 'revenue' && tab !== 'chat' && tab !== 'test' && data.first_day && data.first_day > data.daily[0]!.day && (
             <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
           )}
 
           {tab === 'revenue' && (
             <RevenueTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
+          )}
+
+          {tab === 'test' && (
+            <TestPurchaseTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
           )}
 
           {tab === 'chat' && (
