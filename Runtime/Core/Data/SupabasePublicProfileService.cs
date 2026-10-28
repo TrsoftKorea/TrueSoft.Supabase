@@ -431,12 +431,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-            {
-                // 서버가 raise 한 사유는 본문에만 있다 — ErrorMessage 는 "HTTP/1.1 400 Bad Request" 같은 통신 문구다.
-                if (response.Body != null && response.Body.Contains(SupabaseErrorCode.WithdrawalSettingsMissing))
-                    return SupabaseResult<string>.Fail(SupabaseErrorCode.WithdrawalSettingsMissing);
                 return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_request_failed");
-            }
 
             try
             {

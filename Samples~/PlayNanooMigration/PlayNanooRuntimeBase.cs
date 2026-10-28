@@ -54,9 +54,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     // 거절될 수 있어, 다시 시도할 때는 Supabase 연동만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
     private const string NanooPendingGuestLinkKey = "TrueBase.NanooPendingGuestLink";
 
-    // 나누 탈퇴는 됐는데 Supabase 탈퇴·삭제가 실패했다(값 = Supabase 계정 id). 나누는 탈퇴하면 토큰을 비워 다시 부를 수 없으니,
-    // 다시 시도할 때는 Supabase 쪽만 한다. 앱을 껐다 켜도 이어지도록 저장해 둔다.
-    private const string NanooWithdrawnKey = "TrueBase.NanooWithdrawn";
+    // 나누 탈퇴는 됐는데 Supabase 탈퇴·삭제가 실패한 계정(Supabase 계정 id). 나누는 탈퇴하면 토큰을 비워 다시 부를 수 없으니,
+    // 다시 시도할 때는 Supabase 쪽만 한다. 기기에 저장하지 않는다 — 앱을 껐다 켜면 나누가 탈퇴 신청 중으로 로그인을 막아
+    // 어차피 다시 시도할 수 없고, 남은 표시는 나중의 진짜 탈퇴에서 나누를 건너뛰게 만든다.
+    private string _nanooWithdrawnAccount;
 
     private const string NanooStorageReadFailedReason = "playnanoo_storage_read_failed";
     private string   _nanooNickname;       // 나누 로그인 응답의 닉네임. 로그인 후 Supabase 로 옮기고, 변경 실패 시 롤백에 쓴다
@@ -491,14 +492,14 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     }
 
     /// <summary>
-    /// 나누 탈퇴 → Supabase 탈퇴·삭제. 나누만 되고 Supabase 가 실패했으면 그 사실을 저장해 두고,
+    /// 나누 탈퇴 → Supabase 탈퇴·삭제. 나누만 되고 Supabase 가 실패했으면 그 사실을 기억해 두고,
     /// 다시 시도할 때는 나누를 건너뛴다 — 토큰이 비워진 나누를 다시 부르면 실패해 Supabase 쪽까지 영영 못 간다.
     /// </summary>
     private async Task<SupabaseResult> WithdrawNanooThenAsync(
         int holdDays, Func<Task<SupabaseResult>> sdkStep, bool isGoogle, string sdkFailLog)
     {
         var accountId = Supabase.UserId;
-        if (!string.IsNullOrEmpty(accountId) && PlayerPrefs.GetString(NanooWithdrawnKey, "") == accountId)
+        if (!string.IsNullOrEmpty(accountId) && _nanooWithdrawnAccount == accountId)
         {
             Trace("나누 탈퇴는 이미 끝남 — Supabase 쪽만 다시 시도");
             return await FinishSupabaseWithdrawalAsync(sdkStep, isGoogle, sdkFailLog);
@@ -519,18 +520,16 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             ClearNanooTokens();
             TrueBaseNanoo.UserId = null;
             TrueBaseNanoo.OpenId = null;
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                PlayerPrefs.SetString(NanooWithdrawnKey, accountId);
-                PlayerPrefs.Save();
-            }
+            _nanooWithdrawnAccount = accountId;
 
             tcs.SetResult(await FinishSupabaseWithdrawalAsync(sdkStep, isGoogle, sdkFailLog));
         });
         return await tcs.Task;
     }
 
-    private static async Task<SupabaseResult> FinishSupabaseWithdrawalAsync(
+    private void ClearNanooWithdrawnMark() => _nanooWithdrawnAccount = null;
+
+    private async Task<SupabaseResult> FinishSupabaseWithdrawalAsync(
         Func<Task<SupabaseResult>> sdkStep, bool isGoogle, string sdkFailLog)
     {
         var result = await sdkStep();
@@ -540,8 +539,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
             return result;
         }
 
-        PlayerPrefs.DeleteKey(NanooWithdrawnKey);
-        PlayerPrefs.Save();
+        ClearNanooWithdrawnMark();
         if (isGoogle)
             await Supabase.RevokeGoogleAccessAsync();
         return result;
@@ -795,6 +793,8 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         if (status == Configure.PN_API_STATE_SUCCESS)
         {
             ApplyNanooSession(values, $"{loginType} {action}");
+            // 나누에 로그인됐다면 탈퇴 상태가 아니다 — 남은 표시가 다음 탈퇴에서 나누를 건너뛰게 하면 안 된다.
+            ClearNanooWithdrawnMark();
             OnNanooLoginSuccess(values);
             return true;
         }
@@ -1127,6 +1127,7 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         }
 
         _pendingWithdrawalKey = null;
+        ClearNanooWithdrawnMark();
         return await sdkRedeem();
     }
 

@@ -114,7 +114,9 @@ namespace SdkAudit
         private static void FixedTimeZones(AuditContext ctx, string rel, string raw)
         {
             var text = MaskComments(raw);
-            foreach (Match m in Regex.Matches(text, @"'(?:Asia|Europe|America|Australia|Africa|Pacific|Atlantic|Indian)/\w+'"))
+            // 'America/Argentina/Buenos_Aires'·'Etc/GMT-9' 처럼 여러 마디·기호가 든 이름도 잡는다.
+            // 'UTC' 는 잡지 않는다 — UTC 로 바꾸는 계산은 게임 시간대와 무관한 정당한 쓰임이다.
+            foreach (Match m in Regex.Matches(text, @"'(?:Asia|Europe|America|Australia|Africa|Pacific|Atlantic|Indian|Antarctica|Etc)/[\w/+\-]+'"))
             {
                 var start = text.LastIndexOf(';', m.Index) + 1;
                 var end = text.IndexOf(';', m.Index);
@@ -148,11 +150,18 @@ namespace SdkAudit
                     continue;
 
                 var self = fn.Groups["fn"].Value;
-                foreach (Match r in Regex.Matches(text.Substring(bodyStart, bodyEnd - bodyStart), @"\bpublic\.(?<obj>\w+)", RegexOptions.IgnoreCase))
+                var body = text.Substring(bodyStart, bodyEnd - bodyStart);
+                // 본문 안에서 만든 이름(with 절의 이름)은 표가 아니다 — 뒤 절에 같은 이름의 표가 있어도 건너뛴다.
+                var ctes = new HashSet<string>(
+                    Regex.Matches(body, @"\b(?<n>\w+)\s+as\s*(?:not\s+)?(?:materialized\s+)?\(", RegexOptions.IgnoreCase).Select(c => c.Groups["n"].Value),
+                    StringComparer.OrdinalIgnoreCase);
+                // public. 을 붙인 참조 + 안 붙이고 from·join·into·update 뒤에 쓴 참조(search_path = public 이라 같은 표다).
+                var refs = Regex.Matches(body, @"\bpublic\.(?<obj>\w+)|\b(?:from|join|into|update)\s+(?<obj>[a-z_]\w*)\b(?!\s*\.)", RegexOptions.IgnoreCase);
+                foreach (Match r in refs)
                 {
                     var name = r.Groups["obj"].Value;
-                    var at = bodyStart + r.Index;
-                    if (string.Equals(name, self, StringComparison.OrdinalIgnoreCase) || !defs.TryGetValue(name, out var defAt))
+                    var at = bodyStart + r.Groups["obj"].Index;
+                    if (string.Equals(name, self, StringComparison.OrdinalIgnoreCase) || ctes.Contains(name) || !defs.TryGetValue(name, out var defAt))
                         continue;
                     if (defAt > at)
                         ctx.Report.Error($"[R9 설치순서] {SectionOf(sections, at)} 의 SQL 함수 {self} 본문이 {SectionOf(sections, defAt)} 에서 만드는 {name} 을 참조합니다. language sql 은 만들 때 본문을 확인하므로 신규 프로젝트 설치가 실패합니다. ({rel}:{LineOf(raw, at)})");

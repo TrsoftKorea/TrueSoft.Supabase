@@ -174,7 +174,7 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 15. 리더보드 — 정의·기록·컬럼 등록 + 순위 RPC
 16. 운영자 스키마 버전관리 — 스테이징 → 게시 → 롤백. service_role 전용, 클라이언트 grant 없음. 운영자 계정(ts_admin_operators·비밀번호 해시 ts_admin_passwords)과 콘솔 첫 화면 숫자(ts_admin_dashboard_stats, 매출은 환불 제외)와 자동 작업 상태(ts_admin_cron_jobs — cron.job_run_details 는 저절로 안 지워지고 색인이 runid 뿐이라 최근 5만 건만 본다)와 운영 기록(ts_admin_audit_logs — admin-api 가 성공한 변경 요청마다 남김, 지우는 함수 없음), 콘솔 표시 설정(ts_admin_console_settings — 이 게임의 콘솔 색·이름·아이콘(128px data URL), null 이면 콘솔 코드의 기본값. admin-api `auth.consoleLook` 으로 로그인 전에도 읽힌다)도 여기
 17. 쿠폰 — coupons + coupon_codes + coupon_redemptions + ts_coupon_redeem + ts_admin_player_coupons(플레이어별 사용 이력)
-18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many + chat_daily_stats(한국 날짜·채널 종류별 메시지 수, 영구 보관. chat_messages INSERT 트리거 ts_chat_count_daily 가 세고 공지는 뺀다 — 메시지는 지워져도 숫자는 남는다. 콘솔은 ts_admin_chat_stats)
+18. 채팅 — chat_channels + chat_messages + chat_mutes + ts_chat_send·ts_chat_fetch_many + chat_daily_stats(게임 시간대 날짜·채널 종류별 메시지 수, 영구 보관. chat_messages INSERT 트리거 ts_chat_count_daily 가 세고 공지는 뺀다 — 메시지는 지워져도 숫자는 남는다. 콘솔은 ts_admin_chat_stats)
 19. 매치 결과 신고 — match_reward_configs + match_results + ts_match_report_result(신고·교차검증·우편 지급 한 번에) + ts_match_report_solo_result(상대 없는 판 기록, status='solo', 지급 없음) + ts_match_stats(내 승·패·점수 최대·최소, verified·pending·solo 별) + ts_match_history(내 기록 최근 순). 판마다 선택 점수(score) — 상대와 맞춰 보지 않음. 랭킹·시즌은 15절 리더보드 몫. 무효(mismatch)는 예외가 아니라 상태로 돌려준다 — raise 하면 무효 표시까지 되돌려진다. 보상 지급 여부는 rewarded_at(우편이 만료돼 지워져도 남음). 운영 RPC는 ts_admin_match_reward_config_*(upsert 는 p_create_only 로 추가 시 덮어쓰기 차단)·ts_admin_match_reward_overview·ts_admin_match_player_records
 20. 친구 — friend_requests(요청/친구 관계 단일 테이블) + friend_settings(제한값 1행) + ts_friend_search·ts_friend_request_send·ts_friend_requests_list·ts_friend_request_respond·ts_friend_request_cancel·ts_friends_list·ts_friend_remove·ts_friend_limits(제한값 읽기, 클라이언트용) + ts_friend_request_cleanup(cron, 30일 방치 요청 취소). 18절 채팅 인프라를 재사용해 친구 1:1 채팅(ts_chat_send_direct·ts_chat_fetch_direct, kind='direct' 채널)도 여기서 구현. 운영 RPC는 ts_admin_friend_overview·ts_admin_friend_settings_get/update
 21. 매치 로비(초대) — match_lobbies + match_lobby_members + match_lobby_settings(초대 제한값·만료 분 1행) + ts_match_lobby_create·invite·respond·leave·set_member_meta·start·cancel·list_my(폴링용) + ts_match_lobby_cleanup(cron) + 운영 RPC ts_admin_match_lobby_list·ts_admin_match_lobby_settings_get/update. 로비 id를 그대로 19절 session_id로 재사용. 방 이름(name)과 자유 칸(metadata, 로비·참가자 양쪽)은 서버가 해석하지 않는다 — 프로젝트마다 다른 값은 컬럼을 늘리지 말고 metadata에 넣는다. **초대는 친구가 아니어도 가능**하고 도배는 match_lobby_settings(받는 쪽 대기 초대 상한·보내는 쪽 쿨다운)로 막는다. 18절 채팅 인프라를 재사용해 로비 대화(ts_chat_send_lobby·ts_chat_fetch_lobby, kind='group' code='lobby' 채널, 범위 키=로비 id)도 여기서 구현
@@ -206,13 +206,21 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 기능을 추가·변경·삭제하면 **같은 작업 안에서** `docs~/guide/`의 해당 페이지를 고친다 — 새 API·동작은 페이지 추가·갱신, 지운 API·파일·Secret 키는 모든 문서에서 언급 제거, 바뀐 파라미터·시그니처는 문서 예제까지 갱신. (문서 작성 형식은 아래 `docs.md`가 정한다. 이 항목만 여기 둔 이유는 코드를 고칠 때 보여야 해서다.)
 
+## 게시 — 이 저장소의 커밋·푸시
+
+**이 저장소의 커밋·푸시는 전부 미리보기의 [게시] 버튼으로 한다**(2026-10-27 사용자 결정). 채팅으로 "커밋하고 푸시할까요?"를 묻지 않는다 — 일단락되면 커밋 요약을 적어 두고 "미리보기에서 게시를 눌러 주세요"라고 안내한다. 버튼이 승인이다. 메모리 저장소(`~/.claude`)는 다른 저장소라 여기 해당하지 않는다 — 전역 규칙대로 채팅으로 묻는다.
+
+- 버튼은 콘솔 화면(`Admin~`)과 그 밖(SDK·DB·문서)을 커밋 두 개로 나눠 만들고 한 번에 푸시한다. 요약은 `Admin~/.publish-message`(콘솔)·`Admin~/.publish-message-sdk`(그 밖)에 미리 적는다(게시 후 지워짐). **둘 다 비개발자인 사용자가 확인 창에서 읽는 글이다** — 첫 줄은 짧은 제목, 다음 줄부터 `- ` 항목. **제목과 항목 모두 "~한다·~합니다"로 풀어 쓰지 말고 명사로 끝맺는다** — "실제 반영 여부 확인", "로그인 실패 문제 수정"처럼. 제목에 두 가지면 가운뎃점(`·`)으로 잇는다. 이 요약이 곧 커밋 메시지다. 메모리 저장소(`~/.claude`)에 이 세션이 만드는 커밋 메시지도 같은 꼴로 쓴다. 파일 이름·함수 이름·검사 번호(R9 등)를 쓰지 말고 "무엇이 달라지는지"를 쉬운 말로 적는다(2026-10-28 사용자 지적 "가독성이 너무 구려").
+- 콘솔 파일이 푸시되면 GitHub Actions(`admin-deploy.yml`)가 실제 콘솔에 배포한다. **SDK 변경은 GitHub 에 올라가는 즉시 DefenceR 에 반영된다**(GitHub UPM 참조) — 리뷰가 필요한 양이면 안내하기 전에 리뷰어를 돌린다.
+- 띠의 실제 반영 표시는 배포 작업 상태(`gh`)와 실제 콘솔의 `version.json`(배포 때 커밋 값이 박힌다)으로 본다.
+
 ## 운영 콘솔 화면 수정
 
 콘솔(`Admin~/src`)을 고치면 **가짜 데이터 모드로 띄워 직접 확인한 뒤 사용자가 게시한다.** 실제 콘솔은 로그인이 필요해 에이전트가 볼 수 없고, 운영 서버 로그인에 비밀번호를 넣을 수도 없다.
 
 - 띄우기: 미리보기 설정 `admin-mock`(`npm run preview:mock`, http://localhost:4174) → "가짜 데이터로 들어가기". 밝은·어두운 화면을 둘 다 본다.
 - 가짜 응답은 `Admin~/src/mock/mockAdmin.ts` 의 HANDLERS. 새 화면을 만들면 그 화면의 action 도 여기 더한다(없으면 빈 목록). 가짜 데이터도 규칙(같은 날짜는 기간과 무관하게 같은 값, 나눈 값의 합 = 전체, 화면끼리 같은 숫자)을 지킨다 — 파일 맨 위에 적혀 있고 `npm run check:mock` 이 검사한다. 가짜 데이터를 고치면 돌린다.
-- 게시는 미리보기 맨 위 **[게시]** 버튼 — 사용자가 누른다. 콘솔 파일(`Admin~`)만 커밋·푸시하고 GitHub Actions(`admin-deploy.yml`)가 배포한다. 커밋 요약은 `Admin~/.publish-message` 에 미리 적어 둔다(게시 후 지워짐). 콘솔 화면 게시는 채팅 승인 대신 이 버튼이 승인이다. **배포되는 건 화면뿐이다** — 화면이 새로 부르는 서버 쪽(`admin-api` 엣지 함수·`install.sql` 의 DB 함수)은 게시 전에 두 게임에 직접 올려 둔다. 안 올리면 새 화면에 "알 수 없는 action" 오류가 뜬다. 아직 안 올린 다른 커밋이 있으면 게시 버튼이 멈춘다(푸시가 브랜치 전체를 올리므로).
+- 게시는 위 「게시」 절. **배포되는 건 화면뿐이다** — 화면이 새로 부르는 서버 쪽(`admin-api` 엣지 함수·`install.sql` 의 DB 함수)은 게시 전에 두 게임에 직접 올려 둔다. 안 올리면 새 화면에 "알 수 없는 action" 오류가 뜬다. 서버 쪽에서 옛 화면이 쓰던 것을 없애면 게시 전까지 실제 콘솔의 그 화면이 깨진다 — 그런 변경은 안내할 때 밝힌다.
 - 가짜 데이터 코드는 `__MOCK__` 상수로 일반 빌드에서 통째로 빠진다 — 일반 빌드 결과에 `__publish`·`가짜 데이터` 글자가 없는지로 확인한다.
 
 ## 경로별 규칙

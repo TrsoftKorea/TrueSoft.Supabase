@@ -36,6 +36,8 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: 782622202301-336bs6o064t4i739lcuo1e4idkh8kkt2.apps.googleusercontent.com
           VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
           VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
+          # 배포 판의 version.json — 미리보기 게시 띠가 실제 콘솔이 최신인지 이걸로 본다.
+          VITE_BUILD_SHA: ${{ github.sha }}
       # 첫 실행 때만 필요 — 프로젝트가 이미 있으면 에러가 나지만 그냥 넘어간다.
       - uses: cloudflare/wrangler-action@v3
         continue-on-error: true

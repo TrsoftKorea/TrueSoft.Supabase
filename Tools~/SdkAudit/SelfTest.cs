@@ -72,6 +72,12 @@ namespace SdkAudit
                 // plpgsql 본문은 설치 때 해석되지 않으므로 잡히면 오탐이다.
                 if (!found.Any(f => f.Contains("ts_early_sql ")))
                     missing.Add("[R9 설치순서] language sql 본문(ts_early_sql)");
+                if (!found.Any(f => f.Contains("ts_early_sql_bare ")))
+                    missing.Add("[R9 설치순서] public. 없이 쓴 참조(ts_early_sql_bare)");
+                if (!found.Any(f => f.Contains("Buenos_Aires")))
+                    missing.Add("[R19 시간대고정] 여러 마디 시간대 이름");
+                if (found.Any(f => f.Contains("late_cte")))
+                    missing.Add("[R9 설치순서] with 절 이름 오탐(late_cte)");
                 if (found.Any(f => f.Contains("ts_early_plpgsql")))
                     missing.Add("[R9 설치순서] plpgsql 본문 오탐(ts_early_plpgsql)");
                 // game_settings 의 기본값은 허용 — 이게 잡히면 오탐이다.
@@ -180,6 +186,10 @@ create index if not exists early_idx on public.late_table (id);
 
 create or replace function public.ts_early_sql()
 returns bigint language sql stable as $$ select count(*) from public.late_sql_table; $$;
+create or replace function public.ts_early_sql_bare()
+returns bigint language sql stable as $$ with late_cte as (select 1) select count(*) from late_sql_table, late_cte; $$;
+create or replace function public.ts_nested_tz()
+returns date language sql stable as $$ select (now() at time zone 'America/Argentina/Buenos_Aires')::date; $$;
 create or replace function public.ts_early_plpgsql()
 returns void language plpgsql as $$ begin perform 1 from public.late_sql_table; end; $$;
 create table if not exists public.late_sql_table (id int);

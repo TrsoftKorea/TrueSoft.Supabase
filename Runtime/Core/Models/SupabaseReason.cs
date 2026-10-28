@@ -155,7 +155,6 @@
         MatchLobbyMaxMembersInvalid,
         MatchLobbyNameTooLong,
         AccountDeleteFailed,
-        WithdrawalSettingsMissing,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -221,7 +220,6 @@
             SupabaseErrorCode.WithdrawalCancelIssueFailed => SupabaseReason.WithdrawalCancelIssueFailed,
             SupabaseErrorCode.WithdrawalDeletedRecreateFailed => SupabaseReason.WithdrawalDeletedRecreateFailed,
             SupabaseErrorCode.AccountDeleteFailed => SupabaseReason.AccountDeleteFailed,
-            SupabaseErrorCode.WithdrawalSettingsMissing => SupabaseReason.WithdrawalSettingsMissing,
             SupabaseErrorCode.WithdrawalStatusUnconfirmed => SupabaseReason.WithdrawalStatusUnconfirmed,
             SupabaseErrorCode.InvalidSignInMethod => SupabaseReason.InvalidSignInMethod,
             SupabaseErrorCode.UserSaveFlushFailed => SupabaseReason.UserSaveFlushFailed,

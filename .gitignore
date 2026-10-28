@@ -161,6 +161,9 @@ docs~/.vitepress/cache
 # Supabase CLI (로컬 개발 ?�구, ?�키지 배포???�함?��? ?�음)
 supabase/
 supabase.meta
+# 운영 콘솔 서버(admin-api)는 올린다 — 위 줄이 Admin~/supabase 도 덮어 새 파일이 조용히 빠졌다. CLI 임시 폴더만 뺀다.
+!Admin~/supabase/
+Admin~/supabase/.temp/
 
 Assets/GoogleMobileAds/link.xml.meta
 Assets/StreamingAssets/google-services-desktop.json.meta

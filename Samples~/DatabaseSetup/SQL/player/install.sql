@@ -1258,7 +1258,7 @@ before insert or update on public.user_sessions
 for each row execute function public.ts_user_sessions_guard();
 revoke all on function public.ts_session_is_online(timestamptz, timestamptz, integer) from public, anon, authenticated;
 
--- 일별 접속 기록 — 계정마다 하루(한국 날짜) 한 줄. 일일 사용자·복귀 유저·리텐션을 여기서 센다. 지우지 않는다.
+-- 일별 접속 기록 — 계정마다 하루(게임 시간대 날짜) 한 줄. 일일 사용자·복귀 유저·리텐션을 여기서 센다. 지우지 않는다.
 -- 계정이 지워져도 기록은 남긴다(외래 키 없음) — 지난 리텐션 숫자가 탈퇴로 바뀌면 안 된다.
 -- is_new: 그날 가입한 계정. is_comeback: 직전 14일 동안 한 번도 접속하지 않았다가 들어온 계정.
 create table if not exists public.user_daily_activity (
@@ -1316,7 +1316,7 @@ end;
 $$;
 
 comment on function public.ts_record_daily_activity(uuid) is
-  '그 계정의 오늘(한국 날짜) 첫 접속을 일별 접속 기록에 남긴다. 로그인(ts_after_sign_in)·접속 신호(ts_session_heartbeat)가 부른다.';
+  '그 계정의 오늘(게임 시간대 날짜) 첫 접속을 일별 접속 기록에 남긴다. 로그인(ts_after_sign_in)·접속 신호(ts_session_heartbeat)가 부른다.';
 revoke all on function public.ts_record_daily_activity(uuid) from public, anon, authenticated;
 
 -- 생존 신호 + 현재 세션 토큰 조회를 요청 하나로. 행이 없으면(로그아웃 직후 등) null.
@@ -2731,10 +2731,6 @@ begin
   v_user_id     := auth.uid()::text;
 
   v_scheduled_at := public.ts_withdrawal_deadline(v_delay_days);
-  -- 설정 행이 없으면 null 이 되고, null 은 "탈퇴 예약 없음"이라 신청이 성공한 듯 보이고 아무 일도 안 일어난다.
-  if v_scheduled_at is null then
-    raise exception 'withdrawal_settings_missing';
-  end if;
 
   insert into public.user_profiles (user_id, account_id, withdrawn_at)
   values (v_user_id, v_account_id, v_scheduled_at)
@@ -4392,7 +4388,7 @@ comment on function public.ts_ccu_now() is '지금 접속 중인 플레이어 �
 revoke all on function public.ts_ccu_now() from public, anon, authenticated;
 
 -- 일별 요약 — 지우지 않고 영구 보관한다. 5분 기록은 90일 뒤 지워지므로 긴 기간 추이는 이것으로 본다.
--- 날짜는 한국 기준(대시보드의 다른 숫자와 같다). 최고치 순간의 서버별·플랫폼별도 함께 남긴다.
+-- 날짜는 게임 시간대 기준(대시보드의 다른 숫자와 같다). 최고치 순간의 서버별·플랫폼별도 함께 남긴다.
 create table if not exists public.ccu_daily (
   day         date primary key,
   peak        integer       not null,
@@ -4430,7 +4426,7 @@ as $$
         samples = excluded.samples, by_server = excluded.by_server, by_platform = excluded.by_platform;
 $$;
 
-comment on function public.ts_ccu_daily_refresh(date) is '그날(한국 날짜)의 동시접속자 일별 요약을 5분 기록으로 다시 계산한다. ts_ccu_snapshot 이 부른다.';
+comment on function public.ts_ccu_daily_refresh(date) is '그날(게임 시간대 날짜)의 동시접속자 일별 요약을 5분 기록으로 다시 계산한다. ts_ccu_snapshot 이 부른다.';
 revoke all on function public.ts_ccu_daily_refresh(date) from public, anon, authenticated;
 
 create or replace function public.ts_ccu_snapshot()
@@ -5633,7 +5629,7 @@ begin
            or (p_status = '미수령' and m.deleted_at is null and m.items_claimed_at is null)
            or (p_status = '수령'   and m.deleted_at is null and m.items_claimed_at is not null)
            or (p_status = '삭제'   and m.deleted_at is not null))
-      -- 콘솔의 날짜는 한국 날짜다. ::timestamptz 는 세션 시간대(UTC) 자정이라 0~9시 기록이 전날로 빠진다.
+      -- 콘솔의 날짜는 게임 시간대 날짜다. ::timestamptz 는 세션 시간대(UTC) 자정이라 그 나라 새벽 기록이 전날로 빠진다.
       and (p_start_date is null or m.created_at >= (p_start_date::timestamp at time zone public.ts_game_time_zone()))
       and (p_end_date   is null or m.created_at <  ((p_end_date + 1)::timestamp at time zone public.ts_game_time_zone()))
       and (p_batch_id is null or m.batch_id = p_batch_id)
@@ -6081,7 +6077,7 @@ as $$
   from (
     select
       s.id, s.schedule_type, s.target_mode, gs.server_code, s.title, s.items, s.category,
-      s.scheduled_at, s.repeat_time, s.repeat_unit, s.repeat_dow, s.repeat_dom,
+      s.scheduled_at, s.repeat_time, s.repeat_tz, s.repeat_unit, s.repeat_dow, s.repeat_dom,
       s.next_run_at, s.is_active, s.run_count, s.created_by, s.platform, s.open_for_new
     from public.mail_schedules s
     left join public.game_servers gs on gs.id = s.server_id
@@ -8507,7 +8503,7 @@ as $$
   );
 $$;
 
-comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫자(가입·활동·차단·매출). 날짜는 한국 기준. service_role 전용.';
+comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫자(가입·활동·차단·매출). 날짜는 게임 시간대 기준. service_role 전용.';
 
 revoke all on function public.ts_admin_dashboard_stats() from public, anon, authenticated;
 grant execute on function public.ts_admin_dashboard_stats() to service_role;
@@ -8623,7 +8619,7 @@ as $$
 $$;
 
 
--- 콘솔 "통계 › 매출" — 최근 p_days 일(한국 날짜) 결제를 가입 국가별로 더한다. 환불은 뺀다(대시보드와 같은 기준).
+-- 콘솔 "통계 › 매출" — 최근 p_days 일(게임 시간대 날짜) 결제를 가입 국가별로 더한다. 환불은 뺀다(대시보드와 같은 기준).
 -- 국가는 가입할 때 IP 로 정한 user_profiles.country_code. 탈퇴로 계정이 지워진 결제(account_id 없음)는 user_id 로 잇는다.
 create or replace function public.ts_admin_revenue_by_country(p_days integer)
 returns jsonb
@@ -8666,11 +8662,11 @@ as $$
   );
 $$;
 
-comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통계 — 최근 p_days 일(한국 날짜) 결제를 가입 국가별로(금액 KRW·건수·결제자 수). 환불 제외. service_role 전용.';
+comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통계 — 최근 p_days 일(게임 시간대 날짜) 결제를 가입 국가별로(금액 KRW·건수·결제자 수). 환불 제외. service_role 전용.';
 revoke all on function public.ts_admin_revenue_by_country(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_revenue_by_country(integer) to service_role;
 
-comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 한국 날짜. service_role 전용.';
+comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 게임 시간대 날짜. service_role 전용.';
 revoke all on function public.ts_admin_activity_stats(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_activity_stats(integer) to service_role;
 
@@ -8791,7 +8787,7 @@ begin
             or l.email ilike '%' || v_search || '%'
             or l.params::text ilike '%' || v_search || '%')
        and (v_category is null or l.action like v_category || '.%')
-       -- 콘솔의 날짜는 한국 날짜다(ts_admin_search_mails 와 같은 이유).
+       -- 콘솔의 날짜는 게임 시간대 날짜다(ts_admin_search_mails 와 같은 이유).
        and (p_start_date is null or l.created_at >= (p_start_date::timestamp at time zone public.ts_game_time_zone()))
        and (p_end_date   is null or l.created_at <  ((p_end_date + 1)::timestamp at time zone public.ts_game_time_zone()))
      order by l.created_at desc, l.id desc
@@ -9608,7 +9604,7 @@ alter table public.chat_messages add column if not exists is_notice    boolean n
 create index if not exists chat_messages_cursor_idx  on public.chat_messages (channel_id, scope_key, id);
 create index if not exists chat_messages_cleanup_idx on public.chat_messages (channel_id, created_at);
 
--- 일일 채팅 개수 — 날짜(한국)·채널 종류별 보낸 메시지 수. 메시지는 채널 보관 기간이 지나면 지워지므로
+-- 일일 채팅 개수 — 날짜(게임 시간대)·채널 종류별 보낸 메시지 수. 메시지는 채널 보관 기간이 지나면 지워지므로
 -- 보낼 때 세어 둔다. 운영자 공지는 세지 않는다. 지우지 않는다.
 -- shard: 같은 날·종류를 8줄로 나눠 센다 — 한 줄에 모든 메시지가 +1 하면 채팅이 몰릴 때 그 줄을 기다리느라 보내기가 밀린다.
 create table if not exists public.chat_daily_stats (
@@ -9662,7 +9658,7 @@ select x.day, x.kind, 0, x.n
          group by 1, 2) x
  where not exists (select 1 from public.chat_daily_stats s where s.day = x.day and s.kind = x.kind);
 
--- 콘솔 "통계 › 채팅" — 최근 p_days 일(한국 날짜)의 일일 채팅 개수, 채널 종류별(global·server·group·direct).
+-- 콘솔 "통계 › 채팅" — 최근 p_days 일(게임 시간대 날짜)의 일일 채팅 개수, 채널 종류별(global·server·group·direct).
 create or replace function public.ts_admin_chat_stats(p_days integer)
 returns jsonb
 language sql
@@ -9692,7 +9688,7 @@ as $$
   );
 $$;
 
-comment on function public.ts_admin_chat_stats(integer) is '콘솔 통계 — 일일 채팅 개수(공지 제외), 채널 종류별. 한국 날짜. service_role 전용.';
+comment on function public.ts_admin_chat_stats(integer) is '콘솔 통계 — 일일 채팅 개수(공지 제외), 채널 종류별. 게임 시간대 날짜. service_role 전용.';
 revoke all on function public.ts_admin_chat_stats(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_chat_stats(integer) to service_role;
 
