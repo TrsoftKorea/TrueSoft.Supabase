@@ -10,11 +10,12 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, itemsText } from '../components/ui/format'
+import { timeZoneName } from '../lib/gameTime'
 
 type ScheduleRow = {
   id: string; schedule_type: string; target_mode: string; title: string
   items: { key: string; count: number }[] | null; category: string; scheduled_at: string | null
-  repeat_time: string | null; repeat_unit: string | null; repeat_dow: number | null; repeat_dom: number | null
+  repeat_time: string | null; repeat_tz: string | null; repeat_unit: string | null; repeat_dow: number | null; repeat_dom: number | null
   next_run_at: string; is_active: boolean; run_count: number
   created_by: string | null; server_code: string | null; platform: string | null; open_for_new: boolean
 }
@@ -24,9 +25,9 @@ const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', pl
 const SCHED_LABEL: Record<string, string> = { scheduled: '예약 발송', repeat: '반복 발송' }
 const DOW_LABEL = ['일', '월', '화', '수', '목', '금', '토']
 
-/** "매일 09:00", "매주 월요일 09:00", "매월 30일 09:00" */
+/** "매일 09:00 (한국 시간)", "매주 월요일 09:00 (일본 시간)" — 반복 시각은 예약마다 만들 때의 시간대로 돈다. */
 function repeatText(r: ScheduleRow): string {
-  const time = r.repeat_time ? ` ${r.repeat_time.slice(0, 5)}` : ''
+  const time = r.repeat_time ? ` ${r.repeat_time.slice(0, 5)}${r.repeat_tz ? ` (${timeZoneName(r.repeat_tz)})` : ''}` : ''
   if (r.repeat_unit === 'week' && r.repeat_dow != null) return `매주 ${DOW_LABEL[r.repeat_dow] ?? '?'}요일${time}`
   if (r.repeat_unit === 'month' && r.repeat_dom != null) return `매월 ${r.repeat_dom}일${time}`
   return `매일${time}`
