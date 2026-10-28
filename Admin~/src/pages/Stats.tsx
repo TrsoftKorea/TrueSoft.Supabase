@@ -41,7 +41,7 @@ type TestPurchaseStats = {
   total_count: number
   total_krw: number
   recent: { verified_at: string; store: string; product_id: string; price_amount_krw: number | null; display_name: string | null; account_id: string | null }[]
-  tracking_since: string | null
+  unknown_count: number
 }
 const STORE_NAME: Record<string, string> = { google_play: 'Google Play', apple_app_store: 'App Store' }
 
@@ -76,7 +76,7 @@ function TestPurchaseTab({ target, days, reloadKey, onUnauthenticated, onError }
     <>
       <div className="text-xs text-neutral-500">
         애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정의 결제입니다. 매출·대시보드·누적 결제액에 넣지 않습니다.
-        {data.tracking_since && <> {data.tracking_since.slice(0, 10)} 이전 결제는 시험인지 알 수 없어 매출에 그대로 들어가 있습니다.</>}
+        {data.unknown_count > 0 && <> 이 구분이 생기기 전 결제 {n(data.unknown_count)}건은 시험인지 알 수 없어 매출에 그대로 들어가 있습니다.</>}
       </div>
       <WhiteCard>
         <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">

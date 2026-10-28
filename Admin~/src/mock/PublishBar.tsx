@@ -10,11 +10,13 @@ type PublishStatus = {
   ok: boolean; error?: string
   console: Group & { deploys: boolean }
   sdk: Group
-  unpushed: { hash: string; subject: string }[]
+  unpushed: { hash: string; full: string; subject: string }[]
+  messages: string
   blocked: string[]
+  unplanned: string[]
 }
 type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; alsoPushed?: number; error?: string }
-type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'unknown'
+type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'elsewhere' | 'unknown'
 type Deploy = {
   ok: boolean; error?: string; checkedAt: string; phase: Phase
   console: { sha: string; committedAt: string; subject: string; pushed: boolean }
@@ -77,6 +79,7 @@ function summarize(d: Deploy | null, failed: string, elapsed: string, finished: 
     case 'failed': return { label: '배포 실패', tone: 'bad' }
     case 'live': return finished ? { label: '반영 완료', tone: 'ok', time: finished } : { label: '실제 콘솔 최신', tone: 'ok' }
     case 'unpushed': return { label: 'GitHub 에 안 올라감', tone: 'warn' }
+    case 'elsewhere': return { label: '다른 PC 에서 올린 판', tone: 'warn' }
     default: return { label: '판 확인 불가', tone: 'warn' }
   }
 }
@@ -223,7 +226,7 @@ export function PublishBar() {
     try {
       // 이 창에서 본 목록·내용만 올린다 — 그사이 바뀌었으면 서버가 거절한다.
       const seen = [...status.sdk.files, ...status.console.files].map((f) => ({ file: f.file, hash: f.hash }))
-      const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.length })
+      const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.map((c) => c.full), messages: status.messages })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
       setDone(r)
       setPublishedAt(Date.now())
@@ -301,6 +304,7 @@ export function PublishBar() {
                   {deploy.live?.error ? '판 정보를 읽지 못했습니다'
                     : deploy.live?.current ? `반영됨 · ${timeText(deploy.live.builtAt)}`
                     : phase === 'propagating' ? '새 판이 퍼지는 중'
+                    : phase === 'elsewhere' ? `다른 PC 에서 올린 판 (${deploy.live?.sha ?? '-'})`
                     : `이전 판 (${deploy.live?.sha ?? '-'})`}
                 </Step>
               </ol>
@@ -345,7 +349,7 @@ export function PublishBar() {
         showTarget={false}
         confirmLabel="게시"
         busy={busy}
-        confirmDisabled={!status || empty || status.blocked.length > 0}
+        confirmDisabled={!status || empty || status.blocked.length > 0 || status.unplanned.length > 0}
         error={error || undefined}
         onConfirm={() => void publish()}
         onCancel={() => setOpen(false)}
@@ -359,6 +363,11 @@ export function PublishBar() {
             {status.blocked.length > 0 && (
               <p className="text-sm text-red-600">
                 비밀값이 들었을 수 있는 새 파일이 있어 게시할 수 없습니다: {status.blocked.join(', ')}
+              </p>
+            )}
+            {status.unplanned.length > 0 && (
+              <p className="text-sm text-red-600">
+                이번 요약에 없는 파일이 섞여 있어 게시할 수 없습니다(다른 작업일 수 있습니다): {status.unplanned.join(', ')}
               </p>
             )}
             <FileGroup title="콘솔 화면" group={status.console}

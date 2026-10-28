@@ -116,7 +116,7 @@ function testPurchaseStats(days: number) {
     total_count: all.length,
     total_krw: all.reduce((s, x) => s + x.price_amount_krw, 0),
     recent: [...all].reverse().slice(0, 50),
-    tracking_since: addDays(today, -20) + 'T00:00:00+09:00',
+    unknown_count: 4,
   }
 }
 
@@ -190,6 +190,32 @@ function ccuStats(hours: number) {
   }
 }
 
+// ── 구매 내역 ── 표시 종류(원화·외화·시험·무료·환불·가격 없음)가 한 화면에 다 보이게 고른 표본. 통계 숫자와는 따로 논다.
+function purchaseRows() {
+  const at = (daysAgo: number, hm: string) => `${addDays(kstToday(), -daysAgo)}T${hm}:00+09:00`
+  const row = (id: number, o: Partial<Record<string, unknown>>) => ({
+    id: String(id), account_id: `a${id}`, user_id: `10${id}482913`, product_id: 'gem_pack_1', order_id: `GPA.33${id}-1234-5678`,
+    package_name: 'com.truesoft.mock', store: 'google_play', price_amount: 5500_000000, price_currency: 'KRW', price_amount_krw: 5500,
+    verified_at: at(0, '10:12'), refunded_at: null, is_test: false, is_free: false, ...o,
+  })
+  return [
+    row(9, {}),
+    row(8, { store: 'apple_app_store', product_id: 'gem_pack_3', order_id: '2000000812345678', price_amount: 9_990000, price_currency: 'USD', price_amount_krw: 14280, verified_at: at(0, '09:41') }),
+    row(7, { is_test: true, verified_at: at(1, '18:05') }),
+    row(6, { product_id: 'starter_pack', is_free: true, verified_at: at(1, '13:20') }),
+    row(5, { product_id: 'gem_pack_2', price_amount: 11000_000000, price_amount_krw: 11000, refunded_at: at(0, '08:30'), verified_at: at(2, '21:47') }),
+    row(4, { store: 'apple_app_store', order_id: '2000000798765432', price_amount: null, price_currency: null, price_amount_krw: null, is_test: null, verified_at: at(40, '11:02') }),
+  ]
+}
+
+function purchaseList(p: Record<string, unknown>) {
+  let rows = purchaseRows()
+  if (p['refundedOnly']) rows = rows.filter((r) => r.refunded_at)
+  if (p['test'] === 'only') rows = rows.filter((r) => r.is_test === true)
+  else if (p['test'] === 'exclude') rows = rows.filter((r) => r.is_test !== true)
+  return { rows, total: rows.length, pageSize: 50, truncated: false }
+}
+
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
 
 const HANDLERS: Record<string, Handler> = {
@@ -210,6 +236,28 @@ const HANDLERS: Record<string, Handler> = {
   'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
   'testPurchases.stats': (_t, p) => testPurchaseStats(Number(p['days'] ?? 30)),
   'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
+  // 스토어 연결 — 몇 개는 등록됨·몇 개는 없음으로 보여 입력·바꾸기 버튼이 둘 다 보이게 한다.
+  'settings.getStoreStatus': () => ({
+    rows: [
+      { key: 'APPLE_BUNDLE_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -3) + 'T10:00:00+09:00', updatedBy: 'mock@local' },
+      { key: 'APPLE_SHARED_SECRET', source: 'supabase', status: 'ok', updatedAt: null, updatedBy: null },
+      { key: 'GOOGLE_SERVICE_ACCOUNT_JSON', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -10) + 'T15:30:00+09:00', updatedBy: 'mock@local' },
+      { key: 'APPLE_TEAM_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APPLE_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APPLE_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+    ],
+  }),
+  'purchases.list': (_t, p) => purchaseList(p),
+  // 구글은 옛 결제 재확인 결과가 붙은 정상 완료, 애플은 받은 알림 있음.
+  'purchases.getRefundStatus': () => ({
+    rows: [
+      { store: 'google_play', last_started_at: addDays(kstToday(), 0) + 'T13:00:02+09:00', last_finished_at: addDays(kstToday(), 0) + 'T13:00:19+09:00',
+        last_ok: true, last_message: '시험 결제 확인 12건(그중 시험 3건), 구글이 답하지 않은 2건', last_marked: 1 },
+      { store: 'apple_app_store', last_started_at: addDays(kstToday(), -2) + 'T04:11:40+09:00', last_finished_at: addDays(kstToday(), -2) + 'T04:11:40+09:00',
+        last_ok: true, last_message: null, last_marked: 1 },
+    ],
+  }),
+  'purchases.syncRefunds': () => ({ skipped: 'recently_run' }),
   'game.settingsGet': () => gameSettings,
   'game.settingsUpdate': (_t, p) => {
     gameSettings = { ...gameSettings, time_zone: String(p['timeZone'] ?? gameSettings.time_zone), updated_at: new Date().toISOString(), updated_by: 'mock@local' }

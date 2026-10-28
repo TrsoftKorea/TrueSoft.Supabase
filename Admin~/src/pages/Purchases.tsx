@@ -27,6 +27,7 @@ type PurchaseRow = {
   verified_at: string
   refunded_at: string | null
   is_test: boolean | null
+  is_free: boolean | null
 }
 type PurchaseData = { rows: PurchaseRow[]; total: number; pageSize: number }
 
@@ -51,17 +52,35 @@ function refundStatusText(store: string, s: RefundStatus | undefined): { text: s
       bad: s.last_ok === false,
     }
   }
-  if (!s?.last_finished_at) return { text: '구글: 아직 확인 안 함', bad: false }
-  if (s.last_ok === false) {
-    return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 실패 · ${refundFailText(s.last_message)}`, bad: true }
+  // 시작만 하고 끝을 못 남겼으면(함수가 중간에 죽음) 지난 결과를 그대로 보이면 안 된다. 한 번 도는 데 1분이 안 걸린다.
+  if (s?.last_started_at && Date.parse(s.last_started_at) - Date.parse(s.last_finished_at ?? '1970-01-01') > 10 * 60_000) {
+    return { text: `구글: ${formatDateTime(s.last_started_at)} 확인이 중간에 멈췄습니다. 다시 확인해 주세요.`, bad: true }
   }
-  return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 · 새 환불 ${formatCount(s.last_marked)}건`, bad: false }
+  if (!s?.last_finished_at) return { text: '구글: 아직 확인 안 함', bad: false }
+  const recheck = testRecheckText(s.last_message)
+  if (s.last_ok === false) {
+    return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 실패 · ${refundFailText(s.last_message)}${recheck}`, bad: true }
+  }
+  return { text: `구글: ${formatDateTime(s.last_finished_at)} 확인 · 새 환불 ${formatCount(s.last_marked)}건${recheck}`, bad: false }
+}
+
+// 같은 실행에서 시험 여부를 모르는 옛 결제를 구글에 다시 물은 결과(purchase-refund-sync-google 의 메모 꼴을 읽는다).
+function testRecheckText(message: string | null | undefined): string {
+  const m = /시험 결제 확인 (\d+)건\(그중 시험 (\d+)건\)(?:, 구글이 답하지 않은 (\d+)건)?/.exec(message ?? '')
+  if (!m) return ''
+  const [, filled, tests, unanswered] = m
+  return ` · 옛 결제 시험 여부 ${filled}건 확인(시험 ${tests}건)${unanswered ? `, 구글이 답하지 않음 ${unanswered}건` : ''}`
 }
 
 // 실패 사유는 엣지 함수가 남긴 원문이다(purchase-refund-sync-google). 운영자가 손쓸 수 있는 것만 풀어 쓴다.
-function refundFailText(message: string | null | undefined): string {
+function refundFailText(raw: string | null | undefined): string {
+  // 재확인 결과 메모는 testRecheckText 가 따로 보인다.
+  const message = raw?.replace(/\s*(\/\s*)?시험 결제 확인 \d+건[\s\S]*$/, '').trim() || null
   if (message === 'project_url_missing') return '설치가 끝나지 않음'
   if (message === 'GOOGLE_SERVICE_ACCOUNT_JSON 없음') return '설정 › 스토어 연결에 Google Play 서비스 계정 값이 없습니다.'
+  const noApp = /^(\S+): HTTP 404[\s\S]*No application was found/.exec(message ?? '')
+  if (noApp) return `결제 기록의 앱 ${noApp[1]} 이 Google Play 에 없습니다. 시험용으로 넣은 결제일 수 있습니다.`
+  if (message?.includes('권한 없음으로 거절')) return 'Google Play 서비스 계정에 결제 조회 권한이 없습니다. Play Console의 사용자 및 권한을 확인하세요.'
   return message ? `환불 확인에 실패했습니다. (${message})` : '환불 확인에 실패했습니다.'
 }
 
@@ -292,6 +311,11 @@ export default function Purchases({
                         {r.is_test && (
                           <span className="ml-2 inline-flex items-center rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600 whitespace-nowrap" title="시험 결제 — 매출에 넣지 않습니다">
                             테스트
+                          </span>
+                        )}
+                        {r.is_free && (
+                          <span className="ml-2 inline-flex items-center rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-600 whitespace-nowrap" title="프로모션 코드·광고 보상으로 받은 무료 결제 — 매출에 넣지 않습니다">
+                            무료
                           </span>
                         )}
                       </td>

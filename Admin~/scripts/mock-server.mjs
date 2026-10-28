@@ -24,6 +24,9 @@ const NEVER = new Set(['Admin~/supabase/.temp/cli-latest'])
 // 제가(에이전트) 미리 적어 두는 커밋 요약. 없으면 기본 문구.
 const MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message')
 const SDK_MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message-sdk')
+// 이번에 올릴 파일 목록(한 줄에 경로 하나, 저장소 기준). 요약과 함께 적어 둔다 — 같은 폴더를 쓰는 다른 세션의
+// 하다 만 변경이 이 요약을 달고 섞여 올라가지 않게, 목록에 없는 파일이 있으면 게시를 멈춘다. 없으면 검사하지 않는다.
+const FILES_FILE = path.join(ADMIN_DIR, '.publish-files')
 const LIVE_URL = 'https://truebase-admin.pages.dev'
 const ACTIONS_URL = 'https://github.com/TrsoftKorea/TrueSoft.Supabase/actions/workflows/admin-deploy.yml'
 const TOKEN = crypto.randomBytes(24).toString('hex')
@@ -66,9 +69,36 @@ function pendingFiles() {
   return out
 }
 
-// 비밀값이 들었을 법한 새 파일 — 무시 목록에 없어도 게시하지 않는다.
+// 비밀값이 들었을 법한 새 파일 — 무시 목록에 없어도 게시하지 않는다. 미리 담아 둔(A) 새 파일도 본다.
+// 이름으로 못 거르는 것(구글 서비스 계정 키의 기본 이름 "프로젝트-1a2b….json" 등)은 내용에 키가 들었는지로 본다.
 const SECRET_LIKE = /(^|\/)\.env(\.[^/]*)?$|\.(pem|key|p8|p12|pfx|jks|keystore)$|(secret|credential|service[-_]?account)[^/]*$/i
-const secretLike = (files) => files.filter((f) => f.status === '??' && SECRET_LIKE.test(f.file)).map((f) => f.file)
+const SECRET_CONTENT = /"private_key"\s*:|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+function secretLike(files) {
+  return files
+    .filter((f) => f.status === '??' || f.status === 'A')
+    .filter((f) => {
+      if (SECRET_LIKE.test(f.file)) return true
+      try {
+        const full = path.join(REPO, f.file)
+        return fs.statSync(full).size < 1 << 20 && SECRET_CONTENT.test(fs.readFileSync(full, 'utf8'))
+      } catch { return false }
+    })
+    .map((f) => f.file)
+}
+
+/** 요약과 함께 적어 둔 파일 목록. 없으면 null — 그때는 섞임 검사를 하지 않는다. */
+function plannedFiles() {
+  if (!fs.existsSync(FILES_FILE)) return null
+  return new Set(fs.readFileSync(FILES_FILE, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean))
+}
+
+/** 목록에 없는 변경 — 다른 세션이 하던 것일 수 있다. 이름 변경은 새 이름으로 본다. */
+function unplannedFiles(files) {
+  const plan = plannedFiles()
+  return plan ? files.filter((f) => !plan.has(f.file)).map((f) => f.file) : []
+}
+
+const textHash = (s) => crypto.createHash('sha1').update(s).digest('hex')
 
 /** 확인 창이 본 내용과 누를 때의 내용이 같은지 가르는 지문. 커밋은 작업 폴더 내용을 담으므로 파일 내용으로 잰다. */
 function fingerprint(f) {
@@ -104,9 +134,12 @@ function groups() {
 
 /** 아직 원격에 안 올린 커밋 — 푸시하면 함께 나간다. */
 function unpushed() {
-  const out = git('log', '--format=%h\t%s', '@{u}..HEAD')
-  return out ? out.split('\n').map((l) => { const [hash, subject] = l.split('\t'); return { hash, subject } }) : []
+  const out = git('log', '--format=%H\t%s', '@{u}..HEAD')
+  return out ? out.split('\n').map((l) => { const [full, subject] = l.split('\t'); return { hash: full.slice(0, 7), full, subject } }) : []
 }
+
+/** 확인 창이 본 요약 글 — 창을 연 사이 요약이 바뀌면 사용자가 못 본 메시지로 커밋된다. */
+const messagesNow = () => textHash(`${readMessage(SDK_MESSAGE_FILE)}\n\0\n${readMessage(MESSAGE_FILE)}`)
 
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -150,8 +183,15 @@ function publish(seen) {
   if (all.length === 0 && before.length === 0) return { ok: false, error: '게시할 변경이 없습니다.' }
   const secrets = secretLike(all)
   if (secrets.length) return { ok: false, error: `비밀값이 들었을 수 있는 새 파일이 있어 게시하지 않았습니다: ${secrets.join(', ')}` }
-  if (!sameAsSeen(seen?.files, all) || (seen?.unpushed ?? 0) !== before.length) {
-    return { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 목록을 확인해 주세요.' }
+  const unplanned = unplannedFiles(all)
+  if (unplanned.length) {
+    return { ok: false, error: `이번 요약에 없는 파일이 섞여 있어 게시하지 않았습니다(다른 작업일 수 있습니다): ${unplanned.join(', ')}` }
+  }
+  const seenUnpushed = Array.isArray(seen?.unpushed) ? seen.unpushed : []
+  if (!sameAsSeen(seen?.files, all)
+      || seenUnpushed.length !== before.length || !before.every((c, i) => seenUnpushed[i] === c.full)
+      || seen?.messages !== messagesNow()) {
+    return { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이나 요약이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 내용을 확인해 주세요.' }
   }
 
   const commits = []
@@ -161,12 +201,17 @@ function publish(seen) {
   if (sdkFiles.length) commits.push({ kind: 'sdk', hash: commitFiles(sdkFiles, sdkMessage) })
   if (consoleFiles.length) commits.push({ kind: 'console', hash: commitFiles(consoleFiles, consoleMessage) })
   // 요약은 커밋에 쓰였으니 바로 지운다 — 푸시가 실패해 남으면 다음 게시에 엉뚱한 요약이 붙는다.
-  for (const f of [MESSAGE_FILE, SDK_MESSAGE_FILE]) if (fs.existsSync(f)) fs.rmSync(f)
+  for (const f of [MESSAGE_FILE, SDK_MESSAGE_FILE, FILES_FILE]) if (fs.existsSync(f)) fs.rmSync(f)
   try {
     git('push', '-q')
   } catch (e) {
     const made = commits.map((c) => c.hash).join(', ')
-    return { ok: false, error: `커밋(${made})은 했지만 푸시하지 못했습니다. 다시 게시하면 이 커밋도 함께 올라갑니다: ${String(e.message ?? e).split('\n')[0]}` }
+    const text = `${e.stderr || ''}\n${e.message ?? e}`.trim()
+    // GitHub 에 더 새 커밋이 있으면(다른 PC 에서 게시) 받아오기 전까지 몇 번을 눌러도 거절된다.
+    if (/rejected|non-fast-forward|fetch first/i.test(text)) {
+      return { ok: false, error: `커밋(${made})은 했지만 GitHub 에 더 새 커밋이 있어 올리지 못했습니다(다른 PC 에서 게시한 것). 먼저 받아온(pull) 뒤 다시 게시해야 합니다.` }
+    }
+    return { ok: false, error: `커밋(${made})은 했지만 푸시하지 못했습니다. 다시 게시하면 이 커밋도 함께 올라갑니다: ${text.split('\n')[0]}` }
   }
   deployCache = null
   return { ok: true, commits, alsoPushed: before.length, actionsUrl: ACTIONS_URL }
@@ -184,6 +229,7 @@ function readBody(req) {
 // 실제 콘솔이 지금 화면 코드의 마지막 커밋을 담은 판인지 본다. 배포 작업 상태(GitHub)와 실제 콘솔의 version.json 을 함께 본다.
 // 외부에 묻는 일이라 짧게(4초) 앞 결과를 쓴다 — 화면이 3초마다 물어도 GitHub 에는 그보다 드물게 묻는다.
 let deployCache = null
+let lastFetchAt = 0
 
 // 배포 작업 단계 이름 → 화면 문구. 모르는 단계는 원래 이름.
 // 순서가 중요하다 — "Post Run actions/setup-node" 같은 정리 단계가 준비 규칙에 먼저 걸리지 않게 마무리를 맨 앞에 둔다.
@@ -233,8 +279,14 @@ async function deployStatus() {
     const r = await fetch(`${LIVE_URL}/version.json?t=${Date.now()}`, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
     const v = await r.json()
     const liveSha = typeof v.sha === 'string' ? v.sha : ''
-    const known = !!liveSha && gitOk('cat-file', '-e', liveSha)
-    live = { sha: liveSha.slice(0, 7), builtAt: v.builtAt ?? null, current: known && gitOk('merge-base', '--is-ancestor', sha, liveSha) }
+    let known = !!liveSha && gitOk('cat-file', '-e', liveSha)
+    // 다른 PC 에서 게시한 판이면 이 PC 가 그 커밋을 모른다 — 받아와 보되, 매번 하면 느려서 5분에 한 번만.
+    if (liveSha && !known && Date.now() - lastFetchAt > 5 * 60_000) {
+      lastFetchAt = Date.now()
+      gitOk('fetch', '-q')
+      known = gitOk('cat-file', '-e', liveSha)
+    }
+    live = { sha: liveSha.slice(0, 7), builtAt: v.builtAt ?? null, known, current: known && gitOk('merge-base', '--is-ancestor', sha, liveSha) }
   } catch { live = { error: true } } // 아직 version.json 이 없는 옛 판이거나 연결 실패
 
   // 지금 어느 단계인지 한 단어로. 화면은 이것만 보고 문구를 고른다.
@@ -245,6 +297,7 @@ async function deployStatus() {
     : run.status !== 'completed' ? (run.status === 'in_progress' ? 'running' : 'starting')
     : run.conclusion !== 'success' ? 'failed'
     : live?.error ? 'unknown'
+    : !live?.known ? 'elsewhere'                          // 실제 콘솔이 이 PC 가 모르는 판 — 다른 PC 에서 게시했다
     : 'propagating'                                       // 배포는 끝났고 실제 콘솔에 새 판이 퍼지는 중
 
   const { consoleFiles, sdkFiles } = groups()
@@ -290,7 +343,9 @@ http.createServer(async (req, res) => {
         console: { files: withHash(consoleFiles), message: readMessage(MESSAGE_FILE), lines: lineCounts(consoleFiles), deploys: consoleFiles.some((f) => !f.file.startsWith(SERVER_SCOPE)) },
         sdk: { files: withHash(sdkFiles), message: readMessage(SDK_MESSAGE_FILE), lines: lineCounts(sdkFiles) },
         unpushed: unpushed(),
+        messages: messagesNow(),
         blocked: secretLike([...consoleFiles, ...sdkFiles]),
+        unplanned: unplannedFiles([...consoleFiles, ...sdkFiles]),
       })
     }
     if (req.url === '/__publish/deploy' && req.method === 'GET') {

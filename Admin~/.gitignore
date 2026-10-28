@@ -6,3 +6,4 @@ dist/
 dist-mock/
 .publish-message
 .publish-message-sdk
+.publish-files

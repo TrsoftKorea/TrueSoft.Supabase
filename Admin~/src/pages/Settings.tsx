@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, type GameSettings } from '../lib/gameTime'
-import { Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
 
 type StoreKeyStatus = {
@@ -24,32 +24,145 @@ type StoreKeyStatus = {
 
 // 화면에는 이 값이 없으면 무엇이 안 되는지만 적는다. 키 목록은 admin-api SERVER_CONFIG_VALID ·
 // install.sql ts_server_config_keys() 와 같아야 한다(SdkAudit R16 이 대조).
-const STORE_KEYS: { key: string; label: string; needFor: string; multiline?: boolean; hint: string }[] = [
+/**
+ * 값을 가져오는 방법. 발급처 화면은 영어라 메뉴·버튼 이름은 그 화면에 보이는 영어 그대로 따옴표로 적는다.
+ * 각 단계는 2026-10-28 애플·구글 공식 도움말로 확인했다. 애플 로그인 키의 "Configure → Primary App ID" 만은
+ * 그 도움말 페이지가 열리지 않아 일반 키 만들기 안내와 기억으로 적었다 — 화면이 다르면 여기를 고친다.
+ */
+type KeyGuide = { origin: string; site: { name: string; url: string }; steps: string[]; notes?: string[] }
+
+const STORE_KEYS: { key: string; label: string; needFor: string; multiline?: boolean; hint: string; guide: KeyGuide }[] = [
   {
     key: 'APPLE_BUNDLE_ID', label: 'iOS 앱 번들 ID', needFor: 'iOS 결제 확인 · 애플 환불 기록',
     hint: '앱이 여럿이면 쉼표로 나눠 적습니다.',
+    guide: {
+      origin: 'Bundle ID',
+      site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
+      steps: [
+        '"Apps"에서 게임 앱을 고릅니다.',
+        '왼쪽 "General" 아래 "App Information"을 엽니다.',
+        '"Bundle ID"에 보이는 값을 복사합니다. 예: com.회사이름.게임이름',
+      ],
+      notes: ['유니티 Player Settings의 "Bundle Identifier"와 같은 값입니다.'],
+    },
   },
   {
     key: 'APPLE_SHARED_SECRET', label: 'App Store 앱 전용 공유 암호', needFor: 'iOS 옛 방식 결제 확인',
-    hint: 'App Store Connect 앱 정보의 "앱 전용 공유 암호"입니다.',
+    hint: '복사한 값을 그대로 붙여 넣습니다.',
+    guide: {
+      origin: 'App-Specific Shared Secret',
+      site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
+      steps: [
+        '"Apps"에서 게임 앱을 고릅니다.',
+        '왼쪽 "General" 아래 "App Information"을 엽니다.',
+        '"App-Specific Shared Secret" 칸의 "Manage"를 누릅니다.',
+        '처음이면 "Generate"를 누르고, 이미 있으면 보이는 값을 그대로 복사합니다.',
+        '"Done"을 눌러 닫습니다.',
+      ],
+      notes: [
+        '"Regenerate"는 누르지 마세요. 누르는 순간 예전 값이 바로 못 쓰게 됩니다.',
+        'App Store Connect 계정 소유자(Account Holder)나 관리자(Admin)만 볼 수 있습니다.',
+        '새로 만든 값은 적용까지 최대 24시간 걸릴 수 있습니다.',
+      ],
+    },
   },
   {
     key: 'GOOGLE_SERVICE_ACCOUNT_JSON', label: 'Google Play 서비스 계정', needFor: 'Android 결제 확인 · 구글 환불 기록',
     multiline: true, hint: '서비스 계정 키 JSON 파일 내용 전체를 붙여 넣습니다.',
+    guide: {
+      origin: 'Service account key (JSON)',
+      site: { name: 'Google Cloud Console', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
+      steps: [
+        'Google Cloud Console에서 프로젝트를 고르고, "Google Play Android Developer API"를 찾아 "Enable"을 누릅니다.',
+        '"Service accounts"에서 "Create service account"를 눌러 계정을 만듭니다.',
+        '만든 계정의 이메일을 누르고 "Keys" 탭 → "Add key" → "Create new key" → "JSON" → "Create". JSON 파일이 내려받아집니다.',
+        'Google Play Console의 "Users and permissions"에서 "Invite new users"를 누르고 그 서비스 계정 이메일을 넣습니다.',
+        '권한은 "View financial data, orders, and cancellation survey responses"와 "Manage orders and subscriptions"를 켜고 "Invite user"를 누릅니다.',
+        '내려받은 JSON 파일을 메모장으로 열어 내용 전체를 여기 붙여 넣습니다.',
+      ],
+      notes: [
+        'JSON 파일은 한 번만 내려받을 수 있습니다. 잃어버리면 새 키를 만듭니다.',
+        '"Create new key"가 막혀 있으면 회사 Google Cloud 조직 정책이 키 만들기를 막은 것입니다. 조직 관리자에게 이 프로젝트만 풀어 달라고 요청합니다.',
+      ],
+    },
   },
   {
     key: 'APPLE_TEAM_ID', label: 'Apple 팀 ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
     hint: '영문 대문자·숫자 10자입니다.',
+    guide: {
+      origin: 'Team ID',
+      site: { name: 'Apple Developer', url: 'https://developer.apple.com/account' },
+      steps: [
+        'Apple Developer 계정에 로그인합니다.',
+        '"Membership details"에 보이는 "Team ID"를 복사합니다.',
+      ],
+      notes: ['유료 개발자 프로그램에 가입한 계정에서만 보입니다.'],
+    },
   },
   {
     key: 'APPLE_KEY_ID', label: 'Sign in with Apple 키 ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
     hint: '영문 대문자·숫자 10자입니다.',
+    guide: {
+      origin: 'Key ID',
+      site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
+      steps: [
+        '"Certificates, Identifiers & Profiles"의 "Keys"에서 왼쪽 위 "+"를 누릅니다.',
+        '"Key Name"에 알아볼 이름을 넣고 "Sign in with Apple"에 체크한 뒤, 옆 "Configure"에서 게임 앱("Primary App ID")을 고르고 "Save"를 누릅니다.',
+        '"Continue" → 내용을 확인하고 "Confirm"을 누릅니다.',
+        '만든 키를 누르면 키 이름 아래에 보이는 값이 키 ID입니다.',
+      ],
+      notes: ['이미 만든 애플 로그인 키가 있으면 "Keys" 목록에서 그 키를 눌러 확인합니다. 키 파일과 같은 키여야 합니다.'],
+    },
   },
   {
     key: 'APPLE_PRIVATE_KEY', label: 'Sign in with Apple 키 파일', needFor: '탈퇴 시 애플 로그인 연결 해제',
     multiline: true, hint: '.p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣습니다.',
+    guide: {
+      origin: 'Private key (.p8)',
+      site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
+      steps: [
+        '"Sign in with Apple 키 ID"를 만들 때 마지막 화면에서 "Download"를 누르면 .p8 파일이 내려받아집니다.',
+        '그 파일을 메모장으로 열어 "-----BEGIN PRIVATE KEY-----"부터 "-----END PRIVATE KEY-----"까지 전부 복사해 붙여 넣습니다.',
+      ],
+      notes: [
+        '.p8 파일은 한 번만 내려받을 수 있습니다. "Download"가 회색이면 이미 받은 것입니다. 파일을 잃어버렸으면 새 키를 만들고, 키 ID도 새 키 것으로 바꿉니다.',
+      ],
+    },
   },
 ]
+
+/** 입력칸 옆 "가져오는 방법" — 누르면 발급처·원래 이름·단계가 펼쳐진다. */
+function KeyGuideToggle({ guide }: { guide: KeyGuide }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 text-xs text-[#1677ff] hover:underline">
+        <CircleHelp className="w-3.5 h-3.5" />
+        가져오는 방법
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+      {open && (
+        <div className="mt-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-neutral-500">발급처의 이름 <span className="font-mono text-neutral-800">{guide.origin}</span></span>
+            <a href={guide.site.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[#1677ff] hover:underline">
+              {guide.site.name} 열기 <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <ol className="list-decimal pl-4 space-y-1 leading-relaxed text-neutral-700">
+            {guide.steps.map((s, i) => <li key={i}>{s}</li>)}
+          </ol>
+          {guide.notes && guide.notes.length > 0 && (
+            <ul className="space-y-1 leading-relaxed text-neutral-500">
+              {guide.notes.map((s, i) => <li key={i}>※ {s}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const STATUS_VIEW: Record<StoreKeyStatus['status'], { text: string; cls: string }> = {
   ok: { text: '등록됨', cls: 'bg-green-50 text-green-700' },
@@ -180,7 +293,8 @@ function StoreStatusCard({
         onCancel={() => setEditing(null)}
       >
         {editing && !editing.clear && editingDef && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
+            <KeyGuideToggle key={editingDef.key} guide={editingDef.guide} />
             {editingDef.multiline
               ? (
                 <textarea

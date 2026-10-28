@@ -807,7 +807,7 @@ async function handleAction(
           let query = db
             .from("purchases")
             .select(
-              "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at, refunded_at, refund_reason, is_test",
+              "id, account_id, user_id, product_id, order_id, package_name, store, price_amount, price_currency, price_amount_krw, verified_at, refunded_at, refund_reason, is_test, is_free",
               { count: "exact" },
             )
             .order("verified_at", { ascending: false })
