@@ -206,6 +206,8 @@ Deno.serve(async (req: Request) => {
       order_id:       transactionId,
       package_name:   receiptBundleId,
       store:          "apple_app_store",
+      // 시험 결제(TestFlight·앱 심사·샌드박스 계정)는 매출에서 뺀다. 응답에 environment 가 없으면 모름(null).
+      is_test:        verifyData.environment ? verifyData.environment === "Sandbox" : null,
     });
 
   let alreadyVerified = false;

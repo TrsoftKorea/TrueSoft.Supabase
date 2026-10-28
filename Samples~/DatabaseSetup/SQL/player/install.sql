@@ -3593,7 +3593,12 @@ alter table public.purchases
   add column if not exists price_amount     bigint,     -- 결제 금액(micros = 주 단위 ×1,000,000, price_currency 기준). 내부용
   add column if not exists price_currency   text,       -- ISO 4217 통화 코드 (예: "KRW", "USD")
   add column if not exists price_amount_krw bigint,     -- KRW 환산 금액(원, 정수). 매출 확인용 — 구매 시점 환율 적용
-  add column if not exists granted_at       timestamptz; -- 게임이 실제로 아이템을 지급 완료한 시각. null = 아직 미지급
+  add column if not exists granted_at       timestamptz, -- 게임이 실제로 아이템을 지급 완료한 시각. null = 아직 미지급
+  -- 시험 결제. 애플 Sandbox(TestFlight·앱 심사 포함), 구글 라이선스 테스트 계정. null = 이 칸이 생기기 전 기록이라 모름(실제로 센다).
+  -- 매출·대시보드·누적 결제액(total_paid_krw)에서 뺀다 — 진짜 돈이 아니다.
+  add column if not exists is_test          boolean;
+
+create index if not exists purchases_is_test_idx on public.purchases (verified_at desc) where is_test;
 
 -- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
 alter table public.purchases drop column if exists purchase_state;
@@ -3628,8 +3633,8 @@ security definer
 set search_path = public
 as $$
 begin
-  -- 기록될 때 이미 환불된 결제(환불 알림이 먼저 온 경우)는 누적 결제액에 넣지 않는다.
-  if new.price_amount_krw is not null and new.price_amount_krw > 0 and new.refunded_at is null then
+  -- 기록될 때 이미 환불된 결제(환불 알림이 먼저 온 경우)와 시험 결제는 누적 결제액에 넣지 않는다.
+  if new.price_amount_krw is not null and new.price_amount_krw > 0 and new.refunded_at is null and new.is_test is not true then
     update public.user_profiles
        set total_paid_krw = total_paid_krw + new.price_amount_krw
      where account_id = new.account_id;
@@ -3721,7 +3726,8 @@ as $$
 declare
   v_delta bigint;
 begin
-  if new.account_id is null or coalesce(new.price_amount_krw, 0) <= 0 then
+  -- 시험 결제는 처음부터 누적 결제액에 안 들어갔으니 환불돼도 빼지 않는다.
+  if new.account_id is null or coalesce(new.price_amount_krw, 0) <= 0 or new.is_test is true then
     return new;
   end if;
   if old.refunded_at is null and new.refunded_at is not null then
@@ -4581,8 +4587,8 @@ begin
     'country_code',     p.country_code,
     'total_paid_krw',   p.total_paid_krw,
     -- total_paid_krw 는 환불분을 이미 뺀 값이다.
-    'refund_count',     (select count(*) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null),
-    'refund_krw',       (select coalesce(sum(r.price_amount_krw), 0) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null),
+    'refund_count',     (select count(*) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true),
+    'refund_krw',       (select coalesce(sum(r.price_amount_krw), 0) from public.purchases r where r.account_id = p.account_id and r.refunded_at is not null and r.is_test is not true),
     'created_at',       u.created_at,
     'last_activity_at', p.last_activity_at,
     'last_sign_in_at',  u.last_sign_in_at,
@@ -8496,10 +8502,10 @@ as $$
     'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
     'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date),
     'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
-    'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
-    'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null),
-    'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null),
-    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null)
+    'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true),
+    'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true),
+    'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null and is_test is not true),
+    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null and is_test is not true)
   );
 $$;
 
@@ -8645,7 +8651,7 @@ as $$
          or (pu.account_id is null and pr.user_id = pu.user_id)
       limit 1
     ) prof on true
-    where pu.verified_at >= p.since and pu.refunded_at is null
+    where pu.verified_at >= p.since and pu.refunded_at is null and pu.is_test is not true
   ),
   by_country as (
     select country, sum(krw)::bigint as revenue_krw, count(*) as purchases, count(distinct payer) as payers
@@ -8662,9 +8668,55 @@ as $$
   );
 $$;
 
-comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통계 — 최근 p_days 일(게임 시간대 날짜) 결제를 가입 국가별로(금액 KRW·건수·결제자 수). 환불 제외. service_role 전용.';
+comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통계 — 최근 p_days 일(게임 시간대 날짜) 결제를 가입 국가별로(금액 KRW·건수·결제자 수). 환불·시험 결제 제외. service_role 전용.';
 revoke all on function public.ts_admin_revenue_by_country(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_revenue_by_country(integer) to service_role;
+
+-- 콘솔 "통계 › 테스트 결제" — 최근 p_days 일(게임 시간대 날짜)의 시험 결제. 매출에서 뺀 만큼이 여기 보인다.
+-- 날짜별 건수·금액, 스토어별 합계, 최근 50건.
+create or replace function public.ts_admin_test_purchase_stats(p_days integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with params as (
+    select least(365, greatest(1, coalesce(p_days, 30))) as days,
+           public.ts_game_today() as today
+  ),
+  days as (
+    select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
+  ),
+  tests as (
+    select pu.*, (pu.verified_at at time zone public.ts_game_time_zone())::date as day
+      from public.purchases pu, params p
+     where pu.is_test
+       and pu.verified_at >= ((p.today - p.days + 1)::timestamp at time zone public.ts_game_time_zone())
+  )
+  select jsonb_build_object(
+    'daily', coalesce((select jsonb_agg(jsonb_build_object(
+                 'day', d.day,
+                 'count', (select count(*) from tests t where t.day = d.day),
+                 'krw', (select coalesce(sum(t.price_amount_krw), 0) from tests t where t.day = d.day))
+               order by d.day) from days d), '[]'::jsonb),
+    'by_store', coalesce((select jsonb_object_agg(store, n) from (select store, count(*) as n from tests group by store) s), '{}'::jsonb),
+    'total_count', (select count(*) from tests),
+    'total_krw', (select coalesce(sum(price_amount_krw), 0) from tests),
+    'recent', coalesce((select jsonb_agg(r order by r.verified_at desc) from (
+                 select t.verified_at, t.store, t.product_id, t.price_amount_krw, t.order_id,
+                        coalesce(dn.display_name, t.user_id) as display_name, t.account_id
+                   from tests t
+                   left join public.display_names dn on dn.account_id = t.account_id
+                  order by t.verified_at desc limit 50) r), '[]'::jsonb),
+    -- 이 칸이 생긴 뒤의 첫 결제 시각 — 그 전 결제는 시험인지 몰라 매출에 그대로 들어가 있다.
+    'tracking_since', (select min(verified_at) from public.purchases where is_test is not null)
+  );
+$$;
+
+comment on function public.ts_admin_test_purchase_stats(integer) is '콘솔 통계 — 최근 p_days 일(게임 시간대 날짜) 시험 결제(애플 Sandbox·구글 라이선스 테스트). 날짜별·스토어별·최근 50건. service_role 전용.';
+revoke all on function public.ts_admin_test_purchase_stats(integer) from public, anon, authenticated;
+grant execute on function public.ts_admin_test_purchase_stats(integer) to service_role;
 
 comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 게임 시간대 날짜. service_role 전용.';
 revoke all on function public.ts_admin_activity_stats(integer) from public, anon, authenticated;

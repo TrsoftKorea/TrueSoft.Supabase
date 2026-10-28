@@ -45,6 +45,8 @@ type GoogleProductPurchase = {
   orderId?: string;
   consumptionState?: number;
   purchaseTimeMillis?: string;
+  // 일반 결제가 아닐 때만 온다. 0 = 라이선스 테스트 계정의 시험 결제, 1 = 프로모션 코드, 2 = 광고 보상.
+  purchaseType?: number;
   obfuscatedExternalAccountId?: string;  // 결제 시점에 클라이언트가 SetObfuscatedAccountId로 심어둔 계정 id
 };
 
@@ -259,6 +261,8 @@ Deno.serve(async (req) => {
       price_amount: (price_amount && price_amount > 0) ? price_amount : null,
       price_currency: price_currency || null,
       price_amount_krw: priceAmountKrw,
+      // 라이선스 테스트 계정의 시험 결제는 매출에서 뺀다.
+      is_test: googlePurchase.purchaseType === 0,
     });
 
   if (insertError) {

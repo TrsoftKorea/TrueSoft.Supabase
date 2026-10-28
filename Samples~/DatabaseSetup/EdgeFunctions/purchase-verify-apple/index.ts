@@ -449,6 +449,8 @@ Deno.serve(async (req) => {
       price_amount: priceAmount,
       price_currency: priceCurrency,
       price_amount_krw: priceAmountKrw,
+      // 시험 결제(TestFlight·앱 심사·샌드박스 계정)는 매출에서 뺀다. 위에서 Production·Sandbox 만 통과시켰다.
+      is_test: jwsData.environment === "Sandbox",
     });
 
   if (insertError) {
