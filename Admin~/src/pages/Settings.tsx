@@ -59,27 +59,28 @@ const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
   { id: 'signin', tab: 'login', title: 'Sign in with Apple' },
 ]
 
-// 한 화면에서 함께 가져오는 값들(같은 키의 ID·파일 등). 줄마다 용도를 되풀이하지 않고 여기 한 번 적는다.
+// 한 화면에서 함께 가져오는 값들(같은 키의 ID·파일 등). 묶음 제목 아래에 그 키가 무엇인지 한 번 적는다.
 // 가져오는 곳이 서로 다르면 묶지 않는다 — Sign in with Apple 은 Team ID 가 다른 화면이라 묶지 않았다.
 // 제목·이름은 발급처 화면에 적힌 그대로 쓴다 — 운영자가 그 화면에서 같은 글자를 찾는다.
 const KEY_SETS: Record<KeySet, { title: string; note: string }> = {
   iap: {
     title: '앱 내 구입 키',
-    note: 'iOS 옛 방식 결제의 금액 기록',
+    note: 'App Store Connect에서 만드는 결제 조회용 API 키',
   },
 }
 
 // name 은 발급처 화면의 이름. 홀로 보일 때(입력 창 제목)는 묶음 제목을 앞에 붙인다(keyTitle).
-// 설명은 두 갈래로 나눈다 — needFor·KEY_SETS.note(표): 무엇에 쓰는지만, 짧은 명사형.
+// 설명은 두 갈래로 나눈다 — about·KEY_SETS.note(표): 그 키가 무엇인지만, 짧은 명사형. 어디에 쓰이는지는 적지 않는다
+// (2026-10-28 사용자 결정 — 쓰이는 곳은 화면 카드 설명 한 줄로 충분하다).
 // hint(입력 창): 무엇을 어떤 형식으로 넣는지만, "~넣습니다"로 끝맺는다. 형식은 admin-api SERVER_CONFIG_VALID 와 맞춘다.
 type StoreKeyDef = {
-  key: string; group: StoreGroup; set?: KeySet; name: string; needFor?: string
+  key: string; group: StoreGroup; set?: KeySet; name: string; about: string
   multiline?: boolean; hint: string; guide: KeyGuide
 }
 
 const STORE_KEYS: StoreKeyDef[] = [
   {
-    key: 'APPLE_BUNDLE_ID', group: 'appstore', name: '번들 ID', needFor: 'iOS 결제 확인 · 애플 환불 기록',
+    key: 'APPLE_BUNDLE_ID', group: 'appstore', name: '번들 ID', about: 'iOS 앱의 고유 ID',
     hint: '영문·숫자·점·하이픈으로 된 값을 넣습니다. 앱이 여럿이면 쉼표로 나눕니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
@@ -92,7 +93,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_SHARED_SECRET', group: 'appstore', name: '앱 공유 암호', needFor: 'iOS 옛 방식 결제 확인',
+    key: 'APPLE_SHARED_SECRET', group: 'appstore', name: '앱 공유 암호', about: '영수증 확인용 앱 전용 암호',
     hint: 'App Store Connect에서 복사한 값을 그대로 넣습니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
@@ -111,7 +112,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키', needFor: 'Android 결제 확인 · 구글 환불 기록',
+    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키', about: 'Google Cloud 서비스 계정의 키',
     multiline: true, hint: '내려받은 JSON 파일의 내용 전체를 넣습니다.',
     guide: {
       site: { name: 'Google Cloud 콘솔', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
@@ -130,7 +131,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', about: 'Apple 개발자 계정의 팀 ID',
     hint: '영문 대문자·숫자 10자를 넣습니다.',
     guide: {
       site: { name: 'Apple Developer', url: 'https://developer.apple.com/account' },
@@ -142,7 +143,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_KEY_ID', group: 'signin', name: 'Key ID', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    key: 'APPLE_KEY_ID', group: 'signin', name: 'Key ID', about: 'Sign in with Apple 키의 ID',
     hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
     guide: {
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
@@ -156,7 +157,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key', needFor: '탈퇴 시 애플 로그인 연결 해제',
+    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key', about: 'Sign in with Apple 키의 .p8 파일',
     multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
@@ -170,7 +171,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_IAP_ISSUER_ID', group: 'appstore', set: 'iap', name: 'Issuer ID',
+    key: 'APPLE_IAP_ISSUER_ID', group: 'appstore', set: 'iap', name: 'Issuer ID', about: '키를 발급한 계정의 ID',
     hint: '하이픈이 들어간 36자를 넣습니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
@@ -183,7 +184,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_IAP_KEY_ID', group: 'appstore', set: 'iap', name: 'Key ID',
+    key: 'APPLE_IAP_KEY_ID', group: 'appstore', set: 'iap', name: 'Key ID', about: '앱 내 구입 키의 ID',
     hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
@@ -197,7 +198,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_IAP_PRIVATE_KEY', group: 'appstore', set: 'iap', name: 'Private key',
+    key: 'APPLE_IAP_PRIVATE_KEY', group: 'appstore', set: 'iap', name: 'Private key', about: '앱 내 구입 키의 .p8 파일',
     multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com' },
@@ -352,7 +353,7 @@ function StoreStatusCard({
                     <tr key={k.key} className={set ? '' : 'border-t border-neutral-100 first:border-t-0'}>
                       <td className={`py-2 pr-4 ${set ? 'pl-8' : 'pl-4'}`}>
                         <div className={set ? 'text-neutral-700' : 'text-neutral-800'}>{k.name}</div>
-                        {k.needFor && <div className="text-xs text-neutral-500">{k.needFor}</div>}
+                        <div className="text-xs text-neutral-500">{k.about}</div>
                       </td>
                       <td className="py-2 pr-4 text-xs text-neutral-400">
                         {row?.source === 'console' && row.updatedAt && (
