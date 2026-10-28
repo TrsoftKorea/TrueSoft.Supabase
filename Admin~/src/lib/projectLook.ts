@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import { callAdminPublic } from './api'
 import { getProject, PROJECTS, type ProjectTarget } from './projectTarget'
+import { darkVariant } from './color'
+import { isDarkMode, subscribeTheme } from './theme'
 
 // 게임마다 운영 콘솔에서 쓰는 색·이름·아이콘. 각 게임 DB(ts_admin_console_settings)에 저장되고, 정하지 않았으면
 // projectTarget 의 기본값을 쓴다. 다음에 열 때 기본값이 잠깐 비치지 않도록 마지막 값을 브라우저에 기억해 둔다.
@@ -31,9 +33,17 @@ function update(next: Looks) {
   listeners.forEach((l) => l())
 }
 
-/** 이 게임의 콘솔 색. 아직 못 받았거나 정하지 않았으면 기본색. */
-export function projectColor(target: ProjectTarget): string {
+/** 이 게임에 고른 원래 색(설정 화면 값). 아직 못 받았거나 정하지 않았으면 기본색. */
+export function projectBaseColor(target: ProjectTarget): string {
   return looks[target]?.color ?? getProject(target).color
+}
+
+/** 화면에 칠할 색 — 어두운 화면이면 채도·밝기를 낮춘 색. */
+export const displayColor = (hex: string): string => (isDarkMode() ? darkVariant(hex) : hex)
+
+/** 이 게임의 콘솔 색(화면에 칠할 색). */
+export function projectColor(target: ProjectTarget): string {
+  return displayColor(projectBaseColor(target))
 }
 
 /** 콘솔에 보이는 게임 이름. 정하지 않았으면 기본 이름. */
@@ -77,8 +87,11 @@ export async function refreshProjectLooks(): Promise<void> {
   update(next)
 }
 
-/** 표시 설정이 바뀌면 다시 그리게 한다. */
-export function useProjectLook(): { color: typeof projectColor; name: typeof projectName; icon: typeof projectIcon } {
+/** 표시 설정이나 화면 모드가 바뀌면 다시 그리게 한다. */
+export function useProjectLook(): {
+  color: typeof projectColor; baseColor: typeof projectBaseColor; display: typeof displayColor
+  name: typeof projectName; icon: typeof projectIcon
+} {
   useSyncExternalStore(
     (l) => {
       listeners.add(l)
@@ -86,7 +99,8 @@ export function useProjectLook(): { color: typeof projectColor; name: typeof pro
     },
     () => looks,
   )
-  return { color: projectColor, name: projectName, icon: projectIcon }
+  useSyncExternalStore(subscribeTheme, isDarkMode)
+  return { color: projectColor, baseColor: projectBaseColor, display: displayColor, name: projectName, icon: projectIcon }
 }
 
 /** 색만 쓰는 곳을 위한 줄임. */

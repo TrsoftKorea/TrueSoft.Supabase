@@ -9,6 +9,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
+import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, type GameSettings } from '../lib/gameTime'
 import { Pencil, Trash2 } from 'lucide-react'
 import { LimitsForm, inputCls, type LimitField } from './social/LimitsForm'
@@ -267,24 +268,6 @@ const CONSOLE_PALETTE: { name: string; hex: string }[] = [
 
 const HEX_RE = /^#[0-9a-f]{6}$/
 
-function rgbOf(hex: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
-}
-
-/** WCAG 대비 — 흰 글자와 이 색 바탕. */
-function contrastWithWhite(hex: string): number {
-  const lum = rgbOf(hex)
-    .map((v) => v / 255)
-    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
-  const l = 0.2126 * lum[0]! + 0.7152 * lum[1]! + 0.0722 * lum[2]!
-  return 1.05 / (l + 0.05)
-}
-
-function colorDistance(a: string, b: string): number {
-  const [x, y] = [rgbOf(a), rgbOf(b)]
-  return Math.sqrt(x.reduce((s, v, i) => s + (v - y[i]!) ** 2, 0))
-}
-
 type ConsoleSettings = {
   color: string | null
   display_name: string | null
@@ -476,7 +459,8 @@ function ConsoleColorCard({
   report: (e: unknown, fallback: string) => void
 }) {
   const look = useProjectLook()
-  const colorOf = look.color
+  // 다른 게임과 비슷한지는 고른 원래 색끼리 잰다(화면에 보이는 어두운 화면용 색이 아니라).
+  const colorOf = look.baseColor
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -571,7 +555,7 @@ function ConsoleColorCard({
       )}
 
       <div className="rounded-lg overflow-hidden border border-neutral-200">
-        <div className="px-4 py-3 text-white font-bold" style={{ backgroundColor: valid ? hex : '#9ca3af' }}>
+        <div className="px-4 py-3 text-white font-bold" style={{ backgroundColor: valid ? look.display(hex) : '#9ca3af' }}>
           {look.name(target)}
         </div>
         <div className="px-4 py-2 text-xs text-neutral-500">미리보기</div>

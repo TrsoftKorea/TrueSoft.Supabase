@@ -1,7 +1,7 @@
 // 가짜 데이터 모드 맨 위 띠 + "게시" 버튼 + 실제 반영 상태.
 // 게시는 미리보기 서버(scripts/mock-server.mjs)가 콘솔 화면과 SDK·DB 변경을 커밋 두 개로 나눠 한 번에 푸시한다.
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { UploadCloud, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Check, X, Loader2 } from 'lucide-react'
+import { UploadCloud, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Check, X, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
 type Pending = { status: string; file: string; orig?: string; hash: string }
@@ -50,7 +50,8 @@ const timeText = (iso: string | null | undefined) => {
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-type Summary = { text: string; tone: 'ok' | 'busy' | 'warn' | 'bad' }
+/** 띠의 상태 표시. label 은 지금 상태 한 마디, detail 은 진행 단계, time 은 걸린·지난 시간. */
+type Summary = { label: string; tone: 'ok' | 'busy' | 'warn' | 'bad'; detail?: string; time?: string }
 
 /** 몇 초·몇 분 걸렸는지. */
 const durationText = (ms: number) => {
@@ -60,35 +61,32 @@ const durationText = (ms: number) => {
 
 const BUSY: Phase[] = ['starting', 'running', 'propagating']
 
-/** 띠에 한 줄로 보일 실제 반영 상태. elapsed 는 배포를 시작한 지 얼마나 됐는지(진행 중일 때만). */
+/** 띠에 보일 실제 반영 상태. 올릴 변경 수는 따로 보인다. elapsed 는 배포를 시작한 지 얼마나 됐는지(진행 중일 때만). */
 function summarize(d: Deploy | null, failed: string, elapsed: string, finished: string): Summary {
-  if (failed) return { text: '반영 상태를 확인하지 못했습니다', tone: 'warn' }
-  if (!d) return { text: '실제 반영 확인 중…', tone: 'busy' }
-  const waiting = d.waiting.console + d.waiting.sdk + d.waiting.unpushed
-  const tail = waiting ? ` · 올릴 변경 ${waiting}개` : ''
-  const since = elapsed ? ` · ${elapsed}째` : ''
+  if (failed) return { label: '상태 확인 실패', tone: 'warn' }
+  if (!d) return { label: '확인 중', tone: 'busy' }
+  const since = elapsed ? `${elapsed}째` : undefined
+  const at = (s: Summary) => (since ? { ...s, time: since } : s)
   switch (d.phase) {
-    case 'starting': return { text: `배포 시작 기다리는 중…${since}`, tone: 'busy' }
+    case 'starting': return at({ label: '배포 대기', tone: 'busy' })
     case 'running': {
       const st = d.run?.steps
-      return { text: `배포 중${st ? ` · ${st.done + 1}/${st.total} 단계${st.current ? ` ${st.current}` : ''}` : ''}${since}`, tone: 'busy' }
+      return at({ label: '배포 중', tone: 'busy', ...(st ? { detail: `${st.done + 1}/${st.total}${st.current ? ` ${st.current}` : ''}` } : {}) })
     }
-    case 'propagating': return { text: `배포 끝 · 실제 콘솔 반영 기다리는 중…${since}`, tone: 'busy' }
-    case 'failed': return { text: `실제 콘솔 배포 실패${tail}`, tone: 'bad' }
-    case 'live':
-      if (finished) return { text: `실제 콘솔 반영 완료 (${finished})${tail}`, tone: 'ok' }
-      return { text: waiting ? `실제 콘솔은 최신${tail}` : '실제 콘솔 최신 · 올릴 변경 없음', tone: waiting ? 'warn' : 'ok' }
-    case 'unpushed': return { text: `콘솔 화면이 아직 GitHub 에 안 올라감${tail}`, tone: 'warn' }
-    default: return { text: `실제 콘솔 판 확인 불가${tail}`, tone: 'warn' }
+    case 'propagating': return at({ label: '반영 대기', tone: 'busy', detail: '배포 끝' })
+    case 'failed': return { label: '배포 실패', tone: 'bad' }
+    case 'live': return finished ? { label: '반영 완료', tone: 'ok', time: finished } : { label: '실제 콘솔 최신', tone: 'ok' }
+    case 'unpushed': return { label: 'GitHub 에 안 올라감', tone: 'warn' }
+    default: return { label: '판 확인 불가', tone: 'warn' }
   }
 }
 
-// 띠의 상태 점. 진행 중이면 깜빡인다.
-const DOT: Record<Summary['tone'], string> = {
-  ok: 'bg-emerald-600',
-  busy: 'bg-blue-600 animate-pulse',
-  warn: 'bg-amber-950/50',
-  bad: 'bg-red-600',
+// 상태 아이콘 색. 진행 중이면 돈다.
+function StatusIcon({ tone }: { tone: Summary['tone'] }) {
+  if (tone === 'ok') return <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" />
+  if (tone === 'busy') return <Loader2 className="w-3.5 h-3.5 text-[#1d4ed8] animate-spin" />
+  if (tone === 'bad') return <XCircle className="w-3.5 h-3.5 text-[#dc2626]" />
+  return <AlertCircle className="w-3.5 h-3.5 opacity-70" />
 }
 
 function FileGroup({ title, note, group }: { title: string; note?: string | undefined; group: Group }) {
@@ -241,6 +239,7 @@ export function PublishBar() {
   }, [refresh, status])
 
   const summary = summarize(deploy, deployError, elapsed, finished)
+  const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
   const empty = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
   const run = deploy?.run
   const runState: 'done' | 'busy' | 'todo' | 'bad' = phase === 'starting' || phase === 'running' ? 'busy'
@@ -257,19 +256,32 @@ export function PublishBar() {
 
   return (
     <>
-      <div className="bg-amber-400 text-amber-950 text-xs">
+      {/* 띠는 화면 모드를 따르지 않는다 — 색 이름(amber 등)은 어두운 화면에서 값이 바뀌어 글자만 뒤집히므로 띠 안은 고정 색으로 쓴다. */}
+      <div className="bg-[#fbbf24] text-[#451a03] text-xs">
         <div className="max-w-6xl mx-auto px-6 h-8 flex items-center gap-3">
           <span className="font-semibold whitespace-nowrap">미리보기</span>
-          <span className="text-amber-950/70 truncate hidden sm:inline">가짜 데이터로 보는 화면 · 실제 서버와 연결되지 않습니다</span>
+          <span className="text-[#451a03]/70 truncate hidden sm:inline">가짜 데이터로 보는 화면 · 실제 서버와 연결되지 않습니다</span>
           <button type="button" onClick={() => setExpanded((v) => !v)}
-            title={deploy ? `마지막 확인 ${timeText(deploy.checkedAt)}` : undefined}
-            className="ml-auto inline-flex items-center gap-1.5 h-6 pl-2 pr-1.5 rounded-full hover:bg-amber-950/10 whitespace-nowrap font-medium">
-            <span className={`w-2 h-2 rounded-full ${DOT[summary.tone]}`} />
-            {summary.text}
+            title={deploy ? `마지막 확인 ${timeText(deploy.checkedAt)} · 눌러서 자세히` : undefined}
+            className="ml-auto inline-flex items-center gap-1.5 h-6 rounded-full hover:bg-[#451a03]/10 pr-1 whitespace-nowrap">
+            {/* 지금 상태 — 아이콘 · 한 마디 · 진행 단계 · 시간 */}
+            <span className="inline-flex items-center gap-1.5 h-6 pl-2 pr-2.5 rounded-full bg-[#451a03]/10 font-semibold">
+              <StatusIcon tone={summary.tone} />
+              {summary.label}
+              {summary.detail && <span className="font-normal opacity-70">{summary.detail}</span>}
+              {summary.time && <span className="font-normal tabular-nums opacity-70">{summary.time}</span>}
+            </span>
+            {/* 올릴 변경 수 — 있을 때만 */}
+            {waitingCount > 0 && (
+              <span className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full bg-[#451a03]/10">
+                올릴 변경
+                <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#451a03] text-[#fffbeb] text-[11px] font-semibold grid place-items-center tabular-nums">{waitingCount}</span>
+              </span>
+            )}
             {expanded ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
           </button>
           <button type="button" onClick={() => void openDialog()}
-            className="inline-flex items-center gap-1 h-6 px-3 rounded-full bg-amber-950 text-amber-50 hover:bg-amber-900 whitespace-nowrap font-medium">
+            className="inline-flex items-center gap-1 h-6 px-3 rounded-full bg-[#451a03] text-[#fffbeb] hover:bg-[#78350f] whitespace-nowrap font-medium">
             <UploadCloud className="w-3.5 h-3.5" /> 게시
           </button>
         </div>

@@ -19,13 +19,29 @@ let mode: ThemeMode = read()
 const listeners = new Set<() => void>()
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 
+let dark = false
+
 function apply() {
-  const dark = mode === 'dark' || (mode === 'system' && media.matches)
+  dark = mode === 'dark' || (mode === 'system' && media.matches)
   document.documentElement.classList.toggle('dark', dark)
 }
 
-media.addEventListener('change', () => { if (mode === 'system') apply() })
+// 시스템 설정을 따르는 중이면 OS 가 바뀔 때도 다시 그리게 알린다(게임 색처럼 화면 모드로 값을 고르는 곳이 있다).
+media.addEventListener('change', () => {
+  if (mode !== 'system') return
+  apply()
+  listeners.forEach((l) => l())
+})
 apply()
+
+/** 지금 어두운 화면인지. */
+export const isDarkMode = () => dark
+
+/** 화면 모드가 바뀌면 다시 그리게 한다. */
+export function subscribeTheme(l: () => void): () => void {
+  listeners.add(l)
+  return () => listeners.delete(l)
+}
 
 export function setThemeMode(next: ThemeMode) {
   mode = next
