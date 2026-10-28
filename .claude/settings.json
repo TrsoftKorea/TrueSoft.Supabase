@@ -10,6 +10,10 @@
           {
             "type": "command",
             "command": "dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/FailReasonCheck\" -- --if-changed"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/Admin~/scripts/check-ui.mjs\" --if-changed || exit 2"
           }
         ]
       }

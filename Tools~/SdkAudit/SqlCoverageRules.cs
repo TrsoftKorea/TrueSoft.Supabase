@@ -20,6 +20,8 @@ namespace SdkAudit
         private static readonly Regex DefinedFunction = new(@"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?""?(?<name>\w+)""?\s*\(", RegexOptions.IgnoreCase);
         private static readonly Regex DefinedRelation = new(@"create\s+(?:or\s+replace\s+)?(?:table|view|materialized\s+view)\s+(?:if\s+not\s+exists\s+)?(?:public\.)?""?(?<name>\w+)""?", RegexOptions.IgnoreCase);
         private static readonly Regex ClientGrant = new(@"grant\s+execute\s+on\s+function\s+public\.(?<name>\w+)\s*\([^)]*\)\s+to\s+(?<roles>[^;]+);", RegexOptions.IgnoreCase);
+        // public. 을 붙인 정의만 표로 센다 — install.sql 은 전부 그렇게 쓰고, 주석·문자열 속 "CREATE TABLE AS" 같은 글자를 표로 오인하지 않게.
+        private static readonly Regex DefinedTable = new(@"create\s+table\s+(?:if\s+not\s+exists\s+)?public\.""?(?<name>[A-Za-z_][A-Za-z0-9_]*)""?", RegexOptions.IgnoreCase);
 
         public static void Run(AuditContext ctx)
         {
@@ -65,13 +67,16 @@ namespace SdkAudit
             if (!File.Exists(verifyPath))
                 return;
             var verifyRel = ctx.Rel(verifyPath);
+            var verifyText = File.ReadAllText(verifyPath);
+
+            VerifyTableList(ctx, sql, sqlRel, verifyText, verifyRel);
 
             var granted = ClientGrant.Matches(sql)
                 .Where(m => Regex.IsMatch(m.Groups["roles"].Value, @"\b(authenticated|anon)\b", RegexOptions.IgnoreCase))
                 .Select(m => m.Groups["name"].Value)
                 .ToHashSet(StringComparer.Ordinal);
 
-            var block = Regex.Match(File.ReadAllText(verifyPath), @"'grant:function'[\s\S]*?proname\s+not\s+in\s*\(([\s\S]*?)\)");
+            var block = Regex.Match(verifyText, @"'grant:function'[\s\S]*?proname\s+not\s+in\s*\(([\s\S]*?)\)");
             if (!block.Success)
             {
                 ctx.Report.Error($"[R17 검증목록] {verifyRel} 에서 함수 허용 목록(`proname not in (…)`)을 찾지 못했습니다. 모양이 바뀌었으면 검사기도 고치세요.");
@@ -83,6 +88,27 @@ namespace SdkAudit
                 ctx.Report.Error($"[R17 검증목록] `{name}` 는 {sqlRel} 이 클라이언트에 여는데 {verifyRel} 허용 목록에 없습니다 — 설치 검증이 '권한 과다'로 잘못 표시합니다.");
             foreach (var name in allowed.Except(granted).OrderBy(n => n, StringComparer.Ordinal))
                 ctx.Report.Error($"[R17 검증목록] `{name}` 는 {verifyRel} 허용 목록에 있는데 {sqlRel} 이 클라이언트에 열지 않습니다 — 실제로 열리면 검증이 못 잡습니다.");
+        }
+
+        /// <summary>
+        /// install.sql 이 만드는 표는 전부 verify.sql 의 "표·RLS" 목록에 있어야 한다. 손으로 맞추는 복제라 표를 새로 만들 때
+        /// 빠진다 — 2026-10-28 에 50개 중 25개가 빠져 있어, 그 표가 설치됐는지·RLS 가 켜졌는지를 설치 확인이 보지 못했다.
+        /// </summary>
+        private static void VerifyTableList(AuditContext ctx, string sql, string sqlRel, string verifyText, string verifyRel)
+        {
+            var created = DefinedTable.Matches(sql).Select(m => m.Groups["name"].Value.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+            var block = Regex.Match(verifyText, @"'table\+rls'[\s\S]*?\)\s*as\s+exp\(name\)");
+            if (!block.Success)
+            {
+                ctx.Report.Error($"[R17 검증목록] {verifyRel} 에서 표 목록(`'table+rls'` … `as exp(name)`)을 찾지 못했습니다. 모양이 바뀌었으면 검사기도 고치세요.");
+                return;
+            }
+            var listed = Regex.Matches(block.Value, @"\(\s*'(\w+)'\s*\)").Select(m => m.Groups[1].Value.ToLowerInvariant()).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var name in created.Except(listed).OrderBy(n => n, StringComparer.Ordinal))
+                ctx.Report.Error($"[R17 검증표] 표 `{name}` 를 {sqlRel} 이 만드는데 {verifyRel} 의 표 목록에 없습니다 — 설치 확인이 그 표가 빠졌는지·RLS 가 꺼졌는지 보지 못합니다.");
+            foreach (var name in listed.Except(created).OrderBy(n => n, StringComparer.Ordinal))
+                ctx.Report.Error($"[R17 검증표] 표 `{name}` 는 {verifyRel} 표 목록에 있는데 {sqlRel} 이 만들지 않습니다 — 설치 확인이 늘 missing 으로 표시합니다.");
         }
     }
 }

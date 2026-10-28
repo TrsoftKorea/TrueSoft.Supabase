@@ -7,7 +7,7 @@
 //                      다른 앱(샌드박스에서 공짜로 산 것 포함)의 진짜 영수증을 우리 결제로 인정하게 된다.
 //                      앱이 보내는 bundle_id 는 위조할 수 있어 대조에 쓰지 않는다. 없으면 검증을 거부한다.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 // ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
 // 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
@@ -315,25 +315,45 @@ const SUPABASE_SECRET_KEY = secretKeys.default;
 // Xcode 로컬 StoreKit 시험 영수증은 애플 체인이 아니라 여기까지 오지도 못한다.
 const ACCEPTED_ENVIRONMENTS = new Set(["Production", "Sandbox"]);
 
-// price_amount(micros = 주 단위 ×1,000,000)를 KRW 정수(원)로 환산합니다 (frankfurter.app — 무료, ECB 일 1회 갱신).
-// KRW이면 환율 없이, 그 외는 환율 API. 실패 시 null 반환.
-async function convertToKrw(micros: number, currency: string): Promise<number | null> {
-  const major = micros / 1_000_000;   // micros → 주 단위
-  if (!currency || currency.toUpperCase() === "KRW") return Math.round(major);
+// ═══ BEGIN krw-rate ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 결제 금액(micros = 주 단위 ×1,000,000)을 원화 정수로 바꾼다. KRW 면 그대로, 통화를 모르면 null(원화로 치지 않는다).
+// 환율은 fx_rates(purchase-price-sync 가 하루 한 번 받아 두는 표)에서 결제 날짜(UTC) 이전 4일 안의 가장 가까운 값 —
+// 주말·연휴로 발표가 없는 날을 넘기는 만큼 — 을 쓰고, 표에 없으면 Frankfurter(키 없음, 중앙은행·공식 출처 환율)에
+// 그 날짜를 물어 표에 남긴다. 둘 다 안 되면 null — purchase-price-sync 가 다음 실행에서 채운다.
+async function toKrw(db: SupabaseClient, micros: number, currency: string | null, at: Date): Promise<number | null> {
+  const major = micros / 1_000_000;
+  if (!currency) return null;
+  const cur = currency.toUpperCase();
+  if (cur === "KRW") return Math.round(major);
+  const day = at.toISOString().slice(0, 10);
+  const windowStart = new Date(at.getTime() - 4 * 86_400_000).toISOString().slice(0, 10);
   try {
+    const { data: stored } = await db.from("fx_rates").select("krw_per_unit")
+      .eq("currency", cur).lte("rate_date", day).gte("rate_date", windowStart)
+      .order("rate_date", { ascending: false }).limit(1).maybeSingle();
+    if (stored) return Math.round(major * Number(stored.krw_per_unit));
+
     const res = await fetch(
-      `https://api.frankfurter.app/latest?from=${encodeURIComponent(currency)}&to=KRW`,
+      `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(cur)}&quotes=KRW&date=${day}`,
       { signal: AbortSignal.timeout(3000) },
     );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const rate = data?.rates?.KRW;
-    if (typeof rate !== "number") return null;
-    return Math.round(major * rate);
+    if (!res.ok) {
+      await res.body?.cancel();
+      return null;
+    }
+    const rows = (await res.json()) as { date?: string; quote?: string; rate?: number }[];
+    const hit = Array.isArray(rows) ? rows.find((r) => r.quote === "KRW") : undefined;
+    if (!hit || typeof hit.rate !== "number" || !(hit.rate > 0) || !hit.date) return null;
+    await db.from("fx_rates").upsert(
+      { currency: cur, rate_date: hit.date, krw_per_unit: hit.rate },
+      { onConflict: "currency,rate_date", ignoreDuplicates: true },
+    );
+    return Math.round(major * hit.rate);
   } catch {
     return null;
   }
 }
+// ═══ END krw-rate ═══
 
 // ── 메인 핸들러 ───────────────────────────────────────────────────────────────
 
@@ -427,15 +447,15 @@ Deno.serve(async (req) => {
     ? jwsData.price * 1000
     : null;
   const priceCurrency  = jwsData.currency || null;
-  const priceAmountKrw = priceAmount !== null
-    ? await convertToKrw(priceAmount, priceCurrency || "KRW")
-    : null;
 
   // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
   // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
   const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const priceAmountKrw = priceAmount !== null
+    ? await toKrw(adminClient, priceAmount, priceCurrency, new Date())
+    : null;
   const { error: insertError } = await adminClient
     .from("purchases")
     .insert({

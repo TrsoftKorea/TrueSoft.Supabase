@@ -7,6 +7,9 @@
 //   APPLE_BUNDLE_ID      — 이 프로젝트가 받는 앱 번들 ID. 여럿이면 쉼표로 구분.
 //                          verifyReceipt 는 어느 앱의 영수증이든 진짜면 status 0 을 준다(소모성 상품은
 //                          공유 암호도 안 본다). 서버가 번들 ID를 대조하지 않으면 다른 앱 영수증이 통과한다.
+//   APPLE_IAP_ISSUER_ID·APPLE_IAP_KEY_ID·APPLE_IAP_PRIVATE_KEY — 선택. App Store Connect 의 In-App Purchase 키.
+//                          SK1 영수증에는 가격이 없어, 있으면 기록 뒤(응답을 돌려준 다음) 애플에 그 거래의 실제
+//                          결제 금액을 물어 채운다. 없거나 실패하면 purchase-price-sync 가 하루 한 번 다시 묻는다.
 //
 // 요청 Body (JSON):
 //   receipt    string  — SK1 base64 encoded receipt blob (Unity IAP 영수증의 Payload 필드)
@@ -16,7 +19,7 @@
 // 기록은 purchases.purchase_token UNIQUE 로 중복을 막습니다. 유저 직접 INSERT 정책은 없고
 // 이 함수가 service_role 로만 기록합니다(가짜 결제 기록 차단).
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 // ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
 // 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
@@ -40,6 +43,123 @@ async function serverConfigList(key: string): Promise<string[]> {
   return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 }
 // ═══ END server-config ═══
+
+// ═══ BEGIN krw-rate ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 결제 금액(micros = 주 단위 ×1,000,000)을 원화 정수로 바꾼다. KRW 면 그대로, 통화를 모르면 null(원화로 치지 않는다).
+// 환율은 fx_rates(purchase-price-sync 가 하루 한 번 받아 두는 표)에서 결제 날짜(UTC) 이전 4일 안의 가장 가까운 값 —
+// 주말·연휴로 발표가 없는 날을 넘기는 만큼 — 을 쓰고, 표에 없으면 Frankfurter(키 없음, 중앙은행·공식 출처 환율)에
+// 그 날짜를 물어 표에 남긴다. 둘 다 안 되면 null — purchase-price-sync 가 다음 실행에서 채운다.
+async function toKrw(db: SupabaseClient, micros: number, currency: string | null, at: Date): Promise<number | null> {
+  const major = micros / 1_000_000;
+  if (!currency) return null;
+  const cur = currency.toUpperCase();
+  if (cur === "KRW") return Math.round(major);
+  const day = at.toISOString().slice(0, 10);
+  const windowStart = new Date(at.getTime() - 4 * 86_400_000).toISOString().slice(0, 10);
+  try {
+    const { data: stored } = await db.from("fx_rates").select("krw_per_unit")
+      .eq("currency", cur).lte("rate_date", day).gte("rate_date", windowStart)
+      .order("rate_date", { ascending: false }).limit(1).maybeSingle();
+    if (stored) return Math.round(major * Number(stored.krw_per_unit));
+
+    const res = await fetch(
+      `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(cur)}&quotes=KRW&date=${day}`,
+      { signal: AbortSignal.timeout(3000) },
+    );
+    if (!res.ok) {
+      await res.body?.cancel();
+      return null;
+    }
+    const rows = (await res.json()) as { date?: string; quote?: string; rate?: number }[];
+    const hit = Array.isArray(rows) ? rows.find((r) => r.quote === "KRW") : undefined;
+    if (!hit || typeof hit.rate !== "number" || !(hit.rate > 0) || !hit.date) return null;
+    await db.from("fx_rates").upsert(
+      { currency: cur, rate_date: hit.date, krw_per_unit: hit.rate },
+      { onConflict: "currency,rate_date", ignoreDuplicates: true },
+    );
+    return Math.round(major * hit.rate);
+  } catch {
+    return null;
+  }
+}
+// ═══ END krw-rate ═══
+
+// ═══ BEGIN apple-transaction ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 애플 App Store Server API "Get Transaction Info" 로 거래 하나의 실제 결제 금액을 읽는다. 옛 방식(StoreKit 1)으로
+// 끝낸 거래도 된다(애플 문서). In-App Purchase 키 — 애플 로그인 키와 다른 키 — 의 발급자 ID·키 ID·.p8 이 필요하다.
+// 응답의 서명(JWS)은 검증하지 않는다. 우리 키로 애플 주소에 직접 물어 받은 값이라 중간에 바뀔 길이 없다.
+type AppleIapKey = { issuerId: string; keyId: string; privateKey: string };
+type AppleTxPrice = { priceMicros: number | null; currency: string | null; environment: string | null };
+
+const APPLE_TX_HOSTS = { production: "https://api.storekit.apple.com", sandbox: "https://api.storekit-sandbox.apple.com" };
+
+async function appleIapKey(): Promise<AppleIapKey | null> {
+  const [issuerId, keyId, privateKey] = await Promise.all([
+    serverConfig("APPLE_IAP_ISSUER_ID"), serverConfig("APPLE_IAP_KEY_ID"), serverConfig("APPLE_IAP_PRIVATE_KEY"),
+  ]);
+  return issuerId && keyId && privateKey ? { issuerId, keyId, privateKey } : null;
+}
+
+const appleTxB64url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+// 애플 문서 "Generating JSON Web Tokens for API requests": ES256, kid=키 ID, iss=발급자 ID,
+// aud=appstoreconnect-v1, bid=번들 ID, 만료는 발급 뒤 60분 이내.
+async function appleServerToken(key: AppleIapKey, bundleId: string): Promise<string> {
+  // 붙여넣다 줄바꿈이 글자 그대로의 "\n" 으로 들어가는 경우가 있어 그것도 걷어 낸다.
+  const pem = key.privateKey.replace(/-----[^-]+-----/g, "").replace(/\\n/g, "").replace(/\s+/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const signKey = await crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const now = Math.floor(Date.now() / 1000);
+  const enc = (o: unknown) => appleTxB64url(new TextEncoder().encode(JSON.stringify(o)));
+  const signingInput =
+    enc({ alg: "ES256", kid: key.keyId, typ: "JWT" }) + "." +
+    enc({ iss: key.issuerId, iat: now, exp: now + 600, aud: "appstoreconnect-v1", bid: bundleId });
+  // WebCrypto ECDSA 서명은 JWS 가 요구하는 r||s(64바이트) 형식 그대로다.
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, signKey, new TextEncoder().encode(signingInput)));
+  return `${signingInput}.${appleTxB64url(sig)}`;
+}
+
+// 테스트 결제는 테스트 주소에만 있다. 한쪽에서 못 찾으면(404) 다른 쪽에 묻고, 둘 다 없으면 null.
+// 키가 틀렸거나 권한이 없으면(401 등) 예외 — 호출한 쪽이 실패로 남긴다.
+async function appleTransactionPrice(
+  key: AppleIapKey, bundleId: string, transactionId: string, sandboxFirst: boolean,
+): Promise<AppleTxPrice | null> {
+  const token = await appleServerToken(key, bundleId);
+  const hosts = sandboxFirst
+    ? [APPLE_TX_HOSTS.sandbox, APPLE_TX_HOSTS.production]
+    : [APPLE_TX_HOSTS.production, APPLE_TX_HOSTS.sandbox];
+  for (const host of hosts) {
+    const res = await fetch(`${host}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 404) {
+      await res.body?.cancel();
+      continue;
+    }
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 200);
+      throw new Error(`apple_http_${res.status} ${detail}`);
+    }
+    const body = (await res.json()) as { signedTransactionInfo?: string };
+    const part = body.signedTransactionInfo?.split(".")[1];
+    if (!part) throw new Error("apple_no_transaction_info");
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const tx = JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0)),
+    )) as { price?: number; currency?: string; environment?: string };
+    // price 는 1/1000 단위(milliunits). micros(1/1,000,000)로 맞춘다. 통화가 없으면 금액도 버린다(원화로 오인하지 않게).
+    const currency = typeof tx.currency === "string" && tx.currency ? tx.currency : null;
+    return {
+      priceMicros: typeof tx.price === "number" && currency ? tx.price * 1000 : null,
+      currency,
+      environment: typeof tx.environment === "string" ? tx.environment : null,
+    };
+  }
+  return null;
+}
+// ═══ END apple-transaction ═══
 
 const PRODUCTION_URL = "https://buy.itunes.apple.com/verifyReceipt";
 const SANDBOX_URL    = "https://sandbox.itunes.apple.com/verifyReceipt";
@@ -197,7 +317,8 @@ Deno.serve(async (req: Request) => {
   // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
   // (유저 직접 INSERT를 막아 가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
   // purchase_token UNIQUE — INSERT 성공은 새 검증, 23505는 이미 검증된 영수증.
-  // SK1 영수증에는 가격이 없어 price_* 는 기록하지 않는다.
+  // 금액은 여기서 묻지 않는다 — 위 "기록됐는지 조회"와 이 기록 사이가 길어지면, 같은 상품 두 건을 동시에 확인할 때
+  // 둘 다 같은 거래를 골라 한 건을 잃는다. 기록한 뒤 아래에서 따로 채운다.
   const { error: insertError } = await adminClient
     .from("purchases")
     .insert({
@@ -209,7 +330,7 @@ Deno.serve(async (req: Request) => {
       package_name:   receiptBundleId,
       store:          "apple_app_store",
       // 시험 결제(TestFlight·앱 심사·샌드박스 계정)는 매출에서 뺀다. 샌드박스 주소로 다시 물어 통과했으면 시험이 확실하다.
-      // 응답에 environment 가 없고 운영 주소에서 통과했으면 모름(null).
+      // 응답에 environment 가 없고 운영 주소에서 통과했으면 모름(null) — 아래 금액 조회가 애플 거래 정보로 채운다.
       is_test:        viaSandbox || verifyData.environment === "Sandbox" ? true
                     : verifyData.environment ? false : null,
     });
@@ -234,6 +355,10 @@ Deno.serve(async (req: Request) => {
       console.error("[purchase-verify-apple-legacy] DB 삽입 오류:", insertError.message);
       return jsonResponse({ ok: false, reason: "db_error" }, 500);
     }
+  } else {
+    // 새로 기록한 결제만, 응답을 돌려준 뒤 애플에 실제 결제 금액을 물어 채운다(게임은 기다리지 않는다).
+    // 키가 없거나 실패하면 그대로 두고 purchase-price-sync 가 하루 한 번 다시 묻는다.
+    runAfterResponse(fillPriceFromApple(adminClient, transactionId, receiptBundleId, viaSandbox));
   }
 
   return jsonResponse({
@@ -247,6 +372,39 @@ Deno.serve(async (req: Request) => {
 });
 
 // ── 헬퍼 ─────────────────────────────────────────────────────────────────────
+
+// Supabase 문서 "Background Tasks": EdgeRuntime.waitUntil 에 넘긴 작업은 응답 뒤에도 끝까지 돈다.
+// 그 기능이 없는 곳(로컬 실행 등)에서는 돌게만 둔다 — 중간에 끊기면 purchase-price-sync 가 대신 채운다.
+function runAfterResponse(task: Promise<void>): void {
+  const runtime = (globalThis as unknown as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(task);
+  else void task;
+}
+
+async function fillPriceFromApple(
+  db: SupabaseClient, transactionId: string, bundleId: string, sandboxFirst: boolean,
+): Promise<void> {
+  try {
+    const key = await appleIapKey();
+    if (!key) return;
+    const price = await appleTransactionPrice(key, bundleId, transactionId, sandboxFirst);
+    const update: Record<string, unknown> = { price_checked_at: new Date().toISOString() };
+    if (price?.priceMicros != null) {
+      update.price_amount = price.priceMicros;
+      update.price_currency = price.currency;
+      update.price_amount_krw = await toKrw(db, price.priceMicros, price.currency, new Date());
+    }
+    const { error } = await db.from("purchases").update(update)
+      .eq("purchase_token", transactionId).eq("store", "apple_app_store").is("price_amount", null);
+    if (error) throw new Error(error.message);
+    if (price?.environment) {
+      await db.from("purchases").update({ is_test: price.environment === "Sandbox" })
+        .eq("purchase_token", transactionId).eq("store", "apple_app_store").is("is_test", null);
+    }
+  } catch (e) {
+    console.warn(`[purchase-verify-apple-legacy] 결제 금액 조회 실패(하루 한 번 다시 묻는다): ${e instanceof Error ? e.message : e}`);
+  }
+}
 
 async function callAppleVerifyReceipt(
   url: string,

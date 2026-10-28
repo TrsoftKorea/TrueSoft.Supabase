@@ -34,7 +34,7 @@ namespace SdkAudit
             "[R14 구조누락]",
             "[R15 코드우선]",
             "[R16 공통구간]", "[R16 연결값키]",
-            "[R17 설치누락]", "[R17 검증목록]",
+            "[R17 설치누락]", "[R17 검증목록]", "[R17 검증표]",
             "[R19 시간대고정]",
         };
 
@@ -228,8 +228,10 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
                 "await db.rpc(\"ts_ghost_fn\");\nawait db.rpc(\"ts_never_scheduled\");\nawait db.from(\"ghost_table\").select();\nawait db.from(\"late_table\").select();\nawait db.from(\"UPPER_TABLE\").select();\nawait db.storage.from(\"bucket\");\n");
             File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"),
                 "\nCREATE TABLE IF NOT EXISTS public.UPPER_TABLE (id int);\ngrant execute on function public.ts_properly_scheduled() to authenticated;\n");
+            // 표 목록 — late_table·UPPER_TABLE 은 빠졌고 ghost_listed 는 install.sql 에 없다(양쪽 방향 다 걸려야 한다).
             Write(root, "Samples~/DatabaseSetup/SQL/player/verify.sql",
-                "select 'grant:function'::text where p.proname not in ('ts_not_granted')");
+                "select 'table+rls'::text from (values ('late_sql_table'), ('game_settings'), ('ghost_listed')) as exp(name)\n"
+                + "select 'grant:function'::text where p.proname not in ('ts_not_granted')");
 
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");

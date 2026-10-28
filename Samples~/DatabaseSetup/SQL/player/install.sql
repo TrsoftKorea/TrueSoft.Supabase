@@ -2683,6 +2683,36 @@ revoke all on function public.ts_withdrawal_cancel_redeem(uuid) from authenticat
 grant execute on function public.ts_withdrawal_cancel_redeem(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 탈퇴 취소 토큰 서명 비밀값 — withdrawal-cancel-issue·redeem 이 HMAC 서명에 쓴다.
+-- 설치 때 무작위로 만들어 Vault 에 둔다 — 새 게임은 Supabase Secrets 에 따로 넣지 않는다.
+-- 엣지 함수는 Secrets 의 CANCEL_TOKEN_SECRET 을 먼저 쓰고(이미 넣어 둔 게임은 그 값 그대로 — 바꾸면 발급된
+-- 토큰이 무효가 된다) 없을 때만 이 값을 쓴다. 이미 있으면 다시 만들지 않는다.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'withdrawal_cancel_secret') then
+    perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'withdrawal_cancel_secret',
+      '탈퇴 취소 토큰 서명용. withdrawal-cancel-issue·redeem 전용.');
+  end if;
+end $$;
+
+create or replace function public.ts_withdrawal_cancel_secret()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'withdrawal_cancel_secret';
+$$;
+
+comment on function public.ts_withdrawal_cancel_secret() is
+  '탈퇴 취소 토큰 서명 비밀값(복호화). 엣지 함수 전용 — service_role 만.';
+
+revoke all on function public.ts_withdrawal_cancel_secret() from public, anon, authenticated;
+grant execute on function public.ts_withdrawal_cancel_secret() to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 탈퇴 삭제 시각 — 게임 시간대(1절 game_settings)의 자정에 맞춘다.
 -- 9절 정리 작업이 자정 직후에 지우므로, 시각이 하루 중 아무 때나면
 -- 그 사이에 로그인한 사람이 로그인 중에 계정이 지워져 새로 만들어지는 길을 탄다.
@@ -3592,7 +3622,7 @@ alter table public.purchases
   add column if not exists store          text   not null default 'google_play',
   add column if not exists price_amount     bigint,     -- 결제 금액(micros = 주 단위 ×1,000,000, price_currency 기준). 내부용
   add column if not exists price_currency   text,       -- ISO 4217 통화 코드 (예: "KRW", "USD")
-  add column if not exists price_amount_krw bigint,     -- KRW 환산 금액(원, 정수). 매출 확인용 — 구매 시점 환율 적용
+  add column if not exists price_amount_krw bigint,     -- KRW 환산 금액(원, 정수). 매출 확인용 — 결제 날짜 환율(fx_rates). null = 금액·환율을 아직 모름
   add column if not exists granted_at       timestamptz, -- 게임이 실제로 아이템을 지급 완료한 시각. null = 아직 미지급
   -- 시험 결제. 애플 Sandbox(TestFlight·앱 심사 포함), 구글 라이선스 테스트 계정. null = 이 칸이 생기기 전 기록이라 모름(실제로 센다).
   -- 매출·대시보드·누적 결제액(total_paid_krw)에서 뺀다 — 진짜 돈이 아니다.
@@ -3600,11 +3630,35 @@ alter table public.purchases
   -- 무료 결제 — 구글 프로모션 코드·광고 보상(purchaseType 1·2). 시험은 아니지만 돈을 낸 게 아니라 매출·누적 결제액에서 뺀다.
   add column if not exists is_free          boolean,
   -- 시험 여부를 구글에 마지막으로 물어본 시각(purchase-refund-sync-google). 답을 못 받은 건을 한동안 뒤로 미루는 데 쓴다.
-  add column if not exists test_checked_at  timestamptz;
+  add column if not exists test_checked_at  timestamptz,
+  -- 결제 금액을 애플에 마지막으로 물어본 시각(옛 방식 iOS 결제 — 영수증에 가격이 없다). purchase-price-sync 가
+  -- 답을 못 받은 건을 한동안 뒤로 미루는 데 쓴다.
+  add column if not exists price_checked_at timestamptz;
 
 create index if not exists purchases_is_test_idx on public.purchases (verified_at desc) where is_test;
 -- 시험 여부를 모르는 결제만 담은 색인 — 재확인이 다 끝나 0건이 된 뒤에도 매일 결제 표 전체를 훑지 않게.
 create index if not exists purchases_test_unknown_idx on public.purchases (test_checked_at nulls first, verified_at desc) where is_test is null;
+-- 금액이나 원화 값이 빈 결제만 담은 색인 — purchase-price-sync 가 매일 결제 표 전체를 훑지 않게.
+-- 금액을 애플에 물어 채우는 건 애플 결제뿐이라 애플만 담는다. 구글 결제는 물을 곳이 없어 확인 시각이 늘 비어 있으므로,
+-- 섞이면 색인 맨 앞에 쌓여 매일 건너뛰며 읽게 된다(옛 이름의 색인이 그랬다).
+drop index if exists public.purchases_price_unknown_idx;
+create index if not exists purchases_apple_price_unknown_idx on public.purchases (price_checked_at nulls first, verified_at desc)
+  where price_amount is null and store = 'apple_app_store';
+create index if not exists purchases_krw_unknown_idx on public.purchases (verified_at) where price_amount is not null and price_amount_krw is null;
+
+-- 원화 환산용 환율표. purchase-price-sync 가 하루 한 번 Frankfurter(키 없음, 중앙은행·공식 출처 환율)에서
+-- 원화 기준 전체 통화를 받아 둔다. 결제를 확인할 때는 결제 날짜 이전 4일 안의 가장 가까운 값을 쓰고, 표에 없는
+-- 통화·날짜는 그때 물어 여기 남긴다. 통화마다 하루 한 줄이라 쌓여도 작다(1년 약 6만 줄) — 지우지 않는다.
+create table if not exists public.fx_rates (
+  currency     text    not null,          -- ISO 4217 (예: "USD")
+  rate_date    date    not null,          -- 환율 출처가 발표한 날짜
+  krw_per_unit numeric not null check (krw_per_unit > 0), -- 그 통화 1단위가 몇 원인지
+  fetched_at   timestamptz not null default now(),
+  primary key (currency, rate_date)
+);
+
+alter table public.fx_rates enable row level security;
+revoke all on table public.fx_rates from anon, authenticated;
 
 -- 검증 함수는 완료된 구매만 기록하므로 상태 컬럼은 사용하지 않는다(기존 설치본 정리).
 alter table public.purchases drop column if exists purchase_state;
@@ -3783,9 +3837,10 @@ create trigger tr_after_purchase_paid_change
   for each row execute function public.ts_after_purchase_paid_change();
 
 -- 스토어별 마지막 확인 상태. 애플은 알림을 받은 시각, 구글은 목록을 가져온 시각.
+-- 'price_sync' 는 환율표 저장·빈 금액 채우기(purchase-price-sync)의 마지막 실행이다.
 -- 실패도 남긴다 — 조용히 멈춘 것과 환불이 없는 것을 운영 콘솔에서 구분하려는 것.
 create table if not exists public.purchase_refund_sync (
-  store            text primary key,      -- 'google_play' | 'apple_app_store'
+  store            text primary key,      -- 'google_play' | 'apple_app_store' | 'price_sync'
   last_started_at  timestamptz,
   last_finished_at timestamptz,
   last_ok          boolean,
@@ -3964,7 +4019,8 @@ language sql
 immutable
 as $$
   select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_SERVICE_ACCOUNT_JSON',
-               'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'];
+               'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
+               'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY'];
 $$;
 
 revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
@@ -4228,7 +4284,7 @@ grant execute on function public.ts_withdrawal_sweep_try_start(int) to service_r
 -- 크론 잡 등록 (멱등: 기존 잡이 있으면 교체)
 -- ---------------------------------------------------------------------------
 
--- 1. 메일 만료 정리 — 매일 새벽 3시 (batch 500)
+-- 1. 메일 만료 정리 — 매일 UTC 3시(한국 정오) (batch 500). pg_cron 의 시각은 UTC 다(cron.timezone = GMT).
 do $$
 begin
   if exists (select 1 from cron.job where jobname = 'cleanup-expired-mails') then
@@ -4243,7 +4299,7 @@ select cron.schedule(
 
 -- 2. 탈퇴 계정 정리는 pg_net 이 필요해 아래 4번에 있다.
 
--- 3. 구글 환불 확인 — 매일 새벽 4시. DB 에서 엣지 함수를 부르려면 pg_net 과 Vault 의 project_url 이 필요하다.
+-- 3. 구글 환불 확인 — 매일 UTC 4시(한국 13시). DB 에서 엣지 함수를 부르려면 pg_net 과 Vault 의 project_url 이 필요하다.
 --    project_url 은 프로젝트마다 다르므로 이 파일에 넣지 않는다. 설치 후 한 번 등록한다:
 --      select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
 --    없으면 확인하지 않고 그 사실을 purchase_refund_sync 에 남긴다(운영 콘솔 구매 내역에 보인다).
@@ -4287,6 +4343,50 @@ select cron.schedule(
   'purchase-refund-sync-google',
   '0 4 * * *',
   'select public.ts_purchase_refund_sync_kick()'
+);
+
+-- 3-1. 환율표 저장·빈 금액 채우기 — 매일 UTC 4시 30분(한국 13시 30분). 유럽중앙은행 등은 전날 UTC 15시 무렵 발표하므로
+--      전날 발표분이 들어온다. 엣지 함수 purchase-price-sync 가 원화 기준 환율을 받아 두고,
+--      금액이 없는 옛 방식 iOS 결제는 애플에 실제 결제 금액을 묻고, 원화 값이 빈 결제는 결제 날짜 환율로 채운다.
+--      3번과 같이 project_url 이 필요하고, 없으면 그 사실을 purchase_refund_sync('price_sync')에 남긴다.
+create or replace function public.ts_purchase_price_sync_kick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    perform public.ts_purchase_refund_sync_mark('price_sync', 'finish', false, 'project_url_missing', 0, 0);
+    return;
+  end if;
+  -- 함수 쪽이 10분 안의 재호출을 건너뛰므로 인증 없이 부른다(verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/purchase-price-sync',
+    body                 := '{}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 120000);
+end;
+$$;
+
+comment on function public.ts_purchase_price_sync_kick() is
+  '환율표 저장·빈 결제 금액 채우기 엣지 함수를 부른다. cron 이 매일 부른다.';
+
+revoke all on function public.ts_purchase_price_sync_kick() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'purchase-price-sync') then
+    perform cron.unschedule('purchase-price-sync');
+  end if;
+end $$;
+select cron.schedule(
+  'purchase-price-sync',
+  '30 4 * * *',
+  'select public.ts_purchase_price_sync_kick()'
 );
 
 -- 4. 탈퇴 계정 정리 — 30분마다. 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
@@ -8486,6 +8586,9 @@ revoke all on table public.ts_admin_passwords from anon, authenticated;
 comment on table public.ts_admin_passwords is
   '운영자 비밀번호 해시. admin-api 전용. 운영자를 지우면 함께 지워진다(ts_admin_delete_operator).';
 
+-- 예전 판의 "이메일로 비밀번호 재설정" 코드 표. 재설정을 마스터가 직접 정하는 방식으로 바꾸며 읽는 곳이 없어졌다.
+drop table if exists public.ts_admin_reset_codes;
+
 -- 비활성화와 달리 기록을 남기지 않고 지운다 — 잘못 추가한 이메일을 치울 때 쓴다.
 create or replace function public.ts_admin_delete_operator(p_email text)
 returns void
@@ -8673,6 +8776,7 @@ as $$
   paid as (
     select coalesce(nullif(prof.country_code, ''), 'unknown') as country,
            coalesce(pu.price_amount_krw, 0) as krw,
+           pu.price_amount_krw is null as amount_unknown,
            coalesce(pu.account_id::text, pu.user_id) as payer
     from public.purchases pu
     cross join params p
@@ -8693,6 +8797,8 @@ as $$
     'total_krw', coalesce((select sum(krw) from paid), 0)::bigint,
     'purchases', (select count(*) from paid),
     'payers', (select count(distinct payer) from paid),
+    -- 금액을 모르는 결제(원화 값이 빈 것). 합계에 0원으로 들어가 있어 화면이 따로 알린다.
+    'unknown_amount', (select count(*) from paid where amount_unknown),
     'countries', coalesce((select jsonb_agg(jsonb_build_object(
                      'country', country, 'revenue_krw', revenue_krw, 'purchases', purchases, 'payers', payers)
                    order by revenue_krw desc, country) from by_country), '[]'::jsonb)

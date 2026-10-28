@@ -1,7 +1,7 @@
 // purchase-refund-sync-google
 // Google Play 환불(무효화된 결제) 목록을 가져와 purchases 에 기록한다.
 //
-// 부르는 곳: install.sql 9절 cron(매일 새벽 4시, pg_net) · 운영 콘솔 구매 내역의 "환불 지금 확인".
+// 부르는 곳: install.sql 9절 cron(매일 UTC 4시 = 한국 13시, pg_net) · 운영 콘솔 구매 내역의 "환불 지금 확인".
 // 입력이 없고 같은 환불을 두 번 기록하지 않으며 10분 안의 재호출은 건너뛰므로, 인증 없이 받는다
 // (verify_jwt 끔). cron 이 키 없이 부를 수 있게 하려는 것이다.
 //

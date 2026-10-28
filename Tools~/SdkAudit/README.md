@@ -96,6 +96,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R16 | 하드 오류 | 서버 연결값 키 목록이 `install.sql`(`ts_server_config_keys`)·콘솔 서버(`SERVER_CONFIG_VALID`)·콘솔 화면(`STORE_KEYS`)·엣지 함수의 `serverConfig("…")` 호출에서 서로 맞음 |
 | R17 | 하드 오류 | 콘솔 서버(admin-api)와 엣지 함수가 부르는 `rpc("…")` 함수·`.from("…")` 표가 `install.sql`에 정의돼 있음. 라이브 DB에만 만들어 두면 새 게임 설치 때 그 화면이 실패하고 권한 정리에서도 빠진다 |
 | R17 | 하드 오류 | `verify.sql`의 클라이언트 허용 함수 목록이 `install.sql`이 `authenticated`·`anon`에 grant 하는 함수와 같음 |
+| R17 | 하드 오류 | `verify.sql`의 표·RLS 목록이 `install.sql`이 만드는 표(`create table … public.이름`) 전부와 같음. 빠지면 설치 확인이 그 표의 누락·RLS 꺼짐을 못 본다 |
 | R18 | 하드 오류 | `SerializeObject`·`ToJson`에 익명 객체(`new { ... }`)를 넘기지 않음. IL2CPP 기기 빌드에서 속성이 빠져 `{}`로 나가 RPC 가 404(PGRST202)로 실패한다(2026-10-27 아이폰 실측). 에디터에서는 멀쩡해 컴파일 검사로는 안 잡힌다 |
 | R19 | 하드 오류 | `install.sql`에 `'Asia/Seoul'` 같은 시간대 이름을 직접 쓰지 않음. 날짜를 자르는 곳은 `public.ts_game_time_zone()`(게임 시간대)을 쓴다. 허용은 `game_settings`를 다루는 문장(기본값·대체값)뿐. `'UTC'` 는 잡지 않는다(UTC 로 바꾸는 계산은 정당한 쓰임) |
 
