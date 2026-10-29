@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
   Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
-  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid, Timer, BarChart3,
+  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid, Timer, BarChart3, Headset,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
@@ -180,6 +180,7 @@ export function Layout({
 
           <NavSection label="운영">
             <NavLinkRow to="/players" label="플레이어" icon={Users} accent={accent} />
+            <NavLinkRow to="/support" label="고객센터" icon={Headset} accent={accent} />
             <NavLinkRow to="/purchases" label="구매 내역" icon={ReceiptText} accent={accent} />
             <NavLinkRow to="/items" label="아이템 카탈로그" icon={Package} accent={accent} />
             <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} accent={accent} />

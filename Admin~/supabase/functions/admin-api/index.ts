@@ -1297,6 +1297,90 @@ async function handleAction(
         return json({ ok: true, data: null });
       }
 
+      // 고객센터. 첨부 그림은 비공개 저장소라 볼 때마다 1시간짜리 서명 URL 을 만든다.
+      case "support.list": {
+        const status = optStr(params, "status");
+        if (status && !["open", "answered", "closed"].includes(status)) throw new Error("상태 값이 올바르지 않습니다.");
+        const categoryId = params.categoryId == null ? null : intInRange(params, "categoryId", "분류", 1, 2147483647);
+        const { data, error } = await db.rpc("ts_admin_support_tickets", {
+          p_status: status || null,
+          p_category: categoryId,
+          p_search: optStr(params, "search") || null,
+          p_limit: intInRange(params, "limit", "개수", 1, 200),
+          p_offset: intInRange(params, "offset", "시작 위치", 0, 1_000_000),
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "support.get": {
+        const { data, error } = await db.rpc("ts_admin_support_ticket", { p_ticket: str(params, "ticketId") });
+        if (error) throw new Error(error.message);
+        if (!data) throw new Error("문의를 찾을 수 없습니다.");
+        const ticket = data as { messages?: Array<{ attachments?: string[] }> };
+        const paths = (ticket.messages ?? []).flatMap((m) => m.attachments ?? []);
+        const urls = new Map<string, string>();
+        if (paths.length > 0) {
+          const { data: signed } = await db.storage.from("support-attachments").createSignedUrls(paths, 3600);
+          for (const s of signed ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
+        }
+        return json({
+          ok: true,
+          data: {
+            ...ticket,
+            messages: (ticket.messages ?? []).map((m) => ({
+              ...m,
+              attachments: (m.attachments ?? []).map((path) => ({ path, url: urls.get(path) ?? null })),
+            })),
+          },
+        });
+      }
+
+      case "support.reply": {
+        const body = str(params, "body").trim();
+        if (!body) throw new Error("답변을 입력해 주세요.");
+        if (body.length > 2000) throw new Error("답변은 2000자까지 쓸 수 있습니다.");
+        const { error } = await db.rpc("ts_admin_support_reply", { p_ticket: str(params, "ticketId"), p_body: body, p_by: email });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "support.setStatus": {
+        const status = str(params, "status");
+        if (!["open", "answered", "closed"].includes(status)) throw new Error("상태 값이 올바르지 않습니다.");
+        const { error } = await db.rpc("ts_admin_support_set_status", { p_ticket: str(params, "ticketId"), p_status: status });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "supportCategories.list": {
+        const { data, error } = await db.rpc("ts_admin_support_categories");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "supportCategories.upsert": {
+        const name = str(params, "name").trim();
+        if (name.length < 1 || name.length > 40) throw new Error("분류 이름은 1~40자로 넣어 주세요.");
+        const localized: Record<string, string> = {};
+        const raw = params.localized;
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (!/^[a-z]{2}$/.test(k)) throw new Error("언어 코드는 영문 소문자 두 글자로 넣어 주세요.");
+            if (typeof v === "string" && v.trim()) localized[k] = v.trim().slice(0, 40);
+          }
+        }
+        const { error } = await db.rpc("ts_admin_support_category_upsert", {
+          p_id: params.id == null ? null : intInRange(params, "id", "분류", 1, 2147483647),
+          p_name: name,
+          p_localized: localized,
+          p_sort_order: params.sortOrder == null ? null : intInRange(params, "sortOrder", "순서", 0, 10000),
+          p_is_active: typeof params.isActive === "boolean" ? params.isActive : null,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "friends.settingsGet": {
         const { data, error } = await db.rpc("ts_admin_friend_settings_get");
         if (error) throw new Error(error.message);
@@ -1757,6 +1841,14 @@ async function handleAction(
 
 // DB 함수가 raise 하는 사유 코드를 운영자 문구로. 표에 없는 사유는 원문 그대로 둔다 — 지우면 원인을 잃는다.
 const SERVER_ERRORS: Record<string, string> = {
+  support_body_empty: "답변을 입력하세요.",
+  support_body_too_long: "답변은 2,000자까지 쓸 수 있습니다.",
+  support_ticket_not_found: "문의를 찾을 수 없습니다.",
+  support_ticket_closed: "종료된 문의입니다. 다시 연 뒤 답하세요.",
+  support_status_invalid: "상태 값이 올바르지 않습니다.",
+  support_category_name_invalid: "분류 이름은 1~40자로 넣어 주세요.",
+  support_category_name_taken: "같은 이름의 분류가 이미 있습니다.",
+  support_category_not_found: "분류를 찾을 수 없습니다.",
   server_display_name_empty: "서버 이름을 입력하세요.",
   server_code_invalid: "서버 코드는 영문·숫자·_·- 로 32자 이내여야 합니다.",
   server_code_taken: "이미 있는 서버 코드입니다.",

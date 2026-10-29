@@ -1,0 +1,27 @@
+@import '../../src/theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-soft: 232 240 254;
+  --surface: 255 255 255;
+  --accent: #1677ff;
+}
+
+html.dark {
+  --brand-soft: 27 42 74;
+  --surface: 23 24 29;
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-neutral-50 text-neutral-900 antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* bg-white 는 어두운 화면에서 카드 바탕으로 바꾼다(콘솔과 같은 규칙). */
+:where(html.dark) .bg-white {
+  background-color: rgb(var(--surface));
+}

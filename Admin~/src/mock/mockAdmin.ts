@@ -365,9 +365,122 @@ function purchaseList(p: Record<string, unknown>) {
   return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, pageSize, truncated: false }
 }
 
+// ── 고객센터 ──
+// 첨부 그림 자리 — 서버에서는 서명 URL 이 온다. 색 칸 하나로 모양만 본다.
+const mockShot = (hex: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="568"><rect width="320" height="568" fill="${hex}"/><text x="24" y="60" font-size="28" fill="#fff">스크린샷</text></svg>`)}`
+
+let supportCategories = [
+  { id: 1, name: '결제', localized: { en: 'Payment' } as Record<string, string>, sort_order: 1, is_active: true },
+  { id: 2, name: '계정', localized: { en: 'Account' } as Record<string, string>, sort_order: 2, is_active: true },
+  { id: 3, name: '버그 신고', localized: { en: 'Bug report' } as Record<string, string>, sort_order: 3, is_active: true },
+  { id: 4, name: '기타', localized: { en: 'Other' } as Record<string, string>, sort_order: 4, is_active: true },
+]
+
+type MockSupportMessage = { id: number; sender: 'player' | 'admin'; body: string; attachments: string[]; admin_email: string | null; created_at: string }
+type MockSupportTicket = {
+  id: string; account_id: string | null; user_id: string; display_name: string | null; category_id: number
+  status: 'open' | 'answered' | 'closed'; was_banned: boolean; meta: Record<string, string>
+  created_at: string; last_message_at: string; messages: MockSupportMessage[]
+}
+
+let supportTickets: MockSupportTicket[] = (() => {
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+  const t = (
+    id: string, account: string, name: string, cat: number, status: MockSupportTicket['status'], banned: boolean,
+    meta: Record<string, string>, msgs: Array<[MockSupportMessage['sender'], string, string[], number]>,
+  ): MockSupportTicket => {
+    const messages = msgs.map(([sender, body, attachments, min], i) => ({
+      id: i + 1, sender, body, attachments, admin_email: sender === 'admin' ? MOCK_EMAIL : null, created_at: ago(min),
+    }))
+    return {
+      id, account_id: account, user_id: `10${account.slice(1)}4471`, display_name: name, category_id: cat, status, was_banned: banned, meta,
+      created_at: messages[0]!.created_at, last_message_at: messages[messages.length - 1]!.created_at, messages,
+    }
+  }
+  return [
+    t('6f1c2a90-0000-4000-8000-000000000001', 'a9', '용사김', 1, 'open', false,
+      { platform: 'android', app_version: '1.4.2', os: 'Android 14', device: 'SM-S921N', language: 'ko' },
+      [['player', '젬 1,200개 상품을 결제했는데 우편함에 들어오지 않았습니다. 영수증 첨부합니다.', ['a9/receipt.png'], 42]]),
+    t('6f1c2a90-0000-4000-8000-000000000002', 'a3', 'Guest_7712', 2, 'open', true,
+      { platform: 'ios', app_version: '1.4.2', os: 'iOS 18.1', device: 'iPhone15,2', language: 'ko' },
+      [['player', '갑자기 계정이 정지됐다고 나옵니다. 부정 행위를 한 적이 없는데 확인 부탁드립니다.', [], 180]]),
+    t('6f1c2a90-0000-4000-8000-000000000003', 'a8', '마법사이', 3, 'answered', false,
+      { platform: 'android', app_version: '1.4.1', os: 'Android 13', device: 'Pixel 7', language: 'ko' },
+      [['player', '보스 스테이지 7에서 화면이 멈춥니다.', ['a8/bug1.png', 'a8/bug2.png'], 1500],
+       ['admin', '불편을 드려 죄송합니다. 다음 업데이트에서 고쳐질 예정입니다.', [], 1320]]),
+    t('6f1c2a90-0000-4000-8000-000000000004', 'a7', '궁수박', 4, 'closed', false,
+      { platform: 'ios', app_version: '1.4.0', os: 'iOS 17.6', device: 'iPhone13,2', language: 'en' },
+      [['player', 'How can I change my nickname?', [], 4300],
+       ['admin', 'You can change it in Settings > Profile.', [], 4200],
+       ['player', 'Thanks!', [], 4100]]),
+  ]
+})()
+
+const SHOT_COLOR: Record<string, string> = { 'a9/receipt.png': '#2563eb', 'a8/bug1.png': '#7c3aed', 'a8/bug2.png': '#0f766e' }
+
+function supportRow(t: MockSupportTicket) {
+  const cat = supportCategories.find((c) => c.id === t.category_id)
+  return {
+    id: t.id, account_id: t.account_id, user_id: t.user_id, display_name: t.display_name, category: cat?.name ?? null,
+    status: t.status, was_banned: t.was_banned, preview: t.messages[0]?.body.slice(0, 80) ?? null,
+    created_at: t.created_at, last_message_at: t.last_message_at,
+  }
+}
+
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
 
 const HANDLERS: Record<string, Handler> = {
+  'support.list': (_t, p) => {
+    const search = String(p['search'] ?? '').trim().toLowerCase()
+    const rows = supportTickets
+      .filter((t) => !p['status'] || t.status === p['status'])
+      .filter((t) => p['categoryId'] == null || t.category_id === Number(p['categoryId']))
+      .filter((t) => !search || (t.display_name ?? '').toLowerCase().includes(search) || t.user_id.includes(search))
+      .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at))
+    const offset = Number(p['offset'] ?? 0)
+    const limit = Number(p['limit'] ?? 50)
+    const count = (s: MockSupportTicket['status']) => supportTickets.filter((t) => t.status === s).length
+    return {
+      total: rows.length,
+      counts: { open: count('open'), answered: count('answered'), closed: count('closed') },
+      rows: rows.slice(offset, offset + limit).map(supportRow),
+    }
+  },
+  'support.get': (_t, p) => {
+    const t = supportTickets.find((x) => x.id === p['ticketId'])
+    if (!t) throw new Error('문의를 찾을 수 없습니다.')
+    return {
+      ...supportRow(t), category_id: t.category_id, meta: t.meta,
+      messages: t.messages.map((m) => ({ ...m, attachments: m.attachments.map((path) => ({ path, url: mockShot(SHOT_COLOR[path] ?? '#64748b') })) })),
+    }
+  },
+  'support.reply': (_t, p) => {
+    if (supportTickets.some((t) => t.id === p['ticketId'] && t.status === 'closed')) throw new Error('종료된 문의입니다. 다시 연 뒤 답하세요.')
+    supportTickets = supportTickets.map((t) => t.id !== p['ticketId'] ? t : {
+      ...t, status: 'answered', last_message_at: new Date().toISOString(),
+      messages: [...t.messages, { id: t.messages.length + 1, sender: 'admin', body: String(p['body'] ?? ''), attachments: [], admin_email: MOCK_EMAIL, created_at: new Date().toISOString() }],
+    })
+    return null
+  },
+  'support.setStatus': (_t, p) => {
+    supportTickets = supportTickets.map((t) => t.id !== p['ticketId'] ? t : { ...t, status: p['status'] as MockSupportTicket['status'] })
+    return null
+  },
+  'supportCategories.list': () => supportCategories.map((c) => ({ ...c, tickets: supportTickets.filter((t) => t.category_id === c.id).length })),
+  'supportCategories.upsert': (_t, p) => {
+    const name = String(p['name'] ?? '').trim()
+    if (supportCategories.some((c) => c.name === name && c.id !== p['id'])) throw new Error('같은 이름의 분류가 이미 있습니다.')
+    const next = {
+      name, localized: (p['localized'] ?? {}) as Record<string, string>,
+      sort_order: p['sortOrder'] == null ? 0 : Number(p['sortOrder']), is_active: p['isActive'] !== false,
+    }
+    supportCategories = p['id'] == null
+      ? [...supportCategories, { id: Math.max(...supportCategories.map((c) => c.id)) + 1, ...next }]
+      : supportCategories.map((c) => c.id === p['id'] ? { ...c, ...next } : c)
+    supportCategories.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    return null
+  },
   'auth.consoleLook': () => ({ color: null, display_name: null, icon: null }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
   'schema.getDraft': () => ({ rows: [] }),

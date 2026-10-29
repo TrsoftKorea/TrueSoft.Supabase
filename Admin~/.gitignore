@@ -4,6 +4,8 @@ dist/
 .env.local
 *.tsbuildinfo
 dist-mock/
+dist-support/
+dist-support-mock/
 .publish-message
 .publish-message-sdk
 .publish-files

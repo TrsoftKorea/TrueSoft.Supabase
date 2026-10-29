@@ -22,6 +22,7 @@ import SchemaChanges from './pages/SchemaChanges'
 import Purchases from './pages/Purchases'
 import RemoteConfig from './pages/RemoteConfig'
 import Coupons from './pages/Coupons'
+import Support from './pages/Support'
 import ChatModeration from './pages/ChatModeration'
 import Settings from './pages/Settings'
 import Lobbies from './pages/Lobbies'
@@ -179,6 +180,7 @@ export default function App() {
         <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
+        <Route path="/support" element={<Support target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
         <Route path="/settings" element={<Settings target={target} onUnauthenticated={signOut} />} />
         <Route path="/friends" element={<Navigate to="/settings" replace />} />
