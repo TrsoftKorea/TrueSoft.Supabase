@@ -17,6 +17,7 @@ export type TicketSummary = {
 export type Message = { id: number; sender: 'player' | 'admin'; body: string; attachments: Attachment[]; created_at: string }
 export type Ticket = { id: string; status: Status; category: string | null; created_at: string; messages: Message[] }
 export type Category = { id: number; name: string }
+export type Faq = { id: number; category_id: number | null; question: string; answer: string }
 export type Look = { name: string | null; color: string | null; icon: string | null }
 export type Me = { banned: boolean; lang: string }
 
@@ -28,6 +29,7 @@ export class ApiError extends Error {
 
 export interface SupportApi {
   look(): Promise<Look>
+  faqs(lang: string): Promise<Faq[]>
   me(): Promise<Me>
   categories(lang: string): Promise<Category[]>
   tickets(lang: string): Promise<TicketSummary[]>
@@ -77,6 +79,7 @@ export function createApi(): SupportApi | null {
 
   return {
     look: () => call<Look>('look', {}, false),
+    faqs: (lang) => call<Faq[]>('faqs', { lang }, false),
     me: () => call<Me>('me'),
     categories: (lang) => call<Category[]>('categories', { lang }),
     tickets: (lang) => call<TicketSummary[]>('tickets', { lang }),

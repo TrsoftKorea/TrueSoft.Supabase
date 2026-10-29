@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
+import { InfoList } from '../../components/ui/InfoList'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
@@ -70,10 +71,10 @@ export default function FriendsTab({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex items-center justify-between">
-        <div className="text-sm text-neutral-600">
-          친구 {data?.friend_count ?? 0}명
-          {data ? <span className="text-neutral-400"> / 상한 {data.max_friends}명</span> : null}
-        </div>
+        <InfoList className="flex-1" items={[
+          { label: '친구', value: data ? `${data.friend_count}명` : failed ? '불러오지 못함' : '…' },
+          { label: '상한', value: data ? `${data.max_friends}명` : failed ? '불러오지 못함' : '…' },
+        ]} />
         <Button variant="outline" size="compact"
           onClick={() => void load()}
           disabled={loading}

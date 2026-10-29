@@ -123,7 +123,7 @@ export function RestoreSaveModal({
           )}
 
           <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-            플레이어가 게임을 하고 있으면 게임이 가진 값으로 다시 덮일 수 있습니다. 접속하지 않았을 때 하세요.
+            플레이어가 게임을 하고 있으면 게임이 가진 값으로 다시 덮일 수 있습니다.
           </div>
     </EditDialog>
   )

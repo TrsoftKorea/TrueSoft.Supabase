@@ -28,6 +28,8 @@ const KO = {
   sent: '문의를 보냈습니다. 답변이 오면 알려 드립니다.',
   imageOnly: '(그림)',
   retry: '다시 시도',
+  faqTitle: '자주 묻는 질문',
+  faqForCategory: '문의하기 전에 확인해 보세요',
 } as const
 
 type Key = keyof typeof KO
@@ -61,6 +63,8 @@ const EN: Record<Key, string> = {
   sent: 'Your inquiry has been sent. We will let you know when we reply.',
   imageOnly: '(image)',
   retry: 'Try again',
+  faqTitle: 'FAQ',
+  faqForCategory: 'Check these first',
 }
 
 // 서버가 돌려주는 실패 사유 → 문구. 없는 사유는 일반 오류 문구.

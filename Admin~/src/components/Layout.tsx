@@ -274,7 +274,7 @@ export function Layout({
               className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 hover:bg-amber-100 transition-colors"
             >
               <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>미게시 변경 {pendingCount}건이 있습니다. 변경 관리에서 검토 후 게시하세요.</span>
+              <span>미게시 변경 {pendingCount}건</span>
               <span className="ml-auto text-xs text-amber-600 underline">게시하러 가기</span>
             </NavLink>
           )}

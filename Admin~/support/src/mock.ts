@@ -41,6 +41,16 @@ export function createMockApi(): SupportApi {
 
   return {
     look: () => wait({ name: en ? 'Devil Slayer' : '데빌 슬레이어', color: '#7c3aed', icon: null }),
+    faqs: () => wait(en
+      ? [
+          { id: 1, category_id: 1, question: 'I paid but did not get my item.', answer: 'Items are delivered to your mailbox.\nRestart the app to retry pending purchases.' },
+          { id: 2, category_id: 2, question: 'Can I continue on a new device?', answer: 'Link your Google or Apple account, then sign in with it on the new device.' },
+        ]
+      : [
+          { id: 1, category_id: 1, question: '결제했는데 아이템이 안 들어왔어요.', answer: '결제 후 우편함으로 지급됩니다.\n앱을 다시 켜면 들어오지 않은 결제를 다시 확인합니다.' },
+          { id: 2, category_id: 2, question: '기기를 바꾸면 진행이 이어지나요?', answer: '구글·애플 계정을 연동해 두면 새 기기에서 같은 계정으로 로그인해 이어 할 수 있습니다.' },
+          { id: 3, category_id: null, question: '닉네임은 어떻게 바꾸나요?', answer: '설정 > 프로필에서 바꿀 수 있습니다.' },
+        ]),
     me: () => wait({ banned: params.get('banned') === '1', lang: en ? 'en' : 'ko' }),
     categories: () => wait(categories),
     tickets: () => wait([...tickets].sort((a, b) => summary(b).last_message_at.localeCompare(summary(a).last_message_at)).map(summary)),

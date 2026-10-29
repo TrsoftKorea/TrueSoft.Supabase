@@ -417,6 +417,16 @@ let supportTickets: MockSupportTicket[] = (() => {
   ]
 })()
 
+type MockFaq = {
+  id: number; category_id: number | null; question: string; answer: string
+  localized: Record<string, { question?: string; answer?: string }>; sort_order: number; is_active: boolean
+}
+let supportFaqs: MockFaq[] = [
+  { id: 1, category_id: 1, question: '결제했는데 아이템이 안 들어왔어요.', answer: '결제 후 우편함으로 지급됩니다. 앱을 다시 켜면 들어오지 않은 결제를 다시 확인합니다.\n그래도 없으면 영수증을 붙여 문의해 주세요.', localized: { en: { question: 'I paid but did not get my item.', answer: 'Items are delivered to your mailbox. Restart the app to retry pending purchases.' } }, sort_order: 1, is_active: true },
+  { id: 2, category_id: 2, question: '기기를 바꾸면 진행이 이어지나요?', answer: '구글·애플 계정을 연동해 두면 새 기기에서 같은 계정으로 로그인해 이어 할 수 있습니다.', localized: {}, sort_order: 2, is_active: true },
+  { id: 3, category_id: null, question: '닉네임은 어떻게 바꾸나요?', answer: '설정 > 프로필에서 바꿀 수 있습니다.', localized: { en: { question: 'How do I change my nickname?', answer: 'Go to Settings > Profile.' } }, sort_order: 3, is_active: false },
+]
+
 const SHOT_COLOR: Record<string, string> = { 'a9/receipt.png': '#2563eb', 'a8/bug1.png': '#7c3aed', 'a8/bug2.png': '#0f766e' }
 
 function supportRow(t: MockSupportTicket) {
@@ -467,17 +477,57 @@ const HANDLERS: Record<string, Handler> = {
     supportTickets = supportTickets.map((t) => t.id !== p['ticketId'] ? t : { ...t, status: p['status'] as MockSupportTicket['status'] })
     return null
   },
+  'supportFaqs.list': () => supportFaqs.map((f) => ({ ...f, category: supportCategories.find((c) => c.id === f.category_id)?.name ?? null })),
+  'supportFaqs.upsert': (_t, p) => {
+    const next = {
+      category_id: p['categoryId'] == null ? null : Number(p['categoryId']),
+      question: String(p['question'] ?? '').trim(), answer: String(p['answer'] ?? '').trim(),
+      localized: (p['localized'] ?? {}) as MockFaq['localized'],
+    }
+    // 서버와 같이 빈 순서·사용 여부는 원래 값을 둔다.
+    supportFaqs = p['id'] == null
+      ? [...supportFaqs, { id: Math.max(0, ...supportFaqs.map((f) => f.id)) + 1, ...next, sort_order: Number(p['sortOrder'] ?? 0), is_active: p['isActive'] !== false }]
+      : supportFaqs.map((f) => f.id === p['id'] ? {
+          ...f, ...next,
+          sort_order: p['sortOrder'] == null ? f.sort_order : Number(p['sortOrder']),
+          is_active: p['isActive'] == null ? f.is_active : p['isActive'] === true,
+        } : f)
+    supportFaqs.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    return null
+  },
+  'supportFaqs.setActive': (_t, p) => {
+    supportFaqs = supportFaqs.map((f) => f.id === p['id'] ? { ...f, is_active: p['isActive'] === true } : f)
+    return null
+  },
+  'supportCategories.setActive': (_t, p) => {
+    supportCategories = supportCategories.map((c) => c.id === p['id'] ? { ...c, is_active: p['isActive'] === true } : c)
+    return null
+  },
+  'supportFaqs.reorder': (_t, p) => {
+    const ids = (p['ids'] as number[]) ?? []
+    supportFaqs = supportFaqs
+      .map((f) => ({ ...f, sort_order: ids.includes(f.id) ? ids.indexOf(f.id) + 1 : f.sort_order }))
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+    return null
+  },
+  'supportFaqs.delete': (_t, p) => {
+    supportFaqs = supportFaqs.filter((f) => f.id !== p['id'])
+    return null
+  },
   'supportCategories.list': () => supportCategories.map((c) => ({ ...c, tickets: supportTickets.filter((t) => t.category_id === c.id).length })),
   'supportCategories.upsert': (_t, p) => {
     const name = String(p['name'] ?? '').trim()
     if (supportCategories.some((c) => c.name === name && c.id !== p['id'])) throw new Error('같은 이름의 분류가 이미 있습니다.')
     const next = {
       name, localized: (p['localized'] ?? {}) as Record<string, string>,
-      sort_order: p['sortOrder'] == null ? 0 : Number(p['sortOrder']), is_active: p['isActive'] !== false,
     }
     supportCategories = p['id'] == null
-      ? [...supportCategories, { id: Math.max(...supportCategories.map((c) => c.id)) + 1, ...next }]
-      : supportCategories.map((c) => c.id === p['id'] ? { ...c, ...next } : c)
+      ? [...supportCategories, { id: Math.max(...supportCategories.map((c) => c.id)) + 1, ...next, sort_order: Number(p['sortOrder'] ?? 0), is_active: p['isActive'] !== false }]
+      : supportCategories.map((c) => c.id === p['id'] ? {
+          ...c, ...next,
+          sort_order: p['sortOrder'] == null ? c.sort_order : Number(p['sortOrder']),
+          is_active: p['isActive'] == null ? c.is_active : p['isActive'] === true,
+        } : c)
     supportCategories.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
     return null
   },
@@ -527,6 +577,19 @@ const HANDLERS: Record<string, Handler> = {
     const pl = playerOf(p)
     const banned = isBannedNow(pl)
     return { isBanned: banned, bannedUntil: banned ? pl.banned_until : null, banMessage: banned ? pl.ban_message : null }
+  },
+  // 차단·해제는 이 탭이 열려 있는 동안만 기억한다 — 새로 고치면 처음 값으로 돌아간다.
+  'players.ban': (_t, p) => {
+    const pl = playerOf(p)
+    pl.banned_until = String(p['bannedUntil'])
+    pl.ban_message = String(p['banMessage'] ?? '') || null
+    return { ok: true }
+  },
+  'players.unban': (_t, p) => {
+    const pl = playerOf(p)
+    pl.banned_until = null
+    pl.ban_message = null
+    return { ok: true }
   },
   'matchRecords.player': (_t, p) => matchRecords(p),
   'dataManagement.searchPlayers': () => [

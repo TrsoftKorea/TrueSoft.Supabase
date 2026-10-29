@@ -1353,6 +1353,79 @@ async function handleAction(
         return json({ ok: true, data: null });
       }
 
+      case "supportFaqs.list": {
+        const { data, error } = await db.rpc("ts_admin_support_faqs");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "supportFaqs.upsert": {
+        const question = str(params, "question").trim();
+        const answer = str(params, "answer").trim();
+        if (question.length < 1 || question.length > 200) throw new Error("질문은 1~200자로 넣어 주세요.");
+        if (answer.length < 1 || answer.length > 4000) throw new Error("답은 1~4000자로 넣어 주세요.");
+        // 언어별 문구 {"en": {"question", "answer"}} — 둘 다 비면 그 언어를 뺀다.
+        const localized: Record<string, { question: string; answer: string }> = {};
+        const raw = params.localized;
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (!/^[a-z]{2}$/.test(k)) throw new Error("언어 코드는 영문 소문자 두 글자로 넣어 주세요.");
+            const q = typeof (v as Record<string, unknown>)?.question === "string" ? ((v as Record<string, string>).question).trim().slice(0, 200) : "";
+            const a = typeof (v as Record<string, unknown>)?.answer === "string" ? ((v as Record<string, string>).answer).trim().slice(0, 4000) : "";
+            // 한쪽만 있으면 그 언어 질문에 한국어 답이 붙는다 — 둘 다 넣거나 둘 다 비운다.
+            if (!!q !== !!a) throw new Error("영어 질문과 영어 답은 함께 넣거나 함께 비워 주세요.");
+            if (q && a) localized[k] = { question: q, answer: a };
+          }
+        }
+        const { error } = await db.rpc("ts_admin_support_faq_upsert", {
+          p_id: params.id == null ? null : intInRange(params, "id", "질문", 1, 2147483647),
+          p_category: params.categoryId == null ? null : intInRange(params, "categoryId", "분류", 1, 2147483647),
+          p_question: question,
+          p_answer: answer,
+          p_localized: localized,
+          p_sort_order: params.sortOrder == null ? null : intInRange(params, "sortOrder", "순서", 0, 10000),
+          p_is_active: typeof params.isActive === "boolean" ? params.isActive : null,
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      // 켜기·끄기만 바꾼다 — 화면이 불러 둔 옛 질문·답을 함께 보내면 다른 운영자의 수정을 덮는다.
+      case "supportFaqs.setActive": {
+        if (typeof params.isActive !== "boolean") throw new Error("사용 여부가 없습니다.");
+        const { error } = await db.rpc("ts_admin_support_faq_set_active", {
+          p_id: intInRange(params, "id", "질문", 1, 2147483647), p_is_active: params.isActive, p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "supportCategories.setActive": {
+        if (typeof params.isActive !== "boolean") throw new Error("사용 여부가 없습니다.");
+        const { error } = await db.rpc("ts_admin_support_category_set_active", {
+          p_id: intInRange(params, "id", "분류", 1, 2147483647), p_is_active: params.isActive,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "supportFaqs.reorder": {
+        const ids = params.ids;
+        if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every((v) => Number.isInteger(v) && (v as number) > 0)) {
+          throw new Error("순서 목록이 올바르지 않습니다.");
+        }
+        const { error } = await db.rpc("ts_admin_support_faq_reorder", { p_ids: ids, p_by: email });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "supportFaqs.delete": {
+        const { error } = await db.rpc("ts_admin_support_faq_delete", { p_id: intInRange(params, "id", "질문", 1, 2147483647) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "supportCategories.list": {
         const { data, error } = await db.rpc("ts_admin_support_categories");
         if (error) throw new Error(error.message);
@@ -1849,6 +1922,9 @@ const SERVER_ERRORS: Record<string, string> = {
   support_category_name_invalid: "분류 이름은 1~40자로 넣어 주세요.",
   support_category_name_taken: "같은 이름의 분류가 이미 있습니다.",
   support_category_not_found: "분류를 찾을 수 없습니다.",
+  support_faq_question_invalid: "질문은 1~200자로 넣어 주세요.",
+  support_faq_answer_invalid: "답은 1~4000자로 넣어 주세요.",
+  support_faq_not_found: "질문을 찾을 수 없습니다.",
   server_display_name_empty: "서버 이름을 입력하세요.",
   server_code_invalid: "서버 코드는 영문·숫자·_·- 로 32자 이내여야 합니다.",
   server_code_taken: "이미 있는 서버 코드입니다.",

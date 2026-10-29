@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { InfoList } from '../components/ui/InfoList'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
@@ -241,11 +242,12 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
         description="게임이 이 방식에 맞는 결과를 보내지 않으면, 지금부터 이 코드의 모든 판이 무효가 되고 보상이 나가지 않습니다."
       >
         {cfg && (
-          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
             <div className="font-mono text-neutral-800">{code}</div>
-            <div className="text-xs text-neutral-500 mt-1">
-              {MODE_LABEL[cfg.mode]} → {MODE_LABEL[mode]} · 상대 신고를 기다리는 판 {pendingCount.toLocaleString()}건
-            </div>
+            <InfoList items={[
+              { label: '확인 방식', value: `${MODE_LABEL[cfg.mode]} → ${MODE_LABEL[mode]}` },
+              { label: '상대 신고를 기다리는 판', value: `${pendingCount.toLocaleString()}건` },
+            ]} />
           </div>
         )}
       </ConfirmDialog>
@@ -439,9 +441,12 @@ export default function MatchRewards({
         description="이 게임 코드로 오는 대전 신고가 지금부터 모두 실패합니다. 이미 쌓인 기록은 남습니다."
       >
         {delRow && (
-          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
             <div className="font-mono text-neutral-800">{delRow.game_code}</div>
-            <div className="text-xs text-neutral-500 mt-1">기록 {delRow.record_count.toLocaleString()}건 · 플레이어 {delRow.player_count.toLocaleString()}명</div>
+            <InfoList items={[
+              { label: '기록', value: `${delRow.record_count.toLocaleString()}건` },
+              { label: '플레이어', value: `${delRow.player_count.toLocaleString()}명` },
+            ]} />
           </div>
         )}
       </ConfirmDialog>

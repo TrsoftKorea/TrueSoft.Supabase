@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
 import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
+import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -201,11 +202,12 @@ export default function MailSchedules({
         description="이미 발송된 우편은 그대로 남고, 앞으로 이 예약은 실행되지 않습니다."
       >
         {delTarget && (
-          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
             <div className="text-neutral-800">{delTarget.title}</div>
-            <div className="text-xs text-neutral-500 mt-1">
-              {delTarget.schedule_type === 'repeat' ? `반복 발송 · ${repeatText(delTarget)}` : SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type} · 다음 실행 {formatDateTime(delTarget.next_run_at)}
-            </div>
+            <InfoList items={[
+              { label: '발송 방식', value: delTarget.schedule_type === 'repeat' ? `반복 · ${repeatText(delTarget)}` : SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type },
+              { label: '다음 실행', value: formatDateTime(delTarget.next_run_at) },
+            ]} />
           </div>
         )}
       </ConfirmDialog>

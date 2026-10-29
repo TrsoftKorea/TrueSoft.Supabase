@@ -7,6 +7,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { useServerName } from '../../lib/serverNames'
 import { platformLabel } from '../../lib/platforms'
 import { CardHeader, WhiteCard } from '../../components/ui/Card'
+import { EditDialog } from '../../components/ui/EditDialog'
 import { areaCls, inputCls, inputCompactCls } from '../../components/ui/Input'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -15,6 +16,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
 import { Switch } from '../../components/ui/Switch'
 import { Tabs } from '../../components/ui/Tabs'
+import { InfoList } from '../../components/ui/InfoList'
 import UserDataTab from './UserDataTab'
 import FriendsTab from './FriendsTab'
 import MatchRecordsTab from './MatchRecordsTab'
@@ -95,6 +97,7 @@ export default function PlayerDetail({
   const [applying, setApplying] = useState(false)
   const [askUnban, setAskUnban] = useState(false)
   const [askBan, setAskBan] = useState(false)
+  const [banFormOpen, setBanFormOpen] = useState(false)
   const [unbanLoading, setUnbanLoading] = useState(false)
   const [error, setError] = useState('')
   const [banInputError, setBanInputError] = useState('')
@@ -182,6 +185,7 @@ export default function PlayerDetail({
       return
     }
     setDialogError('')
+    setBanFormOpen(false)
     setAskBan(true)
   }
 
@@ -231,7 +235,7 @@ export default function PlayerDetail({
   return (
     <div className="space-y-4">
       <PageHeader
-        title={shownName ? `플레이어 · ${shownName}` : '플레이어'}
+        title={shownName || '(이름 없음)'}
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -294,15 +298,20 @@ export default function PlayerDetail({
         <WhiteCard className="p-10 text-center">
           <Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" />
         </WhiteCard>
+      ) : !profile ? (
+        <WhiteCard className="p-5">
+          <p className="text-sm text-red-600">
+            프로필을 불러오지 못했습니다.{' '}
+            <button onClick={() => void reloadProfile()} className="underline hover:text-red-700">다시 불러오기</button>
+          </p>
+        </WhiteCard>
       ) : (
       <>
       <WhiteCard className="p-5 space-y-3">
-        <CardHeader title="기본 정보" description="계정 · 결제 · 접속 기록 요약" />
-        <InfoRow label="ID">
-          <span className="font-mono text-xs">{accountId}</span>
-        </InfoRow>
-        <InfoRow label="닉네임">
-          {editingName ? (
+        <CardHeader title="기본 정보" description="계정과 접속 기록" />
+        {/* 이름 위·값 아래 격자 — 한 줄 양 끝에 두면 넓은 화면에서 이름과 값이 멀어 짝이 안 보인다(2026-10-29 사용자 지적). */}
+        <InfoList className="gap-y-4" items={[
+          { label: '닉네임', value: editingName ? (
             <div className="flex items-center gap-2">
               <input
                 value={nameDraft}
@@ -312,7 +321,7 @@ export default function PlayerDetail({
                   else if (e.key === 'Escape') cancelNameEdit()
                 }}
                 autoFocus
-                className={inputCompactCls}
+                className={`${inputCompactCls} w-full min-w-0`}
               />
               {/* 줄 안 편집 확인·취소 — 아이템 카탈로그·우편 분류와 같은 꼴 */}
               <button
@@ -346,113 +355,111 @@ export default function PlayerDetail({
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             </div>
-          )}
-        </InfoRow>
-        <InfoRow label="서버">{serverName(profile?.server_code)}</InfoRow>
-        <InfoRow label="탈퇴">{withdrawalText(profile?.withdrawn_at ?? null)}</InfoRow>
-        <InfoRow label="가입 플랫폼">{!profile ? '-' : platformLabel(profile.signup_platform) || '알 수 없음'}</InfoRow>
-        <InfoRow label="최근 플랫폼">{platformLabel(profile?.platform) || '-'}</InfoRow>
-        <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>
-        <InfoRow label="총 결제금액">{profile ? formatKRW(profile.total_paid_krw ?? null) : '-'}</InfoRow>
-        <InfoRow label="환불">
-          {!profile
-            ? '-'
-            : profile.refund_count
-              ? <span className="text-red-600">{profile.refund_count}건 · {formatKRW(profile.refund_krw ?? null)}</span>
-              : '없음'}
-        </InfoRow>
-        <InfoRow label="마지막 로그인">{formatDateTime(profile?.last_sign_in_at ?? null)}</InfoRow>
-        <InfoRow label="마지막 활동">{formatDateTime(profile?.last_activity_at ?? null)}</InfoRow>
+          ) },
+          { label: 'ID', value: <span className="font-mono text-xs break-all">{accountId}</span> },
+          { label: '서버', value: serverName(profile.server_code) },
+          { label: '탈퇴', value: withdrawalText(profile.withdrawn_at) },
+          { label: '가입 플랫폼', value: platformLabel(profile.signup_platform) || '알 수 없음' },
+          { label: '최근 플랫폼', value: platformLabel(profile.platform) || null },
+          { label: '국가', value: profile.country_code },
+          { label: '마지막 로그인', value: profile.last_sign_in_at ? formatDateTime(profile.last_sign_in_at) : null },
+          { label: '마지막 활동', value: profile.last_activity_at ? formatDateTime(profile.last_activity_at) : null },
+        ]} />
       </WhiteCard>
 
-      <WhiteCard className="relative overflow-hidden p-5 space-y-3">
+      <WhiteCard className="p-5 space-y-3">
+        <CardHeader title="결제 정보" description="누적 결제와 환불" />
+        <InfoList items={[
+          { label: '총 결제금액', value: formatKRW(profile.total_paid_krw ?? null) },
+          { label: '환불 건수', value: `${profile.refund_count ?? 0}건`, ...(profile.refund_count ? { tone: 'danger' as const } : {}) },
+          { label: '환불 금액', value: formatKRW(profile.refund_krw ?? 0), ...(profile.refund_count ? { tone: 'danger' as const } : {}) },
+        ]} />
+      </WhiteCard>
+      </>
+      )}
+
+      <WhiteCard className="p-5 space-y-3">
         <CardHeader
           title="차단 정보"
           description="게임 접속 차단 여부와 차단 메시지"
           actions={!ban ? null : ban.isBanned ? (
             <Button variant="primary" onClick={() => { setDialogError(''); setAskUnban(true) }} disabled={applying || unbanLoading}>
-              {applying || unbanLoading ? '처리 중…' : '차단 해제'}
+              차단 해제
             </Button>
           ) : (
-            <Button variant="primary" onClick={requestBan} disabled={applying}>
-              {applying ? '처리 중…' : '차단'}
+            <Button variant="primary" onClick={() => { setBanInputError(''); setBanFormOpen(true) }} disabled={applying}>
+              차단
             </Button>
           )}
         />
-
-        <div className="text-sm">
-          현재 상태:{' '}
-          {banLoading && !ban ? (
-            <span className="text-neutral-400">확인 중…</span>
-          ) : banFailed || !ban ? (
-            <span className="text-red-600">
-              차단 상태를 확인하지 못했습니다.{' '}
-              <button onClick={() => void reloadBan()} className="underline hover:text-red-700">다시 확인</button>
-            </span>
-          ) : ban.isBanned ? (
-            <span className="text-red-600 font-medium">
-              {isPermanent(ban.bannedUntil) ? '영구 차단' : ban.bannedUntil ? `${formatBanUntil(ban.bannedUntil)}까지 차단` : '차단'}
-            </span>
-          ) : (
-            <span className="text-emerald-600 font-medium">정상</span>
-          )}
-        </div>
-
-        {ban?.isBanned && (
-          <div className="text-sm text-neutral-700 whitespace-pre-wrap">
-            차단 메시지: {ban.banMessage?.trim() ? ban.banMessage : <span className="text-neutral-400">없음</span>}
-          </div>
-        )}
-
-        {ban && !ban.isBanned && (
-          <>
-            <div className="flex flex-wrap items-end gap-6">
-              <div className="w-64">
-                <label className="block text-xs text-neutral-500 mb-1">종료 기한</label>
-                <input
-                  type="datetime-local"
-                  value={banUntilInput}
-                  min={toDatetimeLocal(new Date().toISOString())}
-                  max="9999-12-31T23:59"
-                  onChange={(e) => { setBanUntilInput(e.target.value); setBanInputError('') }}
-                  disabled={permanent}
-                  className={inputCls + ' w-full disabled:bg-neutral-100 disabled:text-neutral-400'}
-                />
-              </div>
-              <div className="flex items-center gap-2 pb-1.5">
-                <span className="text-xs text-neutral-500">영구 차단</span>
-                <Switch value={permanent} onChange={(v) => { setPermanent(v); setBanInputError('') }} />
-              </div>
-            </div>
-            {banInputError && <p className="text-xs text-red-600">{banInputError}</p>}
-
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">차단 메시지</label>
-              <textarea
-                value={banMessage}
-                onChange={(e) => setBanMessage(e.target.value)}
-                rows={4}
-                className={areaCls + ' w-full'}
-              />
-              <p className="mt-1 text-xs text-neutral-400">차단된 플레이어가 게임에서 보게 됩니다.</p>
-            </div>
-          </>
-        )}
-
-        {applying && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px] transition-opacity">
-            <div className="flex items-center gap-2 text-sm font-medium text-neutral-600">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              적용 중…
-            </div>
-          </div>
+        {banFailed || (!banLoading && !ban) ? (
+          <p className="text-sm text-red-600">
+            차단 상태를 확인하지 못했습니다.{' '}
+            <button onClick={() => void reloadBan()} className="underline hover:text-red-700">다시 확인</button>
+          </p>
+        ) : (
+          <InfoList items={!ban ? [
+            { label: '상태', value: '…' },
+            { label: '종료 기한', value: '…' },
+            { label: '차단 메시지', value: '…', wide: true },
+          ] : ban.isBanned ? [
+            { label: '상태', value: isPermanent(ban.bannedUntil) ? '영구 차단' : '차단', tone: 'danger' },
+            { label: '종료 기한', value: ban.bannedUntil && !isPermanent(ban.bannedUntil) ? formatBanUntil(ban.bannedUntil) : null },
+            { label: '차단 메시지', value: ban.banMessage?.trim() ? <span className="whitespace-pre-wrap">{ban.banMessage}</span> : null, wide: true },
+          ] : [
+            // 정상이면 기한·메시지는 비어 있는 게 아니라 해당이 없다 — 칸을 남기지 않는다.
+            { label: '상태', value: <span className="text-emerald-600 font-medium">정상</span> },
+          ]} />
         )}
       </WhiteCard>
       </>
       )}
-      </>
+
+      {banFormOpen && (
+        <EditDialog
+          title="플레이어 차단"
+          description={shownName || accountId.slice(0, 8)}
+          onClose={() => setBanFormOpen(false)}
+          footer={(
+            <>
+              <Button variant="outline" onClick={() => setBanFormOpen(false)}>취소</Button>
+              <Button variant="primary" onClick={requestBan}>차단</Button>
+            </>
+          )}
+        >
+          <div className="flex flex-wrap items-end gap-6">
+            <div className="w-64">
+              <label className="block text-xs text-neutral-500 mb-1">종료 기한</label>
+              <input
+                type="datetime-local"
+                value={banUntilInput}
+                min={toDatetimeLocal(new Date().toISOString())}
+                max="9999-12-31T23:59"
+                onChange={(e) => { setBanUntilInput(e.target.value); setBanInputError('') }}
+                disabled={permanent}
+                className={inputCls + ' w-full disabled:bg-neutral-100 disabled:text-neutral-400'}
+              />
+            </div>
+            <div className="flex items-center gap-2 pb-1.5">
+              <span className="text-xs text-neutral-500">영구 차단</span>
+              <Switch value={permanent} onChange={(v) => { setPermanent(v); setBanInputError('') }} />
+            </div>
+          </div>
+          {banInputError && <p className="text-xs text-red-600">{banInputError}</p>}
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">차단 메시지</label>
+            <textarea
+              value={banMessage}
+              onChange={(e) => setBanMessage(e.target.value)}
+              rows={4}
+              className={areaCls + ' w-full'}
+            />
+            <p className="mt-1 text-xs text-neutral-400">차단된 플레이어가 게임에서 보게 됩니다.</p>
+          </div>
+        </EditDialog>
       )}
 
+      {/* 입력 창 위에 겹치지 않게 확인 창을 띄울 때 입력 창을 닫고, 취소하면 넣던 값 그대로 다시 연다. */}
       <ConfirmDialog
         open={askBan}
         title="플레이어 차단"
@@ -461,7 +468,7 @@ export default function PlayerDetail({
         busy={applying}
         error={askBan ? dialogError : ''}
         onConfirm={() => void handleBan()}
-        onCancel={() => setAskBan(false)}
+        onCancel={() => { setAskBan(false); setBanFormOpen(true) }}
         description="차단하면 바로 접속이 끊기고 기한까지 다시 들어올 수 없습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
@@ -493,17 +500,8 @@ export default function PlayerDetail({
 }
 
 function withdrawalText(withdrawnAt: string | null): ReactNode {
-  if (!withdrawnAt) return '-'
+  if (!withdrawnAt) return null
   return new Date(withdrawnAt).getTime() > Date.now()
     ? <span className="text-red-600 font-medium">탈퇴 예약 · {formatDateTime(withdrawnAt)}에 삭제</span>
     : <span className="text-red-600 font-medium">탈퇴 처리 대기 · 곧 삭제</span>
-}
-
-function InfoRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between border-b border-neutral-100 pb-2 last:border-b-0 last:pb-0">
-      <span className="text-xs text-neutral-500">{label}</span>
-      <span className="text-sm text-neutral-800">{children}</span>
-    </div>
-  )
 }

@@ -399,7 +399,7 @@ export default function ScoresTab({
                   failed={scoresFailed}
                   empty={rows.length === 0}
                   colSpan={colSpan}
-                  emptyText={selectedCode ? '기록이 없습니다.' : '리더보드를 선택하세요.'}
+                  emptyText={selectedCode ? '기록이 없습니다.' : '선택한 리더보드가 없습니다.'}
                 />
               ) : (
                 rows.map((r) => (

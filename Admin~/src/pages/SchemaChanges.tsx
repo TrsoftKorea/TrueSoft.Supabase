@@ -8,6 +8,7 @@ import { pgTypeLabel as typeText } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
 import { inputCls } from '../components/ui/Input'
 import { WhiteCard } from '../components/ui/Card'
+import { InfoList } from '../components/ui/InfoList'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -524,9 +525,11 @@ export default function SchemaChanges({
             <div className="text-neutral-800">
               버전 #{revertTarget.id}{revertTarget.label ? ` · ${revertTarget.label}` : ''}
             </div>
-            <div className="text-xs text-neutral-500 mt-1">
-              {formatDateTime(revertTarget.published_at)}{revertTarget.operator ? ` · ${revertTarget.operator}` : ''} · 변경 {formatCount(revertTarget.op_count)}건
-            </div>
+            <InfoList className="mt-2" items={[
+              { label: '게시 시각', value: formatDateTime(revertTarget.published_at) },
+              { label: '게시한 사람', value: revertTarget.operator || null },
+              { label: '변경', value: `${formatCount(revertTarget.op_count)}건` },
+            ]} />
             {(revertTarget.ops ?? []).length > 0 && (
               <ul className="mt-2 space-y-0.5 text-xs text-neutral-700 max-h-48 overflow-auto">
                 {revertTarget.ops.map((o, i) => (

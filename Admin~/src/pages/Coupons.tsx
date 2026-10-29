@@ -128,19 +128,21 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
                 <tr>
                   <th className="text-left px-4 py-2 font-medium">코드</th>
                   <th className="text-left px-4 py-2 font-medium">상태</th>
+                  <th className="text-left px-4 py-2 font-medium">사용 시각</th>
+                  <th className="text-left px-4 py-2 font-medium">유저 ID</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={`${r.code}-${i}`} className="border-t border-neutral-100">
                     <td className="px-4 py-2 font-mono">{r.code}</td>
-                    <td className="px-4 py-2">
-                      {r.redeemed_at ? (
-                        <span className="text-xs text-neutral-500">사용됨 · {formatDateTime(r.redeemed_at)}{r.user_id ? ` · 유저 ID ${r.user_id}` : ''}</span>
-                      ) : (
-                        <span className="text-xs text-emerald-600">미사용</span>
-                      )}
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {r.redeemed_at
+                        ? <span className="text-xs text-neutral-500">사용됨</span>
+                        : <span className="text-xs text-emerald-600">미사용</span>}
                     </td>
+                    <td className="px-4 py-2 text-xs text-neutral-600 whitespace-nowrap">{r.redeemed_at ? formatDateTime(r.redeemed_at) : ''}</td>
+                    <td className="px-4 py-2 text-xs text-neutral-600 font-mono">{r.user_id ?? ''}</td>
                   </tr>
                 ))}
               </tbody>

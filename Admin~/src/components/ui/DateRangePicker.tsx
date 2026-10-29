@@ -159,7 +159,7 @@ export function DateRangePicker({ start, end, onApply }: Props) {
   const label = start && end ? `${fmtSlash(start)} - ${fmtSlash(end)}` : '전체 기간'
   const footerText = draftStart
     ? `${fmtSlash(draftStart)} - ${fmtSlash(draftEnd ?? draftStart)}`
-    : '기간을 선택하세요'
+    : '선택한 기간 없음'
 
   return (
     <div ref={ref} className="relative">

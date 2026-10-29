@@ -112,7 +112,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
   if (type === 'bool') {
     return (
       <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputCls} w-full`}>
-        {value === '' && <option value="" disabled>선택하세요</option>}
+        {value === '' && <option value="" disabled>선택 안 함</option>}
         <option value="true">참</option>
         <option value="false">거짓</option>
       </select>

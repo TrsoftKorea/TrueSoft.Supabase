@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronLeft, ImagePlus, Loader2, MessageSquarePlus, Send, X } from 'lucide-react'
-import { ApiError, CLOSE_URL, type Attachment, type Category, type Look, type Status, type SupportApi, type Ticket, type TicketSummary } from './api'
+import { ChevronDown, ChevronLeft, ImagePlus, Loader2, MessageSquarePlus, Send, X } from 'lucide-react'
+import { ApiError, CLOSE_URL, type Attachment, type Category, type Faq, type Look, type Status, type SupportApi, type Ticket, type TicketSummary } from './api'
 import { formatTime, pickLang, reasonText, t, type Lang } from './i18n'
 import { shrinkImage } from './image'
 
@@ -27,6 +27,15 @@ export function App({ api }: { api: SupportApi | null }) {
   const [ready, setReady] = useState(false)
   const [view, setView] = useState<View>({ kind: 'list' })
   const [notice, setNotice] = useState<string | null>(null)
+  const [faqs, setFaqs] = useState<Faq[]>([])
+
+  // FAQ 는 공개 정보라 본인 확인과 따로 받는다 — 접속이 실패한 화면에서도 보이게.
+  // 언어는 기기 언어 그대로 보낸다(일본어 등은 서버가 영어로 대신한다).
+  useEffect(() => {
+    if (!api) return
+    const raw = (new URLSearchParams(location.search).get('lang') ?? navigator.language ?? 'en').slice(0, 2).toLowerCase()
+    api.faqs(raw).then(setFaqs).catch(() => setFaqs([]))
+  }, [api])
 
   useEffect(() => {
     if (!api) return
@@ -70,9 +79,12 @@ export function App({ api }: { api: SupportApi | null }) {
 
       <main className="flex-1 px-4 py-4 space-y-4">
         {fatal ? (
-          <p className="py-16 text-center text-sm text-neutral-600">
-            {fatal === 'support_session_missing' ? t(lang, 'sessionMissing') : reasonText(lang, fatal)}
-          </p>
+          <>
+            <p className="py-12 text-center text-sm text-neutral-600">
+              {fatal === 'support_session_missing' ? t(lang, 'sessionMissing') : reasonText(lang, fatal)}
+            </p>
+            <FaqList lang={lang} title={t(lang, 'faqTitle')} items={faqs} />
+          </>
         ) : !ready || !api ? (
           <Spinner label={t(lang, 'loading')} />
         ) : (
@@ -87,11 +99,11 @@ export function App({ api }: { api: SupportApi | null }) {
               </div>
             )}
             {view.kind === 'list' && (
-              <ListView api={api} lang={lang} onOpen={(id) => { setNotice(null); setView({ kind: 'ticket', id }) }}
+              <ListView api={api} lang={lang} faqs={faqs} onOpen={(id) => { setNotice(null); setView({ kind: 'ticket', id }) }}
                 onNew={() => { setNotice(null); setView({ kind: 'new' }) }} onError={fail} />
             )}
             {view.kind === 'new' && (
-              <NewView api={api} lang={lang} onError={fail}
+              <NewView api={api} lang={lang} faqs={faqs} onError={fail}
                 onDone={(id) => { setNotice(t(lang, 'sent')); setView({ kind: 'ticket', id }) }} />
             )}
             {view.kind === 'ticket' && <TicketView api={api} lang={lang} id={view.id} onError={fail} />}
@@ -129,8 +141,33 @@ function StatusBadge({ lang, status }: { lang: Lang; status: Status }) {
   )
 }
 
-function ListView({ api, lang, onOpen, onNew, onError }: {
-  api: SupportApi; lang: Lang; onOpen: (id: string) => void; onNew: () => void; onError: (e: unknown) => void
+/** 질문을 누르면 답이 펼쳐지는 목록. 항목이 없으면 아무것도 그리지 않는다. */
+function FaqList({ lang, title, items }: { lang: Lang; title: string; items: Faq[] }) {
+  const [open, setOpen] = useState<number | null>(null)
+  if (items.length === 0) return null
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold text-neutral-700">{title}</h2>
+      <ul className="rounded-lg border border-neutral-200 bg-white divide-y divide-neutral-200">
+        {items.map((f) => (
+          <li key={f.id}>
+            <button type="button" aria-expanded={open === f.id} onClick={() => setOpen(open === f.id ? null : f.id)}
+              className="w-full flex items-center gap-2 px-3 py-3 text-left text-sm text-neutral-800">
+              <span className="flex-1 break-words">{f.question}</span>
+              <ChevronDown className={`w-4 h-4 shrink-0 text-neutral-400 transition-transform ${open === f.id ? 'rotate-180' : ''}`} />
+            </button>
+            {open === f.id && (
+              <p className="px-3 pb-3 text-sm text-neutral-600 whitespace-pre-wrap break-words" lang={lang}>{f.answer}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ListView({ api, lang, faqs, onOpen, onNew, onError }: {
+  api: SupportApi; lang: Lang; faqs: Faq[]; onOpen: (id: string) => void; onNew: () => void; onError: (e: unknown) => void
 }) {
   const [rows, setRows] = useState<TicketSummary[] | null>(null)
 
@@ -138,8 +175,13 @@ function ListView({ api, lang, onOpen, onNew, onError }: {
     api.tickets(lang).then(setRows).catch((e: unknown) => { setRows([]); onError(e) })
   }, [api, lang, onError])
 
+  // 새 답변이 있으면 내 문의를 맨 위에 — 답을 보러 들어온 사람이 질문 목록을 지나 내려가지 않게.
+  const unreadFirst = !!rows?.some((r) => r.unread)
+  const faqList = <FaqList lang={lang} title={t(lang, 'faqTitle')} items={faqs} />
+
   return (
     <div className="space-y-3">
+      {!unreadFirst && faqList}
       <AccentButton className="w-full" onClick={onNew}>
         <MessageSquarePlus className="w-4 h-4" />{t(lang, 'newTicket')}
       </AccentButton>
@@ -170,6 +212,7 @@ function ListView({ api, lang, onOpen, onNew, onError }: {
           ))}
         </ul>
       )}
+      {unreadFirst && <div className="pt-3">{faqList}</div>}
     </div>
   )
 }
@@ -226,8 +269,8 @@ function AttachPicker({ api, lang, items, onChange, onError }: {
   )
 }
 
-function NewView({ api, lang, onDone, onError }: {
-  api: SupportApi; lang: Lang; onDone: (id: string) => void; onError: (e: unknown) => void
+function NewView({ api, lang, faqs, onDone, onError }: {
+  api: SupportApi; lang: Lang; faqs: Faq[]; onDone: (id: string) => void; onError: (e: unknown) => void
 }) {
   const [categories, setCategories] = useState<Category[] | null>(null)
   const [categoryId, setCategoryId] = useState<number | null>(null)
@@ -270,6 +313,9 @@ function NewView({ api, lang, onDone, onError }: {
           </div>
         )}
       </section>
+      {/* 고른 분류의 FAQ 를 먼저 보인다 — 답이 거기 있으면 문의할 필요가 없다. */}
+      <FaqList key={categoryId ?? 0} lang={lang} title={t(lang, 'faqForCategory')}
+        items={categoryId == null ? [] : faqs.filter((f) => f.category_id === categoryId)} />
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-neutral-700">{t(lang, 'content')}</h2>
         <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} aria-label={t(lang, 'content')}

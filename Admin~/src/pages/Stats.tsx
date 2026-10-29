@@ -3,6 +3,7 @@ import { RefreshCw, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
+import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
@@ -149,11 +150,16 @@ function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
 
   return (
     <WhiteCard>
-      <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-neutral-800">국가별 매출</span>
-        <span className="text-xs text-neutral-500">
-          합계 {formatKRW(data.total_krw)} · {n(data.purchases)}건 · 결제자 {n(data.payers)}명 · 가입 국가 기준, 환불 제외
-        </span>
+      <div className="border-b border-neutral-100 px-5 py-3 space-y-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-sm font-medium text-neutral-800">국가별 매출</span>
+          <span className="text-xs text-neutral-500">가입 국가 기준, 환불 제외</span>
+        </div>
+        <InfoList items={[
+          { label: '합계', value: formatKRW(data.total_krw) },
+          { label: '결제', value: `${n(data.purchases)}건` },
+          { label: '결제자', value: `${n(data.payers)}명` },
+        ]} />
       </div>
       {!!data.unknown_amount && (
         <p className="border-b border-neutral-100 px-5 py-2 text-xs text-amber-700">

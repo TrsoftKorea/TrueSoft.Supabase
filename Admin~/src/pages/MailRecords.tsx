@@ -16,6 +16,7 @@ import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { InfoList } from '../components/ui/InfoList'
 
 type MailRow = {
   id: string
@@ -97,6 +98,7 @@ export default function MailRecords({
   const [selectedBatch, setSelectedBatch] = useState<{ id: string; title: string } | null>(null)
   const [detail, setDetail] = useState<BatchDetail | null>(null)
   const [detailTick, setDetailTick] = useState(0)
+  const [detailFailed, setDetailFailed] = useState(false)
   const [undo, setUndo] = useState<'recall' | 'close' | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
   const [undoError, setUndoError] = useState('')
@@ -170,14 +172,18 @@ export default function MailRecords({
       setDetail(null)
       return
     }
+    setDetailFailed(false)
     void (async () => {
       try {
         setDetail(await callAdmin<BatchDetail>(target, 'mails.getBatchDetail', { batchId: selectedBatch.id }))
       } catch (e: unknown) {
+        setDetailFailed(true)
         report(e, '발송 단위 상세를 불러오지 못했습니다.')
       }
     })()
   }, [target, selectedBatch, report, detailTick])
+
+  const detailPending = detailFailed ? '불러오지 못함' : '…'
 
   const runUndo = async () => {
     if (!selectedBatch || !undo || undoBusy) return
@@ -309,14 +315,14 @@ export default function MailRecords({
       {tab === 'records' && (
         <>
           {selectedBatch && (
-            <div className="flex items-center gap-2 rounded-md bg-brand-soft border border-[#1677ff]/20 px-3 py-2 text-sm">
-              <span className="text-[#1677ff] font-medium truncate">발송: {selectedBatch.title}</span>
-              {detail?.stats && (
-                <span className="text-neutral-600 shrink-0">· 대상 {formatCount(detail.batch?.recipient_count ?? 0)}명 · 수령 {formatCount(detail.stats.claimed_count)} · 삭제 {formatCount(detail.stats.deleted_count)}</span>
-              )}
-              {detail?.batch.recalled_at && (
-                <span className="text-amber-700 shrink-0 whitespace-nowrap">· {formatCount(detail.batch.recalled_count)}통 거둠</span>
-              )}
+            <div className="flex items-center gap-4 rounded-md bg-brand-soft border border-[#1677ff]/20 px-3 py-2 text-sm">
+              <InfoList className="flex-1 min-w-0" items={[
+                { label: '발송', value: <span className="text-[#1677ff] font-medium">{selectedBatch.title}</span> },
+                { label: '대상', value: detail?.stats ? `${formatCount(detail.batch?.recipient_count ?? 0)}명` : detailPending },
+                { label: '수령', value: detail?.stats ? formatCount(detail.stats.claimed_count) : detailPending },
+                { label: '삭제', value: detail?.stats ? formatCount(detail.stats.deleted_count) : detailPending },
+                { label: '거둔 우편', value: !detail ? detailPending : detail.batch.recalled_at ? `${formatCount(detail.batch.recalled_count)}통` : null },
+              ]} />
               <div className="ml-auto flex items-center gap-1.5 shrink-0">
                 {stillOpen && (
                   <Button variant="outline" size="compact" onClick={() => { setUndoError(''); setUndo('close') }}>
@@ -347,10 +353,13 @@ export default function MailRecords({
               ? '아직 받지 않은 플레이어의 우편함에서 이 우편이 사라집니다. 이미 받은 플레이어의 우편과 아이템은 그대로입니다. 새로 들어온 플레이어에게도 더 가지 않습니다.'
               : '이미 받은 플레이어의 우편은 그대로 둡니다.'}
           >
-            <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
+            <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
               <div className="text-neutral-800">{selectedBatch?.title}</div>
               {undo === 'recall' && detail && (
-                <div className="text-xs text-neutral-500">거둘 우편 <span className="font-semibold text-red-600">{formatCount(detail.stats.unclaimed_count)}통</span> · 이미 받음 {formatCount(detail.stats.claimed_count)}통</div>
+                <InfoList items={[
+                  { label: '거둘 우편', value: `${formatCount(detail.stats.unclaimed_count)}통`, tone: 'danger' },
+                  { label: '이미 받음', value: `${formatCount(detail.stats.claimed_count)}통` },
+                ]} />
               )}
             </div>
           </ConfirmDialog>

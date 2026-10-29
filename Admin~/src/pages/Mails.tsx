@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
+import { InfoList } from '../components/ui/InfoList'
 import { Button } from '../components/ui/Button'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -486,11 +487,13 @@ export default function Mails({
           <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
             대상 게임: {look.name(target)}
           </div>
-          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-neutral-600">
-            <span className="font-medium text-neutral-800">{schedSummary}</span> · 대상 <span className="font-medium text-neutral-800">{targetSummary}</span> · 분류 <span className="font-medium text-neutral-800">{catLabel(category)}</span>
-            {items.length > 0 && <> · 보상 {items.length}종</>}
-            {localized && <> · 다국어 {Object.keys(localized).length}개</>}
-          </div>
+          <InfoList className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2.5" items={[
+            { label: '발송', value: schedSummary },
+            { label: '대상', value: targetSummary },
+            { label: '분류', value: catLabel(category) },
+            { label: '보상', value: items.length > 0 ? `${items.length}종` : null },
+            { label: '다국어', value: localized ? `${Object.keys(localized).length}개` : null },
+          ]} />
 
           <div className="flex items-center gap-3">
             <Button variant="primary" className="ml-auto" onClick={requestSubmit} disabled={!canSend || sending}>
@@ -511,15 +514,14 @@ export default function Mails({
         onCancel={() => setAskSend(false)}
         description="보낸 우편은 회수할 수 없습니다. 대상과 아이템을 다시 확인하세요."
       >
-        <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
+        <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
           <div className="text-neutral-800">{title || '제목 없음'}</div>
-          <div className="text-xs text-neutral-500">
-            {schedSummary} · 대상 <span className={mode === 'all' ? 'font-semibold text-red-600' : 'font-medium text-neutral-700'}>{targetSummary}</span>
-          </div>
-          <div className="text-xs text-neutral-500">
-            {items.length > 0 ? itemsText(items, catalog) : '첨부 아이템 없음'}
-          </div>
-          <div className="text-xs text-neutral-500">수령 기한 {formatCount(expiresDays)}일</div>
+          <InfoList items={[
+            { label: '발송', value: schedSummary },
+            { label: '대상', value: targetSummary, ...(mode === 'all' ? { tone: 'danger' as const } : {}) },
+            { label: '아이템', value: items.length > 0 ? itemsText(items, catalog) : '없음' },
+            { label: '수령 기한', value: `${formatCount(expiresDays)}일` },
+          ]} />
         </div>
       </ConfirmDialog>
     </div>
