@@ -16,8 +16,9 @@ import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
-import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
-import { LimitsForm, type LimitField } from './social/LimitsForm'
+import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
+import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { areaCls, inputCls } from '../components/ui/Input'
 
 type StoreKeyStatus = {
@@ -562,6 +563,117 @@ const LOBBY_FIELDS: LimitField[] = [
   },
 ]
 
+// 범위는 admin-api 와 install.sql request_limit_settings 의 check 와 같게 둔다.
+const REQUEST_LIMIT_TOGGLE: LimitToggle = {
+  param: 'enabled', field: 'enabled', label: '사용',
+  hint: '끄면 지금 제한 중인 계정도 함께 풀립니다.',
+}
+
+const REQUEST_LIMIT_FIELDS: LimitField[] = [
+  {
+    param: 'windowSeconds', field: 'window_seconds', min: 1, max: 600,
+    label: '기준 시간',
+    hint: '요청 수를 세는 시간. 초 단위로 1~600 사이.',
+  },
+  {
+    param: 'maxRequests', field: 'max_requests', min: 10, max: 10000,
+    label: '최대 요청 수',
+    hint: '기준 시간 안에 한 계정이 보낼 수 있는 요청 수. 넘으면 제한됩니다. 단순 조회는 세지 않습니다. 10~10000 사이.',
+  },
+  {
+    param: 'blockMinutes', field: 'block_minutes', min: 1, max: 1440,
+    label: '제한 시간',
+    hint: '기준을 넘은 계정의 요청을 모두 막는 시간. 분 단위로 1~1440 사이.',
+  },
+]
+
+type RequestLimitBlock = {
+  key: string; account_id: string | null; ip: string | null; display_name: string | null
+  hits: number; blocked_at: string; blocked_until: string
+}
+
+/** 지금 요청 제한에 걸려 있는 계정·IP. 정상 플레이어가 잘못 걸렸을 때 바로 풀 수 있게 둔다(2026-10-29 사용자 결정). */
+function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const [rows, setRows] = useState<RequestLimitBlock[] | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [unblocking, setUnblocking] = useState('')
+
+  const load = useCallback(async () => {
+    setFailed(false)
+    try {
+      setRows(await callAdmin<RequestLimitBlock[]>(target, 'requestLimit.list'))
+    } catch (e: unknown) {
+      setRows([])
+      setFailed(true)
+      report(e, '제한 중인 계정을 불러오지 못했습니다.')
+    }
+  }, [target, report])
+
+  useEffect(() => { setRows(null); void load() }, [load])
+
+  const unblock = async (key: string) => {
+    setUnblocking(key)
+    try {
+      await callAdmin(target, 'requestLimit.unblock', { key })
+      await load()
+    } catch (e: unknown) {
+      report(e, '제한을 풀지 못했습니다.')
+    } finally {
+      setUnblocking('')
+    }
+  }
+
+  return (
+    <WhiteCard>
+      <div className="p-5 pb-3">
+        <CardHeader
+          title="제한 중인 계정"
+          description="지금 요청이 막혀 있는 계정과 IP입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
+          actions={
+            <Button size="compact" onClick={() => void load()} disabled={rows === null}>
+              <RefreshCw className={`w-3.5 h-3.5 ${rows === null ? 'animate-spin' : ''}`} />
+              새로고침
+            </Button>
+          }
+        />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-neutral-500 text-xs">
+            <tr>
+              <th className="px-5 py-2 text-left font-medium whitespace-nowrap">대상</th>
+              <th className="px-3 py-2 text-right font-medium whitespace-nowrap">요청 수</th>
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 시작</th>
+              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 끝</th>
+              <th className="px-5 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows === null || rows.length === 0 ? (
+              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={5} emptyText="제한 중인 계정이 없습니다." />
+            ) : rows.map((r) => (
+              <tr key={r.key} className="border-t border-neutral-100">
+                <td className="px-5 py-2 text-neutral-800">
+                  {r.account_id ? (r.display_name || r.account_id) : `IP ${r.ip ?? ''}`}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{r.hits.toLocaleString('ko-KR')}</td>
+                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_at)}</td>
+                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_until)}</td>
+                <td className="px-5 py-2 text-right whitespace-nowrap">
+                  <Button size="sm" onClick={() => void unblock(r.key)} disabled={unblocking !== ''}>
+                    {unblocking === r.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlock className="w-3 h-3" />}
+                    해제
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </WhiteCard>
+  )
+}
+
 // 흰 글자가 얹히는 색이라 전부 흰색과 4.5:1 이상 대비가 나는 진한 색으로 골랐다.
 const CONSOLE_PALETTE: { name: string; hex: string }[] = [
   { name: '보라', hex: '#7c3aed' },
@@ -986,7 +1098,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   )
 }
 
-type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'console'
+type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'limit' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
@@ -994,6 +1106,7 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['mail', '우편'],
   ['friend', '친구'],
   ['lobby', '매치 로비'],
+  ['limit', '요청 제한'],
   ['console', '콘솔 표시'],
 ]
 
@@ -1006,6 +1119,8 @@ export default function Settings({
 }) {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('store')
+  // 요청 제한 설정을 저장하면 제한 목록을 다시 읽는다(끄면 목록이 빈다).
+  const [limitReload, setLimitReload] = useState(0)
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -1057,6 +1172,23 @@ export default function Settings({
           fields={LOBBY_FIELDS}
           confirmTitle="매치 로비 설정을 바꿀까요?"
         />
+      )}
+      {tab === 'limit' && (
+        <div className="space-y-4">
+          <LimitsForm
+            target={target}
+            report={report}
+            title="요청 제한"
+            description="짧은 시간에 요청을 지나치게 많이 보내는 계정을 잠시 막습니다."
+            getAction="requestLimit.settingsGet"
+            updateAction="requestLimit.settingsUpdate"
+            fields={REQUEST_LIMIT_FIELDS}
+            toggle={REQUEST_LIMIT_TOGGLE}
+            confirmTitle="요청 제한 설정을 바꿀까요?"
+            onSaved={() => setLimitReload((n) => n + 1)}
+          />
+          <RequestLimitBlocksCard key={limitReload} target={target} report={report} />
+        </div>
       )}
     </div>
   )

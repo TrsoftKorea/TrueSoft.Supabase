@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { inputCls } from '../../components/ui/Input'
+import { Switch } from '../../components/ui/Switch'
 
 /** 제한값 한 칸. min·max 는 서버(admin-api·RPC)가 막는 범위와 같게 둔다. */
 export type LimitField = {
@@ -20,8 +21,16 @@ export type LimitField = {
   max: number
 }
 
+/** 제한 전체를 켜고 끄는 스위치(요청 제한처럼 기본으로 꺼 두는 제한). 저장할 때 다른 칸과 함께 보낸다. */
+export type LimitToggle = {
+  param: string
+  field: string
+  label: string
+  hint: string
+}
+
 /** 제한값 조회 응답. 값 칸은 제한마다 다르고 아래 둘은 공통이다. */
-export type LimitsResponse = Record<string, number | string | null> & {
+export type LimitsResponse = Record<string, number | string | boolean | null> & {
   updated_at?: string | null
   updated_by?: string | null
 }
@@ -40,7 +49,9 @@ export function LimitsForm({
   getAction,
   updateAction,
   fields,
+  toggle,
   confirmTitle = '제한값을 바꿀까요?',
+  onSaved,
 }: {
   target: ProjectTarget
   report: (e: unknown, fallback: string) => void
@@ -49,10 +60,14 @@ export function LimitsForm({
   getAction: string
   updateAction: string
   fields: LimitField[]
+  toggle?: LimitToggle
   confirmTitle?: string
+  /** 저장이 끝난 뒤 — 같은 화면의 다른 카드가 바뀐 값을 다시 읽어야 할 때(요청 제한을 끄면 제한 목록이 빈다). */
+  onSaved?: () => void
 }) {
   const [current, setCurrent] = useState<LimitsResponse | null>(null)
   const [values, setValues] = useState<Record<string, string>>({})
+  const [enabled, setEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -64,7 +79,8 @@ export function LimitsForm({
     const next: Record<string, string> = {}
     for (const f of fields) next[f.param] = String(s[f.field] ?? '')
     setValues(next)
-  }, [fields])
+    if (toggle) setEnabled(s[toggle.field] === true)
+  }, [fields, toggle])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,7 +102,8 @@ export function LimitsForm({
   for (const f of fields) parsed[f.param] = parseField(values[f.param] ?? '', f)
 
   const invalid = fields.some((f) => parsed[f.param] === null)
-  const changed = !!current && fields.some((f) => parsed[f.param] !== current[f.field])
+  const toggleChanged = !!current && !!toggle && enabled !== (current[toggle.field] === true)
+  const changed = !!current && (toggleChanged || fields.some((f) => parsed[f.param] !== current[f.field]))
 
   const edit = (param: string) => (v: string) => {
     setValues((prev) => ({ ...prev, [param]: v }))
@@ -99,9 +116,10 @@ export function LimitsForm({
     setSaved(false)
     setSaveError('')
     try {
-      apply(await callAdmin<LimitsResponse>(target, updateAction, parsed))
+      apply(await callAdmin<LimitsResponse>(target, updateAction, toggle ? { ...parsed, [toggle.param]: enabled } : parsed))
       setSaved(true)
       setConfirming(false)
+      onSaved?.()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) report(e, '')
       else setSaveError(e instanceof Error ? e.message : '설정을 저장하지 못했습니다.')
@@ -113,6 +131,17 @@ export function LimitsForm({
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader title={title} description={description} />
+
+      {toggle && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-neutral-800">{toggle.label}</span>
+            <Switch label={toggle.label} value={enabled} disabled={loading || !current}
+              onChange={(v) => { setEnabled(v); setSaved(false) }} />
+          </div>
+          <p className="text-xs text-neutral-500">{toggle.hint}</p>
+        </div>
+      )}
 
       {fields.map((f) => (
         <Field
@@ -155,6 +184,13 @@ export function LimitsForm({
       >
         {current && (
           <ul className="space-y-1 text-sm text-neutral-700">
+            {toggle && (
+              <li className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-neutral-500">{toggle.label}</span>
+                <span className={toggleChanged ? 'text-neutral-400 line-through' : 'text-neutral-400'}>{current[toggle.field] === true ? '켬' : '끔'}</span>
+                {toggleChanged && <span className="text-neutral-900 font-medium">→ {enabled ? '켬' : '끔'}</span>}
+              </li>
+            )}
             {fields.map((f) => (
               <ChangeRow key={f.param} label={f.label} before={Number(current[f.field])} after={parsed[f.param] ?? null} />
             ))}

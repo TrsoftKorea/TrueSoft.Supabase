@@ -126,6 +126,19 @@ function chatStats(days: number) {
 // ── 서비스 연결 켜기/끄기 ── Sign in with Apple 은 켜 두고 값을 비워, 필수 값이 빠진 모습(빨간 없음)이 보이게 한다.
 let mockServices: Record<string, boolean> = { signin: true }
 
+// ── 요청 제한 ── 켜 둔 상태로, 제한 중인 계정 하나(가짜 플레이어 Guest_7712)와 로그인 전 IP 하나를 보인다.
+let requestLimitSettings = {
+  enabled: true, window_seconds: 10, max_requests: 100, block_minutes: 10,
+  updated_at: null as string | null, updated_by: null as string | null,
+}
+let requestLimitBlocks = (() => {
+  const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
+  return [
+    { key: 'a3', account_id: 'a3', ip: null, display_name: 'Guest_7712', hits: 312, blocked_at: at(3), blocked_until: at(-7) },
+    { key: 'ip:203.0.113.24', account_id: null, ip: '203.0.113.24', display_name: null, hits: 158, blocked_at: at(6), blocked_until: at(-4) },
+  ]
+})()
+
 // ── 게임 시간대 ── 화면에서 바꿔 볼 수 있게 메모리에만 둔다(새로고침하면 처음 값).
 let gameSettings = {
   time_zone: 'Asia/Seoul', updated_at: null as string | null, updated_by: null as string | null,
@@ -520,6 +533,20 @@ const HANDLERS: Record<string, Handler> = {
     max_pending_invites_received: p['maxPendingInvitesReceived'], invite_cooldown_seconds: p['inviteCooldownSeconds'],
     lobby_expire_minutes: p['lobbyExpireMinutes'], updated_at: new Date().toISOString(), updated_by: 'mock@local',
   }),
+  'requestLimit.settingsGet': () => requestLimitSettings,
+  'requestLimit.settingsUpdate': (_t, p) => {
+    requestLimitSettings = {
+      enabled: p['enabled'] === true, window_seconds: Number(p['windowSeconds']), max_requests: Number(p['maxRequests']),
+      block_minutes: Number(p['blockMinutes']), updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL,
+    }
+    if (!requestLimitSettings.enabled) requestLimitBlocks = []
+    return requestLimitSettings
+  },
+  'requestLimit.list': () => requestLimitBlocks,
+  'requestLimit.unblock': (_t, p) => {
+    requestLimitBlocks = requestLimitBlocks.filter((b) => b.key !== p['key'])
+    return null
+  },
   'game.settingsGet': () => gameSettings,
   'game.settingsUpdate': (_t, p) => {
     gameSettings = { ...gameSettings, time_zone: String(p['timeZone'] ?? gameSettings.time_zone), updated_at: new Date().toISOString(), updated_by: 'mock@local' }

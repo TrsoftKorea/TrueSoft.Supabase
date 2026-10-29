@@ -1264,6 +1264,39 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "requestLimit.settingsGet": {
+        const { data, error } = await db.rpc("ts_admin_request_limit_settings_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "requestLimit.settingsUpdate": {
+        // 범위는 install.sql request_limit_settings 의 check 와 같게 둔다.
+        if (typeof params.enabled !== "boolean") throw new Error("사용 여부가 없습니다.");
+        const { data, error } = await db.rpc("ts_admin_request_limit_settings_update", {
+          p_enabled: params.enabled,
+          p_window_seconds: intInRange(params, "windowSeconds", "기준 시간", 1, 600),
+          p_max_requests: intInRange(params, "maxRequests", "최대 요청 수", 10, 10000),
+          p_block_minutes: intInRange(params, "blockMinutes", "제한 시간", 1, 1440),
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      // 이름이 list 로 끝나야 조회로 보고 운영 기록에 남기지 않는다(READ_ACTION).
+      case "requestLimit.list": {
+        const { data, error } = await db.rpc("ts_admin_request_limit_blocks");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "requestLimit.unblock": {
+        const { error } = await db.rpc("ts_admin_request_limit_unblock", { p_key: str(params, "key") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
       case "friends.settingsGet": {
         const { data, error } = await db.rpc("ts_admin_friend_settings_get");
         if (error) throw new Error(error.message);

@@ -67,6 +67,8 @@ const ACTION_LABELS: Record<string, string> = {
   'mails.settingsUpdate': '우편 설정 변경',
   'friends.settingsUpdate': '친구 설정 변경',
   'matchLobby.settingsUpdate': '매치 로비 설정 변경',
+  'requestLimit.settingsUpdate': '요청 제한 설정 변경',
+  'requestLimit.unblock': '요청 제한 해제',
   'withdrawal.settingsUpdate': '탈퇴 기준 시간대 변경',
   'game.settingsUpdate': '게임 시간대 변경',
   'settings.setServerConfig': '서비스 연결값 변경',
