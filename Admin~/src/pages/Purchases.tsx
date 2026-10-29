@@ -227,7 +227,7 @@ export default function Purchases({
       })
       downloadCsv(
         `구매내역_${projectName(target)}_${todayStamp()}.csv`,
-        ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일', '시험 결제'],
+        ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일', '시험 결제', '무료'],
         res.rows.map((r) => [
           formatDateTime(r.verified_at),
           STORE_LABEL[r.store] ?? r.store,
@@ -240,6 +240,8 @@ export default function Purchases({
           r.price_amount_krw,
           r.refunded_at ? formatDateTime(r.refunded_at) : null,
           r.is_test == null ? null : r.is_test ? '예' : '아니요',
+          // 무료 결제(프로모션·광고 보상)도 원화 금액이 적혀 있어, 이 칸 없이 원화를 더하면 매출 화면보다 커진다.
+          r.is_free ? '예' : null,
         ]),
       )
       if (res.truncated) setError('결제가 너무 많아 앞의 10만 건만 담았습니다. 기간을 나눠 내려받으세요.')

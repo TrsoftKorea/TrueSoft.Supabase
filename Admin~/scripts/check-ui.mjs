@@ -123,6 +123,8 @@ const RULES = [
 const EXEMPT = {
   // 로그인 전 화면은 콘솔 틀(메뉴·머리) 밖의 전체 화면이라 자체 배치를 쓴다.
   U3: ['pages/Login.tsx', 'pages/ProjectSelect.tsx'],
+  // 스위치 손잡이는 켜짐(파랑)·꺼짐(회색) 바탕 위에 늘 흰색이어야 보인다 — 테마 색을 쓰면 어두운 화면에서 바탕과 섞인다.
+  U4: ['components/ui/Switch.tsx'],
 }
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.

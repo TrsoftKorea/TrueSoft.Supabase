@@ -134,8 +134,8 @@ let requestLimitSettings = {
 let requestLimitBlocks = (() => {
   const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
   return [
-    { key: 'a3', account_id: 'a3', ip: null, display_name: 'Guest_7712', hits: 312, blocked_at: at(3), blocked_until: at(-7) },
-    { key: 'ip:203.0.113.24', account_id: null, ip: '203.0.113.24', display_name: null, hits: 158, blocked_at: at(6), blocked_until: at(-4) },
+    { key: 'a3', account_id: 'a3', ip: null, display_name: 'Guest_7712', hits: 101, blocked_at: at(3), blocked_until: at(-7) },
+    { key: 'a8', account_id: 'a8', ip: null, display_name: '마법사이', hits: 101, blocked_at: at(6), blocked_until: at(-4) },
   ]
 })()
 

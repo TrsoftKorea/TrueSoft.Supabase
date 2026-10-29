@@ -578,7 +578,7 @@ const REQUEST_LIMIT_FIELDS: LimitField[] = [
   {
     param: 'maxRequests', field: 'max_requests', min: 10, max: 10000,
     label: '최대 요청 수',
-    hint: '기준 시간 안에 한 계정이 보낼 수 있는 요청 수. 넘으면 제한됩니다. 단순 조회는 세지 않습니다. 10~10000 사이.',
+    hint: '기준 시간 안에 한 계정이 보낼 수 있는 요청 수. 넘으면 제한됩니다. 로그인 전 요청, 단순 조회, 쿠폰 말고 실패한 요청은 세지 않습니다. 10~10000 사이.',
   },
   {
     param: 'blockMinutes', field: 'block_minutes', min: 1, max: 1440,
@@ -589,10 +589,10 @@ const REQUEST_LIMIT_FIELDS: LimitField[] = [
 
 type RequestLimitBlock = {
   key: string; account_id: string | null; ip: string | null; display_name: string | null
-  hits: number; blocked_at: string; blocked_until: string
+  blocked_at: string; blocked_until: string
 }
 
-/** 지금 요청 제한에 걸려 있는 계정·IP. 정상 플레이어가 잘못 걸렸을 때 바로 풀 수 있게 둔다(2026-10-29 사용자 결정). */
+/** 지금 요청 제한에 걸려 있는 계정. 정상 플레이어가 잘못 걸렸을 때 바로 풀 수 있게 둔다(2026-10-29 사용자 결정). */
 function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
   const [rows, setRows] = useState<RequestLimitBlock[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -628,7 +628,7 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
       <div className="p-5 pb-3">
         <CardHeader
           title="제한 중인 계정"
-          description="지금 요청이 막혀 있는 계정과 IP입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
+          description="지금 요청이 막혀 있는 계정입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
           actions={
             <Button size="compact" onClick={() => void load()} disabled={rows === null}>
               <RefreshCw className={`w-3.5 h-3.5 ${rows === null ? 'animate-spin' : ''}`} />
@@ -642,7 +642,6 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
           <thead className="bg-neutral-50 text-neutral-500 text-xs">
             <tr>
               <th className="px-5 py-2 text-left font-medium whitespace-nowrap">대상</th>
-              <th className="px-3 py-2 text-right font-medium whitespace-nowrap">요청 수</th>
               <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 시작</th>
               <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 끝</th>
               <th className="px-5 py-2" />
@@ -650,13 +649,12 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
           </thead>
           <tbody>
             {rows === null || rows.length === 0 ? (
-              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={5} emptyText="제한 중인 계정이 없습니다." />
+              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={4} emptyText="제한 중인 계정이 없습니다." />
             ) : rows.map((r) => (
               <tr key={r.key} className="border-t border-neutral-100">
                 <td className="px-5 py-2 text-neutral-800">
-                  {r.account_id ? (r.display_name || r.account_id) : `IP ${r.ip ?? ''}`}
+                  {r.display_name || r.account_id || r.key}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{r.hits.toLocaleString('ko-KR')}</td>
                 <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_at)}</td>
                 <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_until)}</td>
                 <td className="px-5 py-2 text-right whitespace-nowrap">

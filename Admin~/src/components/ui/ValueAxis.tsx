@@ -16,8 +16,9 @@ export function niceAxis(max: number, count = 4): Axis {
   return { top, ticks }
 }
 
-/** 눈금 글자 — 만 단위부터 줄인다(12,000 → 1.2만). */
+/** 눈금 글자 — 만 단위부터 줄인다(12,000 → 1.2만, 150,000,000 → 1.5억). */
 export function tickLabel(v: number): string {
+  if (v >= 100_000_000) return `${(v / 100_000_000).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억`
   if (v >= 10_000) return `${(v / 10_000).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만`
   return v.toLocaleString('ko-KR')
 }

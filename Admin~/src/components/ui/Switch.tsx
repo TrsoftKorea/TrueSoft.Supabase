@@ -22,8 +22,9 @@ export function Switch({
         value ? 'bg-[#1677ff]' : 'bg-neutral-300'
       }`}
     >
+      {/* 손잡이는 어두운 화면에서도 흰색이다 — bg-white 는 어두운 화면에서 카드 바탕색으로 바뀌어 꺼진 회색 바탕과 안 갈린다. */}
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+        className={`inline-block h-4 w-4 transform rounded-full bg-[#ffffff] shadow-sm transition-transform ${
           value ? 'translate-x-4' : 'translate-x-0.5'
         }`}
       />
