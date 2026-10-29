@@ -1011,7 +1011,13 @@ async function handleAction(
       }
 
       case "activity.stats": {
-        const { data, error } = await db.rpc("ts_admin_activity_stats", { p_days: intInRange(params, "days", "기간", 7, 365) });
+        // 가입 플랫폼 거르기 — 비우면 전체, 'unknown' 이면 가입 플랫폼을 모르는 계정.
+        const signupPlatform = optStr(params, "signupPlatform").trim();
+        if (signupPlatform !== "" && !/^[a-z0-9_]{1,20}$/.test(signupPlatform)) throw new Error("가입 플랫폼 값이 올바르지 않습니다.");
+        const { data, error } = await db.rpc("ts_admin_activity_stats", {
+          p_days: intInRange(params, "days", "기간", 7, 365),
+          p_signup_platform: signupPlatform || null,
+        });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
       }

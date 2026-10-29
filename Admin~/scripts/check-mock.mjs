@@ -38,10 +38,44 @@ for (const c of a30.retention) {
   ok(JSON.stringify(c) === JSON.stringify(a365.retention.find((x) => x.day === c.day)), `[1] 리텐션이 기간에 따라 다름 ${c.day}`)
 }
 
+// 2 가입 플랫폼별로 거른 값의 합 = 전체(일별 신규·재방문, 리텐션 가입 인원)
+ok(Array.isArray(a30.signup_platforms) && a30.signup_platforms.length > 0, '[2] 가입 플랫폼 목록이 없음')
+const parts = await Promise.all((a30.signup_platforms ?? []).map((p) => call('activity.stats', { days: 30, signupPlatform: p })))
+a30.daily.forEach((d, i) => {
+  ok(parts.reduce((s, r) => s + r.daily[i].new, 0) === d.new, `[2] 가입 플랫폼별 신규 합 != 전체 ${d.day}`)
+  ok(parts.reduce((s, r) => s + r.daily[i].returning, 0) === d.returning, `[2] 가입 플랫폼별 재방문 합 != 전체 ${d.day}`)
+})
+a30.retention.forEach((c, i) => ok(parts.reduce((s, r) => s + r.retention[i].size, 0) === c.size, `[2] 가입 플랫폼별 리텐션 가입 인원 합 != 전체 ${c.day}`))
+
 // 4 화면끼리 같은 숫자
 const dash = await call('dashboard.stats')
 const today = a30.daily[a30.daily.length - 1]
 ok(dash.new_today === today.new && dash.active_today === today.total, '[4] 대시보드 오늘 값 != 통계 오늘 값')
+
+// 4 플레이어 — 누적 결제액 = 구매 내역에서 매출로 세는 결제의 합, 환불 칸 = 환불된 결제, 대시보드 차단 수 = 차단 목록 수
+const buys = (await call('purchases.list', { all: true })).rows
+const listed = (await call('players.list', {})).rows
+ok(listed.length > 0, '[4] 플레이어 목록이 비어 있음')
+for (const id of [...new Set(buys.map((b) => b.account_id))]) {
+  const pr = await call('players.profile', { accountId: id })
+  const mine = buys.filter((b) => b.account_id === id)
+  const paid = mine.filter((b) => !b.refunded_at && b.is_test !== true && !b.is_free).reduce((s, b) => s + (b.price_amount_krw ?? 0), 0)
+  const refunded = mine.filter((b) => b.refunded_at)
+  ok(pr.total_paid_krw === paid, `[4] 플레이어 누적 결제액 != 구매 내역 합 ${id}`)
+  ok(pr.refund_count === refunded.length && pr.refund_krw === refunded.reduce((s, b) => s + (b.price_amount_krw ?? 0), 0), `[4] 플레이어 환불 != 구매 내역 ${id}`)
+}
+ok(dash.banned_now === (await call('players.list', { bannedOnly: true })).rows.length, '[4] 대시보드 차단 수 != 차단 목록 수')
+
+// 2 대전 기록 — 요약의 승+패 합 = 전체 판 수, 게임 코드로 거른 판 수 = 그 코드 요약의 합
+for (const pl of listed) {
+  const mr = await call('matchRecords.player', { accountId: pl.account_id })
+  ok(Array.isArray(mr.summary) && mr.summary.length > 0, `[2] 대전 기록 요약이 없음 ${pl.account_id}`)
+  ok(mr.summary.reduce((s, g) => s + g.wins + g.losses, 0) === mr.total, `[2] 대전 기록 요약 합 != 전체 판 수 ${pl.account_id}`)
+  for (const code of new Set(mr.summary.map((g) => g.game_code))) {
+    const byCode = await call('matchRecords.player', { accountId: pl.account_id, gameCode: code })
+    ok(byCode.total === mr.summary.filter((g) => g.game_code === code).reduce((s, g) => s + g.wins + g.losses, 0), `[2] 대전 기록 ${code} 판 수 != 요약 ${pl.account_id}`)
+  }
+}
 
 // 1·2 국가별 매출 — 긴 기간이 짧은 기간보다 작을 수 없고, 나라별 합 = 합계, 결제자 ≤ 건수
 const r30 = await call('revenue.stats', { days: 30 })

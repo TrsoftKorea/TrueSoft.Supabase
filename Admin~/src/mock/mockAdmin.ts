@@ -47,7 +47,11 @@ function keptOf(day: string, size: number, n: number, offsets: number[]): number
   return kept
 }
 
-function activityStats(days: number) {
+// 가입 플랫폼별 몫. 같은 숫자를 같은 몫으로 나누므로 플랫폼별 값을 다 더하면 전체와 같다(규칙 2).
+// Windows 가입자는 두지 않는다 — 기록이 없는 플랫폼 버튼이 빠지는 모습을 보이려는 것.
+const SIGNUP_SHARE: [string, number][] = [['android', 0.64], ['ios', 0.36]]
+
+function activityStats(days: number, signupPlatform = '') {
   const today = kstToday()
   const daily = Array.from({ length: days }, (_, i) => dayStats(addDays(today, i - days + 1)))
   const offsets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 30, 45, 60]
@@ -56,7 +60,22 @@ function activityStats(days: number) {
     size: d.new,
     kept: offsets.map((o) => (o >= age ? null : keptOf(d.day, d.new, o, offsets))),
   }))
-  return { today, daily, offsets, retention, first_day: daily[0]?.day ?? null }
+  const first_day = daily[0]?.day ?? null
+  // 실제 서버처럼 이 기간에 기록이 있는 가입 플랫폼만 — 거르기와 상관없이 같다.
+  const signup_platforms = SIGNUP_SHARE.map(([k]) => k).filter((k) => daily.some((d) => (split(d.total, SIGNUP_SHARE)[k] ?? 0) > 0))
+  if (!signupPlatform) return { today, daily, offsets, retention, first_day, signup_platforms }
+  const part = (n: number) => split(n, SIGNUP_SHARE)[signupPlatform] ?? 0
+  return {
+    today, offsets, first_day, signup_platforms,
+    daily: daily.map((d) => {
+      const isNew = part(d.new), returning = part(d.returning)
+      return { day: d.day, total: isNew + returning, new: isNew, returning, comeback: Math.min(part(d.comeback), returning) }
+    }),
+    retention: retention.map((c) => {
+      const size = part(c.size)
+      return { day: c.day, size, kept: c.kept.map((k) => (k === null ? null : Math.min(part(k), size))) }
+    }),
+  }
 }
 
 // ── 국가별 매출 ── 하루·나라별 결제는 날짜에서만 나온다(규칙 1) → 긴 기간 합은 짧은 기간 합보다 작아질 수 없다.
@@ -216,6 +235,101 @@ function purchaseRows() {
   ]
 }
 
+// ── 플레이어 ── 구매 내역 표본(a4~a9)과 같은 사람이다 — 누적 결제액은 그 표본에서 매출로 세는 결제만 더한 값(규칙 4).
+// 화면 종류가 다 보이게 고른다: 게스트, 차단(기한·영구), 탈퇴 예약, 가입 플랫폼과 최근 플랫폼이 다른 계정.
+// 탈퇴 예약 계정은 실제 서버처럼 목록에서 빠진다 — 구매 내역에서 눌러 들어간다.
+const PLAYERS = (() => {
+  const at = (daysAgo: number, hm: string) => `${addDays(kstToday(), -daysAgo)}T${hm}:00+09:00`
+  const p = (account_id: string, display_name: string, o: Partial<{
+    is_guest: boolean; platform: string; signup_platform: string; country_code: string; total_paid_krw: number
+    refund_count: number; refund_krw: number; created: number; active: string; server_code: string
+    withdrawn_at: string | null; banned_until: string | null; ban_message: string | null
+  }>) => ({
+    account_id, display_name, is_guest: false, platform: 'android', signup_platform: 'android', country_code: 'KR',
+    total_paid_krw: 0, refund_count: 0, refund_krw: 0, created: 30, active: at(0, '09:00'), server_code: 'GLOBAL',
+    withdrawn_at: null as string | null, banned_until: null as string | null, ban_message: null as string | null, ...o,
+  })
+  return [
+    p('a9', '용사김', { total_paid_krw: 5500, created: 62, active: at(0, '10:12') }),
+    p('a8', '마법사이', { platform: 'ios', signup_platform: 'ios', country_code: 'US', total_paid_krw: 14280, created: 41, active: at(1, '21:40') }),
+    // 아이폰으로 가입했다가 안드로이드로 옮긴 계정 — 가입 플랫폼과 최근 플랫폼이 다르게 보인다.
+    p('a7', '궁수박', { signup_platform: 'ios', created: 120, active: at(3, '08:05'), server_code: 'KR' }),
+    p('a6', '도적최', { created: 15, active: at(2, '13:20'),
+      banned_until: at(-7, '00:00'), ban_message: '욕설 반복으로 7일 동안 이용이 제한되었습니다.' }),
+    p('a5', '성기사정', { country_code: 'JP', refund_count: 1, refund_krw: 11000, created: 9, active: at(2, '22:10') }),
+    p('a4', '사냥꾼윤', { platform: 'ios', signup_platform: 'ios', created: 200, active: at(5, '11:02'), withdrawn_at: at(-5, '00:00') }),
+    p('a3', 'Guest_7712', { is_guest: true, platform: 'windows', signup_platform: 'windows', country_code: 'KR', created: 2, active: at(0, '07:31') }),
+    p('a2', '암살자한', { created: 70, active: at(20, '19:45'),
+      banned_until: `${new Date().getFullYear() + 100}-01-01T00:00:00+09:00`, ban_message: '부정 결제가 확인되어 영구 이용 정지되었습니다.' }),
+  ].map(({ created, active, ...r }) => ({ ...r, created_at: at(created, '12:00'), last_activity_at: active, last_sign_in_at: active }))
+})()
+
+const isBannedNow = (pl: (typeof PLAYERS)[number]) => !!pl.banned_until && Date.parse(pl.banned_until) > Date.now()
+
+function playerList(p: Record<string, unknown>) {
+  const search = String(p['search'] ?? '').trim()
+  const rows = PLAYERS
+    .filter((pl) => !pl.withdrawn_at && (!search || pl.display_name.includes(search)) && (!p['bannedOnly'] || isBannedNow(pl)))
+    .sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at))
+    .map(({ account_id, display_name, is_guest, platform, country_code, total_paid_krw, created_at, last_activity_at }) =>
+      ({ account_id, display_name, is_guest, platform, country_code, total_paid_krw, created_at, last_activity_at }))
+  return { rows, total: rows.length, pageSize: 20 }
+}
+
+// ── 대전 기록 ── 플레이어마다 고정된 판 기록. 요약은 이 기록을 게임 코드·상태별로 묶은 값이다(규칙 2).
+// 상태가 다 보이게 섞는다: 확인됨·상대 미신고·상대 없음(혼자 하는 판)·무효, 지워진 상대 하나.
+// pvp_1v1 은 매치 보상 화면의 게임 코드와 같다.
+type MockMatch = {
+  session_id: string; game_code: string; is_win: boolean; score: number; status: 'verified' | 'pending' | 'solo' | 'mismatch'
+  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string
+  reported_at: string; resolved_at: string | null
+}
+
+function matchesOf(accountId: string): MockMatch[] {
+  const others = PLAYERS.filter((x) => x.account_id !== accountId && !x.withdrawn_at)
+  const count = 6 + Math.floor(hash(`mr:${accountId}`) * 20)
+  return Array.from({ length: count }, (_, i) => {
+    const h = hash(`mr:${accountId}:${i}`)
+    const solo = i % 5 === 4
+    const status: MockMatch['status'] = solo ? 'solo' : i === 0 ? 'pending' : i === 3 ? 'mismatch' : 'verified'
+    const is_win = h > 0.45
+    const opp = solo ? null : i === 2 ? null : others[i % others.length]!
+    const reported_at = `${addDays(kstToday(), -i)}T${String(9 + (i % 12)).padStart(2, '0')}:${String(Math.floor(h * 60)).padStart(2, '0')}:00+09:00`
+    return {
+      session_id: `${accountId}-m${i}`, game_code: solo ? 'stage_clear' : 'pvp_1v1', is_win, score: Math.round(800 + h * 1200), status,
+      rewarded: status === 'verified' && is_win,
+      // i === 2 는 탈퇴로 지워진 상대 — 실제 서버도 계정은 없고 번호만 남는다.
+      opponent_account_id: solo ? null : opp ? opp.account_id : 'a1',
+      opponent_exists: !!opp, opponent_name: opp ? opp.display_name : '',
+      reported_at, resolved_at: status === 'pending' ? null : reported_at,
+    }
+  })
+}
+
+function matchRecords(p: Record<string, unknown>) {
+  const all = matchesOf(String(p['accountId'] ?? ''))
+  const code = String(p['gameCode'] ?? '').trim()
+  const groups = new Map<string, { game_code: string; status: string; wins: number; losses: number; max_score: number; min_score: number }>()
+  for (const m of all) {
+    const key = `${m.game_code}|${m.status}`
+    const g = groups.get(key) ?? { game_code: m.game_code, status: m.status, wins: 0, losses: 0, max_score: m.score, min_score: m.score }
+    if (m.is_win) g.wins++; else g.losses++
+    g.max_score = Math.max(g.max_score, m.score); g.min_score = Math.min(g.min_score, m.score)
+    groups.set(key, g)
+  }
+  const summary = [...groups.values()].sort((a, b) => a.game_code.localeCompare(b.game_code) || a.status.localeCompare(b.status))
+  const filtered = code ? all.filter((m) => m.game_code === code) : all
+  const pageSize = 20
+  const page = Math.max(1, Number(p['page'] ?? 1))
+  return { summary, rows: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, pageSize }
+}
+
+function playerOf(p: Record<string, unknown>) {
+  const pl = PLAYERS.find((x) => x.account_id === p['accountId'])
+  if (!pl) throw new Error('player_not_found')
+  return pl
+}
+
 // ── 자동 작업 ── 설치 SQL 에 등록된 이름·주기 그대로(시각은 UTC). 하나는 실패 상태를 보여 준다.
 const CRON_SCHEDULES: [string, string][] = [
   ['run-mail-schedules', '* * * * *'], ['deliver-open-mail-batches', '* * * * *'], ['ts_leaderboard_rotate_due', '* * * * *'],
@@ -283,12 +397,12 @@ const HANDLERS: Record<string, Handler> = {
     const week = Array.from({ length: 7 }, (_, i) => dayStats(addDays(today, -i)))
     return {
       total_players: 12840, new_today: week[0]!.new, new_7d: week.reduce((s, d) => s + d.new, 0),
-      active_today: week[0]!.total, banned_now: 4,
+      active_today: week[0]!.total, banned_now: PLAYERS.filter(isBannedNow).length,
       purchases_today: 23, revenue_today_krw: 412000, revenue_7d_krw: 3289000, revenue_total_krw: 48120000,
     }
   },
   'ccu.stats': (_t, p) => ccuStats(Number(p['hours'] ?? 24)),
-  'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30)),
+  'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30), String(p['signupPlatform'] ?? '')),
   'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
   'testPurchases.stats': (_t, p) => testPurchaseStats(Number(p['days'] ?? 30)),
   'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
@@ -313,6 +427,17 @@ const HANDLERS: Record<string, Handler> = {
     return { services: mockServices }
   },
   // 데이터 관리 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
+  'players.list': (_t, p) => playerList(p),
+  'players.profile': (_t, p) => {
+    const { banned_until: _b, ban_message: _m, ...profile } = playerOf(p)
+    return profile
+  },
+  'players.banInfo': (_t, p) => {
+    const pl = playerOf(p)
+    const banned = isBannedNow(pl)
+    return { isBanned: banned, bannedUntil: banned ? pl.banned_until : null, banMessage: banned ? pl.ban_message : null }
+  },
+  'matchRecords.player': (_t, p) => matchRecords(p),
   'dataManagement.searchPlayers': () => [
     { account_id: 'a9', display_name: '용사김', updated_at: addDays(kstToday(), 0) + 'T10:12:00+09:00' },
     { account_id: 'a8', display_name: '마법사이', updated_at: addDays(kstToday(), -1) + 'T21:40:00+09:00' },

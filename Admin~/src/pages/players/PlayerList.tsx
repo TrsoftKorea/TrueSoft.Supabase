@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Search, Copy, Check, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
+import { platformLabel } from '../../lib/platforms'
 import { WhiteCard } from '../../components/ui/Card'
 import { inputCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
@@ -255,7 +256,7 @@ export default function PlayerList({
                     <td className="px-4 py-3 text-center">
                       {r.is_guest ? <Check className="w-4 h-4 inline text-emerald-600" /> : <span className="text-neutral-300">-</span>}
                     </td>
-                    <td className="px-4 py-3 text-neutral-700">{r.platform ?? '-'}</td>
+                    <td className="px-4 py-3 text-neutral-700">{platformLabel(r.platform) || '-'}</td>
                     <td className="px-4 py-3 text-neutral-700">{r.country_code ?? '-'}</td>
                     <td className="px-4 py-3 text-right text-neutral-800">
                       {formatKRW(r.total_paid_krw)}

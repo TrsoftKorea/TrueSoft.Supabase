@@ -5,6 +5,7 @@ import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { useServerName } from '../../lib/serverNames'
+import { platformLabel } from '../../lib/platforms'
 import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { areaCls, inputCls, inputCompactCls } from '../../components/ui/Input'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
@@ -36,6 +37,7 @@ type Profile = {
   display_name: string
   is_guest: boolean | null
   platform: string | null
+  signup_platform?: string | null
   country_code: string | null
   total_paid_krw: string | number | null
   refund_count: number | null
@@ -348,7 +350,8 @@ export default function PlayerDetail({
         </InfoRow>
         <InfoRow label="서버">{serverName(profile?.server_code)}</InfoRow>
         <InfoRow label="탈퇴">{withdrawalText(profile?.withdrawn_at ?? null)}</InfoRow>
-        <InfoRow label="플랫폼">{profile?.platform ?? '-'}</InfoRow>
+        <InfoRow label="가입 플랫폼">{!profile ? '-' : platformLabel(profile.signup_platform) || '알 수 없음'}</InfoRow>
+        <InfoRow label="최근 플랫폼">{platformLabel(profile?.platform) || '-'}</InfoRow>
         <InfoRow label="국가">{profile?.country_code ?? '-'}</InfoRow>
         <InfoRow label="총 결제금액">{profile ? formatKRW(profile.total_paid_krw ?? null) : '-'}</InfoRow>
         <InfoRow label="환불">

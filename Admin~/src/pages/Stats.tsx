@@ -9,6 +9,8 @@ import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
 import { formatDateTime, formatKRW } from '../components/ui/format'
 import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
+import { PLATFORMS, platformLabel } from '../lib/platforms'
+import { Segmented } from '../components/ui/Segmented'
 
 type Day = { day: string; total: number; new: number; returning: number; comeback: number }
 type Cohort = { day: string; size: number; kept: (number | null)[] }
@@ -18,6 +20,7 @@ type ActivityStats = {
   offsets: number[]
   retention: Cohort[]
   first_day: string | null
+  signup_platforms?: string[]
 }
 
 const RANGES = [
@@ -26,7 +29,24 @@ const RANGES = [
   { days: 365, label: '1년' },
 ] as const
 
+/**
+ * 가입 플랫폼 거르기 버튼. '' = 전체. 서버가 알려 준, 이 기간에 기록이 있는 플랫폼만 보인다 — 지금 고른 값은 기간을 바꿔
+ * 기록이 없어져도 남긴다(고른 버튼이 사라지지 않게). 순서는 우편 발송과 같은 PLATFORMS 순, 모르는 값은 그 뒤.
+ */
+function signupPlatformOptions(present: string[] | undefined, selected: string) {
+  const values = new Set(present ?? PLATFORMS.map((p) => p.v as string))
+  if (selected) values.add(selected)
+  const known = PLATFORMS.map((p) => p.v as string).filter((v) => values.has(v))
+  const rest = [...values].filter((v) => !known.includes(v)).sort((a, b) => (a === 'unknown' ? 1 : b === 'unknown' ? -1 : a.localeCompare(b)))
+  return [
+    { v: '', label: '전체' },
+    ...[...known, ...rest].map((v) => ({ v, label: v === 'unknown' ? '알 수 없음' : platformLabel(v) })),
+  ]
+}
+
 type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'test' | 'chat'
+// 접속 기록으로 세는 탭 — 가입 플랫폼으로 거를 수 있다.
+const ACTIVITY_TABS: Tab[] = ['users', 'comeback', 'retention']
 const TABS: [Tab, string][] = [
   ['users', '일일 사용자'],
   ['comeback', '복귀 유저'],
@@ -381,6 +401,7 @@ function DailyTable({ days }: { days: Day[] }) {
 export default function Stats({ target, onUnauthenticated }: { target: ProjectTarget; onUnauthenticated: () => void }) {
   const [tab, setTab] = useState<Tab>('users')
   const [days, setDays] = useState<number>(30)
+  const [signupPlatform, setSignupPlatform] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [data, setData] = useState<ActivityStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -390,14 +411,14 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
     setLoading(true)
     setError('')
     try {
-      setData(await callAdmin<ActivityStats>(target, 'activity.stats', { days }))
+      setData(await callAdmin<ActivityStats>(target, 'activity.stats', { days, signupPlatform }))
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
       setError(e instanceof Error ? e.message : '통계를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [target, days, onUnauthenticated])
+  }, [target, days, signupPlatform, onUnauthenticated])
 
   useEffect(() => { void load() }, [load])
 
@@ -410,24 +431,31 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
       <PageHeader
         title="통계"
         description={`게임 운영 통계를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
+        actions={
+          <Button variant="outline" size="compact" onClick={() => { void load(); setReloadKey((k) => k + 1) }} disabled={loading}>
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            새로고침
+          </Button>
+        }
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <Tabs value={tab} onChange={setTab} tabs={TABS} />
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button key={r.days} type="button" onClick={() => setDays(r.days)}
-              className={`whitespace-nowrap rounded px-2.5 py-1 text-xs ${days === r.days ? 'bg-brand-soft text-[#1677ff] font-medium' : 'text-neutral-500 hover:text-neutral-800'}`}>
-              {r.label}
-            </button>
-          ))}
+      {/* 거르기는 이름표 + 같은 모양으로 나란히 둔다 — 모양이 다르면 어느 쪽이 기간인지 헷갈린다(2026-10-29 사용자 지적). */}
+      {/* 이름표는 버튼 묶음 위에 둔다(우편 발송의 입력 이름과 같은 꼴) — 옆에 두면 선택 안 된 버튼처럼 보인다. */}
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+        <div>
+          <div className="text-xs font-medium text-neutral-500 mb-1">기간</div>
+          <Segmented value={String(days)} onChange={(v) => setDays(Number(v))}
+            options={RANGES.map((r) => ({ v: String(r.days), label: r.label }))} />
         </div>
-        <Button variant="outline" size="compact" onClick={() => { void load(); setReloadKey((k) => k + 1) }} disabled={loading}>
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </Button>
+        {ACTIVITY_TABS.includes(tab) && (
+          <div>
+            <div className="text-xs font-medium text-neutral-500 mb-1">가입 플랫폼</div>
+            <Segmented value={signupPlatform} onChange={setSignupPlatform} options={signupPlatformOptions(data?.signup_platforms, signupPlatform)} />
+          </div>
+        )}
       </div>
 
       {loading && !data ? (
