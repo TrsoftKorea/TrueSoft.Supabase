@@ -432,6 +432,8 @@ function redactParams(params: Params): Params {
 const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APPLE_BUNDLE_ID: (v) => v.split(",").every((s) => /^[A-Za-z0-9.-]+$/.test(s.trim())),
   APPLE_SHARED_SECRET: () => true,
+  // 안드로이드 패키지 이름: 점으로 나뉜 두 마디 이상, 마디마다 영문으로 시작하고 영문·숫자·밑줄.
+  GOOGLE_PACKAGE_NAME: (v) => v.split(",").every((s) => /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(s.trim())),
   GOOGLE_SERVICE_ACCOUNT_JSON: (v) => {
     try {
       const sa = JSON.parse(v);
@@ -450,6 +452,7 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APPLE_BUNDLE_ID: "번들 ID 는 영문·숫자·점·하이픈만 씁니다. 여럿이면 쉼표로 나눕니다.",
+  GOOGLE_PACKAGE_NAME: "패키지 이름은 com.회사.게임처럼 점으로 나뉜 영문·숫자·밑줄입니다. 여럿이면 쉼표로 나눕니다.",
   GOOGLE_SERVICE_ACCOUNT_JSON: "서비스 계정 키 JSON 파일 내용 전체를 붙여 넣으세요(client_email·private_key 가 있어야 합니다).",
   APPLE_TEAM_ID: "팀 ID 는 영문 대문자·숫자 10자입니다.",
   APPLE_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
@@ -619,7 +622,12 @@ async function handleAction(
           p_key: str(params, "key"),
           p_display_name: optStr(params, "displayName"),
         });
-        if (error) throw new Error(error.message);
+        // 동시에 두 창에서 같은 이름을 넣으면 함수 검사를 지나 색인(game_items_display_name_uniq)에서 걸린다.
+        if (error) {
+          throw new Error(error.message.includes("item_name_taken") || error.message.includes("game_items_display_name_uniq")
+            ? "같은 이름의 아이템이 이미 있습니다."
+            : error.message);
+        }
         return json({ ok: true, data: null });
       }
 
@@ -1151,12 +1159,15 @@ async function handleAction(
       // 스토어·애플 연동 값이 어디에 등록돼 있고 형식이 맞는지만 돌려준다. 값은 절대 내보내지 않는다.
       // 엣지 함수와 같은 순서로 고른다 — 콘솔에서 넣은 값(Vault)이 먼저, 없으면 Edge Function Secrets.
       case "settings.getStoreStatus": {
-        const [{ data: values, error: valuesError }, { data: meta, error: metaError }] = await Promise.all([
+        const [{ data: values, error: valuesError }, { data: meta, error: metaError }, { data: services, error: servicesError }] = await Promise.all([
           db.rpc("ts_server_config_get"),
           db.rpc("ts_admin_server_config_status"),
+          db.rpc("ts_admin_server_config_services"),
         ]);
         if (valuesError) throw new Error(valuesError.message);
         if (metaError) throw new Error(metaError.message);
+        // 켜기/끄기는 화면 표시용이라, 이것 하나 때문에 키 상태 표 전체가 안 뜨면 안 된다 — 비우면 화면이 값 유무로 짐작한다.
+        if (servicesError) console.warn(`[admin-api] 서비스 켜기/끄기 상태를 읽지 못했습니다: ${servicesError.message}`);
         const fromConsole = (values ?? {}) as Record<string, string>;
         const metaByKey = new Map(((meta ?? []) as Array<{ key: string; updated_at: string; updated_by: string }>).map((m) => [m.key, m]));
         const rows = Object.entries(SERVER_CONFIG_VALID).map(([key, valid]) => {
@@ -1172,7 +1183,17 @@ async function handleAction(
             updatedBy: m?.updated_by || null,
           };
         });
-        return json({ ok: true, data: { rows } });
+        return json({ ok: true, data: { rows, services: servicesError ? {} : services ?? {} } });
+      }
+
+      // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
+      case "settings.setServiceEnabled": {
+        const service = str(params, "service");
+        if (!["appstore", "googleplay", "signin"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
+        const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { services: data ?? {} } });
       }
 
       // 값은 secretValue 로 받는다 — 운영 기록에서 가려지는 이름이다(SECRET_PARAM). 빈 값이면 콘솔 값을 지운다.

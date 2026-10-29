@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
+import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
@@ -73,14 +74,18 @@ const KEY_SETS: Record<KeySet, { title: string; note: string }> = {
 // 설명은 두 갈래로 나눈다 — about·KEY_SETS.note(표): 그 키가 무엇인지만, 짧은 명사형. 어디에 쓰이는지는 적지 않는다
 // (2026-10-28 사용자 결정 — 쓰이는 곳은 화면 카드 설명 한 줄로 충분하다).
 // hint(입력 창): 무엇을 어떤 형식으로 넣는지만, "~넣습니다"로 끝맺는다. 형식은 admin-api SERVER_CONFIG_VALID 와 맞춘다.
+// required: 그 서비스를 켰으면 없을 때 기능이 멈추는 값. 앱 공유 암호·앱 내 구입 키는 옛 결제 방식(SK1)에서만 필요해
+// 콘솔이 게임마다 가를 수 없으므로 빼 둔다.
+// alsoIn: 다른 서비스도 그 값이 있어야 돌 때 그 묶음에도 같은 줄을 보인다 — 번들 ID 는 애플 로그인(apple-token)도
+// 쓰므로, iOS 결제를 안 써서 App Store 를 꺼 둔 게임에서도 빠진 것이 보여야 한다.
 type StoreKeyDef = {
-  key: string; group: StoreGroup; set?: KeySet; name: string; about: string
-  multiline?: boolean; hint: string; guide: KeyGuide
+  key: string; group: StoreGroup; alsoIn?: StoreGroup[]; set?: KeySet; name: string; about: string
+  required?: boolean; multiline?: boolean; hint: string; guide: KeyGuide
 }
 
 const STORE_KEYS: StoreKeyDef[] = [
   {
-    key: 'APPLE_BUNDLE_ID', group: 'appstore', name: '번들 ID', about: 'iOS 앱의 고유 ID',
+    key: 'APPLE_BUNDLE_ID', group: 'appstore', alsoIn: ['signin'], name: '번들 ID', about: 'iOS 앱의 고유 ID', required: true,
     hint: '영문·숫자·점·하이픈으로 된 값을 넣습니다. 앱이 여럿이면 쉼표로 나눕니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
@@ -112,7 +117,22 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키', about: 'Google Cloud 서비스 계정의 키',
+    key: 'GOOGLE_PACKAGE_NAME', group: 'googleplay', name: '패키지 이름', about: 'Android 앱의 고유 ID', required: true,
+    hint: 'com.회사이름.게임이름처럼 점으로 나뉜 값을 넣습니다. 앱이 여럿이면 쉼표로 나눕니다.',
+    guide: {
+      site: { name: 'Google Play Console', url: 'https://play.google.com/console' },
+      steps: [
+        '"모든 앱"에서 게임 앱을 고릅니다.',
+        '화면 위쪽 앱 이름 아래에 보이는 패키지 이름을 복사합니다. 예: com.회사이름.게임이름',
+      ],
+      notes: [
+        '유니티 Player Settings의 "Package Name"과 같은 값입니다.',
+        '여기 없는 앱의 결제는 기록하지 않습니다. 비워 두면 Android 결제가 전부 거절됩니다.',
+      ],
+    },
+  },
+  {
+    key: 'GOOGLE_SERVICE_ACCOUNT_JSON', group: 'googleplay', name: '서비스 계정 키', about: 'Google Cloud 서비스 계정의 키', required: true,
     multiline: true, hint: '내려받은 JSON 파일의 내용 전체를 넣습니다.',
     guide: {
       site: { name: 'Google Cloud 콘솔', url: 'https://console.cloud.google.com/iam-admin/serviceaccounts' },
@@ -131,7 +151,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', about: 'Apple 개발자 계정의 팀 ID',
+    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', about: 'Apple 개발자 계정의 팀 ID', required: true,
     hint: '영문 대문자·숫자 10자를 넣습니다.',
     guide: {
       site: { name: 'Apple Developer', url: 'https://developer.apple.com/account' },
@@ -143,7 +163,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_KEY_ID', group: 'signin', name: 'Key ID', about: 'Sign in with Apple 키의 ID',
+    key: 'APPLE_KEY_ID', group: 'signin', name: 'Key ID', about: 'Sign in with Apple 키의 ID', required: true,
     hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
     guide: {
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
@@ -157,7 +177,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key', about: 'Sign in with Apple 키의 .p8 파일',
+    key: 'APPLE_PRIVATE_KEY', group: 'signin', name: 'Private key', about: 'Sign in with Apple 키의 .p8 파일', required: true,
     multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
     guide: {
       site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
@@ -255,6 +275,10 @@ const STATUS_VIEW: Record<StoreKeyStatus['status'], { text: string; cls: string 
   missing: { text: '없음', cls: 'bg-red-50 text-red-600' },
   invalid: { text: '형식 오류', cls: 'bg-amber-50 text-amber-700' },
 }
+// 필수가 아닌 값이 비어 있는 것은 문제가 아니다 — 빨갛게 띄우면 진짜 빠진 필수 값이 묻힌다.
+const OPTIONAL_MISSING_VIEW = { text: '없음', cls: 'bg-neutral-100 text-neutral-500' }
+
+type ServiceEnabled = Partial<Record<StoreGroup, boolean>>
 
 function StoreStatusCard({
   target,
@@ -264,6 +288,8 @@ function StoreStatusCard({
   report: (e: unknown, fallback: string) => void
 }) {
   const [rows, setRows] = useState<StoreKeyStatus[] | null>(null)
+  const [services, setServices] = useState<ServiceEnabled>({})
+  const [toggling, setToggling] = useState<StoreGroup | null>(null)
   const [editing, setEditing] = useState<{ key: string; clear: boolean } | null>(null)
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
@@ -273,8 +299,9 @@ function StoreStatusCard({
 
   const load = useCallback(async () => {
     try {
-      const res = await callAdmin<{ rows: StoreKeyStatus[] }>(target, 'settings.getStoreStatus', {})
+      const res = await callAdmin<{ rows: StoreKeyStatus[]; services?: ServiceEnabled }>(target, 'settings.getStoreStatus', {})
       setRows(res.rows)
+      setServices(res.services ?? {})
     } catch (e: unknown) {
       report(e, '서비스 연결 상태를 불러오지 못했습니다.')
     }
@@ -282,12 +309,29 @@ function StoreStatusCard({
 
   useEffect(() => {
     setRows(null)
+    setServices({})
     setSavedKey('')
     void load()
   }, [load])
 
   const byKey = new Map((rows ?? []).map((r) => [r.key, r]))
   const editingDef = STORE_KEYS.find((k) => k.key === editing?.key)
+
+  // 아직 한 번도 켜고 끈 적 없는 서비스는 값이 하나라도 있으면 쓰는 것으로 본다 — 이미 운영 중인 게임이 접혀 보이지 않게.
+  const isEnabled = (g: StoreGroup) =>
+    services[g] ?? STORE_KEYS.some((k) => k.group === g && (byKey.get(k.key)?.status ?? 'missing') !== 'missing')
+
+  const toggle = async (g: StoreGroup, enabled: boolean) => {
+    setToggling(g)
+    try {
+      const res = await callAdmin<{ services: ServiceEnabled }>(target, 'settings.setServiceEnabled', { service: g, enabled })
+      setServices(res.services)
+    } catch (e: unknown) {
+      report(e, '사용 여부를 바꾸지 못했습니다.')
+    } finally {
+      setToggling(null)
+    }
+  }
 
   const open = (key: string, clear: boolean) => {
     setValue('')
@@ -326,7 +370,17 @@ function StoreStatusCard({
       {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
       <div className="space-y-4">
         {groups.map((g) => (
-          <GroupBox key={g.id} title={g.title}>
+          <GroupBox
+            key={g.id}
+            title={g.title}
+            // 상태를 못 불러온 동안은 켜짐을 알 수 없다 — 스위치를 숨기고 접지 않는다(꺼진 것처럼 보이지 않게).
+            actions={rows && <>
+              <span className="text-xs text-neutral-500">사용</span>
+              <Switch label={`${g.title} 사용`} value={isEnabled(g.id)} disabled={toggling === g.id}
+                onChange={(v) => void toggle(g.id, v)} />
+            </>}
+          >
+            {(!rows || isEnabled(g.id)) && (
             <table className="w-full text-sm table-fixed">
               <colgroup>
                 <col className="w-[34%]" />
@@ -335,9 +389,9 @@ function StoreStatusCard({
                 <col className="w-[164px]" />
               </colgroup>
               <tbody>
-                {STORE_KEYS.filter((k) => k.group === g.id).flatMap((k, i, list) => {
+                {STORE_KEYS.filter((k) => k.group === g.id || k.alsoIn?.includes(g.id)).flatMap((k, i, list) => {
                   const row = byKey.get(k.key)
-                  const view = row ? STATUS_VIEW[row.status] : null
+                  const view = !row ? null : row.status === 'missing' && !k.required ? OPTIONAL_MISSING_VIEW : STATUS_VIEW[row.status]
                   // 한 키에서 나오는 값들은 묶음 제목 한 줄 아래에 들여 써서 함께 보인다.
                   const startsSet = !!k.set && list[i - 1]?.set !== k.set
                   const set = k.set ? KEY_SETS[k.set] : null
@@ -352,7 +406,10 @@ function StoreStatusCard({
                     ] : []),
                     <tr key={k.key} className={set ? '' : 'border-t border-neutral-100 first:border-t-0'}>
                       <td className={`py-2 pr-4 ${set ? 'pl-8' : 'pl-4'}`}>
-                        <div className={set ? 'text-neutral-700' : 'text-neutral-800'}>{k.name}</div>
+                        <div className={set ? 'text-neutral-700' : 'text-neutral-800'}>
+                          {k.name}
+                          {k.required && <span className="ml-0.5 text-red-500" aria-label="필수">*</span>}
+                        </div>
                         <div className="text-xs text-neutral-500">{k.about}</div>
                       </td>
                       <td className="py-2 pr-4 text-xs text-neutral-400">
@@ -399,6 +456,7 @@ function StoreStatusCard({
                 })}
               </tbody>
             </table>
+            )}
           </GroupBox>
         ))}
       </div>

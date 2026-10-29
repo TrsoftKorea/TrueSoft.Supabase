@@ -70,6 +70,7 @@ const ACTION_LABELS: Record<string, string> = {
   'withdrawal.settingsUpdate': '탈퇴 기준 시간대 변경',
   'game.settingsUpdate': '게임 시간대 변경',
   'settings.setServerConfig': '서비스 연결값 변경',
+  'settings.setServiceEnabled': '서비스 사용 켜기·끄기',
   'settings.setConsoleColor': '콘솔 색 변경',
   'settings.setConsoleIdentity': '콘솔 이름·아이콘 변경',
   'matchRewards.upsert': '매치 보상 추가·수정',

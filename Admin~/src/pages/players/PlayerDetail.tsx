@@ -12,6 +12,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
+import { Switch } from '../../components/ui/Switch'
 import { Tabs } from '../../components/ui/Tabs'
 import UserDataTab from './UserDataTab'
 import FriendsTab from './FriendsTab'
@@ -417,15 +418,7 @@ export default function PlayerDetail({
               </div>
               <div className="flex items-center gap-2 pb-1.5">
                 <span className="text-xs text-neutral-500">영구 차단</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={permanent}
-                  onClick={() => { setPermanent((v) => !v); setBanInputError('') }}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${permanent ? 'bg-[#1677ff]' : 'bg-neutral-300'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${permanent ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
+                <Switch value={permanent} onChange={(v) => { setPermanent(v); setBanInputError('') }} />
               </div>
             </div>
             {banInputError && <p className="text-xs text-red-600">{banInputError}</p>}

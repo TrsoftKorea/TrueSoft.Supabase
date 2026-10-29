@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { Button } from '../../components/ui/Button'
 import { inputCls } from '../../components/ui/Input'
+import { Switch } from '../../components/ui/Switch'
 import { DEFAULT_TIME_ZONE, isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone, wallClockToIso, zonedParts } from '../../lib/gameTime'
 
 type LeaderboardRow = {
@@ -118,26 +119,6 @@ function fieldsToAnchorIso(form: FormState): string | null {
   }
   // daily — 시각만 의미. 고정 날짜 사용.
   return wallClockToIso(form.tz, 2000, 1, 3, hh, mm)
-}
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      onClick={() => onChange(!value)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-        value ? 'bg-[#1677ff]' : 'bg-neutral-300'
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          value ? 'translate-x-4' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
 }
 
 export default function LeaderboardsTab({
@@ -644,7 +625,7 @@ export default function LeaderboardsTab({
               <div className="border-t border-neutral-100 pt-4">
                 <div className="flex items-center gap-3">
                   <label className="text-xs text-neutral-500">종료 예약</label>
-                  <Toggle
+                  <Switch
                     value={form.hasEndsAt}
                     onChange={(v) =>
                       setForm((prev) => ({ ...prev, hasEndsAt: v, endsAt: v ? prev.endsAt : '' }))
@@ -672,7 +653,7 @@ export default function LeaderboardsTab({
                 <div className="border-t border-neutral-100 pt-4">
                   <div className="flex items-center gap-3 mb-1">
                     <label className="text-xs text-neutral-500">사용 중</label>
-                    <Toggle
+                    <Switch
                       value={form.isActive}
                       onChange={(v) => setForm((prev) => ({ ...prev, isActive: v }))}
                     />

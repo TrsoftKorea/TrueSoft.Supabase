@@ -138,6 +138,9 @@ function chatStats(days: number) {
   return { daily, first_day: daily[0]?.day ?? null }
 }
 
+// ── 서비스 연결 켜기/끄기 ── Sign in with Apple 은 켜 두고 값을 비워, 필수 값이 빠진 모습(빨간 없음)이 보이게 한다.
+let mockServices: Record<string, boolean> = { signin: true }
+
 // ── 게임 시간대 ── 화면에서 바꿔 볼 수 있게 메모리에만 둔다(새로고침하면 처음 값).
 let gameSettings = {
   time_zone: 'Asia/Seoul', updated_at: null as string | null, updated_by: null as string | null,
@@ -294,6 +297,7 @@ const HANDLERS: Record<string, Handler> = {
     rows: [
       { key: 'APPLE_BUNDLE_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -3) + 'T10:00:00+09:00', updatedBy: 'mock@local' },
       { key: 'APPLE_SHARED_SECRET', source: 'supabase', status: 'ok', updatedAt: null, updatedBy: null },
+      { key: 'GOOGLE_PACKAGE_NAME', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), 0) + 'T09:00:00+09:00', updatedBy: 'mock@local' },
       { key: 'GOOGLE_SERVICE_ACCOUNT_JSON', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -10) + 'T15:30:00+09:00', updatedBy: 'mock@local' },
       { key: 'APPLE_TEAM_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
@@ -302,7 +306,12 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APPLE_IAP_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_IAP_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
     ],
+    services: mockServices,
   }),
+  'settings.setServiceEnabled': (_t, p) => {
+    mockServices = { ...mockServices, [String(p['service'])]: p['enabled'] === true }
+    return { services: mockServices }
+  },
   // 데이터 관리 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
   'dataManagement.searchPlayers': () => [
     { account_id: 'a9', display_name: '용사김', updated_at: addDays(kstToday(), 0) + 'T10:12:00+09:00' },

@@ -49,8 +49,9 @@ export function ConfirmDialog({
   // 바깥(어두운 배경)을 눌러도 닫지 않는다 — 편집 창과 같은 규칙. 닫기는 X · 취소 · Esc.
   // 배경 색·위치도 편집 창과 같게, 문서 맨 바깥(body)에 띄운다 — 부모의 간격이 배경에 붙지 않게.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-auto">
-      <div className="w-full max-w-md">
+    // 가운데 정렬은 안쪽의 my-auto 로 한다 — 바깥에 items-center 를 쓰면 화면보다 긴 창의 윗부분이 잘려 스크롤로도 못 본다.
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/40 p-4 overflow-auto">
+      <div className="w-full max-w-md my-auto">
         <WhiteCard className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-neutral-900">{title}</h3>
