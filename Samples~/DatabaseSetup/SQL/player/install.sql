@@ -4968,6 +4968,249 @@ revoke all on function public.ts_admin_game_server_upsert(uuid,text,text,boolean
 grant execute on function public.ts_admin_game_servers_list()                      to service_role;
 grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,boolean) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- 요청 제한 — 짧은 시간에 요청을 지나치게 많이 보내는 계정을 잠시 막는다. 운영 콘솔 "설정 › 요청 제한".
+--
+-- 게임 앱의 데이터 요청(PostgREST)마다 ts_request_limit_check 가 먼저 돈다(pgrst.db_pre_request, Supabase 문서
+-- "Securing your API" 의 방식). 로그인한 계정은 계정 단위, 로그인 전 요청은 IP 단위로 센다(2026-10-29 사용자 결정).
+-- 세는 것은 쓰기·함수 호출(POST·PATCH·DELETE)뿐이다 — 읽기(GET·HEAD)는 읽기 전용으로 실행돼 기록을 남길 수 없다.
+-- 읽기 전용 함수(stable·immutable)도 POST 로 불러도 읽기 전용으로 실행되므로 세지 않는다(2026-10-29 실측).
+-- 제한 중이면 읽기까지 전부 429 로 거절한다. 엣지 함수는 공통 구간 `request-limit` 이 ts_request_limit_ping 을
+-- 사용자 로그인으로 불러 같은 검사를 태운다. 운영 콘솔·서버 함수(service_role)의 요청은 세지 않는다.
+--
+-- [주의] 이 검사는 모든 요청 앞에 끼므로, 실패하면 게임 전체가 멈춘다. 그래서 ① anon·authenticated·service_role
+--        모두 실행 권한이 있어야 하고(22절 허용 목록에도 넣는다) ② 안에서 난 오류는 삼키고 통과시킨다 —
+--        제한 기능이 고장 나도 게임은 돈다.
+-- [주의] 기준을 넘은 바로 그 요청은 통과시키고 제한 기록만 남긴다 — 그 요청에서 거절하면 같은 트랜잭션의
+--        제한 기록까지 되돌려진다. 다음 요청부터 거절한다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.request_limit_settings (
+  id             int         primary key default 1 check (id = 1),
+  enabled        boolean     not null default false,
+  window_seconds int         not null default 10  check (window_seconds between 1 and 600),
+  max_requests   int         not null default 100 check (max_requests between 10 and 10000),
+  block_minutes  int         not null default 10  check (block_minutes between 1 and 1440),
+  updated_at     timestamptz not null default now(),
+  updated_by     text
+);
+insert into public.request_limit_settings (id) values (1) on conflict (id) do nothing;
+alter table public.request_limit_settings enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.request_limit_settings from anon, authenticated;
+
+-- 계정(또는 'ip:주소')마다 지금 구간의 요청 수 한 줄. 서버가 다시 켜지면 비어도 되는 숫자라 기록을 남기지 않는 표로 둔다.
+create unlogged table if not exists public.request_limit_counters (
+  key          text        primary key,
+  window_start timestamptz not null,
+  hits         int         not null
+);
+alter table public.request_limit_counters enable row level security;
+revoke all on table public.request_limit_counters from anon, authenticated;
+
+-- 제한 중인(또는 막 풀린) 계정. 콘솔이 "제한 중" 목록을 이 표에서 읽고, 해제는 줄을 지운다.
+create table if not exists public.request_limit_blocks (
+  key           text        primary key,
+  account_id    uuid,
+  ip            text,
+  hits          int         not null,
+  blocked_at    timestamptz not null default now(),
+  blocked_until timestamptz not null
+);
+alter table public.request_limit_blocks enable row level security;
+revoke all on table public.request_limit_blocks from anon, authenticated;
+
+create or replace function public.ts_request_limit_check()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_settings public.request_limit_settings%rowtype;
+  v_role     text;
+  v_uid      uuid;
+  v_ip       text;
+  v_key      text;
+  v_hits     int;
+  v_until    timestamptz;
+begin
+  begin
+    select * into v_settings from public.request_limit_settings where id = 1;
+    if not found or not v_settings.enabled then return; end if;
+
+    -- security definer 안에서는 current_user 가 함수 주인이다 — PostgREST 가 바꿔 둔 역할은 role 설정에 남는다.
+    v_role := coalesce(nullif(current_setting('role', true), 'none'), '');
+    if v_role not in ('anon', 'authenticated') then return; end if;
+
+    v_uid := auth.uid();
+    if v_uid is not null then
+      v_key := v_uid::text;
+    else
+      v_ip := nullif(btrim(split_part(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', ',', 1)), '');
+      if v_ip is null then return; end if;
+      v_key := 'ip:' || v_ip;
+    end if;
+
+    select b.blocked_until into v_until from public.request_limit_blocks b where b.key = v_key;
+
+    if (v_until is null or v_until <= now())
+       and coalesce(current_setting('request.method', true), 'GET') not in ('GET', 'HEAD') then
+      insert into public.request_limit_counters as c (key, window_start, hits)
+      values (v_key, now(), 1)
+      on conflict (key) do update set
+        hits         = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then 1 else c.hits + 1 end,
+        window_start = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then now() else c.window_start end
+      returning hits into v_hits;
+
+      if v_hits > v_settings.max_requests then
+        insert into public.request_limit_blocks (key, account_id, ip, hits, blocked_at, blocked_until)
+        values (v_key, v_uid, v_ip, v_hits, now(), now() + make_interval(mins => v_settings.block_minutes))
+        on conflict (key) do update set
+          hits = excluded.hits, blocked_at = excluded.blocked_at, blocked_until = excluded.blocked_until;
+        delete from public.request_limit_counters where key = v_key;
+      end if;
+      v_until := null;  -- 기준을 넘은 이 요청은 통과시킨다(위 [주의]).
+    end if;
+  exception when others then
+    return;  -- 제한 기능이 고장 나도 게임은 막지 않는다.
+  end;
+
+  if v_until is not null and v_until > now() then
+    raise sqlstate 'PGRST' using
+      message = json_build_object(
+        'code', 'request_limited',
+        'message', 'request_limited: 요청이 너무 많아 잠시 제한되었습니다.',
+        'details', json_build_object('until', v_until),
+        'hint', null)::text,
+      detail = json_build_object(
+        'status', 429,
+        'headers', json_build_object('Retry-After', greatest(1, ceil(extract(epoch from v_until - now())))::int::text))::text;
+  end if;
+end;
+$$;
+
+-- 엣지 함수가 사용자 로그인으로 불러 위 검사를 태우는 빈 함수(공통 구간 request-limit).
+create or replace function public.ts_request_limit_ping()
+returns void
+language plpgsql
+as $$
+begin
+end;
+$$;
+
+comment on function public.ts_request_limit_check() is
+  '요청 제한 사전 검사(pgrst.db_pre_request). 꺼져 있으면 아무것도 안 한다. anon·authenticated·service_role 실행 권한 필수.';
+comment on function public.ts_request_limit_ping() is
+  '엣지 함수가 요청 제한 검사를 태우려고 부르는 빈 함수.';
+
+revoke all on function public.ts_request_limit_check() from public, anon, authenticated;
+revoke all on function public.ts_request_limit_ping()  from public, anon, authenticated;
+grant execute on function public.ts_request_limit_check() to anon, authenticated, service_role;
+grant execute on function public.ts_request_limit_ping()  to authenticated;
+
+create or replace function public.ts_request_limit_cleanup()
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.request_limit_counters where window_start < now() - interval '1 hour';
+  delete from public.request_limit_blocks where blocked_until < now() - interval '1 day';
+$$;
+
+comment on function public.ts_request_limit_cleanup() is '지난 요청 수·풀린 지 하루 지난 제한 기록을 지운다. cron 이 10분마다 부른다.';
+revoke all on function public.ts_request_limit_cleanup() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('ts_request_limit_cleanup') where exists (select 1 from cron.job where jobname = 'ts_request_limit_cleanup');
+    perform cron.schedule('ts_request_limit_cleanup', '*/10 * * * *', $cron$ select public.ts_request_limit_cleanup(); $cron$);
+  end if;
+end $$;
+
+-- 콘솔 "설정 › 요청 제한"
+create or replace function public.ts_admin_request_limit_settings_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('enabled', s.enabled, 'window_seconds', s.window_seconds, 'max_requests', s.max_requests,
+                            'block_minutes', s.block_minutes, 'updated_at', s.updated_at, 'updated_by', s.updated_by)
+    from public.request_limit_settings s where s.id = 1;
+$$;
+
+-- 범위는 표의 check 와 admin-api 가 같은 값으로 막는다.
+create or replace function public.ts_admin_request_limit_settings_update(
+  p_enabled boolean, p_window_seconds int, p_max_requests int, p_block_minutes int, p_by text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.request_limit_settings
+     set enabled = coalesce(p_enabled, enabled), window_seconds = p_window_seconds, max_requests = p_max_requests,
+         block_minutes = p_block_minutes, updated_at = now(), updated_by = p_by
+   where id = 1;
+  -- 끄면 걸려 있던 제한도 함께 푼다 — 꺼 둔 동안 남은 기록이 다시 켤 때 갑자기 걸리지 않게.
+  -- where true: 콘솔 서버의 DB 연결은 조건 없는 delete 를 막는다(safeupdate).
+  if p_enabled is false then
+    delete from public.request_limit_blocks where true;
+    delete from public.request_limit_counters where true;
+  end if;
+  return public.ts_admin_request_limit_settings_get();
+end;
+$$;
+
+-- 지금 제한 중인 계정·IP. 닉네임은 계정일 때만.
+create or replace function public.ts_admin_request_limit_blocks()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'key', b.key, 'account_id', b.account_id, 'ip', b.ip, 'display_name', d.display_name,
+           'hits', b.hits, 'blocked_at', b.blocked_at, 'blocked_until', b.blocked_until)
+           order by b.blocked_at desc), '[]'::jsonb)
+    from (select * from public.request_limit_blocks where blocked_until > now() order by blocked_at desc limit 200) b
+    left join public.display_names d on d.account_id = b.account_id;
+$$;
+
+create or replace function public.ts_admin_request_limit_unblock(p_key text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.request_limit_blocks where key = p_key;
+  delete from public.request_limit_counters where key = p_key;
+$$;
+
+comment on function public.ts_admin_request_limit_settings_get() is '요청 제한 설정 조회. service_role 전용.';
+comment on function public.ts_admin_request_limit_settings_update(boolean, int, int, int, text) is
+  '요청 제한 설정 변경. 끄면 걸려 있던 제한도 푼다. service_role 전용.';
+comment on function public.ts_admin_request_limit_blocks() is '지금 요청 제한 중인 계정·IP(최근 200). service_role 전용.';
+comment on function public.ts_admin_request_limit_unblock(text) is '요청 제한 해제. service_role 전용.';
+
+revoke all on function public.ts_admin_request_limit_settings_get()                          from public, anon, authenticated;
+revoke all on function public.ts_admin_request_limit_settings_update(boolean, int, int, int, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_request_limit_blocks()                                from public, anon, authenticated;
+revoke all on function public.ts_admin_request_limit_unblock(text)                           from public, anon, authenticated;
+grant execute on function public.ts_admin_request_limit_settings_get()                          to service_role;
+grant execute on function public.ts_admin_request_limit_settings_update(boolean, int, int, int, text) to service_role;
+grant execute on function public.ts_admin_request_limit_blocks()                                to service_role;
+grant execute on function public.ts_admin_request_limit_unblock(text)                           to service_role;
+
+-- 모든 데이터 요청 앞에 검사를 끼운다. 꺼 두면(기본) 설정 한 줄만 읽고 지나간다.
+alter role authenticator set pgrst.db_pre_request = 'public.ts_request_limit_check';
+notify pgrst, 'reload config';
+
 notify pgrst, 'reload schema';
 
 
@@ -13070,6 +13313,9 @@ grant execute on function public.ts_display_name_check(text, uuid)              
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text)              to anon, authenticated;
 grant execute on function public.ts_anon_recovery_delete_by_fingerprint(text, text)          to anon, authenticated;
 grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, uuid, text) to anon, authenticated;
+-- 요청 제한 사전 검사(10절) — 모든 데이터 요청 앞에서 돈다. 빠지면 그 역할의 요청이 전부 실패한다.
+grant execute on function public.ts_request_limit_check()                                    to anon, authenticated, service_role;
+grant execute on function public.ts_request_limit_ping()                                     to authenticated;
 
 -- 로그인 사용자 전용 RPC
 grant execute on function public.ts_ensure_my_profile(text, text)          to authenticated;

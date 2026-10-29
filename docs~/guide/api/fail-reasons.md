@@ -37,6 +37,7 @@ if (!result.IsSuccess)
 | `SessionRequired` | 로그인 세션이 필요합니다 |
 | `AccessTokenEmpty` | 액세스 토큰이 비어있습니다 |
 | `NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `RequestLimited` | 짧은 시간에 요청을 너무 많이 보내 서버가 잠시 막았습니다. 운영 콘솔 **설정 › 요청 제한**에서 정한 시간이 지나면 풀립니다 |
 
 ### 세션 만료 {#세션-만료}
 

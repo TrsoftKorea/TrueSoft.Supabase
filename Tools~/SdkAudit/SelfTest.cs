@@ -78,6 +78,9 @@ namespace SdkAudit
                     missing.Add("[R19 시간대고정] 여러 마디 시간대 이름");
                 if (found.Any(f => f.Contains("late_cte")))
                     missing.Add("[R9 설치순서] with 절 이름 오탐(late_cte)");
+                // unlogged 표도 표로 세야 한다 — 못 세면 표 목록에서 빠진 것을 놓친다.
+                if (!found.Any(f => f.StartsWith("[R17 검증표]", StringComparison.Ordinal) && f.Contains("unlogged_missing")))
+                    missing.Add("[R17 검증표] unlogged 표(unlogged_missing)");
                 if (found.Any(f => f.Contains("ts_early_plpgsql")))
                     missing.Add("[R9 설치순서] plpgsql 본문 오탐(ts_early_plpgsql)");
                 // game_settings 의 기본값은 허용 — 이게 잡히면 오탐이다.
@@ -227,7 +230,7 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             Write(root, "Admin~/supabase/functions/admin-api/index.ts",
                 "await db.rpc(\"ts_ghost_fn\");\nawait db.rpc(\"ts_never_scheduled\");\nawait db.from(\"ghost_table\").select();\nawait db.from(\"late_table\").select();\nawait db.from(\"UPPER_TABLE\").select();\nawait db.storage.from(\"bucket\");\n");
             File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"),
-                "\nCREATE TABLE IF NOT EXISTS public.UPPER_TABLE (id int);\ngrant execute on function public.ts_properly_scheduled() to authenticated;\n");
+                "\nCREATE TABLE IF NOT EXISTS public.UPPER_TABLE (id int);\ncreate unlogged table if not exists public.unlogged_missing (id int);\ngrant execute on function public.ts_properly_scheduled() to authenticated;\n");
             // 표 목록 — late_table·UPPER_TABLE 은 빠졌고 ghost_listed 는 install.sql 에 없다(양쪽 방향 다 걸려야 한다).
             Write(root, "Samples~/DatabaseSetup/SQL/player/verify.sql",
                 "select 'table+rls'::text from (values ('late_sql_table'), ('game_settings'), ('ghost_listed')) as exp(name)\n"

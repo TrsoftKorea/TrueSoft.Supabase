@@ -137,6 +137,13 @@ namespace TrueBase.Core.Common
         /// <summary>HTTP 요청 자체가 실패했습니다(네트워크 없음 또는 타임아웃).</summary>
         public const string NetworkError = "http_response_null";
 
+        /// <summary>
+        /// 짧은 시간에 요청을 너무 많이 보내 서버가 잠시 막았습니다(운영 콘솔 "설정 › 요청 제한"). 제한 시간이 지나면 풀립니다.
+        /// 서버 함수 실패는 이 글자로 오지만, 다른 경로(엣지 함수·표 요청)는 HTTP 오류 본문에 섞여 오므로
+        /// <see cref="SupabaseReasonMap.FromErrorCode"/> 가 글자가 들어 있기만 해도 이 사유로 본다.
+        /// </summary>
+        public const string RequestLimited = "request_limited";
+
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
 

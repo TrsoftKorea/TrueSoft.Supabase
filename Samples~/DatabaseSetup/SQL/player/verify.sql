@@ -65,6 +65,9 @@ from (
       ('ccu_snapshots'),
       ('ccu_daily'),
       ('user_ban_messages'),
+      ('request_limit_settings'),
+      ('request_limit_counters'),
+      ('request_limit_blocks'),
       ('user_data_logs'),
       ('game_items'),
       ('mail_batches'),
@@ -308,6 +311,9 @@ from (
       ('ts_anon_recovery_get_refresh_token',     'anon+auth'),
       ('ts_anon_recovery_upsert_refresh_token',  'anon+auth'),
       ('ts_anon_recovery_delete_by_fingerprint', 'anon+auth'),
+      -- 요청 제한 사전 검사 — 빠지면 그 역할의 요청이 전부 실패한다
+      ('ts_request_limit_check',                 'anon+auth'),
+      ('ts_request_limit_ping',                  'auth'),
       -- 로그인 사용자 전용 RPC
       ('ts_ensure_my_profile',            'auth'),
       ('ts_ensure_my_row',                'auth'),
@@ -391,6 +397,7 @@ from (
       'ts_match_lobby_leave', 'ts_match_lobby_list_my', 'ts_match_lobby_respond',
       'ts_match_lobby_set_member_meta', 'ts_match_lobby_start', 'ts_match_report_result',
       'ts_match_report_solo_result', 'ts_match_stats', 'ts_my_server_id', 'ts_my_withdrawal_status',
+      'ts_request_limit_check', 'ts_request_limit_ping',
       'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_transfer_my_server', 'ts_view_mail_for_user'
     )
 

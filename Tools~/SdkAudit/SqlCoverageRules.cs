@@ -18,10 +18,11 @@ namespace SdkAudit
         // storage.from("버킷") 은 표가 아니다.
         private static readonly Regex FromCall = new(@"(?<!storage)\.from\(\s*""(?<name>[A-Za-z_][\w]*)""\s*\)");
         private static readonly Regex DefinedFunction = new(@"create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?""?(?<name>\w+)""?\s*\(", RegexOptions.IgnoreCase);
-        private static readonly Regex DefinedRelation = new(@"create\s+(?:or\s+replace\s+)?(?:table|view|materialized\s+view)\s+(?:if\s+not\s+exists\s+)?(?:public\.)?""?(?<name>\w+)""?", RegexOptions.IgnoreCase);
+        private static readonly Regex DefinedRelation = new(@"create\s+(?:or\s+replace\s+)?(?:unlogged\s+)?(?:table|view|materialized\s+view)\s+(?:if\s+not\s+exists\s+)?(?:public\.)?""?(?<name>\w+)""?", RegexOptions.IgnoreCase);
         private static readonly Regex ClientGrant = new(@"grant\s+execute\s+on\s+function\s+public\.(?<name>\w+)\s*\([^)]*\)\s+to\s+(?<roles>[^;]+);", RegexOptions.IgnoreCase);
         // public. 을 붙인 정의만 표로 센다 — install.sql 은 전부 그렇게 쓰고, 주석·문자열 속 "CREATE TABLE AS" 같은 글자를 표로 오인하지 않게.
-        private static readonly Regex DefinedTable = new(@"create\s+table\s+(?:if\s+not\s+exists\s+)?public\.""?(?<name>[A-Za-z_][A-Za-z0-9_]*)""?", RegexOptions.IgnoreCase);
+        // unlogged(기록을 남기지 않는 표, 요청 제한의 요청 수)도 표다.
+        private static readonly Regex DefinedTable = new(@"create\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?public\.""?(?<name>[A-Za-z_][A-Za-z0-9_]*)""?", RegexOptions.IgnoreCase);
 
         public static void Run(AuditContext ctx)
         {

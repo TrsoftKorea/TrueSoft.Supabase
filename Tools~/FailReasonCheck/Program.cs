@@ -197,6 +197,14 @@ static SqlErrorCodes CollectSqlErrorCodes(string root, List<string> warnings)
             if (result.Add(code))
                 result.Emissions.Add((name, code));
         }
+
+        // HTTP 상태를 직접 정하는 오류(raise sqlstate 'PGRST' — 요청 제한의 429)는 사유를 JSON 의 code 로 싣는다.
+        if (Regex.IsMatch(body, @"raise\s+sqlstate\s+'PGRST'", RegexOptions.IgnoreCase))
+        {
+            foreach (Match r in Regex.Matches(body, @"'code'\s*,\s*'([a-z][a-z0-9_]*)'", RegexOptions.IgnoreCase))
+                if (result.Add(r.Groups[1].Value))
+                    result.Emissions.Add((name, r.Groups[1].Value));
+        }
     }
 
     return result;
