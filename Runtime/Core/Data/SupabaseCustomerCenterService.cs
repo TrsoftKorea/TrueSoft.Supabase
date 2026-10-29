@@ -5,21 +5,25 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using TrueBase.Core.Common;
 using TrueBase.Core.Http;
+using TrueBase.Core.Models;
 
 namespace TrueBase.Core.Data
 {
-    /// <summary>고객센터 창의 접속 표. 창(웹 페이지)이 이 표로 문의를 읽고 보낸다.</summary>
-    public sealed class SupabaseCustomerCenterSession
+    /// <summary>고객센터 창의 접속 표. 창(웹 페이지)이 이 표로 문의를 읽고 보낸다. SDK 안에서만 쓴다.</summary>
+    internal sealed class SupabaseCustomerCenterSession
     {
         public string Token { get; }
         public bool Banned { get; }
         public string Language { get; }
+        /// <summary>차단된 계정이면 정지 기한·사유. 구글·애플 로그인이 차단으로 거절됐을 때 SDK 가 이걸로 차단 정보를 채운다.</summary>
+        public SupabaseBanInfo BanInfo { get; }
 
-        public SupabaseCustomerCenterSession(string token, bool banned, string language)
+        public SupabaseCustomerCenterSession(string token, bool banned, string language, SupabaseBanInfo banInfo)
         {
             Token = token;
             Banned = banned;
             Language = language;
+            BanInfo = banInfo;
         }
     }
 
@@ -49,7 +53,7 @@ namespace TrueBase.Core.Data
         /// (<c>access_token</c>·<c>saved_access_token</c>·<c>refresh_token</c>·<c>id_token</c>·<c>provider</c>·<c>nonce</c>),
         /// 비어 있는 값은 빼고 보냅니다. 확인할 수 없으면 <see cref="SupabaseErrorCode.CustomerCenterLoginRequired"/>.
         /// </summary>
-        public async Task<SupabaseResult<SupabaseCustomerCenterSession>> StartSessionAsync(
+        internal async Task<SupabaseResult<SupabaseCustomerCenterSession>> StartSessionAsync(
             IDictionary<string, string> proofs, IDictionary<string, string> meta)
         {
             var body = new Dictionary<string, object> { ["action"] = "session.start" };
@@ -74,7 +78,9 @@ namespace TrueBase.Core.Data
             JObject json;
             try
             {
-                json = JObject.Parse(response.Body ?? string.Empty);
+                // 날짜를 글자 그대로 받는다 — 기본 해석은 시각을 기기 시간대로 바꿔 놓아 정지 기한이 어긋날 수 있다.
+                using var reader = new JsonTextReader(new System.IO.StringReader(response.Body ?? string.Empty)) { DateParseHandling = DateParseHandling.None };
+                json = JObject.Load(reader);
             }
             catch
             {
@@ -90,8 +96,20 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrEmpty(token))
                 return SupabaseResult<SupabaseCustomerCenterSession>.Fail(InvalidResponse);
 
+            SupabaseBanInfo banInfo = null;
+            if (data["ban"] is JObject ban && !string.IsNullOrEmpty(ban["account_id"]?.Value<string>()))
+            {
+                DateTimeOffset? until = null;
+                var rawUntil = ban["banned_until"]?.Type == JTokenType.String ? ban["banned_until"].Value<string>() : null;
+                if (!string.IsNullOrWhiteSpace(rawUntil)
+                    && DateTimeOffset.TryParse(rawUntil, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
+                    until = parsed;
+                banInfo = new SupabaseBanInfo(ban["account_id"].Value<string>(), until,
+                    ban["message"]?.Type == JTokenType.Null ? null : ban["message"]?.Value<string>());
+            }
+
             return SupabaseResult<SupabaseCustomerCenterSession>.Success(new SupabaseCustomerCenterSession(
-                token, data["banned"]?.Value<bool>() == true, data["lang"]?.Value<string>()));
+                token, data["banned"]?.Value<bool>() == true, data["lang"]?.Value<string>(), banInfo));
         }
 
         /// <summary>운영자 답을 아직 안 읽은 내 문의 수. 로그인 상태에서만.</summary>

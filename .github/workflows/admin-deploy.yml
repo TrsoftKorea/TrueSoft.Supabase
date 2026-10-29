@@ -19,6 +19,11 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # 게임 목록 — 콘솔과 고객센터 페이지가 같이 쓴다(한쪽에만 넣으면 그쪽이 그 게임을 조용히 거절한다).
+    # Cloudflare 대시보드의 "환경 변수"는 여기선 안 먹는다 — 빌드가 여기(GitHub Actions)에서 일어나기 때문이다.
+    env:
+      VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
+      VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,14 +33,11 @@ jobs:
           cache-dependency-path: Admin~/package-lock.json
       - run: npm ci
         working-directory: Admin~
-      # Cloudflare 대시보드의 "환경 변수"는 여기선 안 먹는다 — 빌드가 Cloudflare가 아니라
-      # 여기(GitHub Actions)에서 일어나기 때문이다. 전부 공개돼도 되는 값(README 참고).
+      # 전부 공개돼도 되는 값(README 참고).
       - run: npm run build
         working-directory: Admin~
         env:
           VITE_GOOGLE_CLIENT_ID: 782622202301-336bs6o064t4i739lcuo1e4idkh8kkt2.apps.googleusercontent.com
-          VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
-          VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
           # 배포 판의 version.json — 미리보기 게시 띠가 실제 콘솔이 최신인지 이걸로 본다.
           VITE_BUILD_SHA: ${{ github.sha }}
       # 첫 실행 때만 필요 — 프로젝트가 이미 있으면 에러가 나지만 그냥 넘어간다.
@@ -57,10 +59,6 @@ jobs:
       # 콘솔 로그인 정보와 저장 공간을 나눠 쓰게 된다. 어느 게임인지는 페이지 주소(?p=)로 받아 값이 따로 없다.
       - run: npm run build:support
         working-directory: Admin~
-        # 페이지가 받는 게임 목록 — 콘솔과 같은 값(없으면 어느 게임도 안 열린다).
-        env:
-          VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
-          VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
       - uses: cloudflare/wrangler-action@v3
         continue-on-error: true
         with:

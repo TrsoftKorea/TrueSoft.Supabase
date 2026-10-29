@@ -104,11 +104,28 @@ async function readToken(req: Request): Promise<SupportToken> {
   return t;
 }
 
-async function isBanned(accountId: string): Promise<boolean> {
+async function bannedUntil(accountId: string): Promise<Date | null> {
   const { data, error } = await db.auth.admin.getUserById(accountId);
   if (error || !data?.user) throw new Reject("support_account_not_found", 404);
-  const until = (data.user as unknown as { banned_until?: string | null }).banned_until;
-  return !!until && new Date(until) > new Date();
+  const raw = (data.user as unknown as { banned_until?: string | null }).banned_until;
+  const until = raw ? new Date(raw) : null;
+  return until && until > new Date() ? until : null;
+}
+
+const isBanned = async (accountId: string) => (await bannedUntil(accountId)) !== null;
+
+// 차단 정보 — 구글·애플 로그인이 차단으로 거절되면 SDK 가 계정을 몰라 정지 기한·사유를 못 채운다. 본인 확인을
+// 마친 이 함수가 대신 알려 준다(get-ban-info 와 같은 기준: 50년 넘게 남으면 영구 = null).
+async function banDetails(accountId: string): Promise<{ account_id: string; banned_until: string | null; message: string | null }> {
+  const until = await bannedUntil(accountId);
+  const permanentAfter = new Date();
+  permanentAfter.setFullYear(permanentAfter.getFullYear() + 50);
+  const { data } = await db.from("user_ban_messages").select("ban_message").eq("account_id", accountId).maybeSingle();
+  return {
+    account_id: accountId,
+    banned_until: until && until < permanentAfter ? until.toISOString() : null,
+    message: (data as { ban_message?: string | null } | null)?.ban_message ?? null,
+  };
 }
 
 // ① 마지막 접속 토큰. 기한(exp)은 일부러 넘긴다 — 서명과 발급 시각(iat)만 본다.
@@ -232,7 +249,8 @@ async function startSession(p: Params): Promise<Response> {
 
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
   const token = await signToken({ sub: account, ban: banned, lang, meta, exp });
-  return json({ ok: true, data: { token, expires_at: new Date(exp * 1000).toISOString(), banned, lang } });
+  const ban = banned ? await banDetails(account) : null;
+  return json({ ok: true, data: { token, expires_at: new Date(exp * 1000).toISOString(), banned, lang, ban } });
 }
 
 async function signAttachments<T extends { attachments?: unknown }>(items: T[]): Promise<T[]> {
@@ -275,7 +293,12 @@ async function upload(t: SupportToken, p: Params): Promise<Response> {
   if (listed.filter((o) => Date.parse(o.created_at!) > hourAgo).length >= UPLOADS_PER_HOUR) {
     throw new Reject("support_too_fast");
   }
-  if (listed.length - stale.length >= MAX_FILES_PER_ACCOUNT) throw new Reject("support_attachment_limit");
+  // 총량은 최근 30일만 센다 — 붙인 그림은 지우지 않으므로 평생 개수로 세면 문의를 많이 한 계정이 영영 못 붙인다.
+  const monthAgo = Date.now() - 30 * 24 * 3600_000;
+  const staleNames = new Set(stale.map((o) => o.name));
+  if (listed.filter((o) => !staleNames.has(o.name) && Date.parse(o.created_at!) > monthAgo).length >= MAX_FILES_PER_ACCOUNT) {
+    throw new Reject("support_attachment_limit");
+  }
 
   const path = `${t.sub}/${crypto.randomUUID()}.${ext}`;
   const { error } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: type, upsert: false });
@@ -321,6 +344,12 @@ Deno.serve(async (req) => {
       case "look": {
         const s = (await rpc<Record<string, string | null>>("ts_admin_console_settings_get", {})) ?? {};
         return json({ ok: true, data: { name: s.display_name ?? null, color: s.color ?? null, icon: s.icon ?? null } });
+      }
+
+      // 자주 묻는 질문 — 공개 정보라 접속 표 없이도 준다(본인 확인이 실패해도 창에서 볼 수 있게).
+      case "faqs": {
+        const lang = (str(p, "lang") || "en").slice(0, 2).toLowerCase();
+        return json({ ok: true, data: await rpc("ts_support_faqs", { p_lang: lang }) });
       }
     }
 

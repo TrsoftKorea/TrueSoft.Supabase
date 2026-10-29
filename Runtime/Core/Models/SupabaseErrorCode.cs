@@ -150,6 +150,9 @@ namespace TrueBase.Core.Common
         /// </summary>
         public const string CustomerCenterLoginRequired = "support_login_required";
 
+        /// <summary>고객센터 창이 뜨지 않았습니다 — 다른 화면이 이미 떠 있어 기기가 창을 띄우지 못한 경우. 잠시 뒤 다시 엽니다.</summary>
+        public const string CustomerCenterNotShown = "customer_center_not_shown";
+
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
 

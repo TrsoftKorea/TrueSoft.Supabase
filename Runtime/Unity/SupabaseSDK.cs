@@ -560,8 +560,7 @@ namespace TrueBase.Unity
                 }
             }
 
-            RememberBannedIdToken(result, "google", idToken, null);
-            return result;
+            return await WithBanInfoAsync(result, "google", idToken, null);
         }
 
         /// <summary>
@@ -898,8 +897,7 @@ namespace TrueBase.Unity
                 }
             }
 
-            RememberBannedIdToken(result, "apple", idToken, rawNonce);
-            return result;
+            return await WithBanInfoAsync(result, "apple", idToken, rawNonce);
         }
 
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(ID 토큰 직접 전달).</summary>
@@ -1887,6 +1885,8 @@ namespace TrueBase.Unity
 
                 // 고객센터 — 로그인하지 않은 상태에서 연 경우. 게임이 "로그인 후 이용" 안내를 띄우면 된다.
                 case SupabaseErrorCode.CustomerCenterLoginRequired:
+                // 다른 화면이 떠 있어 창이 못 뜬 경우 — 코드 오류가 아니라 그 순간의 화면 상태다.
+                case SupabaseErrorCode.CustomerCenterNotShown:
                     return true;
 
                 // 요청 제한 — 막힌 동안 모든 호출이 실패하므로 빨갛게 찍으면 콘솔이 덮인다. 게임은 "잠시 후" 안내만 하면 된다.
@@ -4793,6 +4793,32 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
+        /// 구글·애플 로그인이 차단으로 거절되면 그 ID 토큰을 기억하고(고객센터 본인 확인용), 정지 기한·사유를 채워 돌려준다.
+        /// 이 경로는 계정 번호를 몰라 차단 정보를 못 가져오므로, 본인 확인을 마친 고객센터 서버 함수에 묻는다 — 비어 있으면
+        /// 게임이 기간 정지를 영구 정지로 안내한다(2026-10-29 리뷰). 물어보지 못하면 원래 결과 그대로.
+        /// </summary>
+        private static async Task<SupabaseResult<SupabaseSession>> WithBanInfoAsync(
+            SupabaseResult<SupabaseSession> result, string provider, string idToken, string rawNonce)
+        {
+            RememberBannedIdToken(result, provider, idToken, rawNonce);
+            if (result == null || result.IsSuccess || result.Reason != SupabaseReason.UserBanned || result.BanInfo != null
+                || _bootstrap?.CustomerCenterService == null)
+                return result;
+            try
+            {
+                var proofs = new Dictionary<string, string> { ["id_token"] = idToken, ["provider"] = provider, ["nonce"] = rawNonce };
+                var session = await _bootstrap.CustomerCenterService.StartSessionAsync(proofs, null);
+                if (session.IsSuccess && session.Data?.BanInfo != null)
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.UserBanned, session.Data.BanInfo);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Supabase.BanInfo] 차단 정보 조회 실패: {e.Message}");
+            }
+            return result;
+        }
+
+        /// <summary>
         /// 고객센터 창을 엽니다. 로그인 중이면 그 계정으로, 차단돼 로그인이 막혔으면 이 기기에 남은 로그인 기록이나
         /// 방금 차단으로 거절된 구글·애플 로그인으로 본인을 확인합니다. 게임 안 창이면 닫힐 때까지 기다립니다.
         /// </summary>
@@ -4808,21 +4834,20 @@ namespace TrueBase.Unity
                 && _currentSession.expires_at - DateTimeOffset.UtcNow.ToUnixTimeSeconds() <= SessionRefreshLeadSeconds)
                 await RefreshSessionAsync(_currentSession.refresh_token);
 
-            var proofs = new Dictionary<string, string>();
+            // 로그인 중이어도 기기에 남은 증명을 함께 보낸다 — 게임 중에 차단되면 지금 토큰은 갱신이 막혀 끝나 가고,
+            // 서버는 지금 토큰을 먼저 보고 안 되면 나머지를 본다(나머지는 차단된 계정일 때만 받는다).
+            var proofs = new Dictionary<string, string>
+            {
+                ["saved_access_token"] = PlayerPrefs.GetString(LastAccessTokenKey, null),
+                ["refresh_token"] = PlayerPrefs.GetString(RefreshTokenKey, null),
+            };
             if (IsLoggedIn && !string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
-            {
                 proofs["access_token"] = _currentSession.AccessToken;
-            }
-            else
+            if (!string.IsNullOrWhiteSpace(_bannedIdToken))
             {
-                proofs["saved_access_token"] = PlayerPrefs.GetString(LastAccessTokenKey, null);
-                proofs["refresh_token"] = PlayerPrefs.GetString(RefreshTokenKey, null);
-                if (!string.IsNullOrWhiteSpace(_bannedIdToken))
-                {
-                    proofs["id_token"] = _bannedIdToken;
-                    proofs["provider"] = _bannedIdProvider;
-                    proofs["nonce"] = _bannedIdNonce;
-                }
+                proofs["id_token"] = _bannedIdToken;
+                proofs["provider"] = _bannedIdProvider;
+                proofs["nonce"] = _bannedIdNonce;
             }
 
             var language = SystemLanguageCode();
@@ -4847,8 +4872,10 @@ namespace TrueBase.Unity
             // 접속 표는 # 뒤에 둔다 — 서버로 가는 주소·기록에 남지 않고 페이지가 읽자마자 지운다.
             var query = $"?p={projectRef}&lang={Uri.EscapeDataString(language)}";
             var fragment = $"#t={Uri.EscapeDataString(started.Data.Token)}";
-            await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1{fragment}", $"{baseUrl}/{query}{fragment}");
-            return LogAndReturn(tag, SupabaseResult<bool>.Success(true));
+            var shown = await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1{fragment}", $"{baseUrl}/{query}{fragment}");
+            return LogAndReturn(tag, shown
+                ? SupabaseResult<bool>.Success(true)
+                : SupabaseResult<bool>.Fail(SupabaseErrorCode.CustomerCenterNotShown));
         }
 
         /// <summary>운영자 답을 아직 안 읽은 내 문의 수. 로그인 상태에서만.</summary>

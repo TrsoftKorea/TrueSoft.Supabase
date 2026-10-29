@@ -71,6 +71,7 @@ from (
       ('support_categories'),
       ('support_tickets'),
       ('support_messages'),
+      ('support_faqs'),
       ('user_data_logs'),
       ('game_items'),
       ('mail_batches'),

@@ -276,3 +276,4 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `CustomerCenterLoginRequired` | 고객센터를 열 수 없습니다. 로그인 상태가 아니고, 차단된 계정이 이 기기에 남긴 로그인 기록도 없습니다. 로그인한 뒤 다시 엽니다 |
+| `CustomerCenterNotShown` | 다른 화면이 이미 떠 있어 기기가 고객센터 창을 띄우지 못했습니다. 잠시 뒤 다시 엽니다 |

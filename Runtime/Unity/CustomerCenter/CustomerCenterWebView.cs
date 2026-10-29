@@ -45,19 +45,25 @@ namespace TrueBase.Unity.CustomerCenter
         /// <summary>창을 띄우고 닫힐 때까지 기다린다. 게임 안 창이 없는 곳은 브라우저로 열고 바로 끝난다.</summary>
         /// <param name="inAppUrl">게임 안 창 주소(닫기 단추가 보이는 꼴).</param>
         /// <param name="browserUrl">브라우저로 열 때의 주소.</param>
-        public static async Task OpenAsync(string inAppUrl, string browserUrl)
+        /// <returns>창이 떴으면 true. 게임 안 창이 끝내 안 뜨면 false.</returns>
+        public static async Task<bool> OpenAsync(string inAppUrl, string browserUrl)
         {
 #if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
             OpenNative(inAppUrl);
             // 창은 띄우기가 끝나야 "열림"이 된다. 열린 것이 보일 때까지 기다리되(최대 6초) 끝내 안 뜨면
-            // (다른 화면이 떠 있어 띄우기가 실패한 경우) 기다리지 않고 끝낸다.
-            for (var i = 0; i < 20 && !IsOpenNative(); i++)
+            // (다른 화면이 떠 있어 띄우기가 실패한 경우) 실패로 끝낸다.
+            var shown = false;
+            for (var i = 0; i < 20 && !(shown = IsOpenNative()); i++)
                 await Task.Delay(PollMilliseconds);
+            if (!shown)
+                return false;
             while (IsOpenNative())
                 await Task.Delay(PollMilliseconds);
+            return true;
 #else
             Application.OpenURL(browserUrl);
             await Task.CompletedTask;
+            return true;
 #endif
         }
     }

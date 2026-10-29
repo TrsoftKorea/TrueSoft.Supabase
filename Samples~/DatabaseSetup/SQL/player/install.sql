@@ -5047,6 +5047,7 @@ declare
   v_key      text;
   v_hits     int;
   v_until    timestamptz;
+  v_bucket   timestamptz;
 begin
   begin
     select * into v_settings from public.request_limit_settings where id = 1;
@@ -5071,25 +5072,29 @@ begin
 
     if (v_until is null or v_until <= now())
        and coalesce(current_setting('request.method', true), 'GET') not in ('GET', 'HEAD') then
+      -- 구간은 시계에 맞춘 칸(기준 시간 단위로 자른 시각)이다. 연결마다 "첫 요청 시각"에서 구간을 따로 시작하면
+      -- 줄마다 비우는 때가 어긋나 합계가 실제의 절반 근처로 줄었다(2026-10-29 리뷰) — 모든 줄이 같은 칸을 쓴다.
+      v_bucket := to_timestamp(floor(extract(epoch from now()) / v_settings.window_seconds) * v_settings.window_seconds);
       insert into public.request_limit_counters as c (key, pid, window_start, hits)
-      values (v_key, pg_backend_pid(), now(), 1)
+      values (v_key, pg_backend_pid(), v_bucket, 1)
       on conflict (key, pid) do update set
-        hits         = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then 1 else c.hits + 1 end,
-        window_start = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then now() else c.window_start end;
+        hits         = case when c.window_start < v_bucket then 1 else c.hits + 1 end,
+        window_start = v_bucket;
 
-      -- 계정의 요청 수 = 이 계정의 연결별 줄 중 아직 구간 안인 것의 합. 남의 줄은 읽기만 하므로 기다리지 않는다.
+      -- 계정의 요청 수 = 이 계정의 연결별 줄 중 지금 칸의 합. 남의 줄은 읽기만 하므로 기다리지 않는다.
       select coalesce(sum(c.hits), 0) into v_hits
         from public.request_limit_counters c
-       where c.key = v_key and c.window_start > now() - make_interval(secs => v_settings.window_seconds);
+       where c.key = v_key and c.window_start = v_bucket;
 
       if v_hits > v_settings.max_requests then
         insert into public.request_limit_blocks (key, account_id, hits, blocked_at, blocked_until)
         values (v_key, v_uid, v_hits, now(), now() + make_interval(mins => v_settings.block_minutes))
         on conflict (key) do update set
           hits = excluded.hits, blocked_at = excluded.blocked_at, blocked_until = excluded.blocked_until;
-        -- 내 연결 줄만 비운다 — 다른 연결 줄은 지금 다른 요청이 잡고 있을 수 있어 지우려면 기다려야 한다.
-        -- 남은 줄은 구간이 지나면 저절로 세지 않게 된다.
-        delete from public.request_limit_counters where key = v_key and pid = pg_backend_pid();
+        -- 이 계정의 줄을 비운다 — 남겨 두면 풀리자마자 지난 숫자로 다시 막힌다. 지금 다른 요청이 잡고 있는 줄은
+        -- 기다리지 않고 건너뛴다(기다리면 잠금 대기 실패로 위 제한 기록까지 되돌려진다).
+        delete from public.request_limit_counters
+         where ctid in (select c.ctid from public.request_limit_counters c where c.key = v_key for update skip locked);
       end if;
       v_until := null;  -- 기준을 넘은 이 요청은 통과시킨다(위 [주의]).
     end if;
@@ -13601,6 +13606,184 @@ comment on function public.ts_support_account_attachments(uuid) is '이 계정 �
 revoke all on function public.ts_support_account_attachments(uuid) from public, anon, authenticated;
 grant execute on function public.ts_support_account_attachments(uuid) to service_role;
 
+-- ---------------------------------------------------------------------------
+-- 자주 묻는 질문 — 고객센터 창 첫 화면과 문의 쓰기(고른 분류의 것)에 보인다. 운영 콘솔 "고객센터 › 자주 묻는 질문".
+-- 공개 정보라 창은 접속 표 없이도 읽는다(support-api faqs). 분류를 지우지 않으므로 분류가 꺼져도 FAQ 는 남는다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.support_faqs (
+  id          serial      primary key,
+  category_id int         references public.support_categories (id) on delete set null,
+  question    text        not null check (char_length(btrim(question)) between 1 and 200),
+  answer      text        not null check (char_length(btrim(answer)) between 1 and 4000),
+  -- 언어별 문구 {"en": {"question": "...", "answer": "..."}}. 없는 언어는 한국어가 아니면 en, 그것도 없으면 위 값.
+  localized   jsonb       not null default '{}'::jsonb,
+  sort_order  int         not null default 0,
+  is_active   boolean     not null default true,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  updated_by  text
+);
+create index if not exists support_faqs_order_idx on public.support_faqs (sort_order, id);
+alter table public.support_faqs enable row level security;
+revoke all on table public.support_faqs from anon, authenticated;
+
+create or replace function public.ts_support_faqs(p_lang text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with l as (
+    select f.*,
+           coalesce(f.localized -> p_lang, case when p_lang <> 'ko' then f.localized -> 'en' end) as loc
+      from public.support_faqs f
+     where f.is_active
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', l.id, 'category_id', l.category_id,
+           'question', coalesce(nullif(l.loc ->> 'question', ''), l.question),
+           'answer',   coalesce(nullif(l.loc ->> 'answer', ''),   l.answer))
+           order by l.sort_order, l.id), '[]'::jsonb)
+    from l;
+$$;
+
+create or replace function public.ts_admin_support_faqs()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', f.id, 'category_id', f.category_id, 'category', c.name, 'question', f.question, 'answer', f.answer,
+           'localized', f.localized, 'sort_order', f.sort_order, 'is_active', f.is_active,
+           'updated_at', f.updated_at, 'updated_by', f.updated_by)
+           order by f.sort_order, f.id), '[]'::jsonb)
+    from public.support_faqs f
+    left join public.support_categories c on c.id = f.category_id;
+$$;
+
+-- 추가(p_id null)·바꾸기.
+create or replace function public.ts_admin_support_faq_upsert(
+  p_id int, p_category int, p_question text, p_answer text, p_localized jsonb, p_sort_order int, p_is_active boolean, p_by text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if char_length(btrim(coalesce(p_question, ''))) not between 1 and 200 then
+    raise exception 'support_faq_question_invalid';
+  end if;
+  if char_length(btrim(coalesce(p_answer, ''))) not between 1 and 4000 then
+    raise exception 'support_faq_answer_invalid';
+  end if;
+  if p_category is not null and not exists (select 1 from public.support_categories where id = p_category) then
+    raise exception 'support_category_not_found';
+  end if;
+  if p_id is null then
+    insert into public.support_faqs (category_id, question, answer, localized, sort_order, is_active, updated_by)
+    values (p_category, btrim(p_question), btrim(p_answer), coalesce(p_localized, '{}'::jsonb),
+            coalesce(p_sort_order, 0), coalesce(p_is_active, true), p_by);
+  else
+    update public.support_faqs
+       set category_id = p_category, question = btrim(p_question), answer = btrim(p_answer),
+           localized = coalesce(p_localized, '{}'::jsonb), sort_order = coalesce(p_sort_order, sort_order),
+           is_active = coalesce(p_is_active, is_active), updated_at = now(), updated_by = p_by
+     where id = p_id;
+    if not found then
+      raise exception 'support_faq_not_found';
+    end if;
+  end if;
+end;
+$$;
+
+-- FAQ 는 다른 기록이 가리키지 않아 지울 수 있다.
+create or replace function public.ts_admin_support_faq_delete(p_id int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.support_faqs where id = p_id;
+  if not found then
+    raise exception 'support_faq_not_found';
+  end if;
+end;
+$$;
+
+-- 순서 바꾸기 — 콘솔에서 끌어 놓은 차례 그대로(p_ids 의 앞이 위). 목록에 없는 FAQ 는 건드리지 않는다.
+create or replace function public.ts_admin_support_faq_reorder(p_ids int[], p_by text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.support_faqs f
+     set sort_order = o.ord, updated_at = now(), updated_by = p_by
+    from unnest(p_ids) with ordinality as o(id, ord)
+   where f.id = o.id and f.sort_order is distinct from o.ord;
+$$;
+
+comment on function public.ts_admin_support_faq_reorder(int[], text) is '자주 묻는 질문 순서 바꾸기(끌어 놓은 차례). service_role 전용.';
+revoke all on function public.ts_admin_support_faq_reorder(int[], text) from public, anon, authenticated;
+grant execute on function public.ts_admin_support_faq_reorder(int[], text) to service_role;
+
+-- 켜기·끄기만 — 다른 칸은 건드리지 않는다. 화면이 불러 둔 옛 질문·답을 함께 보내면 다른 운영자의 수정을 덮는다.
+create or replace function public.ts_admin_support_faq_set_active(p_id int, p_is_active boolean, p_by text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.support_faqs set is_active = p_is_active, updated_at = now(), updated_by = p_by where id = p_id;
+  if not found then
+    raise exception 'support_faq_not_found';
+  end if;
+end;
+$$;
+
+create or replace function public.ts_admin_support_category_set_active(p_id int, p_is_active boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.support_categories set is_active = p_is_active, updated_at = now() where id = p_id;
+  if not found then
+    raise exception 'support_category_not_found';
+  end if;
+end;
+$$;
+
+comment on function public.ts_admin_support_faq_set_active(int, boolean, text) is '자주 묻는 질문 켜기·끄기만. service_role 전용.';
+comment on function public.ts_admin_support_category_set_active(int, boolean) is '고객센터 분류 켜기·끄기만. service_role 전용.';
+revoke all on function public.ts_admin_support_faq_set_active(int, boolean, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_support_category_set_active(int, boolean)  from public, anon, authenticated;
+grant execute on function public.ts_admin_support_faq_set_active(int, boolean, text) to service_role;
+grant execute on function public.ts_admin_support_category_set_active(int, boolean)  to service_role;
+
+comment on function public.ts_support_faqs(text) is '고객센터 창의 자주 묻는 질문(켜진 것). service_role 전용.';
+comment on function public.ts_admin_support_faqs() is '콘솔 자주 묻는 질문 전부. service_role 전용.';
+comment on function public.ts_admin_support_faq_upsert(int, int, text, text, jsonb, int, boolean, text) is '자주 묻는 질문 추가·바꾸기. service_role 전용.';
+comment on function public.ts_admin_support_faq_delete(int) is '자주 묻는 질문 지우기. service_role 전용.';
+
+revoke all on function public.ts_support_faqs(text)                                                   from public, anon, authenticated;
+revoke all on function public.ts_admin_support_faqs()                                                 from public, anon, authenticated;
+revoke all on function public.ts_admin_support_faq_upsert(int, int, text, text, jsonb, int, boolean, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_support_faq_delete(int)                                        from public, anon, authenticated;
+grant execute on function public.ts_support_faqs(text)                                                   to service_role;
+grant execute on function public.ts_admin_support_faqs()                                                 to service_role;
+grant execute on function public.ts_admin_support_faq_upsert(int, int, text, text, jsonb, int, boolean, text) to service_role;
+grant execute on function public.ts_admin_support_faq_delete(int)                                        to service_role;
+
+notify pgrst, 'reload schema';
+
 -- 게임의 새 답변 표시 — 로그인한 플레이어가 직접 부른다.
 create or replace function public.ts_support_unread_count()
 returns int
@@ -13685,6 +13868,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_status text;
 begin
   if char_length(btrim(coalesce(p_body, ''))) = 0 then
     raise exception 'support_body_empty';
@@ -13692,11 +13877,13 @@ begin
   if char_length(p_body) > 2000 then
     raise exception 'support_body_too_long';
   end if;
-  if not exists (select 1 from public.support_tickets where id = p_ticket) then
+  -- 상태를 잠그고 본다 — 다른 운영자가 같은 순간 "종료"하면 답이 그걸 덮어 말없이 다시 열 수 있다.
+  select status into v_status from public.support_tickets where id = p_ticket for update;
+  if v_status is null then
     raise exception 'support_ticket_not_found';
   end if;
   -- 종료한 문의에 답하면 말없이 다시 열린다 — 콘솔이 먼저 "다시 열기"를 하게 한다.
-  if exists (select 1 from public.support_tickets where id = p_ticket and status = 'closed') then
+  if v_status = 'closed' then
     raise exception 'support_ticket_closed';
   end if;
   insert into public.support_messages (ticket_id, sender, body, admin_email)
