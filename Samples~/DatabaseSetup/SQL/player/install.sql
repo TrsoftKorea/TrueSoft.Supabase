@@ -273,6 +273,7 @@ create table if not exists public.user_profiles (
   last_activity_at timestamptz default now(),
   country_code text null,
   platform     text null,
+  signup_platform text null,
   total_paid_krw bigint not null default 0
 );
 
@@ -284,6 +285,7 @@ alter table public.user_profiles add column if not exists withdrawn_at timestamp
 alter table public.user_profiles add column if not exists last_activity_at timestamptz default now();
 alter table public.user_profiles add column if not exists country_code text;
 alter table public.user_profiles add column if not exists platform text;
+alter table public.user_profiles add column if not exists signup_platform text;
 alter table public.user_profiles add column if not exists total_paid_krw bigint not null default 0;
 
 update public.user_profiles p
@@ -364,6 +366,7 @@ comment on column public.user_profiles.withdrawn_at is '탈퇴 표시 시각 (�
 comment on column public.user_profiles.last_activity_at is '마지막 게임 활동 시각. Retool 운영 대시보드용 활동 추적.';
 comment on column public.user_profiles.country_code is '최초 가입 시 Cloudflare CF-IPCountry 헤더에서 기록한 ISO 3166-1 alpha-2 국가 코드. 운영 대시보드용.';
 comment on column public.user_profiles.platform is '가장 최근 로그인 시 클라이언트가 전달한 플랫폼 (android, ios, windows, macos, webgl 등). 매 로그인마다 갱신.';
+comment on column public.user_profiles.signup_platform is '계정을 만든 첫 로그인의 플랫폼. 한 번 적으면 바뀌지 않는다. 이 칸이 생기기 전 계정은 남은 흔적으로 추정해 채웠다(7절). null = 플랫폼을 보내지 않은 로그인으로 만든 계정.';
 comment on column public.user_profiles.total_paid_krw is '누적 결제금액(KRW). purchases INSERT 트리거(07_purchases.sql)가 원자적으로 증분. Retool 운영 대시보드용.';
 
 create index if not exists profiles_user_id_idx on public.user_profiles (user_id);
@@ -507,8 +510,10 @@ begin
     v_country := null;
   end;
 
-  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform, last_activity_at)
-  values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''), now())
+  -- signup_platform 은 여기서 처음 만들 때만 적는다 — 아래 갱신 목록에 넣지 않는다(옛 계정에 지금 기기를 적지 않게).
+  insert into public.user_profiles (user_id, account_id, withdrawn_at, server_id, country_code, platform, signup_platform, last_activity_at)
+  values (v_stable, v_uid, null, v_server, v_country, nullif(trim(coalesce(p_platform, '')), ''),
+          nullif(trim(coalesce(p_platform, '')), ''), now())
   -- withdrawn_at 은 갱신하지 않는다. 예전엔 null 로 지웠는데, SDK 의 탈퇴 확인이 통신 실패로 통과된 로그인이
   -- 여기 오면 이용자 모르게 탈퇴 예약이 사라졌다. 예약 취소는 취소 토큰(ts_withdrawal_cancel_redeem)으로만 한다.
   on conflict (account_id) do update set
@@ -1278,6 +1283,24 @@ alter table public.user_daily_activity enable row level security;
 -- [의도적] 정책 없음 — 운영 콘솔이 ts_admin_activity_stats 로만 읽는다.
 revoke all on table public.user_daily_activity from anon, authenticated;
 
+-- 가입 플랫폼(user_profiles.signup_platform)을 줄마다 같이 둔다 — 계정이 탈퇴로 지워져 프로필이 없어도 지난 통계를
+-- 가입 플랫폼별로 나눠 볼 수 있게. 통계 › 접속의 "가입 플랫폼" 거르기가 이 칸을 본다.
+alter table public.user_daily_activity add column if not exists signup_platform text;
+
+-- 이 칸이 생기기 전 계정: 가입한 날의 접속 기록이 있으면 그날 플랫폼이 가입 플랫폼이다(정확함). 그래도 남는 계정은
+-- 7절(결제 표가 생긴 뒤)에서 남은 흔적으로 추정해 채운다.
+update public.user_profiles p
+   set signup_platform = a.platform
+  from (select distinct on (account_id) account_id, platform
+          from public.user_daily_activity
+         where is_new and platform is not null
+         order by account_id, day) a
+ where p.account_id = a.account_id and p.signup_platform is null;
+update public.user_daily_activity a
+   set signup_platform = p.signup_platform
+  from public.user_profiles p
+ where p.account_id = a.account_id and a.signup_platform is null and p.signup_platform is not null;
+
 -- 오늘 첫 접속이면 한 줄 남긴다. 이미 있으면 아무것도 하지 않는다(로그인·접속 신호가 여러 번 불러도 하루 한 줄).
 -- 직전 접속일은 이 표에서 찾고, 표에 기록이 없던 시절의 계정은 프로필의 마지막 활동 시각으로 대신한다
 -- — 그래서 ts_after_sign_in 은 프로필을 갱신하기 전에 이것부터 부른다.
@@ -1307,10 +1330,10 @@ begin
     if v_prev >= v_day then v_prev := null; end if;
   end if;
 
-  insert into public.user_daily_activity (day, account_id, signup_day, is_new, is_comeback, server_id, platform)
+  insert into public.user_daily_activity (day, account_id, signup_day, is_new, is_comeback, server_id, platform, signup_platform)
   values (v_day, p_account_id, v_signup, v_signup = v_day,
           v_signup is distinct from v_day and v_prev is not null and v_prev <= v_day - 15,
-          v_profile.server_id, nullif(v_profile.platform, ''))
+          v_profile.server_id, nullif(v_profile.platform, ''), nullif(v_profile.signup_platform, ''))
   on conflict (day, account_id) do nothing;
 end;
 $$;
@@ -2869,7 +2892,8 @@ begin
   select * into v_profile from public.user_profiles p where p.account_id = v_uid;
   -- 첫 로그인이면 기록할 때 프로필이 없어 서버·플랫폼이 비었다 — 방금 만든 프로필로 채운다.
   update public.user_daily_activity a
-     set server_id = v_profile.server_id, platform = nullif(v_profile.platform, '')
+     set server_id = v_profile.server_id, platform = nullif(v_profile.platform, ''),
+         signup_platform = coalesce(a.signup_platform, nullif(v_profile.signup_platform, ''))
    where a.day = (now() at time zone public.ts_game_time_zone())::date and a.account_id = v_uid and a.platform is null;
 
   select gs.server_code into v_code from public.game_servers gs where gs.id = v_profile.server_id;
@@ -3645,6 +3669,40 @@ drop index if exists public.purchases_price_unknown_idx;
 create index if not exists purchases_apple_price_unknown_idx on public.purchases (price_checked_at nulls first, verified_at desc)
   where price_amount is null and store = 'apple_app_store';
 create index if not exists purchases_krw_unknown_idx on public.purchases (verified_at) where price_amount is not null and price_amount_krw is null;
+
+-- 가입 플랫폼 추정(2절 user_profiles.signup_platform) — 결제 기록을 근거로 쓰므로 이 표가 생긴 뒤에 둔다.
+-- 2절에서 가입한 날의 기록으로 채우고도 남은 옛 계정은 남아 있는 가장 이른 흔적으로 채운다: 첫 접속 기록의 플랫폼과
+-- 첫 결제의 스토어 중 이른 쪽, 둘 다 없으면 지금 로그인 플랫폼. 가입 뒤 기기를 바꾼 계정은 틀릴 수 있지만
+-- "알 수 없음"을 남기지 않기로 했다(2026-10-29 사용자 결정 — 처음엔 비워 두다가 같은 날 바꿈).
+update public.user_profiles p
+   set signup_platform = e.platform
+  from (select p2.account_id,
+               coalesce((select x.platform from (
+                           select a.day::timestamptz as at, a.platform
+                             from public.user_daily_activity a
+                            where a.account_id = p2.account_id and a.platform is not null
+                           union all
+                           select pu.verified_at,
+                                  case pu.store when 'google_play' then 'android' when 'apple_app_store' then 'ios' end
+                             from public.purchases pu
+                            where pu.account_id = p2.account_id) x
+                         where x.platform is not null order by x.at limit 1),
+                        nullif(p2.platform, '')) as platform
+          from public.user_profiles p2
+         where p2.signup_platform is null and p2.account_id is not null) e
+ where p.account_id = e.account_id and e.platform is not null;
+update public.user_daily_activity a
+   set signup_platform = p.signup_platform
+  from public.user_profiles p
+ where p.account_id = a.account_id and a.signup_platform is null and p.signup_platform is not null;
+-- 프로필이 없는(탈퇴로 지워진) 계정의 일별 기록은 그 계정의 첫 접속 플랫폼으로 채운다.
+update public.user_daily_activity a
+   set signup_platform = f.platform
+  from (select distinct on (account_id) account_id, platform
+          from public.user_daily_activity
+         where platform is not null
+         order by account_id, day) f
+ where a.account_id = f.account_id and a.signup_platform is null;
 
 -- 원화 환산용 환율표. purchase-price-sync 가 하루 한 번 Frankfurter(키 없음, 중앙은행·공식 출처 환율)에서
 -- 원화 기준 전체 통화를 받아 둔다. 결제를 확인할 때는 결제 날짜 이전 4일 안의 가장 가까운 값을 쓰고, 표에 없는
@@ -4765,6 +4823,7 @@ begin
     'display_name',     coalesce(d.display_name, p.user_id),
     'is_guest',         u.is_anonymous,
     'platform',         p.platform,
+    'signup_platform',  p.signup_platform,
     'country_code',     p.country_code,
     'total_paid_krw',   p.total_paid_krw,
     -- total_paid_krw 는 환불분을 이미 뺀 값이다.
@@ -8763,7 +8822,9 @@ $$;
 
 -- 콘솔 "통계" 화면 — 최근 p_days 일의 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션.
 -- 재방문 = 그날 신규가 아닌 접속자. 리텐션은 가입한 날(D0)로부터 N일째에 다시 접속한 비율이고, 아직 오지 않은 날은 null.
-create or replace function public.ts_admin_activity_stats(p_days integer)
+-- p_signup_platform: 그 플랫폼으로 가입한 계정만 센다. null 이면 전부, 'unknown' 이면 가입 플랫폼을 모르는 계정.
+drop function if exists public.ts_admin_activity_stats(integer);
+create or replace function public.ts_admin_activity_stats(p_days integer, p_signup_platform text default null)
 returns jsonb
 language sql
 stable
@@ -8773,6 +8834,12 @@ as $$
   with params as (
     select least(365, greatest(7, coalesce(p_days, 30))) as days, (now() at time zone public.ts_game_time_zone())::date as today
   ),
+  act as (
+    select a.* from public.user_daily_activity a
+     where p_signup_platform is null
+        or (p_signup_platform = 'unknown' and a.signup_platform is null)
+        or a.signup_platform = p_signup_platform
+  ),
   days as (
     select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
   ),
@@ -8781,7 +8848,7 @@ as $$
            count(a.account_id) as total,
            count(a.account_id) filter (where a.is_new) as new_users,
            count(a.account_id) filter (where a.is_comeback) as comeback
-    from days d left join public.user_daily_activity a on a.day = d.day
+    from days d left join act a on a.day = d.day
     group by d.day
   ),
   offsets as (
@@ -8789,7 +8856,7 @@ as $$
   ),
   cohort_members as (
     select a.day, a.account_id
-    from public.user_daily_activity a, params p
+    from act a, params p
     where a.is_new and a.day >= p.today - p.days + 1
   ),
   cohorts as (
@@ -8814,7 +8881,10 @@ as $$
                      'day', c.day, 'size', c.size,
                      'kept', (select jsonb_agg(k.kept order by k.n) from kept k where k.day = c.day)) order by c.day desc)
                    from cohorts c), '[]'::jsonb),
-    'first_day', (select min(day) from public.user_daily_activity)
+    'first_day', (select min(day) from public.user_daily_activity),
+    -- 이 기간에 기록이 있는 가입 플랫폼(거르기 전 기준) — 콘솔이 이것만 버튼으로 보인다. 모르는 계정은 'unknown'.
+    'signup_platforms', (select coalesce(jsonb_agg(distinct coalesce(a.signup_platform, 'unknown')), '[]'::jsonb)
+                           from public.user_daily_activity a, params p where a.day >= p.today - p.days + 1)
   );
 $$;
 
@@ -8915,9 +8985,9 @@ comment on function public.ts_admin_test_purchase_stats(integer) is '콘솔 통�
 revoke all on function public.ts_admin_test_purchase_stats(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_test_purchase_stats(integer) to service_role;
 
-comment on function public.ts_admin_activity_stats(integer) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 게임 시간대 날짜. service_role 전용.';
-revoke all on function public.ts_admin_activity_stats(integer) from public, anon, authenticated;
-grant execute on function public.ts_admin_activity_stats(integer) to service_role;
+comment on function public.ts_admin_activity_stats(integer, text) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 게임 시간대 날짜. 가입 플랫폼으로 거를 수 있다. service_role 전용.';
+revoke all on function public.ts_admin_activity_stats(integer, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_activity_stats(integer, text) to service_role;
 
 comment on function public.ts_admin_ccu(integer) is '콘솔 동시접속자 — 지금 접속 중(전체·서버별·플랫폼별)과 최근 p_hours 시간 추이·최고치. 90일 넘는 기간은 일별 요약으로 그린다. service_role 전용.';
 revoke all on function public.ts_admin_ccu(integer) from public, anon, authenticated;
