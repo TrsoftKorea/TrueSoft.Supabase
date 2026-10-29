@@ -358,29 +358,6 @@ async function toKrw(db: SupabaseClient, micros: number, currency: string | null
 
 // ── 메인 핸들러 ───────────────────────────────────────────────────────────────
 
-// ═══ BEGIN request-limit ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
-// 콘솔 "설정 › 요청 제한" — 이 함수 호출도 게임의 데이터 요청과 같은 기준으로 센다. 빈 DB 함수(ts_request_limit_ping)를
-// 사용자 로그인으로 불러 DB 의 사전 검사(ts_request_limit_check)를 태운다. 제한 중이면 그쪽이 429 로 거절한다.
-// 검사 자체가 실패하면(네트워크 등) 막지 않는다 — 제한 기능이 고장 나도 게임이 멈추지 않게.
-async function requestLimited(authHeader: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/ts_request_limit_ping`, {
-      method: "POST",
-      headers: {
-        Authorization: authHeader,
-        apikey: JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!).default,
-        "Content-Type": "application/json",
-      },
-      body: "{}",
-    });
-    await res.body?.cancel();
-    return res.status === 429;
-  } catch {
-    return false;
-  }
-}
-// ═══ END request-limit ═══
-
 Deno.serve(async (req) => {
   const json = <T>(body: T, status = 200) =>
     new Response(JSON.stringify(body), {
@@ -392,9 +369,6 @@ Deno.serve(async (req) => {
   const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
   if (!jwt) {
     return json({ ok: false, reason: "missing_jwt" } satisfies VerifyResponse, 401);
-  }
-  if (await requestLimited(authHeader)) {
-    return json({ ok: false, reason: "request_limited" } satisfies VerifyResponse, 429);
   }
 
   const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {

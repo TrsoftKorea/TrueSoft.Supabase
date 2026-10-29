@@ -404,6 +404,32 @@ from (
   union all
 
   -- ---------------------------------------------------------------------------
+  -- 요청 제한 사전 검사 — 모든 요청 앞에 끼므로 서버 키(service_role) 실행 권한이 빠지면 콘솔·엣지 함수의
+  -- DB 요청이 전부 실패한다. 위 대조는 anon·authenticated 만 보므로 따로 본다. 연결 여부도 함께.
+  -- ---------------------------------------------------------------------------
+  select
+    'pre_request'::text,
+    'ts_request_limit_check → service_role',
+    case
+      when to_regprocedure('public.ts_request_limit_check()') is null then 'missing'
+      when has_function_privilege('service_role', 'public.ts_request_limit_check()', 'EXECUTE') then 'applied'
+      else 'missing_grant'
+    end,
+    'service_role 이 실행하지 못하면 콘솔·엣지 함수 요청이 전부 실패한다'
+  union all
+  select
+    'pre_request'::text,
+    'authenticator pgrst.db_pre_request',
+    case when exists (
+      select 1 from pg_db_role_setting s
+      where s.setrole = 'authenticator'::regrole and s.setdatabase = 0
+        and 'pgrst.db_pre_request=public.ts_request_limit_check' = any (s.setconfig)
+    ) then 'applied' else 'missing' end,
+    '비상시 끄기: alter role authenticator reset pgrst.db_pre_request; notify pgrst, ''reload config'';'
+
+  union all
+
+  -- ---------------------------------------------------------------------------
   -- 기본 권한 — 앞으로 만들 테이블·함수에 클라이언트 권한이 자동 부여되는지
   --   supabase_admin 소유 항목은 postgres 권한으로 수정할 수 없어 검사 대상에서 제외한다.
   -- ---------------------------------------------------------------------------

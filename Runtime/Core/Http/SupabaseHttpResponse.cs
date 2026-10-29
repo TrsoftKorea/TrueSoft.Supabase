@@ -1,4 +1,6 @@
-﻿namespace TrueBase.Core.Http
+﻿using TrueBase.Core.Common;
+
+namespace TrueBase.Core.Http
 {
     /// <summary><see cref="ISupabaseHttpClient"/>가 반환하는 HTTP 응답. 전송 실패도 예외 대신 실패 인스턴스로 표현합니다.</summary>
     public sealed class SupabaseHttpResponse
@@ -28,9 +30,18 @@
             return new SupabaseHttpResponse(true, statusCode, body, null);
         }
 
+        /// <summary>서버 요청 제한에 걸린 응답이면 true. 제한은 분 단위라 곧바로 다시 보내도 소용없다.</summary>
+        public bool IsRequestLimited =>
+            !IsSuccess && StatusCode == 429 && Body != null && Body.Contains(SupabaseErrorCode.RequestLimited);
+
         public static SupabaseHttpResponse Fail(long statusCode, string body, string errorMessage)
         {
-            return new SupabaseHttpResponse(false, statusCode, body, errorMessage);
+            var response = new SupabaseHttpResponse(false, statusCode, body, errorMessage);
+            // 서비스 대부분이 실패 사유를 ErrorMessage ?? Body 로 만든다. 플랫폼이 채운 "429 Too Many Requests" 꼴 문구가
+            // 앞서면 본문의 사유가 버려져 Reason 이 Unknown 이 되므로, 요청 제한이면 사유 코드로 바꿔 둔다.
+            return response.IsRequestLimited
+                ? new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.RequestLimited)
+                : response;
         }
     }
 }

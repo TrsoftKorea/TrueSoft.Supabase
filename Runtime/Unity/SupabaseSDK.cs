@@ -1879,8 +1879,10 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.MatchLobbyNameTooLong:
                     return true;
 
+                // 요청 제한 — 막힌 동안 모든 호출이 실패하므로 빨갛게 찍으면 콘솔이 덮인다. 게임은 "잠시 후" 안내만 하면 된다.
+                // 엣지 함수 경로는 "http_429:{본문}" 꼴이라 문자열 case 로 안 잡혀 Reason 으로 본다.
                 default:
-                    return false;
+                    return SupabaseReasonMap.FromErrorCode(errorCode) == SupabaseReason.RequestLimited;
             }
         }
 

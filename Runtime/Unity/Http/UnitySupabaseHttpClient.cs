@@ -102,10 +102,12 @@ namespace TrueBase.Core.Http
 
         /// <summary>
         /// 재시도 대상 판별. StatusCode 0(응답 자체를 못 받은 네트워크 오류)·429·500·502·503·504만 재시도합니다.
+        /// 서버 요청 제한(429 + request_limited)은 분 단위로 풀리므로 재시도하지 않습니다.
         /// </summary>
         /// <param name="attempt">0부터 시작하는 현재 시도 횟수.</param>
         private bool ShouldRetry(SupabaseHttpResponse response, int attempt) =>
             attempt < _maxRetries &&
+            !response.IsRequestLimited &&
             (response.StatusCode == 0   ||
              response.StatusCode == 429 ||
              response.StatusCode == 500 ||

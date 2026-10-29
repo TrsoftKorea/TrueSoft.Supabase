@@ -4972,9 +4972,11 @@ grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,bool
 -- 요청 제한 — 짧은 시간에 요청을 지나치게 많이 보내는 계정을 잠시 막는다. 운영 콘솔 "설정 › 요청 제한".
 --
 -- 게임 앱의 데이터 요청(PostgREST)마다 ts_request_limit_check 가 먼저 돈다(pgrst.db_pre_request, Supabase 문서
--- "Securing your API" 의 방식). 로그인한 계정은 계정 단위, 로그인 전 요청은 IP 단위로 센다(2026-10-29 사용자 결정).
+-- "Securing your API" 의 방식). 로그인한 계정 단위로 세고, 로그인 전 요청은 세지 않는다(2026-10-29 사용자 결정).
 -- 세는 것은 쓰기·함수 호출(POST·PATCH·DELETE)뿐이다 — 읽기(GET·HEAD)는 읽기 전용으로 실행돼 기록을 남길 수 없다.
 -- 읽기 전용 함수(stable·immutable)도 POST 로 불러도 읽기 전용으로 실행되므로 세지 않는다(2026-10-29 실측).
+-- 예외로 끝난 요청도 세지 않는다 — 트랜잭션째 되돌려져 센 숫자까지 사라진다. 대입 공격 대상인 쿠폰(17절)만
+-- 실패를 값으로 돌려줘 센다.
 -- 제한 중이면 읽기까지 전부 429 로 거절한다. 엣지 함수는 공통 구간 `request-limit` 이 ts_request_limit_ping 을
 -- 사용자 로그인으로 불러 같은 검사를 태운다. 운영 콘솔·서버 함수(service_role)의 요청은 세지 않는다.
 --
@@ -5024,12 +5026,14 @@ returns void
 language plpgsql
 security definer
 set search_path = public
+-- 같은 계정의 쓰기는 요청 수 줄 잠금에서 줄을 선다. 오래 기다리면 세기만 건너뛴다 — 시간 초과 취소는 아래
+-- exception 이 못 잡아 요청째 실패하지만, 잠금 대기 실패(55P03)는 잡힌다.
+set lock_timeout = '100ms'
 as $$
 declare
   v_settings public.request_limit_settings%rowtype;
   v_role     text;
   v_uid      uuid;
-  v_ip       text;
   v_key      text;
   v_hits     int;
   v_until    timestamptz;
@@ -5042,14 +5046,12 @@ begin
     v_role := coalesce(nullif(current_setting('role', true), 'none'), '');
     if v_role not in ('anon', 'authenticated') then return; end if;
 
+    -- 로그인 전 요청은 세지 않는다(2026-10-29 사용자 결정) — IP 하나를 여럿이 나눠 쓰면 한 사람 때문에 모두 막히고,
+    -- 게스트 복구가 막히면 SDK 가 빈 새 계정으로 들어가 진행이 사라진 것처럼 보인다. 로그인 전 함수는 게스트 복구 3종뿐이다.
+    -- 다시 IP 로 세려면 x-forwarded-for 앞쪽은 앱이 적어 보낸 값이 남으니 쓰지 말고 cf-connecting-ip 를 쓴다(같은 날 실측).
     v_uid := auth.uid();
-    if v_uid is not null then
-      v_key := v_uid::text;
-    else
-      v_ip := nullif(btrim(split_part(current_setting('request.headers', true)::jsonb->>'x-forwarded-for', ',', 1)), '');
-      if v_ip is null then return; end if;
-      v_key := 'ip:' || v_ip;
-    end if;
+    if v_uid is null then return; end if;
+    v_key := v_uid::text;
 
     select b.blocked_until into v_until from public.request_limit_blocks b where b.key = v_key;
 
@@ -5063,8 +5065,8 @@ begin
       returning hits into v_hits;
 
       if v_hits > v_settings.max_requests then
-        insert into public.request_limit_blocks (key, account_id, ip, hits, blocked_at, blocked_until)
-        values (v_key, v_uid, v_ip, v_hits, now(), now() + make_interval(mins => v_settings.block_minutes))
+        insert into public.request_limit_blocks (key, account_id, hits, blocked_at, blocked_until)
+        values (v_key, v_uid, v_hits, now(), now() + make_interval(mins => v_settings.block_minutes))
         on conflict (key) do update set
           hits = excluded.hits, blocked_at = excluded.blocked_at, blocked_until = excluded.blocked_until;
         delete from public.request_limit_counters where key = v_key;
@@ -5080,7 +5082,8 @@ begin
       message = json_build_object(
         'code', 'request_limited',
         'message', 'request_limited: 요청이 너무 많아 잠시 제한되었습니다.',
-        'details', json_build_object('until', v_until),
+        -- details·hint 는 글자만 된다 — 묶음을 넣으면 PostgREST 가 해석을 못 해 429 대신 500 을 낸다(2026-10-29 실측).
+        'details', 'until ' || to_char(v_until at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
         'hint', null)::text,
       detail = json_build_object(
         'status', 429,
@@ -5208,6 +5211,8 @@ grant execute on function public.ts_admin_request_limit_blocks()                
 grant execute on function public.ts_admin_request_limit_unblock(text)                           to service_role;
 
 -- 모든 데이터 요청 앞에 검사를 끼운다. 꺼 두면(기본) 설정 한 줄만 읽고 지나간다.
+-- 비상시(검사 함수가 망가져 모든 요청이 실패할 때) 떼어 내기:
+--   alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';
 alter role authenticator set pgrst.db_pre_request = 'public.ts_request_limit_check';
 notify pgrst, 'reload config';
 
@@ -9591,6 +9596,9 @@ revoke all on table public.coupon_redemptions from anon, authenticated;
 -- ts_coupon_redeem — 쿠폰 사용. 성공하면 보상 우편이 생성된다.
 --   실패 사유: coupon_not_found · coupon_inactive · coupon_expired
 --              coupon_already_used · coupon_exhausted
+--   [주의] 위 사유는 예외로 끝내지 않고 PostgREST 오류와 같은 꼴의 본문 + 상태 400 을 "값으로" 돌려준다.
+--          예외로 끝내면 트랜잭션째 되돌려져 요청 제한(10절)의 시도 수까지 사라지고, 틀린 코드를 수백 번 넣는
+--          대입 공격을 셀 수 없다(2026-10-29 사용자 결정). 앱이 받는 응답은 예외 때와 같아 SDK 는 그대로다.
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_coupon_redeem(text);
 
@@ -9612,6 +9620,8 @@ begin
     raise exception 'not_authenticated';
   end if;
 
+  -- 이 블록 안의 쓰기(이력·횟수·우편)는 실패하면 블록째 되돌려진다 — 요청 제한의 시도 수는 블록 밖이라 남는다.
+  begin
   v_code := upper(btrim(coalesce(p_code, '')));
   if v_code = '' then
     raise exception 'coupon_not_found';
@@ -9636,7 +9646,7 @@ begin
   v_user := coalesce(v_user, v_uid::text);
 
   -- 이력을 먼저 넣어 중복 사용을 유니크 인덱스로 잡는다.
-  -- 뒤에서 예외가 나면 함수 전체가 롤백되므로 이력만 남는 일은 없다.
+  -- 뒤에서 예외가 나면 블록 전체가 롤백되므로 이력만 남는 일은 없다.
   begin
     insert into public.coupon_redemptions (coupon_id, code, kind, account_id, user_id)
     values (c.id, v_code, c.kind, v_uid, v_user)
@@ -9673,6 +9683,13 @@ begin
   update public.coupon_redemptions set mail_id = v_mail where id = v_red_id;
 
   return jsonb_build_object('mail_id', v_mail);
+  exception when raise_exception then
+    if sqlerrm not in ('coupon_not_found', 'coupon_inactive', 'coupon_expired', 'coupon_already_used', 'coupon_exhausted') then
+      raise;
+    end if;
+    perform set_config('response.status', '400', true);
+    return jsonb_build_object('code', 'P0001', 'message', sqlerrm, 'details', null, 'hint', null);
+  end;
 end;
 $$;
 
