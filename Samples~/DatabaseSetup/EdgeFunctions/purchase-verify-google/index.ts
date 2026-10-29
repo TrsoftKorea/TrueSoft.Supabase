@@ -2,7 +2,8 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 // ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
 // 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
-// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 기억하지 않고 Secrets 로 넘어간다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 이미 기억해 둔 값을 계속 쓰고,
+// 기억해 둔 값이 없을 때만(함수가 막 깨어났을 때) Secrets 로 넘어간다.
 let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
 
 async function serverConfig(key: string): Promise<string> {
@@ -197,6 +198,18 @@ Deno.serve(async (req) => {
   const { purchase_token, product_id, package_name, price_amount, price_currency } = body;
   if (!purchase_token || !product_id || !package_name) {
     return json({ ok: false, reason: "missing_fields" } satisfies VerifyResponse, 400);
+  }
+
+  // 이 게임의 앱 결제만 받는다 — 게임이 보낸 패키지 이름을 그대로 믿으면 구글이 확인해 주는 다른 앱(같은 개발자 계정의
+  // 다른 게임·시험 앱)의 결제도 기록돼 매출에 섞였다(2026-10-29). 애플의 번들 ID 검사와 같은 자리다. 비어 있으면 전부 거절한다.
+  const allowedPackages = await serverConfigList("GOOGLE_PACKAGE_NAME");
+  if (allowedPackages.length === 0) {
+    console.error("[purchase-verify-google] GOOGLE_PACKAGE_NAME 이 콘솔 설정에도 Secrets 에도 없습니다.");
+    return json({ ok: false, reason: "server_config_error" } satisfies VerifyResponse, 500);
+  }
+  if (!allowedPackages.includes(package_name)) {
+    console.warn(`[purchase-verify-google] package_name_mismatch: ${package_name}`);
+    return json({ ok: false, reason: "package_name_mismatch" } satisfies VerifyResponse);
   }
 
   // Google Play Developer API 호출

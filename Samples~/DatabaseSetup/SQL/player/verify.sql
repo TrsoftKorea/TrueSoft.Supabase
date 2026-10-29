@@ -59,6 +59,7 @@ from (
       ('fx_rates'),
       ('purchase_refund_sync'),
       ('purchase_refund_events'),
+      ('server_config_services'),
       ('remote_config'),
       ('withdrawal_sweep_state'),
       ('ccu_snapshots'),

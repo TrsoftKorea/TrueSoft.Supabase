@@ -4018,7 +4018,7 @@ returns text[]
 language sql
 immutable
 as $$
-  select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_SERVICE_ACCOUNT_JSON',
+  select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_PACKAGE_NAME', 'GOOGLE_SERVICE_ACCOUNT_JSON',
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
                'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY'];
 $$;
@@ -4104,6 +4104,56 @@ comment on function public.ts_admin_server_config_set(text, text, text) is
 
 revoke all on function public.ts_admin_server_config_set(text, text, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_server_config_set(text, text, text) to service_role;
+
+-- 이 게임이 쓰는 서비스(App Store·Google Play·Sign in with Apple) — 콘솔 "서비스 연결"의 켜기/끄기.
+-- 화면 표시만 바꾼다(켠 서비스는 필수 값을 표시, 끈 서비스는 접음). 엣지 함수는 이 표를 보지 않는다 —
+-- 잘못 꺼도 결제·탈퇴가 막히지 않게(2026-10-29 사용자 결정). 줄이 없는 서비스는 콘솔이 값 유무로 짐작한다.
+create table if not exists public.server_config_services (
+  service    text primary key check (service in ('appstore', 'googleplay', 'signin')),
+  enabled    boolean not null,
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+alter table public.server_config_services enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.server_config_services from anon, authenticated;
+
+create or replace function public.ts_admin_server_config_services()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_object_agg(service, enabled), '{}'::jsonb) from public.server_config_services;
+$$;
+
+create or replace function public.ts_admin_server_config_service_set(p_service text, p_enabled boolean, p_by text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin') or p_enabled is null then
+    raise exception 'server_config_service_invalid: %', p_service;
+  end if;
+  insert into public.server_config_services (service, enabled, updated_at, updated_by)
+  values (p_service, p_enabled, now(), p_by)
+  on conflict (service) do update set enabled = excluded.enabled, updated_at = now(), updated_by = excluded.updated_by;
+  return public.ts_admin_server_config_services();
+end;
+$$;
+
+comment on function public.ts_admin_server_config_services() is
+  '서비스 연결 켜기/끄기 상태({서비스: 켜짐}). 콘솔 화면 표시용. service_role 전용.';
+comment on function public.ts_admin_server_config_service_set(text, boolean, text) is
+  '서비스 연결 켜기/끄기. 엣지 함수 동작은 바뀌지 않는다. service_role 전용.';
+
+revoke all on function public.ts_admin_server_config_services() from public, anon, authenticated;
+revoke all on function public.ts_admin_server_config_service_set(text, boolean, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_server_config_services() to service_role;
+grant execute on function public.ts_admin_server_config_service_set(text, boolean, text) to service_role;
 
 
 -- #############################################################################
@@ -5236,6 +5286,11 @@ alter table public.game_items drop column if exists updated_at;
 drop index if exists public.game_items_category_sort_idx;
 drop index if exists public.game_items_active_idx;
 
+-- 콘솔의 아이템 고르기 칸은 표시 이름만 보인다 — 이름이 같은 아이템이 둘이면 우편·쿠폰·매치 보상에서 엉뚱한 것을
+-- 고를 수 있어 막는다. 대소문자·앞뒤 공백은 같은 이름으로 본다. 빈 이름은 화면이 키를 대신 보이므로 겹쳐도 된다.
+create unique index if not exists game_items_display_name_uniq
+  on public.game_items (lower(btrim(display_name))) where btrim(display_name) <> '';
+
 comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 실제 지급은 게임 IMailItemHandler.';
 
 alter table public.game_items enable row level security;
@@ -5572,6 +5627,11 @@ as $$
 begin
   if p_key is null or btrim(p_key) = '' then
     raise exception 'key_empty';
+  end if;
+  if btrim(coalesce(p_display_name, '')) <> '' and exists (
+       select 1 from public.game_items g
+        where lower(btrim(g.display_name)) = lower(btrim(p_display_name)) and g.key <> btrim(p_key)) then
+    raise exception 'item_name_taken';
   end if;
   insert into public.game_items (key, display_name)
   values (btrim(p_key), coalesce(p_display_name, ''))

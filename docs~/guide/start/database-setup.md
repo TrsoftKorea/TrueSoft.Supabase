@@ -75,6 +75,8 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 
 스토어·애플 키는 운영 콘솔 **설정 › 서비스 연결**에서 넣습니다. Supabase 대시보드에 들어가지 않아도 되고, 저장하면 1분 안에 적용됩니다. 각 항목의 **가져오는 방법**을 누르면 발급처 화면에서 값을 찾는 단계가 나옵니다.
 
+묶음마다 **사용** 스위치가 있습니다. 쓰는 스토어·로그인만 켜면 반드시 넣어야 할 값에 빨간 `*`이 붙고, 쓰지 않는 것은 접혀서 보이지 않습니다. 스위치는 화면 표시만 바꿉니다 — 꺼도 넣어 둔 값은 지워지지 않고 서버도 그대로 그 값을 씁니다.
+
 | 콘솔&nbsp;위치 | 키&nbsp;이름 | 필수 | 용도 |
 |------|------|----|------|
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;번들&nbsp;ID | `APPLE_BUNDLE_ID` | iOS&nbsp;IAP·Apple&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 앱의 번들 ID. 여럿이면 쉼표로 구분. 없으면 iOS 결제 검증이 전부 거부됩니다 — 다른 앱의 영수증을 걸러 내는 기준이라 비워 둘 수 없습니다 |
@@ -82,6 +84,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Issuer&nbsp;ID | `APPLE_IAP_ISSUER_ID` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | SK1 영수증에는 가격이 없어, 앱 내 구입 키 셋이 있어야 애플에 실제 결제 금액을 물어 매출에 넣습니다. 없으면 SK1 결제는 금액 없이 기록됩니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Key&nbsp;ID | `APPLE_IAP_KEY_ID` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | 앱 내 구입 키의 키 ID. 10자. Sign in with Apple 키와 다른 키입니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Private&nbsp;key | `APPLE_IAP_PRIVATE_KEY` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
+| 스토어&nbsp;›&nbsp;Google&nbsp;Play&nbsp;›&nbsp;패키지&nbsp;이름 | `GOOGLE_PACKAGE_NAME` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Android 앱의 패키지 이름. 여럿이면 쉼표로 구분. 여기 없는 앱의 결제는 `package_name_mismatch`로 거부되고 기록되지 않습니다. 비워 두면 Android 결제 검증이 전부 `server_config_error`로 실패합니다 — 시험용 앱의 결제가 매출에 섞이지 않게 거르는 기준입니다 |
 | 스토어&nbsp;›&nbsp;Google&nbsp;Play&nbsp;›&nbsp;서비스&nbsp;계정&nbsp;키 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키. 내려받은 JSON 파일 내용 전체 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Team&nbsp;ID | `APPLE_TEAM_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Apple Developer 팀 ID. 10자 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Key&nbsp;ID | `APPLE_KEY_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Sign in with Apple 키의 Key ID. 10자 |

@@ -10,6 +10,8 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 이후 Package Manager에서 `com.unity.purchasing`을 설치합니다 — **5.1 이상의 최신 버전을 권장합니다.** [버전별 차이](./versions.md#iap-versions)를 참고하세요.
 
+서버는 결제가 이 게임 앱에서 일어났는지 대조합니다. 운영 콘솔 **설정 › 서비스 연결**에 Android 패키지 이름과 iOS 번들 ID를 넣어 두세요. 비워 두면 그 플랫폼의 결제가 전부 거부되고, 목록에 없는 앱의 결제는 기록되지 않습니다. 키 목록은 [서비스 연결값](/guide/start/database-setup#secrets)에 있습니다.
+
 ## 환불 기록 {#refunds}
 
 스토어에서 환불된 결제는 운영 콘솔 구매 내역에 취소선으로 표시되고, 플레이어의 총 결제금액에서 빠집니다. 게임 코드는 바꿀 것이 없습니다.
