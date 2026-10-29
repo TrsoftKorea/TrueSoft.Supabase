@@ -58,7 +58,8 @@ export function createApi(): SupportApi | null {
   const token = readToken()
 
   const call = async <T>(action: string, body: Record<string, unknown> = {}, auth = true): Promise<T> => {
-    if (auth && !token) throw new ApiError('support_session_invalid')
+    // 접속 표 없이 주소만으로 연 경우 — 만료가 아니라 게임 밖에서 연 것이다.
+    if (auth && !token) throw new ApiError('support_session_missing')
     let res: Response
     try {
       res = await fetch(url, {
