@@ -270,3 +270,9 @@ bool Handle(SupabaseResult result)
 | `ChatChannelsEmpty` | 구독할 채널 코드가 하나도 없습니다 |
 | `ChatCursorsInvalid` | 조회 커서 형식이 올바르지 않습니다 |
 | `ChatKindUnsupported` | 지원하지 않는 채널 종류입니다 |
+
+## 고객센터
+
+| Reason | 설명 |
+|--------|------|
+| `CustomerCenterLoginRequired` | 고객센터를 열 수 없습니다. 로그인 상태가 아니고, 차단된 계정이 이 기기에 남긴 로그인 기록도 없습니다. 로그인한 뒤 다시 엽니다 |

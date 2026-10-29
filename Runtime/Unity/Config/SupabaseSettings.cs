@@ -91,6 +91,11 @@ namespace TrueBase.Unity
         [Min(1f)]
         public float withdrawalRequestDelayDays = 7f;
 
+        [Header("고객센터")]
+        [Label("고객센터 페이지 주소")]
+        [Tooltip("Supabase.OpenCustomerCenterAsync() 가 게임 안 창으로 여는 페이지. 보통 바꾸지 않습니다.")]
+        public string customerCenterUrl = "https://truebase-support.pages.dev";
+
 
         /// <summary>
         /// 인스펙터 값을 Core 계층의 <see cref="SupabaseOptions"/>로 변환합니다. 범위를 벗어난 값은 최소값으로 보정합니다.

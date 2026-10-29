@@ -229,6 +229,15 @@ export default defineConfig({
             ]
           },
           {
+            text: '고객센터',
+            link: '/guide/customer-center/',
+            collapsed: true,
+            items: [
+              { text: '창 열기', link: '/guide/customer-center/open' },
+              { text: '새 답변 수', link: '/guide/customer-center/unread' }
+            ]
+          },
+          {
             text: '채팅',
             link: '/guide/chat/',
             collapsed: true,
@@ -318,6 +327,7 @@ export default defineConfig({
           { text: '리더보드', link: '/guide/api/leaderboard' },
           { text: '매치 결과', link: '/guide/api/match-result' },
           { text: '쿠폰', link: '/guide/api/coupon' },
+          { text: '고객센터', link: '/guide/api/customer-center' },
           { text: '채팅', link: '/guide/api/chat' },
           { text: '친구', link: '/guide/api/friend' },
           { text: '매치 로비', link: '/guide/api/match-lobby' },

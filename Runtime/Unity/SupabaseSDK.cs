@@ -10,6 +10,7 @@ using TrueBase.Unity.Auth;
 using TrueBase.Unity.Auth.Apple;
 using TrueBase.Unity.Auth.Google;
 using TrueBase.Unity.Config;
+using TrueBase.Unity.CustomerCenter;
 using UnityEngine;
 
 namespace TrueBase.Unity
@@ -25,6 +26,8 @@ namespace TrueBase.Unity
     internal static class SupabaseSDK
     {
         private const string RefreshTokenKey = "TrueBase.RefreshToken";
+        // 마지막 접속 토큰. 차단되면 로그인이 막혀 세션이 없으므로, 고객센터가 이 토큰의 서명으로 본인을 확인한다.
+        private const string LastAccessTokenKey = "TrueBase.LastAccessToken";
         private const string AccountIdPlayerPrefsKey = "TrueBase.AccountId";
         private const string LastSignInMethodKey = "TrueBase.LastSignInMethod";
         private const string AutoLoginBlockedKey = "TrueBase.AutoLoginBlocked";
@@ -337,6 +340,8 @@ namespace TrueBase.Unity
             public const string MatchLobbyStart = "Supabase.MatchLobby.Start";
             public const string MatchLobbyCancel = "Supabase.MatchLobby.Cancel";
             public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
+            public const string CustomerCenterOpen = "Supabase.CustomerCenter.Open";
+            public const string CustomerCenterUnreadCount = "Supabase.CustomerCenter.UnreadCount";
         }
 
         /// <summary>
@@ -555,6 +560,7 @@ namespace TrueBase.Unity
                 }
             }
 
+            RememberBannedIdToken(result, "google", idToken, null);
             return result;
         }
 
@@ -892,6 +898,7 @@ namespace TrueBase.Unity
                 }
             }
 
+            RememberBannedIdToken(result, "apple", idToken, rawNonce);
             return result;
         }
 
@@ -1475,7 +1482,7 @@ namespace TrueBase.Unity
         {
             var r = await LoadUserDataAttributedWithRowStateAsync<T>(includeUpdatedAt);
             var ok = r != null && r.IsSuccess;
-            LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorCode);
+            LogApiResult(ApiLogTags.UserDataLoadAttributedRowState, ok, ok ? null : r?.ErrorCode, errorOnFail: !IsExpectedFailureReason(r?.ErrorCode));
             if (!ok)
             {
                 var d = defaultWhenFailed ?? new T();
@@ -1877,6 +1884,9 @@ namespace TrueBase.Unity
                 // 유저가 입력한 방 이름이 너무 긴 경우. 정원 값(MatchLobbyMaxMembersInvalid)은 게임이
                 // 넘기는 값이라 여기 넣지 않는다 — 그건 고쳐야 할 코드 오류다.
                 case SupabaseErrorCode.MatchLobbyNameTooLong:
+
+                // 고객센터 — 로그인하지 않은 상태에서 연 경우. 게임이 "로그인 후 이용" 안내를 띄우면 된다.
+                case SupabaseErrorCode.CustomerCenterLoginRequired:
                     return true;
 
                 // 요청 제한 — 막힌 동안 모든 호출이 실패하므로 빨갛게 찍으면 콘솔이 덮인다. 게임은 "잠시 후" 안내만 하면 된다.
@@ -1987,6 +1997,7 @@ namespace TrueBase.Unity
                 // 직전 소셜 연동 계정을 복원하지 않도록, 익명 시작을 명시적으로 새 가입으로 강제합니다.
                 forceFreshAnonymous = true;
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
+                PlayerPrefs.DeleteKey(LastAccessTokenKey);
                 SetAutoLoginBlocked(true);
                 PlayerPrefs.Save();
             }
@@ -2457,7 +2468,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryDeleteMailAsync(string mailId)
         {
             var r = await DeleteMailAsync(mailId);
-            LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorCode);
+            LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
@@ -2655,7 +2666,7 @@ namespace TrueBase.Unity
             string code, IReadOnlyDictionary<string, object> data = null)
         {
             var r = await SetLeaderboardPlayerDataAsync(code, data);
-            LogApiResult(ApiLogTags.LeaderboardSetPlayerData, r.IsSuccess, r.ErrorCode);
+            LogApiResult(ApiLogTags.LeaderboardSetPlayerData, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r;
         }
 
@@ -2663,7 +2674,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryDeleteMyLeaderboardScoreAsync(string code)
         {
             var r = await DeleteMyLeaderboardScoreAsync(code);
-            LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode);
+            LogApiResult(ApiLogTags.LeaderboardDeleteMyScore, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r;
         }
 
@@ -3953,7 +3964,11 @@ namespace TrueBase.Unity
             _pendingSignInProfile      = PublicProfile.Empty;
             SetAutoLoginBlocked(true);
             if (clearStorage)
+            {
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
+                PlayerPrefs.DeleteKey(LastAccessTokenKey);
+                _bannedIdProvider = _bannedIdToken = _bannedIdNonce = null;
+            }
 
             if (string.IsNullOrWhiteSpace(accountId) == false)
                 PlayerPrefs.DeleteKey(SessionTokenPlayerPrefsKeyPrefix + accountId);
@@ -3983,6 +3998,8 @@ namespace TrueBase.Unity
             if (_currentSession == null || string.IsNullOrWhiteSpace(_currentSession.RefreshToken))
                 return;
             PlayerPrefs.SetString(RefreshTokenKey, _currentSession.RefreshToken);
+            if (!string.IsNullOrWhiteSpace(_currentSession.AccessToken))
+                PlayerPrefs.SetString(LastAccessTokenKey, _currentSession.AccessToken);
             SetAutoLoginBlocked(false);
             PlayerPrefs.Save();
         }
@@ -4040,7 +4057,10 @@ namespace TrueBase.Unity
             // 서버가 토큰을 거절했다고 확정될 때만 지운다. 네트워크 오류에 지우면 다음 실행도 자동 로그인을 못 하고,
             // 복구 쪽지가 없는 게스트는 계정을 잃는다.
             if (IsRefreshRejectedByServer(result.ErrorCode))
+            {
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
+                PlayerPrefs.DeleteKey(LastAccessTokenKey);
+            }
             return null;
         }
 
@@ -4751,6 +4771,127 @@ namespace TrueBase.Unity
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseBanInfo>.Fail(SupabaseErrorCode.NotInitialized);
             return SupabaseResult<SupabaseBanInfo>.Success(await FetchBanInfoAsync(accountId));
+        }
+
+        // ── 고객센터 ──────────────────────────────────────────────────────────────
+        // 차단으로 거절된 구글·애플 로그인의 ID 토큰. 고객센터가 이걸로 본인을 확인한다(다른 기기에서도 되는 길).
+        // ID 토큰은 곧 끝나고(구글 1시간, 애플은 더 짧을 수 있다 — 확인 안 함) 이번 실행에서만 쓰므로 저장하지 않는다.
+        private static string _bannedIdProvider;
+        private static string _bannedIdToken;
+        private static string _bannedIdNonce;
+
+        private static void RememberBannedIdToken(SupabaseResult<SupabaseSession> result, string provider, string idToken, string rawNonce)
+        {
+            if (result == null || result.IsSuccess || string.IsNullOrWhiteSpace(idToken))
+                return;
+            if (result.Reason != SupabaseReason.UserBanned
+                && (result.ErrorCode?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) ?? -1) < 0)
+                return;
+            _bannedIdProvider = provider;
+            _bannedIdToken = idToken;
+            _bannedIdNonce = rawNonce;
+        }
+
+        /// <summary>
+        /// 고객센터 창을 엽니다. 로그인 중이면 그 계정으로, 차단돼 로그인이 막혔으면 이 기기에 남은 로그인 기록이나
+        /// 방금 차단으로 거절된 구글·애플 로그인으로 본인을 확인합니다. 게임 안 창이면 닫힐 때까지 기다립니다.
+        /// </summary>
+        public static async Task<SupabaseResult> TryOpenCustomerCenterAsync()
+        {
+            const string tag = ApiLogTags.CustomerCenterOpen;
+            if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
+                return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
+
+            // 백그라운드에서 오래 있다 돌아온 직후처럼 자동 갱신이 아직 안 돈 사이면 만료된 토큰을 보내게 된다 —
+            // 그러면 로그인한 플레이어가 "로그인 필요"를 받으므로 곧 끝날 토큰은 먼저 갱신한다.
+            if (IsLoggedIn && !string.IsNullOrEmpty(_currentSession?.refresh_token)
+                && _currentSession.expires_at - DateTimeOffset.UtcNow.ToUnixTimeSeconds() <= SessionRefreshLeadSeconds)
+                await RefreshSessionAsync(_currentSession.refresh_token);
+
+            var proofs = new Dictionary<string, string>();
+            if (IsLoggedIn && !string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+            {
+                proofs["access_token"] = _currentSession.AccessToken;
+            }
+            else
+            {
+                proofs["saved_access_token"] = PlayerPrefs.GetString(LastAccessTokenKey, null);
+                proofs["refresh_token"] = PlayerPrefs.GetString(RefreshTokenKey, null);
+                if (!string.IsNullOrWhiteSpace(_bannedIdToken))
+                {
+                    proofs["id_token"] = _bannedIdToken;
+                    proofs["provider"] = _bannedIdProvider;
+                    proofs["nonce"] = _bannedIdNonce;
+                }
+            }
+
+            var language = SystemLanguageCode();
+            var meta = new Dictionary<string, string>
+            {
+                ["platform"] = GetPlatformString(),
+                ["app_version"] = Application.version,
+                ["os"] = SystemInfo.operatingSystem,
+                ["device"] = SystemInfo.deviceModel,
+                ["language"] = language,
+            };
+
+            var started = await _bootstrap.CustomerCenterService.StartSessionAsync(proofs, meta);
+            if (!started.IsSuccess)
+                return LogAndReturn(tag, started);
+
+            var baseUrl = (_bootstrap.CustomerCenterUrl ?? string.Empty).Trim().TrimEnd('/');
+            var projectRef = ProjectRefFromUrl(_initializedProjectUrl);
+            if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(projectRef))
+                return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
+
+            // 접속 표는 # 뒤에 둔다 — 서버로 가는 주소·기록에 남지 않고 페이지가 읽자마자 지운다.
+            var query = $"?p={projectRef}&lang={Uri.EscapeDataString(language)}";
+            var fragment = $"#t={Uri.EscapeDataString(started.Data.Token)}";
+            await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1{fragment}", $"{baseUrl}/{query}{fragment}");
+            return LogAndReturn(tag, SupabaseResult<bool>.Success(true));
+        }
+
+        /// <summary>운영자 답을 아직 안 읽은 내 문의 수. 로그인 상태에서만.</summary>
+        public static async Task<SupabaseResult<int>> TryGetCustomerCenterUnreadCountAsync()
+        {
+            const string tag = ApiLogTags.CustomerCenterUnreadCount;
+            if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
+                return LogAndReturnResult(tag, SupabaseResult<int>.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult<int>.Fail(SupabaseErrorCode.NotSignedIn));
+            return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetUnreadCountAsync(_currentSession.AccessToken));
+        }
+
+        /// <summary>https://abcd.supabase.co → abcd. 고객센터 페이지가 이 값으로 어느 게임의 서버를 부를지 정한다.</summary>
+        private static string ProjectRefFromUrl(string url)
+        {
+            if (!Uri.TryCreate(url ?? string.Empty, UriKind.Absolute, out var uri))
+                return null;
+            var host = uri.Host;
+            var dot = host.IndexOf('.');
+            return dot > 0 ? host.Substring(0, dot) : null;
+        }
+
+        /// <summary>기기 언어 → 두 글자 코드. 고객센터 창의 언어와 분류 이름에 쓴다.</summary>
+        private static string SystemLanguageCode()
+        {
+            switch (Application.systemLanguage)
+            {
+                case SystemLanguage.Korean: return "ko";
+                case SystemLanguage.Japanese: return "ja";
+                case SystemLanguage.Chinese:
+                case SystemLanguage.ChineseSimplified:
+                case SystemLanguage.ChineseTraditional: return "zh";
+                case SystemLanguage.German: return "de";
+                case SystemLanguage.French: return "fr";
+                case SystemLanguage.Spanish: return "es";
+                case SystemLanguage.Portuguese: return "pt";
+                case SystemLanguage.Russian: return "ru";
+                case SystemLanguage.Thai: return "th";
+                case SystemLanguage.Vietnamese: return "vi";
+                case SystemLanguage.Indonesian: return "id";
+                default: return "en";
+            }
         }
 
         [Serializable]

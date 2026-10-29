@@ -156,6 +156,7 @@
         MatchLobbyNameTooLong,
         AccountDeleteFailed,
         RequestLimited,
+        CustomerCenterLoginRequired,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -305,6 +306,7 @@
             SupabaseErrorCode.MatchLobbyMaxMembersInvalid => SupabaseReason.MatchLobbyMaxMembersInvalid,
             SupabaseErrorCode.MatchLobbyNameTooLong => SupabaseReason.MatchLobbyNameTooLong,
             SupabaseErrorCode.RequestLimited => SupabaseReason.RequestLimited,
+            SupabaseErrorCode.CustomerCenterLoginRequired => SupabaseReason.CustomerCenterLoginRequired,
             // 요청 제한은 서버 함수 밖의 경로(엣지 함수·표 요청)에서 "http_429:{...request_limited...}" 처럼 섞여 온다.
             string s when s.Contains(SupabaseErrorCode.RequestLimited) => SupabaseReason.RequestLimited,
             _ => SupabaseReason.Unknown,

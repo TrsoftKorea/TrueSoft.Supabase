@@ -259,9 +259,17 @@ Deno.serve(async (req) => {
     return json({ ok: false, reason: "purchase_owned_by_other_account" } satisfies VerifyResponse, 409);
   }
 
-  // user_profiles는 SELECT가 공개이므로 account_id로 본인 행을 명시 필터
+  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
+  // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
+  // purchase_token UNIQUE — 충돌 시 중복 요청으로 처리
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // 프로필도 서버 키로 읽는다 — 플레이어 로그인으로 읽으면 요청 제한에 걸린 동안 거절돼 user_id 가 빈 채
+  // 기록된다(2026-10-29 리뷰). account_id 는 JWT 로 확인한 user.id 라 남의 행을 읽을 일은 없다.
   let userId: string | null = null;
-  const { data: profile, error: profileError } = await userClient
+  const { data: profile, error: profileError } = await adminClient
     .from("user_profiles")
     .select("user_id")
     .eq("account_id", user.id)
@@ -272,13 +280,6 @@ Deno.serve(async (req) => {
     // RLS 실패 등의 조회 오류는 로그만 남기고 계속 진행 (user_id = null 허용)
     console.error(`[purchase-verify-google] profile_query_error: ${profileError.message}`);
   }
-
-  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
-  // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
-  // purchase_token UNIQUE — 충돌 시 중복 요청으로 처리
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
 
   // KRW 환산 (price_amount가 있을 때만). 통화를 모르면 원화로 치지 않는다 — null 로 남겨 "금액 모름"으로 센다.
   const priceAmountKrw = (price_amount && price_amount > 0)

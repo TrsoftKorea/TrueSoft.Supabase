@@ -439,7 +439,15 @@ Deno.serve(async (req) => {
     console.warn(`[purchase-verify-apple] app_account_token_mismatch: token=${jwsData.appAccountToken}, caller=${user.id}, transaction=${transactionId}`);
   }
 
-  const { data: profile } = await userClient
+  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
+  // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
+  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // 프로필도 서버 키로 읽는다 — 플레이어 로그인으로 읽으면 요청 제한에 걸린 동안 거절돼 user_id 가 빈 채
+  // 기록된다(2026-10-29 리뷰). account_id 는 JWT 로 확인한 user.id 다.
+  const { data: profile } = await adminClient
     .from("user_profiles").select("user_id").eq("account_id", user.id).maybeSingle();
   const userId: string | null = profile?.user_id ?? null;
 
@@ -449,11 +457,6 @@ Deno.serve(async (req) => {
     : null;
   const priceCurrency  = jwsData.currency || null;
 
-  // 구매 기록은 영수증 검증을 통과한 이 함수만 쓸 수 있어야 하므로 service_role로 기록한다.
-  // (유저 직접 INSERT를 막아 total_paid_krw 조작·가짜 결제 기록을 차단. account_id는 JWT로 검증된 user.id.)
-  const adminClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const priceAmountKrw = priceAmount !== null
     ? await toKrw(adminClient, priceAmount, priceCurrency, new Date())
     : null;

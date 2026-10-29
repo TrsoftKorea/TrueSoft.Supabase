@@ -144,6 +144,12 @@ namespace TrueBase.Core.Common
         /// </summary>
         public const string RequestLimited = "request_limited";
 
+        /// <summary>
+        /// 고객센터를 열 수 없습니다 — 로그인 상태가 아니고, 차단된 계정의 본인 증명(이 기기의 로그인 기록 등)도 없습니다.
+        /// 로그인한 뒤 다시 엽니다. 서버(<c>support-api</c>)가 이 글자 그대로 돌려준다.
+        /// </summary>
+        public const string CustomerCenterLoginRequired = "support_login_required";
+
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
 

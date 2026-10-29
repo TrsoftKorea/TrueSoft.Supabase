@@ -310,7 +310,9 @@ Deno.serve(async (req: Request) => {
 
   const transactionId = match.transaction_id;
 
-  const { data: profile } = await userClient
+  // 프로필은 서버 키로 읽는다 — 플레이어 로그인으로 읽으면 요청 제한에 걸린 동안 거절돼 user_id 가 빈 채
+  // 기록된다(2026-10-29 리뷰). account_id 는 JWT 로 확인한 user.id 다.
+  const { data: profile } = await adminClient
     .from("user_profiles").select("user_id").eq("account_id", user.id).maybeSingle();
   const userId: string | null = profile?.user_id ?? null;
 

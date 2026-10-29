@@ -52,3 +52,25 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: Admin~
           command: pages deploy dist --project-name=truebase-admin
+
+      # 고객센터 창(게임 안 웹뷰로 여는 페이지). 콘솔과 다른 사이트로 둔다 — 같은 주소면 운영자 브라우저에서
+      # 콘솔 로그인 정보와 저장 공간을 나눠 쓰게 된다. 어느 게임인지는 페이지 주소(?p=)로 받아 값이 따로 없다.
+      - run: npm run build:support
+        working-directory: Admin~
+        # 페이지가 받는 게임 목록 — 콘솔과 같은 값(없으면 어느 게임도 안 열린다).
+        env:
+          VITE_DEFENCER_URL: https://wxivrmvtpufeczltward.supabase.co
+          VITE_DEVILSLAYER_URL: https://owumqjyctqhuyailqutd.supabase.co
+      - uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: Admin~
+          command: pages project create truebase-support --production-branch=main
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: Admin~
+          command: pages deploy dist-support --project-name=truebase-support

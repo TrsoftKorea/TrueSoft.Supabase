@@ -151,6 +151,17 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetBanInfoAsync(accountId);
 
         /// <summary>
+        /// 고객센터 창을 엽니다. Android·iOS 는 게임 위 창으로 열고 닫힐 때까지 기다리며, 그 밖은 브라우저로 엽니다.
+        /// 차단돼 로그인할 수 없는 계정도 이 기기에 남은 로그인 기록이나 방금 거절된 구글·애플 로그인으로 열 수 있습니다.
+        /// </summary>
+        public static Task<SupabaseResult> OpenCustomerCenterAsync() =>
+            SupabaseSDK.TryOpenCustomerCenterAsync();
+
+        /// <summary>운영자 답을 아직 읽지 않은 내 문의 수. 새 답변 표시에 씁니다. 로그인 상태에서만 됩니다.</summary>
+        public static Task<SupabaseResult<int>> GetCustomerCenterUnreadCountAsync() =>
+            SupabaseSDK.TryGetCustomerCenterUnreadCountAsync();
+
+        /// <summary>
         /// 등록된 유저 세이브. 생성된 세이브 클래스가 아직 초기화되지 않았으면 null입니다.
         /// <c>StaticUserSave</c> 서브클래스는 프로젝트당 하나이므로 대상이 모호하지 않습니다.
         /// </summary>

@@ -549,6 +549,12 @@ namespace TrueBase.Core.Auth
                 if (error == null)
                     return null;
 
+                // 차단은 사유 코드로 돌려준다 — msg("User is banned")를 그대로 넘기면 Reason 이 Unknown 이 되어
+                // 게임이 구글·애플 로그인의 차단을 가르지 못한다(자동 로그인 경로는 "banned" 글자로 따로 잡는다).
+                if (error.error_code == "user_banned"
+                    || (error.msg?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) ?? -1) >= 0)
+                    return SupabaseErrorCode.UserBanned;
+
                 if (string.IsNullOrWhiteSpace(error.msg) == false)
                     return error.msg;
 
@@ -592,6 +598,7 @@ namespace TrueBase.Core.Auth
             public string error;
             public string error_description;
             public string msg;
+            public string error_code;
             public int code;
         }
 

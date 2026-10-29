@@ -7,7 +7,7 @@ namespace TrueBase.Editor
 {
     /// <summary>
     /// Android 빌드 시 Gradle 프로젝트에 자동으로 주입합니다.
-    ///  1. proguard-user.txt — googleloginplugin keep 규칙
+    ///  1. proguard-user.txt — googleloginplugin·고객센터 창 keep 규칙
     ///  2. build.gradle(unityLibrary 모듈) — CredentialManager 의존성 (EDM 미설치 프로젝트 대응)
     ///  3. build.gradle(최상위 프로젝트) — androidx.core·Kotlin stdlib 버전 강제 고정
     /// </summary>
@@ -25,11 +25,18 @@ namespace TrueBase.Editor
 
         private static void InjectProGuardRule(string path)
         {
-            const string marker = "com.truesoft.googleloginplugin";
-            const string rule =
+            AppendRule(path, "com.truesoft.googleloginplugin",
                 "\n# TrueSoft Supabase SDK - Google Login\n" +
-                "-keep class com.truesoft.googleloginplugin.** { *; }\n";
+                "-keep class com.truesoft.googleloginplugin.** { *; }\n");
+            // 고객센터 창(Runtime/Plugins/Android/TrueSoftCustomerCenter.java). C# 이 이름 문자열로만 부르고,
+            // 사진 고르기 Fragment 는 시스템이 이름으로 다시 만든다 — 코드 줄이기가 켜지면 지워질 수 있다.
+            AppendRule(path, "com.truesoft.supabase.",
+                "\n# TrueSoft Supabase SDK - Customer Center\n" +
+                "-keep class com.truesoft.supabase.** { *; }\n");
+        }
 
+        private static void AppendRule(string path, string marker, string rule)
+        {
             var file = Path.Combine(path, "proguard-user.txt");
             if (File.Exists(file))
             {

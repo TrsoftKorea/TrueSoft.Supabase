@@ -432,21 +432,15 @@ using (
   and server_id = public.auth_user_server_id()
 );
 
--- server_id 는 DEFAULT(ts_default_server_id()) 로 채워지나, PostgREST JSON upsert 시 RLS WITH CHECK 가
--- 기본값 적용 전에 평가되면 server_id 가 null 로 보여 42501 이 날 수 있음 → insert 정책에서는 account_id 만 검증.
-create policy "profiles_insert_own"
-on public.user_profiles for insert
-with check (
-  account_id is not null
-  and account_id = auth.uid()
-);
-
-create policy "profiles_update_own"
-on public.user_profiles for update
-using (account_id is not null and account_id = auth.uid())
-with check (server_id is not null);
-
-grant select, insert, update on public.user_profiles to authenticated;
+-- 플레이어는 이 표에 직접 쓰지 않는다 — 만들기·고치기는 전부 SECURITY DEFINER 함수(ts_ensure_my_profile·
+-- ts_after_sign_in·서버 이동·탈퇴)가 한다. 직접 쓰기를 열어 두면 가입 플랫폼·누적 결제액·서버·탈퇴 시각을
+-- 플레이어가 마음대로 바꿀 수 있었다(2026-10-29). 위 drop 이 옛 insert·update 정책을 지운다.
+-- 읽기도 게임·엣지 함수·다른 표의 정책이 실제로 쓰는 칸만 연다(누적 결제액·가입 플랫폼은 남에게 안 보인다):
+--   SDK 공개 프로필 id·user_id·withdrawn_at(+거르기 account_id) · 엣지 함수 user_id·server_id·withdrawn_at ·
+--   mails 읽기 정책 account_id·user_id·server_id · ts_my_withdrawal_status(호출자 권한) account_id·withdrawn_at
+-- 칸을 새로 읽게 하면 여기와 23절 grant 에 함께 더한다 — 빠지면 그 요청이 권한 오류(42501)로 실패한다.
+revoke all on public.user_profiles from anon, authenticated;
+grant select (id, user_id, account_id, server_id, withdrawn_at) on public.user_profiles to authenticated;
 
 -- PostgREST upsert(merge-duplicates) UPDATE 분기에서 기존 server_id가 NULL이면 WITH CHECK(server_id is not null)가 계속 실패(42501→403).
 -- INSERT 시에도 JSON에 server_id가 없을 때 RLS/기본값 평가 순서에 따라 NULL로 남는 경우가 있어 BEFORE에서 보강.
@@ -4981,7 +4975,7 @@ grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,bool
 -- 사용자 로그인으로 불러 같은 검사를 태운다. 운영 콘솔·서버 함수(service_role)의 요청은 세지 않는다.
 --
 -- [주의] 이 검사는 모든 요청 앞에 끼므로, 실패하면 게임 전체가 멈춘다. 그래서 ① anon·authenticated·service_role
---        모두 실행 권한이 있어야 하고(22절 허용 목록에도 넣는다) ② 안에서 난 오류는 삼키고 통과시킨다 —
+--        모두 실행 권한이 있어야 하고(23절 허용 목록에도 넣는다) ② 안에서 난 오류는 삼키고 통과시킨다 —
 --        제한 기능이 고장 나도 게임은 돈다.
 -- [주의] 기준을 넘은 바로 그 요청은 통과시키고 제한 기록만 남긴다 — 그 요청에서 거절하면 같은 트랜잭션의
 --        제한 기록까지 되돌려진다. 다음 요청부터 거절한다.
@@ -5000,12 +4994,28 @@ alter table public.request_limit_settings enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.request_limit_settings from anon, authenticated;
 
--- 계정(또는 'ip:주소')마다 지금 구간의 요청 수 한 줄. 서버가 다시 켜지면 비어도 되는 숫자라 기록을 남기지 않는 표로 둔다.
+-- 계정·DB 연결(pid)마다 지금 구간의 요청 수 한 줄. 서버가 다시 켜지면 비어도 되는 숫자라 기록을 남기지 않는 표로 둔다.
+-- 계정당 한 줄이면 같은 계정의 동시 요청이 그 줄 잠금에서 줄을 서고, 오래 기다린 요청은 세지 않고 통과해
+-- 동시에 몰아 보내는 쪽이 오히려 덜 세졌다(2026-10-29 리뷰). 한 연결은 한 번에 한 요청만 처리하므로 연결마다 나누면
+-- 잠금 다툼이 없고, 계정의 요청 수는 그 계정 줄들을 더해 본다.
 create unlogged table if not exists public.request_limit_counters (
-  key          text        primary key,
+  key          text        not null,
+  pid          int         not null default 0,
   window_start timestamptz not null,
-  hits         int         not null
+  hits         int         not null,
+  primary key (key, pid)
 );
+-- 옛 판(계정당 한 줄)이면 바꾼다 — 잠깐 쓰는 숫자뿐이라 비워도 된다.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'request_limit_counters' and column_name = 'pid') then
+    truncate public.request_limit_counters;
+    alter table public.request_limit_counters add column pid int not null default 0;
+    alter table public.request_limit_counters drop constraint request_limit_counters_pkey;
+    alter table public.request_limit_counters add primary key (key, pid);
+  end if;
+end $$;
 alter table public.request_limit_counters enable row level security;
 revoke all on table public.request_limit_counters from anon, authenticated;
 
@@ -5026,8 +5036,8 @@ returns void
 language plpgsql
 security definer
 set search_path = public
--- 같은 계정의 쓰기는 요청 수 줄 잠금에서 줄을 선다. 오래 기다리면 세기만 건너뛴다 — 시간 초과 취소는 아래
--- exception 이 못 잡아 요청째 실패하지만, 잠금 대기 실패(55P03)는 잡힌다.
+-- 기준을 넘는 순간 같은 계정의 여러 요청이 제한 줄을 함께 쓰면 줄을 선다. 오래 기다리면 그 요청은 세기를 건너뛴다 —
+-- 시간 초과 취소는 아래 exception 이 못 잡아 요청째 실패하지만, 잠금 대기 실패(55P03)는 잡힌다.
 set lock_timeout = '100ms'
 as $$
 declare
@@ -5053,23 +5063,33 @@ begin
     if v_uid is null then return; end if;
     v_key := v_uid::text;
 
+    -- 결제 지급 완료 기록은 세지도 막지도 않는다 — 막히면 지급은 됐는데 기록이 빠져, 같은 결제가 다시 오면
+    -- 한 번 더 지급될 수 있다(2026-10-29 리뷰). 결제 확인 엣지 함수도 같은 이유로 제한에서 뺐다.
+    if current_setting('request.path', true) = '/rpc/ts_mark_purchase_granted' then return; end if;
+
     select b.blocked_until into v_until from public.request_limit_blocks b where b.key = v_key;
 
     if (v_until is null or v_until <= now())
        and coalesce(current_setting('request.method', true), 'GET') not in ('GET', 'HEAD') then
-      insert into public.request_limit_counters as c (key, window_start, hits)
-      values (v_key, now(), 1)
-      on conflict (key) do update set
+      insert into public.request_limit_counters as c (key, pid, window_start, hits)
+      values (v_key, pg_backend_pid(), now(), 1)
+      on conflict (key, pid) do update set
         hits         = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then 1 else c.hits + 1 end,
-        window_start = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then now() else c.window_start end
-      returning hits into v_hits;
+        window_start = case when c.window_start <= now() - make_interval(secs => v_settings.window_seconds) then now() else c.window_start end;
+
+      -- 계정의 요청 수 = 이 계정의 연결별 줄 중 아직 구간 안인 것의 합. 남의 줄은 읽기만 하므로 기다리지 않는다.
+      select coalesce(sum(c.hits), 0) into v_hits
+        from public.request_limit_counters c
+       where c.key = v_key and c.window_start > now() - make_interval(secs => v_settings.window_seconds);
 
       if v_hits > v_settings.max_requests then
         insert into public.request_limit_blocks (key, account_id, hits, blocked_at, blocked_until)
         values (v_key, v_uid, v_hits, now(), now() + make_interval(mins => v_settings.block_minutes))
         on conflict (key) do update set
           hits = excluded.hits, blocked_at = excluded.blocked_at, blocked_until = excluded.blocked_until;
-        delete from public.request_limit_counters where key = v_key;
+        -- 내 연결 줄만 비운다 — 다른 연결 줄은 지금 다른 요청이 잡고 있을 수 있어 지우려면 기다려야 한다.
+        -- 남은 줄은 구간이 지나면 저절로 세지 않게 된다.
+        delete from public.request_limit_counters where key = v_key and pid = pg_backend_pid();
       end if;
       v_until := null;  -- 기준을 넘은 이 요청은 통과시킨다(위 [주의]).
     end if;
@@ -5169,7 +5189,7 @@ begin
 end;
 $$;
 
--- 지금 제한 중인 계정·IP. 닉네임은 계정일 때만.
+-- 지금 제한 중인 계정과 닉네임.
 create or replace function public.ts_admin_request_limit_blocks()
 returns jsonb
 language sql
@@ -5198,7 +5218,7 @@ $$;
 comment on function public.ts_admin_request_limit_settings_get() is '요청 제한 설정 조회. service_role 전용.';
 comment on function public.ts_admin_request_limit_settings_update(boolean, int, int, int, text) is
   '요청 제한 설정 변경. 끄면 걸려 있던 제한도 푼다. service_role 전용.';
-comment on function public.ts_admin_request_limit_blocks() is '지금 요청 제한 중인 계정·IP(최근 200). service_role 전용.';
+comment on function public.ts_admin_request_limit_blocks() is '지금 요청 제한 중인 계정(최근 200). service_role 전용.';
 comment on function public.ts_admin_request_limit_unblock(text) is '요청 제한 해제. service_role 전용.';
 
 revoke all on function public.ts_admin_request_limit_settings_get()                          from public, anon, authenticated;
@@ -13245,7 +13265,569 @@ notify pgrst, 'reload schema';
 
 
 -- #############################################################################
--- 22. 클라이언트 권한 최소화
+-- 22. 고객센터
+-- #############################################################################
+
+-- 플레이어 문의와 운영자 답변. 게임은 SDK 의 고객센터 창(웹 페이지)을 띄우기만 하고, 화면이 엣지 함수
+-- `support-api` 를 부른다. 이 절의 함수는 전부 service_role 전용이다(ts_support_unread_count 만 예외 —
+-- 게임이 새 답변 표시를 띄우려고 직접 부른다). 문의는 대화 꼴이다: 운영자가 답하면 "답변 완료", 플레이어가
+-- 덧붙이면 다시 "답변 대기". 운영자가 "종료"하면 더 덧붙일 수 없다.
+--
+-- 차단된 계정도 문의할 수 있다 — 로그인이 막혀 세션이 없으므로 support-api 가 기기에 남은 로그인 기록이나
+-- 차단으로 거절된 구글·애플 로그인의 본인 증명으로 계정을 확인한다(ts_support_account_from_*).
+-- 첨부 그림은 비공개 저장소 support-attachments 에 `<계정>/<무작위>.<확장자>` 로 두고, 보여 줄 때만 서명 URL 을 만든다.
+-- =============================================================================
+-- 고객센터 — support_categories + support_tickets + support_messages + RPC
+-- 선행: 02(user_profiles, display_names)
+-- =============================================================================
+
+create table if not exists public.support_categories (
+  id         serial      primary key,
+  name       text        not null check (char_length(btrim(name)) between 1 and 40),
+  -- 언어별 이름 {"en": "Payment"}. 없는 언어는 name 을 쓴다.
+  localized  jsonb       not null default '{}'::jsonb,
+  sort_order int         not null default 0,
+  is_active  boolean     not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists support_categories_name_key on public.support_categories (lower(btrim(name)));
+alter table public.support_categories enable row level security;
+revoke all on table public.support_categories from anon, authenticated;
+
+insert into public.support_categories (name, localized, sort_order)
+select v.name, v.localized, v.sort_order
+  from (values
+    ('결제',      '{"en": "Payment"}'::jsonb,    1),
+    ('계정',      '{"en": "Account"}'::jsonb,    2),
+    ('버그 신고', '{"en": "Bug report"}'::jsonb, 3),
+    ('기타',      '{"en": "Other"}'::jsonb,      4)
+  ) as v(name, localized, sort_order)
+ where not exists (select 1 from public.support_categories);
+
+create table if not exists public.support_tickets (
+  id              uuid        primary key default gen_random_uuid(),
+  -- 탈퇴로 계정이 지워져도 문의는 user_id 로 남는다.
+  account_id      uuid        references auth.users (id) on delete set null,
+  user_id         text        not null,
+  category_id     int         references public.support_categories (id) on delete set null,
+  status          text        not null default 'open' check (status in ('open', 'answered', 'closed')),
+  -- 문의를 연 순간 차단 중이었는지. 콘솔이 차단 관련 문의를 가려 볼 수 있게.
+  was_banned      boolean     not null default false,
+  -- 기기·앱 정보(플랫폼·앱 버전·OS·기기 모델·언어). SDK 가 보낸 그대로 — 서버는 해석하지 않는다.
+  meta            jsonb       not null default '{}'::jsonb,
+  -- 운영자 답을 플레이어가 아직 안 읽었는지. 게임의 새 답변 표시가 이걸 센다.
+  player_unread   boolean     not null default false,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  last_message_at timestamptz not null default now()
+);
+create index if not exists support_tickets_status_idx  on public.support_tickets (status, last_message_at desc);
+create index if not exists support_tickets_account_idx on public.support_tickets (account_id, last_message_at desc);
+alter table public.support_tickets enable row level security;
+revoke all on table public.support_tickets from anon, authenticated;
+
+create table if not exists public.support_messages (
+  id          bigint      generated always as identity primary key,
+  ticket_id   uuid        not null references public.support_tickets (id) on delete cascade,
+  sender      text        not null check (sender in ('player', 'admin')),
+  body        text        not null default '',
+  -- 저장소 경로 배열. 플레이어 메시지에만 있다.
+  attachments jsonb       not null default '[]'::jsonb,
+  admin_email text,
+  created_at  timestamptz not null default now(),
+  check (char_length(body) <= 2000),
+  check (char_length(btrim(body)) > 0 or jsonb_array_length(attachments) > 0)
+);
+create index if not exists support_messages_ticket_idx on public.support_messages (ticket_id, id);
+alter table public.support_messages enable row level security;
+revoke all on table public.support_messages from anon, authenticated;
+
+-- 첨부 그림 저장소. 비공개 — support-api·admin-api 가 서명 URL 로만 보여 준다.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('support-attachments', 'support-attachments', false, 5242880, array['image/png', 'image/jpeg', 'image/webp'])
+on conflict (id) do update set
+  public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- 고객센터 창 접속 표 서명 비밀값 — support-api 가 확인한 계정을 12시간짜리 표로 서명한다.
+-- 설치 때 무작위로 만들어 Vault 에 둔다. 이미 있으면 다시 만들지 않는다.
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'support_token_secret') then
+    perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'support_token_secret',
+      '고객센터 창 접속 표 서명용. support-api 전용.');
+  end if;
+end $$;
+
+create or replace function public.ts_support_token_secret()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'support_token_secret';
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 차단된 계정의 본인 확인 — 로그인이 막혀 세션이 없을 때 support-api 가 쓴다.
+-- ---------------------------------------------------------------------------
+-- 기기에 남은 갱신 토큰. 아직 안 쓴(회수 안 된) 토큰만 받는다 — 기기는 마지막으로 받은 것을 들고 있다.
+-- [주의] 인증 서버가 갱신 토큰을 표에 그대로 적는 형식일 때만 맞는다(2026-10-29 두 DB 확인, 12자).
+--        새 형식(세션별 서명 키)으로 바뀌면 여기서 못 찾아 null 이 되고, 새 SDK 가 함께 보내는
+--        마지막 접속 토큰(서명 확인)으로 넘어간다.
+create or replace function public.ts_support_account_from_refresh_token(p_token text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select rt.user_id::uuid
+    from auth.refresh_tokens rt
+   where rt.token = p_token and not rt.revoked
+   limit 1;
+$$;
+
+-- 구글·애플 계정 연결. p_sub 는 인증 서버가 이미 확인한 ID 토큰의 sub 다(support-api 가 확인 뒤에만 부른다).
+create or replace function public.ts_support_account_from_identity(p_provider text, p_sub text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select i.user_id from auth.identities i where i.provider = p_provider and i.provider_id = p_sub limit 1;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 플레이어 쪽 — support-api 가 확인한 계정으로 부른다(service_role).
+-- ---------------------------------------------------------------------------
+-- 분류 이름은 언어 코드(ko·en …)의 localized 값, 없으면 한국어가 아닌 플레이어에게는 영어, 그것도 없으면 name.
+create or replace function public.ts_support_categories(p_lang text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name))
+                            order by c.sort_order, c.id), '[]'::jsonb)
+    from public.support_categories c
+   where c.is_active;
+$$;
+
+create or replace function public.ts_support_tickets(p_account uuid, p_lang text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', t.id, 'status', t.status, 'unread', t.player_unread,
+           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name),
+           'preview', left(f.body, 80), 'created_at', t.created_at, 'last_message_at', t.last_message_at)
+           order by t.last_message_at desc), '[]'::jsonb)
+    from public.support_tickets t
+    left join public.support_categories c on c.id = t.category_id
+    left join lateral (
+      select m.body from public.support_messages m where m.ticket_id = t.id order by m.id limit 1
+    ) f on true
+   where t.account_id = p_account;
+$$;
+
+-- 문의 하나와 메시지 전부. 읽었으니 새 답변 표시를 끈다.
+create or replace function public.ts_support_ticket(p_account uuid, p_ticket uuid, p_lang text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v jsonb;
+begin
+  update public.support_tickets set player_unread = false
+   where id = p_ticket and account_id = p_account and player_unread;
+
+  select jsonb_build_object(
+           'id', t.id, 'status', t.status, 'created_at', t.created_at,
+           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name),
+           'messages', coalesce((
+             select jsonb_agg(jsonb_build_object('id', m.id, 'sender', m.sender, 'body', m.body,
+                                                 'attachments', m.attachments, 'created_at', m.created_at) order by m.id)
+               from public.support_messages m where m.ticket_id = t.id), '[]'::jsonb))
+    into v
+    from public.support_tickets t
+    left join public.support_categories c on c.id = t.category_id
+   where t.id = p_ticket and t.account_id = p_account;
+
+  if v is null then
+    raise exception 'support_ticket_not_found';
+  end if;
+  return v;
+end;
+$$;
+
+-- 첨부 경로가 그 계정 폴더의 것인지(남의 그림을 붙이지 못하게), 3장 이하인지.
+create or replace function public.ts_support_check_attachments(p_account uuid, p_attachments jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v jsonb := coalesce(p_attachments, '[]'::jsonb);
+  p text;
+begin
+  if jsonb_typeof(v) <> 'array' or jsonb_array_length(v) > 3 then
+    raise exception 'support_attachments_invalid';
+  end if;
+  for p in select jsonb_array_elements_text(v) loop
+    if p !~ ('^' || p_account::text || '/[0-9a-f-]{36}\.(png|jpg|webp)$') then
+      raise exception 'support_attachments_invalid';
+    end if;
+  end loop;
+  return v;
+end;
+$$;
+
+-- 한 계정이 한 시간에 남길 수 있는 메시지 수. 도배 방지.
+create or replace function public.ts_support_guard_rate(p_account uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (select count(*) from public.support_messages m join public.support_tickets t on t.id = m.ticket_id
+       where t.account_id = p_account and m.sender = 'player' and m.created_at > now() - interval '1 hour') >= 20 then
+    raise exception 'support_too_fast';
+  end if;
+end;
+$$;
+
+create or replace function public.ts_support_create(
+  p_account uuid, p_category int, p_body text, p_attachments jsonb, p_meta jsonb, p_was_banned boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user text;
+  v_att  jsonb := public.ts_support_check_attachments(p_account, p_attachments);
+  v_id   uuid;
+begin
+  if char_length(coalesce(p_body, '')) > 2000 then
+    raise exception 'support_body_too_long';
+  end if;
+  if char_length(btrim(coalesce(p_body, ''))) = 0 and jsonb_array_length(v_att) = 0 then
+    raise exception 'support_body_empty';
+  end if;
+  if not exists (select 1 from public.support_categories where id = p_category and is_active) then
+    raise exception 'support_category_invalid';
+  end if;
+  -- 답을 기다리는 문의가 쌓이면 새로 열지 못하게 한다 — 같은 내용을 여러 번 여는 걸 막는다.
+  if (select count(*) from public.support_tickets where account_id = p_account and status = 'open') >= 5 then
+    raise exception 'support_too_many_open';
+  end if;
+  perform public.ts_support_guard_rate(p_account);
+
+  select p.user_id into v_user from public.user_profiles p where p.account_id = p_account;
+
+  insert into public.support_tickets (account_id, user_id, category_id, was_banned, meta)
+  values (p_account, coalesce(v_user, p_account::text), p_category, coalesce(p_was_banned, false),
+          coalesce(p_meta, '{}'::jsonb))
+  returning id into v_id;
+
+  insert into public.support_messages (ticket_id, sender, body, attachments)
+  values (v_id, 'player', btrim(coalesce(p_body, '')), v_att);
+  return v_id;
+end;
+$$;
+
+-- 플레이어가 덧붙이기. 종료된 문의에는 못 붙인다. 붙이면 다시 답변 대기.
+create or replace function public.ts_support_reply(p_account uuid, p_ticket uuid, p_body text, p_attachments jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_att    jsonb := public.ts_support_check_attachments(p_account, p_attachments);
+  v_status text;
+begin
+  if char_length(coalesce(p_body, '')) > 2000 then
+    raise exception 'support_body_too_long';
+  end if;
+  if char_length(btrim(coalesce(p_body, ''))) = 0 and jsonb_array_length(v_att) = 0 then
+    raise exception 'support_body_empty';
+  end if;
+  select status into v_status from public.support_tickets where id = p_ticket and account_id = p_account for update;
+  if v_status is null then
+    raise exception 'support_ticket_not_found';
+  end if;
+  if v_status = 'closed' then
+    raise exception 'support_ticket_closed';
+  end if;
+  perform public.ts_support_guard_rate(p_account);
+
+  insert into public.support_messages (ticket_id, sender, body, attachments)
+  values (p_ticket, 'player', btrim(coalesce(p_body, '')), v_att);
+  update public.support_tickets
+     set status = 'open', updated_at = now(), last_message_at = now()
+   where id = p_ticket;
+end;
+$$;
+
+-- 이 계정의 문의에 실제로 붙어 있는 그림 경로. support-api 가 올리기만 하고 안 붙인 그림을 지울 때 남길 것을 가른다.
+create or replace function public.ts_support_account_attachments(p_account uuid)
+returns text[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(distinct a.path), '{}')
+    from public.support_messages m
+    join public.support_tickets t on t.id = m.ticket_id
+    cross join lateral jsonb_array_elements_text(m.attachments) as a(path)
+   where t.account_id = p_account;
+$$;
+
+comment on function public.ts_support_account_attachments(uuid) is '이 계정 문의에 붙은 그림 경로. 안 붙인 그림 정리용. service_role 전용.';
+revoke all on function public.ts_support_account_attachments(uuid) from public, anon, authenticated;
+grant execute on function public.ts_support_account_attachments(uuid) to service_role;
+
+-- 게임의 새 답변 표시 — 로그인한 플레이어가 직접 부른다.
+create or replace function public.ts_support_unread_count()
+returns int
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::int from public.support_tickets where account_id = auth.uid() and player_unread;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 운영 콘솔 "고객센터"
+-- ---------------------------------------------------------------------------
+-- 목록. p_status null = 전부. p_search 는 닉네임·user_id·계정 ID 일부.
+create or replace function public.ts_admin_support_tickets(
+  p_status text, p_category int, p_search text, p_limit int, p_offset int
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with base as (
+    select t.*, c.name as category, d.display_name
+      from public.support_tickets t
+      left join public.support_categories c on c.id = t.category_id
+      left join public.display_names d on d.account_id = t.account_id
+     where (p_status is null or t.status = p_status)
+       and (p_category is null or t.category_id = p_category)
+       and (coalesce(btrim(p_search), '') = ''
+            or d.display_name ilike '%' || btrim(p_search) || '%'
+            or t.user_id ilike '%' || btrim(p_search) || '%'
+            or t.account_id::text ilike '%' || btrim(p_search) || '%')
+  )
+  select jsonb_build_object(
+    'total', (select count(*) from base),
+    'counts', (select jsonb_build_object(
+                 'open',     count(*) filter (where status = 'open'),
+                 'answered', count(*) filter (where status = 'answered'),
+                 'closed',   count(*) filter (where status = 'closed'))
+               from public.support_tickets),
+    'rows', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', b.id, 'account_id', b.account_id, 'user_id', b.user_id, 'display_name', b.display_name,
+               'category', b.category, 'status', b.status, 'was_banned', b.was_banned,
+               'preview', left((select m.body from public.support_messages m where m.ticket_id = b.id order by m.id limit 1), 80),
+               'created_at', b.created_at, 'last_message_at', b.last_message_at)
+               order by b.last_message_at desc)
+        from (select * from base order by last_message_at desc
+              limit greatest(1, least(coalesce(p_limit, 50), 200)) offset greatest(coalesce(p_offset, 0), 0)) b),
+      '[]'::jsonb));
+$$;
+
+create or replace function public.ts_admin_support_ticket(p_ticket uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+           'id', t.id, 'account_id', t.account_id, 'user_id', t.user_id, 'display_name', d.display_name,
+           'category', c.name, 'category_id', t.category_id, 'status', t.status, 'was_banned', t.was_banned,
+           'meta', t.meta, 'created_at', t.created_at, 'last_message_at', t.last_message_at,
+           'messages', coalesce((
+             select jsonb_agg(jsonb_build_object('id', m.id, 'sender', m.sender, 'body', m.body,
+                                                 'attachments', m.attachments, 'admin_email', m.admin_email,
+                                                 'created_at', m.created_at) order by m.id)
+               from public.support_messages m where m.ticket_id = t.id), '[]'::jsonb))
+    from public.support_tickets t
+    left join public.support_categories c on c.id = t.category_id
+    left join public.display_names d on d.account_id = t.account_id
+   where t.id = p_ticket;
+$$;
+
+-- 운영자 답변. 답하면 "답변 완료"가 되고 플레이어 쪽에 새 답변 표시가 켜진다.
+create or replace function public.ts_admin_support_reply(p_ticket uuid, p_body text, p_by text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if char_length(btrim(coalesce(p_body, ''))) = 0 then
+    raise exception 'support_body_empty';
+  end if;
+  if char_length(p_body) > 2000 then
+    raise exception 'support_body_too_long';
+  end if;
+  if not exists (select 1 from public.support_tickets where id = p_ticket) then
+    raise exception 'support_ticket_not_found';
+  end if;
+  -- 종료한 문의에 답하면 말없이 다시 열린다 — 콘솔이 먼저 "다시 열기"를 하게 한다.
+  if exists (select 1 from public.support_tickets where id = p_ticket and status = 'closed') then
+    raise exception 'support_ticket_closed';
+  end if;
+  insert into public.support_messages (ticket_id, sender, body, admin_email)
+  values (p_ticket, 'admin', btrim(p_body), p_by);
+  update public.support_tickets
+     set status = 'answered', player_unread = true, updated_at = now(), last_message_at = now()
+   where id = p_ticket;
+end;
+$$;
+
+-- 상태 바꾸기 — 주로 종료. 다시 열 수도 있다.
+create or replace function public.ts_admin_support_set_status(p_ticket uuid, p_status text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_status not in ('open', 'answered', 'closed') then
+    raise exception 'support_status_invalid';
+  end if;
+  update public.support_tickets set status = p_status, updated_at = now() where id = p_ticket;
+  if not found then
+    raise exception 'support_ticket_not_found';
+  end if;
+end;
+$$;
+
+create or replace function public.ts_admin_support_categories()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', c.id, 'name', c.name, 'localized', c.localized, 'sort_order', c.sort_order, 'is_active', c.is_active,
+           'tickets', (select count(*) from public.support_tickets t where t.category_id = c.id))
+           order by c.sort_order, c.id), '[]'::jsonb)
+    from public.support_categories c;
+$$;
+
+-- 분류 추가(p_id null)·바꾸기. 지우지 않는다 — 옛 문의가 분류를 잃지 않게 끄기만 한다.
+create or replace function public.ts_admin_support_category_upsert(
+  p_id int, p_name text, p_localized jsonb, p_sort_order int, p_is_active boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if char_length(btrim(coalesce(p_name, ''))) not between 1 and 40 then
+    raise exception 'support_category_name_invalid';
+  end if;
+  if exists (select 1 from public.support_categories
+              where lower(btrim(name)) = lower(btrim(p_name)) and (p_id is null or id <> p_id)) then
+    raise exception 'support_category_name_taken';
+  end if;
+  if p_id is null then
+    insert into public.support_categories (name, localized, sort_order, is_active)
+    values (btrim(p_name), coalesce(p_localized, '{}'::jsonb), coalesce(p_sort_order, 0), coalesce(p_is_active, true));
+  else
+    update public.support_categories
+       set name = btrim(p_name), localized = coalesce(p_localized, '{}'::jsonb), sort_order = coalesce(p_sort_order, sort_order),
+           is_active = coalesce(p_is_active, is_active), updated_at = now()
+     where id = p_id;
+    if not found then
+      raise exception 'support_category_not_found';
+    end if;
+  end if;
+end;
+$$;
+
+comment on function public.ts_support_token_secret() is '고객센터 창 접속 표 서명 비밀값(복호화). support-api 전용 — service_role 만.';
+comment on function public.ts_support_account_from_refresh_token(text) is '기기에 남은 갱신 토큰 → 계정. 차단된 계정의 본인 확인용. service_role 전용.';
+comment on function public.ts_support_account_from_identity(text, text) is '구글·애플 계정 연결 → 계정. 인증 서버가 확인한 ID 토큰의 sub 로만 부른다. service_role 전용.';
+comment on function public.ts_support_categories(text) is '고객센터 분류(켜진 것). service_role 전용.';
+comment on function public.ts_support_tickets(uuid, text) is '플레이어 문의 목록. service_role 전용.';
+comment on function public.ts_support_ticket(uuid, uuid, text) is '플레이어 문의 하나 + 메시지. 새 답변 표시를 끈다. service_role 전용.';
+comment on function public.ts_support_check_attachments(uuid, jsonb) is '첨부 경로 검사(그 계정 폴더·3장 이하). 내부 헬퍼.';
+comment on function public.ts_support_guard_rate(uuid) is '한 시간 20개 메시지 제한. 내부 헬퍼.';
+comment on function public.ts_support_create(uuid, int, text, jsonb, jsonb, boolean) is '문의 열기. service_role 전용.';
+comment on function public.ts_support_reply(uuid, uuid, text, jsonb) is '플레이어 덧붙이기. service_role 전용.';
+comment on function public.ts_support_unread_count() is '새 답변이 있는 내 문의 수. 게임이 직접 부른다.';
+comment on function public.ts_admin_support_tickets(text, int, text, int, int) is '콘솔 고객센터 목록. service_role 전용.';
+comment on function public.ts_admin_support_ticket(uuid) is '콘솔 고객센터 문의 하나. service_role 전용.';
+comment on function public.ts_admin_support_reply(uuid, text, text) is '운영자 답변. service_role 전용.';
+comment on function public.ts_admin_support_set_status(uuid, text) is '문의 상태 바꾸기. service_role 전용.';
+comment on function public.ts_admin_support_categories() is '고객센터 분류 전부. service_role 전용.';
+comment on function public.ts_admin_support_category_upsert(int, text, jsonb, int, boolean) is '고객센터 분류 추가·바꾸기. service_role 전용.';
+
+revoke all on function public.ts_support_token_secret()                                      from public, anon, authenticated;
+revoke all on function public.ts_support_account_from_refresh_token(text)                    from public, anon, authenticated;
+revoke all on function public.ts_support_account_from_identity(text, text)                   from public, anon, authenticated;
+revoke all on function public.ts_support_categories(text)                                    from public, anon, authenticated;
+revoke all on function public.ts_support_tickets(uuid, text)                                 from public, anon, authenticated;
+revoke all on function public.ts_support_ticket(uuid, uuid, text)                            from public, anon, authenticated;
+revoke all on function public.ts_support_check_attachments(uuid, jsonb)                      from public, anon, authenticated;
+revoke all on function public.ts_support_guard_rate(uuid)                                    from public, anon, authenticated;
+revoke all on function public.ts_support_create(uuid, int, text, jsonb, jsonb, boolean)      from public, anon, authenticated;
+revoke all on function public.ts_support_reply(uuid, uuid, text, jsonb)                      from public, anon, authenticated;
+revoke all on function public.ts_support_unread_count()                                      from public, anon, authenticated;
+revoke all on function public.ts_admin_support_tickets(text, int, text, int, int)            from public, anon, authenticated;
+revoke all on function public.ts_admin_support_ticket(uuid)                                  from public, anon, authenticated;
+revoke all on function public.ts_admin_support_reply(uuid, text, text)                       from public, anon, authenticated;
+revoke all on function public.ts_admin_support_set_status(uuid, text)                        from public, anon, authenticated;
+revoke all on function public.ts_admin_support_categories()                                  from public, anon, authenticated;
+revoke all on function public.ts_admin_support_category_upsert(int, text, jsonb, int, boolean) from public, anon, authenticated;
+
+grant execute on function public.ts_support_token_secret()                                   to service_role;
+grant execute on function public.ts_support_account_from_refresh_token(text)                 to service_role;
+grant execute on function public.ts_support_account_from_identity(text, text)                to service_role;
+grant execute on function public.ts_support_categories(text)                                 to service_role;
+grant execute on function public.ts_support_tickets(uuid, text)                              to service_role;
+grant execute on function public.ts_support_ticket(uuid, uuid, text)                         to service_role;
+grant execute on function public.ts_support_create(uuid, int, text, jsonb, jsonb, boolean)   to service_role;
+grant execute on function public.ts_support_reply(uuid, uuid, text, jsonb)                   to service_role;
+grant execute on function public.ts_support_unread_count()                                   to authenticated;
+grant execute on function public.ts_admin_support_tickets(text, int, text, int, int)         to service_role;
+grant execute on function public.ts_admin_support_ticket(uuid)                               to service_role;
+grant execute on function public.ts_admin_support_reply(uuid, text, text)                    to service_role;
+grant execute on function public.ts_admin_support_set_status(uuid, text)                     to service_role;
+grant execute on function public.ts_admin_support_categories()                               to service_role;
+grant execute on function public.ts_admin_support_category_upsert(int, text, jsonb, int, boolean) to service_role;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 23. 클라이언트 권한 최소화
 -- #############################################################################
 
 -- 클라이언트 롤(anon·authenticated)의 테이블·함수 권한을 실제로 필요한 범위까지 좁힙니다.
@@ -13293,9 +13875,11 @@ grant select on table public.ts_protected_fields to authenticated;
 
 -- 본인 행 읽기·쓰기 — RLS 정책이 account_id = auth.uid() 로 제한
 grant select, insert, update         on table public.display_names to authenticated;
-grant select, insert, update         on table public.user_profiles to authenticated;
 grant select, insert, update, delete on table public.user_sessions to authenticated;
 grant select, insert, update, delete on table public.user_data     to authenticated;
+
+-- 프로필 — 읽기만, 칸 단위(2절과 같은 칸). 쓰기는 전부 SECURITY DEFINER 함수가 한다.
+grant select (id, user_id, account_id, server_id, withdrawn_at) on table public.user_profiles to authenticated;
 
 -- 클라이언트 권한을 남기지 않는 테이블(정책 0개 = RLS 가 이미 전면 차단):
 --   account_closures, apple_auth_tokens, anonymous_recovery_tokens, mail_batches, mail_categories,
@@ -13412,6 +13996,9 @@ grant execute on function public.ts_match_lobby_start(uuid)                     
 grant execute on function public.ts_match_lobby_cancel(uuid)                         to authenticated;
 grant execute on function public.ts_match_lobby_list_my()                            to authenticated;
 
+-- 고객센터 — 게임의 새 답변 표시
+grant execute on function public.ts_support_unread_count()                           to authenticated;
+
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
@@ -13427,6 +14014,7 @@ grant execute on function public.ts_match_lobby_list_my()                       
 --   ts_match_lobby_settings / ts_match_lobby_guard_invite / ts_match_lobby_chat_member
 --                          ← 내부 헬퍼(로비 초대 제한값·초대 판정·대화 자격).
 --   ts_admin_friend_overview / ts_admin_friend_settings_* / ts_admin_match_lobby_list ← 운영 콘솔 전용.
+--   ts_support_* (ts_support_unread_count 제외) ← 고객센터 창의 엣지 함수(support-api) 전용.
 
 -- ---------------------------------------------------------------------------
 -- 검증

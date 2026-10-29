@@ -68,6 +68,9 @@ from (
       ('request_limit_settings'),
       ('request_limit_counters'),
       ('request_limit_blocks'),
+      ('support_categories'),
+      ('support_tickets'),
+      ('support_messages'),
       ('user_data_logs'),
       ('game_items'),
       ('mail_batches'),
@@ -246,7 +249,6 @@ from (
       -- 스키마 노출 전용(RLS 정책 0개라 행 반환 없음). 클래스 생성기가 컬럼 타입을 읽는 데 필요
       ('leaderboard_scores',  'authenticated', 'SELECT'),
       ('display_names', 'authenticated', 'INSERT,SELECT,UPDATE'),
-      ('user_profiles', 'authenticated', 'INSERT,SELECT,UPDATE'),
       ('user_sessions', 'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
       ('user_data',     'authenticated', 'DELETE,INSERT,SELECT,UPDATE')
   ) as exp(tbl, grantee, privs)
@@ -257,6 +259,31 @@ from (
       and g.table_name = exp.tbl
       and g.grantee = exp.grantee
   ) act on true
+
+  union all
+
+  -- ---------------------------------------------------------------------------
+  -- 칸 단위 권한 — 프로필은 읽기만, 정해진 칸만(install.sql 2절). 표 단위 권한은 위·아래 검사가 본다.
+  --   칸이 빠지면 SDK·엣지 함수의 그 요청이 실패하고, 쓰기가 열리면 플레이어가 누적 결제액 등을 바꿀 수 있다.
+  -- ---------------------------------------------------------------------------
+  select
+    'grant:column'::text,
+    'user_profiles → authenticated',
+    case
+      when coalesce(act.sel, '') = 'account_id,id,server_id,user_id,withdrawn_at' and coalesce(act.other, '') = '' then 'applied'
+      when coalesce(act.other, '') <> '' then 'over_privileged'
+      when coalesce(act.sel, '') = '' then 'missing_grant'
+      else 'mismatch'
+    end,
+    'expected select: account_id,id,server_id,user_id,withdrawn_at / actual select: ' || coalesce(act.sel, '(none)')
+      || coalesce(' / other: ' || act.other, '')
+  from (
+    select
+      string_agg(c.column_name, ',' order by c.column_name) filter (where c.privilege_type = 'SELECT') as sel,
+      string_agg(distinct c.privilege_type, ',') filter (where c.privilege_type <> 'SELECT') as other
+    from information_schema.column_privileges c
+    where c.table_schema = 'public' and c.table_name = 'user_profiles' and c.grantee = 'authenticated'
+  ) act
 
   union all
 
@@ -279,7 +306,7 @@ from (
           ('remote_config','anon'), ('remote_config','authenticated'),
           ('game_items','authenticated'), ('mails','authenticated'),
           ('purchases','authenticated'), ('ts_protected_fields','authenticated'),
-          ('display_names','authenticated'), ('user_profiles','authenticated'),
+          ('display_names','authenticated'),
           ('user_sessions','authenticated'), ('user_data','authenticated'),
           ('leaderboard_scores','authenticated')
       ) as v(tbl, grantee)
@@ -340,7 +367,9 @@ from (
       ('ts_leaderboard_set_player_data',  'auth'),
       ('ts_leaderboard_delete_my_score',  'auth'),
       ('ts_leaderboard_columns_meta',      'anon+auth'),
-      ('ts_leaderboard_list_meta',         'anon+auth')
+      ('ts_leaderboard_list_meta',         'anon+auth'),
+      -- 고객센터 — 새 답변 수
+      ('ts_support_unread_count',          'auth')
   ) as exp(fn, roles)
   left join lateral (
     select p.oid
@@ -375,7 +404,7 @@ from (
       case when has_function_privilege('anon', p.oid, 'EXECUTE') then 'anon+auth' else 'auth' end
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-  -- 트리거 함수도 본다 — install.sql 22절이 트리거 함수 권한까지 회수한다(트리거 실행은 EXECUTE 를 보지 않는다).
+  -- 트리거 함수도 본다 — install.sql 23절이 트리거 함수 권한까지 회수한다(트리거 실행은 EXECUTE 를 보지 않는다).
   where (has_function_privilege('anon', p.oid, 'EXECUTE')
       or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
     -- install.sql 이 authenticated·anon 에 grant 하는 함수 전부. 둘의 일치는 SdkAudit R17 이 본다.
@@ -398,7 +427,8 @@ from (
       'ts_match_lobby_set_member_meta', 'ts_match_lobby_start', 'ts_match_report_result',
       'ts_match_report_solo_result', 'ts_match_stats', 'ts_my_server_id', 'ts_my_withdrawal_status',
       'ts_request_limit_check', 'ts_request_limit_ping',
-      'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_transfer_my_server', 'ts_view_mail_for_user'
+      'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_support_unread_count',
+      'ts_transfer_my_server', 'ts_view_mail_for_user'
     )
 
   union all
