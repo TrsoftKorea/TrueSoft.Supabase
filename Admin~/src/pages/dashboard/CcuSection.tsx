@@ -4,6 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { platformLabel } from '../../lib/platforms'
 import { WhiteCard } from '../../components/ui/Card'
+import { niceAxis, ValueAxisFrame } from '../../components/ui/ValueAxis'
 
 type Breakdown = Record<string, number>
 type Point = { at: string; total: number }
@@ -41,20 +42,21 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
   const [hover, setHover] = useState<number | null>(null)
   const withDate = hours > 24
 
-  const { path, area, pts, max } = useMemo(() => {
+  const { path, area, pts, max, axis } = useMemo(() => {
     const t0 = Date.now() - hours * 3600_000
     const t1 = Date.now()
     const max = Math.max(1, ...series.map((p) => p.total))
+    const axis = niceAxis(max)
     const pts = series.map((p) => ({
       x: ((new Date(p.at).getTime() - t0) / (t1 - t0)) * W,
-      y: H - (p.total / max) * (H - 8),
+      y: H - (p.total / axis.top) * H,
       p,
     }))
     const path = pts.map((q, i) => `${i === 0 ? 'M' : 'L'}${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(' ')
     const first = pts[0]
     const last = pts[pts.length - 1]
     const area = first && last ? `${path} L${last.x.toFixed(1)},${H} L${first.x.toFixed(1)},${H} Z` : ''
-    return { path, area, pts, max }
+    return { path, area, pts, max, axis }
   }, [series, hours])
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -77,20 +79,23 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
         <span>최대 {n(max)}명</span>
         {hp && <span className="text-neutral-800">{formatAt(hp.at, withDate)} · <b>{n(hp.total)}명</b></span>}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-40 cursor-crosshair"
-        onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-        <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} className="stroke-neutral-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        {area && <path d={area} fill="#1677ff" fillOpacity={0.12} />}
-        {path && <path d={path} fill="none" stroke="#1677ff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
-        {hq && (
-          <line x1={hq.x} y1={0} x2={hq.x} y2={H} className="stroke-neutral-400" strokeWidth={1}
-            strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-        )}
-      </svg>
-      <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
-        <span>{formatAt(new Date(Date.now() - hours * 3600_000).toISOString(), withDate)}</span>
-        <span>지금</span>
-      </div>
+      <ValueAxisFrame axis={axis} heightCls="h-40" footer={
+        <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+          <span>{formatAt(new Date(Date.now() - hours * 3600_000).toISOString(), withDate)}</span>
+          <span>지금</span>
+        </div>
+      }>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full block cursor-crosshair"
+          onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} className="stroke-neutral-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {area && <path d={area} fill="#1677ff" fillOpacity={0.12} />}
+          {path && <path d={path} fill="none" stroke="#1677ff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+          {hq && (
+            <line x1={hq.x} y1={0} x2={hq.x} y2={H} className="stroke-neutral-400" strokeWidth={1}
+              strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+          )}
+        </svg>
+      </ValueAxisFrame>
     </div>
   )
 }

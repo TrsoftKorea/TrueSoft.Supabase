@@ -92,19 +92,6 @@ for (const c of r30.countries) {
   ok(long && long.revenue_krw >= c.revenue_krw && long.purchases >= c.purchases, `[1] 90일 매출이 30일보다 작음 ${c.country}`)
 }
 
-// 1·2 테스트 결제 — 같은 날짜는 기간이 달라도 같고, 날짜별 합 = 합계, 스토어별 합 = 합계
-const t30 = await call('testPurchases.stats', { days: 30 })
-const t90 = await call('testPurchases.stats', { days: 90 })
-for (const t of [t30, t90]) {
-  ok(t.daily.reduce((s, d) => s + d.count, 0) === t.total_count, '[2] 테스트 결제 날짜별 합 != 합계')
-  ok(t.daily.reduce((s, d) => s + d.krw, 0) === t.total_krw, '[2] 테스트 결제 금액 날짜별 합 != 합계')
-  ok(Object.values(t.by_store).reduce((s, v) => s + v, 0) === t.total_count, '[2] 테스트 결제 스토어별 합 != 합계')
-}
-for (const d of t30.daily) {
-  const long = t90.daily.find((x) => x.day === d.day)
-  ok(long && long.count === d.count && long.krw === d.krw, `[1] 테스트 결제 30일·90일 값이 다름 ${d.day}`)
-}
-
 // 1·2 일일 채팅 — 같은 날짜는 기간이 달라도 같고, 종류별 합 = total
 const ch30 = await call('chat.stats', { days: 30 })
 const ch90 = await call('chat.stats', { days: 90 })

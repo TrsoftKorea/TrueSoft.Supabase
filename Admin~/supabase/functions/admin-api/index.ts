@@ -866,12 +866,6 @@ async function handleAction(
         return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
       }
 
-      case "testPurchases.stats": {
-        const { data, error } = await db.rpc("ts_admin_test_purchase_stats", { p_days: intInRange(params, "days", "기간", 1, 365) });
-        if (error) throw new Error(error.message);
-        return json({ ok: true, data });
-      }
-
       case "purchases.getRefundStatus": {
         const { data, error } = await db
           .from("purchase_refund_sync")

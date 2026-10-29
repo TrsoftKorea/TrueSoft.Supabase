@@ -14,6 +14,7 @@ import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatCount, formatDateTime, formatKRW, formatTotal } from '../components/ui/format'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
+import { Segmented } from '../components/ui/Segmented'
 
 type PurchaseRow = {
   id: string
@@ -137,8 +138,9 @@ export default function Purchases({
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [refundedOnly, setRefundedOnly] = useState(false)
-  // 시험 결제 보기: all 전부 · exclude 시험 빼고 · only 시험만
-  const [test, setTest] = useState<'all' | 'exclude' | 'only'>('all')
+  // 라이브 결제(exclude: 시험이 아닌 것 — 무료·시험 여부를 모르는 옛 결제 포함) 또는 테스트 결제(only)만 본다.
+  // 둘을 섞어 보는 "전체"는 두지 않는다 — 테스트 결제는 따로 보는 것이 의도다(2026-10-29 사용자 결정).
+  const [test, setTest] = useState<'exclude' | 'only'>('exclude')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -275,6 +277,13 @@ export default function Purchases({
       )}
 
       <WhiteCard className="p-4 space-y-3">
+        <Segmented value={test} onChange={(v) => { setTest(v); setPage(1) }} options={[
+          { v: 'exclude', label: '라이브 결제' },
+          { v: 'only', label: '테스트 결제' },
+        ]} />
+        {test === 'only' && (
+          <div className="text-xs text-neutral-500">애플 샌드박스와 구글 라이선스 테스트 계정의 결제입니다. 매출에 넣지 않습니다.</div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-neutral-500">결제 확인일</span>
           <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
@@ -289,13 +298,6 @@ export default function Purchases({
             <input type="checkbox" checked={refundedOnly} onChange={(e) => { setRefundedOnly(e.target.checked); setPage(1) }} className="rounded" />
             환불만
           </label>
-          <select value={test} onChange={(e) => { setTest(e.target.value as typeof test); setPage(1) }}
-            className={inputCls}
-            title="시험 결제는 애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정 결제입니다. 매출에 넣지 않습니다">
-            <option value="all">시험 결제 포함</option>
-            <option value="exclude">시험 결제 빼기</option>
-            <option value="only">시험 결제만</option>
-          </select>
           <Button variant="primary" size="compact"
             onClick={submitSearch}
             disabled={loading}

@@ -110,40 +110,6 @@ function revenueStats(days: number) {
   }
 }
 
-// ── 테스트 결제 ── 하루 건수·금액은 날짜에서만 나오고, 합계는 날짜별 합이다(규칙 1·2).
-const TEST_PRODUCTS = ['gem_pack_small', 'gem_pack_large', 'starter_bundle']
-function testDay(day: string) {
-  const count = Math.floor(hash(`test:${day}`) * 4)
-  const items = Array.from({ length: count }, (_, k) => {
-    const apple = hash(`test-store:${day}:${k}`) < 0.5
-    return {
-      verified_at: `${day}T${String(10 + k).padStart(2, '0')}:00:00+09:00`,
-      store: apple ? 'apple_app_store' : 'google_play',
-      product_id: TEST_PRODUCTS[Math.floor(hash(`test-prod:${day}:${k}`) * TEST_PRODUCTS.length)]!,
-      price_amount_krw: PRICES[Math.floor(hash(`test-price:${day}:${k}`) * 4)]!,
-      display_name: `QA_${(k + 1).toString().padStart(2, '0')}`,
-      account_id: null,
-    }
-  })
-  return { day, count, krw: items.reduce((s, x) => s + x.price_amount_krw, 0), items }
-}
-
-function testPurchaseStats(days: number) {
-  const today = kstToday()
-  const list = Array.from({ length: days }, (_, i) => testDay(addDays(today, i - days + 1)))
-  const all = list.flatMap((d) => d.items)
-  const by_store: Record<string, number> = {}
-  for (const x of all) by_store[x.store] = (by_store[x.store] ?? 0) + 1
-  return {
-    daily: list.map(({ day, count, krw }) => ({ day, count, krw })),
-    by_store,
-    total_count: all.length,
-    total_krw: all.reduce((s, x) => s + x.price_amount_krw, 0),
-    recent: [...all].reverse().slice(0, 50),
-    unknown_count: 4,
-  }
-}
-
 // ── 일일 채팅 ── 종류별 개수는 날짜에서만 나오고 total 은 그 합이다.
 const CHAT_KINDS: [string, number][] = [['global', 900], ['server', 500], ['group', 160], ['direct', 220]]
 
@@ -404,7 +370,6 @@ const HANDLERS: Record<string, Handler> = {
   'ccu.stats': (_t, p) => ccuStats(Number(p['hours'] ?? 24)),
   'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30), String(p['signupPlatform'] ?? '')),
   'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
-  'testPurchases.stats': (_t, p) => testPurchaseStats(Number(p['days'] ?? 30)),
   'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
   // 서비스 연결 — 몇 개는 등록됨·몇 개는 없음으로 보여 입력·바꾸기 버튼이 둘 다 보이게 한다.
   'settings.getStoreStatus': () => ({

@@ -7,10 +7,11 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
-import { formatDateTime, formatKRW } from '../components/ui/format'
+import { formatKRW } from '../components/ui/format'
 import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
 import { Segmented } from '../components/ui/Segmented'
+import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
 
 type Day = { day: string; total: number; new: number; returning: number; comeback: number }
 type Cohort = { day: string; size: number; kept: (number | null)[] }
@@ -44,7 +45,7 @@ function signupPlatformOptions(present: string[] | undefined, selected: string) 
   ]
 }
 
-type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'test' | 'chat'
+type Tab = 'users' | 'comeback' | 'retention' | 'revenue' | 'chat'
 // 접속 기록으로 세는 탭 — 가입 플랫폼으로 거를 수 있다.
 const ACTIVITY_TABS: Tab[] = ['users', 'comeback', 'retention']
 const TABS: [Tab, string][] = [
@@ -52,98 +53,8 @@ const TABS: [Tab, string][] = [
   ['comeback', '복귀 유저'],
   ['retention', '리텐션'],
   ['revenue', '국가별 매출'],
-  ['test', '테스트 결제'],
   ['chat', '일일 채팅'],
 ]
-
-type TestPurchaseStats = {
-  daily: { day: string; count: number; krw: number }[]
-  by_store: Record<string, number>
-  total_count: number
-  total_krw: number
-  recent: { verified_at: string; store: string; product_id: string; price_amount_krw: number | null; display_name: string | null; account_id: string | null }[]
-  unknown_count: number
-}
-const STORE_NAME: Record<string, string> = { google_play: 'Google Play', apple_app_store: 'App Store' }
-
-function TestPurchaseTab({ target, days, reloadKey, onUnauthenticated, onError }: {
-  target: ProjectTarget; days: number; reloadKey: number
-  onUnauthenticated: () => void; onError: (m: string) => void
-}) {
-  const [data, setData] = useState<TestPurchaseStats | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    callAdmin<TestPurchaseStats>(target, 'testPurchases.stats', { days })
-      .then((r) => { if (alive) setData(r) })
-      .catch((e: unknown) => {
-        if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
-        onError(e instanceof Error ? e.message : '테스트 결제를 불러오지 못했습니다.')
-      })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [target, days, reloadKey, onUnauthenticated, onError])
-
-  if (loading && !data) {
-    return <WhiteCard className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-neutral-300 mx-auto" /></WhiteCard>
-  }
-  if (!data) return null
-  const rows: DayRow[] = data.daily.map((d) => ({ day: d.day, count: d.count }))
-  const stores = Object.entries(data.by_store).map(([s, c]) => `${STORE_NAME[s] ?? s} ${n(c)}건`).join(' · ')
-
-  return (
-    <>
-      <div className="text-xs text-neutral-500">
-        애플 샌드박스(TestFlight·앱 심사 포함)와 구글 라이선스 테스트 계정의 결제입니다. 매출·대시보드·누적 결제액에 넣지 않습니다.
-        {data.unknown_count > 0 && <> 이 구분이 생기기 전 결제 {n(data.unknown_count)}건은 시험인지 알 수 없어 매출에 그대로 들어가 있습니다.</>}
-      </div>
-      <WhiteCard>
-        <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-neutral-800">테스트 결제</span>
-          <span className="text-xs text-neutral-500">
-            기간 합계 {n(data.total_count)}건 · {formatKRW(data.total_krw)}{stores && ` · ${stores}`}
-          </span>
-        </div>
-        <div className="p-5">
-          <DayBars days={rows} series={[{ key: 'count', color: '#94a3b8', label: '테스트 결제' }]} unit="건" />
-        </div>
-      </WhiteCard>
-      <WhiteCard>
-        <div className="border-b border-neutral-100 px-5 py-3 text-sm font-medium text-neutral-800">최근 테스트 결제</div>
-        {data.recent.length === 0 ? (
-          <div className="p-8 text-center text-sm text-neutral-400">이 기간에 테스트 결제가 없습니다.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-neutral-500 border-b border-neutral-100">
-                  <th className="px-5 py-2 text-left font-medium whitespace-nowrap">결제 시각</th>
-                  <th className="px-3 py-2 text-left font-medium">플레이어</th>
-                  <th className="px-3 py-2 text-left font-medium">상품</th>
-                  <th className="px-3 py-2 text-left font-medium whitespace-nowrap">스토어</th>
-                  <th className="px-5 py-2 text-right font-medium whitespace-nowrap">금액</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent.map((r, i) => (
-                  <tr key={i} className="border-b border-neutral-100 last:border-0">
-                    <td className="px-5 py-2 whitespace-nowrap text-neutral-600">{formatDateTime(r.verified_at)}</td>
-                    <td className="px-3 py-2 text-neutral-800">{r.display_name ?? '-'}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.product_id}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-neutral-600">{STORE_NAME[r.store] ?? r.store}</td>
-                    <td className="px-5 py-2 text-right tabular-nums whitespace-nowrap">{r.price_amount_krw != null ? formatKRW(r.price_amount_krw) : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </WhiteCard>
-    </>
-  )
-}
 
 type ChatDay = { day: string; total: number; by_kind: Record<string, number> }
 type ChatStats = { daily: ChatDay[]; first_day: string | null }
@@ -306,6 +217,7 @@ type DayRow = { day: string } & Record<string, number | string>
 function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; series: { key: keyof R & string; color: string; label: string }[]; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const max = Math.max(1, ...days.map((d) => series.reduce((s, x) => s + (d[x.key] as number), 0)))
+  const axis = niceAxis(max)
   const slot = W / Math.max(1, days.length)
   const bar = Math.max(1, slot * 0.7)
   const hd = hover !== null ? days[hover] : undefined
@@ -326,27 +238,30 @@ function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; 
           </span>
         ) : <span>최대 {n(max)}{unit}</span>}
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-36" onMouseLeave={() => setHover(null)}>
-        <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} className="stroke-neutral-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        {days.map((d, i) => {
-          let y = H
-          const x = i * slot + (slot - bar) / 2
-          return (
-            <g key={d.day} onMouseEnter={() => setHover(i)}>
-              <rect x={i * slot} y={0} width={slot} height={H} fill="transparent" />
-              {series.map((s) => {
-                const h = ((d[s.key] as number) / max) * (H - 6)
-                y -= h
-                return <rect key={s.label} x={x} y={y} width={bar} height={h} fill={s.color} opacity={hover === null || hover === i ? 1 : 0.55} />
-              })}
-            </g>
-          )
-        })}
-      </svg>
-      <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
-        <span>{days[0] ? md(days[0].day) : ''}</span>
-        <span>{days.length ? md(days[days.length - 1]!.day) : ''}</span>
-      </div>
+      <ValueAxisFrame axis={axis} heightCls="h-36" footer={
+        <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+          <span>{days[0] ? md(days[0].day) : ''}</span>
+          <span>{days.length ? md(days[days.length - 1]!.day) : ''}</span>
+        </div>
+      }>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full block" onMouseLeave={() => setHover(null)}>
+          <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} className="stroke-neutral-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          {days.map((d, i) => {
+            let y = H
+            const x = i * slot + (slot - bar) / 2
+            return (
+              <g key={d.day} onMouseEnter={() => setHover(i)}>
+                <rect x={i * slot} y={0} width={slot} height={H} fill="transparent" />
+                {series.map((s) => {
+                  const h = ((d[s.key] as number) / axis.top) * H
+                  y -= h
+                  return <rect key={s.label} x={x} y={y} width={bar} height={h} fill={s.color} opacity={hover === null || hover === i ? 1 : 0.55} />
+                })}
+              </g>
+            )
+          })}
+        </svg>
+      </ValueAxisFrame>
     </div>
   )
 }
@@ -465,16 +380,12 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
       ) : data && (
         <>
           {/* 접속 기록은 통계를 만든 날부터 쌓였다. 매출은 결제 기록이 원래 있어 이 안내가 맞지 않는다. */}
-          {tab !== 'revenue' && tab !== 'chat' && tab !== 'test' && data.first_day && data.first_day > data.daily[0]!.day && (
+          {tab !== 'revenue' && tab !== 'chat' && data.first_day && data.first_day > data.daily[0]!.day && (
             <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
           )}
 
           {tab === 'revenue' && (
             <RevenueTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
-          )}
-
-          {tab === 'test' && (
-            <TestPurchaseTab target={target} days={days} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
           )}
 
           {tab === 'chat' && (
