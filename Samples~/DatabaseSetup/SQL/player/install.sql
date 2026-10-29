@@ -8939,51 +8939,8 @@ comment on function public.ts_admin_revenue_by_country(integer) is '콘솔 통�
 revoke all on function public.ts_admin_revenue_by_country(integer) from public, anon, authenticated;
 grant execute on function public.ts_admin_revenue_by_country(integer) to service_role;
 
--- 콘솔 "통계 › 테스트 결제" — 최근 p_days 일(게임 시간대 날짜)의 시험 결제. 매출에서 뺀 만큼이 여기 보인다.
--- 날짜별 건수·금액, 스토어별 합계, 최근 50건.
-create or replace function public.ts_admin_test_purchase_stats(p_days integer)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  with params as (
-    select least(365, greatest(1, coalesce(p_days, 30))) as days,
-           public.ts_game_today() as today
-  ),
-  days as (
-    select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
-  ),
-  tests as (
-    select pu.*, (pu.verified_at at time zone public.ts_game_time_zone())::date as day
-      from public.purchases pu, params p
-     where pu.is_test
-       and pu.verified_at >= ((p.today - p.days + 1)::timestamp at time zone public.ts_game_time_zone())
-  )
-  select jsonb_build_object(
-    'daily', coalesce((select jsonb_agg(jsonb_build_object(
-                 'day', d.day,
-                 'count', (select count(*) from tests t where t.day = d.day),
-                 'krw', (select coalesce(sum(t.price_amount_krw), 0) from tests t where t.day = d.day))
-               order by d.day) from days d), '[]'::jsonb),
-    'by_store', coalesce((select jsonb_object_agg(store, n) from (select store, count(*) as n from tests group by store) s), '{}'::jsonb),
-    'total_count', (select count(*) from tests),
-    'total_krw', (select coalesce(sum(price_amount_krw), 0) from tests),
-    'recent', coalesce((select jsonb_agg(r order by r.verified_at desc) from (
-                 select t.verified_at, t.store, t.product_id, t.price_amount_krw, t.order_id,
-                        coalesce(dn.display_name, t.user_id) as display_name, t.account_id
-                   from tests t
-                   left join public.display_names dn on dn.account_id = t.account_id
-                  order by t.verified_at desc limit 50) r), '[]'::jsonb),
-    -- 시험인지 모르는 결제(이 칸이 생기기 전 기록) — 매출에 그대로 들어가 있다. 구글 것은 환불 확인 때 하루 50건씩 다시 묻는다.
-    'unknown_count', (select count(*) from public.purchases where is_test is null)
-  );
-$$;
-
-comment on function public.ts_admin_test_purchase_stats(integer) is '콘솔 통계 — 최근 p_days 일(게임 시간대 날짜) 시험 결제(애플 Sandbox·구글 라이선스 테스트). 날짜별·스토어별·최근 50건. service_role 전용.';
-revoke all on function public.ts_admin_test_purchase_stats(integer) from public, anon, authenticated;
-grant execute on function public.ts_admin_test_purchase_stats(integer) to service_role;
+-- 옛 "통계 › 테스트 결제" 탭의 함수 — 테스트 결제는 구매 내역의 "테스트 결제" 보기로 옮겼다(2026-10-29).
+drop function if exists public.ts_admin_test_purchase_stats(integer);
 
 comment on function public.ts_admin_activity_stats(integer, text) is '콘솔 통계 — 일일 사용자(전체·신규·재방문·복귀)와 가입일별 리텐션(D1~D14·21·30·45·60). 게임 시간대 날짜. 가입 플랫폼으로 거를 수 있다. service_role 전용.';
 revoke all on function public.ts_admin_activity_stats(integer, text) from public, anon, authenticated;
