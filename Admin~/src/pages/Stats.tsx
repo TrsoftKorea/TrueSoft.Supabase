@@ -92,9 +92,6 @@ function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
   if (!data) return null
   // 막대는 종류별로 쌓는다 — 날짜 행에 종류별 숫자를 펼쳐 둔다.
   const rows: DayRow[] = data.daily.map((d) => ({ day: d.day, ...Object.fromEntries(CHAT_KINDS.map((k) => [k.key, d.by_kind[k.key] ?? 0])) }))
-  const today = data.daily[data.daily.length - 1]
-  const sum = data.daily.reduce((s, d) => s + d.total, 0)
-
   return (
     <>
       {data.first_day && data.daily[0] && data.first_day > data.daily[0].day && (
@@ -102,10 +99,10 @@ function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
       )}
       <WhiteCard>
         <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-neutral-800">일일 채팅 개수</span>
-          <span className="text-xs text-neutral-500">
-            {today && <>오늘 {n(today.total)}개 · </>}기간 합계 {n(sum)}개 · 운영자 공지 제외
+          <span className="text-sm font-medium text-neutral-800">
+            일일 채팅 개수<span className="ml-2 text-xs font-normal text-neutral-500">운영자 공지 제외</span>
           </span>
+          <ChartLegend series={CHAT_KINDS} />
         </div>
         <div className="p-5">
           <DayBars days={rows} series={CHAT_KINDS} unit="개" />
@@ -204,6 +201,11 @@ function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
 const NEW_COLOR = '#1677ff'
 const RETURNING_COLOR = '#94a3b8'
 const COMEBACK_COLOR = '#f59e0b'
+// 앞에 둔 계열이 막대 아래에 쌓인다 — 재방문을 바닥에, 신규를 위에.
+const USER_SERIES: { key: keyof Day & string; color: string; label: string }[] = [
+  { key: 'returning', color: RETURNING_COLOR, label: '재방문' },
+  { key: 'new', color: NEW_COLOR, label: '신규' },
+]
 
 const n = (v: number) => v.toLocaleString('ko-KR')
 const md = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`
@@ -213,7 +215,23 @@ const H = 150
 
 type DayRow = { day: string } & Record<string, number | string>
 
-/** 날짜별 막대. 계열을 아래부터 쌓는다(신규 + 재방문 = 전체). */
+/**
+ * 그래프 색 설명 — 카드 제목 줄 오른쪽에 둔다(그래프 위에 줄을 따로 잡지 않게, 2026-10-29 사용자 요청).
+ * 계열이 하나인 그래프에는 두지 않는다 — 카드 제목이 이름이다.
+ */
+function ChartLegend({ series }: { series: { color: string; label: string }[] }) {
+  return (
+    <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
+      {series.map((s) => (
+        <span key={s.label} className="inline-flex items-center gap-1 whitespace-nowrap">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />{s.label}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/** 날짜별 막대. 계열을 아래부터 쌓는다(신규 + 재방문 = 전체). 색 설명은 카드 제목 줄의 ChartLegend 가 맡는다. */
 function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; series: { key: keyof R & string; color: string; label: string }[]; unit?: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const max = Math.max(1, ...days.map((d) => series.reduce((s, x) => s + (d[x.key] as number), 0)))
@@ -222,23 +240,25 @@ function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; 
   const bar = Math.max(1, slot * 0.7)
   const hd = hover !== null ? days[hover] : undefined
 
+  // 크기는 왼쪽 눈금이 알려 주므로 "최대" 글자는 두지 않는다.
+  // 날짜별 값은 커서를 따라다니는 상자로 보인다(따로 줄을 잡아 두지 않는다). 값마다 막대 색 네모를 붙이고,
+  // 쌓인 막대와 같은 순서(위에 쌓인 계열부터)로 적어 어느 부분의 값인지 맞춰 볼 수 있게 한다.
+  const tip = !hd ? null : (
+    <div className="space-y-0.5">
+      <div className="text-neutral-500">{md(hd.day)}</div>
+      {[...series].reverse().map((s) => (
+        <div key={s.label} className="flex items-center gap-1.5">
+          <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
+          {series.length > 1 && <span>{s.label}</span>}
+          <span className="ml-auto pl-3 tabular-nums font-medium">{n(hd[s.key] as number)}{series.length === 1 ? unit : ''}</span>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-neutral-500 min-h-5">
-        <span className="flex gap-3">
-          {series.map((s) => (
-            <span key={s.label} className="inline-flex items-center gap-1 whitespace-nowrap">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />{s.label}
-            </span>
-          ))}
-        </span>
-        {hd ? (
-          <span className="text-neutral-800 whitespace-nowrap">
-            {md(hd.day)} · {series.map((s) => `${s.label} ${n(hd[s.key] as number)}`).join(' · ')}
-          </span>
-        ) : <span>최대 {n(max)}{unit}</span>}
-      </div>
-      <ValueAxisFrame axis={axis} heightCls="h-36" footer={
+      <ValueAxisFrame axis={axis} heightCls="h-36" tip={tip} footer={
         <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
           <span>{days[0] ? md(days[0].day) : ''}</span>
           <span>{days.length ? md(days[days.length - 1]!.day) : ''}</span>
@@ -337,7 +357,6 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
   useEffect(() => { void load() }, [load])
 
-  const today = data?.daily[data.daily.length - 1]
   const recent = data ? [...data.daily].reverse() : []
   const tz = useGameTimeZone(target)
 
@@ -394,16 +413,12 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
           {tab === 'users' && (<>
           <WhiteCard>
-            <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
+            <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-medium text-neutral-800">일일 사용자</span>
-              {today && <span className="text-xs text-neutral-500">오늘 {n(today.total)}명 · 신규 {n(today.new)} · 재방문 {n(today.returning)}</span>}
+              <ChartLegend series={USER_SERIES} />
             </div>
             <div className="p-5">
-              {/* 앞에 둔 계열이 막대 아래에 쌓인다 — 재방문을 바닥에, 신규를 위에. */}
-              <DayBars days={data.daily} series={[
-                { key: 'returning', color: RETURNING_COLOR, label: '재방문' },
-                { key: 'new', color: NEW_COLOR, label: '신규' },
-              ]} />
+              <DayBars days={data.daily} series={USER_SERIES} />
             </div>
           </WhiteCard>
           <DailyTable days={recent} />

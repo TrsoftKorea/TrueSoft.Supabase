@@ -42,7 +42,7 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
   const [hover, setHover] = useState<number | null>(null)
   const withDate = hours > 24
 
-  const { path, area, pts, max, axis } = useMemo(() => {
+  const { path, area, pts, axis } = useMemo(() => {
     const t0 = Date.now() - hours * 3600_000
     const t1 = Date.now()
     const max = Math.max(1, ...series.map((p) => p.total))
@@ -56,7 +56,7 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
     const first = pts[0]
     const last = pts[pts.length - 1]
     const area = first && last ? `${path} L${last.x.toFixed(1)},${H} L${first.x.toFixed(1)},${H} Z` : ''
-    return { path, area, pts, max, axis }
+    return { path, area, pts, axis }
   }, [series, hours])
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -73,13 +73,21 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
   const hq = hover !== null ? pts[hover] : undefined
   const hp = hq?.p
 
+  // 크기는 왼쪽 눈금이, 지점별 값은 마우스를 올린 곳 위 상자가 알려 준다 — 그래프 위에 따로 줄을 두지 않는다.
+  // 통계 막대그래프 상자와 같은 꼴 — 시각 아래에 선 색 네모와 값.
+  const tip = hq && hp ? (
+    <div className="space-y-0.5">
+      <div className="text-neutral-500">{formatAt(hp.at, withDate)}</div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0 bg-[#1677ff]" />
+        <span className="tabular-nums font-medium">{n(hp.total)}명</span>
+      </div>
+    </div>
+  ) : null
+
   return (
     <div>
-      <div className="flex items-baseline justify-between text-xs text-neutral-500 h-5">
-        <span>최대 {n(max)}명</span>
-        {hp && <span className="text-neutral-800">{formatAt(hp.at, withDate)} · <b>{n(hp.total)}명</b></span>}
-      </div>
-      <ValueAxisFrame axis={axis} heightCls="h-40" footer={
+      <ValueAxisFrame axis={axis} heightCls="h-40" tip={tip} footer={
         <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
           <span>{formatAt(new Date(Date.now() - hours * 3600_000).toISOString(), withDate)}</span>
           <span>지금</span>
