@@ -162,6 +162,26 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetCustomerCenterUnreadCountAsync();
 
         /// <summary>
+        /// 알림 권한을 (필요하면) 묻고 이 기기를 푸시 알림 대상으로 등록합니다. 로그인한 뒤 실행할 때마다 부릅니다.
+        /// 로그아웃(<see cref="SignOutFullyAsync"/>)하면 등록이 풀립니다. SupabaseSettings 의 "푸시 알림 사용"이 켜져 있어야 합니다.
+        /// </summary>
+        public static Task<SupabaseResult> RegisterPushAsync() =>
+            SupabaseSDK.TryRegisterPushAsync();
+
+        /// <summary>내 푸시 수신 설정(알림 켬·상황별 켬·광고 수신 동의·야간 수신 동의와 그 시각)을 읽습니다.</summary>
+        public static Task<SupabaseResult<SupabasePushPreferences>> GetPushPreferencesAsync() =>
+            SupabaseSDK.TryGetPushPreferencesAsync();
+
+        /// <summary>
+        /// 내 푸시 수신 설정을 바꿉니다. 게임 설정 화면의 알림 스위치가 부릅니다. 바꾸지 않을 값은 null 로 둡니다.
+        /// 광고 동의를 철회하면 야간 동의도 함께 철회됩니다. 돌려받은 동의·철회 시각으로 플레이어에게 처리 결과를 알립니다.
+        /// </summary>
+        public static Task<SupabaseResult<SupabasePushPreferences>> SetPushPreferencesAsync(
+            bool? enabled = null, bool? adConsent = null, bool? nightConsent = null,
+            bool? mail = null, bool? supportReply = null, bool? friendRequest = null, bool? lobbyInvite = null) =>
+            SupabaseSDK.TrySetPushPreferencesAsync(enabled, adConsent, nightConsent, mail, supportReply, friendRequest, lobbyInvite);
+
+        /// <summary>
         /// 등록된 유저 세이브. 생성된 세이브 클래스가 아직 초기화되지 않았으면 null입니다.
         /// <c>StaticUserSave</c> 서브클래스는 프로젝트당 하나이므로 대상이 모호하지 않습니다.
         /// </summary>

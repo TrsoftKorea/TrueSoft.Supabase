@@ -238,6 +238,16 @@ export default defineConfig({
             ]
           },
           {
+            text: '푸시 알림',
+            link: '/guide/push/',
+            collapsed: true,
+            items: [
+              { text: '기기 등록', link: '/guide/push/register' },
+              { text: '수신 설정 읽기', link: '/guide/push/get-preferences' },
+              { text: '수신 설정 바꾸기', link: '/guide/push/set-preferences' }
+            ]
+          },
+          {
             text: '채팅',
             link: '/guide/chat/',
             collapsed: true,
@@ -328,6 +338,7 @@ export default defineConfig({
           { text: '매치 결과', link: '/guide/api/match-result' },
           { text: '쿠폰', link: '/guide/api/coupon' },
           { text: '고객센터', link: '/guide/api/customer-center' },
+          { text: '푸시 알림', link: '/guide/api/push' },
           { text: '채팅', link: '/guide/api/chat' },
           { text: '친구', link: '/guide/api/friend' },
           { text: '매치 로비', link: '/guide/api/match-lobby' },

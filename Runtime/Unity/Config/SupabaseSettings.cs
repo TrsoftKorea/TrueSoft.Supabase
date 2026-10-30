@@ -96,6 +96,27 @@ namespace TrueBase.Unity
         [Tooltip("Supabase.OpenCustomerCenterAsync() 가 게임 안 창으로 여는 페이지. 보통 바꾸지 않습니다.")]
         public string customerCenterUrl = "https://truebase-support.pages.dev";
 
+        [Header("푸시 알림")]
+        [Label("푸시 알림 사용")]
+        [Tooltip("켜면 Android 빌드에 Firebase 푸시 부품이, iOS 빌드에 푸시 권한이 들어갑니다. 끄면 Supabase.RegisterPushAsync() 가 실패합니다.")]
+        public bool pushEnabled;
+
+        [Label("Firebase 프로젝트 ID")]
+        [Tooltip("Firebase 콘솔 › 프로젝트 설정 › 일반의 프로젝트 ID. Android 푸시에 씁니다.")]
+        public string firebaseProjectId = "";
+
+        [Label("Firebase Android 앱 ID")]
+        [Tooltip("Firebase 콘솔 › 프로젝트 설정 › 일반 › 내 앱(Android)의 앱 ID. 1:숫자:android:… 꼴.")]
+        public string firebaseAndroidAppId = "";
+
+        [Label("Firebase 웹 API 키")]
+        [Tooltip("Firebase 콘솔 › 프로젝트 설정 › 일반의 웹 API 키. google-services.json 의 current_key 와 같습니다.")]
+        public string firebaseApiKey = "";
+
+        [Label("Firebase 발신자 ID")]
+        [Tooltip("Firebase 콘솔 › 프로젝트 설정 › 클라우드 메시징의 발신자 ID(숫자).")]
+        public string firebaseSenderId = "";
+
 
         /// <summary>
         /// 인스펙터 값을 Core 계층의 <see cref="SupabaseOptions"/>로 변환합니다. 범위를 벗어난 값은 최소값으로 보정합니다.

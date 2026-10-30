@@ -36,6 +36,9 @@ namespace TrueBase.Unity.Config
         public SupabaseCustomerCenterService CustomerCenterService { get; private set; }
         /// <summary><see cref="SupabaseSettings.customerCenterUrl"/>.</summary>
         public string CustomerCenterUrl { get; private set; }
+        public SupabasePushService PushService { get; private set; }
+        /// <summary>푸시 사용 여부·Firebase 값. 기기 플러그인을 시작할 때 읽는다.</summary>
+        public SupabaseSettings PushSettings { get; private set; }
         /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
         public float DuplicateSessionPollSeconds { get; private set; }
 
@@ -168,6 +171,12 @@ namespace TrueBase.Unity.Config
                 http);
 
             CustomerCenterUrl = settings.customerCenterUrl;
+
+            PushService = new SupabasePushService(
+                options.ProjectURL,
+                options.PublishableKey,
+                http);
+            PushSettings = settings;
 
             MatchLobbyService = new SupabaseMatchLobbyService(
                 options.ProjectURL,

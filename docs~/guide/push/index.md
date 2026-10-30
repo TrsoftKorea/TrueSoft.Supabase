@@ -1,0 +1,88 @@
+# 푸시 알림
+
+운영자가 우편을 보내거나 문의에 답했을 때, 친구 요청이나 로비 초대를 받았을 때 플레이어 기기로 알림이 갑니다. 보내는 일은 서버가 하므로 게임은 기기를 등록하고, 설정 화면에 알림 스위치와 수신 동의를 두기만 하면 됩니다. 문구는 운영 콘솔 **설정 › 푸시 알림**에서 정합니다.
+
+## 기기 등록 {#register}
+
+로그인한 뒤, 실행할 때마다 한 번 부릅니다. 처음 부를 때 기기가 알림 권한을 묻습니다.
+
+```csharp
+async Task AfterLoginAsync()
+{
+    var push = await Supabase.RegisterPushAsync();
+    if (push.Reason == SupabaseReason.PushPermissionDenied)
+        Debug.Log("알림 권한을 거절했습니다. 설정 화면에서 다시 켤 수 있게 안내합니다.");
+}
+```
+
+로그아웃(`Supabase.SignOutFullyAsync`)하면 이 기기의 등록이 풀려 다음 계정이 앞 계정의 알림을 받지 않습니다.
+
+## 수신 동의 {#consent}
+
+광고성 알림은 수신에 동의한 플레이어에게만 가고, 밤 9시부터 아침 8시까지는 야간 수신에도 동의한 플레이어에게만 갑니다. 동의하지 않은 플레이어에게 보낼 알림은 아침 8시로 미뤄집니다. 동의 창은 게임이 띄우고 결과를 SDK에 넘깁니다.
+
+```csharp
+public async void OnClickAgreeAds(bool agree, bool agreeNight)
+{
+    var r = await Supabase.SetPushPreferencesAsync(adConsent: agree, nightConsent: agreeNight);
+    if (r.IsSuccess)
+        ShowToast($"광고성 알림 수신 {(r.Data.AdConsent ? "동의" : "거부")} · {r.Data.AdConsentAt?.ToLocalTime():yyyy-MM-dd HH:mm}");
+}
+```
+
+동의하거나 철회하면 처리 결과와 그 시각을 플레이어에게 알립니다.
+
+## 알림 스위치 {#toggles}
+
+플레이어가 상황마다 알림을 켜고 끕니다. 처음에는 모두 켜져 있고, 끈 알림은 그 플레이어에게 가지 않습니다.
+
+```csharp
+await Supabase.SetPushPreferencesAsync(enabled: allToggle.isOn);       // 알림 전체
+await Supabase.SetPushPreferencesAsync(friendRequest: friendToggle.isOn);
+await Supabase.SetPushPreferencesAsync(lobbyInvite: inviteToggle.isOn);
+```
+
+`enabled`를 끄면 상황별 값과 상관없이 모든 알림이 오지 않습니다. 스위치를 처음 채울 때는 [수신 설정 읽기](/guide/push/get-preferences)를 씁니다.
+
+## 알림이 가는 상황 {#triggers}
+
+| 상황 | 언제 | 문구에 넣을 수 있는 값 |
+|------|------|------|
+| 우편&nbsp;도착 | 운영자가 우편을 보낼 때 "푸시 알림"을 켠 우편. 예약·반복 발송도 됩니다 | `{title}` 우편 제목 |
+| 고객센터&nbsp;답변 | 운영자가 문의에 답했을 때 | 없음 |
+| 친구&nbsp;요청 | 새 친구 요청을 받았을 때 | `{name}` 보낸 플레이어 닉네임 |
+| 로비&nbsp;초대 | 매치 로비에 초대받았을 때 | `{name}` 초대한 플레이어 닉네임, `{lobby}` 방 이름 |
+
+문구는 기기 언어로 고릅니다. 운영 콘솔에서 추가한 언어가 없으면 기본 문구가 갑니다. 광고성으로 보낸 우편 알림은 제목 앞에 `(광고)`가, 본문 끝에 수신 거부 안내가 붙습니다.
+
+## 메서드
+
+| 메서드 | 설명 |
+|--------|------|
+| [`RegisterPushAsync`](/guide/push/register) | 알림 권한을 묻고 기기 등록 |
+| [`GetPushPreferencesAsync`](/guide/push/get-preferences) | 내 수신 설정 읽기 |
+| [`SetPushPreferencesAsync`](/guide/push/set-preferences) | 알림 전체·상황별 켜기, 광고·야간 수신 동의 |
+
+## 준비 {#setup}
+
+1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트를 만들고 Android 앱을 추가합니다. 패키지 이름은 게임과 같아야 합니다.
+2. `SupabaseSettings`의 **푸시 알림 사용**을 켜고, Firebase 프로젝트 설정에 보이는 프로젝트 ID·Android 앱 ID·웹 API 키·발신자 ID를 넣습니다.
+3. Apple Developer에서 앱의 **Push Notifications** 기능을 켜고 APNs 키(.p8)를 만듭니다.
+4. 운영 콘솔 **설정 › 서비스 연결 › 푸시 알림**에 Firebase 서비스 계정 키와 APNs 키를 넣습니다. Team ID·번들 ID는 다른 묶음과 같은 값을 씁니다.
+5. 운영 콘솔 **설정 › 푸시 알림**에서 상황별 문구를 확인합니다. 기본 문구가 한국어·영어로 들어 있습니다.
+
+::: warning 유니티 판
+Android 푸시 부품은 유니티 2022.3.38f1 이상이 필요합니다. 그보다 오래된 2022.3은 빌드 도구가 Firebase의 최소 요구보다 낮습니다.
+:::
+
+::: info 빌드에 들어가는 것
+**푸시 알림 사용**을 켠 게임만 Android 빌드에 Firebase 메시징 부품이, iOS 빌드에 푸시 권한과 기기 토큰을 받는 설정이 들어갑니다. 게임에 Firebase 유니티 패키지가 이미 있으면 그 패키지의 Firebase 설정을 그대로 씁니다.
+:::
+
+::: warning Firebase 유니티 메시징과 함께 쓸 수 없음
+게임에 Firebase 유니티 **메시징** 패키지가 있으면 Android 빌드가 안내와 함께 멈춥니다. 두 푸시가 같은 알림 신호를 나눠 받아 어느 쪽 알림이 끊길지 알 수 없기 때문입니다. 둘 중 하나만 씁니다.
+:::
+
+::: info 설치
+DB는 `install.sql`의 푸시 알림 절이 만들고, 보내기는 엣지 함수 `push-send`가 합니다. [엣지 함수 배포](/guide/start/database-setup#edge-function-deploy)에서 이 함수의 **Verify JWT**를 꺼야 알림이 나갑니다.
+:::

@@ -72,6 +72,11 @@ from (
       ('support_tickets'),
       ('support_messages'),
       ('support_faqs'),
+      ('push_devices'),
+      ('push_preferences'),
+      ('push_triggers'),
+      ('push_ad_settings'),
+      ('push_outbox'),
       ('user_data_logs'),
       ('game_items'),
       ('mail_batches'),
@@ -370,7 +375,12 @@ from (
       ('ts_leaderboard_columns_meta',      'anon+auth'),
       ('ts_leaderboard_list_meta',         'anon+auth'),
       -- 고객센터 — 새 답변 수
-      ('ts_support_unread_count',          'auth')
+      ('ts_support_unread_count',          'auth'),
+      -- 푸시 알림 — 기기 등록·해제, 수신 설정
+      ('ts_push_register',                 'auth'),
+      ('ts_push_unregister',               'auth'),
+      ('ts_push_preferences_get',          'auth'),
+      ('ts_push_preferences_set',          'auth')
   ) as exp(fn, roles)
   left join lateral (
     select p.oid
@@ -405,7 +415,7 @@ from (
       case when has_function_privilege('anon', p.oid, 'EXECUTE') then 'anon+auth' else 'auth' end
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-  -- 트리거 함수도 본다 — install.sql 23절이 트리거 함수 권한까지 회수한다(트리거 실행은 EXECUTE 를 보지 않는다).
+  -- 트리거 함수도 본다 — install.sql 24절이 트리거 함수 권한까지 회수한다(트리거 실행은 EXECUTE 를 보지 않는다).
   where (has_function_privilege('anon', p.oid, 'EXECUTE')
       or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
     -- install.sql 이 authenticated·anon 에 grant 하는 함수 전부. 둘의 일치는 SdkAudit R17 이 본다.
@@ -427,6 +437,7 @@ from (
       'ts_match_lobby_leave', 'ts_match_lobby_list_my', 'ts_match_lobby_respond',
       'ts_match_lobby_set_member_meta', 'ts_match_lobby_start', 'ts_match_report_result',
       'ts_match_report_solo_result', 'ts_match_stats', 'ts_my_server_id', 'ts_my_withdrawal_status',
+      'ts_push_preferences_get', 'ts_push_preferences_set', 'ts_push_register', 'ts_push_unregister',
       'ts_request_limit_check', 'ts_request_limit_ping',
       'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_support_unread_count',
       'ts_transfer_my_server', 'ts_view_mail_for_user'

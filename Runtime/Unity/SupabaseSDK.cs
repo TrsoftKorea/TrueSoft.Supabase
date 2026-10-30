@@ -342,6 +342,9 @@ namespace TrueBase.Unity
             public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
             public const string CustomerCenterOpen = "Supabase.CustomerCenter.Open";
             public const string CustomerCenterUnreadCount = "Supabase.CustomerCenter.UnreadCount";
+            public const string PushRegister = "Supabase.Push.Register";
+            public const string PushGetPreferences = "Supabase.Push.GetPreferences";
+            public const string PushSetPreferences = "Supabase.Push.SetPreferences";
         }
 
         /// <summary>
@@ -1786,6 +1789,14 @@ namespace TrueBase.Unity
             return result ?? SupabaseResult<T>.Fail("null_result");
         }
 
+        /// <summary>값 없는 결과(<see cref="SupabaseResult"/>)판 <see cref="LogAndReturnResult{T}"/>.</summary>
+        private static SupabaseResult LogAndReturnResult(string logTag, SupabaseResult result)
+        {
+            var ok = result != null && result.IsSuccess;
+            LogApiResult(logTag, ok, ok ? null : result?.ErrorCode, errorOnFail: !IsExpectedFailureReason(result?.ErrorCode));
+            return result ?? SupabaseResult.Fail("null_result");
+        }
+
         /// <summary>
         /// 코드 오류가 아니라 기대된 분기인지 판별합니다. 서버가 유저 입력이나 상태를 보고 정상적으로
         /// 거절한 경우가 여기 해당하며, <see cref="Debug.LogError"/> 대신 일반 로그로 남깁니다.
@@ -1887,6 +1898,10 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.CustomerCenterLoginRequired:
                 // 다른 화면이 떠 있어 창이 못 뜬 경우 — 코드 오류가 아니라 그 순간의 화면 상태다.
                 case SupabaseErrorCode.CustomerCenterNotShown:
+
+                // 푸시 — 플레이어가 알림 권한을 거절했거나, 에디터에서 불렀다. 게임이 안내만 하면 된다.
+                case SupabaseErrorCode.PushPermissionDenied:
+                case SupabaseErrorCode.PushUnsupportedPlatform:
                     return true;
 
                 // 요청 제한 — 막힌 동안 모든 호출이 실패하므로 빨갛게 찍으면 콘솔이 덮인다. 게임은 "잠시 후" 안내만 하면 된다.
@@ -3920,6 +3935,7 @@ namespace TrueBase.Unity
             if (await EnsureInitializedAsync())
             {
                 await TrySaveAllAsync();
+                await UnregisterPushQuietlyAsync();
                 _ = await SignOutFromGoogleAsync();
             }
 
@@ -4887,6 +4903,103 @@ namespace TrueBase.Unity
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult<int>.Fail(SupabaseErrorCode.NotSignedIn));
             return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetUnreadCountAsync(_currentSession.AccessToken));
+        }
+
+        // ── 푸시 알림 ────────────────────────────────────────────────────────────
+        // 마지막으로 등록한 기기 토큰. 로그아웃할 때 서버에서 지운다 — 남겨 두면 다음 계정으로 로그인하기 전까지
+        // 앞 계정의 알림이 이 기기로 온다.
+        private const string PushTokenKey = "truesoft_supabase_push_token";
+
+        /// <summary>
+        /// 알림 권한을 (필요하면) 묻고 이 기기의 푸시 주소를 서버에 등록합니다. 로그인한 뒤, 실행할 때마다 부릅니다
+        /// (기기 주소는 바뀔 수 있다 — 애플도 매번 다시 받으라고 한다).
+        /// </summary>
+        public static async Task<SupabaseResult> TryRegisterPushAsync()
+        {
+            const string tag = ApiLogTags.PushRegister;
+            if (!await EnsureInitializedAsync() || _bootstrap?.PushService == null)
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
+            if (_bootstrap.PushSettings == null || !_bootstrap.PushSettings.pushEnabled)
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.PushNotConfigured));
+
+            var native = await Push.PushNative.GetTokenAsync();
+            if (native.ErrorCode != null)
+            {
+                if (!string.IsNullOrEmpty(native.Detail))
+                    Debug.Log($"[{tag}] {native.ErrorCode}: {native.Detail}");
+                return LogAndReturnResult(tag, SupabaseResult.Fail(native.ErrorCode));
+            }
+            if (string.IsNullOrWhiteSpace(native.Token))
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.PushTokenUnavailable));
+
+            // 기다리는 사이(권한 창) 로그아웃했을 수 있다.
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
+            var r = await _bootstrap.PushService.RegisterAsync(
+                _currentSession.AccessToken, native.Token, native.Platform, PushLanguageCode(), Application.version);
+            if (r.IsSuccess)
+            {
+                PlayerPrefs.SetString(PushTokenKey, native.Token);
+                PlayerPrefs.Save();
+            }
+            return LogAndReturnResult(tag, r);
+        }
+
+        /// <summary>내 푸시 수신 설정(알림·광고 동의·야간 동의와 그 시각)을 읽습니다.</summary>
+        public static async Task<SupabaseResult<SupabasePushPreferences>> TryGetPushPreferencesAsync()
+        {
+            const string tag = ApiLogTags.PushGetPreferences;
+            if (!await EnsureInitializedAsync() || _bootstrap?.PushService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotSignedIn));
+            return LogAndReturnResult(tag, await _bootstrap.PushService.GetPreferencesAsync(_currentSession.AccessToken));
+        }
+
+        /// <summary>내 푸시 수신 설정을 바꿉니다. null 인 값은 그대로 둡니다. 광고 동의를 철회하면 야간 동의도 철회됩니다.</summary>
+        public static async Task<SupabaseResult<SupabasePushPreferences>> TrySetPushPreferencesAsync(
+            bool? enabled, bool? adConsent, bool? nightConsent,
+            bool? mail, bool? supportReply, bool? friendRequest, bool? lobbyInvite)
+        {
+            const string tag = ApiLogTags.PushSetPreferences;
+            if (!await EnsureInitializedAsync() || _bootstrap?.PushService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotSignedIn));
+            return LogAndReturnResult(tag, await _bootstrap.PushService.SetPreferencesAsync(
+                _currentSession.AccessToken, enabled, adConsent, nightConsent, mail, supportReply, friendRequest, lobbyInvite));
+        }
+
+        /// <summary>로그아웃 직전에 이 기기 토큰을 서버에서 지운다. 실패해도 로그아웃은 막지 않는다(다음 로그인 때 등록이 주인을 바꾼다).</summary>
+        private static async Task UnregisterPushQuietlyAsync()
+        {
+            var token = PlayerPrefs.GetString(PushTokenKey, "");
+            if (string.IsNullOrEmpty(token) || _bootstrap?.PushService == null || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return;
+            var r = await _bootstrap.PushService.UnregisterAsync(_currentSession.AccessToken, token);
+            if (r.IsSuccess)
+            {
+                PlayerPrefs.DeleteKey(PushTokenKey);
+                PlayerPrefs.Save();
+            }
+            else
+            {
+                Debug.Log($"[{ApiLogTags.PushRegister}] 로그아웃 중 기기 등록 해제 실패(다음 로그인 때 바뀜): {r.ErrorCode}");
+            }
+        }
+
+        /// <summary>푸시 문구를 고를 기기 언어. 우편·콘솔의 언어 코드와 같게 중국어는 간체·번체를 가른다.</summary>
+        private static string PushLanguageCode()
+        {
+            switch (Application.systemLanguage)
+            {
+                case SystemLanguage.ChineseTraditional: return "zh-TW";
+                case SystemLanguage.Chinese:
+                case SystemLanguage.ChineseSimplified: return "zh-CN";
+                default: return SystemLanguageCode();
+            }
         }
 
         /// <summary>https://abcd.supabase.co → abcd. 고객센터 페이지가 이 값으로 어느 게임의 서버를 부를지 정한다.</summary>

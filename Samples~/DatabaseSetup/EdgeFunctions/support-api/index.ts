@@ -340,7 +340,7 @@ Deno.serve(async (req) => {
       case "session.start":
         return await startSession(p);
 
-      // 창 위쪽의 게임 이름·색·아이콘 — 운영 콘솔 "설정 › 콘솔 표시" 값.
+      // 창 위쪽의 게임 이름·색·아이콘 — 운영 콘솔 "설정 › 게임 정보" 값.
       case "look": {
         const s = (await rpc<Record<string, string | null>>("ts_admin_console_settings_get", {})) ?? {};
         return json({ ok: true, data: { name: s.display_name ?? null, color: s.color ?? null, icon: s.icon ?? null } });

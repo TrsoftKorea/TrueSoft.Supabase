@@ -67,9 +67,10 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `apple-token` | Apple 로그인 · 탈퇴 시 Apple 연결 해제 |
 | `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
 | `support-api` | 고객센터 · 문의 창 |
+| `push-send` | 푸시 알림 · 대기 중인 알림 보내기 |
 
-::: warning 다섯 함수는 Verify JWT를 끕니다
-`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`은 DB 정기 작업이 로그인 없이 부릅니다. `support-api`는 차단돼 로그인할 수 없는 플레이어도 문의할 수 있도록 함수가 직접 본인을 확인합니다. 다섯 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않습니다.
+::: warning 여섯 함수는 Verify JWT를 끕니다
+`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`·`push-send`는 DB 정기 작업이 로그인 없이 부릅니다. `support-api`는 차단돼 로그인할 수 없는 플레이어도 문의할 수 있도록 함수가 직접 본인을 확인합니다. 여섯 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않고, 푸시 알림이 나가지 않습니다.
 :::
 
 ## 4. 서비스 연결값 입력 {#secrets}

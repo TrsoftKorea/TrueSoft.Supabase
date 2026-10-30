@@ -438,7 +438,7 @@ using (
 -- 읽기도 게임·엣지 함수·다른 표의 정책이 실제로 쓰는 칸만 연다(누적 결제액·가입 플랫폼은 남에게 안 보인다):
 --   SDK 공개 프로필 id·user_id·withdrawn_at(+거르기 account_id) · 엣지 함수 user_id·server_id·withdrawn_at ·
 --   mails 읽기 정책 account_id·user_id·server_id · ts_my_withdrawal_status(호출자 권한) account_id·withdrawn_at
--- 칸을 새로 읽게 하면 여기와 23절 grant 에 함께 더한다 — 빠지면 그 요청이 권한 오류(42501)로 실패한다.
+-- 칸을 새로 읽게 하면 여기와 24절 grant 에 함께 더한다 — 빠지면 그 요청이 권한 오류(42501)로 실패한다.
 revoke all on public.user_profiles from anon, authenticated;
 grant select (id, user_id, account_id, server_id, withdrawn_at) on public.user_profiles to authenticated;
 
@@ -484,6 +484,7 @@ declare
   v_stable  text;
   v_server  uuid;
   v_country text;
+  v_old_user text;
 begin
   v_uid := auth.uid();
   if v_uid is null then
@@ -491,6 +492,7 @@ begin
   end if;
 
   v_stable := coalesce(nullif(trim(p_user_id), ''), v_uid::text);
+  select user_id into v_old_user from public.user_profiles where account_id = v_uid;
   v_server := public.ts_default_server_id();
 
   -- CF-IPCountry 헤더에서 국가 코드 추출 (PostgREST request context)
@@ -521,6 +523,17 @@ begin
   -- 함께 옮기지 않으면 연동 전에 받아 둔 우편이 안 보이고 받을 수도 없다(기간 우편은 같은 우편을 한 통 더 받는다).
   update public.mails set user_id = v_stable
    where account_id = v_uid and user_id is distinct from v_stable;
+
+  -- 푸시(23절)도 user_id 로 묶여 있다 — 옮기지 않으면 연동 전에 끈 알림이 다시 오고 등록한 기기로 알림이 안 간다.
+  -- 수신 설정은 연동하던 게스트 쪽이 최근 것이라 그것을 남긴다.
+  if v_old_user is not null and v_old_user is distinct from v_stable then
+    update public.push_devices set user_id = v_stable where account_id = v_uid;
+    if exists (select 1 from public.push_preferences where user_id = v_old_user) then
+      delete from public.push_preferences where user_id = v_stable;
+      update public.push_preferences set user_id = v_stable where user_id = v_old_user;
+    end if;
+    update public.push_outbox set user_id = v_stable where user_id = v_old_user and status = 'pending';
+  end if;
 end;
 $$;
 
@@ -4072,7 +4085,8 @@ immutable
 as $$
   select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_PACKAGE_NAME', 'GOOGLE_SERVICE_ACCOUNT_JSON',
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
-               'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY'];
+               'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY',
+               'FCM_SERVICE_ACCOUNT_JSON', 'APNS_KEY_ID', 'APNS_PRIVATE_KEY'];
 $$;
 
 revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
@@ -4161,11 +4175,15 @@ grant execute on function public.ts_admin_server_config_set(text, text, text) to
 -- 화면 표시만 바꾼다(켠 서비스는 필수 값을 표시, 끈 서비스는 접음). 엣지 함수는 이 표를 보지 않는다 —
 -- 잘못 꺼도 결제·탈퇴가 막히지 않게(2026-10-29 사용자 결정). 줄이 없는 서비스는 콘솔이 값 유무로 짐작한다.
 create table if not exists public.server_config_services (
-  service    text primary key check (service in ('appstore', 'googleplay', 'signin')),
+  service    text primary key,
   enabled    boolean not null,
   updated_at timestamptz not null default now(),
   updated_by text
 );
+-- 묶음 목록은 콘솔 화면(STORE_GROUPS)·admin-api 와 같다. 이미 설치된 곳의 옛 제약을 갈아 끼운다.
+alter table public.server_config_services drop constraint if exists server_config_services_service_check;
+alter table public.server_config_services add constraint server_config_services_service_check
+  check (service in ('appstore', 'googleplay', 'signin', 'fcm', 'apns'));
 alter table public.server_config_services enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.server_config_services from anon, authenticated;
@@ -4187,7 +4205,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin') or p_enabled is null then
+  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'fcm', 'apns') or p_enabled is null then
     raise exception 'server_config_service_invalid: %', p_service;
   end if;
   insert into public.server_config_services (service, enabled, updated_at, updated_by)
@@ -4975,7 +4993,7 @@ grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,bool
 -- 사용자 로그인으로 불러 같은 검사를 태운다. 운영 콘솔·서버 함수(service_role)의 요청은 세지 않는다.
 --
 -- [주의] 이 검사는 모든 요청 앞에 끼므로, 실패하면 게임 전체가 멈춘다. 그래서 ① anon·authenticated·service_role
---        모두 실행 권한이 있어야 하고(23절 허용 목록에도 넣는다) ② 안에서 난 오류는 삼키고 통과시킨다 —
+--        모두 실행 권한이 있어야 하고(24절 허용 목록에도 넣는다) ② 안에서 난 오류는 삼키고 통과시킨다 —
 --        제한 기능이 고장 나도 게임은 돈다.
 -- [주의] 기준을 넘은 바로 그 요청은 통과시키고 제한 기록만 남긴다 — 그 요청에서 거절하면 같은 트랜잭션의
 --        제한 기록까지 되돌려진다. 다음 요청부터 거절한다.
@@ -5927,6 +5945,11 @@ begin
      and items_claimed_at is null;
   get diagnostics v_n = row_count;
 
+  -- 아직 안 나간 푸시(23절)도 거둔다 — 지운 우편의 알림이 가면 안 된다.
+  update public.push_outbox
+     set status = 'skipped', result = '우편 회수', done_at = now()
+   where batch_id = p_batch_id and status = 'pending';
+
   update public.mail_batches
      set recalled_at = now(),
          recalled_count = recalled_count + v_n
@@ -6440,6 +6463,7 @@ as $$
 declare
   s record;
   n int := 0;
+  v_sent jsonb;
 begin
   for s in
     select *
@@ -6450,7 +6474,7 @@ begin
     for update skip locked
   loop
     begin
-      perform public.ts_admin_send_mail(
+      v_sent := public.ts_admin_send_mail(
         s.target_mode,
         s.title,
         now() + make_interval(days => s.expires_days),
@@ -6465,6 +6489,11 @@ begin
         s.platform,
         s.open_for_new and s.schedule_type <> 'repeat'
       );
+
+      -- "푸시도 함께"(23절). 푸시 쪽은 실패해도 예외를 내지 않는다 — 우편 발송은 그대로 둔다.
+      if s.push then
+        perform public.ts_push_enqueue_mail_batch((v_sent->>'batch_id')::uuid, s.push_is_ad);
+      end if;
 
       if s.schedule_type = 'scheduled' then
         update public.mail_schedules
@@ -9357,7 +9386,7 @@ grant execute on function public.ts_admin_audit_write(text,text,jsonb)          
 grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 콘솔 표시 — 운영 콘솔에서 이 게임을 나타내는 색·이름·아이콘
+-- 게임 정보 — 운영 콘솔·고객센터 창에서 이 게임을 나타내는 색·이름·아이콘(콘솔 "설정 › 게임 정보")
 -- ---------------------------------------------------------------------------
 -- 운영자가 엉뚱한 게임에서 작업하지 않도록 메뉴·상단 띠·확인 창에 게임마다 다른 색을 쓴다.
 -- 셋 다 null 이면 콘솔 코드에 적힌 기본값을 쓴다(새 게임은 따로 정하지 않아도 된다).
@@ -9382,7 +9411,7 @@ alter table public.ts_admin_console_settings enable row level security;
 -- [의도적] 정책 없음 — service_role 전용.
 
 comment on table public.ts_admin_console_settings is
-  '운영 콘솔 표시 설정(행 하나). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 게임 이름, icon=게임 아이콘(data URL). null 이면 콘솔 기본값.';
+  '게임 정보(행 하나, 콘솔 "설정 › 게임 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 게임 이름, icon=게임 아이콘(data URL). null 이면 콘솔 기본값.';
 
 create or replace function public.ts_admin_console_settings_get()
 returns jsonb
@@ -9458,7 +9487,7 @@ end;
 $$;
 
 comment on function public.ts_admin_console_settings_get() is
-  '콘솔 표시 설정 조회. admin-api 가 로그인 전 화면에도 색을 보여 주려고 인증 없이 부른다. service_role 전용.';
+  '게임 정보 조회. admin-api 가 로그인 전 화면에도 색을 보여 주려고 인증 없이 부른다. service_role 전용.';
 comment on function public.ts_admin_console_settings_update(text, text) is
   '콘솔 색 변경(#rrggbb, 빈 값이면 기본색으로). 형식이 틀리면 console_color_invalid. service_role 전용.';
 comment on function public.ts_admin_console_identity_update(text, text, text) is
@@ -14014,7 +14043,891 @@ notify pgrst, 'reload schema';
 
 
 -- #############################################################################
--- 23. 클라이언트 권한 최소화
+-- 23. 푸시 알림
+-- #############################################################################
+
+-- 게임이 기기의 푸시 주소(토큰)를 등록해 두면, 우편 발송·고객센터 답변·친구 요청·로비 초대 때 서버가 그 기기로
+-- 알림을 보낸다. 상황마다 받을지는 플레이어가 게임 설정에서 정하고(SDK → push_preferences), 문구는 운영 콘솔
+-- "설정 › 푸시 알림"에서 정한다. 기기를 등록한 플레이어만 대기열에 넣는다 — 푸시를 안 쓰는 게임에는 줄이 쌓이지 않는다.
+--
+-- 흐름: 이 절의 함수·트리거가 받을 사람마다 push_outbox 에 한 줄씩 넣고 → ts_push_kick 이 pg_net 으로 엣지 함수
+-- `push-send` 를 부르면 → 그 함수가 대기 줄을 가져가(ts_push_claim) 안드로이드는 구글(FCM), 아이폰은 애플(APNs)로
+-- 보내고 결과를 남긴다(ts_push_report). 키는 운영 콘솔 "설정 › 서비스 연결 › 푸시 알림"(7절 서버 연결값).
+--
+-- 광고성 푸시(운영자가 우편을 보낼 때 고른다)는 광고 수신에 동의한 사람에게만 가고, 밤(게임 시간대 21~8시)에는
+-- 야간 수신까지 동의한 사람에게만 간다 — 나머지는 아침 8시까지 미룬다. 동의는 게임이 SDK 로 받는다(push_preferences).
+-- =============================================================================
+-- 선행: 02(user_profiles, display_names) · 12(mails, mail_batches) · 13(mail_schedules) · 20(friend_requests)
+--       · 21(match_lobbies, match_lobby_members) · 22(support_tickets, support_messages)
+-- =============================================================================
+
+create table if not exists public.push_devices (
+  token        text        primary key check (char_length(token) between 16 and 4096),
+  account_id   uuid        not null references auth.users (id) on delete cascade,
+  user_id      text        not null,
+  platform     text        not null check (platform in ('android', 'ios')),
+  -- 애플 개발용 빌드의 토큰은 애플의 개발 서버로만 간다. 보내는 함수가 운영 서버에서 "다른 환경 토큰"으로
+  -- 거절당하면 이 값을 켜 다음부터 개발 서버로 보낸다.
+  apns_sandbox boolean     not null default false,
+  language     text,
+  app_version  text,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  last_sent_at timestamptz,
+  last_error   text
+);
+create index if not exists push_devices_user_idx    on public.push_devices (user_id);
+create index if not exists push_devices_account_idx on public.push_devices (account_id);
+alter table public.push_devices enable row level security;
+
+-- 플레이어의 수신 설정. 행이 없으면 "알림 켬 · 상황 전부 켬 · 광고 미동의 · 야간 미동의".
+-- 상황별 켜기(우편·고객센터 답변·친구 요청·로비 초대)는 플레이어가 게임 설정 화면에서 SDK 로 바꾼다 — 칸 이름이
+-- push_triggers.code 와 같아야 한다(ts_push_enqueue·ts_push_claim 이 이름으로 읽는다).
+-- 동의·철회 시각은 게임이 동의 결과를 알릴 때 쓴다(광고 수신 동의는 처리 결과를 알려야 한다).
+create table if not exists public.push_preferences (
+  user_id          text        primary key,
+  enabled          boolean     not null default true,
+  mail             boolean     not null default true,
+  support_reply    boolean     not null default true,
+  friend_request   boolean     not null default true,
+  lobby_invite     boolean     not null default true,
+  ad_consent       boolean     not null default false,
+  ad_consent_at    timestamptz,
+  night_consent    boolean     not null default false,
+  night_consent_at timestamptz,
+  updated_at       timestamptz not null default now()
+);
+alter table public.push_preferences add column if not exists mail           boolean not null default true;
+alter table public.push_preferences add column if not exists support_reply  boolean not null default true;
+alter table public.push_preferences add column if not exists friend_request boolean not null default true;
+alter table public.push_preferences add column if not exists lobby_invite   boolean not null default true;
+alter table public.push_preferences enable row level security;
+
+-- 상황별 문구. 문구의 {name}·{title} 은 보낼 때 채운다(친구 요청·초대 = 보낸 사람 닉네임, 우편 = 우편 제목).
+-- 켜고 끄기는 운영자가 아니라 플레이어가 한다(push_preferences). 우편은 운영자가 보낼 때마다 "푸시 알림"을 고른다.
+create table if not exists public.push_triggers (
+  code       text        primary key check (code in ('mail', 'support_reply', 'friend_request', 'lobby_invite')),
+  title      text        not null default '' check (char_length(title) <= 100),
+  body       text        not null default '' check (char_length(body) <= 300),
+  -- 언어별 문구 {"en": {"title": "...", "body": "..."}}. 없는 언어는 title·body 를 쓴다.
+  localized  jsonb       not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+-- 처음엔 운영자가 상황을 켜고 껐다(2026-10-29) — 플레이어 설정으로 옮겨 칸을 지운다.
+alter table public.push_triggers drop column if exists enabled;
+alter table public.push_triggers enable row level security;
+
+insert into public.push_triggers (code, title, body, localized) values
+  ('mail',           '새 우편',   '{title}',
+   '{"en": {"title": "New mail", "body": "{title}"}}'),
+  ('support_reply',  '문의 답변', '문의하신 내용에 답변이 도착했습니다.',
+   '{"en": {"title": "Support", "body": "You have a reply to your inquiry."}}'),
+  ('friend_request', '친구 요청', '{name}님이 친구 요청을 보냈습니다.',
+   '{"en": {"title": "Friend request", "body": "{name} sent you a friend request."}}'),
+  ('lobby_invite',   '초대',      '{name}님이 함께하자고 초대했습니다.',
+   '{"en": {"title": "Invitation", "body": "{name} invited you to play."}}')
+on conflict (code) do nothing;
+
+-- 광고성 푸시의 표시. 제목 앞에 붙는 말과 본문 끝에 붙는 수신 거부 방법.
+create table if not exists public.push_ad_settings (
+  id           int         primary key default 1 check (id = 1),
+  title_prefix text        not null default '(광고)' check (char_length(title_prefix) <= 20),
+  footer       text        not null default '수신 거부: 게임 설정 › 알림' check (char_length(footer) <= 100),
+  -- 언어별 {"en": {"title_prefix": "[Ad]", "footer": "..."}}
+  localized    jsonb       not null default '{"en": {"title_prefix": "[Ad]", "footer": "Unsubscribe: Settings › Notifications"}}'::jsonb,
+  updated_at   timestamptz not null default now(),
+  updated_by   text
+);
+insert into public.push_ad_settings (id) values (1) on conflict (id) do nothing;
+alter table public.push_ad_settings enable row level security;
+
+-- 보낼 줄. 한 사람에 한 줄 — 그 사람의 기기가 여럿이면 보내는 함수가 전부 보낸다.
+create table if not exists public.push_outbox (
+  id             bigint      generated always as identity primary key,
+  user_id        text        not null,
+  trigger_code   text        not null,
+  -- 문구 자리 값 {"name": "용사김"} · 언어별 {"en": {"title": "..."}}(우편 제목처럼 언어마다 다른 값)
+  vars           jsonb       not null default '{}'::jsonb,
+  vars_localized jsonb       not null default '{}'::jsonb,
+  -- 앱이 알림을 눌러 열렸을 때 받는 값(종류·우편·문의 id 등)
+  data           jsonb       not null default '{}'::jsonb,
+  is_ad          boolean     not null default false,
+  batch_id       uuid,
+  not_before     timestamptz not null default now(),
+  status         text        not null default 'pending' check (status in ('pending', 'sending', 'sent', 'skipped', 'failed')),
+  attempts       int         not null default 0,
+  claimed_at     timestamptz,
+  -- 보낸 기기 수 · 건너뛴 이유 · 오류
+  result         text,
+  created_at     timestamptz not null default now(),
+  done_at        timestamptz,
+  -- 이 시각이 지나면 보내지 않는다(cron 이 멈췄다 풀렸을 때 묵은 알림이 한꺼번에 나가지 않게).
+  -- 구글·애플에도 같은 시각을 넘겨, 꺼져 있던 기기가 켜질 때 지난 알림을 받지 않게 한다.
+  expires_at     timestamptz not null default (now() + interval '1 day')
+);
+alter table public.push_outbox add column if not exists expires_at timestamptz not null default (now() + interval '1 day');
+create index if not exists push_outbox_due_idx   on public.push_outbox (not_before, id) where status = 'pending';
+create index if not exists push_outbox_batch_idx on public.push_outbox (batch_id, user_id) where batch_id is not null;
+create index if not exists push_outbox_created_idx on public.push_outbox (created_at);
+alter table public.push_outbox enable row level security;
+
+-- 우편 발송·예약에 "푸시도 함께" 표시
+alter table public.mail_batches   add column if not exists push         boolean not null default false;
+alter table public.mail_batches   add column if not exists push_is_ad   boolean not null default false;
+alter table public.mail_schedules add column if not exists push         boolean not null default false;
+alter table public.mail_schedules add column if not exists push_is_ad   boolean not null default false;
+
+-- ---------------------------------------------------------------------------
+-- 엣지 함수 깨우기. 보낼 줄이 있을 때만 부른다.
+--   p_strict: cron 은 주소가 없으면 실패로 끝내 "자동 작업" 화면에 보이게 한다. 친구 요청 같은 플레이어 요청 안에서
+--             부를 때는 절대 실패하지 않는다 — 푸시 설정 문제로 친구 요청이 막히면 안 된다(남은 줄은 cron 이 보낸다).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_push_kick(p_strict boolean default false)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    if p_strict then raise exception 'project_url_missing'; end if;
+    return;
+  end if;
+  if not exists (select 1 from public.push_outbox where status = 'pending' and not_before <= now()) then
+    return;
+  end if;
+  -- 함수 쪽은 대기열만 처리하므로 인증 없이 부른다(verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/push-send',
+    body                 := '{}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 60000);
+exception
+  when others then
+    if p_strict then raise; end if;
+end;
+$$;
+comment on function public.ts_push_kick(boolean) is '푸시 보내는 엣지 함수(push-send)를 부른다(보낼 줄이 있을 때만). cron 은 p_strict.';
+revoke all on function public.ts_push_kick(boolean) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 대기열에 넣기. 기기가 없거나, 받는 사람이 알림 전체 또는 그 상황을 껐으면 넣지 않는다.
+-- 광고 동의·야간은 보낼 때 본다(ts_push_claim) — 밤에 넣은 광고는 아침에 보내야 해서.
+-- p_expires_at: 이 뒤로는 보내지 않는다(없으면 하루). 로비 초대는 방이 닫히는 시각을 넘긴다.
+-- ---------------------------------------------------------------------------
+drop function if exists public.ts_push_enqueue(text[], text, jsonb, jsonb, jsonb, boolean, uuid);
+create or replace function public.ts_push_enqueue(
+  p_user_ids       text[],
+  p_trigger        text,
+  p_vars           jsonb       default '{}'::jsonb,
+  p_vars_localized jsonb       default '{}'::jsonb,
+  p_data           jsonb       default '{}'::jsonb,
+  p_is_ad          boolean     default false,
+  p_batch_id       uuid        default null,
+  p_expires_at     timestamptz default null
+)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  if p_user_ids is null or cardinality(p_user_ids) = 0 then return 0; end if;
+  if not exists (select 1 from public.push_triggers where code = p_trigger) then return 0; end if;
+
+  if p_expires_at is not null and p_expires_at <= now() then return 0; end if;
+
+  insert into public.push_outbox (user_id, trigger_code, vars, vars_localized, data, is_ad, batch_id, expires_at)
+  select u, p_trigger, coalesce(p_vars, '{}'::jsonb), coalesce(p_vars_localized, '{}'::jsonb),
+         coalesce(p_data, '{}'::jsonb) || jsonb_build_object('type', p_trigger), coalesce(p_is_ad, false), p_batch_id,
+         coalesce(p_expires_at, now() + interval '1 day')
+  from (select distinct unnest(p_user_ids) as u) t
+  where u is not null
+    and exists (select 1 from public.push_devices d where d.user_id = t.u)
+    and not exists (select 1 from public.push_preferences pp
+                     where pp.user_id = t.u and (not pp.enabled or (to_jsonb(pp) ->> p_trigger)::boolean is false));
+  get diagnostics v_n = row_count;
+
+  if v_n > 0 then perform public.ts_push_kick(false); end if;
+  return v_n;
+end;
+$$;
+comment on function public.ts_push_enqueue(text[], text, jsonb, jsonb, jsonb, boolean, uuid, timestamptz) is
+  '푸시 대기열에 받는 사람마다 한 줄씩 넣는다. 기기 없는 사람·알림이나 그 상황을 끈 사람은 뺀다. 넣었으면 엣지 함수를 깨운다.';
+revoke all on function public.ts_push_enqueue(text[], text, jsonb, jsonb, jsonb, boolean, uuid, timestamptz) from public, anon, authenticated;
+
+-- 우편 발송 단위의 정해진 사람들에게 우편 알림을 넣는다(문구 값은 그 발송의 제목). 아래 두 곳이 쓴다.
+create or replace function public.ts_push_enqueue_mail_users(p_batch_id uuid, p_is_ad boolean, p_users text[])
+returns int
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce((
+    select public.ts_push_enqueue(p_users, 'mail',
+             jsonb_build_object('title', b.title),
+             coalesce((select jsonb_object_agg(k, jsonb_build_object('title', v->>'title'))
+                         from jsonb_each(coalesce(b.localized, '{}'::jsonb)) as l(k, v)
+                        where nullif(btrim(v->>'title'), '') is not null), '{}'::jsonb),
+             jsonb_build_object('batch_id', b.id, 'category', b.category),
+             coalesce(p_is_ad, false), b.id)
+    from public.mail_batches b where b.id = p_batch_id), 0);
+$$;
+revoke all on function public.ts_push_enqueue_mail_users(uuid, boolean, text[]) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 우편 발송 단위에 푸시 붙이기 — 운영 콘솔이 ts_admin_send_mail 다음에, 예약 러너가 발송 직후 부른다.
+-- 그때 우편을 받은 사람에게만 넣는다(한 발송에 한 번). "나중에 들어온 플레이어도 받기" 우편을 늦게 받은 사람은
+-- 아래 mails 트리거가 그 사람만 넣는다 — 여기서 발송 전체를 다시 훑으면 나중에 기기를 등록한 사람이 옛 우편 알림을 받는다.
+-- 절대 실패하지 않는다 — 푸시 때문에 우편 발송이 되돌려지면 안 된다. 넣은 수(못 넣었으면 -1)를 돌려준다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_push_enqueue_mail_batch(p_batch_id uuid, p_is_ad boolean default false)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_users text[];
+begin
+  update public.mail_batches set push = true, push_is_ad = coalesce(p_is_ad, false)
+   where id = p_batch_id and not push;
+  if not found then return 0; end if;
+
+  select array_agg(distinct m.user_id) into v_users from public.mails m where m.batch_id = p_batch_id;
+  return public.ts_push_enqueue_mail_users(p_batch_id, p_is_ad, v_users);
+exception
+  when others then
+    raise warning '[ts_push_enqueue_mail_batch] %: %', p_batch_id, sqlerrm;
+    return -1;
+end;
+$$;
+comment on function public.ts_push_enqueue_mail_batch(uuid, boolean) is
+  '우편 발송 단위에 푸시를 붙이고 지금 받은 사람에게 넣는다(발송마다 한 번). 실패해도 예외를 내지 않고 -1.';
+revoke all on function public.ts_push_enqueue_mail_batch(uuid, boolean) from public, anon, authenticated;
+
+-- 늦게 받은 사람("나중에 들어온 플레이어도 받기") — 그 발송에 푸시가 붙어 있으면 이번에 우편이 생긴 사람만 넣는다.
+-- 한 번에 여러 줄을 넣는 배달 크론을 위해 줄마다가 아니라 묶음째 본다. 한 사람이 한 발송의 우편을 두 번 받지 않으므로
+-- 대기열과 대조하지 않는다 — 대조하면 30일 정리로 줄이 지워진 뒤 판단이 바뀐다.
+create or replace function public.ts_push_on_mails_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b record;
+begin
+  for b in
+    select mb.id, mb.push_is_ad, array_agg(distinct n.user_id) as users
+    from new_rows n
+    join public.mail_batches mb on mb.id = n.batch_id and mb.push
+    group by mb.id, mb.push_is_ad
+  loop
+    perform public.ts_push_enqueue_mail_users(b.id, b.push_is_ad, b.users);
+  end loop;
+  return null;
+exception
+  when others then
+    raise warning '[ts_push_on_mails_insert] %', sqlerrm;
+    return null;
+end;
+$$;
+revoke all on function public.ts_push_on_mails_insert() from public, anon, authenticated;
+drop trigger if exists trg_push_on_mails_insert on public.mails;
+create trigger trg_push_on_mails_insert
+  after insert on public.mails
+  referencing new table as new_rows
+  for each statement execute function public.ts_push_on_mails_insert();
+
+-- 고객센터 답변 — 운영자가 답하면 그 문의의 플레이어에게.
+create or replace function public.ts_push_on_support_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user text;
+begin
+  if new.sender <> 'admin' then return null; end if;
+  select user_id into v_user from public.support_tickets where id = new.ticket_id;
+  perform public.ts_push_enqueue(array[v_user], 'support_reply', '{}'::jsonb, '{}'::jsonb,
+                                 jsonb_build_object('ticket_id', new.ticket_id));
+  return null;
+exception
+  when others then
+    raise warning '[ts_push_on_support_message] %', sqlerrm;
+    return null;
+end;
+$$;
+revoke all on function public.ts_push_on_support_message() from public, anon, authenticated;
+drop trigger if exists trg_push_on_support_message on public.support_messages;
+create trigger trg_push_on_support_message
+  after insert on public.support_messages
+  for each row execute function public.ts_push_on_support_message();
+
+-- 친구 요청 — 새 요청을 받은 사람에게. 상호 요청으로 바로 친구가 되는 경우는 새 줄이 생기지 않아 보내지 않는다.
+create or replace function public.ts_push_on_friend_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user text;
+  v_name text;
+begin
+  if new.status <> 'pending' then return null; end if;
+  select user_id into v_user from public.user_profiles where account_id = new.addressee_account_id;
+  select display_name into v_name from public.display_names where account_id = new.requester_account_id;
+  perform public.ts_push_enqueue(array[v_user], 'friend_request',
+                                 jsonb_build_object('name', coalesce(v_name, '')), '{}'::jsonb,
+                                 jsonb_build_object('request_id', new.id));
+  return null;
+exception
+  when others then
+    raise warning '[ts_push_on_friend_request] %', sqlerrm;
+    return null;
+end;
+$$;
+revoke all on function public.ts_push_on_friend_request() from public, anon, authenticated;
+drop trigger if exists trg_push_on_friend_request on public.friend_requests;
+create trigger trg_push_on_friend_request
+  after insert on public.friend_requests
+  for each row execute function public.ts_push_on_friend_request();
+
+-- 로비 초대 — 초대받은 사람에게. 지금 초대 함수는 이미 있는 참가자를 건드리지 않아(거절한 사람 재초대 불가) 새 줄만 온다.
+-- 상태가 invited 로 바뀌는 경우도 받아 두는 것은 나중에 재초대를 열 때 알림이 빠지지 않게 하려는 것이다.
+create or replace function public.ts_push_on_lobby_invite()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user  text;
+  v_name  text;
+  v_lobby text;
+  v_host  uuid;
+  v_until timestamptz;
+begin
+  if new.status <> 'invited' then return null; end if;
+  if tg_op = 'UPDATE' and old.status = 'invited' then return null; end if;
+  select host_account_id, name, expires_at into v_host, v_lobby, v_until from public.match_lobbies where id = new.lobby_id;
+  if v_host = new.account_id then return null; end if;
+  select user_id into v_user from public.user_profiles where account_id = new.account_id;
+  select display_name into v_name from public.display_names where account_id = v_host;
+  -- 방이 닫힌 뒤에 도착하는 초대 알림은 소용이 없다.
+  perform public.ts_push_enqueue(array[v_user], 'lobby_invite',
+                                 jsonb_build_object('name', coalesce(v_name, ''), 'lobby', coalesce(v_lobby, '')), '{}'::jsonb,
+                                 jsonb_build_object('lobby_id', new.lobby_id), false, null, v_until);
+  return null;
+exception
+  when others then
+    raise warning '[ts_push_on_lobby_invite] %', sqlerrm;
+    return null;
+end;
+$$;
+revoke all on function public.ts_push_on_lobby_invite() from public, anon, authenticated;
+drop trigger if exists trg_push_on_lobby_invite on public.match_lobby_members;
+create trigger trg_push_on_lobby_invite
+  after insert or update of status on public.match_lobby_members
+  for each row execute function public.ts_push_on_lobby_invite();
+
+-- 계정이 지워지면(프로필의 account_id 가 비워진다) 수신 설정도 지운다. 기기는 account_id 로 함께 지워진다.
+-- 같은 구글·애플 계정으로 다시 가입하면 user_id 가 같아서, 남겨 두면 옛 광고 수신 동의가 되살아난다.
+create or replace function public.ts_push_on_account_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.user_profiles where user_id = old.user_id and account_id is not null) then
+    delete from public.push_preferences where user_id = old.user_id;
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.ts_push_on_account_deleted() from public, anon, authenticated;
+drop trigger if exists trg_push_on_account_deleted on public.user_profiles;
+create trigger trg_push_on_account_deleted
+  after update on public.user_profiles
+  for each row when (old.account_id is not null and new.account_id is null)
+  execute function public.ts_push_on_account_deleted();
+
+-- ---------------------------------------------------------------------------
+-- 플레이어(SDK) — 기기 등록·해제, 수신 설정
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_push_register(
+  p_token       text,
+  p_platform    text,
+  p_language    text default null,
+  p_app_version text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_user text;
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if p_token is null or char_length(btrim(p_token)) < 16 or char_length(p_token) > 4096 then
+    raise exception 'push_token_invalid';
+  end if;
+  if p_platform is null or p_platform not in ('android', 'ios') then raise exception 'push_token_invalid: platform %', p_platform; end if;
+  select user_id into v_user from public.user_profiles where account_id = v_uid;
+  if v_user is null then raise exception 'profile_not_found'; end if;
+
+  -- 같은 기기를 다른 계정이 쓰게 되면(로그아웃 없이 계정 전환) 토큰의 주인을 바꾼다 — 앞 계정의 알림이 가지 않게.
+  insert into public.push_devices (token, account_id, user_id, platform, language, app_version)
+  values (btrim(p_token), v_uid, v_user, p_platform, left(nullif(btrim(p_language), ''), 10), left(nullif(btrim(p_app_version), ''), 40))
+  on conflict (token) do update
+    set account_id  = excluded.account_id,
+        user_id     = excluded.user_id,
+        platform    = excluded.platform,
+        language    = excluded.language,
+        app_version = excluded.app_version,
+        apns_sandbox = case when push_devices.account_id = excluded.account_id then push_devices.apns_sandbox else false end,
+        last_error  = null,
+        updated_at  = now();
+
+  -- 한 계정에 기기 10대까지. 오래 안 쓴 것부터 뺀다 — 재설치마다 토큰이 바뀌어 죽은 토큰이 쌓인다.
+  delete from public.push_devices
+  where account_id = v_uid
+    and token not in (select token from public.push_devices where account_id = v_uid order by updated_at desc limit 10);
+end;
+$$;
+comment on function public.ts_push_register(text, text, text, text) is '내 기기의 푸시 토큰 등록(갱신). 기기 언어로 문구를 고른다.';
+
+create or replace function public.ts_push_unregister(p_token text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.push_devices where token = btrim(p_token) and account_id = auth.uid();
+$$;
+comment on function public.ts_push_unregister(text) is '내 기기의 푸시 토큰 해제(로그아웃 때).';
+
+create or replace function public.ts_push_preferences_row(p_user text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'enabled',          coalesce(pp.enabled, true),
+    'mail',             coalesce(pp.mail, true),
+    'support_reply',    coalesce(pp.support_reply, true),
+    'friend_request',   coalesce(pp.friend_request, true),
+    'lobby_invite',     coalesce(pp.lobby_invite, true),
+    'ad_consent',       coalesce(pp.ad_consent, false),
+    'ad_consent_at',    pp.ad_consent_at,
+    'night_consent',    coalesce(pp.night_consent, false),
+    'night_consent_at', pp.night_consent_at)
+  from (select 1) one
+  left join public.push_preferences pp on pp.user_id = p_user;
+$$;
+revoke all on function public.ts_push_preferences_row(text) from public, anon, authenticated;
+
+create or replace function public.ts_push_preferences_get()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_user text;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select user_id into v_user from public.user_profiles where account_id = auth.uid();
+  if v_user is null then raise exception 'profile_not_found'; end if;
+  return public.ts_push_preferences_row(v_user);
+end;
+$$;
+comment on function public.ts_push_preferences_get() is '내 푸시 수신 설정(알림·상황별·광고 동의·야간 동의와 그 시각).';
+
+-- null 인 인자는 바꾸지 않는다. 동의 시각은 그 값을 넘길 때마다 새로 적는다 — 같은 값으로 다시 동의해도(주기적인
+-- 수신 동의 재확인) 그 시각이 남아야 해서다. 넘기지 않은 값은 바뀔 때(광고 철회로 야간도 철회될 때)만 적는다.
+-- 야간 동의는 광고 동의가 있을 때만 의미가 있다 — 광고 동의를 철회하면 야간 동의도 함께 철회하고,
+-- 광고 미동의 상태에서 야간만 켜려 하면 push_night_requires_ad_consent 로 거절한다(조용히 꺼 두면 게임이 모른다).
+drop function if exists public.ts_push_preferences_set(boolean, boolean, boolean);
+create or replace function public.ts_push_preferences_set(
+  p_enabled        boolean default null,
+  p_ad_consent     boolean default null,
+  p_night_consent  boolean default null,
+  p_mail           boolean default null,
+  p_support_reply  boolean default null,
+  p_friend_request boolean default null,
+  p_lobby_invite   boolean default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user  text;
+  v_old   public.push_preferences%rowtype;
+  v_ad    boolean;
+  v_night boolean;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select user_id into v_user from public.user_profiles where account_id = auth.uid();
+  if v_user is null then raise exception 'profile_not_found'; end if;
+
+  select * into v_old from public.push_preferences where user_id = v_user for update;
+  v_ad    := coalesce(p_ad_consent, v_old.ad_consent, false);
+  if p_night_consent and not v_ad then raise exception 'push_night_requires_ad_consent'; end if;
+  v_night := coalesce(p_night_consent, v_old.night_consent, false) and v_ad;
+
+  insert into public.push_preferences as pp
+    (user_id, enabled, mail, support_reply, friend_request, lobby_invite, ad_consent, ad_consent_at, night_consent, night_consent_at)
+  values (v_user, coalesce(p_enabled, true),
+          coalesce(p_mail, true), coalesce(p_support_reply, true), coalesce(p_friend_request, true), coalesce(p_lobby_invite, true),
+          -- 처음 적는 행: 그 값을 이번에 정했을 때만 시각을 남긴다 — 알림만 끈 사람에게 "광고 철회 시각"이 생기지 않게.
+          v_ad, case when p_ad_consent is not null then now() end,
+          v_night, case when p_night_consent is not null or (p_ad_consent is not null and not v_ad) then now() end)
+  on conflict (user_id) do update
+    set enabled          = coalesce(p_enabled, pp.enabled),
+        mail             = coalesce(p_mail, pp.mail),
+        support_reply    = coalesce(p_support_reply, pp.support_reply),
+        friend_request   = coalesce(p_friend_request, pp.friend_request),
+        lobby_invite     = coalesce(p_lobby_invite, pp.lobby_invite),
+        ad_consent       = v_ad,
+        ad_consent_at    = case when p_ad_consent is not null or pp.ad_consent is distinct from v_ad then now() else pp.ad_consent_at end,
+        night_consent    = v_night,
+        night_consent_at = case when p_night_consent is not null or pp.night_consent is distinct from v_night then now() else pp.night_consent_at end,
+        updated_at       = now();
+
+  return public.ts_push_preferences_row(v_user);
+end;
+$$;
+comment on function public.ts_push_preferences_set(boolean, boolean, boolean, boolean, boolean, boolean, boolean) is
+  '내 푸시 수신 설정 변경. null 은 그대로. 광고 동의를 철회하면 야간 동의도 철회된다.';
+
+-- ---------------------------------------------------------------------------
+-- 보내는 엣지 함수(push-send) 전용 — service_role
+-- ---------------------------------------------------------------------------
+
+-- 지금이 게임 시간대의 밤(21~8시)인지, 그리고 그 밤이 끝나는 아침 8시.
+create or replace function public.ts_push_night_end(p_at timestamptz default now())
+returns timestamptz
+language sql
+stable
+set search_path = public
+as $$
+  select case
+    when extract(hour from (p_at at time zone public.ts_game_time_zone())) >= 21
+      then ((date_trunc('day', p_at at time zone public.ts_game_time_zone()) + interval '1 day 8 hours') at time zone public.ts_game_time_zone())
+    when extract(hour from (p_at at time zone public.ts_game_time_zone())) < 8
+      then ((date_trunc('day', p_at at time zone public.ts_game_time_zone()) + interval '8 hours') at time zone public.ts_game_time_zone())
+  end;
+$$;
+comment on function public.ts_push_night_end(timestamptz) is '게임 시간대로 밤(21~8시)이면 그 밤이 끝나는 시각, 아니면 null.';
+revoke all on function public.ts_push_night_end(timestamptz) from public, anon, authenticated;
+
+-- 보낼 줄을 가져간다. 그 전에 정리한다: 오래 걸린 줄 되돌리기 · 광고 미동의·알림 끔·기기 없음 건너뛰기 · 밤 광고 미루기.
+-- 돌려주는 것: 문구(상황별·광고 표시)와 줄마다 받는 사람의 기기 목록.
+create or replace function public.ts_push_claim(p_limit int default 200)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_night_end timestamptz := public.ts_push_night_end(now());
+  v_ids       bigint[];
+begin
+  -- 보내는 중에 함수가 죽은 줄 — 10분 지나면 다시 보낸다(세 번까지).
+  update public.push_outbox
+     set status = case when attempts >= 3 then 'failed' else 'pending' end,
+         result = case when attempts >= 3 then '보내는 중 멈춤(3회)' else result end,
+         done_at = case when attempts >= 3 then now() end
+   where status = 'sending' and claimed_at < now() - interval '10 minutes';
+
+  update public.push_outbox o
+     set status = 'skipped', result = '보낼 기한 지남', done_at = now()
+   where o.status = 'pending' and o.expires_at <= now();
+
+  update public.push_outbox o
+     set status = 'skipped', result = '알림 끔', done_at = now()
+   where o.status = 'pending' and o.not_before <= now()
+     and exists (select 1 from public.push_preferences pp where pp.user_id = o.user_id and not pp.enabled);
+
+  update public.push_outbox o
+     set status = 'skipped', result = '광고 수신 미동의', done_at = now()
+   where o.status = 'pending' and o.is_ad and o.not_before <= now()
+     and not exists (select 1 from public.push_preferences pp where pp.user_id = o.user_id and pp.ad_consent);
+
+  -- 넣은 뒤(밤에 미뤄 둔 사이 등) 플레이어가 그 상황을 끈 경우.
+  update public.push_outbox o
+     set status = 'skipped', result = '플레이어가 이 알림 끔', done_at = now()
+   where o.status = 'pending' and o.not_before <= now()
+     and exists (select 1 from public.push_preferences pp
+                  where pp.user_id = o.user_id and (to_jsonb(pp) ->> o.trigger_code)::boolean is false);
+
+  update public.push_outbox o
+     set status = 'skipped', result = '등록된 기기 없음', done_at = now()
+   where o.status = 'pending' and o.not_before <= now()
+     and not exists (select 1 from public.push_devices d where d.user_id = o.user_id);
+
+  if v_night_end is not null then
+    update public.push_outbox o
+       set not_before = v_night_end
+     where o.status = 'pending' and o.is_ad and o.not_before <= now()
+       and not exists (select 1 from public.push_preferences pp where pp.user_id = o.user_id and pp.night_consent);
+  end if;
+
+  with picked as (
+    select id from public.push_outbox
+     where status = 'pending' and not_before <= now()
+     order by id
+     limit greatest(1, least(coalesce(p_limit, 200), 1000))
+     for update skip locked
+  ), upd as (
+    update public.push_outbox o
+       set status = 'sending', attempts = o.attempts + 1, claimed_at = now()
+      from picked where o.id = picked.id
+    returning o.id
+  )
+  select array_agg(id) into v_ids from upd;
+
+  return jsonb_build_object(
+    'triggers', (select coalesce(jsonb_object_agg(code, jsonb_build_object('title', title, 'body', body, 'localized', localized)), '{}'::jsonb)
+                   from public.push_triggers),
+    'ad', (select jsonb_build_object('title_prefix', title_prefix, 'footer', footer, 'localized', localized)
+             from public.push_ad_settings where id = 1),
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', o.id, 'trigger', o.trigger_code, 'vars', o.vars, 'vars_localized', o.vars_localized,
+               'data', o.data, 'is_ad', o.is_ad, 'expires_at', o.expires_at,
+               'devices', (select coalesce(jsonb_agg(jsonb_build_object(
+                                'token', d.token, 'platform', d.platform, 'language', d.language, 'apns_sandbox', d.apns_sandbox)), '[]'::jsonb)
+                             from public.push_devices d where d.user_id = o.user_id))
+             order by o.id)
+        from public.push_outbox o where o.id = any (v_ids)), '[]'::jsonb));
+end;
+$$;
+comment on function public.ts_push_claim(int) is '푸시 보낼 줄을 가져간다(정리 후). push-send 엣지 함수 전용.';
+revoke all on function public.ts_push_claim(int) from public, anon, authenticated;
+
+-- 보낸 결과. p_items: [{id, status: sent|failed|retry, result}] · p_devices: [{token, action: delete|sandbox|sent|failed|retry, error}]
+-- retry 는 구글·애플이 잠시 바빴던 줄 — 2·4분 뒤 다시 보내고, 세 번째도 안 되면 실패로 끝낸다.
+create or replace function public.ts_push_report(p_items jsonb, p_devices jsonb default '[]'::jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.push_outbox o
+     set status = case when i->>'status' = 'retry' then case when o.attempts >= 3 then 'failed' else 'pending' end
+                       when i->>'status' in ('sent', 'failed', 'skipped') then i->>'status'
+                       else 'failed' end,
+         result = left(i->>'result', 300),
+         not_before = case when i->>'status' = 'retry' and o.attempts < 3
+                           then now() + make_interval(mins => 2 * o.attempts) else o.not_before end,
+         done_at = case when i->>'status' = 'retry' and o.attempts < 3 then null else now() end
+    from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) as i
+   where o.id = (i->>'id')::bigint and o.status = 'sending';
+
+  -- 없어진 앱·지운 앱의 토큰은 지운다 — 남겨 두면 매번 실패하며 보내는 시간만 먹는다.
+  delete from public.push_devices d
+   using jsonb_array_elements(coalesce(p_devices, '[]'::jsonb)) as x
+   where d.token = x->>'token' and x->>'action' = 'delete';
+
+  update public.push_devices d
+     set apns_sandbox = case when x->>'action' = 'sandbox' then true else d.apns_sandbox end,
+         last_sent_at = case when x->>'action' in ('sent', 'sandbox') then now() else d.last_sent_at end,
+         last_error   = left(x->>'error', 300)
+    from jsonb_array_elements(coalesce(p_devices, '[]'::jsonb)) as x
+   where d.token = x->>'token' and x->>'action' <> 'delete';
+end;
+$$;
+comment on function public.ts_push_report(jsonb, jsonb) is '푸시 보낸 결과를 남긴다(죽은 토큰 정리 포함). push-send 엣지 함수 전용.';
+revoke all on function public.ts_push_report(jsonb, jsonb) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 운영 콘솔 — service_role
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_admin_push_settings()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'triggers', (select coalesce(jsonb_agg(jsonb_build_object(
+                    'code', t.code, 'title', t.title, 'body', t.body, 'localized', t.localized,
+                    'updated_at', t.updated_at, 'updated_by', t.updated_by,
+                    -- 이 알림을 끈 플레이어(알림 전체를 끈 사람 포함)
+                    'off_count', (select count(*) from public.push_preferences pp
+                                   where not pp.enabled or (to_jsonb(pp) ->> t.code)::boolean is false))
+                    order by array_position(array['mail', 'support_reply', 'friend_request', 'lobby_invite'], t.code)), '[]'::jsonb)
+                   from public.push_triggers t),
+    'ad', (select jsonb_build_object('title_prefix', title_prefix, 'footer', footer, 'localized', localized,
+                                     'updated_at', updated_at, 'updated_by', updated_by)
+             from public.push_ad_settings where id = 1),
+    'devices', jsonb_build_object(
+      'android', (select count(*) from public.push_devices where platform = 'android'),
+      'ios',     (select count(*) from public.push_devices where platform = 'ios'),
+      'ad_consent', (select count(*) from public.push_preferences where ad_consent)));
+$$;
+comment on function public.ts_admin_push_settings() is '푸시 상황별 문구·끈 플레이어 수·광고 표시·등록 기기 수. 운영 콘솔 전용.';
+
+drop function if exists public.ts_admin_push_trigger_update(text, boolean, text, text, jsonb, text);
+create or replace function public.ts_admin_push_trigger_update(
+  p_code      text,
+  p_title     text,
+  p_body      text,
+  p_localized jsonb,
+  p_by        text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_localized is not null and jsonb_typeof(p_localized) <> 'object' then raise exception 'push_localized_invalid'; end if;
+  update public.push_triggers
+     set title      = coalesce(btrim(p_title), title),
+         body       = coalesce(btrim(p_body), body),
+         localized  = coalesce(p_localized, localized),
+         updated_at = now(),
+         updated_by = p_by
+   where code = p_code;
+  if not found then raise exception 'push_trigger_not_found'; end if;
+end;
+$$;
+comment on function public.ts_admin_push_trigger_update(text, text, text, jsonb, text) is
+  '푸시 상황별 문구 수정. null 은 그대로. 운영 콘솔 전용.';
+
+create or replace function public.ts_admin_push_ad_settings_update(p_title_prefix text, p_footer text, p_localized jsonb, p_by text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_localized is not null and jsonb_typeof(p_localized) <> 'object' then raise exception 'push_localized_invalid'; end if;
+  update public.push_ad_settings
+     set title_prefix = coalesce(btrim(p_title_prefix), title_prefix),
+         footer       = coalesce(btrim(p_footer), footer),
+         localized    = coalesce(p_localized, localized),
+         updated_at   = now(),
+         updated_by   = p_by
+   where id = 1;
+end;
+$$;
+comment on function public.ts_admin_push_ad_settings_update(text, text, jsonb, text) is '광고성 푸시 표시 수정. 운영 콘솔 전용.';
+
+-- 최근 N일 상황별·결과별 수와 최근 실패·건너뜀 몇 줄. 날짜는 게임 시간대.
+create or replace function public.ts_admin_push_stats(p_days int default 7)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with recent as (
+    select * from public.push_outbox
+     where created_at >= now() - make_interval(days => greatest(1, least(coalesce(p_days, 7), 30)))
+  )
+  select jsonb_build_object(
+    'by_trigger', (select coalesce(jsonb_agg(jsonb_build_object('trigger', trigger_code, 'status', status, 'count', n)), '[]'::jsonb)
+                     from (select trigger_code, status, count(*) n from recent group by 1, 2) s),
+    'pending', (select count(*) from public.push_outbox where status in ('pending', 'sending')),
+    'recent_problems', (select coalesce(jsonb_agg(jsonb_build_object(
+                           'id', id, 'trigger', trigger_code, 'status', status, 'result', result, 'created_at', created_at)
+                           order by id desc), '[]'::jsonb)
+                          from (select * from recent where status in ('failed', 'skipped') order by id desc limit 50) p));
+$$;
+comment on function public.ts_admin_push_stats(int) is '최근 푸시 결과 집계와 최근 실패·건너뜀. 운영 콘솔 전용.';
+
+-- 예약 우편의 "푸시도 함께" — 예약 만들기 다음에 운영 콘솔이 부른다.
+create or replace function public.ts_admin_mail_schedule_set_push(p_id uuid, p_push boolean, p_is_ad boolean)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.mail_schedules
+     set push = coalesce(p_push, false), push_is_ad = coalesce(p_push, false) and coalesce(p_is_ad, false)
+   where id = p_id;
+$$;
+comment on function public.ts_admin_mail_schedule_set_push(uuid, boolean, boolean) is '예약 우편에 푸시를 붙인다. 운영 콘솔 전용.';
+
+-- 정리 — 끝난 줄은 30일 뒤 지운다(콘솔 집계는 최근 30일까지).
+create or replace function public.ts_push_outbox_cleanup()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  delete from public.push_outbox where status in ('sent', 'skipped', 'failed') and created_at < now() - interval '30 days';
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke all on function public.ts_push_outbox_cleanup() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid) from cron.job where jobname in ('push-send', 'push-outbox-cleanup');
+    perform cron.schedule('push-send', '* * * * *', 'select public.ts_push_kick(true)');
+    perform cron.schedule('push-outbox-cleanup', '50 3 * * *', 'select public.ts_push_outbox_cleanup()');
+  end if;
+end;
+$$;
+
+revoke all on function public.ts_push_register(text, text, text, text)                 from public, anon, authenticated;
+revoke all on function public.ts_push_unregister(text)                                 from public, anon, authenticated;
+revoke all on function public.ts_push_preferences_get()                                from public, anon, authenticated;
+revoke all on function public.ts_push_preferences_set(boolean, boolean, boolean, boolean, boolean, boolean, boolean)       from public, anon, authenticated;
+revoke all on function public.ts_admin_push_settings()                                 from public, anon, authenticated;
+revoke all on function public.ts_admin_push_trigger_update(text, text, text, jsonb, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_push_ad_settings_update(text, text, jsonb, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_push_stats(int)                                 from public, anon, authenticated;
+revoke all on function public.ts_admin_mail_schedule_set_push(uuid, boolean, boolean)  from public, anon, authenticated;
+
+grant execute on function public.ts_push_register(text, text, text, text)              to authenticated;
+grant execute on function public.ts_push_unregister(text)                              to authenticated;
+grant execute on function public.ts_push_preferences_get()                             to authenticated;
+grant execute on function public.ts_push_preferences_set(boolean, boolean, boolean, boolean, boolean, boolean, boolean)    to authenticated;
+grant execute on function public.ts_push_claim(int)                                    to service_role;
+grant execute on function public.ts_push_report(jsonb, jsonb)                          to service_role;
+grant execute on function public.ts_push_enqueue_mail_batch(uuid, boolean)             to service_role;
+grant execute on function public.ts_admin_push_settings()                              to service_role;
+grant execute on function public.ts_admin_push_trigger_update(text, text, text, jsonb, text) to service_role;
+grant execute on function public.ts_admin_push_ad_settings_update(text, text, jsonb, text) to service_role;
+grant execute on function public.ts_admin_push_stats(int)                              to service_role;
+grant execute on function public.ts_admin_mail_schedule_set_push(uuid, boolean, boolean) to service_role;
+
+notify pgrst, 'reload schema';
+
+
+-- #############################################################################
+-- 24. 클라이언트 권한 최소화
 -- #############################################################################
 
 -- 클라이언트 롤(anon·authenticated)의 테이블·함수 권한을 실제로 필요한 범위까지 좁힙니다.
@@ -14186,6 +15099,12 @@ grant execute on function public.ts_match_lobby_list_my()                       
 -- 고객센터 — 게임의 새 답변 표시
 grant execute on function public.ts_support_unread_count()                           to authenticated;
 
+-- 푸시 알림 — 기기 등록·해제, 수신 설정
+grant execute on function public.ts_push_register(text, text, text, text)           to authenticated;
+grant execute on function public.ts_push_unregister(text)                           to authenticated;
+grant execute on function public.ts_push_preferences_get()                          to authenticated;
+grant execute on function public.ts_push_preferences_set(boolean, boolean, boolean, boolean, boolean, boolean, boolean) to authenticated;
+
 -- 클라이언트에 열지 않는 함수(운영·cron·트리거 전용). postgres·service_role 로만 호출합니다:
 --   admin_add_user_data_column / admin_drop_user_data_column / admin_update_user_data_column
 --   ts_protect_field / ts_unprotect_field  ← SECURITY DEFINER 로 CHECK 제약을 조작한다.
@@ -14202,6 +15121,7 @@ grant execute on function public.ts_support_unread_count()                      
 --                          ← 내부 헬퍼(로비 초대 제한값·초대 판정·대화 자격).
 --   ts_admin_friend_overview / ts_admin_friend_settings_* / ts_admin_match_lobby_list ← 운영 콘솔 전용.
 --   ts_support_* (ts_support_unread_count 제외) ← 고객센터 창의 엣지 함수(support-api) 전용.
+--   ts_push_* (등록·해제·수신 설정 제외) ← 대기열·보내는 엣지 함수(push-send)·트리거 전용.
 
 -- ---------------------------------------------------------------------------
 -- 검증

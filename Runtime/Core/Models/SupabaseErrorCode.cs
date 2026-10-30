@@ -153,6 +153,27 @@ namespace TrueBase.Core.Common
         /// <summary>고객센터 창이 뜨지 않았습니다 — 다른 화면이 이미 떠 있어 기기가 창을 띄우지 못한 경우. 잠시 뒤 다시 엽니다.</summary>
         public const string CustomerCenterNotShown = "customer_center_not_shown";
 
+        /// <summary>푸시 알림을 쓸 수 없는 실행 환경입니다(에디터·PC 등). Android·iOS 기기에서만 됩니다.</summary>
+        public const string PushUnsupportedPlatform = "push_unsupported_platform";
+
+        /// <summary>푸시 알림 설정이 비어 있습니다 — SupabaseSettings 의 푸시 사용·Firebase 값이 없거나 빌드에 푸시 부품이 들어가지 않았습니다.</summary>
+        public const string PushNotConfigured = "push_not_configured";
+
+        /// <summary>플레이어가 기기의 알림 권한을 허용하지 않았습니다.</summary>
+        public const string PushPermissionDenied = "push_permission_denied";
+
+        /// <summary>기기에서 푸시 주소(토큰)를 받지 못했습니다 — 네트워크·Google Play 서비스·애플 등록 실패 등.</summary>
+        public const string PushTokenUnavailable = "push_token_unavailable";
+
+        /// <summary>서버가 푸시 주소(토큰)나 플랫폼 형식을 거절했습니다. SDK 쪽 오류입니다.</summary>
+        public const string PushTokenInvalid = "push_token_invalid";
+
+        /// <summary>광고 수신에 동의하지 않은 플레이어에게 야간 수신 동의만 켜려 했습니다. 광고 수신 동의를 함께 받습니다.</summary>
+        public const string PushNightRequiresAdConsent = "push_night_requires_ad_consent";
+
+        /// <summary>로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝나기 전에 불렀을 수 있습니다.</summary>
+        public const string ProfileNotFound = "profile_not_found";
+
         /// <summary>SELECT 컬럼이 지정되지 않았습니다.</summary>
         public const string SelectColumnsEmpty = "select_columns_empty";
 

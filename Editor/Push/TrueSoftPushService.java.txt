@@ -1,0 +1,16 @@
+package com.truesoft.supabase.push;
+
+import androidx.annotation.NonNull;
+
+import com.google.firebase.messaging.FirebaseMessagingService;
+
+/**
+ * TrueSoft Supabase SDK — FCM 등록을 받는다. 알림(notification) 메시지는 앱이 뒤에 있거나 꺼져 있으면 FCM 이
+ * 알아서 띄우므로 따로 받지 않는다. 앱이 앞에 떠 있을 때 온 알림은 띄우지 않는다(게임이 화면에서 직접 보여 준다).
+ */
+public class TrueSoftPushService extends FirebaseMessagingService {
+    @Override
+    public void onRegistered(@NonNull String installationId) {
+        TrueSoftPush.onRegistered(getApplicationContext(), installationId);
+    }
+}

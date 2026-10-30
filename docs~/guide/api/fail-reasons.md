@@ -277,3 +277,15 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `CustomerCenterLoginRequired` | 고객센터를 열 수 없습니다. 로그인 상태가 아니고, 차단된 계정이 이 기기에 남긴 로그인 기록도 없습니다. 로그인한 뒤 다시 엽니다 |
 | `CustomerCenterNotShown` | 다른 화면이 이미 떠 있어 기기가 고객센터 창을 띄우지 못했습니다. 잠시 뒤 다시 엽니다 |
+
+## 푸시 알림
+
+| Reason | 설명 |
+|--------|------|
+| `PushUnsupportedPlatform` | 에디터·PC처럼 푸시를 쓸 수 없는 환경입니다. Android·iOS 기기에서만 됩니다 |
+| `PushNotConfigured` | `SupabaseSettings`의 푸시 알림 사용이나 Firebase 값이 비어 있거나, 빌드에 푸시 부품이 들어가지 않았습니다 |
+| `PushPermissionDenied` | 플레이어가 기기의 알림 권한을 허용하지 않았습니다 |
+| `PushTokenUnavailable` | 기기에서 푸시 주소를 받지 못했습니다. 네트워크·Google Play 서비스·애플 등록 실패일 수 있습니다 |
+| `PushTokenInvalid` | 서버가 기기 푸시 주소의 형식을 거절했습니다. SDK 쪽 오류입니다 |
+| `PushNightRequiresAdConsent` | 광고 수신에 동의하지 않은 플레이어의 야간 수신 동의만 켜려 했습니다. 광고 수신 동의와 함께 받습니다 |
+| `ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |

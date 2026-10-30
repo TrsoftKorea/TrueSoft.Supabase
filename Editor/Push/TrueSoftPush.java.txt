@@ -1,0 +1,133 @@
+package com.truesoft.supabase.push;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.Fragment;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.Build;
+
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.installations.FirebaseInstallations;
+import com.google.firebase.messaging.FirebaseMessaging;
+
+/**
+ * TrueSoft Supabase SDK — 푸시 알림(Android). 빌드 때 SDK 의 Editor/Push 에서 복사돼 들어간다(SupabaseSettings 푸시 사용일 때만).
+ * C#(PushNative) 이 start 를 부른 뒤 state 를 짧게 물어본다 — 받는 쪽 GameObject 를 따로 두지 않으려고.
+ *
+ * 기기 주소는 Firebase 설치 ID(FID)다. FCM 의 토큰(getToken)은 폐지 예정이라(firebase-messaging 25.1.0) 쓰지 않는다:
+ * register() 를 부르면 등록을 마친 FID 가 TrueSoftPushService.onRegistered 로 온다.
+ * Firebase 값은 빌드가 문자열 리소스(google_app_id 등)로 넣어 앱이 뜰 때 기본 Firebase 가 저절로 시작된다 —
+ * 앱이 꺼진 채 알림이 와서 프로세스가 새로 뜰 때도 Firebase 가 있어야 하기 때문이다.
+ */
+public final class TrueSoftPush {
+    private static final int REQUEST_PERMISSION = 7713;
+    private static final String PREFS = "truesoft_push";
+    private static final String KEY_REGISTERED = "registered_fid";
+
+    // "idle" · "pending" · "ok" · "denied" · "failed"
+    private static volatile String state = "idle";
+    private static volatile String token = null;
+    private static volatile String error = null;
+    private static Context appContext;
+
+    public static String state() { return state; }
+    public static String token() { return token; }
+    public static String error() { return error; }
+
+    /** 알림 권한을 (필요하면) 묻고 FCM 에 등록한다. 결과는 state() 로 본다. */
+    public static void start(final Activity activity) {
+        state = "pending";
+        token = null;
+        error = null;
+        appContext = activity.getApplicationContext();
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (FirebaseApp.getApps(appContext).isEmpty()) {
+                        fail("Firebase 가 시작되지 않았습니다(빌드에 Firebase 값이 들어가지 않음)");
+                        return;
+                    }
+                    if (Build.VERSION.SDK_INT >= 33
+                            && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        PermissionResult.start(activity);
+                        return;
+                    }
+                    register();
+                } catch (Throwable t) {
+                    fail(t.toString());
+                }
+            }
+        });
+    }
+
+    static void register() {
+        try {
+            // Google Play 서비스가 없거나 낡은 기기는 여기서 실패가 온다 — 안 받으면 C# 이 이유 없이 시간 초과로 끝난다.
+            FirebaseMessaging.getInstance().register().addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(Exception e) {
+                    if ("pending".equals(state)) fail(e.toString());
+                }
+            });
+            // 이미 등록된 기기는 onRegistered 가 다시 오지 않을 수 있다 — 지난번에 등록을 마친 FID 와 지금 FID 가 같으면 그걸 쓴다.
+            final String saved = prefs().getString(KEY_REGISTERED, null);
+            if (saved != null) {
+                FirebaseInstallations.getInstance().getId().addOnSuccessListener(new OnSuccessListener<String>() {
+                    @Override
+                    public void onSuccess(String id) {
+                        if (saved.equals(id) && "pending".equals(state)) {
+                            token = id;
+                            state = "ok";
+                        }
+                    }
+                });
+            }
+        } catch (Throwable t) {
+            fail(t.toString());
+        }
+    }
+
+    /** TrueSoftPushService.onRegistered 가 부른다. */
+    static void onRegistered(Context context, String installationId) {
+        if (appContext == null) appContext = context.getApplicationContext();
+        prefs().edit().putString(KEY_REGISTERED, installationId).apply();
+        token = installationId;
+        state = "ok";
+    }
+
+    private static SharedPreferences prefs() {
+        return appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static void fail(String message) {
+        error = message;
+        state = "failed";
+    }
+
+    /** 알림 권한 결과만 받고 스스로 떨어지는 보이지 않는 Fragment — 게임 Activity 의 결과 처리를 건드리지 않으려고. */
+    public static final class PermissionResult extends Fragment {
+        static void start(Activity activity) {
+            activity.getFragmentManager().beginTransaction().add(new PermissionResult(), "truebase-push-permission").commitAllowingStateLoss();
+        }
+
+        @Override
+        public void onCreate(android.os.Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, REQUEST_PERMISSION);
+        }
+
+        @Override
+        public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+            if (requestCode == REQUEST_PERMISSION) {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) register();
+                else state = "denied";
+            }
+            getFragmentManager().beginTransaction().remove(this).commitAllowingStateLoss();
+        }
+    }
+}

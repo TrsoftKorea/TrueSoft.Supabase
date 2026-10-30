@@ -158,6 +158,13 @@
         RequestLimited,
         CustomerCenterLoginRequired,
         CustomerCenterNotShown,
+        PushUnsupportedPlatform,
+        PushNotConfigured,
+        PushPermissionDenied,
+        PushTokenUnavailable,
+        PushTokenInvalid,
+        PushNightRequiresAdConsent,
+        ProfileNotFound,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -309,6 +316,13 @@
             SupabaseErrorCode.RequestLimited => SupabaseReason.RequestLimited,
             SupabaseErrorCode.CustomerCenterLoginRequired => SupabaseReason.CustomerCenterLoginRequired,
             SupabaseErrorCode.CustomerCenterNotShown => SupabaseReason.CustomerCenterNotShown,
+            SupabaseErrorCode.PushUnsupportedPlatform => SupabaseReason.PushUnsupportedPlatform,
+            SupabaseErrorCode.PushNotConfigured => SupabaseReason.PushNotConfigured,
+            SupabaseErrorCode.PushPermissionDenied => SupabaseReason.PushPermissionDenied,
+            SupabaseErrorCode.PushTokenUnavailable => SupabaseReason.PushTokenUnavailable,
+            SupabaseErrorCode.PushTokenInvalid => SupabaseReason.PushTokenInvalid,
+            SupabaseErrorCode.PushNightRequiresAdConsent => SupabaseReason.PushNightRequiresAdConsent,
+            SupabaseErrorCode.ProfileNotFound => SupabaseReason.ProfileNotFound,
             // 요청 제한은 서버 함수 밖의 경로(엣지 함수·표 요청)에서 "http_429:{...request_limited...}" 처럼 섞여 온다.
             string s when s.Contains(SupabaseErrorCode.RequestLimited) => SupabaseReason.RequestLimited,
             _ => SupabaseReason.Unknown,
