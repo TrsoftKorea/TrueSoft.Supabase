@@ -6,12 +6,12 @@
 
 ## 메서드 고르기
 
-먼저 [대시보드 설정](./setup)을 완료하세요. [신규 로그인](./signin)(`SignInWithGoogleAsync`)이 **Android·iOS를 모두 처리**합니다. Android는 Play Services 계정 선택 창을, iOS는 기본 로그인 창을 띄웁니다. 다른 SDK로 이미 받은 Google ID 토큰을 쓸 땐 커스텀 메서드를 사용합니다.
+먼저 [대시보드 설정](/guide/social/google/setup)을 완료하세요. [신규 로그인](/guide/social/google/signin)(`SignInWithGoogleAsync`)이 **Android·iOS를 모두 처리**합니다. Android는 Play Services 계정 선택 창을, iOS는 기본 로그인 창을 띄웁니다. 다른 SDK로 이미 받은 Google ID 토큰을 쓸 땐 커스텀 메서드를 사용합니다.
 
 | 상황 | 기본 | 커스텀 |
 |------|------|--------|
-| 신규&nbsp;로그인 | [신규 로그인](./signin) | [ID 토큰 로그인](./signin-token) |
-| 게스트(익명)&nbsp;→&nbsp;연동 | [게스트 연동](./link) | [ID 토큰 연동](./link-token) |
-| 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [추가 연동](./add) | [ID 토큰 추가 연동](./add-token) |
+| 신규&nbsp;로그인 | [신규 로그인](/guide/social/google/signin) | [ID 토큰 로그인](/guide/social/google/signin-token) |
+| 게스트(익명)&nbsp;→&nbsp;연동 | [게스트 연동](/guide/social/google/link) | [ID 토큰 연동](/guide/social/google/link-token) |
+| 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [추가 연동](/guide/social/google/add) | [ID 토큰 추가 연동](/guide/social/google/add-token) |
 
-플랫폼 구분 없이 [Google 연동 해제](./unlink)로 현재 계정에서 Google 연동을 제거할 수 있습니다.
+플랫폼 구분 없이 [Google 연동 해제](/guide/social/google/unlink)로 현재 계정에서 Google 연동을 제거할 수 있습니다.

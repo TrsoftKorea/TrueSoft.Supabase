@@ -18,6 +18,8 @@ if (pref.IsSuccess)
 
 **반환**
 
+`.Data`는 `SupabasePushPreferences`입니다.
+
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
 | `Enabled` | `bool` | 알림을 받는지. 끄면 상황별 값과 상관없이 오지 않습니다 |
@@ -27,7 +29,7 @@ if (pref.IsSuccess)
 | `LobbyInvite` | `bool` | 매치 로비 초대 알림 |
 | `AdConsent` | `bool` | 광고성 알림 수신 동의 |
 | `AdConsentAt` | `DateTimeOffset?` | 광고 수신 동의·철회가 마지막으로 바뀐 시각 |
-| `NightConsent` | `bool` | 밤 9시~아침 8시 광고성 알림 수신 동의. 시각은 운영 콘솔에서 정한 게임 시간대 기준입니다 |
+| `NightConsent` | `bool` | 밤 9시~아침 8시 광고성 알림 수신 동의. 시각은 운영 콘솔에서 정한 프로젝트 시간대 기준입니다 |
 | `NightConsentAt` | `DateTimeOffset?` | 야간 수신 동의·철회가 마지막으로 바뀐 시각 |
 
 **에러 코드**

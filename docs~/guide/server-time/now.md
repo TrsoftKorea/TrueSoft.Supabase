@@ -16,4 +16,4 @@ if (t.Data < eventEndUtc)
 
 **반환**
 
-`.Data`에 서버 기준 UTC 시각이 `DateTimeOffset`으로 담깁니다.
+`.Data`는 서버 기준 UTC 시각 `DateTimeOffset`입니다.

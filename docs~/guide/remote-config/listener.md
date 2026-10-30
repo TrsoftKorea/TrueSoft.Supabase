@@ -1,4 +1,4 @@
-# Listener
+# 변경 구독
 
 ```csharp
 RemoteConfigListener<T> RemoteConfig<T>.CreateListener(Action<T> onChange, float pollInterval = 60f)
@@ -24,4 +24,4 @@ listener.Dispose();
 
 **반환**
 
-값이 바뀔 때마다 콜백을 호출하는 리스너 객체. 사용 후 `Dispose()`를 호출하세요.
+`RemoteConfigListener<T>`를 돌려줍니다. 값이 바뀔 때마다 콜백을 부르는 리스너이며, 다 쓰면 `Dispose()`를 호출하세요.

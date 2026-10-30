@@ -26,12 +26,12 @@ else
 
 **반환**
 
-`.Data` — 정규화되어 적용된 닉네임 문자열. 실패 시 없음.
+`.Data`는 정규화되어 적용된 닉네임 `string`입니다.
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NameTaken` | 이미 사용 중인 닉네임 |
-| `SupabaseReason.NameForbidden` | 금칙어가 들어 있거나 운영 콘솔에서 금지한 닉네임 |
-| `SupabaseReason.NameTooLong` | 허용 길이 초과 |
+| `SupabaseReason.NameTaken` | 이미 사용 중인 닉네임입니다 |
+| `SupabaseReason.NameForbidden` | 금칙어가 들어 있거나 운영 콘솔에서 금지한 닉네임입니다 |
+| `SupabaseReason.NameTooLong` | 허용 길이를 넘었습니다 |

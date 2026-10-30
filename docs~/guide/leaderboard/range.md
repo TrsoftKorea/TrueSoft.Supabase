@@ -22,23 +22,23 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
+| `TLeaderboard` | [클래스 생성기](/guide/leaderboard/columns#generate)로 만든 리더보드 타입 |
 | `start` | 시작 순위. 1부터 (기본값: 1) |
 | `end` | 끝 순위. `start + 99`를 넘으면 잘립니다 (기본값: 100) |
 | `rotationCount` | 조회할 회차. `null`이면 현재 회차 (기본값: `null`) |
 
 **반환**
 
-`.Data`에 `LeaderboardEntry` 목록이 순위 오름차순으로 담깁니다.
+`.Data`는 순위 오름차순의 `LeaderboardEntry` 목록입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Rank` | `int` | 순위. 동점이면 먼저 도달한 쪽이 위 |
-| `.AccountId` | `string` | 계정 ID |
-| `.DisplayName` | `string` | 현재 닉네임. 없으면 `null` |
-| `.Score` | `double` | 점수 |
-| `.RotationCount` | `int` | 회차 |
-| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](./columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
+| `Rank` | `int` | 순위. 동점이면 먼저 도달한 쪽이 위 |
+| `AccountId` | `string` | 계정 ID |
+| `DisplayName` | `string` | 현재 닉네임. 없으면 `null` |
+| `Score` | `double` | 점수 |
+| `RotationCount` | `int` | 회차 |
+| `Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](/guide/leaderboard/columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
 
 **에러 코드**
 
@@ -51,4 +51,4 @@ if (result.IsSuccess)
 기록은 막히지만 순위 조회는 계속 됩니다. 시즌이 끝난 뒤 최종 순위를 보여줄 때 그대로 사용하세요.
 :::
 
-지난 회차를 보려면 `rotationCount`에 이전 회차 번호를 넘깁니다. 현재 회차 번호는 [리더보드 조회](./table)로 확인합니다.
+지난 회차를 보려면 `rotationCount`에 이전 회차 번호를 넘깁니다. 현재 회차 번호는 [리더보드 조회](/guide/leaderboard/table)로 확인합니다.

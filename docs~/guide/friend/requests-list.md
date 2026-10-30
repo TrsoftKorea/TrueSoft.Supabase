@@ -25,11 +25,11 @@ if (r.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `RequestId` | string | [수락·거절](/guide/friend/request-respond) 또는 [취소](/guide/friend/request-cancel)에 넘길 ID |
-| `AccountId` | string | 상대 계정 ID — 받은 요청이면 보낸 사람, 보낸 요청이면 받는 사람 |
-| `Name` | string | 상대 닉네임 |
-| `CreatedAt` | DateTimeOffset | 요청이 만들어진 시각 |
-| `LastActivityAt` | DateTimeOffset? | 상대가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
+| `RequestId` | `string` | [수락·거절](/guide/friend/request-respond) 또는 [취소](/guide/friend/request-cancel)에 넘길 ID |
+| `AccountId` | `string` | 상대 계정 ID. 받은 요청이면 보낸 사람, 보낸 요청이면 받는 사람 |
+| `Name` | `string` | 상대 닉네임 |
+| `CreatedAt` | `DateTimeOffset` | 요청이 만들어진 시각 |
+| `LastActivityAt` | `DateTimeOffset?` | 상대가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
 ::: tip 배지 개수는 이 목록의 길이입니다
 `direction: Incoming`으로 받은 목록의 개수를 그대로 알림 배지에 쓰면 됩니다.

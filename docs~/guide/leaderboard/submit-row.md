@@ -16,7 +16,7 @@ await Supabase.SubmitScoreAsync(1250, row);
 | 파라미터 | 설명 |
 |----------|------|
 | `score` | 이번에 획득한 점수 |
-| `row` | [클래스 생성기](./columns#generate)가 만든 중첩 `Row` 인스턴스 |
+| `row` | [클래스 생성기](/guide/leaderboard/columns#generate)가 만든 중첩 `Row` 인스턴스 |
 
 **반환**
 

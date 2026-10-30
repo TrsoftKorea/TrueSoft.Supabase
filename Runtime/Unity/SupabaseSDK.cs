@@ -4963,7 +4963,8 @@ namespace TrueBase.Unity
         /// 고객센터 창을 엽니다. 로그인 중이면 그 계정으로, 차단돼 로그인이 막혔으면 이 기기에 남은 로그인 기록이나
         /// 방금 차단으로 거절된 구글·애플 로그인으로 본인을 확인합니다. 게임 안 창이면 닫힐 때까지 기다립니다.
         /// </summary>
-        public static async Task<SupabaseResult> TryOpenCustomerCenterAsync()
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어. 플레이어가 창에서 직접 고른 언어가 있으면 그것이 먼저다.</param>
+        public static async Task<SupabaseResult> TryOpenCustomerCenterAsync(string language = null)
         {
             const string tag = ApiLogTags.CustomerCenterOpen;
             if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
@@ -4990,7 +4991,19 @@ namespace TrueBase.Unity
                 proofs["nonce"] = _bannedIdNonce;
             }
 
-            var language = SystemLanguageCode();
+            // 게임 안 언어 옵션이 기기 언어와 다를 수 있어 게임이 넘긴 값을 먼저 쓴다.
+            // 못 읽는 값은 조용히 영어 창이 되지 않게 알리고 기기 언어로 연다.
+            if (string.IsNullOrWhiteSpace(language))
+            {
+                language = DeviceLanguageCode();
+            }
+            else
+            {
+                var normalized = NormalizeLanguageCode(language);
+                if (normalized == null)
+                    Debug.LogWarning($"[{tag}] 고객센터가 지원하지 않는 언어라 기기 언어로 엽니다: {language}");
+                language = normalized ?? DeviceLanguageCode();
+            }
             var meta = new Dictionary<string, string>
             {
                 ["platform"] = GetPlatformString(),
@@ -5073,7 +5086,7 @@ namespace TrueBase.Unity
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
             var r = await _bootstrap.PushService.RegisterAsync(
-                _currentSession.AccessToken, native.Token, native.Platform, PushLanguageCode(), Application.version);
+                _currentSession.AccessToken, native.Token, native.Platform, DeviceLanguageCode(), Application.version);
             if (r.IsSuccess)
             {
                 PlayerPrefs.SetString(PushTokenKey, native.Token);
@@ -5168,18 +5181,6 @@ namespace TrueBase.Unity
             }
         }
 
-        /// <summary>푸시 문구를 고를 기기 언어. 우편·콘솔의 언어 코드와 같게 중국어는 간체·번체를 가른다.</summary>
-        private static string PushLanguageCode()
-        {
-            switch (Application.systemLanguage)
-            {
-                case SystemLanguage.ChineseTraditional: return "zh-TW";
-                case SystemLanguage.Chinese:
-                case SystemLanguage.ChineseSimplified: return "zh-CN";
-                default: return SystemLanguageCode();
-            }
-        }
-
         /// <summary>https://abcd.supabase.co → abcd. 고객센터 페이지가 이 값으로 어느 게임의 서버를 부를지 정한다.</summary>
         private static string ProjectRefFromUrl(string url)
         {
@@ -5190,16 +5191,47 @@ namespace TrueBase.Unity
             return dot > 0 ? host.Substring(0, dot) : null;
         }
 
-        /// <summary>기기 언어 → 두 글자 코드. 고객센터 창의 언어와 분류 이름에 쓴다.</summary>
-        private static string SystemLanguageCode()
+        /// <summary>
+        /// 기기 언어 → 언어 코드. 푸시 문구와 고객센터 창 언어에 쓴다. 우편·콘솔의 언어 코드와 같게
+        /// 중국어만 간체(zh-CN)·번체(zh-TW)를 가르고 나머지는 두 글자다.
+        /// </summary>
+        private static string DeviceLanguageCode() => LanguageCodeOf(Application.systemLanguage) ?? "en";
+
+        private static readonly string[] SupportedLanguageCodes =
+            { "en", "ja", "ko", "zh-CN", "zh-TW", "de", "fr", "es", "pt", "ru", "id", "th", "vi" };
+
+        /// <summary>
+        /// 게임이 넘긴 언어를 언어 코드로 맞춘다. "ko"·"zh-TW"·"zh_Hant" 같은 코드와 "Korean"·"Chinese_Traditional" 같은
+        /// 유니티 언어 이름(번역 도구가 흔히 쓴다)을 읽는다. 지원하는 13개 언어가 아니면 null.
+        /// </summary>
+        private static string NormalizeLanguageCode(string raw)
         {
-            switch (Application.systemLanguage)
+            var v = (raw ?? string.Empty).Trim().Replace('_', '-');
+            if (v.Length == 0) return null;
+
+            var compact = v.Replace("-", string.Empty);
+            if (Enum.TryParse<SystemLanguage>(compact, true, out var named) && !int.TryParse(compact, out _))
+                return LanguageCodeOf(named);
+
+            var lower = v.ToLowerInvariant();
+            if (lower.StartsWith("zh"))
+                return lower.Contains("hans") ? "zh-CN"
+                     : lower.Contains("hant") || lower.Contains("tw") || lower.Contains("hk") || lower.Contains("mo") ? "zh-TW"
+                     : "zh-CN";
+            var two = lower.Length >= 2 ? lower.Substring(0, 2) : lower;
+            return Array.IndexOf(SupportedLanguageCodes, two) >= 0 ? two : null;
+        }
+
+        private static string LanguageCodeOf(SystemLanguage language)
+        {
+            switch (language)
             {
+                case SystemLanguage.English: return "en";
                 case SystemLanguage.Korean: return "ko";
                 case SystemLanguage.Japanese: return "ja";
+                case SystemLanguage.ChineseTraditional: return "zh-TW";
                 case SystemLanguage.Chinese:
-                case SystemLanguage.ChineseSimplified:
-                case SystemLanguage.ChineseTraditional: return "zh";
+                case SystemLanguage.ChineseSimplified: return "zh-CN";
                 case SystemLanguage.German: return "de";
                 case SystemLanguage.French: return "fr";
                 case SystemLanguage.Spanish: return "es";
@@ -5208,7 +5240,7 @@ namespace TrueBase.Unity
                 case SystemLanguage.Thai: return "th";
                 case SystemLanguage.Vietnamese: return "vi";
                 case SystemLanguage.Indonesian: return "id";
-                default: return "en";
+                default: return null;
             }
         }
 

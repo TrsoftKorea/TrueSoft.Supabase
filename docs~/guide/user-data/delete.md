@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.DeleteUserSaveAsync()
 ```
 
-본인 세이브를 삭제합니다. 서버의 세이브 행을 지우고 로컬 상태를 기본값으로 되돌립니다. 다음 [로드](./load.md) 시 기본값 행이 자동 재생성되므로 실질적으로 **기본값으로 리셋**됩니다.
+본인 세이브를 삭제합니다. 서버의 세이브 행을 지우고 로컬 상태를 기본값으로 되돌립니다. 다음 [로드](/guide/user-data/load) 시 기본값 행이 자동 재생성되므로 실질적으로 **기본값으로 리셋**됩니다.
 
 ```csharp
 var result = await Supabase.DeleteUserSaveAsync();
@@ -22,10 +22,10 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveDeleteFailed` | 삭제 실패 (네트워크 오류 등) |
+| `SupabaseReason.UserSaveDeleteFailed` | 네트워크 오류 등으로 삭제하지 못했습니다 |
 
 ::: info 로드 전 초기값도 함께 지워집니다
-[로드 전에 지정한 초기값](./load.md#preload-fallback)은 삭제 시 함께 버려집니다. 남겨두면 다음 로드에서 재생성된 기본값 행 위에 옛 초기값이 다시 병합돼 "삭제했는데 기본값이 아닌 값으로 되살아나는" 문제가 생기기 때문입니다. 삭제 후에도 초기값이 필요하면 다음 로드 전에 다시 세팅하세요.
+[로드 전에 지정한 초기값](/guide/user-data/load#preload-fallback)은 삭제 시 함께 버려집니다. 남겨두면 다음 로드에서 재생성된 기본값 행 위에 옛 초기값이 다시 병합돼 "삭제했는데 기본값이 아닌 값으로 되살아나는" 문제가 생기기 때문입니다. 삭제 후에도 초기값이 필요하면 다음 로드 전에 다시 세팅하세요.
 :::
 
 ::: info 플레이나누 병행 운영 중이라면

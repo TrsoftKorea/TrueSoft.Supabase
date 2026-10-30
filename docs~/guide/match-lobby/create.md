@@ -40,8 +40,8 @@ ShowWaitingRoom();
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `LobbyId` | string | 이후 로비 관련 호출에 넘길 ID |
-| `SessionId` | string | `LobbyId`와 같은 값. [매치 결과 신고](/guide/match-result/report)의 `sessionId`로 그대로 쓸 수 있습니다 |
+| `LobbyId` | `string` | 이후 로비 관련 호출에 넘길 ID |
+| `SessionId` | `string` | `LobbyId`와 같은 값. [매치 결과 신고](/guide/match-result/report)의 `sessionId`로 그대로 쓸 수 있습니다 |
 
 **에러 코드**
 

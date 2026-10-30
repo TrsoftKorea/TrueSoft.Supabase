@@ -39,12 +39,12 @@ async Task OpenDirectChatAsync(string friendAccountId)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `Id` | long | 조회 커서. 다음 호출의 `afterId`로 씁니다 |
-| `AccountId` | string | 보낸 사람 계정 ID |
-| `DisplayName` | string | 보낸 시점의 닉네임 |
-| `Content` | string | 본문. `Deleted`가 true면 null |
-| `Deleted` | bool | 운영자가 숨긴 메시지입니다 |
-| `CreatedAt` | DateTimeOffset | 보낸 시각 |
+| `Id` | `long` | 조회 커서. 다음 호출의 `afterId`로 씁니다 |
+| `AccountId` | `string` | 보낸 사람 계정 ID |
+| `DisplayName` | `string` | 보낸 시점의 닉네임 |
+| `Content` | `string` | 본문. `Deleted`가 true면 null |
+| `Deleted` | `bool` | 운영자가 숨긴 메시지입니다 |
+| `CreatedAt` | `DateTimeOffset` | 보낸 시각 |
 
 **에러 코드**
 

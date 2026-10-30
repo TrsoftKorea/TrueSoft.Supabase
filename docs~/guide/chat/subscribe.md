@@ -46,6 +46,8 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 
 **반환**
 
+`.Data`는 `ChatSubscription`입니다.
+
 | 멤버 | 설명 |
 |------|------|
 | `Dispose()` | 구독을 해제하고 조회를 멈춥니다 |
@@ -63,15 +65,15 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `Id` | long | 조회 커서. 채널을 가리지 않고 시간순으로 증가합니다 |
-| `ChannelCode` | string | 어느 채널의 메시지인지 |
-| `AccountId` | string | 보낸 사람의 계정 |
-| `UserId` | string | 보낸 사람의 플레이어 ID |
-| `DisplayName` | string | 보낸 시점의 닉네임 |
-| `Content` | string | 본문. `Deleted`가 true면 null |
-| `Deleted` | bool | 운영자가 지운 채팅입니다 |
-| `IsNotice` | bool | 운영 콘솔에서 보낸 공지입니다. 보낸 사람이 없어 `DisplayName`·`UserId`는 빈 값이고 `AccountId`는 0으로만 된 ID입니다. 프로필 열기·친구 요청처럼 보낸 사람을 쓰는 동작은 공지에서 막으세요 |
-| `CreatedAt` | DateTimeOffset | 보낸 시각 |
+| `Id` | `long` | 조회 커서. 채널을 가리지 않고 시간순으로 증가합니다 |
+| `ChannelCode` | `string` | 어느 채널의 메시지인지 |
+| `AccountId` | `string` | 보낸 사람의 계정 |
+| `UserId` | `string` | 보낸 사람의 플레이어 ID |
+| `DisplayName` | `string` | 보낸 시점의 닉네임 |
+| `Content` | `string` | 본문. `Deleted`가 true면 null |
+| `Deleted` | `bool` | 운영자가 지운 채팅입니다 |
+| `IsNotice` | `bool` | 운영 콘솔에서 보낸 공지입니다. 보낸 사람이 없어 `DisplayName`·`UserId`는 빈 값이고 `AccountId`는 0으로만 된 ID입니다. 프로필 열기·친구 요청처럼 보낸 사람을 쓰는 동작은 공지에서 막으세요 |
+| `CreatedAt` | `DateTimeOffset` | 보낸 시각 |
 
 내가 보낸 메시지도 이 콜백으로 되돌아옵니다. 발송 직후 화면에 직접 넣지 말고 콜백에서 한 번만 그리세요. 그러지 않으면 같은 말이 두 번 보입니다.
 
@@ -102,7 +104,7 @@ foreach (var m in messages)
 
 대화가 오가면 `minIntervalSeconds`를 유지하고, 아무 말도 없으면 `maxIntervalSeconds`까지 점점 늘어납니다. 조회에 실패하면 간격을 더 크게 벌려 장애 상황에서 서버를 계속 두드리지 않습니다.
 
-구독이 하나도 없으면 네트워크를 전혀 쓰지 않습니다. 채팅창을 열지 않은 유저는 비용이 발생하지 않습니다.
+구독이 하나도 없으면 네트워크를 전혀 쓰지 않습니다. 채팅창을 열지 않은 플레이어는 비용이 발생하지 않습니다.
 
 ::: warning 해제를 빠뜨리면 계속 돕니다
 `Dispose`를 부르지 않으면 채팅창을 닫아도 조회가 이어집니다. 씬 전환에도 안전하도록 `OnDestroy`에서 정리하세요. 로그아웃과 계정 전환 시에는 SDK가 알아서 정리합니다.

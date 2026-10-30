@@ -1,4 +1,4 @@
-# 미수령 메일 수
+# 미수령 우편 수
 
 ```csharp
 Task<SupabaseResult<int>> Supabase.GetUnclaimedMailCountAsync(
@@ -24,4 +24,4 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 미수령 우편 개수가 `int`로 담깁니다. 지정한 분류에 해당 우편이 없으면 `0`입니다.
+`.Data`는 미수령 우편 개수 `int`입니다. 지정한 분류에 해당 우편이 없으면 `0`입니다.

@@ -23,21 +23,21 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 `ClaimResult` 목록으로 지급된 보상이 담깁니다.
+`.Data`는 지급된 보상의 `ClaimResult` 목록입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.ItemKey` | `string` | 아이템 키 |
-| `.Count` | `int` | 지급 수량 |
-| `.ItemIndex` | `int` | 배열 내 순서, 0부터 시작 |
+| `ItemKey` | `string` | 아이템 키 |
+| `Count` | `int` | 지급 수량 |
+| `ItemIndex` | `int` | 배열 내 순서, 0부터 시작 |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `mail_item_handler_missing:<key>` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 처리 전 검증되어 서버 상태는 바뀌지 않습니다 |
-| `mail_expired` | 만료된 우편입니다 |
-| `mail_not_found` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
+| `SupabaseReason.Unknown` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 전에 검증해 서버 상태는 바뀌지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailExpired` | 만료된 우편입니다 |
+| `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
 | `SupabaseReason.AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
 
 ::: warning

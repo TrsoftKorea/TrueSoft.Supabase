@@ -14,7 +14,7 @@
 
 ---
 
-**3.** **이메일 주소**에 [발급 절차](./issue)에서 생성한 서비스 계정의 이메일 주소를 입력합니다.
+**3.** **이메일 주소**에 [발급 절차](/guide/google-service-account/issue)에서 생성한 서비스 계정의 이메일 주소를 입력합니다.
 
 ![](/google-service-account/image19.png)
 

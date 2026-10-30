@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.IsNameAvailableAsync(string displayName)
 ```
 
-닉네임 사용 가능 여부를 확인합니다. `result.IsSuccess`가 `true`면 사용 가능입니다. 쓸 수 없으면 `.Reason`이 이유를 알려 줍니다. 현재 계정이 이미 사용 중인 닉네임은 사용 가능으로 처리합니다.
+닉네임 사용 가능 여부를 확인합니다. `result.IsSuccess`가 `true`면 사용 가능이고, 쓸 수 없으면 `.Reason`이 이유를 알려 줍니다. 현재 계정이 이미 사용 중인 닉네임은 사용 가능으로 처리합니다.
 
 ```csharp
 var result = await Supabase.IsNameAvailableAsync(displayName);
@@ -26,5 +26,5 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NameTaken` | 이미 사용 중인 닉네임 |
-| `SupabaseReason.NameForbidden` | 금칙어가 들어 있거나 운영 콘솔에서 금지한 닉네임 |
+| `SupabaseReason.NameTaken` | 이미 사용 중인 닉네임입니다 |
+| `SupabaseReason.NameForbidden` | 금칙어가 들어 있거나 운영 콘솔에서 금지한 닉네임입니다 |

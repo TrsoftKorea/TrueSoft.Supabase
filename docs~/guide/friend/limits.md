@@ -19,9 +19,9 @@ if (limits.IsSuccess && friends.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `MaxFriends` | int | 친구 수 상한 |
-| `MaxPendingSent` | int | 보낸 뒤 응답을 기다리는 요청의 개수 상한 |
-| `RequestCooldownSeconds` | int | 연속 요청 최소 간격. 0이면 제한 없음 |
+| `MaxFriends` | `int` | 친구 수 상한 |
+| `MaxPendingSent` | `int` | 보낸 뒤 응답을 기다리는 요청의 개수 상한 |
+| `RequestCooldownSeconds` | `int` | 연속 요청 최소 간격. 0이면 제한 없음 |
 
 **에러 코드**
 

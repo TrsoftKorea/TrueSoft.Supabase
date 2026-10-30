@@ -22,7 +22,7 @@ else
 | 파라미터 | 설명 |
 |----------|------|
 | `sessionId` | 게임이 부여한 매치 세션 식별자. 판마다 새로 만들어야 합니다 |
-| `gameCode` | 운영이 어드민에 등록한 게임 코드 |
+| `gameCode` | 운영 콘솔에 등록한 게임 코드 |
 | `isWin` | 본인 기준 승패. 협동·혼자 하는 모드라면 성공 여부 |
 | `score` | 웨이브·점수·시간처럼 게임이 정하는 판 점수 (기본값: `null`) |
 
@@ -32,7 +32,7 @@ else
 |--------|------|
 | `SupabaseReason.MatchSessionIdEmpty` | 세션 ID가 비어 있습니다 |
 | `SupabaseReason.MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
-| `SupabaseReason.MatchRewardConfigNotFound` | 해당 게임 코드가 어드민에 등록돼 있지 않습니다 |
+| `SupabaseReason.MatchRewardConfigNotFound` | 해당 게임 코드가 운영 콘솔에 등록돼 있지 않습니다 |
 | `SupabaseReason.MatchResultMismatch` | 같은 세션을 대인전이나 다른 게임 코드로 이미 신고했습니다 |
 | `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
@@ -41,5 +41,5 @@ else
 :::
 
 ::: warning 상대 없는 판은 검증되지 않습니다
-유저 본인의 신고만으로 기록되므로 조작할 수 있습니다. 재화를 주는 보상의 근거로 쓰지 마세요.
+플레이어 본인의 신고만으로 기록되므로 조작할 수 있습니다. 재화를 주는 보상의 근거로 쓰지 마세요.
 :::

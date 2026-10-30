@@ -39,4 +39,4 @@ Google OAuth 설정 방법은 [Google 대시보드 설정](/guide/social/google/
 
 | 항목 | 설정 | 이유 |
 |------|------|------|
-| **Enforce SSL on incoming connections** | ON | Retool 등 외부 도구에서 DB에 직접 연결할 때 필요 |
+| **Enforce SSL on incoming connections** | ON | 외부 도구에서 DB에 직접 연결할 때 필요 |

@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.RedeemCouponAsync(string code)
 ```
 
-유저가 입력한 쿠폰 코드를 사용합니다. 성공하면 서버가 보상 우편을 만듭니다.
+플레이어가 입력한 쿠폰 코드를 사용합니다. 성공하면 서버가 보상 우편을 만듭니다.
 
 ```csharp
 var result = await Supabase.RedeemCouponAsync(input.text);
@@ -29,7 +29,7 @@ ShowToast(result.Reason switch
 
 | 파라미터 | 설명 |
 |----------|------|
-| `code` | 유저가 입력한 코드. 대소문자와 앞뒤 공백은 서버가 정규화하므로 게임에서 다듬을 필요가 없습니다 |
+| `code` | 플레이어가 입력한 코드. 대소문자와 앞뒤 공백은 서버가 정규화하므로 게임에서 다듬을 필요가 없습니다 |
 
 **에러 코드**
 

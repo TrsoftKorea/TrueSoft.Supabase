@@ -21,7 +21,7 @@ if (result.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Unclaimed` | `int` | 전체 미수령 우편 수 |
-| `.ByCategory` | `Dictionary<string, MailCategoryCounts>` | 분류별 세부 내역. 활성 우편이 있는 분류만 키로 존재 |
+| `Unclaimed` | `int` | 전체 미수령 우편 수 |
+| `ByCategory` | `Dictionary<string, MailCategoryCounts>` | 분류별 세부 내역. 활성 우편이 있는 분류만 키로 존재 |
 
 `MailCategoryCounts`는 `.Unclaimed` 값을 가집니다.

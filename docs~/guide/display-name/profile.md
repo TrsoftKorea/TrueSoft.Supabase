@@ -23,10 +23,10 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 `PublicProfile`이 담깁니다. 조회 실패 시 없음.
+`.Data`는 `PublicProfile`입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Data.Name` | `string` | 닉네임 |
-| `.Data.ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
-| `.Data.IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
+| `Name` | `string` | 닉네임 |
+| `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
+| `IsWithdrawn` | `bool` | 탈퇴 예약 여부 |

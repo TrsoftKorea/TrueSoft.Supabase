@@ -10,7 +10,7 @@
 | [`SendLobbyChatAsync`](/guide/chat/send-lobby) | 로비 대화 발송 |
 | [`GetLobbyChatAsync`](/guide/chat/fetch-lobby) | 로비 대화 조회 |
 
-채널 생성·설정, 대화 삭제, 채팅 차단은 Retool 어드민 전용이라 SDK에 없습니다.
+채널 생성·설정, 대화 삭제, 채팅 차단은 운영 콘솔에서만 하므로 SDK에 없습니다.
 
 ::: tip
 채널을 여러 개 구독해도 서버 요청은 한 번으로 묶입니다. 조회 간격은 대화량에 따라 SDK가 조절합니다.

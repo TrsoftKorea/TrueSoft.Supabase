@@ -35,7 +35,7 @@ public sealed partial class GuildLeaderboard : ILeaderboard
 
 ## 필드는 리더보드마다 따로 정합니다 {#per-leaderboard}
 
-운영자가 Retool의 **리더보드 > 필드** 탭에서 리더보드마다 사용할 필드를 등록합니다. 등록하지 않은 필드를 보내면 기록이 거부되므로, 리더보드마다 필요한 값만 주고받습니다.
+운영자가 운영 콘솔 **리더보드 › 필드** 탭에서 리더보드마다 사용할 필드를 등록합니다. 등록하지 않은 필드를 보내면 기록이 거부되므로, 리더보드마다 필요한 값만 주고받습니다.
 
 리더보드마다 별도 클래스가 생성되므로 서로의 필드가 섞이지 않습니다.
 
@@ -48,7 +48,7 @@ await Supabase.SubmitScoreAsync(1250,
     new GuildLeaderboard.Row { CharacterLevel = 42, GuildName = "붉은검" });
 ```
 
-점수를 바꾸지 않고 값만 고치려면 [추가 데이터 수정](./set-player-data)을 사용합니다.
+점수를 바꾸지 않고 값만 고치려면 [추가 데이터 수정](/guide/leaderboard/set-player-data)을 사용합니다.
 
 ## 값 읽기 {#to-row}
 
@@ -59,7 +59,7 @@ TRow Supabase.ToRow<TRow>(LeaderboardPlayerEntry entry)
 
 순위·플레이어 조회 결과의 `.Data`를 생성 타입의 행으로 되돌립니다. 네트워크 호출이 없습니다.
 
-[추가 데이터 수정](./set-player-data)에 넘길 수 있는 행은 이 메서드로 만든 것뿐입니다.
+[추가 데이터 수정](/guide/leaderboard/set-player-data)에 넘길 수 있는 행은 이 메서드로 만든 것뿐입니다.
 
 ```csharp
 var result = await Supabase.GetRanksAsync<GuildLeaderboard>(1, 50);
@@ -71,5 +71,5 @@ foreach (var entry in result.Data)
 ```
 
 ::: warning 필드 추가는 운영자만
-필드를 새로 만들거나 지우는 것은 Retool에서만 가능합니다. 게임에서는 이미 등록된 필드에 값을 넣고 읽을 수만 있습니다. 필드가 바뀌면 클래스를 다시 생성하세요.
+필드를 새로 만들거나 지우는 것은 운영 콘솔에서만 가능합니다. 게임에서는 이미 등록된 필드에 값을 넣고 읽을 수만 있습니다. 필드가 바뀌면 클래스를 다시 생성하세요.
 :::

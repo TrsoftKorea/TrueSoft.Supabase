@@ -102,13 +102,15 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R19 | 하드 오류 | `install.sql`에 `'Asia/Seoul'` 같은 시간대 이름을 직접 쓰지 않음. 날짜를 자르는 곳은 `public.ts_game_time_zone()`(게임 시간대)을 쓴다. 허용은 `game_settings`를 다루는 문장(기본값·대체값)뿐. `'UTC'` 는 잡지 않는다(UTC 로 바꾸는 계산은 정당한 쓰임) |
 | R20 | 하드 오류 | `install.sql`에서 `returns void`인 함수를 `Runtime/`이 `CallRpcAsync`로 부를 때 `allowEmptyBody: true`를 넘김. 없으면 성공해도 빈 본문이 `<rpc>_empty_body` 실패로 읽힌다(2026-10-30 푸시 기기 등록·해제 — 로그아웃 때 등록이 안 풀렸다) |
 | R21 | 하드 오류 | `Runtime/`의 `Fail(...)`에 응답 본문(`.Body`)·HTTP 상태 글(`.ErrorMessage`)을 그대로 넘기지 않음. 서버 사유가 JSON 째 들어가 게임의 `Reason`이 늘 `Unknown`이 된다 — `SupabaseRestHelpers.ExtractRpcErrorCode`로 사유만 뽑는다(2026-10-30 리뷰, 27곳) |
+| R22 | 하드 오류 | 가이드 페이지 꼴 — 제목에 사이드바 이름이 들어 있음, 함수 페이지의 호출 예제가 있고 표보다 앞, 에러 표(`SupabaseReason.이름` + 문장)·프로퍼티 표(이름에 점 없음, 타입은 코드 표시)·반환 첫 줄 꼴, 표 칸 안 줄표 없음, 다른 페이지 링크는 `/guide/` 로 시작, 낡은 용어(Retool·어드민·유저·메일) 없음, 굵은 라벨 뒤 쌍점 없음. 규칙 원문은 `.claude/rules/docs.md` 13·14절 |
+| R22 | 경고 | 함수 설명이 4문장 이상 |
 
 ## 검사 대상 파일
 
 | 대상 | 적용 규칙 |
 |------|-----------|
 | `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11·R18. `Runtime/`은 R20·R21도 |
-| `docs~/guide/**/*.md` | R3·R4·R5·R8·R10·R15 |
+| `docs~/guide/**/*.md` | R3·R4·R5·R8·R10·R15·R22. R22 제목 대조는 `docs~/.vitepress/config.ts` 사이드바도 읽는다 |
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
 | `install.sql` | R9·R13·R17·R19·R20 |
 | `verify.sql` | R17 |
@@ -156,7 +158,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | 중복 코드 제거 | ✕ | 판단 필요 |
 | 비효율 코드 개선 | ✕ | 판단 필요 |
 | 문서-코드 불일치 | 일부 | R3·R4·R8은 이름·시그니처·기본값. 서술 내용은 수동 |
-| 문서 레이아웃·통일성 | 일부 | R5는 형식, R10·R15는 구조. 톤은 수동 |
+| 문서 레이아웃·통일성 | 일부 | R5는 형식, R10·R15는 구조, R22는 페이지·표 꼴과 용어. 톤은 수동 |
 | 공개 표면 | ○ | R1 + 공개 타입 목록 검토 |
 | 초기화·리셋 대칭성 | ○ | R2 |
 | 샘플 최신성 | ○ | R6 |

@@ -71,12 +71,12 @@ await Supabase.SaveNowAsync(timeoutMs: 5000);        // 즉시 저장
 
 `com.unity.purchasing` 최신 버전을 설치하면 자동으로 활성화됩니다. 최소 5.1 이상을 권장합니다.
 
-**사전 준비:**
+**사전 준비**
 1. `com.unity.purchasing` 설치
 2. [데이터베이스 설정](/guide/start/database-setup) 완료
 3. Inspector에서 `productId` 입력
 
-**구매 흐름:**
+**구매 흐름**
 
 ```csharp
 // 1. 로그인 후 IAP 초기화
@@ -108,10 +108,10 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 
 `SupabaseRuntime`이 있는 씬에 `SampleMailbox` 컴포넌트를 붙이면 우편함 조회·수령·삭제를 [분류](/guide/mailbox/#category)별로 테스트할 수 있습니다.
 
-**사전 준비:**
+**사전 준비**
 1. [데이터베이스 설정](/guide/start/database-setup) 완료
 2. Inspector에서 `Demo Category`·`Demo Item Key` 확인(기본값 `event`·`gold`)
-3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 테스트 메일 발송 — 발송은 Retool 어드민이나 SQL Editor에서만 가능하며, 발송 시 `category`·`items[].key`를 위 Inspector 값과 맞춥니다
+3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 테스트 우편 발송 — 발송은 운영 콘솔 **우편 발송**이나 SQL Editor에서만 가능하며, 발송 시 `category`·`items[].key`를 위 Inspector 값과 맞춥니다
 
 | 키 | 동작 |
 |----|------|
@@ -119,10 +119,10 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 | `2` | 전체 목록 조회 |
 | `3` | `Demo Category` 분류만 조회 |
 | `4` | 분류별 현황 `ByCategory` 출력 |
-| `5` | 첫 미수령 메일 보상 수령 |
+| `5` | 첫 미수령 우편 보상 수령 |
 | `6` | `Demo Category` 분류 일괄 수령 |
 | `7` | `Demo Category` 읽은 우편 일괄 삭제 |
-| `8` | 첫 삭제 가능 메일 삭제 |
+| `8` | 첫 삭제 가능 우편 삭제 |
 
 ::: tip
 키 `5`·`6`의 보상 수령은 `Demo Item Key`와 일치하는 [아이템 핸들러](/guide/mailbox/item-handler)가 등록돼 있을 때만 성공합니다. 샘플은 `Awake`에서 로그만 남기는 데모 핸들러를 자동 등록합니다.
@@ -132,7 +132,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 
 `SupabaseRuntime`이 있는 씬에 `SampleFriend` 컴포넌트를 붙이면 [친구](/guide/friend/) 검색·요청·수락과 [귓속말](/guide/chat/#direct)을 테스트할 수 있습니다.
 
-**사전 준비:**
+**사전 준비**
 1. [데이터베이스 설정](/guide/start/database-setup) 완료
 2. 상대가 될 계정을 따로 하나 만들고 [닉네임](/guide/display-name/nickname/set)을 정해 둡니다 — 혼자서는 요청을 주고받을 수 없습니다
 3. Inspector의 `Target Nickname`에 그 닉네임을 넣습니다
@@ -156,7 +156,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 
 `SupabaseRuntime`이 있는 씬에 `SampleMatchLobby` 컴포넌트를 붙이면 [매치 로비](/guide/match-lobby/)의 생성·초대·시작과 [로비 대화](/guide/chat/send-lobby)를 테스트할 수 있습니다. 초대는 친구가 아니어도 되므로 계정 ID만 있으면 됩니다.
 
-**사전 준비:**
+**사전 준비**
 1. 초대할 상대 계정을 하나 준비합니다 — 친구가 아니어도 됩니다
 2. Inspector의 `Game Code` 확인(기본값 `arena_1v1`)
 3. 추가 초대를 시험하려면 `Invite Account Id`에 대상 계정 ID를 넣습니다

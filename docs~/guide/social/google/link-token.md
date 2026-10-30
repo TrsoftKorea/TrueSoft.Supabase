@@ -33,9 +33,9 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.AnonymousRequired` | 이미 소셜 로그인 상태 — 익명 세션에서만 호출 가능 |
-| `SupabaseReason.GoogleIdTokenEmpty` | 전달된 ID 토큰이 비어있음 |
-| `SupabaseReason.AnonymousSessionTokenMissing` | 익명 세션 토큰 없음 — 재로그인 필요 |
-| `SupabaseReason.GoogleLinkFailed` | Supabase identity 연동 실패 |
-| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseReason.AnonymousRequired` | 이미 소셜 로그인 상태입니다. 익명 세션에서만 부를 수 있습니다 |
+| `SupabaseReason.GoogleIdTokenEmpty` | 넘긴 ID 토큰이 비어 있습니다 |
+| `SupabaseReason.AnonymousSessionTokenMissing` | 익명 세션 토큰이 없습니다. 다시 로그인해야 합니다 |
+| `SupabaseReason.GoogleLinkFailed` | Supabase 계정 연동에 실패했습니다 |
+| `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |

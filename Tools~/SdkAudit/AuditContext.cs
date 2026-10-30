@@ -121,6 +121,7 @@ namespace SdkAudit
             // 둘을 모두 아는 상태에서만 미참조 판정을 할 수 있다.
             CodeRules.Run(ctx);
             DocRules.Run(ctx);
+            DocStyleRules.Run(ctx);
             CodeRules.UnusedPublicApi(ctx);
             CodeRules.Consumers(ctx);
             CodeRules.StructureLists(ctx);

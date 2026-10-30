@@ -21,4 +21,4 @@ maxStamina = cfg.Data.maxStamina;
 
 **반환**
 
-`.Data`에 역직렬화된 설정 객체가 담깁니다.
+`.Data`는 역직렬화된 설정 객체 `T`입니다.

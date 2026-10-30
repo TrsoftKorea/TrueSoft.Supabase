@@ -8,7 +8,7 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 
 [데이터베이스 설정](/guide/start/database-setup) 절차를 먼저 완료하세요.
 
-이후 Package Manager에서 `com.unity.purchasing`을 설치합니다 — **5.1 이상의 최신 버전을 권장합니다.** [버전별 차이](./versions.md#iap-versions)를 참고하세요.
+이후 Package Manager에서 `com.unity.purchasing`을 설치합니다 — **5.1 이상의 최신 버전을 권장합니다.** [버전별 차이](/guide/iap/versions#iap-versions)를 참고하세요.
 
 서버는 결제가 이 게임 앱에서 일어났는지 대조합니다. 운영 콘솔 **설정 › 서비스 연결**에 Android 패키지 이름과 iOS 번들 ID를 넣어 두세요. 비워 두면 그 플랫폼의 결제가 전부 거부되고, 목록에 없는 앱의 결제는 기록되지 않습니다. 키 목록은 [서비스 연결값](/guide/start/database-setup#secrets)에 있습니다.
 
@@ -19,7 +19,7 @@ Android (Google Play)와 iOS (App Store) 소모품 아이템을 하나의 코드
 | 스토어 | 준비 |
 |--------|------|
 | Google&nbsp;Play | `purchase-refund-sync-google` 배포와 [프로젝트 주소 등록](/guide/start/database-setup#project-url). 하루 한 번 자동으로 확인합니다 |
-| App&nbsp;Store | `purchase-notify-apple` 배포 후 App Store Connect에 알림 주소 등록. 환불이 생기면 애플이 바로 알려 줍니다. 유저가 게임을 열기 전에 환불돼 결제 기록보다 알림이 먼저 와도, 결제가 기록될 때 환불로 표시됩니다 |
+| App&nbsp;Store | `purchase-notify-apple` 배포 후 App Store Connect에 알림 주소 등록. 환불이 생기면 애플이 바로 알려 줍니다. 플레이어가 게임을 열기 전에 환불돼 결제 기록보다 알림이 먼저 와도, 결제가 기록될 때 환불로 표시됩니다 |
 
 App Store Connect에서 앱을 고르고 **일반 > 앱 정보 > App Store Server Notifications**로 갑니다. **Production Server URL**과 **Sandbox Server URL**에 아래 주소를 넣고 **Version 2**를 고릅니다.
 

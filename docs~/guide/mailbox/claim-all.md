@@ -1,4 +1,4 @@
-# 보상 일괄 수령
+# 보상 전체 수령
 
 ```csharp
 Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimAllMailItemsAsync(string category = null)
@@ -23,10 +23,10 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 `ClaimResult`로 지급된 모든 보상이 우편·순서대로 담깁니다.
+`.Data`는 지급된 모든 보상의 `ClaimResult` 목록입니다. 우편 순서, 우편 안 아이템 순서대로 담깁니다.
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `mail_item_handler_missing:<key>` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler) 미등록 key가 있으면 수령 전 실패합니다 |
+| `SupabaseReason.Unknown` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않은 key가 있어 수령 전에 멈췄습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |

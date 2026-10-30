@@ -28,10 +28,12 @@ ShowToast(r.Reason switch
 
 **반환**
 
+`.Data`는 `ChatSendResult`입니다.
+
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `Id` | long | 방금 보낸 메시지의 커서 |
-| `CreatedAt` | DateTimeOffset | 서버가 기록한 보낸 시각 |
+| `Id` | `long` | 방금 보낸 메시지의 커서 |
+| `CreatedAt` | `DateTimeOffset` | 서버가 기록한 보낸 시각 |
 
 **에러 코드**
 

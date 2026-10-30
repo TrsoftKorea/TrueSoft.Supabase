@@ -4,7 +4,7 @@
 SupabaseResult Supabase.RequestSave()
 ```
 
-쿨다운을 무시하고 즉시 전송을 요청하되 완료를 기다리지 않습니다. 완료를 확인해야 하면 [즉시 저장 후 대기](./save-now)를 씁니다.
+쿨다운을 무시하고 즉시 전송을 요청하되 완료를 기다리지 않습니다. 완료를 확인해야 하면 [즉시 저장 후 대기](/guide/user-data/save-now)를 씁니다.
 
 ```csharp
 Supabase.RequestSave();   // 완료를 기다리지 않음
@@ -18,5 +18,5 @@ Supabase.RequestSave();   // 완료를 기다리지 않음
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 요청하지 않음. 오류 아님 |
-| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않음 |
+| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 요청하지 않았습니다. 오류가 아닙니다 |
+| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않았습니다 |

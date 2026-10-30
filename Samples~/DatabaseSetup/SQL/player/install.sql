@@ -4112,7 +4112,8 @@ as $$
   select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_PACKAGE_NAME', 'GOOGLE_SERVICE_ACCOUNT_JSON',
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
                'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY',
-               'FCM_SERVICE_ACCOUNT_JSON', 'APNS_KEY_ID', 'APNS_PRIVATE_KEY'];
+               'FCM_SERVICE_ACCOUNT_JSON', 'APNS_KEY_ID', 'APNS_PRIVATE_KEY',
+               'GOOGLE_WEB_CLIENT_ID', 'APPLE_SERVICES_ID'];
 $$;
 
 revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
@@ -4200,6 +4201,7 @@ grant execute on function public.ts_admin_server_config_set(text, text, text) to
 -- 이 게임이 쓰는 서비스(App Store·Google Play·Sign in with Apple) — 콘솔 "서비스 연결"의 켜기/끄기.
 -- 화면 표시만 바꾼다(켠 서비스는 필수 값을 표시, 끈 서비스는 접음). 엣지 함수는 이 표를 보지 않는다 —
 -- 잘못 꺼도 결제·탈퇴가 막히지 않게(2026-10-29 사용자 결정). 줄이 없는 서비스는 콘솔이 값 유무로 짐작한다.
+-- 예외는 로그인 화면 표시 하나다 — support-api 가 google·signin 이 꺼져 있으면 게임 밖 고객센터의 그 로그인 단추를 감춘다.
 create table if not exists public.server_config_services (
   service    text primary key,
   enabled    boolean not null,
@@ -4209,7 +4211,7 @@ create table if not exists public.server_config_services (
 -- 묶음 목록은 콘솔 화면(STORE_GROUPS)·admin-api 와 같다. 이미 설치된 곳의 옛 제약을 갈아 끼운다.
 alter table public.server_config_services drop constraint if exists server_config_services_service_check;
 alter table public.server_config_services add constraint server_config_services_service_check
-  check (service in ('appstore', 'googleplay', 'signin', 'fcm', 'apns'));
+  check (service in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns'));
 alter table public.server_config_services enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.server_config_services from anon, authenticated;
@@ -4231,7 +4233,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'fcm', 'apns') or p_enabled is null then
+  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns') or p_enabled is null then
     raise exception 'server_config_service_invalid: %', p_service;
   end if;
   insert into public.server_config_services (service, enabled, updated_at, updated_by)
@@ -9412,7 +9414,7 @@ grant execute on function public.ts_admin_audit_write(text,text,jsonb)          
 grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 게임 정보 — 운영 콘솔·고객센터 창에서 이 게임을 나타내는 색·이름·아이콘(콘솔 "설정 › 게임 정보")
+-- 프로젝트 정보 — 운영 콘솔·고객센터 창에서 이 프로젝트를 나타내는 색·이름·아이콘(콘솔 "설정 › 프로젝트 정보")
 -- ---------------------------------------------------------------------------
 -- 운영자가 엉뚱한 게임에서 작업하지 않도록 메뉴·상단 띠·확인 창에 게임마다 다른 색을 쓴다.
 -- 셋 다 null 이면 콘솔 코드에 적힌 기본값을 쓴다(새 게임은 따로 정하지 않아도 된다).
@@ -9437,7 +9439,7 @@ alter table public.ts_admin_console_settings enable row level security;
 -- [의도적] 정책 없음 — service_role 전용.
 
 comment on table public.ts_admin_console_settings is
-  '게임 정보(행 하나, 콘솔 "설정 › 게임 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 게임 이름, icon=게임 아이콘(data URL). null 이면 콘솔 기본값.';
+  '프로젝트 정보(행 하나, 콘솔 "설정 › 프로젝트 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 프로젝트 이름, icon=프로젝트 아이콘(data URL). null 이면 콘솔 기본값.';
 
 create or replace function public.ts_admin_console_settings_get()
 returns jsonb
@@ -13407,6 +13409,7 @@ create table if not exists public.support_tickets (
   last_message_at timestamptz not null default now()
 );
 -- 게임 밖(고객센터 주소)에서 유저 ID 만 적고 보낸 문의. 본인 확인을 안 거쳤으므로 콘솔이 따로 표시한다.
+-- 그 길은 없앴고(게임 밖은 이제 구글·애플 로그인) 지난 문의에만 남는다.
 alter table public.support_tickets add column if not exists via_web boolean not null default false;
 create index if not exists support_tickets_status_idx  on public.support_tickets (status, last_message_at desc);
 create index if not exists support_tickets_account_idx on public.support_tickets (account_id, last_message_at desc);
@@ -13556,7 +13559,7 @@ end;
 $$;
 
 -- 첨부 경로가 그 계정 폴더의 것인지(남의 그림을 붙이지 못하게), 3장 이하인지.
--- 게임 밖 창에서 올린 그림은 `web/<계정>/` 에 따로 둔다 — 남이 그 ID 로 올린 그림이 게임 안 올리기 한도를 채우지 않게.
+-- `web/<계정>/` 은 유저 ID 만 적던 옛 게임 밖 창이 올린 그림이다 — 그 길은 없앴지만 받아 둔다.
 create or replace function public.ts_support_check_attachments(p_account uuid, p_attachments jsonb)
 returns jsonb
 language plpgsql
@@ -13690,27 +13693,14 @@ revoke all on function public.ts_support_account_attachments(uuid) from public, 
 grant execute on function public.ts_support_account_attachments(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
--- 게임 밖에서 연 창 — 고객센터 주소를 브라우저로 열면 로그인이 없어 유저 ID 로 계정을 찾는다.
--- 쿠폰 등록과 문의 보내기만 된다. 보상은 그 ID 주인의 우편함으로, 답변은 그 계정의 게임 안 고객센터로 간다 —
--- 남의 ID 를 적어도 남의 문의·우편을 읽을 수는 없다. 코드·ID 를 마구 넣어 보는 것은 아래 횟수 제한으로 막는다.
+-- 게임 밖에서 연 창 — 고객센터 주소를 브라우저로 열면 구글·애플로 로그인한다(support-api web.login).
+-- 게임에 연결된 구글·애플 계정만 받고 새 계정은 만들지 않는다. 게스트는 게임 안 고객센터만 쓴다.
+-- 유저 ID 만 적어 쿠폰·문의를 받던 길은 본인 확인이 없어 없앴다 — 지난 "게임 밖 접수" 문의는 via_web 으로 남는다.
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_support_account_from_user_id(p_user_id text)
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  -- 게임이 보여 주는 값은 계정 번호(Supabase.UserId)다. 구글·애플 계정은 user_id 칸이 그쪽 번호라 둘 다 받는다.
-  with v as (select btrim(coalesce(p_user_id, '')) as id)
-  select p.account_id from public.user_profiles p, v
-   where p.account_id is not null
-     and (p.user_id = v.id
-          or p.account_id = case when v.id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v.id::uuid end)
-   limit 1;
-$$;
+drop function if exists public.ts_support_account_from_user_id(text);
+drop function if exists public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean);
 
--- 횟수 제한 기록. key 는 support-api 가 만든다(접속 주소의 해시·유저 ID 등). 하루 지난 줄은 기록할 때 지운다.
+-- 횟수 제한 기록. key 는 support-api 가 만든다(접속 주소의 해시·계정 등). 하루 지난 줄은 기록할 때 지운다.
 create table if not exists public.support_web_hits (
   key        text        not null,
   created_at timestamptz not null default now()
@@ -13740,38 +13730,9 @@ begin
 end;
 $$;
 
--- 문의 열기(게임 밖). ts_support_create 와 같은 검사를 거치고 "게임 밖 접수" 표시만 더한다.
--- 답을 기다리는 게임 밖 문의는 계정당 하나 — 남의 ID 로 문의를 쌓아 그 사람의 문의 목록을 어지럽히지 못하게.
-create or replace function public.ts_support_create_web(
-  p_account uuid, p_category int, p_body text, p_attachments jsonb, p_meta jsonb, p_was_banned boolean
-)
-returns uuid
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_id uuid;
-begin
-  perform pg_advisory_xact_lock(hashtextextended('support_web_create:' || p_account::text, 0));
-  if exists (select 1 from public.support_tickets where account_id = p_account and via_web and status = 'open') then
-    raise exception 'support_too_many_open';
-  end if;
-  v_id := public.ts_support_create(p_account, p_category, p_body, p_attachments, p_meta, p_was_banned);
-  update public.support_tickets set via_web = true where id = v_id;
-  return v_id;
-end;
-$$;
-
-comment on function public.ts_support_account_from_user_id(text) is '유저 ID → 계정(게임 밖 고객센터 창). service_role 전용.';
-comment on function public.ts_support_web_hit(text, int, int) is '게임 밖 고객센터 창의 횟수 제한. service_role 전용.';
-comment on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) is '게임 밖에서 문의 열기. service_role 전용.';
-revoke all on function public.ts_support_account_from_user_id(text)                       from public, anon, authenticated;
-revoke all on function public.ts_support_web_hit(text, int, int)                          from public, anon, authenticated;
-revoke all on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) from public, anon, authenticated;
-grant execute on function public.ts_support_account_from_user_id(text)                       to service_role;
-grant execute on function public.ts_support_web_hit(text, int, int)                          to service_role;
-grant execute on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) to service_role;
+comment on function public.ts_support_web_hit(text, int, int) is '고객센터 창의 횟수 제한(게임 밖 로그인·쿠폰). service_role 전용.';
+revoke all on function public.ts_support_web_hit(text, int, int) from public, anon, authenticated;
+grant execute on function public.ts_support_web_hit(text, int, int) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 자주 묻는 질문 — 고객센터 창 첫 화면과 문의 쓰기(고른 분류의 것)에 보인다. 운영 콘솔 "고객센터 › 자주 묻는 질문".

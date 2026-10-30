@@ -1,4 +1,4 @@
-# Unity IAP 버전 {#iap-versions}
+# Unity IAP 버전별 차이 {#iap-versions}
 
 SDK는 `com.unity.purchasing` **5.0.0 이상**이 필요합니다. 그보다 낮은 버전에서는 결제 기능만 통째로 빠지고 나머지 SDK는 그대로 동작합니다.
 

@@ -6,6 +6,17 @@ export default defineConfig({
   lang: 'ko-KR',
   base: '/TrueSoft.Supabase/',
 
+  // 제목 없는 ::: 상자가 영어 TIP·WARNING 으로 뜨지 않게
+  markdown: {
+    container: {
+      tipLabel: '팁',
+      infoLabel: '참고',
+      warningLabel: '주의',
+      dangerLabel: '위험',
+      detailsLabel: '자세히'
+    }
+  },
+
   themeConfig: {
     nav: [
       { text: '가이드', link: '/guide/start/install' },
@@ -91,7 +102,7 @@ export default defineConfig({
             items: [
               { text: '중복 확인', link: '/guide/display-name/nickname/check' },
               { text: '닉네임 설정', link: '/guide/display-name/nickname/set' },
-              { text: '다른 플레이어 조회', link: '/guide/display-name/nickname/get-other' }
+              { text: '다른 플레이어 닉네임', link: '/guide/display-name/nickname/get-other' }
             ]
           },
           { text: '공개 프로필', link: '/guide/display-name/profile' },
@@ -188,7 +199,7 @@ export default defineConfig({
               { text: '전체 수령', link: '/guide/mailbox/claim-all' },
               { text: '삭제', link: '/guide/mailbox/delete' },
               { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' },
-              { text: '미수령 수', link: '/guide/mailbox/counts-unclaimed' },
+              { text: '미수령 우편 수', link: '/guide/mailbox/counts-unclaimed' },
               { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' },
               { text: '우편 설정 조회', link: '/guide/mailbox/settings' }
             ]

@@ -40,7 +40,7 @@ switch (result.Data.Status)
 | 파라미터 | 설명 |
 |----------|------|
 | `sessionId` | 게임이 부여한 매치 세션 식별자. 예: Photon 룸 이름 |
-| `gameCode` | 보상 설정을 구분하는 코드. 운영이 어드민에 미리 등록해야 합니다 |
+| `gameCode` | 보상 설정을 구분하는 코드. 운영 콘솔에 미리 등록해야 합니다 |
 | `isWin` | 본인 기준 승패 |
 | `opponentAccountId` | 상대로 지목하는 계정 ID. 봇·혼자 하는 판이면 [상대 없는 판 기록](/guide/match-result/report-solo)을 씁니다 |
 | `score` | 웨이브·점수·시간처럼 게임이 정하는 판 점수. 상대와 맞춰 보지 않으며, 재신고하면 처음 값이 남습니다. NaN·무한대는 보낼 수 없습니다 (기본값: `null`) |
@@ -51,8 +51,8 @@ switch (result.Data.Status)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Status` | `MatchResultStatus` | `Pending`은 상대 신고 대기, `Paid`는 이번 호출로 지급 완료, `AlreadyPaid`는 이전에 이미 지급된 세션을 재신고한 경우 |
-| `.Rewarded` | `bool` | 본인에게 보상 우편이 지급됐는지. `Pending`이면 항상 false |
+| `Status` | `MatchResultStatus` | `Pending`은 상대 신고 대기, `Paid`는 이번 호출로 지급 완료, `AlreadyPaid`는 이전에 이미 지급된 세션을 재신고한 경우 |
+| `Rewarded` | `bool` | 본인에게 보상 우편이 지급됐는지. `Pending`이면 항상 false |
 
 **에러 코드**
 

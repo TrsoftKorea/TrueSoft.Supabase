@@ -22,7 +22,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
+| `TLeaderboard` | [클래스 생성기](/guide/leaderboard/columns#generate)로 만든 리더보드 타입 |
 | `accountId` | 조회할 계정. `null`이면 본인 (기본값: `null`) |
 | `rotationCount` | 조회할 회차. `null`이면 현재 회차 (기본값: `null`) |
 
@@ -32,13 +32,13 @@ if (result.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Registered` | `bool` | 이 회차에 기록이 있는지. `false`면 아래 값은 비어 있음 |
-| `.Rank` | `int` | 순위 |
-| `.AccountId` | `string` | 계정 ID |
-| `.DisplayName` | `string` | 현재 닉네임 |
-| `.Score` | `double` | 점수 |
-| `.RotationCount` | `int` | 회차 |
-| `.Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](./columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
+| `Registered` | `bool` | 이 회차에 기록이 있는지. `false`면 아래 값은 비어 있음 |
+| `Rank` | `int` | 순위 |
+| `AccountId` | `string` | 계정 ID |
+| `DisplayName` | `string` | 현재 닉네임 |
+| `Score` | `double` | 점수 |
+| `RotationCount` | `int` | 회차 |
+| `Data` | `Dictionary<string, object>` | 등록된 플레이어 데이터 필드 값. [`Supabase.ToRow`](/guide/leaderboard/columns#to-row)로 생성 타입의 행으로 바꿔 씁니다 |
 
 **에러 코드**
 

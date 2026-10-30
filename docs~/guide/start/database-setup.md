@@ -24,7 +24,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | 6 | 우편함 |
 | 7~8 | 인앱 결제 영수증 · 원격 설정 |
 | 9~11 | 크론 잡 · 계정 차단 · 유저 데이터 변경 로그 |
-| 12~14 | 어드민 우편 발송 · 예약 · 분류 |
+| 12~14 | 운영 콘솔 우편 발송 · 예약 · 분류 |
 | 15~17 | 리더보드 · 운영자 스키마 버전관리 · 쿠폰 |
 | 18~21 | 채팅 · 매치 결과 · 친구 · 매치 로비 |
 | 22 | 클라이언트 권한 최소화 |
@@ -52,7 +52,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 |-----------|----------|
 | `displayname-get` | 공개 프로필 · 닉네임 조회 |
 | `displayname-set` | 공개 프로필 · 닉네임 설정 |
-| `admin-displayname-set` | 어드민 · 닉네임 강제 변경. Retool 사용 시 |
+| `admin-displayname-set` | 닉네임 강제 변경. 서버 키로 직접 부르는 운영 도구에서만 씁니다 |
 | `withdrawal-cancel-issue` | 공개 프로필 · 탈퇴 취소 토큰 발급 |
 | `withdrawal-cancel-redeem` | 공개 프로필 · 탈퇴 취소 토큰 사용 |
 | `withdrawal-guard` | 공개 프로필 · 탈퇴 계정 자동 처리 |
@@ -81,16 +81,18 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 
 | 콘솔&nbsp;위치 | 키&nbsp;이름 | 필수 | 용도 |
 |------|------|----|------|
-| 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;번들&nbsp;ID | `APPLE_BUNDLE_ID` | iOS&nbsp;IAP·Apple&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 앱의 번들 ID. 여럿이면 쉼표로 구분. 없으면 iOS 결제 검증이 전부 거부됩니다 — 다른 앱의 영수증을 걸러 내는 기준이라 비워 둘 수 없습니다 |
+| 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;번들&nbsp;ID | `APPLE_BUNDLE_ID` | iOS&nbsp;IAP·Apple&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 앱의 번들 ID. 여럿이면 쉼표로 구분. 없으면 iOS 결제 검증이 전부 거부됩니다. 다른 앱의 영수증을 걸러 내는 기준이라 비워 둘 수 없습니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;공유&nbsp;암호 | `APPLE_SHARED_SECRET` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시 | `purchase-verify-apple-legacy` 함수에서 사용. iOS 14 이하 지원이나 플레이나누 병행처럼 SK1을 쓰면 필수이며, 없으면 결제 후 검증이 `server_config_error`로 실패합니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Issuer&nbsp;ID | `APPLE_IAP_ISSUER_ID` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | SK1 영수증에는 가격이 없어, 앱 내 구입 키 셋이 있어야 애플에 실제 결제 금액을 물어 매출에 넣습니다. 없으면 SK1 결제는 금액 없이 기록됩니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Key&nbsp;ID | `APPLE_IAP_KEY_ID` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | 앱 내 구입 키의 키 ID. 10자. Sign in with Apple 키와 다른 키입니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Private&nbsp;key | `APPLE_IAP_PRIVATE_KEY` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
-| 스토어&nbsp;›&nbsp;Google&nbsp;Play&nbsp;›&nbsp;패키지&nbsp;이름 | `GOOGLE_PACKAGE_NAME` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Android 앱의 패키지 이름. 여럿이면 쉼표로 구분. 여기 없는 앱의 결제는 `package_name_mismatch`로 거부되고 기록되지 않습니다. 비워 두면 Android 결제 검증이 전부 `server_config_error`로 실패합니다 — 시험용 앱의 결제가 매출에 섞이지 않게 거르는 기준입니다 |
+| 스토어&nbsp;›&nbsp;Google&nbsp;Play&nbsp;›&nbsp;패키지&nbsp;이름 | `GOOGLE_PACKAGE_NAME` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Android 앱의 패키지 이름. 여럿이면 쉼표로 구분. 여기 없는 앱의 결제는 `package_name_mismatch`로 거부되고 기록되지 않습니다. 비워 두면 Android 결제 검증이 전부 `server_config_error`로 실패합니다. 시험용 앱의 결제가 매출에 섞이지 않게 거르는 기준입니다 |
 | 스토어&nbsp;›&nbsp;Google&nbsp;Play&nbsp;›&nbsp;서비스&nbsp;계정&nbsp;키 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Android&nbsp;IAP&nbsp;사용&nbsp;시 | Google Play 결제 영수증 서버 검증에 사용하는 서비스 계정 키. 내려받은 JSON 파일 내용 전체 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Team&nbsp;ID | `APPLE_TEAM_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Apple Developer 팀 ID. 10자 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Key&nbsp;ID | `APPLE_KEY_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Sign in with Apple 키의 Key ID. 10자 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Private&nbsp;key | `APPLE_PRIVATE_KEY` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
+| 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Services&nbsp;ID | `APPLE_SERVICES_ID` | 선택 | 게임 애플 로그인에 쓰는 Services ID. 넣으면 [게임 밖 고객센터](/guide/customer-center/#web)에 애플 로그인 단추가 보입니다 |
+| 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;클라이언트&nbsp;ID | `GOOGLE_WEB_CLIENT_ID` | 선택 | 게임 구글 로그인에 쓰는 웹 애플리케이션 클라이언트 ID. 넣으면 게임 밖 고객센터에 구글 로그인 단추가 보입니다 |
 
 Google 서비스 계정 키는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)도 참고하세요.
 

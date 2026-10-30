@@ -4,7 +4,7 @@
 Task<SupabaseResult<FriendSearchResult>> Supabase.SearchFriendAsync(string nickname)
 ```
 
-닉네임이 정확히 일치하는 유저를 찾습니다. 대소문자는 구분하지 않습니다.
+닉네임이 정확히 일치하는 플레이어를 찾습니다. 대소문자는 구분하지 않습니다.
 
 ```csharp
 var r = await Supabase.SearchFriendAsync(input.text);
@@ -35,17 +35,17 @@ switch (r.Data.Relation)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `AccountId` | string | 찾은 유저의 계정 ID |
-| `Name` | string | 닉네임 |
+| `AccountId` | `string` | 찾은 플레이어의 계정 ID |
+| `Name` | `string` | 닉네임 |
 | `Relation` | `FriendRelation` | `None`·`Friends`·`RequestSent`·`RequestReceived` 중 하나 |
-| `LastActivityAt` | DateTimeOffset? | 그 유저가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
+| `LastActivityAt` | `DateTimeOffset?` | 그 플레이어가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.FriendNicknameEmpty` | 검색어가 비어 있습니다 |
-| `SupabaseReason.FriendNicknameNotFound` | 해당 닉네임의 유저가 없습니다 |
+| `SupabaseReason.FriendNicknameNotFound` | 해당 닉네임의 플레이어가 없습니다 |
 | `SupabaseReason.FriendSelfRequest` | 본인 닉네임을 검색했습니다 |
 
 ::: tip Relation으로 버튼을 바로 정합니다

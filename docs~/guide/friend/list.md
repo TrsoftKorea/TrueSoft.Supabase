@@ -19,7 +19,7 @@ if (r.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `AccountId` | string | 친구의 계정 ID. [귓속말](/guide/chat/send-direct)·[로비 초대](/guide/match-lobby/invite)에 씁니다 |
-| `Name` | string | 친구 닉네임 |
-| `Since` | DateTimeOffset | 친구가 된 시각 |
-| `LastActivityAt` | DateTimeOffset? | 그 친구가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
+| `AccountId` | `string` | 친구의 계정 ID. [귓속말](/guide/chat/send-direct)·[로비 초대](/guide/match-lobby/invite)에 씁니다 |
+| `Name` | `string` | 친구 닉네임 |
+| `Since` | `DateTimeOffset` | 친구가 된 시각 |
+| `LastActivityAt` | `DateTimeOffset?` | 그 친구가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |

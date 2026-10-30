@@ -154,8 +154,9 @@ namespace TrueBase.Unity
         /// 고객센터 창을 엽니다. Android·iOS 는 게임 위 창으로 열고 닫힐 때까지 기다리며, 그 밖은 브라우저로 엽니다.
         /// 차단돼 로그인할 수 없는 계정도 이 기기에 남은 로그인 기록이나 방금 거절된 구글·애플 로그인으로 열 수 있습니다.
         /// </summary>
-        public static Task<SupabaseResult> OpenCustomerCenterAsync() =>
-            SupabaseSDK.TryOpenCustomerCenterAsync();
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 게임 안 언어 옵션이 있으면 넘깁니다. 비우면 기기 언어.</param>
+        public static Task<SupabaseResult> OpenCustomerCenterAsync(string language = null) =>
+            SupabaseSDK.TryOpenCustomerCenterAsync(language);
 
         /// <summary>운영자 답을 아직 읽지 않은 내 문의 수. 새 답변 표시에 씁니다. 로그인 상태에서만 됩니다.</summary>
         public static Task<SupabaseResult<int>> GetCustomerCenterUnreadCountAsync() =>

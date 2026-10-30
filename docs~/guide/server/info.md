@@ -4,9 +4,17 @@
 Task<SupabaseResult<ServerInfo>> Supabase.GetServerInfoAsync()
 ```
 
-DB 컬럼 `profiles.server_id`에 기록된 내 서버에 대응하는 서버 코드를 조회합니다. 서버 배정은 로그인 시 자동으로 동기화됩니다.
+DB 컬럼 `user_profiles.server_id`에 기록된 내 서버에 대응하는 서버 코드를 조회합니다. 서버 배정은 로그인 시 자동으로 동기화됩니다.
+
+```csharp
+var info = await Supabase.GetServerInfoAsync();
+if (info.IsSuccess)
+    serverLabel.text = info.Data.ServerCode;
+```
 
 **반환**
+
+`.Data`는 `ServerInfo`입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|

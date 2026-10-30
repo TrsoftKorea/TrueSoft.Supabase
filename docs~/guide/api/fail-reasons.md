@@ -36,7 +36,7 @@ if (!result.IsSuccess)
 | `NotAuthenticated` | 서버가 인증 토큰을 거부했습니다. 토큰이 만료·무효일 때로, 재로그인이 필요합니다 |
 | `SessionRequired` | 로그인 세션이 필요합니다 |
 | `AccessTokenEmpty` | 액세스 토큰이 비어있습니다 |
-| `NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `NetworkError` | 네트워크 오류이거나 시간 안에 응답이 없었습니다 |
 | `RequestLimited` | 짧은 시간에 요청을 너무 많이 보내 서버가 잠시 막았습니다. 운영 콘솔 **설정 › 요청 제한**에서 정한 시간이 지나면 풀립니다 |
 
 ### 세션 만료 {#세션-만료}
@@ -62,12 +62,12 @@ bool Handle(SupabaseResult result)
 
 | Reason | 설명 |
 |--------|------|
-| `UserBanned` | 계정이 차단되었습니다. `BanInfo`에서 상세 확인 |
-| `DuplicateLogin` | 다른 기기에서 동일 계정 로그인으로 현재 세션이 무효화됨 |
-| `SignedInNonAnonymous` | 비익명 계정으로 로그인 중. 먼저 `SignOutFullyAsync` 호출 |
+| `UserBanned` | 계정이 차단되었습니다. 자세한 내용은 `BanInfo`에 있습니다 |
+| `DuplicateLogin` | 다른 기기에서 같은 계정으로 로그인해 현재 세션이 무효가 되었습니다 |
+| `SignedInNonAnonymous` | 비익명 계정으로 로그인 중입니다. 먼저 `SignOutFullyAsync`를 호출하세요 |
 | `AnonymousRequired` | 익명 세션이 필요한 작업입니다 |
 | `AnonymousRequiresLink` | 익명 세션에서는 `Link*` 메서드를 사용해야 합니다 |
-| `AnonymousSessionTokenMissing` | 익명 세션 토큰이 없습니다. 재로그인 필요 |
+| `AnonymousSessionTokenMissing` | 익명 세션 토큰이 없습니다. 다시 로그인해야 합니다 |
 | `RestoreSessionFailed` | 저장된 세션 복원에 실패했습니다 |
 | `AutoLoginNoToken` | 자동 로그인이 차단되었거나 저장된 토큰이 없습니다 |
 | `AutoLoginFailed` | 앱 시작 자동 로그인에 실패했습니다 |
@@ -86,7 +86,7 @@ bool Handle(SupabaseResult result)
 
 | Reason | 설명 |
 |--------|------|
-| `GoogleSignInCancelled` | 사용자가 Google 로그인 화면을 직접 취소했습니다 |
+| `GoogleSignInCancelled` | 플레이어가 Google 로그인 화면을 직접 닫았습니다 |
 | `GoogleWebClientIdEmpty` | `SupabaseSettings.googleWebClientId`가 설정되지 않았습니다 |
 | `GoogleIosClientIdInvalid` | `SupabaseSettings.googleIosClientId`가 비어 있거나, iOS 클라이언트 ID 형식이 아니거나, 웹 클라이언트 ID와 같습니다 |
 | `GoogleRevokeNoToken` | iOS에서 이번 실행 중 Google 로그인으로 받은 토큰이 없어 접근 권한을 회수하지 못했습니다 |
@@ -102,7 +102,7 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `AppleIdTokenEmpty` | 전달된 Apple ID 토큰이 비어있습니다 |
-| `AppleSignInCancelled` | 사용자가 Apple 로그인 화면을 직접 취소했습니다 |
+| `AppleSignInCancelled` | 플레이어가 Apple 로그인 화면을 직접 닫았습니다 |
 | `AppleSignInIosOnly` | 네이티브 Apple 로그인은 iOS에서만 지원됩니다 |
 | `AppleSignInUnsupportedPlatform` | 현재 플랫폼에서는 Apple 로그인을 지원하지 않습니다 |
 | `AppleLinkFailed` | Supabase Apple identity 연동에 실패했습니다 |
@@ -150,15 +150,15 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `SelectColumnsEmpty` | SELECT 컬럼이 지정되지 않았습니다 |
-| `UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않았습니다. 로그인·로드 전에 호출한 경우 |
+| `UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않았습니다. 로그인·로드 전에 호출하면 이렇게 됩니다 |
 | `UserSaveNoChanges` | 변경된 값이 없어 전송을 건너뛰었습니다. 오류가 아니라 보낼 것이 없었다는 뜻입니다 |
-| `UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞인 경우 |
-| `UserSaveFlushFailed` | 서버가 전송을 거부했거나 네트워크 오류입니다. 원문은 `ErrorCode` 참조 |
+| `UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞이면 이렇게 됩니다 |
+| `UserSaveFlushFailed` | 서버가 전송을 거부했거나 네트워크 오류입니다. 원문은 `ErrorCode`에 있습니다 |
 | `TableNameEmpty` | 유저 데이터 테이블 이름이 지정되지 않았습니다 |
 | `UserIdNotOwned` | 넘긴 플레이어 번호가 로그인한 계정의 것이 아니라 서버가 프로필·세이브 행 만들기를 거절했습니다 |
 | `UserSaveTimeout` | 전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다 |
-| `UserSaveLoadFailed` | 유저 세이브 로드에 실패했습니다 |
-| `UserSaveDeleteFailed` | 유저 세이브 삭제에 실패했습니다 |
+| `UserSaveLoadFailed` | 유저 데이터 로드에 실패했습니다 |
+| `UserSaveDeleteFailed` | 유저 데이터 삭제에 실패했습니다 |
 
 ## 우편함
 
@@ -217,7 +217,7 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `FriendNicknameEmpty` | 검색할 닉네임이 비어 있습니다 |
-| `FriendNicknameNotFound` | 해당 닉네임의 유저가 없습니다 |
+| `FriendNicknameNotFound` | 해당 닉네임의 플레이어가 없습니다 |
 | `FriendSelfRequest` | 자기 자신에게 요청을 보내려 했습니다 |
 | `FriendTargetRequired` | 요청 대상 계정이 지정되지 않았습니다 |
 | `FriendAlreadyFriends` | 이미 친구인 상대에게 다시 요청했습니다 |

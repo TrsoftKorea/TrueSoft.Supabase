@@ -24,10 +24,10 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 `Mail` 한 건이 담깁니다.
+`.Data`는 `Mail` 한 건입니다.
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `mail_not_found` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
+| `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |

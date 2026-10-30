@@ -6,6 +6,12 @@ IAPProductInfo IAPFacade.GetProductInfo(string productId)
 
 스토어 카탈로그에서 가격·통화 등 상품 정보를 조회합니다. 네트워크 호출 없이 `CreateIAPAsync`가 초기화 시점에 이미 받아온 정보를 그대로 읽습니다.
 
+```csharp
+var info = iap.GetProductInfo(productId);
+if (info != null)
+    priceLabel.text = info.PriceString;
+```
+
 **파라미터**
 
 | 파라미터 | 설명 |
@@ -14,7 +20,7 @@ IAPProductInfo IAPFacade.GetProductInfo(string productId)
 
 **반환**
 
-초기화 전이거나 잘못된 ID로 카탈로그에 없으면 `null`.
+`IAPProductInfo`를 돌려줍니다. 초기화 전이거나 카탈로그에 없는 ID면 `null`입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
@@ -25,11 +31,5 @@ IAPProductInfo IAPFacade.GetProductInfo(string productId)
 | `Price` | `decimal` | 가격(통화 소수점 단위) |
 | `CurrencyCode` | `string` | ISO 4217 통화 코드. 예: `"KRW"` |
 | `IsAvailable` | `bool` | 스토어에서 구매 가능한 상품인지 |
-
-```csharp
-var info = iap.GetProductInfo(productId);
-if (info != null)
-    priceLabel.text = info.PriceString;
-```
 
 `GooglePlayIAPFacade`·`AppleIAPFacade`에도 같은 메서드가 있습니다.

@@ -29,8 +29,8 @@ ShowToast(r.Data.Accepted ? "서로 요청이 있어 바로 친구가 되었습�
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `RequestId` | string | 생성되거나 즉시 수락된 요청 ID |
-| `Accepted` | bool | true면 상호 요청으로 즉시 친구가 된 것입니다. false면 상대 응답 대기 중입니다 |
+| `RequestId` | `string` | 생성되거나 즉시 수락된 요청 ID |
+| `Accepted` | `bool` | true면 상호 요청으로 즉시 친구가 된 것입니다. false면 상대 응답 대기 중입니다 |
 
 **에러 코드**
 

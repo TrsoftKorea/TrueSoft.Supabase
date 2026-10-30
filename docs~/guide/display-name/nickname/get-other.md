@@ -23,4 +23,4 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data` — 조회한 플레이어의 닉네임 문자열.
+`.Data`는 조회한 플레이어의 닉네임 `string`입니다.

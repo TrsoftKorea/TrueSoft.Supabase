@@ -143,10 +143,10 @@ bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 | 메서드 | 대상 | 설명 |
 |--------|------|------|
 | `GetOrDefault(i)` | `AutoList` | 범위 밖이면 기본값 반환(확장 안 함) |
-| `EnsureCount(n)` | `AutoList`·`grid[i]` | `n`칸까지 기본값으로 확장 — `Count`를 논리 크기에 맞출 때 |
+| `EnsureCount(n)` | `AutoList`·`grid[i]` | `n`칸까지 기본값으로 확장. `Count`를 논리 크기에 맞출 때 사용 |
 | `EnsureRows(n)` | `AutoList2D` | 행이 `n`개가 되도록 기본값 행으로 확장 |
-| `EnsureSize(r, c)` | `AutoList2D` | `r`행 × `c`열을 기본값으로 확보 — `EnsureCount`의 2차원 판 |
-| `Row(i)` | `AutoList2D` | 행 반환, 없으면 빈 리스트(비파괴) — 행 단위 조회·LINQ |
+| `EnsureSize(r, c)` | `AutoList2D` | `r`행 × `c`열을 기본값으로 확보. `EnsureCount`의 2차원 판 |
+| `Row(i)` | `AutoList2D` | 행 반환. 행이 없으면 만들지 않고 빈 리스트 반환. 행 단위 조회·LINQ에 사용 |
 | `Cells()` | `AutoList2D` | 모든 셀을 행 순서로 평탄화 열거 |
 
 ```csharp

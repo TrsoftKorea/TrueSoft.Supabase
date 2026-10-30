@@ -4,7 +4,7 @@
 Task<SupabaseResult> Supabase.SaveNowAsync(int timeoutMs = 5000)
 ```
 
-쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 기다립니다. 완료를 기다리지 않아도 되면 [즉시 저장 요청](./request-save)을 씁니다.
+쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 기다립니다. 완료를 기다리지 않아도 되면 [즉시 저장 요청](/guide/user-data/request-save)을 씁니다.
 
 ```csharp
 await Supabase.SaveNowAsync();   // 전송 완료까지 대기
@@ -28,5 +28,5 @@ if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뜀. 오류 아님 |
-| `SupabaseReason.UserSaveTimeout` | `timeoutMs` 초과. 전송은 계속 진행될 수 있음 |
+| `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뛰었습니다. 오류가 아닙니다 |
+| `SupabaseReason.UserSaveTimeout` | `timeoutMs`를 넘었습니다. 전송은 계속 진행될 수 있습니다 |

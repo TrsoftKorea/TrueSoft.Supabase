@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInAnonymouslyAsync()
 ```
 
-별도 회원가입 없이 게스트 계정으로 로그인합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다. 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성합니다. 로그인하면 세션이 기기에 자동 저장되어 다음 실행 시 `Supabase.TriggerAutoLoginAsync()`로 복원할 수 있습니다. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
+별도 회원가입 없이 게스트 계정으로 로그인합니다. 저장된 세션이 있으면 기존 계정으로 복원하고, 없으면 새 익명 계정을 생성합니다. 이미 비익명 계정으로 로그인된 경우 실패합니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();
@@ -23,13 +23,13 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile`은 로그인한 내 프로필입니다. 담기는 필드는 [공개 프로필](/guide/display-name/profile)을 참고하세요.
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
+| `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정이라 새 계정으로 다시 가입되었습니다 |
 
-소셜 로그인은 [소셜 로그인](/guide/social/google/)을 참고하세요. 로그인과 데이터 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](./auto-login#login-load-separate)를 참고하세요.
+로그인하면 세션이 기기에 저장되어 다음 실행 때 `Supabase.TriggerAutoLoginAsync()`로 복원할 수 있습니다. 소셜 로그인은 [소셜 로그인](/guide/social/google/)을 참고하세요. 로그인과 데이터 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](/guide/auth/auto-login#login-load-separate)를 참고하세요.

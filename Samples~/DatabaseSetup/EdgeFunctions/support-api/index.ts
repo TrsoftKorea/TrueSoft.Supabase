@@ -10,9 +10,10 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from "npm:jose@5";
 //   ② 기기에 남은 갱신 토큰 — Supabase 인증 기록에 그 계정과 짝지어 있다.
 //   ③ 차단으로 거절된 구글·애플 ID 토큰 — Supabase 인증 서버에 그대로 보내 "차단됨"을 받으면 그 계정을 알아본 것이다.
 //
-// 게임 밖(고객센터 주소를 브라우저로 연 것) — 접속 표 없이 web.* 요청으로 유저 ID 만 받아 쿠폰 등록·문의 보내기를 한다.
-// 본인 확인이 없으므로 결과가 그 ID 주인에게만 가는 일만 연다: 보상은 그 계정 우편함, 문의 답변은 그 계정의 게임 안
-// 고객센터. 남의 문의·우편을 읽는 길은 없다. 코드·ID 대입은 접속 주소·계정별 횟수 제한(ts_support_web_hit)으로 막는다.
+// 게임 밖(고객센터 주소를 브라우저로 연 것) — 창이 구글·애플 로그인으로 받은 ID 토큰을 web.login 으로 보내면 같은
+// 접속 표를 준다. 게임에 연결된 구글·애플 계정만 받고(③과 같은 확인) 새 계정은 만들지 않는다. 게스트 계정은
+// 구글·애플 증명이 없으므로 게임 안 고객센터만 쓴다. 창이 띄울 로그인 단추의 ID 는 look 이 서버 연결값
+// (GOOGLE_WEB_CLIENT_ID·APPLE_SERVICES_ID)에서 준다.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_PUBLISHABLE_KEY = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!).default;
@@ -41,6 +42,30 @@ const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 const jwks = createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`));
+
+// ═══ BEGIN server-config ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 스토어·애플 연동 값. 운영 콘솔 "설정"에서 넣은 값(DB Vault)을 먼저 쓰고, 없으면 Edge Function Secrets 를 쓴다.
+// 1분 동안 기억해 둔다 — 콘솔에서 바꾼 값은 늦어도 1분 뒤부터 걸린다. 읽기에 실패하면 이미 기억해 둔 값을 계속 쓰고,
+// 기억해 둔 값이 없을 때만(함수가 막 깨어났을 때) Secrets 로 넘어간다.
+let serverConfigCache: { at: number; values: Record<string, string> } | null = null;
+
+async function serverConfig(key: string): Promise<string> {
+  if (!serverConfigCache || Date.now() - serverConfigCache.at > 60_000) {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!).default, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) console.warn(`[server-config] 콘솔 설정값을 읽지 못해 Secrets 를 씁니다: ${error.message}`);
+    else serverConfigCache = { at: Date.now(), values: (data ?? {}) as Record<string, string> };
+  }
+  const fromConsole = (serverConfigCache?.values[key] ?? "").trim();
+  return fromConsole !== "" ? fromConsole : (Deno.env.get(key) ?? "").trim();
+}
+
+async function serverConfigList(key: string): Promise<string[]> {
+  return (await serverConfig(key)).split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+// ═══ END server-config ═══
 
 type Params = Record<string, unknown>;
 type SupportToken = { sub: string; ban: boolean; lang: string; meta: Record<string, string>; exp: number };
@@ -155,20 +180,23 @@ async function accountFromRefreshToken(token: string): Promise<string | null> {
   return typeof data === "string" ? data : null;
 }
 
-// ③ 구글·애플 ID 토큰. 판정은 Supabase 인증 서버가 한다 — 받은 답이 "차단됨"이어야만 그 계정으로 본다.
+// ③ 구글·애플 ID 토큰. 판정은 Supabase 인증 서버가 한다 — 서명·발급 대상(앱·웹 클라이언트 ID)·nonce 를 거기서 본다.
 // 연결된 계정이 없으면 인증 서버에 보내지 않는다(보내면 새 계정이 만들어진다).
-async function accountFromIdToken(provider: string, idToken: string, nonce: string): Promise<string | null> {
-  if (provider !== "google" && provider !== "apple") return null;
+// 차단이 아니면 인증 서버가 세션을 내주는데, 그 세션은 쓰지 않고 바로 닫는다 — 계정이 맞는지만 확인한 것이다.
+type IdentityCheck = { account: string; banned: boolean } | "not_linked" | "invalid";
+
+async function checkIdToken(provider: string, idToken: string, nonce: string): Promise<IdentityCheck> {
+  if (provider !== "google" && provider !== "apple") return "invalid";
   let sub: unknown;
   try {
     sub = decodeJwt(idToken).sub;
   } catch {
-    return null;
+    return "invalid";
   }
-  if (typeof sub !== "string" || !sub) return null;
+  if (typeof sub !== "string" || !sub) return "invalid";
   const { data: linked, error } = await db.rpc("ts_support_account_from_identity", { p_provider: provider, p_sub: sub });
   if (error) throw new Error(error.message);
-  if (typeof linked !== "string") return null;
+  if (typeof linked !== "string") return "not_linked";
 
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
     method: "POST",
@@ -178,7 +206,6 @@ async function accountFromIdToken(provider: string, idToken: string, nonce: stri
   });
   const body = await res.json().catch(() => ({})) as Record<string, unknown>;
   if (res.ok) {
-    // 차단이 아니었다 — 방금 생긴 세션은 쓰지 않으니 닫는다. 이 경로는 차단된 계정만 받는다.
     const access = typeof body.access_token === "string" ? body.access_token : "";
     if (access) {
       await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`, {
@@ -186,11 +213,21 @@ async function accountFromIdToken(provider: string, idToken: string, nonce: stri
         headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${access}` },
       }).catch(() => {});
     }
-    return null;
+    const user = body.user as { id?: unknown } | undefined;
+    return user?.id === linked ? { account: linked, banned: false } : "invalid";
   }
   const code = String(body.error_code ?? body.code ?? "");
   const msg = String(body.msg ?? body.message ?? body.error_description ?? "");
-  return code === "user_banned" || /banned/i.test(msg) ? linked : null;
+  if (code === "user_banned" || /banned/i.test(msg)) return { account: linked, banned: true };
+  // 흔한 원인 — 이 클라이언트 ID·Services ID 가 Supabase 구글·애플 로그인의 Client IDs 에 없음, nonce 불일치, 횟수 제한.
+  console.warn(`[support-api] ${provider} id_token rejected: ${res.status} ${code} ${msg}`.slice(0, 300));
+  return "invalid";
+}
+
+// 게임 안 창의 ③ — 로그인 없이 받는 증명은 차단된 계정만 쓰므로(startSession) 차단일 때만 계정을 돌려준다.
+async function accountFromIdToken(provider: string, idToken: string, nonce: string): Promise<string | null> {
+  const r = await checkIdToken(provider, idToken, nonce);
+  return typeof r === "object" && r.banned ? r.account : null;
 }
 
 const META_KEYS = ["platform", "app_version", "os", "device", "language", "server_id", "sdk_version"];
@@ -206,9 +243,20 @@ function pickMeta(raw: unknown): Record<string, string> {
   return out;
 }
 
+// 언어 코드를 콘솔·우편과 같은 꼴로 — 중국어만 간체(zh-CN)·번체(zh-TW)를 가르고 나머지는 두 글자.
+// 두 글자로만 자르면 번체 기기가 간체로 바뀐다.
+function normLang(raw: string | null | undefined): string {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (!v) return "en";
+  if (v.startsWith("zh")) return !/hans/.test(v) && /tw|hk|mo|hant/.test(v) ? "zh-TW" : "zh-CN";
+  const two = v.slice(0, 2);
+  return SUPPORTED_LANGS.has(two) ? two : "en";
+}
+const SUPPORTED_LANGS = new Set(["en", "ja", "ko", "de", "fr", "es", "pt", "ru", "id", "th", "vi"]);
+
 async function startSession(p: Params): Promise<Response> {
   const meta = pickMeta(p.meta);
-  const lang = (meta.language ?? "").slice(0, 2).toLowerCase() || "en";
+  const lang = normLang(meta.language);
 
   let account: string | null = null;
   let banned = false;
@@ -269,13 +317,9 @@ async function signAttachments<T extends { attachments?: unknown }>(items: T[]):
   }));
 }
 
-// 게임 밖 창에서 올린 그림은 `web/<계정>/` 에 따로 두고 한도도 따로 센다 — 남이 그 ID 로 올린 그림이 본인의
-// 게임 안 올리기 한도를 채우지 않게. 게임 밖 한도는 훨씬 낮다(로그인 없이 저장 공간을 쌓는 길이라).
-const UPLOAD_LIMITS = { app: { perHour: UPLOADS_PER_HOUR, perMonth: MAX_FILES_PER_ACCOUNT }, web: { perHour: 6, perMonth: 20 } };
-
-async function upload(account: string, p: Params, web = false): Promise<Response> {
-  const folder = web ? `web/${account}` : account;
-  const limits = web ? UPLOAD_LIMITS.web : UPLOAD_LIMITS.app;
+async function upload(account: string, p: Params): Promise<Response> {
+  const folder = account;
+  const limits = { perHour: UPLOADS_PER_HOUR, perMonth: MAX_FILES_PER_ACCOUNT };
   const type = str(p, "content_type");
   const ext = IMAGE_EXT[type];
   if (!ext) throw new Reject("support_attachment_type");
@@ -325,12 +369,12 @@ function dbReason(error: { message: string; code?: string }): string | null {
   return m ? m[0] : null;
 }
 
-// ── 게임 밖에서 연 창 ──────────────────────────────────────────────────────────
-// 횟수 제한(시간당). 접속 주소는 그대로 남기지 않고 서명 비밀값으로 해시한 값만 쓴다.
-const WEB_LIMITS = {
-  coupon: { perIp: 20, perAccount: 10 },
-  upload: { perIp: 10, perAccount: 6 },
-  create: { perIp: 5, perAccount: 3 },
+// ── 횟수 제한 ──────────────────────────────────────────────────────────────
+// 시간당. 접속 주소는 그대로 남기지 않고 서명 비밀값으로 해시한 값만 쓴다.
+const LIMITS = {
+  couponPerAccount: 10,
+  // 게임 밖 로그인 — ID 토큰마다 인증 서버를 한 번 부르므로 접속 주소별로 막는다.
+  loginPerIp: 20,
 } as const;
 
 function clientIp(req: Request): string {
@@ -343,17 +387,20 @@ async function webHit(key: string, max: number): Promise<void> {
   if (!ok) throw new Reject("support_too_fast", 429);
 }
 
-// 유저 ID → 계정. 접속 주소 제한을 먼저 세어, 없는 ID 를 마구 넣어 보는 것도 횟수에 든다.
-async function webAccount(req: Request, p: Params, kind: keyof typeof WEB_LIMITS): Promise<string> {
-  const limits = WEB_LIMITS[kind];
-  await webHit(`${kind}:ip:${await hmac(clientIp(req))}`, limits.perIp);
-  const userId = str(p, "user_id").trim();
-  if (!userId || userId.length > 64) throw new Reject("support_user_not_found");
-  const account = await rpc<string | null>("ts_support_account_from_user_id", { p_user_id: userId });
-  if (!account) throw new Reject("support_user_not_found");
-  // 게임 안 창과 다른 칸에 센다 — 남이 그 ID 로 틀려도 본인의 게임 안 쿠폰 시도는 막히지 않게.
-  await webHit(`${kind}:web:${account}`, limits.perAccount);
-  return account;
+// 게임 밖 창의 로그인. 연결된 구글·애플 계정이면 게임 안 창과 같은 접속 표를 준다 — 그 뒤로는 내 문의·덧붙이기까지
+// 게임 안 창과 똑같이 쓴다. 차단된 계정도 받는다(문의는 되고 쿠폰은 redeemCoupon 이 막는다).
+async function webLogin(req: Request, p: Params): Promise<Response> {
+  await webHit(`login:ip:${await hmac(clientIp(req))}`, LIMITS.loginPerIp);
+  const idToken = str(p, "id_token");
+  if (!idToken || idToken.length > 8192) throw new Reject("support_web_login_failed", 401);
+  const r = await checkIdToken(str(p, "provider"), idToken, str(p, "nonce"));
+  if (r === "not_linked") throw new Reject("support_web_not_linked", 404);
+  if (r === "invalid") throw new Reject("support_web_login_failed", 401);
+
+  const lang = normLang(str(p, "lang"));
+  const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
+  const token = await signToken({ sub: r.account, ban: r.banned, lang, meta: webMeta(req, p), exp });
+  return json({ ok: true, data: { token, expires_at: new Date(exp * 1000).toISOString(), banned: r.banned, lang } });
 }
 
 // 차단된 계정은 쿠폰 보상을 받지 않는다(게임에서도 로그인이 막혀 못 쓴다).
@@ -397,46 +444,42 @@ Deno.serve(async (req) => {
       case "session.start":
         return await startSession(p);
 
-      // 창 위쪽의 게임 이름·색·아이콘 — 운영 콘솔 "설정 › 게임 정보" 값.
+      // 창 위쪽의 게임 이름·색·아이콘 — 운영 콘솔 "설정 › 프로젝트 정보" 값. 게임 밖 로그인 단추의 ID 는 "서비스 연결" 값이고,
+      // 비어 있으면 그 단추를 보이지 않는다. 둘 다 웹 페이지에 그대로 드러나는 공개 값이다.
       case "look": {
-        const s = (await rpc<Record<string, string | null>>("ts_admin_console_settings_get", {})) ?? {};
-        return json({ ok: true, data: { name: s.display_name ?? null, color: s.color ?? null, icon: s.icon ?? null } });
+        // 콘솔 "서비스 연결"에서 Google 로그인·Sign in with Apple 묶음을 꺼 두면 값이 있어도 그 단추를 감춘다
+        // (켜고 끈 적이 없으면 값이 기준).
+        const [s, services, google, apple] = await Promise.all([
+          rpc<Record<string, string | null>>("ts_admin_console_settings_get", {}),
+          rpc<Record<string, boolean>>("ts_admin_server_config_services", {}),
+          serverConfig("GOOGLE_WEB_CLIENT_ID"),
+          serverConfig("APPLE_SERVICES_ID"),
+        ]);
+        return json({
+          ok: true,
+          data: {
+            name: s?.display_name ?? null, color: s?.color ?? null, icon: s?.icon ?? null,
+            google_client_id: (services?.google !== false && google) || null,
+            apple_services_id: (services?.signin !== false && apple) || null,
+          },
+        });
       }
 
       // 자주 묻는 질문 — 공개 정보라 접속 표 없이도 준다(본인 확인이 실패해도 창에서 볼 수 있게).
       case "faqs": {
-        const lang = (str(p, "lang") || "en").slice(0, 2).toLowerCase();
-        return json({ ok: true, data: await rpc("ts_support_faqs", { p_lang: lang }) });
+        return json({ ok: true, data: await rpc("ts_support_faqs", { p_lang: normLang(str(p, "lang")) }) });
       }
 
       // 분류 이름도 공개 정보다 — 게임 밖에서 연 창의 문의하기·FAQ 묶음에 쓴다.
       case "categories.public":
-        return json({ ok: true, data: await rpc("ts_support_categories", { p_lang: str(p, "lang") || "en" }) });
+        return json({ ok: true, data: await rpc("ts_support_categories", { p_lang: normLang(str(p, "lang")) }) });
 
-      case "web.coupon": {
-        const account = await webAccount(req, p, "coupon");
-        return await redeemCoupon(account, await isBanned(account), p);
-      }
-
-      case "web.upload":
-        return await upload(await webAccount(req, p, "upload"), p, true);
-
-      case "web.create": {
-        const account = await webAccount(req, p, "create");
-        const id = await rpc<string>("ts_support_create_web", {
-          p_account: account,
-          p_category: Number(p.category_id),
-          p_body: str(p, "body"),
-          p_attachments: Array.isArray(p.attachments) ? p.attachments : [],
-          p_meta: webMeta(req, p),
-          p_was_banned: await isBanned(account),
-        });
-        return json({ ok: true, data: { id } });
-      }
+      case "web.login":
+        return await webLogin(req, p);
     }
 
     const t = await readToken(req);
-    const lang = str(p, "lang") || t.lang;
+    const lang = normLang(str(p, "lang") || t.lang);
     switch (action) {
       case "me":
         return json({ ok: true, data: { banned: t.ban, lang: t.lang } });
@@ -481,7 +524,7 @@ Deno.serve(async (req) => {
       // 서버 키로 부르므로 게임의 요청 제한(10절)을 안 탄다 — 번호 대입은 같은 횟수 제한으로 막는다.
       // 차단 여부는 접속 표에 적힌 값(최대 12시간 전)이 아니라 지금 상태로 본다.
       case "coupon":
-        await webHit(`coupon:app:${t.sub}`, WEB_LIMITS.coupon.perAccount);
+        await webHit(`coupon:app:${t.sub}`, LIMITS.couponPerAccount);
         return await redeemCoupon(t.sub, await isBanned(t.sub), p);
 
       default:

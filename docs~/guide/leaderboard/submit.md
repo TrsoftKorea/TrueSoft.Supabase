@@ -19,7 +19,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
+| `TLeaderboard` | [클래스 생성기](/guide/leaderboard/columns#generate)로 만든 리더보드 타입 |
 
 **파라미터**
 
@@ -33,8 +33,8 @@ if (result.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Score` | `double` | 기록 방식이 적용된 뒤의 최종 점수 |
-| `.RotationCount` | `int` | 기록된 회차 |
+| `Score` | `double` | 기록 방식이 적용된 뒤의 최종 점수 |
+| `RotationCount` | `int` | 기록된 회차 |
 
 **에러 코드**
 
@@ -43,4 +43,4 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 
-순위와 함께 값을 보내려면 [점수 기록 · 생성 클래스](./submit-row)를 참고하세요.
+순위와 함께 값을 보내려면 [점수 기록 · 생성 클래스](/guide/leaderboard/submit-row)를 참고하세요.

@@ -38,6 +38,8 @@ namespace SdkAudit
             "[R19 시간대고정]",
             "[R20 빈응답]",
             "[R21 원문사유]",
+            "[R22 제목]", "[R22 예제순서]", "[R22 예제없음]", "[R22 에러표]", "[R22 프로퍼티표]", "[R22 반환]",
+            "[R22 표줄표]", "[R22 링크]", "[R22 용어]", "[R22 라벨쌍점]", "[R22 설명길이]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -93,6 +95,27 @@ namespace SdkAudit
                     missing.Add("[R20 빈응답] 옵션 있는 호출·값 있는 함수 오탐");
                 if (found.Count(f => f.StartsWith("[R5 표뒤빈줄]", StringComparison.Ordinal) && f.Contains("table-glued.md")) != 1)
                     missing.Add("[R5 표뒤빈줄] 상자를 닫는 ::: 오탐 또는 미탐");
+                if (found.Any(f => f.StartsWith("[R22", StringComparison.Ordinal) && f.Contains("style/good.md")))
+                    missing.Add("[R22] 잘 쓴 페이지 오탐: " + found.First(f => f.StartsWith("[R22", StringComparison.Ordinal) && f.Contains("style/good.md")));
+                if (found.Any(f => f.StartsWith("[R22 에러표]", StringComparison.Ordinal) && f.Contains("fail-reasons.md") && f.Contains("첫 칸")))
+                    missing.Add("[R22 에러표] 카탈로그 첫 칸 오탐");
+                // 이름표 하나에 묶인 세부 판정을 따로 증명한다 — 하나가 망가져도 다른 하나 덕에 통과하지 않게.
+                var late = found.Where(f => f.Contains("style/late-example.md")).ToList();
+                foreach (var (tag, part) in new[]
+                {
+                    ("[R22 에러표]", "첫 칸"), ("[R22 에러표]", "문장으로"),
+                    ("[R22 프로퍼티표]", "점을"), ("[R22 프로퍼티표]", "타입 칸"),
+                    ("[R22 용어]", "'Retool'"), ("[R22 용어]", "'어드민'"), ("[R22 용어]", "'유저'"), ("[R22 용어]", "'메일'"),
+                })
+                    if (!late.Any(f => f.StartsWith(tag, StringComparison.Ordinal) && f.Contains(part)))
+                        missing.Add($"{tag} 세부 판정 '{part}'");
+                if (!found.Any(f => f.StartsWith("[R22 표줄표]", StringComparison.Ordinal) && f.Contains("style/indented.md")))
+                    missing.Add("[R22 표줄표] 들여 쓴 표");
+                if (!found.Any(f => f.StartsWith("[R22 예제순서]", StringComparison.Ordinal) && f.Contains("style/box-first.md")))
+                    missing.Add("[R22 예제순서] 제목 뒤 ::: 상자가 먼저인 함수 페이지");
+                if (!found.Any(f => f.StartsWith("[R22 제목]", StringComparison.Ordinal) && f.Contains("style/indented.md") && f.Contains("사이드바에 없습니다")))
+                    missing.Add("[R22 제목] 사이드바에 없는 페이지");
+                missing.AddRange(SidebarUnreadable());
                 if (found.Any(f => f.StartsWith("[R8 공통사유]", StringComparison.Ordinal) && f.Contains("fail-reasons.md")))
                     missing.Add("[R8 공통사유] 카탈로그 자신 오탐");
                 // ExtractRpcErrorCode 안에서 쓴 원문은 잡으면 오탐이다.
@@ -197,6 +220,24 @@ class Example { void M() { Supabase.NoSuchMemberAsync(); } }");
             // R5 표뒤빈줄 — 표 다음 줄에 문장이 붙는다. 상자를 닫는 ::: 는 잡히면 오탐이다.
             Write(root, "docs~/guide/table-glued.md", "# 붙은 표\n\n| 이름 | 설명 |\n|------|------|\n| a | b |\n붙어 버린 문장\n\n::: info 상자\n| 이름 | 설명 |\n|------|------|\n| a | b |\n:::\n");
 
+            // R22 — 사이드바 이름과 다른 제목, 예제가 표 뒤, 꼴이 어긋난 표들. good.md 는 하나도 안 걸려야 한다.
+            Write(root, "docs~/.vitepress/config.ts", "export default { themeConfig: { sidebar: [\n"
+                + "{ text: '보상 수령', link: '/guide/style/late-example' },\n{ text: '예제 없는 함수', link: '/guide/style/no-example' },\n"
+                + "{ text: '잘 쓴 페이지', link: '/guide/style/good' } ] } }\n");
+            Write(root, "docs~/guide/style/late-example.md", "# 다른 제목\n\n```csharp\nTask<SupabaseResult<int>> Supabase.RealApiAsync()\n```\n\n"
+                + "하나입니다. 둘입니다. 셋입니다. 넷입니다.\n\n**반환**\n\n`.Data`에 개수가 담깁니다.\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n"
+                + "| `mail_not_found` | 없는 우편 |\n\n| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `.Count` | int | 개수 — 설명 |\n\n"
+                + "```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**사전 준비:** [다른 곳](./other)을 보세요. 유저가 메일을 Retool 에서 받고 어드민이 보냅니다.\n");
+            // 목록 안에 들여 쓴 표, 제목 뒤에 ::: 상자가 먼저 오는 함수 페이지(예제가 표 뒤).
+            Write(root, "docs~/guide/style/indented.md", "# 들여 쓴 표\n\n1. 단계\n\n   | 열 | 내용 |\n   |----|------|\n   | a | 줄표 — 남음 |\n");
+            Write(root, "docs~/guide/style/box-first.md", "# 상자 먼저\n\n::: info 먼저\n안내\n:::\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n\n"
+                + "**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n| `SupabaseReason.RealReason` | 없습니다 |\n\n```csharp\nvar r = await Supabase.RealApiAsync();\n```\n");
+            Write(root, "docs~/guide/style/no-example.md", "# 예제 없는 함수\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n");
+            Write(root, "docs~/guide/style/good.md", "# 잘 쓴 페이지\n\n```csharp\nTask<SupabaseResult<int>> Supabase.RealApiAsync()\n```\n\n"
+                + "개수를 읽습니다.\n\n```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**반환**\n\n`.Data`는 `int`입니다.\n\n"
+                + "| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `Count` | `int` | 개수 |\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n"
+                + "| `SupabaseReason.RealReason` | 없는 우편입니다 |\n\n유저 데이터·유저 ID·`유저`와 이메일, [같은 곳](#a)·[다른 곳](/guide/x)·[밖](https://x.y)·![그림](./a.png)은 괜찮습니다.\n");
+
             Write(root, "docs~/guide/broken.md", @"# 깨진 페이지 (부연 괄호)
 
 설명이 코드보다 먼저 온다.
@@ -271,6 +312,26 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");
             Write(root, "Tools~/SdkAudit/consumers.txt", "consumer");
+        }
+
+        /// <summary>사이드바 항목을 하나도 못 읽는 꼴(큰따옴표)이면 R22 제목 검사가 꺼졌다고 알리는지 본다.</summary>
+        private static IEnumerable<string> SidebarUnreadable()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "sdkaudit-selftest-sidebar-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Write(dir, "docs~/.vitepress/config.ts", "export default { themeConfig: { sidebar: [ { text: \"이름\", link: \"/guide/a\" } ] } }\n");
+                Write(dir, "docs~/guide/a.md", "# 전혀 다른 제목\n");
+                var ctx = new AuditContext(dir);
+                DocStyleRules.Run(ctx);
+                return ctx.Report.Errors.Any(e => e.StartsWith("[R22 제목]", StringComparison.Ordinal) && e.Contains("하나도"))
+                    ? Enumerable.Empty<string>()
+                    : new[] { "[R22 제목] 사이드바 0개 읽음" };
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
         }
 
         private static void Write(string root, string relative, string content)

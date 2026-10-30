@@ -2,7 +2,7 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`SearchFriendAsync`](/guide/friend/search) | 닉네임으로 유저 검색 |
+| [`SearchFriendAsync`](/guide/friend/search) | 닉네임으로 플레이어 검색 |
 | [`SendFriendRequestAsync`](/guide/friend/request-send) | 친구 요청 전송 |
 | [`GetFriendRequestsAsync`](/guide/friend/requests-list) | 대기 중인 요청 목록 |
 | [`RespondFriendRequestAsync`](/guide/friend/request-respond) | 받은 요청 수락·거절 |

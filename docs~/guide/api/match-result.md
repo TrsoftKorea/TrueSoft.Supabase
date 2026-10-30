@@ -7,7 +7,7 @@
 | [`GetMatchStatsAsync`](/guide/match-result/stats) | 내 승·패 수와 점수 최댓값·최솟값 |
 | [`GetMatchHistoryAsync`](/guide/match-result/history) | 내 기록을 최근 순으로 |
 
-매치 결과가 게임마다 갖는 보상 정책은 Retool 어드민에서 등록·수정합니다.
+매치 결과가 게임마다 갖는 보상 정책은 운영 콘솔에서 등록·수정합니다.
 
 ::: tip
 보상은 응답이 아니라 [우편](/guide/mailbox/)으로 지급됩니다. 지급이 이루어지면 우편함을 새로 조회하세요.

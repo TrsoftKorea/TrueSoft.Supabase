@@ -1,6 +1,6 @@
 # 대시보드 설정
 
-Apple 로그인([신규 로그인](./signin))을 쓰기 전 준비입니다. 각 설정의 이유·자주 나는 오류는 [Apple 설정](./setup-details)을 참고하세요.
+Apple 로그인([신규 로그인](/guide/social/apple/signin))을 쓰기 전 준비입니다. 각 설정의 이유·자주 나는 오류는 [Apple 설정](/guide/social/apple/setup-details)을 참고하세요.
 
 ## Apple Developer
 
@@ -33,7 +33,7 @@ Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합
 
 **Supabase · Providers > Apple**
 
-- **Client IDs**: 위 Bundle ID 앞에 **Services ID를 맨 앞에 오도록 추가**합니다. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](./setup-details#client-ids))
+- **Client IDs**: 위 Bundle ID 앞에 **Services ID를 맨 앞에 오도록 추가**합니다. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](/guide/social/apple/setup-details#client-ids))
 - OAuth에 쓰는 **Secret Key**는 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 JWT 형태로 넣습니다.
 
 **Supabase · URL Configuration**

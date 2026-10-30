@@ -53,10 +53,10 @@ else
 
 **반환**
 
-`.Data`에 차단 정보가 담깁니다. 차단 상태가 아니면 `null`입니다.
+`.Data`는 `SupabaseBanInfo`입니다. 차단 상태가 아니면 `null`입니다.
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
-| `.Data.IsPermanentBan` | `bool` | 영구 차단 여부. 운영 콘솔의 영구 차단처럼 해제까지 50년 넘게 남은 차단도 영구로 봅니다 |
-| `.Data.BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 `null` |
-| `.Data.BanMessage` | `string` | 어드민이 설정한 차단 사유 메시지. 없으면 빈 문자열 |
+| `IsPermanentBan` | `bool` | 영구 차단 여부. 운영 콘솔의 영구 차단처럼 해제까지 50년 넘게 남은 차단도 영구로 봅니다 |
+| `BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 `null` |
+| `BanMessage` | `string` | 운영자가 설정한 차단 사유 메시지. 없으면 빈 문자열 |

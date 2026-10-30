@@ -80,7 +80,7 @@ async Task OnAccept(FriendRequestSummary request)
 
 | 메서드 | 설명 |
 |--------|------|
-| [`SearchFriendAsync`](/guide/friend/search) | 닉네임으로 유저 검색 |
+| [`SearchFriendAsync`](/guide/friend/search) | 닉네임으로 플레이어 검색 |
 | [`SendFriendRequestAsync`](/guide/friend/request-send) | 친구 요청 전송 |
 | [`GetFriendRequestsAsync`](/guide/friend/requests-list) | 대기 중인 요청 목록 |
 | [`RespondFriendRequestAsync`](/guide/friend/request-respond) | 받은 요청 수락·거절 |
@@ -90,7 +90,7 @@ async Task OnAccept(FriendRequestSummary request)
 | [`GetFriendLimitsAsync`](/guide/friend/limits) | 제한값 읽기 |
 
 ::: tip 닉네임은 정확히 일치해야 합니다
-부분 검색은 지원하지 않습니다. 전체 유저를 훑을 수 있게 여는 걸 막기 위한 설계입니다.
+부분 검색은 지원하지 않습니다. 전체 플레이어를 훑을 수 있게 여는 걸 막기 위한 설계입니다.
 :::
 
 ::: info 돌려보고 싶다면

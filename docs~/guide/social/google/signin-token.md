@@ -4,7 +4,7 @@
 Task<SupabaseSignInResult> Supabase.SignInWithGoogleIdTokenAsync(string idToken)
 ```
 
-다른 SDK나 직접 만든 OAuth 흐름으로 이미 받은 Google ID 토큰으로 Supabase에 로그인합니다. 계정 선택 창을 SDK가 띄우게 하려면 [신규 로그인](./signin)을 쓰세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
+다른 SDK나 직접 만든 OAuth 흐름으로 이미 받은 Google ID 토큰으로 Supabase에 로그인합니다. 계정 선택 창을 SDK가 띄우게 하려면 [신규 로그인](/guide/social/google/signin)을 쓰세요. 성공 시 `result.Profile`에 내 프로필이 담깁니다.
 
 ```csharp
 var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
@@ -28,12 +28,12 @@ else
 
 **반환**
 
-`.Profile` — 로그인한 내 프로필입니다. 담기는 필드는 [`PublicProfile` 필드](/guide/display-name/profile) 참고.
+`.Profile`은 로그인한 내 프로필입니다. 담기는 필드는 [공개 프로필](/guide/display-name/profile)을 참고하세요.
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.AnonymousRequiresLink` | 익명 세션 — 연동은 [게스트 연동](./link-token)을 사용 |
-| `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
-| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 |
+| `SupabaseReason.AnonymousRequiresLink` | 익명 세션입니다. 연동은 [게스트 연동](/guide/social/google/link-token)을 쓰세요 |
+| `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
+| `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |

@@ -16,7 +16,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `TLeaderboard` | [클래스 생성기](./columns#generate)로 만든 리더보드 타입 |
+| `TLeaderboard` | [클래스 생성기](/guide/leaderboard/columns#generate)로 만든 리더보드 타입 |
 
 **에러 코드**
 
@@ -25,5 +25,5 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 
 ::: info 다른 플레이어 기록 삭제
-운영자가 특정 플레이어의 기록을 지우거나 점수를 정정하는 기능은 어드민(Retool)에 있습니다. 게임에서는 본인 기록만 지울 수 있습니다.
+운영자가 특정 플레이어의 기록을 지우거나 점수를 정정하는 기능은 운영 콘솔에 있습니다. 게임에서는 본인 기록만 지울 수 있습니다.
 :::

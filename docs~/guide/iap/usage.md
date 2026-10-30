@@ -12,19 +12,6 @@ Task<SupabaseResult<IAPFacade>> SupabaseIAP.CreateIAPAsync(
 
 Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결합니다. Android/iOS를 자동 감지하므로 대부분의 게임은 이 메서드 하나면 됩니다.
 
-**파라미터**
-
-| 파라미터 | 설명 |
-|----------|------|
-| `productIds` | 등록할 소모품 ID 목록 |
-| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, alreadyGranted)` — `true` 반환 시 SDK가 결제를 소비 처리. [자세히](#duplicate-grant) |
-| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` (기본값: `null`) |
-| `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) |
-
-**반환**
-
-초기화 성공 시 `.Data`에 `IAPFacade`가 담깁니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다.
-
 ```csharp
 var result = await SupabaseIAP.CreateIAPAsync(productIds, async (productId, alreadyGranted) =>
 {
@@ -35,13 +22,26 @@ if (!result.IsSuccess) return;
 var iap = result.Data;
 ```
 
+**파라미터**
+
+| 파라미터 | 설명 |
+|----------|------|
+| `productIds` | 등록할 소모품 ID 목록 |
+| `onGrant` | 서버 검증 완료 후 아이템 지급 콜백. `(productId, alreadyGranted)`를 받고, `true`를 반환하면 SDK가 결제를 소비 처리. [자세히](#duplicate-grant) |
+| `onFailed` | 구매 실패 콜백. `IAPPurchaseFailedInfo.ProductId` / `.FailureReason` (기본값: `null`) |
+| `timeoutMs` | 초기화 대기 최대 시간 ms (기본값: `10_000`) |
+
+**반환**
+
+`.Data`는 `IAPFacade`입니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다.
+
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.IapProductIdsEmpty` | `productIds`가 비어 있음 |
-| `SupabaseReason.IapServicesInitFailed` | Unity Services 초기화 실패 |
-| `SupabaseReason.IapInitTimeout` | 제한 시간 내 초기화 미완료 |
+| `SupabaseReason.IapProductIdsEmpty` | `productIds`가 비어 있습니다 |
+| `SupabaseReason.IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
+| `SupabaseReason.IapInitTimeout` | 제한 시간 안에 초기화가 끝나지 않았습니다 |
 
 ::: warning 로그인 완료 후 호출
 `CreateIAPAsync`는 로그인 완료 후에 호출하세요. 자동 로그인 경로에서도 동일합니다. 초기화 도중 스토어에 남아있는 미처리 주문이 있으면 [구매 처리 흐름](#purchase-flow)이 곧바로 재시작되는데, 이때 세션이 없으면 서버 검증이 실패해 불필요한 재시도가 한 번 낍니다.

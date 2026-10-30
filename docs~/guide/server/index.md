@@ -7,7 +7,7 @@
 | 값 | 어디에 있나 | 무엇인가 |
 |----|------------|----------|
 | `Supabase.ServerCode` | 기기 로컬 | 이 기기가 **접속하려는** 서버 |
-| [서버&nbsp;정보&nbsp;조회](./info) | DB | 계정에 **배정된** 서버 |
+| [서버&nbsp;정보&nbsp;조회](/guide/server/info) | DB | 계정에 **배정된** 서버 |
 
 로그인할 때 SDK가 둘을 비교해, 다르면 계정을 로컬에서 고른 서버로 옮깁니다. 그래서 평소에는 두 값이 같습니다.
 
@@ -23,4 +23,4 @@ string Supabase.ServerCode
 label.text = Supabase.ServerCode;   // "GLOBAL"
 ```
 
-바꾸려면 [서버 선택](./select)을 호출합니다.
+바꾸려면 [서버 선택](/guide/server/select)을 호출합니다.

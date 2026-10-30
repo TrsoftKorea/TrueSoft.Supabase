@@ -23,4 +23,4 @@ if (result.IsSuccess)
 
 **반환**
 
-`.Data`에 삭제된 우편 개수가 `int`로 담깁니다.
+`.Data`는 삭제된 우편 개수 `int`입니다.

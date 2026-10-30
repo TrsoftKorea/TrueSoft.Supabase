@@ -6,7 +6,7 @@ Task<SupabaseResult> Supabase.SetRowAsync<TRow>(TRow row)
 
 이미 기록된 본인 항목의 등록 필드를 **현재 회차**에서 수정합니다. **점수는 바뀌지 않습니다.** 어느 리더보드인지는 행 타입에서 읽습니다.
 
-넘기는 행은 **[`Supabase.ToRow`](./columns#to-row)로 만든 것**이어야 합니다. 직접 `new`한 행은 거부됩니다.
+넘기는 행은 **[`Supabase.ToRow`](/guide/leaderboard/columns#to-row)로 만든 것**이어야 합니다. 직접 `new`한 행은 거부됩니다.
 
 ```csharp
 var me  = await Supabase.GetRankAsync<GuildLeaderboard>();
@@ -19,7 +19,7 @@ await Supabase.SetRowAsync(row);
 
 | 파라미터 | 설명 |
 |----------|------|
-| `row` | [`Supabase.ToRow`](./columns#to-row)로 조회 결과에서 만든 행 |
+| `row` | [`Supabase.ToRow`](/guide/leaderboard/columns#to-row)로 조회 결과에서 만든 행 |
 
 **에러 코드**
 
@@ -36,5 +36,5 @@ await Supabase.SetRowAsync(row);
 :::
 
 ::: warning 기록이 있어야 수정됩니다
-점수를 한 번도 올리지 않았다면 `LeaderboardScoreNotFound`로 실패합니다. 먼저 [점수 기록](./submit)이 필요합니다.
+점수를 한 번도 올리지 않았다면 `LeaderboardScoreNotFound`로 실패합니다. 먼저 [점수 기록](/guide/leaderboard/submit)이 필요합니다.
 :::

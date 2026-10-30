@@ -8,7 +8,7 @@
 | [`ClaimAllMailItemsAsync`](/guide/mailbox/claim-all) | 보상 일괄 수령 · 분류 필터 |
 | [`DeleteMailAsync`](/guide/mailbox/delete) | 삭제 |
 | [`DeleteClaimedMailsAsync`](/guide/mailbox/delete-claimed) | 수령한 우편 일괄 삭제 · 분류 필터 |
-| [`GetUnclaimedMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 메일 수 |
+| [`GetUnclaimedMailCountAsync`](/guide/mailbox/counts-unclaimed) | 미수령 우편 수 |
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미수령 + 분류별 세부 내역 |
 | [`GetMailSettingsAsync`](/guide/mailbox/settings) | 만료 우편 보관 일수 |
 | [`RegisterMailItemHandler`](/guide/mailbox/item-handler) | 보상 지급 핸들러 등록 |
