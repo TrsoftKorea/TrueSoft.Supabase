@@ -19,8 +19,6 @@ const REPO = path.resolve(ADMIN_DIR, '..')
 const SCOPE = 'Admin~/'
 // 실제 콘솔(Cloudflare Pages)에 배포되는 건 화면 코드뿐이다 — 콘솔 서버(admin-api)는 따로 올린다.
 const SERVER_SCOPE = 'Admin~/supabase/'
-// 커밋에 넣지 않는 파일 — Supabase CLI 가 혼자 고치는 버전 기록.
-const NEVER = new Set(['Admin~/supabase/.temp/cli-latest'])
 // 제가(에이전트) 미리 적어 두는 커밋 요약. 없으면 기본 문구.
 const MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message')
 const SDK_MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message-sdk')
@@ -64,7 +62,7 @@ function pendingFiles() {
     const status = entry.slice(0, 2).trim()
     const file = entry.slice(3)
     const orig = /^[RC]/.test(entry) ? parts[++i] : undefined
-    if (!NEVER.has(file)) out.push(orig ? { status, file, orig } : { status, file })
+    out.push(orig ? { status, file, orig } : { status, file })
   }
   return out
 }
