@@ -72,6 +72,8 @@ type TicketRow = {
   category: string | null
   status: Status
   was_banned: boolean
+  // 게임 밖(고객센터 주소)에서 유저 ID 만 적고 보낸 문의 — 본인이 쓴 것인지 확인되지 않았다.
+  via_web?: boolean
   preview: string | null
   created_at: string
   last_message_at: string
@@ -235,6 +237,7 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
                 <td className="px-3 py-2 text-neutral-800 whitespace-nowrap">
                   {r.display_name || r.user_id}
                   {r.was_banned && <span className="ml-1.5 text-[11px] text-red-600">차단</span>}
+                  {r.via_web && <span className="ml-1.5 text-[11px] text-amber-700">게임 밖 접수</span>}
                 </td>
                 <td className="px-3 py-2 text-neutral-600 truncate max-w-[28rem]">{r.preview || '(그림만 보냄)'}</td>
                 <td className="px-5 py-2 text-neutral-500 whitespace-nowrap">{formatDateTime(r.last_message_at)}</td>
@@ -337,6 +340,9 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
             ticket.was_banned
               ? { label: '계정 상태', value: '차단', tone: 'danger' as const }
               : { label: '계정 상태', value: '정상' },
+            ...(ticket.via_web
+              ? [{ label: '접수 경로', value: '게임 밖 주소 · 본인 확인 안 됨' }]
+              : []),
             ...Object.keys(META_LABEL).filter((k) => k !== 'language').map((k) => ({ label: META_LABEL[k], value: ticket.meta[k] })),
             ...meta.filter(([k]) => !(k in META_LABEL)).map(([k, v]) => ({ label: k, value: v })),
             { label: '기기 언어', value: answerLang?.device ? langName(answerLang.device) : null },

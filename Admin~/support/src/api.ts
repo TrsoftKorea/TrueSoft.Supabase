@@ -1,4 +1,5 @@
 // support-api 엣지 함수 호출. 주소의 ?p=<프로젝트 ref> 로 어느 게임인지, #t=<접속 표> 로 누구인지 받는다.
+// 접속 표가 없으면(브라우저로 주소만 연 것) 로그인 없는 창이 되어 유저 ID 로 쿠폰 등록·문의 보내기만 한다.
 // 접속 표는 SDK 가 본인 확인 뒤 받아 넘긴 것이다 — 주소 기록에 남지 않게 읽자마자 지우고 이 창의 저장 공간에만 둔다.
 // 받는 게임은 운영 콘솔의 게임 목록(projectTarget)뿐이다 — 아무 프로젝트나 받으면 남이 자기 서버를 물린 링크로
 // 공식 주소에서 가짜 고객센터를 보여 줄 수 있다. 게임을 추가할 때는 콘솔과 같은 곳만 고치면 된다.
@@ -27,16 +28,19 @@ export class ApiError extends Error {
   }
 }
 
+// signedIn — 게임 안 창(접속 표가 있음). create·upload·coupon 은 userId 를 넘기면 게임 밖 경로, 안 넘기면 접속 표로 간다.
 export interface SupportApi {
+  readonly signedIn: boolean
   look(): Promise<Look>
   faqs(lang: string): Promise<Faq[]>
   me(): Promise<Me>
   categories(lang: string): Promise<Category[]>
   tickets(lang: string): Promise<TicketSummary[]>
   ticket(id: string, lang: string): Promise<Ticket>
-  create(categoryId: number, body: string, attachments: string[]): Promise<string>
+  create(categoryId: number, body: string, attachments: string[], userId?: string, lang?: string): Promise<string>
   reply(ticketId: string, body: string, attachments: string[]): Promise<void>
-  upload(contentType: string, base64: string): Promise<Attachment>
+  upload(contentType: string, base64: string, userId?: string): Promise<Attachment>
+  coupon(code: string, userId?: string): Promise<void>
 }
 
 const TOKEN_KEY = 'tb_support_token'
@@ -60,7 +64,6 @@ export function createApi(): SupportApi | null {
   const token = readToken()
 
   const call = async <T>(action: string, body: Record<string, unknown> = {}, auth = true): Promise<T> => {
-    // 접속 표 없이 주소만으로 연 경우 — 만료가 아니라 게임 밖에서 연 것이다.
     if (auth && !token) throw new ApiError('support_session_missing')
     let res: Response
     try {
@@ -77,17 +80,27 @@ export function createApi(): SupportApi | null {
     return json.data as T
   }
 
+  // 쓰기 요청은 userId 가 있으면 게임 밖 경로로 간다 — 접속 표가 만료돼 화면이 게임 밖 모드로 바뀐 뒤에도
+  // 화면과 같은 경로를 타게(표가 남아 있다는 것만 보고 표로 보내면 만료 오류만 되풀이된다).
   return {
+    signedIn: !!token,
     look: () => call<Look>('look', {}, false),
     faqs: (lang) => call<Faq[]>('faqs', { lang }, false),
     me: () => call<Me>('me'),
-    categories: (lang) => call<Category[]>('categories', { lang }),
+    categories: (lang) => call<Category[]>('categories.public', { lang }, false),
     tickets: (lang) => call<TicketSummary[]>('tickets', { lang }),
     ticket: (id, lang) => call<Ticket>('ticket', { ticket_id: id, lang }),
-    create: async (categoryId, body, attachments) =>
-      (await call<{ id: string }>('create', { category_id: categoryId, body, attachments })).id,
+    create: async (categoryId, body, attachments, userId, lang) => (userId === undefined
+      ? await call<{ id: string }>('create', { category_id: categoryId, body, attachments })
+      : await call<{ id: string }>('web.create', { user_id: userId, category_id: categoryId, body, attachments, lang }, false)).id,
     reply: async (ticketId, body, attachments) => { await call('reply', { ticket_id: ticketId, body, attachments }) },
-    upload: (contentType, data) => call<Attachment>('upload', { content_type: contentType, data }),
+    upload: (contentType, data, userId) => (userId === undefined
+      ? call<Attachment>('upload', { content_type: contentType, data })
+      : call<Attachment>('web.upload', { user_id: userId, content_type: contentType, data }, false)),
+    coupon: async (code, userId) => {
+      if (userId === undefined) await call('coupon', { code })
+      else await call('web.coupon', { user_id: userId, code }, false)
+    },
   }
 }
 
