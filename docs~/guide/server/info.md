@@ -12,10 +12,3 @@ DB 컬럼 `profiles.server_id`에 기록된 내 서버에 대응하는 서버 �
 |---------|------|------|
 | `ServerId` | `string` | 서버의 내부 ID |
 | `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseReason.NotInitialized` | SDK가 초기화되지 않았습니다 |

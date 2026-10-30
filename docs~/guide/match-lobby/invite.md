@@ -28,4 +28,3 @@ if (r.IsSuccess)
 | `SupabaseReason.MatchLobbyInviteLimitReached` | 상대가 떠안고 있는 대기 초대가 상한에 도달했습니다 |
 | `SupabaseReason.MatchLobbyInviteTooFast` | 연속 초대 최소 간격을 지키지 않았습니다 |
 | `SupabaseReason.MatchLobbyFull` | 로비 정원이 가득 찼습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

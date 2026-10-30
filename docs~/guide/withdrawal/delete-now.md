@@ -24,7 +24,6 @@ Apple로 로그인한 계정은 삭제 전에 Apple 연결도 끊습니다. 같�
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseReason.AccountDeleteFailed` | 삭제하지 못했습니다. 계정은 그대로이며 다시 시도할 수 있습니다 |
 
 ::: warning 되돌릴 수 없습니다

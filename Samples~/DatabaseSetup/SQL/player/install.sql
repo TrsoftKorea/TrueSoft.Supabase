@@ -9682,14 +9682,16 @@ revoke all on table public.coupon_redemptions from anon, authenticated;
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_coupon_redeem(text);
 
-create or replace function public.ts_coupon_redeem(p_code text)
+-- 실제 사용 처리. 계정을 받는다 — 게임은 아래 ts_coupon_redeem 이 로그인 계정으로, 고객센터 창은 support-api 가
+-- 확인한 계정으로 부른다(service_role 전용). 실패는 위 사유로 예외를 던진다.
+create or replace function public.ts_coupon_redeem_as(p_uid uuid, p_code text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_uid    uuid := auth.uid();
+  v_uid    uuid := p_uid;
   v_user   text;
   v_code   text;
   c        public.coupons%rowtype;
@@ -9700,8 +9702,6 @@ begin
     raise exception 'not_authenticated';
   end if;
 
-  -- 이 블록 안의 쓰기(이력·횟수·우편)는 실패하면 블록째 되돌려진다 — 요청 제한의 시도 수는 블록 밖이라 남는다.
-  begin
   v_code := upper(btrim(coalesce(p_code, '')));
   if v_code = '' then
     raise exception 'coupon_not_found';
@@ -9763,6 +9763,30 @@ begin
   update public.coupon_redemptions set mail_id = v_mail where id = v_red_id;
 
   return jsonb_build_object('mail_id', v_mail);
+end;
+$$;
+
+comment on function public.ts_coupon_redeem_as(uuid, text) is
+  '쿠폰 사용 처리(계정 지정). 게임은 ts_coupon_redeem, 고객센터 창은 support-api 가 부른다. service_role 전용.';
+revoke all on function public.ts_coupon_redeem_as(uuid, text) from public, anon, authenticated;
+grant execute on function public.ts_coupon_redeem_as(uuid, text) to service_role;
+
+create or replace function public.ts_coupon_redeem(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  -- 이 블록 안의 쓰기(이력·횟수·우편)는 실패하면 블록째 되돌려진다 — 요청 제한의 시도 수는 블록 밖이라 남는다.
+  begin
+    return public.ts_coupon_redeem_as(v_uid, p_code);
   exception when raise_exception then
     if sqlerrm not in ('coupon_not_found', 'coupon_inactive', 'coupon_expired', 'coupon_already_used', 'coupon_exhausted') then
       raise;
@@ -13382,6 +13406,8 @@ create table if not exists public.support_tickets (
   updated_at      timestamptz not null default now(),
   last_message_at timestamptz not null default now()
 );
+-- 게임 밖(고객센터 주소)에서 유저 ID 만 적고 보낸 문의. 본인 확인을 안 거쳤으므로 콘솔이 따로 표시한다.
+alter table public.support_tickets add column if not exists via_web boolean not null default false;
 create index if not exists support_tickets_status_idx  on public.support_tickets (status, last_message_at desc);
 create index if not exists support_tickets_account_idx on public.support_tickets (account_id, last_message_at desc);
 alter table public.support_tickets enable row level security;
@@ -13530,6 +13556,7 @@ end;
 $$;
 
 -- 첨부 경로가 그 계정 폴더의 것인지(남의 그림을 붙이지 못하게), 3장 이하인지.
+-- 게임 밖 창에서 올린 그림은 `web/<계정>/` 에 따로 둔다 — 남이 그 ID 로 올린 그림이 게임 안 올리기 한도를 채우지 않게.
 create or replace function public.ts_support_check_attachments(p_account uuid, p_attachments jsonb)
 returns jsonb
 language plpgsql
@@ -13544,7 +13571,7 @@ begin
     raise exception 'support_attachments_invalid';
   end if;
   for p in select jsonb_array_elements_text(v) loop
-    if p !~ ('^' || p_account::text || '/[0-9a-f-]{36}\.(png|jpg|webp)$') then
+    if p !~ ('^(web/)?' || p_account::text || '/[0-9a-f-]{36}\.(png|jpg|webp)$') then
       raise exception 'support_attachments_invalid';
     end if;
   end loop;
@@ -13590,7 +13617,8 @@ begin
     raise exception 'support_category_invalid';
   end if;
   -- 답을 기다리는 문의가 쌓이면 새로 열지 못하게 한다 — 같은 내용을 여러 번 여는 걸 막는다.
-  if (select count(*) from public.support_tickets where account_id = p_account and status = 'open') >= 5 then
+  -- 게임 밖 접수는 빼고 센다 — 남이 그 ID 로 열어 둔 문의 때문에 본인이 게임 안에서 못 열게 되지 않게.
+  if (select count(*) from public.support_tickets where account_id = p_account and status = 'open' and not via_web) >= 5 then
     raise exception 'support_too_many_open';
   end if;
   perform public.ts_support_guard_rate(p_account);
@@ -13660,6 +13688,90 @@ $$;
 comment on function public.ts_support_account_attachments(uuid) is '이 계정 문의에 붙은 그림 경로. 안 붙인 그림 정리용. service_role 전용.';
 revoke all on function public.ts_support_account_attachments(uuid) from public, anon, authenticated;
 grant execute on function public.ts_support_account_attachments(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 게임 밖에서 연 창 — 고객센터 주소를 브라우저로 열면 로그인이 없어 유저 ID 로 계정을 찾는다.
+-- 쿠폰 등록과 문의 보내기만 된다. 보상은 그 ID 주인의 우편함으로, 답변은 그 계정의 게임 안 고객센터로 간다 —
+-- 남의 ID 를 적어도 남의 문의·우편을 읽을 수는 없다. 코드·ID 를 마구 넣어 보는 것은 아래 횟수 제한으로 막는다.
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_support_account_from_user_id(p_user_id text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  -- 게임이 보여 주는 값은 계정 번호(Supabase.UserId)다. 구글·애플 계정은 user_id 칸이 그쪽 번호라 둘 다 받는다.
+  with v as (select btrim(coalesce(p_user_id, '')) as id)
+  select p.account_id from public.user_profiles p, v
+   where p.account_id is not null
+     and (p.user_id = v.id
+          or p.account_id = case when v.id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v.id::uuid end)
+   limit 1;
+$$;
+
+-- 횟수 제한 기록. key 는 support-api 가 만든다(접속 주소의 해시·유저 ID 등). 하루 지난 줄은 기록할 때 지운다.
+create table if not exists public.support_web_hits (
+  key        text        not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists support_web_hits_key_idx     on public.support_web_hits (key, created_at);
+create index if not exists support_web_hits_created_idx on public.support_web_hits (created_at);
+alter table public.support_web_hits enable row level security;
+revoke all on table public.support_web_hits from anon, authenticated;
+
+-- p_window_seconds 안에 p_max 번 넘게 왔으면 false(기록하지 않음), 아니면 기록하고 true.
+create or replace function public.ts_support_web_hit(p_key text, p_window_seconds int, p_max int)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- 같은 키의 동시 요청이 모두 같은 개수를 보고 통과하지 않게 줄을 세운다.
+  perform pg_advisory_xact_lock(hashtextextended(p_key, 0));
+  delete from public.support_web_hits where created_at < now() - interval '1 day';
+  if (select count(*) from public.support_web_hits
+       where key = p_key and created_at > now() - make_interval(secs => p_window_seconds)) >= p_max then
+    return false;
+  end if;
+  insert into public.support_web_hits (key) values (p_key);
+  return true;
+end;
+$$;
+
+-- 문의 열기(게임 밖). ts_support_create 와 같은 검사를 거치고 "게임 밖 접수" 표시만 더한다.
+-- 답을 기다리는 게임 밖 문의는 계정당 하나 — 남의 ID 로 문의를 쌓아 그 사람의 문의 목록을 어지럽히지 못하게.
+create or replace function public.ts_support_create_web(
+  p_account uuid, p_category int, p_body text, p_attachments jsonb, p_meta jsonb, p_was_banned boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('support_web_create:' || p_account::text, 0));
+  if exists (select 1 from public.support_tickets where account_id = p_account and via_web and status = 'open') then
+    raise exception 'support_too_many_open';
+  end if;
+  v_id := public.ts_support_create(p_account, p_category, p_body, p_attachments, p_meta, p_was_banned);
+  update public.support_tickets set via_web = true where id = v_id;
+  return v_id;
+end;
+$$;
+
+comment on function public.ts_support_account_from_user_id(text) is '유저 ID → 계정(게임 밖 고객센터 창). service_role 전용.';
+comment on function public.ts_support_web_hit(text, int, int) is '게임 밖 고객센터 창의 횟수 제한. service_role 전용.';
+comment on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) is '게임 밖에서 문의 열기. service_role 전용.';
+revoke all on function public.ts_support_account_from_user_id(text)                       from public, anon, authenticated;
+revoke all on function public.ts_support_web_hit(text, int, int)                          from public, anon, authenticated;
+revoke all on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) from public, anon, authenticated;
+grant execute on function public.ts_support_account_from_user_id(text)                       to service_role;
+grant execute on function public.ts_support_web_hit(text, int, int)                          to service_role;
+grant execute on function public.ts_support_create_web(uuid, int, text, jsonb, jsonb, boolean) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 자주 묻는 질문 — 고객센터 창 첫 화면과 문의 쓰기(고른 분류의 것)에 보인다. 운영 콘솔 "고객센터 › 자주 묻는 질문".
@@ -13885,7 +13997,7 @@ as $$
     'rows', coalesce((
       select jsonb_agg(jsonb_build_object(
                'id', b.id, 'account_id', b.account_id, 'user_id', b.user_id, 'display_name', b.display_name,
-               'category', b.category, 'status', b.status, 'was_banned', b.was_banned,
+               'category', b.category, 'status', b.status, 'was_banned', b.was_banned, 'via_web', b.via_web,
                'preview', left((select m.body from public.support_messages m where m.ticket_id = b.id order by m.id limit 1), 80),
                'created_at', b.created_at, 'last_message_at', b.last_message_at)
                order by b.last_message_at desc)
@@ -13904,7 +14016,7 @@ as $$
   select jsonb_build_object(
            'id', t.id, 'account_id', t.account_id, 'user_id', t.user_id, 'display_name', d.display_name,
            'category', c.name, 'category_id', t.category_id, 'status', t.status, 'was_banned', t.was_banned,
-           'meta', t.meta, 'created_at', t.created_at, 'last_message_at', t.last_message_at,
+           'via_web', t.via_web, 'meta', t.meta, 'created_at', t.created_at, 'last_message_at', t.last_message_at,
            'messages', coalesce((
              select jsonb_agg(jsonb_build_object('id', m.id, 'sender', m.sender, 'body', m.body,
                                                  'attachments', m.attachments, 'admin_email', m.admin_email,

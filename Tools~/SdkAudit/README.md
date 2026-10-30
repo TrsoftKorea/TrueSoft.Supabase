@@ -79,6 +79,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R7 | 경고 | 문서·샘플·SDK 어디에서도 참조되지 않는 공개 멤버 |
 | R8 | 하드 오류 | 문서의 `SupabaseReason.*`가 enum에 존재 |
 | R8 | 하드 오류 | 문서에 `SupabaseErrorCode` 노출 없음 (SDK 전용) |
+| R8 | 하드 오류 | 함수 에러 표에 공통 사유(실패 사유 문서 「공통 · 세션」 표의 사유) 없음. 목록은 그 문서에서 읽는다 — 표를 못 찾으면 오류 |
 | R8 | 하드 오류 | 파라미터 표의 이름이 시그니처에 존재 |
 | R8 | 하드 오류 | 문서 기본값 == 코드 기본값 |
 | R8 | 경고 | 파라미터 표 누락·기본값 표기 누락 |
@@ -100,12 +101,13 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R18 | 하드 오류 | `SerializeObject`·`ToJson`에 익명 객체(`new { ... }`)를 넘기지 않음. IL2CPP 기기 빌드에서 속성이 빠져 `{}`로 나가 RPC 가 404(PGRST202)로 실패한다(2026-10-27 아이폰 실측). 에디터에서는 멀쩡해 컴파일 검사로는 안 잡힌다 |
 | R19 | 하드 오류 | `install.sql`에 `'Asia/Seoul'` 같은 시간대 이름을 직접 쓰지 않음. 날짜를 자르는 곳은 `public.ts_game_time_zone()`(게임 시간대)을 쓴다. 허용은 `game_settings`를 다루는 문장(기본값·대체값)뿐. `'UTC'` 는 잡지 않는다(UTC 로 바꾸는 계산은 정당한 쓰임) |
 | R20 | 하드 오류 | `install.sql`에서 `returns void`인 함수를 `Runtime/`이 `CallRpcAsync`로 부를 때 `allowEmptyBody: true`를 넘김. 없으면 성공해도 빈 본문이 `<rpc>_empty_body` 실패로 읽힌다(2026-10-30 푸시 기기 등록·해제 — 로그아웃 때 등록이 안 풀렸다) |
+| R21 | 하드 오류 | `Runtime/`의 `Fail(...)`에 응답 본문(`.Body`)·HTTP 상태 글(`.ErrorMessage`)을 그대로 넘기지 않음. 서버 사유가 JSON 째 들어가 게임의 `Reason`이 늘 `Unknown`이 된다 — `SupabaseRestHelpers.ExtractRpcErrorCode`로 사유만 뽑는다(2026-10-30 리뷰, 27곳) |
 
 ## 검사 대상 파일
 
 | 대상 | 적용 규칙 |
 |------|-----------|
-| `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11·R18. `Runtime/`은 R20도 |
+| `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11·R18. `Runtime/`은 R20·R21도 |
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10·R15 |
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
 | `install.sql` | R9·R13·R17·R19·R20 |

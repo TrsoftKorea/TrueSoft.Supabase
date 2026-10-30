@@ -53,7 +53,6 @@ async Task PollLobbyChat()
 | `SupabaseReason.MatchLobbyNotFound` | 로비가 지정되지 않았습니다 |
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 취소·만료되었습니다 |
 | `SupabaseReason.MatchLobbyMemberNotFound` | 아직 수락하지 않았거나 나간 방입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: warning 로비가 닫히면 조회도 막힙니다
 귓속말과 달리 지난 대화를 나중에 볼 수 없습니다. 방이 취소·만료되면 그 대화는 더 이상 읽히지 않고, 하루 뒤 서버가 지웁니다. 남겨야 할 내용이면 게임이 따로 보관하세요.

@@ -89,7 +89,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<RemoteConfigRow[]>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<RemoteConfigRow[]>.Fail(response.ErrorMessage ?? response.Body ?? "remote_config_fetch_failed");
+                return SupabaseResult<RemoteConfigRow[]>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "remote_config_fetch"));
 
             try
             {

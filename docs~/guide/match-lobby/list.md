@@ -45,12 +45,6 @@ foreach (var lobby in r.Data)
 | `Status` | `MatchLobbyMemberState` | `Invited`·`Accepted`·`Declined`·`Left` |
 | `Metadata` | `Dictionary<string, object>` | [지정한 참가자 칸](/guide/match-lobby/set-member-meta). 지정한 적이 없으면 빈 사전 |
 
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-
 ::: info 응답하지 않고 방치된 초대
 아무도 시작하지 않은 로비는 `ExpiresAt`이 지나면 서버가 자동으로 `Expired`로 정리합니다. 그 시간은 운영 콘솔에서 정하므로 게임이 따로 시간 제한을 관리할 필요는 없습니다.
 :::

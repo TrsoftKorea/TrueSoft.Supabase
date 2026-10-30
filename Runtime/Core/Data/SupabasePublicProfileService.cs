@@ -74,7 +74,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "public_profile_fetch"));
 
             try
             {
@@ -128,7 +128,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "display_name_check_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "display_name_check"));
 
             // RPC가 text 를 JSON 문자열로 반환 → "\"available\"" / "\"taken\"" / "\"forbidden\""
             switch (response.Body?.Trim().Trim('"'))
@@ -136,7 +136,7 @@ namespace TrueBase.Core.Data
                 case "available": return SupabaseResult<bool>.Success(true);
                 case "taken": return SupabaseResult<bool>.Success(false);
                 case "forbidden": return SupabaseResult<bool>.Fail(SupabaseErrorCode.NameForbidden);
-                default: return SupabaseResult<bool>.Fail("display_name_check_parse_failed:" + response.Body);
+                default: return SupabaseResult<bool>.Fail("display_name_check_parse_failed");
             }
         }
 
@@ -171,7 +171,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<PublicProfile>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<PublicProfile>.Fail(response.ErrorMessage ?? response.Body ?? "public_profile_fetch_failed");
+                return SupabaseResult<PublicProfile>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "public_profile_fetch"));
 
             try
             {
@@ -332,7 +332,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<ServerInfo>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<ServerInfo>.Fail(response.ErrorMessage ?? response.Body ?? "my_server_fetch_failed");
+                return SupabaseResult<ServerInfo>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "my_server_fetch"));
 
             try
             {
@@ -377,7 +377,7 @@ namespace TrueBase.Core.Data
             if (response == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "server_transfer_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "server_transfer"));
 
             try
             {
@@ -426,7 +426,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_request_failed");
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "withdrawal_request"));
 
             try
             {
@@ -464,7 +464,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<WithdrawalStatus>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<WithdrawalStatus>.Fail(response.ErrorMessage ?? response.Body ?? "withdrawal_status_failed");
+                return SupabaseResult<WithdrawalStatus>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "withdrawal_status"));
 
             try
             {

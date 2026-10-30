@@ -33,6 +33,36 @@ namespace SdkAudit
             Samples(ctx);
             AnonymousSerialization(ctx);
             VoidRpcEmptyBody(ctx);
+            RawErrorReason(ctx);
+        }
+
+        // ── R21 서버 오류 원문을 사유로 넘기지 않기 ──────────────────────────────
+        // 응답 본문·HTTP 상태 글을 그대로 Fail 에 넘기면 서버가 정한 사유("user_id_not_owned" 등)가 JSON 째 들어가
+        // 게임의 .Reason 이 늘 Unknown 이 된다 — 2026-10-30 리뷰에서 27곳이 그랬다. ExtractRpcErrorCode 로 사유만 뽑는다.
+        private static void RawErrorReason(AuditContext ctx)
+        {
+            foreach (var src in ctx.RuntimeSources)
+            {
+                var root = CSharpSyntaxTree.ParseText(src.Text).GetRoot();
+                foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (call.Expression is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Fail" })
+                        continue;
+                    foreach (var arg in call.ArgumentList.Arguments)
+                    {
+                        var raw = arg.Expression.DescendantNodesAndSelf()
+                            .OfType<MemberAccessExpressionSyntax>()
+                            .FirstOrDefault(m => m.Name.Identifier.ValueText is "Body" or "ErrorMessage"
+                                && !m.Ancestors().OfType<InvocationExpressionSyntax>()
+                                    .TakeWhile(a => a != call)
+                                    .Any(a => a.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ExtractRpcErrorCode" }
+                                           || a.Expression is IdentifierNameSyntax { Identifier.ValueText: "ExtractRpcErrorCode" }));
+                        if (raw != null)
+                            ctx.Report.Error($"[R21 원문사유] Fail 에 {raw} 를 그대로 넘깁니다 — 게임의 Reason 이 Unknown 이 됩니다. " +
+                                             $"SupabaseRestHelpers.ExtractRpcErrorCode(...) 로 사유만 뽑으세요. ({ctx.Where(src, call)})");
+                    }
+                }
+            }
         }
 
         // ── R20 값 없는 RPC 의 빈 응답 ────────────────────────────────────────

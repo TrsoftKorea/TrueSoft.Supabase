@@ -23,9 +23,3 @@ if (r.IsSuccess)
 | `Name` | string | 친구 닉네임 |
 | `Since` | DateTimeOffset | 친구가 된 시각 |
 | `LastActivityAt` | DateTimeOffset? | 그 친구가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

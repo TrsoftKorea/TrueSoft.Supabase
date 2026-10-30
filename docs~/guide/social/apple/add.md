@@ -26,7 +26,6 @@ else
 | `SupabaseReason.AppleSignInCancelled` | 사용자가 로그인 창을 직접 취소 |
 | `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경. 에디터·Android 포함 |
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 추가 연동 · 커스텀](./add-token)을 사용하세요.

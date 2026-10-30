@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using UnityEngine.Networking;
 
 namespace TrueBase.Core.Http
@@ -23,7 +24,7 @@ namespace TrueBase.Core.Http
             _maxRetries = maxRetries;
         }
 
-        /// <summary>HTTP 요청을 보내고, 재시도까지 모두 실패하면 <c>max_retries_exceeded</c> 실패를 반환합니다.</summary>
+        /// <summary>HTTP 요청을 보내고, 재시도까지 모두 실패하면 마지막 시도의 실패를 반환합니다.</summary>
         /// <param name="method">HTTP 메서드(GET·POST·PATCH 등).</param>
         /// <param name="url">요청 전체 URL.</param>
         /// <param name="jsonBody">UTF-8 JSON 본문. null/빈 문자열이면 본문 없이 전송.</param>
@@ -36,7 +37,7 @@ namespace TrueBase.Core.Http
         {
             for (int attempt = 0; attempt <= _maxRetries; attempt++)
             {
-                var response = await SendOnceAsync(method, url, jsonBody, headers);
+                var response = await SendOnceAsync(method, url, jsonBody, headers, attempt == _maxRetries);
                 if (response.IsSuccess || !ShouldRetry(response, attempt))
                     return response;
 
@@ -45,14 +46,16 @@ namespace TrueBase.Core.Http
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
             }
 
-            return SupabaseHttpResponse.Fail(0, "", "max_retries_exceeded");
+            // 위 반복은 마지막 시도에서 반드시 돌아가므로 여기 오지 않는다. 왔다면 응답을 못 받은 것으로 본다.
+            return SupabaseHttpResponse.Fail(0, "", SupabaseErrorCode.NetworkError);
         }
 
         private async Task<SupabaseHttpResponse> SendOnceAsync(
             string method,
             string url,
             string jsonBody,
-            Dictionary<string, string> headers)
+            Dictionary<string, string> headers,
+            bool isLastAttempt)
         {
             using var request = new UnityWebRequest(url, method);
 
@@ -97,8 +100,24 @@ namespace TrueBase.Core.Http
                 return SupabaseHttpResponse.Success(status, body);
             }
 
+            // 상태 0·401 은 응답 객체가, 429·5xx 는 로그인 쪽이 사유 코드로 바꾸면서 원래 글이 사라진다 — 진단용으로 여기 남긴다.
+            // 재시도하는 상태는 마지막 시도에서만 남긴다. 주소의 쿼리는 빼고 적는다.
+            var retriable = status == 0 || status == 429 || status >= 500;
+            if ((retriable && isLastAttempt) || status == 401)
+                UnityEngine.Debug.LogWarning(
+                    $"[Supabase.Http] {method} {StripQuery(url)} → {status}: {request.error} {Truncate(body, 300)}");
+
             return SupabaseHttpResponse.Fail(status, body, request.error);
         }
+
+        private static string StripQuery(string url)
+        {
+            var q = url?.IndexOf('?') ?? -1;
+            return q < 0 ? url : url.Substring(0, q);
+        }
+
+        private static string Truncate(string s, int max) =>
+            string.IsNullOrEmpty(s) || s.Length <= max ? s : s.Substring(0, max) + "…";
 
         /// <summary>
         /// 재시도 대상 판별. StatusCode 0(응답 자체를 못 받은 네트워크 오류)·429·500·502·503·504만 재시도합니다.

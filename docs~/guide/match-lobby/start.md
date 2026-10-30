@@ -23,7 +23,6 @@ if (r.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 없거나 호스트가 아니거나 이미 시작·취소·만료되었습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: warning 시작하면 되돌릴 수 없습니다
 시작한 뒤에는 [로비 취소](/guide/match-lobby/cancel)가 `MatchLobbyNotOpen`으로 실패합니다. 시작된 로비를 닫으려면 호스트가 [로비 나가기](/guide/match-lobby/leave)를 부르세요.

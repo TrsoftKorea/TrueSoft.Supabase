@@ -24,9 +24,3 @@ if (result.IsSuccess)
 **반환**
 
 `.Data`에 삭제된 우편 개수가 `int`로 담깁니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

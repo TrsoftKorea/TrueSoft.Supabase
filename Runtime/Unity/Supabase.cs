@@ -182,6 +182,16 @@ namespace TrueBase.Unity
             SupabaseSDK.TrySetPushPreferencesAsync(enabled, adConsent, nightConsent, mail, supportReply, friendRequest, lobbyInvite);
 
         /// <summary>
+        /// 게임이 화면에 떠 있는 동안 푸시 알림이 오면 발행됩니다. 기기에는 띄우지 않으므로 우편 배지·새 답변 표시를 여기서 새로 고칩니다.
+        /// 씬에 <c>SupabaseRuntime</c> 이 있어야 합니다.
+        /// </summary>
+        public static event Action<SupabasePushMessage> OnPushReceived
+        {
+            add => SupabaseSDK.OnPushReceived += value;
+            remove => SupabaseSDK.OnPushReceived -= value;
+        }
+
+        /// <summary>
         /// 등록된 유저 세이브. 생성된 세이브 클래스가 아직 초기화되지 않았으면 null입니다.
         /// <c>StaticUserSave</c> 서브클래스는 프로젝트당 하나이므로 대상이 모호하지 않습니다.
         /// </summary>

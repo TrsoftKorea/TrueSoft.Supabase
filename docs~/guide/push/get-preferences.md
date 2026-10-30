@@ -27,11 +27,11 @@ if (pref.IsSuccess)
 | `LobbyInvite` | `bool` | 매치 로비 초대 알림 |
 | `AdConsent` | `bool` | 광고성 알림 수신 동의 |
 | `AdConsentAt` | `DateTimeOffset?` | 광고 수신 동의·철회가 마지막으로 바뀐 시각 |
-| `NightConsent` | `bool` | 밤 9시~아침 8시 광고성 알림 수신 동의 |
+| `NightConsent` | `bool` | 밤 9시~아침 8시 광고성 알림 수신 동의. 시각은 운영 콘솔에서 정한 게임 시간대 기준입니다 |
 | `NightConsentAt` | `DateTimeOffset?` | 야간 수신 동의·철회가 마지막으로 바뀐 시각 |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseReason.ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |

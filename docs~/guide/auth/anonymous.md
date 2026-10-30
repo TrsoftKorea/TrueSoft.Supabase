@@ -31,6 +31,5 @@ else
 |--------|------|
 | `SupabaseReason.UserBanned` | 차단된 계정 — `result.BanInfo` 참고 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정 — 새 계정으로 재가입됨 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
 
 소셜 로그인은 [소셜 로그인](/guide/social/google/)을 참고하세요. 로그인과 데이터 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](./auto-login#login-load-separate)를 참고하세요.

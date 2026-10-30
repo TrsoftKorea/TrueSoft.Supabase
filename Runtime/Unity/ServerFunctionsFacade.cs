@@ -21,28 +21,37 @@ namespace TrueBase.Unity
             _sessionGetter = sessionGetter;
         }
 
-        public Task<SupabaseResult<SupabaseFunctionResponse>> InvokeRawAsync(
+        public async Task<SupabaseResult<SupabaseFunctionResponse>> InvokeRawAsync(
             string functionName,
             object requestBody = null,
             bool requireAuth = true)
         {
+            var gate = requireAuth ? await SupabaseSDK.RefreshIfNearExpiryAsync() : null;
+            if (gate != null)
+                return SupabaseResult<SupabaseFunctionResponse>.Fail(gate);
+
             var accessToken = ResolveAccessToken(requireAuth, out var errorCode);
             if (errorCode != null)
-                return Task.FromResult(SupabaseResult<SupabaseFunctionResponse>.Fail(errorCode));
+                return SupabaseResult<SupabaseFunctionResponse>.Fail(errorCode);
 
-            return _functionsService.InvokeRawAsync(functionName, accessToken, requestBody);
+            return await _functionsService.InvokeRawAsync(functionName, accessToken, requestBody);
         }
 
-        public Task<SupabaseResult<TResponse>> InvokeAsync<TResponse>(
+        public async Task<SupabaseResult<TResponse>> InvokeAsync<TResponse>(
             string functionName,
             object requestBody = null,
             bool requireAuth = true)
         {
+            // 결제 확인처럼 결제 창에서 돌아온 직후 부르는 호출이 많다 — 그사이 끝난 토큰을 보내지 않게 먼저 갱신한다.
+            var gate = requireAuth ? await SupabaseSDK.RefreshIfNearExpiryAsync() : null;
+            if (gate != null)
+                return SupabaseResult<TResponse>.Fail(gate);
+
             var accessToken = ResolveAccessToken(requireAuth, out var errorCode);
             if (errorCode != null)
-                return Task.FromResult(SupabaseResult<TResponse>.Fail(errorCode));
+                return SupabaseResult<TResponse>.Fail(errorCode);
 
-            return _functionsService.InvokeAsync<TResponse>(functionName, accessToken, requestBody);
+            return await _functionsService.InvokeAsync<TResponse>(functionName, accessToken, requestBody);
         }
 
         public Task<SupabaseResult<TResponse>> InvokeAsSessionAsync<TResponse>(

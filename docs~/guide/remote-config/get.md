@@ -22,10 +22,3 @@ maxStamina = cfg.Data.maxStamina;
 **반환**
 
 `.Data`에 역직렬화된 설정 객체가 담깁니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotInitialized` | SDK가 초기화되지 않았습니다 |
-| `SupabaseReason.NetworkError` | 서버에 닿지 못했습니다 |

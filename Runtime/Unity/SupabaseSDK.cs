@@ -405,8 +405,110 @@ namespace TrueBase.Unity
             if (_currentSession.expires_at - nowUnix > SessionRefreshLeadSeconds) return;
 
             _isRefreshingSession = true;
-            var token = _currentSession.refresh_token;
-            _ = TryRefreshSessionAsync(token).ContinueWith(_ => _isRefreshingSession = false);
+            _ = RefreshIfNearExpiryAsync().ContinueWith(_ => _isRefreshingSession = false);
+        }
+
+        private static Task<SupabaseResult> _refreshInFlight;
+        private static DateTimeOffset       _gateRefreshDoneAt;
+        private static bool                 _gateRefreshFailed;
+        // 실패가 일시적(네트워크·인증 서버 과부하)이었는지 — 서버가 갱신을 거절한 것과 가른다.
+        private static bool                 _gateRefreshTransient;
+        private static int                  _gateGeneration;
+        // 실패 뒤 다시 시도할 때까지 — 오프라인에서 호출마다 갱신을 기다리면 그만큼 매번 느려진다.
+        private const  int  GateRefreshRetrySeconds = 15;
+        // 성공 뒤에도 이만큼은 다시 안 한다 — 기기 시계가 앞선 기기는 새 토큰도 늘 "곧 만료"로 보여 호출마다 갱신하게 된다.
+        private const  int  GateRefreshMinIntervalSeconds = 60;
+        // 남은 시간이 이보다 길면 갱신을 띄워만 두고 지금 토큰으로 진행한다(일시정지 직전 저장이 갱신을 기다리지 않게).
+        private const  long GateRefreshWaitSeconds = 10;
+        private const  int  SignOutRefreshWaitMs = 10_000;
+
+        /// <summary>
+        /// 곧 끝날 토큰이면 먼저 갱신합니다. 백그라운드에서 오래 있다 돌아온 직후처럼 자동 갱신이 아직 안 돈 사이에
+        /// 만료된 토큰을 보내면 로그인한 플레이어가 "다시 로그인"(<c>NotAuthenticated</c>)을 받기 때문입니다.
+        /// 여러 호출이 동시에 와도 갱신은 한 번만 보냅니다 — 서버는 갱신 토큰을 한 번 쓰면 폐기해 둘째 요청이 실패합니다.
+        /// </summary>
+        /// <returns>
+        /// 본 요청을 보내면 안 될 때의 사유. 토큰이 이미 만료됐는데 갱신이 일시적으로 실패하면(네트워크·인증 서버 429·5xx)
+        /// <c>NetworkError</c> 입니다 — 그대로 보내면 401 이 나 게임이 로그인 화면을 띄운다.
+        /// 서버가 갱신 토큰을 거절했으면(차단·이미 쓴 토큰) null 로 진행시켜 본 요청이 <c>NotAuthenticated</c> 를 받게 합니다.
+        /// 기다리는 사이 로그아웃·계정 전환이 있었으면 <c>NotSignedIn</c> 입니다.
+        /// </returns>
+        internal static async Task<string> RefreshIfNearExpiryAsync()
+        {
+            var session = _currentSession;
+            if (session == null || string.IsNullOrEmpty(session.refresh_token)) return null;
+            if (SecondsLeft(session) > SessionRefreshLeadSeconds) return null;
+            var accountId = session.User?.Id;
+
+            var inFlight = _refreshInFlight;
+            if (inFlight == null || inFlight.IsCompleted)
+            {
+                var since = DateTimeOffset.UtcNow - _gateRefreshDoneAt;
+                var wait  = TimeSpan.FromSeconds(_gateRefreshFailed ? GateRefreshRetrySeconds : GateRefreshMinIntervalSeconds);
+                // 시계를 앞으로 돌렸다 되돌린 기기는 경과가 음수다 — 지난 것으로 본다(아니면 그만큼 갱신이 멈춘다).
+                if (_gateRefreshDoneAt != default && since >= TimeSpan.Zero && since < wait)
+                    return _gateRefreshTransient && SecondsLeft(session) <= 0 ? SupabaseErrorCode.NetworkError : null;
+
+                _refreshInFlight = inFlight = RefreshForGateAsync(session);
+            }
+
+            if (SecondsLeft(session) > GateRefreshWaitSeconds) return null;
+
+            var r = await inFlight;
+            // 기다리는 사이 로그아웃·계정 전환이 있었으면 이 호출은 옛 계정 몫이다 — 새 계정 토큰으로 보내지 않는다.
+            var current = _currentSession;
+            if (current == null || current.User?.Id != accountId)
+                return SupabaseErrorCode.NotSignedIn;
+            // 서버가 갱신을 거절한 것(차단·폐기된 토큰 등)이면 진행시켜 본 요청이 NotAuthenticated 를 받게 한다.
+            if (r.IsSuccess || r.ErrorCode != SupabaseErrorCode.NetworkError)
+                return null;
+            // 남은 시간은 기다린 뒤 다시 잰다 — 느린 갱신 사이에 끝났을 수 있다.
+            return SecondsLeft(current) <= 0 ? SupabaseErrorCode.NetworkError : null;
+        }
+
+        private static long SecondsLeft(SupabaseSession s) => s.expires_at - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        private static async Task<SupabaseResult> RefreshForGateAsync(SupabaseSession session)
+        {
+            var generation = _gateGeneration;
+            SupabaseResult<SupabaseSession> r;
+            try
+            {
+                r = Auth == null
+                    ? SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized)
+                    : await Auth.RefreshSessionAsync(session.refresh_token);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                r = SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NetworkError);
+            }
+
+            // 기다리는 사이 로그아웃·중복 로그인 퇴출·계정 전환이 있었으면 옛 세션을 되살리지 않는다.
+            if (r.IsSuccess && r.Data != null && ReferenceEquals(_currentSession, session))
+            {
+                SetSession(r.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
+                SaveSessionToStorage();
+            }
+
+            // 시작이 아니라 끝난 시각부터 센다 — 느린 네트워크에서 갱신 하나가 수십 초 걸린다.
+            // 로그아웃·계정 전환으로 놓아 버린 갱신이면 새 세션의 상태를 덮지 않는다.
+            if (generation == _gateGeneration)
+            {
+                _gateRefreshDoneAt    = DateTimeOffset.UtcNow;
+                _gateRefreshFailed    = !r.IsSuccess;
+                _gateRefreshTransient = r.ErrorCode == SupabaseErrorCode.NetworkError;
+            }
+            return LogAndReturn(ApiLogTags.AuthRefreshSession, r);
+        }
+
+        private static void ResetGateRefresh()
+        {
+            _gateGeneration++;
+            _refreshInFlight      = null;
+            _gateRefreshDoneAt    = default;
+            _gateRefreshFailed    = false;
+            _gateRefreshTransient = false;
         }
 
         /// <summary><see cref="EnsureInitializedAsync"/> 기본 대기 시간(ms). 씬의 <c>SupabaseRuntime</c> Awake를 기다립니다.</summary>
@@ -2209,6 +2311,10 @@ namespace TrueBase.Unity
             // 이미 로그인되어 있으면 재로그인 없이 현재 세션을 그대로 사용합니다.
             if (IsLoggedIn)
             {
+                var gate = await RefreshIfNearExpiryAsync();
+                if (gate != null)
+                    return SupabaseResult<SupabaseSession>.Fail(gate);
+
                 var singleSessionOk = await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync();
                 if (singleSessionOk == false)
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin);
@@ -3850,6 +3956,12 @@ namespace TrueBase.Unity
             EnsureInitializedOrBootstrapSync();
             if (_bootstrap == null || _currentSession == null)
                 return false;
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null || _currentSession == null)
+            {
+                if (_enableApiResultLogs) Debug.LogWarning($"{tag} {gate ?? SupabaseErrorCode.NotSignedIn}");
+                return false;
+            }
 
             var result = await _bootstrap.IAPService.MarkGrantedAsync(_currentSession.AccessToken, orderId);
             if (!result.IsSuccess && _enableApiResultLogs)
@@ -3893,6 +4005,8 @@ namespace TrueBase.Unity
                 _chat = null;
                 _remoteConfig = null;
                 DisposeActiveIapFacade();
+                ResetGateRefresh();
+                Push.PushNative.ClearReceived();
             }
 
             _currentSession = session;
@@ -3919,6 +4033,13 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task SignOutAsync()
         {
+            // 진행 중인 갱신이 있으면 끝까지 기다린다 — 서버는 이미 옛 갱신 토큰을 폐기했는데 쪽지에 그 토큰을 적고
+            // 갱신 결과는 로그아웃으로 버려지면, 다음 게스트 로그인이 이 계정으로 못 돌아온다.
+            // 망이 나쁘면 갱신이 1분 넘게 걸린다 — 로그아웃 버튼이 그만큼 멈추지 않게 10초까지만 기다린다.
+            var inFlight = _refreshInFlight;
+            if (inFlight != null && !inFlight.IsCompleted)
+                await Task.WhenAny(inFlight, Task.Delay(SignOutRefreshWaitMs));
+
             if (IsAnonymousSession(_currentSession))
                 await TryUpsertAnonymousRecoveryTokenAsync(_currentSession);
 
@@ -3972,6 +4093,9 @@ namespace TrueBase.Unity
             UserSaveStaticSyncRegistry.ResetAll();
 
             _currentSession = null;
+            ResetGateRefresh();
+            // 기기에 쌓인 앞 계정 몫 알림이 다음 계정에게 가지 않게.
+            Push.PushNative.ClearReceived();
             _remoteConfig   = null;
             // 구독·커서·채널 캐시는 계정에 묶인 상태다. 남겨두면 다음 계정이 물려받는다.
             _chat?.Reset();
@@ -4119,6 +4243,7 @@ namespace TrueBase.Unity
             if (!preserveSession)
             {
                 _currentSession = null;
+                ResetGateRefresh();
             }
 
             _userSaves = null;
@@ -4844,11 +4969,10 @@ namespace TrueBase.Unity
             if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
                 return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
 
-            // 백그라운드에서 오래 있다 돌아온 직후처럼 자동 갱신이 아직 안 돈 사이면 만료된 토큰을 보내게 된다 —
-            // 그러면 로그인한 플레이어가 "로그인 필요"를 받으므로 곧 끝날 토큰은 먼저 갱신한다.
-            if (IsLoggedIn && !string.IsNullOrEmpty(_currentSession?.refresh_token)
-                && _currentSession.expires_at - DateTimeOffset.UtcNow.ToUnixTimeSeconds() <= SessionRefreshLeadSeconds)
-                await RefreshSessionAsync(_currentSession.refresh_token);
+            // 이 창은 차단된 계정도 열어야 해서 EnsureReadySessionAsync 를 거치지 않는다 — 갱신만 따로 태운다.
+            // 갱신이 안 돼도 창은 연다 — 그때는 서버가 기기에 남은 다른 증명으로 본인을 확인한다.
+            if (IsLoggedIn)
+                await RefreshIfNearExpiryAsync();
 
             // 로그인 중이어도 기기에 남은 증명을 함께 보낸다 — 게임 중에 차단되면 지금 토큰은 갱신이 막혀 끝나 가고,
             // 서버는 지금 토큰을 먼저 보고 안 되면 나머지를 본다(나머지는 차단된 계정일 때만 받는다).
@@ -4902,6 +5026,9 @@ namespace TrueBase.Unity
                 return LogAndReturnResult(tag, SupabaseResult<int>.Fail(SupabaseErrorCode.NotInitialized));
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult<int>.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult<int>.Fail(gate));
             return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetUnreadCountAsync(_currentSession.AccessToken));
         }
 
@@ -4921,6 +5048,9 @@ namespace TrueBase.Unity
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotInitialized));
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
+            // 플랫폼을 설정보다 먼저 본다 — 푸시를 아직 안 켠 게임도 에디터에서는 "지원 안 함"(일반 로그)으로 끝나게.
+            if (!Push.PushNative.IsSupportedPlatform)
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.PushUnsupportedPlatform));
             if (_bootstrap.PushSettings == null || !_bootstrap.PushSettings.pushEnabled)
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.PushNotConfigured));
 
@@ -4934,7 +5064,12 @@ namespace TrueBase.Unity
             if (string.IsNullOrWhiteSpace(native.Token))
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.PushTokenUnavailable));
 
-            // 기다리는 사이(권한 창) 로그아웃했을 수 있다.
+            // 기다리는 사이(권한 창) 로그아웃했을 수 있다. 권한 창이 길었으면 토큰도 끝나 간다.
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult.Fail(gate));
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn));
             var r = await _bootstrap.PushService.RegisterAsync(
@@ -4955,6 +5090,9 @@ namespace TrueBase.Unity
                 return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotInitialized));
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(gate));
             return LogAndReturnResult(tag, await _bootstrap.PushService.GetPreferencesAsync(_currentSession.AccessToken));
         }
 
@@ -4968,8 +5106,48 @@ namespace TrueBase.Unity
                 return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotInitialized));
             if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
                 return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabasePushPreferences>.Fail(gate));
             return LogAndReturnResult(tag, await _bootstrap.PushService.SetPreferencesAsync(
                 _currentSession.AccessToken, enabled, adConsent, nightConsent, mail, supportReply, friendRequest, lobbyInvite));
+        }
+
+        /// <summary>게임이 화면에 떠 있는 동안 푸시 알림이 오면 발행됩니다. 기기에는 띄우지 않습니다.</summary>
+        public static event Action<SupabasePushMessage> OnPushReceived;
+
+        private static float _lastPushPollTime = float.MinValue;
+        private const  float PushPollIntervalSeconds = 0.5f;
+        // 한 프레임에 꺼내는 최대 개수 — 대량 우편 뒤에 몰려 와도 한 프레임을 붙잡지 않게.
+        private const  int   PushPollMaxPerTick = 5;
+        private const  long  PushReceivedMaxAgeMs = 60_000;
+
+        /// <summary>기기에 쌓인 알림을 꺼내 <see cref="OnPushReceived"/> 로 넘깁니다. SupabaseRuntime.Update 에서 부릅니다.</summary>
+        internal static void TickPushReceived(float realtimeSinceStartup)
+        {
+            // 받는 쪽이 없으면 기기에 묻지 않는다(기기 쪽 줄은 개수 상한이 있어 쌓이지 않는다).
+            if (OnPushReceived == null || !Push.PushNative.IsSupportedPlatform) return;
+            if (realtimeSinceStartup - _lastPushPollTime < PushPollIntervalSeconds) return;
+            _lastPushPollTime = realtimeSinceStartup;
+
+            for (var i = 0; i < PushPollMaxPerTick; i++)
+            {
+                var json = Push.PushNative.PollReceived();
+                if (json == null) return;
+                var message = SupabasePushMessage.FromNativeJson(json);
+                if (message == null)
+                {
+                    Debug.LogWarning($"[Supabase.Push.Received] 받은 알림을 읽지 못했습니다: {json}");
+                    continue;
+                }
+                // 게임이 한참 뒤에 구독하면 지난 알림이 "방금 온 알림"으로 나간다 — 받은 지 오래된 것은 버린다.
+                // 받은 시각과 지금은 같은 기기 시계라 시계가 틀려도 차이는 맞다.
+                if (message.ReceivedAtMs > 0
+                    && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - message.ReceivedAtMs > PushReceivedMaxAgeMs)
+                    continue;
+                try { OnPushReceived?.Invoke(message); }
+                catch (Exception e) { Debug.LogException(e); }
+            }
         }
 
         /// <summary>로그아웃 직전에 이 기기 토큰을 서버에서 지운다. 실패해도 로그아웃은 막지 않는다(다음 로그인 때 등록이 주인을 바꾼다).</summary>

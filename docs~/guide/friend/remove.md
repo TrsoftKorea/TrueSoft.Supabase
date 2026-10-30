@@ -23,4 +23,3 @@ if (r.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.FriendNotFound` | 해당 계정과 친구 관계가 아닙니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

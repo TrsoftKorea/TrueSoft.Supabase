@@ -85,7 +85,7 @@ namespace TrueBase.Core.Data
             catch
             {
                 return SupabaseResult<SupabaseCustomerCenterSession>.Fail(
-                    response.IsSuccess ? InvalidResponse : response.ErrorMessage ?? "customer_center_failed");
+                    response.IsSuccess ? InvalidResponse : $"customer_center_http_{response.StatusCode}");
             }
 
             if (json["ok"]?.Value<bool>() != true)

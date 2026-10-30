@@ -65,6 +65,73 @@ extern "C" void TrueSoftPush_Start()
     }];
 }
 
+// ── 게임이 앞에 떠 있을 때 온 알림 ─────────────────────────────────────────────
+// 앞에 떠 있을 때 온 알림은 iOS 가 띄우지 않는다(알림 센터 대리자가 없으면). Unity 앱 델리게이트가
+// didReceiveRemoteNotification:fetchCompletionHandler: 에서 kUnityDidReceiveRemoteNotification 을 보내고,
+// 애플 문서상 이 메서드는 앱이 앞에 있을 때도 불린다. 알림을 눌러 앱이 앞으로 올 때 다시 불릴 수 있어
+// 그 순간 앱이 활성일 때만 담는다. C# 이 PollReceived 로 꺼내 Supabase.OnPushReceived 로 알린다.
+static const NSUInteger kReceivedMax = 20;
+static NSMutableArray<NSString*>* s_received = nil;
+static id s_receivedObserver = nil;
+
+static void TrueSoftPushListenReceived()
+{
+    if (s_receivedObserver != nil) return;
+    s_received = [NSMutableArray array];
+    s_receivedObserver = [[NSNotificationCenter defaultCenter] addObserverForName:kUnityDidReceiveRemoteNotification object:nil queue:nil usingBlock:^(NSNotification* note) {
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+        NSDictionary* info = (NSDictionary*)note.userInfo;
+        if (![info isKindOfClass:[NSDictionary class]]) return;
+
+        NSString* title = @"";
+        NSString* body = @"";
+        id alert = [info[@"aps"] isKindOfClass:[NSDictionary class]] ? info[@"aps"][@"alert"] : nil;
+        if ([alert isKindOfClass:[NSDictionary class]]) {
+            if ([alert[@"title"] isKindOfClass:[NSString class]]) title = alert[@"title"];
+            if ([alert[@"body"] isKindOfClass:[NSString class]]) body = alert[@"body"];
+        } else if ([alert isKindOfClass:[NSString class]]) {
+            body = alert;
+        }
+        NSMutableDictionary* data = [NSMutableDictionary dictionary];
+        for (id key in info) {
+            if (![key isKindOfClass:[NSString class]] || [key isEqualToString:@"aps"]) continue;
+            id value = info[key];
+            if ([value isKindOfClass:[NSString class]]) data[key] = value;
+            else if ([value isKindOfClass:[NSNumber class]]) data[key] = [value stringValue];
+        }
+        // 받은 시각(밀리초) — 게임이 한참 뒤에 구독하면 지난 알림을 C# 이 거른다.
+        NSNumber* at = @((long long)([[NSDate date] timeIntervalSince1970] * 1000.0));
+        NSData* json = [NSJSONSerialization dataWithJSONObject:@{ @"title": title, @"body": body, @"data": data, @"at": at } options:0 error:nil];
+        if (json == nil) return;
+        NSString* line = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+        @synchronized (s_received) {
+            if (s_received.count >= kReceivedMax) [s_received removeObjectAtIndex:0];
+            [s_received addObject:line];
+        }
+    }];
+}
+
+// 처음 부를 때 듣기 시작한다 — C# 은 게임이 OnPushReceived 를 구독한 뒤에야 부른다.
+extern "C" char* TrueSoftPush_PollReceived()
+{
+    TrueSoftPushListenReceived();
+    @synchronized (s_received) {
+        if (s_received.count == 0) return NULL;
+        NSString* line = s_received[0];
+        [s_received removeObjectAtIndex:0];
+        return TrueSoftPushCopy(line);
+    }
+}
+
+// 로그아웃·계정 전환 때 쌓인 알림을 버린다 — 앞 계정 몫이 다음 계정에게 가지 않게.
+extern "C" void TrueSoftPush_ClearReceived()
+{
+    if (s_received == nil) return;
+    @synchronized (s_received) {
+        [s_received removeAllObjects];
+    }
+}
+
 extern "C" int TrueSoftPush_State() { return s_state; }
 extern "C" char* TrueSoftPush_Token() { return TrueSoftPushCopy(s_token); }
 extern "C" char* TrueSoftPush_Error() { return TrueSoftPushCopy(s_error); }

@@ -10,7 +10,6 @@ Task<SupabaseResult> Supabase.UnlinkAppleAsync()
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다. |
 | `SupabaseReason.IdentityNotLinked` | Apple이 현재 계정에 연동되어 있지 않습니다. |
 | `SupabaseReason.CannotUnlinkLastIdentity` | 마지막 남은 연동이라 해제할 수 없습니다. |
 | `SupabaseReason.UnlinkFailed` | 연동 해제에 실패했습니다. |

@@ -24,9 +24,3 @@ if (result.IsSuccess)
 **반환**
 
 `.Data` — 조회한 플레이어의 닉네임 문자열.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

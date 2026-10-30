@@ -45,7 +45,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<DateTimeOffset>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<DateTimeOffset>.Fail(response.ErrorMessage ?? response.Body ?? "server_time_fetch_failed");
+                return SupabaseResult<DateTimeOffset>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "server_time_fetch"));
 
             try
             {

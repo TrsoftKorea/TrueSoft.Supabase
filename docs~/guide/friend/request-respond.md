@@ -25,7 +25,6 @@ if (r.IsSuccess)
 |--------|------|
 | `SupabaseReason.FriendRequestNotFound` | 해당 요청이 없거나 본인이 받는 쪽이 아닙니다 |
 | `SupabaseReason.FriendRequestNotPending` | 이미 처리된 요청입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: info 화면을 갱신하는 시점
 호출이 성공하면 그 자리에서 목록에서 빼고, 수락이면 [친구 목록](/guide/friend/list)에도 바로 추가하세요. 따로 다시 불러올 필요는 없습니다.

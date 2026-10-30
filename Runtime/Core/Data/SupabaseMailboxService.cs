@@ -88,7 +88,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<Mail>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<Mail>.Fail(response.ErrorMessage ?? response.Body ?? "mail_view_failed");
+                return SupabaseResult<Mail>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "mail_view"));
 
             var body = response.Body?.Trim();
             if (string.IsNullOrEmpty(body) || body == "null")
@@ -138,7 +138,7 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(
-                    response.ErrorMessage ?? response.Body ?? "claim_mail_items_failed");
+                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "claim_mail_items"));
 
             return ParseClaimItemsArray(response.Body);
         }
@@ -167,7 +167,7 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(
-                    response.ErrorMessage ?? response.Body ?? "claim_all_mail_items_failed");
+                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "claim_all_mail_items"));
 
             return ParseClaimAllResponse(response.Body);
         }
@@ -196,7 +196,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "delete_mail_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete_mail"));
 
             return SupabaseResult<bool>.Success(true);
         }
@@ -224,7 +224,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<int>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<int>.Fail(response.ErrorMessage ?? response.Body ?? "delete_claimed_mails_failed");
+                return SupabaseResult<int>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete_claimed_mails"));
 
             var body = response.Body?.Trim();
             if (string.IsNullOrEmpty(body))
@@ -260,7 +260,7 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<MailInboxCounts>.Fail(
-                    response.ErrorMessage ?? response.Body ?? "mail_inbox_counts_failed");
+                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "mail_inbox_counts"));
 
             var body = response.Body?.Trim();
             if (string.IsNullOrEmpty(body) || body == "null")
@@ -299,7 +299,7 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<MailSettings>.Fail(
-                    response.ErrorMessage ?? response.Body ?? "mail_settings_failed");
+                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "mail_settings"));
 
             var body = response.Body?.Trim();
             if (string.IsNullOrEmpty(body) || body == "null")
@@ -331,7 +331,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<IReadOnlyList<Mail>>.Fail(response.ErrorMessage ?? response.Body ?? "mail_list_failed");
+                return SupabaseResult<IReadOnlyList<Mail>>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "mail_list"));
 
             try
             {

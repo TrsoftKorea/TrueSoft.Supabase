@@ -47,7 +47,6 @@ switch (r.Data.Relation)
 | `SupabaseReason.FriendNicknameEmpty` | 검색어가 비어 있습니다 |
 | `SupabaseReason.FriendNicknameNotFound` | 해당 닉네임의 유저가 없습니다 |
 | `SupabaseReason.FriendSelfRequest` | 본인 닉네임을 검색했습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: tip Relation으로 버튼을 바로 정합니다
 검색 결과에 관계가 함께 오므로, 별도로 친구 목록·요청 목록과 대조할 필요 없이 `Relation` 값만으로 "추가"·"요청됨"·"이미 친구" 버튼을 바로 그릴 수 있습니다.

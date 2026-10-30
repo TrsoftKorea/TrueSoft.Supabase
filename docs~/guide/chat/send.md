@@ -45,7 +45,6 @@ ShowToast(r.Reason switch
 | `SupabaseReason.ChatChannelInactive` | 운영이 채팅을 중지한 채널입니다 |
 | `SupabaseReason.ChatChannelNotFound` | 존재하지 않는 채널입니다 |
 | `SupabaseReason.ChatScopeUnavailable` | 서버가 정해지지 않아 서버 채팅을 쓸 수 없습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: tip 입력창 길이 제한
 `ChatChannelInfo.MaxLength`를 입력창에 그대로 걸어 두면 `ChatMessageTooLong`을 만날 일이 없습니다. 서버 검사는 그래도 남겨 두는 안전장치입니다.

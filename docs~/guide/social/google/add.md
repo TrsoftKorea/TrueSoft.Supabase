@@ -24,4 +24,3 @@ if (result.IsSuccess)
 | `SupabaseReason.GoogleWebClientIdEmpty` | Android · `googleWebClientId`가 비어 있음 |
 | `SupabaseReason.GoogleIosClientIdInvalid` | iOS · `googleIosClientId`가 비었거나, 형식이 틀리거나, 웹 클라이언트 ID와 같음 |
 | `SupabaseReason.GoogleLinkFailed` | Supabase identity 연동 실패 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

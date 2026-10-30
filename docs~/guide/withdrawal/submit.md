@@ -17,10 +17,3 @@ else
     ShowError(result.Reason);
 }
 ```
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |

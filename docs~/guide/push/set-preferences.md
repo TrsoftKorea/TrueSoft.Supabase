@@ -28,7 +28,7 @@ public async void OnAdConsentToggle(bool on)
 }
 ```
 
-광고 수신에 동의하거나 철회한 뒤에는 돌려받은 시각으로 처리 결과를 플레이어에게 알립니다. 시각은 UTC로 오므로 기기 시각으로 바꿔 보여 줍니다. 같은 값으로 다시 동의해도 시각이 새로 적혀, 주기적인 수신 동의 재확인 기록으로 쓸 수 있습니다.
+광고 수신에 동의하거나 철회한 뒤에는 게임이 돌려받은 시각으로 처리 결과를 플레이어에게 알립니다. 시각은 UTC로 오므로 기기 시각으로 바꿔 보여 줍니다. 같은 값으로 다시 동의해도 시각이 새로 적혀, 주기적인 수신 동의 재확인 기록으로 쓸 수 있습니다.
 
 **파라미터**
 
@@ -36,7 +36,7 @@ public async void OnAdConsentToggle(bool on)
 |----------|------|
 | `enabled` | 알림을 받을지. 끄면 상황별 값과 상관없이 모든 알림이 오지 않습니다 (기본값: null) |
 | `adConsent` | 광고성 알림 수신 동의 (기본값: null) |
-| `nightConsent` | 밤 9시~아침 8시 광고성 알림 수신 동의. 광고 수신 동의가 있어야 켤 수 있습니다 (기본값: null) |
+| `nightConsent` | 밤 9시~아침 8시 광고성 알림 수신 동의. 시각은 운영 콘솔에서 정한 게임 시간대 기준입니다. 광고 수신 동의가 있어야 켤 수 있습니다 (기본값: null) |
 | `mail` | 우편 도착 알림 (기본값: null) |
 | `supportReply` | 고객센터 답변 알림 (기본값: null) |
 | `friendRequest` | 친구 요청 알림 (기본값: null) |
@@ -50,5 +50,5 @@ public async void OnAdConsentToggle(bool on)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
+| `SupabaseReason.ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |
 | `SupabaseReason.PushNightRequiresAdConsent` | 광고 수신에 동의하지 않은 플레이어의 야간 수신 동의만 켜려 했습니다. `adConsent: true`와 함께 넘깁니다 |

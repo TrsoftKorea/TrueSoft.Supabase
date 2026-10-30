@@ -17,5 +17,4 @@ if (result.Reason == SupabaseReason.CustomerCenterLoginRequired)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.CustomerCenterLoginRequired` | 로그인 상태가 아니고, 차단된 계정의 본인 증명도 없습니다 |
-| `SupabaseReason.CustomerCenterNotShown` | 다른 화면이 이미 떠 있어 창이 뜨지 않았습니다 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
+| `SupabaseReason.CustomerCenterNotShown` | 기기가 6초 안에 창을 띄우지 못했습니다. 다른 화면이 이미 떠 있을 때 주로 생깁니다 |

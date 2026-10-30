@@ -24,4 +24,3 @@ if (r.IsSuccess)
 |--------|------|
 | `SupabaseReason.FriendRequestNotFound` | 해당 요청이 없거나 본인이 보낸 쪽이 아닙니다 |
 | `SupabaseReason.FriendRequestNotPending` | 이미 처리된 요청입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

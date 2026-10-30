@@ -44,6 +44,84 @@ namespace TrueBase.Core.Data
         public DateTimeOffset? NightConsentAt { get; set; }
     }
 
+    /// <summary>푸시 알림이 어떤 상황에서 왔는지.</summary>
+    public enum SupabasePushKind
+    {
+        /// <summary>SDK 가 모르는 상황 — 서버에 새 상황이 생겼는데 SDK 가 아직 옛 판일 때.</summary>
+        Unknown,
+        /// <summary>우편 도착.</summary>
+        Mail,
+        /// <summary>고객센터 답변.</summary>
+        SupportReply,
+        /// <summary>친구 요청.</summary>
+        FriendRequest,
+        /// <summary>매치 로비 초대.</summary>
+        LobbyInvite
+    }
+
+    /// <summary>게임이 화면에 떠 있는 동안 온 푸시 알림. 기기에는 띄우지 않고 게임에만 넘긴다.</summary>
+    public sealed class SupabasePushMessage
+    {
+        /// <summary>어떤 상황의 알림인지.</summary>
+        public SupabasePushKind Kind { get; }
+
+        /// <summary>알림 제목. 플레이어 기기 언어로 고른 문구.</summary>
+        public string Title { get; }
+
+        /// <summary>알림 본문.</summary>
+        public string Body { get; }
+
+        /// <summary>
+        /// 상황별 값. 우편은 <c>batch_id</c>·<c>category</c>, 고객센터 답변은 <c>ticket_id</c>,
+        /// 친구 요청은 <c>request_id</c>, 로비 초대는 <c>lobby_id</c>. 상황 이름은 <c>type</c>.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> Data { get; }
+
+        /// <summary>기기가 받은 시각(기기 시계, 유닉스 밀리초). 모르면 0.</summary>
+        internal long ReceivedAtMs { get; }
+
+        internal SupabasePushMessage(SupabasePushKind kind, string title, string body, IReadOnlyDictionary<string, string> data, long receivedAtMs = 0)
+        {
+            Kind = kind;
+            Title = title ?? "";
+            Body = body ?? "";
+            Data = data;
+            ReceivedAtMs = receivedAtMs;
+        }
+
+        /// <summary>기기 쪽이 넘긴 <c>{"title","body","data":{...}}</c> 를 읽는다. 꼴이 틀리면 null.</summary>
+        internal static SupabasePushMessage FromNativeJson(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                var o = JObject.Parse(json);
+                var data = new Dictionary<string, string>();
+                if (o["data"] is JObject d)
+                    foreach (var p in d.Properties())
+                        data[p.Name] = p.Value.Type == JTokenType.String ? p.Value.Value<string>() : p.Value.ToString(Formatting.None);
+                // 상황 이름은 대기열에 넣을 때 DB(ts_push_enqueue)가 type 으로 넣는다.
+                data.TryGetValue("type", out var trigger);
+                return new SupabasePushMessage(KindOf(trigger), o.Value<string>("title"), o.Value<string>("body"), data,
+                                               o.Value<long?>("at") ?? 0);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        // 서버 push_triggers.code 와 같은 이름.
+        private static SupabasePushKind KindOf(string trigger) => trigger switch
+        {
+            "mail"           => SupabasePushKind.Mail,
+            "support_reply"  => SupabasePushKind.SupportReply,
+            "friend_request" => SupabasePushKind.FriendRequest,
+            "lobby_invite"   => SupabasePushKind.LobbyInvite,
+            _                => SupabasePushKind.Unknown
+        };
+    }
+
     /// <summary>
     /// 푸시 알림 — 기기 토큰 등록·해제(RPC <c>ts_push_register</c>·<c>ts_push_unregister</c>)와
     /// 수신 설정(<c>ts_push_preferences_get</c>·<c>ts_push_preferences_set</c>). 보내기는 서버가 한다.

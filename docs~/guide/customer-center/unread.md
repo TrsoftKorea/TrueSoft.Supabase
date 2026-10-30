@@ -14,9 +14,3 @@ supportBadge.SetActive(unread.IsSuccess && unread.Data > 0);
 **반환**
 
 `.Data`는 새 답변이 있는 문의 수입니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

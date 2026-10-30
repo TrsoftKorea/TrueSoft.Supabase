@@ -53,7 +53,6 @@ ShowWaitingRoom();
 | `SupabaseReason.MatchLobbyFull` | 초대 인원이 정원을 넘습니다. 호스트도 한 자리를 씁니다 |
 | `SupabaseReason.MatchLobbyInviteLimitReached` | 초대 대상 중 대기 초대가 상한에 찬 계정이 있습니다 |
 | `SupabaseReason.MatchLobbyInviteTooFast` | 연속 초대 최소 간격을 지키지 않았습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: info 방이 저절로 닫히기까지의 시간은 운영이 정합니다
 아무도 시작하지 않은 방은 일정 시간이 지나면 자동으로 닫힙니다. 그 시간은 게임이 넘기는 값이 아니라 운영 콘솔 **설정**의 매치 로비 항목에서 정하며, 기본값은 10분입니다. 남은 시간은 목록의 `ExpiresAt`으로 읽을 수 있습니다.

@@ -244,7 +244,8 @@ export default defineConfig({
             items: [
               { text: '기기 등록', link: '/guide/push/register' },
               { text: '수신 설정 읽기', link: '/guide/push/get-preferences' },
-              { text: '수신 설정 바꾸기', link: '/guide/push/set-preferences' }
+              { text: '수신 설정 바꾸기', link: '/guide/push/set-preferences' },
+              { text: '게임 중에 온 알림', link: '/guide/push/received' }
             ]
           },
           {

@@ -9,6 +9,10 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from "npm:jose@5";
 //   ① 마지막 접속 토큰 — Supabase 가 비밀 키로 서명한 토큰. 기한이 지나도 서명은 공개 키로 확인된다.
 //   ② 기기에 남은 갱신 토큰 — Supabase 인증 기록에 그 계정과 짝지어 있다.
 //   ③ 차단으로 거절된 구글·애플 ID 토큰 — Supabase 인증 서버에 그대로 보내 "차단됨"을 받으면 그 계정을 알아본 것이다.
+//
+// 게임 밖(고객센터 주소를 브라우저로 연 것) — 접속 표 없이 web.* 요청으로 유저 ID 만 받아 쿠폰 등록·문의 보내기를 한다.
+// 본인 확인이 없으므로 결과가 그 ID 주인에게만 가는 일만 연다: 보상은 그 계정 우편함, 문의 답변은 그 계정의 게임 안
+// 고객센터. 남의 문의·우편을 읽는 길은 없다. 코드·ID 대입은 접속 주소·계정별 횟수 제한(ts_support_web_hit)으로 막는다.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_PUBLISHABLE_KEY = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!).default;
@@ -265,7 +269,13 @@ async function signAttachments<T extends { attachments?: unknown }>(items: T[]):
   }));
 }
 
-async function upload(t: SupportToken, p: Params): Promise<Response> {
+// 게임 밖 창에서 올린 그림은 `web/<계정>/` 에 따로 두고 한도도 따로 센다 — 남이 그 ID 로 올린 그림이 본인의
+// 게임 안 올리기 한도를 채우지 않게. 게임 밖 한도는 훨씬 낮다(로그인 없이 저장 공간을 쌓는 길이라).
+const UPLOAD_LIMITS = { app: { perHour: UPLOADS_PER_HOUR, perMonth: MAX_FILES_PER_ACCOUNT }, web: { perHour: 6, perMonth: 20 } };
+
+async function upload(account: string, p: Params, web = false): Promise<Response> {
+  const folder = web ? `web/${account}` : account;
+  const limits = web ? UPLOAD_LIMITS.web : UPLOAD_LIMITS.app;
   const type = str(p, "content_type");
   const ext = IMAGE_EXT[type];
   if (!ext) throw new Reject("support_attachment_type");
@@ -281,42 +291,89 @@ async function upload(t: SupportToken, p: Params): Promise<Response> {
   if (!looksLike(type, bytes)) throw new Reject("support_attachment_type");
 
   // 올리기만 하고 안 붙인 지 하루 지난 그림은 지운다 — 따로 도는 정리 작업 없이 그 계정이 다시 올릴 때 치운다.
-  const { data: files } = await db.storage.from(BUCKET).list(t.sub, { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
+  const { data: files } = await db.storage.from(BUCKET).list(folder, { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
   const listed = (files ?? []).filter((o) => o.name && o.created_at);
-  const attached = new Set(await rpc<string[]>("ts_support_account_attachments", { p_account: t.sub }) ?? []);
+  const attached = new Set(await rpc<string[]>("ts_support_account_attachments", { p_account: account }) ?? []);
   const dayAgo = Date.now() - 24 * 3600_000;
-  const stale = listed.filter((o) => !attached.has(`${t.sub}/${o.name}`) && Date.parse(o.created_at!) < dayAgo);
-  if (stale.length > 0) await db.storage.from(BUCKET).remove(stale.map((o) => `${t.sub}/${o.name}`));
+  const stale = listed.filter((o) => !attached.has(`${folder}/${o.name}`) && Date.parse(o.created_at!) < dayAgo);
+  if (stale.length > 0) await db.storage.from(BUCKET).remove(stale.map((o) => `${folder}/${o.name}`));
 
   // 도배 막기 — 시간당 개수와 계정당 총량.
   const hourAgo = Date.now() - 3600_000;
-  if (listed.filter((o) => Date.parse(o.created_at!) > hourAgo).length >= UPLOADS_PER_HOUR) {
+  if (listed.filter((o) => Date.parse(o.created_at!) > hourAgo).length >= limits.perHour) {
     throw new Reject("support_too_fast");
   }
   // 총량은 최근 30일만 센다 — 붙인 그림은 지우지 않으므로 평생 개수로 세면 문의를 많이 한 계정이 영영 못 붙인다.
   const monthAgo = Date.now() - 30 * 24 * 3600_000;
   const staleNames = new Set(stale.map((o) => o.name));
-  if (listed.filter((o) => !staleNames.has(o.name) && Date.parse(o.created_at!) > monthAgo).length >= MAX_FILES_PER_ACCOUNT) {
+  if (listed.filter((o) => !staleNames.has(o.name) && Date.parse(o.created_at!) > monthAgo).length >= limits.perMonth) {
     throw new Reject("support_attachment_limit");
   }
 
-  const path = `${t.sub}/${crypto.randomUUID()}.${ext}`;
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
   const { error } = await db.storage.from(BUCKET).upload(path, bytes, { contentType: type, upsert: false });
   if (error) throw new Error(`upload: ${error.message}`);
   const { data: signed } = await db.storage.from(BUCKET).createSignedUrl(path, 3600);
   return json({ ok: true, data: { path, url: signed?.signedUrl ?? null } });
 }
 
-// DB 함수가 raise 한 사유(support_*)는 화면이 문구로 바꿔 보이게 그대로 돌려준다.
-function dbReason(message: string): string | null {
-  const m = /support_[a-z_]+/.exec(message);
+// DB 함수가 raise 한 사유(support_*·coupon_*)는 화면이 문구로 바꿔 보이게 그대로 돌려준다. 직접 raise 한 것(P0001)만
+// 본다 — "함수가 없다" 같은 글 속 함수 이름을 사유로 뽑으면 배포 누락이 서버 로그에 안 남는다.
+function dbReason(error: { message: string; code?: string }): string | null {
+  if (error.code !== "P0001") return null;
+  const m = /^(?:support|coupon)_[a-z_]+$/.exec(error.message.trim());
   return m ? m[0] : null;
+}
+
+// ── 게임 밖에서 연 창 ──────────────────────────────────────────────────────────
+// 횟수 제한(시간당). 접속 주소는 그대로 남기지 않고 서명 비밀값으로 해시한 값만 쓴다.
+const WEB_LIMITS = {
+  coupon: { perIp: 20, perAccount: 10 },
+  upload: { perIp: 10, perAccount: 6 },
+  create: { perIp: 5, perAccount: 3 },
+} as const;
+
+function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for") ?? "";
+  return (req.headers.get("cf-connecting-ip") ?? fwd.split(",")[0] ?? "").trim() || "unknown";
+}
+
+async function webHit(key: string, max: number): Promise<void> {
+  const ok = await rpc<boolean>("ts_support_web_hit", { p_key: key, p_window_seconds: 3600, p_max: max });
+  if (!ok) throw new Reject("support_too_fast", 429);
+}
+
+// 유저 ID → 계정. 접속 주소 제한을 먼저 세어, 없는 ID 를 마구 넣어 보는 것도 횟수에 든다.
+async function webAccount(req: Request, p: Params, kind: keyof typeof WEB_LIMITS): Promise<string> {
+  const limits = WEB_LIMITS[kind];
+  await webHit(`${kind}:ip:${await hmac(clientIp(req))}`, limits.perIp);
+  const userId = str(p, "user_id").trim();
+  if (!userId || userId.length > 64) throw new Reject("support_user_not_found");
+  const account = await rpc<string | null>("ts_support_account_from_user_id", { p_user_id: userId });
+  if (!account) throw new Reject("support_user_not_found");
+  // 게임 안 창과 다른 칸에 센다 — 남이 그 ID 로 틀려도 본인의 게임 안 쿠폰 시도는 막히지 않게.
+  await webHit(`${kind}:web:${account}`, limits.perAccount);
+  return account;
+}
+
+// 차단된 계정은 쿠폰 보상을 받지 않는다(게임에서도 로그인이 막혀 못 쓴다).
+async function redeemCoupon(account: string, banned: boolean, p: Params): Promise<Response> {
+  if (banned) throw new Reject("support_account_restricted");
+  const code = str(p, "code").trim();
+  if (!code || code.length > 64) throw new Reject("coupon_not_found");
+  await rpc("ts_coupon_redeem_as", { p_uid: account, p_code: code });
+  return json({ ok: true, data: null });
+}
+
+function webMeta(req: Request, p: Params): Record<string, string> {
+  const ua = (req.headers.get("user-agent") ?? "").slice(0, 80);
+  return pickMeta({ platform: "web", language: str(p, "lang"), device: ua });
 }
 
 async function rpc<T>(name: string, args: Params): Promise<T> {
   const { data, error } = await db.rpc(name, args);
   if (error) {
-    const reason = dbReason(error.message);
+    const reason = dbReason(error);
     if (reason) throw new Reject(reason);
     throw new Error(`${name}: ${error.message}`);
   }
@@ -350,6 +407,31 @@ Deno.serve(async (req) => {
       case "faqs": {
         const lang = (str(p, "lang") || "en").slice(0, 2).toLowerCase();
         return json({ ok: true, data: await rpc("ts_support_faqs", { p_lang: lang }) });
+      }
+
+      // 분류 이름도 공개 정보다 — 게임 밖에서 연 창의 문의하기·FAQ 묶음에 쓴다.
+      case "categories.public":
+        return json({ ok: true, data: await rpc("ts_support_categories", { p_lang: str(p, "lang") || "en" }) });
+
+      case "web.coupon": {
+        const account = await webAccount(req, p, "coupon");
+        return await redeemCoupon(account, await isBanned(account), p);
+      }
+
+      case "web.upload":
+        return await upload(await webAccount(req, p, "upload"), p, true);
+
+      case "web.create": {
+        const account = await webAccount(req, p, "create");
+        const id = await rpc<string>("ts_support_create_web", {
+          p_account: account,
+          p_category: Number(p.category_id),
+          p_body: str(p, "body"),
+          p_attachments: Array.isArray(p.attachments) ? p.attachments : [],
+          p_meta: webMeta(req, p),
+          p_was_banned: await isBanned(account),
+        });
+        return json({ ok: true, data: { id } });
       }
     }
 
@@ -394,7 +476,13 @@ Deno.serve(async (req) => {
         return json({ ok: true, data: null });
 
       case "upload":
-        return await upload(t, p);
+        return await upload(t.sub, p);
+
+      // 서버 키로 부르므로 게임의 요청 제한(10절)을 안 탄다 — 번호 대입은 같은 횟수 제한으로 막는다.
+      // 차단 여부는 접속 표에 적힌 값(최대 12시간 전)이 아니라 지금 상태로 본다.
+      case "coupon":
+        await webHit(`coupon:app:${t.sub}`, WEB_LIMITS.coupon.perAccount);
+        return await redeemCoupon(t.sub, await isBanned(t.sub), p);
 
       default:
         return fail("unknown_action");

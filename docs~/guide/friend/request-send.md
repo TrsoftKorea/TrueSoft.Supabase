@@ -40,4 +40,3 @@ ShowToast(r.Data.Accepted ? "서로 요청이 있어 바로 친구가 되었습�
 | `SupabaseReason.FriendSelfRequest` | 자기 자신에게 보내려 했습니다 |
 | `SupabaseReason.FriendAlreadyFriends` | 이미 친구입니다 |
 | `SupabaseReason.FriendRequestAlreadySent` | 이미 보낸 요청이 대기 중입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

@@ -23,9 +23,9 @@ namespace SdkAudit
             "[R2 리셋누락]",
             "[R3 없는API]",
             "[R4 시그니처]",
-            "[R5 알림문법]", "[R5 헤딩괄호]", "[R5 매달린구분선]",
+            "[R5 알림문법]", "[R5 헤딩괄호]", "[R5 매달린구분선]", "[R5 표뒤빈줄]",
             "[R6 샘플]",
-            "[R8 없는사유]", "[R8 internal노출]",
+            "[R8 없는사유]", "[R8 internal노출]", "[R8 공통사유]",
             "[R9 설치순서]",
             "[R10 코드우선]",
             "[R11 시각타입]", "[R11 별칭]",
@@ -37,6 +37,7 @@ namespace SdkAudit
             "[R17 설치누락]", "[R17 검증목록]", "[R17 검증표]",
             "[R19 시간대고정]",
             "[R20 빈응답]",
+            "[R21 원문사유]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -90,6 +91,13 @@ namespace SdkAudit
                 // 옵션을 넘긴 호출·값을 돌려주는 함수는 잡으면 오탐이다.
                 if (found.Any(f => f.StartsWith("[R20", StringComparison.Ordinal) && (f.Contains("ts_properly_scheduled") || f.Contains("ts_early_sql "))))
                     missing.Add("[R20 빈응답] 옵션 있는 호출·값 있는 함수 오탐");
+                if (found.Count(f => f.StartsWith("[R5 표뒤빈줄]", StringComparison.Ordinal) && f.Contains("table-glued.md")) != 1)
+                    missing.Add("[R5 표뒤빈줄] 상자를 닫는 ::: 오탐 또는 미탐");
+                if (found.Any(f => f.StartsWith("[R8 공통사유]", StringComparison.Ordinal) && f.Contains("fail-reasons.md")))
+                    missing.Add("[R8 공통사유] 카탈로그 자신 오탐");
+                // ExtractRpcErrorCode 안에서 쓴 원문은 잡으면 오탐이다.
+                if (found.Count(f => f.StartsWith("[R21", StringComparison.Ordinal) && f.Contains("FixtureRpc.cs")) != 1)
+                    missing.Add("[R21 원문사유] ExtractRpcErrorCode 안 원문 오탐");
 
                 Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개 · 변경 게이트 {GateCases.Length}건");
                 Console.WriteLine();
@@ -170,6 +178,8 @@ class FixtureRpc
         await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_never_scheduled"", ""{}"");
         await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_properly_scheduled"", ""{}"", allowEmptyBody: true);
         await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_early_sql"", ""{}"");
+        var bad = SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? ""x_failed"");
+        var ok = SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, ""x""));
     }
 }");
             Write(root, "Runtime/Unity/MailFacade.cs", "namespace TrueBase.Unity { internal sealed class MailFacade { } }");
@@ -181,6 +191,12 @@ using Sb = TrueBase.Unity.Supabase;
 class Example { void M() { Supabase.NoSuchMemberAsync(); } }");
 
             // 문서 — R3·R4·R5·R8·R10 위반.
+            // R8 공통사유 — 카탈로그의 「공통 · 세션」에 있는 사유를 함수 표에 다시 적는다. 카탈로그 자신은 안 잡혀야 한다.
+            Write(root, "docs~/guide/api/fail-reasons.md", "# 실패 사유\n\n## 공통 · 세션\n\n| Reason | 설명 |\n|--------|------|\n| `RealReason` | 공통 |\n\n## 그 밖\n");
+            Write(root, "docs~/guide/common-row.md", "# 공통 사유 페이지\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n| `SupabaseReason.RealReason` | 공통 |\n");
+            // R5 표뒤빈줄 — 표 다음 줄에 문장이 붙는다. 상자를 닫는 ::: 는 잡히면 오탐이다.
+            Write(root, "docs~/guide/table-glued.md", "# 붙은 표\n\n| 이름 | 설명 |\n|------|------|\n| a | b |\n붙어 버린 문장\n\n::: info 상자\n| 이름 | 설명 |\n|------|------|\n| a | b |\n:::\n");
+
             Write(root, "docs~/guide/broken.md", @"# 깨진 페이지 (부연 괄호)
 
 설명이 코드보다 먼저 온다.

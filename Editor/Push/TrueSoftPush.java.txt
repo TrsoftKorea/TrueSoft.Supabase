@@ -8,6 +8,12 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
+import org.json.JSONObject;
+
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.FirebaseApp;
@@ -90,6 +96,42 @@ public final class TrueSoftPush {
             }
         } catch (Throwable t) {
             fail(t.toString());
+        }
+    }
+
+    // 게임이 앞에 떠 있을 때 온 알림. C# 이 짧게 물어 꺼낸다. 받는 쪽이 없을 때 끝없이 쌓이지 않게 상한을 둔다.
+    private static final int RECEIVED_MAX = 20;
+    private static final ArrayDeque<String> received = new ArrayDeque<String>();
+
+    /** TrueSoftPushService.onMessageReceived 가 부른다(FCM 스레드). */
+    static void onReceived(String title, String body, Map<String, String> data) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("title", title != null ? title : "");
+            o.put("body", body != null ? body : "");
+            o.put("data", new JSONObject(data != null ? data : new HashMap<String, String>()));
+            // 받은 시각 — 게임이 한참 뒤에 구독하면 지난 알림을 "방금 온 알림"으로 내보내지 않게 C# 이 거른다.
+            o.put("at", System.currentTimeMillis());
+            synchronized (received) {
+                if (received.size() >= RECEIVED_MAX) received.pollFirst();
+                received.addLast(o.toString());
+            }
+        } catch (Throwable ignored) {
+            // 알림 하나를 놓쳐도 게임은 우편함·새 답변 수를 다시 읽으면 된다.
+        }
+    }
+
+    /** 쌓인 알림 하나를 꺼낸다. 없으면 null. */
+    public static String pollReceived() {
+        synchronized (received) {
+            return received.pollFirst();
+        }
+    }
+
+    /** 쌓인 알림을 버린다. 로그아웃·계정 전환 때 — 앞 계정 몫이 다음 계정에게 가지 않게. */
+    public static void clearReceived() {
+        synchronized (received) {
+            received.clear();
         }
     }
 

@@ -87,6 +87,7 @@ namespace TrueBase.Unity.Config
             SupabaseSDK.TickRemoteConfigKeyPolls(Time.realtimeSinceStartup);
             SupabaseSDK.TickChatPolls(Time.realtimeSinceStartup);
             SupabaseSDK.TickSessionRefresh(Time.realtimeSinceStartup);
+            SupabaseSDK.TickPushReceived(Time.realtimeSinceStartup);
         }
 
         private void OnApplicationPause(bool pause)

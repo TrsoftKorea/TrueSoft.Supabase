@@ -30,7 +30,6 @@ await Supabase.SetMatchLobbyMemberMetaAsync(
 |--------|------|
 | `SupabaseReason.MatchLobbyNotFound` | 남의 칸을 바꾸려는데 호스트가 아니거나, 그런 로비가 없습니다 |
 | `SupabaseReason.MatchLobbyMemberNotFound` | 지정하려는 멤버가 로비에 없습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: warning 일부만 바꿀 수 없습니다
 넘긴 값이 기존 값을 통째로 대체합니다. `ready`만 바꾸려면 [목록](/guide/match-lobby/list)에서 읽은 기존 칸에 그 키만 덮어써서 전체를 다시 넘기세요.

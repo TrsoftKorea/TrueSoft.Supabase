@@ -22,7 +22,6 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 
 ::: info 다른 플레이어 기록 삭제

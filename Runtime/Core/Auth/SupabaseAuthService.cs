@@ -308,6 +308,11 @@ namespace TrueBase.Core.Auth
 
             if (response.IsSuccess == false)
             {
+                // 응답을 못 받음·과부하·서버 오류는 잠깐 뒤 다시 하면 되는 실패다 — 토큰을 거절한 것과 가르도록
+                // 사유를 네트워크로 모은다(세션 갱신 관문이 이 둘을 다르게 다룬다).
+                if (response.StatusCode == 0 || response.StatusCode == 429 || response.StatusCode >= 500)
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NetworkError);
+
                 var errorMessage = ExtractErrorMessage(response.Body);
                 if (string.IsNullOrWhiteSpace(errorMessage))
                     errorMessage = response.ErrorMessage ?? defaultError;

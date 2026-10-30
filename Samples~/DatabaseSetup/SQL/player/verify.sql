@@ -72,6 +72,7 @@ from (
       ('support_tickets'),
       ('support_messages'),
       ('support_faqs'),
+      ('support_web_hits'),
       ('push_devices'),
       ('push_preferences'),
       ('push_triggers'),

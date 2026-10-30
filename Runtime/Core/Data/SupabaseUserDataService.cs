@@ -132,7 +132,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "patch_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "patch"));
 
             // return=representation: 빈 배열([])이면 필터에 매칭된 행이 없었음
             var trimmedBody = response.Body?.Trim();
@@ -177,7 +177,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "delete_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete"));
 
             // 매칭 행이 없어도(빈 배열) 삭제 목적은 달성 — 멱등 성공.
             return SupabaseResult<bool>.Success(true);
@@ -224,7 +224,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(response.ErrorMessage ?? response.Body ?? "load_failed");
+                return SupabaseResult<DataColumnsLoadResult<T>>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "load"));
 
             try
             {

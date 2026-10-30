@@ -27,7 +27,6 @@ await Supabase.SubmitScoreAsync(1250, row);
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.LeaderboardRowRequired` | 행 객체가 null입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 필드를 보냈습니다 |

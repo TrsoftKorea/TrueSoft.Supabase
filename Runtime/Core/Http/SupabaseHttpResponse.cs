@@ -37,11 +37,16 @@ namespace TrueBase.Core.Http
         public static SupabaseHttpResponse Fail(long statusCode, string body, string errorMessage)
         {
             var response = new SupabaseHttpResponse(false, statusCode, body, errorMessage);
-            // 서비스 대부분이 실패 사유를 ErrorMessage ?? Body 로 만든다. 플랫폼이 채운 "429 Too Many Requests" 꼴 문구가
-            // 앞서면 본문의 사유가 버려져 Reason 이 Unknown 이 되므로, 요청 제한이면 사유 코드로 바꿔 둔다.
-            return response.IsRequestLimited
-                ? new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.RequestLimited)
-                : response;
+            // 플랫폼이 채운 문구("Cannot resolve destination host"·"HTTP/1.1 401 Unauthorized" 꼴)는 사유 카탈로그에 없어
+            // Reason 이 Unknown 이 된다. 통신 단계에서 이미 갈린 실패는 여기서 사유 코드로 바꿔 둔다 —
+            // 응답을 못 받음(상태 0) = 네트워크, 401 = 토큰 거부, 429 + request_limited = 요청 제한.
+            if (response.IsRequestLimited)
+                return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.RequestLimited);
+            if (statusCode == 0)
+                return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.NetworkError);
+            if (statusCode == 401)
+                return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.NotAuthenticated);
+            return response;
         }
     }
 }

@@ -42,10 +42,4 @@ if (result.IsSuccess)
 | `.ExpiresAt` | `DateTimeOffset` | 받을 수 있는 기한 |
 | `.Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-
 다국어 우편의 언어별 제목·본문은 [다국어 메시지](./localized)로 읽습니다.

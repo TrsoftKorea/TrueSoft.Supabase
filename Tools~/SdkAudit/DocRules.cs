@@ -64,6 +64,23 @@ namespace SdkAudit
             }
         }
 
+        // 실패 사유 문서 「공통 · 세션」 표의 사유들. 목록을 여기 따로 적으면 문서와 갈라지므로 문서에서 읽는다.
+        // 저장소 위치별로 기억한다 — 자체 시험과 실제 저장소가 한 실행에서 섞여도 목록이 섞이지 않게.
+        private static readonly Dictionary<string, string[]> _commonReasons = new Dictionary<string, string[]>();
+        private static string[] CommonReasonsOf(AuditContext ctx)
+        {
+            if (_commonReasons.TryGetValue(ctx.Root, out var cached)) return cached;
+            var file = Path.Combine(ctx.Root, "docs~", "guide", "api", "fail-reasons.md");
+            var text = File.Exists(file) ? File.ReadAllText(file) : "";
+            var section = Regex.Match(text, @"## 공통 · 세션(.*?)(?=\n#)", RegexOptions.Singleline).Groups[1].Value;
+            var found = Regex.Matches(section, @"^\|\s*`([A-Z]\w*)`\s*\|", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToArray();
+            // 문서가 옮겨지거나 표 제목이 바뀌면 검사가 조용히 꺼진다 — 그때는 꺼졌다고 알린다.
+            if (found.Length == 0)
+                ctx.Report.Error("[R8 공통사유] docs~/guide/api/fail-reasons.md 의 「공통 · 세션」 표를 찾지 못해 공통 사유 검사를 못 했습니다.");
+            _commonReasons[ctx.Root] = found;
+            return found;
+        }
+
         /// <param name="isGuide">
         /// true 면 게임 가이드로 보고 형식 규칙(R5·R10)과 커버리지 집계까지 적용한다.
         /// false 면 규칙 파일이라 코드 참조 정합성(R3·R4·R8 사유)만 본다.
@@ -71,6 +88,7 @@ namespace SdkAudit
         private static void CheckFile(AuditContext ctx, string path, Dictionary<string, List<MethodDeclarationSyntax>> codeMethods, bool isGuide)
         {
             var rel = ctx.Rel(path);
+            var CommonReasons = CommonReasonsOf(ctx);
             var lines = File.ReadAllLines(path);
             var signatures = new List<DocSignature>();
 
@@ -105,6 +123,16 @@ namespace SdkAudit
                     continue;
                 }
 
+                // ── R5 표 다음 줄은 비운다 ── 붙어 있으면 그 문장이 표의 마지막 행으로 그려진다(2026-10-30 우편 목록,
+                // 문서 일괄 수정 스크립트가 빈 줄을 지웠다). ::: 상자는 지금 렌더러가 끊어 주지만 같은 실수의 흔적이라 함께 막는다.
+                if (isGuide && !inFence && trimmed.StartsWith("|", StringComparison.Ordinal) && i + 1 < lines.Length)
+                {
+                    var next = lines[i + 1].Trim();
+                    // 상자 안 표가 상자를 닫는 ::: 로 끝나는 것은 정상이다.
+                    if (next.Length > 0 && next != ":::" && !next.StartsWith("|", StringComparison.Ordinal))
+                        ctx.Report.Error($"[R5 표뒤빈줄] 표 바로 다음 줄이 비어 있지 않아 그 줄이 표에 붙어 그려질 수 있습니다. 빈 줄을 넣으세요. ({rel}:{i + 2})");
+                }
+
                 // ── R3 문서가 가리키는 API 는 산문·코드 어디에 있어도 실제로 존재해야 한다 ──
                 // 한정자가 붙은 형태(TrueSoft.Supabase.git)·소문자 세그먼트·로그 태그([Supabase.Chat])는 멤버 참조가 아니다.
                 foreach (Match hit in Regex.Matches(line, @"(?<![\w.\[])Supabase(?:IAP)?\.([A-Z]\w*)"))
@@ -128,6 +156,15 @@ namespace SdkAudit
 
                     if (!ctx.ReasonMembers.Contains(reason))
                         ctx.Report.Error($"[R8 없는사유] 문서가 SupabaseReason.{reason} 을 가리키지만 enum 에 없습니다. ({at})");
+                }
+
+                // ── R8 공통 사유는 함수 에러 표에 다시 적지 않는다 ── 실패 사유 카탈로그의 「공통 · 세션」이 한 번만 적는다.
+                // 쪽마다 손으로 지키던 때는 81쪽 중 54쪽이 적고 나머지는 안 적어 갈라져 있었다(2026-10-30).
+                if (isGuide && CommonReasons.Length > 0 && !rel.Replace('\\', '/').EndsWith("api/fail-reasons.md", StringComparison.Ordinal))
+                {
+                    var common = Regex.Match(line, @"^\|\s*`SupabaseReason\.(" + string.Join("|", CommonReasons) + @")`\s*\|");
+                    if (common.Success)
+                        ctx.Report.Error($"[R8 공통사유] SupabaseReason.{common.Groups[1].Value} 은 모든 호출에 생길 수 있는 공통 사유라 함수 에러 표에 적지 않습니다(실패 사유 문서의 공통 · 세션). ({at})");
                 }
 
                 // 규칙 파일은 SDK 내부 카탈로그를 설명하는 자리라 SupabaseErrorCode 를 써도 된다.

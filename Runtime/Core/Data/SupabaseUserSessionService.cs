@@ -59,7 +59,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_get_failed");
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "user_session_get"));
 
             try
             {
@@ -96,7 +96,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_heartbeat_failed");
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "user_session_heartbeat"));
 
             try
             {
@@ -149,7 +149,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_upsert_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "user_session_upsert"));
 
             return SupabaseResult<bool>.Success(true);
         }
@@ -179,7 +179,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "user_session_delete_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "user_session_delete"));
 
             return SupabaseResult<bool>.Success(true);
         }

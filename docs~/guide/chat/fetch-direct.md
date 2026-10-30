@@ -51,7 +51,6 @@ async Task OpenDirectChatAsync(string friendAccountId)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.FriendTargetRequired` | 대화 상대가 지정되지 않았습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: tip 친구가 아니어도 조회는 됩니다
 이전에 친구였다가 삭제된 사이라도 지난 대화는 조회할 수 있습니다. 새로 보내려면 다시 친구여야 합니다.

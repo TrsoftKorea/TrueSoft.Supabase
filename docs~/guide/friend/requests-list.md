@@ -31,12 +31,6 @@ if (r.IsSuccess)
 | `CreatedAt` | DateTimeOffset | 요청이 만들어진 시각 |
 | `LastActivityAt` | DateTimeOffset? | 상대가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-
 ::: tip 배지 개수는 이 목록의 길이입니다
 `direction: Incoming`으로 받은 목록의 개수를 그대로 알림 배지에 쓰면 됩니다.
 :::

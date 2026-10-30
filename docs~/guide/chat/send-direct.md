@@ -43,7 +43,6 @@ ShowToast(r.Reason switch
 | `SupabaseReason.ChatMessageEmpty` | 보낼 내용이 비어 있습니다 |
 | `SupabaseReason.ChatMessageTooLong` | 최대 글자 수를 넘었습니다 |
 | `SupabaseReason.ChatMuted` | 채팅이 차단된 계정입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: info 보낸 메시지는 조회로 돌아옵니다
 발송에 성공했다고 화면에 직접 넣지 마세요. 다음 [대화 조회](/guide/chat/fetch-direct)에서 같은 메시지가 오므로 두 번 보이게 됩니다.

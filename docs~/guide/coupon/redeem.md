@@ -40,7 +40,6 @@ ShowToast(result.Reason switch
 | `SupabaseReason.CouponExpired` | 사용 기한이 지났습니다 |
 | `SupabaseReason.CouponAlreadyUsed` | 일반 쿠폰은 그 코드가 이미 쓰였고, 키워드 쿠폰은 본인이 이미 썼습니다 |
 | `SupabaseReason.CouponExhausted` | 키워드 쿠폰의 최대 사용 횟수가 소진되었습니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: info 보상은 응답에 없습니다
 지급 내역은 [우편](/guide/mailbox/)으로 오므로, 성공 후 우편함을 새로 조회하세요. 자세한 이유는 [보상은 우편으로 옵니다](/guide/coupon/#reward-by-mail)를 참고하세요.

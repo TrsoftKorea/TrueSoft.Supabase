@@ -56,7 +56,7 @@ namespace TrueBase.Core.Auth
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<string>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_get_failed");
+                return SupabaseResult<string>.Fail(TrueBase.Core.Data.SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "anonymous_recovery_get"));
 
             try
             {
@@ -108,7 +108,7 @@ namespace TrueBase.Core.Auth
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_upsert_failed");
+                return SupabaseResult<bool>.Fail(TrueBase.Core.Data.SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "anonymous_recovery_upsert"));
 
             return SupabaseResult<bool>.Success(true);
         }
@@ -140,7 +140,7 @@ namespace TrueBase.Core.Auth
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.ErrorMessage ?? response.Body ?? "anonymous_recovery_delete_failed");
+                return SupabaseResult<bool>.Fail(TrueBase.Core.Data.SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "anonymous_recovery_delete"));
 
             return SupabaseResult<bool>.Success(true);
         }

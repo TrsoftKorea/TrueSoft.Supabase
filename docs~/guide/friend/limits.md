@@ -28,7 +28,6 @@ if (limits.IsSuccess && friends.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.FriendSettingsMissing` | 제한값 설정이 DB에 없습니다. 설치가 깨진 상태입니다 |
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 
 ::: warning 게임에 숫자를 박아 두지 마세요
 이 값은 운영 콘솔에서 바뀝니다. 화면에 상수로 적어 두면 운영이 값을 바꾸는 순간 실제 동작과 표시가 어긋납니다.

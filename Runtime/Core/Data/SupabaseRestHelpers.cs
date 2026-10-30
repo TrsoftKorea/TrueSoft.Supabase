@@ -38,6 +38,11 @@ namespace TrueBase.Core.Data
         /// </summary>
         internal static string ExtractRpcErrorCode(string body, string fallbackMessage, string rpcName)
         {
+            // 통신 단계에서 갈린 사유(SupabaseHttpResponse.Fail 이 바꿔 둔 것)가 본문보다 앞선다 —
+            // 401 본문은 "JWT expired" 같은 글이라 그대로 쓰면 Unknown 이 된다.
+            if (fallbackMessage == SupabaseErrorCode.NetworkError || fallbackMessage == SupabaseErrorCode.NotAuthenticated)
+                return fallbackMessage;
+
             if (!string.IsNullOrWhiteSpace(body))
             {
                 try

@@ -17,9 +17,3 @@ if (t.Data < eventEndUtc)
 **반환**
 
 `.Data`에 서버 기준 UTC 시각이 `DateTimeOffset`으로 담깁니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NetworkError` | 한 번도 시각을 받지 못했고 지금도 서버에 닿지 못했습니다 |

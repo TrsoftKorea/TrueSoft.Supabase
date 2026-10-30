@@ -25,9 +25,3 @@ if (result.IsSuccess)
 **반환**
 
 `.Data`에 미수령 우편 개수가 `int`로 담깁니다. 지정한 분류에 해당 우편이 없으면 `0`입니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

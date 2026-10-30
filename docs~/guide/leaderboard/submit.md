@@ -40,7 +40,6 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 

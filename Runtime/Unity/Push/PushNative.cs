@@ -34,6 +34,13 @@ namespace TrueBase.Unity.Push
             }
         }
 
+        internal static bool IsSupportedPlatform =>
+#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
+            true;
+#else
+            false;
+#endif
+
         public static async Task<Result> GetTokenAsync()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -81,7 +88,55 @@ namespace TrueBase.Unity.Push
 #endif
         }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private static bool _androidPushMissing;
+#endif
+
+        /// <summary>게임이 앞에 떠 있는 동안 온 알림 하나를 꺼낸다(<c>{"title","body","data":{...}}</c>). 없으면 null.</summary>
+        public static string PollReceived()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (_androidPushMissing) return null;
+            try
+            {
+                using var push = new AndroidJavaClass("com.truesoft.supabase.push.TrueSoftPush");
+                return push.CallStatic<string>("pollReceived");
+            }
+            catch (AndroidJavaException)
+            {
+                // 푸시 부품이 빌드에 없다(푸시 사용이 꺼진 채 빌드) — 매번 예외를 내지 않게 다시 묻지 않는다.
+                _androidPushMissing = true;
+                return null;
+            }
+#elif UNITY_IOS && !UNITY_EDITOR
+            return TrueSoftPush_PollReceived();
+#else
+            return null;
+#endif
+        }
+
+        /// <summary>기기에 쌓인 알림을 버린다(로그아웃·계정 전환).</summary>
+        public static void ClearReceived()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (_androidPushMissing) return;
+            try
+            {
+                using var push = new AndroidJavaClass("com.truesoft.supabase.push.TrueSoftPush");
+                push.CallStatic("clearReceived");
+            }
+            catch (AndroidJavaException)
+            {
+                _androidPushMissing = true;
+            }
+#elif UNITY_IOS && !UNITY_EDITOR
+            TrueSoftPush_ClearReceived();
+#endif
+        }
+
 #if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")] private static extern void TrueSoftPush_ClearReceived();
+        [DllImport("__Internal")] private static extern string TrueSoftPush_PollReceived();
         [DllImport("__Internal")] private static extern void TrueSoftPush_Start();
         [DllImport("__Internal")] private static extern int TrueSoftPush_State();
         [DllImport("__Internal")] private static extern string TrueSoftPush_Token();

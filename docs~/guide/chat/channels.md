@@ -30,12 +30,6 @@ foreach (var ch in r.Data)
 | `MaxLength` | int | 보낼 수 있는 최대 글자 수. 입력창 제한에 그대로 쓰세요 |
 | `SlowModeSeconds` | int | 같은 사람의 연속 채팅 최소 간격. 0이면 제한 없음 |
 
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |
-
 ::: tip 한 번만 받으면 됩니다
 채널 설정은 운영자가 가끔 바꾸는 값이라 SDK가 캐시합니다. 매번 호출해도 네트워크를 타지 않으므로 채팅창을 열 때마다 불러도 됩니다.
 :::

@@ -25,9 +25,3 @@ if (result.IsSuccess)
 | `.ByCategory` | `Dictionary<string, MailCategoryCounts>` | 분류별 세부 내역. 활성 우편이 있는 분류만 키로 존재 |
 
 `MailCategoryCounts`는 `.Unclaimed` 값을 가집니다.
-
-**에러 코드**
-
-| Reason | 설명 |
-|--------|------|
-| `SupabaseReason.NotSignedIn` | 로그인 상태가 아닙니다 |

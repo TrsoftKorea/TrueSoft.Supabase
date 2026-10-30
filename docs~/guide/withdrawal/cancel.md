@@ -47,4 +47,3 @@ var cancel = await Supabase.RedeemWithdrawalCancelAsync();   // 저장된 토큰
 |--------|------|
 | `SupabaseReason.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
 | `SupabaseReason.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
-| `SupabaseReason.NetworkError` | 네트워크 오류 또는 타임아웃 |
