@@ -36,6 +36,7 @@ namespace SdkAudit
             "[R16 공통구간]", "[R16 연결값키]",
             "[R17 설치누락]", "[R17 검증목록]", "[R17 검증표]",
             "[R19 시간대고정]",
+            "[R20 빈응답]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -86,6 +87,9 @@ namespace SdkAudit
                 // game_settings 의 기본값은 허용 — 이게 잡히면 오탐이다.
                 if (found.Any(f => f.StartsWith("[R19", StringComparison.Ordinal) && f.Contains("'Asia/Seoul'")))
                     missing.Add("[R19 시간대고정] game_settings 기본값 오탐");
+                // 옵션을 넘긴 호출·값을 돌려주는 함수는 잡으면 오탐이다.
+                if (found.Any(f => f.StartsWith("[R20", StringComparison.Ordinal) && (f.Contains("ts_properly_scheduled") || f.Contains("ts_early_sql "))))
+                    missing.Add("[R20 빈응답] 옵션 있는 호출·값 있는 함수 오탐");
 
                 Console.WriteLine($"검사기 자체 테스트 — 기대 규칙 {ExpectedTags.Length}개 · 발동 {ExpectedTags.Length - missing.Count}개 · 변경 게이트 {GateCases.Length}건");
                 Console.WriteLine();
@@ -156,6 +160,18 @@ namespace TrueBase.Unity
     }
 }");
             Write(root, "Runtime/Unity/ChatFacade.cs", "namespace TrueBase.Unity { internal sealed class ChatFacade { } }");
+
+            // R20 — returns void 함수를 빈 응답 허용 없이 부른다. 옵션을 넘긴 호출·값 있는 함수는 안 잡혀야 한다.
+            Write(root, "Runtime/Core/Data/FixtureRpc.cs", @"
+class FixtureRpc
+{
+    async void M()
+    {
+        await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_never_scheduled"", ""{}"");
+        await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_properly_scheduled"", ""{}"", allowEmptyBody: true);
+        await SupabaseRestHelpers.CallRpcAsync(h, u, k, t, ""ts_early_sql"", ""{}"");
+    }
+}");
             Write(root, "Runtime/Unity/MailFacade.cs", "namespace TrueBase.Unity { internal sealed class MailFacade { } }");
 
             // 샘플 — R6(없는 멤버)·R11(별칭).

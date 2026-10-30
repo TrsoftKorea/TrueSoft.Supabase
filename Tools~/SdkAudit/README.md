@@ -99,15 +99,16 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R17 | 하드 오류 | `verify.sql`의 표·RLS 목록이 `install.sql`이 만드는 표(`create table … public.이름`) 전부와 같음. 빠지면 설치 확인이 그 표의 누락·RLS 꺼짐을 못 본다 |
 | R18 | 하드 오류 | `SerializeObject`·`ToJson`에 익명 객체(`new { ... }`)를 넘기지 않음. IL2CPP 기기 빌드에서 속성이 빠져 `{}`로 나가 RPC 가 404(PGRST202)로 실패한다(2026-10-27 아이폰 실측). 에디터에서는 멀쩡해 컴파일 검사로는 안 잡힌다 |
 | R19 | 하드 오류 | `install.sql`에 `'Asia/Seoul'` 같은 시간대 이름을 직접 쓰지 않음. 날짜를 자르는 곳은 `public.ts_game_time_zone()`(게임 시간대)을 쓴다. 허용은 `game_settings`를 다루는 문장(기본값·대체값)뿐. `'UTC'` 는 잡지 않는다(UTC 로 바꾸는 계산은 정당한 쓰임) |
+| R20 | 하드 오류 | `install.sql`에서 `returns void`인 함수를 `Runtime/`이 `CallRpcAsync`로 부를 때 `allowEmptyBody: true`를 넘김. 없으면 성공해도 빈 본문이 `<rpc>_empty_body` 실패로 읽힌다(2026-10-30 푸시 기기 등록·해제 — 로그아웃 때 등록이 안 풀렸다) |
 
 ## 검사 대상 파일
 
 | 대상 | 적용 규칙 |
 |------|-----------|
-| `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11 |
+| `Runtime/`·`Samples~/` | R1·R2·R6·R7·R11·R18. `Runtime/`은 R20도 |
 | `docs~/guide/**/*.md` | R3·R4·R5·R8·R10·R15 |
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
-| `install.sql` | R9·R13·R17·R19 |
+| `install.sql` | R9·R13·R17·R19·R20 |
 | `verify.sql` | R17 |
 | `Samples~/DatabaseSetup/EdgeFunctions/**/*.ts`·`Admin~`의 admin-api·설정 화면 | R16·R17 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |

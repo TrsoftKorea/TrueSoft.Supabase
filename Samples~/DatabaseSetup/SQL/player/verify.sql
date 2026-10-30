@@ -179,6 +179,7 @@ from (
       ('ts_ccu_now'),
       ('ts_ccu_daily_refresh'),
       ('ts_ccu_snapshot'),
+      ('ts_owned_user_id'),
       ('ts_leaderboard_next_rotation_at'),
       ('ts_leaderboard_columns_of'),
       ('ts_leaderboard_columns_meta'),

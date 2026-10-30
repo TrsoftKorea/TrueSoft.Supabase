@@ -76,7 +76,8 @@ namespace TrueBase.Core.Data
                 ["p_language"] = language,
                 ["p_app_version"] = appVersion,
             });
-            var r = await SupabaseRestHelpers.CallRpcAsync(_httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_push_register", body);
+            // returns void — 성공해도 본문이 비어 온다.
+            var r = await SupabaseRestHelpers.CallRpcAsync(_httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_push_register", body, allowEmptyBody: true);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 
@@ -86,7 +87,7 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult.Fail(SupabaseErrorCode.NotSignedIn);
             var body = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_token"] = token });
-            var r = await SupabaseRestHelpers.CallRpcAsync(_httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_push_unregister", body);
+            var r = await SupabaseRestHelpers.CallRpcAsync(_httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_push_unregister", body, allowEmptyBody: true);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }
 

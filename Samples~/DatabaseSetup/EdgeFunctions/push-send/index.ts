@@ -51,12 +51,13 @@ type Claim = {
   items: Item[];
 };
 // retry — 구글·애플이 잠시 바쁘거나(429·5xx) 응답이 늦은 경우. 그 줄은 몇 분 뒤 다시 보낸다(ts_push_report).
-type DeviceResult = { token: string; action: "sent" | "sandbox" | "delete" | "failed" | "retry"; error?: string };
+type DeviceResult = { token: string; platform: Device["platform"]; action: "sent" | "sandbox" | "delete" | "failed" | "retry"; error?: string };
+type SendResult = Omit<DeviceResult, "platform">;
 
 const RUN_MS = 45_000;
 const BATCH = 200;
 const PARALLEL = 20;
-// 한 묶음에서 이만큼 넘게, 그리고 절반 넘게 "없는 기기"가 나오면 기기 탓이 아니라 키·설정 탓으로 보고 지우지 않는다.
+// 한 묶음에서 한 플랫폼으로 한 대도 못 보냈는데 "없는 기기"가 이만큼 넘게 나오면 키·설정 탓으로 보고 지우지 않는다.
 const DELETE_GUARD_MIN = 20;
 
 // 남은 유효 시간(초). 구글·애플도 이 시간이 지나면 기기가 꺼져 있던 동안 쌓인 알림을 버린다.
@@ -128,7 +129,7 @@ async function fcmAuth(): Promise<Fcm | null> {
 }
 
 // 기기 쪽(SDK)은 설치 ID(FID)로 등록한다 — FCM 의 token 필드는 폐지 예정이고 fid 를 쓰라고 한다.
-async function sendFcm(fcm: Fcm, device: Device, text: { title: string; body: string }, data: Record<string, string>, ttl: number): Promise<DeviceResult> {
+async function sendFcm(fcm: Fcm, device: Device, text: { title: string; body: string }, data: Record<string, string>, ttl: number): Promise<SendResult> {
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${fcm.projectId}/messages:send`, {
     method: "POST",
     headers: { Authorization: `Bearer ${fcm.token}`, "Content-Type": "application/json" },
@@ -198,7 +199,7 @@ async function postApns(apns: Apns, host: string, device: Device, payload: strin
 }
 
 // 개발용 빌드의 토큰은 개발 서버로만 간다 — 운영 서버가 BadDeviceToken 이면 개발 서버로 한 번 더 보내고, 되면 기억한다.
-async function sendApns(apns: Apns, device: Device, text: { title: string; body: string }, data: Record<string, string>, ttl: number): Promise<DeviceResult> {
+async function sendApns(apns: Apns, device: Device, text: { title: string; body: string }, data: Record<string, string>, ttl: number): Promise<SendResult> {
   const payload = JSON.stringify({ aps: { alert: { title: text.title, body: text.body }, sound: "default" }, ...data });
   const expiresAt = Math.floor(Date.now() / 1000) + ttl;
   const first = device.apns_sandbox ? APNS_HOSTS.sandbox : APNS_HOSTS.production;
@@ -218,12 +219,22 @@ async function sendApns(apns: Apns, device: Device, text: { title: string; body:
   return { token: device.token, action: "failed", error };
 }
 
-// 한 묶음에서 지울 기기가 많으면 기기들이 아니라 키·설정이 틀린 것이다 — 지우지 않고 실패로만 남긴다.
+// 같은 묶음에서 그 플랫폼으로 한 대라도 받았으면 키는 맞다 — 그때의 "없는 기기"는 진짜 앱을 지운 기기라 지운다.
+// 한 대도 못 받았는데 지울 기기가 많으면 키·설정이 틀린 것일 수 있어 지우지 않고 실패로만 남긴다.
+// (전체 우편처럼 이탈자가 대부분인 발송에서도 받은 기기가 섞이므로 정리가 멈추지 않는다.)
 function guardDeletes(devices: DeviceResult[]): DeviceResult[] {
-  const deletes = devices.filter((d) => d.action === "delete").length;
-  if (deletes < DELETE_GUARD_MIN || deletes * 2 <= devices.length) return devices;
-  console.warn(`[push-send] 한 묶음에서 ${deletes}/${devices.length}대가 없는 기기로 나와 지우지 않았습니다 — 푸시 키·번들 ID 를 확인하세요.`);
-  return devices.map((d): DeviceResult => d.action === "delete" ? { ...d, action: "failed", error: `${d.error} · 대량이라 지우지 않음` } : d);
+  const held = new Set<Device["platform"]>();
+  for (const platform of ["android", "ios"] as const) {
+    const mine = devices.filter((d) => d.platform === platform);
+    const deletes = mine.filter((d) => d.action === "delete").length;
+    const received = mine.some((d) => d.action === "sent" || d.action === "sandbox");
+    if (deletes >= DELETE_GUARD_MIN && !received) {
+      held.add(platform);
+      console.warn(`[push-send] ${platform} 으로 한 대도 못 보내고 ${deletes}대가 없는 기기로 나와 지우지 않았습니다 — 푸시 키·번들 ID 를 확인하세요.`);
+    }
+  }
+  if (held.size === 0) return devices;
+  return devices.map((d): DeviceResult => d.action === "delete" && held.has(d.platform) ? { ...d, action: "failed", error: `${d.error} · 대량이라 지우지 않음` } : d);
 }
 
 // ── 한 줄 보내기 ──────────────────────────────────────────────────────────────
@@ -241,17 +252,17 @@ async function sendItem(claim: Claim, item: Item): Promise<{ item: { id: number;
       if (device.platform === "android") {
         const fcm = await fcmAuth();
         if (!fcm) { reasons.add("Firebase 키 없음"); continue; }
-        results.push(await sendFcm(fcm, device, text, data, ttl));
+        results.push({ ...await sendFcm(fcm, device, text, data, ttl), platform: device.platform });
       } else {
         const apns = await apnsAuth();
         if (!apns) { reasons.add("애플 푸시 키 없음"); continue; }
-        results.push(await sendApns(apns, device, text, data, ttl));
+        results.push({ ...await sendApns(apns, device, text, data, ttl), platform: device.platform });
       }
     } catch (e) {
       // 시간 초과·연결 끊김은 다시 보내 볼 만하다. 키 형식 오류 같은 건 다시 해도 같다.
       const error = String(e instanceof Error ? e.message : e).slice(0, 200);
       const transient = e instanceof DOMException || e instanceof TypeError;
-      results.push({ token: device.token, action: transient ? "retry" : "failed", error });
+      results.push({ token: device.token, platform: device.platform, action: transient ? "retry" : "failed", error });
     }
   }
   const sent = results.filter((r) => r.action === "sent" || r.action === "sandbox").length;

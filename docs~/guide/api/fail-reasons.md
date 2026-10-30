@@ -155,6 +155,7 @@ bool Handle(SupabaseResult result)
 | `UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞인 경우 |
 | `UserSaveFlushFailed` | 서버가 전송을 거부했거나 네트워크 오류입니다. 원문은 `ErrorCode` 참조 |
 | `TableNameEmpty` | 유저 데이터 테이블 이름이 지정되지 않았습니다 |
+| `UserIdNotOwned` | 넘긴 플레이어 번호가 로그인한 계정의 것이 아니라 서버가 프로필·세이브 행 만들기를 거절했습니다 |
 | `UserSaveTimeout` | 전송 완료를 기다리다 제한 시간을 넘겼습니다. 전송 자체는 계속 진행될 수 있습니다 |
 | `UserSaveLoadFailed` | 유저 세이브 로드에 실패했습니다 |
 | `UserSaveDeleteFailed` | 유저 세이브 삭제에 실패했습니다 |

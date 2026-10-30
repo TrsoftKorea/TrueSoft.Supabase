@@ -34,11 +34,15 @@ namespace TrueBase.Editor
             var settings = PushBuildSettings.Load();
             var javaDir = Path.Combine(path, "src", "main", "java", "com", "truesoft", "supabase", "push");
             var valuesPath = Path.Combine(path, "src", "main", "res", "values", ValuesFile);
+            var iconPath = Path.Combine(path, "src", "main", "res", IconFolder, IconFile);
+            var oldIconPath = Path.Combine(path, "src", "main", "res", "drawable", IconFile);
+            if (File.Exists(oldIconPath)) File.Delete(oldIconPath);
 
             if (settings == null || !settings.pushEnabled)
             {
                 if (Directory.Exists(javaDir)) Directory.Delete(javaDir, true);
                 if (File.Exists(valuesPath)) File.Delete(valuesPath);
+                if (File.Exists(iconPath)) File.Delete(iconPath);
                 return;
             }
 
@@ -59,8 +63,54 @@ namespace TrueBase.Editor
             Directory.CreateDirectory(javaDir);
             File.WriteAllText(Path.Combine(javaDir, "TrueSoftPush.java"), PushBuildSettings.ReadTemplate("TrueSoftPush.java.txt"));
             File.WriteAllText(Path.Combine(javaDir, "TrueSoftPushService.java"), PushBuildSettings.ReadTemplate("TrueSoftPushService.java.txt"));
-            InjectManifest(path);
+            var hasIcon = CopyIcon(settings, iconPath);
+            InjectManifest(path, hasIcon);
             RaiseKotlinPin(path);
+        }
+
+        // 상태 표시줄 아이콘. 안드로이드는 이 아이콘의 투명도만 써서 흰색으로 그린다 — 지정하지 않으면 FCM 이 앱 아이콘을 써서
+        // 꽉 찬 흰 네모로 보인다. 그림은 PNG 파일을 그대로 넣는다(유니티 압축·크기 조정을 거치지 않게).
+        // 가장 높은 밀도 폴더에 둔다 — 크기 구분 없는 drawable 에 두면 기준 밀도 그림으로 읽혀 고밀도 기기에서 몇 배로 늘려 푼다.
+        private const string IconFile = "truesoft_push_icon.png";
+        private const string IconFolder = "drawable-xxxhdpi";
+        private const string IconResource = "@drawable/truesoft_push_icon";
+        private const int IconRecommendedPx = 96;  // 상태 표시줄 아이콘 24dp × xxxhdpi 4배
+
+        private static bool CopyIcon(TrueBase.Unity.SupabaseSettings s, string iconPath)
+        {
+            if (File.Exists(iconPath)) File.Delete(iconPath);
+            var asset = s.pushAndroidIcon != null ? UnityEditor.AssetDatabase.GetAssetPath(s.pushAndroidIcon) : null;
+            if (string.IsNullOrEmpty(asset))
+            {
+                Debug.LogWarning("[TrueSoft.Supabase] SupabaseSettings 의 Android 알림 아이콘이 비어 있습니다. 알림 아이콘이 흰 네모로 보일 수 있습니다.");
+                return false;
+            }
+            if (!asset.EndsWith(".png", System.StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogWarning($"[TrueSoft.Supabase] Android 알림 아이콘은 PNG 파일이어야 합니다: {asset}");
+                return false;
+            }
+            var source = UnityEditor.FileUtil.GetPhysicalPath(asset);
+            var (w, h) = PngSize(source);
+            if (w > IconRecommendedPx * 2 || h > IconRecommendedPx * 2)
+                Debug.LogWarning($"[TrueSoft.Supabase] Android 알림 아이콘이 {w}×{h} 입니다. {IconRecommendedPx}×{IconRecommendedPx} 로 줄이면 기기 메모리를 덜 씁니다.");
+            Directory.CreateDirectory(Path.GetDirectoryName(iconPath));
+            File.Copy(source, iconPath, true);
+            return true;
+        }
+
+        // PNG 머리(IHDR)의 가로·세로. 읽지 못하면 0.
+        private static (int w, int h) PngSize(string file)
+        {
+            try
+            {
+                using var fs = File.OpenRead(file);
+                var b = new byte[24];
+                if (fs.Read(b, 0, 24) < 24) return (0, 0);
+                int Be(int o) => (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
+                return (Be(16), Be(20));
+            }
+            catch (IOException) { return (0, 0); }
         }
 
         // 구글 로그인 후처리(GoogleLoginProGuardPostBuild, 순서 1)가 최상위 build.gradle 에서 kotlin-stdlib 를 1.8.22 로 강제 고정한다.
@@ -129,7 +179,7 @@ namespace TrueBase.Editor
                 + "</resources>\n");
         }
 
-        private static void InjectManifest(string path)
+        private static void InjectManifest(string path, bool hasIcon)
         {
             var manifestPath = Path.Combine(path, "src", "main", "AndroidManifest.xml");
             if (!File.Exists(manifestPath)) return;
@@ -169,6 +219,24 @@ namespace TrueBase.Editor
                 meta.SetAttribute("name", AndroidNs, "firebase_messaging_installation_id_enabled");
                 meta.SetAttribute("value", AndroidNs, "true");
                 app.AppendChild(meta);
+            }
+
+            const string iconMetaName = "com.google.firebase.messaging.default_notification_icon";
+            XmlElement iconMeta = null;
+            foreach (XmlElement e in app.GetElementsByTagName("meta-data"))
+                if (e.GetAttribute("name", AndroidNs) == iconMetaName) iconMeta = e;
+            // 게임이 직접 넣은 아이콘 지정은 건드리지 않는다. 우리가 넣은 것만 고치고 지운다.
+            var ours = iconMeta == null || iconMeta.GetAttribute("resource", AndroidNs) == IconResource;
+            if (ours && hasIcon && iconMeta == null)
+            {
+                iconMeta = doc.CreateElement("meta-data");
+                iconMeta.SetAttribute("name", AndroidNs, iconMetaName);
+                iconMeta.SetAttribute("resource", AndroidNs, IconResource);
+                app.AppendChild(iconMeta);
+            }
+            else if (ours && !hasIcon && iconMeta != null)
+            {
+                iconMeta.ParentNode?.RemoveChild(iconMeta);
             }
             doc.Save(manifestPath);
         }

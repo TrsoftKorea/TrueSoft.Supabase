@@ -28,7 +28,7 @@ public final class TrueSoftPush {
     private static final String PREFS = "truesoft_push";
     private static final String KEY_REGISTERED = "registered_fid";
 
-    // "idle" · "pending" · "ok" · "denied" · "failed"
+    // "idle" · "pending" · "ok" · "denied" · "unconfigured"(빌드에 Firebase 값이 없음) · "failed"(그 밖 — 네트워크·Play 서비스 등)
     private static volatile String state = "idle";
     private static volatile String token = null;
     private static volatile String error = null;
@@ -49,7 +49,8 @@ public final class TrueSoftPush {
             public void run() {
                 try {
                     if (FirebaseApp.getApps(appContext).isEmpty()) {
-                        fail("Firebase 가 시작되지 않았습니다(빌드에 Firebase 값이 들어가지 않음)");
+                        error = "Firebase 가 시작되지 않았습니다(빌드에 Firebase 값이 들어가지 않음)";
+                        state = "unconfigured";
                         return;
                     }
                     if (Build.VERSION.SDK_INT >= 33

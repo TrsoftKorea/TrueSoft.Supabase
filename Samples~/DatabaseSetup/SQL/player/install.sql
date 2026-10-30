@@ -467,8 +467,34 @@ before insert or update on public.user_profiles
 for each row
 execute function public.ts_profiles_coalesce_server_id();
 
+-- 플레이어 번호(user_id) 확인 — 로그인한 사람이 넘긴 번호가 자기 것인지 본다. 받는 값은 SDK 규칙과 같다:
+-- 로그인 계정 번호(auth.uid) 또는 그 계정에 연동된 구글·애플 계정 번호(identity_data.sub). 비면 계정 번호.
+-- 남의 번호를 받으면 그 사람의 우편·푸시 기기·수신 설정에 끼어들 수 있어 거절한다(user_id 는 같은 서버 플레이어끼리 보인다).
+create or replace function public.ts_owned_user_id(p_user_id text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_want text := nullif(trim(p_user_id), '');
+begin
+  if v_uid is null then raise exception 'not_authenticated'; end if;
+  if v_want is null or v_want = v_uid::text then return v_uid::text; end if;
+  if exists (select 1 from auth.identities i where i.user_id = v_uid and i.identity_data->>'sub' = v_want) then
+    return v_want;
+  end if;
+  raise exception 'user_id_not_owned';
+end;
+$$;
+comment on function public.ts_owned_user_id(text) is
+  '넘긴 플레이어 번호가 로그인한 계정의 것(계정 번호·연동 계정 번호)이면 그 값, 비면 계정 번호, 아니면 user_id_not_owned.';
+revoke all on function public.ts_owned_user_id(text) from public, anon, authenticated;
+
 -- 클라이언트 ensure-profile: PostgREST upsert만으로는 RLS/병합 순서에 따라 42501이 남을 수 있어 RPC로 통일.
--- account_id는 항상 auth.uid()만 사용(클라이언트 조작 불가). user_id는 p_user_id 또는 uid 문자열.
+-- account_id는 항상 auth.uid()만 사용(클라이언트 조작 불가). user_id는 p_user_id(ts_owned_user_id 로 확인) 또는 uid 문자열.
 drop function if exists public.ts_ensure_my_profile(text);
 create or replace function public.ts_ensure_my_profile(
   p_user_id  text default null,
@@ -491,7 +517,7 @@ begin
     raise exception 'not_authenticated';
   end if;
 
-  v_stable := coalesce(nullif(trim(p_user_id), ''), v_uid::text);
+  v_stable := public.ts_owned_user_id(p_user_id);
   select user_id into v_old_user from public.user_profiles where account_id = v_uid;
   v_server := public.ts_default_server_id();
 
@@ -1913,7 +1939,7 @@ begin
     raise exception 'table_name_empty';
   end if;
 
-  v_stable := coalesce(nullif(trim(p_user_id), ''), v_uid::text);
+  v_stable := public.ts_owned_user_id(p_user_id);
   v_server_id := public.ts_default_server_id();
 
   -- %I 로 식별자 이스케이프 → SQL 인젝션 안전. 테이블 부재 시 Postgres 런타임 오류 반환.
@@ -14263,6 +14289,7 @@ comment on function public.ts_push_enqueue(text[], text, jsonb, jsonb, jsonb, bo
 revoke all on function public.ts_push_enqueue(text[], text, jsonb, jsonb, jsonb, boolean, uuid, timestamptz) from public, anon, authenticated;
 
 -- 우편 발송 단위의 정해진 사람들에게 우편 알림을 넣는다(문구 값은 그 발송의 제목). 아래 두 곳이 쓴다.
+-- 보낼 기한은 우편 만료와 하루 중 이른 쪽 — 밤에 미뤄 둔 광고 알림이 우편이 없어진 뒤에 가지 않게.
 create or replace function public.ts_push_enqueue_mail_users(p_batch_id uuid, p_is_ad boolean, p_users text[])
 returns int
 language sql
@@ -14276,7 +14303,7 @@ as $$
                          from jsonb_each(coalesce(b.localized, '{}'::jsonb)) as l(k, v)
                         where nullif(btrim(v->>'title'), '') is not null), '{}'::jsonb),
              jsonb_build_object('batch_id', b.id, 'category', b.category),
-             coalesce(p_is_ad, false), b.id)
+             coalesce(p_is_ad, false), b.id, least(b.expires_at, now() + interval '1 day'))
     from public.mail_batches b where b.id = p_batch_id), 0);
 $$;
 revoke all on function public.ts_push_enqueue_mail_users(uuid, boolean, text[]) from public, anon, authenticated;
@@ -14454,6 +14481,11 @@ begin
     delete from public.push_preferences where user_id = old.user_id;
   end if;
   return null;
+exception
+  -- 계정 삭제 안에서 돈다 — 푸시 정리가 실패해도 탈퇴 삭제는 막지 않는다.
+  when others then
+    raise warning '[ts_push_on_account_deleted] %', sqlerrm;
+    return null;
 end;
 $$;
 revoke all on function public.ts_push_on_account_deleted() from public, anon, authenticated;
@@ -14600,7 +14632,8 @@ begin
           coalesce(p_mail, true), coalesce(p_support_reply, true), coalesce(p_friend_request, true), coalesce(p_lobby_invite, true),
           -- 처음 적는 행: 그 값을 이번에 정했을 때만 시각을 남긴다 — 알림만 끈 사람에게 "광고 철회 시각"이 생기지 않게.
           v_ad, case when p_ad_consent is not null then now() end,
-          v_night, case when p_night_consent is not null or (p_ad_consent is not null and not v_ad) then now() end)
+          -- 야간은 이번에 정했을 때만 — 광고 거부로 처음 적는 행에 켠 적 없는 야간의 철회 시각이 생기지 않게.
+          v_night, case when p_night_consent is not null then now() end)
   on conflict (user_id) do update
     set enabled          = coalesce(p_enabled, pp.enabled),
         mail             = coalesce(p_mail, pp.mail),

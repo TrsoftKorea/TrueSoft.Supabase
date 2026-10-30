@@ -66,17 +66,22 @@ await Supabase.SetPushPreferencesAsync(lobbyInvite: inviteToggle.isOn);
 ## 준비 {#setup}
 
 1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트를 만들고 Android 앱을 추가합니다. 패키지 이름은 게임과 같아야 합니다.
-2. `SupabaseSettings`의 **푸시 알림 사용**을 켜고, Firebase 프로젝트 설정에 보이는 프로젝트 ID·Android 앱 ID·웹 API 키·발신자 ID를 넣습니다.
-3. Apple Developer에서 앱의 **Push Notifications** 기능을 켜고 APNs 키(.p8)를 만듭니다.
-4. 운영 콘솔 **설정 › 서비스 연결 › 푸시 알림**에 Firebase 서비스 계정 키와 APNs 키를 넣습니다. Team ID·번들 ID는 다른 묶음과 같은 값을 씁니다.
-5. 운영 콘솔 **설정 › 푸시 알림**에서 상황별 문구를 확인합니다. 기본 문구가 한국어·영어로 들어 있습니다.
+2. `SupabaseSettings`의 **푸시 알림 사용**을 켜고, 아래 [Firebase 값](#firebase-values) 네 칸을 넣습니다.
+3. **Android 알림 아이콘**에 흰색 그림에 배경이 투명한 96×96 PNG를 넣습니다. 비우면 상태 표시줄에 흰 네모로 보일 수 있습니다.
+4. Apple Developer에서 앱의 **Push Notifications** 기능을 켜고 APNs 키(.p8)를 만듭니다.
+5. 운영 콘솔 **설정 › 서비스 연결 › 푸시 알림**에 Firebase 서비스 계정 키와 APNs 키를 넣습니다. 키를 가져오는 방법은 그 화면의 각 칸에 있습니다. Team ID·번들 ID는 다른 묶음과 같은 값을 씁니다.
+6. 운영 콘솔 **설정 › 푸시 알림**에서 상황별 문구를 확인합니다. 기본 문구가 한국어·영어로 들어 있습니다.
 
 ::: warning 유니티 판
 Android 푸시 부품은 유니티 2022.3.38f1 이상이 필요합니다. 그보다 오래된 2022.3은 빌드 도구가 Firebase의 최소 요구보다 낮습니다.
 :::
 
 ::: info 빌드에 들어가는 것
-**푸시 알림 사용**을 켠 게임만 Android 빌드에 Firebase 메시징 부품이, iOS 빌드에 푸시 권한과 기기 토큰을 받는 설정이 들어갑니다. 게임에 Firebase 유니티 패키지가 이미 있으면 그 패키지의 Firebase 설정을 그대로 씁니다.
+**푸시 알림 사용**을 켠 게임만 Android 빌드에 Firebase 메시징 부품과 알림 권한이, iOS 빌드에 Push Notifications 기능과 기기 토큰을 받는 설정이 들어갑니다. 따로 손댈 매니페스트·Xcode 설정은 없습니다. 게임에 Firebase 유니티 패키지가 이미 있으면 그 패키지의 Firebase 설정을 그대로 씁니다.
+:::
+
+::: warning 알림 아이콘을 다른 곳에서 지정한 게임
+게임이 다른 플러그인이나 매니페스트에서 Firebase 알림 아이콘을 이미 지정했다면 **Android 알림 아이콘** 칸을 비웁니다. 두 곳에서 다른 그림을 지정하면 빌드가 멈출 수 있습니다.
 :::
 
 ::: warning Firebase 유니티 메시징과 함께 쓸 수 없음
@@ -86,3 +91,16 @@ Android 푸시 부품은 유니티 2022.3.38f1 이상이 필요합니다. 그보
 ::: info 설치
 DB는 `install.sql`의 푸시 알림 절이 만들고, 보내기는 엣지 함수 `push-send`가 합니다. [엣지 함수 배포](/guide/start/database-setup#edge-function-deploy)에서 이 함수의 **Verify JWT**를 꺼야 알림이 나갑니다.
 :::
+
+## Firebase 값 {#firebase-values}
+
+`google-services.json` 파일은 게임에 넣지 않습니다. 빌드할 때 SDK가 아래 네 값으로 같은 설정을 만듭니다. 값은 Firebase 콘솔의 **프로젝트 설정 › 일반**에서 보거나, 그 화면에서 내려받은 `google-services.json`에서 옮겨 적습니다.
+
+| SupabaseSettings 칸 | `google-services.json` 위치 |
+|------|------|
+| Firebase&nbsp;프로젝트&nbsp;ID | `project_info.project_id` |
+| Firebase&nbsp;Android&nbsp;앱&nbsp;ID | `client[].client_info.mobilesdk_app_id` |
+| Firebase&nbsp;웹&nbsp;API&nbsp;키 | `client[].api_key[].current_key` |
+| Firebase&nbsp;발신자&nbsp;ID | `project_info.project_number` |
+
+`client`가 여럿이면 `client_info.android_client_info.package_name`이 게임 패키지 이름과 같은 것을 고릅니다.

@@ -117,6 +117,10 @@ namespace TrueBase.Unity
         [Tooltip("Firebase 콘솔 › 프로젝트 설정 › 클라우드 메시징의 발신자 ID(숫자).")]
         public string firebaseSenderId = "";
 
+        [Label("Android 알림 아이콘")]
+        [Tooltip("상태 표시줄에 보이는 작은 아이콘. 흰색 그림에 배경이 투명한 96×96 PNG. 비우면 앱 아이콘이 흰 네모로 보일 수 있습니다.")]
+        public Texture2D pushAndroidIcon;
+
 
         /// <summary>
         /// 인스펙터 값을 Core 계층의 <see cref="SupabaseOptions"/>로 변환합니다. 범위를 벗어난 값은 최소값으로 보정합니다.

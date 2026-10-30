@@ -50,13 +50,9 @@ namespace TrueBase.Unity.Push
                     var state = push.CallStatic<string>("state");
                     if (state == "ok") return new Result(push.CallStatic<string>("token"), "android", null, null);
                     if (state == "denied") return new Result(null, "android", SupabaseErrorCode.PushPermissionDenied, null);
-                    if (state == "failed")
-                    {
-                        var error = push.CallStatic<string>("error");
-                        // 빌드에 Firebase 값이 안 들어간 경우는 설정 문제다.
-                        var code = error != null && error.Contains("Firebase") ? SupabaseErrorCode.PushNotConfigured : SupabaseErrorCode.PushTokenUnavailable;
-                        return new Result(null, "android", code, error);
-                    }
+                    // 빌드에 Firebase 값이 안 들어간 것은 설정 문제, 그 밖의 실패(네트워크·Play 서비스)는 기기에서 못 받은 것.
+                    if (state == "unconfigured") return new Result(null, "android", SupabaseErrorCode.PushNotConfigured, push.CallStatic<string>("error"));
+                    if (state == "failed") return new Result(null, "android", SupabaseErrorCode.PushTokenUnavailable, push.CallStatic<string>("error"));
                 }
                 return new Result(null, "android", SupabaseErrorCode.PushTokenUnavailable, "timeout");
             }

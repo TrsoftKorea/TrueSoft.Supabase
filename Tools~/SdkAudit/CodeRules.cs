@@ -32,6 +32,52 @@ namespace SdkAudit
             ResetSymmetry(ctx);
             Samples(ctx);
             AnonymousSerialization(ctx);
+            VoidRpcEmptyBody(ctx);
+        }
+
+        // ── R20 값 없는 RPC 의 빈 응답 ────────────────────────────────────────
+        // returns void 인 함수는 성공해도 본문이 비어 온다. CallRpcAsync 는 기본으로 빈 본문을 "<rpc>_empty_body" 실패로
+        // 돌려주므로 allowEmptyBody: true 가 없으면 성공이 늘 실패로 보인다 — 2026-10-30 푸시 기기 등록·해제가 그랬다
+        // (서버엔 등록되는데 SDK 는 실패로 읽어 로그아웃 때 해제를 안 했다).
+        private static void VoidRpcEmptyBody(AuditContext ctx)
+        {
+            var sqlPath = Path.Combine(ctx.Root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql");
+            if (!File.Exists(sqlPath))
+                return;
+            var voids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Match m in Regex.Matches(File.ReadAllText(sqlPath),
+                         @"create\s+or\s+replace\s+function\s+public\.(\w+)\s*\((?:[^()]|\([^()]*\))*\)\s*returns\s+(\w+)",
+                         RegexOptions.IgnoreCase))
+            {
+                // 같은 이름에 다른 반환형 판이 섞여 있으면(옛 판 drop 전) 판단하지 않는다.
+                if (m.Groups[2].Value.Equals("void", StringComparison.OrdinalIgnoreCase)) voids.Add(m.Groups[1].Value);
+                else voids.Remove(m.Groups[1].Value);
+            }
+
+            foreach (var src in ctx.RuntimeSources)
+            {
+                var root = CSharpSyntaxTree.ParseText(src.Text).GetRoot();
+                foreach (var call in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    var callee = call.Expression switch
+                    {
+                        MemberAccessExpressionSyntax m => m.Name.Identifier.ValueText,
+                        IdentifierNameSyntax i => i.Identifier.ValueText,
+                        _ => null,
+                    };
+                    if (callee != "CallRpcAsync")
+                        continue;
+                    var args = call.ArgumentList.Arguments;
+                    if (args.Any(a => a.NameColon?.Name.Identifier.ValueText == "allowEmptyBody"))
+                        continue;
+                    foreach (var lit in args.Select(a => a.Expression).OfType<LiteralExpressionSyntax>())
+                    {
+                        if (lit.IsKind(SyntaxKind.StringLiteralExpression) && voids.Contains(lit.Token.ValueText))
+                            ctx.Report.Error($"[R20 빈응답] {lit.Token.ValueText} 는 returns void 라 성공해도 본문이 비어 옵니다. " +
+                                             $"CallRpcAsync 에 allowEmptyBody: true 를 넘기세요. ({ctx.Where(src, call)})");
+                    }
+                }
+            }
         }
 
         // ── R18 익명 객체 직렬화 금지 ─────────────────────────────────────────

@@ -66,7 +66,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<bool>.Fail(response.Body ?? response.ErrorMessage ?? "ensure_row_failed");
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "ensure_row"));
 
             return SupabaseResult<bool>.Success(true);
         }

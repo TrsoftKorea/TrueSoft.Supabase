@@ -246,12 +246,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
 
             if (response.IsSuccess == false)
-            {
-                var detail = string.IsNullOrWhiteSpace(response.Body) == false
-                    ? response.Body.Trim()
-                    : (response.ErrorMessage ?? "profile_ensure_rpc_failed");
-                return SupabaseResult<bool>.Fail(detail);
-            }
+                return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "profile_ensure_rpc"));
 
             return SupabaseResult<bool>.Success(true);
         }
@@ -291,7 +286,7 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<AfterSignInSnapshot>.Fail(AfterSignInRpcMissing);
 
             if (response.IsSuccess == false)
-                return SupabaseResult<AfterSignInSnapshot>.Fail(response.ErrorMessage ?? response.Body ?? "after_sign_in_failed");
+                return SupabaseResult<AfterSignInSnapshot>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "after_sign_in"));
 
             try
             {

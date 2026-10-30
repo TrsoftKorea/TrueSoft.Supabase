@@ -225,6 +225,9 @@ namespace TrueBase.Core.Common
         /// <summary>유저 데이터 테이블 이름이 지정되지 않았습니다.</summary>
         public const string TableNameEmpty = "table_name_empty";
 
+        /// <summary>넘긴 플레이어 번호가 로그인한 계정의 것이 아닙니다. 프로필·세이브 행을 만들 때 서버가 거절합니다.</summary>
+        public const string UserIdNotOwned = "user_id_not_owned";
+
         /// <summary>세이브 값을 전송 형식으로 변환하지 못했습니다. 직렬화할 수 없는 타입이 섞였을 때 발생합니다.</summary>
         public const string UserSaveSerializeFailed = "user_save_serialize_failed";
 
