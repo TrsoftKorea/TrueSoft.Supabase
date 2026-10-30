@@ -11,6 +11,7 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Segmented } from '../components/ui/Segmented'
+import { Switch } from '../components/ui/Switch'
 import { formatCount, itemsText } from '../components/ui/format'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
@@ -118,6 +119,8 @@ export default function Mails({
   const [servers, setServers] = useState<ServerRow[]>([])
   const [catalog, setCatalog] = useState<GameItem[]>([])
   const [categories, setCategories] = useState<CategoryRow[]>([])
+  const [push, setPush] = useState(false)
+  const [pushIsAd, setPushIsAd] = useState(false)
   // 단계 게이팅: active = 현재 열린 단계, reached = 다음 버튼으로 도달한 최대 단계(0~3, 3=발송)
   const [active, setActive] = useState(0)
   const [reached, setReached] = useState(0)
@@ -227,6 +230,8 @@ export default function Mails({
   // 예약 시각은 게임 시간대로 읽는다 — 시간대를 받기 전에는 예약을 보내지 않는다.
   const tz = useGameTimeZone(target)
   const tzText = tz ? `${timeZoneName(tz)} 기준` : ''
+  const pushApplies = push
+  const pushSummary = pushApplies ? (pushIsAd ? '보냄 · 광고성' : '보냄') : null
   const canSend = msgOk && expiresDays > 0 && targetOk && schedOk && (sched === 'immediate' || !!tz)
     && items.every((it) => it.key && Number(it.count) > 0)
 
@@ -235,6 +240,7 @@ export default function Mails({
     setSched('immediate'); setMode('players'); setScheduledAt('')
     setRepeatUnit('day'); setRepeatTime('12:00'); setRepeatDow(1); setRepeatDom(1)
     setCategory('default'); setExpiresDays(7); setServerId(''); setPlatform(''); setOpenForNew(false)
+    setPush(false); setPushIsAd(false)
     setActive(0); setReached(0)
   }
 
@@ -258,11 +264,16 @@ export default function Mails({
         title, content, category: category.trim() || 'default',
         items: items.map((it) => ({ key: it.key, count: Number(it.count) })),
         localized,
+        push: pushApplies,
+        pushIsAd: pushApplies && pushIsAd,
       }
       if (sched === 'immediate') {
         const expiresAt = new Date(Date.now() + expiresDays * 86400000).toISOString()
-        const res = await callAdmin<{ recipient_count: number }>(target, 'mails.send', { ...common, expiresAt })
-        setNotice(`발송 완료 — ${formatCount(res?.recipient_count ?? 0)}명에게 보냈습니다.`)
+        const res = await callAdmin<{ recipient_count: number; push_count?: number }>(target, 'mails.send', { ...common, expiresAt })
+        const pushPart = res?.push_count === undefined ? ''
+          : res.push_count < 0 ? ' 푸시는 넣지 못했습니다.'
+          : ` 푸시 ${formatCount(res.push_count)}명.`
+        setNotice(`발송 완료 — ${formatCount(res?.recipient_count ?? 0)}명에게 보냈습니다.${pushPart}`)
       } else {
         await callAdmin(target, 'mails.createSchedule', {
           ...common, scheduleType: sched, expiresDays,
@@ -484,6 +495,26 @@ export default function Mails({
             <span className="text-sm text-neutral-500">일</span>
           </div>
 
+          <div className="space-y-2 border-t border-neutral-100 pt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-neutral-600 shrink-0 w-24">푸시 알림</span>
+              <Switch value={pushApplies} onChange={(v) => { setPush(v); if (!v) setPushIsAd(false) }} />
+            </div>
+            {pushApplies && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-neutral-600 shrink-0 w-24">광고성 알림</span>
+                <Switch value={pushIsAd} onChange={setPushIsAd} />
+              </div>
+            )}
+            {pushApplies && (
+              <p className="text-xs text-neutral-400">
+                {pushIsAd
+                  ? '광고 수신에 동의한 플레이어에게만 가고, 밤 9시~아침 8시에는 야간 수신에 동의한 플레이어에게만 갑니다. 나머지는 아침 8시에 갑니다.'
+                  : '우편 알림을 켜 둔 플레이어의 기기로 우편 제목이 갑니다.'}
+              </p>
+            )}
+          </div>
+
           <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
             대상 게임: {look.name(target)}
           </div>
@@ -493,6 +524,7 @@ export default function Mails({
             { label: '분류', value: catLabel(category) },
             { label: '보상', value: items.length > 0 ? `${items.length}종` : null },
             { label: '다국어', value: localized ? `${Object.keys(localized).length}개` : null },
+            { label: '푸시', value: pushSummary },
           ]} />
 
           <div className="flex items-center gap-3">
@@ -521,6 +553,7 @@ export default function Mails({
             { label: '대상', value: targetSummary, ...(mode === 'all' ? { tone: 'danger' as const } : {}) },
             { label: '아이템', value: items.length > 0 ? itemsText(items, catalog) : '없음' },
             { label: '수령 기한', value: `${formatCount(expiresDays)}일` },
+            { label: '푸시', value: pushSummary },
           ]} />
         </div>
       </ConfirmDialog>

@@ -43,10 +43,10 @@ type CodeRow = { code: string; redeemed_at: string | null; account_id: string | 
 
 const KEYWORD_RE = /^[A-Z0-9_-]+$/
 
-/** "12 / 100 (12%)". 코드 발급은 발급 수 대비, 키워드는 최대 사용 횟수 대비. 키워드 무제한은 횟수만. */
+/** "12 / 100 (12%)". 1회용은 발급 수 대비, 공용은 최대 사용 횟수 대비. 공용 무제한도 같은 꼴로 "312 / 무제한". */
 function usageText(c: Coupon): string {
   const cap = c.kind === 'keyword' ? c.max_uses : c.issued_count
-  if (cap == null) return `${formatCount(c.used_count)}회`
+  if (cap == null) return `${formatCount(c.used_count)} / 무제한`
   const rate = cap > 0 ? Math.round((c.used_count / cap) * 1000) / 10 : 0
   return `${formatCount(c.used_count)} / ${formatCount(cap)} (${rate}%)`
 }
@@ -440,12 +440,12 @@ export default function Coupons({
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
               <tr>
-                <th className="text-left px-5 py-2.5 font-medium">제목</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">종류</th>
+                <th className="text-left px-5 py-2.5 font-medium min-w-[10rem]">제목</th>
+                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">종류</th>
                 <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">사용률</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">사용 마감</th>
+                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">사용률</th>
+                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">상태</th>
+                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">사용 마감</th>
                 <th className="px-3 py-2.5 w-28" />
               </tr>
             </thead>
@@ -456,26 +456,29 @@ export default function Coupons({
                 rows.map((c) => (
                   <tr key={c.id} className="border-t border-neutral-100">
                     <td className="px-5 py-3">{c.title}</td>
-                    <td className="px-4 py-3 text-neutral-600">{KIND_NAME[c.kind]}</td>
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {c.kind === 'keyword' ? c.code : `발급 ${formatCount(c.issued_count)}개`}
+                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{KIND_NAME[c.kind]}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {c.kind === 'keyword'
+                        ? <span className="font-mono text-xs text-neutral-800">{c.code}</span>
+                        : <span className="text-neutral-600">코드 {formatCount(c.issued_count)}개</span>}
                     </td>
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
                       {usageText(c)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`px-2 py-0.5 text-xs rounded ${c.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
                         {c.is_active ? '활성' : '비활성'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{c.expires_at ? formatDateTime(c.expires_at) : '무기한'}</td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        {c.kind === 'normal' && (
+                        {/* 공용 코드는 볼 코드 목록이 없다 — 자리는 비워 두어 수정·삭제가 줄마다 같은 위치에 선다. */}
+                        {c.kind === 'normal' ? (
                           <button onClick={() => setCodesTarget(c)} title="코드 보기" aria-label="코드 보기" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                             <List className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                        ) : <span className="w-7 h-7" aria-hidden />}
                         <button onClick={() => { setNotice(''); setEditTarget(c) }} title="수정" aria-label="수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>

@@ -10,7 +10,7 @@ export type ProjectConfig = {
   label: string
   url: string
   /**
-   * 화면 상단 띠·확인 창에 쓰는 게임 기본색. 운영 콘솔 "설정 › 콘솔 표시"에서 바꾸면 그 값이 이긴다(lib/projectLook). 이름(label)도 같다.
+   * 화면 상단 띠·확인 창에 쓰는 게임 기본색. 운영 콘솔 "설정 › 게임 정보"에서 바꾸면 그 값이 이긴다(lib/projectLook). 이름(label)도 같다.
    * 게임끼리 확실히 달라야 하고, 흰 글자가 얹히므로 흰색과 4.5:1 이상 대비가 나야 한다.
    */
   color: string

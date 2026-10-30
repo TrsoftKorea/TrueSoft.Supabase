@@ -63,8 +63,15 @@ const durationText = (ms: number) => {
 
 const BUSY: Phase[] = ['starting', 'running', 'propagating']
 
+/**
+ * 게시를 누른 뒤 서버 상태가 따라오기 전까지 화면이 먼저 보여 줄 단계.
+ * pushing: 커밋·푸시 중. pushed: 올렸고 배포 상태 조회가 아직 새 커밋을 못 봤다(앞 판 상태가 돌아오는 동안).
+ */
+type Local = { stage: 'pushing' | 'pushed'; hash: string; at: number }
+
 /** 띠에 보일 실제 반영 상태. 올릴 변경 수는 따로 보인다. elapsed 는 배포를 시작한 지 얼마나 됐는지(진행 중일 때만). */
-function summarize(d: Deploy | null, failed: string, elapsed: string, finished: string): Summary {
+function summarize(d: Deploy | null, failed: string, elapsed: string, finished: string, local: Local | null): Summary {
+  if (local) return { label: local.stage === 'pushing' ? '올리는 중' : '배포 대기', tone: 'busy', ...(elapsed ? { time: `${elapsed}째` } : {}) }
   if (failed) return { label: '상태 확인 실패', tone: 'warn' }
   if (!d) return { label: '확인 중', tone: 'busy' }
   const since = elapsed ? `${elapsed}째` : undefined
@@ -163,8 +170,9 @@ function Step({ label, state, last, children }: { label: string; state: StepStat
 export function PublishBar() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<PublishStatus | null>(null)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [local, setLocal] = useState<Local | null>(null)
+  const [publishError, setPublishError] = useState('')
   const [done, setDone] = useState<PublishResult | null>(null)
   const [deploy, setDeploy] = useState<Deploy | null>(null)
   const [deployError, setDeployError] = useState('')
@@ -182,7 +190,14 @@ export function PublishBar() {
 
   // 배포가 진행 중이거나 방금 게시해 아직 반영 전이면 3초마다, 아니면 1분마다 다시 본다.
   const phase = deploy?.phase
-  const watching = (!!phase && BUSY.includes(phase)) || (!!done && phase !== 'live' && phase !== 'failed')
+  const watching = !!local || (!!phase && BUSY.includes(phase)) || (!!done && phase !== 'live' && phase !== 'failed')
+
+  // 푸시한 뒤에 새로 확인한 상태가 오면 화면이 먼저 그리던 단계를 내려놓는다 — 서버는 푸시 때 앞 결과를 버리므로
+  // 그 뒤의 응답은 새 커밋 기준이다(커밋 번호 대조는 짧은 번호 길이가 달라 어긋날 수 있어 쓰지 않는다).
+  const checkedAt = deploy?.checkedAt ?? ''
+  useEffect(() => {
+    if (local?.stage === 'pushed' && checkedAt && Date.parse(checkedAt) >= local.at) setLocal(null)
+  }, [local, checkedAt])
   useEffect(() => {
     void refresh()
     const id = window.setInterval(() => void refresh(), watching ? 3_000 : 60_000)
@@ -200,9 +215,12 @@ export function PublishBar() {
   // 게시한 순간부터 실제 콘솔에 반영될 때까지 걸린 시간.
   const [publishedAt, setPublishedAt] = useState<number | null>(null)
   const [finished, setFinished] = useState('')
+  // 게시한 뒤에 확인한 상태로만 잰다 — 앞 판의 "반영됨"을 보고 0초로 끝내지 않게.
   useEffect(() => {
-    if (publishedAt && phase === 'live' && !finished) setFinished(durationText(Date.now() - publishedAt))
-  }, [publishedAt, phase, finished])
+    if (publishedAt && !local && phase === 'live' && !finished && checkedAt && Date.parse(checkedAt) >= publishedAt) {
+      setFinished(durationText(Date.now() - publishedAt))
+    }
+  }, [publishedAt, local, phase, finished, checkedAt])
   const startedAt = publishedAt ?? (deploy?.run?.createdAt ? Date.parse(deploy.run.createdAt) : null)
   const elapsed = watching && startedAt ? durationText(now - startedAt) : ''
 
@@ -219,29 +237,36 @@ export function PublishBar() {
     }
   }, [])
 
+  // 누르는 즉시 창을 닫고 진행 표시를 연다 — 커밋·푸시가 끝날 때까지 앞 판 상태로 멈춰 보이지 않게.
   const publish = useCallback(async () => {
     if (!status) return
-    setBusy(true)
-    setError('')
+    // 이 창에서 본 목록·내용만 올린다 — 그사이 바뀌었으면 서버가 거절한다.
+    const seen = [...status.sdk.files, ...status.console.files].map((f) => ({ file: f.file, hash: f.hash }))
+    // 콘솔 화면 코드가 없으면 실제 콘솔은 다시 배포되지 않는다 — 배포 단계를 기다리지 않는다.
+    const deploys = status.console.files.length > 0 && status.console.deploys
+    setOpen(false)
+    setExpanded(true)
+    setPublishError('')
+    setDone(null)
+    setFinished('')
+    setPublishedAt(Date.now())
+    setLocal({ stage: 'pushing', hash: '', at: Date.now() })
     try {
-      // 이 창에서 본 목록·내용만 올린다 — 그사이 바뀌었으면 서버가 거절한다.
-      const seen = [...status.sdk.files, ...status.console.files].map((f) => ({ file: f.file, hash: f.hash }))
       const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.map((c) => c.full), messages: status.messages })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
+      const hash = r.commits?.find((c) => c.kind === 'console')?.hash ?? ''
+      setLocal(deploys && hash ? { stage: 'pushed', hash, at: Date.now() } : null)
       setDone(r)
-      setPublishedAt(Date.now())
-      setFinished('')
-      setOpen(false)
-      setExpanded(true)
       void refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '게시하지 못했습니다.')
-    } finally {
-      setBusy(false)
+      setLocal(null)
+      setPublishedAt(null)
+      setPublishError(e instanceof Error ? e.message : '게시하지 못했습니다.')
+      void refresh()
     }
   }, [refresh, status])
 
-  const summary = summarize(deploy, deployError, elapsed, finished)
+  const summary = summarize(deploy, deployError, elapsed, finished, local)
   const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
   const empty = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
   const run = deploy?.run
@@ -283,8 +308,8 @@ export function PublishBar() {
             )}
             {expanded ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
           </button>
-          <button type="button" onClick={() => void openDialog()}
-            className="inline-flex items-center gap-1 h-6 px-3 rounded-full bg-[#451a03] text-[#fffbeb] hover:bg-[#78350f] whitespace-nowrap font-medium">
+          <button type="button" onClick={() => void openDialog()} disabled={local?.stage === 'pushing'}
+            className="inline-flex items-center gap-1 h-6 px-3 rounded-full bg-[#451a03] text-[#fffbeb] hover:bg-[#78350f] whitespace-nowrap font-medium disabled:opacity-50">
             <UploadCloud className="w-3.5 h-3.5" /> 게시
           </button>
         </div>
@@ -293,8 +318,19 @@ export function PublishBar() {
       {expanded && (
         <div className="bg-white border-b border-neutral-200">
           <div className="max-w-6xl mx-auto px-6 py-3 space-y-3">
+            {publishError && <p className="text-xs text-red-600">{publishError}</p>}
             {deployError && <p className="text-xs text-red-600">{deployError}</p>}
-            {deploy && (
+            {local ? (
+              <ol className="flex gap-2">
+                <Step label="GitHub 에 올림" state={local.stage === 'pushing' ? 'busy' : 'done'}>
+                  {local.stage === 'pushing' ? '커밋하고 올리는 중' : `${local.hash} · 방금`}
+                </Step>
+                <Step label="배포" state={local.stage === 'pushing' ? 'todo' : 'busy'}>
+                  {local.stage === 'pushing' ? '올린 뒤 시작' : '시작 기다리는 중'}
+                </Step>
+                <Step label="실제 콘솔 반영" state="todo" last>{`이전 판 (${deploy?.live?.sha ?? '-'})`}</Step>
+              </ol>
+            ) : deploy && (
               <ol className="flex gap-2">
                 <Step label="GitHub 에 올림" state={deploy.console.pushed ? 'done' : 'todo'}>
                   {deploy.console.pushed ? `${deploy.console.sha} · ${timeText(deploy.console.committedAt)}` : '아직 안 올라감'}
@@ -348,7 +384,6 @@ export function PublishBar() {
         description="콘솔 화면은 몇 분 뒤 모든 게임의 실제 운영 콘솔에 반영됩니다. SDK 변경은 GitHub 에 올라가 게임이 패키지를 새로 받을 때 반영됩니다."
         showTarget={false}
         confirmLabel="게시"
-        busy={busy}
         confirmDisabled={!status || empty || status.blocked.length > 0 || status.unplanned.length > 0}
         error={error || undefined}
         onConfirm={() => void publish()}

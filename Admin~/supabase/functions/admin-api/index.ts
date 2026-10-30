@@ -448,6 +448,16 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APPLE_IAP_ISSUER_ID: (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
   APPLE_IAP_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
   APPLE_IAP_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
+  FCM_SERVICE_ACCOUNT_JSON: (v) => {
+    try {
+      const sa = JSON.parse(v);
+      return typeof sa.client_email === "string" && typeof sa.private_key === "string" && typeof sa.project_id === "string";
+    } catch {
+      return false;
+    }
+  },
+  APNS_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
+  APNS_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -460,6 +470,9 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APPLE_IAP_ISSUER_ID: "발급자 ID 는 하이픈이 들어간 36자입니다(예: 57246542-96fe-1a63-e053-0824d011072a).",
   APPLE_IAP_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
   APPLE_IAP_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
+  FCM_SERVICE_ACCOUNT_JSON: "Firebase 서비스 계정 키 JSON 파일 내용 전체를 붙여 넣으세요(project_id·client_email·private_key 가 있어야 합니다).",
+  APNS_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
+  APNS_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
 };
 
 async function handleAction(
@@ -1189,7 +1202,7 @@ async function handleAction(
       // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
       case "settings.setServiceEnabled": {
         const service = str(params, "service");
-        if (!["appstore", "googleplay", "signin"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (!["appstore", "googleplay", "signin", "fcm", "apns"].includes(service)) throw new Error("모르는 서비스입니다.");
         if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
         const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
         if (error) throw new Error(error.message);
@@ -1686,6 +1699,14 @@ async function handleAction(
           p_open_for_new: params["openForNew"] === true,
         });
         if (error) throw new Error(error.message);
+        // "푸시도 함께" — 우편은 이미 나갔다. 푸시를 못 넣어도 발송을 실패로 돌리지 않고 결과에 넣은 수만 붙인다.
+        if (params["push"] === true && data?.batch_id) {
+          const { data: pushed } = await db.rpc("ts_push_enqueue_mail_batch", {
+            p_batch_id: data.batch_id,
+            p_is_ad: params["pushIsAd"] === true,
+          });
+          return json({ ok: true, data: { ...data, push_count: typeof pushed === "number" ? pushed : -1 } });
+        }
         return json({ ok: true, data });
       }
 
@@ -1709,6 +1730,59 @@ async function handleAction(
           p_created_by: email,
           p_platform: optStr(params, "platform") || null,
           p_open_for_new: params["openForNew"] === true,
+        });
+        if (error) throw new Error(error.message);
+        if (params["push"] === true && typeof data === "string") {
+          const { error: pushError } = await db.rpc("ts_admin_mail_schedule_set_push", {
+            p_id: data,
+            p_push: true,
+            p_is_ad: params["pushIsAd"] === true,
+          });
+          if (pushError) throw new Error(`예약은 만들었지만 푸시를 붙이지 못했습니다: ${pushError.message}`);
+        }
+        return json({ ok: true, data });
+      }
+
+      case "push.get": {
+        const { data, error } = await db.rpc("ts_admin_push_settings");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "push.updateTrigger": {
+        const localized = params["localized"];
+        if (localized !== undefined && localized !== null && (typeof localized !== "object" || Array.isArray(localized))) {
+          throw new Error("언어별 문구 형식이 맞지 않습니다.");
+        }
+        const { error } = await db.rpc("ts_admin_push_trigger_update", {
+          p_code: str(params, "code"),
+          p_title: typeof params["title"] === "string" ? params["title"] : null,
+          p_body: typeof params["body"] === "string" ? params["body"] : null,
+          p_localized: localized ?? null,
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "push.updateAd": {
+        const localized = params["localized"];
+        if (localized !== undefined && localized !== null && (typeof localized !== "object" || Array.isArray(localized))) {
+          throw new Error("언어별 문구 형식이 맞지 않습니다.");
+        }
+        const { error } = await db.rpc("ts_admin_push_ad_settings_update", {
+          p_title_prefix: typeof params["titlePrefix"] === "string" ? params["titlePrefix"] : null,
+          p_footer: typeof params["footer"] === "string" ? params["footer"] : null,
+          p_localized: localized ?? null,
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "push.stats": {
+        const { data, error } = await db.rpc("ts_admin_push_stats", {
+          p_days: typeof params["days"] === "number" ? params["days"] : 7,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });

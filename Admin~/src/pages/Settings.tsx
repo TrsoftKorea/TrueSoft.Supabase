@@ -18,6 +18,7 @@ import { colorDistance, contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
 import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
+import PushSettings from './PushSettings'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { areaCls, inputCls } from '../components/ui/Input'
 
@@ -44,13 +45,14 @@ type StoreKeyStatus = {
  */
 type KeyGuide = { site: { name: string; url: string }; steps: string[]; notes?: string[] }
 
-type ServiceTab = 'store' | 'login'
-type StoreGroup = 'appstore' | 'googleplay' | 'signin'
-type KeySet = 'iap'
+type ServiceTab = 'store' | 'login' | 'push'
+type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'fcm' | 'apns'
+type KeySet = 'iap' | 'apns'
 
 const SERVICE_TABS: readonly (readonly [ServiceTab, string])[] = [
   ['store', '스토어'],
   ['login', '로그인'],
+  ['push', '푸시 알림'],
 ]
 
 // 화면에 묶어 보이는 순서와 제목. 같은 묶음의 키는 STORE_KEYS 순서대로 나온다.
@@ -59,6 +61,8 @@ const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
   { id: 'appstore', tab: 'store', title: 'App Store' },
   { id: 'googleplay', tab: 'store', title: 'Google Play' },
   { id: 'signin', tab: 'login', title: 'Sign in with Apple' },
+  { id: 'fcm', tab: 'push', title: 'Firebase Cloud Messaging' },
+  { id: 'apns', tab: 'push', title: 'Apple Push Notifications' },
 ]
 
 // 한 화면에서 함께 가져오는 값들(같은 키의 ID·파일 등). 묶음 제목 아래에 그 키가 무엇인지 한 번 적는다.
@@ -68,6 +72,10 @@ const KEY_SETS: Record<KeySet, { title: string; note: string }> = {
   iap: {
     title: '앱 내 구입 키',
     note: 'App Store Connect에서 만드는 결제 조회용 API 키',
+  },
+  apns: {
+    title: 'APNs 키',
+    note: 'Apple Developer에서 만드는 푸시 알림 전송용 키',
   },
 }
 
@@ -86,7 +94,7 @@ type StoreKeyDef = {
 
 const STORE_KEYS: StoreKeyDef[] = [
   {
-    key: 'APPLE_BUNDLE_ID', group: 'appstore', alsoIn: ['signin'], name: '번들 ID', about: 'iOS 앱의 고유 ID', required: true,
+    key: 'APPLE_BUNDLE_ID', group: 'appstore', alsoIn: ['signin', 'apns'], name: '번들 ID', about: 'iOS 앱의 고유 ID', required: true,
     hint: '영문·숫자·점·하이픈으로 된 값을 넣습니다. 앱이 여럿이면 쉼표로 나눕니다.',
     guide: {
       site: { name: 'App Store Connect', url: 'https://appstoreconnect.apple.com/apps' },
@@ -152,7 +160,7 @@ const STORE_KEYS: StoreKeyDef[] = [
     },
   },
   {
-    key: 'APPLE_TEAM_ID', group: 'signin', name: 'Team ID', about: 'Apple 개발자 계정의 팀 ID', required: true,
+    key: 'APPLE_TEAM_ID', group: 'signin', alsoIn: ['apns'], name: 'Team ID', about: 'Apple 개발자 계정의 팀 ID', required: true,
     hint: '영문 대문자·숫자 10자를 넣습니다.',
     guide: {
       site: { name: 'Apple Developer', url: 'https://developer.apple.com/account' },
@@ -229,6 +237,53 @@ const STORE_KEYS: StoreKeyDef[] = [
       ],
       notes: [
         '.p8 파일은 한 번만 내려받을 수 있습니다. "키 다운로드"가 안 보이면 이미 받은 것입니다. 파일을 잃어버렸으면 새 키를 만들고, "키 ID"도 새 키 것으로 바꿉니다.',
+      ],
+    },
+  },
+  // 푸시 알림 — 화면 표기는 Firebase·Apple 문서의 영어 표기로 적었다. 한국어 화면의 글자는 확인 못 함(2026-10-29) —
+  // 운영자가 다르다고 하면 그 화면 글자로 고친다.
+  {
+    key: 'FCM_SERVICE_ACCOUNT_JSON', group: 'fcm', name: '서비스 계정 키', about: 'Firebase 프로젝트 서비스 계정의 키', required: true,
+    multiline: true, hint: '내려받은 JSON 파일의 내용 전체를 넣습니다.',
+    guide: {
+      site: { name: 'Firebase 콘솔', url: 'https://console.firebase.google.com' },
+      steps: [
+        'Firebase 콘솔에서 게임의 Firebase 프로젝트를 엽니다.',
+        '왼쪽 위 톱니바퀴 → "Project settings" → "Service accounts" 탭을 엽니다.',
+        '"Generate new private key"를 누르고 확인하면 JSON 파일이 내려받아집니다.',
+        '내려받은 JSON 파일을 메모장으로 열어 내용 전체를 여기 붙여 넣습니다.',
+      ],
+      notes: [
+        '게임 빌드의 Firebase 설정(SupabaseSettings 의 푸시 칸)과 같은 프로젝트여야 합니다.',
+        'JSON 파일은 다시 내려받을 수 없습니다. 잃어버리면 새 키를 만듭니다.',
+      ],
+    },
+  },
+  {
+    key: 'APNS_KEY_ID', group: 'apns', set: 'apns', name: 'Key ID', about: 'APNs 키의 ID', required: true,
+    hint: '영문 대문자·숫자 10자를 넣습니다. Private key와 같은 키의 값이어야 합니다.',
+    guide: {
+      site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
+      steps: [
+        '"인증서, 식별자 및 프로파일"에서 사이드바의 "Keys"를 누르고, 왼쪽 위 추가 버튼(+)을 누릅니다.',
+        '"Key Name"에 알아볼 이름을 넣고 "Apple Push Notifications service (APNs)"에 체크합니다.',
+        '환경을 고르는 칸이 있으면 "Production"을 고릅니다. 개발용 빌드로 시험할 때도 보내려면 "Sandbox & Production"을 고릅니다.',
+        '"Continue" → "Register"를 누르고, 만든 키를 누르면 키 이름 아래에 보이는 값이 "Key ID"입니다.',
+      ],
+      notes: ['Sign in with Apple 키와 다른 키입니다. 앱의 "Push Notifications" 기능도 켜 두어야 합니다(Identifiers에서 앱을 눌러 체크).'],
+    },
+  },
+  {
+    key: 'APNS_PRIVATE_KEY', group: 'apns', set: 'apns', name: 'Private key', about: 'APNs 키의 .p8 파일', required: true,
+    multiline: true, hint: '.p8 파일 내용 전체를 -----BEGIN PRIVATE KEY----- 줄까지 넣습니다. Key ID와 같은 키의 파일이어야 합니다.',
+    guide: {
+      site: { name: 'Apple Developer › Keys', url: 'https://developer.apple.com/account/resources/authkeys/list' },
+      steps: [
+        '위 "Key ID"의 키를 만들 때 마지막 화면에서 "Download"를 누르면 .p8 파일이 내려받아집니다.',
+        '그 파일을 메모장으로 열어 "-----BEGIN PRIVATE KEY-----"부터 "-----END PRIVATE KEY-----"까지 전부 복사해 붙여 넣습니다.',
+      ],
+      notes: [
+        '.p8 파일은 한 번만 내려받을 수 있습니다. 파일을 잃어버렸으면 새 키를 만들고, "Key ID"도 새 키 것으로 바꿉니다.',
       ],
     },
   },
@@ -365,7 +420,7 @@ function StoreStatusCard({
     <WhiteCard className="p-5 space-y-5">
       <CardHeader
         title="서비스 연결"
-        description="결제 확인·환불 기록·탈퇴 처리에 쓰는 스토어·애플 키를 넣습니다."
+        description="결제 확인·환불 기록·탈퇴 처리·푸시 알림에 쓰는 스토어·애플·Firebase 키를 넣습니다."
       />
       <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
       {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
@@ -851,7 +906,7 @@ function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: u
     setCurrent(null)
     callAdmin<ConsoleSettings>(target, 'settings.getConsole')
       .then(setCurrent)
-      .catch((e: unknown) => report(e, '콘솔 표시 설정을 불러오지 못했습니다.'))
+      .catch((e: unknown) => report(e, '게임 정보를 불러오지 못했습니다.'))
   }, [target, report])
 
   const onSaved = (s: ConsoleSettings) => {
@@ -1096,7 +1151,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   )
 }
 
-type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'limit' | 'console'
+type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
@@ -1104,8 +1159,9 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['mail', '우편'],
   ['friend', '친구'],
   ['lobby', '매치 로비'],
+  ['push', '푸시 알림'],
   ['limit', '요청 제한'],
-  ['console', '콘솔 표시'],
+  ['console', '게임 정보'],
 ]
 
 export default function Settings({
@@ -1171,6 +1227,7 @@ export default function Settings({
           confirmTitle="매치 로비 설정을 바꿀까요?"
         />
       )}
+      {tab === 'push' && <PushSettings target={target} report={report} onUnauthenticated={onUnauthenticated} />}
       {tab === 'limit' && (
         <div className="space-y-4">
           <LimitsForm

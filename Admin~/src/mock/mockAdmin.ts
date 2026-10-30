@@ -429,6 +429,16 @@ let supportFaqs: MockFaq[] = [
 
 const SHOT_COLOR: Record<string, string> = { 'a9/receipt.png': '#2563eb', 'a8/bug1.png': '#7c3aed', 'a8/bug2.png': '#0f766e' }
 
+// ── 푸시 알림 ── 상황 넷(설치 SQL 기본 문구 그대로)과 최근 7일 결과.
+type MockPushTrigger = { code: string; off_count: number; title: string; body: string; localized: Record<string, { title?: string; body?: string }>; updated_at: string | null; updated_by: string | null }
+let pushTriggers: MockPushTrigger[] = [
+  { code: 'mail', off_count: 212, title: '새 우편', body: '{title}', localized: { en: { title: 'New mail', body: '{title}' } }, updated_at: null, updated_by: null },
+  { code: 'support_reply', off_count: 35, title: '문의 답변', body: '문의하신 내용에 답변이 도착했습니다.', localized: { en: { title: 'Support', body: 'You have a reply to your inquiry.' } }, updated_at: null, updated_by: null },
+  { code: 'friend_request', off_count: 148, title: '친구 요청', body: '{name}님이 친구 요청을 보냈습니다.', localized: { en: { title: 'Friend request', body: '{name} sent you a friend request.' } }, updated_at: null, updated_by: null },
+  { code: 'lobby_invite', off_count: 97, title: '초대', body: '{name}님이 함께하자고 초대했습니다.', localized: { en: { title: 'Invitation', body: '{name} invited you to play.' } }, updated_at: null, updated_by: null },
+]
+let pushAd = { title_prefix: '(광고)', footer: '수신 거부: 게임 설정 › 알림', localized: { en: { title_prefix: '[Ad]', footer: 'Unsubscribe: Settings › Notifications' } } as Record<string, { title_prefix?: string; footer?: string }>, updated_at: null as string | null, updated_by: null as string | null }
+
 function supportRow(t: MockSupportTicket) {
   const cat = supportCategories.find((c) => c.id === t.category_id)
   return {
@@ -441,6 +451,40 @@ function supportRow(t: MockSupportTicket) {
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
 
 const HANDLERS: Record<string, Handler> = {
+  'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
+  'push.updateTrigger': (_t, p) => {
+    pushTriggers = pushTriggers.map((t) => t.code !== p['code'] ? t : {
+      ...t,
+      ...(typeof p['title'] === 'string' ? { title: p['title'] } : {}),
+      ...(typeof p['body'] === 'string' ? { body: p['body'] } : {}),
+      ...(p['localized'] && typeof p['localized'] === 'object' ? { localized: p['localized'] as MockPushTrigger['localized'] } : {}),
+      updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL,
+    })
+    return null
+  },
+  'push.updateAd': (_t, p) => {
+    pushAd = {
+      ...pushAd,
+      ...(typeof p['titlePrefix'] === 'string' ? { title_prefix: p['titlePrefix'] } : {}),
+      ...(typeof p['footer'] === 'string' ? { footer: p['footer'] } : {}),
+      ...(p['localized'] && typeof p['localized'] === 'object' ? { localized: p['localized'] as typeof pushAd.localized } : {}),
+      updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL,
+    }
+    return null
+  },
+  'push.stats': () => ({
+    by_trigger: [
+      { trigger: 'mail', status: 'sent', count: 4210 }, { trigger: 'mail', status: 'skipped', count: 380 },
+      { trigger: 'mail', status: 'failed', count: 12 },
+      { trigger: 'support_reply', status: 'sent', count: 37 }, { trigger: 'support_reply', status: 'skipped', count: 4 },
+    ],
+    pending: 0,
+    recent_problems: [
+      { id: 9012, trigger: 'mail', status: 'failed', result: 'FCM 503: 잠시 뒤 다시', created_at: new Date(Date.now() - 2 * 3600_000).toISOString() },
+      { id: 9007, trigger: 'mail', status: 'skipped', result: '광고 수신 미동의', created_at: new Date(Date.now() - 3 * 3600_000).toISOString() },
+      { id: 8990, trigger: 'support_reply', status: 'skipped', result: '등록된 기기 없음', created_at: new Date(Date.now() - 26 * 3600_000).toISOString() },
+    ],
+  }),
   'support.list': (_t, p) => {
     const search = String(p['search'] ?? '').trim().toLowerCase()
     const rows = supportTickets
@@ -560,6 +604,9 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APPLE_IAP_ISSUER_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_IAP_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APPLE_IAP_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'FCM_SERVICE_ACCOUNT_JSON', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APNS_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'APNS_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
     ],
     services: mockServices,
   }),
