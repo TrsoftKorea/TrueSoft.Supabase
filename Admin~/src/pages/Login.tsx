@@ -47,7 +47,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (outcomes: SignInOut
     <div className="min-h-screen flex items-center justify-center p-6 bg-[#161a2b]">
       <WhiteCard className="w-full max-w-sm p-6">
         <h1 className="text-xl font-semibold text-neutral-900">트루베이스 운영 콘솔</h1>
-        <p className="mt-1 text-sm text-neutral-600">로그인하면 들어갈 수 있는 게임 목록이 나옵니다.</p>
+        <p className="mt-1 text-sm text-neutral-600">로그인하면 들어갈 수 있는 프로젝트 목록이 나옵니다.</p>
 
         <div className="mt-6">
           <PasswordLoginForm onSignedIn={onSignedIn} />

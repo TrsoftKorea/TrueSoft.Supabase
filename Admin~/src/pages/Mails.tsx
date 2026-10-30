@@ -516,7 +516,7 @@ export default function Mails({
           </div>
 
           <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
-            대상 게임: {look.name(target)}
+            대상 프로젝트: {look.name(target)}
           </div>
           <InfoList className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2.5" items={[
             { label: '발송', value: schedSummary },

@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Gift, ImagePlus, Inbox, Loader2, MessageSquarePlus, Search, Send, X } from 'lucide-react'
-import { ApiError, CLOSE_URL, type Attachment, type Category, type Faq, type Look, type Status, type SupportApi, type Ticket, type TicketSummary } from './api'
+import { ApiError, CLOSE_URL, type Attachment, type Category, type Faq, type Look, type Provider, type Status, type SupportApi, type Ticket, type TicketSummary } from './api'
 import { formatTime, LANG_NAME, LANGS, pickLang, reasonText, t, type Key, type Lang } from './i18n'
 import { shrinkImage } from './image'
+import { prepareApple, renderGoogleButton, type AppleLogin } from './login'
 
 type View =
   | { kind: 'home' } | { kind: 'new' } | { kind: 'coupon' } | { kind: 'tickets' } | { kind: 'ticket'; id: string }
-  | { kind: 'done'; message: Key }
+  | { kind: 'login'; next: View }
 
 const MAX_ATTACH = 3
 const MAX_BODY = 2000
 const LANG_KEY = 'tb_support_lang'
-const USER_ID_KEY = 'tb_support_user_id'
 
 const STATUS_CLS: Record<Status, string> = {
   open: 'bg-amber-100 text-amber-800',
@@ -22,15 +22,12 @@ const STATUS_CLS: Record<Status, string> = {
 // 게임 안 창이면(?app=1) 닫기 단추를 보인다. 브라우저로 열었으면 브라우저 탭을 닫으면 된다.
 const IN_APP = new URLSearchParams(location.search).get('app') === '1'
 
-// 언어는 계속 기억하고, 유저 ID 는 창을 닫으면 잊는다 — PC방 같은 공용 PC 에서 다음 사람에게 앞사람 ID 가 채워지지 않게.
-function store(key: string): Storage | null {
-  try { return key === USER_ID_KEY ? sessionStorage : localStorage } catch { return null }
-}
+// 고른 언어는 창을 닫아도 기억한다. 로그인은 api.ts 가 창을 닫으면 잊는 저장 공간에 둔다(공용 PC 대비).
 function readStored(key: string): string | null {
-  try { return store(key)?.getItem(key) ?? null } catch { return null }
+  try { return localStorage.getItem(key) } catch { return null }
 }
 function writeStored(key: string, value: string) {
-  try { store(key)?.setItem(key, value) } catch { /* 저장이 막힌 창이면 이번 화면에서만 */ }
+  try { localStorage.setItem(key, value) } catch { /* 저장이 막힌 창이면 이번 화면에서만 */ }
 }
 
 function initialLang(): Lang {
@@ -45,7 +42,8 @@ function matches(f: Faq, category: string | undefined, query: string): boolean {
 
 export function App({ api }: { api: SupportApi | null }) {
   const [lang, setLangState] = useState<Lang>(initialLang)
-  const [look, setLook] = useState<Look | null>(null)
+  // null 은 받는 중, undefined 는 받지 못함(로그인 화면이 "불러오는 중"에 멈추지 않게 가른다).
+  const [look, setLook] = useState<Look | null | undefined>(null)
   const [banned, setBanned] = useState(false)
   const [expired, setExpired] = useState(false)
   const [ready, setReady] = useState(!api?.signedIn)
@@ -53,15 +51,15 @@ export function App({ api }: { api: SupportApi | null }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [faqs, setFaqs] = useState<Faq[] | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
-  const [userId, setUserIdState] = useState(() => readStored(USER_ID_KEY) ?? '')
+  // 로그인·로그아웃은 api 안의 접속 표를 바꾼다 — 화면을 다시 그리게 하는 신호.
+  const [, setAuthVersion] = useState(0)
   const signedIn = !!api?.signedIn && !expired
 
   const setLang = (next: Lang) => { setLangState(next); writeStored(LANG_KEY, next) }
-  const setUserId = (v: string) => { setUserIdState(v); writeStored(USER_ID_KEY, v.trim()) }
 
   useEffect(() => {
     if (!api) return
-    void api.look().then(setLook).catch(() => {})
+    void api.look().then(setLook).catch(() => setLook(undefined))
     if (!api.signedIn) return
     api.me()
       .then((me) => {
@@ -71,9 +69,11 @@ export function App({ api }: { api: SupportApi | null }) {
       })
       .catch((e: unknown) => {
         const reason = e instanceof ApiError ? e.reason : 'server_error'
-        // 접속 표가 끝났으면 게임 밖 모드로 돌린다(유저 ID 로 쿠폰·문의). 통신 오류면 그 사유를 보이고 표는 그대로 쓴다.
-        if (reason === 'support_session_expired' || reason === 'support_session_invalid') setExpired(true)
-        else setNotice(reasonText(pickLang(navigator.language), reason))
+        // 접속 표가 끝났으면 — 이 창에서 로그인한 것이면 로그아웃해 다시 로그인하게, 게임 안 창이면 창을 다시 열게 한다.
+        // 통신 오류면 그 사유를 보이고 표는 그대로 쓴다.
+        if (reason === 'support_session_expired' || reason === 'support_session_invalid') {
+          if (api.viaWeb) { api.logout(); setNotice(t(initialLang(), 'loginAgain')) } else setExpired(true)
+        } else setNotice(reasonText(pickLang(navigator.language), reason))
         setReady(true)
       })
   }, [api])
@@ -98,13 +98,37 @@ export function App({ api }: { api: SupportApi | null }) {
     if (text) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  const go = useCallback((next: View) => { setNotice(null); setView(next); window.scrollTo({ top: 0 }) }, [])
+
   const fail = useCallback((e: unknown) => {
     const reason = e instanceof ApiError ? e.reason : 'server_error'
+    if ((reason === 'support_session_expired' || reason === 'support_session_invalid') && api?.viaWeb) {
+      api.logout()
+      setAuthVersion((v) => v + 1)
+      setView({ kind: 'login', next: { kind: 'home' } })
+      showNotice(t(lang, 'loginAgain'))
+      return
+    }
     if (reason === 'support_session_expired' || reason === 'support_session_invalid') setExpired(true)
     showNotice(reasonText(lang, reason))
-  }, [lang, showNotice])
+  }, [api, lang, showNotice])
 
-  const go = (next: View) => { setNotice(null); setView(next); window.scrollTo({ top: 0 }) }
+  // 로그인이 필요한 화면은 로그인부터 — 끝나면 원래 가려던 화면으로 간다.
+  const open = (next: View) => go(signedIn || next.kind === 'home' ? next : { kind: 'login', next })
+
+  const onLogin = (r: { banned: boolean }) => {
+    setBanned(r.banned)
+    setExpired(false)
+    setAuthVersion((v) => v + 1)
+    go(view.kind === 'login' ? view.next : { kind: 'home' })
+  }
+
+  const logout = () => {
+    api?.logout()
+    setBanned(false)
+    setAuthVersion((v) => v + 1)
+    go({ kind: 'home' })
+  }
 
   const notices = (
     <>
@@ -122,36 +146,25 @@ export function App({ api }: { api: SupportApi | null }) {
   } else if (view.kind === 'home') {
     body = (
       <HomeView api={api} lang={lang} signedIn={signedIn} faqs={faqs} categories={categories} notices={notices}
-        look={look} onGo={go} onError={fail} />
+        look={look} onGo={open} onError={fail} />
     )
   } else {
     const titles: Record<Exclude<View['kind'], 'home'>, Key> = {
-      new: 'newTicket', coupon: 'coupon', tickets: 'myTickets', ticket: 'myTickets', done: 'title',
+      new: 'newTicket', coupon: 'coupon', tickets: 'myTickets', ticket: 'myTickets', login: 'login',
     }
     body = (
       <>
         <SubHeader lang={lang} title={t(lang, titles[view.kind])} onBack={() => go(view.kind === 'ticket' ? { kind: 'tickets' } : { kind: 'home' })} />
         <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-5 space-y-4">
           {notices}
+          {view.kind === 'login' && <LoginView api={api} lang={lang} look={look} onDone={onLogin} onError={fail} />}
           {view.kind === 'new' && (
-            <NewView api={api} lang={lang} signedIn={signedIn} faqs={faqs ?? []} categories={categories}
-              userId={userId} onUserId={setUserId} onError={fail}
-              onDone={(id) => {
-                if (signedIn) { go({ kind: 'ticket', id }); setNotice(t(lang, 'sent')) } else go({ kind: 'done', message: 'sentWeb' })
-              }} />
+            <NewView api={api} lang={lang} faqs={faqs ?? []} categories={categories} onError={fail}
+              onDone={(id) => { go({ kind: 'ticket', id }); setNotice(t(lang, 'sent')) }} />
           )}
-          {view.kind === 'coupon' && (
-            <CouponView api={api} lang={lang} signedIn={signedIn} userId={userId} onUserId={setUserId}
-              onError={fail} onDone={() => showNotice(null)} />
-          )}
+          {view.kind === 'coupon' && <CouponView api={api} lang={lang} onError={fail} onDone={() => showNotice(null)} />}
           {view.kind === 'tickets' && <TicketList api={api} lang={lang} onOpen={(id) => go({ kind: 'ticket', id })} onError={fail} />}
           {view.kind === 'ticket' && <TicketView api={api} lang={lang} id={view.id} onError={fail} />}
-          {view.kind === 'done' && (
-            <div className="py-10 text-center space-y-5">
-              <p className="text-[15px] text-neutral-800">{t(lang, view.message)}</p>
-              <AccentButton onClick={() => go({ kind: 'home' })}>{t(lang, 'back')}</AccentButton>
-            </div>
-          )}
         </main>
       </>
     )
@@ -160,7 +173,7 @@ export function App({ api }: { api: SupportApi | null }) {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col">{body}</div>
-      <Footer lang={lang} onLang={setLang} name={look?.name ?? null} />
+      <Footer lang={lang} onLang={setLang} name={look?.name ?? null} onLogout={api?.viaWeb && signedIn ? logout : undefined} />
     </div>
   )
 }
@@ -198,7 +211,7 @@ function SubHeader({ lang, title, onBack }: { lang: Lang; title: string; onBack:
   )
 }
 
-function Footer({ lang, onLang, name }: { lang: Lang; onLang: (l: Lang) => void; name: string | null }) {
+function Footer({ lang, onLang, name, onLogout }: { lang: Lang; onLang: (l: Lang) => void; name: string | null; onLogout: (() => void) | undefined }) {
   return (
     <footer className="mt-10 border-t border-neutral-200 bg-white">
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-3">
@@ -210,7 +223,16 @@ function Footer({ lang, onLang, name }: { lang: Lang; onLang: (l: Lang) => void;
             </button>
           ))}
         </nav>
-        {name && <p className="text-xs text-neutral-400">{name}</p>}
+        {(name || onLogout) && (
+          <div className="flex items-center gap-3">
+            {name && <p className="flex-1 text-xs text-neutral-400">{name}</p>}
+            {onLogout && (
+              <button type="button" onClick={onLogout} className="ml-auto text-xs text-neutral-500 underline hover:text-neutral-800">
+                {t(lang, 'logout')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </footer>
   )
@@ -282,7 +304,7 @@ function FaqList({ lang, items }: { lang: Lang; items: Faq[] }) {
 
 function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, onError }: {
   api: SupportApi; lang: Lang; signedIn: boolean; faqs: Faq[] | null; categories: Category[]; notices: ReactNode
-  look: Look | null; onGo: (v: View) => void; onError: (e: unknown) => void
+  look: Look | null | undefined; onGo: (v: View) => void; onError: (e: unknown) => void
 }) {
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
@@ -308,13 +330,16 @@ function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, 
     requestAnimationFrame(() => results.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
-  const actions: Array<{ key: string; icon: ReactNode; title: Key; desc: Key; view: View; badge?: number }> = [
-    { key: 'new', icon: <MessageSquarePlus className="w-5 h-5" />, title: 'newTicket', desc: 'newTicketDesc', view: { kind: 'new' } },
-    { key: 'coupon', icon: <Gift className="w-5 h-5" />, title: 'coupon', desc: 'couponDesc', view: { kind: 'coupon' } },
-    ...(signedIn
-      ? [{ key: 'tickets', icon: <Inbox className="w-5 h-5" />, title: 'myTickets' as Key, desc: 'myTicketsDesc' as Key, view: { kind: 'tickets' } as View, badge: unread }]
-      : []),
-  ]
+  // 로그인 없이는 못 쓰는 일들. 게임 안 창은 접속 표가 끝났으면(창을 다시 열어야 한다), 브라우저로 연 창은 이 게임에
+  // 웹 로그인이 없으면 감춘다 — 누르면 막다른 화면만 나온다. 웹 로그인이 있으면 누를 때 로그인부터 한다.
+  const webLogin = !IN_APP && !!(look?.google_client_id || look?.apple_services_id)
+  const actions: Array<{ key: string; icon: ReactNode; title: Key; desc: Key; view: View; badge?: number }> = signedIn || webLogin
+    ? [
+        { key: 'new', icon: <MessageSquarePlus className="w-5 h-5" />, title: 'newTicket', desc: 'newTicketDesc', view: { kind: 'new' } },
+        { key: 'coupon', icon: <Gift className="w-5 h-5" />, title: 'coupon', desc: 'couponDesc', view: { kind: 'coupon' } },
+        { key: 'tickets', icon: <Inbox className="w-5 h-5" />, title: 'myTickets', desc: 'myTicketsDesc', view: { kind: 'tickets' }, badge: unread },
+      ]
+    : []
 
   return (
     <>
@@ -345,7 +370,7 @@ function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, 
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 space-y-7">
         {notices}
-        {!searching && (
+        {!searching && actions.length > 0 && (
           <section className="space-y-2.5">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>{t(lang, 'help')}</h2>
             <ul className={`grid gap-2.5 ${actions.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
@@ -392,9 +417,11 @@ function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, 
               {searching && shown.length === 0 && (
                 <div className="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center space-y-3">
                   <p className="text-sm text-neutral-600">{t(lang, 'noResults')}</p>
-                  <AccentButton onClick={() => onGo({ kind: 'new' })}>
-                    <MessageSquarePlus className="w-4 h-4" />{t(lang, 'newTicket')}
-                  </AccentButton>
+                  {actions.length > 0 && (
+                    <AccentButton onClick={() => onGo({ kind: 'new' })}>
+                      <MessageSquarePlus className="w-4 h-4" />{t(lang, 'newTicket')}
+                    </AccentButton>
+                  )}
                 </div>
               )}
             </>
@@ -441,8 +468,8 @@ function TicketList({ api, lang, onOpen, onError }: {
 }
 
 /** 그림 붙이기 — 고르는 즉시 줄여 올려 경로를 받아 둔다. 보내기는 그 경로만 넘긴다. */
-function AttachPicker({ api, lang, items, userId, onChange, onError }: {
-  api: SupportApi; lang: Lang; items: Attachment[]; userId?: string | undefined; onChange: (next: Attachment[]) => void; onError: (e: unknown) => void
+function AttachPicker({ api, lang, items, onChange, onError }: {
+  api: SupportApi; lang: Lang; items: Attachment[]; onChange: (next: Attachment[]) => void; onError: (e: unknown) => void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
@@ -454,7 +481,7 @@ function AttachPicker({ api, lang, items, userId, onChange, onError }: {
     try {
       for (const f of Array.from(files).slice(0, MAX_ATTACH - items.length)) {
         const img = await shrinkImage(f)
-        const up = await api.upload(img.contentType, img.base64, userId)
+        const up = await api.upload(img.contentType, img.base64)
         next = [...next, { path: up.path, url: up.url ?? img.previewUrl }]
         onChange(next)
       }
@@ -464,12 +491,6 @@ function AttachPicker({ api, lang, items, userId, onChange, onError }: {
       setBusy(false)
       if (input.current) input.current.value = ''
     }
-  }
-
-  // 주소로 연 창은 유저 ID 의 계정에 그림을 올린다 — ID 부터 받는다.
-  const open = () => {
-    if (userId !== undefined && !userId.trim()) onError(new ApiError('support_user_id_required'))
-    else input.current?.click()
   }
 
   return (
@@ -485,7 +506,7 @@ function AttachPicker({ api, lang, items, userId, onChange, onError }: {
           </div>
         ))}
         {items.length < MAX_ATTACH && (
-          <button type="button" disabled={busy} onClick={open}
+          <button type="button" disabled={busy} onClick={() => input.current?.click()}
             className="w-20 h-20 rounded-lg border border-dashed border-neutral-300 flex flex-col items-center justify-center gap-1 text-xs text-neutral-500 disabled:opacity-50">
             {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
             {t(lang, 'attach')}
@@ -498,18 +519,92 @@ function AttachPicker({ api, lang, items, userId, onChange, onError }: {
   )
 }
 
-function UserIdField({ lang, value, onChange }: { lang: Lang; value: string; onChange: (v: string) => void }) {
+/** 게임 밖 창의 로그인. 게임 안 창은 SDK 가 접속 표를 주므로 여기 오는 것은 그 표가 끝났을 때뿐이다. */
+function LoginView({ api, lang, look, onDone, onError }: {
+  api: SupportApi; lang: Lang; look: Look | null | undefined; onDone: (r: { banned: boolean }) => void; onError: (e: unknown) => void
+}) {
+  const googleEl = useRef<HTMLDivElement>(null)
+  const appleLogin = useRef<AppleLogin | null>(null)
+  const [busy, setBusy] = useState(false)
+  const google = look?.google_client_id ?? null
+  const apple = look?.apple_services_id ?? null
+  const mock = __MOCK__ && (google?.startsWith('mock') || apple?.startsWith('mock'))
+
+  // 화면이 다시 그려져도 구글 단추를 새로 초기화하지 않게 최신 값은 ref 로 읽는다 — 다시 초기화하면 nonce 가 바뀌어
+  // 이미 열린 구글 창에서 돌아온 토큰이 서버에서 맞지 않는다.
+  const latest = useRef({ api, lang, onDone, onError })
+  latest.current = { api, lang, onDone, onError }
+
+  const finish = useCallback(async (provider: Provider, idToken: string, nonce: string) => {
+    const { api: a, lang: l, onDone: done, onError: err } = latest.current
+    setBusy(true)
+    try {
+      done(await a.login(provider, idToken, nonce, l))
+    } catch (e: unknown) {
+      err(e)
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
+  // 구글 단추는 구글 스크립트가 그린다. 언어를 바꾸면 그 언어로 다시 그린다.
+  useEffect(() => {
+    if (!google || mock || IN_APP || !googleEl.current) return
+    renderGoogleButton(googleEl.current, google, lang, (token, nonce) => void finish('google', token, nonce))
+      .catch(() => latest.current.onError(new ApiError('support_web_login_failed')))
+  }, [google, mock, lang, finish])
+
+  useEffect(() => {
+    if (!apple || mock || IN_APP) return
+    let live = true
+    prepareApple(apple).then((a) => { if (live) appleLogin.current = a }).catch(() => {})
+    return () => { live = false }
+  }, [apple, mock])
+
+  const onApple = async () => {
+    setBusy(true)
+    try {
+      const r = mock ? { idToken: 'mock', rawNonce: '' } : await appleLogin.current?.signIn()
+      if (r) await finish('apple', r.idToken, r.rawNonce)
+      else if (r === undefined) onError(new ApiError('support_web_login_failed'))
+    } catch {
+      onError(new ApiError('support_web_login_failed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (IN_APP) return <p className="py-10 text-center text-sm text-neutral-600">{t(lang, 'sessionExpired')}</p>
+  if (look === undefined) return <p className="py-10 text-center text-sm text-neutral-600">{t(lang, 'genericError')}</p>
+  if (!look) return <Spinner label={t(lang, 'loading')} />
+  if (!google && !apple) return <p className="py-10 text-center text-sm text-neutral-600">{t(lang, 'loginUnavailable')}</p>
+
   return (
-    <Field label={t(lang, 'userId')} hint={t(lang, 'userIdHint')}>
-      <input value={value} onChange={(e) => onChange(e.target.value)} aria-label={t(lang, 'userId')}
-        autoComplete="off" autoCapitalize="off" spellCheck={false} className={INPUT_CLS} />
-    </Field>
+    <div className="py-4 flex flex-col items-center gap-5 text-center">
+      <p className="text-[15px] text-neutral-800">{t(lang, 'loginDesc')}</p>
+      <div className="w-full max-w-[320px] flex flex-col gap-3">
+        {google && (mock
+          ? <button type="button" disabled={busy} onClick={() => void finish('google', 'mock', '')}
+              className="h-11 rounded border border-neutral-300 bg-white text-sm font-medium text-neutral-800">Google</button>
+          : <div ref={googleEl} className="h-11 flex justify-center" />)}
+        {apple && (
+          <button type="button" disabled={busy} onClick={() => void onApple()}
+            className="apple-signin h-11 rounded-md bg-black text-white text-[15px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50">
+            <svg viewBox="0 0 17 20" className="w-4 h-4 fill-current" aria-hidden="true">
+              <path d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.7-1-2.7-4.1zM11.5 3c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.1.1 2.3-.6 3-1.5z" />
+            </svg>
+            {t(lang, 'appleSignIn')}
+          </button>
+        )}
+      </div>
+      {busy && <Loader2 className="w-5 h-5 animate-spin text-neutral-500" />}
+      <p className="text-xs text-neutral-500">{t(lang, 'loginGuest')}</p>
+    </div>
   )
 }
 
-function NewView({ api, lang, signedIn, faqs, categories, userId, onUserId, onDone, onError }: {
-  api: SupportApi; lang: Lang; signedIn: boolean; faqs: Faq[]; categories: Category[]
-  userId: string; onUserId: (v: string) => void; onDone: (id: string) => void; onError: (e: unknown) => void
+function NewView({ api, lang, faqs, categories, onDone, onError }: {
+  api: SupportApi; lang: Lang; faqs: Faq[]; categories: Category[]; onDone: (id: string) => void; onError: (e: unknown) => void
 }) {
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [body, setBody] = useState('')
@@ -521,7 +616,7 @@ function NewView({ api, lang, signedIn, faqs, categories, userId, onUserId, onDo
     if (categoryId == null) return
     setSending(true)
     try {
-      onDone(await api.create(categoryId, body, attachments.map((a) => a.path), signedIn ? undefined : userId.trim(), lang))
+      onDone(await api.create(categoryId, body, attachments.map((a) => a.path)))
     } catch (e: unknown) {
       onError(e)
     } finally {
@@ -530,8 +625,7 @@ function NewView({ api, lang, signedIn, faqs, categories, userId, onUserId, onDo
   }
 
   const tooLong = body.length > MAX_BODY
-  const canSend = categoryId != null && !tooLong && agree && (signedIn || userId.trim().length > 0)
-    && (body.trim().length > 0 || attachments.length > 0) && !sending
+  const canSend = categoryId != null && !tooLong && agree && (body.trim().length > 0 || attachments.length > 0) && !sending
 
   return (
     <div className="space-y-6">
@@ -552,16 +646,13 @@ function NewView({ api, lang, signedIn, faqs, categories, userId, onUserId, onDo
           <FaqList key={categoryId} lang={lang} items={faqs.filter((f) => f.category_id === categoryId)} />
         </Field>
       )}
-      {/* 그림은 올릴 때의 ID 계정에 들어간다 — ID 를 고치면 붙인 그림을 비운다(그대로 보내면 남의 폴더 그림이라 거절된다). */}
-      {!signedIn && <UserIdField lang={lang} value={userId} onChange={(v) => { onUserId(v); setAttachments([]) }} />}
       <Field label={t(lang, 'content')}
         hint={<span className={tooLong ? 'text-red-600' : ''}>{t(lang, 'contentHint')} ({body.length.toLocaleString()}/{MAX_BODY.toLocaleString()})</span>}>
         <textarea rows={7} value={body} onChange={(e) => setBody(e.target.value)} aria-label={t(lang, 'content')}
           className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-[15px] text-neutral-900 focus:outline-none focus:border-[color:var(--accent)]" />
       </Field>
       <Field label={t(lang, 'attach')} hint={t(lang, 'attachHint')}>
-        <AttachPicker api={api} lang={lang} items={attachments} userId={signedIn ? undefined : userId}
-          onChange={setAttachments} onError={onError} />
+        <AttachPicker api={api} lang={lang} items={attachments} onChange={setAttachments} onError={onError} />
       </Field>
       <section className="rounded-lg border border-neutral-200 bg-white px-3.5 py-3 space-y-2.5">
         <h2 className="text-sm font-semibold text-neutral-700">{t(lang, 'privacyTitle')}</h2>
@@ -578,9 +669,8 @@ function NewView({ api, lang, signedIn, faqs, categories, userId, onUserId, onDo
   )
 }
 
-function CouponView({ api, lang, signedIn, userId, onUserId, onDone, onError }: {
-  api: SupportApi; lang: Lang; signedIn: boolean; userId: string; onUserId: (v: string) => void
-  onDone: () => void; onError: (e: unknown) => void
+function CouponView({ api, lang, onDone, onError }: {
+  api: SupportApi; lang: Lang; onDone: () => void; onError: (e: unknown) => void
 }) {
   const [code, setCode] = useState('')
   const [sending, setSending] = useState(false)
@@ -590,7 +680,7 @@ function CouponView({ api, lang, signedIn, userId, onUserId, onDone, onError }: 
     setSending(true)
     setDone(false)
     try {
-      await api.coupon(code.trim(), signedIn ? undefined : userId.trim())
+      await api.coupon(code.trim())
       setCode('')
       setDone(true)
       onDone()
@@ -601,12 +691,11 @@ function CouponView({ api, lang, signedIn, userId, onUserId, onDone, onError }: 
     }
   }
 
-  const canSend = code.trim().length > 0 && (signedIn || userId.trim().length > 0) && !sending
+  const canSend = code.trim().length > 0 && !sending
 
   return (
     <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); if (canSend) void send() }}>
       {done && <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-800">{t(lang, 'couponDone')}</div>}
-      {!signedIn && <UserIdField lang={lang} value={userId} onChange={onUserId} />}
       <Field label={t(lang, 'couponCode')}>
         <input value={code} onChange={(e) => { setCode(e.target.value); setDone(false) }} aria-label={t(lang, 'couponCode')}
           autoComplete="off" autoCapitalize="characters" spellCheck={false} className={`${INPUT_CLS} uppercase tracking-wide`} />

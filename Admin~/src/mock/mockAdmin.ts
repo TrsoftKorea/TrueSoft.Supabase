@@ -608,6 +608,8 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'FCM_SERVICE_ACCOUNT_JSON', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APNS_KEY_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'APNS_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'GOOGLE_WEB_CLIENT_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T11:00:00+09:00', updatedBy: 'mock@local' },
+      { key: 'APPLE_SERVICES_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
     ],
     services: mockServices,
   }),

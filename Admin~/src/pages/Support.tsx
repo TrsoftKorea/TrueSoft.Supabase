@@ -30,11 +30,11 @@ const STATUS_CLS: Record<Status, string> = {
 
 // 기기 정보 칸 이름. SDK 가 보내는 키 — support-api 의 META_KEYS 와 같다.
 const META_LABEL: Record<string, string> = {
-  platform: '플랫폼', app_version: '앱 버전', os: 'OS', device: '기기', language: '기기 언어', server_id: '서버', sdk_version: 'SDK',
+  platform: '플랫폼', app_version: '앱 버전', os: 'OS', device: '기기', language: '창 언어', server_id: '서버', sdk_version: 'SDK',
 }
 
 const LANG_NAME: Record<string, string> = {
-  ko: '한국어', en: '영어', ja: '일본어', zh: '중국어', th: '태국어', ru: '러시아어',
+  ko: '한국어', en: '영어', ja: '일본어', zh: '중국어', 'zh-CN': '중국어 간체', 'zh-TW': '중국어 번체', th: '태국어', ru: '러시아어',
   de: '독일어', fr: '프랑스어', es: '스페인어', pt: '포르투갈어', vi: '베트남어', id: '인도네시아어',
 }
 /** 글자 꼴로 본 언어. 로마자면 'latin', 글이 없으면 null. */
@@ -50,7 +50,8 @@ function scriptLang(text: string): string | null {
 
 /** 플레이어가 쓴 글(가장 최근 글부터)의 언어와 기기 언어 — 운영자가 어느 언어로 답할지 고르는 근거. */
 function playerLanguages(messages: Message[], deviceLang: string | undefined): { written: string | null; device: string | null } {
-  const device = (deviceLang ?? '').slice(0, 2).toLowerCase() || null
+  const raw = (deviceLang ?? '').trim()
+  const device = /^zh-(CN|TW)$/i.test(raw) ? `zh-${raw.slice(3).toUpperCase()}` : raw.slice(0, 2).toLowerCase() || null
   let written: string | null = null
   for (const m of [...messages].reverse()) {
     if (m.sender !== 'player' || !m.body.trim()) continue
@@ -345,7 +346,7 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
               : []),
             ...Object.keys(META_LABEL).filter((k) => k !== 'language').map((k) => ({ label: META_LABEL[k], value: ticket.meta[k] })),
             ...meta.filter(([k]) => !(k in META_LABEL)).map(([k, v]) => ({ label: k, value: v })),
-            { label: '기기 언어', value: answerLang?.device ? langName(answerLang.device) : null },
+            { label: '창 언어', value: answerLang?.device ? langName(answerLang.device) : null },
             { label: '문의 글 언어', value: answerLang?.written ? (answerLang.written === 'latin' ? '로마자' : langName(answerLang.written)) : null },
           ]} />
 

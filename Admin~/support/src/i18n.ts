@@ -47,11 +47,15 @@ export const KO = {
   sessionExpired: '접속 시간이 지났습니다. 창을 닫고 다시 열어 주세요.',
   badLink: '고객센터 주소가 올바르지 않습니다. 게임 안에서 고객센터를 열어 주세요.',
   sent: '문의를 보냈습니다. 답변이 오면 알려 드립니다.',
-  sentWeb: '문의를 보냈습니다. 답변은 게임 안 고객센터에서 확인할 수 있습니다.',
   imageOnly: '(그림)',
   faqForCategory: '문의하기 전에 확인해 보세요',
-  userId: '유저 ID',
-  userIdHint: '게임 안에서 확인할 수 있는 유저 ID를 적어 주세요.',
+  login: '로그인',
+  loginDesc: '게임에 연결한 구글·Apple 계정으로 로그인합니다.',
+  loginGuest: '게스트 계정은 게임 안 고객센터에서 문의할 수 있습니다.',
+  loginUnavailable: '이 게임은 게임 안 고객센터에서 문의할 수 있습니다.',
+  appleSignIn: 'Apple로 로그인',
+  logout: '로그아웃',
+  loginAgain: '로그인 시간이 지났습니다. 다시 로그인해 주세요.',
   couponCode: '쿠폰 번호',
   couponDone: '쿠폰을 등록했습니다. 보상은 게임 우편함으로 들어갑니다.',
   privacyTitle: '개인정보 수집 및 이용 동의',
@@ -66,8 +70,8 @@ export type Key = keyof typeof KO
 export const REASON_KEYS = [
   'support_body_empty', 'support_body_too_long', 'support_category_invalid', 'support_too_many_open', 'support_too_fast',
   'support_ticket_closed', 'support_ticket_not_found', 'support_attachment_too_large', 'support_attachment_type',
-  'support_attachment_invalid', 'support_attachment_limit', 'support_attachments_invalid', 'support_user_not_found',
-  'support_user_id_required', 'support_account_restricted', 'coupon_not_found', 'coupon_inactive', 'coupon_expired',
+  'support_attachment_invalid', 'support_attachment_limit', 'support_attachments_invalid', 'support_web_not_linked',
+  'support_web_login_failed', 'support_account_restricted', 'coupon_not_found', 'coupon_inactive', 'coupon_expired',
   'coupon_already_used', 'coupon_exhausted',
 ] as const
 export type ReasonKey = (typeof REASON_KEYS)[number]
@@ -85,8 +89,8 @@ export const REASON_KO: Record<ReasonKey, string> = {
   support_attachment_invalid: '그림을 읽지 못했습니다. 다른 그림을 붙여 주세요.',
   support_attachment_limit: '붙일 수 있는 그림 수를 넘었습니다.',
   support_attachments_invalid: '그림을 다시 붙여 주세요.',
-  support_user_not_found: '유저 ID를 찾을 수 없습니다. 다시 확인해 주세요.',
-  support_user_id_required: '유저 ID를 먼저 적어 주세요.',
+  support_web_not_linked: '이 게임에 연결된 계정이 아닙니다. 게임에서 연결한 구글·Apple 계정으로 로그인해 주세요.',
+  support_web_login_failed: '로그인하지 못했습니다. 다시 시도해 주세요.',
   support_account_restricted: '이용이 제한된 계정은 쿠폰을 등록할 수 없습니다.',
   coupon_not_found: '쿠폰 번호가 맞지 않습니다.',
   coupon_inactive: '지금은 쓸 수 없는 쿠폰입니다.',
@@ -102,7 +106,7 @@ const TABLE: Record<Lang, { ui: Strings; reasons: Reasons }> = { ko: { ui: KO, r
 
 export function pickLang(raw: string | null | undefined): Lang {
   const v = (raw ?? '').trim().toLowerCase()
-  if (v.startsWith('zh')) return /tw|hk|mo|hant/.test(v) ? 'zh-TW' : 'zh-CN'
+  if (v.startsWith('zh')) return !/hans/.test(v) && /tw|hk|mo|hant/.test(v) ? 'zh-TW' : 'zh-CN'
   const two = v.slice(0, 2)
   return (LANGS as readonly string[]).includes(two) ? (two as Lang) : 'en'
 }

@@ -370,7 +370,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
     <div className="space-y-4">
       <PageHeader
         title="통계"
-        description={`게임 운영 통계를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
+        description={`프로젝트 운영 통계를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
         actions={
           <Button variant="outline" size="compact" onClick={() => { void load(); setReloadKey((k) => k + 1) }} disabled={loading}>
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

@@ -46,7 +46,7 @@ type StoreKeyStatus = {
 type KeyGuide = { site: { name: string; url: string }; steps: string[]; notes?: string[] }
 
 type ServiceTab = 'store' | 'login' | 'push'
-type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'fcm' | 'apns'
+type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'google' | 'fcm' | 'apns'
 type KeySet = 'iap' | 'apns'
 
 const SERVICE_TABS: readonly (readonly [ServiceTab, string])[] = [
@@ -61,6 +61,7 @@ const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
   { id: 'appstore', tab: 'store', title: 'App Store' },
   { id: 'googleplay', tab: 'store', title: 'Google Play' },
   { id: 'signin', tab: 'login', title: 'Sign in with Apple' },
+  { id: 'google', tab: 'login', title: 'Google 로그인' },
   { id: 'fcm', tab: 'push', title: 'Firebase Cloud Messaging' },
   { id: 'apns', tab: 'push', title: 'Apple Push Notifications' },
 ]
@@ -287,6 +288,40 @@ const STORE_KEYS: StoreKeyDef[] = [
       ],
     },
   },
+  // 웹 로그인 값(지금은 게임 밖 고객센터가 쓴다) — 표기는 한국어 도움말(Google: developers.google.com/identity/gsi/web ?hl=ko,
+  // Apple: developer.apple.com/kr/help "웹용 Sign in with Apple 구성")로 2026-10-30 확인했다.
+  {
+    key: 'GOOGLE_WEB_CLIENT_ID', group: 'google', name: '클라이언트 ID', about: '웹 애플리케이션 유형 OAuth 클라이언트의 ID',
+    hint: '.apps.googleusercontent.com 으로 끝나는 값을 넣습니다.',
+    guide: {
+      site: { name: 'Google Cloud 콘솔 › 클라이언트', url: 'https://console.cloud.google.com/auth/clients' },
+      steps: [
+        'Google Cloud 콘솔에서 게임의 프로젝트를 고르고 "Google 인증 플랫폼"의 "클라이언트" 페이지를 엽니다.',
+        '애플리케이션 유형이 "웹 애플리케이션"인 클라이언트를 엽니다. 게임의 구글 로그인에 쓰는 것과 같은 클라이언트입니다.',
+        '"승인된 JavaScript 원본"에 https://truebase-support.pages.dev 를 추가하고 저장합니다.',
+        '같은 화면의 "클라이언트 ID"를 복사합니다.',
+      ],
+      notes: [
+        '저장한 원본이 걸리기까지 몇 분 걸릴 수 있습니다.',
+        '이 클라이언트 ID가 Supabase 대시보드 구글 로그인 설정의 "Client IDs"에 들어 있어야 로그인이 됩니다.',
+      ],
+    },
+  },
+  {
+    key: 'APPLE_SERVICES_ID', group: 'signin', name: 'Services ID', about: '웹 로그인용 Services ID의 식별자',
+    hint: '영문·숫자·점·하이픈으로 된 식별자를 넣습니다.',
+    guide: {
+      site: { name: 'Apple Developer › Identifiers', url: 'https://developer.apple.com/account/resources/identifiers/list/serviceId' },
+      steps: [
+        '"인증서, 식별자 및 프로파일"에서 사이드바의 "Identifiers"를 누르고, 게임의 애플 로그인에 쓰는 Services ID를 엽니다.',
+        '"Sign in with Apple"의 "Configure"를 누릅니다.',
+        '"Website URLs"의 도메인에 truebase-support.pages.dev 를, 반환 URL에 https://truebase-support.pages.dev/ 를 더합니다.',
+        '"Done" → "Continue" → "Save"를 누릅니다.',
+        'Services ID 목록의 "Identifier" 값을 복사합니다. 예: com.회사이름.게임이름.Services',
+      ],
+      notes: ['이 Services ID가 Supabase 대시보드 애플 로그인 설정의 "Client IDs"에 들어 있어야 로그인이 됩니다. 새로 만들었으면 맨 앞에 넣습니다.'],
+    },
+  },
 ]
 
 /** 입력 창 제목처럼 홀로 보일 때의 이름 — "Key ID" 만으로는 어느 키인지 모르니 묶음 제목을 앞에 붙인다. */
@@ -420,7 +455,7 @@ function StoreStatusCard({
     <WhiteCard className="p-5 space-y-5">
       <CardHeader
         title="서비스 연결"
-        description="결제 확인·환불 기록·탈퇴 처리·푸시 알림에 쓰는 스토어·애플·Firebase 키를 넣습니다."
+        description="결제 확인·환불 기록·탈퇴 처리·푸시 알림·게임 밖 고객센터 로그인에 쓰는 스토어·애플·구글·Firebase 키를 넣습니다."
       />
       <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
       {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
@@ -843,12 +878,12 @@ function ConsoleIdentityCard({
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
-        title="게임 이름 · 아이콘"
-        description="게임 목록·메뉴·상단 띠·확인 창에 보일 이 게임의 이름과 아이콘을 정합니다."
+        title="프로젝트 이름 · 아이콘"
+        description="프로젝트 목록·메뉴·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
       />
 
       <div className="space-y-1">
-        <label htmlFor="console-name" className="block text-sm font-medium text-neutral-800">게임 이름</label>
+        <label htmlFor="console-name" className="block text-sm font-medium text-neutral-800">프로젝트 이름</label>
         <input
           id="console-name"
           className={`${inputCls} w-72 ${tooLong ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
@@ -885,7 +920,7 @@ function ConsoleIdentityCard({
           )}
         </div>
         <p className={`text-xs ${iconError ? 'text-red-600' : 'text-neutral-500'}`}>
-          {iconError || '정사각형 그림이 좋습니다. 가운데를 기준으로 잘라 작게 줄여 저장합니다. 그림이 없으면 게임 색 바탕에 이름 첫 글자가 보입니다.'}
+          {iconError || '정사각형 그림이 좋습니다. 가운데를 기준으로 잘라 작게 줄여 저장합니다. 그림이 없으면 프로젝트 색 바탕에 이름 첫 글자가 보입니다.'}
         </p>
       </div>
 
@@ -906,7 +941,7 @@ function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: u
     setCurrent(null)
     callAdmin<ConsoleSettings>(target, 'settings.getConsole')
       .then(setCurrent)
-      .catch((e: unknown) => report(e, '게임 정보를 불러오지 못했습니다.'))
+      .catch((e: unknown) => report(e, '프로젝트 정보를 불러오지 못했습니다.'))
   }, [target, report])
 
   const onSaved = (s: ConsoleSettings) => {
@@ -975,8 +1010,8 @@ function ConsoleColorCard({
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
-        title="게임 색"
-        description="메뉴·상단 띠·확인 창에 쓸 이 게임의 색을 정합니다."
+        title="프로젝트 색"
+        description="메뉴·상단 띠·확인 창에 쓸 이 프로젝트의 색을 정합니다."
       />
 
       <div className="flex flex-wrap gap-2.5" role="group" aria-label="색 고르기">
@@ -1023,7 +1058,7 @@ function ConsoleColorCard({
 
       {similar.length > 0 && (
         <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {similar.map((p) => look.name(p.key)).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 게임에서 작업하지 않도록 확실히 다른 색을 고르세요.
+          {similar.map((p) => look.name(p.key)).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 프로젝트에서 작업하지 않도록 확실히 다른 색을 고르세요.
         </div>
       )}
 
@@ -1106,7 +1141,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
-        title="게임 시간대"
+        title="프로젝트 시간대"
         description="날짜를 나누는 기준 시간대를 정합니다."
       />
       <div className="space-y-1.5">
@@ -1135,7 +1170,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
       </div>
       <ConfirmDialog
         open={asking}
-        title="게임 시간대를 바꿀까요?"
+        title="프로젝트 시간대를 바꿀까요?"
         confirmLabel="바꾸기"
         busy={busy}
         error={saveError || undefined}
@@ -1161,7 +1196,7 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['lobby', '매치 로비'],
   ['push', '푸시 알림'],
   ['limit', '요청 제한'],
-  ['console', '게임 정보'],
+  ['console', '프로젝트 정보'],
 ]
 
 export default function Settings({
@@ -1183,7 +1218,7 @@ export default function Settings({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="설정" description="게임 운영에 필요한 설정을 정합니다." />
+      <PageHeader title="설정" description="프로젝트 운영에 필요한 설정을 정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <Tabs value={tab} onChange={setTab} tabs={TABS} />

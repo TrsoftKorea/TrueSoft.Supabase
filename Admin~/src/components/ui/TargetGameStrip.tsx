@@ -10,7 +10,7 @@ export function TargetGameStrip() {
   const target = getTarget()
   return (
     <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
-      대상 게임: {look.name(target)}
+      대상 프로젝트: {look.name(target)}
     </div>
   )
 }

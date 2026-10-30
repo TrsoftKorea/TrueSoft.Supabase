@@ -458,6 +458,8 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   },
   APNS_KEY_ID: (v) => /^[A-Z0-9]{10}$/.test(v),
   APNS_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
+  GOOGLE_WEB_CLIENT_ID: (v) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v),
+  APPLE_SERVICES_ID: (v) => /^[A-Za-z0-9.-]+$/.test(v),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -473,6 +475,8 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   FCM_SERVICE_ACCOUNT_JSON: "Firebase 서비스 계정 키 JSON 파일 내용 전체를 붙여 넣으세요(project_id·client_email·private_key 가 있어야 합니다).",
   APNS_KEY_ID: "키 ID 는 영문 대문자·숫자 10자입니다.",
   APNS_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
+  GOOGLE_WEB_CLIENT_ID: "클라이언트 ID 는 숫자-영문.apps.googleusercontent.com 꼴입니다.",
+  APPLE_SERVICES_ID: "Services ID 는 영문·숫자·점·하이픈만 씁니다.",
 };
 
 async function handleAction(
@@ -895,7 +899,7 @@ async function handleAction(
           body: "{}",
         });
         const body = await res.json().catch(() => null);
-        if (res.status === 404) throw new Error("이 게임에는 구글 환불 확인 기능이 설치되어 있지 않습니다.");
+        if (res.status === 404) throw new Error("이 프로젝트에는 구글 환불 확인 기능이 설치되어 있지 않습니다.");
         return json({ ok: true, data: body ?? { ok: false, message: `HTTP ${res.status}` } });
       }
 
@@ -1202,7 +1206,7 @@ async function handleAction(
       // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
       case "settings.setServiceEnabled": {
         const service = str(params, "service");
-        if (!["appstore", "googleplay", "signin", "fcm", "apns"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google"].includes(service)) throw new Error("모르는 서비스입니다.");
         if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
         const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
         if (error) throw new Error(error.message);
@@ -2052,7 +2056,7 @@ const SERVER_ERRORS: Record<string, string> = {
   mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
-  console_name_too_long: "게임 이름은 40자 이내여야 합니다.",
+  console_name_too_long: "프로젝트 이름은 40자 이내여야 합니다.",
   console_icon_invalid: "아이콘은 PNG·JPG·WebP 그림이어야 하고 너무 크면 안 됩니다.",
 };
 

@@ -25,3 +25,9 @@ body {
 :where(html.dark) .bg-white {
   background-color: rgb(var(--surface));
 }
+
+/* 애플 로그인 단추 — 어두운 바탕에서는 애플 안내대로 흰 단추로 바꾼다(검은 단추는 바탕에 묻힌다). */
+:where(html.dark) .apple-signin {
+  background-color: #fff;
+  color: #000;
+}

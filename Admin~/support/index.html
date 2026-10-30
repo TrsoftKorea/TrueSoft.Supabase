@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="referrer" content="no-referrer" />
+    <!-- 구글 로그인 스크립트가 출처(origin)로 허용된 사이트인지 본다 — no-referrer 면 단추가 안 뜬다.
+         origin 만 보내므로 주소의 ?p= 는 나가지 않는다(#t= 는 어느 설정에서도 안 나간다). -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>Customer Center</title>
     <script>
       // 게임 안 창은 기기 설정(어두운 화면)을 따른다.

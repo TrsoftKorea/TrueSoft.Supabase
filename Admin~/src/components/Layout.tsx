@@ -137,7 +137,7 @@ export function Layout({
 
         {/* 게임 고르기 — 색 점으로 게임을 구분한다. 지금 게임은 테두리도 그 색으로. */}
         <div className="px-3 pb-2 space-y-1">
-          <div className="px-1 pb-0.5 text-[11px] font-medium text-[color:var(--sb-muted)]">게임</div>
+          <div className="px-1 pb-0.5 text-[11px] font-medium text-[color:var(--sb-muted)]">프로젝트</div>
           {PROJECTS.map((p) => {
             const on = p.key === target
             const allowed = allowedTargets.has(p.key)
@@ -240,11 +240,11 @@ export function Layout({
             <button
               type="button"
               onClick={onBackToList}
-              title="게임 목록으로"
+              title="프로젝트 목록으로"
               className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              게임 목록
+              프로젝트 목록
             </button>
             <ProjectIcon target={target} size={32} className="ring-2 ring-white/70" />
             <span className="text-lg font-bold tracking-tight truncate">{look.name(target)}</span>

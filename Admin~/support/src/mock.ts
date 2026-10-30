@@ -1,6 +1,7 @@
 // 가짜 데이터 모드(--mode mock, 주소에 ?mock=1). 서버 없이 화면 모양을 확인한다. 일반 빌드에는 들어가지 않는다.
-// ?banned=1 이면 차단된 계정, ?lang=en 이면 영어, ?web=1 이면 게임 밖에서 주소로 연 창(로그인 없음).
-// 쿠폰은 WELCOME 이 성공, USED 가 이미 사용, 그 밖은 틀린 번호. 게임 밖 창의 유저 ID 는 1234 만 있는 것으로 본다.
+// ?banned=1 이면 차단된 계정, ?lang=en 이면 영어, ?web=1 이면 게임 밖에서 주소로 연 창(로그인 전).
+// 게임 밖 로그인은 가짜 단추로 바로 된다. ?unlinked=1 이면 연결 안 된 계정, ?nologin=1 이면 로그인 ID 를 안 넣은 게임.
+// 쿠폰은 WELCOME 이 성공, USED 가 이미 사용, 그 밖은 틀린 번호.
 import type { Attachment, Category, Message, SupportApi, Ticket, TicketSummary } from './api'
 import { ApiError } from './api'
 
@@ -8,7 +9,8 @@ export function createMockApi(): SupportApi {
   const params = new URLSearchParams(location.search)
   const now = Date.now()
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
-  const signedIn = params.get('web') !== '1'
+  let signedIn = params.get('web') !== '1'
+  let viaWeb = false
   const isKo = (lang: string) => lang.toLowerCase().startsWith('ko')
 
   const categoriesFor = (lang: string): Category[] => isKo(lang)
@@ -43,13 +45,26 @@ export function createMockApi(): SupportApi {
   const toPaths = (paths: string[]): Attachment[] => paths.map((p) => ({ path: p, url: uploads.get(p) ?? shot }))
   const uploads = new Map<string, string>()
   const usedCoupons = new Set<string>(['USED'])
-  const checkUser = (userId?: string) => {
-    if (!signedIn && userId !== '1234') throw new ApiError('support_user_not_found')
+  const checkUser = () => {
+    if (!signedIn) throw new ApiError('support_session_missing')
   }
+  const noLogin = params.get('nologin') === '1'
 
   return {
-    signedIn,
-    look: () => wait({ name: en ? 'Devil Slayer' : '데빌 슬레이어', color: '#7c3aed', icon: null }),
+    get signedIn() { return signedIn },
+    get viaWeb() { return viaWeb },
+    look: () => wait({
+      name: en ? 'Devil Slayer' : '데빌 슬레이어', color: '#7c3aed', icon: null,
+      google_client_id: noLogin ? null : 'mock-google', apple_services_id: noLogin ? null : 'mock-apple',
+    }),
+    login: async () => {
+      await wait(null)
+      if (params.get('unlinked') === '1') throw new ApiError('support_web_not_linked')
+      signedIn = true
+      viaWeb = true
+      return { banned: params.get('banned') === '1', lang: en ? 'en' : 'ko' }
+    },
+    logout: () => { signedIn = false; viaWeb = false },
     faqs: (lang) => wait(!isKo(lang)
       ? [
           { id: 1, category_id: 1, question: 'I paid but did not get my item.', answer: 'Items are delivered to your mailbox.\nRestart the app to retry pending purchases.' },
@@ -73,8 +88,8 @@ export function createMockApi(): SupportApi {
       x.unread = false
       return wait(x)
     },
-    create: async (categoryId, body, attachments, userId) => {
-      checkUser(userId)
+    create: async (categoryId, body, attachments) => {
+      checkUser()
       if (!body.trim() && attachments.length === 0) throw new ApiError('support_body_empty')
       const id = `t${tickets.length + 1}`
       const msg: Message = { id: 1, sender: 'player', body: body.trim(), attachments: toPaths(attachments), created_at: new Date().toISOString() }
@@ -89,16 +104,16 @@ export function createMockApi(): SupportApi {
       x.status = 'open'
       return wait(undefined)
     },
-    upload: async (contentType, data, userId) => {
-      checkUser(userId)
+    upload: async (contentType, data) => {
+      checkUser()
       const path = `mock/${crypto.randomUUID()}.jpg`
       uploads.set(path, `data:${contentType};base64,${data}`)
       return wait({ path, url: uploads.get(path)! })
     },
-    coupon: async (code, userId) => {
+    coupon: async (code) => {
       await wait(null)
-      checkUser(userId)
-      if (signedIn && params.get('banned') === '1') throw new ApiError('support_account_restricted')
+      checkUser()
+      if (params.get('banned') === '1') throw new ApiError('support_account_restricted')
       const c = code.toUpperCase()
       if (usedCoupons.has(c)) throw new ApiError('coupon_already_used')
       if (c !== 'WELCOME') throw new ApiError('coupon_not_found')
