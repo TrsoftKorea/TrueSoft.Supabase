@@ -349,10 +349,16 @@ function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, 
           backgroundImage: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #000) 0%, color-mix(in srgb, var(--accent) 45%, #0f172a) 100%)',
         }}>
         <CloseButton lang={lang} className="absolute top-2 right-2 text-white/80" />
-        <div className="max-w-2xl mx-auto px-4 pt-10 pb-9 flex flex-col items-center text-center">
-          {look?.icon && <img src={look.icon} alt="" className="w-20 h-20 rounded-full border-4 border-white/90 bg-white object-cover shadow" />}
-          {look?.name && <p className="mt-3 text-sm text-white/80">{look.name}</p>}
-          <h1 className="mt-1 text-2xl font-semibold">{t(lang, 'heroTitle')}</h1>
+        {look?.name && (
+          <div className="max-w-2xl mx-auto px-4 pt-3 pr-12 flex items-center gap-2 min-w-0">
+            {look.icon
+              ? <img src={look.icon} alt="" className="w-7 h-7 shrink-0 rounded-md bg-white object-cover" />
+              : <span aria-hidden className="w-7 h-7 shrink-0 rounded-md bg-white/20 flex items-center justify-center text-sm font-semibold">{[...look.name][0]}</span>}
+            <span className="text-[15px] font-semibold truncate">{look.name}</span>
+          </div>
+        )}
+        <div className={`max-w-2xl mx-auto px-4 ${look?.name ? 'pt-7' : 'pt-10'} pb-9 flex flex-col items-center text-center`}>
+          <h1 className="text-2xl font-semibold">{t(lang, 'heroTitle')}</h1>
           <form className="mt-6 w-full max-w-lg flex rounded-lg overflow-hidden shadow-sm" role="search"
             onSubmit={(e) => { e.preventDefault(); submit() }}>
             <div className="flex-1 flex items-center bg-white">

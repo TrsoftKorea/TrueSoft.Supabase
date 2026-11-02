@@ -4,8 +4,8 @@ import { getProject, PROJECTS, type ProjectTarget } from './projectTarget'
 import { darkVariant } from './color'
 import { isDarkMode, subscribeTheme } from './theme'
 
-// 게임마다 운영 콘솔에서 쓰는 색·이름·아이콘. 각 게임 DB(ts_admin_console_settings)에 저장되고, 정하지 않았으면
-// projectTarget 의 기본값을 쓴다. 다음에 열 때 기본값이 잠깐 비치지 않도록 마지막 값을 브라우저에 기억해 둔다.
+// 게임마다 운영 콘솔에서 쓰는 색·이름·아이콘. 각 게임 DB(ts_admin_console_settings)에 저장되고, 색을 정하지 않았으면
+// projectTarget 의 기본색을 쓴다. 다음에 열 때 기본값이 잠깐 비치지 않도록 마지막 값을 브라우저에 기억해 둔다.
 const STORAGE_KEY = 'tb_project_look'
 
 export type ProjectLook = { color: string | null; name: string | null; icon: string | null }
@@ -46,9 +46,9 @@ export function projectColor(target: ProjectTarget): string {
   return displayColor(projectBaseColor(target))
 }
 
-/** 콘솔에 보이는 게임 이름. 정하지 않았으면 기본 이름. */
+/** 콘솔에 보이는 프로젝트 이름. 기본 이름은 없다 — 아직 정하지 않았으면 그 사실이 보이게 한다. */
 export function projectName(target: ProjectTarget): string {
-  return looks[target]?.name ?? getProject(target).label
+  return looks[target]?.name ?? '이름 없는 프로젝트'
 }
 
 /** 게임 아이콘 그림(data URL). 없으면 null — 화면은 이름 첫 글자로 대신한다. */

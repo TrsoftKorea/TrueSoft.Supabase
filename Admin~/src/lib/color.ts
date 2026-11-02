@@ -13,11 +13,6 @@ export function contrastWithWhite(hex: string): number {
   return 1.05 / (l + 0.05)
 }
 
-export function colorDistance(a: string, b: string): number {
-  const [x, y] = [rgbOf(a), rgbOf(b)]
-  return Math.sqrt(x.reduce((s, v, i) => s + (v - y[i]!) ** 2, 0))
-}
-
 function toHsl([r, g, b]: [number, number, number]): [number, number, number] {
   const [R, G, B] = [r / 255, g / 255, b / 255]
   const max = Math.max(R, G, B)

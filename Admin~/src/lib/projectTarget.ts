@@ -7,11 +7,11 @@ export type ProjectTarget = 'defencer' | 'devilslayer'
 
 export type ProjectConfig = {
   key: ProjectTarget
-  label: string
   url: string
   /**
-   * 화면 상단 띠·확인 창에 쓰는 게임 기본색. 운영 콘솔 "설정 › 게임 정보"에서 바꾸면 그 값이 이긴다(lib/projectLook). 이름(label)도 같다.
-   * 게임끼리 확실히 달라야 하고, 흰 글자가 얹히므로 흰색과 4.5:1 이상 대비가 나야 한다.
+   * 화면 상단 띠·확인 창에 쓰는 게임 기본색. 운영 콘솔 "설정 › 프로젝트 정보"에서 바꾸면 그 값이 이긴다(lib/projectLook).
+   * 이름은 기본값을 두지 않는다 — 운영자가 프로젝트 정보에서 정한 이름만 쓴다.
+   * 흰 글자가 얹히므로 흰색과 4.5:1 이상 대비가 나야 한다.
    */
   color: string
 }
@@ -19,8 +19,8 @@ export type ProjectConfig = {
 const env = import.meta.env as Record<string, string | undefined>
 
 export const PROJECTS: ProjectConfig[] = [
-  { key: 'defencer', label: '마왕은 힘들어', url: env['VITE_DEFENCER_URL'] ?? '', color: '#7c3aed' },
-  { key: 'devilslayer', label: '데빌 슬레이어', url: env['VITE_DEVILSLAYER_URL'] ?? '', color: '#c2410c' },
+  { key: 'defencer', url: env['VITE_DEFENCER_URL'] ?? '', color: '#7c3aed' },
+  { key: 'devilslayer', url: env['VITE_DEVILSLAYER_URL'] ?? '', color: '#c2410c' },
 ]
 
 const STORAGE_KEY = 'tb_project_target'
@@ -55,4 +55,17 @@ export function getProject(t: ProjectTarget): ProjectConfig {
   const found = PROJECTS.find((p) => p.key === t)
   if (!found) throw new Error(`알 수 없는 프로젝트: ${t}`)
   return found
+}
+
+// 고객센터 웹 페이지(Admin~/support). SDK 의 SupabaseSettings.customerCenterUrl 기본값과 같다.
+export const SUPPORT_PAGE_ORIGIN = 'https://truebase-support.pages.dev'
+
+/** 게임 밖에서 여는 고객센터 주소. 백엔드 주소를 모르면 null. */
+export function supportPageUrl(t: ProjectTarget): string | null {
+  try {
+    const ref = new URL(getProject(t).url).hostname.split('.')[0]
+    return ref ? `${SUPPORT_PAGE_ORIGIN}/?p=${ref}` : null
+  } catch {
+    return null
+  }
 }

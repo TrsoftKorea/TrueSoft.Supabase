@@ -451,6 +451,9 @@ function supportRow(t: MockSupportTicket) {
 
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
 
+// 콘솔 코드에는 프로젝트 이름 기본값이 없다 — 실제로는 각 DB 의 프로젝트 정보가 정한다.
+const MOCK_PROJECT_NAME: Record<ProjectTarget, string> = { defencer: '마왕은 힘들어', devilslayer: '데빌 슬레이어' }
+
 const HANDLERS: Record<string, Handler> = {
   'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
   'push.updateTrigger': (_t, p) => {
@@ -576,7 +579,8 @@ const HANDLERS: Record<string, Handler> = {
     supportCategories.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
     return null
   },
-  'auth.consoleLook': () => ({ color: null, display_name: null, icon: null }),
+  'auth.consoleLook': (target) => ({ color: null, display_name: MOCK_PROJECT_NAME[target], icon: null }),
+  'settings.getConsole': (target) => ({ color: null, display_name: MOCK_PROJECT_NAME[target], icon: null, updated_at: null, updated_by: null }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
   'schema.getDraft': () => ({ rows: [] }),
   'dashboard.stats': () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import { getProject, PROJECTS, type ProjectTarget } from '../lib/projectTarget'
+import { getProject, type ProjectTarget } from '../lib/projectTarget'
 import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -14,7 +14,7 @@ import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
-import { colorDistance, contrastWithWhite } from '../lib/color'
+import { contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
 import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
@@ -298,7 +298,7 @@ const STORE_KEYS: StoreKeyDef[] = [
       steps: [
         'Google Cloud 콘솔에서 게임의 프로젝트를 고르고 "Google 인증 플랫폼"의 "클라이언트" 페이지를 엽니다.',
         '애플리케이션 유형이 "웹 애플리케이션"인 클라이언트를 엽니다. 게임의 구글 로그인에 쓰는 것과 같은 클라이언트입니다.',
-        '"승인된 JavaScript 원본"에 https://truebase-support.pages.dev 를 추가하고 저장합니다.',
+        '"승인된 JavaScript 원본"에 https://truebase-support.pages.dev 를 추가하고 저장합니다. "승인된 리디렉션 URI"에는 넣지 않아도 됩니다.',
         '같은 화면의 "클라이언트 ID"를 복사합니다.',
       ],
       notes: [
@@ -843,9 +843,9 @@ function ConsoleIdentityCard({
     setIconError('')
   }, [current])
 
-  const defaultName = getProject(target).label
   const trimmed = name.trim()
   const tooLong = trimmed.length > 40
+  const empty = !!current && trimmed === ''
   const changed = !!current && (trimmed !== (current.display_name ?? '') || icon !== current.icon)
 
   const pick = async (file: File | undefined) => {
@@ -886,15 +886,15 @@ function ConsoleIdentityCard({
         <label htmlFor="console-name" className="block text-sm font-medium text-neutral-800">프로젝트 이름</label>
         <input
           id="console-name"
-          className={`${inputCls} w-72 ${tooLong ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
+          className={`${inputCls} w-72 ${tooLong || empty ? 'border-red-400 focus:border-red-400 focus:ring-red-200' : ''}`}
           value={name}
           disabled={!current}
           onChange={(e) => { setName(e.target.value); setSaved(false) }}
           autoComplete="off"
         />
-        <p className={`text-xs ${tooLong ? 'text-red-600' : 'text-neutral-500'}`}>
-          {tooLong ? '40자 이내로 적어 주세요.' : `비워 두면 "${defaultName}"으로 보입니다.`}
-        </p>
+        {(tooLong || empty) && (
+          <p className="text-xs text-red-600">{tooLong ? '40자 이내로 적어 주세요.' : '프로젝트 이름을 적어 주세요.'}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -925,7 +925,7 @@ function ConsoleIdentityCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" onClick={() => void save()} disabled={saving || !changed || tooLong}>
+        <Button variant="primary" onClick={() => void save()} disabled={saving || !changed || tooLong || empty}>
           저장
         </Button>
         {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
@@ -969,8 +969,6 @@ function ConsoleColorCard({
   report: (e: unknown, fallback: string) => void
 }) {
   const look = useProjectLook()
-  // 다른 게임과 비슷한지는 고른 원래 색끼리 잰다(화면에 보이는 어두운 화면용 색이 아니라).
-  const colorOf = look.baseColor
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -987,9 +985,6 @@ function ConsoleColorCard({
   const hex = value.trim().toLowerCase()
   const valid = HEX_RE.test(hex)
   const readable = valid && contrastWithWhite(hex) >= 4.5
-  const similar = valid
-    ? PROJECTS.filter((p) => p.key !== target && colorDistance(colorOf(p.key), hex) < 90)
-    : []
   const changed = !!current && valid && hex !== (current.color ?? getProject(target).color)
 
   const save = async (color: string | null) => {
@@ -1055,12 +1050,6 @@ function ConsoleColorCard({
               : '#과 16진수 6자리.'}
         </p>
       </div>
-
-      {similar.length > 0 && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {similar.map((p) => look.name(p.key)).join(', ')}와(과) 색이 비슷합니다. 엉뚱한 프로젝트에서 작업하지 않도록 확실히 다른 색을 고르세요.
-        </div>
-      )}
 
       <div className="rounded-lg overflow-hidden border border-neutral-200">
         <div className="px-4 py-3 text-white font-bold" style={{ backgroundColor: valid ? look.display(hex) : '#9ca3af' }}>

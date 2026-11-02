@@ -2056,6 +2056,7 @@ const SERVER_ERRORS: Record<string, string> = {
   mail_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   friend_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
   match_lobby_settings_out_of_range: "허용 범위를 벗어난 값이 있습니다.",
+  console_name_required: "프로젝트 이름을 적어 주세요.",
   console_name_too_long: "프로젝트 이름은 40자 이내여야 합니다.",
   console_icon_invalid: "아이콘은 PNG·JPG·WebP 그림이어야 하고 너무 크면 안 됩니다.",
 };

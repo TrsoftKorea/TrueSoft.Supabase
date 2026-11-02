@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { GripVertical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, UserRound, XCircle } from 'lucide-react'
+import { Check, Copy, GripVertical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, UserRound, XCircle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import type { ProjectTarget } from '../lib/projectTarget'
+import { supportPageUrl, type ProjectTarget } from '../lib/projectTarget'
+import { copyToClipboard } from '../lib/clipboard'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs } from '../components/ui/Tabs'
@@ -98,15 +99,36 @@ type Category = { id: number; name: string; localized: Record<string, string>; s
 export default function Support({ target, onUnauthenticated }: { target: ProjectTarget; onUnauthenticated: () => void }) {
   const [tab, setTab] = useState<'tickets' | 'faqs' | 'categories'>('tickets')
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const pageUrl = supportPageUrl(target)
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
     setError(e instanceof Error ? e.message : fallback)
   }, [onUnauthenticated])
 
+  const copyPageUrl = async () => {
+    if (!pageUrl) return
+    if (await copyToClipboard(pageUrl)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } else {
+      setError('주소를 복사하지 못했습니다.')
+    }
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader title="고객센터" description="플레이어 문의를 보고 답합니다." />
+      <PageHeader
+        title="고객센터"
+        description="플레이어 문의를 보고 답합니다."
+        actions={pageUrl && (
+          <Button onClick={copyPageUrl} title={pageUrl}>
+            {copied ? <Check size={15} className="text-green-600" /> : <Copy size={15} />}
+            {copied ? '복사했습니다' : '고객센터 주소 복사'}
+          </Button>
+        )}
+      />
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <Tabs value={tab} onChange={setTab} tabs={[['tickets', '문의'], ['faqs', '자주 묻는 질문'], ['categories', '분류']] as const} />
       {tab === 'tickets' && <TicketsTab target={target} report={report} />}
