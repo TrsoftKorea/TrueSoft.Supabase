@@ -21,5 +21,5 @@ if (!r && r.Reason == SupabaseReason.CannotUnlinkLastIdentity)
 | `SupabaseReason.UnlinkFailed` | 연동 해제에 실패했습니다. |
 
 ::: warning 마지막 연동은 해제할 수 없습니다
-계정에 연동이 하나뿐이면 해제 시 로그인 수단이 사라지므로 거부됩니다. Google·Apple처럼 둘 이상 연동했을 때 하나를 해제할 수 있습니다.
+계정에 연동이 하나뿐이면 해제 시 로그인 수단이 사라지므로 거부됩니다. 둘 이상 연동했을 때 하나를 해제할 수 있습니다.
 :::

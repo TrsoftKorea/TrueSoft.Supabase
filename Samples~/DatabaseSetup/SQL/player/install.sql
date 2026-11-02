@@ -9417,7 +9417,7 @@ grant execute on function public.ts_admin_audit_list(text,text,date,date,int,int
 -- 프로젝트 정보 — 운영 콘솔·고객센터 창에서 이 프로젝트를 나타내는 색·이름·아이콘(콘솔 "설정 › 프로젝트 정보")
 -- ---------------------------------------------------------------------------
 -- 운영자가 엉뚱한 게임에서 작업하지 않도록 메뉴·상단 띠·확인 창에 게임마다 다른 색을 쓴다.
--- 셋 다 null 이면 콘솔 코드에 적힌 기본값을 쓴다(새 게임은 따로 정하지 않아도 된다).
+-- 색·아이콘이 null 이면 콘솔 코드의 기본색·이름 첫 글자를 쓴다. 이름은 기본값이 없어 운영자가 꼭 정한다.
 -- icon 은 콘솔이 128px 로 줄여 보낸 그림(data URL)이다. 로그인 전 화면에서도 읽으므로 파일 저장소를 두지 않았다.
 create table if not exists public.ts_admin_console_settings (
   id           int primary key default 1 check (id = 1),
@@ -9439,7 +9439,7 @@ alter table public.ts_admin_console_settings enable row level security;
 -- [의도적] 정책 없음 — service_role 전용.
 
 comment on table public.ts_admin_console_settings is
-  '프로젝트 정보(행 하나, 콘솔 "설정 › 프로젝트 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 프로젝트 이름, icon=프로젝트 아이콘(data URL). null 이면 콘솔 기본값.';
+  '프로젝트 정보(행 하나, 콘솔 "설정 › 프로젝트 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 프로젝트 이름, icon=프로젝트 아이콘(data URL). 색·아이콘 null 은 콘솔 기본값, 이름 null 은 아직 안 정한 것.';
 
 create or replace function public.ts_admin_console_settings_get()
 returns jsonb
@@ -9469,7 +9469,11 @@ declare
   v_name text := nullif(btrim(coalesce(p_display_name, '')), '');
   v_icon text := nullif(btrim(coalesce(p_icon, '')), '');
 begin
-  if v_name is not null and char_length(v_name) > 40 then
+  -- 이름은 기본값이 없어 운영자가 꼭 정한다. 아직 정하지 않은 새 프로젝트만 표에 null 로 남는다.
+  if v_name is null then
+    raise exception 'console_name_required';
+  end if;
+  if char_length(v_name) > 40 then
     raise exception 'console_name_too_long';
   end if;
   if v_icon is not null and (v_icon !~ '^data:image/(png|jpeg|webp);base64,' or length(v_icon) > 120000) then
