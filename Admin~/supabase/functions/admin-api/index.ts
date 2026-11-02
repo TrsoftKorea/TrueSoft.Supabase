@@ -460,6 +460,8 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APNS_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
   GOOGLE_WEB_CLIENT_ID: (v) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v),
   APPLE_SERVICES_ID: (v) => /^[A-Za-z0-9.-]+$/.test(v),
+  // 권한을 좁힌 개인 토큰(sbp_fc…)만 받는다 — 계정 전체 권한 토큰이 들어가면 이 서버가 계정의 모든 프로젝트를 다룰 수 있다.
+  SUPABASE_ACCESS_TOKEN: (v) => /^sbp_fc[A-Za-z0-9_]+$/.test(v),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -477,6 +479,7 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APNS_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
   GOOGLE_WEB_CLIENT_ID: "클라이언트 ID 는 숫자-영문.apps.googleusercontent.com 꼴입니다.",
   APPLE_SERVICES_ID: "Services ID 는 영문·숫자·점·하이픈만 씁니다.",
+  SUPABASE_ACCESS_TOKEN: "권한을 좁힌 토큰(sbp_fc 로 시작)만 넣을 수 있습니다. 계정 전체 권한 토큰은 받지 않습니다.",
 };
 
 async function handleAction(
@@ -1039,6 +1042,12 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "usage.stats": {
+        const { data, error } = await db.rpc("ts_admin_usage", { p_hours: intInRange(params, "hours", "기간", 1, 24 * 3650) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "chat.channels": {
         const { data, error } = await db
           .from("chat_channels")
@@ -1206,7 +1215,7 @@ async function handleAction(
       // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
       case "settings.setServiceEnabled": {
         const service = str(params, "service");
-        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google", "supabase"].includes(service)) throw new Error("모르는 서비스입니다.");
         if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
         const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
         if (error) throw new Error(error.message);

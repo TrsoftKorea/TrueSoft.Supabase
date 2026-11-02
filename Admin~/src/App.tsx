@@ -30,6 +30,7 @@ import MatchRewards from './pages/MatchRewards'
 import Dashboard from './pages/Dashboard'
 import DataLogs from './pages/DataLogs'
 import CronJobs from './pages/CronJobs'
+import ServerStatus from './pages/ServerStatus'
 import Stats from './pages/Stats'
 import DataManagement from './pages/DataManagement'
 import GameServers from './pages/GameServers'
@@ -191,6 +192,7 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/jobs" element={<CronJobs target={target} onUnauthenticated={signOut} />} />
+        <Route path="/server" element={<ServerStatus target={target} onUnauthenticated={signOut} />} />
         <Route path="/stats" element={<Stats target={target} onUnauthenticated={signOut} />} />
         <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />

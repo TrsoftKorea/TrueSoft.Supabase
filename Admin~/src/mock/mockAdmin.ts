@@ -196,6 +196,106 @@ function ccuStats(hours: number) {
   }
 }
 
+// ── 서버 상태 ── 끝난 시간마다 값이 하나씩. 접속자에 비례하는 몫(게임이 주기적으로 묻는 것)과 늘 비슷한 몫(운영 콘솔·
+// 자동 작업)을 더한다. 긴 기간의 점은 그 구간 시간 값의 합, 동시접속자는 같은 구간 5분 값의 최고치(동시접속자 화면과 같은 값).
+const HOUR = 3600_000
+// [기능, 접속자 1명당 시간당 건수, 늘 나오는 건수, 한 건 응답 크기(바이트)] — 전송량은 건수 × 크기라 기간과 무관하게 같다.
+const MOCK_REQUEST_RATES: [string, number, number, number][] = [
+  ['원격 설정', 34, 0, 190], ['접속 관리', 33, 0, 60], ['매치 로비', 25, 0, 120], ['세이브', 3, 0, 2400], ['우편', 2, 1, 900],
+  ['채팅', 2, 0, 1500], ['리더보드', 1.5, 1, 3200], ['로그인', 0.6, 0, 1800], ['운영 콘솔', 0, 9, 2600], ['서버 설정', 0, 14, 80],
+]
+const MOCK_FUNCTION_RATES: [string, number, number, number][] = [
+  ['운영 콘솔', 0, 8, 4000], ['고객센터', 0.3, 1, 2200], ['푸시', 0.4, 0, 40], ['결제', 0.2, 0, 300], ['탈퇴', 0, 2, 60], ['사용량 수집', 0, 1, 20],
+]
+
+/**
+ * 월간 활성 사용자 — 이번 달 날마다 처음 들어온 계정 수의 합 = 이번 달 값(규칙 2). 1일은 그날 접속자 전부,
+ * 그 뒤로는 신규 + 이번 달 아직 안 왔던 재방문 일부(날이 갈수록 준다).
+ */
+function mockMau() {
+  const today = kstToday()
+  const monthStart = `${today.slice(0, 8)}01`
+  const this_month: { day: string; users: number }[] = []
+  for (let d = monthStart, i = 0; d <= today; d = addDays(d, 1), i++) {
+    const s = dayStats(d)
+    this_month.push({ day: d, users: i === 0 ? s.total : Math.round(s.new + s.returning * 0.45 * Math.pow(0.8, i)) })
+  }
+  const months: { month: string; users: number }[] = []
+  for (let k = 11; k >= 1; k--) {
+    const m = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1 - k, 1)).toISOString().slice(0, 10)
+    months.push({ month: m, users: Math.round(620 - k * 18 + hash(`mau:${m}`) * 140) })
+  }
+  months.push({ month: monthStart, users: this_month.reduce((a, d) => a + d.users, 0) })
+  return { months, this_month }
+}
+
+/** 저장 용량 날별 기록 120일 — DB 는 천천히 늘고 파일(문의 첨부 그림)은 가끔 늘어난다. */
+function mockSizes() {
+  const today = kstToday()
+  const series = Array.from({ length: 120 }, (_, i) => {
+    const day = addDays(today, i - 119)
+    return { day, db: Math.round(52e6 + i * 0.18e6 + hash(`db:${day}`) * 0.4e6), storage: Math.round(8e6 + Math.floor(i / 9) * 0.9e6) }
+  })
+  const last = series[series.length - 1]!
+  return { series, db: last.db, storage: last.storage }
+}
+
+function mockHourCalls(h: number, kind: string, feature: string, perPlayer: number, base: number): number {
+  return Math.round(perPlayer * ccuAt(h) + base + hash(`uh:${kind}:${feature}:${h}`) * (base + perPlayer * 3))
+}
+
+/** 하루 묶음은 한국 자정(게임 시간대)으로 자른다 — 서버가 게임 시간대 날짜로 묶는 것과 같게. */
+function usageBucketStart(h: number, bucketMin: number): number {
+  if (bucketMin < 1440) return Math.floor(h / (bucketMin * 60_000)) * bucketMin * 60_000
+  return Math.floor((h + 9 * HOUR) / (24 * HOUR)) * 24 * HOUR - 9 * HOUR
+}
+
+function usageStats(hours: number) {
+  const bucketMin = hours <= 24 ? 60 : hours <= 24 * 7 ? 360 : 1440
+  const lastHour = Math.floor(Date.now() / HOUR) * HOUR - HOUR
+  const firstHour = Math.floor((Date.now() - hours * HOUR) / HOUR) * HOUR + HOUR
+  const ccu = new Map<number, number>()
+  const calls = new Map<string, { kind: string; feature: string; byAt: Map<number, { calls: number; bytes: number }> }>()
+  for (let h = firstHour; h <= lastHour; h += HOUR) {
+    const b = usageBucketStart(h, bucketMin)
+    let peak = ccu.get(b) ?? -1
+    for (let s = h; s < h + HOUR; s += SLOT) peak = Math.max(peak, ccuAt(s))
+    ccu.set(b, peak)
+    for (const [kind, rates] of [['request', MOCK_REQUEST_RATES], ['function', MOCK_FUNCTION_RATES]] as const) {
+      for (const [feature, perPlayer, base, size] of rates) {
+        const key = `${kind}:${feature}`
+        const f = calls.get(key) ?? { kind, feature, byAt: new Map<number, { calls: number; bytes: number }>() }
+        const c = mockHourCalls(h, kind, feature, perPlayer, base)
+        const cur = f.byAt.get(b) ?? { calls: 0, bytes: 0 }
+        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * size })
+        calls.set(key, f)
+      }
+    }
+  }
+  const at = (ms: number) => new Date(ms).toISOString()
+  const features = [...calls.values()].map((f) => {
+    const series = [...f.byAt.entries()].sort((a, b) => a[0] - b[0]).map(([b, v]) => ({ at: at(b), calls: v.calls, bytes: v.bytes }))
+    return {
+      kind: f.kind, feature: f.feature,
+      calls: series.reduce((a, p) => a + p.calls, 0), bytes: series.reduce((a, p) => a + p.bytes, 0), series,
+    }
+  }).sort((a, b) => a.kind.localeCompare(b.kind) || b.calls - a.calls)
+  // 기록은 1년보다 오래전부터 쌓인 것으로 둔다 — 어느 기간에도 "기록은 ~부터" 안내가 뜨지 않게.
+  const recordedFrom = at(Math.floor((Date.now() - 400 * 24 * HOUR) / HOUR) * HOUR)
+  const lastRun = Math.floor(Date.now() / HOUR) * HOUR + 5 * 60_000
+  const runAt = lastRun > Date.now() ? lastRun - HOUR : lastRun
+  return {
+    bucket_minutes: bucketMin,
+    features,
+    ccu: [...ccu.entries()].sort((a, b) => a[0] - b[0]).map(([b, total]) => ({ at: at(b), total })),
+    calls_first_at: recordedFrom,
+    mau: mockMau(),
+    sizes: mockSizes(),
+    sync: { last_run_at: at(runAt), finished_at: at(runAt + 4000), ok: true, message: '호출 수 1시간' },
+    has_token: true,
+  }
+}
+
 // ── 구매 내역 ── 표시 종류(원화·외화·시험·무료·환불·가격 없음)가 한 화면에 다 보이게 고른 표본. 통계 숫자와는 따로 논다.
 function purchaseRows() {
   const at = (daysAgo: number, hm: string) => `${addDays(kstToday(), -daysAgo)}T${hm}:00+09:00`
@@ -312,7 +412,7 @@ function playerOf(p: Record<string, unknown>) {
 // ── 자동 작업 ── 설치 SQL 에 등록된 이름·주기 그대로(시각은 UTC). 하나는 실패 상태를 보여 준다.
 const CRON_SCHEDULES: [string, string][] = [
   ['run-mail-schedules', '* * * * *'], ['deliver-open-mail-batches', '* * * * *'], ['ts_leaderboard_rotate_due', '* * * * *'],
-  ['ccu-snapshot', '*/5 * * * *'], ['ts_match_lobby_cleanup', '*/5 * * * *'], ['withdrawal-cleanup', '0,30 * * * *'],
+  ['ccu-snapshot', '*/5 * * * *'], ['usage-sync', '5 * * * *'], ['ts_match_lobby_cleanup', '*/5 * * * *'], ['withdrawal-cleanup', '0,30 * * * *'],
   ['withdrawal-overdue-check', '15 * * * *'], ['ts_chat_cleanup', '17 * * * *'], ['cleanup-expired-mails', '0 3 * * *'],
   ['cleanup-user-data-logs', '0 3 * * *'], ['cleanup-cron-run-details', '40 3 * * *'], ['purchase-refund-sync-google', '0 4 * * *'],
   ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'],
@@ -593,6 +693,7 @@ const HANDLERS: Record<string, Handler> = {
     }
   },
   'ccu.stats': (_t, p) => ccuStats(Number(p['hours'] ?? 24)),
+  'usage.stats': (_t, p) => usageStats(Number(p['hours'] ?? 24)),
   'activity.stats': (_t, p) => activityStats(Number(p['days'] ?? 30), String(p['signupPlatform'] ?? '')),
   'revenue.stats': (_t, p) => revenueStats(Number(p['days'] ?? 30)),
   'chat.stats': (_t, p) => chatStats(Number(p['days'] ?? 30)),
@@ -614,6 +715,7 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APNS_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'GOOGLE_WEB_CLIENT_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T11:00:00+09:00', updatedBy: 'mock@local' },
       { key: 'APPLE_SERVICES_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'SUPABASE_ACCESS_TOKEN', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), 0) + 'T10:30:00+09:00', updatedBy: 'mock@local' },
     ],
     services: mockServices,
   }),
