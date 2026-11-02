@@ -9450,10 +9450,12 @@ as $$
 $$;
 
 -- 콘솔 "서버 상태" — 최근 p_hours 시간의 Supabase 사용량. 묶음 크기는 24시간 1시간 · 7일 6시간 · 그 이상 하루(게임 시간대).
+-- 요청·서버 함수 기록은 끝난 시간까지만 준다(지금 시간은 빼고, 매시 10분이 되기 전에는 직전 시간도 뺀다).
 --   features 기능 묶음별 요청 수·서버 함수 호출 수와 어림 전송량·크기를 몰라 뺀 건수(기간 합)와 묶음마다의 값 — 지분 표와
 --            쌓은 막대에 쓴다. 전송량은 쌓을 때 어림해 둔 값이다(9절 7. 사용량 기록). 압축 여부는 모른다 — 기능끼리 견주는 값이다.
 --   ccu      같은 묶음의 동시접속자 최고치
---   mau      달마다 한 번이라도 접속한 계정 수(최근 12달, 게임 시간대 달력)와 이번 달 날마다 처음 들어온 계정 수 — 기간과 무관
+--   mau      이번 달(current, 게임 시간대 달력 — 접속이 없는 달도 12달의 끝이 된다), 달마다 한 번이라도 접속한 계정 수(최근 12달)와
+--            이번 달 날마다 처음 들어온 계정 수 — 기간과 무관
 --   sizes    저장 용량 날별 기록(최근 1년)과 지금 값 — 기간과 무관
 --   sync     수집이 마지막으로 깨어난 때·결과
 create or replace function public.ts_admin_usage(p_hours integer)
@@ -9498,7 +9500,8 @@ as $$
            u.kind, public.ts_usage_feature(u.kind, u.target) as feature,
            sum(u.calls) as calls, sum(u.bytes) as bytes, sum(u.unsized) as unsized
     from public.usage_hourly u, keyed k
-    where u.hour >= k.since
+    -- 끝난 시간만 — 지금 시간은 덜 찼고, 요청 수는 다음 시각 5분 수집 때 앞 시간에 들어온다.
+    where u.hour >= k.since and u.hour < date_trunc('hour', now() - interval '10 minutes')
     group by 1, 2, 3
   )
   select jsonb_build_object(
@@ -9507,11 +9510,12 @@ as $$
                                                               'unsized', total_unsized, 'series', series)
                                            order by kind, total desc)
                           from (select kind, feature, sum(calls) as total, sum(bytes) as total_bytes, sum(unsized) as total_unsized,
-                                       jsonb_agg(jsonb_build_object('at', at, 'calls', calls, 'bytes', bytes) order by at) as series
+                                       jsonb_agg(jsonb_build_object('at', at, 'calls', calls, 'bytes', bytes, 'unsized', unsized) order by at) as series
                                   from calls group by kind, feature) f), '[]'::jsonb),
     'ccu', coalesce((select jsonb_agg(jsonb_build_object('at', c.at, 'total', c.total) order by c.at) from ccu c), '[]'::jsonb),
     'calls_first_at', (select min(hour) from public.usage_hourly),
     'mau', jsonb_build_object(
+      'current', date_trunc('month', public.ts_game_today())::date,
       'months', coalesce((select jsonb_agg(jsonb_build_object('month', m, 'users', users) order by m)
                           from (select date_trunc('month', a.day)::date as m, count(distinct a.account_id) as users
                                   from public.user_daily_activity a
