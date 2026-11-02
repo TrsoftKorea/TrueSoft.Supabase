@@ -15,14 +15,14 @@ import { formatDateTime } from '../components/ui/format'
 type Kind = 'request' | 'function'
 type Feature = {
   kind: Kind; feature: string; calls: number; bytes: number; unsized: number
-  series: { at: string; calls: number; bytes: number }[]
+  series: { at: string; calls: number; bytes: number; unsized: number }[]
 }
 type Usage = {
   bucket_minutes: number
   features: Feature[]
   ccu: { at: string; total: number }[]
   calls_first_at: string | null
-  mau: { months: { month: string; users: number }[]; this_month: { day: string; users: number }[] }
+  mau: { current: string; months: { month: string; users: number }[]; this_month: { day: string; users: number }[] }
   sizes: { series: { day: string; db: number; storage: number }[]; db: number; storage: number }
   sync: { last_run_at: string | null; finished_at: string | null; ok: boolean | null; message: string | null } | null
 }
@@ -37,21 +37,30 @@ const RANGES = [
 type Tab = 'egress' | 'functions' | 'mau' | 'sizes'
 const TABS = [['egress', '데이터 전송량'], ['functions', '서버 함수 호출'], ['mau', '월간 활성 사용자'], ['sizes', '저장 용량']] as const
 
-/** 그래프 한 줄 — 기능 하나의 기간 합과 묶음마다의 값. 전송량은 바이트, 서버 함수 호출은 건수. */
-type Row = { feature: string; total: number; series: { at: string; v: number }[] }
+/**
+ * 그래프 한 줄 — 기능 하나의 기간 합과 묶음마다의 값. 전송량은 바이트, 서버 함수 호출은 건수.
+ * unsized 는 전송량에서만 — 크기를 몰라 바이트에 못 더한 건수다(0B 가 "안 나갔다"로 읽히지 않게 따로 보인다).
+ */
+type Row = { feature: string; total: number; unsized: number; series: { at: string; v: number; unsized: number }[] }
 
 /** 서버 함수만 고르거나(kind), 요청·서버 함수를 기능 이름으로 합친다(null). */
 function rowsOf(features: Feature[], kind: Kind | null, metric: 'calls' | 'bytes'): Row[] {
-  const byName = new Map<string, { total: number; at: Map<string, number> }>()
+  const withUnsized = metric === 'bytes'
+  const byName = new Map<string, { total: number; unsized: number; at: Map<string, { v: number; unsized: number }> }>()
   for (const f of features) {
     if (kind && f.kind !== kind) continue
-    const r = byName.get(f.feature) ?? { total: 0, at: new Map<string, number>() }
+    const r = byName.get(f.feature) ?? { total: 0, unsized: 0, at: new Map<string, { v: number; unsized: number }>() }
     r.total += f[metric]
-    for (const p of f.series) r.at.set(p.at, (r.at.get(p.at) ?? 0) + p[metric])
+    if (withUnsized) r.unsized += f.unsized
+    for (const p of f.series) {
+      const cur = r.at.get(p.at) ?? { v: 0, unsized: 0 }
+      r.at.set(p.at, { v: cur.v + p[metric], unsized: cur.unsized + (withUnsized ? p.unsized : 0) })
+    }
     byName.set(f.feature, r)
   }
   return [...byName.entries()].map(([feature, r]) => ({
-    feature, total: r.total, series: [...r.at.entries()].map(([at, v]) => ({ at, v })),
+    feature, total: r.total, unsized: r.unsized,
+    series: [...r.at.entries()].map(([at, p]) => ({ at, v: p.v, unsized: p.unsized })),
   }))
 }
 
@@ -107,11 +116,11 @@ function bucketLabel(minutes: number): string {
 
 /**
  * 묶음 하나가 실제로 덮은 시간 — 기간 앞뒤에서 잘린 묶음(지금 막 시작한 묶음·기록을 켠 날)도 시간당 값으로 그리려고 쓴다.
- * 끝은 지금 시간의 시작(아직 끝나지 않은 시간은 세지 않는다).
+ * 끝은 서버가 준 마지막 시간의 끝 — 서버는 끝난 시간만 주고, 매시 10분 전에는 직전 시간도 뺀다(그때 요청 수가 들어온다).
  */
 function coveredHours(at: string, minutes: number, windowStart: number, firstAt: string | null): number {
   const s = Math.max(new Date(at).getTime(), windowStart, firstAt ? new Date(firstAt).getTime() : 0)
-  const e = Math.min(new Date(at).getTime() + minutes * 60_000, Math.floor(Date.now() / HOUR) * HOUR)
+  const e = Math.min(new Date(at).getTime() + minutes * 60_000, Math.floor((Date.now() - 10 * 60_000) / HOUR) * HOUR)
   return Math.max(1, (e - s) / HOUR)
 }
 
@@ -263,7 +272,9 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
 }
 
 /** 기능별 값·비율. 색은 막대 그래프와 같게 기능 이름으로 정한다 — 고른 막대에서는 순서가 바뀌어도 색이 따라간다. */
-function ShareTable({ rows, metric, colorOf }: { rows: { feature: string; v: number }[]; metric: Metric; colorOf: (feature: string) => string }) {
+function ShareTable({ rows, metric, colorOf }: {
+  rows: { feature: string; v: number; unsized: number }[]; metric: Metric; colorOf: (feature: string) => string
+}) {
   const total = rows.reduce((a, f) => a + f.v, 0)
   const sorted = [...rows].sort((a, b) => b.v - a.v)
   return (
@@ -282,7 +293,10 @@ function ShareTable({ rows, metric, colorOf }: { rows: { feature: string; v: num
             return (
               <tr key={f.feature} className="border-t border-neutral-100">
                 <td className="px-4 py-2 text-neutral-800">{f.feature}</td>
-                <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{metric.text(f.v)}</td>
+                <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
+                  {f.v === 0 && f.unsized > 0 ? <span className="text-neutral-400">알 수 없음</span> : metric.text(f.v)}
+                  {f.unsized > 0 && <div className="text-[11px] text-neutral-400">크기 모름 {n(f.unsized)}건</div>}
+                </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
@@ -303,9 +317,9 @@ function ShareTable({ rows, metric, colorOf }: { rows: { feature: string; v: num
 }
 
 /** 기능별 카드 본문 — 막대·요약·표. 전송량 탭과 서버 함수 호출 탭이 같은 꼴을 쓴다. */
-function FeatureBreakdown({ rows, metric, data, hours, ccu, note, selectedAt, onSelect }: {
+function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect }: {
   rows: Row[]; metric: Metric; data: Usage; hours: number; ccu?: { at: string; total: number }[]
-  note?: string | null; selectedAt: string | null; onSelect: (at: string | null) => void
+  selectedAt: string | null; onSelect: (at: string | null) => void
 }) {
   if (rows.length === 0) {
     return <div className="h-44 flex items-center justify-center text-sm text-neutral-400">아직 기록이 없습니다.</div>
@@ -314,8 +328,11 @@ function FeatureBreakdown({ rows, metric, data, hours, ccu, note, selectedAt, on
   const colorOf = (feature: string) => slices.find((s) => s.name === groupOf(feature))?.color ?? REST_COLOR
   // 막대를 골랐으면 그 묶음의 값만, 아니면 기간 전체.
   const tableRows = selectedAt
-    ? rows.map((r) => ({ feature: r.feature, v: r.series.find((p) => p.at === selectedAt)?.v ?? 0 })).filter((r) => r.v > 0)
-    : rows.map((r) => ({ feature: r.feature, v: r.total }))
+    ? rows.map((r) => {
+        const p = r.series.find((s) => s.at === selectedAt)
+        return { feature: r.feature, v: p?.v ?? 0, unsized: p?.unsized ?? 0 }
+      }).filter((r) => r.v > 0 || r.unsized > 0)
+    : rows.map((r) => ({ feature: r.feature, v: r.total, unsized: r.unsized }))
   const total = tableRows.reduce((a, r) => a + r.v, 0)
   const top = [...tableRows].sort((a, b) => b.v - a.v)[0]
   return (
@@ -334,7 +351,6 @@ function FeatureBreakdown({ rows, metric, data, hours, ccu, note, selectedAt, on
         )}
       </div>
       <ShareTable rows={tableRows} metric={metric} colorOf={colorOf} />
-      {note && <div className="text-xs text-neutral-400">{note}</div>}
       {data.calls_first_at && new Date(data.calls_first_at).getTime() > Date.now() - hours * HOUR && (
         <div className="text-xs text-neutral-400">기록은 {formatAt(data.calls_first_at, true)}부터 있습니다.</div>
       )}
@@ -351,10 +367,10 @@ const ymd = (s: string) => s.slice(0, 10).split('-').map(Number) as [number, num
 const monthLabel = (s: string) => `${ymd(s)[1]}월`
 const dayLabel = (s: string) => `${ymd(s)[1]}/${ymd(s)[2]}`
 
-/** 최근 12달 — 기록이 없는 달은 0명으로 채워 막대 자리를 맞춘다. */
-function last12Months(months: { month: string; users: number }[]): { month: string; users: number }[] {
+/** 이번 달(게임 시간대)로 끝나는 최근 12달 — 기록이 없는 달은 0명으로 채워 막대 자리를 맞춘다. */
+function last12Months(current: string, months: { month: string; users: number }[]): { month: string; users: number }[] {
   const byKey = new Map(months.map((m) => [m.month.slice(0, 7), m.users]))
-  const last = months.length > 0 ? ymd(months[months.length - 1]!.month) : ymd(new Date().toISOString())
+  const last = ymd(current)
   const out: { month: string; users: number }[] = []
   for (let i = 11; i >= 0; i--) {
     const key = new Date(Date.UTC(last[0], last[1] - 1 - i, 1)).toISOString().slice(0, 7)
@@ -468,7 +484,7 @@ function SizeChart({ series }: { series: { day: string; db: number; storage: num
 function SyncLine({ data }: { data: Usage }) {
   const [open, setOpen] = useState(false)
   const s = data.sync
-  // 매시 5분에 돈다 — 두 시간 넘게 안 깨어났으면 멈춘 것이다(요청만 보내는 작업이라 실패 기록이 안 남는다).
+  // 매시 5분에 돈다 — 두 시간 넘게 안 깨어났으면 멈춘 것이다(수집이 실패를 삼켜 자동 작업 기록에는 성공으로 남는다).
   const stale = !s?.last_run_at || Date.now() - new Date(s.last_run_at).getTime() > 2 * HOUR + 10 * 60_000
   const problem = !s?.last_run_at ? '아직 한 번도 모으지 않았습니다'
     : stale ? '두 시간 넘게 모으지 못했습니다'
@@ -530,10 +546,9 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
 
   const usage = data?.usage
   const egressRows = useMemo(() => (usage ? rowsOf(usage.features, null, 'bytes') : []), [usage])
-  const unsized = usage ? usage.features.reduce((a, f) => a + f.unsized, 0) : 0
   const functionRows = useMemo(() => (usage ? rowsOf(usage.features, 'function', 'calls') : []), [usage])
 
-  const months12 = usage ? last12Months(usage.mau.months) : []
+  const months12 = usage ? last12Months(usage.mau.current, usage.mau.months) : []
   const thisMonth = months12[months12.length - 1]
   const lastMonth = months12[months12.length - 2]
   const peakMonth = months12.reduce<{ month: string; users: number } | undefined>((a, m) => (!a || m.users > a.users ? m : a), undefined)
@@ -582,7 +597,6 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
             <CardHeader title="데이터 전송량"
               description="플레이어에게 나간 데이터 양을 기능별로 어림해 동시접속자와 함께 봅니다. 막대를 누르면 그때의 값만 봅니다." />
             <FeatureBreakdown rows={egressRows} metric={BYTES} data={usage} hours={data.hours} ccu={usage.ccu}
-              note={unsized > 0 ? `기간 안에 크기를 모르는 요청 ${n(unsized)}건은 전송량에 빠져 있습니다.` : null}
               selectedAt={selectedAt} onSelect={setSelectedAt} />
           </WhiteCard>}
 
@@ -612,7 +626,9 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
               ...(sizeMonthAgo ? [{ label: '30일 사이 늘어난 DB', value: bytesText(Math.max(0, usage.sizes.db - sizeMonthAgo.db)) }] : []),
             ]} />
             {usage.sizes.series.length < 2 ? (
-              <div className="h-24 flex items-center justify-center text-sm text-neutral-400">아직 하루치 기록만 있습니다.</div>
+              <div className="h-24 flex items-center justify-center text-sm text-neutral-400">
+                {usage.sizes.series.length === 0 ? '아직 기록이 없습니다.' : '아직 하루치 기록만 있습니다.'}
+              </div>
             ) : (
               <SizeChart series={usage.sizes.series} />
             )}

@@ -227,7 +227,7 @@ function mockMau() {
     months.push({ month: m, users: Math.round(620 - k * 18 + hash(`mau:${m}`) * 140) })
   }
   months.push({ month: monthStart, users: this_month.reduce((a, d) => a + d.users, 0) })
-  return { months, this_month }
+  return { current: monthStart, months, this_month }
 }
 
 /** 저장 용량 날별 기록 120일 — DB 는 천천히 늘고 파일(문의 첨부 그림)은 가끔 늘어난다. */
@@ -253,11 +253,12 @@ function usageBucketStart(h: number, bucketMin: number): number {
 
 function usageStats(hours: number) {
   const bucketMin = hours <= 24 ? 60 : hours <= 24 * 7 ? 360 : 1440
-  const lastHour = Math.floor(Date.now() / HOUR) * HOUR - HOUR
+  // 서버와 같게 끝난 시간까지만 — 매시 10분 전에는 직전 시간도 뺀다.
+  const lastHour = Math.floor((Date.now() - 10 * 60_000) / HOUR) * HOUR - HOUR
   const firstHour = Math.floor((Date.now() - hours * HOUR) / HOUR) * HOUR + HOUR
   const ccu = new Map<number, number>()
   const calls = new Map<string, {
-    kind: string; feature: string; unsized: number; byAt: Map<number, { calls: number; bytes: number }>
+    kind: string; feature: string; unsized: number; byAt: Map<number, { calls: number; bytes: number; unsized: number }>
   }>()
   let lastHourRequests = 0
   for (let h = firstHour; h <= lastHour; h += HOUR) {
@@ -268,10 +269,10 @@ function usageStats(hours: number) {
     for (const [kind, rates] of [['request', MOCK_REQUEST_RATES], ['function', MOCK_FUNCTION_RATES]] as const) {
       for (const [feature, perPlayer, base, size] of rates) {
         const key = `${kind}:${feature}`
-        const f = calls.get(key) ?? { kind, feature, unsized: 0, byAt: new Map<number, { calls: number; bytes: number }>() }
+        const f = calls.get(key) ?? { kind, feature, unsized: 0, byAt: new Map<number, { calls: number; bytes: number; unsized: number }>() }
         const c = mockHourCalls(h, kind, feature, perPlayer, base)
-        const cur = f.byAt.get(b) ?? { calls: 0, bytes: 0 }
-        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * (size ?? 0) })
+        const cur = f.byAt.get(b) ?? { calls: 0, bytes: 0, unsized: 0 }
+        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * (size ?? 0), unsized: cur.unsized + (size === null ? c : 0) })
         if (size === null) f.unsized += c
         if (kind === 'request' && h === lastHour) lastHourRequests += c
         calls.set(key, f)
@@ -280,7 +281,8 @@ function usageStats(hours: number) {
   }
   const at = (ms: number) => new Date(ms).toISOString()
   const features = [...calls.values()].map((f) => {
-    const series = [...f.byAt.entries()].sort((a, b) => a[0] - b[0]).map(([b, v]) => ({ at: at(b), calls: v.calls, bytes: v.bytes }))
+    const series = [...f.byAt.entries()].sort((a, b) => a[0] - b[0])
+      .map(([b, v]) => ({ at: at(b), calls: v.calls, bytes: v.bytes, unsized: v.unsized }))
     return {
       kind: f.kind, feature: f.feature, unsized: f.unsized,
       calls: series.reduce((a, p) => a + p.calls, 0), bytes: series.reduce((a, p) => a + p.bytes, 0), series,
