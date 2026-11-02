@@ -199,13 +199,14 @@ function ccuStats(hours: number) {
 // ── 서버 상태 ── 끝난 시간마다 값이 하나씩. 접속자에 비례하는 몫(게임이 주기적으로 묻는 것)과 늘 비슷한 몫(운영 콘솔·
 // 자동 작업)을 더한다. 긴 기간의 점은 그 구간 시간 값의 합, 동시접속자는 같은 구간 5분 값의 최고치(동시접속자 화면과 같은 값).
 const HOUR = 3600_000
-// [기능, 접속자 1명당 시간당 건수, 늘 나오는 건수, 한 건 응답 크기(바이트)] — 전송량은 건수 × 크기라 기간과 무관하게 같다.
-const MOCK_REQUEST_RATES: [string, number, number, number][] = [
+// [기능, 접속자 1명당 시간당 건수, 늘 나오는 건수, 한 건 응답 크기(바이트) — null 은 크기를 모르는 것]
+// 전송량은 건수 × 크기라 기간과 무관하게 같다.
+const MOCK_REQUEST_RATES: [string, number, number, number | null][] = [
   ['원격 설정', 34, 0, 190], ['접속 관리', 33, 0, 60], ['매치 로비', 25, 0, 120], ['세이브', 3, 0, 2400], ['우편', 2, 1, 900],
-  ['채팅', 2, 0, 1500], ['리더보드', 1.5, 1, 3200], ['로그인', 0.6, 0, 1800], ['운영 콘솔', 0, 9, 2600], ['서버 설정', 0, 14, 80],
+  ['채팅', 2, 0, 1500], ['리더보드', 1.5, 1, null], ['운영 콘솔', 0, 9, 2600], ['서버 설정', 0, 14, 80],
 ]
-const MOCK_FUNCTION_RATES: [string, number, number, number][] = [
-  ['운영 콘솔', 0, 8, 4000], ['고객센터', 0.3, 1, 2200], ['푸시', 0.4, 0, 40], ['결제', 0.2, 0, 300], ['탈퇴', 0, 2, 60], ['사용량 수집', 0, 1, 20],
+const MOCK_FUNCTION_RATES: [string, number, number, number | null][] = [
+  ['운영 콘솔', 0, 8, 4000], ['고객센터', 0.3, 1, 2200], ['푸시', 0.4, 0, 40], ['결제', 0.2, 0, 300], ['탈퇴', 0, 2, 60],
 ]
 
 /**
@@ -255,7 +256,10 @@ function usageStats(hours: number) {
   const lastHour = Math.floor(Date.now() / HOUR) * HOUR - HOUR
   const firstHour = Math.floor((Date.now() - hours * HOUR) / HOUR) * HOUR + HOUR
   const ccu = new Map<number, number>()
-  const calls = new Map<string, { kind: string; feature: string; byAt: Map<number, { calls: number; bytes: number }> }>()
+  const calls = new Map<string, {
+    kind: string; feature: string; unsized: number; byAt: Map<number, { calls: number; bytes: number }>
+  }>()
+  let lastHourRequests = 0
   for (let h = firstHour; h <= lastHour; h += HOUR) {
     const b = usageBucketStart(h, bucketMin)
     let peak = ccu.get(b) ?? -1
@@ -264,10 +268,12 @@ function usageStats(hours: number) {
     for (const [kind, rates] of [['request', MOCK_REQUEST_RATES], ['function', MOCK_FUNCTION_RATES]] as const) {
       for (const [feature, perPlayer, base, size] of rates) {
         const key = `${kind}:${feature}`
-        const f = calls.get(key) ?? { kind, feature, byAt: new Map<number, { calls: number; bytes: number }>() }
+        const f = calls.get(key) ?? { kind, feature, unsized: 0, byAt: new Map<number, { calls: number; bytes: number }>() }
         const c = mockHourCalls(h, kind, feature, perPlayer, base)
         const cur = f.byAt.get(b) ?? { calls: 0, bytes: 0 }
-        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * size })
+        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * (size ?? 0) })
+        if (size === null) f.unsized += c
+        if (kind === 'request' && h === lastHour) lastHourRequests += c
         calls.set(key, f)
       }
     }
@@ -276,7 +282,7 @@ function usageStats(hours: number) {
   const features = [...calls.values()].map((f) => {
     const series = [...f.byAt.entries()].sort((a, b) => a[0] - b[0]).map(([b, v]) => ({ at: at(b), calls: v.calls, bytes: v.bytes }))
     return {
-      kind: f.kind, feature: f.feature,
+      kind: f.kind, feature: f.feature, unsized: f.unsized,
       calls: series.reduce((a, p) => a + p.calls, 0), bytes: series.reduce((a, p) => a + p.bytes, 0), series,
     }
   }).sort((a, b) => a.kind.localeCompare(b.kind) || b.calls - a.calls)
@@ -291,8 +297,7 @@ function usageStats(hours: number) {
     calls_first_at: recordedFrom,
     mau: mockMau(),
     sizes: mockSizes(),
-    sync: { last_run_at: at(runAt), finished_at: at(runAt + 4000), ok: true, message: '호출 수 1시간' },
-    has_token: true,
+    sync: { last_run_at: at(runAt), finished_at: at(runAt + 400), ok: true, message: `요청 ${lastHourRequests}건` },
   }
 }
 
@@ -715,7 +720,6 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APNS_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'GOOGLE_WEB_CLIENT_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T11:00:00+09:00', updatedBy: 'mock@local' },
       { key: 'APPLE_SERVICES_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
-      { key: 'SUPABASE_ACCESS_TOKEN', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), 0) + 'T10:30:00+09:00', updatedBy: 'mock@local' },
     ],
     services: mockServices,
   }),

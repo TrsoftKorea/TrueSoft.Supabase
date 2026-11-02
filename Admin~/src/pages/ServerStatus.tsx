@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronUp, Loader2, RefreshCw, Settings as SettingsIcon } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
@@ -14,7 +13,10 @@ import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
 import { formatDateTime } from '../components/ui/format'
 
 type Kind = 'request' | 'function'
-type Feature = { kind: Kind; feature: string; calls: number; bytes: number; series: { at: string; calls: number; bytes: number }[] }
+type Feature = {
+  kind: Kind; feature: string; calls: number; bytes: number; unsized: number
+  series: { at: string; calls: number; bytes: number }[]
+}
 type Usage = {
   bucket_minutes: number
   features: Feature[]
@@ -23,7 +25,6 @@ type Usage = {
   mau: { months: { month: string; users: number }[]; this_month: { day: string; users: number }[] }
   sizes: { series: { day: string; db: number; storage: number }[]; db: number; storage: number }
   sync: { last_run_at: string | null; finished_at: string | null; ok: boolean | null; message: string | null } | null
-  has_token: boolean
 }
 
 const RANGES = [
@@ -302,23 +303,12 @@ function ShareTable({ rows, metric, colorOf }: { rows: { feature: string; v: num
 }
 
 /** 기능별 카드 본문 — 막대·요약·표. 전송량 탭과 서버 함수 호출 탭이 같은 꼴을 쓴다. */
-function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect }: {
+function FeatureBreakdown({ rows, metric, data, hours, ccu, note, selectedAt, onSelect }: {
   rows: Row[]; metric: Metric; data: Usage; hours: number; ccu?: { at: string; total: number }[]
-  selectedAt: string | null; onSelect: (at: string | null) => void
+  note?: string | null; selectedAt: string | null; onSelect: (at: string | null) => void
 }) {
-  const navigate = useNavigate()
   if (rows.length === 0) {
-    return (
-      <div className="h-44 flex flex-col items-center justify-center gap-3 text-sm text-neutral-400">
-        <span>{data.has_token ? '아직 기록이 없습니다.' : '기록 읽기 토큰이 없습니다.'}</span>
-        {!data.has_token && (
-          <Button variant="outline" size="compact" onClick={() => navigate('/settings')}>
-            <SettingsIcon className="w-3.5 h-3.5" />
-            설정 열기
-          </Button>
-        )}
-      </div>
-    )
+    return <div className="h-44 flex items-center justify-center text-sm text-neutral-400">아직 기록이 없습니다.</div>
   }
   const { slices, groupOf } = slicesOf(rows)
   const colorOf = (feature: string) => slices.find((s) => s.name === groupOf(feature))?.color ?? REST_COLOR
@@ -344,6 +334,7 @@ function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect
         )}
       </div>
       <ShareTable rows={tableRows} metric={metric} colorOf={colorOf} />
+      {note && <div className="text-xs text-neutral-400">{note}</div>}
       {data.calls_first_at && new Date(data.calls_first_at).getTime() > Date.now() - hours * HOUR && (
         <div className="text-xs text-neutral-400">기록은 {formatAt(data.calls_first_at, true)}부터 있습니다.</div>
       )}
@@ -539,6 +530,7 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
 
   const usage = data?.usage
   const egressRows = useMemo(() => (usage ? rowsOf(usage.features, null, 'bytes') : []), [usage])
+  const unsized = usage ? usage.features.reduce((a, f) => a + f.unsized, 0) : 0
   const functionRows = useMemo(() => (usage ? rowsOf(usage.features, 'function', 'calls') : []), [usage])
 
   const months12 = usage ? last12Months(usage.mau.months) : []
@@ -590,6 +582,7 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
             <CardHeader title="데이터 전송량"
               description="플레이어에게 나간 데이터 양을 기능별로 어림해 동시접속자와 함께 봅니다. 막대를 누르면 그때의 값만 봅니다." />
             <FeatureBreakdown rows={egressRows} metric={BYTES} data={usage} hours={data.hours} ccu={usage.ccu}
+              note={unsized > 0 ? `기간 안에 크기를 모르는 요청 ${n(unsized)}건은 전송량에 빠져 있습니다.` : null}
               selectedAt={selectedAt} onSelect={setSelectedAt} />
           </WhiteCard>}
 

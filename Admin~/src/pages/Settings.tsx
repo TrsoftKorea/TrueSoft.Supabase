@@ -45,15 +45,14 @@ type StoreKeyStatus = {
  */
 type KeyGuide = { site: { name: string; url: string }; steps: string[]; notes?: string[] }
 
-type ServiceTab = 'store' | 'login' | 'push' | 'server'
-type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'google' | 'fcm' | 'apns' | 'supabase'
+type ServiceTab = 'store' | 'login' | 'push'
+type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'google' | 'fcm' | 'apns'
 type KeySet = 'iap' | 'apns'
 
 const SERVICE_TABS: readonly (readonly [ServiceTab, string])[] = [
   ['store', '스토어'],
   ['login', '로그인'],
   ['push', '푸시 알림'],
-  ['server', '서버 상태'],
 ]
 
 // 화면에 묶어 보이는 순서와 제목. 같은 묶음의 키는 STORE_KEYS 순서대로 나온다.
@@ -65,7 +64,6 @@ const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
   { id: 'google', tab: 'login', title: 'Google 로그인' },
   { id: 'fcm', tab: 'push', title: 'Firebase Cloud Messaging' },
   { id: 'apns', tab: 'push', title: 'Apple Push Notifications' },
-  { id: 'supabase', tab: 'server', title: 'Supabase' },
 ]
 
 // 한 화면에서 함께 가져오는 값들(같은 키의 ID·파일 등). 묶음 제목 아래에 그 키가 무엇인지 한 번 적는다.
@@ -322,24 +320,6 @@ const STORE_KEYS: StoreKeyDef[] = [
         'Services ID 목록의 "Identifier" 값을 복사합니다. 예: com.회사이름.게임이름.Services',
       ],
       notes: ['이 Services ID가 Supabase 대시보드 애플 로그인 설정의 "Client IDs"에 들어 있어야 로그인이 됩니다. 새로 만들었으면 맨 앞에 넣습니다.'],
-    },
-  },
-  // 서버 상태의 기능별 호출 수를 세는 토큰. 권한 이름("Logs"·"Read")과 토큰 앞머리(sbp_fc)는 Supabase 문서
-  // "Personal Access Tokens"(2026-11-02)로 확인했다. 토큰 화면의 단추 글자는 확인 못 함 — 다르면 그 화면 글자로 고친다.
-  {
-    key: 'SUPABASE_ACCESS_TOKEN', group: 'supabase', name: 'Access token', about: '이 프로젝트의 기록 읽기 권한만 준 개인 토큰',
-    required: true, hint: 'sbp_fc 로 시작하는 토큰을 넣습니다.',
-    guide: {
-      site: { name: 'Supabase › Access Tokens', url: 'https://supabase.com/dashboard/account/tokens' },
-      steps: [
-        'Supabase 계정 설정의 Access Tokens 화면에서 새 토큰을 만듭니다.',
-        '만들 때 이 게임의 프로젝트 하나만 고르고, 권한은 "Logs"의 "Read"만 줍니다.',
-        '만든 토큰을 복사합니다. sbp_fc 로 시작합니다.',
-      ],
-      notes: [
-        '권한을 고르는 칸이 보이지 않으면 계정에 아직 열리지 않은 기능입니다. Supabase 지원에 요청하면 열어 줍니다.',
-        '권한을 고르지 않은 토큰은 계정의 모든 프로젝트를 다룰 수 있어 받지 않습니다.',
-      ],
     },
   },
 ]

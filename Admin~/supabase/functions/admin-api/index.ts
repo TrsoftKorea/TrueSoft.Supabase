@@ -290,7 +290,28 @@ async function verifySecretHash(secret: string, stored: string): Promise<boolean
 
 const MIN_PASSWORD_LENGTH = 8;
 
+// ═══ BEGIN usage-count ═══ (Tools~/SdkAudit 가 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 운영 콘솔 "서버 상태"의 서버 함수 호출 수에 1 을 더한다. 응답을 기다리지 않고, 실패해도 이 함수의 동작에는 영향이 없다.
+// 미리 거치는 OPTIONS 요청은 Supabase 요금도 세지 않아 빼고 센다.
+function countCall(name: string, req: Request): void {
+  if (req.method === "OPTIONS") return;
+  try {
+    const key = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default ?? "";
+    const done = fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/ts_usage_count_call`, {
+      method: "POST",
+      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_name: name }),
+    }).then((r) => r.body?.cancel()).catch(() => {});
+    // 응답을 돌려준 뒤에도 이 요청이 끝날 때까지 함수가 살아 있게 한다.
+    (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(done);
+  } catch {
+    // 세기 실패는 무시한다.
+  }
+}
+// ═══ END usage-count ═══
+
 Deno.serve(async (req) => {
+  countCall("admin-api", req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return fail("method_not_allowed", 405);
 
@@ -460,8 +481,6 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APNS_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
   GOOGLE_WEB_CLIENT_ID: (v) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v),
   APPLE_SERVICES_ID: (v) => /^[A-Za-z0-9.-]+$/.test(v),
-  // 권한을 좁힌 개인 토큰(sbp_fc…)만 받는다 — 계정 전체 권한 토큰이 들어가면 이 서버가 계정의 모든 프로젝트를 다룰 수 있다.
-  SUPABASE_ACCESS_TOKEN: (v) => /^sbp_fc[A-Za-z0-9_]+$/.test(v),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -479,7 +498,6 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APNS_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
   GOOGLE_WEB_CLIENT_ID: "클라이언트 ID 는 숫자-영문.apps.googleusercontent.com 꼴입니다.",
   APPLE_SERVICES_ID: "Services ID 는 영문·숫자·점·하이픈만 씁니다.",
-  SUPABASE_ACCESS_TOKEN: "권한을 좁힌 토큰(sbp_fc 로 시작)만 넣을 수 있습니다. 계정 전체 권한 토큰은 받지 않습니다.",
 };
 
 async function handleAction(
@@ -1215,7 +1233,7 @@ async function handleAction(
       // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
       case "settings.setServiceEnabled": {
         const service = str(params, "service");
-        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google", "supabase"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google"].includes(service)) throw new Error("모르는 서비스입니다.");
         if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
         const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
         if (error) throw new Error(error.message);
