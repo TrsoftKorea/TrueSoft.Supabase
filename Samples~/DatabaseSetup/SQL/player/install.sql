@@ -4113,10 +4113,13 @@ as $$
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
                'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY',
                'FCM_SERVICE_ACCOUNT_JSON', 'APNS_KEY_ID', 'APNS_PRIVATE_KEY',
-               'GOOGLE_WEB_CLIENT_ID', 'APPLE_SERVICES_ID', 'SUPABASE_ACCESS_TOKEN'];
+               'GOOGLE_WEB_CLIENT_ID', 'APPLE_SERVICES_ID'];
 $$;
 
 revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
+
+-- 사용량을 기록 조회로 모으던 때 넣던 Supabase 기록 읽기 토큰 — 이제 안 쓴다. 남은 값을 지운다.
+delete from vault.secrets where name = 'ts_cfg:SUPABASE_ACCESS_TOKEN';
 
 create or replace function public.ts_server_config_get()
 returns jsonb
@@ -4210,8 +4213,10 @@ create table if not exists public.server_config_services (
 );
 -- 묶음 목록은 콘솔 화면(STORE_GROUPS)·admin-api 와 같다. 이미 설치된 곳의 옛 제약을 갈아 끼운다.
 alter table public.server_config_services drop constraint if exists server_config_services_service_check;
+-- 'supabase'(사용량 기록 조회 토큰)는 사용량을 DB 실행 횟수로 세게 되면서 뺐다.
+delete from public.server_config_services where service = 'supabase';
 alter table public.server_config_services add constraint server_config_services_service_check
-  check (service in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns', 'supabase'));
+  check (service in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns'));
 alter table public.server_config_services enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.server_config_services from anon, authenticated;
@@ -4233,7 +4238,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns', 'supabase') or p_enabled is null then
+  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns') or p_enabled is null then
     raise exception 'server_config_service_invalid: %', p_service;
   end if;
   insert into public.server_config_services (service, enabled, updated_at, updated_by)
@@ -4352,7 +4357,7 @@ create policy remote_config_all_service_role
 -- · 그 결과 확인              매시 15분  ts_withdrawal_overdue_check()
 -- · 실행 기록 정리            매일 03:40  cron.job_run_details 7일치만 남김
 -- · 동시접속자 기록          5분마다     ts_ccu_snapshot() → ccu_snapshots(90일 보관) + ccu_daily(일별 요약, 영구)
--- · Supabase 사용량 기록    매시 05분   ts_usage_sync_kick() → 엣지 함수 usage-sync → usage_hourly·usage_size_daily(영구)
+-- · Supabase 사용량 기록    매시 05분   ts_usage_collect() → usage_hourly·usage_size_daily(영구)
 -- (시각은 모두 UTC)
 --
 -- =============================================================================
@@ -4751,36 +4756,73 @@ select cron.schedule(
   'select public.ts_ccu_snapshot()'
 );
 
--- 7. Supabase 사용량 기록 — 매시 5분. 엣지 함수 usage-sync 가 지난 시간의 사용량을 시간 단위로 남긴다(영구 보관).
---    · 요청·서버 함수 호출 수와 응답 크기 — Supabase 기록(로그)을 Management API 로 끝난 시간마다 세어 대상(주소·함수)별로
---      남긴다. 기록 읽기 토큰(서버 연결값 SUPABASE_ACCESS_TOKEN)이 있어야 한다. 기록은 오래 남지 않아 밀린 시간은 24시간까지만 메운다.
---      전송량은 이 응답 크기로 어림한다(ts_admin_usage). 서버 지표(Metrics API)의 송신 바이트는 접속자가 없어도 시간당
---      수 MB 가 나가는 DB 서버 자체의 송신이라 쓰지 않는다(2026-11-02 실측).
+-- 7. Supabase 사용량 기록 — 매시 5분 ts_usage_collect(). 지난 시간의 사용량을 시간 단위로 남긴다(영구 보관).
+--    · 요청 수 — DB 가 쿼리마다 세어 두는 실행 횟수(pg_stat_statements)의 누계를 매번 읽어 직전과의 차이를 대상(표·DB 함수)별로
+--      남긴다. 게임·콘솔·서버 함수의 데이터 요청은 모두 PostgREST 를 거쳐 'WITH pgrst_' 로 시작하는 쿼리 하나가 되므로 그것만
+--      센다. 로그인·파일 저장소 요청은 PostgREST 를 안 거쳐 빠진다. 쿼리 종류가 5000 을 넘으면 드물게 쓰인 것부터 밀려나
+--      그 사이 몫이 빠질 수 있다.
+--    · 서버 함수 호출 수 — 함수마다 맨 앞에서 ts_usage_count_call 로 1 씩 더한다(공통 구간 usage-count).
+--    · 전송량은 쌓을 때 어림해 둔다 — 표 읽기는 건수 × 그 표 한 줄 크기(PostgREST 응답이 한 줄로 묶여 기록돼 실제 줄 수는
+--      모른다), 쓰기는 0, DB 함수·서버 함수는 건수 × usage_target_size 의 잰 크기. 크기를 모르면 unsized 로 따로 센다.
+--    Supabase 기록(로그) 조회는 쓰지 않는다 — 1시간 범위 한 번에 0.17~0.34GB 를 읽어, 매시간 돌리면 게임 하나가 무료 한도를
+--    넘긴다(2026-11-02 실측).
 --    기능 묶음은 ts_usage_feature 가 대상 이름으로 정한다 — 묶음을 바꾸면 쌓인 기록도 그대로 다시 묶인다.
---    3번과 같이 project_url 이 필요하고, 없으면 실패로 끝내 "자동 작업" 화면에 보이게 한다.
 create table if not exists public.usage_hourly (
-  hour   timestamptz not null,
-  kind   text        not null check (kind in ('request', 'function')),
-  target text        not null,            -- 요청은 '/rest/v1/rpc/ts_mail_claim' 꼴, 함수는 함수 이름
-  calls  bigint      not null,
-  bytes  bigint      not null default 0,  -- 응답 크기가 기록에 남은 것들의 크기 합(조각으로 나눠 보낸 응답은 크기가 빈다)
-  sized  bigint      not null default 0,  -- 그 건수 — 빈 응답의 크기는 ts_admin_usage 가 기능별 평균으로 채운다
+  hour    timestamptz not null,
+  kind    text        not null check (kind in ('request', 'function')),
+  target  text        not null,            -- 요청은 표·DB 함수 이름, 서버 함수는 함수 이름
+  calls   bigint      not null,
+  bytes   bigint      not null default 0,  -- 어림 전송량
+  unsized bigint      not null default 0,  -- 그중 크기를 몰라 전송량에 못 넣은 건수
   primary key (hour, kind, target)
 );
 alter table public.usage_hourly add column if not exists bytes bigint not null default 0;
-alter table public.usage_hourly add column if not exists sized bigint not null default 0;
+alter table public.usage_hourly add column if not exists unsized bigint not null default 0;
 alter table public.usage_hourly enable row level security;
--- [의도적] 정책 없음 — usage-sync(service_role)가 쓰고 운영 콘솔이 ts_admin_usage 로만 읽는다.
+-- [의도적] 정책 없음 — 아래 함수들이 쓰고 운영 콘솔이 ts_admin_usage 로만 읽는다.
 revoke all on table public.usage_hourly from anon, authenticated;
 
--- 서버 지표로 재던 전송량 — 플레이어 몫이 아니어서 뺐다(위 설명). 이미 설치된 곳에서 걷어 낸다.
-drop function if exists public.ts_usage_add_egress(timestamptz, bigint, integer);
-drop table if exists public.usage_egress_hourly;
+-- DB 함수·서버 함수 응답 한 건의 크기. 기록 조회로 재서 넣는다(콘솔 화면은 없다). 표 읽기는 그때그때 표 한 줄을 재므로 여기 없다.
+create table if not exists public.usage_target_size (
+  target      text        primary key,
+  size        numeric     not null,
+  sample      bigint      not null,      -- 잰 응답 수 — 적으면 믿기 어렵다
+  measured_at timestamptz not null default now()
+);
+alter table public.usage_target_size enable row level security;
+-- [의도적] 정책 없음 — ts_usage_collect·ts_usage_count_call 이 읽는다.
+revoke all on table public.usage_target_size from anon, authenticated;
+
+-- 기록(로그) 조회로 모으던 때의 칸(sized: 크기가 남은 건수)에서 잰 크기를 옮기고 걷어 낸다. 이미 설치된 곳에서만 돈다.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'usage_hourly' and column_name = 'sized') then
+    execute $q$
+      insert into public.usage_target_size (target, size, sample, measured_at)
+      select regexp_replace(target, '^.*/', ''), sum(bytes)::numeric / sum(sized), sum(sized), max(hour)
+        from public.usage_hourly where sized > 0
+       group by 1
+      on conflict (target) do nothing$q$;
+    execute 'update public.usage_hourly set unsized = greatest(calls - sized, 0) where sized < calls';
+    execute 'alter table public.usage_hourly drop column sized';
+  end if;
+end $$;
+
+-- 직전 누계. 처음 실행은 기준만 남기고 세지 않는다 — 그때까지 몇 달 치 쌓인 누계가 한 시간에 몰리지 않게.
+create table if not exists public.usage_stmt_last (
+  userid  oid    not null,
+  queryid bigint not null,
+  calls   bigint not null,
+  primary key (userid, queryid)
+);
+alter table public.usage_stmt_last enable row level security;
+-- [의도적] 정책 없음 — ts_usage_collect 전용.
+revoke all on table public.usage_stmt_last from anon, authenticated;
 
 -- 수집 상태 1행. 깨어난 시각(last_run_at)은 시작할 때 남긴다 — 끝까지 못 가도 돌았는지는 보인다.
 create table if not exists public.usage_sync_state (
   id           boolean     primary key default true check (id),
-  logs_until   timestamptz,             -- 이 시각 전의 시간은 기록을 세어 두었다
   last_run_at  timestamptz,
   finished_at  timestamptz,
   last_ok      boolean,
@@ -4788,60 +4830,21 @@ create table if not exists public.usage_sync_state (
 );
 alter table public.usage_sync_state drop column if exists metric_at;
 alter table public.usage_sync_state drop column if exists metric_bytes;
+alter table public.usage_sync_state drop column if exists logs_until;
 alter table public.usage_sync_state enable row level security;
--- [의도적] 정책 없음 — usage-sync 전용.
+-- [의도적] 정책 없음 — ts_usage_collect 전용.
 revoke all on table public.usage_sync_state from anon, authenticated;
 
--- 시작 표시 — 앞 실행 뒤 p_min_gap_seconds 가 안 지났으면 null(겹쳐 돌면 같은 시간을 두 번 센다). 지났으면 상태 행.
-create or replace function public.ts_usage_sync_start(p_min_gap_seconds int)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_row public.usage_sync_state;
-begin
-  insert into public.usage_sync_state (id) values (true) on conflict (id) do nothing;
-  update public.usage_sync_state s
-     set last_run_at = now()
-   where s.id
-     and (s.last_run_at is null or s.last_run_at < now() - make_interval(secs => greatest(coalesce(p_min_gap_seconds, 0), 0)))
-  returning * into v_row;
-  if not found then
-    return null;
-  end if;
-  return to_jsonb(v_row);
-end;
-$$;
-
-revoke all on function public.ts_usage_sync_start(int) from public, anon, authenticated;
-grant execute on function public.ts_usage_sync_start(int) to service_role;
-
--- 끝 표시 — logs_until 을 null 로 넘기면 그대로 둔다(그 단계를 건너뛴 실행이 앞 값을 지우지 않게).
+-- 기록 조회·서버 지표로 모으던 때의 것 — 이미 설치된 곳에서 걷어 낸다.
+drop function if exists public.ts_usage_add_egress(timestamptz, bigint, integer);
+drop table if exists public.usage_egress_hourly;
+drop function if exists public.ts_usage_sync_start(int);
 drop function if exists public.ts_usage_sync_finish(boolean, text, timestamptz, numeric, timestamptz);
-create or replace function public.ts_usage_sync_finish(
-  p_ok         boolean,
-  p_message    text,
-  p_logs_until timestamptz default null)
-returns void
-language sql
-security definer
-set search_path = public
-as $$
-  update public.usage_sync_state
-     set finished_at  = now(),
-         last_ok      = p_ok,
-         last_message = p_message,
-         logs_until   = coalesce(p_logs_until, logs_until)
-   where id;
-$$;
-
-revoke all on function public.ts_usage_sync_finish(boolean, text, timestamptz) from public, anon, authenticated;
-grant execute on function public.ts_usage_sync_finish(boolean, text, timestamptz) to service_role;
+drop function if exists public.ts_usage_sync_finish(boolean, text, timestamptz);
+drop function if exists public.ts_usage_sync_kick();
 
 -- 저장 용량(DB 크기·파일 저장 공간)의 날별 기록 — 요금이 용량으로 붙는 항목이라 흐름을 남긴다. 영구 보관.
--- 날짜는 게임 시간대. usage-sync 가 깨어날 때마다 그날 줄을 지금 값으로 덮어쓰므로 그날 마지막 값이 남는다.
+-- 날짜는 게임 시간대. 수집이 깨어날 때마다 그날 줄을 지금 값으로 덮어쓰므로 그날 마지막 값이 남는다.
 create table if not exists public.usage_size_daily (
   day           date        primary key,
   db_bytes      bigint      not null,
@@ -4849,7 +4852,7 @@ create table if not exists public.usage_size_daily (
   at            timestamptz not null default now()
 );
 alter table public.usage_size_daily enable row level security;
--- [의도적] 정책 없음 — usage-sync 가 아래 함수로 쓰고 운영 콘솔이 ts_admin_usage 로만 읽는다.
+-- [의도적] 정책 없음 — 아래 함수로 쓰고 운영 콘솔이 ts_admin_usage 로만 읽는다.
 revoke all on table public.usage_size_daily from anon, authenticated;
 
 create or replace function public.ts_usage_record_size()
@@ -4865,11 +4868,10 @@ as $$
     set db_bytes = excluded.db_bytes, storage_bytes = excluded.storage_bytes, at = excluded.at;
 $$;
 
-revoke all on function public.ts_usage_record_size() from public, anon, authenticated;
-grant execute on function public.ts_usage_record_size() to service_role;
+revoke all on function public.ts_usage_record_size() from public, anon, authenticated, service_role;
 
--- 대상(주소·함수 이름)을 기능 묶음 이름으로. 위에서부터 처음 맞는 것 — 운영 콘솔(ts_admin_…·admin-…)을 먼저 걸러
--- 플레이어 몫과 섞이지 않게 한다. 새 기능을 더하면 여기에 한 줄 더한다(없으면 "기타").
+-- 대상(표·DB 함수·서버 함수 이름)을 기능 묶음 이름으로. 위에서부터 처음 맞는 것 — 운영 콘솔(ts_admin_…·admin-…)을 먼저
+-- 걸러 플레이어 몫과 섞이지 않게 한다. 새 기능을 더하면 여기에 한 줄 더한다(없으면 "기타").
 create or replace function public.ts_usage_feature(p_kind text, p_target text)
 returns text
 language sql
@@ -4880,7 +4882,7 @@ as $$
     when p_kind = 'request' and p_target like '/storage/%'  then '파일'
     when p_kind = 'request' and p_target like '/realtime/%' then '실시간'
     when n ~ '^(ts_admin_|ts_schema|admin-)'                then '운영 콘솔'
-    when n ~ '^usage-sync$'                                 then '사용량 수집'
+    when n ~ '^(usage-sync$|ts_usage_)'                     then '사용량 수집'
     when n ~ 'remote_config'                                then '원격 설정'
     when n ~ '^(user_sessions|ts_session_|ts_after_sign_in|ts_record_daily_activity|ts_anon_recovery)' then '접속 관리'
     when n ~ '^(user_data|ts_ensure_my_row)'                then '세이브'
@@ -4906,30 +4908,134 @@ $$;
 
 revoke all on function public.ts_usage_feature(text, text) from public, anon, authenticated;
 
-create or replace function public.ts_usage_sync_kick()
+-- 서버 함수가 불릴 때마다 그 시간 줄에 1 을 더한다. 전송량은 잰 크기가 있으면 함께 더한다.
+create or replace function public.ts_usage_count_call(p_name text)
 returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into public.usage_hourly as u (hour, kind, target, calls, bytes, unsized)
+  select date_trunc('hour', now()), 'function', left(coalesce(p_name, ''), 100), 1,
+         coalesce(round(s.size), 0), case when s.size is null then 1 else 0 end
+    from (select 1) one
+    left join public.usage_target_size s on s.target = left(coalesce(p_name, ''), 100)
+  on conflict (hour, kind, target) do update
+    set calls = u.calls + 1, bytes = u.bytes + excluded.bytes, unsized = u.unsized + excluded.unsized;
+$$;
+
+revoke all on function public.ts_usage_count_call(text) from public, anon, authenticated;
+grant execute on function public.ts_usage_count_call(text) to service_role;
+
+-- 표 한 줄을 응답 꼴(JSON)로 만든 크기의 평균 — 앞 200줄로 잰다. 게임이 일부 칸만 읽으면 실제보다 크게 잡힌다.
+create or replace function public.ts_usage_row_size(p_table text)
+returns numeric
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_url text;
+  v numeric;
 begin
-  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
-  if v_url is null or btrim(v_url) = '' then
-    raise exception 'project_url_missing — Vault 에 project_url 을 등록해야 사용량을 모읍니다';
-  end if;
-  -- 함수 쪽이 5분 안의 재호출을 건너뛰므로 인증 없이 부른다(verify_jwt 끔).
-  perform net.http_post(
-    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/usage-sync',
-    body                 := '{}'::jsonb,
-    headers              := '{"Content-Type": "application/json"}'::jsonb,
-    timeout_milliseconds := 120000);
+  execute format('select avg(octet_length(row_to_json(t)::text)) from (select * from public.%I limit 200) t', p_table) into v;
+  return coalesce(v, 0);
 end;
 $$;
 
-comment on function public.ts_usage_sync_kick() is 'Supabase 사용량 기록 엣지 함수를 부른다. cron 이 매시 5분에 부른다.';
-revoke all on function public.ts_usage_sync_kick() from public, anon, authenticated;
+revoke all on function public.ts_usage_row_size(text) from public, anon, authenticated;
+
+-- 매시 5분. 저장 용량을 남기고, 실행 횟수 누계의 직전과의 차이를 지난 시간 줄로 남긴다.
+create or replace function public.ts_usage_collect()
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hour  timestamptz := date_trunc('hour', now()) - interval '1 hour';
+  v_first boolean;
+  v_calls bigint := 0;
+begin
+  insert into public.usage_sync_state (id) values (true) on conflict (id) do nothing;
+  update public.usage_sync_state set last_run_at = now() where id;
+
+  -- 아래가 실패해도 깨어난 시각은 남고, 실패는 같은 트랜잭션 안에서 상태 행에 적는다(콘솔 서버 상태가 보인다).
+  begin
+    perform public.ts_usage_record_size();
+
+    v_first := not exists (select 1 from public.usage_stmt_last);
+
+    create temp table _usage_cur on commit drop as
+    select s.userid, s.queryid, sum(s.calls)::bigint as calls,
+           coalesce(min(substring(s.query from '"public"\."([A-Za-z0-9_]+)"')), '(알 수 없음)') as target,
+           bool_or(s.query ~* '^WITH pgrst_source AS \(\s*(INSERT|UPDATE|DELETE)') as is_write
+      from extensions.pg_stat_statements s
+     where s.toplevel
+       and s.dbid = (select oid from pg_database where datname = current_database())
+       and s.query like 'WITH pgrst\_%'
+     group by s.userid, s.queryid;
+
+    if not v_first then
+      select coalesce(sum(case when l.calls is null or c.calls < l.calls then c.calls else c.calls - l.calls end), 0)
+        into v_calls
+        from _usage_cur c
+        left join public.usage_stmt_last l on l.userid = c.userid and l.queryid = c.queryid;
+
+      with delta as (
+        -- 누계가 줄었으면(통계 초기화) 지금 값 전부가 그 사이 몫이다. 처음 보는 쿼리도 지금 값 전부.
+        select c.target, c.is_write,
+               case when l.calls is null or c.calls < l.calls then c.calls else c.calls - l.calls end as calls
+          from _usage_cur c
+          left join public.usage_stmt_last l on l.userid = c.userid and l.queryid = c.queryid
+      ),
+      per_target as (
+        select target,
+               sum(calls) as calls,
+               sum(calls) filter (where not is_write) as reads
+          from delta
+         group by target
+        having sum(calls) > 0
+      ),
+      sized as (
+        select p.target, p.calls,
+               case
+                 when coalesce(p.reads, 0) = 0 then 0
+                 when to_regclass('public.' || quote_ident(p.target)) is not null
+                   then round(p.reads * public.ts_usage_row_size(p.target))
+                 else round(p.reads * coalesce(z.size, 0))
+               end as bytes,
+               case
+                 when coalesce(p.reads, 0) > 0
+                  and to_regclass('public.' || quote_ident(p.target)) is null
+                  and z.size is null then p.reads
+                 else 0
+               end as unsized
+          from per_target p
+          left join public.usage_target_size z on z.target = p.target
+      )
+      insert into public.usage_hourly as u (hour, kind, target, calls, bytes, unsized)
+      select v_hour, 'request', target, calls, bytes, unsized from sized
+      on conflict (hour, kind, target) do update
+        set calls = u.calls + excluded.calls, bytes = u.bytes + excluded.bytes, unsized = u.unsized + excluded.unsized;
+    end if;
+
+    delete from public.usage_stmt_last;
+    insert into public.usage_stmt_last (userid, queryid, calls) select userid, queryid, calls from _usage_cur;
+
+    update public.usage_sync_state
+       set finished_at = now(), last_ok = true,
+           last_message = case when v_first then '요청 수 기준값 저장' else format('요청 %s건', v_calls) end
+     where id;
+  exception when others then
+    update public.usage_sync_state
+       set finished_at = now(), last_ok = false, last_message = left(sqlerrm, 1000)
+     where id;
+  end;
+end;
+$$;
+
+comment on function public.ts_usage_collect() is 'Supabase 사용량 기록 — 저장 용량과 지난 시간의 요청 수·어림 전송량. cron 이 매시 5분에 부른다.';
+revoke all on function public.ts_usage_collect() from public, anon, authenticated;
 
 do $$
 begin
@@ -4940,7 +5046,7 @@ end $$;
 select cron.schedule(
   'usage-sync',
   '5 * * * *',
-  'select public.ts_usage_sync_kick()'
+  'select public.ts_usage_collect()'
 );
 
 -- ---------------------------------------------------------------------------
@@ -9344,14 +9450,12 @@ as $$
 $$;
 
 -- 콘솔 "서버 상태" — 최근 p_hours 시간의 Supabase 사용량. 묶음 크기는 24시간 1시간 · 7일 6시간 · 그 이상 하루(게임 시간대).
---   features 기능 묶음별 요청 수·서버 함수 호출 수와 어림 전송량(기간 합)과 묶음마다의 값 — 지분 표와 쌓은 막대에 쓴다.
---            전송량 = 기록에 남은 응답 크기 + 크기가 빈 응답 수 × 그 기능의 평균 크기. 평균은 기간과 무관하게 쌓인 기록
---            전체로 낸다(같은 시간이 기간마다 다른 값이 되지 않게). 크기가 한 번도 안 남은 기능은 원격 설정이면 지금 설정
---            한 줄의 응답 크기, 아니면 같은 종류 전체 평균. 압축 여부는 모른다 — 기능끼리 견주는 값이다.
+--   features 기능 묶음별 요청 수·서버 함수 호출 수와 어림 전송량·크기를 몰라 뺀 건수(기간 합)와 묶음마다의 값 — 지분 표와
+--            쌓은 막대에 쓴다. 전송량은 쌓을 때 어림해 둔 값이다(9절 7. 사용량 기록). 압축 여부는 모른다 — 기능끼리 견주는 값이다.
 --   ccu      같은 묶음의 동시접속자 최고치
 --   mau      달마다 한 번이라도 접속한 계정 수(최근 12달, 게임 시간대 달력)와 이번 달 날마다 처음 들어온 계정 수 — 기간과 무관
 --   sizes    저장 용량 날별 기록(최근 1년)과 지금 값 — 기간과 무관
---   sync     수집이 마지막으로 깨어난 때·결과, 기록 읽기 토큰이 들어 있는지
+--   sync     수집이 마지막으로 깨어난 때·결과
 create or replace function public.ts_admin_usage(p_hours integer)
 returns jsonb
 language sql
@@ -9374,25 +9478,6 @@ as $$
            case when b.minutes = 1440 then 'day' else 'bin' end as mode
     from bucket b
   ),
-  avg_feature as (
-    select u.kind, public.ts_usage_feature(u.kind, u.target) as feature,
-           sum(u.bytes)::numeric / nullif(sum(u.sized), 0) as size
-    from public.usage_hourly u
-    group by 1, 2
-  ),
-  avg_kind as (
-    select u.kind, sum(u.bytes)::numeric / nullif(sum(u.sized), 0) as size
-    from public.usage_hourly u
-    group by 1
-  ),
-  -- 원격 설정은 응답이 늘 조각으로 나가 크기가 안 남는다 — 게임이 받는 칸 그대로 한 줄을 만들어 잰다.
-  -- 한 요청에 키가 여럿이면 실제보다 작게 잡힌다.
-  rc_size as (
-    select avg(octet_length(json_build_array(json_build_object(
-             'key', r.key, 'value_json', r.value_json, 'updated_at', r.updated_at, 'version', r.version,
-             'enabled', r.enabled, 'description', r.description, 'requires_auth', r.requires_auth))::text))::numeric as size
-    from public.remote_config r
-  ),
   ccu as (
     select case when k.mode = 'day'
                 then ((c.at at time zone public.ts_game_time_zone())::date)::timestamp at time zone public.ts_game_time_zone()
@@ -9410,23 +9495,18 @@ as $$
     select case when k.mode = 'day'
                 then ((u.hour at time zone public.ts_game_time_zone())::date)::timestamp at time zone public.ts_game_time_zone()
                 else date_bin(make_interval(mins => k.minutes), u.hour, timestamptz '2000-01-01') end as at,
-           u.kind, x.feature, sum(u.calls) as calls,
-           round(sum(u.bytes + greatest(u.calls - u.sized, 0)
-                     * coalesce(af.size, case when x.feature = '원격 설정' then (select size from rc_size) end, ak.size, 0))) as bytes
-    from public.usage_hourly u
-    cross join keyed k
-    cross join lateral (select public.ts_usage_feature(u.kind, u.target) as feature) x
-    left join avg_feature af on af.kind = u.kind and af.feature = x.feature
-    left join avg_kind ak on ak.kind = u.kind
+           u.kind, public.ts_usage_feature(u.kind, u.target) as feature,
+           sum(u.calls) as calls, sum(u.bytes) as bytes, sum(u.unsized) as unsized
+    from public.usage_hourly u, keyed k
     where u.hour >= k.since
     group by 1, 2, 3
   )
   select jsonb_build_object(
     'bucket_minutes', (select minutes from bucket),
     'features', coalesce((select jsonb_agg(jsonb_build_object('kind', kind, 'feature', feature, 'calls', total, 'bytes', total_bytes,
-                                                              'series', series)
+                                                              'unsized', total_unsized, 'series', series)
                                            order by kind, total desc)
-                          from (select kind, feature, sum(calls) as total, sum(bytes) as total_bytes,
+                          from (select kind, feature, sum(calls) as total, sum(bytes) as total_bytes, sum(unsized) as total_unsized,
                                        jsonb_agg(jsonb_build_object('at', at, 'calls', calls, 'bytes', bytes) order by at) as series
                                   from calls group by kind, feature) f), '[]'::jsonb),
     'ccu', coalesce((select jsonb_agg(jsonb_build_object('at', c.at, 'total', c.total) order by c.at) from ccu c), '[]'::jsonb),
@@ -9451,8 +9531,7 @@ as $$
       'storage', (select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects)),
     'sync', (select jsonb_build_object('last_run_at', s.last_run_at, 'finished_at', s.finished_at,
                                        'ok', s.last_ok, 'message', s.last_message)
-               from public.usage_sync_state s where s.id),
-    'has_token', exists (select 1 from vault.secrets where name = 'ts_cfg:SUPABASE_ACCESS_TOKEN')
+               from public.usage_sync_state s where s.id)
   );
 $$;
 
