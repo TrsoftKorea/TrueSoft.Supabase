@@ -68,9 +68,10 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `get-ban-info` | 인증 · 차단된 계정 정보 조회 |
 | `support-api` | 고객센터 · 문의 창 |
 | `push-send` | 푸시 알림 · 대기 중인 알림 보내기 |
+| `usage-sync` | 운영 콘솔 · 서버 상태에 쓰는 사용량 기록 |
 
-::: warning 여섯 함수는 Verify JWT를 끕니다
-`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`·`push-send`는 DB 정기 작업이 로그인 없이 부릅니다. `support-api`는 차단돼 로그인할 수 없는 플레이어도 문의할 수 있도록 함수가 직접 본인을 확인합니다. 여섯 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않고, 푸시 알림이 나가지 않습니다.
+::: warning 일곱 함수는 Verify JWT를 끕니다
+`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`·`push-send`·`usage-sync`는 DB 정기 작업이 로그인 없이 부릅니다. `support-api`는 차단돼 로그인할 수 없는 플레이어도 문의할 수 있도록 함수가 직접 본인을 확인합니다. 일곱 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않고, 푸시 알림이 나가지 않고, 운영 콘솔 서버 상태에 사용량이 쌓이지 않습니다.
 :::
 
 ## 4. 서비스 연결값 입력 {#secrets}
@@ -93,6 +94,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Private&nbsp;key | `APPLE_PRIVATE_KEY` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Services&nbsp;ID | `APPLE_SERVICES_ID` | 선택 | 게임 애플 로그인에 쓰는 Services ID. 넣으면 [게임 밖 고객센터](/guide/customer-center/#web)에 애플 로그인 단추가 보입니다 |
 | 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;클라이언트&nbsp;ID | `GOOGLE_WEB_CLIENT_ID` | 선택 | 게임 구글 로그인에 쓰는 웹 애플리케이션 클라이언트 ID. 넣으면 게임 밖 고객센터에 구글 로그인 단추가 보입니다 |
+| 서버&nbsp;상태&nbsp;›&nbsp;Supabase&nbsp;›&nbsp;Access&nbsp;token | `SUPABASE_ACCESS_TOKEN` | 선택 | 이 프로젝트 하나에 Logs 읽기 권한만 준 Supabase 개인 토큰. `sbp_fc`로 시작하는 토큰만 받습니다. 넣으면 운영 콘솔 서버 상태에 기능별 데이터 전송량과 서버 함수 호출 수가 쌓입니다 |
 
 Google 서비스 계정 키는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)도 참고하세요.
 
@@ -108,7 +110,7 @@ Secrets에 `CANCEL_TOKEN_SECRET`이 있으면 DB가 만든 비밀값보다 그 �
 
 ## 5. 프로젝트 주소 등록 {#project-url}
 
-DB가 엣지 함수를 직접 부르는 자동 작업이 셋 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`), 구글 환불 확인(`purchase-refund-sync-google`), 환율표 저장과 빈 결제 금액 채우기(`purchase-price-sync`). 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
+DB가 엣지 함수를 직접 부르는 자동 작업이 여럿 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)·구글 환불 확인·사용량 기록 등. 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
 
 ```sql
 select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');

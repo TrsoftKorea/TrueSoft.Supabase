@@ -23,8 +23,13 @@ const content = payload.tool_input?.content ?? payload.tool_input?.new_string ??
 const KEY_USAGE = /SUPABASE_SERVICE_ROLE_KEY|service_role_key|SERVICE_ROLE_KEY/i
 
 if (KEY_USAGE.test(content)) {
+  // PreToolUse 는 hookSpecificOutput 꼴만 받는다 — 옛 최상위 decision 은 'approve'·'block' 만 옮겨 주고 'ask' 는 버려져
+  // 확인창이 안 떴다(공식 문서 Hooks › PreToolUse, 2026-11-02 확인).
   console.log(JSON.stringify({
-    decision: 'ask',
-    reason: 'legacy service_role 키를 쓰려 한다. Supabase 공식 대체재는 secret key(sb_secret_...) — 기능은 동일하고 지금 발급 가능하다. 이 파일에서 legacy 키가 꼭 필요한 이유가 있는지 확인한다. (프로젝트 규칙)',
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: 'legacy service_role 키를 쓰려 한다. Supabase 공식 대체재는 secret key(sb_secret_...) — 기능은 동일하고 지금 발급 가능하다. 이 파일에서 legacy 키가 꼭 필요한 이유가 있는지 확인한다. (프로젝트 규칙)',
+    },
   }))
 }
