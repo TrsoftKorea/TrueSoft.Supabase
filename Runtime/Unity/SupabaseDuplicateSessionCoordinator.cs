@@ -96,28 +96,35 @@ namespace TrueBase.Unity
 
         private IEnumerator DeferredActionCheckAfterCooldown(float dueAtRealtime)
         {
-            while (Time.realtimeSinceStartup < dueAtRealtime)
-                yield return null;
-
-            if (SupabaseSDK.IsLoggedIn == false || SupabaseSDK.Session?.User == null)
+            // 기다리는 Task 는 지역 변수로 잡는다 — 필드는 VerifyCurrentSessionForActionAsync 의 finally 가 기다리는 도중 비울 수 있다.
+            // 예약 표시는 어떻게 끝나든 비운다 — 남으면 앱을 다시 켤 때까지 지연 검사가 예약되지 않는다.
+            Task<bool> mine = null;
+            try
             {
-                _deferredActionCheckRoutine = null;
-                yield break;
-            }
+                while (Time.realtimeSinceStartup < dueAtRealtime)
+                    yield return null;
 
-            if (_inflightActionCheck != null)
+                if (SupabaseSDK.IsLoggedIn == false || SupabaseSDK.Session?.User == null)
+                    yield break;
+
+                var running = _inflightActionCheck;
+                if (running != null)
+                {
+                    yield return new WaitUntil(() => running.IsCompleted);
+                    yield break;
+                }
+
+                mine = VerifyCurrentSessionCoreAsync();
+                _inflightActionCheck = mine;
+                yield return new WaitUntil(() => mine.IsCompleted);
+                _lastActionCheckAtRealtime = Time.realtimeSinceStartup;
+            }
+            finally
             {
-                yield return new WaitUntil(() => _inflightActionCheck.IsCompleted);
+                if (mine != null && ReferenceEquals(_inflightActionCheck, mine))
+                    _inflightActionCheck = null;
                 _deferredActionCheckRoutine = null;
-                yield break;
             }
-
-            _inflightActionCheck = VerifyCurrentSessionCoreAsync();
-            yield return new WaitUntil(() => _inflightActionCheck.IsCompleted);
-
-            _lastActionCheckAtRealtime = Time.realtimeSinceStartup;
-            _inflightActionCheck = null;
-            _deferredActionCheckRoutine = null;
         }
 
         /// <summary>
