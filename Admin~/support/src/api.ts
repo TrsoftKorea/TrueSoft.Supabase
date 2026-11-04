@@ -24,7 +24,8 @@ export type Look = {
   name: string | null; color: string | null; icon: string | null
   google_client_id?: string | null; apple_services_id?: string | null
 }
-export type Me = { banned: boolean; lang: string }
+// email 은 브라우저로 연 창에서만 온다. 메일이 없는 계정이면 비어 있다.
+export type Me = { banned: boolean; lang: string; email?: string | null }
 export type Provider = 'google' | 'apple'
 export type Login = { banned: boolean; lang: string }
 

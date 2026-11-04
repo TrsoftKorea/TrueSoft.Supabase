@@ -45,6 +45,7 @@ export function App({ api }: { api: SupportApi | null }) {
   // null 은 받는 중, undefined 는 받지 못함(로그인 화면이 "불러오는 중"에 멈추지 않게 가른다).
   const [look, setLook] = useState<Look | null | undefined>(null)
   const [banned, setBanned] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
   const [expired, setExpired] = useState(false)
   const [ready, setReady] = useState(!api?.signedIn)
   const [view, setView] = useState<View>({ kind: 'home' })
@@ -64,6 +65,7 @@ export function App({ api }: { api: SupportApi | null }) {
     api.me()
       .then((me) => {
         setBanned(me.banned)
+        setEmail(me.email ?? null)
         if (!readStored(LANG_KEY) && !new URLSearchParams(location.search).get('lang')) setLangState(pickLang(me.lang))
         setReady(true)
       })
@@ -121,11 +123,14 @@ export function App({ api }: { api: SupportApi | null }) {
     setExpired(false)
     setAuthVersion((v) => v + 1)
     go(view.kind === 'login' ? view.next : { kind: 'home' })
+    // 표시만을 위한 조회라 실패해도 로그인은 그대로다.
+    void api?.me().then((me) => setEmail(me.email ?? null)).catch(() => {})
   }
 
   const logout = () => {
     api?.logout()
     setBanned(false)
+    setEmail(null)
     setAuthVersion((v) => v + 1)
     go({ kind: 'home' })
   }
@@ -138,6 +143,8 @@ export function App({ api }: { api: SupportApi | null }) {
     </>
   )
 
+  const shownEmail = api?.viaWeb && signedIn ? email : null
+
   let body: ReactNode
   if (!api) {
     body = <p className="py-16 text-center text-sm text-neutral-600">{t(lang, 'badLink')}</p>
@@ -145,7 +152,7 @@ export function App({ api }: { api: SupportApi | null }) {
     body = <Spinner label={t(lang, 'loading')} />
   } else if (view.kind === 'home') {
     body = (
-      <HomeView api={api} lang={lang} signedIn={signedIn} faqs={faqs} categories={categories} notices={notices}
+      <HomeView api={api} lang={lang} signedIn={signedIn} email={shownEmail} faqs={faqs} categories={categories} notices={notices}
         look={look} onGo={open} onError={fail} />
     )
   } else {
@@ -173,7 +180,7 @@ export function App({ api }: { api: SupportApi | null }) {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col">{body}</div>
-      <Footer lang={lang} onLang={setLang} name={look?.name ?? null} onLogout={api?.viaWeb && signedIn ? logout : undefined} />
+      <Footer lang={lang} onLang={setLang} name={look?.name ?? null} email={shownEmail} onLogout={api?.viaWeb && signedIn ? logout : undefined} />
     </div>
   )
 }
@@ -211,7 +218,7 @@ function SubHeader({ lang, title, onBack }: { lang: Lang; title: string; onBack:
   )
 }
 
-function Footer({ lang, onLang, name, onLogout }: { lang: Lang; onLang: (l: Lang) => void; name: string | null; onLogout: (() => void) | undefined }) {
+function Footer({ lang, onLang, name, email, onLogout }: { lang: Lang; onLang: (l: Lang) => void; name: string | null; email: string | null; onLogout: (() => void) | undefined }) {
   return (
     <footer className="mt-10 border-t border-neutral-200 bg-white">
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-3">
@@ -226,8 +233,9 @@ function Footer({ lang, onLang, name, onLogout }: { lang: Lang; onLang: (l: Lang
         {(name || onLogout) && (
           <div className="flex items-center gap-3">
             {name && <p className="flex-1 text-xs text-neutral-400">{name}</p>}
+            {email && <p className="ml-auto min-w-0 truncate text-xs text-neutral-500" title={email}>{email}</p>}
             {onLogout && (
-              <button type="button" onClick={onLogout} className="ml-auto text-xs text-neutral-500 underline hover:text-neutral-800">
+              <button type="button" onClick={onLogout} className={`${email ? '' : 'ml-auto '}shrink-0 text-xs text-neutral-500 underline hover:text-neutral-800`}>
                 {t(lang, 'logout')}
               </button>
             )}
@@ -302,8 +310,8 @@ function FaqList({ lang, items }: { lang: Lang; items: Faq[] }) {
   )
 }
 
-function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, onError }: {
-  api: SupportApi; lang: Lang; signedIn: boolean; faqs: Faq[] | null; categories: Category[]; notices: ReactNode
+function HomeView({ api, lang, signedIn, email, faqs, categories, notices, look, onGo, onError }: {
+  api: SupportApi; lang: Lang; signedIn: boolean; email: string | null; faqs: Faq[] | null; categories: Category[]; notices: ReactNode
   look: Look | null | undefined; onGo: (v: View) => void; onError: (e: unknown) => void
 }) {
   const [draft, setDraft] = useState('')
@@ -349,15 +357,16 @@ function HomeView({ api, lang, signedIn, faqs, categories, notices, look, onGo, 
           backgroundImage: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #000) 0%, color-mix(in srgb, var(--accent) 45%, #0f172a) 100%)',
         }}>
         <CloseButton lang={lang} className="absolute top-2 right-2 text-white/80" />
-        {look?.name && (
-          <div className="max-w-2xl mx-auto px-4 pt-3 pr-12 flex items-center gap-2 min-w-0">
-            {look.icon
+        {(look?.name || email) && (
+          <div className={`max-w-2xl mx-auto px-4 pt-3 ${IN_APP ? 'pr-12' : ''} flex items-center gap-2 min-w-0`}>
+            {look?.name && (look.icon
               ? <img src={look.icon} alt="" className="w-7 h-7 shrink-0 rounded-md bg-white object-cover" />
-              : <span aria-hidden className="w-7 h-7 shrink-0 rounded-md bg-white/20 flex items-center justify-center text-sm font-semibold">{[...look.name][0]}</span>}
-            <span className="text-[15px] font-semibold truncate">{look.name}</span>
+              : <span aria-hidden className="w-7 h-7 shrink-0 rounded-md bg-white/20 flex items-center justify-center text-sm font-semibold">{[...look.name][0]}</span>)}
+            {look?.name && <span className="text-[15px] font-semibold truncate">{look.name}</span>}
+            {email && <span className="ml-auto min-w-0 truncate text-xs text-white/85" title={email}>{email}</span>}
           </div>
         )}
-        <div className={`max-w-2xl mx-auto px-4 ${look?.name ? 'pt-7' : 'pt-10'} pb-9 flex flex-col items-center text-center`}>
+        <div className={`max-w-2xl mx-auto px-4 ${look?.name || email ? 'pt-7' : 'pt-10'} pb-9 flex flex-col items-center text-center`}>
           <h1 className="text-2xl font-semibold">{t(lang, 'heroTitle')}</h1>
           <form className="mt-6 w-full max-w-lg flex rounded-lg overflow-hidden shadow-sm" role="search"
             onSubmit={(e) => { e.preventDefault(); submit() }}>

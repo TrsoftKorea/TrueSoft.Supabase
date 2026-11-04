@@ -79,7 +79,7 @@ export function createMockApi(): SupportApi {
           { id: 4, category_id: 1, question: '환불을 받을 수 있나요?', answer: '환불은 결제한 구글 플레이·앱스토어에서 처리합니다.' },
           { id: 5, category_id: null, question: '쿠폰은 어디서 쓰나요?', answer: '고객센터 첫 화면의 쿠폰 등록에서 쓸 수 있습니다. 보상은 우편함으로 들어갑니다.' },
         ]),
-    me: () => wait({ banned: params.get('banned') === '1', lang: en ? 'en' : 'ko' }),
+    me: () => wait({ banned: params.get('banned') === '1', lang: en ? 'en' : 'ko', email: viaWeb ? 'player@example.com' : null }),
     categories: (lang) => wait(categoriesFor(lang)),
     tickets: () => wait([...tickets].sort((a, b) => summary(b).last_message_at.localeCompare(summary(a).last_message_at)).map(summary)),
     ticket: (id) => {
