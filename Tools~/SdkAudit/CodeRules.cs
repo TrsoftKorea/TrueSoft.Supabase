@@ -261,7 +261,10 @@ namespace SdkAudit
             var reset = nullers[0];
 
             foreach (var f in facadeFields)
-                if (!reset.Nulled.Contains(f.Field))
+                // 원격 설정은 게임이 들고 있는 리스너의 구독을 쥐고 있어 객체를 버리면 리스너가 조용히 죽는다. 받아 둔 값만 비운다.
+                if (f.Type == "RemoteConfigFacade"
+                        ? !Regex.IsMatch(reset.Body, Regex.Escape(f.Field) + @"\s*\??\s*\.\s*ResetCache\s*\(")
+                        : !reset.Nulled.Contains(f.Field))
                     ctx.Report.Error($"[R2 리셋누락] {f.Type} {f.Field} 가 리셋 블록({reset.Name})에서 정리되지 않습니다.");
 
             foreach (var f in facadeFields.Where(f => facadesWithReset.ContainsKey(f.Type)))

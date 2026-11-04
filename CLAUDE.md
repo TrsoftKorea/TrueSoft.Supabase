@@ -130,6 +130,7 @@ The SDK has three layers:
 
 - No HTTP on app start. Config is lazy-loaded on first `RemoteConfig<T>.GetAsync()`/`CreateListener()` call.
 - 캐시 유효 시간은 `maxStale`(0이면 그 키에 앞서 지정한 값, 없으면 300초). 지나면 `GetAsync`는 서버 응답을 기다려 새 값을 돌려준다. 낡은 값을 먼저 주고 뒤에서 갱신하는 경로는 리스너의 첫 조회만 쓴다.
+- `RemoteConfigFacade`는 다른 파사드와 달리 로그인·로그아웃에도 버리지 않는다. 게임이 들고 있는 리스너의 구독을 쥐고 있어 버리면 리스너가 조용히 죽는다 — 받아 둔 값만 `ResetCache`로 비우고, 값이 같으면 리스너가 콜백을 부르지 않는다.
 - Per-key background polling via `CreateListener(pollInterval)` (0 = no polling). `SupabaseRuntime` ticks polls in `Update`. 주기는 키마다 따로지만 요청은 하나다 — 만기된 키와 남은 시간이 주기의 절반 이하인 키를 모아 한 번에 묻는다.
 - 게임 표면은 `RemoteConfig<T>` 둘뿐이다: `GetAsync()`(1회 읽기, `SupabaseResult<T>` 반환), `CreateListener()`(변경 시 콜백). 자주 읽어야 하면 게임이 리스너 콜백에서 자기 필드에 담아 두고 그 필드를 읽는다 — SDK가 값을 들고 있어 주는 경로(구 `CreateBinding`)는 없앴다. 첫 fetch 전에 `null`을 돌려줘 게임이 NRE를 맞는 구조였고, 리스너 + 필드 하나면 같은 일을 게임 기본값으로 안전하게 할 수 있기 때문이다.
 - Design: group related settings into one key as a JSON object (`{"stamina":{...},"battle":{...}}`), not one key per scalar.

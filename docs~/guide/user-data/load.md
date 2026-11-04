@@ -17,6 +17,8 @@ await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 
 자동 로그인(`Supabase.TriggerAutoLoginAsync()`)도 로그인만 수행하므로, 수동 로그인과 동일하게 성공 후 위 로드 단계를 직접 호출합니다.
 
+로그아웃 없이 다른 계정으로 로그인하면 앞 계정의 세이브 값이 비워지고, 아직 보내지 못한 변경분은 저장되지 않습니다. 앞 계정의 변경분을 지키려면 계정을 바꾸기 전에 [즉시 저장](/guide/user-data/save-now)을 부르거나 [로그아웃](/guide/auth/logout)을 거치세요. 계정을 바꾼 뒤에는 다시 로드합니다.
+
 **반환**
 
 `SupabaseLoadResult`를 돌려줍니다.

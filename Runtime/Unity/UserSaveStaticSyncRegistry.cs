@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using TrueBase.Core.Common;
 using UnityEngine;
 
 namespace TrueBase.Unity
@@ -17,15 +18,23 @@ namespace TrueBase.Unity
             public Func<bool> HasDirty;
             /// <summary>throttle 캐시를 무시한 정확한 dirty 검사. null이면 <see cref="HasDirty"/>로 대체.</summary>
             public Func<bool> HasFreshDirty;
-            public Func<Task<bool>> FlushAsync;
+            public Func<Task<SupabaseResult>> FlushAsync;
             public Action ResetLocalState;
             public bool IsInFlight;
             public bool RequestImmediateAfterInFlight;
             /// <summary>flush가 완료될 때마다 1 증가. "내가 요청한 전송이 끝났는가" 판정에 사용.</summary>
             public long FlushCompletedCount;
+            /// <summary>마지막 flush의 실패 사유. 성공했으면 null. 즉시 저장이 결과를 돌려줄 때 씁니다.</summary>
+            public string LastFlushError;
+            /// <summary><see cref="ResetAll"/> 횟수. 기다리는 사이 로그아웃·계정 교체가 있었는지 가릅니다.</summary>
+            public long ResetCount;
             public float NextAllowedAtRealtime;
             /// <summary>null이면 전역 <see cref="_cooldownSeconds"/> 사용. non-null이면 dirty 우선순위별 쿨다운 반환.</summary>
             public Func<float> GetDirtyCooldown;
+            /// <summary>연달아 실패한 횟수. 성공하면 0으로 돌아갑니다.</summary>
+            public int ConsecutiveFailures;
+            /// <summary>실패 뒤 자동 저장을 다시 시도해도 되는 시각. 값을 바꿔도 앞당겨지지 않습니다.</summary>
+            public float RetryNotBeforeRealtime;
         }
 
         private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal);
@@ -35,6 +44,10 @@ namespace TrueBase.Unity
         private static float _urgentCooldown = 1f;
         private static float _normalCooldown = 5f;
         private static float _lazyCooldown   = 30f;
+
+        // 실패 뒤 자동 저장을 쉬는 시간. 오프라인이나 없는 칸(400)이면 쉬지 않고 다시 보내 화면이 멈추고 요청이 쏟아진다.
+        private const float FailureRetryBaseSeconds = 2f;
+        private const float FailureRetryMaxSeconds  = 60f;
 
         /// <summary>
         /// 모든 <see cref="StaticUserSave{TRow}"/> 인스턴스에 공통으로 적용되는
@@ -69,7 +82,7 @@ namespace TrueBase.Unity
         public static void Register(
             string key,
             Func<bool> hasDirty,
-            Func<Task<bool>> flushAsync,
+            Func<Task<SupabaseResult>> flushAsync,
             Action resetLocalState = null,
             Func<float> getDirtyCooldown = null,
             Func<bool> hasFreshDirty = null)
@@ -147,16 +160,17 @@ namespace TrueBase.Unity
             return TryStartFlush(entry, immediate: true);
         }
 
-        /// <summary>즉시 flush를 시작하고 그 전송이 끝날 때까지 대기합니다.</summary>
-        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
-        public static async Task<bool> RequestImmediateFlushAsync(string key, int timeoutMs = 5000)
+        /// <summary>즉시 flush를 시작하고 그 전송이 끝날 때까지 대기합니다. 전송이 실패하면 그 사유를 돌려줍니다.</summary>
+        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 <c>UserSaveTimeout</c> 실패를 반환합니다.</param>
+        public static async Task<SupabaseResult> RequestImmediateFlushAsync(string key, int timeoutMs = 5000)
         {
             if (!TryGetEntry(key, out var entry))
-                return false;
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
             var startCount = entry.FlushCompletedCount;
+            var startResetCount = entry.ResetCount;
             _ = RequestImmediateFlush(key);
-            return await WaitForSettledAsync(entry, startCount, timeoutMs);
+            return await WaitForSettledAsync(entry, startCount, startResetCount, timeoutMs);
         }
 
         /// <summary>등록된 모든 항목에 즉시 flush를 요청합니다(완료 대기 없음).</summary>
@@ -170,7 +184,7 @@ namespace TrueBase.Unity
         /// 등록된 모든 항목에 즉시 flush를 요청하고, 요청한 전송이 전부 끝날 때까지 대기합니다.
         /// <para>단건 대기와 같은 기준입니다 — 대기 중 새로 생긴 변경분까지 기다리지 않습니다.</para>
         /// </summary>
-        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과 시 false를 반환합니다.</param>
+        /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정되며, 초과하거나 전송이 실패하면 false를 반환합니다.</param>
         public static async Task<bool> RequestImmediateFlushAllAsync(int timeoutMs = 5000)
         {
             var startCounts = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -202,7 +216,16 @@ namespace TrueBase.Unity
                 }
 
                 if (allSettled)
+                {
+                    foreach (var pair in Entries)
+                    {
+                        var startCount = startCounts.TryGetValue(pair.Key, out var c) ? c : 0L;
+                        if (pair.Value.FlushCompletedCount > startCount && pair.Value.LastFlushError != null)
+                            return false;
+                    }
+
                     return true;
+                }
 
                 await Task.Delay(16);
             }
@@ -219,6 +242,9 @@ namespace TrueBase.Unity
             foreach (var entry in Entries.Values)
             {
                 if (entry.IsInFlight)
+                    continue;
+
+                if (realtimeNow < entry.RetryNotBeforeRealtime)
                     continue;
 
                 if (!SafeHasDirty(entry))
@@ -239,6 +265,10 @@ namespace TrueBase.Unity
                 entry.IsInFlight = false;
                 entry.RequestImmediateAfterInFlight = false;
                 entry.NextAllowedAtRealtime = 0f;
+                entry.ConsecutiveFailures = 0;
+                entry.RetryNotBeforeRealtime = 0f;
+                entry.LastFlushError = null;
+                entry.ResetCount++;
 
                 try
                 {
@@ -282,7 +312,7 @@ namespace TrueBase.Unity
             var now = Time.realtimeSinceStartup;
             _lastRealtime = now;
 
-            if (!immediate && now < entry.NextAllowedAtRealtime)
+            if (!immediate && (now < entry.NextAllowedAtRealtime || now < entry.RetryNotBeforeRealtime))
                 return false;
 
             _ = StartFlushAsync(entry, immediate);
@@ -292,10 +322,14 @@ namespace TrueBase.Unity
         private static async Task StartFlushAsync(Entry entry, bool immediate)
         {
             entry.IsInFlight = true;
+            var succeeded = false;
+            string error = SupabaseErrorCode.UserSaveFlushFailed;
 
             try
             {
-                await entry.FlushAsync();
+                var result = await entry.FlushAsync();
+                succeeded = result != null && result.IsSuccess;
+                error = succeeded ? null : result?.ErrorCode ?? SupabaseErrorCode.UserSaveFlushFailed;
             }
             catch (Exception e)
             {
@@ -319,6 +353,20 @@ namespace TrueBase.Unity
                     entry.NextAllowedAtRealtime = now + _cooldownSeconds;
                 }
 
+                if (succeeded)
+                {
+                    entry.ConsecutiveFailures = 0;
+                    entry.RetryNotBeforeRealtime = 0f;
+                }
+                else
+                {
+                    entry.ConsecutiveFailures++;
+                    entry.RetryNotBeforeRealtime = now + Mathf.Min(
+                        FailureRetryMaxSeconds,
+                        FailureRetryBaseSeconds * Mathf.Pow(2f, entry.ConsecutiveFailures - 1));
+                }
+
+                entry.LastFlushError = error;
                 entry.IsInFlight = false;
                 entry.FlushCompletedCount++;
             }
@@ -333,7 +381,7 @@ namespace TrueBase.Unity
                 return;
             }
 
-            if (!immediate && SafeHasDirty(entry) && _lastRealtime >= entry.NextAllowedAtRealtime)
+            if (!immediate && succeeded && SafeHasDirty(entry) && _lastRealtime >= entry.NextAllowedAtRealtime)
                 _ = StartFlushAsync(entry, immediate: false);
         }
 
@@ -374,28 +422,39 @@ namespace TrueBase.Unity
         /// 대기하는 동안 게임이 값을 계속 바꾸면 dirty는 영영 사라지지 않으므로, 그 기준으로는
         /// 전송이 성공해도 타임아웃이 납니다. 대기 중 생긴 새 변경분은 다음 자동 저장이 처리합니다.
         /// </para>
+        /// <para>
+        /// 앞선 전송이 진행 중이었으면 끝나는 즉시 같은 흐름에서 재전송이 시작되므로, 여기서는 그 재전송까지 기다립니다.
+        /// 돌려주는 결과는 마지막 전송의 것입니다.
+        /// </para>
         /// </summary>
         /// <param name="startCount">요청 직전의 <see cref="Entry.FlushCompletedCount"/>.</param>
+        /// <param name="startResetCount">요청 직전의 <see cref="Entry.ResetCount"/>.</param>
         /// <param name="timeoutMs">대기 최대 시간(밀리초). 250 미만은 250으로 보정됩니다.</param>
-        private static async Task<bool> WaitForSettledAsync(Entry entry, long startCount, int timeoutMs)
+        private static async Task<SupabaseResult> WaitForSettledAsync(Entry entry, long startCount, long startResetCount, int timeoutMs)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var limitMs = Math.Max(250, timeoutMs);
             while (sw.ElapsedMilliseconds < limitMs)
             {
+                // 기다리는 사이 로그아웃·계정 교체로 비워졌다 — 저장됐는지 알 수 없으므로 성공으로 알리지 않는다.
+                if (entry.ResetCount != startResetCount)
+                    return SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+
                 if (!entry.IsInFlight)
                 {
-                    // 요청 이후 전송이 한 번이라도 끝났으면 완료.
+                    // 요청 이후 전송이 한 번이라도 끝났으면 그 결과를 돌려준다.
                     if (entry.FlushCompletedCount > startCount)
-                        return true;
+                        return entry.LastFlushError == null
+                            ? SupabaseResult.Ok
+                            : SupabaseResult.Fail(entry.LastFlushError);
                     // 보낼 것이 없어 전송이 시작조차 안 된 경우도 완료로 본다.
                     if (!SafeHasFreshDirty(entry))
-                        return true;
+                        return SupabaseResult.Ok;
                 }
                 await Task.Delay(16).ConfigureAwait(true);
             }
 
-            return false;
+            return SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
         }
     }
 }

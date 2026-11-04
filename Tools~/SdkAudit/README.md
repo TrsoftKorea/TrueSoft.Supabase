@@ -138,6 +138,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | 예외 | 이유 |
 |------|------|
 | `CodeRules.NonFailingMembers` | 값을 돌려주지만 실패할 수 없는 멤버(순수 변환·등록 헬퍼). 항목을 추가할 때는 근거를 주석으로 남기세요 |
+| R2 `RemoteConfigFacade` | 게임이 들고 있는 리스너의 구독을 쥐고 있어 객체를 버리면 리스너가 죽습니다. 리셋 블록에서 null 대신 `ResetCache` 호출을 봅니다 |
 | `[Supabase.Chat]` 형태 | 로그 태그이지 멤버 참조가 아닙니다 |
 | `TrueSoft.Supabase.git` 형태 | 한정자가 붙은 이름은 멤버 참조가 아닙니다 |
 | 이미지가 있는 페이지의 `---` | 단계별 절차 페이지의 단계 구분은 허용됩니다 |

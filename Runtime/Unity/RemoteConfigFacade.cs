@@ -14,7 +14,7 @@ namespace TrueBase.Unity
     /// </summary>
     internal sealed class RemoteConfigFacade
     {
-        private readonly SupabaseRemoteConfigService _service;
+        private readonly Func<SupabaseRemoteConfigService> _service;
         private readonly Func<string> _accessTokenGetter;
         private readonly Dictionary<string, string> _cache = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly Dictionary<string, CachedKeyMeta> _keyMeta = new Dictionary<string, CachedKeyMeta>(StringComparer.Ordinal);
@@ -23,18 +23,38 @@ namespace TrueBase.Unity
         private readonly Dictionary<string, float> _pollIntervalOverrideByKey = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _maxStaleByKey = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string> _pollKeyBuffer = new List<string>();
+        private int _cacheResetCount; // 응답을 기다리는 사이 로그인 상태가 바뀌었는지 가른다
 
         /// <summary>Remote config가 변경되어 캐시가 갱신되면 호출됩니다. 인자는 변경된 key 목록.</summary>
         public event Action<IReadOnlyList<string>> OnChanged;
 
-        /// <param name="service">REST 호출을 수행할 서비스. null이면 예외.</param>
+        /// <param name="service">REST 호출을 수행할 서비스를 돌려주는 함수. null이면 예외.</param>
         /// <param name="accessTokenGetter">현재 액세스 토큰 제공자. null이거나 빈 토큰을 반환하면 <c>requires_auth</c> 키는 조회에서 제외됩니다.</param>
         public RemoteConfigFacade(
-            SupabaseRemoteConfigService service,
+            Func<SupabaseRemoteConfigService> service,
             Func<string> accessTokenGetter = null)
         {
             _service = service ?? throw new ArgumentNullException(nameof(service));
             _accessTokenGetter = accessTokenGetter;
+        }
+
+        /// <summary>
+        /// 로그인 상태가 바뀔 때 받아 둔 값만 비웁니다. 로그인 여부에 따라 읽을 수 있는 키가 달라 값을 넘겨주면 안 되기 때문입니다.
+        /// 구독과 폴링 설정은 게임이 들고 있는 리스너의 것이라 유지합니다.
+        /// </summary>
+        /// <param name="refetchSubscribed">true면 구독 중인 키를 지금 로그인으로 한 요청에 다시 받습니다.</param>
+        public void ResetCache(bool refetchSubscribed)
+        {
+            _cacheResetCount++;
+            _cache.Clear();
+            _keyMeta.Clear();
+
+            if (!refetchSubscribed || _keySubscribers.Count == 0)
+                return;
+
+            var keys = new string[_keySubscribers.Count];
+            _keySubscribers.Keys.CopyTo(keys, 0);
+            _ = RefreshKeysInBackgroundAsync(keys);
         }
 
         /// <summary>
@@ -94,7 +114,10 @@ namespace TrueBase.Unity
 
             list.Remove(onValueChanged);
             if (list.Count == 0)
+            {
                 _keySubscribers.Remove(k);
+                _pollIntervalOverrideByKey.Remove(k); // 듣는 쪽이 없으면 더 묻지 않는다
+            }
         }
 
         /// <summary>네트워크 없이 캐시에서 원본 JSON 문자열을 조회합니다. 캐시에 없으면 false.</summary>
@@ -140,7 +163,7 @@ namespace TrueBase.Unity
             {
                 // 폴링 없는 경우에만 stale-while-revalidate 체크
                 if (DateTime.UtcNow - metaStale.FetchedAtUtc > TimeSpan.FromSeconds(GetEffectiveMaxStaleSeconds(trimmedKey)))
-                    _ = RefreshKeyInBackgroundAsync(trimmedKey);
+                    _ = RefreshKeysInBackgroundAsync(new[] { trimmedKey });
             }
 
             return ReadCachedKey<T>(trimmedKey);
@@ -239,9 +262,10 @@ namespace TrueBase.Unity
             if (_pollKeyBuffer.Count == 0)
                 return;
 
+            var resetCount = _cacheResetCount;
             // 토큰이 비어 있으면 requires_auth 키는 결과에서 빠진다.
-            var result = await _service.GetByKeysAsync(_pollKeyBuffer, _accessTokenGetter?.Invoke()).ConfigureAwait(true);
-            if (result.IsSuccess && result.Data != null)
+            var result = await _service().GetByKeysAsync(_pollKeyBuffer, _accessTokenGetter?.Invoke()).ConfigureAwait(true);
+            if (resetCount == _cacheResetCount && result.IsSuccess && result.Data != null)
                 ApplyRows(result.Data);
 
             foreach (var key in _pollKeyBuffer)
@@ -255,16 +279,16 @@ namespace TrueBase.Unity
             }
         }
 
-        private async Task RefreshKeyInBackgroundAsync(string key)
+        private async Task RefreshKeysInBackgroundAsync(string[] keys)
         {
             try
             {
                 // 첫 로드와 같은 in-flight 맵을 지나므로, 같은 키를 동시에 여러 곳에서 읽어도 갱신 요청은 한 번만 나간다.
-                await EnsureKeysFetchedWithOutcomeAsync(new[] { key }).ConfigureAwait(true);
+                await EnsureKeysFetchedWithOutcomeAsync(keys).ConfigureAwait(true);
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[Supabase] RemoteConfig 백그라운드 갱신 실패. key={key}, err={e.Message}");
+                Debug.LogWarning($"[Supabase] RemoteConfig 백그라운드 갱신 실패. key={string.Join(",", keys)}, err={e.Message}");
             }
         }
 
@@ -335,8 +359,14 @@ namespace TrueBase.Unity
 
         private async Task<FetchOutcome> FetchKeysCoreAsync(string[] keys)
         {
+            var resetCount = _cacheResetCount;
             var accessToken = _accessTokenGetter?.Invoke();
-            var result = await _service.GetByKeysAsync(keys, accessToken).ConfigureAwait(true);
+            var result = await _service().GetByKeysAsync(keys, accessToken).ConfigureAwait(true);
+
+            // 기다리는 사이 로그인 상태가 바뀌었다 — 옛 로그인의 응답을 쓰지 않고 지금 로그인으로 다시 받는다.
+            if (resetCount != _cacheResetCount)
+                return await FetchKeysCoreAsync(keys).ConfigureAwait(true);
+
             if (result.IsSuccess == false)
                 return new FetchOutcome(false, result.ErrorCode ?? "remote_config_fetch_failed");
 
@@ -459,6 +489,8 @@ namespace TrueBase.Unity
                 {
                     if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
                     {
+                        // 값이 그대로여도 방금 확인했으므로 유효 시간을 다시 잰다. 안 그러면 유효 시간 뒤 읽을 때마다 요청이 나간다.
+                        _keyMeta[row.key] = new CachedKeyMeta(now);
                         UpdateKeyTimestampFromRow(row.key, row.updated_at);
                         continue;
                     }

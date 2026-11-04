@@ -13,6 +13,7 @@ namespace TrueBase.Unity
         private readonly string _key;
         private readonly Action<string> _onRawChanged;
         private bool _disposed;
+        private string _lastJson;
 
         /// <param name="key">remote_config 테이블의 key 값.</param>
         /// <param name="pollInterval">폴링 주기(초).</param>
@@ -25,6 +26,9 @@ namespace TrueBase.Unity
             _onRawChanged = json =>
             {
                 if (_disposed) return;
+                // 로그인·로그아웃 뒤 캐시를 비우고 다시 받은 같은 값은 변경이 아니다.
+                if (string.Equals(json, _lastJson, StringComparison.Ordinal)) return;
+                _lastJson = json;
                 // 역직렬화 실패 시 콜백을 호출하지 않습니다.
                 try
                 {

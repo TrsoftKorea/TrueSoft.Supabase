@@ -79,6 +79,8 @@ namespace TrueBase.Unity
         private            string _newUserCarriedForAccount;            // PlayNANOO 동기화가 행을 처음 만든 계정. 게임의 다음 로드에 IsNewUser 로 넘긴다
         private            TRow   _loadFallback;                        // 로드 전에 세팅한 초기값 스냅샷(1회 캡처)
         private            bool   _fallbackCaptured;                    // _loadFallback 캡처 여부
+        private            int    _resetCount;                          // 로컬을 비운 횟수. 보내거나 읽는 사이 로그아웃·계정 교체·삭제가 있었는지 가른다
+        private            int    _sendsInFlight;                       // 응답을 기다리는 저장 수. 삭제가 이걸 기다린 뒤 나간다
         protected readonly string _syncKey;
         protected readonly string LogTag;
 
@@ -176,12 +178,12 @@ namespace TrueBase.Unity
             return _lastDeepResult;
         }
 
-        private async Task<bool> FlushDirtyAsync()
+        private async Task<SupabaseResult> FlushDirtyAsync()
         {
             // flush 시점에는 throttle을 무시하고 신선하게 검사 — 즉시 저장(앱 종료 등)에서
             // 컬렉션 제자리 수정이 throttle 캐시 때문에 누락되지 않도록 합니다.
             _lastDeepCheckTime = float.MinValue;
-            if (!HasDirty()) return true;
+            if (!HasDirty()) return SupabaseResult.Ok;
 
             // await 이전에 현재 값을 스냅샷하고 dirty를 먼저 해제합니다.
             // 이렇게 하면 네트워크 대기 중 게임 코드가 새 값을 쓰고 MarkDirty()를 호출해도
@@ -192,28 +194,48 @@ namespace TrueBase.Unity
             _scalarDirtyPri = PriNone; // 스냅샷 이후의 스칼라 변경은 await 중 MarkDirty가 다시 채운다
             _refPriCheckedAt = float.MinValue; // 참조 우선순위도 새 스냅샷 기준으로 재평가
 
-            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
-                _lastSynced, snapshot,
-                ensureRow: true, setUpdatedAtIsoUtc: true);
+            var resetCount = _resetCount;
+            SupabaseResult ok;
+            _sendsInFlight++;
+            try
+            {
+                ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
+                    _lastSynced, snapshot,
+                    ensureRow: true, setUpdatedAtIsoUtc: true);
+            }
+            finally
+            {
+                _sendsInFlight--;
+            }
+
+            // 보내는 사이 로컬이 비워졌다 — 이 결과는 옛 상태 몫이라 새 상태에 적지 않는다.
+            if (resetCount != _resetCount)
+                return SupabaseResult.Ok;
 
             if (!ok)
             {
                 // 전송 실패 시 dirty 복원 — 다음 flush 때 재전송
                 _isDirty = true;
-                return false;
+                return ok;
             }
 
+            CommitSynced(snapshot);
+            return SupabaseResult.Ok;
+        }
+
+        private void CommitSynced(TRow snapshot)
+        {
             _lastSynced = snapshot;
             // 방금 동기화했으므로 값 비교·참조 우선순위 캐시를 초기화(새 _lastSynced 기준으로 재평가)
             _lastDeepResult = false;
             _lastDeepCheckTime = float.MinValue;
             _refDirtyPri = PriNone;
             _refPriCheckedAt = float.MinValue;
-            return true;
         }
 
         private void ResetLocalState()
         {
+            _resetCount++;
             DataSchema.CopyInto(Current, new TRow());
             DataSchema.ApplyAutoDefaults(Current);
             _lastSynced = new TRow();
@@ -344,10 +366,11 @@ namespace TrueBase.Unity
         /// <returns>로컬이 서버 정본과 일치하게 됐으면 true. 호출부는 false 를 반영 실패로 취급해 플레이나누 쓰기를 열지 않는다.</returns>
         private async Task<bool> ReloadFromServerAsync()
         {
+            var resetCount = _resetCount;
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null);
 
-            if (!success || !hasRow || row == null)
+            if (!success || !hasRow || row == null || resetCount != _resetCount)
             {
                 // 로컬이 서버와 어긋났다(기본값이거나, 로그아웃 없이 바꾼 이전 계정의 데이터일 수 있다).
                 // _hasLoadedOnce 를 여기서 올리지 않는다. 이미 true 였어도 false 를 돌려줘 이번 로그인의 플레이나누 쓰기를 막게 한다.
@@ -532,10 +555,14 @@ namespace TrueBase.Unity
         /// <para>반복 호출해도 안전합니다. 이미 전송 중이면 완료 후 1회 재전송이 예약되고 성공을 반환하므로
         /// 중복 전송이 쌓이지 않습니다. 다만 호출할 때마다 값 비교를 새로 하므로 매 프레임 호출은 피하세요.</para>
         /// <para>보낼 변경분이 없으면 요청하지 않고 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
+        /// <para>아직 로드하지 않았으면 <see cref="SupabaseReason.UserSaveNotReady"/> 사유의 실패를 반환합니다.</para>
         /// </summary>
         public SupabaseResult RequestSave()
         {
             EnsureRegistered();
+
+            if (!_hasLoadedOnce)
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
             if (!HasFreshDirty())
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
@@ -548,18 +575,21 @@ namespace TrueBase.Unity
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송한 뒤 완료까지 대기합니다. 앱 종료 등 중요한 시점에 사용하세요.
         /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
+        /// <para>아직 로드하지 않았으면 <see cref="SupabaseReason.UserSaveNotReady"/> 사유의 실패를 반환합니다.</para>
+        /// <para>전송이 실패하면 그 사유(중복 로그인·네트워크 오류 등)를 그대로 돌려줍니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 <see cref="SupabaseReason.UserSaveTimeout"/>.</param>
         public async Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
 
+            if (!_hasLoadedOnce)
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
+
             if (!HasFreshDirty())
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
-            return await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs)
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(SupabaseErrorCode.UserSaveTimeout);
+            return await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs);
         }
 
         /// <summary>
@@ -620,6 +650,7 @@ namespace TrueBase.Unity
                 _fallbackCaptured = true;
             }
 
+            var resetCount = _resetCount;
             var (success, hasRow, row) = await SupabaseSDK.TryLoadUserDataAttributedWithRowStateAsync<TRow>(
                 defaultWhenFailed: null, includeUpdatedAt: includeUpdatedAt);
 
@@ -650,15 +681,22 @@ namespace TrueBase.Unity
                 }
             }
 
+            // 읽는 사이 로그아웃·계정 교체·삭제가 있었다 — 옛 상태의 값을 새 상태에 적용하면 다른 계정 줄에 섞여 저장된다.
+            if (resetCount != _resetCount)
+                return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
+
             ApplyRow(row);
 
             // 서버에 없던(SQL NULL) 컬렉션 컬럼에 로드 전 초기값(fallback)이 유지됐다면,
             // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
             // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
             // 변경분이 없으면(일반 로드) UserSaveNoChanges로 돌아오며, 이는 오류가 아니라 정상 경로다.
-            var initSave = await SaveIfChangedAsync();
+            var initSave = await SendChangesAsync();
             if (!initSave.IsSuccess && initSave.Reason != SupabaseReason.UserSaveNoChanges)
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
+
+            if (resetCount != _resetCount)
+                return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
             _hasLoadedOnce = true;
 
@@ -671,6 +709,8 @@ namespace TrueBase.Unity
 
             return SupabaseLoadResult.Success(isNewUser);
         }
+
+        private const int DeleteWaitForSendsMs = 5000;
 
         /// <summary>
         /// 본인 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋).
@@ -696,6 +736,12 @@ namespace TrueBase.Unity
             _loadFallback     = null;
             _fallbackCaptured = false;
 
+            // 이미 나간 저장이 끝난 뒤 지운다. 삭제보다 늦게 도착하면 지운 줄을 다시 만들 수 있기 때문이다.
+            // 응답이 오래 안 오면 더 기다리지 않는다 — 그때는 서비스 쪽 삭제 표시가 되살림을 막는다.
+            var waited = System.Diagnostics.Stopwatch.StartNew();
+            while (_sendsInFlight > 0 && waited.ElapsedMilliseconds < DeleteWaitForSendsMs)
+                await Task.Delay(16);
+
             var r = await SupabaseSDK.DeleteUserDataAsync<TRow>();
             if (r == null || !r.IsSuccess)
                 return SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveDeleteFailed);
@@ -719,17 +765,29 @@ namespace TrueBase.Unity
         /// <summary>
         /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
         /// <para>변경이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
+        /// <para>아직 로드하지 않았으면 <see cref="SupabaseReason.UserSaveNotReady"/> 사유의 실패를 반환합니다. 로드 전 값을 보내면 서버 값을 덮기 때문입니다.</para>
         /// </summary>
-        public async Task<SupabaseResult> SaveIfChangedAsync()
+        public Task<SupabaseResult> SaveIfChangedAsync()
         {
             EnsureRegistered();
 
+            return _hasLoadedOnce
+                ? SendChangesAsync()
+                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
+        }
+
+        private async Task<SupabaseResult> SendChangesAsync()
+        {
             string tableName;
             Dictionary<string, object> patch;
+            TRow snapshot;
             try
             {
                 tableName = DataSchema.ResolveTableName<TRow>();
-                patch     = DataSchema.BuildPatch(_lastSynced, Current);
+                // 보낸 값을 기준으로 삼는다. 끝난 뒤 Current 를 베끼면 보내는 사이 바뀐 값이 "이미 저장됨"이 돼 사라진다.
+                snapshot  = DataSchema.CloneRow(Current);
+                DataSchema.ApplyAutoDefaults(snapshot); // 비교 양쪽이 같은 기본값 기준을 갖도록
+                patch     = DataSchema.BuildPatch(_lastSynced, snapshot);
             }
             catch (Exception e)
             {
@@ -739,24 +797,40 @@ namespace TrueBase.Unity
 
             if (patch == null || patch.Count == 0)
             {
-                _lastSynced = DataSchema.CloneRow(Current);
-                DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
+                _lastSynced = snapshot;
                 _isDirty    = false;
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
             }
 
-            var result = await SupabaseSDK.PatchUserDataAsync(
-                tableName, patch, ensureRow: true, setUpdatedAtIsoUtc: true);
+            // 먼저 해제해야 보내는 사이 게임이 부른 MarkDirty 가 지워지지 않는다.
+            var resetCount = _resetCount;
+            _isDirty = false;
+            _scalarDirtyPri = PriNone;
+            _refPriCheckedAt = float.MinValue;
+
+            SupabaseResult<bool> result;
+            _sendsInFlight++;
+            try
+            {
+                result = await SupabaseSDK.PatchUserDataAsync(
+                    tableName, patch, ensureRow: true, setUpdatedAtIsoUtc: true);
+            }
+            finally
+            {
+                _sendsInFlight--;
+            }
+
+            // 보내는 사이 로컬이 비워졌으면 옛 상태 몫이라 새 상태에 적지 않는다.
+            var stale = resetCount != _resetCount;
 
             if (!result.IsSuccess)
             {
+                if (!stale) _isDirty = true;
                 Debug.LogWarning($"{LogTag} PATCH 전송 실패 — {result.ErrorCode}");
                 return SupabaseResult.Fail(result.ErrorCode ?? SupabaseErrorCode.UserSaveFlushFailed);
             }
 
-            _lastSynced = DataSchema.CloneRow(Current);
-            DataSchema.ApplyAutoDefaults(_lastSynced); // 비교 양쪽이 같은 기본값 기준을 갖도록
-            _isDirty    = false;
+            if (!stale) CommitSynced(snapshot);
             return SupabaseResult.Ok;
         }
 

@@ -23,6 +23,9 @@ namespace TrueBase.Core.Data
         // 플레이어 id 까지 보는 이유: 게스트가 구글·애플을 연동하면 id 가 바뀌는데 user_data.user_id 를 고치는 곳은 ts_ensure_my_row 뿐이다.
         private readonly Dictionary<string, string> _ensuredRows = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // 이 기기에서 세이브를 지운 횟수. 저장을 보내는 사이 삭제가 있었으면 행을 다시 만들지 않으려고 본다.
+        private int _deleteCount;
+
         public SupabaseUserDataService(
             string supabaseUrl,
             string publishableKey,
@@ -108,6 +111,7 @@ namespace TrueBase.Core.Data
             if (patch == null || patch.Count == 0)
                 return SupabaseResult<bool>.Fail("patch_empty");
 
+            var deleteCount = _deleteCount;
             var rowKey = BuildRowKey(tableName, accountId);
             var stable = string.IsNullOrWhiteSpace(playerUserId) ? null : playerUserId.Trim();
             var ensuredNow = false;
@@ -116,6 +120,9 @@ namespace TrueBase.Core.Data
                 var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
                 if (ensured == null || !ensured.IsSuccess)
                     return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
+
+                if (deleteCount != _deleteCount)
+                    return SupabaseResult<bool>.Fail(PatchNoRowsAffected);
 
                 _ensuredRows[rowKey] = stable;
                 ensuredNow = true;
@@ -137,11 +144,15 @@ namespace TrueBase.Core.Data
             var sent = await SendPatchAsync(accessToken, url, bodyJson);
 
             // 기억해 둔 행이 사라졌을 수 있다 — 다른 기기에서 세이브를 지운 경우 등.
-            if (ensureRow && !ensuredNow && sent.ErrorCode == PatchNoRowsAffected)
+            // 이 기기에서 방금 지운 것이면 되살리지 않는다.
+            if (ensureRow && !ensuredNow && sent.ErrorCode == PatchNoRowsAffected && deleteCount == _deleteCount)
             {
                 var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
                 if (ensured == null || !ensured.IsSuccess)
                     return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
+
+                if (deleteCount != _deleteCount)
+                    return sent;
 
                 sent = await SendPatchAsync(accessToken, url, bodyJson);
             }
@@ -195,6 +206,10 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(tableName))
                 return SupabaseResult<bool>.Fail("table_name_empty");
 
+            // 보내기 전에 표시한다. 응답을 기다리는 사이 도착한 저장이 행을 다시 만들면 지운 세이브가 되살아난다.
+            _deleteCount++;
+            _ensuredRows.Remove(BuildRowKey(tableName, accountId));
+
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, tableName)}" +
                 $"?account_id=eq.{Uri.EscapeDataString(accountId.Trim())}";
@@ -210,8 +225,6 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete"));
-
-            _ensuredRows.Remove(BuildRowKey(tableName, accountId));
 
             // 매칭 행이 없어도(빈 배열) 삭제 목적은 달성 — 멱등 성공.
             return SupabaseResult<bool>.Success(true);

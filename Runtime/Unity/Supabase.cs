@@ -210,6 +210,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 대기합니다.
         /// <para>보낼 변경분이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다.</para>
+        /// <para>전송이 실패하면 그 사유(중복 로그인·네트워크 오류 등)를 그대로 돌려줍니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
         public static Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000) =>

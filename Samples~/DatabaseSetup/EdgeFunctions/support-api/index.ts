@@ -143,6 +143,16 @@ async function bannedUntil(accountId: string): Promise<Date | null> {
 
 const isBanned = async (accountId: string) => (await bannedUntil(accountId)) !== null;
 
+// 브라우저로 연 창이 어느 계정으로 들어왔는지 보이는 데 쓴다. 못 읽어도 창은 그대로 쓴다.
+async function accountEmail(accountId: string): Promise<string | null> {
+  try {
+    const { data } = await db.auth.admin.getUserById(accountId);
+    return data?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // 차단 정보 — 구글·애플 로그인이 차단으로 거절되면 SDK 가 계정을 몰라 정지 기한·사유를 못 채운다. 본인 확인을
 // 마친 이 함수가 대신 알려 준다(get-ban-info 와 같은 기준: 50년 넘게 남으면 영구 = null).
 async function banDetails(accountId: string): Promise<{ account_id: string; banned_until: string | null; message: string | null }> {
@@ -503,7 +513,7 @@ Deno.serve(async (req) => {
     const lang = normLang(str(p, "lang") || t.lang);
     switch (action) {
       case "me":
-        return json({ ok: true, data: { banned: t.ban, lang: t.lang } });
+        return json({ ok: true, data: { banned: t.ban, lang: t.lang, email: t.meta?.platform === "web" ? await accountEmail(t.sub) : null } });
 
       case "categories":
         return json({ ok: true, data: await rpc("ts_support_categories", { p_lang: lang }) });

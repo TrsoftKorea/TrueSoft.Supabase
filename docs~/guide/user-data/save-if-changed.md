@@ -17,6 +17,6 @@ await Supabase.SaveIfChangedAsync();
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 전송을 건너뛰었습니다. 오류가 아닙니다 |
-| `SupabaseReason.UserSaveNotReady` | 세이브 클래스가 아직 초기화되지 않았습니다 |
+| `SupabaseReason.UserSaveNotReady` | 아직 [로드](/guide/user-data/load)하지 않았습니다. 로드 전 값이 서버 값을 덮지 않도록 보내지 않습니다 |
 | `SupabaseReason.UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다 |
 | `SupabaseReason.UserSaveFlushFailed` | 서버가 거부했거나 네트워크 오류입니다 |

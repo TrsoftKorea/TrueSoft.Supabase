@@ -4878,6 +4878,8 @@ alter table public.usage_size_daily enable row level security;
 -- [의도적] 정책 없음 — 아래 함수로 쓰고 운영 콘솔이 ts_admin_usage 로만 읽는다.
 revoke all on table public.usage_size_daily from anon, authenticated;
 
+-- DB 크기는 서버의 DB 전부를 더한다 — Supabase 사용량 화면의 Database Size 가 이 값이다
+-- (게임 DB 외에 기본 빈 DB 2개, 약 15MB. 2026-11-04 두 게임에서 소수점까지 대조).
 create or replace function public.ts_usage_record_size()
 returns void
 language sql
@@ -4885,7 +4887,7 @@ security definer
 set search_path = public
 as $$
   insert into public.usage_size_daily as s (day, db_bytes, storage_bytes, at)
-  values (public.ts_game_today(), pg_database_size(current_database()),
+  values (public.ts_game_today(), (select sum(pg_database_size(oid))::bigint from pg_database),
           (select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects), now())
   on conflict (day) do update
     set db_bytes = excluded.db_bytes, storage_bytes = excluded.storage_bytes, at = excluded.at;
@@ -9714,7 +9716,7 @@ as $$
     'sizes', jsonb_build_object(
       'series', coalesce((select jsonb_agg(jsonb_build_object('day', d.day, 'db', d.db_bytes, 'storage', d.storage_bytes) order by d.day)
                           from public.usage_size_daily d where d.day > public.ts_game_today() - 365), '[]'::jsonb),
-      'db', pg_database_size(current_database()),
+      'db', (select sum(pg_database_size(oid))::bigint from pg_database),
       'storage', (select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects)),
     'sync', (select jsonb_build_object('last_run_at', s.last_run_at, 'finished_at', s.finished_at,
                                        'ok', s.last_ok, 'ok_at', s.last_ok_at, 'message', s.last_message)

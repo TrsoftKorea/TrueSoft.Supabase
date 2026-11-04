@@ -1639,7 +1639,7 @@ namespace TrueBase.Unity
         public static void RegisterUserSaveStaticSync(
             string key,
             Func<bool> hasDirty,
-            Func<Task<bool>> flushAsync,
+            Func<Task<SupabaseResult>> flushAsync,
             Action resetLocalState = null,
             Func<float> getDirtyCooldown = null,
             Func<bool> hasFreshDirty = null)
@@ -1659,8 +1659,8 @@ namespace TrueBase.Unity
             return UserSaveStaticSyncRegistry.RequestImmediateFlush(key);
         }
 
-        /// <summary>특정 정적 세이브를 즉시 전송하고 완료까지 대기합니다. 전송 중이면 완료 후 1회까지 반영 대기합니다.</summary>
-        public static Task<bool> TryFlushUserSaveImmediateAsync(string key, int timeoutMs = 5000)
+        /// <summary>특정 정적 세이브를 즉시 전송하고 완료까지 대기합니다. 전송 중이면 완료 후 1회까지 반영 대기하고, 전송이 실패하면 그 사유를 돌려줍니다.</summary>
+        public static Task<SupabaseResult> TryFlushUserSaveImmediateAsync(string key, int timeoutMs = 5000)
         {
             return UserSaveStaticSyncRegistry.RequestImmediateFlushAsync(key, timeoutMs);
         }
@@ -1671,7 +1671,7 @@ namespace TrueBase.Unity
             UserSaveStaticSyncRegistry.RequestImmediateFlushAll();
         }
 
-        /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다.</summary>
+        /// <summary>등록된 모든 정적 세이브를 즉시 전송하고 완료까지 대기합니다. 시간을 넘기거나 전송이 실패하면 false입니다.</summary>
         public static Task<bool> TrySaveAllAsync(int timeoutMs = 5000)
         {
             return UserSaveStaticSyncRegistry.RequestImmediateFlushAllAsync(timeoutMs);
@@ -2317,6 +2317,8 @@ namespace TrueBase.Unity
 
         private static async Task<SupabaseResult<SupabaseSession>> EnsureReadySessionCoreAsync(bool checkDuplicateLogin)
         {
+            var accountAtCall = _currentSession?.User?.Id;
+
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
 
@@ -2329,6 +2331,10 @@ namespace TrueBase.Unity
 
                 if (checkDuplicateLogin && await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync() == false)
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin);
+
+                // 기다리는 사이 계정이 바뀌었으면 이 호출은 앞 계정 몫이다 — 앞 계정의 저장·삭제가 새 계정 줄에 닿으면 안 된다.
+                if (accountAtCall != null && _currentSession?.User?.Id != accountAtCall)
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotSignedIn);
 
                 return SupabaseResult<SupabaseSession>.Success(_currentSession);
             }
@@ -3743,8 +3749,9 @@ namespace TrueBase.Unity
                 if (_bootstrap == null)
                     throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
 
+                // 리스너가 물려 있어 로그인·재초기화에도 새로 만들지 않는다. 그래서 서비스도 그때그때 읽는다.
                 return _remoteConfig ??= new RemoteConfigFacade(
-                    _bootstrap.RemoteConfigService,
+                    () => _bootstrap.RemoteConfigService,
                     () => _currentSession?.AccessToken);
             }
         }
@@ -4015,13 +4022,21 @@ namespace TrueBase.Unity
             {
                 _chat?.Reset();
                 _chat = null;
-                _remoteConfig = null;
                 DisposeActiveIapFacade();
                 ResetGateRefresh();
                 Push.PushNative.ClearReceived();
+
+                // 앞 계정 값이 새 계정 줄에 저장되지 않게 세이브를 비운다. 같은 계정으로 다시 로그인한 것이면 그대로 둔다.
+                var previousAccountId = _currentSession?.User?.Id;
+                if (!string.IsNullOrEmpty(previousAccountId) && previousAccountId != session?.User?.Id)
+                    UserSaveStaticSyncRegistry.ResetAll();
             }
 
             _currentSession = session;
+
+            if (kind == SupabaseSessionChangeKind.NewSignIn)
+                _remoteConfig?.ResetCache(refetchSubscribed: true);
+
             if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.User.Id))
                 return;
 
@@ -4108,7 +4123,7 @@ namespace TrueBase.Unity
             ResetGateRefresh();
             // 기기에 쌓인 앞 계정 몫 알림이 다음 계정에게 가지 않게.
             Push.PushNative.ClearReceived();
-            _remoteConfig   = null;
+            _remoteConfig?.ResetCache(refetchSubscribed: false);
             // 구독·커서·채널 캐시는 계정에 묶인 상태다. 남겨두면 다음 계정이 물려받는다.
             _chat?.Reset();
             _chat           = null;
@@ -4267,7 +4282,8 @@ namespace TrueBase.Unity
             _matchLobby = null;
             _chat?.Reset();
             _chat = null;
-            _remoteConfig = null;
+            if (!sameProject)
+                _remoteConfig?.ResetCache(refetchSubscribed: true);
             _functions = null;
             DisposeActiveIapFacade();
 

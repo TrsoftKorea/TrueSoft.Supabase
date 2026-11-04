@@ -82,6 +82,10 @@ onGrant: async (productId, alreadyGranted) =>
 }
 ```
 
+::: warning 지급한 뒤에는 false를 돌려주지 마세요
+`false`를 돌려준 주문은 지급 완료로 기록되지 않아 다음 처리 때 `alreadyGranted = false`로 다시 옵니다. 세이브에 지급한 뒤 `Supabase.SaveNowAsync()`가 실패했다고 `false`를 돌려주면, 그 변경분은 자동 저장이 이어서 보내므로 같은 결제가 두 번 지급될 수 있습니다. 저장 결과와 상관없이 `true`를 돌려주거나, 지급을 되돌린 뒤 `false`를 돌려주세요.
+:::
+
 ::: info 다른 계정의 영수증
 다른 계정이 검증한 영수증을 보내면 `alreadyGranted`가 아니라 검증 자체가 거부됩니다. 이 플래그는 항상 "내 계정이 이미 지급한 것"만을 뜻합니다.
 
