@@ -201,10 +201,13 @@ function ccuStats(hours: number) {
 const HOUR = 3600_000
 // [기능, 접속자 1명당 시간당 건수, 늘 나오는 건수, 한 건 응답 크기(바이트) — null 은 크기를 모르는 것]
 // 전송량은 건수 × 크기라 기간과 무관하게 같다.
+// 실제와 같게 플레이어 요청만 — 운영 콘솔은 서버 함수 호출로만 잡힌다. 마지막 값은 본문 크기(null = 모름)이고 머리글은 따로 더한다.
 const MOCK_REQUEST_RATES: [string, number, number, number | null][] = [
   ['원격 설정', 34, 0, 190], ['접속 관리', 33, 0, 60], ['매치 로비', 25, 0, 120], ['세이브', 3, 0, 2400], ['우편', 2, 1, 900],
-  ['채팅', 2, 0, 1500], ['리더보드', 1.5, 1, null], ['운영 콘솔', 0, 9, 2600], ['서버 설정', 0, 14, 80],
+  ['채팅', 2, 0, 1500], ['리더보드', 1.5, 1, null], ['서버 설정', 0, 14, 80],
 ]
+/** 응답 한 건의 머리글 — install.sql 의 ts_usage_header_bytes 와 같은 값. */
+const MOCK_HEADER_BYTES = 1000
 const MOCK_FUNCTION_RATES: [string, number, number, number | null][] = [
   ['운영 콘솔', 0, 8, 4000], ['고객센터', 0.3, 1, 2200], ['푸시', 0.4, 0, 40], ['결제', 0.2, 0, 300], ['탈퇴', 0, 2, 60],
 ]
@@ -256,23 +259,19 @@ function usageStats(hours: number) {
   // 서버와 같게 끝난 시간까지만 — 매시 10분 전에는 직전 시간도 뺀다.
   const lastHour = Math.floor((Date.now() - 10 * 60_000) / HOUR) * HOUR - HOUR
   const firstHour = Math.floor((Date.now() - hours * HOUR) / HOUR) * HOUR + HOUR
-  const ccu = new Map<number, number>()
   const calls = new Map<string, {
     kind: string; feature: string; unsized: number; byAt: Map<number, { calls: number; bytes: number; unsized: number }>
   }>()
   let lastHourRequests = 0
   for (let h = firstHour; h <= lastHour; h += HOUR) {
     const b = usageBucketStart(h, bucketMin)
-    let peak = ccu.get(b) ?? -1
-    for (let s = h; s < h + HOUR; s += SLOT) peak = Math.max(peak, ccuAt(s))
-    ccu.set(b, peak)
     for (const [kind, rates] of [['request', MOCK_REQUEST_RATES], ['function', MOCK_FUNCTION_RATES]] as const) {
       for (const [feature, perPlayer, base, size] of rates) {
         const key = `${kind}:${feature}`
         const f = calls.get(key) ?? { kind, feature, unsized: 0, byAt: new Map<number, { calls: number; bytes: number; unsized: number }>() }
         const c = mockHourCalls(h, kind, feature, perPlayer, base)
         const cur = f.byAt.get(b) ?? { calls: 0, bytes: 0, unsized: 0 }
-        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * (size ?? 0), unsized: cur.unsized + (size === null ? c : 0) })
+        f.byAt.set(b, { calls: cur.calls + c, bytes: cur.bytes + c * (MOCK_HEADER_BYTES + (size ?? 0)), unsized: cur.unsized + (size === null ? c : 0) })
         if (size === null) f.unsized += c
         if (kind === 'request' && h === lastHour) lastHourRequests += c
         calls.set(key, f)
@@ -288,6 +287,14 @@ function usageStats(hours: number) {
       calls: series.reduce((a, p) => a + p.calls, 0), bytes: series.reduce((a, p) => a + p.bytes, 0), series,
     }
   }).sort((a, b) => a.kind.localeCompare(b.kind) || b.calls - a.calls)
+  // 요청 수가 온전하지 않을 수 있는 시간 둘 — 어느 기간에서 봐도 같은 시각이다.
+  const gapByAt = new Map<number, Set<string>>()
+  for (const [h, reason] of [[lastHour - 5 * HOUR, '드물게 쓰인 요청 기록이 밀려남'], [lastHour - 50 * HOUR, '서버 통계가 초기화됨']] as const) {
+    if (h < firstHour) continue
+    const b = usageBucketStart(h, bucketMin)
+    gapByAt.set(b, (gapByAt.get(b) ?? new Set<string>()).add(reason))
+  }
+  const gaps = [...gapByAt.entries()].sort((a, b) => a[0] - b[0]).map(([b, r]) => ({ at: new Date(b).toISOString(), reasons: [...r] }))
   // 기록은 1년보다 오래전부터 쌓인 것으로 둔다 — 어느 기간에도 "기록은 ~부터" 안내가 뜨지 않게.
   const recordedFrom = at(Math.floor((Date.now() - 400 * 24 * HOUR) / HOUR) * HOUR)
   const lastRun = Math.floor(Date.now() / HOUR) * HOUR + 5 * 60_000
@@ -295,11 +302,11 @@ function usageStats(hours: number) {
   return {
     bucket_minutes: bucketMin,
     features,
-    ccu: [...ccu.entries()].sort((a, b) => a[0] - b[0]).map(([b, total]) => ({ at: at(b), total })),
+    gaps,
     calls_first_at: recordedFrom,
     mau: mockMau(),
     sizes: mockSizes(),
-    sync: { last_run_at: at(runAt), finished_at: at(runAt + 400), ok: true, message: `요청 ${lastHourRequests}건` },
+    sync: { last_run_at: at(runAt), finished_at: at(runAt + 400), ok: true, ok_at: at(runAt + 400), message: `요청 ${lastHourRequests}건` },
   }
 }
 
@@ -420,7 +427,7 @@ function playerOf(p: Record<string, unknown>) {
 const CRON_SCHEDULES: [string, string][] = [
   ['run-mail-schedules', '* * * * *'], ['deliver-open-mail-batches', '* * * * *'], ['ts_leaderboard_rotate_due', '* * * * *'],
   ['ccu-snapshot', '*/5 * * * *'], ['usage-sync', '5 * * * *'], ['ts_match_lobby_cleanup', '*/5 * * * *'], ['withdrawal-cleanup', '0,30 * * * *'],
-  ['withdrawal-overdue-check', '15 * * * *'], ['ts_chat_cleanup', '17 * * * *'], ['cleanup-expired-mails', '0 3 * * *'],
+  ['withdrawal-overdue-check', '15 * * * *'], ['usage-sync-check', '15 * * * *'], ['ts_chat_cleanup', '17 * * * *'], ['cleanup-expired-mails', '0 3 * * *'],
   ['cleanup-user-data-logs', '0 3 * * *'], ['cleanup-cron-run-details', '40 3 * * *'], ['purchase-refund-sync-google', '0 4 * * *'],
   ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'],
   ['push-send', '* * * * *'], ['push-outbox-cleanup', '50 3 * * *'],

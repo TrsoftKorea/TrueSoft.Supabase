@@ -20,11 +20,11 @@ type Feature = {
 type Usage = {
   bucket_minutes: number
   features: Feature[]
-  ccu: { at: string; total: number }[]
+  gaps: { at: string; reasons: string[] }[]
   calls_first_at: string | null
   mau: { current: string; months: { month: string; users: number }[]; this_month: { day: string; users: number }[] }
   sizes: { series: { day: string; db: number; storage: number }[]; db: number; storage: number }
-  sync: { last_run_at: string | null; finished_at: string | null; ok: boolean | null; message: string | null } | null
+  sync: { last_run_at: string | null; finished_at: string | null; ok: boolean | null; ok_at: string | null; message: string | null } | null
 }
 
 const RANGES = [
@@ -69,7 +69,6 @@ type Metric = { unitOf: (maxPerHour: number) => { div: number; label: string }; 
 const HOUR = 3600_000
 const W = 600
 const H = 180
-const CCU_COLOR = '#f59e0b'
 // 막대에 따로 색을 주는 기능 수. 나머지는 "그 밖" 한 색으로 묶는다 — 색이 너무 많으면 어느 것이 어느 기능인지 못 가린다.
 const TOP_FEATURES = 6
 const FEATURE_COLORS = ['#1677ff', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
@@ -126,6 +125,17 @@ function coveredHours(at: string, minutes: number, windowStart: number, firstAt:
 
 const xOf = (iso: string, t0: number, t1: number) => ((new Date(iso).getTime() - t0) / (t1 - t0)) * W
 
+type Gaps = Usage['gaps']
+
+/**
+ * 그 묶음의 요청 수가 온전하지 않을 수 있는 사유 — 서버가 준 시각과 문자열 꼴이 달라 시각 값으로 맞춘다.
+ * 요청 수(전송량 탭)에만 해당한다. 서버 함수 호출은 함수가 직접 센다.
+ */
+function gapOf(gaps: Gaps, at: string): string[] | null {
+  const t = new Date(at).getTime()
+  return gaps.find((g) => new Date(g.at).getTime() === t)?.reasons ?? null
+}
+
 function TimeFooter({ hours, withDate }: { hours: number; withDate: boolean }) {
   return (
     <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
@@ -148,16 +158,16 @@ function slicesOf(rows: Row[]): { slices: Slice[]; groupOf: (f: string) => strin
   return { slices, groupOf: (f) => (topNames.has(f) ? f : REST) }
 }
 
-/** 기능별로 쌓은 시간당 막대. 막대를 누르면 그 묶음을 고르고, 같은 막대를 다시 누르면 푼다. ccu 를 주면 동시접속자를 점선으로 겹친다. */
-function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: {
-  rows: Row[]; metric: Metric; data: Usage; hours: number; ccu?: { at: string; total: number }[] | undefined
-  selectedAt: string | null; onSelect: (at: string | null) => void
+/** 기능별로 쌓은 시간당 막대. 막대를 누르면 그 묶음을 고르고, 같은 막대를 다시 누르면 푼다. */
+function StackedChart({ rows, metric, data, hours, gaps, selectedAt, onSelect }: {
+  rows: Row[]; metric: Metric; data: Usage; hours: number
+  gaps: Gaps; selectedAt: string | null; onSelect: (at: string | null) => void
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const withDate = hours > 24
   const { slices, groupOf } = slicesOf(rows)
 
-  const { bars, axis, unit, barW, ccuPath, ccuOf } = useMemo(() => {
+  const { bars, axis, unit, barW } = useMemo(() => {
     const t0 = Date.now() - hours * HOUR
     const t1 = Date.now()
     // 묶음마다 기능별 합 → 시간당 값으로 나눠 쌓는다.
@@ -173,23 +183,13 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
     const raw = [...byAt.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([at, m]) => {
       const hrs = coveredHours(at, data.bucket_minutes, t0, data.calls_first_at)
       const parts = slices.map((s) => ({ ...s, perHour: (m.get(s.name) ?? 0) / hrs, sum: m.get(s.name) ?? 0 }))
-      return { at, x: xOf(at, t0, t1), parts, total: parts.reduce((a, p) => a + p.perHour, 0) }
+      return { at, x: xOf(at, t0, t1), parts, total: parts.reduce((a, p) => a + p.perHour, 0), gap: gapOf(gaps, at) }
     })
     const unit = metric.unitOf(Math.max(1, ...raw.map((b) => b.total)))
     const axis = niceAxis(Math.max(1, ...raw.map((b) => b.total / unit.div)))
     const barW = Math.max(1, ((data.bucket_minutes * 60_000) / (t1 - t0)) * W * 0.8)
-    // 동시접속자는 단위가 달라 제 최댓값을 꼭대기로 따로 그린다 — 값은 마우스를 올린 곳 상자에 나온다.
-    const ccuTop = niceAxis(Math.max(1, ...(ccu ?? []).map((c) => c.total))).top
-    const ccuPath = (ccu ?? [])
-      .map((c, i) => `${i === 0 ? 'M' : 'L'}${(xOf(c.at, t0, t1) + barW / 2).toFixed(1)},${(H - (c.total / ccuTop) * H).toFixed(1)}`)
-      .join(' ')
-    const ccuMap = new Map((ccu ?? []).map((c) => [c.at, c.total]))
-    const ccuOf = (at: string) => {
-      for (const [k, v] of ccuMap) if (new Date(k).getTime() === new Date(at).getTime()) return v
-      return null
-    }
-    return { bars: raw, axis, unit, barW, ccuPath, ccuOf }
-  }, [rows, slices, groupOf, metric, hours, ccu, data.bucket_minutes, data.calls_first_at])
+    return { bars: raw, axis, unit, barW }
+  }, [rows, slices, groupOf, metric, hours, gaps, data.bucket_minutes, data.calls_first_at])
 
   const nearest = (e: React.MouseEvent<SVGSVGElement>): number | null => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -209,7 +209,6 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
   }
 
   const hb = hover !== null ? bars[hover] : undefined
-  const hccu = hb && ccu ? ccuOf(hb.at) : null
   const tip = hb ? (
     <div className="space-y-0.5">
       <div className="text-neutral-500">{bucketAt(hb.at, data.bucket_minutes, withDate)} · {bucketLabel(data.bucket_minutes)} · 시간당</div>
@@ -220,12 +219,7 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
           <span className="ml-auto pl-3 tabular-nums">{metric.text(p.perHour)}</span>
         </div>
       ))}
-      {ccu && (
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 border-t-2 border-dashed shrink-0" style={{ borderColor: CCU_COLOR }} />
-          <span className="tabular-nums">{hccu === null ? '동시접속자 기록 없음' : `동시접속자 ${n(hccu)}명`}</span>
-        </div>
-      )}
+      {hb.gap && <div className="text-neutral-500">일부 빠졌을 수 있음 · {hb.gap.join(', ')}</div>}
     </div>
   ) : null
 
@@ -238,10 +232,10 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
             {s.name}
           </span>
         ))}
-        {ccu && (
+        {bars.some((b) => b.gap) && (
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 border-t-2 border-dashed" style={{ borderColor: CCU_COLOR }} />
-            동시접속자
+            <span className="inline-block w-3 border-t-2 border-dotted border-neutral-500" />
+            일부 빠졌을 수 있는 시간
           </span>
         )}
         <span className="ml-auto">시간당 {unit.label}</span>
@@ -261,10 +255,13 @@ function StackedChart({ rows, metric, data, hours, ccu, selectedAt, onSelect }: 
                   y -= h
                   return h > 0 ? <rect key={p.name} x={b.x} y={y} width={barW} height={h} fill={p.color} /> : null
                 })}
+                {b.gap && (
+                  <line x1={b.x} y1={Math.max(y - 2, 1)} x2={b.x + barW} y2={Math.max(y - 2, 1)}className="stroke-neutral-500" strokeWidth={2}
+                    strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+                )}
               </g>
             )
           })}
-          {ccuPath && <path d={ccuPath} fill="none" stroke={CCU_COLOR} strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
         </svg>
       </ValueAxisFrame>
     </div>
@@ -317,9 +314,9 @@ function ShareTable({ rows, metric, colorOf }: {
 }
 
 /** 기능별 카드 본문 — 막대·요약·표. 전송량 탭과 서버 함수 호출 탭이 같은 꼴을 쓴다. */
-function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect }: {
-  rows: Row[]; metric: Metric; data: Usage; hours: number; ccu?: { at: string; total: number }[]
-  selectedAt: string | null; onSelect: (at: string | null) => void
+function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, onSelect }: {
+  rows: Row[]; metric: Metric; data: Usage; hours: number
+  gaps?: Gaps; selectedAt: string | null; onSelect: (at: string | null) => void
 }) {
   if (rows.length === 0) {
     return <div className="h-44 flex items-center justify-center text-sm text-neutral-400">아직 기록이 없습니다.</div>
@@ -335,9 +332,14 @@ function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect
     : rows.map((r) => ({ feature: r.feature, v: r.total, unsized: r.unsized }))
   const total = tableRows.reduce((a, r) => a + r.v, 0)
   const top = [...tableRows].sort((a, b) => b.v - a.v)[0]
+  const selectedGap = selectedAt ? gapOf(gaps, selectedAt) : null
+  // 점선은 막대가 있는 묶음에만 그려진다 — 막대 없는 묶음의 사유(수집이 멈춘 시간)는 따로 센다.
+  const withData = new Set(rows.flatMap((r) => r.series.filter((p) => p.v > 0 || p.unsized > 0).map((p) => new Date(p.at).getTime())))
+  const gapBars = gaps.filter((g) => withData.has(new Date(g.at).getTime())).length
+  const emptyGaps = gaps.length - gapBars
   return (
     <>
-      <StackedChart rows={rows} metric={metric} data={data} hours={hours} ccu={ccu} selectedAt={selectedAt} onSelect={onSelect} />
+      <StackedChart rows={rows} metric={metric} data={data} hours={hours} gaps={gaps} selectedAt={selectedAt} onSelect={onSelect} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <InfoList className="flex-1" items={[
           { label: '보는 범위', value: selectedAt
@@ -350,6 +352,14 @@ function FeatureBreakdown({ rows, metric, data, hours, ccu, selectedAt, onSelect
           <Button variant="outline" size="compact" onClick={() => onSelect(null)}>기간 전체 보기</Button>
         )}
       </div>
+      {selectedGap
+        ? <div className="text-xs text-neutral-500">이 시간은 일부 빠졌을 수 있습니다 · {selectedGap.join(', ')}</div>
+        : !selectedAt && (gapBars > 0 || emptyGaps > 0) && (
+          <div className="text-xs text-neutral-500">
+            {[gapBars > 0 && `일부 빠졌을 수 있는 막대 ${n(gapBars)}개`, emptyGaps > 0 && `기록 없이 비어 있는 자리 ${n(emptyGaps)}곳`]
+              .filter(Boolean).join(' · ')}
+          </div>
+        )}
       <ShareTable rows={tableRows} metric={metric} colorOf={colorOf} />
       {data.calls_first_at && new Date(data.calls_first_at).getTime() > Date.now() - hours * HOUR && (
         <div className="text-xs text-neutral-400">기록은 {formatAt(data.calls_first_at, true)}부터 있습니다.</div>
@@ -488,6 +498,8 @@ function SyncLine({ data }: { data: Usage }) {
   const stale = !s?.last_run_at || Date.now() - new Date(s.last_run_at).getTime() > 2 * HOUR + 10 * 60_000
   const problem = !s?.last_run_at ? '아직 한 번도 모으지 않았습니다'
     : stale ? '두 시간 넘게 모으지 못했습니다'
+    // 요청 수는 셌는데(그 시각이 성공 시각으로 남는다) 저장 용량만 못 남긴 경우를 가른다.
+    : s.ok === false && s.ok_at && s.ok_at === s.finished_at ? '저장 용량 기록에 실패했습니다'
     : s.ok === false ? '마지막 수집에 실패했습니다'
     : null
   return (
@@ -520,6 +532,8 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
   const [error, setError] = useState('')
   const [selectedAt, setSelectedAt] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('egress')
+  // 전송량은 어림값이라 기능끼리 견줄 때는 DB 가 직접 센 요청 수가 더 믿을 만하다 — 같은 그래프를 건수로도 본다.
+  const [egressBy, setEgressBy] = useState<'bytes' | 'calls'>('bytes')
   const reqId = useRef(0)
 
   const load = useCallback(async () => {
@@ -545,7 +559,7 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
   useEffect(() => { setSelectedAt(null) }, [data, tab])
 
   const usage = data?.usage
-  const egressRows = useMemo(() => (usage ? rowsOf(usage.features, null, 'bytes') : []), [usage])
+  const egressRows = useMemo(() => (usage ? rowsOf(usage.features, null, egressBy) : []), [usage, egressBy])
   const functionRows = useMemo(() => (usage ? rowsOf(usage.features, 'function', 'calls') : []), [usage])
 
   const months12 = usage ? last12Months(usage.mau.current, usage.mau.months) : []
@@ -595,9 +609,16 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
         <>
           {tab === 'egress' && <WhiteCard className="p-5 space-y-5">
             <CardHeader title="데이터 전송량"
-              description="플레이어에게 나간 데이터 양을 기능별로 어림해 동시접속자와 함께 봅니다. 막대를 누르면 그때의 값만 봅니다." />
-            <FeatureBreakdown rows={egressRows} metric={BYTES} data={usage} hours={data.hours} ccu={usage.ccu}
-              selectedAt={selectedAt} onSelect={setSelectedAt} />
+              description={egressBy === 'bytes'
+                ? '플레이어에게 나간 데이터 양을 기능별로 어림해 봅니다. 막대를 누르면 그때의 값만 봅니다.'
+                : '플레이어 요청 수를 기능별로 봅니다. 막대를 누르면 그때의 값만 봅니다.'} />
+            <div>
+              <div className="text-xs font-medium text-neutral-500 mb-1">기준</div>
+              <Segmented value={egressBy} onChange={setEgressBy}
+                options={[{ v: 'bytes', label: '전송량' }, { v: 'calls', label: '요청 수' }]} />
+            </div>
+            <FeatureBreakdown rows={egressRows} metric={egressBy === 'bytes' ? BYTES : CALLS} data={usage} hours={data.hours}
+              gaps={usage.gaps} selectedAt={selectedAt} onSelect={setSelectedAt} />
           </WhiteCard>}
 
           {tab === 'functions' && <WhiteCard className="p-5 space-y-5">

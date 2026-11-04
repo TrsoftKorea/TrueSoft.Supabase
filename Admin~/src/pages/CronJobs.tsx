@@ -39,6 +39,7 @@ const JOB_LABELS: Record<string, string> = {
   'cleanup-cron-run-details': '7일 지난 자동 작업 기록 정리',
   'ccu-snapshot': '동시접속자 기록',
   'usage-sync': 'Supabase 사용량 기록',
+  'usage-sync-check': 'Supabase 사용량 기록이 제때 됐는지 확인',
   'purchase-refund-sync-google': '구글 환불 확인',
   'purchase-price-sync': '환율표·빈 결제 금액 채우기',
   'push-send': '남은 푸시 알림 보내기',
