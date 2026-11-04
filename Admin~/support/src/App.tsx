@@ -144,6 +144,7 @@ export function App({ api }: { api: SupportApi | null }) {
   )
 
   const shownEmail = api?.viaWeb && signedIn ? email : null
+  const webLogout = api?.viaWeb && signedIn ? logout : undefined
 
   let body: ReactNode
   if (!api) {
@@ -152,7 +153,7 @@ export function App({ api }: { api: SupportApi | null }) {
     body = <Spinner label={t(lang, 'loading')} />
   } else if (view.kind === 'home') {
     body = (
-      <HomeView api={api} lang={lang} signedIn={signedIn} email={shownEmail} faqs={faqs} categories={categories} notices={notices}
+      <HomeView api={api} lang={lang} signedIn={signedIn} email={shownEmail} onLogout={webLogout} faqs={faqs} categories={categories} notices={notices}
         look={look} onGo={open} onError={fail} />
     )
   } else {
@@ -180,7 +181,7 @@ export function App({ api }: { api: SupportApi | null }) {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col">{body}</div>
-      <Footer lang={lang} onLang={setLang} name={look?.name ?? null} email={shownEmail} onLogout={api?.viaWeb && signedIn ? logout : undefined} />
+      <Footer lang={lang} onLang={setLang} email={shownEmail} onLogout={webLogout} />
     </div>
   )
 }
@@ -218,7 +219,7 @@ function SubHeader({ lang, title, onBack }: { lang: Lang; title: string; onBack:
   )
 }
 
-function Footer({ lang, onLang, name, email, onLogout }: { lang: Lang; onLang: (l: Lang) => void; name: string | null; email: string | null; onLogout: (() => void) | undefined }) {
+function Footer({ lang, onLang, email, onLogout }: { lang: Lang; onLang: (l: Lang) => void; email: string | null; onLogout: (() => void) | undefined }) {
   return (
     <footer className="mt-10 border-t border-neutral-200 bg-white">
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-3">
@@ -230,9 +231,8 @@ function Footer({ lang, onLang, name, email, onLogout }: { lang: Lang; onLang: (
             </button>
           ))}
         </nav>
-        {(name || onLogout) && (
+        {onLogout && (
           <div className="flex items-center gap-3">
-            {name && <p className="flex-1 text-xs text-neutral-400">{name}</p>}
             {email && <p className="ml-auto min-w-0 truncate text-xs text-neutral-500" title={email}>{email}</p>}
             {onLogout && (
               <button type="button" onClick={onLogout} className={`${email ? '' : 'ml-auto '}shrink-0 text-xs text-neutral-500 underline hover:text-neutral-800`}>
@@ -310,8 +310,9 @@ function FaqList({ lang, items }: { lang: Lang; items: Faq[] }) {
   )
 }
 
-function HomeView({ api, lang, signedIn, email, faqs, categories, notices, look, onGo, onError }: {
-  api: SupportApi; lang: Lang; signedIn: boolean; email: string | null; faqs: Faq[] | null; categories: Category[]; notices: ReactNode
+function HomeView({ api, lang, signedIn, email, onLogout, faqs, categories, notices, look, onGo, onError }: {
+  api: SupportApi; lang: Lang; signedIn: boolean; email: string | null; onLogout: (() => void) | undefined
+  faqs: Faq[] | null; categories: Category[]; notices: ReactNode
   look: Look | null | undefined; onGo: (v: View) => void; onError: (e: unknown) => void
 }) {
   const [draft, setDraft] = useState('')
@@ -357,16 +358,21 @@ function HomeView({ api, lang, signedIn, email, faqs, categories, notices, look,
           backgroundImage: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #000) 0%, color-mix(in srgb, var(--accent) 45%, #0f172a) 100%)',
         }}>
         <CloseButton lang={lang} className="absolute top-2 right-2 text-white/80" />
-        {(look?.name || email) && (
+        {(look?.name || email || onLogout) && (
           <div className={`max-w-2xl mx-auto px-4 pt-3 ${IN_APP ? 'pr-12' : ''} flex items-center gap-2 min-w-0`}>
             {look?.name && (look.icon
               ? <img src={look.icon} alt="" className="w-7 h-7 shrink-0 rounded-md bg-white object-cover" />
               : <span aria-hidden className="w-7 h-7 shrink-0 rounded-md bg-white/20 flex items-center justify-center text-sm font-semibold">{[...look.name][0]}</span>)}
             {look?.name && <span className="text-[15px] font-semibold truncate">{look.name}</span>}
             {email && <span className="ml-auto min-w-0 truncate text-xs text-white/85" title={email}>{email}</span>}
+            {onLogout && (
+              <button type="button" onClick={onLogout} className={`${email ? '' : 'ml-auto '}shrink-0 text-xs text-white/85 underline hover:text-white`}>
+                {t(lang, 'logout')}
+              </button>
+            )}
           </div>
         )}
-        <div className={`max-w-2xl mx-auto px-4 ${look?.name || email ? 'pt-7' : 'pt-10'} pb-9 flex flex-col items-center text-center`}>
+        <div className={`max-w-2xl mx-auto px-4 ${look?.name || email || onLogout ? 'pt-7' : 'pt-10'} pb-9 flex flex-col items-center text-center`}>
           <h1 className="text-2xl font-semibold">{t(lang, 'heroTitle')}</h1>
           <form className="mt-6 w-full max-w-lg flex rounded-lg overflow-hidden shadow-sm" role="search"
             onSubmit={(e) => { e.preventDefault(); submit() }}>
