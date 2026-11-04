@@ -714,20 +714,24 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 본인 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋).
-        /// 다음 <see cref="LoadAsync"/> 시 <c>ts_ensure_my_row</c>가 기본 행을 재생성하므로 실질적으로 "기본값 리셋"입니다.
+        /// 이미 로드한 상태였으면 <c>ts_ensure_my_row</c>로 기본 행을 다시 만들어 읽어 오므로, 끝나면 바로 이어서 저장할 수 있습니다.
         /// 계정 탈퇴가 아니라 세이브 데이터만 비웁니다.
         /// <para>먼저 로컬을 기본값으로 리셋한 뒤 서버를 삭제하므로, 삭제 도중 자동 저장이 옛 데이터를 되쓰지 않습니다.
         /// 저장이 활발한 순간(전투 중 등)보다 설정 화면 등 조용한 시점에 호출하세요.
-        /// 실패 시 로컬은 기본값이지만 서버 데이터는 유지되므로 <see cref="LoadAsync"/>로 재동기화하세요.</para>
-        /// <para>로드 전 초기값(fallback) 스냅샷도 함께 버립니다. 삭제 후 다시 초기값을 넣고 싶으면
-        /// <see cref="LoadAsync"/> 전에 새로 세팅하세요.</para>
+        /// 실패 시 로컬은 기본값이지만 서버 데이터는 유지되므로 <see cref="LoadAsync"/>로 재동기화하세요.
+        /// 지운 뒤 다시 읽기만 실패해도 실패를 반환합니다 — 같은 방법으로 다시 로드하면 됩니다.</para>
+        /// <para>로드 전 초기값(fallback) 스냅샷도 함께 버립니다. 로드하기 전에 지웠으면 다음 <see cref="LoadAsync"/> 전에 새로 세팅하고,
+        /// 로드한 뒤에 지웠으면 삭제가 끝난 다음 값을 넣으세요.</para>
         /// </summary>
         public async Task<SupabaseResult> DeleteAsync()
         {
             EnsureRegistered();
 
+            var wasLoaded = _hasLoadedOnce;
+
             // 로컬을 먼저 리셋 — 삭제 await 도중 자동 저장이 돌아도 diff가 비어 PATCH가 안 나감(옛 데이터 되쓰기 방지).
             ResetLocalState();
+            var resetCount = _resetCount;
 
             // 로드 전 초기값 스냅샷도 함께 버린다.
             // 남겨두면 다음 LoadAsync에서 재생성된 기본 행(컬렉션 컬럼은 SQL NULL) 위에
@@ -758,6 +762,19 @@ namespace TrueBase.Unity
                                    + "다음 로그인에서 옛 데이터가 복원될 수 있습니다.");
                 }
             }
+
+            // 플레이 중에 지웠으면 기본 행을 읽어 와 저장을 다시 연다. 리셋한 로컬은 C# 기본값이라 DB 기본값과 다를 수 있어,
+            // 읽지 않고 저장만 열면 틀린 값이 서버에 올라간다. 게임이 다시 로드하지 않아도 이후 진행이 사라지지 않게 하려는 것이다.
+            if (!wasLoaded || resetCount != _resetCount)
+                return SupabaseResult.Ok;
+
+            var loaded = await LoadAsync();
+            if (!loaded.IsSuccess)
+                return SupabaseResult.Fail(loaded.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
+
+            // 이 로드는 게임이 부른 것이 아니다 — 게임이 다음에 부르는 로드가 신규 유저 후처리를 놓치지 않게 넘긴다.
+            if (loaded.IsNewUser)
+                _newUserCarriedForAccount = SupabaseSDK.CurrentAccountId;
 
             return SupabaseResult.Ok;
         }
