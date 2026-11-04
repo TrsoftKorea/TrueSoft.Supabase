@@ -18,7 +18,7 @@ Apple 로그인([신규 로그인](/guide/social/apple/signin))을 쓰기 전 �
 
 게스트 연동을 쓰면 **Authentication > Sign In / Providers**에서 **Manual Linking**을 활성화합니다.
 
-## Android 추가
+## Android 추가 {#android}
 
 Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합니다.
 
@@ -34,8 +34,12 @@ Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합
 **Supabase · Providers > Apple**
 
 - **Client IDs**: 위 Bundle ID 앞에 **Services ID를 맨 앞에 오도록 추가**합니다. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](/guide/social/apple/setup-details#client-ids))
-- OAuth에 쓰는 **Secret Key**는 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 JWT 형태로 넣습니다.
+- OAuth에 쓰는 **Secret Key**는 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 JWT 형태로 넣습니다. **6개월마다 만료**되어 교체하지 않으면 Android 로그인이 끊깁니다. [Secret Key 갱신](/guide/social/apple/setup-details#secret)을 참고하세요.
 
 **Supabase · URL Configuration**
 
 - **Redirect URLs**에 `{패키지이름}://login-callback`을 추가합니다. 패키지 이름은 Unity **Player Settings > Other Settings > Package Name** 값입니다.
+
+::: info 탈퇴 처리에 필요한 값
+계정을 삭제할 때 Apple 연결을 끊으려면 서비스 연결값도 필요합니다. [탈퇴 시 Apple 연결 해제](/guide/social/apple/#revoke)를 참고하세요.
+:::

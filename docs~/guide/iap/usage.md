@@ -15,6 +15,7 @@ Unity IAP를 초기화하고 서버 영수증 검증 파이프라인을 연결�
 ```csharp
 var result = await SupabaseIAP.CreateIAPAsync(productIds, async (productId, alreadyGranted) =>
 {
+    if (alreadyGranted) return true;   // 이미 지급된 결제의 재처리는 소비만 완료합니다
     await MyInventory.GiveItemAsync(productId);
     return true;
 });

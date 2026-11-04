@@ -13,7 +13,7 @@
 | [`Supabase.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |
 
 ::: tip
-프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/how-it-works)를 참고하세요.
+프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/)를 참고하세요.
 :::
 
 ## 원격 설정

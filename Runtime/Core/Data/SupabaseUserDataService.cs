@@ -12,10 +12,16 @@ namespace TrueBase.Core.Data
     /// </summary>
     public sealed class SupabaseUserDataService
     {
+        private const string PatchNoRowsAffected = "patch_no_rows_affected";
+
         private readonly string _supabaseUrl;
         private readonly string _publishableKey;
         private readonly ISupabaseHttpClient _httpClient;
         private readonly ISupabaseJsonSerializer _jsonSerializer;
+
+        // 이번 실행에서 저장 경로가 행을 보장해 둔 "테이블|계정" → 그때의 플레이어 id. 저장마다 보장 요청을 보내지 않으려는 기억이다.
+        // 플레이어 id 까지 보는 이유: 게스트가 구글·애플을 연동하면 id 가 바뀌는데 user_data.user_id 를 고치는 곳은 ts_ensure_my_row 뿐이다.
+        private readonly Dictionary<string, string> _ensuredRows = new Dictionary<string, string>(StringComparer.Ordinal);
 
         public SupabaseUserDataService(
             string supabaseUrl,
@@ -76,10 +82,10 @@ namespace TrueBase.Core.Data
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터(<c>account_id=eq.</c>)에 사용. 필수.</param>
-        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRowFirst"/>가 true일 때 행 생성에만 사용됩니다.</param>
+        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRow"/>가 true일 때 행 보장에만 사용됩니다.</param>
         /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
         /// <param name="patch">변경할 컬럼과 값의 딕셔너리. 변경된 필드만 포함. 비어 있으면 실패.</param>
-        /// <param name="ensureRowFirst">true면 PATCH 전에 <see cref="EnsureMyRowAsync"/>로 본인 행 존재를 보장합니다(기본값: true).</param>
+        /// <param name="ensureRow">true면 본인 행이 있도록 보장합니다(기본값: true). 이 계정·플레이어 id로 처음 저장할 때만 PATCH 전에 <see cref="EnsureMyRowAsync"/>를 부르고, 그 뒤로는 PATCH가 행을 못 찾았을 때만 부른 뒤 다시 보냅니다.</param>
         /// <param name="setUpdatedAtIsoUtc">true면 patch에 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
         public async Task<SupabaseResult<bool>> PatchAsync(
             string accessToken,
@@ -87,7 +93,7 @@ namespace TrueBase.Core.Data
             string playerUserId,
             string tableName,
             Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
@@ -102,11 +108,17 @@ namespace TrueBase.Core.Data
             if (patch == null || patch.Count == 0)
                 return SupabaseResult<bool>.Fail("patch_empty");
 
-            if (ensureRowFirst)
+            var rowKey = BuildRowKey(tableName, accountId);
+            var stable = string.IsNullOrWhiteSpace(playerUserId) ? null : playerUserId.Trim();
+            var ensuredNow = false;
+            if (ensureRow && (_ensuredRows.TryGetValue(rowKey, out var ensuredFor) == false || ensuredFor != stable))
             {
-                var ensured = await EnsureMyRowAsync(accessToken, tableName, playerUserId);
+                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
                 if (ensured == null || !ensured.IsSuccess)
                     return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
+
+                _ensuredRows[rowKey] = stable;
+                ensuredNow = true;
             }
 
             var url =
@@ -122,6 +134,23 @@ namespace TrueBase.Core.Data
 
             var bodyJson = JsonConvert.SerializeObject(payload);
 
+            var sent = await SendPatchAsync(accessToken, url, bodyJson);
+
+            // 기억해 둔 행이 사라졌을 수 있다 — 다른 기기에서 세이브를 지운 경우 등.
+            if (ensureRow && !ensuredNow && sent.ErrorCode == PatchNoRowsAffected)
+            {
+                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
+                if (ensured == null || !ensured.IsSuccess)
+                    return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
+
+                sent = await SendPatchAsync(accessToken, url, bodyJson);
+            }
+
+            return sent;
+        }
+
+        private async Task<SupabaseResult<bool>> SendPatchAsync(string accessToken, string url, string bodyJson)
+        {
             var response = await _httpClient.SendAsync(
                 method: "PATCH",
                 url: url,
@@ -137,10 +166,13 @@ namespace TrueBase.Core.Data
             // return=representation: 빈 배열([])이면 필터에 매칭된 행이 없었음
             var trimmedBody = response.Body?.Trim();
             if (string.IsNullOrEmpty(trimmedBody) || trimmedBody == "[]")
-                return SupabaseResult<bool>.Fail("patch_no_rows_affected");
+                return SupabaseResult<bool>.Fail(PatchNoRowsAffected);
 
             return SupabaseResult<bool>.Success(true);
         }
+
+        private static string BuildRowKey(string tableName, string accountId) =>
+            tableName.Trim() + "|" + accountId.Trim();
 
         /// <summary>
         /// 본인 세이브 행을 삭제합니다(<c>DELETE ... account_id=eq.</c>). RLS <c>delete_own_authenticated</c> 정책으로 허용됩니다.
@@ -178,6 +210,8 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete"));
+
+            _ensuredRows.Remove(BuildRowKey(tableName, accountId));
 
             // 매칭 행이 없어도(빈 배열) 삭제 목적은 달성 — 멱등 성공.
             return SupabaseResult<bool>.Success(true);
@@ -270,10 +304,10 @@ namespace TrueBase.Core.Data
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="accountId">현재 계정 ID(<c>auth.users.id</c>). PATCH 필터에 사용. 필수.</param>
-        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRowFirst"/>가 true일 때 행 생성에만 사용됩니다.</param>
+        /// <param name="playerUserId">안정 플레이어 id. <paramref name="ensureRow"/>가 true일 때 행 보장에만 사용됩니다.</param>
         /// <param name="previous">직전 스냅샷. null이면 <paramref name="current"/>의 모든 매핑 컬럼이 전송됩니다.</param>
         /// <param name="current">현재 상태. 필수.</param>
-        /// <param name="ensureRowFirst">true면 PATCH 전에 본인 행 존재를 보장합니다(기본값: true).</param>
+        /// <param name="ensureRow">true면 본인 행이 있도록 보장합니다(기본값: true). <see cref="PatchAsync"/>를 참고하세요.</param>
         /// <param name="setUpdatedAtIsoUtc">true면 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,
@@ -281,7 +315,7 @@ namespace TrueBase.Core.Data
             string playerUserId,
             T previous,
             T current,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             string tableName;
@@ -305,7 +339,7 @@ namespace TrueBase.Core.Data
                 playerUserId,
                 tableName,
                 patch,
-                ensureRowFirst,
+                ensureRow,
                 setUpdatedAtIsoUtc);
         }
 

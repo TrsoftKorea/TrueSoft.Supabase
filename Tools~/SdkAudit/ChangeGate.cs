@@ -20,7 +20,7 @@ namespace SdkAudit
             "Samples~/",
             "docs~/",
             "Tools~/SdkAudit/",
-            "Admin~/supabase/functions/admin-api/", // R16 연결값 키 목록
+            "Admin~/supabase/functions/", // R16 공통 구간·호출 세기·연결값 키 목록
             "Admin~/src/pages/Settings.tsx",
             "CLAUDE.md",
             ".claude/",

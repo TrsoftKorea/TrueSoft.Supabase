@@ -12,7 +12,7 @@ Task<SupabaseResult> Supabase.RedeemWithdrawalCancelAsync(string cancelToken = n
 var login = await Supabase.TriggerAutoLoginAsync();
 if (login.Reason == SupabaseReason.WithdrawalGateBlocked)
 {
-    // 남은 유예 시간 등을 보여주고, 사용자가 취소를 선택하면
+    // 남은 유예 시간 등을 보여주고, 플레이어가 취소를 선택하면
     var cancel = await Supabase.RedeemWithdrawalCancelAsync(login.WithdrawalCancelToken);
     if (cancel.IsSuccess)
         ShowMessage("탈퇴가 취소되었습니다. 다시 로그인해 주세요.");

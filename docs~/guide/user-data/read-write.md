@@ -22,7 +22,7 @@ PlayerSave.Inventory.Add(5);
 PlayerSave.Inventory[0] = 9;
 PlayerSave.Stats["atk"] = 100;
 
-PlayerSave.Inventory = new List<int>{1, 2}; // 통째 교체도 가능
+PlayerSave.Inventory = new AutoList<int>{1, 2}; // 통째 교체도 가능
 ```
 
 ::: tip 중첩 컬렉션

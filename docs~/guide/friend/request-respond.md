@@ -27,5 +27,5 @@ if (r.IsSuccess)
 | `SupabaseReason.FriendRequestNotPending` | 이미 처리된 요청입니다 |
 
 ::: info 화면을 갱신하는 시점
-호출이 성공하면 그 자리에서 목록에서 빼고, 수락이면 [친구 목록](/guide/friend/list)에도 바로 추가하세요. 따로 다시 불러올 필요는 없습니다.
+호출이 성공하면 요청은 그 자리에서 목록에서 빼면 됩니다. 수락했으면 [친구 목록](/guide/friend/list)을 다시 불러 화면을 맞춥니다.
 :::

@@ -27,6 +27,7 @@ export default defineConfig({
       {
         text: '시작하기',
         link: '/guide/start/',
+        collapsed: true,
         items: [
           { text: '설치', link: '/guide/start/install' },
           { text: '프로젝트 생성', link: '/guide/start/project' },
@@ -38,10 +39,12 @@ export default defineConfig({
       {
         text: '인증',
         link: '/guide/auth/',
+        collapsed: true,
         items: [
           {
             text: '로그인',
-            collapsed: false,
+            link: '/guide/auth/login',
+            collapsed: true,
             items: [
               { text: '익명 로그인', link: '/guide/auth/anonymous' },
               { text: '자동 로그인', link: '/guide/auth/auto-login' },
@@ -55,7 +58,8 @@ export default defineConfig({
           },
           {
             text: '소셜 로그인',
-            collapsed: false,
+            link: '/guide/social/',
+            collapsed: true,
             items: [
               {
                 text: 'Google',
@@ -94,6 +98,7 @@ export default defineConfig({
       {
         text: '계정',
         link: '/guide/account/',
+        collapsed: true,
         items: [
           {
             text: '닉네임',
@@ -131,13 +136,13 @@ export default defineConfig({
       {
         text: '게임 데이터',
         link: '/guide/game-data/',
+        collapsed: true,
         items: [
           {
             text: '유저 데이터',
             link: '/guide/user-data/',
-            collapsed: false,
+            collapsed: true,
             items: [
-              { text: '개요', link: '/guide/user-data/how-it-works' },
               { text: '클래스 생성', link: '/guide/user-data/class-gen' },
               { text: '로드', link: '/guide/user-data/load' },
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
@@ -162,7 +167,6 @@ export default defineConfig({
             link: '/guide/remote-config/',
             collapsed: true,
             items: [
-              { text: '개요', link: '/guide/remote-config/how-it-works' },
               { text: '빠른 시작', link: '/guide/remote-config/quickstart' },
               { text: '값 읽기', link: '/guide/remote-config/get' },
               { text: '변경 구독', link: '/guide/remote-config/listener' },
@@ -173,6 +177,8 @@ export default defineConfig({
       },
       {
         text: '서비스',
+        link: '/guide/service/',
+        collapsed: true,
         items: [
           {
             text: '인앱 결제',
@@ -180,6 +186,15 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '사전 준비', link: '/guide/iap/prepare' },
+              {
+                text: '서비스 계정 JSON 발급',
+                link: '/guide/google-service-account/',
+                collapsed: true,
+                items: [
+                  { text: '발급 절차', link: '/guide/google-service-account/issue' },
+                  { text: '콘솔 등록', link: '/guide/google-service-account/console' }
+                ]
+              },
               { text: '사용법', link: '/guide/iap/usage' },
               { text: '상품 정보 조회', link: '/guide/iap/product-info' },
               { text: '더 알아보기', link: '/guide/iap/advanced' },
@@ -231,14 +246,7 @@ export default defineConfig({
               { text: '최근 전적', link: '/guide/match-result/history' }
             ]
           },
-          {
-            text: '쿠폰',
-            link: '/guide/coupon/',
-            collapsed: true,
-            items: [
-              { text: '쿠폰 사용', link: '/guide/coupon/redeem' }
-            ]
-          },
+          { text: '쿠폰', link: '/guide/coupon/' },
           {
             text: '고객센터',
             link: '/guide/customer-center/',
@@ -315,20 +323,10 @@ export default defineConfig({
         ]
       },
       {
-        text: '서비스 계정 JSON 발급',
-        link: '/guide/google-service-account/',
-        collapsed: true,
-        items: [
-          { text: '발급 절차', link: '/guide/google-service-account/issue' },
-          { text: '콘솔 등록', link: '/guide/google-service-account/console' }
-        ]
-      },
-      {
         text: '플레이나누 이관',
         link: '/guide/migration/',
         collapsed: true,
         items: [
-          { text: '개요', link: '/guide/migration/how-it-works' },
           { text: '설치', link: '/guide/migration/install' },
           { text: '로그인', link: '/guide/migration/login' },
           { text: '탈퇴 취소', link: '/guide/migration/withdrawal' },
@@ -340,6 +338,7 @@ export default defineConfig({
       {
         text: 'API',
         link: '/guide/api/',
+        collapsed: true,
         items: [
           { text: '인증', link: '/guide/api/auth' },
           { text: '계정', link: '/guide/api/account' },
@@ -360,6 +359,7 @@ export default defineConfig({
       },
       {
         text: '부록',
+        link: '/guide/appendix/',
         collapsed: true,
         items: [
           { text: '예제', link: '/guide/samples/examples' },

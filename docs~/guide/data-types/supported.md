@@ -8,7 +8,6 @@
 | `decimal` | `numeric` | 정밀 금액 |
 | `string` | `text` | |
 | `DateTime` / `DateTimeOffset` | `timestamptz` | ISO8601 자동 파싱 |
-| `DateOnly` / `TimeOnly` | `date` / `time` | 날짜·시각만 |
 | `List<T>` | `jsonb` | |
 | `T[]` | `jsonb` | |
 | `Dictionary<K,V>` | `jsonb` | |

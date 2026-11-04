@@ -18,7 +18,7 @@
 :::
 
 ```csharp
-[DataColumn("stage_clears")] internal AutoList<int> stageClears = new();   // 기본값 0
+[DataColumn("stage_clears")] internal AutoList<int> stage_clears = new();   // 기본값 0
 ```
 ```csharp
 PlayerSave.StageClears[4] = 1;        // 크기가 3이어도 자동 확장 후 저장
@@ -30,9 +30,9 @@ int s = PlayerSave.StageClears[4];    // 범위 밖이면 기본값 반환, 확�
 기본값이 `0`/`false`/`null`이 아니어야 하면 **필드에 `[AutoDefault(...)]` 한 줄**을 붙입니다.
 
 ```csharp
-[DataColumn("stage_scores")] [AutoDefault(-1)]    internal AutoList<int>        stageScores = new();  // 미클리어 = -1
-[DataColumn("unlocked")]     [AutoDefault(false)] internal AutoList<bool>       unlocked    = new();
-[DataColumn("counters")]     [AutoDefault(0)]     internal AutoDict<string,int> counters    = new();
+[DataColumn("stage_scores")] [AutoDefault(-1)]    internal AutoList<int>        stage_scores = new();  // 미클리어 = -1
+[DataColumn("unlocked")]     [AutoDefault(false)] internal AutoList<bool>       unlocked     = new();
+[DataColumn("counters")]     [AutoDefault(0)]     internal AutoDict<string,int> counters     = new();
 ```
 
 - **단순 값 1개**는 그 값으로 변환됩니다(`int`·`long`·`float`·`bool`·`string`·`enum` 등).
@@ -46,9 +46,9 @@ public struct Stage { public int score, stars; public Stage(int s, int st) { sco
 ```
 
 ```csharp
-public class HeroData { public int level; public HeroData(int level) { this.level = level; } }
+public class HeroData { public int level; public HeroData() { } public HeroData(int level) { this.level = level; } }
 
-[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<HeroName, HeroData> heroData = new();   // 빈 칸 = new HeroData(1)
+[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<HeroName, HeroData> hero_data = new();   // 빈 칸 = new HeroData(1)
 ```
 
 요소 타입에 인자와 맞는 생성자가 있어야 합니다. 슬롯마다 매번 새 인스턴스를 만들기 때문에 struct·튜플뿐 아니라 클래스 값도 자동 확장에 안전합니다 — 한 슬롯을 수정해도 다른 슬롯이 같이 바뀌지 않습니다.
@@ -71,8 +71,8 @@ PlayerSave.HeroData[hero].Count = 1;   // hero가 처음 등장해도 그 자리
 
 이 동작은 `AutoDict`/`AutoDict2D`의 참조 타입 `[AutoDefault]` 값에만 적용됩니다. `AutoList`/`AutoList2D`는 인덱스가 슬롯 순서를 나타내므로 항상 비파괴로 남아 있고, 스칼라·struct 값이나 `DefaultValue = ...`로 직접 대입한 경우도 기존처럼 비파괴입니다.
 
-::: warning 필드·프로퍼티 타입을 모두 바꾸세요
-자동 확장 인덱서는 정적 타입이 `AutoList`/`AutoDict`일 때만 동작합니다. 생성 클래스의 **Row 필드와 정적 프로퍼티를 모두** `AutoList<T>`(또는 `AutoDict<TKey,TValue>`)로 선언하세요. `List<T>`로 캐스팅하면 기본 인덱서가 쓰입니다.
+::: warning List 변수에 담으면 자동 확장이 꺼집니다
+자동 확장 인덱서는 정적 타입이 `AutoList`/`AutoDict`일 때만 동작합니다. 생성기가 Row 필드와 정적 프로퍼티를 함께 만들어 주므로 손댈 곳은 없습니다. 값을 `List<T>` 변수에 담으면 기본 인덱서가 쓰입니다.
 :::
 
 ## 이중 리스트
@@ -129,7 +129,7 @@ bool has = PlayerSave.Counts["fire"].ContainsKey(3);   // 프록시 연산
 
 ## 일반 리스트처럼 쓸 때 주의
 
-`AutoList`·`AutoList2D`는 리스트를 상속해 대부분의 List 연산이 그대로 되지만, **인덱스가 슬롯 의미**(예: `stageClears[stageId]`)라 일반 리스트처럼 다루면 매핑이 깨질 수 있습니다.
+`AutoList`·`AutoList2D`는 리스트를 상속해 대부분의 List 연산이 그대로 되지만, **인덱스가 슬롯 의미**(예: `PlayerSave.StageClears[stageId]`)라 일반 리스트처럼 다루면 매핑이 깨질 수 있습니다.
 
 - **`Count`·`foreach`·LINQ는 실제 저장된 값만** 봅니다. 자동 확장 기본값은 미리 채워지지 않으므로, 안 쓴 슬롯은 열거·`Count`에 잡히지 않습니다.
 - **인덱스를 미는 연산은 매핑을 깨뜨립니다.** `Insert`·`RemoveAt`·`Sort`·`Reverse` 등은 호출 시 `[Obsolete]` 경고가 표시됩니다. 슬롯을 비우려면 제거가 아니라 `list[i] = 기본값`으로 덮어쓰세요.

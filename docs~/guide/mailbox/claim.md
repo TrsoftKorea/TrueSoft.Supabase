@@ -4,14 +4,14 @@
 Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimMailItemsAsync(string mailId)
 ```
 
-우편 1건의 첨부 보상을 수령합니다. 수령과 동시에 읽음 처리됩니다.
+우편 1건의 첨부 보상을 수령합니다. 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 이 호출 안에서 지급까지 끝내므로, 결과는 보상 표시에만 씁니다.
 
 ```csharp
 var result = await Supabase.ClaimMailItemsAsync(mailId);
 if (result.IsSuccess)
 {
-    foreach (var reward in result.Data)   // 지급된 보상 목록
-        GrantItem(reward.ItemKey, reward.Count);
+    foreach (var reward in result.Data)
+        ShowRewardPopup(reward.ItemKey, reward.Count);   // 지급은 이미 끝났으니 표시만 합니다
 }
 ```
 

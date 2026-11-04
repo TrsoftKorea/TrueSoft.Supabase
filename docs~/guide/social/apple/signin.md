@@ -21,7 +21,7 @@ else
 ```
 
 ::: tip Android 사용 시
-Android도 같은 호출로 동작합니다. Supabase 대시보드 Redirect URLs에 `{패키지이름}://login-callback`만 등록하면 되고, 나머지는 자동 처리됩니다. 자세히는 [대시보드 설정](/guide/social/apple/setup)을 참고하세요.
+Android도 같은 호출로 동작합니다. 다만 Services ID·키 발급 같은 추가 준비가 필요합니다. [Android 추가 설정](/guide/social/apple/setup#android)을 참고하세요.
 
 플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열립니다. [플레이나누 이관 중 로그인](/guide/migration/login#apple-android)을 참고하세요.
 :::

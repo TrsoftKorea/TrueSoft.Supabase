@@ -15,7 +15,7 @@ if (Supabase.SetServerCode("KR1"))
 
 | 파라미터 | 설명 |
 |----------|------|
-| `serverCode` | `game_servers.code` 값. 예: `GLOBAL`·`KR1` |
+| `serverCode` | `game_servers.server_code` 값. 예: `GLOBAL`·`KR1` |
 
 **에러 코드**
 

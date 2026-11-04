@@ -58,11 +58,11 @@ namespace TrueBase.Unity
         public Task<SupabaseResult<bool>> PatchAsync(
             string tableName,
             Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             var session = _sessionGetter?.Invoke();
-            return PatchAsync(session, tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
+            return PatchAsync(session, tableName, patch, ensureRow, setUpdatedAtIsoUtc);
         }
 
         /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
@@ -70,7 +70,7 @@ namespace TrueBase.Unity
             SupabaseSession session,
             string tableName,
             Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             if (session == null)
@@ -88,7 +88,7 @@ namespace TrueBase.Unity
                 playerUserId: session.User.PlayerUserId,
                 tableName: tableName,
                 patch: patch,
-                ensureRowFirst: ensureRowFirst,
+                ensureRow: ensureRow,
                 setUpdatedAtIsoUtc: setUpdatedAtIsoUtc);
         }
 
@@ -126,11 +126,11 @@ namespace TrueBase.Unity
         public Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             T previous,
             T current,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             var session = _sessionGetter?.Invoke();
-            return PatchDiffAsync(session, previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            return PatchDiffAsync(session, previous, current, ensureRow, setUpdatedAtIsoUtc);
         }
 
         /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
@@ -138,7 +138,7 @@ namespace TrueBase.Unity
             SupabaseSession session,
             T previous,
             T current,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             if (session == null)
@@ -156,7 +156,7 @@ namespace TrueBase.Unity
                 playerUserId: session.User.PlayerUserId,
                 previous: previous,
                 current: current,
-                ensureRowFirst: ensureRowFirst,
+                ensureRow: ensureRow,
                 setUpdatedAtIsoUtc: setUpdatedAtIsoUtc);
         }
 

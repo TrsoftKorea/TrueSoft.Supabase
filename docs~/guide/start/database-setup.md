@@ -108,7 +108,7 @@ Secrets에 `CANCEL_TOKEN_SECRET`이 있으면 DB가 만든 비밀값보다 그 �
 
 ## 5. 프로젝트 주소 등록 {#project-url}
 
-DB가 엣지 함수를 직접 부르는 자동 작업이 여럿 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)·구글 환불 확인·사용량 기록 등. 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
+DB가 엣지 함수를 직접 부르는 자동 작업이 여럿 있습니다 — 탈퇴 유예가 지난 계정 삭제(`withdrawal-sweep`)·구글 환불 확인 등. 그러려면 DB가 이 프로젝트의 주소를 알아야 합니다. 구글 결제를 쓰지 않아도 탈퇴 계정 삭제 때문에 **반드시** 등록합니다. SQL Editor에서 한 번 실행하세요.
 
 ```sql
 select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');

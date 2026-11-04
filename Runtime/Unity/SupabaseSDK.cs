@@ -1569,7 +1569,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<DataColumnsLoadResult<T>>> LoadUserDataAttributedWithRowStateAsync<T>(
             bool includeUpdatedAt = true) where T : class, new()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<DataColumnsLoadResult<T>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -1599,10 +1599,10 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
-            var r = await PatchUserDataDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            var r = await PatchUserDataDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc);
             // 자동 저장이 쿨다운마다 부르는 길이라 성공·변경 없음은 남기지 않는다(콘솔이 저장 줄로 덮인다). 실패만 남긴다.
             if (r != null && r.IsSuccess)
                 return SupabaseResult.Ok;
@@ -2302,8 +2302,20 @@ namespace TrueBase.Unity
         /// <summary>
         /// 초기화 후 로그인 세션이 준비되었는지 확인합니다.
         /// 미로그인 상태면 실패를 반환하며, 자동 익명 로그인은 수행하지 않습니다.
+        /// 데이터를 바꾸는 호출의 관문입니다 — 다른 기기에서 로그인했으면 <c>DuplicateLogin</c>으로 막습니다.
         /// </summary>
-        public static async Task<SupabaseResult<SupabaseSession>> EnsureReadySessionAsync()
+        public static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionAsync() =>
+            EnsureReadySessionCoreAsync(checkDuplicateLogin: true);
+
+        /// <summary>
+        /// 데이터를 바꾸지 않는 조회의 관문입니다. <see cref="EnsureReadySessionAsync"/>와 같되 중복 로그인 확인 요청을 보내지 않습니다.
+        /// 다른 기기 로그인은 주기 확인(<c>duplicateSessionPollSeconds</c>)이나 다음 쓰기에서 잡힙니다.
+        /// 조회 전마다 확인하면 자주 부르는 조회의 요청이 두 배가 되는데, 잠깐 더 읽어도 잃는 것이 없기 때문입니다.
+        /// </summary>
+        public static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionForReadAsync() =>
+            EnsureReadySessionCoreAsync(checkDuplicateLogin: false);
+
+        private static async Task<SupabaseResult<SupabaseSession>> EnsureReadySessionCoreAsync(bool checkDuplicateLogin)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
@@ -2315,8 +2327,7 @@ namespace TrueBase.Unity
                 if (gate != null)
                     return SupabaseResult<SupabaseSession>.Fail(gate);
 
-                var singleSessionOk = await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync();
-                if (singleSessionOk == false)
+                if (checkDuplicateLogin && await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync() == false)
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin);
 
                 return SupabaseResult<SupabaseSession>.Success(_currentSession);
@@ -2457,7 +2468,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<Mail>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2473,7 +2484,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_mail_client_settings</c> — 우편 설정(만료 우편 보관 일수)을 읽습니다.</summary>
         public static async Task<SupabaseResult<MailSettings>> GetMailSettingsAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<MailSettings>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2490,6 +2501,7 @@ namespace TrueBase.Unity
         /// <summary>우편함 메일 한 건(<c>ts_view_mail_for_user</c>: 보상 items 없으면 조회 시 읽음).</summary>
         public static async Task<SupabaseResult<Mail>> GetMailAsync(string mailId)
         {
+            // 첨부 없는 우편은 조회가 곧 수령이라(ts_view_mail_for_user) 쓰기 관문을 지난다.
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<Mail>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
@@ -2540,7 +2552,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_mail_inbox_counts</c> 전체 응답(전체 집계 + 분류별 세부 내역).</summary>
         public static async Task<SupabaseResult<MailInboxCounts>> GetMailInboxCountsAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<MailInboxCounts>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2550,7 +2562,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_mail_inbox_counts</c>의 미수령 메일 수. <paramref name="category"/> 지정 시 그 분류만.</summary>
         public static async Task<SupabaseResult<int>> GetUnclaimedMailCountAsync(string category = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2610,7 +2622,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_leaderboard_tables</c> — 사용 가능한 리더보드 목록(비활성·종료 제외).</summary>
         public static async Task<SupabaseResult<IReadOnlyList<LeaderboardTable>>> GetLeaderboardTablesAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<LeaderboardTable>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2620,7 +2632,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_leaderboard_table</c> — 리더보드 정의·현재 회차 상태.</summary>
         public static async Task<SupabaseResult<LeaderboardTable>> GetLeaderboardTableAsync(string code)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<LeaderboardTable>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2642,7 +2654,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<IReadOnlyList<LeaderboardEntry>>> GetLeaderboardRangeAsync(
             string code, int start = 1, int end = 100, int? rotationCount = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<LeaderboardEntry>>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2653,7 +2665,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<LeaderboardPlayerEntry>> GetLeaderboardPlayerAsync(
             string code, string accountId = null, int? rotationCount = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<LeaderboardPlayerEntry>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -2723,7 +2735,7 @@ namespace TrueBase.Unity
         /// <param name="gameCode">셀 게임 코드.</param>
         public static async Task<SupabaseResult<MatchStats>> GetMatchStatsAsync(string gameCode)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<MatchStats>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2737,7 +2749,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<IReadOnlyList<MatchRecord>>> GetMatchHistoryAsync(
             string gameCode = null, int limit = 20, DateTimeOffset? before = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<MatchRecord>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2852,7 +2864,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_chat_channels</c> — 사용 가능한 채팅 채널. 기본은 캐시에서 돌려줍니다.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<ChatChannelInfo>>> GetChatChannelsAsync(bool forceRefresh = false)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ChatChannelInfo>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2903,7 +2915,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_chat_fetch_lobby</c> — 로비 대화 커서 조회. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetLobbyChatAsync(string lobbyId, long afterId = 0, int limit = 50)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2937,7 +2949,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_chat_fetch_direct</c> — 특정 친구와의 대화 커서 조회. <paramref name="afterId"/>가 0 이하면 최근 <paramref name="limit"/>개.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<ChatMessage>>> GetDirectChatAsync(string targetAccountId, long afterId = 0, int limit = 50)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ChatMessage>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2954,7 +2966,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_friend_search</c> — 닉네임 정확 일치(대소문자 무시) 검색. 친구·요청 상태도 같이 돌아옵니다.</summary>
         public static async Task<SupabaseResult<FriendSearchResult>> SearchFriendAsync(string nickname)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<FriendSearchResult>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -2992,7 +3004,7 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<IReadOnlyList<FriendRequestSummary>>> GetFriendRequestsAsync(
             FriendRequestDirection direction = FriendRequestDirection.Incoming)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<FriendRequestSummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -3046,7 +3058,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_friends_list</c> — 내 친구 목록.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<FriendSummary>>> GetFriendsAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<FriendSummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -3063,7 +3075,7 @@ namespace TrueBase.Unity
         /// <summary><c>ts_friend_limits</c> — 친구 기능 제한값(상한·간격)을 읽습니다.</summary>
         public static async Task<SupabaseResult<FriendLimits>> GetFriendLimitsAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<FriendLimits>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -3239,7 +3251,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<IReadOnlyList<MatchLobbySummary>>> ListMatchLobbiesAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<IReadOnlyList<MatchLobbySummary>>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn);
 
@@ -3279,14 +3291,14 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<bool>> PatchUserDataAsync(
             string tableName,
             Dictionary<string, object> patch,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.PatchAsync(tableName, patch, ensureRowFirst, setUpdatedAtIsoUtc);
+            return await UserSaves.PatchAsync(tableName, patch, ensureRow, setUpdatedAtIsoUtc);
         }
 
         /// <summary>
@@ -3295,14 +3307,14 @@ namespace TrueBase.Unity
         public static async Task<SupabaseResult<bool>> PatchUserDataDiffAsync<T>(
             T previous,
             T current,
-            bool ensureRowFirst = true,
+            bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.PatchDiffAsync(previous, current, ensureRowFirst, setUpdatedAtIsoUtc);
+            return await UserSaves.PatchDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc);
         }
 
         /// <summary>
@@ -3311,7 +3323,7 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<string>> GetPublicNameAsync(string userId)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -3419,7 +3431,7 @@ namespace TrueBase.Unity
         /// <summary>displayName이 사용 가능한지 조회합니다(유니크 체크). 로그인 중이면 현재 계정이 이미 쓰는 이름은 사용 가능으로 처리합니다.</summary>
         public static async Task<SupabaseResult<bool>> IsNameAvailableAsync(string displayName)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -3500,7 +3512,7 @@ namespace TrueBase.Unity
         /// <summary>DB에 기록된 내 <c>profiles.server_id</c>에 대응하는 서버 코드를 조회합니다(RPC <c>ts_my_server_id</c>).</summary>
         public static async Task<SupabaseResult<ServerInfo>> GetServerInfoAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<ServerInfo>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -3521,7 +3533,7 @@ namespace TrueBase.Unity
         /// <summary>공개 프로필(닉네임·탈퇴 시각)을 한 번에 조회합니다. <paramref name="userId"/>는 <c>profiles.user_id</c>(안정 플레이어 id)입니다.</summary>
         public static async Task<SupabaseResult<PublicProfile>> GetPublicProfileAsync(string userId)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<PublicProfile>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 

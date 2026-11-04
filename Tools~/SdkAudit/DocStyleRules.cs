@@ -38,6 +38,7 @@ namespace SdkAudit
             foreach (var md in Directory.EnumerateFiles(guideDir, "*.md", SearchOption.AllDirectories))
             {
                 CheckFile(ctx, md, sidebar);
+                CheckCardNames(ctx, md, sidebar);
                 // 사이드바 항목을 일부만 읽어도 그 밖의 페이지는 제목 대조를 조용히 건너뛴다 — 빠진 페이지를 오류로 낸다.
                 if (sidebar.Count > 0 && !sidebar.ContainsKey(ctx.Rel(md)))
                     ctx.Report.Error($"[R22 제목] {ctx.Rel(md)} 이 사이드바에 없습니다(또는 사이드바 항목을 읽지 못했습니다).");
@@ -64,6 +65,8 @@ namespace SdkAudit
                 return map;
             }
 
+            CheckSidebarGroups(ctx, text.Substring(start));
+
             foreach (Match m in Regex.Matches(text.Substring(start), @"text:\s*'([^']+)',\s*link:\s*'/guide/([^']*)'"))
             {
                 var link = m.Groups[2].Value;
@@ -75,6 +78,95 @@ namespace SdkAudit
             if (map.Count == 0)
                 ctx.Report.Error("[R22 제목] config.ts 사이드바에서 항목을 하나도 읽지 못했습니다. 항목 꼴이 text: '이름', link: '/guide/…' 인지 봅니다.");
             return map;
+        }
+
+        private sealed class SidebarNode
+        {
+            public string Text;
+            public bool HasLink, HasItems, Collapsed;
+            public int Children;
+        }
+
+        private static readonly Regex CardLine = new Regex(@"^- \[\*\*(?<name>[^*]+)\*\*.*?\]\(/guide/(?<link>[^)#]*)(?:#[^)]*)?\)", RegexOptions.Multiline | RegexOptions.Compiled);
+
+        /// <summary>모음 카드의 이름이 같은 페이지의 사이드바 이름과 같은지 본다 — 같은 곳을 두 이름으로 부르면 찾는 사람이 헷갈린다.</summary>
+        private static void CheckCardNames(AuditContext ctx, string path, Dictionary<string, string> sidebar)
+        {
+            foreach (Match m in CardLine.Matches(File.ReadAllText(path)))
+            {
+                var link = m.Groups["link"].Value;
+                var page = "docs~/guide/" + (link.EndsWith("/") || link.Length == 0 ? link + "index.md" : link + ".md");
+                if (sidebar.TryGetValue(page, out var side) && side != m.Groups["name"].Value)
+                    ctx.Report.Error($"[R22 카드이름] {ctx.Rel(path)} 카드 '{m.Groups["name"].Value}' 이 사이드바 이름 '{side}' 과 다릅니다.");
+            }
+        }
+
+        private static readonly Regex SidebarKey = new Regex(@"\G(?<key>text|link|items|collapsed):\s*(?:'(?<value>[^']*)'|(?<value>true|false))?", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 하위가 있는 항목은 눌러서 갈 페이지가 있고(link) 기본으로 접혀 있어야(collapsed: true) 한다.
+        /// 중괄호로 객체를 따라가며 그 객체에 직접 달린 키만 본다 — 정규식 한 줄로는 하위 항목의 link 를 상위 것으로 착각한다.
+        /// </summary>
+        private static void CheckSidebarGroups(AuditContext ctx, string sidebarText)
+        {
+            var stack = new Stack<SidebarNode>();
+            var inString = false;
+            for (var i = 0; i < sidebarText.Length; i++)
+            {
+                var c = sidebarText[i];
+                if (inString)
+                {
+                    inString = c != '\'';
+                    continue;
+                }
+
+                if (c == '\'')
+                {
+                    inString = true;
+                }
+                else if (c == '{')
+                {
+                    stack.Push(new SidebarNode());
+                }
+                else if (c == '}')
+                {
+                    if (stack.Count == 0)
+                        return; // sidebar 를 품은 객체가 닫혔다
+
+                    var node = stack.Pop();
+                    if (stack.Count > 0)
+                        stack.Peek().Children++;
+                    if (!node.HasItems)
+                    {
+                        if (node.Text == "개요")
+                            ctx.Report.Error("[R22 사이드바] 하위 항목에 '개요'가 있습니다. 기능의 첫 페이지가 개요이므로 그 내용을 첫 페이지로 합칩니다.");
+                        continue;
+                    }
+                    if (node.Children == 1)
+                        ctx.Report.Error($"[R22 사이드바] '{node.Text}' 은 하위 항목이 하나뿐입니다. 묶지 않고 한 페이지로 합칩니다.");
+                    if (!node.HasLink)
+                        ctx.Report.Error($"[R22 사이드바] '{node.Text}' 은 하위 항목이 있는데 눌러서 갈 페이지(link)가 없습니다. 모음 페이지를 만들어 연결합니다.");
+                    if (!node.Collapsed)
+                        ctx.Report.Error($"[R22 사이드바] '{node.Text}' 은 하위 항목이 있는데 기본으로 접혀 있지 않습니다(collapsed: true).");
+                }
+                else if (stack.Count > 0 && char.IsLetter(c) && !char.IsLetterOrDigit(sidebarText[i - 1]))
+                {
+                    var m = SidebarKey.Match(sidebarText, i);
+                    if (!m.Success)
+                        continue;
+
+                    var top = stack.Peek();
+                    var value = m.Groups["value"].Value;
+                    switch (m.Groups["key"].Value)
+                    {
+                        case "text": top.Text = value; break;
+                        case "link": top.HasLink = true; break;
+                        case "items": top.HasItems = true; break;
+                        case "collapsed": top.Collapsed = value == "true"; break;
+                    }
+                    i = m.Index + m.Length - 1;
+                }
+            }
         }
 
         private static void CheckFile(AuditContext ctx, string path, Dictionary<string, string> sidebar)

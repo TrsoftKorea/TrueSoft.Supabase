@@ -204,9 +204,6 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 설정된 주기에 따라, 만기된 키만 폴링합니다. <see cref="SupabaseRuntime"/> 또는 <c>Update</c>에서 호출하세요.
-        /// </summary>
-        /// <summary>
         /// 지금 폴링할 키가 하나라도 있는지 확인합니다. 매 프레임 도는 경로라 할당 없이 판정합니다.
         /// </summary>
         public bool HasDuePoll(float realtimeSinceStartup)
@@ -223,13 +220,29 @@ namespace TrueBase.Unity
             return false;
         }
 
+        /// <summary>
+        /// 만기된 키를 한 요청으로 묶어 조회합니다. <see cref="SupabaseRuntime"/> 또는 <c>Update</c>에서 호출하세요.
+        /// 남은 시간이 주기의 절반 이하인 키도 함께 실어, 시작 시각이 달라 따로 나가던 요청을 다음 회차부터 하나로 모읍니다.
+        /// 그래서 함께 실린 키는 설정한 주기보다 일찍 갱신될 수 있습니다(늦어지지는 않습니다).
+        /// </summary>
         public async Task TickKeyPollsAsync(float realtimeSinceStartup)
         {
-            var accessToken = _accessTokenGetter?.Invoke();
-
-            // 폴링 중 컬렉션이 바뀔 수 있어 복사본을 돈다. 매 프레임 경로라 버퍼를 재사용한다.
+            // 요청 중 컬렉션이 바뀔 수 있어 고른 키를 따로 담아 둔다. 매 프레임 경로라 버퍼를 재사용한다.
             _pollKeyBuffer.Clear();
-            _pollKeyBuffer.AddRange(_keyPollStates.Keys);
+            foreach (var pair in _keyPollStates)
+            {
+                var interval = GetEffectivePollIntervalSeconds(pair.Key);
+                if (interval > 0 && pair.Value.NextPollAtRealtime - realtimeSinceStartup <= interval * 0.5f)
+                    _pollKeyBuffer.Add(pair.Key);
+            }
+
+            if (_pollKeyBuffer.Count == 0)
+                return;
+
+            // 토큰이 비어 있으면 requires_auth 키는 결과에서 빠진다.
+            var result = await _service.GetByKeysAsync(_pollKeyBuffer, _accessTokenGetter?.Invoke()).ConfigureAwait(true);
+            if (result.IsSuccess && result.Data != null)
+                ApplyRows(result.Data);
 
             foreach (var key in _pollKeyBuffer)
             {
@@ -237,27 +250,9 @@ namespace TrueBase.Unity
                     continue;
 
                 var interval = GetEffectivePollIntervalSeconds(key);
-                if (interval <= 0)
-                    continue;
-
-                if (realtimeSinceStartup < state.NextPollAtRealtime)
-                    continue;
-
-                await PollKeyAsync(key, accessToken).ConfigureAwait(true);
-                state.NextPollAtRealtime = realtimeSinceStartup + interval;
+                if (interval > 0)
+                    state.NextPollAtRealtime = realtimeSinceStartup + interval;
             }
-        }
-
-
-        /// <summary>키 1개를 서버에서 조회해 캐시에 반영합니다. 캐시에 실제 변경이 있었으면 true.</summary>
-        /// <param name="accessToken">null 허용. 비어 있으면 <c>requires_auth</c> 키는 결과에서 제외됩니다.</param>
-        private async Task<bool> PollKeyAsync(string key, string accessToken)
-        {
-            var result = await _service.GetByKeysAsync(new[] { key }, accessToken).ConfigureAwait(true);
-            if (result.IsSuccess == false || result.Data == null)
-                return false;
-
-            return ApplyRows(result.Data);
         }
 
         private async Task RefreshKeyInBackgroundAsync(string key)

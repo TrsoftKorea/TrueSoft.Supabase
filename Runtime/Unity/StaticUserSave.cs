@@ -194,7 +194,7 @@ namespace TrueBase.Unity
 
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
                 _lastSynced, snapshot,
-                ensureRowFirst: true, setUpdatedAtIsoUtc: true);
+                ensureRow: true, setUpdatedAtIsoUtc: true);
 
             if (!ok)
             {
@@ -746,7 +746,7 @@ namespace TrueBase.Unity
             }
 
             var result = await SupabaseSDK.PatchUserDataAsync(
-                tableName, patch, ensureRowFirst: true, setUpdatedAtIsoUtc: true);
+                tableName, patch, ensureRow: true, setUpdatedAtIsoUtc: true);
 
             if (!result.IsSuccess)
             {

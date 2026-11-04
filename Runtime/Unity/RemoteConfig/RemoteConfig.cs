@@ -48,7 +48,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 값을 한 번 읽습니다. 캐시가 신선하면 즉시, 만료됐으면 서버 갱신을 기다린 뒤 반환합니다.
         /// </summary>
-        /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 DB 설정을 따릅니다.</param>
+        /// <param name="maxStale">유효로 간주할 최대 캐시 경과 시간(초). 0이면 이 키에 앞서 지정한 값, 없으면 300초입니다.</param>
         /// <example><code>
         /// var cfg = await RemoteConfig&lt;GameplayV1Config&gt;.GetAsync();
         /// </code></example>

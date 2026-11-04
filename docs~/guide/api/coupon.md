@@ -2,7 +2,7 @@
 
 | 메서드 | 설명 |
 |--------|------|
-| [`RedeemCouponAsync`](/guide/coupon/redeem) | 쿠폰 코드 사용 |
+| [`RedeemCouponAsync`](/guide/coupon/) | 쿠폰 코드 사용 |
 
 쿠폰 생성·수정·삭제와 코드 발급은 운영 콘솔에서만 하므로 SDK에 없습니다.
 

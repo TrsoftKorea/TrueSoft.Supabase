@@ -9,21 +9,25 @@ namespace SdkAudit
     /// <summary>
     /// R16 공통 구간. Edge Function 은 함수마다 따로 배포돼 파일을 나눠 쓸 수 없어서, 같은 코드를 함수마다
     /// 복사해 둔다(`═══ BEGIN 이름 ═══` ~ `═══ END 이름 ═══`). 한쪽만 고치면 배포된 함수끼리 조용히
-    /// 다르게 동작하므로, 같은 이름의 구간이 글자 그대로 같은지 대조한다.
+    /// 다르게 동작하므로, 같은 이름의 구간이 글자 그대로 같은지 대조한다. 콘솔 서버(Admin~/supabase/functions)
+    /// 사본도 함께 본다.
     /// </summary>
     public static class EdgeFunctionRules
     {
         private static readonly Regex Begin = new(@"^//\s*═══\s*BEGIN\s+(?<name>[\w-]+)\s*═══");
         private static readonly Regex End = new(@"^//\s*═══\s*END\s+(?<name>[\w-]+)\s*═══");
+        private static readonly Regex HandlerFirstLine = new(@"Deno\.serve\([^\n]*\{\s*\n\s*(?<line>[^\n]*)");
+        private static readonly Regex CountCall = new(@"^countCall\(""(?<name>[\w-]+)"",\s*req\);");
 
         public static void Run(AuditContext ctx)
         {
             var dir = Path.Combine(ctx.Root, "Samples~", "DatabaseSetup", "EdgeFunctions");
             if (!Directory.Exists(dir))
                 return;
+            var dirs = new[] { dir, Path.Combine(ctx.Root, "Admin~", "supabase", "functions") }.Where(Directory.Exists).ToArray();
 
             var blocks = new Dictionary<string, List<(string File, string Text)>>(StringComparer.Ordinal);
-            foreach (var path in Directory.GetFiles(dir, "*.ts", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
+            foreach (var path in dirs.SelectMany(d => Directory.GetFiles(d, "*.ts", SearchOption.AllDirectories)).OrderBy(p => p, StringComparer.Ordinal))
             {
                 var rel = ctx.Rel(path);
                 var lines = File.ReadAllText(path).Replace("\r\n", "\n").Split('\n');
@@ -52,6 +56,8 @@ namespace SdkAudit
             }
 
             ServerConfigKeys(ctx, dir);
+            if (blocks.ContainsKey("usage-count"))
+                UsageCount(ctx, dirs);
 
             foreach (var (name, list) in blocks)
             {
@@ -66,6 +72,35 @@ namespace SdkAudit
                     var line = Enumerable.Range(0, Math.Min(a.Length, b.Length)).FirstOrDefault(k => a[k] != b[k], Math.Min(a.Length, b.Length));
                     ctx.Report.Error($"[R16 공통구간] `{name}` 구간이 {baseline.File} 와 다릅니다 — 구간 안 {line + 1}번째 줄부터. 한쪽만 고쳤습니다. ({other.File})");
                 }
+            }
+        }
+
+        /// <summary>
+        /// 서버 함수 호출 수는 함수마다 넣은 공통 구간 usage-count 가 센다 — 새 함수에 빠뜨리면 그 함수는 콘솔
+        /// "서버 함수 호출"에 아예 안 나오고 아무 신호도 없다. 함수 폴더마다 구간이 있고, 핸들러 첫 줄에서 자기
+        /// 폴더 이름으로 countCall 을 부르는지 본다(다른 이름이면 다른 함수 몫으로 쌓인다).
+        /// </summary>
+        private static void UsageCount(AuditContext ctx, IEnumerable<string> dirs)
+        {
+            foreach (var fnDir in dirs.SelectMany(Directory.GetDirectories).OrderBy(p => p, StringComparer.Ordinal))
+            {
+                var name = Path.GetFileName(fnDir);
+                var index = Path.Combine(fnDir, "index.ts");
+                if (name.StartsWith("_", StringComparison.Ordinal) || !File.Exists(index))
+                    continue; // 공유 폴더
+                var text = File.ReadAllText(index).Replace("\r\n", "\n");
+                var rel = ctx.Rel(index);
+                if (!Regex.IsMatch(text, @"^//\s*═══\s*BEGIN\s+usage-count\s*═══", RegexOptions.Multiline))
+                {
+                    ctx.Report.Error($"[R16 호출세기] `{name}` 에 공통 구간 usage-count 가 없습니다 — 이 함수 호출이 콘솔 서버 상태에 안 잡힙니다. 다른 함수에서 구간을 복사해 넣으세요. ({rel})");
+                    continue;
+                }
+                var first = HandlerFirstLine.Match(text);
+                var call = first.Success ? CountCall.Match(first.Groups["line"].Value.Trim()) : Match.Empty;
+                if (!call.Success)
+                    ctx.Report.Error($"[R16 호출세기] `{name}` 의 Deno.serve 핸들러 첫 줄이 countCall(\"{name}\", req); 가 아닙니다 — 앞에서 끝나는 요청은 안 세어집니다. ({rel})");
+                else if (call.Groups["name"].Value != name)
+                    ctx.Report.Error($"[R16 호출세기] `{name}` 가 countCall(\"{call.Groups["name"].Value}\", …) 로 다른 이름을 셉니다 — 다른 함수 몫으로 쌓입니다. ({rel})");
             }
         }
 

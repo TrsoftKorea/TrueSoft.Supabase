@@ -5,7 +5,7 @@
 <div class="tb-cards">
 
 - [**닉네임**<br><small>설정 · 중복 확인</small>](/guide/display-name/nickname/)
-- [**프로필**<br><small>공개 프로필 조회</small>](/guide/display-name/profile)
+- [**공개 프로필**<br><small>공개 프로필 조회</small>](/guide/display-name/profile)
 - [**탈퇴 처리**<br><small>예약 · 취소</small>](/guide/withdrawal/)
 - [**서버**<br><small>서버 선택·배정 확인</small>](/guide/server/)
 

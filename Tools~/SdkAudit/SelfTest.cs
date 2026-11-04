@@ -33,7 +33,7 @@ namespace SdkAudit
             "[R13 크론미등록]",
             "[R14 구조누락]",
             "[R15 코드우선]",
-            "[R16 공통구간]", "[R16 연결값키]",
+            "[R16 공통구간]", "[R16 연결값키]", "[R16 호출세기]",
             "[R17 설치누락]", "[R17 검증목록]", "[R17 검증표]",
             "[R19 시간대고정]",
             "[R20 빈응답]",
@@ -85,6 +85,14 @@ namespace SdkAudit
                 // unlogged 표도 표로 세야 한다 — 못 세면 표 목록에서 빠진 것을 놓친다.
                 if (!found.Any(f => f.StartsWith("[R17 검증표]", StringComparison.Ordinal) && f.Contains("unlogged_missing")))
                     missing.Add("[R17 검증표] unlogged 표(unlogged_missing)");
+                if (found.Any(f => f.StartsWith("[R16 호출세기]", StringComparison.Ordinal) && f.Contains("/counted/")))
+                    missing.Add("[R16 호출세기] 맞게 넣은 함수 오탐(counted)");
+                if (!found.Any(f => f.StartsWith("[R16 호출세기]", StringComparison.Ordinal) && f.Contains("/miscounted/") && f.Contains("다른 이름")))
+                    missing.Add("[R16 호출세기] 다른 이름으로 센 함수(miscounted)");
+                if (!found.Any(f => f.StartsWith("[R16 호출세기]", StringComparison.Ordinal) && f.Contains("/latecount/") && f.Contains("첫 줄")))
+                    missing.Add("[R16 호출세기] 첫 줄이 아닌 곳에서 센 함수(latecount)");
+                if (!found.Any(f => f.StartsWith("[R16 호출세기]", StringComparison.Ordinal) && f.Contains("/a/") && f.Contains("구간 usage-count 가 없습니다")))
+                    missing.Add("[R16 호출세기] 구간이 없는 함수(a)");
                 if (found.Any(f => f.Contains("ts_early_plpgsql")))
                     missing.Add("[R9 설치순서] plpgsql 본문 오탐(ts_early_plpgsql)");
                 // game_settings 의 기본값은 허용 — 이게 잡히면 오탐이다.
@@ -116,6 +124,7 @@ namespace SdkAudit
                 if (!found.Any(f => f.StartsWith("[R22 제목]", StringComparison.Ordinal) && f.Contains("style/indented.md") && f.Contains("사이드바에 없습니다")))
                     missing.Add("[R22 제목] 사이드바에 없는 페이지");
                 missing.AddRange(SidebarUnreadable());
+                missing.AddRange(SidebarGroups());
                 if (found.Any(f => f.StartsWith("[R8 공통사유]", StringComparison.Ordinal) && f.Contains("fail-reasons.md")))
                     missing.Add("[R8 공통사유] 카탈로그 자신 오탐");
                 // ExtractRpcErrorCode 안에서 쓴 원문은 잡으면 오탐이다.
@@ -297,6 +306,11 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             // 엣지 함수 공통 구간 — R16(두 사본이 한 줄 다름).
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/a/index.ts", "// ═══ BEGIN shared ═══\nconst x = 1;\n// ═══ END shared ═══\n");
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/b/index.ts", "// ═══ BEGIN shared ═══\nconst x = 2;\n// ═══ END shared ═══\nawait serverConfig(\"NOT_IN_DB\");\n");
+            // 호출 세기 — R16(counted 는 맞게 넣음, miscounted 는 다른 이름으로 셈, a·b·admin-api 는 구간이 없음).
+            const string usageBlock = "// ═══ BEGIN usage-count ═══\nfunction countCall(name: string, req: Request): void {}\n// ═══ END usage-count ═══\n";
+            Write(root, "Samples~/DatabaseSetup/EdgeFunctions/counted/index.ts", usageBlock + "Deno.serve(async (req) => {\n  countCall(\"counted\", req);\n});\n");
+            Write(root, "Samples~/DatabaseSetup/EdgeFunctions/miscounted/index.ts", usageBlock + "Deno.serve(async (req) => {\n  countCall(\"other\", req);\n});\n");
+            Write(root, "Samples~/DatabaseSetup/EdgeFunctions/latecount/index.ts", usageBlock + "Deno.serve(async (req) => {\n  if (req.method === \"OPTIONS\") return new Response(null);\n  countCall(\"latecount\", req);\n});\n");
 
             // R17 — 없는 함수·표를 부르고, 있는 것(late_table·ts_never_scheduled)은 안 잡는지 본다.
             // 대문자 CREATE TABLE 도 인식해야 한다(install.sql 에 섞여 있다).
@@ -312,6 +326,42 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             // 소비 게임 — R12.
             Write(root, "consumer/Assets/Scripts/Game.cs", "class Game { void M() { Supabase.GhostForGameAsync(); } }");
             Write(root, "Tools~/SdkAudit/consumers.txt", "consumer");
+        }
+
+        /// <summary>하위가 있는 항목의 클릭·접힘을 하나씩 가르는지 본다. 하위 항목의 link 를 상위 것으로 착각하면 '링크없음'이 통과한다.</summary>
+        private static IEnumerable<string> SidebarGroups()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "sdkaudit-selftest-groups-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                const string leaves = "items: [ { text: '잎', link: '/guide/leaf' }, { text: '잎둘', link: '/guide/leaf2' } ]";
+                Write(dir, "docs~/.vitepress/config.ts", "export default { themeConfig: { sidebar: [\n"
+                    + $"{{ text: '링크없음', collapsed: true, {leaves} }},\n"
+                    + $"{{ text: '못접음', link: '/guide/a/', {leaves} }},\n"
+                    + $"{{ text: '펼침', link: '/guide/b/', collapsed: false, {leaves} }},\n"
+                    + "{ text: '하나뿐', link: '/guide/e/', collapsed: true, items: [ { text: '잎셋', link: '/guide/leaf3' } ] },\n"
+                    + "{ text: '개요묶음', link: '/guide/f/', collapsed: true, items: [ { text: '개요', link: '/guide/f/how' }, { text: '잎넷', link: '/guide/leaf4' } ] },\n"
+                    + $"{{ text: '정상', link: '/guide/c/', collapsed: true, items: [ {{ text: '안쪽정상', link: '/guide/d/', collapsed: true, {leaves} }}, {{ text: '잎다섯', link: '/guide/leaf5' }} ] }}\n"
+                    + "], socialLinks: [ { icon: 'github', link: 'https://x' } ] } }\n");
+                Write(dir, "docs~/guide/cards.md", "# 카드\n\n- [**다른이름**<br><small>설명</small>](/guide/c/)\n- [**정상**<br><small>설명</small>](/guide/c/)\n");
+                var ctx = new AuditContext(dir);
+                DocStyleRules.Run(ctx);
+                var errors = ctx.Report.Errors.Where(e => e.StartsWith("[R22 사이드바]", StringComparison.Ordinal)).ToList();
+                var missing = new List<string>();
+                foreach (var (name, part) in new[] { ("'링크없음'", "link"), ("'못접음'", "collapsed"), ("'펼침'", "collapsed"), ("'하나뿐'", "하나뿐"), ("'개요'", "합칩니다") })
+                    if (!errors.Any(e => e.Contains(name) && e.Contains(part)))
+                        missing.Add($"[R22 사이드바] {name} 못 잡음");
+                if (errors.Count != 5)
+                    missing.Add($"[R22 사이드바] 오류 {errors.Count}건(5건이어야 함 — 정상 항목 오탐)");
+                var cards = ctx.Report.Errors.Where(e => e.StartsWith("[R22 카드이름]", StringComparison.Ordinal)).ToList();
+                if (cards.Count != 1 || !cards[0].Contains("'다른이름'"))
+                    missing.Add($"[R22 카드이름] 다른 이름 1건만 잡아야 하는데 {cards.Count}건");
+                return missing;
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
         }
 
         /// <summary>사이드바 항목을 하나도 못 읽는 꼴(큰따옴표)이면 R22 제목 검사가 꺼졌다고 알리는지 본다.</summary>

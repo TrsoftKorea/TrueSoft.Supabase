@@ -93,7 +93,8 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R13 | 하드 오류 | 주석에 cron 이 부른다고 적힌 함수가 실제로 `cron.schedule` 됨 |
 | R14 | 하드 오류 | `CLAUDE.md`의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴)에 실제 파일이 다 있음 |
 | R15 | 하드 오류 | 단일 함수 페이지는 H1 다음에 바로 시그니처가 옴 |
-| R16 | 하드 오류 | Edge Function 끼리 복사해 둔 같은 이름의 `═══ BEGIN 이름 ═══` 구간이 글자 그대로 같음 |
+| R16 | 하드 오류 | Edge Function 끼리 복사해 둔 같은 이름의 `═══ BEGIN 이름 ═══` 구간이 글자 그대로 같음(콘솔 서버 `Admin~/supabase/functions` 사본 포함) |
+| R16 | 하드 오류 | 함수 폴더마다 `usage-count` 구간이 있고, `Deno.serve` 핸들러 첫 줄에서 자기 폴더 이름으로 `countCall("이름", req);` 를 부름 |
 | R16 | 하드 오류 | 서버 연결값 키 목록이 `install.sql`(`ts_server_config_keys`)·콘솔 서버(`SERVER_CONFIG_VALID`)·콘솔 화면(`STORE_KEYS`)·엣지 함수의 `serverConfig("…")` 호출에서 서로 맞음 |
 | R17 | 하드 오류 | 콘솔 서버(admin-api)와 엣지 함수가 부르는 `rpc("…")` 함수·`.from("…")` 표가 `install.sql`에 정의돼 있음. 라이브 DB에만 만들어 두면 새 게임 설치 때 그 화면이 실패하고 권한 정리에서도 빠진다 |
 | R17 | 하드 오류 | `verify.sql`의 클라이언트 허용 함수 목록이 `install.sql`이 `authenticated`·`anon`에 grant 하는 함수와 같음 |
@@ -103,6 +104,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R20 | 하드 오류 | `install.sql`에서 `returns void`인 함수를 `Runtime/`이 `CallRpcAsync`로 부를 때 `allowEmptyBody: true`를 넘김. 없으면 성공해도 빈 본문이 `<rpc>_empty_body` 실패로 읽힌다(2026-10-30 푸시 기기 등록·해제 — 로그아웃 때 등록이 안 풀렸다) |
 | R21 | 하드 오류 | `Runtime/`의 `Fail(...)`에 응답 본문(`.Body`)·HTTP 상태 글(`.ErrorMessage`)을 그대로 넘기지 않음. 서버 사유가 JSON 째 들어가 게임의 `Reason`이 늘 `Unknown`이 된다 — `SupabaseRestHelpers.ExtractRpcErrorCode`로 사유만 뽑는다(2026-10-30 리뷰, 27곳) |
 | R22 | 하드 오류 | 가이드 페이지 꼴 — 제목에 사이드바 이름이 들어 있음, 함수 페이지의 호출 예제가 있고 표보다 앞, 에러 표(`SupabaseReason.이름` + 문장)·프로퍼티 표(이름에 점 없음, 타입은 코드 표시)·반환 첫 줄 꼴, 표 칸 안 줄표 없음, 다른 페이지 링크는 `/guide/` 로 시작, 낡은 용어(Retool·어드민·유저·메일) 없음, 굵은 라벨 뒤 쌍점 없음. 규칙 원문은 `.claude/rules/docs.md` 13·14절 |
+| R22 | 하드 오류 | 사이드바에서 하위가 있는 항목은 깊이와 상관없이 `link` 가 있고 `collapsed: true`이며 하위가 둘 이상, 하위 항목 이름에 `개요` 없음, 모음 카드 이름이 사이드바 이름과 같음 |
 | R22 | 경고 | 함수 설명이 4문장 이상 |
 
 ## 검사 대상 파일

@@ -53,15 +53,15 @@
 
 ## 생성 결과 {#generated-output}
 
-예를 들어 컬럼 `user_id`의 필드명을 `playerId`로 바꾸면 다음과 같이 생성됩니다.
+예를 들어 컬럼 `stage_best`의 필드명을 `stageBest`로 바꾸면 다음과 같이 생성됩니다.
 
 ```csharp
-[DataColumn("user_id")] [JsonProperty("user_id")] internal int playerId;
+[DataColumn("stage_best")] [JsonProperty("stage_best")] internal int stageBest = 0;
 
-public static int PlayerId
+public static int StageBest
 {
-    get => Instance.Current.playerId;
-    set { if (EqualityComparer<int>.Default.Equals(Instance.Current.playerId, value)) return; Instance.Current.playerId = value; Instance.MarkDirty(DataSavePriority.Normal); }
+    get => Instance.Current.stageBest;
+    set { if (EqualityComparer<int>.Default.Equals(Instance.Current.stageBest, value)) return; Instance.Current.stageBest = value; Instance.MarkDirty(DataSavePriority.Normal); }
 }
 ```
 
@@ -76,7 +76,7 @@ public static int PlayerId
 요소가 클래스라도 마찬가지입니다. CSV엔 네임스페이스 없이 `type=Dictionary<HeroName, HeroData>` · `default=1`만 넣으면, 생성기가 이름을 찾아 `AutoDict`로 승격하고 완전한 이름으로 채워 넣습니다.
 
 ```csharp
-[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<Quantum.HeroName, Game.Data.HeroData> heroData = new AutoDict<Quantum.HeroName, Game.Data.HeroData>();
+[DataColumn("hero_data")] [AutoDefault(1)] internal AutoDict<Quantum.HeroName, Game.Data.HeroData> hero_data = new AutoDict<Quantum.HeroName, Game.Data.HeroData>();
 ```
 
 요소 타입에는 기본값 인자와 맞는 생성자가 있어야 합니다. 이름이 여러 네임스페이스에 겹치거나 아직 찾을 수 없는 타입이면 승격 대신 `SeedDefault_필드명` partial 메서드가 선언됩니다. 별도 partial 파일에 구현하면 로드될 때마다 자동 호출됩니다.
@@ -86,7 +86,7 @@ public static int PlayerId
 값이 enum이면 타입 해석·네임스페이스 자동완성은 클래스와 동일하게 동작하지만, `기본값`엔 멤버 이름 대신 **정수값**을 씁니다.
 
 ```csharp
-[DataColumn("hero_grade")] [AutoDefault(0)] internal AutoDict<HeroName, HeroGrade> heroGrade = new();   // 빈 칸 = (HeroGrade)0
+[DataColumn("hero_grade")] [AutoDefault(0)] internal AutoDict<HeroName, HeroGrade> hero_grade = new AutoDict<HeroName, HeroGrade>();   // 빈 칸 = (HeroGrade)0
 ```
 
 ::: warning enum 멤버 이름 대신 정수를 쓰세요
@@ -99,7 +99,7 @@ public sealed partial class PlayerSave
 {
     static partial void SeedDefault_HeroData(Row row)
     {
-        foreach (var name in Enum.GetValues<HeroName>())
+        foreach (HeroName name in Enum.GetValues(typeof(HeroName)))
             if (!row.hero_data.ContainsKey(name))
                 row.hero_data[name] = new HeroData { level = 1 };
     }
@@ -117,7 +117,7 @@ jsonb 컬럼은 가져올 때 미지정 상태를 뜻하는 `Dictionary<string, 
 생성된 파일은 다음과 같은 구조입니다.
 
 ```csharp
-// PlayerSave.cs — 생성기로 자동 생성, 직접 수정하지 않습니다
+// PlayerSave.cs — 생성기로 자동 생성. 다시 생성하면 덮어쓰므로 직접 수정하지 않습니다([AutoDefault]만 보존)
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -137,9 +137,9 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
     [JsonObject(MemberSerialization.Fields)]   // Newtonsoft가 internal 필드를 저장/로드
     public sealed class Row
     {
-        [DataColumn("level")]     internal int            level;
-        [DataColumn("coins")]     internal int            coins;
-        [DataColumn("inventory")] internal List<int>      inventory = new List<int>();   // 컬렉션은 빈 인스턴스로 초기화
+        [DataColumn("level")]                      internal int           level = 1;
+        [DataColumn("coins")]                      internal int           coins = 0;
+        [DataColumn("inventory")] [AutoDefault(0)] internal AutoList<int> inventory = new AutoList<int>();   // 컬렉션은 빈 인스턴스로 초기화
     }
 
     // 스칼라: get/set — 값이 실제로 바뀔 때만 MarkDirty
@@ -156,10 +156,10 @@ public sealed partial class PlayerSave : StaticUserSave<PlayerSave.Row>
     }
 
     // 컬렉션: 일반 컬렉션처럼 사용 — 제자리 수정도 자동 동기화에 반영
-    public static List<int> Inventory
+    public static AutoList<int> Inventory
     {
         get => Instance.Current.inventory;
-        set { Instance.Current.inventory = value ?? new List<int>(); Instance.MarkDirty(DataSavePriority.Normal); }
+        set { Instance.Current.inventory = value ?? new AutoList<int>(); Instance.MarkDirty(DataSavePriority.Normal); }
     }
 }
 ```

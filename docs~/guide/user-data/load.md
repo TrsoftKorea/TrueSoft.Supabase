@@ -13,7 +13,7 @@ await Supabase.SignInAnonymouslyAsync();   // 1. 로그인
 await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 ```
 
-`LoadAsync`는 서버에서 유저 데이터를 가져와 `Current`에 채웁니다. 신규 플레이어는 이때 DB 행이 초기값(컬럼 DEFAULT)으로 자동 생성됩니다. `await` 반환 시점에 적용이 끝나 있으므로, 로드 후 실행할 코드는 `await LoadAsync()` 다음 줄에 이어서 작성합니다.
+`LoadUserSaveAsync`는 서버에서 유저 데이터를 가져와 `Current`에 채웁니다. 신규 플레이어는 이때 DB 행이 초기값(컬럼 DEFAULT)으로 자동 생성됩니다. `await` 반환 시점에 적용이 끝나 있으므로, 로드 후 실행할 코드는 `await LoadAsync()` 다음 줄에 이어서 작성합니다.
 
 자동 로그인(`Supabase.TriggerAutoLoginAsync()`)도 로그인만 수행하므로, 수동 로그인과 동일하게 성공 후 위 로드 단계를 직접 호출합니다.
 
@@ -27,7 +27,7 @@ await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 
 ## 신규 플레이어 후처리 {#new-user}
 
-`LoadAsync()`는 `SupabaseLoadResult`를 반환합니다. 그 `IsNewUser`로 신규 플레이어를 분기합니다. **DB에 본인 행이 없던 신규 플레이어의 최초 로드**에서만 `true`이고, 기존 플레이어 로드나 재로그인 시에는 `false`입니다. 값이 호출에 묶여 불변이므로, 이후 재로드해도 이 결과의 `IsNewUser`는 바뀌지 않습니다.
+`LoadUserSaveAsync()`는 `SupabaseLoadResult`를 반환합니다. 그 `IsNewUser`로 신규 플레이어를 분기합니다. **DB에 본인 행이 없던 신규 플레이어의 최초 로드**에서만 `true`이고, 기존 플레이어 로드나 재로그인 시에는 `false`입니다. 값이 호출에 묶여 불변이므로, 이후 재로드해도 이 결과의 `IsNewUser`는 바뀌지 않습니다.
 
 플레이나누를 병행하면 로그인 직후 동기화가 게임보다 먼저 행을 만들어, 게임이 로드할 때는 이미 행이 있습니다. 그래도 SDK와 플레이나누 양쪽에 데이터가 없던 플레이어는 로그인 후 게임이 처음 부르는 로드에서 `true`를 받습니다. 자세한 조건은 [데이터 동기화](/guide/migration/sync#flow)를 참고하세요.
 
@@ -35,7 +35,7 @@ await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 var result = await Supabase.LoadUserSaveAsync();
 if (result.IsNewUser)
 {
-    // 신규 유저 전용 로직: 튜토리얼 시작, 웰컴 보너스 지급 등
+    // 신규 플레이어 전용 로직: 튜토리얼 시작, 웰컴 보너스 지급 등
     PlayerSave.Coins = 100;   // 세팅한 값은 자동 저장에 반영됩니다
 }
 ```
@@ -63,5 +63,5 @@ await Supabase.LoadUserSaveAsync();            // 서버에 실제 값이 든 �
 :::
 
 ::: tip
-로드 전 세팅은 첫 로드 시점에 한 번 스냅샷됩니다. 유지된 초기값은 서버 정본과의 **차이(diff)만** PATCH되며, 그 저장까지 끝난 뒤 `await LoadAsync()`가 반환됩니다.
+로드 전 세팅은 첫 로드 시점에 한 번 스냅샷됩니다. 유지된 초기값은 서버 정본과의 **차이(diff)만** PATCH되며, 그 저장까지 끝난 뒤 `await Supabase.LoadUserSaveAsync()`가 반환됩니다.
 :::

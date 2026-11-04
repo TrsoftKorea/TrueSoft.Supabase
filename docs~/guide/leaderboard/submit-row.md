@@ -7,7 +7,7 @@ Task<SupabaseResult<LeaderboardSubmitResult>> Supabase.SubmitScoreAsync<TRow>(do
 순위와 함께 표시할 값을 점수와 같이 보냅니다. 어느 리더보드인지는 행 타입에서 읽으므로 타입 파라미터를 적을 필요가 없습니다.
 
 ```csharp
-var row = new ArenaLeaderboard.Row { CharacterLevel = 42, GuildName = "붉은검" };
+var row = new GuildLeaderboard.Row { CharacterLevel = 42, GuildName = "붉은검" };
 await Supabase.SubmitScoreAsync(1250, row);
 ```
 
