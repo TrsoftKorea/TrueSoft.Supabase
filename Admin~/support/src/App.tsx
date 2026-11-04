@@ -153,7 +153,7 @@ export function App({ api }: { api: SupportApi | null }) {
     body = <Spinner label={t(lang, 'loading')} />
   } else if (view.kind === 'home') {
     body = (
-      <HomeView api={api} lang={lang} signedIn={signedIn} email={shownEmail} onLogout={webLogout} faqs={faqs} categories={categories} notices={notices}
+      <HomeView api={api} lang={lang} signedIn={signedIn} email={shownEmail} onLogin={onLogin} onLogout={webLogout} faqs={faqs} categories={categories} notices={notices}
         look={look} onGo={open} onError={fail} />
     )
   } else {
@@ -310,8 +310,9 @@ function FaqList({ lang, items }: { lang: Lang; items: Faq[] }) {
   )
 }
 
-function HomeView({ api, lang, signedIn, email, onLogout, faqs, categories, notices, look, onGo, onError }: {
-  api: SupportApi; lang: Lang; signedIn: boolean; email: string | null; onLogout: (() => void) | undefined
+function HomeView({ api, lang, signedIn, email, onLogin, onLogout, faqs, categories, notices, look, onGo, onError }: {
+  api: SupportApi; lang: Lang; signedIn: boolean; email: string | null
+  onLogin: (r: { banned: boolean }) => void; onLogout: (() => void) | undefined
   faqs: Faq[] | null; categories: Category[]; notices: ReactNode
   look: Look | null | undefined; onGo: (v: View) => void; onError: (e: unknown) => void
 }) {
@@ -339,10 +340,10 @@ function HomeView({ api, lang, signedIn, email, onLogout, faqs, categories, noti
     requestAnimationFrame(() => results.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
-  // 로그인 없이는 못 쓰는 일들. 게임 안 창은 접속 표가 끝났으면(창을 다시 열어야 한다), 브라우저로 연 창은 이 게임에
-  // 웹 로그인이 없으면 감춘다 — 누르면 막다른 화면만 나온다. 웹 로그인이 있으면 누를 때 로그인부터 한다.
-  const webLogin = !IN_APP && !!(look?.google_client_id || look?.apple_services_id)
-  const actions: Array<{ key: string; icon: ReactNode; title: Key; desc: Key; view: View; badge?: number }> = signedIn || webLogin
+  // 로그인 없이는 못 쓰는 일들이라 로그인했을 때만 보인다. 브라우저로 연 창은 이 게임에 웹 로그인이 있으면 그 자리에
+  // 로그인 단추를 둔다 — 카드를 그대로 두면 바로 쓸 수 있는 것처럼 보인다. 자주 묻는 질문은 로그인 없이 그대로 보인다.
+  const webLogin = !signedIn && !IN_APP && !!(look?.google_client_id || look?.apple_services_id)
+  const actions: Array<{ key: string; icon: ReactNode; title: Key; desc: Key; view: View; badge?: number }> = signedIn
     ? [
         { key: 'new', icon: <MessageSquarePlus className="w-5 h-5" />, title: 'newTicket', desc: 'newTicketDesc', view: { kind: 'new' } },
         { key: 'coupon', icon: <Gift className="w-5 h-5" />, title: 'coupon', desc: 'couponDesc', view: { kind: 'coupon' } },
@@ -391,6 +392,14 @@ function HomeView({ api, lang, signedIn, email, onLogout, faqs, categories, noti
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-6 space-y-7">
         {notices}
+        {!searching && webLogin && (
+          <section className="space-y-2.5">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>{t(lang, 'help')}</h2>
+            <div className="rounded-lg border border-neutral-200 bg-white px-4">
+              <LoginView api={api} lang={lang} look={look} desc="loginHomeDesc" onDone={onLogin} onError={onError} />
+            </div>
+          </section>
+        )}
         {!searching && actions.length > 0 && (
           <section className="space-y-2.5">
             <h2 className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>{t(lang, 'help')}</h2>
@@ -541,8 +550,8 @@ function AttachPicker({ api, lang, items, onChange, onError }: {
 }
 
 /** 게임 밖 창의 로그인. 게임 안 창은 SDK 가 접속 표를 주므로 여기 오는 것은 그 표가 끝났을 때뿐이다. */
-function LoginView({ api, lang, look, onDone, onError }: {
-  api: SupportApi; lang: Lang; look: Look | null | undefined; onDone: (r: { banned: boolean }) => void; onError: (e: unknown) => void
+function LoginView({ api, lang, look, desc = 'loginDesc', onDone, onError }: {
+  api: SupportApi; lang: Lang; look: Look | null | undefined; desc?: Key; onDone: (r: { banned: boolean }) => void; onError: (e: unknown) => void
 }) {
   const googleEl = useRef<HTMLDivElement>(null)
   const appleLogin = useRef<AppleLogin | null>(null)
@@ -602,7 +611,7 @@ function LoginView({ api, lang, look, onDone, onError }: {
 
   return (
     <div className="py-4 flex flex-col items-center gap-5 text-center">
-      <p className="text-[15px] text-neutral-800">{t(lang, 'loginDesc')}</p>
+      <p className="text-[15px] text-neutral-800">{t(lang, desc)}</p>
       <div className="w-full max-w-[320px] flex flex-col gap-3">
         {google && (mock
           ? <button type="button" disabled={busy} onClick={() => void finish('google', 'mock', '')}

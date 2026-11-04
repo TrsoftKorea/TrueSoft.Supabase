@@ -51,6 +51,7 @@ export const KO = {
   faqForCategory: '문의하기 전에 확인해 보세요',
   login: '로그인',
   loginDesc: '게임에 연결한 계정으로 로그인합니다.',
+  loginHomeDesc: '게임에 연결한 계정으로 로그인하면 모든 기능을 이용할 수 있습니다.',
   loginGuest: '게스트 계정은 게임 안 고객센터에서 문의할 수 있습니다.',
   loginUnavailable: '이 게임은 게임 안 고객센터에서 문의할 수 있습니다.',
   appleSignIn: 'Apple로 로그인',
