@@ -12,6 +12,7 @@ type View =
 const MAX_ATTACH = 3
 const MAX_BODY = 2000
 const LANG_KEY = 'tb_support_lang'
+const LANG_GIVEN_KEY = 'tb_support_lang_given'
 
 const STATUS_CLS: Record<Status, string> = {
   open: 'bg-amber-100 text-amber-800',
@@ -31,7 +32,13 @@ function writeStored(key: string, value: string) {
 }
 
 function initialLang(): Lang {
-  return pickLang(readStored(LANG_KEY) ?? new URLSearchParams(location.search).get('lang') ?? navigator.language)
+  const given = new URLSearchParams(location.search).get('lang')
+  // 게임이 넘기는 언어가 바뀌면 전에 창에서 고른 언어를 버리고 게임을 따른다. 그대로면 플레이어가 고른 언어를 유지한다.
+  if (given && readStored(LANG_GIVEN_KEY) !== given) {
+    writeStored(LANG_GIVEN_KEY, given)
+    writeStored(LANG_KEY, pickLang(given))
+  }
+  return pickLang(readStored(LANG_KEY) ?? given ?? navigator.language)
 }
 
 /** 검색 — 띄어 쓴 낱말이 모두 질문·답·분류 이름 어딘가에 있으면 찾은 것으로 본다. */
