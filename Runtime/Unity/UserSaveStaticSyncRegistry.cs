@@ -28,6 +28,8 @@ namespace TrueBase.Unity
             public string LastFlushError;
             /// <summary><see cref="ResetAll"/> 횟수. 기다리는 사이 로그아웃·계정 교체가 있었는지 가릅니다.</summary>
             public long ResetCount;
+            /// <summary>마지막 <see cref="ResetAll"/> 때 받은 실패 사유. 일반 로그아웃·계정 교체면 null입니다.</summary>
+            public string LastResetReason;
             public float NextAllowedAtRealtime;
             /// <summary>null이면 전역 <see cref="_cooldownSeconds"/> 사용. non-null이면 dirty 우선순위별 쿨다운 반환.</summary>
             public Func<float> GetDirtyCooldown;
@@ -258,7 +260,8 @@ namespace TrueBase.Unity
         }
 
         /// <summary>모든 항목의 전송 상태·타이머를 초기화하고 <c>resetLocalState</c> 콜백을 호출합니다. 세션 해제 시 호출됩니다.</summary>
-        public static void ResetAll()
+        /// <param name="reason">저장이 끝나길 기다리던 호출에 돌려줄 실패 사유. 비우면 <c>UserSaveFlushFailed</c>.</param>
+        public static void ResetAll(string reason = null)
         {
             foreach (var entry in Entries.Values)
             {
@@ -269,6 +272,7 @@ namespace TrueBase.Unity
                 entry.RetryNotBeforeRealtime = 0f;
                 entry.LastFlushError = null;
                 entry.ResetCount++;
+                entry.LastResetReason = reason;
 
                 try
                 {
@@ -438,7 +442,7 @@ namespace TrueBase.Unity
             {
                 // 기다리는 사이 로그아웃·계정 교체로 비워졌다 — 저장됐는지 알 수 없으므로 성공으로 알리지 않는다.
                 if (entry.ResetCount != startResetCount)
-                    return SupabaseResult.Fail(SupabaseErrorCode.UserSaveFlushFailed);
+                    return SupabaseResult.Fail(entry.LastResetReason ?? SupabaseErrorCode.UserSaveFlushFailed);
 
                 if (!entry.IsInFlight)
                 {

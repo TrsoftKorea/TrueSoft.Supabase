@@ -560,6 +560,10 @@ namespace TrueBase.Core.Auth
                     || (error.msg?.IndexOf("banned", StringComparison.OrdinalIgnoreCase) ?? -1) >= 0)
                     return SupabaseErrorCode.UserBanned;
 
+                if (error.error_code == "identity_already_exists"
+                    || (error.msg?.IndexOf("already linked", StringComparison.OrdinalIgnoreCase) ?? -1) >= 0)
+                    return SupabaseErrorCode.IdentityAlreadyLinked;
+
                 if (string.IsNullOrWhiteSpace(error.msg) == false)
                     return error.msg;
 

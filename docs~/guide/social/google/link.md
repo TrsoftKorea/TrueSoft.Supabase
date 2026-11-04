@@ -32,5 +32,6 @@ else
 | `SupabaseReason.GoogleWebClientIdEmpty` | Android에서 `googleWebClientId`가 비어 있습니다 |
 | `SupabaseReason.GoogleIosClientIdInvalid` | iOS에서 `googleIosClientId`가 비었거나, 형식이 틀리거나, 웹 클라이언트 ID와 같습니다 |
 | `SupabaseReason.AnonymousRequired` | 이미 소셜 로그인 상태입니다. 익명 세션에서만 부를 수 있습니다 |
+| `SupabaseReason.IdentityAlreadyLinked` | 이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |

@@ -31,6 +31,7 @@ else
 | `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경입니다. 에디터·Android도 여기에 해당합니다 |
 | `SupabaseReason.AnonymousRequired` | 익명 세션이 아닙니다 |
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
+| `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 
 ::: info 커스텀 토큰

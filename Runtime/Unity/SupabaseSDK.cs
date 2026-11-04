@@ -781,7 +781,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithGoogleIdTokenAsync(idToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_signin_failed", ok.BanInfo);
         }
 
         /// <summary>
@@ -1226,7 +1226,7 @@ namespace TrueBase.Unity
             var ok = await TrySignInWithAppleIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "apple_signin_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "apple_signin_failed", ok.BanInfo);
         }
 
         /// <summary>현재 익명 세션에 Apple identity를 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -1923,6 +1923,7 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.UserBanned:
                 case SupabaseErrorCode.DuplicateLogin:
                 case SupabaseErrorCode.CannotUnlinkLastIdentity:
+                case SupabaseErrorCode.IdentityAlreadyLinked:
 
                 // 유저가 입력한 닉네임이 거절된 경우
                 case SupabaseErrorCode.NameTaken:
@@ -4110,14 +4111,15 @@ namespace TrueBase.Unity
         /// </remarks>
         /// <param name="clearStorage">저장된 refresh_token 삭제 여부.</param>
         /// <param name="deleteUserSessionRow">true면 <c>user_sessions</c>에서 본인 행을 삭제합니다. 다른 기기에 의해 세션이 무효화된 경우 false로 두세요.</param>
-        public static void ClearSession(bool clearStorage = true, bool deleteUserSessionRow = true)
+        /// <param name="saveResetReason">저장이 끝나길 기다리던 호출에 돌려줄 실패 사유. 비우면 <c>UserSaveFlushFailed</c>.</param>
+        public static void ClearSession(bool clearStorage = true, bool deleteUserSessionRow = true, string saveResetReason = null)
         {
             var accessToken = _currentSession?.AccessToken;
             var accountId = _currentSession?.User?.Id;
 
             SupabaseDuplicateSessionCoordinator.StopPolling();
 
-            UserSaveStaticSyncRegistry.ResetAll();
+            UserSaveStaticSyncRegistry.ResetAll(saveResetReason);
 
             _currentSession = null;
             ResetGateRefresh();
@@ -4155,7 +4157,7 @@ namespace TrueBase.Unity
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>
         internal static void RaiseDuplicateLoginDetected()
         {
-            ClearSession(clearStorage: true, deleteUserSessionRow: false);
+            ClearSession(clearStorage: true, deleteUserSessionRow: false, saveResetReason: SupabaseErrorCode.DuplicateLogin);
             OnDuplicateLoginDetected?.Invoke();
         }
 
@@ -4991,7 +4993,7 @@ namespace TrueBase.Unity
         /// 고객센터 창을 엽니다. 로그인 중이면 그 계정으로, 차단돼 로그인이 막혔으면 이 기기에 남은 로그인 기록이나
         /// 방금 차단으로 거절된 구글·애플 로그인으로 본인을 확인합니다. 게임 안 창이면 닫힐 때까지 기다립니다.
         /// </summary>
-        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어. 플레이어가 창에서 직접 고른 언어가 있으면 그것이 먼저다.</param>
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어. 플레이어가 창에서 고른 언어는 이 값이 바뀌기 전까지만 유지된다.</param>
         public static async Task<SupabaseResult> TryOpenCustomerCenterAsync(string language = null)
         {
             const string tag = ApiLogTags.CustomerCenterOpen;

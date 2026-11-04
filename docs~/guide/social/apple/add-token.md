@@ -29,3 +29,9 @@ else
 | `idToken` | Sign in with Apple에서 발급받은 ID 토큰 |
 | `rawNonce` | 토큰과 함께 전달된 nonce (기본값: `null`) |
 | `authorizationCode` | 토큰과 함께 받은 일회용 인증 코드. 넘겨야 탈퇴할 때 Apple 연결이 끊깁니다. [탈퇴 시 Apple 연결 해제](/guide/social/apple/#revoke)를 참고하세요 (기본값: `null`) |
+
+**에러 코드**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |

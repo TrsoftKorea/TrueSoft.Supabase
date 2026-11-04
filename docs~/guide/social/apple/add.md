@@ -26,6 +26,7 @@ else
 | `SupabaseReason.AppleSignInCancelled` | 플레이어가 로그인 창을 직접 닫았습니다 |
 | `SupabaseReason.AppleSignInIosOnly` | iOS가 아닌 환경입니다. 에디터·Android도 여기에 해당합니다 |
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
+| `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 추가 연동 · 커스텀](/guide/social/apple/add-token)을 사용하세요.

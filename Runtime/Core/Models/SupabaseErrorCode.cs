@@ -41,6 +41,9 @@ namespace TrueBase.Core.Common
         /// <summary>다른 기기에서 동일 계정으로 로그인해 현재 세션이 무효화되었습니다.</summary>
         public const string DuplicateLogin = "duplicate_login_detected";
 
+        /// <summary>연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다.</summary>
+        public const string IdentityAlreadyLinked = "identity_already_linked";
+
         /// <summary>익명(게스트) 세션이 필요한 작업입니다.</summary>
         public const string AnonymousRequired = "anonymous_session_required";
 

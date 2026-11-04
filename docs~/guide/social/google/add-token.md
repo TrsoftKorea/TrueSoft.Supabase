@@ -20,3 +20,9 @@ if (result.IsSuccess)
 |----------|------|
 | `idToken` | Google OAuth에서 발급받은 ID 토큰 |
 | `googleAccessToken` | Google Access Token (기본값: `null`) |
+
+**에러 코드**
+
+| Reason | 설명 |
+|--------|------|
+| `SupabaseReason.IdentityAlreadyLinked` | 이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
