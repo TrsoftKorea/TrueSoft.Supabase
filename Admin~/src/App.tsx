@@ -98,7 +98,7 @@ export default function App() {
   // 게임 색·이름·아이콘은 로그인 화면에서도 쓰므로 로그인 여부와 관계없이 처음 한 번 받는다.
   useEffect(() => { void refreshProjectLooks() }, [])
 
-  // 로그인 세션 토큰(24시간)이 모든 게임에서 만료되면 로그인 화면으로 돌려보낸다.
+  // 로그인 세션 토큰이 모든 게임에서 만료되거나 다른 탭에서 로그아웃하면 로그인 화면으로 돌려보낸다.
   useEffect(() => {
     if (!signedIn) return
     const id = window.setInterval(() => {

@@ -38,7 +38,7 @@ const SESSION_SECRET = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const SESSION_KEY = SESSION_SECRET ? new TextEncoder().encode(SESSION_SECRET) : null;
 // 구글 로그인도 이 토큰으로 바꿔 준다(auth.googleLogin) — 구글 ID 토큰은 1시간이면 끝나
 // 그대로 쓰면 운영자가 한 시간마다 다시 로그인해야 했다.
-const SESSION_TTL = "24h";
+const SESSION_TTL = "7d";
 
 // 비어 있으면 마스터가 없는 상태 — 표에 등록된 운영자만 들어온다.
 const MASTER_EMAILS = new Set(

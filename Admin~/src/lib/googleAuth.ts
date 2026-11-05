@@ -47,7 +47,7 @@ type Tokens = Partial<Record<ProjectTarget, string>>
 
 function readTokens(): Tokens {
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(STORAGE_KEY)
     return raw ? (JSON.parse(raw) as Tokens) : {}
   } catch {
     // 예전 형식(토큰 문자열 하나)이나 깨진 값이면 다시 로그인하게 한다.
@@ -83,13 +83,13 @@ export function signedInEmail(): string {
 }
 
 export function clearToken(): void {
-  window.sessionStorage.removeItem(STORAGE_KEY)
+  window.localStorage.removeItem(STORAGE_KEY)
   window.google?.accounts.id.disableAutoSelect()
 }
 
 /** 백엔드가 발급한 로그인 세션 토큰들을 게임별로 저장한다(구글·비밀번호 로그인 공용). */
 export function storeTokens(tokens: Tokens): void {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(tokens))
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens))
 }
 
 /** 토큰의 이메일. 화면 표시용이며 권한 판단에는 쓰지 않는다(그건 백엔드가 한다). */
