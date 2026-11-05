@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -83,17 +83,23 @@ function LobbyList({
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     try {
-      setData(await callAdmin<LobbyData>(target, 'matchLobby.list', { status, page }))
+      const res = await callAdmin<LobbyData>(target, 'matchLobby.list', { status, page })
+      if (req !== loadReq.current) return
+      setData(res)
       setFailed(false)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '로비 목록을 불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, status, page, report])
 

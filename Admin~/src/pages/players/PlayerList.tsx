@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
@@ -17,7 +17,7 @@ import { Tabs } from '../../components/ui/Tabs'
 
 type PlayerRow = {
   account_id: string
-  display_name: string
+  display_name: string | null
   is_guest: boolean | null
   platform: string | null
   country_code: string | null
@@ -77,24 +77,27 @@ export default function PlayerList({
     [onUnauthenticated],
   )
 
+  // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setError('')
     setFailed(false)
     try {
-      setData(
-        await callAdmin<ListResult>(target, 'players.list', {
-          search,
-          page,
-          bannedOnly: tab === 'banned',
-        }),
-      )
+      const res = await callAdmin<ListResult>(target, 'players.list', {
+        search,
+        page,
+        bannedOnly: tab === 'banned',
+      })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, search, page, tab, report])
 
@@ -106,6 +109,11 @@ export default function PlayerList({
   const total = data?.total ?? 0
   const pageSize = data?.pageSize ?? 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  // 주소로 끝 쪽을 넘겨 들어오면(저장한 링크 등) 빈 표 대신 마지막 쪽을 보인다.
+  useEffect(() => {
+    if (data && page > totalPages) setPage(totalPages)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
   const submitSearch = () => setListState({ search: input, page: 1 })
 
@@ -174,10 +182,10 @@ export default function PlayerList({
                     <td className="px-4 py-3">
                       {r.account_id ? (
                         <button
-                          onClick={() => onSelect(r.account_id, r.display_name)}
+                          onClick={() => onSelect(r.account_id, r.display_name ?? '')}
                           className="text-[#1677ff] hover:underline"
                         >
-                          {r.display_name}
+                          {r.display_name || <span className="font-mono text-xs">{r.account_id.slice(0, 8)}</span>}
                         </button>
                       ) : (
                         <span className="text-neutral-400">-</span>

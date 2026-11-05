@@ -11,7 +11,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, diffSummary, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
-import { PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer } from '../components/ui/PlayerLink'
+import { PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
 import { RestoreSaveModal } from './players/RestoreSaveModal'
 
 type LogRow = { id: number; account_id: string; display_name: string | null; diff: Record<string, unknown>; source: string | null; created_at: string }
@@ -32,6 +32,7 @@ export default function DataLogs({
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
+  useOnChange(filter.accountId, () => setPage(1))
   const [data, setData] = useState<LogData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -95,7 +96,7 @@ export default function DataLogs({
           accountId={restoreRow.account_id}
           logId={restoreRow.id}
           loggedAt={restoreRow.created_at}
-          playerName={restoreRow.display_name || restoreRow.account_id}
+          playerName={playerLabel(restoreRow.display_name, restoreRow.account_id)}
           onClose={() => setRestoreRow(null)}
           onRestored={() => {
             setNotice(`${playerLabel(restoreRow.display_name, restoreRow.account_id)}의 데이터를 ${formatDateTime(restoreRow.created_at)} 변경 전으로 되돌렸습니다.`)

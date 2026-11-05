@@ -76,6 +76,21 @@ export function AccountIdCell({ accountId }: { accountId: string }) {
   )
 }
 
+/** 앞 게임에서만 뜻이 있는 주소 값을 지운다(게임을 바꿀 때). 플레이어·검색어·쪽 번호가 새 게임에 남으면 "기록 없음"처럼 보인다. */
+export function dropGameParams(p: URLSearchParams): URLSearchParams {
+  for (const k of ['account', 'name', 'q', 'page']) p.delete(k)
+  return p
+}
+
+/** 값이 바뀌면 그 렌더에서 곧바로 fn 을 부른다 — 효과(useEffect)로 하면 옛 값으로 요청이 한 번 먼저 나간다. */
+export function useOnChange<T>(value: T, fn: () => void) {
+  const [prev, setPrev] = useState(value)
+  if (prev !== value) {
+    setPrev(value)
+    fn()
+  }
+}
+
 /** 주소에 플레이어를 실어 열린 화면(`?account=&name=`) — 그 플레이어의 기록만 본다. */
 export function useFilterPlayer() {
   const [params, setParams] = useSearchParams()

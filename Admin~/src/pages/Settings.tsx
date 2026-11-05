@@ -739,7 +739,7 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
             ) : rows.map((r) => (
               <tr key={r.key} className="border-t border-neutral-100">
                 <td className="px-5 py-2 text-neutral-800">
-                  {r.display_name || r.account_id || r.key}
+                  {r.display_name || r.account_id?.slice(0, 8) || r.key}
                 </td>
                 <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_at)}</td>
                 <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_until)}</td>

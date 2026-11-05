@@ -7,7 +7,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { useServerName } from '../../lib/serverNames'
 import { platformLabel } from '../../lib/platforms'
 import { CardHeader, WhiteCard } from '../../components/ui/Card'
-import { withPlayer } from '../../components/ui/PlayerLink'
+import { playerLabel, withPlayer } from '../../components/ui/PlayerLink'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { areaCls, inputCls, inputCompactCls } from '../../components/ui/Input'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
@@ -37,7 +37,7 @@ function permanentUntil(): string {
 
 type Profile = {
   account_id: string
-  display_name: string
+  display_name: string | null
   is_guest: boolean | null
   platform: string | null
   signup_platform?: string | null
@@ -228,20 +228,21 @@ export default function PlayerDetail({
   }
 
   const shownName = profile?.display_name || initialName
+  const shownLabel = playerLabel(shownName, accountId)
   const cancelNameEdit = () => {
     setEditingName(false)
-    setNameDraft(profile?.display_name ?? initialName)
+    setNameDraft(shownName)
   }
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title={shownName || '(이름 없음)'}
+        title={shownLabel}
         actions={
           <div className="flex items-center gap-2">
             <Button
               onClick={() => {
-                navigate(`/mails/send?account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(shownName)}`)
+                navigate(withPlayer('/mails/send', accountId, shownName))
               }}
             >
               <Send className="w-3.5 h-3.5" />
@@ -273,7 +274,7 @@ export default function PlayerDetail({
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={accountId}
-          displayName={profile?.display_name ?? initialName}
+          displayName={shownLabel}
         />
       ) : tab === 'mails' ? (
         <MailsTab target={target} onUnauthenticated={onUnauthenticated} accountId={accountId} />
@@ -346,7 +347,7 @@ export default function PlayerDetail({
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span>{profile?.display_name ?? initialName}</span>
+              <span>{shownLabel}</span>
               <button
                 onClick={() => setEditingName(true)}
                 className="text-neutral-400 hover:text-[#1677ff]"
@@ -483,7 +484,7 @@ export default function PlayerDetail({
         description="차단하면 바로 접속이 끊기고 기한까지 다시 들어올 수 없습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-1">
-          <div className="text-neutral-800">{shownName}</div>
+          <div className="text-neutral-800">{shownLabel}</div>
           <div className="text-xs text-neutral-500 font-mono">{accountId.slice(0, 8)}</div>
           <div className="text-xs text-neutral-500">
             {permanent ? '영구 차단' : `${formatBanUntil(banUntil)}까지`}
@@ -502,7 +503,7 @@ export default function PlayerDetail({
         description="바로 다시 접속할 수 있게 됩니다. 필요하면 다시 차단할 수 있습니다."
       >
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
-          <div className="text-neutral-800">{shownName}</div>
+          <div className="text-neutral-800">{shownLabel}</div>
           <div className="text-xs text-neutral-500 mt-1 font-mono">{accountId.slice(0, 8)}</div>
         </div>
       </ConfirmDialog>

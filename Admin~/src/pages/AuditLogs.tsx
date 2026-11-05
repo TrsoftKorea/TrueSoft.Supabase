@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useRef, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -172,19 +172,24 @@ export default function AuditLogs({
     [onUnauthenticated],
   )
 
+  // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setFailed(false)
     try {
-      setData(await callAdmin<AuditData>(target, 'audit.list', {
+      const res = await callAdmin<AuditData>(target, 'audit.list', {
         search, category, startDate: dateFrom || null, endDate: dateTo || null, page,
-      }))
+      })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '운영 기록을 불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, search, category, dateFrom, dateTo, page, report])
 

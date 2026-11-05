@@ -15,6 +15,7 @@ import { formatCount, itemsText } from '../components/ui/format'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
 import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
+import { playerLabel } from '../components/ui/PlayerLink'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -24,7 +25,7 @@ type LangRow = { lang: string; title: string; content: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
 type GameItem = { key: string; display_name: string }
 type CategoryRow = { key: string; display_name: string }
-type PlayerRow = { account_id: string; display_name: string }
+type PlayerRow = { account_id: string; display_name: string | null }
 
 const DOW_LABEL = ['일', '월', '화', '수', '목', '금', '토']
 const LANGS = ['en', 'ja', 'ko', 'zh-CN', 'zh-TW', 'de', 'fr', 'es', 'pt', 'ru', 'id', 'th', 'vi']
@@ -168,7 +169,7 @@ export default function Mails({
   const addItem = () => setItems((x) => [...x, { key: catalog[0]?.key ?? '', count: 1 }])
   const setItem = (i: number, patch: Partial<ItemRow>) => setItems((x) => x.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   const delItem = (i: number) => setItems((x) => x.filter((_, j) => j !== i))
-  const togglePlayer = (p: PlayerRow) => setSelected((s) => { const n = { ...s }; if (n[p.account_id]) delete n[p.account_id]; else n[p.account_id] = p.display_name; return n })
+  const togglePlayer = (p: PlayerRow) => setSelected((s) => { const n = { ...s }; if (n[p.account_id]) delete n[p.account_id]; else n[p.account_id] = playerLabel(p.display_name, p.account_id); return n })
 
   const addLang = () => setLangRows((x) => [...x, { lang: LANGS.find((l) => !x.some((r) => r.lang === l)) ?? '', title: '', content: '' }])
   const setLang = (i: number, patch: Partial<LangRow>) => setLangRows((x) => x.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -400,7 +401,7 @@ export default function Mails({
                 {playerRows.map((p) => (
                   <label key={p.account_id} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 cursor-pointer">
                     <input type="checkbox" checked={!!selected[p.account_id]} onChange={() => togglePlayer(p)} />
-                    <span className="truncate">{p.display_name}</span>
+                    <span className="truncate">{playerLabel(p.display_name, p.account_id)}</span>
                     <span className="text-xs text-neutral-400 font-mono ml-auto shrink-0">{p.account_id.slice(0, 8)}</span>
                   </label>
                 ))}

@@ -375,17 +375,22 @@ export default function PlayersTab({
     [onUnauthenticated],
   )
 
+  // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setFailed(false)
     try {
-      setData(await callAdmin<ListData>(target, 'dataManagement.searchPlayers', { search: query, page }))
+      const res = await callAdmin<ListData>(target, 'dataManagement.searchPlayers', { search: query, page })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       setData(null)
       setFailed(true)
       report(e, '검색에 실패했습니다.')
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, query, page, report])
 

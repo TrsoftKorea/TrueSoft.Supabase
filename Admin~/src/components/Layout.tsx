@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
+import { startTransition, useEffect, useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
 import {
   LayoutDashboard, Database, FilePen, Trophy, Settings, Users, ReceiptText, Package, Ticket,
@@ -15,6 +15,7 @@ import { signedInTargets } from '../lib/googleAuth'
 import { blockedReason, type SignInOutcome } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
 import { PublishBar } from '../mock/PublishBar'
+import { dropGameParams } from './ui/PlayerLink'
 
 // 사이드바 색은 화면 모드를 따른다 — 값은 index.css 의 .sidebar 변수(--sb-*)에 있다.
 const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
@@ -182,13 +183,11 @@ export function Layout({
   const [, setSearchParams] = useSearchParams()
   const switchTarget = (t: ProjectTarget) => {
     setTarget(t)
-    onTargetChange(t)
-    // 주소의 플레이어는 앞 게임 사람이다. 남겨 두면 새 게임에 "기록 없음"으로 보인다.
-    setSearchParams((p) => {
-      p.delete('account')
-      p.delete('name')
-      return p
-    }, { replace: true })
+    // 한 번에 그린다 — 라우터의 주소 변경은 늦게 그려져서, 따로 하면 새 게임의 화면이 앞 게임 주소로 먼저 만들어진다.
+    startTransition(() => {
+      onTargetChange(t)
+      setSearchParams(dropGameParams, { replace: true })
+    })
   }
 
   // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.

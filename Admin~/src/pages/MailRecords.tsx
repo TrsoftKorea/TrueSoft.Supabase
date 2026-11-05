@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
@@ -130,39 +130,48 @@ export default function MailRecords({
     })()
   }, [target, report])
 
+  // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
+  const batchReq = useRef(0)
+  const recReq = useRef(0)
   const loadBatches = useCallback(async () => {
+    const req = ++batchReq.current
     setBatchLoading(true)
     // 시작할 때 지운다 — 성공했을 때 지우면 함께 나간 분류·아이템 조회의 실패 표시까지 사라진다.
     setError('')
     try {
       const res = await callAdmin<BatchData>(target, 'mails.getBatches', { page: batchPage, search: batchSearch, category: batchCategory })
+      if (req !== batchReq.current) return
       setBatchData(res)
       setBatchFailed(false)
     } catch (e: unknown) {
+      if (req !== batchReq.current) return
       report(e, '발송 단위를 불러오지 못했습니다.')
       setBatchData(null)
       setBatchFailed(true)
     } finally {
-      setBatchLoading(false)
+      if (req === batchReq.current) setBatchLoading(false)
     }
   }, [target, batchPage, batchSearch, batchCategory, report])
   useEffect(() => { if (tab === 'batches') void loadBatches() }, [tab, loadBatches])
 
   const loadRecords = useCallback(async () => {
+    const req = ++recReq.current
     setRecLoading(true)
     setError('')
     try {
       const res = await callAdmin<MailData>(target, 'mails.getRecords', {
         search, status, category, startDate: dateFrom || null, endDate: dateTo || null, batchId: selectedBatch?.id ?? null, page,
       })
+      if (req !== recReq.current) return
       setRecData(res)
       setRecFailed(false)
     } catch (e: unknown) {
+      if (req !== recReq.current) return
       report(e, '우편 내역을 불러오지 못했습니다.')
       setRecData(null)
       setRecFailed(true)
     } finally {
-      setRecLoading(false)
+      if (req === recReq.current) setRecLoading(false)
     }
   }, [target, search, status, category, dateFrom, dateTo, selectedBatch, page, report])
   useEffect(() => { if (tab === 'records') void loadRecords() }, [tab, loadRecords])

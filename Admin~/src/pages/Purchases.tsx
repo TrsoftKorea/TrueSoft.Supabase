@@ -15,7 +15,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
-import { PlayerFilterChip, PlayerLink, useFilterPlayer } from '../components/ui/PlayerLink'
+import { PlayerFilterChip, PlayerLink, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
 
 type PurchaseRow = {
   id: string
@@ -144,6 +144,7 @@ export default function Purchases({
   // 둘을 섞어 보는 "전체"는 두지 않는다 — 테스트 결제는 따로 보는 것이 의도다(2026-10-29 사용자 결정).
   const [test, setTest] = useState<'exclude' | 'only'>('exclude')
   const [page, setPage] = useState(1)
+  useOnChange(filter.accountId, () => setPage(1))
   const [data, setData] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -234,7 +235,7 @@ export default function Purchases({
   const exportCsv = async () => {
     setExporting(true)
     try {
-      const res = await callAdmin<{ rows: PurchaseRow[]; truncated: boolean }>(target, 'purchases.list', {
+      const res = await callAdmin<{ rows: PurchaseRow[]; truncated: boolean; nameSearchTruncated?: boolean }>(target, 'purchases.list', {
         search, accountId: filter.accountId || null, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, test, all: true,
       })
       downloadCsv(
@@ -258,6 +259,7 @@ export default function Purchases({
         ]),
       )
       if (res.truncated) setError('결제가 너무 많아 앞의 10만 건만 담았습니다. 기간을 나눠 내려받으세요.')
+      else if (res.nameSearchTruncated) setError('닉네임이 맞는 플레이어가 많아 앞 100명의 결제만 담았습니다.')
     } catch (e: unknown) {
       report(e, '내려받지 못했습니다.')
     } finally {

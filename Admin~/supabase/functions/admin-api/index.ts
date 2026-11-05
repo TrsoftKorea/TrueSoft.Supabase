@@ -220,7 +220,7 @@ async function accountFilterForSearch(db: SupabaseClient, term: string): Promise
   const range = accountIdRange(term);
   if (range) anyOf.push(`and(account_id.gte.${range.lo},account_id.lte.${range.hi})`);
   if (UUID_RE.test(term)) return { anyOf, truncated: false };
-  const { data, error } = await db.from("display_names").select("account_id").ilike("display_name", `%${term}%`).limit(NAME_SEARCH_LIMIT + 1);
+  const { data, error } = await db.from("display_names").select("account_id").ilike("display_name", `%${term}%`).order("account_id").limit(NAME_SEARCH_LIMIT + 1);
   if (error) throw new Error(error.message);
   const ids = (data ?? []).map((n) => n.account_id as string);
   if (ids.length > 0) anyOf.push(`account_id.in.(${ids.slice(0, NAME_SEARCH_LIMIT).join(",")})`);
@@ -897,17 +897,13 @@ async function handleAction(
       }
 
       case "dataManagement.searchPlayers": {
-        const paged = typeof params["page"] === "number";
         const { data, error } = await db.rpc("ts_admin_search_user_data_players", {
           p_search: optStr(params, "search"),
-          p_page: paged ? params["page"] : 1,
+          p_page: typeof params["page"] === "number" ? params["page"] : 1,
           p_page_size: 20,
         });
         if (error) throw new Error(error.message);
-        if (paged) return json({ ok: true, data });
-        // 쪽을 보내지 않는 옛 화면은 배열과 이름을 받는다(화면 게시는 서버 적용보다 늦다).
-        const oldRows = (data as { rows: Array<{ account_id: string; display_name: string | null }> }).rows;
-        return json({ ok: true, data: oldRows.map((r) => ({ ...r, display_name: r.display_name ?? `Player_${r.account_id.slice(0, 8)}` })) });
+        return json({ ok: true, data });
       }
 
       case "purchases.list": {

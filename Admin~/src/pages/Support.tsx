@@ -17,7 +17,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
-import { PlayerFilterChip, PlayerLink, playerLabel, playerPath, useFilterPlayer } from '../components/ui/PlayerLink'
+import { PlayerFilterChip, PlayerLink, playerLabel, playerPath, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 
@@ -158,6 +158,8 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  // 플레이어로 거를 때는 그 사람의 문의 전체, 전체 목록은 답변 대기부터 — 처음 열 때와 같게.
+  useOnChange(filter.accountId, () => { setPage(1); setStatus(filter.accountId ? 'all' : 'open') })
   const [data, setData] = useState<ListResponse | null>(null)
   const [failed, setFailed] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)

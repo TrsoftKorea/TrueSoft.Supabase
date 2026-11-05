@@ -13,7 +13,7 @@ import { EditDialog } from '../../components/ui/EditDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
-import { PlayerLink } from '../../components/ui/PlayerLink'
+import { PlayerLink, playerLabel } from '../../components/ui/PlayerLink'
 
 type LbRow = { code: string; display_name: string; rotation: string; scope: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
@@ -502,7 +502,7 @@ export default function ScoresTab({
       {dataEditRow && (
         <EditDialog
           title="플레이어 데이터 수정"
-          description={`${dataEditRow.display_name ?? dataEditRow.account_id}${hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}`}
+          description={`${playerLabel(dataEditRow.display_name, dataEditRow.account_id)}${hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}`}
           busy={saving}
           onClose={() => setDataEditRow(null)}
           error={dialogError || undefined}
@@ -562,7 +562,7 @@ export default function ScoresTab({
       >
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
-            <div className="text-neutral-800">{delTarget.display_name ?? delTarget.account_id}</div>
+            <div className="text-neutral-800">{playerLabel(delTarget.display_name, delTarget.account_id)}</div>
             <div className="text-xs text-neutral-500 mt-1">{formatCount(delTarget.rank)}위 · {formatScore(delTarget.score)}점</div>
           </div>
         )}

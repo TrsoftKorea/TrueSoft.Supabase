@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { startTransition, useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from './components/ui/Button'
@@ -37,6 +37,7 @@ import PlayerDataFields from './pages/PlayerDataFields'
 import GameServers from './pages/GameServers'
 import AuditLogs from './pages/AuditLogs'
 import BannedWords from './pages/BannedWords'
+import { dropGameParams } from './components/ui/PlayerLink'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -84,12 +85,17 @@ export default function App() {
     setMe(null)
   }, [])
 
+  const [, setSearchParams] = useSearchParams()
   const enter = useCallback((t: ProjectTarget) => {
     setTarget(t)
-    setTargetState(t)
     window.sessionStorage.setItem(ENTERED_KEY, '1')
-    setEntered(true)
-  }, [])
+    // 한 번에 그린다 — 라우터의 주소 변경은 늦게 그려져서, 따로 하면 화면이 앞 게임 주소로 먼저 만들어진다.
+    startTransition(() => {
+      setTargetState(t)
+      setEntered(true)
+      if (t !== target) setSearchParams(dropGameParams, { replace: true })
+    })
+  }, [target, setSearchParams])
 
   // 로그인은 그대로 두고 게임 목록으로만 돌아간다.
   const backToList = useCallback(() => {

@@ -24,8 +24,14 @@ const SRC = path.join(ADMIN, 'src')
 const BASELINE = path.join(ADMIN, 'scripts', 'check-ui-baseline.json')
 const args = new Set(process.argv.slice(2))
 
-// 공용 부품 자신은 검사하지 않는다 — 꼴을 정의하는 곳이다.
-const SKIP_DIRS = [path.join(SRC, 'components', 'ui'), path.join(SRC, 'mock')]
+const SKIP_DIRS = [path.join(SRC, 'mock')]
+// 공용 부품 자신은 꼴 규칙을 검사하지 않는다 — 꼴을 정의하는 곳이다. 화면 글자 규칙만 alsoUi 로 함께 본다.
+const UI_DIR = 'components/ui/'
+
+/** 주석을 같은 길이의 공백으로 지운다(위치는 그대로). 주소의 // 는 앞이 글자라 지워지지 않는다. */
+function maskComments(t) {
+  return t.replace(/\/\*[\s\S]*?\*\/|(^|\s)\/\/[^\n]*/gm, (m) => m.replace(/[^\n]/g, ' '))
+}
 
 /** 상대 휘도(0~1). 연한 색 바탕을 가르는 데만 쓴다. */
 function luminance(hex) {
@@ -113,9 +119,9 @@ const RULES = [
     good: '<label className="block text-xs">차단 시간</label>',
   },
   {
-    id: 'U12', name: '플레이어 표시·이동을 화면에서 직접 짬', fix: '공용 PlayerLink(표시·상세 이동)·playerPath·withPlayer 를 쓴다',
-    find: (t) => matchAll(t, /\/players\?/g),
-    bad: 'navigate(`/players?account=${id}`)', good: '<PlayerLink accountId={id} name={name} />',
+    id: 'U12', name: '플레이어 주소를 화면에서 직접 짬', fix: '공용 PlayerLink(표시·상세 이동)·playerPath·withPlayer 를 쓴다',
+    find: (t) => matchAll(maskComments(t), /\/players\?|pathname: *['"`]\/players|[?&]account=/g),
+    bad: 'navigate(`/purchases?account=${id}`)', good: '// ?account=&name= 으로 넘긴다',
   },
   {
     id: 'U13', name: '표 머리의 시각 이름이 갈라짐', fix: '값이 날짜와 시각이면 "~ 시각"(가입 시각·등록 시각), 상태는 "마지막 ~"',
@@ -124,17 +130,16 @@ const RULES = [
   },
   {
     id: 'U14', name: '화면 글자에 옛 이름 "유저 데이터"', fix: '콘솔 화면에서는 "플레이어 데이터"로 쓴다(가이드 문서의 SDK 기능 이름은 그대로)',
+    alsoUi: true,
     // 주석에 쓴 옛 이름은 화면에 안 나오므로 뺀다.
-    find: (t) => matchAll(t, /유저 데이터/g).filter((m) => {
-      const head = t.slice(t.lastIndexOf('\n', m.index) + 1, m.index).trimStart()
-      return !(head.startsWith('//') || head.startsWith('*') || head.startsWith('{/*'))
-    }),
-    bad: '<p>이 플레이어의 유저 데이터</p>', good: '// 유저 데이터 값 수정과 원격 설정이 같다',
+    find: (t) => matchAll(maskComments(t), /유저\s*데이터/g),
+    bad: '{/* 안내 */} <p>이 플레이어의 유저데이터</p>', good: '// 유저 데이터 값 수정과 원격 설정이 같다',
   },
   {
     id: 'U15', name: '새로고침 버튼을 직접 짬', fix: '공용 RefreshButton 을 쓴다. 검색 줄이 있으면 그 오른쪽 끝, 없으면 제목 오른쪽(PageHeader 의 actions)',
-    find: (t) => matchAll(t, /<RefreshCw\b[^>]*\/>\s*새로고침/g),
-    bad: '<Button><RefreshCw className="w-3.5 h-3.5" />새로고침</Button>', good: '<RefreshButton onClick={load} loading={loading} />',
+    // 아이콘과 글자 사이에 다른 부품·닫는 태그가 없는 경우. 다른 버튼의 글자까지 넘어가지 않게 닫는 태그에서 멈춘다.
+    find: (t) => matchAll(t, /<RefreshCw\b(?:(?!<\/)[\s\S]){0,200}?새로고침/g),
+    bad: '<Button>{busy ? <Loader2 /> : <RefreshCw onClick={() => x()} />}새로고침</Button>', good: '<RefreshCw />구글 환불 확인</Button><RefreshButton />새로고침',
   },
   {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
@@ -200,6 +205,7 @@ for (const abs of walk(SRC)) {
   const rel = path.relative(SRC, abs).split(path.sep).join('/')
   const text = fs.readFileSync(abs, 'utf8')
   for (const r of RULES) {
+    if (rel.startsWith(UI_DIR) && !r.alsoUi) continue
     if (EXEMPT[r.id]?.includes(rel)) continue
     for (const m of r.find(text)) hits.push({ rule: r, file: rel, line: text.slice(0, m.index).split('\n').length })
   }

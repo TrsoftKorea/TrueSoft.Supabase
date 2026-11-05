@@ -13,7 +13,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
-import { PlayerFilterChip, PlayerLink, useFilterPlayer } from '../components/ui/PlayerLink'
+import { PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
 import { Tabs } from '../components/ui/Tabs'
 
 type ChannelRow = { id: string; kind: string; code: string; display_name: string; is_active: boolean }
@@ -27,7 +27,7 @@ type MessageRow = {
 type MessageData = { rows: MessageRow[]; total: number; pageSize: number }
 type MuteRow = { id: number; account_id: string; channel_id: string | null; until: string; reason: string; created_by: string | null; created_at: string; display_name: string | null }
 type MuteData = { rows: MuteRow[]; total: number; pageSize: number }
-type PlayerRow = { account_id: string; display_name: string }
+type PlayerRow = { account_id: string; display_name: string | null }
 
 const NOTICE_MAX = 1000
 
@@ -236,10 +236,10 @@ function MuteModal({
                       {playerRows.map((p) => (
                         <button
                           key={p.account_id}
-                          onClick={() => { setAccountId(p.account_id); setAccountLabel(p.display_name) }}
+                          onClick={() => { setAccountId(p.account_id); setAccountLabel(playerLabel(p.display_name, p.account_id)) }}
                           className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-50"
                         >
-                          {p.display_name} <span className="text-xs text-neutral-400 font-mono">{p.account_id.slice(0, 8)}</span>
+                          {p.display_name || '-'} <span className="text-xs text-neutral-400 font-mono">{p.account_id.slice(0, 8)}</span>
                         </button>
                       ))}
                     </div>
@@ -294,6 +294,7 @@ export default function ChatModeration({
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  useOnChange(filter.accountId, () => setPage(1))
   const [msgData, setMsgData] = useState<MessageData | null>(null)
   const [msgLoading, setMsgLoading] = useState(false)
   const [msgFailed, setMsgFailed] = useState(false)

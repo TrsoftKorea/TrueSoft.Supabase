@@ -18,7 +18,7 @@ type SummaryRow = {
 }
 type RecordRow = {
   session_id: string; game_code: string; is_win: boolean; score: number | null; status: Status
-  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string
+  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
   reported_at: string; resolved_at: string | null
 }
 type Data = { summary: SummaryRow[]; rows: RecordRow[]; total: number; pageSize: number }

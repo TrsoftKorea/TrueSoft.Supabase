@@ -335,7 +335,7 @@ function purchaseRows() {
 // 탈퇴 예약 계정은 실제 서버처럼 목록에서 빠진다 — 구매 내역에서 눌러 들어간다.
 const PLAYERS = (() => {
   const at = (daysAgo: number, hm: string) => `${addDays(kstToday(), -daysAgo)}T${hm}:00+09:00`
-  const p = (account_id: string, display_name: string, o: Partial<{
+  const p = (account_id: string, display_name: string | null, o: Partial<{
     is_guest: boolean; platform: string; signup_platform: string; country_code: string; total_paid_krw: number
     refund_count: number; refund_krw: number; created: number; active: string; server_code: string
     withdrawn_at: string | null; banned_until: string | null; ban_message: string | null
@@ -346,6 +346,7 @@ const PLAYERS = (() => {
   })
   return [
     p('a9', '용사김', { total_paid_krw: 5500, created: 62, active: at(0, '10:12') }),
+    p('b0c7e1d2-0000-4000-8000-000000000042', null, { created: 12, active: at(0, '08:40') }),
     p('a8', '마법사이', { platform: 'ios', signup_platform: 'ios', country_code: 'US', total_paid_krw: 14280, created: 41, active: at(1, '21:40') }),
     // 아이폰으로 가입했다가 안드로이드로 옮긴 계정 — 가입 플랫폼과 최근 플랫폼이 다르게 보인다.
     p('a7', '궁수박', { signup_platform: 'ios', created: 120, active: at(3, '08:05'), server_code: 'KR' }),
@@ -364,7 +365,7 @@ const isBannedNow = (pl: (typeof PLAYERS)[number]) => !!pl.banned_until && Date.
 function playerList(p: Record<string, unknown>) {
   const search = String(p['search'] ?? '').trim()
   const rows = PLAYERS
-    .filter((pl) => !pl.withdrawn_at && (!search || pl.display_name.includes(search)) && (!p['bannedOnly'] || isBannedNow(pl)))
+    .filter((pl) => !pl.withdrawn_at && (!search || (pl.display_name ?? '').includes(search) || pl.account_id.startsWith(search)) && (!p['bannedOnly'] || isBannedNow(pl)))
     .sort((a, b) => b.last_activity_at.localeCompare(a.last_activity_at))
     .map(({ account_id, display_name, is_guest, platform, country_code, total_paid_krw, created_at, last_activity_at }) =>
       ({ account_id, display_name, is_guest, platform, country_code, total_paid_krw, created_at, last_activity_at }))
@@ -376,7 +377,7 @@ function playerList(p: Record<string, unknown>) {
 // pvp_1v1 은 매치 보상 화면의 게임 코드와 같다.
 type MockMatch = {
   session_id: string; game_code: string; is_win: boolean; score: number; status: 'verified' | 'pending' | 'solo' | 'mismatch'
-  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string
+  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
   reported_at: string; resolved_at: string | null
 }
 
@@ -772,7 +773,7 @@ const HANDLERS: Record<string, Handler> = {
   'dataManagement.searchPlayers': (_t, p) => {
     const search = String(p['search'] ?? '').trim()
     const rows = PLAYERS
-      .filter((pl) => !search || pl.display_name.includes(search) || pl.account_id.startsWith(search))
+      .filter((pl) => !search || (pl.display_name ?? '').includes(search) || pl.account_id.startsWith(search))
       .map((pl) => ({ account_id: pl.account_id, display_name: pl.display_name, updated_at: pl.last_activity_at }))
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     // 쪽을 실제로 나눠 돌려준다 — 표 바닥 줄의 쪽 넘김을 가짜 데이터로도 눌러 볼 수 있게.
