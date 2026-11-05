@@ -77,6 +77,9 @@ namespace TrueBase.Unity
         private            bool   _lastDeepResult;                      // 캐시된 값 비교 결과
         private            bool   _hasLoadedOnce;                       // 최초 로드 완료 여부(로드 전 auto-flush 차단용)
         private            string _newUserCarriedForAccount;            // PlayNANOO 동기화가 행을 처음 만든 계정. 게임의 다음 로드에 IsNewUser 로 넘긴다
+        private            string _newUserAfterDeleteAccount;           // 삭제가 기본 행을 다시 읽어 온 계정. 기기에도 적어 둔다 — 플레이어 진행이 저장되면 지운다
+        private            bool   _reopenAfterDelete;                   // 이번 로그인에서 로드한 뒤 지웠다. 삭제가 실패해도 남아 다시 지울 때 저장을 연다
+        private            Task<SupabaseResult> _deleteInFlight;        // 진행 중인 삭제. 두 번 불러도 삭제는 한 번만 돈다
         private            TRow   _loadFallback;                        // 로드 전에 세팅한 초기값 스냅샷(1회 캡처)
         private            bool   _fallbackCaptured;                    // _loadFallback 캡처 여부
         private            int    _resetCount;                          // 로컬을 비운 횟수. 보내거나 읽는 사이 로그아웃·계정 교체·삭제가 있었는지 가른다
@@ -114,7 +117,7 @@ namespace TrueBase.Unity
         {
             if (_isRegistered) return;
             SupabaseSDK.RegisterUserSaveStaticSync(
-                _syncKey, HasDirty, FlushDirtyAsync, ResetLocalState,
+                _syncKey, HasDirty, FlushDirtyAsync, ResetForSessionChange,
                 GetDirtyCooldown, HasFreshDirty);
             _isRegistered = true;
         }
@@ -226,11 +229,43 @@ namespace TrueBase.Unity
         private void CommitSynced(TRow snapshot)
         {
             _lastSynced = snapshot;
+            // 삭제 뒤 진행이 저장됐다 — 이제 와서 신규 유저로 알리면 게임의 신규 처리가 그 진행을 덮는다.
+            if (_newUserAfterDeleteAccount != null)
+                ClearNewUserAfterDelete(_newUserAfterDeleteAccount);
             // 방금 동기화했으므로 값 비교·참조 우선순위 캐시를 초기화(새 _lastSynced 기준으로 재평가)
             _lastDeepResult = false;
             _lastDeepCheckTime = float.MinValue;
             _refDirtyPri = PriNone;
             _refPriCheckedAt = float.MinValue;
+        }
+
+        // 로그아웃·계정 교체 때 불린다. 삭제가 비우는 로컬(ResetLocalState)과 달리 이번 로그인에 묶인 표시도 함께 버린다.
+        // 기기에 적어 둔 신규 표시는 남긴다 — 같은 계정으로 돌아오면 그 로드에 넘겨야 한다.
+        private void ResetForSessionChange()
+        {
+            _reopenAfterDelete = false;
+            _newUserAfterDeleteAccount = null;
+            ResetLocalState();
+        }
+
+        private string NewUserAfterDeleteKey(string accountId)
+            => $"TrueBase.UserSave.NewUserAfterDelete.{_syncKey}.{accountId}";
+
+        private void MarkNewUserAfterDelete()
+        {
+            var accountId = SupabaseSDK.CurrentAccountId;
+            if (string.IsNullOrEmpty(accountId)) return;
+            _newUserAfterDeleteAccount = accountId;
+            PlayerPrefs.SetInt(NewUserAfterDeleteKey(accountId), 1);
+            PlayerPrefs.Save();
+        }
+
+        private void ClearNewUserAfterDelete(string accountId)
+        {
+            _newUserAfterDeleteAccount = null;
+            if (string.IsNullOrEmpty(accountId) || !PlayerPrefs.HasKey(NewUserAfterDeleteKey(accountId))) return;
+            PlayerPrefs.DeleteKey(NewUserAfterDeleteKey(accountId));
+            PlayerPrefs.Save();
         }
 
         private void ResetLocalState()
@@ -687,6 +722,10 @@ namespace TrueBase.Unity
 
             ApplyRow(row);
 
+            // 아래 초기값 저장이 표시를 지우기 전에 읽어 둔다 — 이 저장은 플레이어 진행이 아니다.
+            var loadAccountId = SupabaseSDK.CurrentAccountId;
+            var afterDelete = !string.IsNullOrEmpty(loadAccountId) && PlayerPrefs.HasKey(NewUserAfterDeleteKey(loadAccountId));
+
             // 서버에 없던(SQL NULL) 컬렉션 컬럼에 로드 전 초기값(fallback)이 유지됐다면,
             // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
             // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
@@ -699,6 +738,13 @@ namespace TrueBase.Unity
                 return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
 
             _hasLoadedOnce = true;
+            _reopenAfterDelete = false;
+
+            if (afterDelete)
+            {
+                isNewUser = true;
+                ClearNewUserAfterDelete(loadAccountId);
+            }
 
             // PlayNANOO 동기화가 이 계정의 행을 먼저 만든 경우 — 게임이 처음 부르는 로드에서 신규 유저로 알린다(1회).
             // 계정에 묶어 둬서, 로그아웃 후 다른 계정으로 들어온 로드에는 넘어가지 않는다.
@@ -725,9 +771,21 @@ namespace TrueBase.Unity
         /// </summary>
         public async Task<SupabaseResult> DeleteAsync()
         {
+            // 진행 중인 삭제를 기다린다. 따로 돌면 뒤 호출이 앞 호출을 초기화로 착각해 저장을 다시 열지 못한다.
+            if (_deleteInFlight != null)
+                return await _deleteInFlight;
+
+            _deleteInFlight = DeleteCoreAsync();
+            try { return await _deleteInFlight; }
+            finally { _deleteInFlight = null; }
+        }
+
+        private async Task<SupabaseResult> DeleteCoreAsync()
+        {
             EnsureRegistered();
 
-            var wasLoaded = _hasLoadedOnce;
+            // 앞 삭제가 실패해 이미 닫힌 저장도 다시 열어야 하므로, 지금 로드 상태가 아니라 이번 로그인 기준으로 본다.
+            _reopenAfterDelete |= _hasLoadedOnce;
 
             // 로컬을 먼저 리셋 — 삭제 await 도중 자동 저장이 돌아도 diff가 비어 PATCH가 안 나감(옛 데이터 되쓰기 방지).
             ResetLocalState();
@@ -746,9 +804,17 @@ namespace TrueBase.Unity
             while (_sendsInFlight > 0 && waited.ElapsedMilliseconds < DeleteWaitForSendsMs)
                 await Task.Delay(16);
 
+            // 기다리는 사이 로그아웃·계정 교체가 있었다. 삭제는 그때의 로그인으로 나가므로 그대로 보내면 다른 계정 세이브가 지워진다.
+            if (resetCount != _resetCount)
+                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveDeleteFailed);
+
             var r = await SupabaseSDK.DeleteUserDataAsync<TRow>();
             if (r == null || !r.IsSuccess)
                 return SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveDeleteFailed);
+
+            // 지우는 사이 계정이 바뀌었으면 앞 계정 줄은 지워졌다. 이어지는 일은 지금 계정에 닿으므로 하지 않는다.
+            if (resetCount != _resetCount)
+                return SupabaseResult.Ok;
 
             // PlayNANOO 병행 운영 중이면 그쪽 스토리지도 초기값으로 되돌린다.
             // 안 되돌리면 다음 로그인의 동기화가 옛 데이터를 그대로 다시 밀어 넣어 삭제가 무효가 된다.
@@ -765,7 +831,7 @@ namespace TrueBase.Unity
 
             // 플레이 중에 지웠으면 기본 행을 읽어 와 저장을 다시 연다. 리셋한 로컬은 C# 기본값이라 DB 기본값과 다를 수 있어,
             // 읽지 않고 저장만 열면 틀린 값이 서버에 올라간다. 게임이 다시 로드하지 않아도 이후 진행이 사라지지 않게 하려는 것이다.
-            if (!wasLoaded || resetCount != _resetCount)
+            if (!_reopenAfterDelete || resetCount != _resetCount)
                 return SupabaseResult.Ok;
 
             var loaded = await LoadAsync();
@@ -773,8 +839,9 @@ namespace TrueBase.Unity
                 return SupabaseResult.Fail(loaded.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
 
             // 이 로드는 게임이 부른 것이 아니다 — 게임이 다음에 부르는 로드가 신규 유저 후처리를 놓치지 않게 넘긴다.
+            // 앱을 다시 켠 뒤의 로드는 이미 행이 있어 스스로 알 수 없으므로 기기에 적어 둔다.
             if (loaded.IsNewUser)
-                _newUserCarriedForAccount = SupabaseSDK.CurrentAccountId;
+                MarkNewUserAfterDelete();
 
             return SupabaseResult.Ok;
         }

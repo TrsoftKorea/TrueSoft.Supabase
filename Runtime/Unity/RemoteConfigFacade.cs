@@ -140,6 +140,7 @@ namespace TrueBase.Unity
         /// fetch 실패·키 없음·역직렬화 실패 시 <see cref="SupabaseResult{T}.Fail"/>를 반환합니다.
         /// 실패 시 <see cref="SupabaseResult{T}.ErrorCode"/> 예:
         /// <c>remote_config_key_not_in_database</c>(테이블/RLS에 행 없음),
+        /// <c>remote_config_key_not_in_database_or_requires_auth</c>(로그인 전이라 행이 안 보임),
         /// <c>remote_config_key_disabled</c>, <c>remote_config_key_requires_auth</c>,
         /// <c>remote_config_value_must_be_object_json</c>(뒤에 <c>:</c>로 이유·접두 미리보기가 붙을 수 있음).
         /// </summary>
@@ -408,8 +409,11 @@ namespace TrueBase.Unity
                 }
             }
 
+            // 로그인 전에는 서버가 인증 필요 키를 돌려주지 않아 없는 키와 구분되지 않는다.
             if (match == null)
-                return "remote_config_key_not_in_database";
+                return string.IsNullOrWhiteSpace(accessToken)
+                    ? "remote_config_key_not_in_database_or_requires_auth"
+                    : "remote_config_key_not_in_database";
 
             if (match.enabled == false)
                 return "remote_config_key_disabled";

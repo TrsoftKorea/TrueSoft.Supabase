@@ -326,6 +326,7 @@ namespace TrueBase.Unity
         private static async Task StartFlushAsync(Entry entry, bool immediate)
         {
             entry.IsInFlight = true;
+            var resetCountAtStart = entry.ResetCount;
             var succeeded = false;
             string error = SupabaseErrorCode.UserSaveFlushFailed;
 
@@ -341,39 +342,46 @@ namespace TrueBase.Unity
             }
             finally
             {
-                var now = Time.realtimeSinceStartup;
-                _lastRealtime = now;
+                // 보내는 사이 초기화됐으면 이 결과는 옛 계정 몫이다. 적으면 새 계정의 전송 중 표시·실패 사유·재시도 시각을 덮는다.
+                if (entry.ResetCount == resetCountAtStart)
+                {
+                    var now = Time.realtimeSinceStartup;
+                    _lastRealtime = now;
 
-                if (entry.GetDirtyCooldown != null)
-                {
-                    // 우선순위 기반: dirty 없으면 타이머 리셋(대기 상태),
-                    // dirty 남아있으면 MarkDirty가 이미 올바르게 설정한 타이머 유지
-                    if (!SafeHasDirty(entry))
-                        entry.NextAllowedAtRealtime = 0f;
-                }
-                else
-                {
-                    // 전역 쿨다운(레거시): flush 후 항상 쿨다운 재설정
-                    entry.NextAllowedAtRealtime = now + _cooldownSeconds;
-                }
+                    if (entry.GetDirtyCooldown != null)
+                    {
+                        // 우선순위 기반: dirty 없으면 타이머 리셋(대기 상태),
+                        // dirty 남아있으면 MarkDirty가 이미 올바르게 설정한 타이머 유지
+                        if (!SafeHasDirty(entry))
+                            entry.NextAllowedAtRealtime = 0f;
+                    }
+                    else
+                    {
+                        // 전역 쿨다운(레거시): flush 후 항상 쿨다운 재설정
+                        entry.NextAllowedAtRealtime = now + _cooldownSeconds;
+                    }
 
-                if (succeeded)
-                {
-                    entry.ConsecutiveFailures = 0;
-                    entry.RetryNotBeforeRealtime = 0f;
-                }
-                else
-                {
-                    entry.ConsecutiveFailures++;
-                    entry.RetryNotBeforeRealtime = now + Mathf.Min(
-                        FailureRetryMaxSeconds,
-                        FailureRetryBaseSeconds * Mathf.Pow(2f, entry.ConsecutiveFailures - 1));
-                }
+                    if (succeeded)
+                    {
+                        entry.ConsecutiveFailures = 0;
+                        entry.RetryNotBeforeRealtime = 0f;
+                    }
+                    else
+                    {
+                        entry.ConsecutiveFailures++;
+                        entry.RetryNotBeforeRealtime = now + Mathf.Min(
+                            FailureRetryMaxSeconds,
+                            FailureRetryBaseSeconds * Mathf.Pow(2f, entry.ConsecutiveFailures - 1));
+                    }
 
-                entry.LastFlushError = error;
-                entry.IsInFlight = false;
-                entry.FlushCompletedCount++;
+                    entry.LastFlushError = error;
+                    entry.IsInFlight = false;
+                    entry.FlushCompletedCount++;
+                }
             }
+
+            if (entry.ResetCount != resetCountAtStart)
+                return;
 
             if (entry.RequestImmediateAfterInFlight)
             {

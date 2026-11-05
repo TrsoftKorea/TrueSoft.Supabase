@@ -4321,13 +4321,13 @@ create trigger tr_remote_config_set_updated_at
 
 alter table public.remote_config enable row level security;
 
--- anon: 읽기만 (로그인 없이 클라이언트 조회)
+-- anon: 읽기만 (로그인 없이 클라이언트 조회). 인증 필요 키는 공개 키로 보이지 않는다.
 drop policy if exists remote_config_select_anon on public.remote_config;
 create policy remote_config_select_anon
   on public.remote_config
   for select
   to anon
-  using (true);
+  using (requires_auth = false);
 
 -- authenticated: 읽기 (로그인 사용자)
 drop policy if exists remote_config_select_authenticated on public.remote_config;

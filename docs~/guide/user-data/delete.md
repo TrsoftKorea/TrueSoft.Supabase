@@ -22,10 +22,12 @@ else
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.UserSaveDeleteFailed` | 네트워크 오류 등으로 삭제하지 못했습니다 |
+| `SupabaseReason.UserSaveDeleteFailed` | 네트워크 오류나 삭제 중 계정 변경으로 삭제하지 못했습니다 |
 | `SupabaseReason.UserSaveLoadFailed` | 지웠지만 기본값 행을 다시 읽지 못했습니다. `Supabase.LoadUserSaveAsync()`로 다시 로드하세요 |
 
-저장이 진행 중이면 끝날 때까지 최대 5초 기다렸다가 지웁니다. 삭제 뒤 게임이 처음 부르는 로드의 `IsNewUser`는 `true`입니다.
+저장이 진행 중이면 끝날 때까지 최대 5초 기다렸다가 지웁니다. 삭제가 끝나기 전에 다시 호출하면 삭제는 한 번만 돌고 같은 결과를 돌려줍니다.
+
+삭제 뒤 게임이 처음 부르는 로드의 `IsNewUser`는 앱을 다시 켜도 `true`입니다. 그 로드 전에 플레이어 진행이 저장되면 `false`입니다.
 
 ::: info 로드 전 초기값도 함께 지워집니다
 [로드 전에 지정한 초기값](/guide/user-data/load#preload-fallback)은 삭제 시 함께 버려집니다. 남겨두면 다음 로드에서 재생성된 기본값 행 위에 옛 초기값이 다시 병합돼 "삭제했는데 기본값이 아닌 값으로 되살아나는" 문제가 생기기 때문입니다. 로드하기 전에 지웠으면 다음 로드 전에 다시 세팅하고, 로드한 뒤에 지웠으면 삭제가 끝난 다음 값을 넣으세요.

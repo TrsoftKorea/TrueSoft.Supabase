@@ -245,6 +245,25 @@ from (
 
   union all
 
+  -- 인증 필요 키가 공개 키로 읽히지 않는지. 표 권한만으로는 안 보인다 — 막는 곳이 이 정책이다.
+  select
+    'policy'::text,
+    'remote_config_select_anon'::text,
+    case
+      when exists (
+        select 1
+        from pg_policies p
+        where p.schemaname = 'public'
+          and p.tablename = 'remote_config'
+          and p.policyname = 'remote_config_select_anon'
+          and p.qual ~ 'requires_auth'
+      ) then 'applied'
+      else 'missing'
+    end,
+    'hides requires_auth keys from anon'::text
+
+  union all
+
   -- ---------------------------------------------------------------------------
   -- 테이블 권한 — 있어야 할 권한이 정확히 있는지
   -- ---------------------------------------------------------------------------
