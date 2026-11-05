@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Loader2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
@@ -13,6 +12,8 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerLink } from '../components/ui/PlayerLink'
 import { Tabs } from '../components/ui/Tabs'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -65,7 +66,6 @@ export default function MailRecords({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const navigate = useNavigate()
   const serverName = useServerName(target)
   const [tab, setTab] = useState<'batches' | 'records'>('batches')
   const [error, setError] = useState('')
@@ -234,11 +234,10 @@ export default function MailRecords({
   const clearBatch = () => { setSelectedBatch(null); setPage(1); setNotice('') }
 
   const submitBatchSearch = () => { setBatchSearch(batchSearchInput); setBatchPage(1) }
+  const resetBatchSearch = () => { setBatchSearchInput(''); setBatchSearch(''); setBatchCategory(''); setBatchPage(1) }
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
-
-  const goPlayer = (r: MailRow) => {
-    if (!r.account_id) return
-    navigate(`/players?account=${encodeURIComponent(r.account_id)}&name=${encodeURIComponent(r.display_name ?? '')}`)
+  const resetSearch = () => {
+    setSearchInput(''); setSearch(''); setDateFrom(''); setDateTo(''); setStatus('전체'); setCategory(''); setPage(1)
   }
 
 
@@ -263,15 +262,18 @@ export default function MailRecords({
       {tab === 'batches' && (
         <>
           <WhiteCard className="p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <select value={batchCategory} onChange={(e) => { setBatchCategory(e.target.value); setBatchPage(1) }} className={inputCls + ' w-40'}>
-                {renderCategoryOptions()}
-              </select>
-              <input value={batchSearchInput} onChange={(e) => setBatchSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitBatchSearch()} placeholder="제목 검색" className={inputCls + ' flex-1 min-w-[200px]'} />
-              <Button variant="primary" size="compact" onClick={submitBatchSearch} disabled={batchLoading}>
-                {batchLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </Button>
-            </div>
+            <FilterBar>
+              <FilterField label="분류">
+                <select value={batchCategory} onChange={(e) => { setBatchCategory(e.target.value); setBatchPage(1) }} className={inputCls + ' w-40'}>
+                  {renderCategoryOptions()}
+                </select>
+              </FilterField>
+              <FilterField label="제목" className="flex-1 min-w-[200px]">
+                <input value={batchSearchInput} onChange={(e) => setBatchSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitBatchSearch()} className={inputCls + ' w-full'} />
+              </FilterField>
+              <SearchActions onSearch={submitBatchSearch} onReset={resetBatchSearch} loading={batchLoading} />
+              <RefreshButton className="ml-auto" onClick={() => void loadBatches()} loading={batchLoading} />
+            </FilterBar>
           </WhiteCard>
 
           <WhiteCard>
@@ -285,7 +287,7 @@ export default function MailRecords({
                     <th className="text-left px-4 py-2.5 font-medium w-20">수신자</th>
                     <th className="text-left px-4 py-2.5 font-medium">아이템</th>
                     <th className="text-left px-4 py-2.5 font-medium w-24">운영자</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">발송일</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-40">보낸 시각</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -365,20 +367,26 @@ export default function MailRecords({
           </ConfirmDialog>
 
           <WhiteCard className="p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-xs text-neutral-500">등록기간</span>
-              <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
-              <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className={inputCls}>
-                {STATUS_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
-              </select>
-              <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1) }} className={inputCls + ' w-40'}>
-                {renderCategoryOptions()}
-              </select>
-              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 계정 ID" className={inputCls + ' flex-1 min-w-[200px]'} />
-              <Button variant="primary" size="compact" onClick={submitSearch} disabled={recLoading}>
-                {recLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </Button>
-            </div>
+            <FilterBar>
+              <FilterField label="기간">
+                <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
+              </FilterField>
+              <FilterField label="상태">
+                <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className={inputCls}>
+                  {STATUS_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
+                </select>
+              </FilterField>
+              <FilterField label="분류">
+                <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1) }} className={inputCls + ' w-40'}>
+                  {renderCategoryOptions()}
+                </select>
+              </FilterField>
+              <FilterField label="플레이어" className="flex-1 min-w-[200px]">
+                <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 계정 ID" className={inputCls + ' w-full'} />
+              </FilterField>
+              <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={recLoading} />
+              <RefreshButton className="ml-auto" onClick={() => void loadRecords()} loading={recLoading} />
+            </FilterBar>
           </WhiteCard>
 
           <WhiteCard>
@@ -391,9 +399,9 @@ export default function MailRecords({
                     <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
                     <th className="text-left px-4 py-2.5 font-medium">아이템</th>
                     <th className="text-left px-4 py-2.5 font-medium">메시지</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">수령 일자</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">만료 일자</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">등록 일자</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-40">받은 시각</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-40">만료 시각</th>
+                    <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -407,9 +415,7 @@ export default function MailRecords({
                           <td className="px-4 py-3 whitespace-nowrap"><span className={'inline-flex items-center px-2 py-0.5 rounded text-xs ' + st.cls}>{st.label}</span></td>
                           <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(r.category)}</td>
                           <td className="px-4 py-3">
-                            {r.account_id ? (
-                              <button onClick={() => goPlayer(r)} className="text-[#1677ff] hover:underline">{r.display_name ?? '(이름 없음)'}</button>
-                            ) : (<span className="text-neutral-400">{r.user_id ?? '-'}</span>)}
+                            <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
                           </td>
                           <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
                           <td className="px-4 py-3 text-neutral-700">{r.title || '-'}</td>

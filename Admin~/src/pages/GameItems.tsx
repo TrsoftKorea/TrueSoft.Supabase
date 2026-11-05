@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
@@ -136,6 +137,7 @@ export default function GameItems({
       <PageHeader
         title="아이템 카탈로그"
         description="우편·쿠폰·매치 보상으로 지급할 아이템을 등록합니다."
+        actions={<RefreshButton onClick={() => void load()} loading={loading} />}
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -177,7 +179,7 @@ export default function GameItems({
             <tr>
               <th className="text-left px-4 py-2.5 font-medium">코드</th>
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">등록일자</th>
+              <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
               <th className="px-4 py-2.5 w-24"></th>
             </tr>
           </thead>

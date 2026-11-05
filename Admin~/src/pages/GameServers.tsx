@@ -4,10 +4,10 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
 import { inputCls } from '../components/ui/Input'
@@ -88,11 +88,12 @@ export default function GameServers({
       <PageHeader
         title="게임 서버"
         description="플레이어가 속하는 서버를 추가하고 이름·이전 허용 여부를 정합니다."
-        actions={
+        actions={<>
+          <RefreshButton onClick={() => void load()} loading={loading} />
           <Button variant="primary" onClick={() => setDraft({ id: null, serverCode: '', displayName: '', allowTransfers: true })}>
             <Plus className="w-4 h-4" />서버 추가
           </Button>
-        }
+        </>}
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -105,7 +106,7 @@ export default function GameServers({
                 <th className="text-left px-4 py-2.5 font-medium">이름</th>
                 <th className="text-right px-4 py-2.5 font-medium">플레이어</th>
                 <th className="text-left px-4 py-2.5 font-medium">이전 받기</th>
-                <th className="text-left px-4 py-2.5 font-medium">추가한 날</th>
+                <th className="text-left px-4 py-2.5 font-medium">등록 시각</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -163,7 +164,6 @@ export default function GameServers({
             </Button>
           </>}
         >
-          <TargetGameStrip />
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-neutral-500 mb-1">서버 코드</label>

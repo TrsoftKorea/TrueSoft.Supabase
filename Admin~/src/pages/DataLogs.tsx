@@ -1,6 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -12,12 +10,12 @@ import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, diffSummary, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer } from '../components/ui/PlayerLink'
 import { RestoreSaveModal } from './players/RestoreSaveModal'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 type LogRow = { id: number; account_id: string; display_name: string | null; diff: Record<string, unknown>; source: string | null; created_at: string }
-type LogData = { rows: LogRow[]; total: number; pageSize: number }
+type LogData = { rows: LogRow[]; total: number; pageSize: number; nameSearchTruncated?: boolean }
 
 export default function DataLogs({
   target,
@@ -26,9 +24,9 @@ export default function DataLogs({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const navigate = useNavigate()
-  const [accountIdInput, setAccountIdInput] = useState('')
-  const [accountId, setAccountId] = useState('')
+  const filter = useFilterPlayer()
+  const [playerInput, setPlayerInput] = useState('')
+  const [player, setPlayer] = useState('')
   const [sourceInput, setSourceInput] = useState('')
   const [source, setSource] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -38,7 +36,6 @@ export default function DataLogs({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
-  const [idHint, setIdHint] = useState('')
   const [restoreRow, setRestoreRow] = useState<LogRow | null>(null)
   const [notice, setNotice] = useState('')
 
@@ -50,21 +47,26 @@ export default function DataLogs({
     [onUnauthenticated],
   )
 
+  // 조건을 빠르게 바꾸면 늦게 온 옛 응답이 새 목록을 덮는다 — 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setFailed(false)
     try {
-      setData(await callAdmin<LogData>(target, 'dataLogs.list', {
-        accountId, source, startDate: dateFrom || null, endDate: dateTo || null, page,
-      }))
+      const res = await callAdmin<LogData>(target, 'dataLogs.list', {
+        accountId: filter.accountId || null, search: filter.accountId ? '' : player, source, startDate: dateFrom || null, endDate: dateTo || null, page,
+      })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '데이터 로그를 불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
-  }, [target, accountId, source, dateFrom, dateTo, page, report])
+  }, [target, filter.accountId, player, source, dateFrom, dateTo, page, report])
 
   useEffect(() => { void load() }, [load])
 
@@ -73,16 +75,12 @@ export default function DataLogs({
   const pageSize = data?.pageSize ?? 30
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const submitSearch = () => {
-    const id = accountIdInput.trim()
-    // 계정 ID 는 전체가 맞아야 걸린다 — 일부만 넣으면 조용히 0건이 나와 "기록이 없다"로 오해한다.
-    if (id && !UUID_RE.test(id)) { setIdHint('계정 ID 전체를 넣으세요.'); return }
-    setIdHint('')
-    setAccountId(id); setSource(sourceInput.trim()); setPage(1)
+  const submitSearch = () => { setPlayer(playerInput.trim()); setSource(sourceInput.trim()); setPage(1) }
+  const resetSearch = () => {
+    setPlayerInput(''); setPlayer(''); setSourceInput(''); setSource(''); setDateFrom(''); setDateTo(''); setPage(1)
+    filter.clear()
   }
-
-  const goPlayer = (id: string, name: string) =>
-    navigate(`/players?account=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`)
+  const clearPlayer = () => { filter.clear(); setPage(1) }
 
   return (
     <div className="space-y-4">
@@ -100,7 +98,7 @@ export default function DataLogs({
           playerName={restoreRow.display_name || restoreRow.account_id}
           onClose={() => setRestoreRow(null)}
           onRestored={() => {
-            setNotice(`${restoreRow.display_name || restoreRow.account_id.slice(0, 8)}의 세이브를 ${formatDateTime(restoreRow.created_at)} 변경 전으로 되돌렸습니다.`)
+            setNotice(`${playerLabel(restoreRow.display_name, restoreRow.account_id)}의 데이터를 ${formatDateTime(restoreRow.created_at)} 변경 전으로 되돌렸습니다.`)
             setRestoreRow(null)
             void load()
           }}
@@ -108,31 +106,39 @@ export default function DataLogs({
       )}
 
       <WhiteCard className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-neutral-500">변경 시각</span>
-          <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
-          <span className="text-xs text-neutral-500">계정 ID</span>
-          <input
-            value={accountIdInput}
-            onChange={(e) => { setAccountIdInput(e.target.value); setIdHint('') }}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            className={inputCls + ' font-mono w-64'}
-          />
-          <span className="text-xs text-neutral-500">출처</span>
-          <input
-            value={sourceInput}
-            onChange={(e) => setSourceInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            className={inputCls + ' w-48'}
-          />
-          <Button variant="primary" size="compact"
-            onClick={submitSearch}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </Button>
-        </div>
-        {idHint && <p className="mt-2 text-xs text-red-600">{idHint}</p>}
+        <FilterBar>
+          <FilterField label="기간">
+            <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
+          </FilterField>
+          {filter.accountId ? (
+            <FilterField label="플레이어">
+              <PlayerFilterChip accountId={filter.accountId} name={filter.name} onClear={clearPlayer} />
+            </FilterField>
+          ) : (
+            <FilterField label="플레이어" className="flex-1 min-w-[200px]">
+              <input
+                value={playerInput}
+                onChange={(e) => setPlayerInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+                placeholder="닉네임 / 계정 ID"
+                className={inputCls + ' w-full'}
+              />
+            </FilterField>
+          )}
+          <FilterField label="출처">
+            <input
+              value={sourceInput}
+              onChange={(e) => setSourceInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+              className={inputCls + ' w-48'}
+            />
+          </FilterField>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={loading} />
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
+        {data?.nameSearchTruncated && (
+          <p className="mt-2 text-xs text-neutral-500">닉네임이 맞는 플레이어가 많아 앞 100명의 기록만 찾았습니다.</p>
+        )}
       </WhiteCard>
 
       <WhiteCard>
@@ -141,7 +147,7 @@ export default function DataLogs({
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
               <tr>
                 <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">계정</th>
+                <th className="text-left px-4 py-2.5 font-medium w-32">플레이어</th>
                 <th className="text-left px-4 py-2.5 font-medium w-32">출처</th>
                 <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
                 <th className="w-28" />
@@ -155,9 +161,7 @@ export default function DataLogs({
                   <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => goPlayer(r.account_id, r.display_name ?? '')} className="text-[#1677ff] hover:underline text-xs">
-                        {r.display_name || <span className="font-mono">{r.account_id.slice(0, 8)}</span>}
-                      </button>
+                      <PlayerLink accountId={r.account_id} name={r.display_name} />
                     </td>
                     <td className="px-4 py-3 text-neutral-600">{r.source ?? '-'}</td>
                     <td className="px-4 py-3 text-neutral-700 max-w-[480px] truncate" title={diffSummary(r.diff)}>

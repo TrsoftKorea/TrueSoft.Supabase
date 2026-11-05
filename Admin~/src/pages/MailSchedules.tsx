@@ -7,6 +7,7 @@ import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -126,7 +127,7 @@ export default function MailSchedules({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="예약 목록" description="등록한 예약·반복 발송을 켜고 끄거나 지웁니다." />
+      <PageHeader title="예약 목록" description="등록한 예약·반복 발송을 켜고 끄거나 지웁니다." actions={<RefreshButton onClick={() => void load()} loading={loading} />} />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -138,8 +139,8 @@ export default function MailSchedules({
                 <th className="text-left px-4 py-2.5 font-medium w-20">상태</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">종류</th>
                 <th className="text-left px-4 py-2.5 font-medium w-44">다음 실행</th>
-                <th className="text-left px-4 py-2.5 font-medium">대상</th>
-                {/* 글이 긴 두 칸은 최소 폭을 둔다 — 없으면 좁은 창에서 다른 칸에 밀려 한 글자씩 깨진다(그때는 표가 옆으로 넘어간다). */}
+                {/* 글이 긴 칸은 최소 폭을 둔다 — 없으면 좁은 창에서 다른 칸에 밀려 한 글자씩 깨진다(그때는 표가 옆으로 넘어간다). */}
+                <th className="text-left px-4 py-2.5 font-medium min-w-[10rem]">대상</th>
                 <th className="text-left px-4 py-2.5 font-medium min-w-[10rem]">제목</th>
                 <th className="text-left px-4 py-2.5 font-medium min-w-[7rem]">아이템</th>
                 <th className="text-left px-4 py-2.5 font-medium w-20">운영자</th>

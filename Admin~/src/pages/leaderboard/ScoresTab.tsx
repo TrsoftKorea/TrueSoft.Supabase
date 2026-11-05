@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Pencil, Trash2, Check, X, Loader2, SlidersHorizontal } from 'lucide-react'
+import { Pencil, Trash2, Check, X, Loader2, SlidersHorizontal } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
@@ -7,12 +7,13 @@ import { inputCls, inputCompactCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatCount, formatDateTime, formatScore, formatTotal } from '../../components/ui/format'
-import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
+import { PlayerLink } from '../../components/ui/PlayerLink'
 
 type LbRow = { code: string; display_name: string; rotation: string; scope: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
@@ -213,6 +214,7 @@ export default function ScoresTab({
   const displayedRotation = data?.rotationCount ?? null
 
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
+  const resetSearch = () => { setSearchInput(''); setSearch(''); setPage(1) }
 
   const startEdit = (row: ScoreRow) => {
     setEditingId(row.account_id)
@@ -312,66 +314,69 @@ export default function ScoresTab({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {/* 필터 영역 */}
       <WhiteCard className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedCode}
-            onChange={(e) => onSelect(e.target.value)}
-            disabled={listLoading}
-            className={inputCls + ' min-w-[160px] disabled:opacity-60 disabled:cursor-not-allowed'}
-          >
-            {listLoading ? (
-              <option value={selectedCode}>불러오는 중…</option>
-            ) : (
-              <>
-                <option value="">리더보드 선택</option>
-                {leaderboards.map((lb) => (
-                  <option key={lb.code} value={lb.code}>{lb.display_name}</option>
-                ))}
-              </>
-            )}
-          </select>
-          {isServerScoped && (
+        <FilterBar>
+          <FilterField label="리더보드">
             <select
-              value={selectedServerId}
-              onChange={(e) => { setSelectedServerId(e.target.value); setPage(1) }}
-              className={inputCls + ' w-44'}
+              value={selectedCode}
+              onChange={(e) => onSelect(e.target.value)}
+              disabled={listLoading}
+              className={inputCls + ' min-w-[160px] disabled:opacity-60 disabled:cursor-not-allowed'}
             >
-              {servers.length === 0 && <option value="">서버 없음</option>}
-              {servers.map((sv) => (
-                <option key={sv.id} value={sv.id}>{sv.display_name || sv.server_code}</option>
-              ))}
+              {listLoading ? (
+                <option value={selectedCode}>불러오는 중…</option>
+              ) : (
+                <>
+                  <option value="">리더보드 선택</option>
+                  {leaderboards.map((lb) => (
+                    <option key={lb.code} value={lb.code}>{lb.display_name}</option>
+                  ))}
+                </>
+              )}
             </select>
+          </FilterField>
+          {isServerScoped && (
+            <FilterField label="서버">
+              <select
+                value={selectedServerId}
+                onChange={(e) => { setSelectedServerId(e.target.value); setPage(1) }}
+                className={inputCls + ' w-44'}
+              >
+                {servers.length === 0 && <option value="">서버 없음</option>}
+                {servers.map((sv) => (
+                  <option key={sv.id} value={sv.id}>{sv.display_name || sv.server_code}</option>
+                ))}
+              </select>
+            </FilterField>
           )}
           {hasRotation && (
-            <select
-              value={rotVal ?? ''}
-              onChange={(e) => { setSelectedRotation(Number(e.target.value)); setPage(1) }}
-              disabled={maxRotation === null}
-              className={inputCls + ' w-36'}
-            >
-              {maxRotation === null && <option value="">-</option>}
-              {rotationOptions.map((n) => (
-                <option key={n} value={n}>
-                  {n}회차{n === maxRotation ? ' (현재)' : ''}
-                </option>
-              ))}
-            </select>
+            <FilterField label="회차">
+              <select
+                value={rotVal ?? ''}
+                onChange={(e) => { setSelectedRotation(Number(e.target.value)); setPage(1) }}
+                disabled={maxRotation === null}
+                className={inputCls + ' w-36'}
+              >
+                {maxRotation === null && <option value="">-</option>}
+                {rotationOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {n}회차{n === maxRotation ? ' (현재)' : ''}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
           )}
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            placeholder="닉네임 / 계정 ID"
-            className={inputCls + ' flex-1 min-w-[180px]'}
-          />
-          <Button variant="primary" size="compact"
-            onClick={submitSearch}
-            disabled={!selectedCode || scoresLoading}
-          >
-            {scoresLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            검색
-          </Button>
-        </div>
+          <FilterField label="플레이어" className="flex-1 min-w-[180px]">
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+              placeholder="닉네임 / 계정 ID"
+              className={inputCls + ' w-full'}
+            />
+          </FilterField>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={scoresLoading} disabled={!selectedCode} />
+          <RefreshButton className="ml-auto" onClick={() => void loadScores()} loading={scoresLoading} />
+        </FilterBar>
       </WhiteCard>
 
       {/* 기록 테이블 */}
@@ -389,7 +394,7 @@ export default function ScoresTab({
                 {attachedCols.map((c) => (
                   <th key={c.name} className="text-left px-4 py-2.5 font-medium whitespace-nowrap">{c.name}</th>
                 ))}
-                <th className="text-left px-4 py-2.5 font-medium">작업</th>
+                <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody>
@@ -406,9 +411,7 @@ export default function ScoresTab({
                   <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50">
                     <td className="px-4 py-3 text-right">{formatCount(r.rank)}</td>
                     <td className="px-4 py-3">
-                      {r.display_name ?? (
-                        <span className="font-mono text-xs text-neutral-500">{r.account_id}</span>
-                      )}
+                      <PlayerLink accountId={r.account_id} name={r.display_name} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{serverName(r.server_code)}</td>
                     <td className="px-4 py-3 text-right">
@@ -511,7 +514,6 @@ export default function ScoresTab({
             </Button>
           </>}
         >
-            <TargetGameStrip />
             <div className="space-y-2.5">
               {attachedCols.map((c) => (
                 <div key={c.name} className="flex items-center gap-3">

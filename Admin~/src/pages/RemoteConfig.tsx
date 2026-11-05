@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -14,6 +14,7 @@ import { EditDialog } from '../components/ui/EditDialog'
 import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } from '../components/ui/TypedValueField'
 import { opLabel } from '../lib/schemaLabels'
 import { Button } from '../components/ui/Button'
+import { RefreshButton } from '../components/ui/FilterBar'
 
 type ConfigRow = {
   key: string
@@ -328,15 +329,20 @@ export default function RemoteConfig({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="원격 설정" description="게임 클라이언트가 읽는 키-값 설정을 관리합니다." />
+      <PageHeader
+        title="원격 설정"
+        description="게임 클라이언트가 읽는 키-값 설정을 관리합니다."
+        actions={
+          <>
+            <RefreshButton onClick={() => void reload()} loading={loading} />
+            <Button variant="primary" size="compact" onClick={() => setShowNew(true)}>
+              <Plus className="w-4 h-4" />설정 추가
+            </Button>
+          </>
+        }
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={busy} />
-
-      <div className="flex justify-end">
-        <Button variant="primary" size="compact" onClick={() => setShowNew(true)}>
-          <Plus className="w-4 h-4" />설정 추가
-        </Button>
-      </div>
 
       <WhiteCard>
         <table className="w-full text-sm">
@@ -400,9 +406,7 @@ export default function RemoteConfig({
             title={<span className="font-mono">{selectedKey}</span>}
             description="선택한 설정의 활성 · 인증 필요 여부와 필드"
             actions={
-              <Button variant="outline" size="compact" onClick={() => void Promise.all([reload(), reloadDrafts()])}>
-                <RefreshCw className="w-3.5 h-3.5" />새로고침
-              </Button>
+              <RefreshButton onClick={() => void Promise.all([reload(), reloadDrafts()])} />
             }
           />
 

@@ -9,8 +9,8 @@ import { useEscapeToClose } from './useEscapeToClose'
  * 어두운 바깥을 눌러도 닫지 않는다 — 입력하던 값을 실수로 잃는다. 닫기는 X · 취소 · Esc.
  * 본문이 길면 본문만 스크롤되고 제목 줄과 아래 버튼 줄은 남는다.
  */
-type Size = 'md' | 'lg' | 'xl'
-const SIZE_CLS: Record<Size, string> = { md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl' }
+type Size = 'md' | 'lg' | 'xl' | 'xxl'
+const SIZE_CLS: Record<Size, string> = { md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl', xxl: 'max-w-4xl' }
 
 export function EditDialog({
   title,

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, X, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
@@ -137,7 +137,6 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
         </Button>
       </>}
     >
-          <TargetGameStrip />
           <div>
             <label className="block text-xs text-neutral-500 mb-1">게임 코드</label>
             <input
@@ -330,25 +329,19 @@ export default function MatchRewards({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="매치 보상" description="게임 코드마다 대전 결과를 어떻게 인정할지와 이긴 쪽에 보낼 보상을 정합니다." />
+      <PageHeader
+        title="매치 보상"
+        description="게임 코드마다 대전 결과를 어떻게 인정할지와 이긴 쪽에 보낼 보상을 정합니다."
+        actions={
+          <>
+            <RefreshButton onClick={() => void load()} loading={loading} />
+            <Button variant="primary" size="compact" onClick={() => setCreating(true)} disabled={loading || listFailed}>
+              <Plus className="w-3.5 h-3.5" />게임 코드 추가
+            </Button>
+          </>
+        }
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-
-      <div className="flex items-center gap-2">
-        <Button variant="primary" size="compact"
-          onClick={() => setCreating(true)}
-          disabled={loading || listFailed}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          게임 코드 추가
-        </Button>
-        <Button variant="outline" size="compact"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </Button>
-      </div>
 
       <WhiteCard>
         <div className="overflow-auto">

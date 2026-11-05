@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Pencil, Check, X, Loader2, Send } from 'lucide-react'
+import { ArrowLeft, Pencil, Check, X, Loader2, Send, Receipt, History, MessagesSquare, Headset } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { useServerName } from '../../lib/serverNames'
 import { platformLabel } from '../../lib/platforms'
 import { CardHeader, WhiteCard } from '../../components/ui/Card'
+import { withPlayer } from '../../components/ui/PlayerLink'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { areaCls, inputCls, inputCompactCls } from '../../components/ui/Input'
 import { formatDateTime, formatKRW, formatBanUntil, toDatetimeLocal } from '../../components/ui/format'
@@ -259,7 +260,7 @@ export default function PlayerDetail({
         onChange={setTab}
         tabs={[
           ['info', '기본 정보'],
-          ['userData', '유저 데이터'],
+          ['userData', '플레이어 데이터'],
           ['mails', '받은 우편'],
           ['coupons', '쿠폰 사용'],
           ['friends', '친구'],
@@ -356,7 +357,7 @@ export default function PlayerDetail({
               </button>
             </div>
           ) },
-          { label: 'ID', value: <span className="font-mono text-xs break-all">{accountId}</span> },
+          { label: '계정 ID', value: <span className="font-mono text-xs break-all">{accountId}</span> },
           { label: '서버', value: serverName(profile.server_code) },
           { label: '탈퇴', value: withdrawalText(profile.withdrawn_at) },
           { label: '가입 플랫폼', value: platformLabel(profile.signup_platform) || '알 수 없음' },
@@ -374,6 +375,16 @@ export default function PlayerDetail({
           { label: '환불 건수', value: `${profile.refund_count ?? 0}건`, ...(profile.refund_count ? { tone: 'danger' as const } : {}) },
           { label: '환불 금액', value: formatKRW(profile.refund_krw ?? 0), ...(profile.refund_count ? { tone: 'danger' as const } : {}) },
         ]} />
+      </WhiteCard>
+
+      <WhiteCard className="p-5 space-y-3">
+        <CardHeader title="관련 기록" description="이 플레이어의 기록을 해당 화면에서 봅니다." />
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => navigate(withPlayer('/purchases', accountId, shownName))}><Receipt className="w-3.5 h-3.5" />구매 내역</Button>
+          <Button onClick={() => navigate(withPlayer('/data-logs', accountId, shownName))}><History className="w-3.5 h-3.5" />데이터 로그</Button>
+          <Button onClick={() => navigate(withPlayer('/chat', accountId, shownName))}><MessagesSquare className="w-3.5 h-3.5" />채팅 관리</Button>
+          <Button onClick={() => navigate(withPlayer('/support', accountId, shownName))}><Headset className="w-3.5 h-3.5" />고객센터</Button>
+        </div>
       </WhiteCard>
       </>
       )}

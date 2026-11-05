@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
@@ -11,6 +11,7 @@ import { Tabs } from '../components/ui/Tabs'
 import { InfoList } from '../components/ui/InfoList'
 import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
 import { formatDateTime } from '../components/ui/format'
+import { RefreshButton } from '../components/ui/FilterBar'
 
 type Kind = 'request' | 'function'
 type Feature = {
@@ -77,7 +78,7 @@ const REST = '그 밖'
 
 // 기능 묶음이 담은 것. 이름은 install.sql 의 ts_usage_feature 가 정하고, 둘의 일치는 SdkAudit R16 이 본다.
 const FEATURE_INFO: Record<string, string> = {
-  '세이브': '유저 데이터 불러오기·저장·삭제와 저장 전 세이브 확인',
+  '세이브': '플레이어 데이터 불러오기·저장·삭제와 저장 전 세이브 확인',
   '접속 관리': '중복 로그인 확인, 접속 중 신호, 로그인 직후 처리, 게스트 복구 정보 갱신',
   '원격 설정': '게임이 원격 설정값을 읽는 요청',
   '운영 콘솔': '콘솔 화면의 조회·변경, 콘솔을 열어 둔 동안의 변경 대기 확인',
@@ -361,7 +362,6 @@ function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, on
       }).filter((r) => r.v > 0 || r.unsized > 0)
     : rows.map((r) => ({ feature: r.feature, v: r.total, unsized: r.unsized }))
   const total = tableRows.reduce((a, r) => a + r.v, 0)
-  const top = [...tableRows].sort((a, b) => b.v - a.v)[0]
   const selectedGap = selectedAt ? gapOf(gaps, selectedAt) : null
   // 점선은 막대가 있는 묶음에만 그려진다 — 막대 없는 묶음의 사유(수집이 멈춘 시간)는 따로 센다.
   const withData = new Set(rows.flatMap((r) => r.series.filter((p) => p.v > 0 || p.unsized > 0).map((p) => new Date(p.at).getTime())))
@@ -376,7 +376,6 @@ function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, on
             ? `${bucketAt(selectedAt, data.bucket_minutes, true)} · ${bucketLabel(data.bucket_minutes)}`
             : `기간 전체 · ${RANGES.find((r) => r.hours === hours)?.label ?? ''}` },
           { label: '합계', value: metric.text(total) },
-          { label: '가장 많은 기능', value: top ? `${top.feature} · ${metric.text(top.v)}` : null },
         ]} />
         {selectedAt && (
           <Button variant="outline" size="compact" onClick={() => onSelect(null)}>기간 전체 보기</Button>
@@ -611,10 +610,7 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
         title="서버 상태"
         description="Supabase 사용량을 항목별로 봅니다."
         actions={
-          <Button variant="outline" size="compact" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
+          <RefreshButton onClick={() => void load()} loading={loading} />
         }
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />

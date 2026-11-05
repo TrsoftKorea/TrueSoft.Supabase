@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, Copy, Check, Loader2 } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { platformLabel } from '../../lib/platforms'
-import { copyToClipboard } from '../../lib/clipboard'
 import { WhiteCard } from '../../components/ui/Card'
 import { inputCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
@@ -12,7 +11,8 @@ import { formatDateTime, formatKRW, formatTotal } from '../../components/ui/form
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PageHeader } from '../../components/ui/PageHeader'
-import { Button } from '../../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
+import { AccountIdCell } from '../../components/ui/PlayerLink'
 import { Tabs } from '../../components/ui/Tabs'
 
 type PlayerRow = {
@@ -61,7 +61,6 @@ export default function PlayerList({
       { replace: true },
     )
   const setPage = (pg: number) => setListState({ page: pg })
-  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [data, setData] = useState<ListResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,18 +114,9 @@ export default function PlayerList({
     setListState({ search: '', page: 1 })
   }
 
-  const copyId = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    const ok = await copyToClipboard(id)
-    if (ok) {
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 1500)
-    }
-  }
-
   return (
     <div className="space-y-4">
-      <PageHeader title="플레이어" description="플레이어를 찾아 계정 정보를 봅니다." />
+      <PageHeader title="플레이어 목록" description="플레이어를 찾아 계정 정보를 봅니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -137,34 +127,21 @@ export default function PlayerList({
       />
 
       <WhiteCard className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-neutral-500">닉네임 검색</span>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitSearch()
-            }}
-            placeholder="닉네임"
-            className={inputCls + ' flex-1 min-w-[260px]'}
-          />
-          <Button variant="primary" size="compact"
-            onClick={submitSearch}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Search className="w-3.5 h-3.5" />
-            )}
-            검색
-          </Button>
-          <Button variant="outline" size="compact"
-            onClick={resetSearch}
-          >
-            초기화
-          </Button>
-        </div>
+        <FilterBar>
+          <FilterField label="플레이어" className="flex-1 min-w-[260px]">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitSearch()
+              }}
+              placeholder="닉네임 / 계정 ID"
+              className={inputCls + ' w-full'}
+            />
+          </FilterField>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={loading} />
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
       </WhiteCard>
 
       <WhiteCard>
@@ -172,14 +149,14 @@ export default function PlayerList({
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
               <tr>
-                <th className="text-left px-4 py-2.5 font-medium">ID</th>
+                <th className="text-left px-4 py-2.5 font-medium">계정 ID</th>
                 <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
-                <th className="text-center px-4 py-2.5 font-medium w-16">게스트</th>
+                <th className="text-center px-4 py-2.5 font-medium w-16 whitespace-nowrap">게스트</th>
                 <th className="text-left px-4 py-2.5 font-medium w-24">플랫폼</th>
                 <th className="text-left px-4 py-2.5 font-medium w-16">국가</th>
                 <th className="text-right px-4 py-2.5 font-medium w-32">총 결제금액</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">생성일자</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">최근 활동시간</th>
+                <th className="text-left px-4 py-2.5 font-medium w-40">가입 시각</th>
+                <th className="text-left px-4 py-2.5 font-medium w-40">마지막 활동</th>
               </tr>
             </thead>
             <tbody>
@@ -191,31 +168,8 @@ export default function PlayerList({
                     key={r.account_id ?? Math.random()}
                     className="border-t border-neutral-100 hover:bg-neutral-50/50"
                   >
-                    <td className="px-4 py-3 font-mono text-xs text-neutral-600">
-                      {r.account_id ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate max-w-[140px]">{r.account_id}</span>
-                          <button
-                            onClick={(e) => copyId(e, r.account_id)}
-                            className={[
-                              'flex-shrink-0 transition-colors',
-                              copiedId === r.account_id
-                                ? 'text-emerald-500'
-                                : 'text-neutral-400 hover:text-neutral-700',
-                            ].join(' ')}
-                            aria-label="ID 복사"
-                            title="ID 복사"
-                          >
-                            {copiedId === r.account_id ? (
-                              <Check className="w-3 h-3" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-neutral-400">-</span>
-                      )}
+                    <td className="px-4 py-3">
+                      {r.account_id ? <AccountIdCell accountId={r.account_id} /> : <span className="text-neutral-400">-</span>}
                     </td>
                     <td className="px-4 py-3">
                       {r.account_id ? (

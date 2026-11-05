@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { RefreshCw, Search, Pencil, ExternalLink } from 'lucide-react'
+import { Search, Pencil, ExternalLink, History } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
@@ -12,9 +12,10 @@ import { pgTypeLabel } from '../../lib/schemaLabels'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
+import { withPlayer } from '../../components/ui/PlayerLink'
 import { EditDialog } from '../../components/ui/EditDialog'
-import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { RestoreSaveModal } from './RestoreSaveModal'
+import { RefreshButton } from '../../components/ui/FilterBar'
 
 type LogRow = { id: number; diff: Record<string, unknown>; source: string | null; created_at: string }
 
@@ -92,7 +93,6 @@ function EditValueModal({
         </Button>
       </>}
     >
-          <TargetGameStrip />
           <TypedValueInput
             type={type}
             text={text}
@@ -154,7 +154,7 @@ export default function UserDataTab({
     } catch (e: unknown) {
       setFields([])
       setFailed(true)
-      report(e, '유저 데이터를 불러오지 못했습니다.')
+      report(e, '플레이어 데이터를 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -213,18 +213,20 @@ export default function UserDataTab({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            to={`/data-management?tab=players&account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(displayName ?? '')}`}
+            to={withPlayer('/player-data', accountId, displayName)}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            데이터 관리에서 열기
+            플레이어 데이터에서 열기
           </Link>
-          <Button variant="outline" size="compact"
-            onClick={() => { void reload(); void reloadLogs() }}
+          <Link
+            to={withPlayer('/data-logs', accountId, displayName)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-neutral-300 text-sm bg-white hover:bg-neutral-50 text-neutral-600 whitespace-nowrap"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
+            <History className="w-3.5 h-3.5" />
+            데이터 로그
+          </Link>
+          <RefreshButton onClick={() => { void reload(); void reloadLogs() }} loading={loading} />
         </div>
       </div>
 

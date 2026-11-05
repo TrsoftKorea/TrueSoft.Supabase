@@ -9,11 +9,12 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, toDatetimeLocal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
+import { RefreshButton } from '../components/ui/FilterBar'
+import { PlayerLink } from '../components/ui/PlayerLink'
 
 type ItemRow = { key: string; count: number }
 type GameItem = { key: string; display_name: string }
@@ -39,7 +40,7 @@ type Coupon = {
   issued_count: number
 }
 
-type CodeRow = { code: string; redeemed_at: string | null; account_id: string | null; user_id: string | null }
+type CodeRow = { code: string; redeemed_at: string | null; account_id: string | null; user_id: string | null; display_name?: string | null }
 
 const KEYWORD_RE = /^[A-Z0-9_-]+$/
 
@@ -129,7 +130,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
                   <th className="text-left px-4 py-2 font-medium">코드</th>
                   <th className="text-left px-4 py-2 font-medium">상태</th>
                   <th className="text-left px-4 py-2 font-medium">사용 시각</th>
-                  <th className="text-left px-4 py-2 font-medium">유저 ID</th>
+                  <th className="text-left px-4 py-2 font-medium">플레이어</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,7 +143,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
                         : <span className="text-xs text-emerald-600">미사용</span>}
                     </td>
                     <td className="px-4 py-2 text-xs text-neutral-600 whitespace-nowrap">{r.redeemed_at ? formatDateTime(r.redeemed_at) : ''}</td>
-                    <td className="px-4 py-2 text-xs text-neutral-600 font-mono">{r.user_id ?? ''}</td>
+                    <td className="px-4 py-2">{r.redeemed_at && <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -248,7 +249,6 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
         </Button>
       </>}
     >
-          <TargetGameStrip />
           {!isEdit && (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">종류</label>
@@ -425,15 +425,20 @@ export default function Coupons({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="쿠폰" description="코드를 입력하면 보상을 지급하는 쿠폰을 관리합니다." />
+      <PageHeader
+        title="쿠폰"
+        description="코드를 입력하면 보상을 지급하는 쿠폰을 관리합니다."
+        actions={
+          <>
+            <RefreshButton onClick={() => void load()} loading={loading} />
+            <Button variant="primary" size="compact" onClick={() => { setNotice(''); setShowModal(true) }}>
+              <Plus className="w-4 h-4" />쿠폰 추가
+            </Button>
+          </>
+        }
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
-
-      <div className="flex justify-end">
-        <Button variant="primary" size="compact" onClick={() => { setNotice(''); setShowModal(true) }}>
-          <Plus className="w-4 h-4" />쿠폰 추가
-        </Button>
-      </div>
 
       <WhiteCard>
         <div className="overflow-auto">

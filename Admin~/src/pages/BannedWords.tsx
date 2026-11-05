@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { areaCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
@@ -106,7 +107,7 @@ export default function BannedWords({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="금칙어" description="채팅과 닉네임에 쓸 수 없는 말을 정합니다." />
+      <PageHeader title="금칙어" description="채팅과 닉네임에 쓸 수 없는 말을 정합니다." actions={<RefreshButton onClick={() => void load()} loading={loading} />} />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 

@@ -1,9 +1,10 @@
-import { useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
 import {
-  LayoutDashboard, Database, Trophy, Settings, Users, ReceiptText, Package, Ticket,
-  MessageSquare, Mail, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
+  LayoutDashboard, Database, FilePen, Trophy, Settings, Users, ReceiptText, Package, Ticket,
+  MessageSquare, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
   Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
+  UserRound, MessagesSquare, Mail, Gift, Crown, Settings2, Gauge,
   ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid, Timer, BarChart3, Headset, Activity,
 } from 'lucide-react'
 import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
@@ -31,8 +32,8 @@ function NavLinkRow({ to, label, icon: Icon, end = false, badge, accent }: NavIt
       className={({ isActive }) => `${NAV_BASE} ${isActive ? NAV_ACTIVE : NAV_IDLE}`}
       style={({ isActive }) => (isActive ? { boxShadow: `inset 3px 0 0 ${accent}` } : undefined)}
     >
-      <Icon className="w-4 h-4" />
-      <span>{label}</span>
+      <Icon className="w-4 h-4 shrink-0" />
+      <span className="whitespace-nowrap">{label}</span>
       {!!badge && (
         <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-[#161a2b] text-[11px] font-semibold leading-none">
           {badge}
@@ -42,39 +43,116 @@ function NavLinkRow({ to, label, icon: Icon, end = false, badge, accent }: NavIt
   )
 }
 
-function NavGroupBlock({ label, icon: Icon, items, accent }: { label: string; icon: Icon; items: NavItem[]; accent: string }) {
-  const location = useLocation()
-  const active = items.some((it) => location.pathname.startsWith(it.to))
-  // 현재 화면이 이 그룹 소속이면 펼친 채로 시작한다.
-  const [open, setOpen] = useState(active)
+// 운영자가 하러 온 일로 묶는다. 대시보드·통계는 묶음 밖에 늘 보인다.
+const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
+  {
+    label: '플레이어',
+    icon: UserRound,
+    items: [
+      { to: '/players', label: '플레이어 목록', icon: Users },
+      { to: '/player-data', label: '플레이어 데이터', icon: FilePen },
+      { to: '/purchases', label: '구매 내역', icon: ReceiptText },
+      { to: '/data-logs', label: '데이터 로그', icon: ScrollText },
+    ],
+  },
+  {
+    label: '커뮤니티',
+    icon: MessagesSquare,
+    items: [
+      { to: '/chat', label: '채팅 관리', icon: MessageSquare },
+      { to: '/banned-words', label: '금칙어', icon: ShieldBan },
+    ],
+  },
+  {
+    label: '우편',
+    icon: Mail,
+    items: [
+      { to: '/mails/send', label: '우편 발송', icon: Send },
+      { to: '/mails/records', label: '우편 내역', icon: Inbox },
+      { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
+      { to: '/mails/categories', label: '우편 분류', icon: Tags },
+    ],
+  },
+  {
+    label: '보상',
+    icon: Gift,
+    items: [
+      { to: '/coupons', label: '쿠폰', icon: Ticket },
+      { to: '/items', label: '아이템 카탈로그', icon: Package },
+    ],
+  },
+  {
+    label: '매치·랭킹',
+    icon: Crown,
+    items: [
+      { to: '/leaderboard', label: '리더보드', icon: Trophy },
+      { to: '/lobbies', label: '매치 로비', icon: Swords },
+      { to: '/match-rewards', label: '매치 보상', icon: Medal },
+    ],
+  },
+  {
+    label: '게임 설정',
+    icon: Settings2,
+    items: [
+      { to: '/remote-config', label: '원격 설정', icon: Settings },
+      { to: '/player-data-fields', label: '플레이어 데이터 필드', icon: Database },
+      { to: '/servers', label: '게임 서버', icon: Server },
+    ],
+  },
+  {
+    label: '모니터링',
+    icon: Gauge,
+    items: [
+      { to: '/server', label: '서버 상태', icon: Activity },
+      { to: '/jobs', label: '자동 작업', icon: Timer },
+      { to: '/audit', label: '운영 기록', icon: ClipboardList },
+    ],
+  },
+]
 
+// 운영자가 직접 펼친 묶음만 기억한다. 처음에는 전부 접혀 있다.
+const OPEN_KEY = 'tb_sidebar_open'
+
+function loadOpen(): string[] {
+  try {
+    const raw = window.localStorage.getItem(OPEN_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveOpen(labels: string[]) {
+  try {
+    window.localStorage.setItem(OPEN_KEY, JSON.stringify(labels))
+  } catch {
+    // 저장이 막힌 브라우저에서는 새로 열 때 다시 접힐 뿐이다.
+  }
+}
+
+// '/server' 가 '/servers' 까지 잡지 않게 경로 단위로 본다.
+const isUnder = (pathname: string, to: string) => pathname === to || pathname.startsWith(`${to}/`)
+
+const sectionHasPath = (items: NavItem[], pathname: string) => items.some((it) => isUnder(pathname, it.to))
+const sectionOf = (pathname: string) => NAV_SECTIONS.find((s) => sectionHasPath(s.items, pathname))?.label ?? null
+
+function NavSection({ label, icon: Icon, open, active, onToggle, children }: {
+  label: string; icon: Icon; open: boolean; active: boolean; onToggle: () => void; children: ReactNode
+}) {
   return (
     <div>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 w-full h-9 px-3 rounded-md text-sm transition-colors ${active ? 'text-[color:var(--sb-text-strong)] font-medium' : NAV_IDLE}`}
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`${NAV_BASE} w-full ${active && !open ? 'text-[color:var(--sb-text-strong)] font-medium' : NAV_IDLE}`}
       >
         <Icon className="w-4 h-4" />
         <span>{label}</span>
         <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="mt-0.5 space-y-0.5 pl-3">
-          {items.map((it) => (
-            <NavLinkRow key={it.to} {...it} accent={accent} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NavSection({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <div className="pt-4 first:pt-0">
-      {label && <div className="px-3 pb-1 text-[11px] font-medium text-[color:var(--sb-muted)]">{label}</div>}
-      <div className="space-y-0.5">{children}</div>
+      {open && <div className="mt-0.5 space-y-0.5 pl-3">{children}</div>}
     </div>
   )
 }
@@ -101,9 +179,16 @@ export function Layout({
   const location = useLocation()
   const look = useProjectLook()
   const colorOf = look.color
+  const [, setSearchParams] = useSearchParams()
   const switchTarget = (t: ProjectTarget) => {
     setTarget(t)
     onTargetChange(t)
+    // 주소의 플레이어는 앞 게임 사람이다. 남겨 두면 새 게임에 "기록 없음"으로 보인다.
+    setSearchParams((p) => {
+      p.delete('account')
+      p.delete('name')
+      return p
+    }, { replace: true })
   }
 
   // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.
@@ -117,12 +202,25 @@ export function Layout({
   // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 그 게임에서 받은 실패 사유를 붙인다.
   const allowedTargets = new Set(signedInTargets())
 
+  const [savedOpen, setSavedOpen] = useState<string[]>(loadOpen)
+  // 지금 화면이 든 묶음은 위치가 보이게 잠시 편다. 기억하지 않아서 다른 화면으로 가면 다시 접힌다.
+  const [currentOpen, setCurrentOpen] = useState<string | null>(() => sectionOf(location.pathname))
+  useEffect(() => { setCurrentOpen(sectionOf(location.pathname)) }, [location.pathname])
+
+  const isOpen = (label: string) => savedOpen.includes(label) || currentOpen === label
+  const toggleSection = (label: string) => {
+    const next = isOpen(label) ? savedOpen.filter((l) => l !== label) : [...savedOpen, label]
+    if (currentOpen === label) setCurrentOpen(null)
+    setSavedOpen(next)
+    saveOpen(next)
+  }
+
   return (
     <div className="h-screen flex overflow-hidden">
       {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
           화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
       <aside
-        className="sidebar w-56 shrink-0 h-full flex flex-col border-r border-[color:var(--sb-border)] text-[color:var(--sb-text)]"
+        className="sidebar w-60 shrink-0 h-full flex flex-col border-r border-[color:var(--sb-border)] text-[color:var(--sb-text)]"
         style={{ backgroundColor: 'var(--sb-bg)', '--sb-accent': accent } as CSSProperties}
       >
         <div className="h-14 flex items-center gap-2.5 px-4">
@@ -167,57 +265,30 @@ export function Layout({
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 scroll-area scroll-area-dark">
-          <NavSection>
+          <div className="space-y-0.5">
             <NavLinkRow to="/" label="대시보드" icon={LayoutDashboard} end accent={accent} />
             <NavLinkRow to="/stats" label="통계" icon={BarChart3} accent={accent} />
-          </NavSection>
+          </div>
 
-          <NavSection label="빌드">
-            <NavLinkRow to="/data-management" label="데이터 관리" icon={Database} accent={accent} />
-            <NavLinkRow to="/leaderboard" label="리더보드" icon={Trophy} accent={accent} />
-            <NavLinkRow to="/remote-config" label="원격 설정" icon={Settings} accent={accent} />
-          </NavSection>
-
-          <NavSection label="운영">
-            <NavLinkRow to="/players" label="플레이어" icon={Users} accent={accent} />
-            <NavLinkRow to="/support" label="고객센터" icon={Headset} accent={accent} />
-            <NavLinkRow to="/purchases" label="구매 내역" icon={ReceiptText} accent={accent} />
-            <NavLinkRow to="/items" label="아이템 카탈로그" icon={Package} accent={accent} />
-            <NavLinkRow to="/coupons" label="쿠폰" icon={Ticket} accent={accent} />
-            <NavLinkRow to="/servers" label="게임 서버" icon={Server} accent={accent} />
-            <NavGroupBlock
-              label="우편함"
-              icon={Mail}
-              accent={accent}
-              items={[
-                { to: '/mails/send', label: '우편 발송', icon: Send },
-                { to: '/mails/records', label: '우편 내역', icon: Inbox },
-                { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
-                { to: '/mails/categories', label: '우편 분류', icon: Tags },
-              ]}
-            />
-          </NavSection>
-
-          <NavSection label="소셜">
-            <NavLinkRow to="/chat" label="채팅 관리" icon={MessageSquare} accent={accent} />
-            <NavLinkRow to="/banned-words" label="금칙어" icon={ShieldBan} accent={accent} />
-          </NavSection>
-
-          <NavSection label="매치">
-            <NavLinkRow to="/lobbies" label="매치 로비" icon={Swords} accent={accent} />
-            <NavLinkRow to="/match-rewards" label="매치 보상" icon={Medal} accent={accent} />
-          </NavSection>
-
-          <NavSection label="모니터링">
-            <NavLinkRow to="/data-logs" label="데이터 로그" icon={ScrollText} accent={accent} />
-            <NavLinkRow to="/audit" label="운영 기록" icon={ClipboardList} accent={accent} />
-            <NavLinkRow to="/jobs" label="자동 작업" icon={Timer} accent={accent} />
-            <NavLinkRow to="/server" label="서버 상태" icon={Activity} accent={accent} />
-          </NavSection>
+          <div className="mt-3 space-y-0.5">
+            {NAV_SECTIONS.map((s) => (
+              <NavSection
+                key={s.label}
+                label={s.label}
+                icon={s.icon}
+                open={isOpen(s.label)}
+                active={sectionHasPath(s.items, location.pathname)}
+                onToggle={() => toggleSection(s.label)}
+              >
+                {s.items.map((it) => <NavLinkRow key={it.to} {...it} accent={accent} />)}
+              </NavSection>
+            ))}
+          </div>
         </nav>
 
-        {/* 스크롤 영역 밖에 고정 — 메뉴가 길어져도 변경 관리는 항상 보인다. */}
+        {/* 스크롤 영역 밖에 고정 — 자주 드나드는 고객센터와 변경 관리는 묶음을 접어도 항상 보인다. */}
         <div className="border-t border-[color:var(--sb-border)] p-3 space-y-0.5">
+          <NavLinkRow to="/support" label="고객센터" icon={Headset} accent={accent} />
           <NavLinkRow to="/settings" label="설정" icon={SlidersHorizontal} accent={accent} />
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} accent={accent} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle, Check } from 'lucide-react'
+import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle, Check, History } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
@@ -13,10 +14,12 @@ import { formatDateTime, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
-import { Segmented } from '../../components/ui/Segmented'
-import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
+import { TableFooter } from '../../components/ui/TableFooter'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
+import { AccountIdCell, PlayerLink, playerLabel, withPlayer } from '../../components/ui/PlayerLink'
 
-type Row = { account_id: string; display_name: string; updated_at: string }
+type Row = { account_id: string; display_name: string | null; updated_at: string }
+type ListData = { rows: Row[]; total: number; pageSize: number }
 
 const CLIPBOARD_KEY = 'tb_data_clipboard'
 
@@ -168,7 +171,7 @@ function PlayerEditModal({
     <EditDialog
       title="데이터 수정"
       description={displayName}
-      size="xl"
+      size="xxl"
       flush
       bodyClassName="h-[520px]"
       busy={saving}
@@ -185,7 +188,6 @@ function PlayerEditModal({
       </>}
     >
         <div className="sticky top-0 z-10 bg-white px-5 py-3 border-b border-neutral-200 space-y-3">
-          <TargetGameStrip />
           {!loading && (
             <div className="relative">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -200,11 +202,12 @@ function PlayerEditModal({
           {loading ? (
             <div className="p-8 text-center text-sm text-neutral-500"><Loader2 className="w-5 h-5 animate-spin text-neutral-300 mx-auto" /></div>
           ) : (
-            <table className="w-full text-sm table-fixed">
+            // 필드·타입 칸은 글자 길이만큼 넓어지고, 남은 폭을 값 칸이 쓴다. 긴 값만 말줄임으로 자른다.
+            <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-neutral-500 text-xs">
                 <tr>
-                  <th className="text-left px-5 py-2 font-medium w-1/4">필드</th>
-                  <th className="text-left px-5 py-2 font-medium w-28">타입</th>
+                  <th className="text-left px-5 py-2 font-medium">필드</th>
+                  <th className="text-left px-5 py-2 font-medium">타입</th>
                   <th className="text-left px-5 py-2 font-medium">값</th>
                   <th className="text-right px-5 py-2 font-medium w-16" />
                 </tr>
@@ -215,11 +218,11 @@ function PlayerEditModal({
                   const displayValue = isEdited ? valueToString(edits[r.column_name]) : valueToString(r.value)
                   return (
                     <tr key={r.column_name} className="border-t border-neutral-100">
-                      <td className="px-5 py-3 font-medium">{r.column_name}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 truncate max-w-full">{pgTypeLabel(r.data_type)}</span>
+                      <td className="px-5 py-3 font-medium whitespace-nowrap">{r.column_name}</td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(r.data_type)}</span>
                       </td>
-                      <td className={`px-5 py-3 font-mono text-xs truncate ${isEdited ? 'text-amber-700' : 'text-neutral-700'}`}>
+                      <td title={displayValue || undefined} className={`px-5 py-3 font-mono text-xs truncate w-full max-w-0 ${isEdited ? 'text-amber-700' : 'text-neutral-700'}`}>
                         {displayValue || <span className="text-neutral-400">—</span>}
                         {isEdited && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded ml-1">수정됨</span>}
                       </td>
@@ -308,7 +311,7 @@ function PasteConfirmModal({
       <div className="space-y-4">
         <div className="text-sm text-neutral-600 space-y-1">
           <p>클립보드 출처: <span className="font-medium text-neutral-800">{clipboard.sourceLabel}</span></p>
-          <p>대상 플레이어: <span className="font-medium text-neutral-800">{targetRow.display_name}</span></p>
+          <p>대상 플레이어: <span className="font-medium text-neutral-800">{playerLabel(targetRow.display_name, targetRow.account_id)}</span></p>
           <p>필드 수: <span className="font-medium">{fieldCount}개</span></p>
           {compareLoading
             ? <p className="text-neutral-500">비교 중…</p>
@@ -318,7 +321,7 @@ function PasteConfirmModal({
           <p className="text-xs text-neutral-600 bg-neutral-100 rounded-md px-3 py-2">현재 데이터와 동일하여 변경점이 없습니다.</p>
         ) : compared && (
           <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-3 py-2">
-            위 플레이어의 {fieldCount}개 필드를 클립보드 데이터로 일괄 덮어씁니다. 이 작업은 되돌릴 수 없습니다.
+            위 플레이어의 {fieldCount}개 필드를 클립보드 데이터로 일괄 덮어씁니다. 7일 안에는 데이터 로그에서 되돌릴 수 있습니다.
           </p>
         )}
         {compared && sourceStale && (
@@ -340,9 +343,12 @@ export default function PlayersTab({
   initialAccountId?: string | undefined
   initialName?: string | undefined
 }) {
-  const [mode, setMode] = useState<'nickname' | 'id'>('nickname')
+  const navigate = useNavigate()
   const [searchInput, setSearchInput] = useState('')
-  const [rows, setRows] = useState<Row[]>([])
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [data, setData] = useState<ListData | null>(null)
+  const [notice, setNotice] = useState<{ text: string; accountId: string; name: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
@@ -369,26 +375,31 @@ export default function PlayersTab({
     [onUnauthenticated],
   )
 
-  const search = useCallback(async (q: string) => {
+  const load = useCallback(async () => {
     setLoading(true)
     setFailed(false)
     try {
-      setRows(await callAdmin<Row[]>(target, 'dataManagement.searchPlayers', { search: q, mode }))
+      setData(await callAdmin<ListData>(target, 'dataManagement.searchPlayers', { search: query, page }))
     } catch (e: unknown) {
-      setRows([])
+      setData(null)
       setFailed(true)
       report(e, '검색에 실패했습니다.')
     } finally {
       setLoading(false)
     }
-  }, [target, mode, report])
+  }, [target, query, page, report])
 
-  // searchInput 은 의도적으로 뺐다 — 입력마다 재검색하지 않고 mode·target 이 바뀔 때만 다시 돈다.
-  useEffect(() => { void search(searchInput) }, [target, mode]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load() }, [load])
+
+  const rows = data?.rows ?? []
+  const total = data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / (data?.pageSize ?? 20)))
+  const submitSearch = () => { setQuery(searchInput.trim()); setPage(1) }
+  const resetSearch = () => { setSearchInput(''); setQuery(''); setPage(1) }
 
   // 플레이어 상세에서 계정을 지정해 들어온 경우 바로 편집 모달을 연다.
   useEffect(() => {
-    if (initialAccountId) setSelected({ account_id: initialAccountId, display_name: initialName || initialAccountId, updated_at: '' })
+    if (initialAccountId) setSelected({ account_id: initialAccountId, display_name: initialName || null, updated_at: '' })
   }, [initialAccountId, initialName])
 
   const clipboardMismatch = !!clipboard && clipboard.appKey !== target
@@ -405,7 +416,7 @@ export default function PlayersTab({
       if (reqId !== copyReqRef.current) return
       const data = Object.fromEntries(fields.map((f) => [f.column_name, f.value]))
       const cb: DataClipboard = {
-        sourceLabel: row.display_name, sourceAccountId: row.account_id, data,
+        sourceLabel: playerLabel(row.display_name, row.account_id), sourceAccountId: row.account_id, data,
         copiedAt: new Date().toISOString(), updatedAt: row.updated_at, appKey: target,
       }
       localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(cb))
@@ -460,15 +471,16 @@ export default function PlayersTab({
     setPasteError('')
     try {
       await callAdmin(target, 'userData.update', { accountId: pasteTarget.account_id, patch: clipboard.data })
+      setNotice({ text: `${playerLabel(pasteTarget.display_name, pasteTarget.account_id)}의 데이터를 덮어썼습니다.`, accountId: pasteTarget.account_id, name: pasteTarget.display_name })
       setPasteTarget(null)
-      void search(searchInput)
+      void load()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { setPasteTarget(null); onUnauthenticated(); return }
       setPasteError(e instanceof Error ? e.message : '붙여넣기에 실패했습니다.')
     } finally {
       setPasting(false)
     }
-  }, [target, pasteTarget, clipboard, clipboardMismatch, compareFailed, changedCount, search, searchInput, onUnauthenticated])
+  }, [target, pasteTarget, clipboard, clipboardMismatch, compareFailed, changedCount, load, onUnauthenticated])
 
   const clearClipboard = () => {
     localStorage.removeItem(CLIPBOARD_KEY)
@@ -479,28 +491,27 @@ export default function PlayersTab({
     <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-neutral-500">검색 기준</span>
-          <Segmented value={mode} onChange={setMode} options={[{ v: 'nickname', label: '닉네임' }, { v: 'id', label: 'ID' }]} />
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void search(searchInput)}
-            className={inputCls + ' flex-1 min-w-[240px]'}
-          />
-          <Button variant="primary" size="compact"
-            onClick={() => void search(searchInput)}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </Button>
-          <Button variant="outline" size="compact"
-            onClick={() => { setSearchInput(''); void search('') }}
-          >
-            초기화
-          </Button>
+      {notice && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
+          <span>{notice.text}</span>
+          <Link to={withPlayer('/data-logs', notice.accountId, notice.name)} className="shrink-0 underline hover:no-underline">데이터 로그</Link>
         </div>
+      )}
+
+      <WhiteCard className="p-4">
+        <FilterBar>
+          <FilterField label="플레이어" className="flex-1 min-w-[240px]">
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+              placeholder="닉네임 / 계정 ID"
+              className={inputCls + ' w-full'}
+            />
+          </FilterField>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={loading} />
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
       </WhiteCard>
 
       {clipboard && (clipboardMismatch ? (
@@ -521,10 +532,10 @@ export default function PlayersTab({
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-neutral-500 text-xs">
             <tr>
-              <th className="text-left px-5 py-2.5 font-medium">ID</th>
-              <th className="text-left px-5 py-2.5 font-medium">닉네임</th>
-              <th className="text-left px-5 py-2.5 font-medium">업데이트 시각</th>
-              <th className="text-right px-5 py-2.5 font-medium w-28" />
+              <th className="text-left px-4 py-2.5 font-medium">계정 ID</th>
+              <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
+              <th className="text-left px-4 py-2.5 font-medium">마지막 저장</th>
+              <th className="px-4 py-2.5 w-36" />
             </tr>
           </thead>
           <tbody>
@@ -533,10 +544,10 @@ export default function PlayersTab({
             ) : (
               rows.map((r) => (
                 <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
-                  <td className="px-5 py-3 font-mono text-xs text-neutral-600">{r.account_id}</td>
-                  <td className="px-5 py-3">{r.display_name}</td>
-                  <td className="px-5 py-3 text-neutral-600">{formatDateTime(r.updated_at)}</td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-4 py-3"><AccountIdCell accountId={r.account_id} /></td>
+                  <td className="px-4 py-3"><PlayerLink accountId={r.account_id} name={r.display_name} /></td>
+                  <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.updated_at)}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => void handleCopy(r)}
@@ -560,6 +571,14 @@ export default function PlayersTab({
                         <ClipboardPaste className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        onClick={() => navigate(withPlayer('/data-logs', r.account_id, r.display_name))}
+                        title="데이터 로그"
+                        aria-label="데이터 로그"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => setSelected(r)}
                         title="데이터 수정"
                         aria-label="데이터 수정"
@@ -574,9 +593,7 @@ export default function PlayersTab({
             )}
           </tbody>
         </table>
-        <div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          {formatTotal(rows.length)}
-        </div>
+        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
       </WhiteCard>
 
       {selected && (
@@ -584,9 +601,9 @@ export default function PlayersTab({
           target={target}
           onUnauthenticated={onUnauthenticated}
           accountId={selected.account_id}
-          displayName={selected.display_name}
+          displayName={playerLabel(selected.display_name, selected.account_id)}
           onClose={() => setSelected(null)}
-          onChanged={() => void search(searchInput)}
+          onChanged={() => void load()}
         />
       )}
 

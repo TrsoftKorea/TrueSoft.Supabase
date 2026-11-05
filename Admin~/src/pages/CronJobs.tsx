@@ -1,12 +1,12 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { Button } from '../components/ui/Button'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { formatDateTime, formatCount } from '../components/ui/format'
 import { DEFAULT_TIME_ZONE, useGameTimeZone, zonedParts } from '../lib/gameTime'
 
@@ -119,7 +119,11 @@ export default function CronJobs({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="자동 작업" description="서버가 정해진 시각마다 혼자 하는 일이 제때 돌고 있는지 봅니다." />
+      <PageHeader
+        title="자동 작업"
+        description="서버가 정해진 시각마다 혼자 하는 일이 제때 돌고 있는지 봅니다."
+        actions={<RefreshButton onClick={() => { void load() }} loading={loading} />}
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -129,9 +133,6 @@ export default function CronJobs({
             : <span className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-sm text-emerald-700">모든 작업이 정상입니다</span>
         )}
         <span className="text-xs text-neutral-500">조회 {formatDateTime(new Date(loadedAt).toISOString())}</span>
-        <Button variant="outline" size="compact" className="ml-auto" onClick={() => { void load() }} disabled={loading}>
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />새로고침
-        </Button>
       </div>
 
       <WhiteCard>

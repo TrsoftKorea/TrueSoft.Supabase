@@ -19,7 +19,7 @@ export function PageHeader({
         <h2 className="text-2xl font-semibold text-neutral-900">{title}</h2>
         {description && <p className="text-sm text-neutral-500 mt-1">{description}</p>}
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
     </div>
   )
 }

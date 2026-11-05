@@ -1,6 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Loader2, Download, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Loader2, Download, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { projectName } from '../lib/projectLook'
@@ -15,11 +14,14 @@ import { formatCount, formatDateTime, formatKRW, formatTotal } from '../componen
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerFilterChip, PlayerLink, useFilterPlayer } from '../components/ui/PlayerLink'
 
 type PurchaseRow = {
   id: string
   account_id: string | null
   user_id: string | null
+  display_name: string | null
   product_id: string
   order_id: string | null
   package_name: string
@@ -32,7 +34,7 @@ type PurchaseRow = {
   is_test: boolean | null
   is_free: boolean | null
 }
-type PurchaseData = { rows: PurchaseRow[]; total: number; pageSize: number }
+type PurchaseData = { rows: PurchaseRow[]; total: number; pageSize: number; nameSearchTruncated?: boolean }
 
 type RefundStatus = {
   store: string
@@ -132,7 +134,7 @@ export default function Purchases({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const navigate = useNavigate()
+  const filter = useFilterPlayer()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [searchInput, setSearchInput] = useState('')
@@ -163,21 +165,26 @@ export default function Purchases({
     [onUnauthenticated],
   )
 
+  // 조건을 빠르게 바꾸면 늦게 온 옛 응답이 새 목록을 덮는다 — 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setLoadFailed(false)
     try {
-      setData(await callAdmin<PurchaseData>(target, 'purchases.list', {
-        search, startDate: dateFrom || null, endDate: dateTo || null, page, refundedOnly, test,
-      }))
+      const res = await callAdmin<PurchaseData>(target, 'purchases.list', {
+        search, accountId: filter.accountId || null, startDate: dateFrom || null, endDate: dateTo || null, page, refundedOnly, test,
+      })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '구매 내역을 불러오지 못했습니다.')
       setData(null)
       setLoadFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
-  }, [target, search, dateFrom, dateTo, page, refundedOnly, test, report])
+  }, [target, search, filter.accountId, dateFrom, dateTo, page, refundedOnly, test, report])
 
   const loadRefundStatus = useCallback(async () => {
     try {
@@ -199,6 +206,11 @@ export default function Purchases({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
+  const resetSearch = () => {
+    setSearchInput(''); setSearch(''); setDateFrom(''); setDateTo(''); setRefundedOnly(false); setTest('exclude'); setPage(1)
+    filter.clear()
+  }
+  const clearPlayer = () => { filter.clear(); setPage(1) }
 
   const syncRefunds = async () => {
     setSyncing(true)
@@ -223,16 +235,17 @@ export default function Purchases({
     setExporting(true)
     try {
       const res = await callAdmin<{ rows: PurchaseRow[]; truncated: boolean }>(target, 'purchases.list', {
-        search, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, test, all: true,
+        search, accountId: filter.accountId || null, startDate: dateFrom || null, endDate: dateTo || null, refundedOnly, test, all: true,
       })
       downloadCsv(
         `구매내역_${projectName(target)}_${todayStamp()}.csv`,
-        ['결제 확인일', '스토어', '상품 ID', '주문번호', '플레이어', '계정 ID', '금액', '통화', '원화 환산', '환불일', '시험 결제', '무료'],
+        ['결제 확인 시각', '스토어', '상품 ID', '주문번호', '닉네임', '유저 ID', '계정 ID', '금액', '통화', '원화 환산', '환불일', '시험 결제', '무료'],
         res.rows.map((r) => [
           formatDateTime(r.verified_at),
           STORE_LABEL[r.store] ?? r.store,
           r.product_id,
           r.order_id,
+          r.display_name,
           r.user_id,
           r.account_id,
           priceFromMicros(r.price_amount),
@@ -250,11 +263,6 @@ export default function Purchases({
     } finally {
       setExporting(false)
     }
-  }
-
-  const goPlayer = (r: PurchaseRow) => {
-    if (!r.account_id) return
-    navigate(`/players?account=${encodeURIComponent(r.account_id)}&name=${encodeURIComponent(r.user_id ?? '')}`)
   }
 
   const statusByStore = new Map(refundStatus.map((s) => [s.store, s]))
@@ -279,37 +287,46 @@ export default function Purchases({
       )}
 
       <WhiteCard className="p-4 space-y-3">
-        <Segmented value={test} onChange={(v) => { setTest(v); setPage(1) }} options={[
-          { v: 'exclude', label: '라이브 결제' },
-          { v: 'only', label: '테스트 결제' },
-        ]} />
-        {test === 'only' && (
-          <div className="text-xs text-neutral-500">애플 샌드박스와 구글 라이선스 테스트 계정의 결제입니다. 매출에 넣지 않습니다.</div>
-        )}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-neutral-500">결제 확인일</span>
-          <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            placeholder="상품 ID / 플레이어 / 주문번호"
-            className={inputCls + ' flex-1 min-w-[200px]'}
-          />
-          <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer whitespace-nowrap">
+        <FilterBar>
+          <FilterField label="결제 종류">
+            <Segmented value={test} onChange={(v) => { setTest(v); setPage(1) }} options={[
+              { v: 'exclude', label: '라이브 결제' },
+              { v: 'only', label: '테스트 결제' },
+            ]} />
+          </FilterField>
+          <FilterField label="기간">
+            <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
+          </FilterField>
+          {filter.accountId && (
+            <FilterField label="플레이어">
+              <PlayerFilterChip accountId={filter.accountId} name={filter.name} onClear={clearPlayer} />
+            </FilterField>
+          )}
+          <FilterField label="검색" className="flex-1 min-w-[200px]">
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+              placeholder="상품 ID / 플레이어 / 주문번호"
+              className={inputCls + ' w-full'}
+            />
+          </FilterField>
+          <label className="flex h-9 items-center gap-1.5 text-xs text-neutral-600 cursor-pointer whitespace-nowrap">
             <input type="checkbox" checked={refundedOnly} onChange={(e) => { setRefundedOnly(e.target.checked); setPage(1) }} className="rounded" />
             환불만
           </label>
-          <Button variant="primary" size="compact"
-            onClick={submitSearch}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </Button>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={loading} />
           <Button size="compact" onClick={() => void exportCsv()} disabled={exporting || total === 0} title="지금 검색 조건에 맞는 결제 전체를 내려받습니다">
             {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}CSV 내려받기
           </Button>
-        </div>
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
+        {test === 'only' && (
+          <div className="text-xs text-neutral-500">애플 샌드박스와 구글 라이선스 테스트 계정의 결제입니다. 매출에 넣지 않습니다.</div>
+        )}
+        {data?.nameSearchTruncated && (
+          <div className="text-xs text-neutral-500">닉네임이 맞는 플레이어가 많아 앞 100명의 결제만 찾았습니다.</div>
+        )}
         <div className="border-t border-neutral-100 pt-3 text-xs">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {refundStatusState === 'loading' && <span className="text-neutral-400">결제 자동 작업 상태 확인 중…</span>}
@@ -346,7 +363,7 @@ export default function Purchases({
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
               <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">결제 확인일</th>
+                <th className="text-left px-4 py-2.5 font-medium w-40">결제 확인 시각</th>
                 <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
                 <th className="text-left px-4 py-2.5 font-medium">상품</th>
                 <th className="text-left px-4 py-2.5 font-medium w-28">스토어</th>
@@ -365,11 +382,7 @@ export default function Purchases({
                     <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
                       <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.verified_at)}</td>
                       <td className="px-4 py-3">
-                        {r.account_id ? (
-                          <button onClick={() => goPlayer(r)} className="text-[#1677ff] hover:underline">{r.user_id ?? '(이름 없음)'}</button>
-                        ) : (
-                          <span className="text-neutral-400">{r.user_id ?? '-'}</span>
-                        )}
+                        <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
                       </td>
                       <td className="px-4 py-3">
                         <span className={`font-mono text-xs ${strike}`}>{r.product_id}</span>

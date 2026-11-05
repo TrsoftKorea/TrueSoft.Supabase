@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus, RefreshCw, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatCount, formatTotal } from '../../components/ui/format'
+import { RefreshButton } from '../../components/ui/FilterBar'
 
 type LbRow = { code: string; display_name: string; columns: string }
 type Col = {
@@ -701,12 +702,7 @@ export default function ColumnsTab({
             <Plus className="w-4 h-4" />
             필드 추가
           </Button>
-          <Button variant="outline" size="compact"
-            onClick={refresh}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${colsLoading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
+          <RefreshButton onClick={refresh} loading={colsLoading} />
         </div>
       </div>
 

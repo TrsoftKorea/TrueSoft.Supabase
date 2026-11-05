@@ -56,7 +56,7 @@ ok(dash.new_today === today.new && dash.active_today === today.total, '[4] 대�
 const buys = (await call('purchases.list', { all: true })).rows
 const listed = (await call('players.list', {})).rows
 ok(listed.length > 0, '[4] 플레이어 목록이 비어 있음')
-for (const id of [...new Set(buys.map((b) => b.account_id))]) {
+for (const id of [...new Set(buys.map((b) => b.account_id).filter(Boolean))]) {
   const pr = await call('players.profile', { accountId: id })
   const mine = buys.filter((b) => b.account_id === id)
   const paid = mine.filter((b) => !b.refunded_at && b.is_test !== true && !b.is_free).reduce((s, b) => s + (b.price_amount_krw ?? 0), 0)

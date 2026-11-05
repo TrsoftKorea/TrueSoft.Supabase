@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, X } from 'lucide-react'
 import { WhiteCard } from './Card'
-import { TargetGameStrip } from './TargetGameStrip'
 import { useEscapeToClose } from './useEscapeToClose'
 
 /**
@@ -23,7 +22,6 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   children,
-  showTarget = true,
 }: {
   open: boolean
   title: string
@@ -37,15 +35,12 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
   children?: ReactNode
-  // 게임과 무관한 동작(콘솔 전체 게시 등)이면 "대상 게임" 띠를 감춘다 — 한 게임에만 걸리는 일로 오해하지 않게.
-  showTarget?: boolean
 }) {
   // 진행 중에는 Esc 로 닫지 않는다. 요청은 이미 나갔는데 창만 사라지면 결과를 볼 수 없다.
   useEscapeToClose(open, busy, onCancel)
 
   if (!open) return null
 
-  // 대상 게임은 이 탭이 열고 있는 게임이다 — 화면마다 넘겨받지 않고 띠가 직접 읽는다.
   // 바깥(어두운 배경)을 눌러도 닫지 않는다 — 편집 창과 같은 규칙. 닫기는 X · 취소 · Esc.
   // 배경 색·위치도 편집 창과 같게, 문서 맨 바깥(body)에 띄운다 — 부모의 간격이 배경에 붙지 않게.
   return createPortal(
@@ -65,7 +60,6 @@ export function ConfirmDialog({
             </button>
           </div>
 
-          {showTarget && <TargetGameStrip />}
 
           {children}
 

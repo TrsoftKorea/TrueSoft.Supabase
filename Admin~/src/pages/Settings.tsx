@@ -10,17 +10,17 @@ import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
-import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { areaCls, inputCls } from '../components/ui/Input'
+import { RefreshButton } from '../components/ui/FilterBar'
 
 type StoreKeyStatus = {
   key: string
@@ -578,7 +578,6 @@ function StoreStatusCard({
             </Button>
           </>}
         >
-          <TargetGameStrip />
           <div className="space-y-1.5">
             <KeyGuideToggle key={editingDef.key} guide={editingDef.guide} />
             {editingDef.multiline
@@ -720,10 +719,7 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
           title="제한 중인 계정"
           description="지금 요청이 막혀 있는 계정입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
           actions={
-            <Button size="compact" onClick={() => void load()} disabled={rows === null}>
-              <RefreshCw className={`w-3.5 h-3.5 ${rows === null ? 'animate-spin' : ''}`} />
-              새로고침
-            </Button>
+            <RefreshButton onClick={() => void load()} loading={rows === null} />
           }
         />
       </div>

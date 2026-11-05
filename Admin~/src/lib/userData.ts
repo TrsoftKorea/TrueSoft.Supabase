@@ -1,5 +1,5 @@
 // 유저 데이터(user_data 테이블) 관련 공유 로직.
-// 플레이어 상세의 "유저 데이터" 탭과 데이터 관리의 "플레이어 데이터" 탭이 똑같은
+// 플레이어 상세의 "유저 데이터" 탭과 "플레이어 데이터" 화면이 똑같은
 // "컬럼 정의 + 현재 값 합치기"를 각자 구현하고 있었다 — 여기 하나로 모은다.
 import { callAdmin } from './api'
 import type { ProjectTarget } from './projectTarget'

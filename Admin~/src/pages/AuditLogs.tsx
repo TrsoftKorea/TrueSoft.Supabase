@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
-import { Search, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -9,7 +8,8 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { Button } from '../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerLink } from '../components/ui/PlayerLink'
 import { formatDateTime, formatTotal } from '../components/ui/format'
 
 type AuditRow = { id: number; email: string; action: string; params: Record<string, unknown>; created_at: string }
@@ -19,7 +19,7 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: '', label: '전체' },
   { key: 'mails', label: '우편' },
   { key: 'players', label: '플레이어' },
-  { key: 'userData', label: '유저 데이터' },
+  { key: 'userData', label: '플레이어 데이터' },
   { key: 'coupons', label: '쿠폰' },
   { key: 'purchases', label: '결제' },
   { key: 'chat', label: '채팅' },
@@ -53,8 +53,8 @@ const ACTION_LABELS: Record<string, string> = {
   'players.ban': '플레이어 차단',
   'players.unban': '플레이어 차단 해제',
   'players.setDisplayName': '닉네임 변경',
-  'userData.update': '유저 데이터 수정',
-  'userData.restore': '유저 데이터 되돌리기',
+  'userData.update': '플레이어 데이터 수정',
+  'userData.restore': '플레이어 데이터 되돌리기',
   'remoteConfig.stageNew': '원격 설정 추가(대기)',
   'remoteConfig.stageMeta': '원격 설정 수정(대기)',
   'remoteConfig.stageItem': '원격 설정 값 수정(대기)',
@@ -196,6 +196,7 @@ export default function AuditLogs({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const submitSearch = () => { setSearch(searchInput.trim()); setPage(1) }
+  const resetSearch = () => { setSearchInput(''); setSearch(''); setCategory(''); setDateFrom(''); setDateTo(''); setPage(1) }
 
   return (
     <div className="space-y-4">
@@ -203,28 +204,30 @@ export default function AuditLogs({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard className="p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-neutral-500">시각</span>
-          <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
-          <span className="text-xs text-neutral-500">종류</span>
-          <select
-            value={category}
-            onChange={(e) => { setCategory(e.target.value); setPage(1) }}
-            className={inputCls}
-          >
-            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <span className="text-xs text-neutral-500">운영자·내용</span>
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
-            className={inputCls + ' w-56'}
-          />
-          <Button variant="primary" onClick={submitSearch} disabled={loading}>
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-          </Button>
-        </div>
+        <FilterBar>
+          <FilterField label="기간">
+            <DateRangePicker start={dateFrom || null} end={dateTo || null} onApply={(s, e) => { setDateFrom(s ?? ''); setDateTo(e ?? ''); setPage(1) }} />
+          </FilterField>
+          <FilterField label="종류">
+            <select
+              value={category}
+              onChange={(e) => { setCategory(e.target.value); setPage(1) }}
+              className={inputCls}
+            >
+              {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </FilterField>
+          <FilterField label="운영자·내용" className="flex-1 min-w-[200px]">
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitSearch()}
+              className={inputCls + ' w-full'}
+            />
+          </FilterField>
+          <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={loading} />
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
       </WhiteCard>
 
       <WhiteCard>
@@ -261,7 +264,9 @@ export default function AuditLogs({
                               <Fragment key={k}>
                                 <dt className="text-neutral-500 whitespace-nowrap" title={k}>{paramLabel(k)}</dt>
                                 <dd className="text-neutral-700 break-all">
-                                  {v !== null && typeof v === 'object'
+                                  {k === 'accountId' && typeof v === 'string'
+                                    ? <PlayerLink accountId={v}>{v}</PlayerLink>
+                                    : v !== null && typeof v === 'object'
                                     ? <pre className="whitespace-pre-wrap font-mono">{JSON.stringify(v, null, 2)}</pre>
                                     : scalarText(v)}
                                 </dd>

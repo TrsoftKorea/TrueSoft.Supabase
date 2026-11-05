@@ -113,6 +113,30 @@ const RULES = [
     good: '<label className="block text-xs">차단 시간</label>',
   },
   {
+    id: 'U12', name: '플레이어 표시·이동을 화면에서 직접 짬', fix: '공용 PlayerLink(표시·상세 이동)·playerPath·withPlayer 를 쓴다',
+    find: (t) => matchAll(t, /\/players\?/g),
+    bad: 'navigate(`/players?account=${id}`)', good: '<PlayerLink accountId={id} name={name} />',
+  },
+  {
+    id: 'U13', name: '표 머리의 시각 이름이 갈라짐', fix: '값이 날짜와 시각이면 "~ 시각"(가입 시각·등록 시각), 상태는 "마지막 ~"',
+    find: (t) => matchAll(t, /<th\b[^>]*>[^<]*(일자|한 날|활동시간)[^<]*<\/th>/g),
+    bad: '<th className="px-4">등록일자</th>', good: '<th className="px-4">등록 시각</th>',
+  },
+  {
+    id: 'U14', name: '화면 글자에 옛 이름 "유저 데이터"', fix: '콘솔 화면에서는 "플레이어 데이터"로 쓴다(가이드 문서의 SDK 기능 이름은 그대로)',
+    // 주석에 쓴 옛 이름은 화면에 안 나오므로 뺀다.
+    find: (t) => matchAll(t, /유저 데이터/g).filter((m) => {
+      const head = t.slice(t.lastIndexOf('\n', m.index) + 1, m.index).trimStart()
+      return !(head.startsWith('//') || head.startsWith('*') || head.startsWith('{/*'))
+    }),
+    bad: '<p>이 플레이어의 유저 데이터</p>', good: '// 유저 데이터 값 수정과 원격 설정이 같다',
+  },
+  {
+    id: 'U15', name: '새로고침 버튼을 직접 짬', fix: '공용 RefreshButton 을 쓴다. 검색 줄이 있으면 그 오른쪽 끝, 없으면 제목 오른쪽(PageHeader 의 actions)',
+    find: (t) => matchAll(t, /<RefreshCw\b[^>]*\/>\s*새로고침/g),
+    bad: '<Button><RefreshCw className="w-3.5 h-3.5" />새로고침</Button>', good: '<RefreshButton onClick={load} loading={loading} />',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',
@@ -125,6 +149,8 @@ const EXEMPT = {
   U3: ['pages/Login.tsx', 'pages/ProjectSelect.tsx'],
   // 스위치 손잡이는 켜짐(파랑)·꺼짐(회색) 바탕 위에 늘 흰색이어야 보인다 — 테마 색을 쓰면 어두운 화면에서 바탕과 섞인다.
   U4: ['components/ui/Switch.tsx'],
+  // 공용 새로고침 버튼 자신.
+  U15: ['components/ui/FilterBar.tsx'],
 }
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.
@@ -138,7 +164,7 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name)
     if (e.isDirectory()) { if (!SKIP_DIRS.includes(p)) walk(p, out) }
-    else if (p.endsWith('.tsx')) out.push(p)
+    else if (p.endsWith('.tsx') || p.endsWith('.ts')) out.push(p)
   }
   return out
 }

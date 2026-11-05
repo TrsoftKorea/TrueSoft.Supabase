@@ -4,7 +4,6 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { Button } from '../../components/ui/Button'
 import { EditDialog } from '../../components/ui/EditDialog'
-import { TargetGameStrip } from '../../components/ui/TargetGameStrip'
 import { formatDateTime } from '../../components/ui/format'
 
 type PreviewRow = { column: string; data_type: string; current: unknown; restored: unknown }
@@ -88,7 +87,6 @@ export function RestoreSaveModal({
         </Button>
       </>}
     >
-          <TargetGameStrip />
           <p className="text-sm text-neutral-600">
             {formatDateTime(loggedAt)} 변경 직전 값으로 돌아갑니다. 그 뒤에 바뀐 칸도 함께 돌아가므로, 돌리지 않을 칸은 체크를 끄세요.
           </p>

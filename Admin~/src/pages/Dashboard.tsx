@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatKRW } from '../components/ui/format'
-import { Button } from '../components/ui/Button'
+import { RefreshButton } from '../components/ui/FilterBar'
 import CcuSection from './dashboard/CcuSection'
 
 type Stats = {
@@ -81,18 +81,12 @@ export default function Dashboard({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="대시보드" description="프로젝트 현황을 한눈에 봅니다." />
+      <PageHeader
+        title="대시보드"
+        description="프로젝트 현황을 한눈에 봅니다."
+        actions={<RefreshButton onClick={() => { void load(); setReloadKey((k) => k + 1) }} loading={loading} />}
+      />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-
-      <div className="flex justify-end">
-        <Button variant="outline" size="compact"
-          onClick={() => { void load(); setReloadKey((k) => k + 1) }}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </Button>
-      </div>
 
       <CcuSection target={target} reloadKey={reloadKey} onUnauthenticated={onUnauthenticated} onError={setError} />
 

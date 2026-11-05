@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Loader2, Send, X, Plus, Check, ChevronDown, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { type ProjectTarget } from '../lib/projectTarget'
-import { useProjectLook } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { Button } from '../components/ui/Button'
@@ -88,7 +87,6 @@ export default function Mails({
   const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>('day')
   const [repeatDow, setRepeatDow] = useState(1)
   const [repeatDom, setRepeatDom] = useState(1)
-  const look = useProjectLook()
   // 플레이어 상세의 "우편 보내기"가 ?account=&name= 으로 넘겨 그 사람을 미리 골라 둔다.
   const [params] = useSearchParams()
   const presetAccount = params.get('account')
@@ -111,6 +109,7 @@ export default function Mails({
   const [askSend, setAskSend] = useState(false)
   const [sendError, setSendError] = useState('')
   const [notice, setNotice] = useState('')
+  const [noticeLink, setNoticeLink] = useState({ to: '/mails/records', label: '우편 내역' })
   const [error, setError] = useState('')
   const [playerQuery, setPlayerQuery] = useState('')
   const [playerInput, setPlayerInput] = useState('')
@@ -273,6 +272,7 @@ export default function Mails({
         const pushPart = res?.push_count === undefined ? ''
           : res.push_count < 0 ? ' 푸시는 넣지 못했습니다.'
           : ` 푸시 ${formatCount(res.push_count)}명.`
+        setNoticeLink({ to: '/mails/records', label: '우편 내역' })
         setNotice(`발송 완료 — ${formatCount(res?.recipient_count ?? 0)}명에게 보냈습니다.${pushPart}`)
       } else {
         await callAdmin(target, 'mails.createSchedule', {
@@ -282,6 +282,7 @@ export default function Mails({
           repeatTime: sched === 'repeat' ? repeatTime : null,
           repeatUnit, repeatDow, repeatDom,
         })
+        setNoticeLink({ to: '/mails/schedules', label: '예약 목록' })
         setNotice(sched === 'scheduled' ? '예약 등록을 마쳤습니다.' : '반복 예약 등록을 마쳤습니다.')
       }
       setAskSend(false)
@@ -297,7 +298,12 @@ export default function Mails({
       <PageHeader title="우편 발송" description="플레이어에게 우편을 발송합니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-      {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
+      {notice && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
+          <span>{notice}</span>
+          <Link to={noticeLink.to} className="shrink-0 underline hover:no-underline">{noticeLink.label}</Link>
+        </div>
+      )}
 
       {/* 1. 발송 시점 */}
       <Step n={1} title="발송 시점" state={stepState(0)} summary={schedSummary} onEdit={() => setActive(0)}>
@@ -515,9 +521,6 @@ export default function Mails({
             )}
           </div>
 
-          <div className="rounded-md px-3 py-2 text-sm font-medium text-white" style={{ backgroundColor: look.color(target) }}>
-            대상 프로젝트: {look.name(target)}
-          </div>
           <InfoList className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2.5" items={[
             { label: '발송', value: schedSummary },
             { label: '대상', value: targetSummary },

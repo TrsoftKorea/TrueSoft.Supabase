@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
@@ -119,7 +120,7 @@ export default function MailCategories({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="우편 분류" description="우편을 보낼 때 고르는 분류를 관리합니다." />
+      <PageHeader title="우편 분류" description="우편을 보낼 때 고르는 분류를 관리합니다." actions={<RefreshButton onClick={() => void load()} loading={loading} />} />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
@@ -161,7 +162,7 @@ export default function MailCategories({
             <tr>
               <th className="text-left px-4 py-2.5 font-medium">코드</th>
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">등록일자</th>
+              <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
               <th className="px-4 py-2.5 w-24"></th>
             </tr>
           </thead>

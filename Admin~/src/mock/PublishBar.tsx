@@ -382,7 +382,6 @@ export function PublishBar() {
         open={open}
         title="변경을 게시할까요?"
         description="콘솔 화면은 몇 분 뒤 모든 게임의 실제 운영 콘솔에 반영됩니다. SDK 변경은 GitHub 에 올라가 게임이 패키지를 새로 받을 때 반영됩니다."
-        showTarget={false}
         confirmLabel="게시"
         confirmDisabled={!status || empty || status.blocked.length > 0 || status.unplanned.length > 0}
         error={error || undefined}

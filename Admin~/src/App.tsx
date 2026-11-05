@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from './components/ui/Button'
 import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
@@ -32,7 +32,8 @@ import DataLogs from './pages/DataLogs'
 import CronJobs from './pages/CronJobs'
 import ServerStatus from './pages/ServerStatus'
 import Stats from './pages/Stats'
-import DataManagement from './pages/DataManagement'
+import PlayerData from './pages/PlayerData'
+import PlayerDataFields from './pages/PlayerDataFields'
 import GameServers from './pages/GameServers'
 import AuditLogs from './pages/AuditLogs'
 import BannedWords from './pages/BannedWords'
@@ -42,6 +43,16 @@ type Me = { email: string; isMaster: boolean }
 const ENTERED_KEY = 'tb_admin_entered'
 // 게임별 로그인 결과(실패 사유 포함). 로그인 표와 같은 곳에 둔다 — 표만 남으면 권한 없는 게임이 "로그인 만료"로 보인다.
 const OUTCOMES_KEY = 'tb_admin_signin_outcomes'
+
+/** 예전 데이터 관리 주소 — 저장해 둔 링크가 나뉜 화면으로 이어지게 한다. */
+function OldDataManagement() {
+  const [params] = useSearchParams()
+  if (params.get('tab') === 'columns') return <Navigate to="/player-data-fields" replace />
+  const rest = new URLSearchParams(params)
+  rest.delete('tab')
+  const search = rest.toString()
+  return <Navigate to={`/player-data${search ? `?${search}` : ''}`} replace />
+}
 
 function readOutcomes(): SignInOutcome[] {
   try {
@@ -165,7 +176,8 @@ export default function App() {
       onSignOut={signOut}
       onBackToList={backToList}
     >
-      <Routes>
+      {/* 게임을 바꾸면 화면을 새로 만든다 — 앞 게임의 쪽 번호·검색어가 남으면 빈 목록으로 보인다. */}
+      <Routes key={target}>
         <Route path="/" element={<Dashboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/items" element={<GameItems target={target} onUnauthenticated={signOut} />} />
         <Route path="/servers" element={<GameServers target={target} onUnauthenticated={signOut} />} />
@@ -194,7 +206,9 @@ export default function App() {
         <Route path="/jobs" element={<CronJobs target={target} onUnauthenticated={signOut} />} />
         <Route path="/server" element={<ServerStatus target={target} onUnauthenticated={signOut} />} />
         <Route path="/stats" element={<Stats target={target} onUnauthenticated={signOut} />} />
-        <Route path="/data-management" element={<DataManagement target={target} onUnauthenticated={signOut} />} />
+        <Route path="/data-management" element={<OldDataManagement />} />
+        <Route path="/player-data" element={<PlayerData target={target} onUnauthenticated={signOut} />} />
+        <Route path="/player-data-fields" element={<PlayerDataFields target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
         <Route
           path="/operators"

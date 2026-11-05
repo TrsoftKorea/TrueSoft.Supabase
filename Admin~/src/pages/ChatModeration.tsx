@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Search, Trash2, ShieldOff, X, Loader2, Megaphone } from 'lucide-react'
+import { Trash2, ShieldOff, X, Megaphone } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -10,10 +9,11 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerFilterChip, PlayerLink, useFilterPlayer } from '../components/ui/PlayerLink'
 import { Tabs } from '../components/ui/Tabs'
 
 type ChannelRow = { id: string; kind: string; code: string; display_name: string; is_active: boolean }
@@ -100,7 +100,6 @@ function NoticeModal({
         </Button>
       </>}
     >
-          <TargetGameStrip />
           {targets.length === 0 ? (
             <p className="text-sm text-neutral-500">공지를 보낼 수 있는 채널이 없습니다. 전체·서버 채널만 공지를 받습니다.</p>
           ) : (
@@ -212,7 +211,6 @@ function MuteModal({
         </Button>
       </>}
     >
-          <TargetGameStrip />
           {fixedAccount ? (
             <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
               <div className="text-neutral-800">{accountLabel}</div>
@@ -285,7 +283,7 @@ export default function ChatModeration({
   target: ProjectTarget
   onUnauthenticated: () => void
 }) {
-  const navigate = useNavigate()
+  const filter = useFilterPlayer()
   const [tab, setTab] = useState<'messages' | 'mutes'>('messages')
   const [channels, setChannels] = useState<ChannelRow[]>([])
   const [error, setError] = useState('')
@@ -333,19 +331,25 @@ export default function ChatModeration({
     })()
   }, [target, report])
 
+  // 조건을 빠르게 바꾸면 늦게 온 옛 응답이 새 목록을 덮는다 — 마지막 요청만 반영한다.
+  const msgReq = useRef(0)
   const loadMessages = useCallback(async () => {
+    const req = ++msgReq.current
     setMsgLoading(true)
     try {
-      setMsgData(await callAdmin<MessageData>(target, 'chat.messages', { channelId, includeDeleted, search, page }))
+      const res = await callAdmin<MessageData>(target, 'chat.messages', { channelId, includeDeleted, search, page, accountId: filter.accountId || null })
+      if (req !== msgReq.current) return
+      setMsgData(res)
       setMsgFailed(false)
     } catch (e: unknown) {
+      if (req !== msgReq.current) return
       report(e, '메시지를 불러오지 못했습니다.')
       setMsgData(null)
       setMsgFailed(true)
     } finally {
-      setMsgLoading(false)
+      if (req === msgReq.current) setMsgLoading(false)
     }
-  }, [target, channelId, includeDeleted, search, page, report])
+  }, [target, channelId, includeDeleted, search, page, filter.accountId, report])
   useEffect(() => { if (tab === 'messages') void loadMessages() }, [tab, loadMessages])
 
   const loadMutes = useCallback(async (pageOverride?: number) => {
@@ -374,15 +378,15 @@ export default function ChatModeration({
   const muteTotalPages = Math.max(1, Math.ceil(muteTotal / mutePageSize))
 
   const submitSearch = () => { setSearch(searchInput); setPage(1) }
+  const resetSearch = () => {
+    setSearchInput(''); setSearch(''); setChannelId(''); setIncludeDeleted(false); setPage(1)
+    filter.clear()
+  }
+  const clearPlayer = () => { filter.clear(); setPage(1) }
 
   const channelLabel = (id: string) => {
     const c = channels.find((x) => x.id === id)
     return c ? (c.display_name || c.code) : '-'
-  }
-
-  const goPlayer = (accountId: string | null, name: string) => {
-    if (!accountId) return
-    navigate(`/players?account=${encodeURIComponent(accountId)}&name=${encodeURIComponent(name)}`)
   }
 
   const confirmDeleteMessage = async () => {
@@ -447,20 +451,28 @@ export default function ChatModeration({
       {tab === 'messages' && (
         <>
           <WhiteCard className="p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <select value={channelId} onChange={(e) => { setChannelId(e.target.value); setPage(1) }} className={inputCls + ' w-48'}>
-                <option value="">전체 채널</option>
-                {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code}</option>))}
-              </select>
-              <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 내용 / 유저 ID" className={inputCls + ' flex-1 min-w-[200px]'} />
-              <label className="flex items-center gap-1.5 text-xs text-neutral-600 cursor-pointer">
+            <FilterBar>
+              <FilterField label="채널">
+                <select value={channelId} onChange={(e) => { setChannelId(e.target.value); setPage(1) }} className={inputCls + ' w-48'}>
+                  <option value="">전체 채널</option>
+                  {channels.map((c) => (<option key={c.id} value={c.id}>{c.display_name || c.code}</option>))}
+                </select>
+              </FilterField>
+              {filter.accountId && (
+                <FilterField label="플레이어">
+                  <PlayerFilterChip accountId={filter.accountId} name={filter.name} onClear={clearPlayer} />
+                </FilterField>
+              )}
+              <FilterField label="검색" className="flex-1 min-w-[200px]">
+                <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitSearch()} placeholder="닉네임 / 내용 / 유저 ID" className={inputCls + ' w-full'} />
+              </FilterField>
+              <label className="flex h-9 items-center gap-1.5 text-xs text-neutral-600 cursor-pointer whitespace-nowrap">
                 <input type="checkbox" checked={includeDeleted} onChange={(e) => { setIncludeDeleted(e.target.checked); setPage(1) }} className="rounded" />
                 삭제된 메시지 포함
               </label>
-              <Button variant="primary" size="compact" onClick={submitSearch} disabled={msgLoading}>
-                {msgLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}검색
-              </Button>
-            </div>
+              <SearchActions onSearch={submitSearch} onReset={resetSearch} loading={msgLoading} />
+              <RefreshButton className="ml-auto" onClick={() => void loadMessages()} loading={msgLoading} />
+            </FilterBar>
           </WhiteCard>
 
           <WhiteCard>
@@ -470,7 +482,7 @@ export default function ChatModeration({
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
                     <th className="text-left px-4 py-2.5 font-medium w-28">채널</th>
-                    <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
+                    <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
                     <th className="text-left px-4 py-2.5 font-medium w-36">받는 사람</th>
                     <th className="text-left px-4 py-2.5 font-medium">내용</th>
                     <th className="px-3 py-2.5 w-24" />
@@ -487,16 +499,12 @@ export default function ChatModeration({
                         <td className="px-4 py-3">
                           {m.is_notice ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap">공지</span>
-                          ) : m.account_id ? (
-                            <button onClick={() => goPlayer(m.account_id, m.display_name)} className="text-[#1677ff] hover:underline">{m.display_name}</button>
-                          ) : (m.display_name || '-')}
+                          ) : <PlayerLink accountId={m.account_id} name={m.display_name} userId={m.user_id} />}
                         </td>
                         <td className="px-4 py-3 max-w-[9rem]">
-                          {m.to_account_id ? (
-                            <button onClick={() => goPlayer(m.to_account_id, m.to_display_name ?? '')} className="block w-full text-left text-[#1677ff] hover:underline truncate" title={m.to_display_name ?? ''}>
-                              {m.to_display_name || m.to_account_id.slice(0, 8)}
-                            </button>
-                          ) : <span className="text-neutral-300">-</span>}
+                          {m.to_account_id
+                            ? <PlayerLink accountId={m.to_account_id} name={m.to_display_name} className="block truncate" />
+                            : <span className="text-neutral-300">-</span>}
                         </td>
                         <td className="px-4 py-3 text-neutral-700 max-w-[420px] truncate" title={m.content}>
                           {m.deleted_at ? <span className="text-neutral-400 line-through">{m.content}</span> : m.content}
@@ -528,7 +536,8 @@ export default function ChatModeration({
 
       {tab === 'mutes' && (
         <>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <RefreshButton onClick={() => void loadMutes()} loading={mutesLoading} />
             <Button variant="primary" size="compact" onClick={() => { setNotice(''); setShowMuteAdd(true) }}>
               <ShieldOff className="w-4 h-4" />차단 추가
             </Button>
@@ -538,7 +547,7 @@ export default function ChatModeration({
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 text-neutral-500 text-xs">
                   <tr>
-                    <th className="text-left px-5 py-2.5 font-medium">계정</th>
+                    <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
                     <th className="text-left px-4 py-2.5 font-medium w-28">채널</th>
                     <th className="text-left px-4 py-2.5 font-medium w-40">해제 시각</th>
                     <th className="text-left px-4 py-2.5 font-medium">사유</th>
@@ -554,11 +563,7 @@ export default function ChatModeration({
                       const ended = new Date(m.until).getTime() <= Date.now()
                       return (
                         <tr key={m.id} className={`border-t border-neutral-100 ${ended ? 'text-neutral-400' : ''}`}>
-                          <td className="px-5 py-3">
-                            <button onClick={() => goPlayer(m.account_id, m.display_name ?? '')} className="text-[#1677ff] hover:underline text-xs">
-                              {m.display_name || <span className="font-mono">{m.account_id.slice(0, 8)}</span>}
-                            </button>
-                          </td>
+                          <td className="px-4 py-3"><PlayerLink accountId={m.account_id} name={m.display_name} /></td>
                           <td className="px-4 py-3 text-neutral-600">{m.channel_id ? channelLabel(m.channel_id) : '전체'}</td>
                           <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(m.until)}</td>
                           <td className="px-4 py-3 text-neutral-700">{m.reason || '-'}</td>

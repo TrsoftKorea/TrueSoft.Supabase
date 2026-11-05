@@ -6,10 +6,10 @@ import { projectName } from '../lib/projectLook'
 import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
+import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
@@ -84,7 +84,6 @@ function SetPasswordModal({
         </Button>
       </>}
     >
-      <TargetGameStrip />
       <div className="space-y-3">
         <div>
           <label className="block text-xs text-neutral-500 mb-1">새 비밀번호</label>
@@ -231,6 +230,7 @@ export default function Operators({
     <div className="space-y-4">
       <PageHeader
         title="운영자 관리"
+        actions={<RefreshButton onClick={() => void load()} loading={loading} />}
         description={`${projectName(target)}의 운영 콘솔에 들어올 계정을 관리합니다.`}
       />
 
@@ -281,7 +281,7 @@ export default function Operators({
               <th className="text-left px-4 py-2.5 font-medium">이메일</th>
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
               <th className="text-left px-4 py-2.5 font-medium w-36">상태</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">추가일자</th>
+              <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
               <th className="px-4 py-2.5 w-72"></th>
             </tr>
           </thead>

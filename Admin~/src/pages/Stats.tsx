@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { Button } from '../components/ui/Button'
 import { Tabs } from '../components/ui/Tabs'
 import { formatKRW } from '../components/ui/format'
 import { timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { PLATFORMS, platformLabel } from '../lib/platforms'
 import { Segmented } from '../components/ui/Segmented'
 import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
+import { RefreshButton } from '../components/ui/FilterBar'
 
 type Day = { day: string; total: number; new: number; returning: number; comeback: number }
 type Cohort = { day: string; size: number; kept: (number | null)[] }
@@ -298,8 +298,9 @@ function RetentionCell({ kept, size }: { kept: number | null; size: number }) {
   const pct = size > 0 ? (kept / size) * 100 : 0
   const alpha = Math.min(0.85, pct / 100 + 0.05)
   return (
+    // 글자색은 화면 기본값 그대로 둔다. 밝은 화면에서 흰 글자로 바꾸면 중간 칸(50~70%)이 대비 2.2~2.4 로 안 읽혔다.
     <td className="px-2 py-1.5 text-center tabular-nums whitespace-nowrap" title={`${n(kept)} / ${n(size)}명`}
-      style={{ background: `rgba(22, 119, 255, ${alpha})`, color: pct >= 50 ? '#fff' : undefined }}>
+      style={{ background: `rgba(22, 119, 255, ${alpha})` }}>
       {pct.toFixed(0)}%
     </td>
   )
@@ -372,10 +373,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
         title="통계"
         description={`프로젝트 운영 통계를 봅니다.${tz ? ` 날짜는 ${timeZoneName(tz)} 기준입니다.` : ''}`}
         actions={
-          <Button variant="outline" size="compact" onClick={() => { void load(); setReloadKey((k) => k + 1) }} disabled={loading}>
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
+          <RefreshButton onClick={() => { void load(); setReloadKey((k) => k + 1) }} loading={loading} />
         }
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />

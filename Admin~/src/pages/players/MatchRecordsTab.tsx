@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { PlayerLink } from '../../components/ui/PlayerLink'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime, formatTotal } from '../../components/ui/format'
-import { Button } from '../../components/ui/Button'
 import { inputCls } from '../../components/ui/Input'
+import { RefreshButton } from '../../components/ui/FilterBar'
 
 type Status = 'verified' | 'pending' | 'solo' | 'mismatch'
 
@@ -42,7 +41,6 @@ export default function MatchRecordsTab({
   onUnauthenticated: () => void
   accountId: string
 }) {
-  const navigate = useNavigate()
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -94,13 +92,7 @@ export default function MatchRecordsTab({
           <option value="">모든 게임 코드</option>
           {codeOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
         </select>
-        <Button variant="outline" size="compact"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </Button>
+        <RefreshButton onClick={() => void load()} loading={loading} />
       </div>
 
       <WhiteCard>
@@ -167,12 +159,7 @@ export default function MatchRecordsTab({
                       {r.opponent_account_id && !r.opponent_exists ? (
                         <span className="text-neutral-400" title={r.opponent_account_id}>탈퇴한 계정</span>
                       ) : r.opponent_account_id ? (
-                        <button
-                          onClick={() => navigate(`/players?account=${encodeURIComponent(r.opponent_account_id!)}&name=${encodeURIComponent(r.opponent_name)}`)}
-                          className="text-[#1677ff] hover:underline"
-                        >
-                          {r.opponent_name || r.opponent_account_id.slice(0, 8)}
-                        </button>
+                        <PlayerLink accountId={r.opponent_account_id} name={r.opponent_name} />
                       ) : (
                         <span className="text-neutral-400">-</span>
                       )}

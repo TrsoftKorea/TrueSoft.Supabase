@@ -192,12 +192,39 @@ async function withDisplayNames<T extends { account_id?: unknown }>(
 ): Promise<Array<T & { display_name: string | null }>> {
   const ids = [...new Set(rows.map((r) => r.account_id).filter((v): v is string => typeof v === "string"))];
   const names = new Map<string, string>();
-  if (ids.length > 0) {
-    const { data, error } = await db.from("display_names").select("account_id, display_name").in("account_id", ids);
+  // 계정 ID 를 주소에 실어 보내므로 한 번에 묻는 수를 묶어 나눈다(내려받기는 수천 명일 수 있다).
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await db.from("display_names").select("account_id, display_name").in("account_id", ids.slice(i, i + 200));
     if (error) throw new Error(error.message);
     for (const n of data ?? []) names.set(n.account_id as string, (n.display_name as string) ?? "");
   }
   return rows.map((r) => ({ ...r, display_name: names.get(r.account_id as string) || null }));
+}
+
+const NAME_SEARCH_LIMIT = 100;
+
+/** 계정 ID 앞부분(16진수 4자 이상)이면 그 범위. uuid 칸은 글자 검색이 안 되어 범위로 찾는다. */
+function accountIdRange(term: string): { lo: string; hi: string } | null {
+  if (!/^[0-9a-f-]+$/i.test(term)) return null;
+  const hex = term.replace(/-/g, "").toLowerCase();
+  if (hex.length < 4 || hex.length > 32) return null;
+  const uuid = (h: string) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  return { lo: uuid(hex.padEnd(32, "0")), hi: uuid(hex.padEnd(32, "f")) };
+}
+
+/** 검색어로 계정을 거르는 조건들(or 에 넣는 꼴) — 계정 ID 앞부분 또는 닉네임 일부. 닉네임 칸이 없는 표(구매·데이터 로그)가
+ *  같은 기준으로 찾게 한다. 화면이 닉네임 없는 플레이어를 ID 앞 8자로 보이므로 앞부분도 찾아야 한다.
+ *  닉네임은 계정 ID 를 주소에 실어 거르므로 앞 100명까지만 쓰고, 넘으면 truncated 로 화면에 알린다. term 은 sanitizeSearchTerm 을 거친 값. */
+async function accountFilterForSearch(db: SupabaseClient, term: string): Promise<{ anyOf: string[]; truncated: boolean }> {
+  const anyOf: string[] = [];
+  const range = accountIdRange(term);
+  if (range) anyOf.push(`and(account_id.gte.${range.lo},account_id.lte.${range.hi})`);
+  if (UUID_RE.test(term)) return { anyOf, truncated: false };
+  const { data, error } = await db.from("display_names").select("account_id").ilike("display_name", `%${term}%`).limit(NAME_SEARCH_LIMIT + 1);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).map((n) => n.account_id as string);
+  if (ids.length > 0) anyOf.push(`account_id.in.(${ids.slice(0, NAME_SEARCH_LIMIT).join(",")})`);
+  return { anyOf, truncated: ids.length > NAME_SEARCH_LIMIT };
 }
 
 /** 마스터이거나, 표에 등록되고 비활성화되지 않은 운영자인지. 비밀번호 로그인·재설정에서 공용으로 쓴다. */
@@ -870,16 +897,24 @@ async function handleAction(
       }
 
       case "dataManagement.searchPlayers": {
+        const paged = typeof params["page"] === "number";
         const { data, error } = await db.rpc("ts_admin_search_user_data_players", {
           p_search: optStr(params, "search"),
-          p_mode: optStr(params, "mode") === "id" ? "id" : "nickname",
+          p_page: paged ? params["page"] : 1,
+          p_page_size: 20,
         });
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: data ?? [] });
+        if (paged) return json({ ok: true, data });
+        // 쪽을 보내지 않는 옛 화면은 배열과 이름을 받는다(화면 게시는 서버 적용보다 늦다).
+        const oldRows = (data as { rows: Array<{ account_id: string; display_name: string | null }> }).rows;
+        return json({ ok: true, data: oldRows.map((r) => ({ ...r, display_name: r.display_name ?? `Player_${r.account_id.slice(0, 8)}` })) });
       }
 
       case "purchases.list": {
         const search = sanitizeSearchTerm(optStr(params, "search").trim());
+        const accountId = optStr(params, "accountId").trim();
+        if (accountId && !UUID_RE.test(accountId)) return json({ ok: true, data: { rows: [], total: 0, pageSize: 20 } });
+        const byAccount = search ? await accountFilterForSearch(db, search) : { anyOf: [], truncated: false };
         const startDate = params["startDate"];
         const endDate = params["endDate"];
         const tz = startDate || endDate ? await gameTimeZoneOf(db) : "";
@@ -898,8 +933,9 @@ async function handleAction(
           const test = optStr(params, "test");
           if (test === "only") query = query.eq("is_test", true);
           else if (test === "exclude") query = query.not("is_test", "is", true);
+          if (accountId) query = query.eq("account_id", accountId);
           if (search) {
-            query = query.or(`product_id.ilike.%${search}%,user_id.ilike.%${search}%,order_id.ilike.%${search}%`);
+            query = query.or([`product_id.ilike.%${search}%`, `user_id.ilike.%${search}%`, `order_id.ilike.%${search}%`, ...byAccount.anyOf].join(","));
           }
           const start = typeof startDate === "string" ? dayStartIn(tz, startDate) : null;
           if (start) query = query.gte("verified_at", start);
@@ -921,7 +957,7 @@ async function handleAction(
             rows.push(...(data ?? []));
             if (!data || data.length < CHUNK) break;
           }
-          return json({ ok: true, data: { rows, total: rows.length, truncated: rows.length >= MAX } });
+          return json({ ok: true, data: { rows: await withDisplayNames(db, rows as Array<{ account_id?: unknown }>), total: rows.length, truncated: rows.length >= MAX } });
         }
 
         const page = typeof params["page"] === "number" ? params["page"] : 1;
@@ -929,7 +965,7 @@ async function handleAction(
         const from = (page - 1) * pageSize;
         const { data, error, count } = await filtered(from, from + pageSize - 1);
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: data ?? [], total: count ?? 0, pageSize } });
+        return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize, nameSearchTruncated: byAccount.truncated } });
       }
 
       case "purchases.getRefundStatus": {
@@ -1034,6 +1070,13 @@ async function handleAction(
           query = query.eq("account_id", accountId);
         }
 
+        const player = sanitizeSearchTerm(optStr(params, "search").trim());
+        const byAccount = player ? await accountFilterForSearch(db, player) : { anyOf: [], truncated: false };
+        if (player) {
+          if (byAccount.anyOf.length === 0) return json({ ok: true, data: { rows: [], total: 0, pageSize } });
+          query = query.or(byAccount.anyOf.join(","));
+        }
+
         const source = sanitizeSearchTerm(optStr(params, "source").trim());
         if (source) query = query.ilike("source", `%${source}%`);
 
@@ -1049,7 +1092,7 @@ async function handleAction(
 
         const { data, error, count } = await query;
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize } });
+        return json({ ok: true, data: { rows: await withDisplayNames(db, data ?? []), total: count ?? 0, pageSize, nameSearchTruncated: byAccount.truncated } });
       }
 
       case "dashboard.stats": {
@@ -1119,6 +1162,12 @@ async function handleAction(
         const channelId = params["channelId"];
         if (typeof channelId === "string" && channelId) query = query.eq("channel_id", channelId);
         if (!bool(params, "includeDeleted")) query = query.is("deleted_at", null);
+
+        const accountId = optStr(params, "accountId").trim();
+        if (accountId) {
+          if (!UUID_RE.test(accountId)) return json({ ok: true, data: { rows: [], total: 0, pageSize } });
+          query = query.eq("account_id", accountId);
+        }
 
         const search = sanitizeSearchTerm(optStr(params, "search").trim());
         if (search) query = query.or(`display_name.ilike.%${search}%,content.ilike.%${search}%,user_id.ilike.%${search}%`);
@@ -1374,10 +1423,13 @@ async function handleAction(
         const status = optStr(params, "status");
         if (status && !["open", "answered", "closed"].includes(status)) throw new Error("상태 값이 올바르지 않습니다.");
         const categoryId = params.categoryId == null ? null : intInRange(params, "categoryId", "분류", 1, 2147483647);
+        // 플레이어로 거를 때는 전체 ID 만 받는다 — 검색 함수는 일부도 찾아서 다른 사람 문의가 섞인다.
+        const accountId = optStr(params, "accountId").trim();
+        if (accountId && !UUID_RE.test(accountId)) return json({ ok: true, data: { rows: [], total: 0 } });
         const { data, error } = await db.rpc("ts_admin_support_tickets", {
           p_status: status || null,
           p_category: categoryId,
-          p_search: optStr(params, "search") || null,
+          p_search: accountId || optStr(params, "search") || null,
           p_limit: intInRange(params, "limit", "개수", 1, 200),
           p_offset: intInRange(params, "offset", "시작 위치", 0, 1_000_000),
         });
@@ -1661,12 +1713,14 @@ async function handleAction(
 
       case "coupons.codes": {
         // all: CSV 내려받기 — 화면 목록(500개)과 달리 전부 준다. 상한은 일반 쿠폰 1회 발급량을 넉넉히 넘게 잡았다.
+        const all = bool(params, "all");
         const { data, error } = await db.rpc("ts_admin_coupon_codes", {
           p_coupon_id: str(params, "id"),
-          p_limit: bool(params, "all") ? 200_000 : 500,
+          p_limit: all ? 200_000 : 500,
         });
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: data ?? [] });
+        // 내려받기는 쓴 계정이 수십만일 수 있어 닉네임을 붙이지 않는다(그 파일은 ID 칸으로 본다).
+        return json({ ok: true, data: all ? data ?? [] : await withDisplayNames(db, (data ?? []) as Array<{ account_id?: unknown }>) });
       }
 
       case "coupons.create": {
@@ -2094,7 +2148,7 @@ const SERVER_ERRORS: Record<string, string> = {
   field_name_reserved: "기본으로 쓰는 이름이라 필드명으로 쓸 수 없습니다.",
   field_name_invalid: "필드명은 영문자나 _ 로 시작하고 영문·숫자·_ 만 쓸 수 있습니다.",
   chat_mute_not_found: "이미 해제된 채팅 차단입니다.",
-  user_data_not_found: "이 플레이어는 유저 데이터가 없습니다.",
+  user_data_not_found: "이 플레이어는 저장된 데이터가 없습니다.",
   user_data_log_not_found: "이 변경 기록을 찾을 수 없습니다. 7일이 지나 지워졌을 수 있습니다.",
   patch_required: "바꿀 값이 없습니다.",
   schema_draft_empty: "게시할 변경이 없습니다.",

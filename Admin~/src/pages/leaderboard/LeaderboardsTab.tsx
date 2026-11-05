@@ -12,6 +12,7 @@ import { opLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { Button } from '../../components/ui/Button'
+import { RefreshButton } from '../../components/ui/FilterBar'
 import { inputCls } from '../../components/ui/Input'
 import { Switch } from '../../components/ui/Switch'
 import { DEFAULT_TIME_ZONE, isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone, wallClockToIso, zonedParts } from '../../lib/gameTime'
@@ -338,7 +339,8 @@ export default function LeaderboardsTab({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={discarding} />
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <RefreshButton onClick={() => void reloadRows()} loading={loading} />
         <Button variant="primary" size="compact"
           onClick={openAdd}
           disabled={!gameTz}
@@ -362,7 +364,7 @@ export default function LeaderboardsTab({
                 <th className="text-right px-4 py-2.5 font-medium">회차</th>
                 <th className="text-right px-4 py-2.5 font-medium">참여</th>
                 <th className="text-left px-4 py-2.5 font-medium">다음 초기화</th>
-                <th className="text-left px-4 py-2.5 font-medium">작업</th>
+                <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody>

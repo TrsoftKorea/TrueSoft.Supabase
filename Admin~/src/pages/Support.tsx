@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Check, Copy, GripVertical, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Search, Send, Trash2, UserRound, XCircle } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Check, Copy, GripVertical, Loader2, Pencil, Plus, RotateCcw, Send, Trash2, UserRound, XCircle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { supportPageUrl, type ProjectTarget } from '../lib/projectTarget'
 import { copyToClipboard } from '../lib/clipboard'
@@ -16,6 +16,8 @@ import { InfoList } from '../components/ui/InfoList'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
+import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
+import { PlayerFilterChip, PlayerLink, playerLabel, playerPath, useFilterPlayer } from '../components/ui/PlayerLink'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 
@@ -147,9 +149,12 @@ function StatusBadge({ status }: { status: Status }) {
 }
 
 function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
-  const [status, setStatus] = useState<StatusFilter>('open')
+  // 플레이어 상세에서 넘어오면 그 사람의 문의 전부를 본다.
+  const [params] = useSearchParams()
+  const [status, setStatus] = useState<StatusFilter>(params.get('account') ? 'all' : 'open')
   const [categoryId, setCategoryId] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
+  const filter = useFilterPlayer()
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -157,22 +162,28 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
   const [failed, setFailed] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // 조건을 빠르게 바꾸면 늦게 온 옛 응답이 새 목록을 덮는다 — 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setData(null)
     setFailed(false)
     try {
-      setData(await callAdmin<ListResponse>(target, 'support.list', {
+      const res = await callAdmin<ListResponse>(target, 'support.list', {
         status: status === 'all' ? null : status,
         categoryId: categoryId ? Number(categoryId) : null,
+        accountId: filter.accountId || null,
         search,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
-      }))
+      })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       setFailed(true)
       report(e, '문의를 불러오지 못했습니다.')
     }
-  }, [target, status, categoryId, search, page, report])
+  }, [target, status, categoryId, search, filter.accountId, page, report])
 
   useEffect(() => { void load() }, [load])
 
@@ -206,37 +217,35 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
         <CardHeader
           title="문의 목록"
           description="문의를 누르면 대화를 보고 답할 수 있습니다."
-          actions={
-            <Button size="compact" onClick={() => void load()} disabled={data === null && !failed}>
-              <RefreshCw className={`w-3.5 h-3.5 ${data === null && !failed ? 'animate-spin' : ''}`} />
-              새로고침
-            </Button>
-          }
         />
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <div className="text-xs font-medium text-neutral-500 mb-1">상태</div>
+        <FilterBar>
+          <FilterField label="상태">
             <Segmented value={status} onChange={(v) => { setStatus(v); setPage(1) }} options={statusOptions} />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-neutral-500 mb-1">분류</div>
+          </FilterField>
+          <FilterField label="분류">
             <select className={`${inputCls} w-36`} value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setPage(1) }}>
               <option value="">전체</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-          </div>
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => { e.preventDefault(); setSearch(searchInput.trim()); setPage(1) }}
-          >
-            <div>
-              <div className="text-xs font-medium text-neutral-500 mb-1">플레이어</div>
+          </FilterField>
+          {filter.accountId ? (
+            <FilterField label="플레이어">
+              <PlayerFilterChip accountId={filter.accountId} name={filter.name} onClear={() => { filter.clear(); setPage(1) }} />
+            </FilterField>
+          ) : (
+            <FilterField label="플레이어">
               <input className={`${inputCls} w-56`} value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="닉네임·유저 ID" />
-            </div>
-            <Button type="submit"><Search className="w-3.5 h-3.5" />찾기</Button>
-          </form>
-        </div>
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSearch(searchInput.trim()); setPage(1) } }}
+                placeholder="닉네임 / 유저 ID" />
+            </FilterField>
+          )}
+          <SearchActions
+            onSearch={() => { setSearch(searchInput.trim()); setPage(1) }}
+            onReset={() => { setSearchInput(''); setSearch(''); setStatus('open'); setCategoryId(''); setPage(1); filter.clear() }}
+            loading={data === null && !failed}
+          />
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={data === null && !failed} />
+        </FilterBar>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -258,7 +267,7 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
                 <td className="px-5 py-2 whitespace-nowrap"><StatusBadge status={r.status} /></td>
                 <td className="px-3 py-2 text-neutral-700 whitespace-nowrap">{r.category ?? '없음'}</td>
                 <td className="px-3 py-2 text-neutral-800 whitespace-nowrap">
-                  {r.display_name || r.user_id}
+                  <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
                   {r.was_banned && <span className="ml-1.5 text-[11px] text-red-600">차단</span>}
                   {r.via_web && <span className="ml-1.5 text-[11px] text-amber-700">게임 밖 접수</span>}
                 </td>
@@ -325,12 +334,12 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
     <EditDialog
       size="xl"
       title="문의"
-      description={ticket ? `${ticket.display_name || ticket.user_id} · ${ticket.category ?? '분류 없음'}` : undefined}
+      description={ticket ? `${playerLabel(ticket.display_name, ticket.account_id, ticket.user_id)} · ${ticket.category ?? '분류 없음'}` : undefined}
       busy={busy}
       error={saveError || undefined}
       onClose={onClose}
       actions={ticket?.account_id ? (
-        <Button size="sm" onClick={() => navigate(`/players?account=${encodeURIComponent(ticket.account_id!)}&name=${encodeURIComponent(ticket.display_name ?? '')}`)}>
+        <Button size="sm" onClick={() => navigate(playerPath(ticket.account_id!, ticket.display_name))}>
           <UserRound className="w-3 h-3" />플레이어 보기
         </Button>
       ) : undefined}

@@ -13,7 +13,6 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
-import { TargetGameStrip } from '../components/ui/TargetGameStrip'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 
@@ -468,7 +467,6 @@ export default function SchemaChanges({
             </Button>
           </>}
         >
-              <TargetGameStrip />
               <p className="text-sm text-neutral-700">
                 대기 중 변경 <b>{drafts.length}건</b>을 라이브에 적용합니다.
               </p>

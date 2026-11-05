@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -10,7 +8,8 @@ import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { inputCls } from '../components/ui/Input'
-import { Button } from '../components/ui/Button'
+import { FilterBar, FilterField, RefreshButton } from '../components/ui/FilterBar'
+import { PlayerLink } from '../components/ui/PlayerLink'
 
 type Meta = Record<string, unknown>
 type LobbyMember = {
@@ -77,7 +76,6 @@ function LobbyList({
   target: ProjectTarget
   report: (e: unknown, fallback: string) => void
 }) {
-  const navigate = useNavigate()
   const [data, setData] = useState<LobbyData | null>(null)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -109,26 +107,22 @@ function LobbyList({
   return (
     <>
       <WhiteCard className="p-4">
-        <div className="flex items-center gap-2">
-          <select
-            className={inputCls}
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); setPage(1) }}
-          >
-            <option value="">모든 상태</option>
-            <option value="open">모집 중</option>
-            <option value="started">시작됨</option>
-            <option value="cancelled">취소됨</option>
-            <option value="expired">만료됨</option>
-          </select>
-          <Button variant="outline" size="compact"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            새로고침
-          </Button>
-        </div>
+        <FilterBar>
+          <FilterField label="상태">
+            <select
+              className={inputCls}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1) }}
+            >
+              <option value="">모든 상태</option>
+              <option value="open">모집 중</option>
+              <option value="started">시작됨</option>
+              <option value="cancelled">취소됨</option>
+              <option value="expired">만료됨</option>
+            </select>
+          </FilterField>
+          <RefreshButton className="ml-auto" onClick={() => void load()} loading={loading} />
+        </FilterBar>
       </WhiteCard>
 
       <WhiteCard>
@@ -169,12 +163,7 @@ function LobbyList({
                           <div className="mt-2 space-y-1">
                             {l.members.map((m) => (
                               <div key={m.account_id} className="flex items-center gap-2 text-xs">
-                                <button
-                                  onClick={() => navigate(`/players?account=${encodeURIComponent(m.account_id)}&name=${encodeURIComponent(m.display_name)}`)}
-                                  className="text-[#1677ff] hover:underline"
-                                >
-                                  {m.display_name || m.account_id.slice(0, 8)}
-                                </button>
+                                <PlayerLink accountId={m.account_id} name={m.display_name} />
                                 {m.account_id === l.host_account_id && <span className="text-neutral-400">방장</span>}
                                 <span className="text-neutral-500">{MEMBER_STATUS_LABEL[m.status] ?? m.status}</span>
                                 <MetaText meta={m.metadata} />

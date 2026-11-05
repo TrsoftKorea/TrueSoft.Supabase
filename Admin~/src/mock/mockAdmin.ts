@@ -324,6 +324,8 @@ function purchaseRows() {
     row(7, { is_test: true, verified_at: at(1, '18:05') }),
     row(6, { product_id: 'starter_pack', is_free: true, verified_at: at(1, '13:20') }),
     row(5, { product_id: 'gem_pack_2', price_amount: 11000_000000, price_amount_krw: 11000, refunded_at: at(0, '08:30'), verified_at: at(2, '21:47') }),
+    // 탈퇴로 계정이 사라진 결제 — 유저 ID 만 남는다.
+    row(3, { account_id: null, user_id: '109876543210987654321', product_id: 'gem_pack_1', verified_at: at(3, '11:30') }),
     row(4, { store: 'apple_app_store', order_id: '2000000798765432', price_amount: null, price_currency: null, price_amount_krw: null, is_test: null, verified_at: at(40, '11:02') }),
   ]
 }
@@ -468,8 +470,13 @@ function cronJobs() {
   })
 }
 
+const playerNameOf = (id: string | null | undefined) => PLAYERS.find((pl) => pl.account_id === id)?.display_name ?? null
+
 function purchaseList(p: Record<string, unknown>) {
-  let rows = purchaseRows()
+  let rows = purchaseRows().map((r) => ({ ...r, display_name: playerNameOf(r.account_id as string | null) }))
+  if (p['accountId']) rows = rows.filter((r) => r.account_id === p['accountId'])
+  const search = String(p['search'] ?? '').trim().toLowerCase()
+  if (search) rows = rows.filter((r) => [r.product_id, r.user_id, r.order_id, r.display_name, r.account_id].some((v) => String(v ?? '').toLowerCase().includes(search)))
   if (p['refundedOnly']) rows = rows.filter((r) => r.refunded_at)
   if (p['test'] === 'only') rows = rows.filter((r) => r.is_test === true)
   else if (p['test'] === 'exclude') rows = rows.filter((r) => r.is_test !== true)
@@ -609,6 +616,7 @@ const HANDLERS: Record<string, Handler> = {
       .filter((t) => !p['status'] || t.status === p['status'])
       .filter((t) => p['categoryId'] == null || t.category_id === Number(p['categoryId']))
       .filter((t) => !search || (t.display_name ?? '').toLowerCase().includes(search) || t.user_id.includes(search))
+      .filter((t) => !p['accountId'] || t.account_id === p['accountId'])
       .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at))
     const offset = Number(p['offset'] ?? 0)
     const limit = Number(p['limit'] ?? 50)
@@ -736,7 +744,7 @@ const HANDLERS: Record<string, Handler> = {
     mockServices = { ...mockServices, [String(p['service'])]: p['enabled'] === true }
     return { services: mockServices }
   },
-  // 데이터 관리 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
+  // 플레이어 데이터·플레이어 데이터 필드 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
   'players.list': (_t, p) => playerList(p),
   'players.profile': (_t, p) => {
     const { banned_until: _b, ban_message: _m, ...profile } = playerOf(p)
@@ -761,11 +769,86 @@ const HANDLERS: Record<string, Handler> = {
     return { ok: true }
   },
   'matchRecords.player': (_t, p) => matchRecords(p),
-  'dataManagement.searchPlayers': () => [
-    { account_id: 'a9', display_name: '용사김', updated_at: addDays(kstToday(), 0) + 'T10:12:00+09:00' },
-    { account_id: 'a8', display_name: '마법사이', updated_at: addDays(kstToday(), -1) + 'T21:40:00+09:00' },
-    { account_id: 'a7', display_name: '궁수박', updated_at: addDays(kstToday(), -3) + 'T08:05:00+09:00' },
-  ],
+  'dataManagement.searchPlayers': (_t, p) => {
+    const search = String(p['search'] ?? '').trim()
+    const rows = PLAYERS
+      .filter((pl) => !search || pl.display_name.includes(search) || pl.account_id.startsWith(search))
+      .map((pl) => ({ account_id: pl.account_id, display_name: pl.display_name, updated_at: pl.last_activity_at }))
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    // 쪽을 실제로 나눠 돌려준다 — 표 바닥 줄의 쪽 넘김을 가짜 데이터로도 눌러 볼 수 있게.
+    const pageSize = 4
+    const page = Math.max(1, Number(p['page'] ?? 1))
+    return { rows: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, pageSize }
+  },
+  'dataLogs.list': (_t, p) => {
+    const search = String(p['search'] ?? '').trim()
+    const rows = [
+      { id: 12, account_id: 'a9', diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
+      { id: 11, account_id: 'a8', diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
+      { id: 10, account_id: 'a9', diff: { gold: 900 }, source: 'client', created_at: addDays(kstToday(), -1) + 'T11:05:00+09:00' },
+    ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
+      .filter((r) => !p['accountId'] || r.account_id === p['accountId'])
+      .filter((r) => !search || r.account_id.startsWith(search) || (r.display_name ?? '').includes(search))
+    return { rows, total: rows.length, pageSize: 30 }
+  },
+  'chat.channels': () => ({
+    rows: [
+      { id: 'c1', kind: 'global', code: 'global', display_name: '전체 채팅', is_active: true },
+      { id: 'c2', kind: 'direct', code: 'direct', display_name: '귓속말', is_active: true },
+    ],
+  }),
+  'chat.messages': (_t, p) => {
+    const search = String(p['search'] ?? '').trim()
+    const msg = (id: number, channel_id: string, account_id: string | null, content: string, o: Partial<Record<string, unknown>> = {}) => ({
+      id, channel_id, account_id, user_id: `10${id}4471`, display_name: playerNameOf(account_id) ?? '', content,
+      created_at: addDays(kstToday(), 0) + `T1${id}:00:00+09:00`, deleted_at: null, deleted_by: null, is_notice: false,
+      to_account_id: null, to_display_name: null, ...o,
+    })
+    const rows = [
+      msg(4, 'c1', null, '오늘 저녁 점검이 있습니다.', { is_notice: true, display_name: '운영팀' }),
+      msg(3, 'c1', 'a9', '파티 구합니다'),
+      msg(2, 'c2', 'a8', '같이 하실래요?', { to_account_id: 'a9', to_display_name: '용사김' }),
+      msg(1, 'c1', 'a7', '안녕하세요'),
+    ]
+      .filter((m) => !p['channelId'] || m.channel_id === p['channelId'])
+      .filter((m) => !p['accountId'] || m.account_id === p['accountId'])
+      .filter((m) => !search || m.display_name.includes(search) || m.content.includes(search))
+    return { rows, total: rows.length, pageSize: 30 }
+  },
+  'chat.mutes': () => {
+    const rows = [
+      { id: 1, account_id: 'a6', channel_id: null, until: addDays(kstToday(), 3) + 'T00:00:00+09:00', reason: '도배', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T09:00:00+09:00' },
+    ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
+    return { rows, total: rows.length, pageSize: 30 }
+  },
+  'mails.getRecords': () => {
+    const rows = [
+      { id: 'r1', account_id: 'a9', user_id: '1094471', category: 'default', title: '점검 보상', content: '감사합니다', items: [{ key: 'gem', count: 10 }], items_claimed_at: addDays(kstToday(), 0) + 'T10:00:00+09:00', deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
+      { id: 'r2', account_id: null, user_id: '109876543210987654321', category: 'default', title: '점검 보상', content: '감사합니다', items: [{ key: 'gem', count: 10 }], items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
+    ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
+    return { rows, total: rows.length, pageSize: 20 }
+  },
+  'matchLobby.list': () => {
+    const member = (account_id: string, status: string) => ({ account_id, display_name: playerNameOf(account_id) ?? '', status, metadata: null, invited_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', responded_at: null })
+    const rows = [
+      { lobby_id: 'l1', game_code: 'pvp_1v1', name: '친선전', metadata: null, host_account_id: 'a9', status: 'open', max_members: 2, created_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', started_at: null, ended_at: null, expires_at: addDays(kstToday(), 1) + 'T09:00:00+09:00', members: [member('a9', 'accepted'), member('a8', 'invited')] },
+    ]
+    return { rows, total: rows.length, pageSize: 20 }
+  },
+  'leaderboard.list': () => ({
+    rows: [{
+      code: 'season', display_name: '시즌 랭킹', scope: 'global', record_type: 'best', sort_type: 'desc', rotation: 'none',
+      rotation_period_seconds: null, rotation_anchor_at: null, rotation_tz: null, rotation_count: 1, next_rotation_at: null,
+      ends_at: null, is_active: true, is_ended: false, current_entries: 2, columns: '',
+    }],
+  }),
+  'leaderboard.scores': () => {
+    const rows = [
+      { rank: 1, account_id: 'a9', user_id: '1094471', display_name: '용사김', score: 3200, score_achieved_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', score_count: 12, server_code: 'GLOBAL' },
+      { rank: 2, account_id: 'a7', user_id: '1074471', display_name: null, score: 2100, score_achieved_at: addDays(kstToday(), -1) + 'T09:00:00+09:00', score_count: 4, server_code: 'GLOBAL' },
+    ]
+    return { rows, total: rows.length, pageSize: 20, rotationCount: null, maxRotation: null, scope: 'global', dataColumns: [] }
+  },
   'userData.columns': () => [
     { column_name: 'gold', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
     { column_name: 'level', data_type: 'integer', is_nullable: 'NO', column_default: '1' },
@@ -791,7 +874,11 @@ const HANDLERS: Record<string, Handler> = {
       code: null, issued_count: 200,
     },
   ],
-  'coupons.codes': () => [],
+  'coupons.codes': () => [
+    { code: 'A1B2-C3D4', redeemed_at: addDays(kstToday(), -2) + 'T20:15:00+09:00', account_id: 'a9', user_id: '1094471', display_name: '용사김' },
+    { code: 'E5F6-G7H8', redeemed_at: addDays(kstToday(), -3) + 'T10:00:00+09:00', account_id: null, user_id: '109876543210987654321', display_name: null },
+    { code: 'I9J0-K1L2', redeemed_at: null, account_id: null, user_id: null, display_name: null },
+  ],
   'matchRewards.list': () => [
     {
       game_code: 'pvp_1v1', record_count: 1240, player_count: 380, pending_count: 4,
@@ -844,7 +931,7 @@ const HANDLERS: Record<string, Handler> = {
   'players.coupons': () => [
     { code: 'WELCOME2026', kind: 'keyword', title: '오픈 기념', mail_id: 'm1', redeemed_at: addDays(kstToday(), -2) + 'T20:15:00+09:00' },
   ],
-  // 로그는 바뀌기 전 값만 남는다 — 칸 이름은 유저 데이터 칸 목록과 같다.
+  // 로그는 바뀌기 전 값만 남는다 — 칸 이름은 플레이어 데이터 칸 목록과 같다.
   'userData.logs': () => [
     { id: 2, diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
     { id: 1, diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
@@ -868,6 +955,23 @@ const HANDLERS: Record<string, Handler> = {
   // 설정 › 우편·친구·매치 로비 — 저장하면 받은 값을 그대로 돌려준다(새로 고치면 처음 값으로 돌아간다).
   'mails.settingsGet': () => ({ expired_retention_days: 3, updated_at: null, updated_by: null }),
   'mails.settingsUpdate': (_t, p) => ({ expired_retention_days: p['expiredRetentionDays'], updated_at: new Date().toISOString(), updated_by: 'mock@local' }),
+  // 친구는 탈퇴 안 한 플레이어를 원으로 세워 양옆과 맺는다 — 내 친구 목록에 있는 사람의 목록에도 내가 있고, 받은 요청은 상대의 보낸 요청과 맞는다.
+  'friends.overview': (_t, p) => {
+    const ring = PLAYERS.filter((x) => !x.withdrawn_at)
+    const i = ring.findIndex((x) => x.account_id === p['accountId'])
+    const at = (d: number) => ring[(i + d + ring.length) % ring.length]!
+    const me = PLAYERS.find((x) => x.account_id === p['accountId'])
+    const friends = i < 0 ? [] : [at(-1), at(1)].map((x, n) => ({ account_id: x.account_id, display_name: x.display_name, since: `2026-10-${String(10 + n).padStart(2, '0')}T09:00:00+09:00` }))
+    return {
+      account_id: p['accountId'],
+      display_name: me?.display_name ?? '',
+      friend_count: friends.length,
+      max_friends: 100,
+      friends,
+      incoming: i < 0 ? [] : [{ request_id: `req-${at(2).account_id}-${at(0).account_id}`, account_id: at(2).account_id, display_name: at(2).display_name, created_at: '2026-11-01T12:00:00+09:00' }],
+      outgoing: i < 0 ? [] : [{ request_id: `req-${at(0).account_id}-${at(-2).account_id}`, account_id: at(-2).account_id, display_name: at(-2).display_name, created_at: '2026-11-01T12:00:00+09:00' }],
+    }
+  },
   'friends.settingsGet': () => ({ max_friends: 100, max_pending_sent: 50, request_cooldown_seconds: 3, updated_at: null, updated_by: null }),
   'friends.settingsUpdate': (_t, p) => ({
     max_friends: p['maxFriends'], max_pending_sent: p['maxPendingSent'], request_cooldown_seconds: p['requestCooldownSeconds'],

@@ -1,14 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { InfoList } from '../../components/ui/InfoList'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { AccountIdCell, PlayerLink } from '../../components/ui/PlayerLink'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
-import { Button } from '../../components/ui/Button'
+import { RefreshButton } from '../../components/ui/FilterBar'
 
 type FriendRow = { account_id: string; display_name: string; since: string | null }
 type RequestRow = { request_id: string; account_id: string; display_name: string; created_at: string }
@@ -31,7 +30,6 @@ export default function FriendsTab({
   onUnauthenticated: () => void
   accountId: string
 }) {
-  const navigate = useNavigate()
   const [data, setData] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -58,10 +56,6 @@ export default function FriendsTab({
 
   useEffect(() => { void load() }, [load])
 
-  const goPlayer = (id: string, name: string) => {
-    navigate(`/players?account=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`)
-  }
-
   const friends = data?.friends ?? []
   const incoming = data?.incoming ?? []
   const outgoing = data?.outgoing ?? []
@@ -75,13 +69,7 @@ export default function FriendsTab({
           { label: '친구', value: data ? `${data.friend_count}명` : failed ? '불러오지 못함' : '…' },
           { label: '상한', value: data ? `${data.max_friends}명` : failed ? '불러오지 못함' : '…' },
         ]} />
-        <Button variant="outline" size="compact"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          새로고침
-        </Button>
+        <RefreshButton onClick={() => void load()} loading={loading} />
       </div>
 
       <WhiteCard>
@@ -102,11 +90,9 @@ export default function FriendsTab({
                 friends.map((f) => (
                   <tr key={f.account_id} className="border-t border-neutral-100">
                     <td className="px-4 py-3">
-                      <button onClick={() => goPlayer(f.account_id, f.display_name)} className="text-[#1677ff] hover:underline">
-                        {f.display_name || '(이름 없음)'}
-                      </button>
+                      <PlayerLink accountId={f.account_id} name={f.display_name} />
                     </td>
-                    <td className="px-4 py-3 text-neutral-500 font-mono text-xs">{f.account_id}</td>
+                    <td className="px-4 py-3"><AccountIdCell accountId={f.account_id} /></td>
                     <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(f.since)}</td>
                   </tr>
                 ))
@@ -117,8 +103,8 @@ export default function FriendsTab({
       </WhiteCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PendingCard title="받은 요청" rows={incoming} loading={loading} failed={failed} onPlayer={goPlayer} />
-        <PendingCard title="보낸 요청" rows={outgoing} loading={loading} failed={failed} onPlayer={goPlayer} />
+        <PendingCard title="받은 요청" rows={incoming} loading={loading} failed={failed} />
+        <PendingCard title="보낸 요청" rows={outgoing} loading={loading} failed={failed} />
       </div>
     </div>
   )
@@ -129,13 +115,11 @@ function PendingCard({
   rows,
   loading,
   failed,
-  onPlayer,
 }: {
   title: string
   rows: RequestRow[]
   loading: boolean
   failed: boolean
-  onPlayer: (id: string, name: string) => void
 }) {
   return (
     <WhiteCard>
@@ -157,9 +141,7 @@ function PendingCard({
               rows.map((r) => (
                 <tr key={r.request_id} className="border-t border-neutral-100">
                   <td className="px-4 py-3">
-                    <button onClick={() => onPlayer(r.account_id, r.display_name)} className="text-[#1677ff] hover:underline">
-                      {r.display_name || '(이름 없음)'}
-                    </button>
+                    <PlayerLink accountId={r.account_id} name={r.display_name} />
                   </td>
                   <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
                 </tr>
