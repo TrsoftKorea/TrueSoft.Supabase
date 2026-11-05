@@ -5328,7 +5328,10 @@ begin
     join auth.users u on u.id = p.account_id
     left join public.display_names d on d.account_id = p.account_id
     where p.withdrawn_at is null
-      and (v_search is null or d.display_name ilike '%' || v_search || '%')
+      and (v_search is null
+           or d.display_name ilike '%' || v_search || '%'
+           or p.account_id::text ilike v_search || '%'
+           or p.user_id ilike v_search || '%')
       and (not p_banned_only or (u.banned_until is not null and u.banned_until > now()))
     order by p.last_activity_at desc nulls last
     limit v_size offset (v_page - 1) * v_size
@@ -5976,43 +5979,38 @@ begin
 end;
 $$;
 
--- 데이터 관리 화면의 플레이어 찾기. 유저 데이터 행이 있는 플레이어만, 최근 저장 순 20명.
-create or replace function public.ts_admin_search_user_data_players(p_search text default null, p_mode text default 'nickname')
+-- 플레이어 데이터 화면의 목록. 데이터 행이 있는 플레이어만 최근 저장 순. 검색어는 닉네임 일부 또는 계정 ID 앞부분.
+drop function if exists public.ts_admin_search_user_data_players(text, text);
+create or replace function public.ts_admin_search_user_data_players(
+  p_search    text default null,
+  p_page      int  default 1,
+  p_page_size int  default 20
+)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_search text := coalesce(p_search, '');
-  v_rows jsonb;
+  v_search text := nullif(btrim(coalesce(p_search, '')), '');
+  v_page   int  := greatest(1, coalesce(p_page, 1));
+  v_size   int  := least(100, greatest(1, coalesce(p_page_size, 20)));
+  v_total  int;
+  v_rows   jsonb;
 begin
-  if p_mode = 'id' then
-    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) into v_rows
-    from (
-      select ud.account_id,
-             coalesce(dn.display_name, 'Player_' || left(ud.account_id::text, 8)) as display_name,
-             ud.updated_at
-      from public.user_data ud
-      left join public.display_names dn on dn.account_id = ud.account_id
-      where v_search = '' or ud.account_id::text ilike v_search || '%'
-      order by ud.updated_at desc
-      limit 20
-    ) t;
-  else
-    select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) into v_rows
-    from (
-      select ud.account_id,
-             coalesce(dn.display_name, 'Player_' || left(ud.account_id::text, 8)) as display_name,
-             ud.updated_at
-      from public.user_data ud
-      left join public.display_names dn on dn.account_id = ud.account_id
-      where v_search = '' or dn.display_name ilike '%' || v_search || '%'
-      order by ud.updated_at desc
-      limit 20
-    ) t;
-  end if;
-  return v_rows;
+  select coalesce(jsonb_agg(to_jsonb(t) - 'total'), '[]'::jsonb), coalesce(max(t.total), 0)
+    into v_rows, v_total
+  from (
+    select ud.account_id, dn.display_name, ud.updated_at, count(*) over() as total
+    from public.user_data ud
+    left join public.display_names dn on dn.account_id = ud.account_id
+    where v_search is null
+       or dn.display_name ilike '%' || v_search || '%'
+       or ud.account_id::text ilike v_search || '%'
+    order by ud.updated_at desc
+    limit v_size offset (v_page - 1) * v_size
+  ) t;
+  return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
 $$;
 
@@ -6020,12 +6018,12 @@ revoke all on function public.ts_admin_user_data_columns()                      
 revoke all on function public.ts_admin_user_data_get(uuid)                       from public, anon, authenticated;
 revoke all on function public.ts_admin_user_data_logs(uuid, integer)             from public, anon, authenticated;
 revoke all on function public.ts_admin_user_data_update(uuid, jsonb, text)       from public, anon, authenticated;
-revoke all on function public.ts_admin_search_user_data_players(text, text)      from public, anon, authenticated;
+revoke all on function public.ts_admin_search_user_data_players(text, int, int)  from public, anon, authenticated;
 grant execute on function public.ts_admin_user_data_columns()                    to service_role;
 grant execute on function public.ts_admin_user_data_get(uuid)                    to service_role;
 grant execute on function public.ts_admin_user_data_logs(uuid, integer)          to service_role;
 grant execute on function public.ts_admin_user_data_update(uuid, jsonb, text)    to service_role;
-grant execute on function public.ts_admin_search_user_data_players(text, text)   to service_role;
+grant execute on function public.ts_admin_search_user_data_players(text, int, int) to service_role;
 
 -- ── 세이브 되돌리기 — 어떤 변경 직전 상태로 ────────────────────────────────
 -- 로그는 바뀌기 "전" 값만 남긴다. 지금 값에서 최신 로그부터 그 로그까지 거꾸로 덧씌우면 그 변경 직전 상태가 된다.

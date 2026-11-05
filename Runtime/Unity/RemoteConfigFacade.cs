@@ -267,7 +267,7 @@ namespace TrueBase.Unity
             // 토큰이 비어 있으면 requires_auth 키는 결과에서 빠진다.
             var result = await _service().GetByKeysAsync(_pollKeyBuffer, _accessTokenGetter?.Invoke()).ConfigureAwait(true);
             if (resetCount == _cacheResetCount && result.IsSuccess && result.Data != null)
-                ApplyRows(result.Data);
+                ApplyRows(result.Data, _pollKeyBuffer);
 
             foreach (var key in _pollKeyBuffer)
             {
@@ -372,7 +372,7 @@ namespace TrueBase.Unity
                 return new FetchOutcome(false, result.ErrorCode ?? "remote_config_fetch_failed");
 
             if (result.Data != null)
-                ApplyRows(result.Data);
+                ApplyRows(result.Data, keys);
 
             foreach (var rawKey in keys)
             {
@@ -454,7 +454,7 @@ namespace TrueBase.Unity
         /// 실제 값이 바뀐 키가 하나라도 있으면 true.
         /// 비활성(<c>enabled=false</c>)·인증 필요(비로그인) 행은 캐시에서 제거되며, 이 역시 변경으로 통지됩니다.
         /// </summary>
-        private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows)
+        private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows, IEnumerable<string> requestedKeys)
         {
             if (rows == null)
                 rows = Array.Empty<SupabaseRemoteConfigService.RemoteConfigRow>();
@@ -506,6 +506,25 @@ namespace TrueBase.Unity
 
                 UpdateKeyTimestampFromRow(row.key, row.updated_at);
                 RecomputeKeyPollState(row.key, realtime);
+            }
+
+            // 물은 키가 응답에 없으면 지워졌거나 지금 로그인으로 볼 수 없는 키다. 서버는 그런 행을 아예 돌려주지 않으므로
+            // 여기서 지우지 않으면 인증 필요로 바뀐 키의 옛 값을 로그인 전 플레이어가 계속 읽는다.
+            var returnedKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var row in rows)
+            {
+                if (row != null && string.IsNullOrWhiteSpace(row.key) == false)
+                    returnedKeys.Add(row.key.Trim());
+            }
+
+            foreach (var rawKey in requestedKeys)
+            {
+                if (string.IsNullOrWhiteSpace(rawKey))
+                    continue;
+
+                var key = rawKey.Trim();
+                if (returnedKeys.Contains(key) == false)
+                    RemoveCacheKey(key, changedKeys);
             }
 
             if (changedKeys.Count == 0)

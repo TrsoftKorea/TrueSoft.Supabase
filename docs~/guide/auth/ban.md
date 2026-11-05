@@ -4,7 +4,7 @@
 
 ## 로그인 시 자동 감지
 
-운영 콘솔의 플레이어 화면에서 계정을 차단하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
+운영 콘솔의 플레이어 목록에서 계정을 차단하면, 해당 계정으로 로그인 시 SDK가 자동으로 차단 정보를 가져와 `result.BanInfo`에 채웁니다.
 
 ```csharp
 var result = await Supabase.SignInAnonymouslyAsync();

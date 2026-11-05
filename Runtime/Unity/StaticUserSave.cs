@@ -834,14 +834,17 @@ namespace TrueBase.Unity
             if (!_reopenAfterDelete || resetCount != _resetCount)
                 return SupabaseResult.Ok;
 
+            // 읽기 전에 적는다. 기본 행이 만들어진 뒤 읽기가 실패하면 다음 로드는 행이 있어 신규 유저를 알 수 없다.
+            MarkNewUserAfterDelete();
+
             var loaded = await LoadAsync();
             if (!loaded.IsSuccess)
                 return SupabaseResult.Fail(loaded.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
 
             // 이 로드는 게임이 부른 것이 아니다 — 게임이 다음에 부르는 로드가 신규 유저 후처리를 놓치지 않게 넘긴다.
             // 앱을 다시 켠 뒤의 로드는 이미 행이 있어 스스로 알 수 없으므로 기기에 적어 둔다.
-            if (loaded.IsNewUser)
-                MarkNewUserAfterDelete();
+            // 방금 로드가 표시를 소비했으므로 다시 적는다.
+            MarkNewUserAfterDelete();
 
             return SupabaseResult.Ok;
         }
