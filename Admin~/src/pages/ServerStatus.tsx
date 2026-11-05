@@ -75,6 +75,33 @@ const FEATURE_COLORS = ['#1677ff', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '
 const REST_COLOR = '#a3a3a3'
 const REST = '그 밖'
 
+// 기능 묶음이 담은 것. 이름은 install.sql 의 ts_usage_feature 가 정하고, 둘의 일치는 SdkAudit R16 이 본다.
+const FEATURE_INFO: Record<string, string> = {
+  '세이브': '유저 데이터 불러오기·저장·삭제와 저장 전 세이브 확인',
+  '접속 관리': '중복 로그인 확인, 접속 중 신호, 로그인 직후 처리, 게스트 복구 정보 갱신',
+  '원격 설정': '게임이 원격 설정값을 읽는 요청',
+  '운영 콘솔': '콘솔 화면의 조회·변경, 콘솔을 열어 둔 동안의 변경 대기 확인',
+  '로그인': '애플 로그인 토큰 보관·연결 해제. 로그인 요청 자체는 세지 않음',
+  '파일': '파일 올리기·내려받기',
+  '실시간': '실시간 연결',
+  '사용량 수집': '이 화면에 쓰는 사용량 기록',
+  '매치 로비': '로비 만들기·초대·참가·목록 확인과 로비 대화',
+  '채팅': '채널 채팅과 친구 1:1 대화',
+  '친구': '친구 찾기·요청·목록',
+  '리더보드': '순위 조회와 점수 기록',
+  '쿠폰': '쿠폰 사용',
+  '매치 결과': '매치 결과 신고와 전적 조회',
+  '우편': '우편 목록·받기와 안 받은 우편 수',
+  '결제': '결제 확인, 환불 확인, 환율·빈 금액 채우기',
+  '고객센터': '문의 읽기·쓰기와 새 답변 수',
+  '푸시': '기기 등록, 알림 설정, 알림 보내기',
+  '탈퇴': '탈퇴 신청·취소와 유예 지난 계정 삭제',
+  '프로필': '닉네임 변경·조회와 프로필 조회',
+  '계정 차단': '차단 안내 조회',
+  '서버 설정': '서버 시간과 게임 서버 목록',
+  '기타': '다른 기능에 들지 않는 요청',
+}
+
 const n = (v: number) => Math.round(v).toLocaleString('ko-KR')
 
 function bytesText(b: number): string {
@@ -289,7 +316,10 @@ function ShareTable({ rows, metric, colorOf }: {
             const share = total > 0 ? (f.v / total) * 100 : 0
             return (
               <tr key={f.feature} className="border-t border-neutral-100">
-                <td className="px-4 py-2 text-neutral-800">{f.feature}</td>
+                <td className="px-4 py-2 text-neutral-800">
+                  {f.feature}
+                  {FEATURE_INFO[f.feature] && <div className="text-xs text-neutral-500 mt-0.5">{FEATURE_INFO[f.feature]}</div>}
+                </td>
                 <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
                   {f.v === 0 && f.unsized > 0 ? <span className="text-neutral-400">알 수 없음</span> : metric.text(f.v)}
                   {f.unsized > 0 && <div className="text-[11px] text-neutral-400">크기 모름 {n(f.unsized)}건</div>}
