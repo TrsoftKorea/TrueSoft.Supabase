@@ -91,6 +91,10 @@ namespace TrueBase.Core.Data
             if (response.IsSuccess == false)
                 return SupabaseResult<RemoteConfigRow[]>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "remote_config_fetch"));
 
+            // 서버는 행이 없어도 []를 준다. 빈 본문을 "행 0개"로 읽으면 받아 둔 값이 없는 키로 지워진다.
+            if (string.IsNullOrWhiteSpace(response.Body))
+                return SupabaseResult<RemoteConfigRow[]>.Fail("remote_config_parse_failed:empty_body");
+
             try
             {
                 var rows = DeserializeRemoteConfigRows(response.Body);
@@ -108,9 +112,6 @@ namespace TrueBase.Core.Data
         /// </summary>
         private static RemoteConfigRow[] DeserializeRemoteConfigRows(string body)
         {
-            if (string.IsNullOrWhiteSpace(body))
-                return Array.Empty<RemoteConfigRow>();
-
             var arr = JArray.Parse(body);
             var list = new List<RemoteConfigRow>(arr.Count);
             foreach (var token in arr)

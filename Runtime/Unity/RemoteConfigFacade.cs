@@ -452,7 +452,7 @@ namespace TrueBase.Unity
         /// <summary>
         /// 서버 응답 행들을 캐시에 반영하고 변경된 키의 구독자·<see cref="OnChanged"/>를 호출합니다.
         /// 실제 값이 바뀐 키가 하나라도 있으면 true.
-        /// 비활성(<c>enabled=false</c>)·인증 필요(비로그인) 행은 캐시에서 제거되며, 이 역시 변경으로 통지됩니다.
+        /// 비활성(<c>enabled=false</c>)·인증 필요(비로그인) 행은 캐시에서 제거되며, <see cref="OnChanged"/>는 불리지만 키 구독자 콜백은 불리지 않습니다.
         /// </summary>
         private bool ApplyRows(SupabaseRemoteConfigService.RemoteConfigRow[] rows, IEnumerable<string> requestedKeys)
         {

@@ -5316,7 +5316,7 @@ begin
   from (
     select
       p.account_id,
-      coalesce(d.display_name, p.user_id) as display_name,
+      d.display_name,
       u.is_anonymous     as is_guest,
       p.platform,
       p.country_code,
@@ -5337,6 +5337,11 @@ begin
     limit v_size offset (v_page - 1) * v_size
   ) t;
 
+  -- 끝 쪽을 넘긴 요청은 줄이 없어 건수도 0 이 된다. 건수는 첫 쪽으로 다시 물어 "기록 없음"처럼 보이지 않게 한다.
+  if v_total = 0 and v_page > 1 then
+    v_total := (public.ts_admin_search_players(p_search, p_banned_only, 1, 1)->>'total')::int;
+  end if;
+
   return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
 $$;
@@ -5352,7 +5357,7 @@ declare
 begin
   select jsonb_build_object(
     'account_id',       p.account_id,
-    'display_name',     coalesce(d.display_name, p.user_id),
+    'display_name',     d.display_name,
     'is_guest',         u.is_anonymous,
     'platform',         p.platform,
     'signup_platform',  p.signup_platform,
@@ -6010,6 +6015,12 @@ begin
     order by ud.updated_at desc
     limit v_size offset (v_page - 1) * v_size
   ) t;
+
+  -- 끝 쪽을 넘긴 요청은 줄이 없어 건수도 0 이 된다. 건수는 첫 쪽으로 다시 물어 "기록 없음"처럼 보이지 않게 한다.
+  if v_total = 0 and v_page > 1 then
+    v_total := (public.ts_admin_search_user_data_players(p_search, 1, 1)->>'total')::int;
+  end if;
+
   return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
 $$;
@@ -6610,6 +6621,11 @@ begin
     limit v_size offset (v_page - 1) * v_size
   ) t;
 
+  -- 끝 쪽을 넘긴 요청은 줄이 없어 건수도 0 이 된다. 건수는 첫 쪽으로 다시 물어 "기록 없음"처럼 보이지 않게 한다.
+  if v_total = 0 and v_page > 1 then
+    v_total := (public.ts_admin_list_mail_batches(p_search, p_category, 1, 1)->>'total')::int;
+  end if;
+
   return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
 $$;
@@ -6701,6 +6717,11 @@ begin
     order by m.created_at desc
     limit v_size offset (v_page - 1) * v_size
   ) t;
+
+  -- 끝 쪽을 넘긴 요청은 줄이 없어 건수도 0 이 된다. 건수는 첫 쪽으로 다시 물어 "기록 없음"처럼 보이지 않게 한다.
+  if v_total = 0 and v_page > 1 then
+    v_total := (public.ts_admin_search_mails(p_search, p_status, p_category, p_start_date, p_end_date, p_batch_id, 1, 1)->>'total')::int;
+  end if;
 
   return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
@@ -9974,6 +9995,11 @@ begin
      order by l.created_at desc, l.id desc
      limit v_size offset (v_page - 1) * v_size
   ) t;
+
+  -- 끝 쪽을 넘긴 요청은 줄이 없어 건수도 0 이 된다. 건수는 첫 쪽으로 다시 물어 "기록 없음"처럼 보이지 않게 한다.
+  if v_total = 0 and v_page > 1 then
+    v_total := (public.ts_admin_audit_list(p_search, p_category, p_start_date, p_end_date, 1, 1)->>'total')::int;
+  end if;
 
   return jsonb_build_object('rows', v_rows, 'total', v_total, 'pageSize', v_size);
 end;
