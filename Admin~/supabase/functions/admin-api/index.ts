@@ -215,22 +215,42 @@ async function issueSessionToken(email: string): Promise<string> {
     .sign(SESSION_KEY);
 }
 
+type Identity = { email: string; issuedAt: number | null };
+
 /** 비밀번호 로그인 세션 토큰을 검증한다. 실패하면 null. */
-async function verifySessionToken(token: string): Promise<string | null> {
+async function verifySessionToken(token: string): Promise<Identity | null> {
   if (!SESSION_KEY) return null;
   try {
     const { payload } = await jwtVerify(token, SESSION_KEY);
     const email = payload["email"];
-    return typeof email === "string" ? email.toLowerCase() : null;
+    if (typeof email !== "string") return null;
+    return { email: email.toLowerCase(), issuedAt: typeof payload.iat === "number" ? payload.iat : null };
   } catch {
     return null;
   }
 }
 
-/** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인하고 이메일을 돌려준다. */
-async function verifyIdentity(token: string): Promise<string | null> {
+// 발급 시각은 초까지만 있다. 초로 맞춰, 비밀번호를 바꾼 바로 그 초에 다시 로그인한 표까지 끊지 않게 한다.
+function issuedBeforePasswordChange(issuedAtSeconds: number, passwordUpdatedAt: string): boolean {
+  return issuedAtSeconds < Math.floor(Date.parse(passwordUpdatedAt) / 1000);
+}
+
+/** 비밀번호를 바꾸기 전에 발급한 로그인인지. 유출이 의심돼 바꿨을 때 남의 로그인을 바로 끊으려는 것이다. */
+async function isRevokedByPasswordChange(db: SupabaseClient, identity: Identity): Promise<boolean> {
+  if (identity.issuedAt === null) return false;
+  const { data, error } = await db
+    .from("ts_admin_passwords")
+    .select("updated_at")
+    .eq("email", identity.email)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? issuedBeforePasswordChange(identity.issuedAt, data.updated_at as string) : false;
+}
+
+/** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인한다. 구글 토큰은 구글이 1시간이면 끝내므로 발급 시각을 보지 않는다. */
+async function verifyIdentity(token: string): Promise<Identity | null> {
   const google = await verifyGoogleIdToken(token);
-  if (google) return google;
+  if (google) return { email: google, issuedAt: null };
   const session = await verifySessionToken(token);
   if (session) return session;
   // 둘 다 아니면 그때만 로그를 남긴다 — 어느 한쪽만 실패하는 건 정상(로그인 방식이 둘이라
@@ -394,8 +414,16 @@ Deno.serve(async (req) => {
   const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
   if (!idToken) return fail("로그인이 필요합니다.", 401);
 
-  const email = await verifyIdentity(idToken);
-  if (!email) return fail("로그인이 필요합니다.", 401);
+  const identity = await verifyIdentity(idToken);
+  if (!identity) return fail("로그인이 필요합니다.", 401);
+  const email = identity.email;
+
+  // 마스터도 거친다 — 마스터는 비활성화가 안 되므로 이것이 그 로그인을 끊는 수단이다.
+  try {
+    if (await isRevokedByPasswordChange(db, identity)) return fail("로그인이 필요합니다.", 401);
+  } catch {
+    return fail(OPERATOR_LOOKUP_FAILED, 503);
+  }
 
   // ── 4. 인가 ────────────────────────────────────────────────────────────────
   const isMaster = MASTER_EMAILS.has(email);

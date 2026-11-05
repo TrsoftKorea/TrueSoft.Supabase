@@ -40,12 +40,12 @@ import BannedWords from './pages/BannedWords'
 type Me = { email: string; isMaster: boolean }
 
 const ENTERED_KEY = 'tb_admin_entered'
-// 게임별 로그인 결과(실패 사유 포함). 로그인 표와 같이 탭 단위로 기억해 새로고침 뒤에도 사유가 남게 한다.
+// 게임별 로그인 결과(실패 사유 포함). 로그인 표와 같은 곳에 둔다 — 표만 남으면 권한 없는 게임이 "로그인 만료"로 보인다.
 const OUTCOMES_KEY = 'tb_admin_signin_outcomes'
 
 function readOutcomes(): SignInOutcome[] {
   try {
-    const raw = window.sessionStorage.getItem(OUTCOMES_KEY)
+    const raw = window.localStorage.getItem(OUTCOMES_KEY)
     return raw ? (JSON.parse(raw) as SignInOutcome[]) : []
   } catch {
     return []
@@ -66,7 +66,7 @@ export default function App() {
   const signOut = useCallback(() => {
     clearToken()
     window.sessionStorage.removeItem(ENTERED_KEY)
-    window.sessionStorage.removeItem(OUTCOMES_KEY)
+    window.localStorage.removeItem(OUTCOMES_KEY)
     setOutcomes([])
     setSignedIn(false)
     setEntered(false)
@@ -88,7 +88,7 @@ export default function App() {
   }, [])
 
   const onSignedIn = useCallback((results: SignInOutcome[]) => {
-    window.sessionStorage.setItem(OUTCOMES_KEY, JSON.stringify(results))
+    window.localStorage.setItem(OUTCOMES_KEY, JSON.stringify(results))
     setOutcomes(results)
     window.sessionStorage.removeItem(ENTERED_KEY)
     setEntered(false)
