@@ -33,7 +33,7 @@ namespace SdkAudit
             "[R13 크론미등록]",
             "[R14 구조누락]",
             "[R15 코드우선]",
-            "[R16 공통구간]", "[R16 연결값키]", "[R16 호출세기]",
+            "[R16 공통구간]", "[R16 연결값키]", "[R16 호출세기]", "[R16 기능설명]",
             "[R17 설치누락]", "[R17 검증목록]", "[R17 검증표]",
             "[R19 시간대고정]",
             "[R20 빈응답]",
@@ -311,6 +311,11 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/counted/index.ts", usageBlock + "Deno.serve(async (req) => {\n  countCall(\"counted\", req);\n});\n");
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/miscounted/index.ts", usageBlock + "Deno.serve(async (req) => {\n  countCall(\"other\", req);\n});\n");
             Write(root, "Samples~/DatabaseSetup/EdgeFunctions/latecount/index.ts", usageBlock + "Deno.serve(async (req) => {\n  if (req.method === \"OPTIONS\") return new Response(null);\n  countCall(\"latecount\", req);\n});\n");
+
+            // 사용량 기능 설명 — R16(묶음 하나는 설명이 없고, 설명 하나는 없는 묶음을 가리킨다).
+            Write(root, "Admin~/src/pages/ServerStatus.tsx", "const FEATURE_INFO: Record<string, string> = {\n  '있음': '설명',\n  '없는묶음': '설명',\n}\n");
+            File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"),
+                "\ncreate or replace function public.ts_usage_feature(p_kind text, p_target text)\nreturns text language sql immutable as $$ select case when p_kind = 'a' then '있음' else '설명없음' end; $$;\n");
 
             // R17 — 없는 함수·표를 부르고, 있는 것(late_table·ts_never_scheduled)은 안 잡는지 본다.
             // 대문자 CREATE TABLE 도 인식해야 한다(install.sql 에 섞여 있다).

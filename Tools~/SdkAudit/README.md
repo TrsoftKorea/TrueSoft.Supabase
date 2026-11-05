@@ -96,6 +96,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R16 | 하드 오류 | Edge Function 끼리 복사해 둔 같은 이름의 `═══ BEGIN 이름 ═══` 구간이 글자 그대로 같음(콘솔 서버 `Admin~/supabase/functions` 사본 포함) |
 | R16 | 하드 오류 | 함수 폴더마다 `usage-count` 구간이 있고, `Deno.serve` 핸들러 첫 줄에서 자기 폴더 이름으로 `countCall("이름", req);` 를 부름 |
 | R16 | 하드 오류 | 서버 연결값 키 목록이 `install.sql`(`ts_server_config_keys`)·콘솔 서버(`SERVER_CONFIG_VALID`)·콘솔 화면(`STORE_KEYS`)·엣지 함수의 `serverConfig("…")` 호출에서 서로 맞음 |
+| R16 | 하드 오류 | 사용량 기능 묶음 이름이 `install.sql`(`ts_usage_feature`)과 콘솔 서버 상태 화면의 설명(`FEATURE_INFO`)에서 서로 맞음 |
 | R17 | 하드 오류 | 콘솔 서버(admin-api)와 엣지 함수가 부르는 `rpc("…")` 함수·`.from("…")` 표가 `install.sql`에 정의돼 있음. 라이브 DB에만 만들어 두면 새 게임 설치 때 그 화면이 실패하고 권한 정리에서도 빠진다 |
 | R17 | 하드 오류 | `verify.sql`의 클라이언트 허용 함수 목록이 `install.sql`이 `authenticated`·`anon`에 grant 하는 함수와 같음 |
 | R17 | 하드 오류 | `verify.sql`의 표·RLS 목록이 `install.sql`이 만드는 표(`create table … public.이름`) 전부와 같음. 빠지면 설치 확인이 그 표의 누락·RLS 꺼짐을 못 본다 |
@@ -116,7 +117,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | `CLAUDE.md`·`.claude/skills/**`·`.claude/rules/**` | **R3·R4·R8(사유)만**. `CLAUDE.md`는 R14도 |
 | `install.sql` | R9·R13·R17·R19·R20 |
 | `verify.sql` | R17 |
-| `Samples~/DatabaseSetup/EdgeFunctions/**/*.ts`·`Admin~`의 admin-api·설정 화면 | R16·R17 |
+| `Samples~/DatabaseSetup/EdgeFunctions/**/*.ts`·`Admin~`의 admin-api·설정 화면·서버 상태 화면 | R16·R17 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
 
 규칙 파일을 보는 이유는 게임 문서보다 위험하기 때문입니다. **문서가 틀리면 게임 개발자가 고생하지만, `CLAUDE.md`가 틀리면 Claude가 읽고 그대로 코드를 고칩니다.** 실제로 "SupabaseSDK는 MonoBehaviour singleton"이라는 한 줄 때문에 샘플 컴파일이 깨진 적이 있습니다.

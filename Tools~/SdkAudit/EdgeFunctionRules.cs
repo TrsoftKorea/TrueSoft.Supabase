@@ -56,6 +56,7 @@ namespace SdkAudit
             }
 
             ServerConfigKeys(ctx, dir);
+            UsageFeatureInfo(ctx);
             if (blocks.ContainsKey("usage-count"))
                 UsageCount(ctx, dirs);
 
@@ -152,6 +153,41 @@ namespace SdkAudit
                         ctx.Report.Error($"[R16 연결값키] 엣지 함수가 읽는 `{m.Groups[1].Value}` 가 {sqlRel} 의 ts_server_config_keys 에 없습니다 — 콘솔 값이 항상 빈 채로 읽힙니다. ({ctx.Rel(path)})");
                 }
             }
+        }
+
+        /// <summary>
+        /// 사용량 기능 묶음의 이름은 DB(ts_usage_feature)가 정하고 설명은 콘솔 화면(FEATURE_INFO)에 있다.
+        /// 한쪽만 고치면 그 묶음의 설명이 말없이 사라지거나, 없는 묶음의 설명만 남는다.
+        /// </summary>
+        private static void UsageFeatureInfo(AuditContext ctx)
+        {
+            var sqlPath = Path.Combine(ctx.Root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql");
+            if (!File.Exists(sqlPath))
+                return;
+            var fn = Regex.Match(File.ReadAllText(sqlPath), @"function\s+public\.ts_usage_feature\([^)]*\)[\s\S]*?\$\$([\s\S]*?)\$\$");
+            if (!fn.Success)
+                return; // 이 기능이 없는 저장소(검사기 픽스처 등)
+
+            const string relPath = "Admin~/src/pages/ServerStatus.tsx";
+            var path = Path.Combine(ctx.Root, relPath.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                ctx.Report.Error($"[R16 기능설명] {relPath} 를 찾지 못해 기능 설명을 대조하지 못했습니다. 경로가 바뀌었으면 검사기도 고치세요.");
+                return;
+            }
+            var block = Regex.Match(File.ReadAllText(path), @"FEATURE_INFO[^\n]*=\s*\{([\s\S]*?)\n\}");
+            if (!block.Success)
+            {
+                ctx.Report.Error($"[R16 기능설명] {relPath} 에서 FEATURE_INFO 를 찾지 못했습니다. 검사기가 목록을 못 읽고 있습니다.");
+                return;
+            }
+
+            var names = Regex.Matches(fn.Groups[1].Value, @"\b(?:then|else)\s+'([^']+)'").Select(m => m.Groups[1].Value).ToHashSet();
+            var infos = Regex.Matches(block.Groups[1].Value, @"^\s*'([^']+)':", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToHashSet();
+            foreach (var name in names.Except(infos))
+                ctx.Report.Error($"[R16 기능설명] `{name}` 가 ts_usage_feature 에는 있는데 FEATURE_INFO 에 설명이 없습니다. ({relPath})");
+            foreach (var name in infos.Except(names))
+                ctx.Report.Error($"[R16 기능설명] `{name}` 의 설명이 FEATURE_INFO 에 있는데 ts_usage_feature 에 그런 묶음이 없습니다. ({relPath})");
         }
     }
 }

@@ -4897,6 +4897,7 @@ revoke all on function public.ts_usage_record_size() from public, anon, authenti
 
 -- 대상(표·DB 함수·서버 함수 이름)을 기능 묶음 이름으로. 위에서부터 처음 맞는 것 — 운영 콘솔(ts_admin_…·admin-…)을 먼저
 -- 걸러 플레이어 몫과 섞이지 않게 한다. 새 기능을 더하면 여기에 한 줄 더한다(없으면 "기타").
+-- 새 이름은 콘솔 서버 상태 화면의 FEATURE_INFO 에도 설명을 더한다(SdkAudit R16 이 대조한다).
 create or replace function public.ts_usage_feature(p_kind text, p_target text)
 returns text
 language sql
@@ -5800,10 +5801,8 @@ ALTER TABLE public.user_data_logs ADD COLUMN IF NOT EXISTS source text;
 CREATE INDEX IF NOT EXISTS user_data_logs_account_id_created_idx
   ON public.user_data_logs (account_id, created_at DESC);
 
--- 어드민 저장 로그 화면의 필드 필터(jsonb_exists(diff, '컬럼명'))용.
--- 없으면 계정별 로그를 전부 훑는다.
-CREATE INDEX IF NOT EXISTS user_data_logs_diff_gin
-  ON public.user_data_logs USING gin (diff jsonb_path_ops);
+-- 예전 판의 diff 색인. 쓰는 조회가 없는데 로그 용량의 절반을 차지했다.
+DROP INDEX IF EXISTS public.user_data_logs_diff_gin;
 
 ALTER TABLE public.user_data_logs ENABLE ROW LEVEL SECURITY;
 -- 플레이어 직접 접근 없음 (서비스 롤 + 어드민 전용)

@@ -22,6 +22,7 @@ namespace SdkAudit
             "Tools~/SdkAudit/",
             "Admin~/supabase/functions/", // R16 공통 구간·호출 세기·연결값 키 목록
             "Admin~/src/pages/Settings.tsx",
+            "Admin~/src/pages/ServerStatus.tsx", // R16 기능 설명
             "CLAUDE.md",
             ".claude/",
         };
