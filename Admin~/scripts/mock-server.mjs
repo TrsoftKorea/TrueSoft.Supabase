@@ -229,26 +229,29 @@ function readBody(req) {
 let deployCache = null
 let lastFetchAt = 0
 
-// 배포 작업 단계 이름 → 화면 문구. 모르는 단계는 원래 이름.
-// 순서가 중요하다 — "Post Run actions/setup-node" 같은 정리 단계가 준비 규칙에 먼저 걸리지 않게 마무리를 맨 앞에 둔다.
-const STEP_LABEL = [
-  [/^post |complete job/i, '마무리'],
-  [/set up job|checkout|setup-node/i, '준비'],
-  [/npm ci/i, '부품 설치'],
-  [/npm run build/i, '화면 빌드'],
-  [/wrangler/i, '실제 콘솔에 올리는 중'],
-]
-const stepLabel = (name) => STEP_LABEL.find(([re]) => re.test(name))?.[1] ?? name
+// 배포 작업을 화면에 보일 묶음. 단계 대부분이 2초 안에 끝나 번호로 보이면 건너뛰는 것처럼 보인다.
+const DEPLOY_STAGES = ['준비', '콘솔 빌드', '콘솔 올리기', '고객센터 올리기']
 
-/** 진행 중인 배포 작업의 단계 — 몇 번째 단계를 하고 있는지. */
+/** 지금 몇 번째 묶음인지. 올리는 단계는 콘솔·고객센터가 이름이 같아 admin-deploy.yml 의 순서로 가른다. */
+function deployProgress(steps) {
+  let stage = 0
+  const stages = steps.map((s) => {
+    if (/npm run build:support/i.test(s.name)) stage = 3
+    else if (stage === 0 && /npm run build/i.test(s.name)) stage = 1
+    else if (stage === 1 && /wrangler/i.test(s.name)) stage = 2
+    return stage
+  })
+  const at = stages.find((_, i) => steps[i].status !== 'completed') ?? DEPLOY_STAGES.length - 1
+  return { done: at, total: DEPLOY_STAGES.length, current: DEPLOY_STAGES[at] }
+}
+
+/** 진행 중인 배포 작업의 단계 — 몇 번째 묶음을 하고 있는지. */
 function runSteps(id) {
   try {
     const { jobs = [] } = JSON.parse(execFileSync('gh', ['run', 'view', String(id), '--json', 'jobs'], { cwd: REPO, encoding: 'utf8' }))
     const steps = jobs.flatMap((j) => j.steps ?? [])
     if (!steps.length) return null
-    const doneCount = steps.filter((s) => s.status === 'completed').length
-    const current = steps.find((s) => s.status === 'in_progress') ?? steps.find((s) => s.status !== 'completed')
-    return { done: doneCount, total: steps.length, current: current ? stepLabel(current.name) : null }
+    return deployProgress(steps)
   } catch { return null }
 }
 
