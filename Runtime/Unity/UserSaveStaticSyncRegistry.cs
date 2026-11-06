@@ -289,9 +289,6 @@ namespace TrueBase.Unity
                 if (entry.IsInFlight)
                     continue;
 
-                if (realtimeNow < entry.RetryNotBeforeRealtime)
-                    continue;
-
                 if (!SafeHasDirty(entry))
                 {
                     // 다시 로드해 실패한 변경을 버렸으면 재시도가 없어 실패 상태를 풀어 줄 전송도 오지 않는다.
@@ -302,6 +299,9 @@ namespace TrueBase.Unity
                         entry.NextAllowedAtRealtime = 0f;
                     continue;
                 }
+
+                if (realtimeNow < entry.RetryNotBeforeRealtime)
+                    continue;
 
                 // 컬렉션을 제자리에서 고치면 MarkDirty 가 안 불려 타이머가 없다. 마지막 전송에서 쿨타임이 지났으면 바로 보내고
                 // (값 비교 주기만큼 이미 늦었다), 아니면 그때까지 기다린다. 실패 뒤 재시도는 RetryNotBeforeRealtime 이 정한다.

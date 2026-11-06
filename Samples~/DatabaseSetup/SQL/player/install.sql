@@ -4911,7 +4911,7 @@ as $$
     when n ~ '^(usage-sync$|ts_usage_)'                     then '사용량 수집'
     when n ~ 'remote_config'                                then '원격 설정'
     when n ~ '^(user_sessions|ts_session_|ts_after_sign_in|ts_record_daily_activity|ts_anon_recovery)' then '접속 관리'
-    when n ~ '^(user_data|ts_ensure_my_row)'                then '세이브'
+    when n ~ '^(user_data|ts_ensure_my_row|ts_user_data_reset_pending)' then '세이브'
     when n ~ 'lobby'                                        then '매치 로비'
     when n ~ 'chat'                                         then '채팅'
     when n ~ 'friend'                                       then '친구'
@@ -6126,9 +6126,20 @@ revoke all on function public.ts_admin_user_data_restore(uuid, bigint, text[], t
 grant execute on function public.ts_admin_user_data_restore_preview(uuid, bigint)          to service_role;
 grant execute on function public.ts_admin_user_data_restore(uuid, bigint, text[], text)    to service_role;
 
+-- 콘솔이 초기화한 시각. 그 행의 updated_at 과 같으면 "초기화한 뒤 아직 아무 저장도 없다"는 뜻이다.
+-- 지우는 곳이 없다 — 저장이 한 번이라도 일어나면 updated_at 이 달라져 저절로 효력을 잃는다. 그래서 옛 빌드로
+-- 며칠 플레이한 계정이 새 빌드로 올렸을 때 신규 유저로 잘못 처리되지 않고, 처리 도중 앱이 꺼져도 다음 로그인에 다시 잡힌다.
+create table if not exists public.user_data_resets (
+  user_data_id uuid        primary key references public.user_data(id) on delete cascade,
+  reset_at     timestamptz not null
+);
+alter table public.user_data_resets enable row level security;
+revoke all on table public.user_data_resets from public, anon, authenticated;
+
 -- 게임 칸 전부를 표의 기본값으로 되돌린다. 행을 지우지 않는 이유 둘:
--- ① 플레이나누 병행 게임은 행이 없으면 다음 로그인이 나누의 옛 데이터를 그대로 다시 가져온다. 행이 남고 updated_at 이
---    새로우면 SDK 쪽이 최신이라 나누도 초기값으로 덮인다(비교 칸을 CompareBy 로 바꾼 게임은 그 칸의 값으로 갈린다).
+-- ① 플레이나누 병행 게임은 행이 없으면 다음 로그인이 나누의 옛 데이터를 그대로 다시 가져온다. 행을 남기고
+--    user_data_resets 에 시각을 적으면 SDK 가 그 로그인의 비교를 건너뛰어 나누도 초기값으로 덮는다
+--    (비교 칸까지 처음 값이 되므로, 비교하면 칸 종류와 상관없이 나누가 이길 수 있다).
 -- ② 변경 로그에 바뀌기 전 값이 남아 "이 변경 전으로"로 바로 되돌릴 수 있다. 행을 지우면 다시 생기기 전까지 못 되돌린다.
 create or replace function public.ts_admin_user_data_reset(p_account_id uuid, p_operator text default null)
 returns jsonb
@@ -6138,7 +6149,8 @@ set search_path = public
 as $$
 declare
   v_set text;
-  v_n   int;
+  v_id  uuid;
+  v_at  timestamptz;
   v_row jsonb;
 begin
   select string_agg(format('%I = default', c->>'column_name'), ', ') into v_set
@@ -6153,21 +6165,43 @@ begin
     true
   );
 
-  execute format('update public.user_data set updated_at = now(), %s where account_id = $1', v_set)
+  execute format('update public.user_data set updated_at = now(), %s where account_id = $1 returning id, updated_at', v_set)
+    into v_id, v_at
     using p_account_id;
 
-  get diagnostics v_n = row_count;
-  if v_n = 0 then
+  if v_id is null then
     raise exception 'user_data_not_found';
   end if;
 
-  select to_jsonb(d) into v_row from public.user_data d where d.account_id = p_account_id;
+  insert into public.user_data_resets (user_data_id, reset_at)
+  values (v_id, v_at)
+  on conflict (user_data_id) do update set reset_at = excluded.reset_at;
+
+  select to_jsonb(d) into v_row from public.user_data d where d.id = v_id;
   return v_row;
 end;
 $$;
 
 revoke all on function public.ts_admin_user_data_reset(uuid, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_user_data_reset(uuid, text) to service_role;
+
+-- 내 저장 데이터가 콘솔 초기화 뒤 그대로면 그 초기화 시각, 아니면 null. SDK 가 로드할 때 부른다.
+create or replace function public.ts_user_data_reset_pending()
+returns timestamptz
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select r.reset_at
+  from public.user_data d
+  join public.user_data_resets r on r.user_data_id = d.id
+  where d.account_id = auth.uid()
+    and d.updated_at = r.reset_at;
+$$;
+
+revoke all on function public.ts_user_data_reset_pending() from public, anon, authenticated;
+grant execute on function public.ts_user_data_reset_pending() to authenticated;
 
 
 -- #############################################################################
@@ -15767,6 +15801,7 @@ grant execute on function public.ts_request_limit_ping()                        
 -- 로그인 사용자 전용 RPC
 grant execute on function public.ts_ensure_my_profile(text, text)          to authenticated;
 grant execute on function public.ts_ensure_my_row(text, text)              to authenticated;
+grant execute on function public.ts_user_data_reset_pending()               to authenticated;
 grant execute on function public.ts_my_server_id()                         to authenticated;
 grant execute on function public.ts_my_withdrawal_status()                 to authenticated;
 grant execute on function public.ts_after_sign_in(text, text)              to authenticated;

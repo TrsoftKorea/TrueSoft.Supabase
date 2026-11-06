@@ -308,6 +308,10 @@ namespace TrueBase.Unity
             PlayerPrefs.Save();
         }
 
+        // 콘솔 초기화 뒤 표시가 그대로면 다시 로드해도 또 잡힌다. 신규 유저로 알린 초기화를 기기에 적어 한 번만 알린다.
+        private string ResetReportedKey(string accountId)
+            => $"TrueBase.UserSave.ResetReported.{_syncKey}.{accountId}";
+
         private void ClearNewUserAfterDelete(string accountId)
         {
             _newUserAfterDeleteAccount = null;
@@ -343,6 +347,13 @@ namespace TrueBase.Unity
             {
                 return (true, false, DateTimeOffset.MinValue);
             }
+
+            // 콘솔이 초기화한 뒤 그대로인 행은 비교 칸까지 처음 값이라, 비교하면 나누의 옛 데이터가 이겨 초기화가 사라진다.
+            // 가장 늦은 시각을 돌려줘 서버 쪽이 이기게 하고 나누도 초기값으로 덮는다. 못 물어봤으면 나누에 쓰지 않도록 읽기 실패로 친다.
+            var reset = await SupabaseSDK.TryGetUserDataPendingResetAsync();
+            if (!reset.IsSuccess) return (false, false, DateTimeOffset.MinValue);
+            if (reset.Data != null) return (true, true, DateTimeOffset.MaxValue);
+
             var map = GetNanooMap();
             if (map != null && map.HasCompareBy)
                 return (true, true, map.CompareSelector(row));
@@ -636,7 +647,7 @@ namespace TrueBase.Unity
             if (!_hasLoadedOnce)
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
-            if (!HasFreshDirty())
+            if (!HasFreshDirty() && _sendsInFlight == 0)
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
             return SupabaseSDK.RequestImmediateUserSaveStaticFlush(_syncKey)
@@ -658,7 +669,8 @@ namespace TrueBase.Unity
             if (!_hasLoadedOnce)
                 return SupabaseSaveResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
-            if (!HasFreshDirty())
+            // 보내는 중이면 변경 표시가 내려가 있어도 저장이 끝난 것이 아니다. 그 전송이 실패하면 변경이 되살아나므로 결과를 기다린다.
+            if (!HasFreshDirty() && _sendsInFlight == 0)
                 return SupabaseSaveResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
             return SupabaseSaveResult.From(await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs));
@@ -719,8 +731,19 @@ namespace TrueBase.Unity
 
             // DB에 본인 행이 없던 신규 유저 여부. 반환값 IsNewUser로 노출한다.
             var isNewUser = !hasRow;
+            string pendingReset = null;
 
-            if (!hasRow)
+            if (hasRow)
+            {
+                var reset = await SupabaseSDK.TryGetUserDataPendingResetAsync();
+                if (!reset.IsSuccess)
+                {
+                    Debug.LogWarning($"{LogTag} TryLoadAsync: 저장 데이터 초기화 여부 확인 실패 — {reset.ErrorCode ?? "null"}");
+                    return SupabaseLoadResult.Fail(SupabaseErrorCode.UserSaveLoadFailed);
+                }
+                pendingReset = reset.Data;
+            }
+            else
             {
                 var ensured = await SupabaseSDK.EnsureMyRowAsync<TRow>();
                 if (ensured == null || !ensured.IsSuccess)
@@ -768,6 +791,15 @@ namespace TrueBase.Unity
             {
                 isNewUser = true;
                 ClearNewUserAfterDelete(loadAccountId);
+            }
+
+            // 운영 콘솔이 초기화한 계정 — 행은 있어도 게임에는 새로 시작한 플레이어다.
+            if (pendingReset != null && !string.IsNullOrEmpty(loadAccountId)
+                && PlayerPrefs.GetString(ResetReportedKey(loadAccountId), string.Empty) != pendingReset)
+            {
+                isNewUser = true;
+                PlayerPrefs.SetString(ResetReportedKey(loadAccountId), pendingReset);
+                PlayerPrefs.Save();
             }
 
             // PlayNANOO 동기화가 이 계정의 행을 먼저 만든 경우 — 게임이 처음 부르는 로드에서 신규 유저로 알린다(1회).

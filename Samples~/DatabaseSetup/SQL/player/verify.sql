@@ -85,6 +85,7 @@ from (
       ('push_ad_settings'),
       ('push_outbox'),
       ('user_data_logs'),
+      ('user_data_resets'),
       ('game_items'),
       ('mail_batches'),
       ('mail_schedules'),
@@ -148,6 +149,7 @@ from (
       ('ts_profiles_coalesce_server_id'),
       ('ts_ensure_my_profile'),
       ('ts_ensure_my_row'),
+      ('ts_user_data_reset_pending'),
       ('ts_my_server_id'),
       ('ts_sync_server_id_by_account'),
       ('ts_transfer_my_server'),
@@ -384,6 +386,7 @@ from (
       -- 로그인 사용자 전용 RPC
       ('ts_ensure_my_profile',            'auth'),
       ('ts_ensure_my_row',                'auth'),
+      ('ts_user_data_reset_pending',      'auth'),
       ('ts_my_server_id',                 'auth'),
       ('ts_my_withdrawal_status',         'auth'),
       ('ts_after_sign_in',                'auth'),
@@ -474,7 +477,7 @@ from (
       'ts_push_preferences_get', 'ts_push_preferences_set', 'ts_push_register', 'ts_push_unregister',
       'ts_request_limit_check', 'ts_request_limit_ping',
       'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_support_unread_count',
-      'ts_transfer_my_server', 'ts_view_mail_for_user'
+      'ts_transfer_my_server', 'ts_user_data_reset_pending', 'ts_view_mail_for_user'
     )
 
   union all

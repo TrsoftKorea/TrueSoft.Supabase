@@ -329,6 +329,8 @@
             SupabaseErrorCode.ProfileNotFound => SupabaseReason.ProfileNotFound,
             // 요청 제한은 서버 함수 밖의 경로(엣지 함수·표 요청)에서 "http_429:{...request_limited...}" 처럼 섞여 온다.
             string s when s.Contains(SupabaseErrorCode.RequestLimited) => SupabaseReason.RequestLimited,
+            // 뒤에 변환 오류 원문이 붙는다(원문은 ErrorCode 로 읽는다).
+            _ when errorCode.StartsWith(SupabaseErrorCode.UserSaveSerializeFailed + ":", System.StringComparison.Ordinal) => SupabaseReason.UserSaveSerializeFailed,
             _ => SupabaseReason.Unknown,
         };
     }

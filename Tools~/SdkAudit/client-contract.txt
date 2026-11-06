@@ -102,3 +102,4 @@ table mails account_id,category,content,created_at,expires_at,id,items,items_cla
 table remote_config description,enabled,key,requires_auth,updated_at,value_json,version
 table user_profiles id,user_id,withdrawn_at
 table user_sessions account_id,session_token
+rpc ts_user_data_reset_pending

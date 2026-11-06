@@ -52,6 +52,16 @@ namespace TrueBase.Unity
             return await _userDataService.EnsureMyRowAsync(accessToken, tableName, session.User?.PlayerUserId);
         }
 
+        /// <summary>운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.</summary>
+        public async Task<SupabaseResult<string>> GetPendingResetAsync()
+        {
+            var accessToken = _sessionGetter?.Invoke()?.AccessToken;
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail("auth_not_signed_in");
+
+            return await _userDataService.GetPendingResetAsync(accessToken);
+        }
+
         /// <summary>
         /// 변경된 값만 부분 저장(PATCH)합니다. <paramref name="tableName"/>은 대상 테이블을 명시합니다.
         /// </summary>

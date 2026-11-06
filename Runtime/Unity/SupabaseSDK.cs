@@ -3308,6 +3308,16 @@ namespace TrueBase.Unity
             return await UserSaves.EnsureMyRowAsync<T>();
         }
 
+        /// <summary>운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.</summary>
+        public static async Task<SupabaseResult<string>> TryGetUserDataPendingResetAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+
+            return await UserSaves.GetPendingResetAsync();
+        }
+
         /// <summary>
         /// 변경된 컬럼만 부분 저장(PATCH)합니다. <paramref name="tableName"/>은 대상 테이블을 명시합니다.
         /// </summary>

@@ -146,7 +146,7 @@ namespace TrueBase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<bool>.Fail("data_patch_build_failed:" + e.Message);
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.UserSaveSerializeFailed + ":" + e.Message);
             }
 
             var sent = await SendPatchAsync(accessToken, url, bodyJson);
@@ -350,7 +350,7 @@ namespace TrueBase.Core.Data
             }
             catch (Exception e)
             {
-                return SupabaseResult<bool>.Fail("data_patch_build_failed:" + e.Message);
+                return SupabaseResult<bool>.Fail(SupabaseErrorCode.UserSaveSerializeFailed + ":" + e.Message);
             }
 
             if (patch == null || patch.Count == 0)
@@ -374,6 +374,38 @@ namespace TrueBase.Core.Data
 
         private Dictionary<string, string> CreateAuthHeaders(string accessToken, string prefer = null) =>
             SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken, prefer);
+
+        /// <summary>
+        /// 운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.
+        /// DB RPC: <c>ts_user_data_reset_pending()</c>.
+        /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        public async Task<SupabaseResult<string>> GetPendingResetAsync(string accessToken)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: $"{_supabaseUrl}/rest/v1/rpc/ts_user_data_reset_pending",
+                jsonBody: "{}",
+                headers: CreateAuthHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
+
+            if (response.IsSuccess == false)
+            {
+                // 이 함수가 아직 없는 DB에는 초기화 기록도 없다. 로드까지 막지 않는다.
+                if (response.StatusCode == 404)
+                    return SupabaseResult<string>.Success(null);
+
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "user_data_reset_check_failed"));
+            }
+
+            var value = response.Body?.Trim().Trim('"');
+            return SupabaseResult<string>.Success(string.IsNullOrEmpty(value) || value == "null" ? null : value);
+        }
 
         [Serializable]
         private sealed class EnsureMyRowBody

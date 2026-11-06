@@ -40,4 +40,5 @@ if (!result.IsSaved)
 | `SupabaseReason.UserSaveNotReady` | 아직 [로드](/guide/user-data/load)하지 않았습니다. 로드 전 값이 서버 값을 덮지 않도록 보내지 않습니다 |
 | `SupabaseReason.UserSaveTimeout` | `timeoutMs`를 넘었습니다. 전송은 계속 진행될 수 있습니다 |
 | `SupabaseReason.UserSaveFlushFailed` | 전송에 실패했습니다. 원문은 `ErrorCode`에 있습니다 |
+| `SupabaseReason.UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 원문은 `ErrorCode`에 있습니다 |
 | `SupabaseReason.DuplicateLogin` | 다른 기기에서 로그인해 전송이 막혔습니다 |
