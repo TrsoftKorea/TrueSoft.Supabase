@@ -13,7 +13,6 @@ import { Segmented } from '../components/ui/Segmented'
 import { Switch } from '../components/ui/Switch'
 import { formatCount, itemsText } from '../components/ui/format'
 import { areaCls, inputCls } from '../components/ui/Input'
-import { PLATFORMS, platformLabel } from '../lib/platforms'
 import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { playerLabel } from '../components/ui/PlayerLink'
 
@@ -96,7 +95,6 @@ export default function Mails({
     presetAccount ? { [presetAccount]: params.get('name') || presetAccount.slice(0, 8) } : {},
   )
   const [serverId, setServerId] = useState('')
-  const [platform, setPlatform] = useState('')
   const [openForNew, setOpenForNew] = useState(false)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -212,14 +210,12 @@ export default function Mails({
     const c = categories.find((x) => x.key === key)
     return c ? (c.display_name ? `${c.display_name}` : c.key) : key
   }
-  // 플레이어를 직접 고른 발송에는 플랫폼이 걸리지 않는다(서버도 무시한다).
-  const platformPart = mode !== 'players' && platform ? ` · ${platformLabel(platform)}만` : ''
   // 반복 발송에는 걸 수 없다 — 회차마다 열려 있어 나중에 가입한 사람이 지난 회차를 한꺼번에 받는다.
   const openApplies = mode !== 'players' && sched !== 'repeat' && openForNew
   const openPart = openApplies ? ' · 나중에 들어온 플레이어도' : ''
   const targetSummary = (mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
-    : `플레이어 ${formatCount(playerIds.length)}명`) + platformPart + openPart
+    : `플레이어 ${formatCount(playerIds.length)}명`) + openPart
   const repeatDesc = repeatUnit === 'day' ? `매일 ${repeatTime}`
     : repeatUnit === 'week' ? `매주 ${DOW_LABEL[repeatDow]}요일 ${repeatTime}`
     : `매월 ${repeatDom}일 ${repeatTime}`
@@ -239,7 +235,7 @@ export default function Mails({
     setTitle(''); setContent(''); setItems([]); setSelected({}); setLangRows([])
     setSched('immediate'); setMode('players'); setScheduledAt('')
     setRepeatUnit('day'); setRepeatTime('12:00'); setRepeatDow(1); setRepeatDom(1)
-    setCategory('default'); setExpiresDays(7); setServerId(''); setPlatform(''); setOpenForNew(false)
+    setCategory('default'); setExpiresDays(7); setServerId(''); setOpenForNew(false)
     setPush(false); setPushIsAd(false)
     setActive(0); setReached(0)
   }
@@ -259,7 +255,6 @@ export default function Mails({
         mode,
         accountIds: mode === 'players' ? playerIds : [],
         serverId: mode === 'server' ? serverId : null,
-        platform: mode === 'players' ? null : platform || null,
         openForNew: openApplies,
         title, content, category: category.trim() || 'default',
         items: items.map((it) => ({ key: it.key, count: Number(it.count) })),
@@ -356,7 +351,7 @@ export default function Mails({
 
           {mode === 'all' && (
             <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
-              {platform ? `${platformLabel(platform)} 플레이어 모두에게 발송됩니다.` : '모든 플레이어에게 발송됩니다.'}
+              모든 플레이어에게 발송됩니다.
             </div>
           )}
 
@@ -366,13 +361,6 @@ export default function Mails({
                 <option value="">서버 선택…</option>
                 {servers.map((s) => (<option key={s.id} value={s.id}>{s.display_name || s.server_code}</option>))}
               </select>
-            </Field>
-          )}
-
-          {mode !== 'players' && (
-            <Field label="플랫폼">
-              <Segmented value={platform} onChange={setPlatform}
-                options={[{ v: '', label: '전체' }, ...PLATFORMS.map((p) => ({ v: p.v as string, label: p.label }))]} />
             </Field>
           )}
 

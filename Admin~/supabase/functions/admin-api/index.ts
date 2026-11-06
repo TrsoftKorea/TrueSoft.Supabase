@@ -881,6 +881,15 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      case "userData.reset": {
+        const { data, error } = await db.rpc("ts_admin_user_data_reset", {
+          p_account_id: str(params, "accountId"),
+          p_operator: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       case "jobs.list": {
         const { data, error } = await db.rpc("ts_admin_cron_jobs");
         if (error) throw new Error(error.message);
@@ -1791,6 +1800,9 @@ async function handleAction(
       }
 
       case "mails.send": {
+        if (optStr(params, "platform")) {
+          throw new Error("우편 플랫폼 지정이 없어졌습니다. 화면을 새로고침한 뒤 다시 보내 주세요.");
+        }
         const { data, error } = await db.rpc("ts_admin_send_mail", {
           p_target_mode: str(params, "mode"),
           p_title: str(params, "title"),
@@ -1804,7 +1816,6 @@ async function handleAction(
           p_skip_item_validation: false,
           p_category: optStr(params, "category") || "default",
           p_localized: params["localized"] ?? null,
-          p_platform: optStr(params, "platform") || null,
           p_open_for_new: params["openForNew"] === true,
         });
         if (error) throw new Error(error.message);
@@ -1820,6 +1831,9 @@ async function handleAction(
       }
 
       case "mails.createSchedule": {
+        if (optStr(params, "platform")) {
+          throw new Error("우편 플랫폼 지정이 없어졌습니다. 화면을 새로고침한 뒤 다시 보내 주세요.");
+        }
         const { data, error } = await db.rpc("ts_admin_create_mail_schedule", {
           p_schedule_type: str(params, "scheduleType"),
           p_target_mode: str(params, "mode"),
@@ -1837,7 +1851,6 @@ async function handleAction(
           p_repeat_dow: params["repeatDow"] ?? null,
           p_repeat_dom: params["repeatDom"] ?? null,
           p_created_by: email,
-          p_platform: optStr(params, "platform") || null,
           p_open_for_new: params["openForNew"] === true,
         });
         if (error) throw new Error(error.message);

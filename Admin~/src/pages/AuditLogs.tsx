@@ -55,6 +55,7 @@ const ACTION_LABELS: Record<string, string> = {
   'players.setDisplayName': '닉네임 변경',
   'userData.update': '플레이어 데이터 수정',
   'userData.restore': '플레이어 데이터 되돌리기',
+  'userData.reset': '플레이어 데이터 초기화',
   'remoteConfig.stageNew': '원격 설정 추가(대기)',
   'remoteConfig.stageMeta': '원격 설정 수정(대기)',
   'remoteConfig.stageItem': '원격 설정 값 수정(대기)',

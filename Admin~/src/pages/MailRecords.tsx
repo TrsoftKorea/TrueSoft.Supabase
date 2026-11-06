@@ -3,7 +3,6 @@ import { X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
-import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
@@ -40,7 +39,7 @@ type BatchRow = {
   id: string; target_mode: string; title: string
   items: { key: string; count: number }[] | null; recipient_count: number
   category: string; expires_at: string; created_by: string | null; created_at: string; server_code: string | null
-  platform: string | null; open_until: string | null; recalled_at?: string | null
+  open_until: string | null; recalled_at?: string | null
 }
 type BatchData = { rows: BatchRow[]; total: number; pageSize: number }
 type CategoryRow = { key: string; display_name: string }
@@ -305,7 +304,7 @@ export default function MailRecords({
                   ) : (
                     batches.map((b) => (
                       <tr key={b.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openBatch(b)}>
-                        <td className="px-4 py-3 whitespace-nowrap">{b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}{b.platform ? ` · ${platformLabel(b.platform)}` : ''}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
                         <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(b.category)}</td>
                         <td className="px-4 py-3">{b.title}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{formatCount(b.recipient_count)}</td>

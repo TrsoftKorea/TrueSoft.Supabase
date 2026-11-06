@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Pencil, ExternalLink, History } from 'lucide-react'
+import { Search, Pencil, ExternalLink, History, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
-import { inputCls } from '../../components/ui/Input'
+import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime, diffSummary, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel } from '../../lib/schemaLabels'
@@ -14,6 +14,7 @@ import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValue
 import { Button } from '../../components/ui/Button'
 import { withPlayer } from '../../components/ui/PlayerLink'
 import { EditDialog } from '../../components/ui/EditDialog'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { RestoreSaveModal } from './RestoreSaveModal'
 import { RefreshButton } from '../../components/ui/FilterBar'
 
@@ -105,6 +106,75 @@ function EditValueModal({
   )
 }
 
+const RESET_CONFIRM_WORD = '초기화'
+
+export function ResetSaveDialog({
+  target,
+  onUnauthenticated,
+  accountId,
+  playerName,
+  onClose,
+  onDone,
+}: {
+  target: ProjectTarget
+  onUnauthenticated: () => void
+  accountId: string
+  playerName: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [word, setWord] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleConfirm = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await callAdmin(target, 'userData.reset', { accountId })
+      onDone()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) {
+        onUnauthenticated()
+        return
+      }
+      setError(e instanceof Error ? e.message : '초기화에 실패했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      open
+      danger
+      title="저장 데이터 초기화"
+      confirmLabel="초기화"
+      busy={busy}
+      confirmDisabled={word.trim() !== RESET_CONFIRM_WORD}
+      error={error || undefined}
+      onConfirm={() => { void handleConfirm() }}
+      onCancel={onClose}
+    >
+      <p className="text-sm text-neutral-600">대상 플레이어: <span className="font-medium text-neutral-800">{playerName}</span></p>
+      <ul className="list-disc pl-5 space-y-1 text-sm text-neutral-600">
+        <li>모든 필드가 처음 값으로 돌아갑니다.</li>
+        <li>게임에 접속 중이면 게임을 다시 켜야 반영되고, 그 전에 저장되는 필드는 게임의 값으로 다시 바뀝니다.</li>
+        <li>7일 안에는 변경 이력의 &lsquo;이 변경 전으로&rsquo;로 되돌릴 수 있습니다.</li>
+      </ul>
+      <div>
+        <div className="text-xs font-medium text-neutral-500 mb-1">확인을 위해 &lsquo;{RESET_CONFIRM_WORD}&rsquo;를 입력합니다</div>
+        <input
+          value={word}
+          onChange={(e) => setWord(e.target.value)}
+          autoFocus
+          className={dangerInputCls + ' w-full'}
+        />
+      </div>
+    </ConfirmDialog>
+  )
+}
+
 export default function UserDataTab({
   target,
   onUnauthenticated,
@@ -128,6 +198,7 @@ export default function UserDataTab({
   const [page, setPage] = useState(1)
   const [editField, setEditField] = useState<UserDataField | null>(null)
   const [restoreLog, setRestoreLog] = useState<LogRow | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
   const [logsFailed, setLogsFailed] = useState(false)
@@ -227,6 +298,10 @@ export default function UserDataTab({
             데이터 로그
           </Link>
           <RefreshButton onClick={() => { void reload(); void reloadLogs() }} loading={loading} />
+          <Button variant="dangerOutline" onClick={() => setResetOpen(true)} disabled={loading || failed || !hasRow}>
+            <Trash2 className="w-3.5 h-3.5" />
+            데이터 초기화
+          </Button>
         </div>
       </div>
 
@@ -341,6 +416,17 @@ export default function UserDataTab({
           </table>
         </div>
       </WhiteCard>
+
+      {resetOpen && (
+        <ResetSaveDialog
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={accountId}
+          playerName={displayName || accountId}
+          onClose={() => setResetOpen(false)}
+          onDone={() => { setResetOpen(false); void reload(); void reloadLogs() }}
+        />
+      )}
 
       {restoreLog && (
         <RestoreSaveModal

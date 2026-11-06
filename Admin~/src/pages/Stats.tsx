@@ -33,7 +33,7 @@ const RANGES = [
 
 /**
  * 가입 플랫폼 거르기 버튼. '' = 전체. 서버가 알려 준, 이 기간에 기록이 있는 플랫폼만 보인다 — 지금 고른 값은 기간을 바꿔
- * 기록이 없어져도 남긴다(고른 버튼이 사라지지 않게). 순서는 우편 발송과 같은 PLATFORMS 순, 모르는 값은 그 뒤.
+ * 기록이 없어져도 남긴다(고른 버튼이 사라지지 않게). 순서는 PLATFORMS 순, 모르는 값은 그 뒤.
  */
 function signupPlatformOptions(present: string[] | undefined, selected: string) {
   const values = new Set(present ?? PLATFORMS.map((p) => p.v as string))

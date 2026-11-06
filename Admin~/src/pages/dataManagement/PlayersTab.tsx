@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle, Check, History } from 'lucide-react'
+import { Search, Pencil, Loader2, Copy, ClipboardPaste, X, AlertTriangle, Check, History, Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
 import { AccountIdCell, PlayerLink, playerLabel, withPlayer } from '../../components/ui/PlayerLink'
+import { ResetSaveDialog } from '../players/UserDataTab'
 
 type Row = { account_id: string; display_name: string | null; updated_at: string }
 type ListData = { rows: Row[]; total: number; pageSize: number }
@@ -353,6 +354,7 @@ export default function PlayersTab({
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
   const [selected, setSelected] = useState<Row | null>(null)
+  const [resetTarget, setResetTarget] = useState<Row | null>(null)
 
   const [clipboard, setClipboard] = useState<DataClipboard | null>(() => readClipboard())
   const [copyingId, setCopyingId] = useState<string | null>(null)
@@ -540,7 +542,7 @@ export default function PlayersTab({
               <th className="text-left px-4 py-2.5 font-medium">계정 ID</th>
               <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
               <th className="text-left px-4 py-2.5 font-medium">마지막 저장</th>
-              <th className="px-4 py-2.5 w-36" />
+              <th className="px-4 py-2.5 w-44" />
             </tr>
           </thead>
           <tbody>
@@ -591,6 +593,14 @@ export default function PlayersTab({
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      <button
+                        onClick={() => setResetTarget(r)}
+                        title="데이터 초기화"
+                        aria-label="데이터 초기화"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-red-50 text-red-500"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -609,6 +619,17 @@ export default function PlayersTab({
           displayName={playerLabel(selected.display_name, selected.account_id)}
           onClose={() => setSelected(null)}
           onChanged={() => void load()}
+        />
+      )}
+
+      {resetTarget && (
+        <ResetSaveDialog
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          accountId={resetTarget.account_id}
+          playerName={playerLabel(resetTarget.display_name, resetTarget.account_id)}
+          onClose={() => setResetTarget(null)}
+          onDone={() => { setResetTarget(null); void load() }}
         />
       )}
 

@@ -3,7 +3,6 @@ import { Trash2, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
-import { platformLabel } from '../lib/platforms'
 import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -20,7 +19,7 @@ type ScheduleRow = {
   items: { key: string; count: number }[] | null; category: string; scheduled_at: string | null
   repeat_time: string | null; repeat_tz: string | null; repeat_unit: string | null; repeat_dow: number | null; repeat_dom: number | null
   next_run_at: string; is_active: boolean; run_count: number
-  created_by: string | null; server_code: string | null; platform: string | null; open_for_new: boolean
+  created_by: string | null; server_code: string | null; open_for_new: boolean
 }
 type GameItem = { key: string; display_name: string }
 
@@ -166,10 +165,7 @@ export default function MailSchedules({
                     <td className="px-4 py-3">
                       {/* 종류 칸처럼 주 대상 한 줄 + 조건은 작은 글씨 — 한 줄에 다 이으면 좁은 칸에서 글자 단위로 깨진다. */}
                       <div className="whitespace-nowrap">{r.server_code ? serverTargetLabel(serverName(r.server_code)) : MODE_LABEL[r.target_mode] ?? r.target_mode}</div>
-                      {(() => {
-                        const conds = [r.platform ? platformLabel(r.platform) : null, r.open_for_new && r.schedule_type !== 'repeat' ? '나중에 들어온 플레이어도' : null].filter(Boolean)
-                        return conds.length > 0 && <div className="text-xs text-neutral-500">{conds.join(' · ')}</div>
-                      })()}
+                      {r.open_for_new && r.schedule_type !== 'repeat' && <div className="text-xs text-neutral-500">나중에 들어온 플레이어도</div>}
                     </td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
