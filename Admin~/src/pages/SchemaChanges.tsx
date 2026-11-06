@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { RotateCcw, Trash2, Send, Loader2, AlertTriangle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { usePendingChanges } from '../lib/pendingChanges'
+import { usePendingChanges, type DraftRow } from '../lib/pendingChanges'
 import { opLabel } from '../lib/schemaLabels'
 import { pgTypeLabel as typeText } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -217,6 +217,7 @@ export default function SchemaChanges({
   }, [target, report])
 
   useEffect(() => { void reloadVersions() }, [reloadVersions])
+  useEffect(() => { void reloadDrafts() }, [reloadDrafts])
 
   // 원격 설정 대기 변경을 지금 값과 비교하려고 받는다. 못 받으면 비교 없이 요약만 보인다.
   const hasConfigDraft = drafts.some((d) => d.feature === 'remote_config')
@@ -233,8 +234,19 @@ export default function SchemaChanges({
     liveConfigs ? liveConfigs.get(key) ?? null : undefined
 
   const hasDestructiveDraft = drafts.some((d) => isDestructive(d.feature, d.action))
-  // 이름을 비우고 게시하면 이력에 이 작업 요약이 이름으로 자동 표시된다.
-  const draftSummary = Array.from(new Set(drafts.map((d) => opLabel(d.feature, d.action)))).join(', ')
+  const summaryOf = (rows: DraftRow[]) => Array.from(new Set(rows.map((d) => opLabel(d.feature, d.action)))).join(', ')
+  const draftSummary = summaryOf(drafts)
+
+  // 게시와 전체 취소는 화면에 보이는 목록이 아니라 서버에 쌓인 변경 전부에 적용된다.
+  // 창을 열기 전에 새로 받아, 다른 운영자가 담은 변경도 보고 결정하게 한다.
+  const refreshBeforeDialog = async (): Promise<DraftRow[] | null> => {
+    setDialogError('')
+    setBusy(true)
+    const fresh = await reloadDrafts()
+    setBusy(false)
+    if (!fresh) setError('대기 중 변경을 불러오지 못했습니다.')
+    return fresh && fresh.length > 0 ? fresh : null
+  }
 
   const doPublish = async () => {
     if (drafts.length === 0) return
@@ -250,10 +262,16 @@ export default function SchemaChanges({
     } finally { setBusy(false) }
   }
 
-  const openPublish = () => {
-    setLabel(draftSummary)
-    setDialogError('')
+  const openPublish = async () => {
+    const fresh = await refreshBeforeDialog()
+    if (!fresh) return
+    // 이름을 비우고 게시하면 이력에 이 작업 요약이 이름으로 자동 표시된다.
+    setLabel(summaryOf(fresh))
     setShowPublish(true)
+  }
+
+  const openDiscardAll = async () => {
+    if (await refreshBeforeDialog()) setAskDiscardAll(true)
   }
 
   const discardOne = async (id: number) => {
@@ -306,13 +324,13 @@ export default function SchemaChanges({
           <span className="text-xs text-neutral-400">{drafts.length}건</span>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="compact"
-              onClick={() => { setDialogError(''); setAskDiscardAll(true) }}
+              onClick={() => { void openDiscardAll() }}
               disabled={busy || drafts.length === 0}
             >
               전체 취소
             </Button>
             <Button variant="primary" size="compact"
-              onClick={openPublish}
+              onClick={() => { void openPublish() }}
               disabled={busy || drafts.length === 0}
             >
               <Send className="w-3.5 h-3.5" />

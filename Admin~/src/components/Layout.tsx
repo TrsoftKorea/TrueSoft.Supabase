@@ -191,7 +191,7 @@ export function Layout({
   }
 
   // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.
-  // 실제 조회·폴링은 PendingChangesProvider 하나가 맡는다 — 각 관리 화면도 같은 값을 구독하므로,
+  // 실제 조회는 PendingChangesProvider 하나가 맡는다 — 각 관리 화면도 같은 값을 구독하므로,
   // 거기서 변경을 담거나 취소하면 이 배지도 그 자리에서 같이 바뀐다.
   const { drafts } = usePendingChanges()
   const pendingCount = drafts?.length ?? null
