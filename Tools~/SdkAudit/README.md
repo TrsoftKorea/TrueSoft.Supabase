@@ -43,6 +43,22 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 
 새 규칙을 추가하면 `SelfTest.ExpectedTags`에 태그를 넣고 픽스처에 위반 사례를 추가합니다.
 
+**옛 빌드 호환 기준 목록(R23)은 `client-contract.txt`입니다.** 플레이어 폰의 옛 게임이 부르는 것을 더하기만 합니다.
+
+```sh
+dotnet run --project Tools~/SdkAudit -- --update-contract
+```
+
+지금 코드의 새 호출을 목록에 더합니다. 지우지는 않습니다. 더는 그 호출을 하는 빌드가 없으면 줄을 `retired … # 날짜 이유`로 바꿉니다.
+
+```sh
+dotnet run --project Tools~/SdkAudit -- --contract-history
+```
+
+깃 기록의 모든 SDK 판이 불렀던 호출과 처음·마지막 날짜를 출력합니다. 2분쯤 걸립니다.
+
+라이브 DB에 SQL을 적용하기 직전에는 훅(`.claude/hooks/check-live-sql-compat.mjs`)이 `--check-migration <파일>`로 "`install.sql` + 적용할 SQL"의 최종 상태를 대조해, 깨지면 적용을 막습니다. 검사기를 못 돌리면 막지 않고 호환 확인 없이 적용된다고 알립니다.
+
 ## 작동 방식
 
 세 가지 방식을 씁니다.
@@ -107,6 +123,9 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | R22 | 하드 오류 | 가이드 페이지 꼴 — 제목에 사이드바 이름이 들어 있음, 함수 페이지의 호출 예제가 있고 표보다 앞, 에러 표(`SupabaseReason.이름` + 문장)·프로퍼티 표(이름에 점 없음, 타입은 코드 표시)·반환 첫 줄 꼴, 표 칸 안 줄표 없음, 다른 페이지 링크는 `/guide/` 로 시작, 낡은 용어(Retool·어드민·유저·메일) 없음, 굵은 라벨 뒤 쌍점 없음. 규칙 원문은 `.claude/rules/docs.md` 13·14절 |
 | R22 | 하드 오류 | 사이드바에서 하위가 있는 항목은 깊이와 상관없이 `link` 가 있고 `collapsed: true`이며 하위가 둘 이상, 하위 항목 이름에 `개요` 없음, 모음 카드 이름이 사이드바 이름과 같음 |
 | R22 | 경고 | 함수 설명이 4문장 이상 |
+| R23 | 하드 오류 | `client-contract.txt`의 호출이 `install.sql` 최종 상태에서 그대로 통한다. DB 함수는 그 인자로 부를 판과 클라이언트 실행 권한, 서버 함수는 폴더, 표는 칸을 본다 |
+| R23 | 하드 오류 | 지금 코드가 부르는 호출이 모두 `client-contract.txt`에 있다. 코드에서 찾은 DB 함수 호출이 40개보다 적으면 뽑기가 고장 난 것으로 본다 |
+| R23 | 하드 오류 | `retired` 줄에 `#` 뒤 이유가 있다 |
 
 ## 검사 대상 파일
 
@@ -119,6 +138,7 @@ dotnet run --project Tools~/SdkAudit -- --selftest
 | `verify.sql` | R17 |
 | `Samples~/DatabaseSetup/EdgeFunctions/**/*.ts`·`Admin~`의 admin-api·설정 화면·서버 상태 화면 | R16·R17 |
 | `consumers.txt`에 적힌 게임의 `Assets/Scripts` | R12 |
+| `client-contract.txt`와 `Runtime/`·`install.sql`·`Samples~/DatabaseSetup/EdgeFunctions/` | R23 |
 
 규칙 파일을 보는 이유는 게임 문서보다 위험하기 때문입니다. **문서가 틀리면 게임 개발자가 고생하지만, `CLAUDE.md`가 틀리면 Claude가 읽고 그대로 코드를 고칩니다.** 실제로 "SupabaseSDK는 MonoBehaviour singleton"이라는 한 줄 때문에 샘플 컴파일이 깨진 적이 있습니다.
 
@@ -190,6 +210,7 @@ cat $(find docs~/guide -name "*.md") >> corpus.tmp
 - 중복 코드, 비효율 코드
 - 에러 사유의 로그 레벨 분류(`IsExpectedFailureReason`) — "누구 탓인가"는 기계가 못 정합니다
 - 라이브 DB와 `install.sql`의 대조 — Supabase MCP가 필요합니다
+- 옛 빌드 호환(R23)에서 응답 내용의 변화, 함수 안쪽 동작, 서버 함수(엣지 함수)가 받는 요청 내용, 게임별 세이브 칸 — 이름·인자·권한·칸의 존재만 봅니다. 조건에 따라 인자를 안 보내는 호출은 코드에서 한 꼴만 뽑히므로, 그 꼴은 라이브 호출 기록에서 더했습니다
 - 문서 **서술**의 정확성 — 검사기는 이름이 존재하는지만 봅니다. "이 함수는 ~한다"가 맞는지는 사람이 읽어야 합니다
 - 표 칸의 **부연 괄호** — 수식 표기 `(i)`·버전 `(4.x)`·파라미터 목록과 구분할 수 없어 자동 검사를 넣었다 뺐습니다. 하위 유형 구분은 가운뎃점(·)으로 손보세요
 

@@ -20,6 +20,16 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "mcp__.*__(apply_migration|execute_sql)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-live-sql-compat.mjs\"",
+            "timeout": 120
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write",
         "hooks": [
           {

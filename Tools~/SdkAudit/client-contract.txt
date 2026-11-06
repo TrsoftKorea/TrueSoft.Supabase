@@ -1,0 +1,104 @@
+# 옛 빌드 호환 기준 목록(검사 R23). 지금까지 나간 SDK 가 서버에 부르는 것.
+# 서버는 적용 즉시 전원에게 바뀌지만 깔린 게임은 그대로라, 여기 줄이 설치 파일에서 사라지면 그 빌드가 실패한다.
+#
+# 줄 꼴: rpc 함수 인자,인자 / edge 서버함수 / table 표 칸,칸
+# 더하기: dotnet run --project Tools~/SdkAudit -- --update-contract
+# 빼기: 지우지 말고 앞에 retired 를 붙이고 # 뒤에 날짜와 이유를 적는다.
+# 처음 만든 재료: 깃 기록 전체(--contract-history)와 2026-11-06 두 라이브 DB 의 실제 호출 기록.
+edge apple-token
+edge displayname-get
+edge get-ban-info
+edge purchase-verify-apple
+edge purchase-verify-apple-legacy
+edge purchase-verify-google
+edge support-api
+edge withdrawal-cancel-issue
+edge withdrawal-cancel-redeem
+edge withdrawal-guard
+edge withdrawal-now
+rpc ts_after_sign_in p_platform,p_user_id
+rpc ts_anon_recovery_delete_by_fingerprint p_fingerprint_hash
+rpc ts_anon_recovery_delete_by_fingerprint p_fingerprint_hash,p_server_code
+rpc ts_anon_recovery_get_refresh_token p_fingerprint_hash
+rpc ts_anon_recovery_get_refresh_token p_fingerprint_hash,p_server_code
+rpc ts_anon_recovery_upsert_refresh_token p_account_id,p_fingerprint_hash,p_refresh_token
+rpc ts_anon_recovery_upsert_refresh_token p_account_id,p_fingerprint_hash,p_refresh_token,p_server_code
+rpc ts_chat_channels
+rpc ts_chat_fetch_direct p_after_id,p_limit,p_target_account_id
+rpc ts_chat_fetch_lobby p_after_id,p_limit,p_lobby_id
+rpc ts_chat_fetch_many p_cursors,p_limit
+rpc ts_chat_send p_code,p_content
+rpc ts_chat_send_direct p_content,p_target_account_id
+rpc ts_chat_send_lobby p_content,p_lobby_id
+rpc ts_claim_all_mail_items
+rpc ts_claim_all_mail_items p_category
+rpc ts_claim_mail_items p_mail_id
+rpc ts_coupon_redeem p_code
+rpc ts_default_server_id
+rpc ts_delete_claimed_mails_for_user p_category
+rpc ts_delete_mail_for_user p_mail_id
+retired rpc ts_delete_read_mails_for_user # 2026-11-06 2026-07 제거. 두 게임 호출 기록에 없음
+retired rpc ts_delete_read_mails_for_user p_category # 2026-11-06 2026-07 제거. 두 게임 호출 기록에 없음
+rpc ts_display_name_check p_display_name,p_ignore_account_id
+rpc ts_ensure_my_profile p_platform,p_user_id
+rpc ts_ensure_my_profile p_user_id
+rpc ts_ensure_my_row p_table,p_user_id
+retired rpc ts_ensure_my_user_save_row p_user_id # 2026-11-06 2026-04 제거. ProjectR 기록 8회는 그 전 개발 빌드, 데빌 슬레이어 기록에 없음
+rpc ts_friend_limits
+rpc ts_friend_remove p_friend_account_id
+rpc ts_friend_request_cancel p_request_id
+rpc ts_friend_request_respond p_accept,p_request_id
+rpc ts_friend_request_send p_target_account_id
+rpc ts_friend_requests_list p_direction
+rpc ts_friend_search p_nickname
+rpc ts_friends_list
+rpc ts_is_display_name_available p_display_name,p_ignore_account_id
+rpc ts_leaderboard_columns_meta p_code
+rpc ts_leaderboard_delete_my_score p_code
+rpc ts_leaderboard_delete_my_score p_code,p_rotation_count
+rpc ts_leaderboard_list_meta
+rpc ts_leaderboard_player p_account_id,p_code,p_rotation_count
+rpc ts_leaderboard_range p_code,p_end,p_rotation_count,p_start
+rpc ts_leaderboard_set_player_data p_code,p_data
+retired rpc ts_leaderboard_set_player_data p_code,p_data,p_extra_data,p_rotation_count # 2026-11-06 2026-07 이틀만 있던 꼴. 두 게임 호출 기록에 없음
+rpc ts_leaderboard_set_player_data p_code,p_data,p_rotation_count
+retired rpc ts_leaderboard_submit_score p_code,p_data,p_extra_data,p_score # 2026-11-06 2026-07 이틀만 있던 꼴. 두 게임 호출 기록에 없음
+rpc ts_leaderboard_submit_score p_code,p_data,p_score
+rpc ts_leaderboard_table p_code
+rpc ts_leaderboard_tables
+rpc ts_mail_client_settings
+rpc ts_mail_inbox_counts
+rpc ts_mark_purchase_granted p_order_id
+rpc ts_match_history p_before,p_game_code,p_limit
+rpc ts_match_lobby_cancel p_lobby_id
+rpc ts_match_lobby_create p_game_code,p_invited_account_ids
+rpc ts_match_lobby_create p_game_code,p_invited_account_ids,p_max_members,p_metadata,p_name
+rpc ts_match_lobby_invite p_account_id,p_lobby_id
+rpc ts_match_lobby_leave p_lobby_id
+rpc ts_match_lobby_list_my
+rpc ts_match_lobby_respond p_accept,p_lobby_id
+rpc ts_match_lobby_set_member_meta p_account_id,p_lobby_id,p_metadata
+retired rpc ts_match_lobby_set_role p_account_id,p_lobby_id,p_role_tag # 2026-11-06 2026-09 제거. 두 게임 호출 기록에 없음
+rpc ts_match_lobby_start p_lobby_id
+retired rpc ts_match_report_bot_result p_game_code,p_is_win,p_session_id # 2026-11-06 2026-10 하루만 있던 꼴. 두 게임 호출 기록에 없음
+rpc ts_match_report_result p_game_code,p_is_win,p_opponent_account_id,p_score,p_session_id
+rpc ts_match_report_result p_game_code,p_is_win,p_opponent_account_id,p_session_id
+rpc ts_match_report_solo_result p_game_code,p_is_win,p_score,p_session_id
+rpc ts_match_stats p_game_code
+retired rpc ts_match_win_count p_game_code # 2026-11-06 2026-10 하루만 있던 꼴. 두 게임 호출 기록에 없음
+rpc ts_my_server_id
+rpc ts_my_withdrawal_status
+rpc ts_push_preferences_get
+rpc ts_push_preferences_set p_ad_consent,p_enabled,p_friend_request,p_lobby_invite,p_mail,p_night_consent,p_support_reply
+rpc ts_push_register p_app_version,p_language,p_platform,p_token
+rpc ts_push_unregister p_token
+rpc ts_request_withdrawal p_delay_days
+rpc ts_server_now
+rpc ts_session_heartbeat p_interval_seconds
+rpc ts_support_unread_count
+rpc ts_transfer_my_server p_reason,p_target_server_code
+rpc ts_view_mail_for_user p_mail_id
+table mails account_id,category,content,created_at,expires_at,id,items,items_claimed_at,localized,sender_type,title,user_id
+table remote_config description,enabled,key,requires_auth,updated_at,value_json,version
+table user_profiles id,user_id,withdrawn_at
+table user_sessions account_id,session_token

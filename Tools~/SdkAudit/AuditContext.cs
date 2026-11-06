@@ -128,6 +128,7 @@ namespace SdkAudit
             SqlRules.Run(ctx);
             EdgeFunctionRules.Run(ctx);
             SqlCoverageRules.Run(ctx);
+            ClientContractRules.Run(ctx);
         }
     }
 }

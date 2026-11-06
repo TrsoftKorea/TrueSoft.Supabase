@@ -38,6 +38,7 @@ namespace SdkAudit
             "[R19 시간대고정]",
             "[R20 빈응답]",
             "[R21 원문사유]",
+            "[R23 옛빌드호환]", "[R23 기준누락]", "[R23 이유없음]", "[R23 뽑기고장]",
             "[R22 제목]", "[R22 예제순서]", "[R22 예제없음]", "[R22 에러표]", "[R22 프로퍼티표]", "[R22 반환]",
             "[R22 표줄표]", "[R22 링크]", "[R22 용어]", "[R22 라벨쌍점]", "[R22 설명길이]",
         };
@@ -103,6 +104,13 @@ namespace SdkAudit
                     missing.Add("[R20 빈응답] 옵션 있는 호출·값 있는 함수 오탐");
                 if (found.Count(f => f.StartsWith("[R5 표뒤빈줄]", StringComparison.Ordinal) && f.Contains("table-glued.md")) != 1)
                     missing.Add("[R5 표뒤빈줄] 상자를 닫는 ::: 오탐 또는 미탐");
+                // R23 — 옛 빌드가 부를 수 없게 된 경우마다 잡고, 문제없는 줄은 잡지 않는다.
+                foreach (var part in new[] { "rpc ts_contract_gone", "rpc ts_contract_renamed_arg", "rpc ts_contract_new_required", "rpc ts_contract_no_grant", "rpc ts_contract_dropped_old", "edge contract-gone", "table contract_table" })
+                    if (!found.Any(f => f.StartsWith("[R23 옛빌드호환]", StringComparison.Ordinal) && f.Contains(part)))
+                        missing.Add($"[R23 옛빌드호환] {part}");
+                foreach (var part in new[] { "rpc ts_contract_ok", "rpc ts_contract_with_default", "rpc ts_contract_two_versions", "ts_contract_retired" })
+                    if (found.Any(f => f.StartsWith("[R23", StringComparison.Ordinal) && f.Contains(part)))
+                        missing.Add($"[R23] 오탐 {part}");
                 if (found.Any(f => f.StartsWith("[R22", StringComparison.Ordinal) && f.Contains("style/good.md")))
                     missing.Add("[R22] 잘 쓴 페이지 오탐: " + found.First(f => f.StartsWith("[R22", StringComparison.Ordinal) && f.Contains("style/good.md")));
                 if (found.Any(f => f.StartsWith("[R22 에러표]", StringComparison.Ordinal) && f.Contains("fail-reasons.md") && f.Contains("첫 칸")))
@@ -316,6 +324,42 @@ returns text[] language sql immutable as $$ select array['ONLY_KEY']; $$;");
             Write(root, "Admin~/src/pages/ServerStatus.tsx", "const FEATURE_INFO: Record<string, string> = {\n  '있음': '설명',\n  '없는묶음': '설명',\n}\n");
             File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"),
                 "\ncreate or replace function public.ts_usage_feature(p_kind text, p_target text)\nreturns text language sql immutable as $$ select case when p_kind = 'a' then '있음' else '설명없음' end; $$;\n");
+
+            // R23 — 옛 빌드가 부르던 것이 사라지거나 바뀐 경우. _ok·_with_default·_two_versions 는 잡으면 오탐이다.
+            File.AppendAllText(Path.Combine(root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql"), @"
+create or replace function public.ts_contract_ok(p_a text) returns void language sql as $$ select 1; $$;
+grant execute on function public.ts_contract_ok(text) to authenticated;
+create or replace function public.ts_contract_with_default(p_a text, p_new text default null) returns void language sql as $$ select 1; $$;
+grant execute on function public.ts_contract_with_default(text, text) to anon, authenticated;
+create or replace function public.ts_contract_two_versions(p_a text) returns void language sql as $$ select 1; $$;
+create or replace function public.ts_contract_two_versions(p_a text, p_b int, p_c jsonb default '{""x"": [1, 2]}'::jsonb) returns void language sql as $$ select 1; $$;
+grant execute on function public.ts_contract_two_versions(text) to authenticated;
+create or replace function public.ts_contract_renamed_arg(p_renamed text) returns void language sql as $$ select 1; $$;
+grant execute on function public.ts_contract_renamed_arg(text) to authenticated;
+create or replace function public.ts_contract_new_required(p_a text, p_need int) returns void language sql as $$ select 1; $$;
+grant execute on function public.ts_contract_new_required(text, int) to authenticated;
+create or replace function public.ts_contract_no_grant(p_a text) returns void language sql as $$ select 1; $$;
+create or replace function public.ts_contract_dropped_old(p_a text) returns void language sql as $$ select 1; $$;
+create or replace function public.ts_contract_dropped_old(p_a text, p_b int) returns void language sql as $$ select 1; $$;
+drop function if exists public.ts_contract_dropped_old(text);
+grant execute on function public.ts_contract_dropped_old(text, int) to authenticated;
+create table if not exists public.contract_table (id int, kept text);
+");
+            Write(root, "Tools~/SdkAudit/client-contract.txt", @"# 자체 테스트 기준 목록
+rpc ts_contract_ok p_a
+rpc ts_contract_with_default p_a
+rpc ts_contract_two_versions p_a
+rpc ts_contract_two_versions p_a,p_b
+rpc ts_contract_gone p_a
+rpc ts_contract_renamed_arg p_a
+rpc ts_contract_new_required p_a
+rpc ts_contract_no_grant p_a
+rpc ts_contract_dropped_old p_a
+edge contract-gone
+table contract_table gone_col,kept
+retired rpc ts_contract_retired p_a # 2026-01-01 옛 빌드 없음
+retired rpc ts_contract_no_reason p_a
+");
 
             // R17 — 없는 함수·표를 부르고, 있는 것(late_table·ts_never_scheduled)은 안 잡는지 본다.
             // 대문자 CREATE TABLE 도 인식해야 한다(install.sql 에 섞여 있다).

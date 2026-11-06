@@ -26,7 +26,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 - 동작 시험 러너는 없다. 동작 확인은 `Samples~/Examples/ExampleSupabaseScenarios.cs`(Play Mode 단축키 시나리오)로 한다.
 - **Core 레이어 컴파일 검증**: `Runtime/Core/`는 UnityEngine 의존이 0(`noEngineReferences: true`)이라 Unity 없이 `dotnet build Tools~/CoreCompileCheck/CoreCompileCheck.csproj`로 컴파일 오류를 즉시 확인할 수 있다. Core 변경 후 실행 권장(경고 0 = 정상). `Runtime/Unity/`·`Editor/`는 UnityEngine 의존이라 이 도구로 검증 불가 — Unity 재컴파일 필요.
 - **플랫폼 전용 코드 컴파일 검증**: 유니티 에디터 컴파일은 빌드 대상과 무관하게 `UNITY_EDITOR`가 켜져 `#if UNITY_IOS && !UNITY_EDITOR` 안쪽을 **한 번도 컴파일하지 않는다**(에디터 "오류 0"은 그 코드를 본 것이 아니다). 플랫폼 분기·IAP·`Samples~/PlayNanooMigration`을 고쳤으면 `bash "Tools~/PlayerCompileCheck/run.sh"`로 Android·iOS 플레이어 조건 컴파일을 돌린다. 사용 조건은 `Tools~/PlayerCompileCheck/README.md`.
-- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어·코드 우선), 가이드 페이지 꼴·표 꼴·용어·링크(규칙은 `.claude/rules/docs.md` 0·13·14절), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, Edge Function 끼리 복사해 둔 공통 구간(`═══ BEGIN 이름 ═══`)의 일치, 콘솔 서버·엣지 함수가 부르는 DB 함수·표가 `install.sql`에 있는지와 `verify.sql` 허용 목록의 일치, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴) 누락, 요청 본문을 익명 객체로 직렬화하는 곳(IL2CPP 기기에서 `{}`로 나감), 값을 돌려주지 않는(`returns void`) DB 함수를 빈 응답 허용(`allowEmptyBody: true`) 없이 부르는 곳(성공이 실패로 보임), 서버 응답 본문·HTTP 상태 글을 실패 사유로 그대로 넘기는 곳(게임의 `Reason`이 늘 `Unknown`)을 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
+- **규칙 정적 검사**: `dotnet run --project Tools~/SdkAudit` — 작업이 끝나면 Stop 훅이 `--if-changed` 로 자동 실행한다(검사 대상 경로가 바뀌었을 때만). **이 파일(CLAUDE.md)과 스킬도 검사 대상이다**(가리키는 API·사유가 실존하는지). 그 밖에 공개 표면(`internal` 멤버·`Try` 접두어·result 타입), 파사드 리셋 대칭성, 문서 정합성(없는 API·시그니처·기본값·`SupabaseReason` 표기), 문서 형식(알림 문법·헤딩 괄호·책갈피 누락·수식어·코드 우선), 가이드 페이지 꼴·표 꼴·용어·링크(규칙은 `.claude/rules/docs.md` 0·13·14절), 샘플 최신성, 미참조 공개 API, `install.sql` 설치 순서와 cron 등록 누락, Edge Function 끼리 복사해 둔 공통 구간(`═══ BEGIN 이름 ═══`)의 일치, 콘솔 서버·엣지 함수가 부르는 DB 함수·표가 `install.sql`에 있는지와 `verify.sql` 허용 목록의 일치, 이 파일의 구조 목록(어셈블리·Edge Function·Core 서비스·에디터 메뉴) 누락, 요청 본문을 익명 객체로 직렬화하는 곳(IL2CPP 기기에서 `{}`로 나감), 값을 돌려주지 않는(`returns void`) DB 함수를 빈 응답 허용(`allowEmptyBody: true`) 없이 부르는 곳(성공이 실패로 보임), 서버 응답 본문·HTTP 상태 글을 실패 사유로 그대로 넘기는 곳(게임의 `Reason`이 늘 `Unknown`), 지금까지 나간 SDK가 부르는 DB 함수·인자·실행 권한·서버 함수·표 칸이 `install.sql`에 남아 있는지(R23, 아래 「옛 빌드 호환」)를 검사한다. Roslyn 구문 파싱이라 `Runtime/Unity`도 UnityEngine 없이 본다. 파사드·공개 API·문서·`install.sql`을 손댄 뒤 실행한다. 규칙의 예외는 검사기에 반영해야 오탐이 안 난다 — `Tools~/SdkAudit/README.md`의 예외 표 참고.
 
 ## Architecture
 
@@ -189,6 +189,8 @@ All REST table names are configurable in `SupabaseSettings` and default in `Supa
 
 **DB를 고칠 때는 MCP 적용과 `install.sql` 수정을 항상 한 세트로** 합니다. 파일을 "최초 설치 전용"으로 취급해 갱신을 미루면 파일과 라이브 DB가 갈라지고, 그 차이는 다음 신규 프로젝트에서야 드러납니다(실제로 `mails.localized`·`ts_coupon_redeem`에서 두 번 발생).
 
+**옛 빌드 호환.** 서버는 적용 즉시 전원에게 바뀌지만 깔린 게임은 그대로라, 클라이언트가 부르는 함수를 지우거나 인자를 바꾸면 그 빌드만 조용히 실패한다. 인자는 기본값을 붙여 더하고, 바꿀 일이면 옛 판을 남긴다. 지켜야 할 호출은 `Tools~/SdkAudit/client-contract.txt`에 있고 R23이 대조한다. 라이브에 SQL을 적용하기 직전에도 훅(`.claude/hooks/check-live-sql-compat.mjs`)이 같은 대조로 막는다 — 함수 안쪽 동작과 응답 내용의 변화는 못 본다. SDK에 새 호출을 넣으면 `dotnet run --project Tools~/SdkAudit -- --update-contract`로 더한다. 정말 그 빌드가 없을 때만 줄을 `retired … # 날짜 이유`로 바꾼다.
+
 ::: warning revoke 대상에 anon·authenticated를 반드시 포함
 `revoke all on function x from public`만 쓰면 PUBLIC 유사롤만 회수되고, Supabase 기본 권한이 anon·authenticated에 **직접 부여한** EXECUTE는 그대로 남습니다. 이 때문에 SECURITY DEFINER 관리 함수가 anon에 노출돼 있었습니다. 항상 `from public, anon, authenticated`로 회수하세요.
 :::
@@ -217,7 +219,7 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 - 버튼은 콘솔 화면(`Admin~`)과 그 밖(SDK·DB·문서)을 커밋 두 개로 나눠 만들고 한 번에 푸시한다. 요약은 `Admin~/.publish-message`(콘솔)·`Admin~/.publish-message-sdk`(그 밖)에 미리 적는다(게시 후 지워짐). **둘 다 비개발자인 사용자가 확인 창에서 읽는 글이다** — 첫 줄은 짧은 제목, 다음 줄부터 `- ` 항목. **제목과 항목 모두 "~한다·~합니다"로 풀어 쓰지 말고 명사로 끝맺는다** — "실제 반영 여부 확인", "로그인 실패 문제 수정"처럼. 제목에 두 가지면 가운뎃점(`·`)으로 잇는다. 이 요약이 곧 커밋 메시지다. 메모리 저장소(`~/.claude`)에 이 세션이 만드는 커밋 메시지도 같은 꼴로 쓴다. 파일 이름·함수 이름·검사 번호(R9 등)를 쓰지 말고 "무엇이 달라지는지"를 쉬운 말로 적는다(2026-10-28 사용자 지적 "가독성이 너무 구려").
 - 요약과 함께 **이번에 올릴 파일 목록**을 `Admin~/.publish-files`(한 줄에 저장소 기준 경로 하나)에 적는다. 목록에 없는 변경이 있으면 버튼이 게시를 멈춘다 — 같은 폴더에서 도는 다른 세션의 하다 만 변경이 이 요약을 달고 섞여 올라가지 않게. 그 파일이 다른 세션 것이면 목록에 넣지 말고 사용자에게 알린다.
-- 콘솔 파일이 푸시되면 GitHub Actions(`admin-deploy.yml`)가 실제 콘솔에 배포한다. **SDK 변경은 GitHub 에 올라가는 즉시 DefenceR 에 반영된다**(GitHub UPM 참조) — 리뷰어는 저절로 돌리지 않는다. 리뷰가 필요한 양이면 게시를 안내할 때 돌릴지 묻는다(2026-11-02 사용자 지시).
+- 콘솔 파일이 푸시되면 GitHub Actions(`admin-deploy.yml`)가 실제 콘솔에 배포한다. **SDK 변경은 게임이 판을 올리고 새 빌드를 내야 플레이어에게 닿는다**(`packages-lock.json` 이 커밋을 못박는다) — 리뷰어는 저절로 돌리지 않는다. 리뷰가 필요한 양이면 게시를 안내할 때 돌릴지 묻는다(2026-11-02 사용자 지시).
 - 띠의 실제 반영 표시는 배포 작업 상태(`gh`)와 실제 콘솔의 `version.json`(배포 때 커밋 값이 박힌다)으로 본다.
 
 ## 운영 콘솔 화면 수정

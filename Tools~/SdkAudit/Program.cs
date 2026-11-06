@@ -16,6 +16,15 @@ if (root == null)
     return 1;
 }
 
+// 옛 빌드 호환 기준 목록(R23). 지금 코드의 호출을 더하거나, 깃 기록의 호출을 모아 본다.
+if (args.Length > 0 && args[0] == "--update-contract")
+    return ClientContractRules.UpdateContract(root);
+if (args.Length > 0 && args[0] == "--contract-history")
+    return ClientContractRules.DumpHistory(root);
+// 라이브 적용 직전 훅이 부른다. 호환이 깨지면 2.
+if (args.Length > 1 && args[0] == "--check-migration")
+    return ClientContractRules.CheckMigration(root, args[1]);
+
 // 훅에서 매 턴 부르기 위한 모드. 검사 대상 경로가 바뀌지 않았으면 아무 일도 하지 않는다.
 // 조건 판정을 셸이 아니라 여기서 하는 이유는 플랫폼마다 훅 셸이 달라서다.
 if (args.Length > 0 && args[0] == "--if-changed" && !ChangeGate.HasRelevantChange(root))
@@ -38,7 +47,7 @@ if (warnings.Count > 0)
 
 if (errors.Count == 0)
 {
-    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 · R12 소비 게임 · R13 크론 등록 · R14 구조 열거 · R15 코드 우선 · R16 공통 구간 · R17 설치 누락 · R18 익명 직렬화 · R19 시간대 고정 · R20 빈 응답 · R21 원문 사유 · R22 문서 꼴 통과.");
+    Console.WriteLine("  ✔ R1 공개 표면 · R2 리셋 대칭성 · R3 문서 커버리지 · R4 시그니처 · R5 문서 형식 · R6 샘플 · R7 미참조 · R8 문서 값 · R9 설치 순서 · R10 문서 구조 · R11 명명 규칙 · R12 소비 게임 · R13 크론 등록 · R14 구조 열거 · R15 코드 우선 · R16 공통 구간 · R17 설치 누락 · R18 익명 직렬화 · R19 시간대 고정 · R20 빈 응답 · R21 원문 사유 · R22 문서 꼴 · R23 옛 빌드 호환 통과.");
     Console.WriteLine();
     Console.WriteLine(warnings.Count == 0 ? "결과: OK" : $"결과: OK (경고 {warnings.Count}건)");
     return 0;
