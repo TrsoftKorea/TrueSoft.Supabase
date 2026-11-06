@@ -139,7 +139,15 @@ namespace TrueBase.Core.Data
                 payload["updated_at"] = DateTime.UtcNow.ToString("o");
             }
 
-            var bodyJson = JsonConvert.SerializeObject(payload);
+            string bodyJson;
+            try
+            {
+                bodyJson = JsonConvert.SerializeObject(payload);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<bool>.Fail("data_patch_build_failed:" + e.Message);
+            }
 
             var sent = await SendPatchAsync(accessToken, url, bodyJson);
 
@@ -322,6 +330,7 @@ namespace TrueBase.Core.Data
         /// <param name="current">현재 상태. 필수.</param>
         /// <param name="ensureRow">true면 본인 행이 있도록 보장합니다(기본값: true). <see cref="PatchAsync"/>를 참고하세요.</param>
         /// <param name="setUpdatedAtIsoUtc">true면 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
+        /// <param name="sentColumns">null이 아니면 이번 요청에 담는 칸 이름을 채웁니다. 저장 요약 로그가 비교를 다시 하지 않게 하려는 것입니다.</param>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,
             string accountId,
@@ -329,7 +338,8 @@ namespace TrueBase.Core.Data
             T previous,
             T current,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            ICollection<string> sentColumns = null)
         {
             string tableName;
             Dictionary<string, object> patch;
@@ -345,6 +355,12 @@ namespace TrueBase.Core.Data
 
             if (patch == null || patch.Count == 0)
                 return SupabaseResult<bool>.Success(false); // false = 변경 없음, HTTP 요청 미발송
+
+            if (sentColumns != null)
+            {
+                foreach (var column in patch.Keys)
+                    sentColumns.Add(column);
+            }
 
             return await PatchAsync(
                 accessToken,

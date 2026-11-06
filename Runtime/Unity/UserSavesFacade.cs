@@ -127,10 +127,11 @@ namespace TrueBase.Unity
             T previous,
             T current,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            ICollection<string> sentColumns = null)
         {
             var session = _sessionGetter?.Invoke();
-            return PatchDiffAsync(session, previous, current, ensureRow, setUpdatedAtIsoUtc);
+            return PatchDiffAsync(session, previous, current, ensureRow, setUpdatedAtIsoUtc, sentColumns);
         }
 
         /// <summary>세션을 직접 지정하는 오버로드. <paramref name="session"/>이 null이면 <c>session_null</c>로 실패합니다.</summary>
@@ -139,7 +140,8 @@ namespace TrueBase.Unity
             T previous,
             T current,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            ICollection<string> sentColumns = null)
         {
             if (session == null)
                 return SupabaseResult<bool>.Fail("session_null");
@@ -157,7 +159,8 @@ namespace TrueBase.Unity
                 previous: previous,
                 current: current,
                 ensureRow: ensureRow,
-                setUpdatedAtIsoUtc: setUpdatedAtIsoUtc);
+                setUpdatedAtIsoUtc: setUpdatedAtIsoUtc,
+                sentColumns: sentColumns);
         }
 
         /// <summary>본인 세이브 행을 삭제합니다. 테이블은 <typeparamref name="T"/>에서 해석합니다.</summary>

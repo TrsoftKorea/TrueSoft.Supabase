@@ -1596,15 +1596,16 @@ namespace TrueBase.Unity
             return (true, r.Data.HasRow, r.Data.Row);
         }
 
-        /// <inheritdoc cref="PatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
+        /// <inheritdoc cref="PatchUserDataDiffAsync{T}(T, T, bool, bool, ICollection{string})"/>
         /// <returns>성공이면 <c>Data</c>가 실제로 보냈는지입니다(false = 변경이 없어 요청 안 함).</returns>
         public static async Task<SupabaseResult<bool>> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            ICollection<string> sentColumns = null)
         {
-            var r = await PatchUserDataDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc);
+            var r = await PatchUserDataDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc, sentColumns);
             // 자동 저장이 쿨다운마다 부르는 길이라 성공·변경 없음은 남기지 않는다(콘솔이 저장 줄로 덮인다). 실패만 남긴다.
             // 성공은 1분 요약(UserSaveStaticSyncRegistry)으로 모아 본다.
             if (r != null && r.IsSuccess)
@@ -3321,17 +3322,19 @@ namespace TrueBase.Unity
         /// <summary>
         /// 이전 스냅샷과 비교해 변경된 컬럼만 PATCH합니다.
         /// </summary>
+        /// <param name="sentColumns">null이 아니면 이번 요청에 담는 칸 이름을 채웁니다.</param>
         public static async Task<SupabaseResult<bool>> PatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            ICollection<string> sentColumns = null)
         {
             var ready = await EnsureReadySessionAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.PatchDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc);
+            return await UserSaves.PatchDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc, sentColumns);
         }
 
         /// <summary>

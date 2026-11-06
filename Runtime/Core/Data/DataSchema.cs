@@ -573,25 +573,22 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// <paramref name="previous"/>와 <paramref name="current"/> 사이에 값이 바뀐 칸과 그 우선순위를 돌려줍니다.
-        /// 비교 기준은 <see cref="BuildPatch{T}"/>와 같아 서버로 나갈 칸과 일치합니다.
+        /// 서버로 보낸 칸 이름에 우선순위를 붙여 돌려줍니다. 값은 비교하지 않으며, 매핑되지 않은 이름은 건너뜁니다.
         /// </summary>
-        internal static List<(string Column, DataSavePriority Priority)> GetChangedColumns<T>(T previous, T current)
+        internal static List<(string Column, DataSavePriority Priority)> GetColumnPriorities<T>(IEnumerable<string> columns)
         {
-            var changed = new List<(string Column, DataSavePriority Priority)>();
-            if (current == null) return changed;
+            var result = new List<(string Column, DataSavePriority Priority)>();
+            if (columns == null) return result;
 
+            var remaining = new HashSet<string>(columns, StringComparer.Ordinal);
             foreach (var m in GetMappedMembers(typeof(T)))
             {
                 var col = ResolveColumnName(m);
-                if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
-                    continue;
-
-                if (!EqualsValues(GetValue(m, previous), GetValue(m, current)))
-                    changed.Add((col, ResolveColumnPriority(m)));
+                if (!string.IsNullOrEmpty(col) && remaining.Remove(col))
+                    result.Add((col, ResolveColumnPriority(m)));
             }
 
-            return changed;
+            return result;
         }
 
         private static readonly Dictionary<Type, MemberInfo[]> _autoDefaultMembersCache = new();

@@ -156,27 +156,22 @@ namespace TrueBase.Unity
             return UserSaveStaticSyncRegistry.GetPriorityCooldown(p);
         }
 
-        // 저장 요약 로그에 쓸 값이라 로그가 꺼져 있으면 비교를 건너뛴다.
-        private static List<(string Column, DataSavePriority Priority)> GetChangedColumnsForLog(TRow previous, TRow current) =>
-            SupabaseSDK.ApiResultLogsEnabled ? DataSchema.GetChangedColumns(previous, current) : null;
+        // 저장 요약 로그에 쓸 칸 이름을 담을 곳. 전송 코드가 만든 목록을 받으므로 로그 때문에 값을 다시 비교하지 않는다.
+        private static List<string> NewSentColumnsForLog() =>
+            SupabaseSDK.ApiResultLogsEnabled ? new List<string>() : null;
 
-        // 실제로 보낼 값으로 가른다. 변경 표시로 보면 실패 뒤 재시도의 긴급 값을 보통으로, 되돌린 긴급 값을 긴급으로 센다.
-        private static UserSaveSendCause GetAutoSendCause(List<(string Column, DataSavePriority Priority)> changed)
+        // 실제로 보낸 칸으로 가른다. 변경 표시로 보면 실패 뒤 재시도의 긴급 값을 보통으로, 되돌린 긴급 값을 긴급으로 센다.
+        private static UserSaveSendCause GetAutoSendCause(List<(string Column, DataSavePriority Priority)> columns)
         {
-            var highest = DataSavePriority.Lazy;
-            var hasChange = false;
-            if (changed != null)
-            {
-                foreach (var column in changed)
-                {
-                    hasChange = true;
-                    if (column.Priority < highest)
-                        highest = column.Priority;
-                }
-            }
-
-            if (!hasChange)
+            if (columns.Count == 0)
                 return UserSaveSendCause.AutoNormal;
+
+            var highest = DataSavePriority.Lazy;
+            foreach (var column in columns)
+            {
+                if (column.Priority < highest)
+                    highest = column.Priority;
+            }
 
             return highest switch
             {
@@ -186,15 +181,24 @@ namespace TrueBase.Unity
             };
         }
 
+        /// <param name="requestedBy">저장을 요청한 쪽. 자동 저장이면 null(보낸 칸의 우선순위로 가른다).</param>
         private static void RecordSendResult(
             SupabaseResult<bool> result,
-            UserSaveSendCause cause,
-            List<(string Column, DataSavePriority Priority)> changed)
+            UserSaveSendCause? requestedBy,
+            List<string> sentColumns)
         {
+            if (!SupabaseSDK.ApiResultLogsEnabled)
+                return;
+
             if (!result.IsSuccess)
+            {
                 UserSaveStaticSyncRegistry.RecordSendFailure();
+            }
             else if (result.Data)
-                UserSaveStaticSyncRegistry.RecordSend(cause, changed);
+            {
+                var columns = DataSchema.GetColumnPriorities<TRow>(sentColumns);
+                UserSaveStaticSyncRegistry.RecordSend(requestedBy ?? GetAutoSendCause(columns), columns);
+            }
         }
 
         // 스칼라는 setter의 MarkDirty(_isDirty)로 즉시 잡습니다. 컬렉션·클래스는 직접 수정 시
@@ -234,27 +238,26 @@ namespace TrueBase.Unity
             // dirty 플래그가 올바르게 유지됩니다.
             var snapshot = DataSchema.CloneRow(Current);
             DataSchema.ApplyAutoDefaults(snapshot); // 클론은 [AutoDefault]가 다시 안 걸려 있음 — diff·다음 _lastSynced 기준으로 쓰이기 전에 재주입
-            var changed = GetChangedColumnsForLog(_lastSynced, snapshot);
-            var cause = requestedBy ?? GetAutoSendCause(changed);
             _isDirty = false;
             _scalarDirtyPri = PriNone; // 스냅샷 이후의 스칼라 변경은 await 중 MarkDirty가 다시 채운다
             _refPriCheckedAt = float.MinValue; // 참조 우선순위도 새 스냅샷 기준으로 재평가
 
             var resetCount = _resetCount;
+            var sentColumns = NewSentColumnsForLog();
             SupabaseResult<bool> ok;
             _sendsInFlight++;
             try
             {
                 ok = await SupabaseSDK.TryPatchUserDataDiffAsync(
                     _lastSynced, snapshot,
-                    ensureRow: true, setUpdatedAtIsoUtc: true);
+                    ensureRow: true, setUpdatedAtIsoUtc: true, sentColumns: sentColumns);
             }
             finally
             {
                 _sendsInFlight--;
             }
 
-            RecordSendResult(ok, cause, changed);
+            RecordSendResult(ok, requestedBy, sentColumns);
 
             // 보내는 사이 로컬이 비워졌다 — 이 결과는 옛 상태 몫이라 새 상태에 적지 않는다.
             if (resetCount != _resetCount)
@@ -397,10 +400,9 @@ namespace TrueBase.Unity
                 LogNanooConvertFailure("NanooPatchFromEmptyAsync", e, nanooJson);
                 return false;
             }
-            var emptyRow = new TRow();
-            var changed = GetChangedColumnsForLog(emptyRow, nanooRow);
-            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(emptyRow, nanooRow);
-            RecordSendResult(ok, UserSaveSendCause.Sdk, changed);
+            var sentColumns = NewSentColumnsForLog();
+            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(new TRow(), nanooRow, sentColumns: sentColumns);
+            RecordSendResult(ok, UserSaveSendCause.Sdk, sentColumns);
             return ok && await ReloadFromServerAsync();
         }
 
@@ -414,9 +416,9 @@ namespace TrueBase.Unity
                 return false;
             }
             var prev = _nanooLastLoaded ?? new TRow();
-            var changed = GetChangedColumnsForLog(prev, nanooRow);
-            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow);
-            RecordSendResult(ok, UserSaveSendCause.Sdk, changed);
+            var sentColumns = NewSentColumnsForLog();
+            var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow, sentColumns: sentColumns);
+            RecordSendResult(ok, UserSaveSendCause.Sdk, sentColumns);
             return ok && await ReloadFromServerAsync();
         }
 
@@ -918,7 +920,6 @@ namespace TrueBase.Unity
             string tableName;
             Dictionary<string, object> patch;
             TRow snapshot;
-            List<(string Column, DataSavePriority Priority)> changed;
             try
             {
                 tableName = DataSchema.ResolveTableName<TRow>();
@@ -926,7 +927,6 @@ namespace TrueBase.Unity
                 snapshot  = DataSchema.CloneRow(Current);
                 DataSchema.ApplyAutoDefaults(snapshot); // 비교 양쪽이 같은 기본값 기준을 갖도록
                 patch     = DataSchema.BuildPatch(_lastSynced, snapshot);
-                changed   = GetChangedColumnsForLog(_lastSynced, snapshot);
             }
             catch (Exception e)
             {
@@ -940,6 +940,8 @@ namespace TrueBase.Unity
                 _isDirty    = false;
                 return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
             }
+
+            var sentColumns = SupabaseSDK.ApiResultLogsEnabled ? new List<string>(patch.Keys) : null;
 
             // 먼저 해제해야 보내는 사이 게임이 부른 MarkDirty 가 지워지지 않는다.
             var resetCount = _resetCount;
@@ -959,7 +961,7 @@ namespace TrueBase.Unity
                 _sendsInFlight--;
             }
 
-            RecordSendResult(result, cause, changed);
+            RecordSendResult(result, cause, sentColumns);
 
             // 보내는 사이 로컬이 비워졌으면 옛 상태 몫이라 새 상태에 적지 않는다.
             var stale = resetCount != _resetCount;
