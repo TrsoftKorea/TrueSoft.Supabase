@@ -285,6 +285,7 @@ namespace TrueBase.Unity
             public const string AuthRefreshSession = "Supabase.Auth.RefreshSession";
             public const string UserDataLoadAttributedRowState = "Supabase.UserData.LoadAttributed.RowState";
             public const string UserDataPatchDiff = "Supabase.UserData.PatchDiff";
+            public const string UserDataSaveSummary = "Supabase.UserData.SaveSummary";
             public const string UserDataDelete = "Supabase.UserData.Delete";
             public const string AuthRestoreSession = "Supabase.Auth.RestoreSession";
             public const string ProfilePublicNameGet = "Supabase.Profile.Name.Get";
@@ -1596,7 +1597,8 @@ namespace TrueBase.Unity
         }
 
         /// <inheritdoc cref="PatchUserDataDiffAsync{T}(T, T, bool, bool)"/>
-        public static async Task<SupabaseResult> TryPatchUserDataDiffAsync<T>(
+        /// <returns>성공이면 <c>Data</c>가 실제로 보냈는지입니다(false = 변경이 없어 요청 안 함).</returns>
+        public static async Task<SupabaseResult<bool>> TryPatchUserDataDiffAsync<T>(
             T previous,
             T current,
             bool ensureRow = true,
@@ -1604,10 +1606,18 @@ namespace TrueBase.Unity
         {
             var r = await PatchUserDataDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc);
             // 자동 저장이 쿨다운마다 부르는 길이라 성공·변경 없음은 남기지 않는다(콘솔이 저장 줄로 덮인다). 실패만 남긴다.
+            // 성공은 1분 요약(UserSaveStaticSyncRegistry)으로 모아 본다.
             if (r != null && r.IsSuccess)
-                return SupabaseResult.Ok;
-            return LogAndReturn(ApiLogTags.UserDataPatchDiff, r);
+                return r;
+            return LogAndReturnResult(ApiLogTags.UserDataPatchDiff, r);
         }
+
+        /// <summary>저장 요약 로그를 모을지 정합니다. 끄면 세는 비용도 쓰지 않습니다.</summary>
+        internal static bool ApiResultLogsEnabled => _enableApiResultLogs;
+
+        /// <summary>1분치 저장 요약 한 줄을 남깁니다.</summary>
+        internal static void LogUserSaveSummary(string message) =>
+            LogApiResult(ApiLogTags.UserDataSaveSummary, true, message);
 
         /// <summary>본인 세이브 행을 삭제합니다. 테이블은 <typeparamref name="T"/>에서 해석합니다.</summary>
         public static async Task<SupabaseResult<bool>> DeleteUserDataAsync<T>()
@@ -1639,7 +1649,7 @@ namespace TrueBase.Unity
         public static void RegisterUserSaveStaticSync(
             string key,
             Func<bool> hasDirty,
-            Func<Task<SupabaseResult>> flushAsync,
+            Func<UserSaveSendCause?, Task<SupabaseResult>> flushAsync,
             Action resetLocalState = null,
             Func<float> getDirtyCooldown = null,
             Func<bool> hasFreshDirty = null)

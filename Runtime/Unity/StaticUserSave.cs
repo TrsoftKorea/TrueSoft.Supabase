@@ -156,6 +156,29 @@ namespace TrueBase.Unity
             return UserSaveStaticSyncRegistry.GetPriorityCooldown(p);
         }
 
+        // 실제로 보낼 값으로 가른다. 변경 표시로 보면 실패 뒤 재시도의 긴급 값을 보통으로, 되돌린 긴급 값을 긴급으로 센다.
+        // 로그가 꺼져 있으면 쓰지 않을 값이라 비교를 건너뛴다.
+        private UserSaveSendCause GetAutoSendCause()
+        {
+            if (!SupabaseSDK.ApiResultLogsEnabled)
+                return UserSaveSendCause.AutoNormal;
+
+            return DataSchema.GetHighestDirtyPriority(_lastSynced, Current) switch
+            {
+                DataSavePriority.Urgent => UserSaveSendCause.AutoUrgent,
+                DataSavePriority.Lazy => UserSaveSendCause.AutoLazy,
+                _ => UserSaveSendCause.AutoNormal
+            };
+        }
+
+        private static void RecordSendResult(SupabaseResult<bool> result, UserSaveSendCause cause)
+        {
+            if (!result.IsSuccess)
+                UserSaveStaticSyncRegistry.RecordSendFailure();
+            else if (result.Data)
+                UserSaveStaticSyncRegistry.RecordSend(cause);
+        }
+
         // 스칼라는 setter의 MarkDirty(_isDirty)로 즉시 잡습니다. 컬렉션·클래스는 직접 수정 시
         // 플래그가 안 걸리므로 마지막 동기화본과 값 비교(HasChanges)로 변경을 감지합니다.
         // → 리스트를 일반 리스트처럼 자유롭게 수정해도 자동 저장됩니다.
@@ -181,12 +204,14 @@ namespace TrueBase.Unity
             return _lastDeepResult;
         }
 
-        private async Task<SupabaseResult> FlushDirtyAsync()
+        private async Task<SupabaseResult> FlushDirtyAsync(UserSaveSendCause? requestedBy)
         {
             // flush 시점에는 throttle을 무시하고 신선하게 검사 — 즉시 저장(앱 종료 등)에서
             // 컬렉션 제자리 수정이 throttle 캐시 때문에 누락되지 않도록 합니다.
             _lastDeepCheckTime = float.MinValue;
             if (!HasDirty()) return SupabaseResult.Ok;
+
+            var cause = requestedBy ?? GetAutoSendCause();
 
             // await 이전에 현재 값을 스냅샷하고 dirty를 먼저 해제합니다.
             // 이렇게 하면 네트워크 대기 중 게임 코드가 새 값을 쓰고 MarkDirty()를 호출해도
@@ -198,7 +223,7 @@ namespace TrueBase.Unity
             _refPriCheckedAt = float.MinValue; // 참조 우선순위도 새 스냅샷 기준으로 재평가
 
             var resetCount = _resetCount;
-            SupabaseResult ok;
+            SupabaseResult<bool> ok;
             _sendsInFlight++;
             try
             {
@@ -210,6 +235,8 @@ namespace TrueBase.Unity
             {
                 _sendsInFlight--;
             }
+
+            RecordSendResult(ok, cause);
 
             // 보내는 사이 로컬이 비워졌다 — 이 결과는 옛 상태 몫이라 새 상태에 적지 않는다.
             if (resetCount != _resetCount)
@@ -353,6 +380,7 @@ namespace TrueBase.Unity
                 return false;
             }
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(new TRow(), nanooRow);
+            RecordSendResult(ok, UserSaveSendCause.Sdk);
             return ok && await ReloadFromServerAsync();
         }
 
@@ -367,6 +395,7 @@ namespace TrueBase.Unity
             }
             var prev = _nanooLastLoaded ?? new TRow();
             var ok = await SupabaseSDK.TryPatchUserDataDiffAsync(prev, nanooRow);
+            RecordSendResult(ok, UserSaveSendCause.Sdk);
             return ok && await ReloadFromServerAsync();
         }
 
@@ -730,7 +759,7 @@ namespace TrueBase.Unity
             // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
             // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
             // 변경분이 없으면(일반 로드) UserSaveNoChanges로 돌아오며, 이는 오류가 아니라 정상 경로다.
-            var initSave = await SendChangesAsync();
+            var initSave = await SendChangesAsync(UserSaveSendCause.Sdk);
             if (!initSave.IsSuccess && initSave.Reason != SupabaseReason.UserSaveNoChanges)
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
@@ -859,11 +888,11 @@ namespace TrueBase.Unity
             EnsureRegistered();
 
             return _hasLoadedOnce
-                ? SendChangesAsync()
+                ? SendChangesAsync(UserSaveSendCause.Game)
                 : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
         }
 
-        private async Task<SupabaseResult> SendChangesAsync()
+        private async Task<SupabaseResult> SendChangesAsync(UserSaveSendCause cause)
         {
             string tableName;
             Dictionary<string, object> patch;
@@ -906,6 +935,8 @@ namespace TrueBase.Unity
             {
                 _sendsInFlight--;
             }
+
+            RecordSendResult(result, cause);
 
             // 보내는 사이 로컬이 비워졌으면 옛 상태 몫이라 새 상태에 적지 않는다.
             var stale = resetCount != _resetCount;
