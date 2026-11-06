@@ -14,6 +14,34 @@
 
 세이브 클래스는 [클래스 생성](/guide/user-data/class-gen)으로 만들고, 값은 [읽기 / 쓰기](/guide/user-data/read-write)로 다룹니다.
 
+## 저장 시점 고르기 {#when-to-save}
+
+칸마다 정하는 우선순위는 값이 바뀐 뒤 몇 초 안에 저장을 시작할지만 정합니다. 저장 한 번에는 그때까지 바뀐 칸이 우선순위와 상관없이 모두 실리며, 게임은 자동 저장이 끝났는지 알 수 없습니다. 결제나 뽑기처럼 잃으면 안 되는 행동은 우선순위가 아니라 그 행동이 끝나는 자리에서 저장합니다.
+
+| 상황 | 방법 |
+|------|------|
+| 방치&nbsp;보상처럼&nbsp;자주&nbsp;바뀌는&nbsp;값 | 낮음. 클래스 생성기의 저장 주기 **길게** |
+| 대부분의&nbsp;값 | 보통. 저장 주기 기본값 |
+| 잃으면&nbsp;안&nbsp;되는&nbsp;행동 | 행동이 끝나는 자리에서 [`SaveNowAsync`](/guide/user-data/save-now) |
+| 결과를&nbsp;기다릴&nbsp;필요&nbsp;없이&nbsp;빨리&nbsp;저장할&nbsp;행동 | 그 자리에서 [`RequestSave`](/guide/user-data/request-save) |
+
+높음은 기본으로 쓰지 않아도 됩니다. 보통과의 차이는 4초 정도이고, 잃으면 곤란한 값은 1초 안에 저장되는 것으로도 안전하지 않기 때문입니다. 특정 행동에 묶을 수 없이 여러 곳에서 드물게 바뀌는 값에만 저장 주기 **짧게**를 고릅니다.
+
+뽑기처럼 여러 값이 함께 바뀌는 행동은 값을 `await` 없이 한 번에 바꾼 뒤 저장합니다. 사이에 연출 대기가 있으면 재화 차감만 먼저 저장될 수 있습니다. 결과 화면은 저장이 끝난 뒤 보여 줍니다.
+
+```csharp
+PlayerSave.Gems -= cost;
+PlayerSave.Items.Add(item);
+
+var result = await Supabase.SaveNowAsync();
+if (!result.IsSaved)
+    ShowSaveError(result.ErrorCode);
+
+ShowResult(item);
+```
+
+결제 지급은 저장 결과에 따라 지급 콜백의 반환값을 바꾸면 안 됩니다. [구매 처리](/guide/iap/usage)를 참고하세요.
+
 ## 저장 횟수 확인 {#save-count}
 
 저장이 생각보다 자주 나갈 때 원인을 가르는 로그입니다. 씬에 `SupabaseRuntime`이 있으면 저장 시도가 있고 1분이 지날 때 콘솔에 요약을 남기고, 저장 시도가 없으면 남기지 않습니다. `SupabaseSettings`의 `enableApiResultLogs`를 끄면 세지도 남기지도 않습니다.
@@ -49,5 +77,5 @@
 | [`LoadUserSaveAsync`](/guide/user-data/load) | 서버에서 세이브 불러오기 |
 | [`SaveNowAsync`](/guide/user-data/save-now) | 변경분 전송 후 완료 대기 |
 | [`RequestSave`](/guide/user-data/request-save) | 대기 없이 저장 요청 |
-| [`SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 저장 |
+| [`OnSaveStatusChanged`](/guide/user-data/save-status) | 저장 실패와 복구 알림 |
 | [`DeleteUserSaveAsync`](/guide/user-data/delete) | 내 세이브 행 삭제 |

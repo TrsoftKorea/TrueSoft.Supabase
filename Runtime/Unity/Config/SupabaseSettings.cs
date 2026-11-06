@@ -44,7 +44,7 @@ namespace TrueBase.Unity
 
         [Header("유저 세이브 저장 주기")]
         [Label("높음 우선순위 쿨다운")]
-        [Tooltip("레벨·튜토리얼 등 중요 데이터의 저장 대기 시간(초).")]
+        [Tooltip("어디서 바뀌든 빨리 저장해야 하고 드물게 바뀌는 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float urgentSaveCooldownSeconds = 1f;
 
@@ -54,7 +54,7 @@ namespace TrueBase.Unity
         public float normalSaveCooldownSeconds = 5f;
 
         [Label("낮음 우선순위 쿨다운")]
-        [Tooltip("골드 등 자주 변하고 중요도가 낮은 데이터의 저장 대기 시간(초).")]
+        [Tooltip("방치 보상처럼 자주 바뀌는 데이터의 저장 대기 시간(초).")]
         [Min(0f)]
         public float lazySaveCooldownSeconds = 30f;
 

@@ -491,7 +491,7 @@ namespace SdkAudit
                 ret = ret.Substring(5, ret.Length - 6).Trim();
 
             var outer = (ret.Contains('<') ? ret.Substring(0, ret.IndexOf('<')) : ret).Trim();
-            return outer is "SupabaseResult" or "SupabaseLoadResult" or "SupabaseSignInResult";
+            return outer is "SupabaseResult" or "SupabaseLoadResult" or "SupabaseSaveResult" or "SupabaseSignInResult";
         }
 
         private static bool NullsField(string body, string field) =>

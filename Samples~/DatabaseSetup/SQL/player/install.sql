@@ -6126,6 +6126,49 @@ revoke all on function public.ts_admin_user_data_restore(uuid, bigint, text[], t
 grant execute on function public.ts_admin_user_data_restore_preview(uuid, bigint)          to service_role;
 grant execute on function public.ts_admin_user_data_restore(uuid, bigint, text[], text)    to service_role;
 
+-- 게임 칸 전부를 표의 기본값으로 되돌린다. 행을 지우지 않는 이유 둘:
+-- ① 플레이나누 병행 게임은 행이 없으면 다음 로그인이 나누의 옛 데이터를 그대로 다시 가져온다. 행이 남고 updated_at 이
+--    새로우면 SDK 쪽이 최신이라 나누도 초기값으로 덮인다(비교 칸을 CompareBy 로 바꾼 게임은 그 칸의 값으로 갈린다).
+-- ② 변경 로그에 바뀌기 전 값이 남아 "이 변경 전으로"로 바로 되돌릴 수 있다. 행을 지우면 다시 생기기 전까지 못 되돌린다.
+create or replace function public.ts_admin_user_data_reset(p_account_id uuid, p_operator text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_set text;
+  v_n   int;
+  v_row jsonb;
+begin
+  select string_agg(format('%I = default', c->>'column_name'), ', ') into v_set
+  from jsonb_array_elements(public.ts_admin_user_data_columns()) c;
+  if v_set is null then
+    raise exception 'user_data_no_columns';
+  end if;
+
+  perform set_config(
+    'app.log_source',
+    'admin' || case when p_operator is not null and p_operator <> '' then ':' || p_operator else '' end,
+    true
+  );
+
+  execute format('update public.user_data set updated_at = now(), %s where account_id = $1', v_set)
+    using p_account_id;
+
+  get diagnostics v_n = row_count;
+  if v_n = 0 then
+    raise exception 'user_data_not_found';
+  end if;
+
+  select to_jsonb(d) into v_row from public.user_data d where d.account_id = p_account_id;
+  return v_row;
+end;
+$$;
+
+revoke all on function public.ts_admin_user_data_reset(uuid, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_user_data_reset(uuid, text) to service_role;
+
 
 -- #############################################################################
 -- 12. 어드민 우편 발송 · 아이템 카탈로그
@@ -6204,8 +6247,7 @@ alter table public.mail_batches add column if not exists created_at      timesta
 alter table public.mail_batches add column if not exists category        text not null default 'default';
 -- 언어별 제목·본문 오버라이드. ts_admin_send_mail 이 INSERT 하므로 컬럼이 없으면 발송이 실패한다.
 alter table public.mail_batches add column if not exists localized       jsonb;
--- 받는 플랫폼(user_profiles.platform 값). null 이면 플랫폼을 가리지 않는다.
-alter table public.mail_batches add column if not exists platform        text;
+alter table public.mail_batches drop column if exists platform;
 -- 이 시각까지 나중에 대상이 된 플레이어에게도 보낸다(ts_deliver_open_mail_batches). null 이면 보낸 순간의 대상만.
 alter table public.mail_batches add column if not exists open_until      timestamptz;
 -- 운영자가 안 받은 우편을 거둔 시각·거둔 통수(ts_admin_mail_batch_recall).
@@ -6258,6 +6300,7 @@ drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uu
 drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,text,jsonb,text,boolean,text,jsonb);
 drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb);
 drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text);
+drop function if exists public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean);
 
 create or replace function public.ts_admin_send_mail(
   p_target_mode          text,
@@ -6271,7 +6314,6 @@ create or replace function public.ts_admin_send_mail(
   p_skip_item_validation boolean default false,
   p_category             text    default 'default',
   p_localized            jsonb   default null,
-  p_platform             text    default null,
   p_open_for_new         boolean default false
 )
 returns jsonb
@@ -6286,8 +6328,6 @@ declare
   v_key         text;
   v_account_ids uuid[];
   v_category    text;
-  -- 플레이어를 직접 고른 발송에는 플랫폼을 걸지 않는다 — 고른 사람이 곧 대상이다.
-  v_platform    text := case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end;
 begin
   if p_target_mode not in ('all','server','players') then
     raise exception 'invalid_target_mode: %', p_target_mode;
@@ -6336,12 +6376,12 @@ begin
   end if;
 
   insert into public.mail_batches
-    (target_mode, server_id, title, content, items, expires_at, created_by, category, localized, platform, open_until)
+    (target_mode, server_id, title, content, items, expires_at, created_by, category, localized, open_until)
   values
     (p_target_mode,
      case when p_target_mode = 'server' then p_server_id else null end,
      p_title, coalesce(p_content, ''),
-     p_items, p_expires_at, p_created_by, v_category, p_localized, v_platform,
+     p_items, p_expires_at, p_created_by, v_category, p_localized,
      -- 고른 플레이어에게 보내는 우편은 나중에 들어올 사람이 없다.
      case when p_open_for_new and p_target_mode <> 'players' then p_expires_at end)
   returning id into v_batch_id;
@@ -6358,8 +6398,7 @@ begin
       p_target_mode = 'all'
       or (p_target_mode = 'server'  and p.server_id = p_server_id)
       or (p_target_mode = 'players' and p.account_id = any (v_account_ids))
-    )
-    and (v_platform is null or p.platform = v_platform);
+    );
 
   get diagnostics v_count = row_count;
   update public.mail_batches set recipient_count = v_count where id = v_batch_id;
@@ -6368,8 +6407,8 @@ begin
 end;
 $$;
 
-comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) is
-  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback). p_platform 은 all/server 대상을 그 플랫폼으로 좁힌다(players 대상에는 무시). p_open_for_new 면 수령 기한까지 나중에 대상이 된 플레이어에게도 ts_deliver_open_mail_batches 가 보낸다(players 대상에는 무시).';
+comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) is
+  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback). p_open_for_new 면 수령 기한까지 나중에 대상이 된 플레이어에게도 ts_deliver_open_mail_batches 가 보낸다(players 대상에는 무시).';
 
 -- ---------------------------------------------------------------------------
 -- ts_deliver_open_mail_batches — "나중에 들어온 플레이어도 받기"로 보낸 우편을 아직 없는 대상에게 넣는다(크론 매분).
@@ -6404,7 +6443,6 @@ begin
     where p.account_id is not null
       and p.withdrawn_at is null
       and (b.target_mode = 'all' or (b.target_mode = 'server' and p.server_id = b.server_id))
-      and (b.platform is null or p.platform = b.platform)
       -- user_id 로 본다 — 재인증으로 account_id 가 바뀌어도 그대로고, 연동으로 바뀌면 ts_ensure_my_profile 이
       -- 그 계정의 우편도 함께 옮긴다. (batch_id, user_id) 색인으로 받친다.
       and not exists (
@@ -6610,7 +6648,7 @@ begin
     into v_rows, v_total
   from (
     select
-      b.id, b.target_mode, gs.server_code, b.platform, b.open_until, b.recalled_at, b.title, b.items,
+      b.id, b.target_mode, gs.server_code, b.open_until, b.recalled_at, b.title, b.items,
       b.recipient_count, b.category, b.expires_at, b.created_by, b.created_at,
       count(*) over() as total
     from public.mail_batches b
@@ -6734,8 +6772,8 @@ comment on function public.ts_admin_search_mails(text,text,text,date,date,uuid,i
 -- ---------------------------------------------------------------------------
 -- 어드민 RPC EXECUTE — service_role 전용(클라이언트 금지)
 -- ---------------------------------------------------------------------------
-revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) from public, anon, authenticated;
-grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,text,boolean) to service_role;
+revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) from public, anon, authenticated;
+grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) to service_role;
 revoke all on function public.ts_admin_upsert_game_item(text,text) from public, anon, authenticated;
 grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;
@@ -6850,7 +6888,6 @@ create table if not exists public.mail_schedules (
   repeat_unit   text not null default 'day' check (repeat_unit in ('day','week','month')),
   repeat_dow    int null,                               -- week: 0=일 ~ 6=토
   repeat_dom    int null,                               -- month: 1~31 (말일 초과 시 말일)
-  platform      text null,                              -- 받는 플랫폼. null 이면 가리지 않는다
   next_run_at   timestamptz not null,                   -- 러너 판단 기준(두 타입 통일)
   is_active     boolean not null default true,
   last_run_at   timestamptz null,
@@ -6873,7 +6910,7 @@ alter table public.mail_schedules add column if not exists repeat_dom   int;
 alter table public.mail_schedules add column if not exists last_run_at  timestamptz;
 alter table public.mail_schedules add column if not exists run_count    int not null default 0;
 alter table public.mail_schedules add column if not exists created_by   text;
-alter table public.mail_schedules add column if not exists platform     text;
+alter table public.mail_schedules drop column if exists platform;
 alter table public.mail_schedules add column if not exists open_for_new boolean not null default false;
 
 do $$ begin
@@ -7020,7 +7057,6 @@ begin
         false,
         s.category,
         s.localized,
-        s.platform,
         s.open_for_new and s.schedule_type <> 'repeat'
       );
 
@@ -7066,6 +7102,7 @@ revoke all on function public.ts_run_due_mail_schedules() from public;
 
 drop function if exists public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text);
 drop function if exists public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text);
+drop function if exists public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean);
 
 create or replace function public.ts_admin_create_mail_schedule(
   p_schedule_type text,
@@ -7084,7 +7121,6 @@ create or replace function public.ts_admin_create_mail_schedule(
   p_repeat_dow    int         default null,
   p_repeat_dom    int         default null,
   p_created_by    text        default null,
-  p_platform      text        default null,
   p_open_for_new  boolean     default false
 )
 returns uuid
@@ -7145,12 +7181,11 @@ begin
   insert into public.mail_schedules
     (schedule_type, target_mode, server_id, account_ids, title, content, items, localized,
      category, expires_days, scheduled_at, repeat_time, repeat_tz, repeat_unit, repeat_dow, repeat_dom,
-     next_run_at, created_by, platform, open_for_new)
+     next_run_at, created_by, open_for_new)
   values
     (p_schedule_type, p_target_mode, p_server_id, p_account_ids, p_title, coalesce(p_content, ''), p_items, p_localized,
      v_category, coalesce(p_expires_days, 7), p_scheduled_at, p_repeat_time, public.ts_game_time_zone(), coalesce(p_repeat_unit, 'day'), p_repeat_dow, p_repeat_dom,
      v_next, p_created_by,
-     case when p_target_mode = 'players' then null else nullif(btrim(p_platform), '') end,
      -- 반복 발송은 회차마다 열려 있어, 나중에 가입한 사람이 수령 기한 안의 지난 회차를 한꺼번에 받게 된다.
      coalesce(p_open_for_new, false) and p_target_mode <> 'players' and p_schedule_type <> 'repeat')
   returning id into v_id;
@@ -7170,7 +7205,7 @@ as $$
     select
       s.id, s.schedule_type, s.target_mode, gs.server_code, s.title, s.items, s.category,
       s.scheduled_at, s.repeat_time, s.repeat_tz, s.repeat_unit, s.repeat_dow, s.repeat_dom,
-      s.next_run_at, s.is_active, s.run_count, s.created_by, s.platform, s.open_for_new
+      s.next_run_at, s.is_active, s.run_count, s.created_by, s.open_for_new
     from public.mail_schedules s
     left join public.game_servers gs on gs.id = s.server_id
   ) t;
@@ -7194,13 +7229,13 @@ as $$
   delete from public.mail_schedules where id = p_id;
 $$;
 
-comment on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) is '우편 예약·반복 발송 등록. service_role 전용.';
+comment on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,boolean) is '우편 예약·반복 발송 등록. service_role 전용.';
 comment on function public.ts_admin_list_mail_schedules() is '우편 예약 목록. service_role 전용.';
 comment on function public.ts_admin_set_mail_schedule_active(uuid,boolean) is '우편 예약 활성/비활성 전환. service_role 전용.';
 comment on function public.ts_admin_delete_mail_schedule(uuid) is '우편 예약 삭제. service_role 전용.';
 
-revoke all on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) from public, anon, authenticated;
-grant execute on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,text,boolean) to service_role;
+revoke all on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,boolean) from public, anon, authenticated;
+grant execute on function public.ts_admin_create_mail_schedule(text,text,text,int,jsonb,uuid,text,jsonb,jsonb,text,timestamptz,time,text,int,int,text,boolean) to service_role;
 revoke all on function public.ts_admin_list_mail_schedules() from public, anon, authenticated;
 grant execute on function public.ts_admin_list_mail_schedules() to service_role;
 revoke all on function public.ts_admin_set_mail_schedule_active(uuid,boolean) from public, anon, authenticated;

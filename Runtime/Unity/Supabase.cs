@@ -213,10 +213,10 @@ namespace TrueBase.Unity
         /// <para>전송이 실패하면 그 사유(중복 로그인·네트워크 오류 등)를 그대로 돌려줍니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 실패를 반환합니다.</param>
-        public static Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000) =>
+        public static Task<SupabaseSaveResult> SaveNowAsync(int timeoutMs = 5000) =>
             UserSave != null
                 ? UserSave.SaveNowAsync(timeoutMs)
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
+                : Task.FromResult(SupabaseSaveResult.Fail(SupabaseErrorCode.UserSaveNotReady));
 
         /// <summary>
         /// 쿨다운을 무시하고 즉시 전송을 요청합니다. 완료를 기다리지 않습니다(fire-and-forget).
@@ -229,13 +229,14 @@ namespace TrueBase.Unity
                 : SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
         /// <summary>
-        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
-        /// <para>변경이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다.</para>
+        /// 세이브 전송이 실패 상태로 들어가거나 벗어날 때 발행됩니다. 재시도마다 다시 알리지 않습니다.
+        /// 인자가 실패면 <see cref="SupabaseResult.Reason"/>이 그 사유이고, 성공이면 다시 저장됐거나 로그아웃으로 보낼 변경이 사라진 것입니다.
         /// </summary>
-        public static Task<SupabaseResult> SaveIfChangedAsync() =>
-            UserSave != null
-                ? UserSave.SaveIfChangedAsync()
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
+        public static event Action<SupabaseResult> OnSaveStatusChanged
+        {
+            add => SupabaseSDK.OnSaveStatusChanged += value;
+            remove => SupabaseSDK.OnSaveStatusChanged -= value;
+        }
 
         /// <summary>
         /// 유저 세이브를 삭제합니다(서버 행 DELETE + 로컬 상태를 기본값으로 리셋). 계정 탈퇴가 아닙니다.

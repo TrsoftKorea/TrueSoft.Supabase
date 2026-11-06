@@ -1,7 +1,7 @@
 # 즉시 저장 후 대기
 
 ```csharp
-Task<SupabaseResult> Supabase.SaveNowAsync(int timeoutMs = 5000)
+Task<SupabaseSaveResult> Supabase.SaveNowAsync(int timeoutMs = 5000)
 ```
 
 쿨다운을 무시하고 변경분을 즉시 전송한 뒤 완료까지 기다립니다. 완료를 기다리지 않아도 되면 [즉시 저장 요청](/guide/user-data/request-save)을 씁니다.
@@ -10,11 +10,11 @@ Task<SupabaseResult> Supabase.SaveNowAsync(int timeoutMs = 5000)
 await Supabase.SaveNowAsync();   // 전송 완료까지 대기
 ```
 
-보낼 변경분이 없으면 네트워크 요청 없이 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻이므로, 저장 실패를 처리할 때 이 사유는 걸러내세요. 전송이 실패하면 그 사유를 그대로 돌려주므로 저장됐는지 결과로 판단할 수 있습니다.
+보낼 변경분이 없으면 네트워크 요청 없이 `UserSaveNoChanges` 사유의 실패를 반환합니다. 오류가 아니라 보낼 것이 없었다는 뜻이므로, 저장 뒤 다음 단계로 넘어갈지는 `IsSaved`로 판단합니다. 전송이 실패하면 그 사유를 그대로 돌려줍니다.
 
 ```csharp
 var result = await Supabase.SaveNowAsync();
-if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
+if (!result.IsSaved)
     ShowSaveError(result.ErrorCode);
 ```
 
@@ -23,6 +23,14 @@ if (!result.IsSuccess && result.Reason != SupabaseReason.UserSaveNoChanges)
 | 파라미터 | 설명 |
 |----------|------|
 | `timeoutMs` | 전송 완료를 기다리는 최대 시간, 밀리초 단위. 초과 시 실패 (기본값: 5000) |
+
+**반환**
+
+`SupabaseSaveResult`를 돌려줍니다.
+
+| 프로퍼티 | 타입 | 설명 |
+|---------|------|------|
+| `IsSaved` | `bool` | 서버에 보낼 변경이 남지 않았는지. 전송에 성공했거나 보낼 변경이 없었으면 `true` |
 
 **에러 코드**
 

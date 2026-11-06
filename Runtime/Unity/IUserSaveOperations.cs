@@ -15,10 +15,8 @@ namespace TrueBase.Unity
     internal interface IUserSaveOperations
     {
         Task<SupabaseLoadResult> LoadAsync(bool includeUpdatedAt);
-        Task<SupabaseResult> SaveNowAsync(int timeoutMs);
+        Task<SupabaseSaveResult> SaveNowAsync(int timeoutMs);
         SupabaseResult RequestSave();
-        Task<SupabaseResult> SaveIfChangedAsync();
         Task<SupabaseResult> DeleteAsync();
-        Task<SupabaseResult> EnsureRowAsync();
     }
 }

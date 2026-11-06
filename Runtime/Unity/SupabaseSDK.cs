@@ -1637,6 +1637,11 @@ namespace TrueBase.Unity
             return LogAndReturn(ApiLogTags.UserDataDelete, r);
         }
 
+        /// <summary>세이브 전송이 실패 상태로 들어가거나 벗어날 때. 게임 쪽 설명은 <see cref="Supabase.OnSaveStatusChanged"/>.</summary>
+        public static event Action<SupabaseResult> OnSaveStatusChanged;
+
+        internal static void RaiseSaveStatusChanged(SupabaseResult status) => OnSaveStatusChanged?.Invoke(status);
+
         /// <summary>
         /// 우선순위별 유저 세이브 쿨다운(초)을 전역으로 설정합니다.
         /// <see cref="SupabaseSettings"/>에서 읽은 값을 <see cref="Config.SupabaseRuntime"/>이 자동으로 적용합니다.

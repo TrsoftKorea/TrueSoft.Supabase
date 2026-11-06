@@ -148,7 +148,7 @@ export default defineConfig({
               { text: '읽기 / 쓰기', link: '/guide/user-data/read-write' },
               { text: '즉시 저장 후 대기', link: '/guide/user-data/save-now' },
               { text: '즉시 저장 요청', link: '/guide/user-data/request-save' },
-              { text: '변경분 저장', link: '/guide/user-data/save-if-changed' },
+              { text: '저장 실패 알림', link: '/guide/user-data/save-status' },
               { text: '세이브 삭제', link: '/guide/user-data/delete' }
             ]
           },

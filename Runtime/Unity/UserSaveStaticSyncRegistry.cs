@@ -15,7 +15,7 @@ namespace TrueBase.Unity
         AutoUrgent,
         AutoNormal,
         AutoLazy,
-        /// <summary>게임이 부른 <c>SaveNowAsync</c>·<c>RequestSave</c>·<c>SaveIfChangedAsync</c>.</summary>
+        /// <summary>게임이 부른 <c>SaveNowAsync</c>·<c>RequestSave</c>.</summary>
         Game,
         /// <summary>앱 전환, 로그아웃, 로드 직후 초기값, 플레이나누 동기화처럼 게임이 부르지 않았는데 SDK 가 보낸 것. 응답을 받은 뒤 세므로 앱 종료 때 보낸 저장은 대개 못 센다.</summary>
         Sdk
@@ -58,6 +58,8 @@ namespace TrueBase.Unity
             public int ConsecutiveFailures;
             /// <summary>실패 뒤 자동 저장을 다시 시도해도 되는 시각. 값을 바꿔도 앞당겨지지 않습니다.</summary>
             public float RetryNotBeforeRealtime;
+            /// <summary>게임에 실패 상태로 알린 뒤 아직 풀리지 않았는지.</summary>
+            public bool SaveFailureReported;
         }
 
         private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal);
@@ -85,8 +87,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 모든 <see cref="StaticUserSave{TRow}"/> 인스턴스에 공통으로 적용되는
-        /// 우선순위별 기본 쿨다운(초)을 설정합니다.
-        /// 인스턴스별 <c>ConfigureCooldown</c> 오버라이드가 있으면 그 값이 우선합니다.
+        /// 우선순위별 쿨다운(초)을 설정합니다.
         /// </summary>
         public static void ConfigurePriorityCooldowns(float urgent, float normal, float lazy)
         {
@@ -293,6 +294,9 @@ namespace TrueBase.Unity
 
                 if (!SafeHasDirty(entry))
                 {
+                    // 다시 로드해 실패한 변경을 버렸으면 재시도가 없어 실패 상태를 풀어 줄 전송도 오지 않는다.
+                    ReportSaveStatus(entry, null);
+
                     // 기다리던 변경을 게임이 직접 보냈다. 지난 시각을 남겨 두면 다음 변경이 쿨타임 없이 나간다.
                     if (entry.GetDirtyCooldown != null && entry.NextAllowedAtRealtime > 0f && realtimeNow >= entry.NextAllowedAtRealtime)
                         entry.NextAllowedAtRealtime = 0f;
@@ -469,6 +473,26 @@ namespace TrueBase.Unity
                 {
                     Debug.LogWarning("[Supabase] user save reset failed: " + e.Message);
                 }
+
+                ReportSaveStatus(entry, null);
+            }
+        }
+
+        // 실패로 들어가고 벗어날 때만 알린다. 재시도마다 알리면 저장 표시가 깜빡인다.
+        private static void ReportSaveStatus(Entry entry, string error)
+        {
+            var failing = error != null;
+            if (entry.SaveFailureReported == failing)
+                return;
+
+            entry.SaveFailureReported = failing;
+            try
+            {
+                SupabaseSDK.RaiseSaveStatusChanged(failing ? SupabaseResult.Fail(error) : SupabaseResult.Ok);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[Supabase] OnSaveStatusChanged handler failed: " + e.Message);
             }
         }
 
@@ -575,6 +599,8 @@ namespace TrueBase.Unity
 
             if (entry.ResetCount != resetCountAtStart)
                 return;
+
+            ReportSaveStatus(entry, succeeded ? null : error);
 
             if (entry.RequestImmediateAfterInFlight)
             {

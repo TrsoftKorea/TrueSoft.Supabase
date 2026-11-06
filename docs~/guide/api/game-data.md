@@ -10,7 +10,7 @@
 | [`Supabase.DeleteUserSaveAsync`](/guide/user-data/delete) | 세이브 삭제 · 기본값 리셋 |
 | [`Supabase.SaveNowAsync`](/guide/user-data/save-now) | 변경분 즉시 전송 후 완료 대기 |
 | [`Supabase.RequestSave`](/guide/user-data/request-save) | 대기 없이 즉시 전송 요청 |
-| [`Supabase.SaveIfChangedAsync`](/guide/user-data/save-if-changed) | 변경된 필드만 PATCH |
+| [`Supabase.OnSaveStatusChanged`](/guide/user-data/save-status) | 저장 실패와 복구 알림 |
 
 ::: tip
 프로퍼티 읽기/쓰기, 컬럼 추가, 클래스 생성은 [유저 데이터 가이드](/guide/user-data/)를 참고하세요.

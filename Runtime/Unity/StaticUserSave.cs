@@ -613,35 +613,6 @@ namespace TrueBase.Unity
 
 
         /// <summary>
-        /// 저장 쿨다운을 전역으로 설정합니다.
-        /// <para>
-        /// <paramref name="priority"/>가 <c>null</c>이면 모든 우선순위를 동일한 <paramref name="seconds"/>로 설정합니다.<br/>
-        /// <paramref name="priority"/>를 지정하면 해당 우선순위의 쿨다운만 변경합니다.
-        /// </para>
-        /// </summary>
-        /// <remarks>
-        /// 유저 세이브 클래스는 프로젝트 전체에서 하나만 존재하므로 이 설정은 전역에 적용됩니다.
-        /// 일반적으로는 <see cref="SupabaseSettings"/> Inspector에서 저장 주기를 지정하는 것을 권장합니다.
-        /// </remarks>
-        public void ConfigureCooldown(float seconds, DataSavePriority? priority = null)
-        {
-            var s = Mathf.Max(0f, seconds);
-            if (priority == null)
-            {
-                // 모든 우선순위를 동일하게 설정
-                SupabaseSDK.ConfigureUserSavePriorityCooldowns(s, s, s);
-            }
-            else
-            {
-                // 지정한 우선순위만 변경, 나머지는 현재 값 유지
-                var urgent = priority.Value == DataSavePriority.Urgent ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(0);
-                var normal = priority.Value == DataSavePriority.Normal ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(1);
-                var lazy   = priority.Value == DataSavePriority.Lazy   ? s : UserSaveStaticSyncRegistry.GetPriorityCooldown(2);
-                SupabaseSDK.ConfigureUserSavePriorityCooldowns(urgent, normal, lazy);
-            }
-        }
-
-        /// <summary>
         /// throttle 캐시를 무시하고 지금 시점의 변경 여부를 신선하게 검사합니다.
         /// 즉시 저장 경로가 "보낼 것이 있는지"를 판정할 때 사용합니다.
         /// </summary>
@@ -680,17 +651,17 @@ namespace TrueBase.Unity
         /// <para>전송이 실패하면 그 사유(중복 로그인·네트워크 오류 등)를 그대로 돌려줍니다.</para>
         /// </summary>
         /// <param name="timeoutMs">전송 완료를 기다리는 최대 시간(밀리초). 초과 시 <see cref="SupabaseReason.UserSaveTimeout"/>.</param>
-        public async Task<SupabaseResult> SaveNowAsync(int timeoutMs = 5000)
+        public async Task<SupabaseSaveResult> SaveNowAsync(int timeoutMs = 5000)
         {
             EnsureRegistered();
 
             if (!_hasLoadedOnce)
-                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady);
+                return SupabaseSaveResult.Fail(SupabaseErrorCode.UserSaveNotReady);
 
             if (!HasFreshDirty())
-                return SupabaseResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
+                return SupabaseSaveResult.Fail(SupabaseErrorCode.UserSaveNoChanges);
 
-            return await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs);
+            return SupabaseSaveResult.From(await SupabaseSDK.TryFlushUserSaveImmediateAsync(_syncKey, timeoutMs));
         }
 
         /// <summary>
@@ -719,18 +690,6 @@ namespace TrueBase.Unity
         /// 생성기가 컬럼 기본값 시딩(<c>SeedDefault_*</c>)을 배선하는 데 사용합니다. 게임 코드는 재정의할 필요가 없습니다.
         /// </summary>
         protected virtual void OnCurrentApplied() { }
-
-        /// <summary>
-        /// DB에 본인 행이 존재하도록 보장합니다. 행이 없으면 DB 기본값으로 생성합니다(로컬 데이터는 변경하지 않음).
-        /// </summary>
-        public async Task<SupabaseResult> EnsureRowAsync()
-        {
-            EnsureRegistered();
-            var r = await SupabaseSDK.EnsureMyRowAsync<TRow>();
-            return r != null && r.IsSuccess
-                ? SupabaseResult.Ok
-                : SupabaseResult.Fail(r?.ErrorCode ?? SupabaseErrorCode.UserSaveLoadFailed);
-        }
 
         /// <summary>
         /// DB에서 세이브를 로드해 <see cref="CurrentRow"/>에 적용합니다. 행이 없으면 생성 후 재로드합니다.
@@ -793,10 +752,9 @@ namespace TrueBase.Unity
             var afterDelete = !string.IsNullOrEmpty(loadAccountId) && PlayerPrefs.HasKey(NewUserAfterDeleteKey(loadAccountId));
 
             // 서버에 없던(SQL NULL) 컬렉션 컬럼에 로드 전 초기값(fallback)이 유지됐다면,
-            // _lastSynced는 서버 정본 기준이므로 SaveIfChangedAsync가 그 변경분만 PATCH한다.
-            // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않는다(no-op).
-            // 변경분이 없으면(일반 로드) UserSaveNoChanges로 돌아오며, 이는 오류가 아니라 정상 경로다.
-            var initSave = await SendChangesAsync(UserSaveSendCause.Sdk);
+            // _lastSynced는 서버 정본 기준이므로 그 변경분만 PATCH한다.
+            // 변경분이 없으면(일반 로드) patch가 비어 HTTP를 보내지 않고 UserSaveNoChanges로 돌아오며, 이는 오류가 아니라 정상 경로다.
+            var initSave = await SendInitialValuesAsync();
             if (!initSave.IsSuccess && initSave.Reason != SupabaseReason.UserSaveNoChanges)
                 Debug.LogWarning($"{LogTag} 로드 후 초기값 저장 실패 — {initSave.ErrorCode ?? "null"}. 다음 저장에서 재시도됩니다.");
 
@@ -915,21 +873,8 @@ namespace TrueBase.Unity
             return SupabaseResult.Ok;
         }
 
-        /// <summary>
-        /// 마지막 동기화 이후 변경된 필드만 즉시 PATCH합니다.
-        /// <para>변경이 없으면 네트워크 요청 없이 <see cref="SupabaseReason.UserSaveNoChanges"/> 사유의 실패를 반환합니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</para>
-        /// <para>아직 로드하지 않았으면 <see cref="SupabaseReason.UserSaveNotReady"/> 사유의 실패를 반환합니다. 로드 전 값을 보내면 서버 값을 덮기 때문입니다.</para>
-        /// </summary>
-        public Task<SupabaseResult> SaveIfChangedAsync()
-        {
-            EnsureRegistered();
-
-            return _hasLoadedOnce
-                ? SendChangesAsync(UserSaveSendCause.Game)
-                : Task.FromResult(SupabaseResult.Fail(SupabaseErrorCode.UserSaveNotReady));
-        }
-
-        private async Task<SupabaseResult> SendChangesAsync(UserSaveSendCause cause)
+        // 로드 도중 자동 저장이 아직 닫혀 있을 때만 부른다. 레지스트리를 거치지 않아 다른 때 부르면 자동 저장과 겹쳐 나간다.
+        private async Task<SupabaseResult> SendInitialValuesAsync()
         {
             string tableName;
             Dictionary<string, object> patch;
@@ -975,7 +920,7 @@ namespace TrueBase.Unity
                 _sendsInFlight--;
             }
 
-            RecordSendResult(result, cause, sentColumns);
+            RecordSendResult(result, UserSaveSendCause.Sdk, sentColumns);
 
             // 보내는 사이 로컬이 비워졌으면 옛 상태 몫이라 새 상태에 적지 않는다.
             var stale = resetCount != _resetCount;
