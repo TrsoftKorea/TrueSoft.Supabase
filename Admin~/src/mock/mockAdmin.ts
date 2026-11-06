@@ -576,6 +576,10 @@ type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unkno
 // 콘솔 코드에는 프로젝트 이름 기본값이 없다 — 실제로는 각 DB 의 프로젝트 정보가 정한다.
 const MOCK_PROJECT_NAME: Record<ProjectTarget, string> = { defencer: '마왕은 힘들어', devilslayer: '데빌 슬레이어' }
 
+const SAVE_VALUES = { gold: 5200, level: 12, inventory: { gem: 50 } }
+const SAVE_DEFAULTS = { gold: 0, level: 1, inventory: null }
+const resetAccounts = new Set<string>()
+
 const HANDLERS: Record<string, Handler> = {
   'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
   'push.updateTrigger': (_t, p) => {
@@ -932,8 +936,17 @@ const HANDLERS: Record<string, Handler> = {
   'players.coupons': () => [
     { code: 'WELCOME2026', kind: 'keyword', title: '오픈 기념', mail_id: 'm1', redeemed_at: addDays(kstToday(), -2) + 'T20:15:00+09:00' },
   ],
+  // 초기화한 계정은 칸 목록의 기본값으로 보인다. 값은 아래 로그·되돌리기 미리보기의 "현재"와 같다.
+  'userData.get': (_t, p) => (resetAccounts.has(String(p['accountId'])) ? SAVE_DEFAULTS : SAVE_VALUES),
+  'userData.reset': (_t, p) => {
+    resetAccounts.add(String(p['accountId']))
+    return SAVE_DEFAULTS
+  },
   // 로그는 바뀌기 전 값만 남는다 — 칸 이름은 플레이어 데이터 칸 목록과 같다.
-  'userData.logs': () => [
+  'userData.logs': (_t, p) => [
+    ...(resetAccounts.has(String(p['accountId']))
+      ? [{ id: 3, diff: SAVE_VALUES, source: 'admin:' + MOCK_EMAIL, created_at: new Date().toISOString() }]
+      : []),
     { id: 2, diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
     { id: 1, diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
   ],

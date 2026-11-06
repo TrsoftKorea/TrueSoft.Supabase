@@ -158,7 +158,8 @@ export function ResetSaveDialog({
     >
       <p className="text-sm text-neutral-600">대상 플레이어: <span className="font-medium text-neutral-800">{playerName}</span></p>
       <ul className="list-disc pl-5 space-y-1 text-sm text-neutral-600">
-        <li>모든 필드가 처음 값으로 돌아갑니다.</li>
+        <li>모든 필드가 처음 값으로 돌아가고, 다음 접속부터 새로 시작한 플레이어로 처리됩니다.</li>
+        <li>이 기능이 들어간 게임 빌드 전까지는 새로 시작한 플레이어로 처리되지 않고, 플레이나누를 함께 쓰는 게임은 다음 접속에 옛 데이터로 돌아갑니다.</li>
         <li>게임에 접속 중이면 게임을 다시 켜야 반영되고, 그 전에 저장되는 필드는 게임의 값으로 다시 바뀝니다.</li>
         <li>7일 안에는 변경 이력의 &lsquo;이 변경 전으로&rsquo;로 되돌릴 수 있습니다.</li>
       </ul>
