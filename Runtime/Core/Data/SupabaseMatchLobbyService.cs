@@ -51,14 +51,17 @@ namespace TrueBase.Core.Data
                 .Select(id => id.Trim())
                 .ToArray();
 
-            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
+            var built = SupabaseRestHelpers.TrySerializeBody(new Dictionary<string, object>
             {
                 ["p_game_code"] = gameCode.Trim(),
                 ["p_invited_account_ids"] = ids,
                 ["p_name"] = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
                 ["p_max_members"] = maxMembers,
                 ["p_metadata"] = metadata
-            });
+            }, out var body, out var buildError);
+            if (!built)
+                return SupabaseResult<MatchLobbyCreateOutcome>.Fail("match_lobby_request_build:" + buildError);
+
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_create", body);
             if (!r.IsSuccess)
                 return SupabaseResult<MatchLobbyCreateOutcome>.Fail(r.ErrorCode);
@@ -121,12 +124,15 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(accountId))
                 return SupabaseResult.Fail(SupabaseErrorCode.MatchLobbyMemberNotFound);
 
-            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
+            var built = SupabaseRestHelpers.TrySerializeBody(new Dictionary<string, object>
             {
                 ["p_lobby_id"] = lobbyId.Trim(),
                 ["p_account_id"] = accountId.Trim(),
                 ["p_metadata"] = metadata
-            });
+            }, out var body, out var buildError);
+            if (!built)
+                return SupabaseResult.Fail("match_lobby_request_build:" + buildError);
+
             var r = await CallRpcAsync(accessToken, "ts_match_lobby_set_member_meta", body);
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
         }

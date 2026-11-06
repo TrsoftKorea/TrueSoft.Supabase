@@ -41,7 +41,15 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<SupabaseFunctionResponse>.Fail("function_name_empty");
 
             var url = $"{_supabaseUrl}/functions/v1/{Uri.EscapeDataString(functionName)}";
-            var bodyJson = requestBody == null ? null : _jsonSerializer.ToJson(requestBody);
+            string bodyJson;
+            try
+            {
+                bodyJson = requestBody == null ? null : _jsonSerializer.ToJson(requestBody);
+            }
+            catch (Exception e)
+            {
+                return SupabaseResult<SupabaseFunctionResponse>.Fail("function_request_build:" + e.Message);
+            }
 
             var response = await _httpClient.SendAsync(
                 method: "POST",

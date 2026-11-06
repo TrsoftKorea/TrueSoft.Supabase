@@ -580,8 +580,22 @@ namespace TrueBase.Unity
             _hasLoadedOnce = true;   // 서버에서 읽은 행을 그대로 적용 — 이 시점부터 자동 저장 허용
         }
 
+        // 등록 변환·게임 클래스는 변환 중 예외를 낼 수 있다. 부르는 쪽은 null 이면 나누에 쓰지 않는다.
+        private string TryNanooSerializeJson(TRow row)
+        {
+            try
+            {
+                return NanooSerializeJson(row);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"{LogTag} 플레이나누 JSON 변환 실패 — {e.Message}");
+                return null;
+            }
+        }
+
         string INanooSaveSyncable.NanooGetLastLoadedJson()
-            => _nanooLastLoaded != null ? NanooSerializeJson(_nanooLastLoaded) : null;
+            => _nanooLastLoaded != null ? TryNanooSerializeJson(_nanooLastLoaded) : null;
 
         async Task<bool> INanooSaveSyncable.TryLoadAsync()
         {
@@ -593,7 +607,7 @@ namespace TrueBase.Unity
             return r.IsSuccess;
         }
 
-        string INanooSaveSyncable.NanooCurrentJson => NanooSerializeJson(Current);
+        string INanooSaveSyncable.NanooCurrentJson => TryNanooSerializeJson(Current);
 
         bool INanooSaveSyncable.NanooHasServerData => _hasLoadedOnce;
 

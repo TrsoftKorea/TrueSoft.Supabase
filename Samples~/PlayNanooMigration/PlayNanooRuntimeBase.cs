@@ -1562,8 +1562,10 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
         {
             Trace($"판정: SDK가 최신(나누={nanooTime:o} <= SDK={sdkTime:o}) → 나누를 SDK 데이터로 덮어씀");
             save.NanooApplyLastLoaded();
-            SaveToNanoo(save.NanooGetLastLoadedJson());
-            _nanooSyncedThisLogin = true;
+            var sdkJson = save.NanooGetLastLoadedJson();
+            SaveToNanoo(sdkJson);
+            _nanooSyncedThisLogin = sdkJson != null;
+            if (!_nanooSyncedThisLogin) Trace("동기화 실패 — 이번 로그인에서는 나누에 쓰지 않음");
         }
         return true;
     }

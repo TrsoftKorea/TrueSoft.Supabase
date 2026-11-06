@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using TrueBase.Core.Common;
 using TrueBase.Core.Http;
@@ -14,6 +15,26 @@ namespace TrueBase.Core.Data
     /// </summary>
     internal static class SupabaseRestHelpers
     {
+        /// <summary>
+        /// 게임이 넘긴 값이 든 요청 본문을 JSON으로 바꿉니다. 게임 클래스는 변환 중 예외를 낼 수 있어
+        /// 그대로 두면 result 대신 예외가 게임까지 올라갑니다. 변환하지 못하면 false이고 <paramref name="error"/>에 사유를 담습니다.
+        /// </summary>
+        internal static bool TrySerializeBody(Dictionary<string, object> body, out string json, out string error)
+        {
+            try
+            {
+                json = JsonConvert.SerializeObject(body);
+                error = null;
+                return true;
+            }
+            catch (Exception e)
+            {
+                json = null;
+                error = e.Message;
+                return false;
+            }
+        }
+
         /// <summary>PostgREST 호출용 인증 헤더를 만듭니다.</summary>
         /// <param name="prefer">비어 있지 않으면 <c>Prefer</c> 헤더를 추가합니다.</param>
         internal static Dictionary<string, string> AuthHeaders(string publishableKey, string accessToken, string prefer = null)

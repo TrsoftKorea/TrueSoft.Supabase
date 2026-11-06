@@ -32,13 +32,13 @@ namespace TrueBase.Unity
         /// <summary>SDK 데이터가 최신 — 마지막으로 로드한 DB Row를 Current에 Apply합니다.</summary>
         void NanooApplyLastLoaded();
 
-        /// <summary>마지막으로 로드한 DB Row를 JSON으로 반환합니다. PlayNANOO에 저장할 때 사용합니다.</summary>
+        /// <summary>마지막으로 로드한 DB Row를 JSON으로 반환합니다. PlayNANOO에 저장할 때 사용합니다. 변환하지 못하면 null입니다.</summary>
         string NanooGetLastLoadedJson();
 
         /// <summary>DB에서 로드하여 Current에 적용합니다 (신규 유저, PlayNANOO 데이터 없음).</summary>
         Task<bool> TryLoadAsync();
 
-        /// <summary>현재 로컬 세이브 데이터를 JSON으로 반환합니다. PlayNANOO에 저장할 때 사용합니다.</summary>
+        /// <summary>현재 로컬 세이브 데이터를 JSON으로 반환합니다. PlayNANOO에 저장할 때 사용합니다. 변환하지 못하면 null입니다.</summary>
         string NanooCurrentJson { get; }
 
         /// <summary>

@@ -87,12 +87,14 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
-            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
+            var built = SupabaseRestHelpers.TrySerializeBody(new Dictionary<string, object>
             {
                 ["p_code"] = code.Trim(),
                 ["p_score"] = score,
                 ["p_data"] = data
-            });
+            }, out var body, out var buildError);
+            if (!built)
+                return SupabaseResult<LeaderboardSubmitResult>.Fail("leaderboard_request_build:" + buildError);
 
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_submit_score", body);
             if (!r.IsSuccess)
@@ -194,11 +196,13 @@ namespace TrueBase.Core.Data
                 return SupabaseResult.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
             // 현재 회차에만 적용 — p_rotation_count를 보내지 않으면 서버가 현재 회차를 씁니다.
-            var body = JsonConvert.SerializeObject(new Dictionary<string, object>
+            var built = SupabaseRestHelpers.TrySerializeBody(new Dictionary<string, object>
             {
                 ["p_code"] = code.Trim(),
                 ["p_data"] = data
-            });
+            }, out var body, out var buildError);
+            if (!built)
+                return SupabaseResult.Fail("leaderboard_request_build:" + buildError);
 
             // returns void — 성공해도 본문이 비어 온다.
             var r = await CallRpcAsync(accessToken, "ts_leaderboard_set_player_data", body, allowEmptyBody: true);
