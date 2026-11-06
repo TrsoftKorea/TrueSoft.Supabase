@@ -572,6 +572,28 @@ namespace TrueBase.Core.Data
             return highest;
         }
 
+        /// <summary>
+        /// <paramref name="previous"/>와 <paramref name="current"/> 사이에 값이 바뀐 칸과 그 우선순위를 돌려줍니다.
+        /// 비교 기준은 <see cref="BuildPatch{T}"/>와 같아 서버로 나갈 칸과 일치합니다.
+        /// </summary>
+        internal static List<(string Column, DataSavePriority Priority)> GetChangedColumns<T>(T previous, T current)
+        {
+            var changed = new List<(string Column, DataSavePriority Priority)>();
+            if (current == null) return changed;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                var col = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(col) || string.Equals(col, UpdatedAtColumn, StringComparison.Ordinal))
+                    continue;
+
+                if (!EqualsValues(GetValue(m, previous), GetValue(m, current)))
+                    changed.Add((col, ResolveColumnPriority(m)));
+            }
+
+            return changed;
+        }
+
         private static readonly Dictionary<Type, MemberInfo[]> _autoDefaultMembersCache = new();
 
         /// <summary>

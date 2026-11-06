@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using System.Threading.Tasks;
 using TrueBase.Core.Common;
+using TrueBase.Core.Data;
 using UnityEngine;
 
 namespace TrueBase.Unity
@@ -70,10 +72,14 @@ namespace TrueBase.Unity
         private const float FailureRetryBaseSeconds = 2f;
         private const float FailureRetryMaxSeconds  = 60f;
 
-        // 저장 요약 로그. 저장마다 찍으면 콘솔이 덮이고, 어떤 칸이 바뀌었는지는 서버 기록(user_data_logs)에 있으므로
-        // "왜 나갔는지"만 1분에 한 줄로 모은다. 그 시간에 저장이 없으면 찍지 않는다.
+        // 저장 요약 로그. 저장마다 찍으면 콘솔이 덮이므로 "왜 나갔는지"와 "어느 칸이 실렸는지"를 1분에 한 번 모은다.
+        // 그 시간에 저장이 없으면 찍지 않는다. 값은 남기지 않고 칸 이름과 횟수만 남긴다.
         private const float SendSummarySeconds = 60f;
+        // 기기 로그는 한 줄이 길면 잘릴 수 있어, 칸이 많으면 칸 경계에서 나눠 남긴다. 크기는 여유를 둔 값이다.
+        private const int SendSummaryChunkLength = 1000;
         private static readonly int[] SendCounts = new int[(int)UserSaveSendCause.Sdk + 1];
+        // 세이브는 표 하나(user_data)만 쓰므로 칸 이름만으로 구분된다.
+        private static readonly Dictionary<string, (int Count, DataSavePriority Priority)> ColumnSendCounts = new(StringComparer.Ordinal);
         private static int _sendFailures;
         private static float _sendWindowStart = -1f;
 
@@ -315,12 +321,22 @@ namespace TrueBase.Unity
         }
 
         /// <summary>서버까지 실제로 나간 저장을 셉니다. 보낼 변경이 없어 요청을 안 한 경우에는 부르지 않습니다.</summary>
-        internal static void RecordSend(UserSaveSendCause cause)
+        /// <param name="changed">이 저장에 실린 칸과 우선순위.</param>
+        internal static void RecordSend(UserSaveSendCause cause, List<(string Column, DataSavePriority Priority)> changed)
         {
             if (!SupabaseSDK.ApiResultLogsEnabled)
                 return;
 
             SendCounts[(int)cause]++;
+            if (changed != null)
+            {
+                foreach (var (column, priority) in changed)
+                {
+                    ColumnSendCounts.TryGetValue(column, out var counted);
+                    ColumnSendCounts[column] = (counted.Count + 1, priority);
+                }
+            }
+
             OpenSendWindow();
         }
 
@@ -359,12 +375,72 @@ namespace TrueBase.Unity
                 + (_sendFailures > 0 ? $" · 실패 {_sendFailures}" : "")
                 + $" (쿨타임 긴급 {FormatSeconds(_urgentCooldown)} · 보통 {FormatSeconds(_normalCooldown)} · 느림 {FormatSeconds(_lazyCooldown)})";
 
+            var columnLines = BuildColumnSummaryLines();
+
             Array.Clear(SendCounts, 0, SendCounts.Length);
+            ColumnSendCounts.Clear();
             _sendFailures = 0;
             _sendWindowStart = -1f;
 
             SupabaseSDK.LogUserSaveSummary(message);
+            foreach (var line in columnLines)
+                SupabaseSDK.LogUserSaveSummary(line);
         }
+
+        // 원인 칸을 바로 찾도록 우선순위별로 묶고 그 안에서 많이 실린 순으로 놓는다.
+        // 저장 한 번에 여러 칸이 실리므로 칸별 횟수의 합은 저장 횟수와 다르다.
+        private static List<string> BuildColumnSummaryLines()
+        {
+            var lines = new List<string>();
+            if (ColumnSendCounts.Count == 0)
+                return lines;
+
+            var columns = new List<KeyValuePair<string, (int Count, DataSavePriority Priority)>>(ColumnSendCounts);
+            columns.Sort((a, b) =>
+            {
+                var byPriority = a.Value.Priority.CompareTo(b.Value.Priority);
+                if (byPriority != 0) return byPriority;
+                var byCount = b.Value.Count.CompareTo(a.Value.Count);
+                return byCount != 0 ? byCount : StringComparer.Ordinal.Compare(a.Key, b.Key);
+            });
+
+            var line = new StringBuilder($"저장에 실린 칸 {columns.Count}개 —");
+            DataSavePriority? group = null;
+            var groupHasColumn = false;
+            foreach (var column in columns)
+            {
+                var label = FormatPriority(column.Value.Priority);
+                var item = $"{column.Key} {column.Value.Count}";
+
+                if (line.Length + label.Length + item.Length + 5 > SendSummaryChunkLength)
+                {
+                    lines.Add(line.ToString());
+                    line.Clear().Append("저장에 실린 칸(이어서) —");
+                    group = null;
+                }
+
+                if (group != column.Value.Priority)
+                {
+                    if (group != null) line.Append(" /");
+                    line.Append(' ').Append(label).Append(':');
+                    group = column.Value.Priority;
+                    groupHasColumn = false;
+                }
+
+                line.Append(groupHasColumn ? ", " : " ").Append(item);
+                groupHasColumn = true;
+            }
+
+            lines.Add(line.ToString());
+            return lines;
+        }
+
+        private static string FormatPriority(DataSavePriority priority) => priority switch
+        {
+            DataSavePriority.Urgent => "긴급",
+            DataSavePriority.Lazy => "느림",
+            _ => "보통"
+        };
 
         private static string FormatSeconds(float seconds) =>
             seconds.ToString("0.##", CultureInfo.InvariantCulture) + "초";
