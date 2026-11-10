@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Download, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Download, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { copyToClipboard } from '../lib/clipboard'
 import { PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { projectHidden, projectName, useProjectLook } from '../lib/projectLook'
 import { getToken } from '../lib/googleAuth'
@@ -20,15 +21,16 @@ import { KeyGuideToggle, MANAGEMENT_KEY, type StoreKeyStatus } from './Settings'
  * 마스터 전용 "트루베이스 설정" — 프로젝트 밖의 일을 한다. 프로젝트 선택 화면에서 연다.
  *  - 초대: 트루베이스에 들어올 수 있는 사람(콘솔 주소의 초대 저장소). 초대된 사람은 새 프로젝트를 만들고 운영자로 더해질 수 있다.
  *    초대를 지우면 콘솔이 모든 프로젝트의 운영자에서 먼저 뺀다(removeFromAllProjects) — 저장소는 프로젝트 주소·열쇠를 모른다.
- *    구글 계정이 없는 사람의 비밀번호도 여기서 정한다 — 비밀번호는 프로젝트가 아니라 사람에 붙어 모든 프로젝트에 같이 쓰인다.
+ *    구글 계정이 없는 사람에게는 여기서 임시 비밀번호를 준다(초기화). 실제 비밀번호는 본인이 처음 들어올 때 정하고 마스터는
+ *    모른다 — 비밀번호는 프로젝트가 아니라 사람에 붙어 모든 프로젝트에 같이 쓰인다.
  *  - 관리 열쇠: 프로젝트마다 Supabase 로그인 설정을 바꾸는 열쇠. 운영자는 열쇠를 만들지도 보지도 않는다 — 대기 프로젝트를
  *    준비할 때 마스터가 넣어 두면, 운영자가 서비스 연결에 넣은 로그인 값이 저절로 Supabase 에 들어간다.
  */
 
-type Invite = { email: string; display_name: string; invited_by: string | null; invited_at: string; has_password: boolean }
-
-// hub.ts 의 MIN_PASSWORD_LENGTH 와 같은 값이어야 한다 — 런타임이 달라(Vite 번들 vs Pages 서버 기능) 상수를 공유할 수 없다.
-const MIN_PASSWORD_LENGTH = 8
+type Invite = {
+  email: string; display_name: string; invited_by: string | null; invited_at: string
+  has_password: boolean; must_change: boolean
+}
 
 // ok 가 null 이면 관리 열쇠가 없어 건너뛴 것.
 type AuthSyncStatus = { finishedAt: string | null; ok: boolean | null; message: string | null }
@@ -191,7 +193,7 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
     <WhiteCard className="p-5 space-y-5">
       <CardHeader
         title="초대"
-        description="트루베이스에 들어올 수 있는 사람과 그 사람의 비밀번호를 정합니다."
+        description="트루베이스에 들어올 수 있는 사람을 정하고, 비밀번호로 들어오는 사람에게 임시 비밀번호를 줍니다."
         actions={
           <Button size="sm" onClick={() => void importOperators()} disabled={importing}>
             {importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
@@ -253,18 +255,20 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
                 <td className="px-4 py-2.5 text-xs text-neutral-500">{r.invited_by ?? '-'}</td>
                 <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(r.invited_at)}</td>
                 <td className="px-4 py-2.5 whitespace-nowrap">
-                  {r.has_password
-                    ? <span className="text-xs text-emerald-600">사용 중</span>
-                    : <span className="text-xs text-neutral-400">없음</span>}
+                  {!r.has_password
+                    ? <span className="text-xs text-neutral-400">없음</span>
+                    : r.must_change
+                      ? <span className="text-xs text-amber-600">임시</span>
+                      : <span className="text-xs text-emerald-600">사용 중</span>}
                 </td>
                 <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
                   {r.has_password ? (
                     <Button variant="outline" size="sm" onClick={() => setPasswordTarget(r)}>
-                      <Pencil className="w-3 h-3" /> 바꾸기
+                      <RotateCcw className="w-3 h-3" /> 초기화
                     </Button>
                   ) : (
                     <Button variant="primary" size="sm" onClick={() => setPasswordTarget(r)}>
-                      <Plus className="w-3 h-3" /> 입력
+                      <Plus className="w-3 h-3" /> 발급
                     </Button>
                   )}
                   <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setRemoveTarget(r) }}>
@@ -297,10 +301,10 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
       </ConfirmDialog>
 
       {passwordTarget && (
-        <PasswordDialog
+        <ResetPasswordDialog
           invite={passwordTarget}
           onClose={() => setPasswordTarget(null)}
-          onSaved={() => { setPasswordTarget(null); void load() }}
+          onIssued={() => void load()}
           report={report}
         />
       )}
@@ -308,86 +312,81 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
   )
 }
 
-// 구글 계정이 없는 구성원이 이메일과 이 비밀번호로 로그인한다. 바꾸면 그 사람의 기존 로그인이 모두 끊긴다.
-function PasswordDialog({
+// 마스터는 비밀번호를 정하지 않는다 — 임시 비밀번호를 받아 그 사람에게 전하고, 그 사람이 처음 들어올 때 새로 정한다.
+// 임시 비밀번호는 이 창에서 한 번만 보인다. 초기화하면 그 사람의 기존 로그인이 몇 분 안에 끊긴다.
+function ResetPasswordDialog({
   invite,
   onClose,
-  onSaved,
+  onIssued,
   report,
 }: {
   invite: Invite
   onClose: () => void
-  onSaved: () => void
+  onIssued: () => void
   report: (e: unknown, fallback: string) => void
 }) {
-  const [newPassword, setNewPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [issued, setIssued] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const tooShort = newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH
-  const mismatch = confirm.length > 0 && newPassword !== confirm
-  const canSubmit = newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirm && !busy
-
-  const submit = async () => {
-    if (!canSubmit) return
+  const issue = async () => {
     setBusy(true)
     setError('')
     try {
-      await callHub('passwords.set', { email: invite.email, newPassword })
-      onSaved()
+      const { password } = await callHub<{ password: string }>('passwords.reset', { email: invite.email })
+      setIssued(password)
+      onIssued()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { report(e, ''); return }
-      setError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+      setError(e instanceof Error ? e.message : '임시 비밀번호를 만들지 못했습니다.')
     } finally {
       setBusy(false)
     }
   }
 
+  const copy = async () => {
+    if (issued && (await copyToClipboard(issued))) setCopied(true)
+  }
+
+  const title = invite.has_password ? '비밀번호 초기화' : '임시 비밀번호 발급'
   return (
     <EditDialog
-      title={invite.has_password ? '비밀번호 바꾸기' : '비밀번호 입력'}
+      title={title}
       description={invite.display_name ? `${invite.display_name} · ${invite.email}` : invite.email}
       busy={busy}
       onClose={onClose}
       error={error || undefined}
-      footer={<>
+      footer={issued ? (
+        <Button variant="primary" onClick={onClose}>닫기</Button>
+      ) : (<>
         <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
-        <Button variant="primary" onClick={() => void submit()} disabled={!canSubmit}>
+        <Button variant="primary" onClick={() => void issue()} disabled={busy}>
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          저장
+          {invite.has_password ? '초기화' : '발급'}
         </Button>
-      </>}
+      </>)}
     >
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호</label>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className={inputCls + ' w-full'}
-          />
-          <p className={`mt-1 text-xs ${tooShort ? 'text-amber-600' : 'text-neutral-400'}`}>{MIN_PASSWORD_LENGTH}자 이상 넣습니다.</p>
+      {issued ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 font-mono text-base tracking-wider text-neutral-900 select-all">
+              {issued}
+            </code>
+            <Button variant="outline" onClick={() => void copy()}>
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? '복사됨' : '복사'}
+            </Button>
+          </div>
+          <p className="text-xs text-neutral-500">이 창을 닫으면 다시 볼 수 없습니다. 이 사람은 이 비밀번호로 처음 들어올 때 새 비밀번호를 정합니다.</p>
         </div>
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 확인</label>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void submit()}
-            className={inputCls + ' w-full'}
-          />
-          {mismatch && <p className="mt-1 text-xs text-amber-600">비밀번호가 서로 다릅니다.</p>}
-        </div>
-        <p className="text-xs text-neutral-500">
-          이 이메일과 비밀번호로 모든 프로젝트에 로그인합니다.
-          {invite.has_password && ' 바꾸면 이 사람의 기존 로그인이 몇 분 안에 끊깁니다.'}
+      ) : (
+        <p className="text-sm text-neutral-600">
+          {invite.has_password
+            ? '임시 비밀번호를 새로 만듭니다. 이 사람의 기존 로그인은 몇 분 안에 끊기고, 다음 로그인 때 새 비밀번호를 정합니다.'
+            : '임시 비밀번호를 만듭니다. 이 사람은 처음 들어올 때 새 비밀번호를 정합니다.'}
         </p>
-      </div>
+      )}
     </EditDialog>
   )
 }

@@ -90,25 +90,51 @@ export type SignInOutcome = { target: ProjectTarget; ok: boolean; error?: string
  * 모든 게임 서버에 같은 로그인을 한꺼번에 보내고, 통과한 게임의 표만 저장한다.
  * 한 게임도 통과하지 못하면 첫 실패 사유로 던진다 — 로그인 화면이 그 문구를 그대로 보여 준다.
  */
+type HubLogin = { token: string; isMaster: boolean; mustChange?: boolean }
+
+/** 마스터가 초기화한 임시 비밀번호로 들어왔다 — 새 비밀번호를 정하기 전에는 들어갈 수 없다. token 은 바꾸기에만 쓰는 표다. */
+export class PasswordChangeRequiredError extends Error {
+  constructor(readonly pendingToken: string) {
+    super('새 비밀번호를 정해야 합니다.')
+    this.name = 'PasswordChangeRequiredError'
+  }
+}
+
 export async function signInAllProjects(
   login: { idToken: string } | { email: string; password: string },
 ): Promise<SignInOutcome[]> {
-  type HubSession = { token: string; isMaster: boolean }
-  let hub: Promise<HubSession | null>
-  let action: string
-  let params: Record<string, unknown>
   if ('idToken' in login) {
     // 구글 로그인은 트루베이스 초대 표도 같이 받는다. 초대되지 않았거나 저장소가 응답하지 않아도 게임 프로젝트 로그인은 그대로 된다.
-    hub = postHub<HubSession>('login', { idToken: login.idToken }, null).catch(() => null)
-    action = 'auth.googleLogin'
-    params = { idToken: login.idToken }
-  } else {
-    // 비밀번호는 트루베이스 저장소 한 곳에 있다 — 저장소가 준 표를 프로젝트마다 그 프로젝트의 로그인으로 바꾼다.
-    const session = await postHub<HubSession>('login', { email: login.email, password: login.password }, null)
-    hub = Promise.resolve(session)
-    action = 'auth.hubLogin'
-    params = { hubToken: session.token }
+    const hub = postHub<HubLogin>('login', { idToken: login.idToken }, null).catch(() => null)
+    return signInProjects('auth.googleLogin', { idToken: login.idToken }, hub, false)
   }
+  // 비밀번호는 트루베이스 저장소 한 곳에 있다 — 저장소가 준 표를 프로젝트마다 그 프로젝트의 로그인으로 바꾼다.
+  const session = await postHub<HubLogin>('login', { email: login.email, password: login.password }, null)
+  if (session.mustChange) throw new PasswordChangeRequiredError(session.token)
+  return signInProjects('auth.hubLogin', { hubToken: session.token }, Promise.resolve(session), true)
+}
+
+/**
+ * 비밀번호로 들어온 사람이 자기 비밀번호를 바꾼다. 바꾸면 그 전 저장소 표와 그 표로 받은 프로젝트 로그인이 끊기므로
+ * 새 표로 모든 프로젝트에 다시 로그인해 둔다. pendingToken 은 임시 비밀번호로 받은 표(첫 로그인)다 — 없으면 지금 로그인의 표.
+ */
+export async function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+  pendingToken?: string,
+): Promise<SignInOutcome[]> {
+  const token = pendingToken ?? getHubToken()
+  if (!token) throw new NotAuthenticatedError()
+  const session = await postHub<HubLogin>('passwords.change', { currentPassword, newPassword }, token)
+  return signInProjects('auth.hubLogin', { hubToken: session.token }, Promise.resolve(session), true)
+}
+
+async function signInProjects(
+  action: string,
+  params: Record<string, unknown>,
+  hub: Promise<HubLogin | null>,
+  viaPassword: boolean,
+): Promise<SignInOutcome[]> {
   const results = await Promise.all(
     PROJECTS.filter((p) => p.url).map(async (p) => {
       try {
@@ -132,7 +158,7 @@ export async function signInAllProjects(
     throw new Error(results.find((r) => r.error)?.error ?? '로그인하지 못했습니다.')
   }
   storeTokens(tokens)
-  storeHubSession(hubSession ? { token: hubSession.token, isMaster: hubSession.isMaster } : null)
+  storeHubSession(hubSession ? { token: hubSession.token, isMaster: hubSession.isMaster, viaPassword } : null)
   return results.map(({ target, ok, error, status }) =>
     ok ? { target, ok } : { target, ok, error: error ?? '로그인하지 못했습니다.', ...(status !== undefined ? { status } : {}) },
   )

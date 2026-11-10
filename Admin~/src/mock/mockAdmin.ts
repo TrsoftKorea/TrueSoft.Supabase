@@ -588,10 +588,14 @@ const SAVE_VALUES = { gold: 5200, level: 12, inventory: { gem: 50 } }
 const SAVE_DEFAULTS = { gold: 0, level: 1, inventory: null }
 const resetAccounts = new Set<string>()
 
-let mockInvites: { email: string; display_name: string; invited_by: string | null; invited_at: string; has_password: boolean }[] = [
-  { email: 'dev.kim@example.com', display_name: '김개발', invited_by: MOCK_EMAIL, invited_at: '2026-11-03T02:10:00.000Z', has_password: false },
-  { email: 'ops.lee@example.com', display_name: '이운영', invited_by: MOCK_EMAIL, invited_at: '2026-10-21T08:30:00.000Z', has_password: true },
+let mockInvites: {
+  email: string; display_name: string; invited_by: string | null; invited_at: string; has_password: boolean; must_change: boolean
+}[] = [
+  { email: 'dev.kim@example.com', display_name: '김개발', invited_by: MOCK_EMAIL, invited_at: '2026-11-03T02:10:00.000Z', has_password: false, must_change: false },
+  { email: 'ops.lee@example.com', display_name: '이운영', invited_by: MOCK_EMAIL, invited_at: '2026-10-21T08:30:00.000Z', has_password: true, must_change: false },
 ]
+// 초기화로 받은 임시 비밀번호(이메일 → 비밀번호). 그 비밀번호로 로그인하면 새 비밀번호를 정하는 창이 뜬다.
+const mockTempPasswords = new Map<string, string>()
 
 type MockOperator = { email: string; display_name: string; disabled_at: string | null; created_at: string; created_by: string | null }
 const mockOperators: Record<string, MockOperator[]> = {}
@@ -739,14 +743,33 @@ const HANDLERS: Record<string, Handler> = {
     return { look: { ...mockLook(target), updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL }, token: mockToken() }
   },
   // ── 트루베이스 초대 저장소(/hub) ── 메모리에만 둔다(새로고침하면 처음 값).
-  'hub.login': () => ({ token: mockToken(), email: MOCK_EMAIL, invited: true, isMaster: true }),
+  // 비밀번호 로그인: 초기화로 받은 임시 비밀번호면 새 비밀번호를 정하라고 답한다. 그 밖의 비밀번호는 아무거나 통과.
+  'hub.login': (_t, p) => {
+    const email = String(p['email'] ?? '').trim().toLowerCase()
+    const pending = typeof p['password'] === 'string' && mockTempPasswords.get(email) === p['password']
+    return { token: mockToken(), email: pending ? email : MOCK_EMAIL, invited: true, isMaster: !pending, mustChange: pending }
+  },
   'auth.hubLogin': () => ({ token: mockToken() }),
-  'hub.passwords.set': (_t, p) => {
-    if (String(p['newPassword'] ?? '').length < 8) throw new Error('비밀번호는 8자 이상이어야 합니다.')
+  'hub.passwords.reset': (_t, p) => {
     const found = mockInvites.find((i) => i.email === p['email'])
-    if (!found) throw new Error('트루베이스에 초대된 사람만 비밀번호를 정할 수 있습니다.')
+    if (!found) throw new Error('트루베이스에 초대된 사람만 비밀번호를 받을 수 있습니다.')
+    const password = 'Mock' + Math.random().toString(36).slice(2, 10)
+    mockTempPasswords.set(found.email, password)
     found.has_password = true
-    return null
+    found.must_change = true
+    return { password }
+  },
+  'hub.passwords.change': (_t, p) => {
+    const next = String(p['newPassword'] ?? '')
+    if (next.length < 8) throw new Error('비밀번호는 8자 이상이어야 합니다.')
+    if (next === p['currentPassword']) throw new Error('지금과 다른 비밀번호를 넣어 주세요.')
+    for (const [email, temp] of mockTempPasswords) {
+      if (temp !== p['currentPassword']) continue
+      mockTempPasswords.delete(email)
+      const found = mockInvites.find((i) => i.email === email)
+      if (found) found.must_change = false
+    }
+    return { token: mockToken(), email: MOCK_EMAIL, invited: true, isMaster: true, mustChange: false }
   },
   'hub.members.list': () => mockInvites.map((i) => ({ email: i.email, display_name: i.display_name })),
   'hub.invites.list': () => [...mockInvites].sort((a, b) => b.invited_at.localeCompare(a.invited_at)),
@@ -755,7 +778,7 @@ const HANDLERS: Record<string, Handler> = {
     const name = String(p['displayName'] ?? '').trim()
     const found = mockInvites.find((i) => i.email === email)
     if (found) found.display_name = name
-    else mockInvites.push({ email, display_name: name, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false })
+    else mockInvites.push({ email, display_name: name, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false, must_change: false })
     return null
   },
   'hub.invites.addMany': (_t, p) => {
@@ -763,7 +786,7 @@ const HANDLERS: Record<string, Handler> = {
     let added = 0
     for (const e of entries) {
       if (mockInvites.some((i) => i.email === e.email)) continue
-      mockInvites.push({ email: e.email, display_name: e.displayName, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false })
+      mockInvites.push({ email: e.email, display_name: e.displayName, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false, must_change: false })
       added++
     }
     return { added }

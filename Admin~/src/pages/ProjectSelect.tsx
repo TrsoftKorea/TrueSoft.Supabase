@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ChevronRight, LogOut, Plus, Settings2 } from 'lucide-react'
+import { ChevronRight, KeyRound, LogOut, Plus, Settings2 } from 'lucide-react'
 import { PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
-import { addToken, getHubToken, hubIsMaster, signedInEmail, signedInTargets } from '../lib/googleAuth'
+import { addToken, getHubToken, hubIsMaster, hubViaPassword, signedInEmail, signedInTargets } from '../lib/googleAuth'
+import ChangePasswordDialog from '../components/ChangePasswordDialog'
 import { blockedReason, callAdminPublic, isForbiddenProject, type SignInOutcome } from '../lib/api'
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -99,6 +100,8 @@ export default function ProjectSelect({
   const look = useProjectLook()
   const allowed = new Set(signedInTargets())
   const [creating, setCreating] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordChanged, setPasswordChanged] = useState(false)
   const invited = getHubToken() !== null
   const standby = invited ? PROJECTS.find((p) => look.hidden(p.key))?.key ?? null : null
   // 대기 중이거나 권한이 없는 프로젝트는 보이지 않는다.
@@ -121,8 +124,18 @@ export default function ProjectSelect({
             </button>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 text-sm text-[#c7cbe0] truncate">{signedInEmail()}</p>
+        <div className="flex items-center gap-2">
+          <p className="flex-1 min-w-0 text-sm text-[#c7cbe0] truncate">{signedInEmail()}</p>
+          {hubViaPassword() && (
+            <button
+              type="button"
+              onClick={() => setChangingPassword(true)}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-[#2c3250] text-sm text-[#c7cbe0] hover:bg-white/5 hover:text-white whitespace-nowrap shrink-0"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              비밀번호 바꾸기
+            </button>
+          )}
           {hubIsMaster() && (
             <button
               type="button"
@@ -134,6 +147,14 @@ export default function ProjectSelect({
             </button>
           )}
         </div>
+        {passwordChanged && <p className="text-xs text-emerald-400">비밀번호를 바꿨습니다.</p>}
+        {changingPassword && (
+          <ChangePasswordDialog
+            email={signedInEmail()}
+            onClose={() => setChangingPassword(false)}
+            onDone={() => { setChangingPassword(false); setPasswordChanged(true) }}
+          />
+        )}
 
         <ul className="space-y-2">
           {visible.map((p) => {

@@ -88,7 +88,8 @@ export function signedInEmail(): string {
 // 마스터 여부는 화면 표시용으로만 같이 기억한다. 권한 판단은 저장소와 각 프로젝트 서버가 한다.
 const HUB_KEY = 'tb_hub_token'
 
-export type HubSession = { token: string; isMaster: boolean }
+// viaPassword: 비밀번호로 들어왔는지 — "비밀번호 바꾸기" 단추를 보일지 정한다.
+export type HubSession = { token: string; isMaster: boolean; viaPassword?: boolean }
 
 function readHub(): HubSession | null {
   try {
@@ -107,6 +108,11 @@ export function getHubToken(): string | null {
 /** 화면 표시용 — 마스터 전용 단추를 보일지. */
 export function hubIsMaster(): boolean {
   return readHub()?.isMaster ?? false
+}
+
+/** 화면 표시용 — 비밀번호로 들어온 사람에게만 "비밀번호 바꾸기"를 보인다. */
+export function hubViaPassword(): boolean {
+  return readHub()?.viaPassword ?? false
 }
 
 export function storeHubSession(s: HubSession | null): void {

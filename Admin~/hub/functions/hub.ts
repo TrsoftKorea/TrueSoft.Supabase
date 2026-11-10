@@ -2,8 +2,9 @@
 //
 // 트루베이스에 초대된 운영자 목록 하나만 둔다. 게임 프로젝트(Supabase)마다 운영자를 따로 두지만, 아직 운영자가 없는
 // 대기 프로젝트는 "누가 새 프로젝트를 만들 수 있는지"를 스스로 알 수 없어 여기에 묻는다.
-//   - 콘솔: 로그인 때 login 으로 초대 표(7일)를 받는다. 마스터는 invites.* 로 초대 목록을, passwords.set 으로
-//     구글 계정이 없는 구성원의 비밀번호를 관리한다. 비밀번호는 여기 한 곳에만 있다.
+//   - 콘솔: 로그인 때 login 으로 초대 표(7일)를 받는다. 마스터는 invites.* 로 초대 목록을 관리하고, 구글 계정이 없는
+//     구성원에게 passwords.reset 으로 임시 비밀번호를 준다. 비밀번호는 본인이 passwords.change 로 정한다 — 마스터는
+//     실제 비밀번호를 모른다. 비밀번호는 여기 한 곳에만 있다.
 //   - 각 프로젝트의 admin-api: 운영자가 보낸 초대 표를 verify 로 확인한다(새 프로젝트 만들기·운영자 추가·비밀번호 로그인).
 // 표는 이 저장소만 서명·확인한다(HS256, 비밀값은 처음 요청 때 D1 에 만든다) — 프로젝트들은 비밀값을 갖지 않는다.
 // 쿠키를 쓰지 않고 모든 요청이 구글 토큰·초대 표를 직접 싣기 때문에 다른 주소에서 불러도 된다(로컬에서 띄운 콘솔로 시험할 때).
@@ -65,13 +66,20 @@ function ensureSchema(db: D1Database): Promise<void> {
       )`),
       db.prepare('create table if not exists meta (key text primary key, value text not null)'),
       // 구글 계정이 없는 구성원의 비밀번호. 해시만 둔다. 바꾼 시각보다 먼저 받은 표는 무효다(verifyToken).
+      // must_change 1 = 마스터가 초기화한 임시 비밀번호 — 본인이 새로 정하기 전에는 비밀번호 바꾸기만 된다.
       db.prepare(`create table if not exists passwords (
         email text primary key,
         password_hash text not null,
         updated_at text not null,
-        updated_by text
+        updated_by text,
+        must_change integer not null default 0
       )`),
     ])
+    // must_change 가 생기기 전에 만든 표에 칸을 더한다.
+    const { results: cols } = await db.prepare('pragma table_info(passwords)').all<{ name: string }>()
+    if (!cols.some((c) => c.name === 'must_change')) {
+      await db.prepare('alter table passwords add column must_change integer not null default 0').run()
+    }
   })().catch((e) => {
     ready = null // 실패는 기억하지 않는다 — 다음 요청이 다시 시도한다.
     throw e
@@ -98,22 +106,31 @@ const b64url = (bytes: Uint8Array) =>
 const fromB64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
 const encodeJson = (v: unknown) => b64url(new TextEncoder().encode(JSON.stringify(v)))
 
-async function issueToken(db: D1Database, email: string): Promise<string> {
+// 임시 비밀번호로 받은 표(pwc)는 비밀번호 바꾸기에만 쓴다 — 다른 요청과 프로젝트 로그인에는 안 통한다.
+const PENDING_TOKEN_TTL_SECONDS = 30 * 60
+
+async function issueToken(db: D1Database, email: string, pending = false): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
-  const head = `${encodeJson({ alg: 'HS256', typ: 'JWT' })}.${encodeJson({ email, iat: now, exp: now + TOKEN_TTL_SECONDS, aud: 'truebase-hub' })}`
+  const claims = pending
+    ? { email, iat: now, exp: now + PENDING_TOKEN_TTL_SECONDS, aud: 'truebase-hub', pwc: true }
+    : { email, iat: now, exp: now + TOKEN_TTL_SECONDS, aud: 'truebase-hub' }
+  const head = `${encodeJson({ alg: 'HS256', typ: 'JWT' })}.${encodeJson(claims)}`
   const sig = await crypto.subtle.sign('HMAC', await signingKey(db), new TextEncoder().encode(head))
   return `${head}.${b64url(new Uint8Array(sig))}`
 }
 
-async function verifyToken(db: D1Database, token: string): Promise<string | null> {
+async function verifyToken(db: D1Database, token: string, allowPending = false): Promise<string | null> {
   const [h, p, s] = token.split('.')
   if (!h || !p || !s) return null
   try {
     const ok = await crypto.subtle.verify('HMAC', await signingKey(db), fromB64url(s), new TextEncoder().encode(`${h}.${p}`))
     if (!ok) return null
-    const payload = JSON.parse(new TextDecoder().decode(fromB64url(p))) as { email?: unknown; exp?: unknown; aud?: unknown; iat?: unknown }
+    const payload = JSON.parse(new TextDecoder().decode(fromB64url(p))) as {
+      email?: unknown; exp?: unknown; aud?: unknown; iat?: unknown; pwc?: unknown
+    }
     if (payload.aud !== 'truebase-hub' || typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null
     if (typeof payload.email !== 'string' || typeof payload.iat !== 'number') return null
+    if (payload.pwc === true && !allowPending) return null
     // 비밀번호를 바꾸면 그 전에 받은 표를 끊는다 — 유출이 의심돼 바꿨을 때 남의 로그인을 바로 막으려는 것이다.
     // 발급 시각은 초까지만 있어 초로 맞춘다(바꾼 바로 그 초에 다시 로그인한 표까지 끊지 않게).
     const pw = await db.prepare('select updated_at from passwords where email = ?').bind(payload.email).first<{ updated_at: string }>()
@@ -157,6 +174,20 @@ async function passwordMatches(password: string, stored: string): Promise<boolea
   } catch {
     return false
   }
+}
+
+// 임시 비밀번호 — 읽어 전하기 쉽게 헷갈리는 글자(0·O·1·l·I)를 뺀 12자.
+const TEMP_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+function tempPassword(): string {
+  const out: string[] = []
+  // 나머지 편향이 없게 알파벳 길이의 배수 밖 값은 버린다.
+  const limit = 256 - (256 % TEMP_ALPHABET.length)
+  while (out.length < 12) {
+    for (const b of crypto.getRandomValues(new Uint8Array(16))) {
+      if (b < limit && out.length < 12) out.push(TEMP_ALPHABET[b % TEMP_ALPHABET.length]!)
+    }
+  }
+  return out.join('')
 }
 
 // ── 구글 ID 토큰 ────────────────────────────────────────────────────────────────
@@ -224,12 +255,17 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
     // 구글 로그인은 표를 못 받아도 프로젝트 로그인이 따로 되므로 실패는 콘솔이 넘긴다. 비밀번호 로그인은 이 표가 전부다.
     case 'login': {
       let email: string | null
+      let mustChange = false
       if (typeof params['password'] === 'string') {
         email = cleanEmail(str(params, 'email'))
-        const row = await db.prepare('select password_hash from passwords where email = ?').bind(email).first<{ password_hash: string }>()
+        const row = await db
+          .prepare('select password_hash, must_change from passwords where email = ?')
+          .bind(email)
+          .first<{ password_hash: string; must_change: number }>()
         if (!row || !(await passwordMatches(params['password'], row.password_hash))) {
           throw new HubError('이메일 또는 비밀번호가 올바르지 않습니다.', 401)
         }
+        mustChange = row.must_change === 1
       } else {
         email = await verifyGoogleIdToken(str(params, 'idToken'), env.GOOGLE_CLIENT_ID)
         if (!email) throw new HubError('구글 로그인을 확인하지 못했습니다.', 401)
@@ -237,7 +273,30 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       const isMaster = masters(env).has(email)
       const invited = await isInvited(db, email)
       if (!isMaster && !invited) throw new HubError('트루베이스에 초대되지 않은 계정입니다.', 403)
-      return { token: await issueToken(db, email), email, invited, isMaster }
+      // 임시 비밀번호면 비밀번호 바꾸기에만 쓰는 표를 준다 — 콘솔은 새 비밀번호를 정하게 한 뒤에 들어간다.
+      return { token: await issueToken(db, email, mustChange), email, invited, isMaster, mustChange }
+    }
+
+    // 비밀번호로 들어온 구성원이 자기 비밀번호를 바꾼다. 임시 비밀번호로 받은 표도 여기서는 통한다.
+    // 바꾸면 그 전에 받은 표가 모두 끊기므로(verifyToken) 새 표를 돌려준다.
+    case 'passwords.change': {
+      const email = bearer ? await verifyToken(db, bearer, true) : null
+      if (!email) throw new HubError('로그인이 필요합니다.', 401)
+      const isMaster = masters(env).has(email)
+      const invited = await isInvited(db, email)
+      if (!isMaster && !invited) throw new HubError('트루베이스에 초대되지 않은 계정입니다.', 403)
+      const row = await db.prepare('select password_hash from passwords where email = ?').bind(email).first<{ password_hash: string }>()
+      if (!row) throw new HubError('비밀번호로 들어온 계정만 바꿀 수 있습니다.', 400)
+      const current = typeof params['currentPassword'] === 'string' ? params['currentPassword'] : ''
+      if (!(await passwordMatches(current, row.password_hash))) throw new HubError('지금 비밀번호가 올바르지 않습니다.', 400)
+      const next = typeof params['newPassword'] === 'string' ? params['newPassword'] : ''
+      if (next.length < MIN_PASSWORD_LENGTH) throw new HubError(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400)
+      if (next === current) throw new HubError('지금과 다른 비밀번호를 넣어 주세요.', 400)
+      await db
+        .prepare('update passwords set password_hash = ?, updated_at = ?, updated_by = ?, must_change = 0 where email = ?')
+        .bind(await hashPassword(next), new Date().toISOString(), email, email)
+        .run()
+      return { token: await issueToken(db, email), email, invited, isMaster, mustChange: false }
     }
 
     // 프로젝트 admin-api 가 운영자의 표를 확인한다. 초대 여부는 지금 다시 본다 — 초대를 지우면 바로 막힌다.
@@ -275,25 +334,26 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
   switch (action) {
     case 'invites.list': {
       const { results } = await db
-        .prepare(`select i.email, i.display_name, i.invited_by, i.invited_at, (p.email is not null) as has_password
+        .prepare(`select i.email, i.display_name, i.invited_by, i.invited_at, (p.email is not null) as has_password,
+                         coalesce(p.must_change, 0) as must_change
                   from invites i left join passwords p on p.email = i.email order by i.invited_at desc`)
-        .all<Invite & { has_password: number }>()
-      return results.map((r) => ({ ...r, has_password: r.has_password === 1 }))
+        .all<Invite & { has_password: number; must_change: number }>()
+      return results.map((r) => ({ ...r, has_password: r.has_password === 1, must_change: r.must_change === 1 }))
     }
 
-    // 구글 계정이 없는 구성원의 비밀번호를 마스터가 정해 따로 알려 준다. 초대된 사람만 — 지우면 비밀번호도 함께 지운다.
-    case 'passwords.set': {
+    // 비밀번호 초기화. 마스터는 비밀번호를 정하지 않는다 — 임시 비밀번호를 만들어 이 응답에서 한 번만 돌려주고,
+    // 그 사람이 처음 들어올 때 새로 정하게 한다(must_change). 그 전에 받은 표는 모두 끊긴다. 초대된 사람만.
+    case 'passwords.reset': {
       const email = cleanEmail(str(params, 'email'))
-      const password = typeof params['newPassword'] === 'string' ? params['newPassword'] : ''
-      if (password.length < MIN_PASSWORD_LENGTH) throw new HubError(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400)
-      if (!(await isInvited(db, email))) throw new HubError('트루베이스에 초대된 사람만 비밀번호를 정할 수 있습니다.', 400)
+      if (!(await isInvited(db, email))) throw new HubError('트루베이스에 초대된 사람만 비밀번호를 받을 수 있습니다.', 400)
+      const password = tempPassword()
       await db
-        .prepare(`insert into passwords (email, password_hash, updated_at, updated_by) values (?, ?, ?, ?)
+        .prepare(`insert into passwords (email, password_hash, updated_at, updated_by, must_change) values (?, ?, ?, ?, 1)
                   on conflict (email) do update set password_hash = excluded.password_hash,
-                    updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
+                    updated_at = excluded.updated_at, updated_by = excluded.updated_by, must_change = 1`)
         .bind(email, await hashPassword(password), new Date().toISOString(), caller)
         .run()
-      return null
+      return { password }
     }
 
     case 'invites.add': {
