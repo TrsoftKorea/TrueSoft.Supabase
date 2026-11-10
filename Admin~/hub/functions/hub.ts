@@ -367,22 +367,6 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       return null
     }
 
-    // 여러 프로젝트에 이미 있는 운영자를 한꺼번에 넣는다. 이미 초대된 사람은 그대로 둔다.
-    case 'invites.addMany': {
-      const raw = Array.isArray(params['entries']) ? (params['entries'] as Params[]) : []
-      const entries = raw
-        .map((e) => ({ email: typeof e['email'] === 'string' ? e['email'].trim().toLowerCase() : '', name: typeof e['displayName'] === 'string' ? e['displayName'].trim().slice(0, 40) : '' }))
-        .filter((e) => EMAIL_RE.test(e.email))
-      if (entries.length === 0) return { added: 0 }
-      const now = new Date().toISOString()
-      const before = await db.prepare('select count(*) as n from invites').first<{ n: number }>()
-      await db.batch(entries.map((e) =>
-        db.prepare('insert or ignore into invites (email, display_name, invited_by, invited_at) values (?, ?, ?, ?)')
-          .bind(e.email, e.name, caller, now)))
-      const after = await db.prepare('select count(*) as n from invites').first<{ n: number }>()
-      return { added: (after?.n ?? 0) - (before?.n ?? 0) }
-    }
-
     case 'invites.remove': {
       const email = cleanEmail(str(params, 'email'))
       await db.batch([

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Check, Copy, Download, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 import { copyToClipboard } from '../lib/clipboard'
 import { PROJECTS, type ProjectTarget } from '../lib/projectTarget'
 import { projectHidden, projectName, useProjectLook } from '../lib/projectLook'
@@ -104,8 +104,6 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
   const [name, setName] = useState('')
   const [emailHint, setEmailHint] = useState('')
   const [adding, setAdding] = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [imported, setImported] = useState<string>('')
   const [removeTarget, setRemoveTarget] = useState<Invite | null>(null)
   const [passwordTarget, setPasswordTarget] = useState<Invite | null>(null)
   const [removing, setRemoving] = useState(false)
@@ -145,29 +143,6 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
     }
   }
 
-  // 이미 프로젝트에 등록된 운영자를 초대 목록에 넣는다 — 초대 방식으로 바꾸기 전부터 있던 사람이 새 프로젝트·운영자 추가에서 막히지 않게.
-  const importOperators = async () => {
-    setImporting(true)
-    setImported('')
-    try {
-      const entries = new Map<string, string>()
-      for (const p of PROJECTS) {
-        if (!p.url || !getToken(p.key)) continue
-        const ops = await callAdmin<Array<{ email: string; display_name: string; disabled_at: string | null }>>(p.key, 'operators.list')
-        for (const o of ops) if (!o.disabled_at && !entries.has(o.email)) entries.set(o.email, o.display_name)
-      }
-      const res = await callHub<{ added: number }>('invites.addMany', {
-        entries: [...entries].map(([e, n]) => ({ email: e, displayName: n })),
-      })
-      setImported(`${res.added}명을 더했습니다.`)
-      await load()
-    } catch (e: unknown) {
-      report(e, '기존 운영자를 가져오지 못했습니다.')
-    } finally {
-      setImporting(false)
-    }
-  }
-
   const remove = async (inv: Invite) => {
     setRemoving(true)
     setDialogError('')
@@ -194,14 +169,7 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
       <CardHeader
         title="초대"
         description="트루베이스에 들어올 수 있는 사람을 정하고, 비밀번호로 들어오는 사람에게 임시 비밀번호를 줍니다."
-        actions={
-          <Button size="sm" onClick={() => void importOperators()} disabled={importing}>
-            {importing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-            기존 운영자 가져오기
-          </Button>
-        }
       />
-      {imported && <p className="text-xs text-green-600">{imported}</p>}
 
       <div>
         <div className="grid grid-cols-[1.5fr_1fr_auto] gap-2 items-end">
@@ -241,36 +209,22 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
               <th className="text-left px-4 py-2.5 font-medium">초대한 사람</th>
               <th className="text-left px-4 py-2.5 font-medium w-40">초대 시각</th>
-              <th className="text-left px-4 py-2.5 font-medium w-20">비밀번호</th>
-              <th className="px-4 py-2.5 w-44"></th>
+              <th className="px-4 py-2.5 w-56"></th>
             </tr>
           </thead>
           <tbody>
             {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={6} emptyText="초대된 사람이 없습니다." />
+              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="초대된 사람이 없습니다." />
             ) : rows.map((r) => (
               <tr key={r.email} className="border-t border-neutral-100">
                 <td className="px-4 py-2.5 font-mono text-xs">{r.email}</td>
-                <td className="px-4 py-2.5">{r.display_name || '-'}</td>
+                <td className="px-4 py-2.5 whitespace-nowrap">{r.display_name || '-'}</td>
                 <td className="px-4 py-2.5 text-xs text-neutral-500">{r.invited_by ?? '-'}</td>
                 <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(r.invited_at)}</td>
-                <td className="px-4 py-2.5 whitespace-nowrap">
-                  {!r.has_password
-                    ? <span className="text-xs text-neutral-400">없음</span>
-                    : r.must_change
-                      ? <span className="text-xs text-amber-600">임시</span>
-                      : <span className="text-xs text-emerald-600">사용 중</span>}
-                </td>
                 <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                  {r.has_password ? (
-                    <Button variant="outline" size="sm" onClick={() => setPasswordTarget(r)}>
-                      <RotateCcw className="w-3 h-3" /> 초기화
-                    </Button>
-                  ) : (
-                    <Button variant="primary" size="sm" onClick={() => setPasswordTarget(r)}>
-                      <Plus className="w-3 h-3" /> 발급
-                    </Button>
-                  )}
+                  <Button variant="outline" size="sm" onClick={() => setPasswordTarget(r)}>
+                    <RotateCcw className="w-3 h-3" /> 비밀번호 초기화
+                  </Button>
                   <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setRemoveTarget(r) }}>
                     <Trash2 className="w-3 h-3" /> 삭제
                   </Button>
@@ -349,7 +303,7 @@ function ResetPasswordDialog({
     if (issued && (await copyToClipboard(issued))) setCopied(true)
   }
 
-  const title = invite.has_password ? '비밀번호 초기화' : '임시 비밀번호 발급'
+  const title = '비밀번호 초기화'
   return (
     <EditDialog
       title={title}
@@ -363,7 +317,7 @@ function ResetPasswordDialog({
         <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
         <Button variant="primary" onClick={() => void issue()} disabled={busy}>
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          {invite.has_password ? '초기화' : '발급'}
+          초기화
         </Button>
       </>)}
     >

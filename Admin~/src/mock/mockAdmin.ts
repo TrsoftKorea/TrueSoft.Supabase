@@ -781,16 +781,6 @@ const HANDLERS: Record<string, Handler> = {
     else mockInvites.push({ email, display_name: name, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false, must_change: false })
     return null
   },
-  'hub.invites.addMany': (_t, p) => {
-    const entries = (p['entries'] as { email: string; displayName: string }[] | undefined) ?? []
-    let added = 0
-    for (const e of entries) {
-      if (mockInvites.some((i) => i.email === e.email)) continue
-      mockInvites.push({ email: e.email, display_name: e.displayName, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false, must_change: false })
-      added++
-    }
-    return { added }
-  },
   'hub.invites.remove': (_t, p) => {
     mockInvites = mockInvites.filter((i) => i.email !== p['email'])
     return null
