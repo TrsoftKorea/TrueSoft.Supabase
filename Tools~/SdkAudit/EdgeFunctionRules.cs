@@ -56,6 +56,7 @@ namespace SdkAudit
             }
 
             ServerConfigKeys(ctx, dir);
+            ServerConfigServices(ctx);
             UsageFeatureInfo(ctx);
             if (blocks.ContainsKey("usage-count"))
                 UsageCount(ctx, dirs);
@@ -152,6 +153,73 @@ namespace SdkAudit
                     if (!sqlKeys.Contains(m.Groups[1].Value))
                         ctx.Report.Error($"[R16 연결값키] 엣지 함수가 읽는 `{m.Groups[1].Value}` 가 {sqlRel} 의 ts_server_config_keys 에 없습니다 — 콘솔 값이 항상 빈 채로 읽힙니다. ({ctx.Rel(path)})");
                 }
+            }
+        }
+
+        /// <summary>
+        /// 서비스 연결의 묶음(사용 켜기/끄기 단위) 이름도 네 곳에 있다 — 표 제약(server_config_services check),
+        /// 켜고 끄는 DB 함수(ts_admin_server_config_service_set), 콘솔 서버(settings.setServiceEnabled), 콘솔 화면(StoreGroup).
+        /// 한 곳이라도 빠지면 그 묶음의 사용 스위치가 오류를 낸다.
+        /// </summary>
+        private static void ServerConfigServices(AuditContext ctx)
+        {
+            var sqlPath = Path.Combine(ctx.Root, "Samples~", "DatabaseSetup", "SQL", "player", "install.sql");
+            if (!File.Exists(sqlPath))
+                return;
+            var sql = File.ReadAllText(sqlPath);
+            if (!sql.Contains("server_config_services"))
+                return; // 이 기능이 없는 저장소(검사기 픽스처 등)
+            var sqlRel = ctx.Rel(sqlPath);
+
+            HashSet<string>? Read(string text, string pattern, string what, string rel)
+            {
+                var m = Regex.Match(text, pattern);
+                if (!m.Success)
+                {
+                    ctx.Report.Error($"[R16 연결묶음] {rel} 에서 {what} 를 찾지 못했습니다. 검사기가 목록을 못 읽고 있습니다.");
+                    return null;
+                }
+                return Regex.Matches(m.Groups[1].Value, @"['""]([a-z][a-z0-9_]*)['""]").Select(x => x.Groups[1].Value).ToHashSet();
+            }
+
+            string? ReadFile(string relPath)
+            {
+                var path = Path.Combine(ctx.Root, relPath.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(path))
+                    return File.ReadAllText(path);
+                ctx.Report.Error($"[R16 연결묶음] {relPath} 를 찾지 못해 묶음 목록을 대조하지 못했습니다. 경로가 바뀌었으면 검사기도 고치세요.");
+                return null;
+            }
+
+            var lists = new List<(string What, string Rel, HashSet<string>? Names)>
+            {
+                ("표 제약 server_config_services", sqlRel,
+                    Read(sql, @"check\s*\(\s*service\s+in\s*\(([^)]*)\)", "server_config_services 의 check", sqlRel)),
+                ("DB 함수 ts_admin_server_config_service_set", sqlRel,
+                    Read(sql, @"p_service\s+not\s+in\s*\(([^)]*)\)", "ts_admin_server_config_service_set 의 목록", sqlRel)),
+            };
+            const string apiRel = "Admin~/supabase/functions/admin-api/index.ts";
+            var api = ReadFile(apiRel);
+            if (api != null)
+                lists.Add(("콘솔 서버 settings.setServiceEnabled", apiRel,
+                    Read(api, @"""settings\.setServiceEnabled""[\s\S]*?\[([^\]]*)\]\.includes", "settings.setServiceEnabled 의 목록", apiRel)));
+            const string uiRel = "Admin~/src/pages/Settings.tsx";
+            var ui = ReadFile(uiRel);
+            if (ui != null)
+                lists.Add(("콘솔 화면 StoreGroup", uiRel,
+                    Read(ui, @"type\s+StoreGroup\s*=([^\n]*)", "StoreGroup", uiRel)));
+
+            var baseline = lists[0];
+            if (baseline.Names == null)
+                return;
+            foreach (var other in lists.Skip(1))
+            {
+                if (other.Names == null)
+                    continue;
+                foreach (var n in baseline.Names.Except(other.Names))
+                    ctx.Report.Error($"[R16 연결묶음] `{n}` 가 {baseline.What} 에는 있는데 {other.What} 에 없습니다 — 그 묶음의 사용 스위치가 오류를 냅니다. ({other.Rel})");
+                foreach (var n in other.Names.Except(baseline.Names))
+                    ctx.Report.Error($"[R16 연결묶음] `{n}` 가 {other.What} 에는 있는데 {baseline.What} 에 없습니다. ({other.Rel})");
             }
         }
 

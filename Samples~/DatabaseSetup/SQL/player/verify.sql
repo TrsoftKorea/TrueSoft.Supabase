@@ -96,7 +96,6 @@ from (
       ('ts_schema_draft'),
       ('ts_schema_version'),
       ('ts_admin_operators'),
-      ('ts_admin_passwords'),
       ('ts_admin_audit_logs'),
       ('ts_admin_console_settings'),
       ('coupons'),
@@ -288,8 +287,7 @@ from (
       ('mails',               'authenticated', 'SELECT'),
       ('purchases',           'authenticated', 'SELECT'),
       ('ts_protected_fields', 'authenticated', 'SELECT'),
-      -- 스키마 노출 전용(RLS 정책 0개라 행 반환 없음). 클래스 생성기가 컬럼 타입을 읽는 데 필요
-      ('leaderboard_scores',  'authenticated', 'SELECT'),
+      -- leaderboard_scores 는 클라이언트 권한이 없다(install.sql 24절 — 생성기는 ts_leaderboard_columns_meta 로 읽는다).
       ('display_names', 'authenticated', 'INSERT,SELECT,UPDATE'),
       ('user_sessions', 'authenticated', 'DELETE,INSERT,SELECT,UPDATE'),
       ('user_data',     'authenticated', 'DELETE,INSERT,SELECT,UPDATE')
@@ -349,8 +347,7 @@ from (
           ('game_items','authenticated'), ('mails','authenticated'),
           ('purchases','authenticated'), ('ts_protected_fields','authenticated'),
           ('display_names','authenticated'),
-          ('user_sessions','authenticated'), ('user_data','authenticated'),
-          ('leaderboard_scores','authenticated')
+          ('user_sessions','authenticated'), ('user_data','authenticated')
       ) as v(tbl, grantee)
     )
   group by g.table_name, g.grantee

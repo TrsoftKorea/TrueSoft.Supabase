@@ -48,12 +48,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: Admin~
           command: pages project create truebase-admin --production-branch=main
+      # 화면(dist)과 초대 저장소(hub/functions)를 함께 올린다. 설정(저장소 연결)은 hub/wrangler.toml 이 정한다.
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: Admin~
-          command: pages deploy dist --project-name=truebase-admin
+          workingDirectory: Admin~/hub
+          command: pages deploy --project-name=truebase-admin
 
       # 고객센터 창(게임 안 웹뷰로 여는 페이지). 콘솔과 다른 사이트로 둔다 — 같은 주소면 운영자 브라우저에서
       # 콘솔 로그인 정보와 저장 공간을 나눠 쓰게 된다. 어느 게임인지는 페이지 주소(?p=)로 받아 값이 따로 없다.

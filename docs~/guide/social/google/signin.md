@@ -34,6 +34,7 @@ else
 | `SupabaseReason.GoogleIdTokenEmpty` | ID 토큰을 받지 못했습니다 |
 | `SupabaseReason.GoogleWebClientIdEmpty` | Android에서 `googleWebClientId`가 비어 있습니다 |
 | `SupabaseReason.GoogleIosClientIdInvalid` | iOS에서 `googleIosClientId`가 비었거나, 형식이 틀리거나, 웹 클라이언트 ID와 같습니다 |
+| `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 Supabase에 등록한 클라이언트 ID용이 아닙니다 |
 | `SupabaseReason.AnonymousRequiresLink` | 익명 세션입니다. 연동은 [게스트 연동](/guide/social/google/link)을 쓰세요 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정이라 새 계정으로 다시 가입되었습니다 |

@@ -44,6 +44,9 @@ namespace TrueBase.Core.Common
         /// <summary>연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다.</summary>
         public const string IdentityAlreadyLinked = "identity_already_linked";
 
+        /// <summary>인증 서버가 구글·애플 ID 토큰을 받지 않았습니다(형식·서명·만료·대상 앱·nonce 가 맞지 않음).</summary>
+        public const string IdTokenInvalid = "id_token_invalid";
+
         /// <summary>익명(게스트) 세션이 필요한 작업입니다.</summary>
         public const string AnonymousRequired = "anonymous_session_required";
 

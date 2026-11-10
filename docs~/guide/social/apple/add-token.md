@@ -35,3 +35,4 @@ else
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
+| `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 nonce가 맞지 않습니다 |

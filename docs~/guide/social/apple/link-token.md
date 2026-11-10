@@ -43,5 +43,6 @@ else
 | `SupabaseReason.AnonymousSessionTokenMissing` | 익명 세션 토큰이 없습니다. 다시 로그인해야 합니다 |
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
+| `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 nonce가 맞지 않습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |

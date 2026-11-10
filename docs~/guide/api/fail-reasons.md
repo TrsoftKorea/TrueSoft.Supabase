@@ -65,6 +65,7 @@ bool Handle(SupabaseResult result)
 | `UserBanned` | 계정이 차단되었습니다. 자세한 내용은 `BanInfo`에 있습니다 |
 | `DuplicateLogin` | 다른 기기에서 같은 계정으로 로그인해 현재 세션이 무효가 되었습니다 |
 | `IdentityAlreadyLinked` | 연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다 |
+| `IdTokenInvalid` | 인증 서버가 구글·애플 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나, 다른 앱(클라이언트 ID)용이거나 nonce 가 맞지 않습니다 |
 | `SignedInNonAnonymous` | 비익명 계정으로 로그인 중입니다. 먼저 `SignOutFullyAsync`를 호출하세요 |
 | `AnonymousRequired` | 익명 세션이 필요한 작업입니다 |
 | `AnonymousRequiresLink` | 익명 세션에서는 `Link*` 메서드를 사용해야 합니다 |

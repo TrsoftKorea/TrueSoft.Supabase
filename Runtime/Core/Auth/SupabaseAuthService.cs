@@ -542,6 +542,11 @@ namespace TrueBase.Core.Auth
             return userToken["id"]?.Value<string>();
         }
 
+        private static bool MentionsIdToken(string text) =>
+            !string.IsNullOrEmpty(text)
+            && (text.IndexOf("id token", StringComparison.OrdinalIgnoreCase) >= 0
+                || text.IndexOf("id_token", StringComparison.OrdinalIgnoreCase) >= 0);
+
         private string ExtractErrorMessage(string body)
         {
             if (string.IsNullOrWhiteSpace(body))
@@ -563,6 +568,11 @@ namespace TrueBase.Core.Auth
                 if (error.error_code == "identity_already_exists"
                     || (error.msg?.IndexOf("already linked", StringComparison.OrdinalIgnoreCase) ?? -1) >= 0)
                     return SupabaseErrorCode.IdentityAlreadyLinked;
+
+                // ID 토큰 거절은 코드가 없거나("Bad ID token" — 구글) 넓은 코드(validation_failed — 애플)로 와서 글자로 가른다
+                // (2026-11-10 시험 프로젝트에서 잼).
+                if (MentionsIdToken(error.msg) || MentionsIdToken(error.error_description))
+                    return SupabaseErrorCode.IdTokenInvalid;
 
                 if (string.IsNullOrWhiteSpace(error.msg) == false)
                     return error.msg;

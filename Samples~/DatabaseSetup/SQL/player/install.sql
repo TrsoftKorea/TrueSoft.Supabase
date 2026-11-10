@@ -3931,7 +3931,7 @@ create trigger tr_after_purchase_paid_change
 -- 'price_sync' 는 환율표 저장·빈 금액 채우기(purchase-price-sync)의 마지막 실행이다.
 -- 실패도 남긴다 — 조용히 멈춘 것과 환불이 없는 것을 운영 콘솔에서 구분하려는 것.
 create table if not exists public.purchase_refund_sync (
-  store            text primary key,      -- 'google_play' | 'apple_app_store' | 'price_sync'
+  store            text primary key,      -- 'google_play' | 'apple_app_store' | 'price_sync' | 'auth_sync'
   last_started_at  timestamptz,
   last_finished_at timestamptz,
   last_ok          boolean,
@@ -4113,7 +4113,8 @@ as $$
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
                'APPLE_IAP_ISSUER_ID', 'APPLE_IAP_KEY_ID', 'APPLE_IAP_PRIVATE_KEY',
                'FCM_SERVICE_ACCOUNT_JSON', 'APNS_KEY_ID', 'APNS_PRIVATE_KEY',
-               'GOOGLE_WEB_CLIENT_ID', 'APPLE_SERVICES_ID'];
+               'GOOGLE_WEB_CLIENT_ID', 'APPLE_SERVICES_ID',
+               'GOOGLE_WEB_CLIENT_SECRET', 'GOOGLE_IOS_CLIENT_ID', 'SUPABASE_MANAGEMENT_TOKEN'];
 $$;
 
 revoke all on function public.ts_server_config_keys() from public, anon, authenticated;
@@ -4212,11 +4213,10 @@ create table if not exists public.server_config_services (
   updated_by text
 );
 -- 묶음 목록은 콘솔 화면(STORE_GROUPS)·admin-api 와 같다. 이미 설치된 곳의 옛 제약을 갈아 끼운다.
+-- 'supabase' 는 로그인 설정 반영용 관리 열쇠(SUPABASE_MANAGEMENT_TOKEN) 묶음이다.
 alter table public.server_config_services drop constraint if exists server_config_services_service_check;
--- 'supabase'(사용량 기록 조회 토큰)는 사용량을 DB 실행 횟수로 세게 되면서 뺐다.
-delete from public.server_config_services where service = 'supabase';
 alter table public.server_config_services add constraint server_config_services_service_check
-  check (service in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns'));
+  check (service in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns', 'supabase'));
 alter table public.server_config_services enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.server_config_services from anon, authenticated;
@@ -4238,7 +4238,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns') or p_enabled is null then
+  if p_service is null or p_service not in ('appstore', 'googleplay', 'signin', 'google', 'fcm', 'apns', 'supabase') or p_enabled is null then
     raise exception 'server_config_service_invalid: %', p_service;
   end if;
   insert into public.server_config_services (service, enabled, updated_at, updated_by)
@@ -4542,6 +4542,50 @@ select cron.schedule(
   'purchase-price-sync',
   '30 4 * * *',
   'select public.ts_purchase_price_sync_kick()'
+);
+
+-- 3-2. 로그인 설정 반영 — 매주 월요일 UTC 5시 15분. 엣지 함수 auth-config-sync 가 콘솔 "서비스 연결"의 구글·애플 값을
+--      Supabase 로그인 설정에 다시 넣고, 애플 Secret Key(최대 6개월 유효)를 새로 만들어 끼운다. 관리 열쇠
+--      (SUPABASE_MANAGEMENT_TOKEN)가 없으면 아무것도 바꾸지 않는다. 값을 바꿀 때는 콘솔 서버가 바로 반영하므로
+--      이 작업은 애플 Secret Key 가 만료되지 않게 하는 몫이다. 결과는 purchase_refund_sync('auth_sync')에 남는다.
+create or replace function public.ts_auth_config_sync_kick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    perform public.ts_purchase_refund_sync_mark('auth_sync', 'finish', false, 'project_url_missing', 0, 0);
+    return;
+  end if;
+  -- 함수 쪽이 1시간 안의 재호출을 건너뛰므로 인증 없이 부른다(verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/auth-config-sync',
+    body                 := '{}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 60000);
+end;
+$$;
+
+comment on function public.ts_auth_config_sync_kick() is
+  '로그인 설정 반영 엣지 함수를 부른다. cron 이 매주 부른다.';
+
+revoke all on function public.ts_auth_config_sync_kick() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'auth-config-sync') then
+    perform cron.unschedule('auth-config-sync');
+  end if;
+end $$;
+select cron.schedule(
+  'auth-config-sync',
+  '15 5 * * 1',
+  'select public.ts_auth_config_sync_kick()'
 );
 
 -- 4. 탈퇴 계정 정리 — 30분마다. 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
@@ -9594,23 +9638,9 @@ grant execute on function public.ts_admin_list_operators()                      
 grant execute on function public.ts_admin_upsert_operator(text,text,text)           to service_role;
 grant execute on function public.ts_admin_set_operator_disabled(text,boolean,text)  to service_role;
 
--- 비밀번호로 들어오는 운영자의 비밀번호. 해시는 admin-api 가 만들고 검사한다 — DB 는 보관만 한다.
--- 구글로만 들어오는 운영자는 행이 없다.
-create table if not exists public.ts_admin_passwords (
-  email         text        primary key,
-  password_hash text        not null,
-  updated_at    timestamptz not null default now(),
-  updated_by    text
-);
-
-alter table public.ts_admin_passwords enable row level security;
--- [의도적] 정책 없음 — service_role 전용.
-revoke all on table public.ts_admin_passwords from anon, authenticated;
-
-comment on table public.ts_admin_passwords is
-  '운영자 비밀번호 해시. admin-api 전용. 운영자를 지우면 함께 지워진다(ts_admin_delete_operator).';
-
--- 예전 판의 "이메일로 비밀번호 재설정" 코드 표. 재설정을 마스터가 직접 정하는 방식으로 바꾸며 읽는 곳이 없어졌다.
+-- 예전 판의 운영자 비밀번호 표·"이메일로 비밀번호 재설정" 코드 표. 비밀번호는 이제 트루베이스 저장소(콘솔 주소의 /hub)
+-- 한 곳에 있고, 프로젝트는 그 저장소가 준 표로 로그인을 받는다(admin-api auth.hubLogin).
+drop table if exists public.ts_admin_passwords;
 drop table if exists public.ts_admin_reset_codes;
 
 -- 비활성화와 달리 기록을 남기지 않고 지운다 — 잘못 추가한 이메일을 치울 때 쓴다.
@@ -9631,12 +9661,11 @@ begin
     raise exception 'operator_not_disabled';
   end if;
 
-  delete from public.ts_admin_passwords where email = v_email;
   delete from public.ts_admin_operators where email = v_email;
 end;
 $$;
 
-comment on function public.ts_admin_delete_operator(text) is '운영자 삭제(비밀번호 포함). service_role 전용.';
+comment on function public.ts_admin_delete_operator(text) is '운영자 삭제. service_role 전용.';
 
 revoke all on function public.ts_admin_delete_operator(text) from public, anon, authenticated;
 grant execute on function public.ts_admin_delete_operator(text) to service_role;
@@ -10094,6 +10123,7 @@ create table if not exists public.ts_admin_console_settings (
   color        text check (color ~ '^#[0-9a-f]{6}$'),
   display_name text check (char_length(display_name) between 1 and 40),
   icon         text check (icon ~ '^data:image/(png|jpeg|webp);base64,' and length(icon) <= 120000),
+  activated_at timestamptz,
   updated_at   timestamptz not null default now(),
   updated_by   text
 );
@@ -10103,13 +10133,26 @@ alter table public.ts_admin_console_settings
   add column if not exists display_name text check (char_length(display_name) between 1 and 40),
   add column if not exists icon         text check (icon ~ '^data:image/(png|jpeg|webp);base64,' and length(icon) <= 120000);
 
+-- 콘솔에 보이는 프로젝트인지. 새로 설치한 프로젝트는 대기(null)로 숨겨 두고, 마스터가 콘솔의 "새 프로젝트 만들기"에서
+-- 이름을 정하는 순간 켠다. 이 칸이 생기기 전부터 쓰던 프로젝트는 이름이 정해져 있으니 그때부터 쓰던 것으로 본다 —
+-- 설치를 다시 돌려도 운영 중인 게임이 콘솔에서 사라지지 않게.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'ts_admin_console_settings'
+                    and column_name = 'activated_at') then
+    alter table public.ts_admin_console_settings add column activated_at timestamptz;
+    update public.ts_admin_console_settings set activated_at = updated_at where display_name is not null;
+  end if;
+end $$;
+
 insert into public.ts_admin_console_settings (id) values (1) on conflict (id) do nothing;
 
 alter table public.ts_admin_console_settings enable row level security;
 -- [의도적] 정책 없음 — service_role 전용.
 
 comment on table public.ts_admin_console_settings is
-  '프로젝트 정보(행 하나, 콘솔 "설정 › 프로젝트 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 프로젝트 이름, icon=프로젝트 아이콘(data URL). 색·아이콘 null 은 콘솔 기본값, 이름 null 은 아직 안 정한 것.';
+  '프로젝트 정보(행 하나, 콘솔 "설정 › 프로젝트 정보"). color=콘솔 색(#rrggbb 소문자), display_name=콘솔에 보이는 프로젝트 이름, icon=프로젝트 아이콘(data URL), activated_at=콘솔에 꺼낸 시각(null 이면 대기 — 콘솔 목록에 안 보임). 색·아이콘 null 은 콘솔 기본값, 이름 null 은 아직 안 정한 것.';
 
 create or replace function public.ts_admin_console_settings_get()
 returns jsonb
@@ -10120,9 +10163,55 @@ set search_path = public
 as $$
   select coalesce(
            (select jsonb_build_object('color', c.color, 'display_name', c.display_name, 'icon', c.icon,
+                                      'active', c.activated_at is not null, 'activated_at', c.activated_at,
                                       'updated_at', c.updated_at, 'updated_by', c.updated_by)
               from public.ts_admin_console_settings c where c.id = 1),
-           jsonb_build_object('color', null, 'display_name', null, 'icon', null, 'updated_at', null, 'updated_by', null));
+           jsonb_build_object('color', null, 'display_name', null, 'icon', null, 'active', false, 'activated_at', null,
+                              'updated_at', null, 'updated_by', null));
+$$;
+
+-- 대기 중인 프로젝트를 콘솔에 꺼낸다(콘솔 "새 프로젝트 만들기", 마스터 전용). 이름은 꼭 정한다.
+create or replace function public.ts_admin_project_activate(
+  p_display_name text,
+  p_color        text default null,
+  p_by           text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_name  text := nullif(btrim(coalesce(p_display_name, '')), '');
+  v_color text := nullif(lower(btrim(coalesce(p_color, ''))), '');
+  v_row   public.ts_admin_console_settings%rowtype;
+begin
+  if v_name is null then
+    raise exception 'console_name_required';
+  end if;
+  if char_length(v_name) > 40 then
+    raise exception 'console_name_too_long';
+  end if;
+  if v_color is not null and v_color !~ '^#[0-9a-f]{6}$' then
+    raise exception 'console_color_invalid';
+  end if;
+
+  insert into public.ts_admin_console_settings (id) values (1) on conflict (id) do nothing;
+  select * into v_row from public.ts_admin_console_settings where id = 1 for update;
+  if v_row.activated_at is not null then
+    raise exception 'project_already_active';
+  end if;
+
+  update public.ts_admin_console_settings
+     set display_name = v_name,
+         color        = coalesce(v_color, color),
+         activated_at = now(),
+         updated_at   = now(),
+         updated_by   = p_by
+   where id = 1;
+
+  return public.ts_admin_console_settings_get();
+end;
 $$;
 
 create or replace function public.ts_admin_console_identity_update(
@@ -10199,9 +10288,44 @@ revoke all on table    public.ts_admin_console_settings from anon, authenticated
 revoke all on function public.ts_admin_console_settings_get()                       from public, anon, authenticated;
 revoke all on function public.ts_admin_console_settings_update(text, text)          from public, anon, authenticated;
 revoke all on function public.ts_admin_console_identity_update(text, text, text)    from public, anon, authenticated;
+revoke all on function public.ts_admin_project_activate(text, text, text)           from public, anon, authenticated;
 grant execute on function public.ts_admin_console_settings_get()                    to service_role;
 grant execute on function public.ts_admin_console_settings_update(text, text)       to service_role;
 grant execute on function public.ts_admin_console_identity_update(text, text, text) to service_role;
+grant execute on function public.ts_admin_project_activate(text, text, text)        to service_role;
+
+comment on function public.ts_admin_project_activate(text, text, text) is
+  '대기 중인 프로젝트를 콘솔에 꺼낸다(이름 필수, 색은 선택). 이미 꺼낸 프로젝트면 project_already_active. service_role 전용.';
+
+-- ---------------------------------------------------------------------------
+-- 콘솔 로그인 표 서명 비밀값 — admin-api 가 운영자 로그인 표를 서명한다.
+-- 설치 때 무작위로 만들어 Vault 에 둔다 — 새 프로젝트는 Supabase Secrets 에 따로 넣지 않는다.
+-- admin-api 는 Secrets 의 ADMIN_SESSION_SECRET 을 먼저 쓴다(이미 넣어 둔 게임은 그 값 그대로 — 바꾸면
+-- 운영자가 모두 다시 로그인해야 한다). 이미 있으면 다시 만들지 않는다.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'admin_session_secret') then
+    perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'admin_session_secret',
+      '운영 콘솔 로그인 표 서명용. admin-api 전용.');
+  end if;
+end $$;
+
+create or replace function public.ts_admin_session_secret()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'admin_session_secret';
+$$;
+
+comment on function public.ts_admin_session_secret() is
+  '운영 콘솔 로그인 표 서명 비밀값(복호화). admin-api 전용 — service_role 만.';
+
+revoke all on function public.ts_admin_session_secret() from public, anon, authenticated;
+grant execute on function public.ts_admin_session_secret() to service_role;
 
 notify pgrst, 'reload schema';
 

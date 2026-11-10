@@ -128,9 +128,10 @@ namespace TrueBase.Core.Data
                 ensuredNow = true;
             }
 
+            // 돌려받는 칸은 account_id 하나 — 맞는 행이 있었는지만 보면 된다. select 가 없으면 행 전체(수십 KB)가 저장마다 되돌아온다.
             var url =
                 $"{SupabaseRestTableRef.BuildTableUrl(_supabaseUrl, tableName)}" +
-                $"?account_id=eq.{Uri.EscapeDataString(accountId.Trim())}";
+                $"?account_id=eq.{Uri.EscapeDataString(accountId.Trim())}&select=account_id";
 
             var payload = patch;
             if (setUpdatedAtIsoUtc)
@@ -226,7 +227,7 @@ namespace TrueBase.Core.Data
                 method: "DELETE",
                 url: url,
                 jsonBody: null,
-                headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
+                headers: CreateAuthHeaders(accessToken, prefer: "return=minimal"));
 
             if (response == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
@@ -234,7 +235,7 @@ namespace TrueBase.Core.Data
             if (response.IsSuccess == false)
                 return SupabaseResult<bool>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "delete"));
 
-            // 매칭 행이 없어도(빈 배열) 삭제 목적은 달성 — 멱등 성공.
+            // 매칭 행이 없어도 삭제 목적은 달성 — 멱등 성공. 그래서 응답 본문을 받지 않는다(return=minimal).
             return SupabaseResult<bool>.Success(true);
         }
 
