@@ -7,7 +7,7 @@ import { opLabel } from '../lib/schemaLabels'
 import { pgTypeLabel as typeText } from '../lib/schemaLabels'
 import { PageHeader } from '../components/ui/PageHeader'
 import { inputCls } from '../components/ui/Input'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { formatCount, formatDateTime } from '../components/ui/format'
@@ -319,10 +319,11 @@ export default function SchemaChanges({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
       <WhiteCard>
-        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-5 py-3">
-          <span className="text-sm font-medium text-neutral-800">대기 중 변경</span>
-          <span className="text-xs text-neutral-400">{drafts.length}건</span>
-          <div className="ml-auto flex items-center gap-2">
+        <div className="border-b border-neutral-100 p-5 pb-3">
+          <CardHeader
+            title={<>대기 중 변경 <span className="text-xs font-normal text-neutral-400">{drafts.length}건</span></>}
+            description="게시하면 실제로 반영될 변경을 봅니다."
+            actions={<>
             <Button variant="outline" size="compact"
               onClick={() => { void openDiscardAll() }}
               disabled={busy || drafts.length === 0}
@@ -336,7 +337,8 @@ export default function SchemaChanges({
               <Send className="w-3.5 h-3.5" />
               게시
             </Button>
-          </div>
+            </>}
+          />
         </div>
         {hasDestructiveDraft && (
           <div className="flex items-center gap-2 px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700">
@@ -400,8 +402,8 @@ export default function SchemaChanges({
       </WhiteCard>
 
       <WhiteCard>
-        <div className="border-b border-neutral-100 px-5 py-3">
-          <span className="text-sm font-medium text-neutral-800">게시 이력</span>
+        <div className="p-5 pb-3">
+          <CardHeader title="게시 이력" description="게시한 변경을 버전마다 보고 되돌립니다." />
         </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">

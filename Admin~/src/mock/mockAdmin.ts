@@ -125,6 +125,9 @@ function chatStats(days: number) {
 
 // ── 서비스 연결 켜기/끄기 ── Sign in with Apple 은 켜 두고 값을 비워, 필수 값이 빠진 모습(빨간 없음)이 보이게 한다.
 let mockServices: Record<string, boolean> = { signin: true }
+let mockAuthSync: { finishedAt: string | null; ok: boolean | null; message: string | null } = {
+  finishedAt: addDays(kstToday(), -1) + 'T10:50:00+09:00', ok: true, message: '기본 설정 · Google · 돌아올 주소',
+}
 
 // ── 요청 제한 ── 켜 둔 상태로, 제한 중인 계정 하나(가짜 플레이어 Guest_7712)와 로그인 전 IP 하나를 보인다.
 let requestLimitSettings = {
@@ -574,11 +577,31 @@ function supportRow(t: MockSupportTicket) {
 type Handler = (target: ProjectTarget, params: Record<string, unknown>) => unknown
 
 // 콘솔 코드에는 프로젝트 이름 기본값이 없다 — 실제로는 각 DB 의 프로젝트 정보가 정한다.
+// 이름이 없는 프로젝트(standby)는 대기 중 — "새 프로젝트 만들기"로 꺼내면 이름이 생긴다. 새로고침하면 다시 대기로 돌아간다.
 const MOCK_PROJECT_NAME: Record<ProjectTarget, string> = { defencer: '마왕은 힘들어', devilslayer: '데빌 슬레이어' }
+const mockLook = (target: ProjectTarget) => {
+  const name = MOCK_PROJECT_NAME[target] ?? null
+  return { color: null, display_name: name, icon: null, active: name !== null }
+}
 
 const SAVE_VALUES = { gold: 5200, level: 12, inventory: { gem: 50 } }
 const SAVE_DEFAULTS = { gold: 0, level: 1, inventory: null }
 const resetAccounts = new Set<string>()
+
+let mockInvites: { email: string; display_name: string; invited_by: string | null; invited_at: string; has_password: boolean }[] = [
+  { email: 'dev.kim@example.com', display_name: '김개발', invited_by: MOCK_EMAIL, invited_at: '2026-11-03T02:10:00.000Z', has_password: false },
+  { email: 'ops.lee@example.com', display_name: '이운영', invited_by: MOCK_EMAIL, invited_at: '2026-10-21T08:30:00.000Z', has_password: true },
+]
+
+type MockOperator = { email: string; display_name: string; disabled_at: string | null; created_at: string; created_by: string | null }
+const mockOperators: Record<string, MockOperator[]> = {}
+// 운영자는 트루베이스 구성원(초대 목록)과 같은 사람이다. 운영자2는 초대 방식 전부터 있던 사람이라 초대 목록에 없다.
+function operatorsOf(target: ProjectTarget): MockOperator[] {
+  return (mockOperators[target] ??= [
+    { email: 'ops.lee@example.com', display_name: '이운영', disabled_at: null, created_at: addDays(kstToday(), -40) + 'T10:00:00+09:00', created_by: MOCK_EMAIL },
+    { email: 'ops2@local', display_name: '운영자2', disabled_at: addDays(kstToday(), -5) + 'T10:00:00+09:00', created_at: addDays(kstToday(), -20) + 'T10:00:00+09:00', created_by: MOCK_EMAIL },
+  ])
+}
 
 const HANDLERS: Record<string, Handler> = {
   'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
@@ -706,8 +729,53 @@ const HANDLERS: Record<string, Handler> = {
     supportCategories.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
     return null
   },
-  'auth.consoleLook': (target) => ({ color: null, display_name: MOCK_PROJECT_NAME[target], icon: null }),
-  'settings.getConsole': (target) => ({ color: null, display_name: MOCK_PROJECT_NAME[target], icon: null, updated_at: null, updated_by: null }),
+  'auth.consoleLook': (target) => mockLook(target),
+  'settings.getConsole': (target) => ({ ...mockLook(target), updated_at: null, updated_by: null }),
+  'auth.activateProject': (target, p) => {
+    if (MOCK_PROJECT_NAME[target]) throw new Error('다른 사람이 방금 이 프로젝트를 만들었습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.')
+    const name = String(p['displayName'] ?? '').trim()
+    if (!name) throw new Error('프로젝트 이름을 입력해 주세요.')
+    MOCK_PROJECT_NAME[target] = name
+    return { look: { ...mockLook(target), updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL }, token: mockToken() }
+  },
+  // ── 트루베이스 초대 저장소(/hub) ── 메모리에만 둔다(새로고침하면 처음 값).
+  'hub.login': () => ({ token: mockToken(), email: MOCK_EMAIL, invited: true, isMaster: true }),
+  'auth.hubLogin': () => ({ token: mockToken() }),
+  'hub.passwords.set': (_t, p) => {
+    if (String(p['newPassword'] ?? '').length < 8) throw new Error('비밀번호는 8자 이상이어야 합니다.')
+    const found = mockInvites.find((i) => i.email === p['email'])
+    if (!found) throw new Error('트루베이스에 초대된 사람만 비밀번호를 정할 수 있습니다.')
+    found.has_password = true
+    return null
+  },
+  'hub.members.list': () => mockInvites.map((i) => ({ email: i.email, display_name: i.display_name })),
+  'hub.invites.list': () => [...mockInvites].sort((a, b) => b.invited_at.localeCompare(a.invited_at)),
+  'hub.invites.add': (_t, p) => {
+    const email = String(p['email'] ?? '').trim().toLowerCase()
+    const name = String(p['displayName'] ?? '').trim()
+    const found = mockInvites.find((i) => i.email === email)
+    if (found) found.display_name = name
+    else mockInvites.push({ email, display_name: name, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false })
+    return null
+  },
+  'hub.invites.addMany': (_t, p) => {
+    const entries = (p['entries'] as { email: string; displayName: string }[] | undefined) ?? []
+    let added = 0
+    for (const e of entries) {
+      if (mockInvites.some((i) => i.email === e.email)) continue
+      mockInvites.push({ email: e.email, display_name: e.displayName, invited_by: MOCK_EMAIL, invited_at: new Date().toISOString(), has_password: false })
+      added++
+    }
+    return { added }
+  },
+  'hub.invites.remove': (_t, p) => {
+    mockInvites = mockInvites.filter((i) => i.email !== p['email'])
+    return null
+  },
+  'project.getConnection': (target) => ({
+    url: `https://${target}-mock.supabase.co`,
+    publishableKey: `sb_publishable_${target}_mock`,
+  }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
   'schema.getDraft': () => ({ rows: [] }),
   'dashboard.stats': () => {
@@ -742,9 +810,22 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'APNS_PRIVATE_KEY', source: null, status: 'missing', updatedAt: null, updatedBy: null },
       { key: 'GOOGLE_WEB_CLIENT_ID', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T11:00:00+09:00', updatedBy: 'mock@local' },
       { key: 'APPLE_SERVICES_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'GOOGLE_WEB_CLIENT_SECRET', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T11:05:00+09:00', updatedBy: 'mock@local' },
+      { key: 'GOOGLE_IOS_CLIENT_ID', source: null, status: 'missing', updatedAt: null, updatedBy: null },
+      { key: 'SUPABASE_MANAGEMENT_TOKEN', source: 'console', status: 'ok', updatedAt: addDays(kstToday(), -1) + 'T10:50:00+09:00', updatedBy: 'mock@local' },
     ],
     services: mockServices,
+    authSync: mockAuthSync,
   }),
+  // 가짜 반영 — 한 번은 실패, 다음은 성공으로 번갈아 답해 두 상태 줄을 다 볼 수 있게 한다.
+  'settings.syncAuth': () => {
+    const ok = mockAuthSync.ok !== true
+    mockAuthSync = ok
+      ? { finishedAt: new Date().toISOString(), ok: true, message: '기본 설정 · Google · 돌아올 주소' }
+      : { finishedAt: new Date().toISOString(), ok: false, message: 'Supabase 관리 열쇠가 맞지 않거나 권한이 모자랍니다. 열쇠를 다시 넣어 주세요.' }
+    if (!ok) throw new Error(mockAuthSync.message ?? '반영하지 못했습니다.')
+    return { message: mockAuthSync.message }
+  },
   'settings.setServiceEnabled': (_t, p) => {
     mockServices = { ...mockServices, [String(p['service'])]: p['enabled'] === true }
     return { services: mockServices }
@@ -927,11 +1008,30 @@ const HANDLERS: Record<string, Handler> = {
     { kind: 'name', word: '운영자', created_at: addDays(kstToday(), -30) + 'T09:00:00+09:00', created_by: null },
   ],
   'jobs.list': () => cronJobs(),
-  // 마스터(MOCK_EMAIL)는 목록에 나오지 않는다 — 화면 안내와 같게.
-  'operators.list': () => [
-    { email: 'ops1@local', display_name: '운영자1', disabled_at: null, created_at: addDays(kstToday(), -40) + 'T10:00:00+09:00', created_by: MOCK_EMAIL, hasPassword: true },
-    { email: 'ops2@local', display_name: '운영자2', disabled_at: addDays(kstToday(), -5) + 'T10:00:00+09:00', created_at: addDays(kstToday(), -20) + 'T10:00:00+09:00', created_by: MOCK_EMAIL, hasPassword: false },
-  ],
+  // 마스터(MOCK_EMAIL)는 목록에 나오지 않는다 — 화면 안내와 같게. 프로젝트마다 따로 바뀐다(트루베이스 구성원 삭제가 모든 프로젝트에서 뺀다).
+  'operators.list': (target) => operatorsOf(target),
+  'operators.upsert': (target, p) => {
+    const email = String(p['email'] ?? '').trim().toLowerCase()
+    const ops = operatorsOf(target)
+    const found = ops.find((o) => o.email === email)
+    if (found) found.disabled_at = null
+    else ops.push({ email, display_name: String(p['displayName'] ?? ''), disabled_at: null, created_at: new Date().toISOString(), created_by: MOCK_EMAIL })
+    return null
+  },
+  'operators.setDisabled': (target, p) => {
+    const found = operatorsOf(target).find((o) => o.email === p['email'])
+    if (!found) throw new Error('operator_not_found')
+    found.disabled_at = p['disabled'] ? new Date().toISOString() : null
+    return null
+  },
+  'operators.delete': (target, p) => {
+    const ops = operatorsOf(target)
+    const found = ops.find((o) => o.email === p['email'])
+    if (!found) throw new Error('operator_not_found')
+    if (!found.disabled_at) throw new Error('operator_not_disabled')
+    mockOperators[target] = ops.filter((o) => o !== found)
+    return null
+  },
   // 쿠폰 코드는 쿠폰 목록의 '오픈 기념'과 같다.
   'players.coupons': () => [
     { code: 'WELCOME2026', kind: 'keyword', title: '오픈 기념', mail_id: 'm1', redeemed_at: addDays(kstToday(), -2) + 'T20:15:00+09:00' },

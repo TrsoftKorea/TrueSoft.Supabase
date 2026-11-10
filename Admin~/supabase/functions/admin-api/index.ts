@@ -1,28 +1,30 @@
 // 운영 도구 백엔드.
 //
-// 운영자 인증은 게임 Auth 를 쓰지 않는다. 구글 ID 토큰이나, 아래 비밀번호 로그인으로 발급한
-// 자체 세션 토큰을 여기서 직접 검증한다. 그래서 운영자는 auth.users 에 존재하지 않는다 —
+// 운영자 인증은 게임 Auth 를 쓰지 않는다. 구글 ID 토큰이나, 로그인 때 발급한 자체 세션 토큰을
+// 여기서 직접 검증한다. 그래서 운영자는 auth.users 에 존재하지 않는다 —
 // 플레이어와 계정 풀이 겹치지 않고, 게임의 탈퇴·차단 흐름이 운영자 접근에 영향을 주지 않는다.
 //
 // 로그인 방법은 둘이다.
 //   구글 로그인    — 구글 계정이 있는 운영자용. 매번 구글이 신원을 증명한다.
-//   비밀번호 로그인 — 구글 계정이 없어도 등록된 이메일이면 쓸 수 있다. 비밀번호는 이메일을
-//                   거치지 않고 마스터가 "운영자 관리" 화면에서 직접 정해서 운영자에게 알려준다
-//                   (이메일 발송 인프라가 따로 필요 없다).
+//   비밀번호 로그인 — 구글 계정이 없는 운영자용. 비밀번호는 프로젝트가 아니라 트루베이스 초대 저장소(/hub)
+//                   한 곳에 있고 마스터가 "트루베이스 설정"에서 정한다. 콘솔이 저장소에서 받은 표를
+//                   auth.hubLogin 으로 보내면 이 프로젝트의 세션 토큰으로 바꿔 준다.
 //
 // 권한은 두 단계다.
-//   마스터  — ADMIN_EMAILS 환경변수. 화면에서 지울 수 없어 잠기지 않는 비상구. 운영자 관리 가능.
-//   운영자  — ts_admin_operators 표. 마스터가 화면에서 추가·비활성화·비밀번호 설정한다.
+//   마스터  — ADMIN_EMAILS 환경변수. 화면에서 지울 수 없어 잠기지 않는 비상구. 운영자 비활성화·삭제와
+//             Supabase 관리 열쇠는 마스터만.
+//   운영자  — ts_admin_operators 표. 서로 권한이 같다(처음 만든 사람도 따로 없다 — 퇴사자가 생겨도 남은 사람이 관리한다).
+//             트루베이스에 초대된 사람(콘솔 주소의 초대 저장소 /hub)만 운영자로 더할 수 있다.
 //
 // 필요한 시크릿:
 //   GOOGLE_CLIENT_ID, ADMIN_EMAILS(쉼표 구분) — 기존과 동일.
-//   ADMIN_SESSION_SECRET — 비밀번호 로그인 세션 토큰 서명용. 긴 무작위 문자열.
+//   ADMIN_SESSION_SECRET — 세션 토큰 서명용(선택). 없으면 설치 때 Vault 에 만든 값을 쓴다.
 //   SUPABASE_* 는 플랫폼이 자동 주입한다.
 //
 // verify_jwt 는 false 로 배포한다. 게이트웨이의 JWT 검증은 게임 Auth 기준이라 구글 토큰을
 // 통과시키지 못하고, CORS 프리플라이트(Authorization 없음)까지 막는다. 검증은 아래가 직접 한다.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { createRemoteJWKSet, jwtVerify, SignJWT } from "npm:jose@5";
+import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "npm:jose@5";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!);
@@ -31,11 +33,21 @@ const SUPABASE_SECRET_KEY = secretKeys.default;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
-// 비밀번호 로그인 세션 토큰 서명 키. 구글 토큰과 형태(JWT)를 맞춰서 프런트의
+// 세션 토큰 서명 키. 구글 토큰과 형태(JWT)를 맞춰서 프런트의
 // 만료 판단 로직을 그대로 재사용한다 — 다만 서명 알고리즘이 달라(HS256 vs RS256)
 // verifyIdentity() 가 시도 순서로 둘을 구분한다.
+// Secrets 에 넣어 둔 값이 먼저다(그 값으로 발급한 표가 계속 통하도록). 없으면 설치 때 Vault 에 만든 값을 쓴다
+// (install.sql 16절 admin_session_secret) — 새 프로젝트는 Secrets 에 따로 넣지 않는다.
 const SESSION_SECRET = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
-const SESSION_KEY = SESSION_SECRET ? new TextEncoder().encode(SESSION_SECRET) : null;
+let sessionKeyCache: Uint8Array | null = SESSION_SECRET ? new TextEncoder().encode(SESSION_SECRET) : null;
+
+async function sessionKey(db: SupabaseClient): Promise<Uint8Array | null> {
+  if (sessionKeyCache) return sessionKeyCache;
+  const { data, error } = await db.rpc("ts_admin_session_secret");
+  if (error || typeof data !== "string" || data === "") return null;
+  sessionKeyCache = new TextEncoder().encode(data);
+  return sessionKeyCache;
+}
 // 구글 로그인도 이 토큰으로 바꿔 준다(auth.googleLogin) — 구글 ID 토큰은 1시간이면 끝나
 // 그대로 쓰면 운영자가 한 시간마다 다시 로그인해야 했다.
 const SESSION_TTL = "7d";
@@ -162,8 +174,8 @@ async function verifyGoogleIdToken(idToken: string): Promise<string | null> {
     const email = payload["email"];
     return typeof email === "string" ? email.toLowerCase() : null;
   } catch {
-    // 실패 로그는 여기서 안 남긴다 — 비밀번호 로그인 세션 토큰(HS256)도 항상 이 경로를
-    // 먼저 타서 매번 "실패"하므로, 여기서 찍으면 정상적인 비밀번호 로그인마다 가짜 에러가
+    // 실패 로그는 여기서 안 남긴다 — 세션 토큰(HS256)도 항상 이 경로를
+    // 먼저 타서 매번 "실패"하므로, 여기서 찍으면 정상적인 세션 요청마다 가짜 에러가
     // 쌓인다. 진짜 실패(둘 다 아님)는 verifyIdentity 에서 한 번만 남긴다.
     return null;
   }
@@ -227,115 +239,76 @@ async function accountFilterForSearch(db: SupabaseClient, term: string): Promise
   return { anyOf, truncated: ids.length > NAME_SEARCH_LIMIT };
 }
 
-/** 마스터이거나, 표에 등록되고 비활성화되지 않은 운영자인지. 비밀번호 로그인·재설정에서 공용으로 쓴다. */
+/** 마스터이거나, 표에 등록되고 비활성화되지 않은 운영자인지. 로그인 때 쓴다. */
 async function isAllowedIdentity(db: SupabaseClient, email: string): Promise<boolean> {
   return MASTER_EMAILS.has(email) || (await isEnabledOperator(db, email));
 }
 
-/** 로그인 세션 토큰을 발급한다(비밀번호·구글 공용). 구글 ID 토큰과 같은 JWT 형태라 프런트가 만료를 그대로 읽는다. */
-async function issueSessionToken(email: string): Promise<string> {
-  if (!SESSION_KEY) throw new Error("ADMIN_SESSION_SECRET 가 설정되지 않았습니다.");
-  return await new SignJWT({ email })
+/**
+ * 로그인 세션 토큰을 발급한다. 구글 ID 토큰과 같은 JWT 형태라 프런트가 만료를 그대로 읽는다.
+ * 트루베이스 저장소의 표(비밀번호 로그인)로 받은 로그인은 그 표를 함께 싣는다 — 저장소에서 비밀번호를 바꾸면
+ * 그 전에 받은 표가 무효가 되고, 요청마다 그것을 확인해 이 로그인도 함께 끊는다(stillValidHubToken).
+ */
+async function issueSessionToken(db: SupabaseClient, email: string, hubToken?: string): Promise<string> {
+  const key = await sessionKey(db);
+  if (!key) throw new Error("로그인 서명 비밀값이 없습니다. 설치 SQL 을 다시 실행해 주세요.");
+  return await new SignJWT(hubToken ? { email, hub: hubToken } : { email })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(SESSION_TTL)
-    .sign(SESSION_KEY);
+    .sign(key);
 }
 
-type Identity = { email: string; issuedAt: number | null };
+type Identity = { email: string; hubToken: string | null };
 
-/** 비밀번호 로그인 세션 토큰을 검증한다. 실패하면 null. */
-async function verifySessionToken(token: string): Promise<Identity | null> {
-  if (!SESSION_KEY) return null;
+/** 우리가 발급한 세션 토큰을 검증한다. 실패하면 null. */
+async function verifySessionToken(db: SupabaseClient, token: string): Promise<Identity | null> {
+  const key = await sessionKey(db);
+  if (!key) return null;
   try {
-    const { payload } = await jwtVerify(token, SESSION_KEY);
+    const { payload } = await jwtVerify(token, key);
     const email = payload["email"];
     if (typeof email !== "string") return null;
-    return { email: email.toLowerCase(), issuedAt: typeof payload.iat === "number" ? payload.iat : null };
+    const hub = payload["hub"];
+    return { email: email.toLowerCase(), hubToken: typeof hub === "string" ? hub : null };
   } catch {
     return null;
   }
 }
 
-// 발급 시각은 초까지만 있다. 초로 맞춰, 비밀번호를 바꾼 바로 그 초에 다시 로그인한 표까지 끊지 않게 한다.
-function issuedBeforePasswordChange(issuedAtSeconds: number, passwordUpdatedAt: string): boolean {
-  return issuedAtSeconds < Math.floor(Date.parse(passwordUpdatedAt) / 1000);
-}
-
-/** 비밀번호를 바꾸기 전에 발급한 로그인인지. 유출이 의심돼 바꿨을 때 남의 로그인을 바로 끊으려는 것이다. */
-async function isRevokedByPasswordChange(db: SupabaseClient, identity: Identity): Promise<boolean> {
-  if (identity.issuedAt === null) return false;
-  const { data, error } = await db
-    .from("ts_admin_passwords")
-    .select("updated_at")
-    .eq("email", identity.email)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  return data ? issuedBeforePasswordChange(identity.issuedAt, data.updated_at as string) : false;
-}
-
-/** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인한다. 구글 토큰은 구글이 1시간이면 끝내므로 발급 시각을 보지 않는다. */
-async function verifyIdentity(token: string): Promise<Identity | null> {
+/** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인한다. */
+async function verifyIdentity(db: SupabaseClient, token: string): Promise<Identity | null> {
   const google = await verifyGoogleIdToken(token);
-  if (google) return { email: google, issuedAt: null };
-  const session = await verifySessionToken(token);
+  if (google) return { email: google, hubToken: null };
+  const session = await verifySessionToken(db, token);
   if (session) return session;
   // 둘 다 아니면 그때만 로그를 남긴다 — 어느 한쪽만 실패하는 건 정상(로그인 방식이 둘이라
   // 그렇다) 이라 노이즈가 안 되고, 진짜 문제만 여기 걸린다.
-  console.error("[admin-api] 토큰 검증 실패 — 구글 ID 토큰도 비밀번호 로그인 세션도 아닙니다.");
+  console.error("[admin-api] 토큰 검증 실패 — 구글 ID 토큰도 세션 토큰도 아닙니다.");
   return null;
 }
 
-// ── 비밀번호 해시 (Web Crypto PBKDF2-SHA256, 외부 의존성 없음) ──────────────────────
-const PBKDF2_ITERATIONS = 100_000;
+// 저장소 확인 결과를 잠깐 기억한다 — 요청마다 묻지 않게. 비밀번호를 바꾼 뒤 옛 로그인이 끊기기까지 길어야 이만큼 걸린다.
+const HUB_CHECK_TTL_MS = 5 * 60_000;
+const hubChecked = new Map<string, number>();
 
-function toBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
-}
-function fromBase64(b64: string): Uint8Array {
-  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-}
-
-async function pbkdf2(secret: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, [
-    "deriveBits",
-  ]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
-    keyMaterial,
-    256,
-  );
-  return new Uint8Array(bits);
-}
-
-/** "pbkdf2$반복수$salt$hash" 형태로 저장한다. 원문은 어디에도 남지 않는다. */
-async function hashSecret(secret: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await pbkdf2(secret, salt, PBKDF2_ITERATIONS);
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`;
-}
-
-/** 저장된 해시와 대조한다. 형식이 깨졌으면 false(예외를 던지지 않는다). */
-async function verifySecretHash(secret: string, stored: string): Promise<boolean> {
-  const parts = stored.split("$");
-  if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
-  const iterations = Number(parts[1]);
-  if (!Number.isFinite(iterations) || iterations <= 0) return false;
+/** 세션에 실린 저장소 표가 아직 유효한지. 저장소가 거절하면 false, 저장소에 닿지 못하면 예외. */
+async function stillValidHubToken(hubToken: string): Promise<boolean> {
+  const until = hubChecked.get(hubToken);
+  if (until && until > Date.now()) return true;
   try {
-    const salt = fromBase64(parts[2]);
-    const expected = fromBase64(parts[3]);
-    const actual = await pbkdf2(secret, salt, iterations);
-    if (actual.length !== expected.length) return false;
-    // 타이밍 공격을 막으려 길이가 같을 때만 상수시간으로 비교한다.
-    let diff = 0;
-    for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
-    return diff === 0;
-  } catch {
-    return false;
+    await hubVerify(hubToken);
+  } catch (e) {
+    if (e instanceof HubRequestError && e.status === 401) {
+      hubChecked.delete(hubToken);
+      return false;
+    }
+    throw e;
   }
+  if (hubChecked.size > 1000) hubChecked.clear();
+  hubChecked.set(hubToken, Date.now() + HUB_CHECK_TTL_MS);
+  return true;
 }
-
-const MIN_PASSWORD_LENGTH = 8;
 
 // ═══ BEGIN usage-count ═══ (Tools~/SdkAudit 가 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
 // 운영 콘솔 "서버 상태"의 서버 함수 호출 수에 1 을 더한다. 응답을 기다리지 않고, 실패해도 이 함수의 동작에는 영향이 없다.
@@ -356,6 +329,150 @@ function countCall(name: string, req: Request): void {
   }
 }
 // ═══ END usage-count ═══
+
+// ═══ BEGIN auth-sync ═══ (Tools~/SdkAudit R16 이 엣지 함수마다 이 구간이 글자 그대로 같은지 대조한다)
+// 콘솔 "서비스 연결"의 로그인 값을 Supabase 로그인 설정(관리 API)에 넣는다. 관리 열쇠는 이 프로젝트 하나에
+// Auth Config·Project Settings 읽기·쓰기만 준 열쇠다.
+// 기존 설정에 더하기만 하고 지우지 않는다 — 대시보드에서 직접 넣어 둔 클라이언트 ID·돌아올 주소가 콘솔에 없다고
+// 빠지면 그 로그인이 깨진다. 값이 없는 로그인은 건드리지 않는다.
+// 애플 Secret Key 는 Sign in with Apple 키로 서버가 만든다. 애플이 6개월까지만 받아 150일로 만들고 매주 다시 만든다.
+type AuthSyncResult = { ok: boolean; skipped?: boolean; message: string };
+
+const AUTH_SYNC_APPLE_SECRET_DAYS = 150;
+
+function authSyncList(v: string | null | undefined): string[] {
+  return (v ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+// 앞의 것을 앞에 두고 겹치는 것은 한 번만 — 애플은 Services ID 가 맨 앞이어야 웹·Android 로그인이 된다.
+function authSyncMerge(first: string[], existing: string[]): string {
+  const out: string[] = [];
+  for (const s of [...first, ...existing]) if (!out.includes(s)) out.push(s);
+  return out.join(",");
+}
+
+async function authSyncAppleSecret(teamId: string, keyId: string, privateKey: string, servicesId: string): Promise<string> {
+  const key = await importPKCS8(privateKey.replace(/\\n/g, "\n"), "ES256");
+  return await new SignJWT({})
+    .setProtectedHeader({ alg: "ES256", kid: keyId })
+    .setIssuer(teamId)
+    .setIssuedAt()
+    .setExpirationTime(`${AUTH_SYNC_APPLE_SECRET_DAYS}d`)
+    .setAudience("https://appleid.apple.com")
+    .setSubject(servicesId)
+    .sign(key);
+}
+
+async function syncAuthConfig(values: Record<string, string>): Promise<AuthSyncResult> {
+  const v = (k: string) => (values[k] ?? "").trim();
+  const token = v("SUPABASE_MANAGEMENT_TOKEN");
+  if (!token) return { ok: true, skipped: true, message: "no_token" };
+
+  const ref = new URL(Deno.env.get("SUPABASE_URL")!).hostname.split(".")[0];
+  const api = `https://api.supabase.com/v1/projects/${ref}/config/auth`;
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const failed = (status: number, what: string): AuthSyncResult => ({
+    ok: false,
+    message: status === 401 || status === 403
+      ? "Supabase 관리 열쇠가 맞지 않거나 권한이 모자랍니다. 열쇠를 다시 넣어 주세요."
+      : status === 429
+      ? "Supabase 가 요청을 잠시 막았습니다. 잠시 뒤 다시 반영해 주세요."
+      : `${what}에 실패했습니다(HTTP ${status}).`,
+  });
+
+  let current: Response;
+  try {
+    current = await fetch(api, { headers, signal: AbortSignal.timeout(15_000) });
+  } catch {
+    return { ok: false, message: "Supabase 에 연결하지 못했습니다. 잠시 뒤 다시 반영해 주세요." };
+  }
+  if (!current.ok) {
+    await current.body?.cancel();
+    return failed(current.status, "로그인 설정 읽기");
+  }
+  const cfg = (await current.json()) as {
+    uri_allow_list?: string | null; external_google_client_id?: string | null; external_apple_client_id?: string | null;
+  };
+
+  const patch: Record<string, unknown> = {
+    external_anonymous_users_enabled: true,
+    mailer_autoconfirm: true,
+    security_manual_linking_enabled: true,
+  };
+  const done: string[] = ["기본 설정"];
+
+  const googleIds = [...authSyncList(values["GOOGLE_WEB_CLIENT_ID"]), ...authSyncList(values["GOOGLE_IOS_CLIENT_ID"])];
+  if (googleIds.length > 0) {
+    patch.external_google_enabled = true;
+    patch.external_google_client_id = authSyncMerge(googleIds, authSyncList(cfg.external_google_client_id));
+    if (v("GOOGLE_WEB_CLIENT_SECRET")) patch.external_google_secret = v("GOOGLE_WEB_CLIENT_SECRET");
+    done.push("Google");
+  }
+
+  const bundles = authSyncList(values["APPLE_BUNDLE_ID"]);
+  const servicesId = v("APPLE_SERVICES_ID");
+  if (bundles.length > 0) {
+    patch.external_apple_enabled = true;
+    patch.external_apple_client_id = authSyncMerge(
+      [...(servicesId ? [servicesId] : []), ...bundles], authSyncList(cfg.external_apple_client_id));
+    if (servicesId && v("APPLE_TEAM_ID") && v("APPLE_KEY_ID") && v("APPLE_PRIVATE_KEY")) {
+      try {
+        patch.external_apple_secret = await authSyncAppleSecret(v("APPLE_TEAM_ID"), v("APPLE_KEY_ID"), v("APPLE_PRIVATE_KEY"), servicesId);
+      } catch {
+        return { ok: false, message: "Sign in with Apple 키로 Secret Key 를 만들지 못했습니다. Private key 를 확인해 주세요." };
+      }
+      done.push("Apple · Secret Key");
+    } else {
+      done.push("Apple");
+    }
+  }
+
+  // 안드로이드 애플 로그인이 브라우저에서 앱으로 돌아오는 주소.
+  const packages = authSyncList(values["GOOGLE_PACKAGE_NAME"]);
+  if (packages.length > 0) {
+    patch.uri_allow_list = authSyncMerge(authSyncList(cfg.uri_allow_list), packages.map((p) => `${p}://login-callback`));
+    done.push("돌아올 주소");
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(api, { method: "PATCH", headers, body: JSON.stringify(patch), signal: AbortSignal.timeout(15_000) });
+  } catch {
+    return { ok: false, message: "Supabase 에 연결하지 못했습니다. 잠시 뒤 다시 반영해 주세요." };
+  }
+  await res.body?.cancel();
+  if (!res.ok) return failed(res.status, "로그인 설정 저장");
+  return { ok: true, message: done.join(" · ") };
+}
+
+// 로그인 설정 반영에 쓰는 키. 콘솔 값이 없으면 Edge Function Secrets 를 쓴다(server-config 구간과 같은 순서).
+// 콘솔 서버는 이 키가 저장되면 바로 반영한다.
+const AUTH_SYNC_KEYS = [
+  "SUPABASE_MANAGEMENT_TOKEN", "GOOGLE_WEB_CLIENT_ID", "GOOGLE_WEB_CLIENT_SECRET", "GOOGLE_IOS_CLIENT_ID",
+  "APPLE_BUNDLE_ID", "APPLE_SERVICES_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY", "GOOGLE_PACKAGE_NAME",
+];
+// ═══ END auth-sync ═══
+
+/** 지금 값으로 로그인 설정을 반영하고 결과를 상태 표에 남긴다. 관리 열쇠가 없으면 아무것도 하지 않는다. */
+async function runAuthSync(db: SupabaseClient): Promise<AuthSyncResult> {
+  let result: AuthSyncResult;
+  try {
+    const { data, error } = await db.rpc("ts_server_config_get");
+    if (error) throw new Error(error.message);
+    const fromConsole = (data ?? {}) as Record<string, string>;
+    const values: Record<string, string> = {};
+    for (const k of AUTH_SYNC_KEYS) values[k] = (fromConsole[k] ?? "").trim() || (Deno.env.get(k) ?? "").trim();
+    result = await syncAuthConfig(values);
+  } catch (e) {
+    result = { ok: false, message: `반영하지 못했습니다: ${e instanceof Error ? e.message : e}` };
+  }
+  if (result.skipped) return result;
+  const { error } = await db.rpc("ts_purchase_refund_sync_mark", {
+    p_store: "auth_sync", p_phase: "finish", p_ok: result.ok, p_message: result.message,
+  });
+  if (error) console.error(`[admin-api] 로그인 설정 반영 기록 실패: ${error.message}`);
+  return result;
+}
 
 Deno.serve(async (req) => {
   countCall("admin-api", req);
@@ -379,27 +496,20 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // ── 2. 로그인 전 공개 액션(비밀번호 로그인·재설정) ────────────────────────────────
+  // ── 2. 로그인 전 공개 액션(로그인·프로젝트 꺼내기) ────────────────────────────────
   // 아직 세션이 없는 상태에서만 의미가 있으므로 아래 신원 확인보다 먼저 처리하고 끝낸다.
   if (action.startsWith("auth.")) {
     try {
       switch (action) {
-        case "auth.passwordLogin": {
-          const loginEmail = str(params, "email").toLowerCase();
-          const password = str(params, "password");
-          const { data: row, error } = await db
-            .from("ts_admin_passwords")
-            .select("password_hash")
-            .eq("email", loginEmail)
-            .maybeSingle();
-          if (error) throw new Error(error.message);
-          if (!row || !(await verifySecretHash(password, row.password_hash))) {
-            return fail("이메일 또는 비밀번호가 올바르지 않습니다.", 401);
-          }
-          if (!(await isAllowedIdentity(db, loginEmail))) {
+        // 비밀번호 로그인. 비밀번호는 트루베이스 저장소 한 곳에 있다 — 콘솔이 저장소에서 받은 표를 프로젝트마다 보내
+        // 이 프로젝트의 로그인으로 바꾼다.
+        case "auth.hubLogin": {
+          const hubToken = str(params, "hubToken");
+          const who = await hubVerify(hubToken);
+          if (!(await isAllowedIdentity(db, who.email))) {
             return fail("운영자 권한이 없습니다.", 403);
           }
-          const token = await issueSessionToken(loginEmail);
+          const token = await issueSessionToken(db, who.email, hubToken);
           return json({ ok: true, data: { token } });
         }
 
@@ -409,7 +519,7 @@ Deno.serve(async (req) => {
           if (!(await isAllowedIdentity(db, googleEmail))) {
             return fail("운영자 권한이 없습니다.", 403);
           }
-          const token = await issueSessionToken(googleEmail);
+          const token = await issueSessionToken(db, googleEmail);
           return json({ ok: true, data: { token } });
         }
 
@@ -419,11 +529,39 @@ Deno.serve(async (req) => {
         case "auth.consoleColor": { // 옛 이름 — 배포 전 콘솔 화면이 아직 부른다
           const { data, error } = await db.rpc("ts_admin_console_settings_get");
           if (error) throw new Error(error.message);
-          const s = (data ?? {}) as { color?: string | null; display_name?: string | null; icon?: string | null };
+          const s = (data ?? {}) as {
+            color?: string | null; display_name?: string | null; icon?: string | null; active?: boolean;
+          };
           return json({
             ok: true,
-            data: { color: s.color ?? null, display_name: s.display_name ?? null, icon: s.icon ?? null },
+            // active 가 false 면 대기 중인 프로젝트 — 콘솔이 목록에서 숨기고 "새 프로젝트 만들기"에서만 보인다.
+            data: { color: s.color ?? null, display_name: s.display_name ?? null, icon: s.icon ?? null, active: s.active ?? true },
           });
+        }
+
+        // 대기 프로젝트 꺼내기. 대기 프로젝트에는 운영자가 없어 이 프로젝트의 로그인으로는 누구인지 알 수 없다 —
+        // 트루베이스 초대 저장소가 준 표로 초대된 운영자(또는 마스터)인지 확인하고, 누른 사람을 첫 운영자로 넣은 뒤
+        // 이 프로젝트의 로그인 표를 돌려준다(콘솔이 다시 로그인하지 않고 바로 들어간다).
+        case "auth.activateProject": {
+          const who = await hubVerify(str(params, "hubToken"));
+          if (!who.invited && !who.isMaster) return fail("트루베이스에 초대되지 않은 계정입니다.", 403);
+          const { data, error } = await db.rpc("ts_admin_project_activate", {
+            p_display_name: optStr(params, "displayName"),
+            p_color: optStr(params, "color"),
+            p_by: who.email,
+          });
+          if (error) throw new Error(ACTIVATE_ERRORS[error.message] ?? error.message);
+          if (!who.isMaster) {
+            const { error: opError } = await db.rpc("ts_admin_upsert_operator", {
+              p_email: who.email, p_display_name: "", p_by: who.email,
+            });
+            if (opError) throw new Error(opError.message);
+          }
+          const { error: auditError } = await db.rpc("ts_admin_audit_write", {
+            p_email: who.email, p_action: "project.activate", p_params: redactParams(params),
+          });
+          if (auditError) console.error(`[admin-api] 운영 기록 실패 (project.activate, ${who.email}): ${auditError.message}`);
+          return json({ ok: true, data: { look: data, token: await issueSessionToken(db, who.email, str(params, "hubToken")) } });
         }
 
         default:
@@ -432,24 +570,28 @@ Deno.serve(async (req) => {
     } catch (e) {
       console.error(`[admin-api] ${action} 실패: ${e}`);
       const message = e instanceof Error ? e.message : "처리에 실패했습니다.";
+      if (e instanceof HubRequestError) return fail(message, e.status === 0 ? 503 : e.status === 401 ? 401 : 400);
       return fail(message, message === OPERATOR_LOOKUP_FAILED ? 503 : 400);
     }
   }
 
-  // ── 3. 신원 확인(구글 또는 비밀번호 로그인 세션) ───────────────────────────────────
+  // ── 3. 신원 확인(구글 또는 세션 토큰) ───────────────────────────────────
   const authHeader = req.headers.get("Authorization") ?? "";
   const idToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : "";
   if (!idToken) return fail("로그인이 필요합니다.", 401);
 
-  const identity = await verifyIdentity(idToken);
+  const identity = await verifyIdentity(db, idToken);
   if (!identity) return fail("로그인이 필요합니다.", 401);
   const email = identity.email;
 
+  // 트루베이스 저장소의 표로 받은 로그인은 그 표가 아직 유효해야 한다(비밀번호를 바꾸면 무효).
   // 마스터도 거친다 — 마스터는 비활성화가 안 되므로 이것이 그 로그인을 끊는 수단이다.
-  try {
-    if (await isRevokedByPasswordChange(db, identity)) return fail("로그인이 필요합니다.", 401);
-  } catch {
-    return fail(OPERATOR_LOOKUP_FAILED, 503);
+  if (identity.hubToken) {
+    try {
+      if (!(await stillValidHubToken(identity.hubToken))) return fail("로그인이 필요합니다.", 401);
+    } catch {
+      return fail("트루베이스 초대 저장소에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 503);
+    }
   }
 
   // ── 4. 인가 ────────────────────────────────────────────────────────────────
@@ -465,9 +607,13 @@ Deno.serve(async (req) => {
   }
 
   // ── 5. 처리 ────────────────────────────────────────────────────────────────
-  // 운영자 관리는 마스터만. 화면에서도 숨기지만 서버가 다시 막는다.
-  if (action.startsWith("operators.") && !isMaster) {
-    return fail("운영자 관리는 마스터만 할 수 있습니다.", 403);
+  // 운영자는 모두 같은 권한이라 누구나 초대된 사람을 운영자로 더할 수 있다. 빼기·관리 열쇠는 마스터만 —
+  // 화면에서도 숨기지만 서버가 다시 막는다.
+  if (MASTER_ONLY_ACTIONS.has(action) && !isMaster) {
+    return fail("마스터만 할 수 있습니다.", 403);
+  }
+  if (action === "settings.setServerConfig" && params["key"] === "SUPABASE_MANAGEMENT_TOKEN" && !isMaster) {
+    return fail("Supabase 관리 열쇠는 마스터만 넣을 수 있습니다.", 403);
   }
 
   const res = await handleAction(db, action, params, email, isMaster);
@@ -484,6 +630,49 @@ Deno.serve(async (req) => {
   }
   return res;
 });
+
+const MASTER_ONLY_ACTIONS = new Set(["operators.setDisabled", "operators.delete"]);
+
+const ACTIVATE_ERRORS: Record<string, string> = {
+  console_name_required: "프로젝트 이름을 입력해 주세요.",
+  console_name_too_long: "프로젝트 이름은 40자까지입니다.",
+  console_color_invalid: "색은 #rrggbb 형식이어야 합니다.",
+  project_already_active: "다른 사람이 방금 이 프로젝트를 만들었습니다. 목록을 새로 고친 뒤 다시 시도해 주세요.",
+};
+
+// ── 트루베이스 초대 저장소 ──────────────────────────────────────────────────────
+// 콘솔과 같은 주소(Cloudflare Pages)의 /hub. 대기 프로젝트에는 운영자가 없어 "새 프로젝트를 만들 수 있는 사람"과
+// "운영자로 더할 수 있는 사람"을 여기 묻는다. 운영자의 초대 표는 저장소만 확인할 수 있다(비밀값이 저장소에만 있다).
+const HUB_URL = Deno.env.get("TRUEBASE_HUB_URL") ?? "https://truebase-admin.pages.dev/hub";
+
+async function callHub<T>(action: string, params: Params): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(HUB_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, params }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new HubRequestError("트루베이스 초대 저장소에 연결하지 못했습니다. 잠시 뒤 다시 시도해 주세요.", 0);
+  }
+  const body = (await res.json().catch(() => null)) as { ok?: boolean; data?: T; error?: string } | null;
+  if (!res.ok || !body?.ok) {
+    throw new HubRequestError(body?.error ?? `초대 저장소가 요청을 처리하지 못했습니다(HTTP ${res.status}).`, res.status);
+  }
+  return body.data as T;
+}
+
+/** 저장소 요청 실패. status 는 저장소가 준 응답 코드이고, 닿지 못했으면 0 이다. */
+class HubRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+const hubVerify = (token: string) =>
+  callHub<{ email: string; invited: boolean; isMaster: boolean }>("verify", { token });
 
 // 조회 요청 이름. 여기 안 걸리는 action 은 전부 변경으로 보고 기록한다 — 새 조회를 추가하면서
 // 이름을 이 꼴로 안 지으면 기록이 늘 뿐 빠지지는 않는 쪽으로 틀리게 해 둔다.
@@ -536,6 +725,9 @@ const SERVER_CONFIG_VALID: Record<string, (v: string) => boolean> = {
   APNS_PRIVATE_KEY: (v) => v.includes("BEGIN PRIVATE KEY"),
   GOOGLE_WEB_CLIENT_ID: (v) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v),
   APPLE_SERVICES_ID: (v) => /^[A-Za-z0-9.-]+$/.test(v),
+  GOOGLE_WEB_CLIENT_SECRET: (v) => /^\S+$/.test(v),
+  GOOGLE_IOS_CLIENT_ID: (v) => v.split(",").every((s) => /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(s.trim())),
+  SUPABASE_MANAGEMENT_TOKEN: (v) => /^\S{20,}$/.test(v),
 };
 
 const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
@@ -553,6 +745,9 @@ const SERVER_CONFIG_FORMAT_HINT: Record<string, string> = {
   APNS_PRIVATE_KEY: ".p8 파일 내용 전체(-----BEGIN PRIVATE KEY----- 줄 포함)를 붙여 넣으세요.",
   GOOGLE_WEB_CLIENT_ID: "클라이언트 ID 는 숫자-영문.apps.googleusercontent.com 꼴입니다.",
   APPLE_SERVICES_ID: "Services ID 는 영문·숫자·점·하이픈만 씁니다.",
+  GOOGLE_WEB_CLIENT_SECRET: "클라이언트 보안 비밀번호는 띄어쓰기 없이 한 줄입니다.",
+  GOOGLE_IOS_CLIENT_ID: "클라이언트 ID 는 숫자-영문.apps.googleusercontent.com 꼴입니다. 여럿이면 쉼표로 나눕니다.",
+  SUPABASE_MANAGEMENT_TOKEN: "Supabase 에서 복사한 열쇠를 띄어쓰기 없이 그대로 붙여 넣으세요.",
 };
 
 async function handleAction(
@@ -631,26 +826,25 @@ async function handleAction(
       case "operators.list": {
         const { data, error } = await db.rpc("ts_admin_list_operators");
         if (error) throw new Error(error.message);
-        // 표 자체는 안 건드리고, 비밀번호 설정 여부만 덧붙인다 — 화면에서 상태 표시에 쓴다.
-        const rows = (data ?? []) as Array<Record<string, unknown> & { email: string }>;
-        const emails = rows.map((r) => r.email);
-        const withPassword = new Set<string>();
-        if (emails.length > 0) {
-          const { data: pwRows, error: pwError } = await db
-            .from("ts_admin_passwords")
-            .select("email")
-            .in("email", emails);
-          if (pwError) throw new Error(pwError.message);
-          for (const r of pwRows ?? []) withPassword.add(r.email as string);
-        }
-        return json({ ok: true, data: rows.map((r) => ({ ...r, hasPassword: withPassword.has(r.email) })) });
+        return json({ ok: true, data: data ?? [] });
       }
 
       case "operators.upsert": {
-        // 소문자로 저장해야 한다 — 로그인·비밀번호 설정·hasPassword 판정이 전부 소문자로
-        // 비교한다(원본 대소문자를 그대로 넣으면 그 운영자는 영원히 인증에 실패한다).
+        // 소문자로 저장해야 한다 — 로그인 판정이 전부 소문자로 비교한다
+        // (원본 대소문자를 그대로 넣으면 그 운영자는 영원히 인증에 실패한다).
+        const targetEmail = str(params, "email").trim().toLowerCase();
+        // 운영자로 더할 수 있는 사람은 트루베이스에 초대된 사람뿐이다. 묻는 표는 부른 사람의 초대 표다.
+        const { invited } = await callHub<{ invited: boolean }>("check", { token: str(params, "hubToken"), email: targetEmail });
+        if (!invited) throw new Error("트루베이스에 초대되지 않은 이메일입니다. 마스터에게 초대를 요청해 주세요.");
+        // 다시 넣으면 비활성이 풀린다 — 마스터가 막은 사람을 다른 운영자가 되살리지 못하게 한다.
+        if (!isMaster) {
+          const { data: ops, error: listError } = await db.rpc("ts_admin_list_operators");
+          if (listError) throw new Error(listError.message);
+          const existing = ((ops ?? []) as Array<{ email: string; disabled_at: string | null }>).find((o) => o.email === targetEmail);
+          if (existing?.disabled_at) throw new Error("비활성화된 운영자는 마스터만 되살릴 수 있습니다.");
+        }
         const { error } = await db.rpc("ts_admin_upsert_operator", {
-          p_email: str(params, "email").toLowerCase(),
+          p_email: targetEmail,
           p_display_name: optStr(params, "displayName"),
           p_by: email,
         });
@@ -658,30 +852,9 @@ async function handleAction(
         return json({ ok: true, data: null });
       }
 
-      case "operators.setPassword": {
-        // 이메일 발송을 안 거친다 — 마스터가 여기서 직접 정한 비밀번호를 운영자에게 따로 알려준다.
-        const targetEmail = str(params, "email").toLowerCase();
-        const newPassword = str(params, "newPassword");
-        if (newPassword.length < MIN_PASSWORD_LENGTH) {
-          return fail(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400);
-        }
-        if (!(await isEnabledOperator(db, targetEmail))) {
-          throw new Error("등록된 운영자가 아닙니다.");
-        }
-        const passwordHash = await hashSecret(newPassword);
-        const { error } = await db
-          .from("ts_admin_passwords")
-          .upsert(
-            { email: targetEmail, password_hash: passwordHash, updated_at: new Date().toISOString(), updated_by: email },
-            { onConflict: "email" },
-          );
-        if (error) throw new Error(error.message);
-        return json({ ok: true, data: null });
-      }
-
       case "operators.setDisabled": {
         const targetEmail = str(params, "email").toLowerCase();
-        // 여기 오는 요청은 항상 마스터가 보낸 것이다(operators.* 는 위에서 이미 막았다) — 마스터
+        // 여기 오는 요청은 항상 마스터가 보낸 것이다(MASTER_ONLY_ACTIONS 로 위에서 이미 막았다) — 마스터
         // 접근은 이 표가 아니라 ADMIN_EMAILS 로 정해지므로, 자기 이메일이 표에 우연히 들어 있어도
         // 그걸 비활성화한다고 본인이 잠기지 않는다. 막을 이유가 없다.
         const { error } = await db.rpc("ts_admin_set_operator_disabled", {
@@ -1294,6 +1467,12 @@ async function handleAction(
         if (metaError) throw new Error(metaError.message);
         // 켜기/끄기는 화면 표시용이라, 이것 하나 때문에 키 상태 표 전체가 안 뜨면 안 된다 — 비우면 화면이 값 유무로 짐작한다.
         if (servicesError) console.warn(`[admin-api] 서비스 켜기/끄기 상태를 읽지 못했습니다: ${servicesError.message}`);
+        const { data: authSync, error: authSyncError } = await db
+          .from("purchase_refund_sync")
+          .select("last_finished_at, last_ok, last_message")
+          .eq("store", "auth_sync")
+          .maybeSingle();
+        if (authSyncError) console.warn(`[admin-api] 로그인 설정 반영 상태를 읽지 못했습니다: ${authSyncError.message}`);
         const fromConsole = (values ?? {}) as Record<string, string>;
         const metaByKey = new Map(((meta ?? []) as Array<{ key: string; updated_at: string; updated_by: string }>).map((m) => [m.key, m]));
         const rows = Object.entries(SERVER_CONFIG_VALID).map(([key, valid]) => {
@@ -1309,13 +1488,30 @@ async function handleAction(
             updatedBy: m?.updated_by || null,
           };
         });
-        return json({ ok: true, data: { rows, services: servicesError ? {} : services ?? {} } });
+        return json({
+          ok: true,
+          data: {
+            rows,
+            services: servicesError ? {} : services ?? {},
+            authSync: authSync
+              ? { finishedAt: authSync.last_finished_at, ok: authSync.last_ok, message: authSync.last_message }
+              : null,
+          },
+        });
+      }
+
+      // Supabase 로그인 설정에 지금 값을 다시 넣는다(서비스 연결 › Supabase 의 "다시 반영").
+      case "settings.syncAuth": {
+        const result = await runAuthSync(db);
+        if (result.skipped) throw new Error("Supabase 관리 열쇠가 없습니다.");
+        if (!result.ok) throw new Error(result.message);
+        return json({ ok: true, data: { message: result.message } });
       }
 
       // 화면 표시만 바꾼다 — 엣지 함수는 이 값을 보지 않는다.
       case "settings.setServiceEnabled": {
         const service = str(params, "service");
-        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google"].includes(service)) throw new Error("모르는 서비스입니다.");
+        if (!["appstore", "googleplay", "signin", "fcm", "apns", "google", "supabase"].includes(service)) throw new Error("모르는 서비스입니다.");
         if (typeof params.enabled !== "boolean") throw new Error("켜짐 여부가 없습니다.");
         const { data, error } = await db.rpc("ts_admin_server_config_service_set", { p_service: service, p_enabled: params.enabled, p_by: email });
         if (error) throw new Error(error.message);
@@ -1331,7 +1527,13 @@ async function handleAction(
         if (value !== "" && !valid(value)) throw new Error(SERVER_CONFIG_FORMAT_HINT[key] ?? "형식이 맞지 않습니다.");
         const { error } = await db.rpc("ts_admin_server_config_set", { p_key: key, p_value: value, p_by: email });
         if (error) throw new Error(error.message);
-        return json({ ok: true, data: null });
+        // 로그인 값이면 바로 Supabase 로그인 설정에 넣는다. 반영이 실패해도 저장은 된 것이라 성공으로 답하고 결과를 함께 준다.
+        // 지운 값은 Supabase 쪽에서 빼지 않는다(반영은 더하기만 한다).
+        const authSync = AUTH_SYNC_KEYS.includes(key) ? await runAuthSync(db) : null;
+        return json({
+          ok: true,
+          data: authSync && !authSync.skipped ? { authSync: { ok: authSync.ok, message: authSync.message } } : null,
+        });
       }
 
       case "settings.getConsole": {
@@ -1347,6 +1549,12 @@ async function handleAction(
         });
         if (error) throw new Error(error.message === "console_color_invalid" ? "색은 #rrggbb 형식이어야 합니다." : error.message);
         return json({ ok: true, data });
+      }
+
+      // 게임 개발자에게 넘길 연결 정보. 공개 키는 게임 빌드에 그대로 들어가는 값이라 운영자 누구에게나 보인다.
+      case "project.getConnection": {
+        const publishable = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}") as Record<string, string>;
+        return json({ ok: true, data: { url: SUPABASE_URL, publishableKey: publishable["default"] ?? null } });
       }
 
       case "settings.setConsoleIdentity": {

@@ -1,0 +1,17 @@
+# 운영 콘솔(Cloudflare Pages truebase-admin)의 배포 설정. 화면(../dist)과 서버 기능(functions/hub.ts — 초대 저장소)을 함께 올린다.
+# 고객센터 페이지(truebase-support)는 이 폴더 밖에서 따로 올린다 — 여기 두면 그쪽에도 서버 기능이 실린다.
+# 이 파일이 바인딩의 원본이다 — Cloudflare 화면에서 같은 항목을 바꿀 수 없다.
+# 비밀값 MASTER_EMAILS(마스터 이메일, 쉼표 구분)는 여기 두지 않고 `wrangler pages secret put` 으로 넣는다.
+name = "truebase-admin"
+pages_build_output_dir = "../dist"
+compatibility_date = "2025-10-01"
+
+[vars]
+# 운영자 로그인용 구글 클라이언트 ID(공개값) — admin-deploy.yml 의 VITE_GOOGLE_CLIENT_ID 와 같다.
+GOOGLE_CLIENT_ID = "782622202301-336bs6o064t4i739lcuo1e4idkh8kkt2.apps.googleusercontent.com"
+
+[[d1_databases]]
+binding = "HUB_DB"
+database_name = "truebase-hub"
+# 2026-11-10 에 만든 저장소(공개돼도 되는 값).
+database_id = "f19fe60c-7b68-49bf-b801-e14b597d675f"

@@ -4,7 +4,7 @@ import { Search, Pencil, ExternalLink, History, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { formatDateTime, diffSummary, formatTotal } from '../../components/ui/format'
@@ -383,8 +383,8 @@ export default function UserDataTab({
       </WhiteCard>
 
       <WhiteCard>
-        <div className="border-b border-neutral-100 px-5 py-3">
-          <span className="text-sm font-medium text-neutral-800">최근 변경 이력</span>
+        <div className="p-5 pb-3">
+          <CardHeader title="최근 변경 이력" description="이 플레이어의 데이터가 바뀌기 전 값을 최근 순으로 봅니다." />
         </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">

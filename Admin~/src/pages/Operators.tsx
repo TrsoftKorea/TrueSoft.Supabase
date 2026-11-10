@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import { KeyRound, Loader2, Plus, RotateCcw, Trash2, UserMinus } from 'lucide-react'
-import { callAdmin, NotAuthenticatedError } from '../lib/api'
+import { Loader2, Plus, RotateCcw, Trash2, UserMinus } from 'lucide-react'
+import { callAdmin, callHub, NotAuthenticatedError } from '../lib/api'
+import { getHubToken } from '../lib/googleAuth'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { projectName } from '../lib/projectLook'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
-import { EditDialog } from '../components/ui/EditDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { formatDateTime } from '../components/ui/format'
@@ -20,121 +20,33 @@ type Operator = {
   disabled_at: string | null
   created_at: string
   created_by: string | null
-  hasPassword: boolean
 }
 
-// admin-api/index.ts 의 MIN_PASSWORD_LENGTH 와 같은 값이어야 한다 — 프런트와 백엔드가
-// 런타임이 달라(Vite 번들 vs Deno 함수) 상수를 공유할 수 없다.
-const MIN_PASSWORD_LENGTH = 8
-// 오타를 보내기 전에 거르는 정도만 본다 — 최종 판정은 DB 가 한다.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+type Member = { email: string; display_name: string }
 
-function SetPasswordModal({
-  target,
-  op,
-  onClose,
-  onSaved,
-  report,
-}: {
-  target: ProjectTarget
-  op: Operator
-  onClose: () => void
-  onSaved: () => void
-  report: (e: unknown, fallback: string) => void
-}) {
-  const [newPassword, setNewPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const tooShort = newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH
-  const mismatch = confirm.length > 0 && newPassword !== confirm
-  const canSubmit = newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirm && !busy
-
-  const submit = async () => {
-    if (!canSubmit) return
-    setBusy(true)
-    setError('')
-    try {
-      await callAdmin(target, 'operators.setPassword', { email: op.email, newPassword })
-      onSaved()
-    } catch (e: unknown) {
-      if (e instanceof NotAuthenticatedError) {
-        report(e, '설정하지 못했습니다.')
-        return
-      }
-      setError(e instanceof Error ? e.message : '설정하지 못했습니다.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <EditDialog
-      title="비밀번호 설정"
-      description={op.email}
-      busy={busy}
-      onClose={onClose}
-      error={error || undefined}
-      footer={<>
-        <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
-        <Button variant="primary" onClick={() => void submit()} disabled={busy || !canSubmit}>
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-          설정
-        </Button>
-      </>}
-    >
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호</label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className={inputCls + ' w-full'}
-          />
-          {/* 길이 조건은 이름 괄호가 아니라 칸 아래 안내로 — 짧으면 같은 글을 경고 색으로. */}
-          <p className={`mt-1 text-xs ${tooShort ? 'text-amber-600' : 'text-neutral-400'}`}>{MIN_PASSWORD_LENGTH}자 이상 넣습니다.</p>
-        </div>
-        <div>
-          <label className="block text-xs text-neutral-500 mb-1">새 비밀번호 확인</label>
-          <input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void submit()}
-            className={inputCls + ' w-full'}
-          />
-          {mismatch && <p className="mt-1 text-xs text-amber-600">비밀번호가 서로 다릅니다.</p>}
-        </div>
-        <p className="text-xs text-neutral-400">이 비밀번호는 이메일로 전달되지 않습니다. 직접 알려주세요.</p>
-      </div>
-    </EditDialog>
-  )
-}
-
+// 운영자는 서로 권한이 같아 누구나 초대된 사람을 더할 수 있다. 빼기(비활성화·삭제)는 마스터만 — 서버도 막는다.
+// 비밀번호는 프로젝트가 아니라 트루베이스 구성원에 붙는다(트루베이스 설정).
 export default function Operators({
   target,
-  masterEmail,
+  isMaster,
   onUnauthenticated,
 }: {
   target: ProjectTarget
-  masterEmail: string
+  isMaster: boolean
   onUnauthenticated: () => void
 }) {
   const [rows, setRows] = useState<Operator[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // 더할 수 있는 사람은 트루베이스 구성원(초대된 사람)뿐이라 목록에서 고른다. null 은 아직 못 불러온 것.
+  const [members, setMembers] = useState<Member[] | null>(null)
   const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [disableTarget, setDisableTarget] = useState<Operator | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Operator | null>(null)
-  const [passwordTarget, setPasswordTarget] = useState<Operator | null>(null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [emailHint, setEmailHint] = useState('')
   // 확인 창이 떠 있는 동안 실패하면 창 안에 보여준다 — 페이지 배너는 창 배경에 가린다.
   const [dialogError, setDialogError] = useState('')
 
@@ -169,19 +81,32 @@ export default function Operators({
     void load()
   }, [load])
 
+  useEffect(() => {
+    callHub<Member[]>('members.list')
+      .then(setMembers)
+      .catch((e: unknown) => {
+        setMembers([])
+        report(e, '트루베이스 구성원을 불러오지 못했습니다.')
+      })
+  }, [report])
+
+  // 이미 이 프로젝트에 있는 사람(비활성 포함 — 되살리기는 마스터의 "복구")은 빼고 보인다.
+  const candidates = (members ?? []).filter((m) => !rows.some((r) => r.email === m.email))
+
   const add = async () => {
-    if (!email.trim() || adding) return
-    if (!EMAIL_RE.test(email.trim())) { setEmailHint('이메일 형식이 아닙니다.'); return }
-    setEmailHint('')
+    const picked = candidates.find((m) => m.email === email)
+    if (!picked || adding) return
     setAdding(true)
     setError('')
     try {
+      const hubToken = getHubToken()
+      if (!hubToken) throw new Error('초대 확인이 만료됐습니다. 다시 로그인해 주세요.')
       await callAdmin(target, 'operators.upsert', {
-        email: email.trim(),
-        displayName: name.trim(),
+        email: picked.email,
+        displayName: picked.display_name,
+        hubToken,
       })
       setEmail('')
-      setName('')
       await load()
     } catch (e: unknown) {
       report(e, '추가하지 못했습니다.')
@@ -234,43 +159,35 @@ export default function Operators({
         description={`${projectName(target)}의 운영 콘솔에 들어올 계정을 관리합니다.`}
       />
 
-      <div className="rounded-md border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-600">
-        마스터 <span className="font-medium text-neutral-800">{masterEmail}</span> 는 목록에 없고
-        지울 수도 없습니다. 목록이 비어도 잠기지 않도록 남겨둔 계정입니다.
-      </div>
-
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-4">
-        <div className="text-xs font-medium text-neutral-500 mb-2">운영자 추가</div>
-        <div className="grid grid-cols-[1.5fr_1fr_auto] gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">이메일</span>
-            <input
+      <WhiteCard className="p-5 space-y-4">
+        <CardHeader title="운영자 추가" description="트루베이스 구성원을 이 프로젝트의 운영자로 더합니다." />
+        <div>
+        <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-neutral-500">트루베이스 구성원</span>
+            <select
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setEmailHint('') }}
-              onKeyDown={(e) => e.key === 'Enter' && void add()}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={members === null || candidates.length === 0}
               className={inputCls}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">이름</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void add()}
-              className={inputCls}
-            />
-          </div>
-          <Button variant="primary" onClick={() => void add()} disabled={adding || !email.trim()}>
+            >
+              <option value="" />
+              {candidates.map((m) => (
+                <option key={m.email} value={m.email}>{m.display_name ? `${m.display_name} · ${m.email}` : m.email}</option>
+              ))}
+            </select>
+          </label>
+          <Button variant="primary" onClick={() => void add()} disabled={adding || !email}>
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             추가
           </Button>
         </div>
-        {emailHint && <p className="mt-1 text-xs text-red-600">{emailHint}</p>}
-        <p className="mt-2 text-xs text-neutral-400">
-          구글 계정으로 바로 로그인할 수 있습니다. 비밀번호 로그인이 필요하면 추가 후 "비밀번호 설정"으로 정해서 알려주세요. 이미 있는 이메일을 다시 추가하면 비활성 상태가 풀립니다.
-        </p>
+        {members !== null && candidates.length === 0 && (
+          <p className="mt-2 text-xs text-neutral-400">더할 수 있는 구성원이 없습니다.</p>
+        )}
+        </div>
       </WhiteCard>
 
       <WhiteCard>
@@ -280,9 +197,9 @@ export default function Operators({
             <tr>
               <th className="text-left px-4 py-2.5 font-medium">이메일</th>
               <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-36">상태</th>
+              <th className="text-left px-4 py-2.5 font-medium w-20">상태</th>
               <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
-              <th className="px-4 py-2.5 w-72"></th>
+              <th className="px-4 py-2.5 w-48"></th>
             </tr>
           </thead>
           <tbody>
@@ -292,7 +209,7 @@ export default function Operators({
                 empty={rows.length === 0}
                 failed={failed}
                 colSpan={5}
-                emptyText="등록된 운영자가 없습니다. 마스터만 들어올 수 있는 상태입니다."
+                emptyText="등록된 운영자가 없습니다."
               />
             ) : (
               rows.map((op) => {
@@ -303,34 +220,27 @@ export default function Operators({
                     className={`border-t border-neutral-100 ${disabled ? 'bg-neutral-50/60' : ''}`}
                   >
                     <td className="px-4 py-2.5 font-mono text-xs">{op.email}</td>
-                    <td className="px-4 py-2.5">{op.display_name || '-'}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">{op.display_name || '-'}</td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
                       {disabled ? (
                         <span className="text-xs text-neutral-500">비활성</span>
-                      ) : op.hasPassword ? (
-                        <span className="text-xs text-emerald-600">비밀번호 사용 중</span>
                       ) : (
-                        <span className="text-xs text-amber-600">비밀번호 미설정</span>
+                        <span className="text-xs text-emerald-600">활성</span>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(op.created_at)}</td>
                     <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                      {!disabled && (
-                        <Button variant="outline" size="sm" onClick={() => setPasswordTarget(op)} disabled={busy}>
-                          <KeyRound className="w-3 h-3" /> 비밀번호 설정
-                        </Button>
-                      )}
-                      {disabled ? (
+                      {!isMaster ? null : disabled ? (
                         <>
                           <Button variant="outline" size="sm" onClick={() => void setDisabled(op, false)} disabled={busy}>
                             <RotateCcw className="w-3 h-3" /> 복구
                           </Button>
-                          <Button variant="danger" size="sm" onClick={() => { setDialogError(''); setDeleteTarget(op) }} disabled={busy}>
+                          <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDeleteTarget(op) }} disabled={busy}>
                             <Trash2 className="w-3 h-3" /> 삭제
                           </Button>
                         </>
                       ) : (
-                        <Button variant="danger" size="sm" onClick={() => { setDialogError(''); setDisableTarget(op) }} disabled={busy}>
+                        <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDisableTarget(op) }} disabled={busy}>
                           <UserMinus className="w-3 h-3" /> 비활성화
                         </Button>
                       )}
@@ -385,19 +295,6 @@ export default function Operators({
           </div>
         )}
       </ConfirmDialog>
-
-      {passwordTarget && (
-        <SetPasswordModal
-          target={target}
-          op={passwordTarget}
-          onClose={() => setPasswordTarget(null)}
-          onSaved={() => {
-            setPasswordTarget(null)
-            void load()
-          }}
-          report={report}
-        />
-      )}
     </div>
   )
 }

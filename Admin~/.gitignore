@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .env.local
+# 초대 저장소(hub)를 이 PC 에서 띄울 때 생기는 것 — 로컬 저장소 파일과 비밀값.
+.wrangler/
+.dev.vars
 *.tsbuildinfo
 dist-mock/
 dist-support/

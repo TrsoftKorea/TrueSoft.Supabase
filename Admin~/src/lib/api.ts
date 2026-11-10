@@ -1,5 +1,5 @@
 import { getProject, PROJECTS, type ProjectTarget } from './projectTarget'
-import { getToken, storeTokens } from './googleAuth'
+import { getHubToken, getToken, storeHubSession, storeTokens } from './googleAuth'
 
 /** 토큰이 없거나 만료돼 로그인 화면으로 돌려보내야 하는 경우. */
 export class NotAuthenticatedError extends Error {
@@ -91,9 +91,24 @@ export type SignInOutcome = { target: ProjectTarget; ok: boolean; error?: string
  * 한 게임도 통과하지 못하면 첫 실패 사유로 던진다 — 로그인 화면이 그 문구를 그대로 보여 준다.
  */
 export async function signInAllProjects(
-  action: 'auth.googleLogin' | 'auth.passwordLogin',
-  params: Record<string, unknown>,
+  login: { idToken: string } | { email: string; password: string },
 ): Promise<SignInOutcome[]> {
+  type HubSession = { token: string; isMaster: boolean }
+  let hub: Promise<HubSession | null>
+  let action: string
+  let params: Record<string, unknown>
+  if ('idToken' in login) {
+    // 구글 로그인은 트루베이스 초대 표도 같이 받는다. 초대되지 않았거나 저장소가 응답하지 않아도 게임 프로젝트 로그인은 그대로 된다.
+    hub = postHub<HubSession>('login', { idToken: login.idToken }, null).catch(() => null)
+    action = 'auth.googleLogin'
+    params = { idToken: login.idToken }
+  } else {
+    // 비밀번호는 트루베이스 저장소 한 곳에 있다 — 저장소가 준 표를 프로젝트마다 그 프로젝트의 로그인으로 바꾼다.
+    const session = await postHub<HubSession>('login', { email: login.email, password: login.password }, null)
+    hub = Promise.resolve(session)
+    action = 'auth.hubLogin'
+    params = { hubToken: session.token }
+  }
   const results = await Promise.all(
     PROJECTS.filter((p) => p.url).map(async (p) => {
       try {
@@ -111,13 +126,56 @@ export async function signInAllProjects(
   )
   const tokens: Partial<Record<ProjectTarget, string>> = {}
   for (const r of results) if (r.ok && r.token) tokens[r.target] = r.token
-  if (Object.keys(tokens).length === 0) {
+  const hubSession = await hub
+  // 초대만 받고 아직 운영자인 프로젝트가 없는 사람도 들어와야 "새 프로젝트 만들기"를 쓴다.
+  if (Object.keys(tokens).length === 0 && !hubSession) {
     throw new Error(results.find((r) => r.error)?.error ?? '로그인하지 못했습니다.')
   }
   storeTokens(tokens)
+  storeHubSession(hubSession ? { token: hubSession.token, isMaster: hubSession.isMaster } : null)
   return results.map(({ target, ok, error, status }) =>
     ok ? { target, ok } : { target, ok, error: error ?? '로그인하지 못했습니다.', ...(status !== undefined ? { status } : {}) },
   )
+}
+
+// 트루베이스 초대 저장소. 콘솔과 같은 주소의 /hub 다(Cloudflare Pages 의 서버 기능, hub/functions/hub.ts).
+const env = import.meta.env as Record<string, string | undefined>
+const HUB_URL = env['VITE_HUB_URL'] || '/hub'
+
+async function postHub<T>(action: string, params: Record<string, unknown>, token: string | null): Promise<T> {
+  if (__MOCK__) {
+    const { mockAdmin } = await import('../mock/mockAdmin')
+    return mockAdmin<T>('hub', `hub.${action}`, params)
+  }
+  let res: Response
+  try {
+    res = await fetch(HUB_URL, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, params }),
+    })
+  } catch {
+    throw new Error('서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.')
+  }
+  const body = (await res.json().catch(() => null)) as { ok?: boolean; data?: T; error?: string } | null
+  if (token && res.status === 401) throw new NotAuthenticatedError()
+  if (!res.ok || !body?.ok) throw new AdminRequestError(body?.error ?? `요청이 실패했습니다 (HTTP ${res.status}).`, res.status)
+  return body.data as T
+}
+
+/** 초대 저장소 호출(마스터 화면). 초대 표가 없으면 다시 로그인해야 한다. */
+export async function callHub<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
+  const token = getHubToken()
+  if (!token) throw new NotAuthenticatedError()
+  return postHub<T>(action, params, token)
+}
+
+/**
+ * 권한이 없어 목록에서 숨길 프로젝트인지 — 로그인 때 서버가 403 을 줬고 지금도 표가 없을 때만.
+ * 연결 실패·만료처럼 다시 해 보면 될 수 있는 것은 숨기지 않고 사유를 보인다. 그 뒤 새로 만든 프로젝트는 표가 있어 보인다.
+ */
+export function isForbiddenProject(outcomes: SignInOutcome[], target: ProjectTarget): boolean {
+  return getToken(target) === null && outcomes.find((o) => o.target === target)?.status === 403
 }
 
 /**

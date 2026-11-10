@@ -7,7 +7,7 @@ import { inputCls } from './ui/Input'
 /**
  * 이메일 + 비밀번호 로그인. 구글 계정이 없는 운영자용 대안 로그인 경로다.
  *
- * 비밀번호는 마스터가 "운영자 관리" 화면에서 직접 정해서 알려준다 — 여기서는
+ * 비밀번호는 마스터가 "트루베이스 설정" 화면에서 직접 정해서 알려준다 — 여기서는
  * 그렇게 받은 비밀번호로 로그인만 한다.
  */
 
@@ -22,8 +22,7 @@ export default function PasswordLoginForm({ onSignedIn }: { onSignedIn: (outcome
     setBusy(true)
     setError('')
     try {
-      // 비밀번호는 게임마다 따로 저장돼 있다 — 이 비밀번호가 맞는 게임만 목록에서 들어갈 수 있다.
-      onSignedIn(await signInAllProjects('auth.passwordLogin', { email: email.trim(), password }))
+      onSignedIn(await signInAllProjects({ email: email.trim(), password }))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
     } finally {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { renderGoogleButton, storeTokens } from '../lib/googleAuth'
+import { renderGoogleButton, storeHubSession, storeTokens } from '../lib/googleAuth'
 import { signInAllProjects, type SignInOutcome } from '../lib/api'
 import { PROJECTS } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
@@ -9,7 +9,9 @@ import PasswordLoginForm from '../components/PasswordLoginForm'
 async function enterMock(onSignedIn: (outcomes: SignInOutcome[]) => void) {
   if (!__MOCK__) return
   const { mockToken } = await import('../mock/mockAdmin')
+  // 가짜 로그인은 마스터라 대기 프로젝트에도 들어갈 수 있다(실제 마스터와 같다 — 관리 열쇠를 넣는 데 쓴다).
   storeTokens(Object.fromEntries(PROJECTS.map((p) => [p.key, mockToken()])))
+  storeHubSession({ token: mockToken(), isMaster: true })
   onSignedIn(PROJECTS.map((p) => ({ target: p.key, ok: true })))
 }
 
@@ -32,7 +34,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (outcomes: SignInOut
     const onCredential = async (idToken: string) => {
       setError('')
       try {
-        onSignedIn(await signInAllProjects('auth.googleLogin', { idToken }))
+        onSignedIn(await signInAllProjects({ idToken }))
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : '로그인하지 못했습니다.')
       }

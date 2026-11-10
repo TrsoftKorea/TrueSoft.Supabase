@@ -8,7 +8,9 @@ import { isDarkMode, subscribeTheme } from './theme'
 // projectTarget 의 기본색을 쓴다. 다음에 열 때 기본값이 잠깐 비치지 않도록 마지막 값을 브라우저에 기억해 둔다.
 const STORAGE_KEY = 'tb_project_look'
 
-export type ProjectLook = { color: string | null; name: string | null; icon: string | null }
+// active: false 면 대기 중인 프로젝트(아직 꺼내지 않음). 한 번도 못 받았으면 값이 없고, 그때는 보인다 —
+// 서버가 잠깐 응답하지 않았다고 운영 중인 게임이 목록에서 사라지면 안 된다.
+export type ProjectLook = { color: string | null; name: string | null; icon: string | null; active?: boolean }
 type Looks = Partial<Record<ProjectTarget, ProjectLook>>
 
 function load(): Looks {
@@ -56,17 +58,25 @@ export function projectIcon(target: ProjectTarget): string | null {
   return looks[target]?.icon ?? null
 }
 
-/** 설정을 저장한 직후 화면에 바로 반영한다. */
-export function setProjectLook(target: ProjectTarget, look: ProjectLook) {
-  update({ ...looks, [target]: look })
+/** 대기 중이라 목록에 안 보이는 프로젝트인지. */
+export function projectHidden(target: ProjectTarget): boolean {
+  return looks[target]?.active === false
 }
 
-type ServerLook = { color: string | null; display_name?: string | null; icon?: string | null }
+/** 설정을 저장한 직후 화면에 바로 반영한다. 대기·활성 여부는 넘기지 않으면 그대로 둔다. */
+export function setProjectLook(target: ProjectTarget, look: ProjectLook) {
+  const active = look.active ?? looks[target]?.active
+  update({ ...looks, [target]: active === undefined ? look : { ...look, active } })
+}
+
+type ServerLook = { color: string | null; display_name?: string | null; icon?: string | null; active?: boolean }
 
 export const toProjectLook = (s: ServerLook): ProjectLook => ({
   color: s.color ?? null,
   name: s.display_name ?? null,
   icon: s.icon ?? null,
+  // 옛 서버는 이 값을 안 준다 — 그 서버의 프로젝트는 운영 중인 것이다.
+  active: s.active ?? true,
 })
 
 /** 모든 게임의 표시 설정을 서버에서 다시 받는다. 한 게임이 응답하지 않아도 나머지는 반영한다. */
@@ -90,7 +100,7 @@ export async function refreshProjectLooks(): Promise<void> {
 /** 표시 설정이나 화면 모드가 바뀌면 다시 그리게 한다. */
 export function useProjectLook(): {
   color: typeof projectColor; baseColor: typeof projectBaseColor; display: typeof displayColor
-  name: typeof projectName; icon: typeof projectIcon
+  name: typeof projectName; icon: typeof projectIcon; hidden: typeof projectHidden
 } {
   useSyncExternalStore(
     (l) => {
@@ -100,7 +110,10 @@ export function useProjectLook(): {
     () => looks,
   )
   useSyncExternalStore(subscribeTheme, isDarkMode)
-  return { color: projectColor, baseColor: projectBaseColor, display: displayColor, name: projectName, icon: projectIcon }
+  return {
+    color: projectColor, baseColor: projectBaseColor, display: displayColor, name: projectName, icon: projectIcon,
+    hidden: projectHidden,
+  }
 }
 
 /** 색만 쓰는 곳을 위한 줄임. */

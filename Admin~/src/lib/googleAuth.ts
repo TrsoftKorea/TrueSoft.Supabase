@@ -76,20 +76,63 @@ export function signedInTargets(): ProjectTarget[] {
   return Object.keys(liveTokens()) as ProjectTarget[]
 }
 
-/** 아무 게임이든 살아 있는 표에서 이메일을 읽는다. 없으면 빈 문자열. */
+/** 아무 게임이든 살아 있는 표에서 이메일을 읽는다. 없으면 초대 표의 이메일, 그것도 없으면 빈 문자열. */
 export function signedInEmail(): string {
-  const any = Object.values(liveTokens())[0]
+  const any = Object.values(liveTokens())[0] ?? getHubToken()
   return any ? emailOf(any) : ''
+}
+
+// ── 트루베이스 초대 표 ──
+// 콘솔 주소의 초대 저장소(/hub)가 구글 로그인 때 준다. 게임 프로젝트의 로그인 표와 따로 둔다 — 아직 아무 프로젝트에도
+// 운영자로 없는(새로 초대받은) 사람도 이 표로 로그인 상태가 되어 "새 프로젝트 만들기"를 쓴다.
+// 마스터 여부는 화면 표시용으로만 같이 기억한다. 권한 판단은 저장소와 각 프로젝트 서버가 한다.
+const HUB_KEY = 'tb_hub_token'
+
+export type HubSession = { token: string; isMaster: boolean }
+
+function readHub(): HubSession | null {
+  try {
+    const raw = window.localStorage.getItem(HUB_KEY)
+    const s = raw ? (JSON.parse(raw) as HubSession) : null
+    return s && typeof s.token === 'string' && expiryOf(s.token) - 30_000 > Date.now() ? s : null
+  } catch {
+    return null
+  }
+}
+
+export function getHubToken(): string | null {
+  return readHub()?.token ?? null
+}
+
+/** 화면 표시용 — 마스터 전용 단추를 보일지. */
+export function hubIsMaster(): boolean {
+  return readHub()?.isMaster ?? false
+}
+
+export function storeHubSession(s: HubSession | null): void {
+  if (s) window.localStorage.setItem(HUB_KEY, JSON.stringify(s))
+  else window.localStorage.removeItem(HUB_KEY)
+}
+
+/** 로그인 상태인지 — 게임 프로젝트 표가 하나라도 있거나 초대 표가 있으면. */
+export function isSignedIn(): boolean {
+  return signedInTargets().length > 0 || getHubToken() !== null
 }
 
 export function clearToken(): void {
   window.localStorage.removeItem(STORAGE_KEY)
+  window.localStorage.removeItem(HUB_KEY)
   window.google?.accounts.id.disableAutoSelect()
 }
 
 /** 백엔드가 발급한 로그인 세션 토큰들을 게임별로 저장한다(구글·비밀번호 로그인 공용). */
 export function storeTokens(tokens: Tokens): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens))
+}
+
+/** 프로젝트 하나의 표를 더한다(새 프로젝트를 만든 직후 — 다시 로그인하지 않고 들어간다). */
+export function addToken(target: ProjectTarget, token: string): void {
+  storeTokens({ ...readTokens(), [target]: token })
 }
 
 /** 토큰의 이메일. 화면 표시용이며 권한 판단에는 쓰지 않는다(그건 백엔드가 한다). */

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -99,11 +99,9 @@ function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
         <div className="text-xs text-neutral-500">기록은 {data.first_day}부터 있습니다. 그 전 날짜는 0으로 보입니다.</div>
       )}
       <WhiteCard>
-        <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-neutral-800">
-            일일 채팅 개수<span className="ml-2 text-xs font-normal text-neutral-500">운영자 공지 제외</span>
-          </span>
-          <ChartLegend series={CHAT_KINDS} />
+        <div className="border-b border-neutral-100 p-5 pb-3">
+          <CardHeader title="일일 채팅 개수" description="날마다 오간 채팅 메시지 수를 봅니다. 운영자 공지는 뺍니다."
+            actions={<ChartLegend series={CHAT_KINDS} />} />
         </div>
         <div className="p-5">
           <DayBars days={rows} series={CHAT_KINDS} unit="개" />
@@ -150,11 +148,8 @@ function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
 
   return (
     <WhiteCard>
-      <div className="border-b border-neutral-100 px-5 py-3 space-y-2">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-sm font-medium text-neutral-800">국가별 매출</span>
-          <span className="text-xs text-neutral-500">가입 국가 기준, 환불 제외</span>
-        </div>
+      <div className="border-b border-neutral-100 p-5 pb-3 space-y-3">
+        <CardHeader title="국가별 매출" description="가입 국가마다 매출을 봅니다. 환불·테스트·무료 결제는 뺍니다." />
         <InfoList items={[
           { label: '합계', value: formatKRW(data.total_krw) },
           { label: '결제', value: `${n(data.purchases)}건` },
@@ -309,8 +304,8 @@ function RetentionCell({ kept, size }: { kept: number | null; size: number }) {
 function DailyTable({ days }: { days: Day[] }) {
   return (
     <WhiteCard>
-      <div className="border-b border-neutral-100 px-5 py-3">
-        <span className="text-sm font-medium text-neutral-800">날짜별 숫자</span>
+      <div className="border-b border-neutral-100 p-5 pb-3">
+        <CardHeader title="날짜별 숫자" description="날마다 접속한 사용자 수를 표로 봅니다." />
       </div>
       <div className="overflow-x-auto max-h-96">
         <table className="w-full text-sm">
@@ -417,9 +412,9 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
           {tab === 'users' && (<>
           <WhiteCard>
-            <div className="border-b border-neutral-100 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-medium text-neutral-800">일일 사용자</span>
-              <ChartLegend series={USER_SERIES} />
+            <div className="border-b border-neutral-100 p-5 pb-3">
+              <CardHeader title="일일 사용자" description="날마다 접속한 사용자 수를 봅니다."
+                actions={<ChartLegend series={USER_SERIES} />} />
             </div>
             <div className="p-5">
               <DayBars days={data.daily} series={USER_SERIES} />
@@ -430,9 +425,8 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
           {tab === 'comeback' && (
           <WhiteCard>
-            <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-neutral-800">복귀 유저</span>
-              <span className="text-xs text-neutral-500">직전 14일 동안 접속하지 않았다가 들어온 사람</span>
+            <div className="border-b border-neutral-100 p-5 pb-3">
+              <CardHeader title="복귀 유저" description="직전 14일 동안 접속하지 않았다가 들어온 사람 수를 날마다 봅니다." />
             </div>
             <div className="p-5">
               <DayBars days={data.daily} series={[{ key: 'comeback', color: COMEBACK_COLOR, label: '복귀' }]} />
@@ -442,9 +436,8 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
 
           {tab === 'retention' && (
           <WhiteCard>
-            <div className="border-b border-neutral-100 px-5 py-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-neutral-800">리텐션</span>
-              <span className="text-xs text-neutral-500">가입한 날로부터 N일째에 다시 접속한 비율 · 칸에 마우스를 올리면 인원</span>
+            <div className="border-b border-neutral-100 p-5 pb-3">
+              <CardHeader title="리텐션" description="가입한 날로부터 N일째에 다시 접속한 비율을 봅니다. 칸에 마우스를 올리면 인원이 보입니다." />
             </div>
             {data.retention.length === 0 ? (
               <div className="p-8 text-center text-sm text-neutral-400">이 기간에 가입한 플레이어가 없습니다.</div>

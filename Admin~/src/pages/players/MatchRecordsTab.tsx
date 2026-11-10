@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PlayerLink } from '../../components/ui/PlayerLink'
@@ -96,7 +96,9 @@ export default function MatchRecordsTab({
       </div>
 
       <WhiteCard>
-        <div className="px-5 py-3 border-b border-neutral-100 text-sm font-medium text-neutral-800">요약</div>
+        <div className="p-5 pb-3">
+          <CardHeader title="요약" description="게임 코드와 상태마다 승패와 점수 범위를 봅니다." />
+        </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
@@ -130,7 +132,9 @@ export default function MatchRecordsTab({
       </WhiteCard>
 
       <WhiteCard>
-        <div className="px-5 py-3 border-b border-neutral-100 text-sm font-medium text-neutral-800">기록</div>
+        <div className="p-5 pb-3">
+          <CardHeader title="기록" description="이 플레이어가 신고한 대전을 최근 순으로 봅니다." />
+        </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">

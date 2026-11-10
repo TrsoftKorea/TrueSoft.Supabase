@@ -3,13 +3,14 @@ import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from './components/ui/Button'
 import { getTarget, setTarget, type ProjectTarget } from './lib/projectTarget'
-import { clearToken, getToken, signedInEmail, signedInTargets } from './lib/googleAuth'
+import { clearToken, getToken, isSignedIn, signedInEmail } from './lib/googleAuth'
 import { callAdmin, NotAuthenticatedError, type SignInOutcome } from './lib/api'
 import { PendingChangesProvider } from './lib/pendingChanges'
 import { refreshProjectLooks } from './lib/projectLook'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import ProjectSelect from './pages/ProjectSelect'
+import TrueBaseSettings from './pages/TrueBaseSettings'
 import GameItems from './pages/GameItems'
 import Operators from './pages/Operators'
 import Players from './pages/Players'
@@ -66,7 +67,9 @@ function readOutcomes(): SignInOutcome[] {
 
 export default function App() {
   const [target, setTargetState] = useState<ProjectTarget>(() => getTarget())
-  const [signedIn, setSignedIn] = useState(() => signedInTargets().length > 0)
+  const [signedIn, setSignedIn] = useState(isSignedIn)
+  // 프로젝트 선택 화면에서 연 마스터 전용 "트루베이스 설정". 프로젝트 밖의 화면이라 주소를 두지 않는다.
+  const [hubSettings, setHubSettings] = useState(false)
   // 게임 목록에서 하나를 골라 들어갔는지. 새로고침해도 같은 게임 안에 머물도록 탭 단위로 기억한다.
   const [entered, setEntered] = useState(() => window.sessionStorage.getItem(ENTERED_KEY) === '1')
   const [me, setMe] = useState<Me | null>(null)
@@ -82,6 +85,7 @@ export default function App() {
     setOutcomes([])
     setSignedIn(false)
     setEntered(false)
+    setHubSettings(false)
     setMe(null)
   }, [])
 
@@ -119,7 +123,7 @@ export default function App() {
   useEffect(() => {
     if (!signedIn) return
     const id = window.setInterval(() => {
-      if (signedInTargets().length === 0) signOut()
+      if (!isSignedIn()) signOut()
     }, 30_000)
     return () => window.clearInterval(id)
   }, [signedIn, signOut])
@@ -148,7 +152,10 @@ export default function App() {
   }, [inside, target, signOut])
 
   if (!signedIn) return <Login onSignedIn={onSignedIn} />
-  if (!inside) return <ProjectSelect outcomes={outcomes} onEnter={enter} onSignOut={signOut} />
+  if (!inside && hubSettings) return <TrueBaseSettings onBack={() => setHubSettings(false)} onUnauthenticated={signOut} />
+  if (!inside) {
+    return <ProjectSelect outcomes={outcomes} onEnter={enter} onSignOut={signOut} onOpenHubSettings={() => setHubSettings(true)} />
+  }
 
   // 권한 확인에 실패하면(대개 403) 화면 대신 사유를 보여준다.
   if (meError) {
@@ -216,16 +223,7 @@ export default function App() {
         <Route path="/player-data" element={<PlayerData target={target} onUnauthenticated={signOut} />} />
         <Route path="/player-data-fields" element={<PlayerDataFields target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
-        <Route
-          path="/operators"
-          element={
-            me.isMaster ? (
-              <Operators target={target} masterEmail={me.email} onUnauthenticated={signOut} />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+        <Route path="/operators" element={<Operators target={target} isMaster={me.isMaster} onUnauthenticated={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

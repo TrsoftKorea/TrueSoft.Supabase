@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
@@ -124,8 +124,9 @@ export default function MailCategories({
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-4">
-        <div className="text-xs font-medium text-neutral-500 mb-2">새 분류 추가</div>
+      <WhiteCard className="p-5 space-y-4">
+        <CardHeader title="새 분류 추가" description="우편을 보낼 때 고를 수 있는 분류를 더합니다." />
+        <div>
         <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
           <div className="flex flex-col gap-1">
             <span className="text-xs text-neutral-500">코드</span>
@@ -154,6 +155,7 @@ export default function MailCategories({
           </Button>
         </div>
         {keyTaken && <p className="mt-1.5 text-xs text-red-600">이미 있는 분류 코드입니다.</p>}
+        </div>
       </WhiteCard>
 
       <WhiteCard>

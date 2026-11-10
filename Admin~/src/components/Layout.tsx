@@ -12,7 +12,7 @@ import { useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from './ui/ProjectIcon'
 import { ThemeToggle } from './ThemeToggle'
 import { signedInTargets } from '../lib/googleAuth'
-import { blockedReason, type SignInOutcome } from '../lib/api'
+import { blockedReason, callAdmin, isForbiddenProject, type SignInOutcome } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
 import { PublishBar } from '../mock/PublishBar'
 import { dropGameParams } from './ui/PlayerLink'
@@ -25,7 +25,8 @@ const NAV_ACTIVE = 'bg-[var(--sb-active-bg)] text-[color:var(--sb-active-text)] 
 type Icon = ComponentType<{ className?: string }>
 type NavItem = { to: string; label: string; icon: Icon; end?: boolean }
 
-function NavLinkRow({ to, label, icon: Icon, end = false, badge, accent }: NavItem & { badge?: number | undefined; accent: string }) {
+// alert: 처리를 기다리는 일(답변 대기 문의 등) — 빨간 점에 개수. 아니면 노란 개수(미게시 변경처럼 알림 정도).
+function NavLinkRow({ to, label, icon: Icon, end = false, badge, alert = false, accent }: NavItem & { badge?: number | undefined; alert?: boolean; accent: string }) {
   return (
     <NavLink
       to={to}
@@ -36,12 +37,41 @@ function NavLinkRow({ to, label, icon: Icon, end = false, badge, accent }: NavIt
       <Icon className="w-4 h-4 shrink-0" />
       <span className="whitespace-nowrap">{label}</span>
       {!!badge && (
-        <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400 text-[#161a2b] text-[11px] font-semibold leading-none">
-          {badge}
+        <span className={`ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none ${
+          alert ? 'bg-red-500 text-white' : 'bg-amber-400 text-[#161a2b]'
+        }`}>
+          {badge > 99 ? '99+' : badge}
         </span>
       )}
     </NavLink>
   )
+}
+
+/**
+ * 답변 대기 문의 수 — 고객센터 메뉴의 빨간 표시. 1분마다, 그리고 화면을 옮길 때(답변하고 나오면 바로 줄게) 다시 센다.
+ * 못 세면 표시를 숨긴다(null).
+ */
+function useWaitingSupportCount(target: ProjectTarget, pathname: string): number | null {
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    const read = () => {
+      callAdmin<{ counts?: { open?: number } }>(target, 'support.list', { limit: 1, offset: 0 })
+        .then((d) => { if (alive) setCount(typeof d.counts?.open === 'number' ? d.counts.open : null) })
+        .catch(() => { if (alive) setCount(null) })
+    }
+    // 화면을 열거나 옮길 때는 늘 센다. 주기 재조회만 가려진 탭에서 건너뛴다.
+    const tick = () => { if (!document.hidden) read() }
+    read()
+    const id = window.setInterval(tick, 60_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      alive = false
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [target, pathname])
+  return count
 }
 
 // 운영자가 하러 온 일로 묶는다. 대시보드·통계는 묶음 밖에 늘 보인다.
@@ -196,6 +226,8 @@ export function Layout({
   const { drafts } = usePendingChanges()
   const pendingCount = drafts?.length ?? null
 
+  const waitingSupport = useWaitingSupportCount(target, location.pathname)
+
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
   const accent = colorOf(target)
   // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 그 게임에서 받은 실패 사유를 붙인다.
@@ -235,7 +267,7 @@ export function Layout({
         {/* 게임 고르기 — 색 점으로 게임을 구분한다. 지금 게임은 테두리도 그 색으로. */}
         <div className="px-3 pb-2 space-y-1">
           <div className="px-1 pb-0.5 text-[11px] font-medium text-[color:var(--sb-muted)]">프로젝트</div>
-          {PROJECTS.map((p) => {
+          {PROJECTS.filter((p) => p.key === target || (!look.hidden(p.key) && !isForbiddenProject(outcomes, p.key))).map((p) => {
             const on = p.key === target
             const allowed = allowedTargets.has(p.key)
             const reason = allowed ? null : blockedReason(outcomes.find((o) => o.target === p.key))
@@ -287,11 +319,11 @@ export function Layout({
 
         {/* 스크롤 영역 밖에 고정 — 자주 드나드는 고객센터와 변경 관리는 묶음을 접어도 항상 보인다. */}
         <div className="border-t border-[color:var(--sb-border)] p-3 space-y-0.5">
-          <NavLinkRow to="/support" label="고객센터" icon={Headset} accent={accent} />
+          <NavLinkRow to="/support" label="고객센터" icon={Headset} badge={waitingSupport ?? undefined} alert accent={accent} />
           <NavLinkRow to="/settings" label="설정" icon={SlidersHorizontal} accent={accent} />
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} accent={accent} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
-          {isMaster && <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} accent={accent} />}
+          <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} accent={accent} />
           <a
             href="https://trsoftkorea.github.io/TrueSoft.Supabase/"
             target="_blank"

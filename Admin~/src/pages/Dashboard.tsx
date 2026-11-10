@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatKRW } from '../components/ui/format'
@@ -30,11 +30,11 @@ function StatTile({ label, value }: { label: string; value: string }) {
   )
 }
 
-function StatSection({ title, children }: { title: string; children: React.ReactNode }) {
+function StatSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <WhiteCard>
-      <div className="border-b border-neutral-100 px-5 py-3">
-        <span className="text-sm font-medium text-neutral-800">{title}</span>
+      <div className="border-b border-neutral-100 p-5 pb-3">
+        <CardHeader title={title} description={description} />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 divide-x divide-y sm:divide-y-0 divide-neutral-100">
         {children}
@@ -96,7 +96,7 @@ export default function Dashboard({
         </WhiteCard>
       ) : stats && (
         <div className="space-y-4">
-          <StatSection title="플레이어">
+          <StatSection title="플레이어" description="가입하고 활동하는 플레이어 수를 봅니다.">
             <StatTile label="총 가입자" value={n(stats.total_players)} />
             <StatTile label="오늘 신규 가입" value={n(stats.new_today)} />
             <StatTile label="최근 7일 신규 가입" value={n(stats.new_7d)} />
@@ -104,7 +104,7 @@ export default function Dashboard({
             <StatTile label="현재 차단 중" value={n(stats.banned_now)} />
           </StatSection>
 
-          <StatSection title="매출">
+          <StatSection title="매출" description="결제 건수와 금액을 봅니다. 환불·테스트·무료 결제는 뺍니다.">
             <StatTile label="오늘 결제 건수" value={n(stats.purchases_today)} />
             <StatTile label="오늘 결제 금액" value={formatKRW(stats.revenue_today_krw)} />
             <StatTile label="최근 7일 결제 금액" value={formatKRW(stats.revenue_7d_krw)} />

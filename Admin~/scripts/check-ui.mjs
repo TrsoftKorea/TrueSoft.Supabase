@@ -142,6 +142,15 @@ const RULES = [
     bad: '<Button>{busy ? <Loader2 /> : <RefreshCw onClick={() => x()} />}새로고침</Button>', good: '<RefreshCw />구글 환불 확인</Button><RefreshButton />새로고침',
   },
   {
+    id: 'U16', name: '카드 제목을 글자만 든 칸으로 직접 짬(설명 없음)', fix: 'CardHeader(title + 설명 한 줄 description)를 쓴다. 표 카드는 <div className="p-5 pb-3"> 안에 둔다',
+    // 카드의 첫 자식이 굵은 글자(font-medium 등) 칸이면 손으로 짠 제목이다 — 작은 회색 글자라 아래 칸 이름과 안 갈렸고(운영자·아이템·분류 추가)
+    // 설명이 빠졌다(플레이어 친구·대전 기록 탭). 맨 위 띠(border-b) 안에 굵은 글자를 둔 꼴도 같다(대시보드·통계).
+    // 2026-11-10 에 카드 첫 자식 80곳을 나열해 대 보니 이 꼴만 걸리고 본문 칸은 안 걸렸다.
+    find: (t) => matchAll(t, /<WhiteCard\b[^>]*>\s*(?:<div\b[^>]*className="[^"]*\bborder-b\b[^"]*"[^>]*>\s*(?:<div\b[^>]*>\s*)?)?<(?:div|p|span)\b[^>]*className="[^"]*\bfont-(?:medium|semibold|bold)\b/g),
+    bad: '<WhiteCard>\n  <div className="border-b border-neutral-100 px-5 py-3">\n    <span className="text-sm font-medium text-neutral-800">리텐션</span>',
+    good: '<WhiteCard className="p-5">\n  <CardHeader title="새 분류 추가" description="…" />\n</WhiteCard><WhiteCard><div className="border-b p-5 pb-3">\n<CardHeader title="리텐션" description="…" />',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',

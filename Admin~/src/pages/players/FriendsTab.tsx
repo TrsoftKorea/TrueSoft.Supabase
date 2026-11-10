@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { InfoList } from '../../components/ui/InfoList'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { AccountIdCell, PlayerLink } from '../../components/ui/PlayerLink'
@@ -73,7 +73,9 @@ export default function FriendsTab({
       </div>
 
       <WhiteCard>
-        <div className="px-5 py-3 border-b border-neutral-100 text-sm font-medium text-neutral-800">친구 목록</div>
+        <div className="p-5 pb-3">
+          <CardHeader title="친구 목록" description="이 플레이어와 친구인 계정을 봅니다." />
+        </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-500 text-xs">
@@ -103,8 +105,8 @@ export default function FriendsTab({
       </WhiteCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PendingCard title="받은 요청" rows={incoming} loading={loading} failed={failed} />
-        <PendingCard title="보낸 요청" rows={outgoing} loading={loading} failed={failed} />
+        <PendingCard title="받은 요청" description="이 플레이어가 받고 아직 답하지 않은 친구 요청을 봅니다." rows={incoming} loading={loading} failed={failed} />
+        <PendingCard title="보낸 요청" description="이 플레이어가 보내고 상대가 아직 답하지 않은 친구 요청을 봅니다." rows={outgoing} loading={loading} failed={failed} />
       </div>
     </div>
   )
@@ -112,19 +114,24 @@ export default function FriendsTab({
 
 function PendingCard({
   title,
+  description,
   rows,
   loading,
   failed,
 }: {
   title: string
+  description: string
   rows: RequestRow[]
   loading: boolean
   failed: boolean
 }) {
   return (
     <WhiteCard>
-      <div className="px-5 py-3 border-b border-neutral-100 text-sm font-medium text-neutral-800">
-        {title} <span className="text-neutral-400 font-normal">{rows.length}</span>
+      <div className="p-5 pb-3">
+        <CardHeader
+          title={<>{title} <span className="text-neutral-400 font-normal">{rows.length}</span></>}
+          description={description}
+        />
       </div>
       <div className="overflow-auto">
         <table className="w-full text-sm">

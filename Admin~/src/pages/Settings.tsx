@@ -15,14 +15,15 @@ import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
-import { ChevronDown, ChevronUp, CircleHelp, ExternalLink, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, ExternalLink, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
+import { copyToClipboard } from '../lib/clipboard'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { RefreshButton } from '../components/ui/FilterBar'
 
-type StoreKeyStatus = {
+export type StoreKeyStatus = {
   key: string
   source: 'console' | 'supabase' | null
   status: 'ok' | 'missing' | 'invalid'
@@ -45,11 +46,14 @@ type StoreKeyStatus = {
  */
 type KeyGuide = { site: { name: string; url: string }; steps: string[]; notes?: string[] }
 
-type ServiceTab = 'store' | 'login' | 'push'
-type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'google' | 'fcm' | 'apns'
+type ServiceTab = 'supabase' | 'store' | 'login' | 'push'
+type StoreGroup = 'appstore' | 'googleplay' | 'signin' | 'google' | 'fcm' | 'apns' | 'supabase'
 type KeySet = 'iap' | 'apns'
 
+// Supabase 탭은 이 프로젝트 자체 — 게임에 넣을 연결 정보와, 로그인 탭의 값을 Supabase 로그인 설정에 넣는 관리 열쇠.
+// 새 프로젝트를 만든 뒤 가장 먼저 쓰므로 맨 앞. 관리 열쇠는 플레이어가 쓰는 로그인 수단이 아니라 로그인 탭에 두지 않는다.
 const SERVICE_TABS: readonly (readonly [ServiceTab, string])[] = [
+  ['supabase', 'Supabase'],
   ['store', '스토어'],
   ['login', '로그인'],
   ['push', '푸시 알림'],
@@ -62,6 +66,7 @@ const STORE_GROUPS: { id: StoreGroup; tab: ServiceTab; title: string }[] = [
   { id: 'googleplay', tab: 'store', title: 'Google Play' },
   { id: 'signin', tab: 'login', title: 'Sign in with Apple' },
   { id: 'google', tab: 'login', title: 'Google 로그인' },
+  // 관리 열쇠(supabase 묶음)는 여기 없다 — 마스터만 "트루베이스 설정"에서 넣는다(운영자는 열쇠를 만들지도 보지도 않는다).
   { id: 'fcm', tab: 'push', title: 'Firebase Cloud Messaging' },
   { id: 'apns', tab: 'push', title: 'Apple Push Notifications' },
 ]
@@ -303,8 +308,50 @@ const STORE_KEYS: StoreKeyDef[] = [
       ],
       notes: [
         '저장한 원본이 걸리기까지 몇 분 걸릴 수 있습니다.',
-        '이 클라이언트 ID가 Supabase 대시보드 구글 로그인 설정의 "Client IDs"에 들어 있어야 로그인이 됩니다.',
+        'Supabase 탭의 관리 열쇠가 있으면 저장할 때 Supabase 로그인 설정에도 들어갑니다.',
       ],
+    },
+  },
+  // 표기는 Google Cloud 콘솔 한국어 화면 기준으로 적었다 — "클라이언트 보안 비밀번호"·"iOS" 유형 이름은 화면으로 확인 못 함(2026-11-10).
+  {
+    key: 'GOOGLE_WEB_CLIENT_SECRET', group: 'google', name: '클라이언트 보안 비밀번호', about: '웹 애플리케이션 유형 OAuth 클라이언트의 비밀번호',
+    hint: '띄어쓰기 없는 한 줄을 넣습니다.',
+    guide: {
+      site: { name: 'Google Cloud 콘솔 › 클라이언트', url: 'https://console.cloud.google.com/auth/clients' },
+      steps: [
+        '위 "클라이언트 ID"와 같은 웹 애플리케이션 클라이언트를 엽니다.',
+        '"클라이언트 보안 비밀번호"에 보이는 값을 복사합니다. 보이지 않으면 새 비밀번호를 추가해 복사합니다.',
+      ],
+    },
+  },
+  {
+    key: 'GOOGLE_IOS_CLIENT_ID', group: 'google', name: 'iOS 클라이언트 ID', about: 'iOS 유형 OAuth 클라이언트의 ID',
+    hint: '.apps.googleusercontent.com 으로 끝나는 값을 넣습니다. 여럿이면 쉼표로 나눕니다.',
+    guide: {
+      site: { name: 'Google Cloud 콘솔 › 클라이언트', url: 'https://console.cloud.google.com/auth/clients' },
+      steps: [
+        '"클라이언트" 페이지에서 애플리케이션 유형이 "iOS"인 클라이언트를 엽니다. 없으면 "클라이언트 만들기"로 게임의 번들 ID를 넣어 만듭니다.',
+        '"클라이언트 ID"를 복사합니다.',
+      ],
+      notes: ['게임 SupabaseSettings 의 "Google iOS 클라이언트 ID"와 같은 값입니다.'],
+    },
+  },
+  // Supabase 열쇠 만들기 화면은 영어다. "Generate token"·"Expires in"·"Resource access"·"Permissions"·"Review access" 와
+  // 묶음 이름("Project"·"Application services")은 운영자 화면으로 확인했다(2026-11-09). 묶음 안 항목 이름
+  // "Project Settings"·"Auth Config" 는 Supabase 문서 표기다 — 화면이 다르면 여기를 고친다.
+  {
+    key: 'SUPABASE_MANAGEMENT_TOKEN', group: 'supabase', name: '관리 열쇠', about: '이 프로젝트의 로그인 설정만 바꿀 수 있는 Supabase 열쇠', required: true,
+    hint: 'Supabase 에서 복사한 열쇠를 그대로 넣습니다.',
+    guide: {
+      site: { name: 'Supabase › Access Tokens', url: 'https://supabase.com/dashboard/account/tokens' },
+      steps: [
+        '"Generate token"을 누르고 "Name"에 알아볼 이름을 넣습니다.',
+        '"Expires in"에서 만료되지 않는 선택지를 고릅니다.',
+        '"Resource access"에서 "Project"를 고르고, 조직과 이 프로젝트 하나만 고릅니다.',
+        '"Permissions"의 "Project" 묶음에서 "Project Settings"를, "Application services" 묶음에서 "Auth Config"를 읽기·쓰기로 바꿉니다. 나머지는 그대로 둡니다.',
+        '"Review access"로 확인하고 만든 뒤, 보이는 열쇠를 복사합니다.',
+      ],
+      notes: ['열쇠는 만들 때 한 번만 보입니다. 잃어버리면 새로 만들어 넣습니다.'],
     },
   },
   {
@@ -319,7 +366,7 @@ const STORE_KEYS: StoreKeyDef[] = [
         '"Done" → "Continue" → "Save"를 누릅니다.',
         'Services ID 목록의 "Identifier" 값을 복사합니다. 예: com.회사이름.게임이름.Services',
       ],
-      notes: ['이 Services ID가 Supabase 대시보드 애플 로그인 설정의 "Client IDs"에 들어 있어야 로그인이 됩니다. 새로 만들었으면 맨 앞에 넣습니다.'],
+      notes: ['Supabase 탭의 관리 열쇠가 있으면 저장할 때 Supabase 로그인 설정에도 들어갑니다.'],
     },
   },
 ]
@@ -331,8 +378,11 @@ function keyTitle(k: StoreKeyDef | undefined): string {
   return owner ? `${owner} › ${k.name}` : k.name
 }
 
+/** 마스터 전용 "트루베이스 설정"이 쓰는 관리 열쇠 정의(이름·안내·가져오는 방법). */
+export const MANAGEMENT_KEY = STORE_KEYS.find((k) => k.key === 'SUPABASE_MANAGEMENT_TOKEN')!
+
 /** 입력칸 옆 "가져오는 방법" — 누르면 발급처 바로 가기·단계가 펼쳐진다. */
-function KeyGuideToggle({ guide }: { guide: KeyGuide }) {
+export function KeyGuideToggle({ guide }: { guide: KeyGuide }) {
   const [open, setOpen] = useState(false)
   return (
     <div>
@@ -386,11 +436,13 @@ function StoreStatusCard({
   const [saving, setSaving] = useState(false)
   const [savedKey, setSavedKey] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [tab, setTab] = useState<ServiceTab>('store')
+  const [tab, setTab] = useState<ServiceTab>('supabase')
 
   const load = useCallback(async () => {
     try {
-      const res = await callAdmin<{ rows: StoreKeyStatus[]; services?: ServiceEnabled }>(target, 'settings.getStoreStatus', {})
+      const res = await callAdmin<{ rows: StoreKeyStatus[]; services?: ServiceEnabled }>(
+        target, 'settings.getStoreStatus', {},
+      )
       setRows(res.rows)
       setServices(res.services ?? {})
     } catch (e: unknown) {
@@ -455,11 +507,12 @@ function StoreStatusCard({
     <WhiteCard className="p-5 space-y-5">
       <CardHeader
         title="서비스 연결"
-        description="서버 기능이 바깥 서비스와 연결할 때 쓰는 키를 넣습니다."
+        description="이 프로젝트를 바깥 서비스와 잇는 값을 관리합니다."
       />
       <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
       {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
       <div className="space-y-4">
+        {tab === 'supabase' && <ConnectionBox target={target} report={report} />}
         {groups.map((g) => (
           <GroupBox
             key={g.id}
@@ -950,6 +1003,73 @@ function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: u
       <ConsoleIdentityCard target={target} current={current} onSaved={onSaved} report={report} />
       <ConsoleColorCard target={target} current={current} onSaved={onSaved} report={report} />
     </div>
+  )
+}
+
+type Connection = { url: string; publishableKey: string | null }
+
+/**
+ * 서비스 연결 › Supabase — 게임의 SupabaseSettings 에 넣을 이 프로젝트의 주소와 공개 키. 새 프로젝트를 만든 뒤 개발자에게 넘긴다.
+ * 다른 묶음과 같은 칸 폭(table-fixed + colgroup)이라 복사 버튼이 다른 탭의 입력 버튼 자리에 선다.
+ */
+function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const [conn, setConn] = useState<Connection | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => {
+    setConn(null)
+    callAdmin<Connection>(target, 'project.getConnection')
+      .then(setConn)
+      .catch((e: unknown) => report(e, '연결 정보를 불러오지 못했습니다.'))
+  }, [target, report])
+
+  const copy = async (label: string, value: string) => {
+    if (await copyToClipboard(value)) {
+      setCopied(label)
+      setTimeout(() => setCopied((c) => (c === label ? null : c)), 1500)
+    } else {
+      report(new Error('복사하지 못했습니다.'), '복사하지 못했습니다.')
+    }
+  }
+
+  // 이름은 Supabase 화면·SupabaseSettings 칸에 적힌 그대로.
+  const rows: [string, string, string | null | undefined][] = [
+    ['Project URL', '이 프로젝트의 주소', conn?.url],
+    ['Publishable Key', '이 프로젝트의 공개 키', conn ? conn.publishableKey : undefined],
+  ]
+
+  return (
+    <GroupBox title="프로젝트 연결 정보">
+      <table className="w-full text-sm table-fixed">
+        <colgroup>
+          <col className="w-[34%]" />
+          <col />
+          <col className="w-[164px]" />
+        </colgroup>
+        <tbody>
+          {rows.map(([label, about, value]) => (
+            <tr key={label} className="border-t border-neutral-100 first:border-t-0">
+              <td className="py-2 pl-4 pr-4">
+                <div className="text-neutral-800">{label}</div>
+                <div className="text-xs text-neutral-500">{about}</div>
+              </td>
+              <td className="py-2 pr-4">
+                <code className={`block truncate text-xs ${value ? 'text-neutral-900' : 'text-neutral-400'}`} title={value ?? undefined}>
+                  {value === undefined ? '…' : value || '없음'}
+                </code>
+              </td>
+              <td className="py-2 pr-4 text-right whitespace-nowrap">
+                <Button size="sm" className="w-[76px]" onClick={() => value && void copy(label, value)} disabled={!value}>
+                  {copied === label ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                  {copied === label ? '복사함' : '복사'}
+                </Button>
+                <span className="inline-block w-[64px] ml-1.5" aria-hidden />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </GroupBox>
   )
 }
 

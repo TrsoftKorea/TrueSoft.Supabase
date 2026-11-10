@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { platformLabel } from '../../lib/platforms'
-import { WhiteCard } from '../../components/ui/Card'
+import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { niceAxis, ValueAxisFrame } from '../../components/ui/ValueAxis'
 
 type Breakdown = Record<string, number>
@@ -161,8 +161,8 @@ export default function CcuSection({
 
   return (
     <WhiteCard>
-      <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
-        <span className="text-sm font-medium text-neutral-800">동시접속자</span>
+      <div className="border-b border-neutral-100 p-5 pb-3">
+        <CardHeader title="동시접속자" description="지금 접속 중인 플레이어 수와 그동안의 흐름을 봅니다." actions={
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <button key={r.hours} type="button" onClick={() => setHours(r.hours)}
@@ -171,6 +171,7 @@ export default function CcuSection({
             </button>
           ))}
         </div>
+        } />
       </div>
 
       {loading && !data ? (

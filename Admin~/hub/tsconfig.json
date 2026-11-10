@@ -1,0 +1,14 @@
+{
+  "//": "초대 저장소(functions/hub.ts) 형식 검사용. 콘솔 화면(src)과 실행 환경이 달라 따로 둔다 — npx tsc -p hub",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["functions"]
+}
