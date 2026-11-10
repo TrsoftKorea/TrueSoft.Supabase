@@ -161,6 +161,8 @@ const RULES = [
 const EXEMPT = {
   // 로그인 전 화면은 콘솔 틀(메뉴·머리) 밖의 전체 화면이라 자체 배치를 쓴다.
   U3: ['pages/Login.tsx', 'pages/ProjectSelect.tsx'],
+  // 좁은 화면에서 연 메뉴 뒤의 어두운 바닥 — 값을 넣거나 확인받는 창이 아니라 누르면 메뉴가 닫히는 바닥이다.
+  U2: ['components/Layout.tsx'],
   // 스위치 손잡이는 켜짐(파랑)·꺼짐(회색) 바탕 위에 늘 흰색이어야 보인다 — 테마 색을 쓰면 어두운 화면에서 바탕과 섞인다.
   U4: ['components/ui/Switch.tsx'],
   // 공용 새로고침 버튼 자신.

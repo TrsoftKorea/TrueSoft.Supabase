@@ -39,6 +39,7 @@ import GameServers from './pages/GameServers'
 import AuditLogs from './pages/AuditLogs'
 import BannedWords from './pages/BannedWords'
 import { dropGameParams } from './components/ui/PlayerLink'
+import DesignSample from './mock/DesignSample'
 
 type Me = { email: string; isMaster: boolean }
 
@@ -182,8 +183,6 @@ export default function App() {
     <PendingChangesProvider target={target} onUnauthenticated={signOut}>
     <Layout
       target={target}
-      onTargetChange={setTargetState}
-      outcomes={outcomes}
       email={me.email}
       isMaster={me.isMaster}
       onSignOut={signOut}
@@ -223,6 +222,7 @@ export default function App() {
         <Route path="/player-data" element={<PlayerData target={target} onUnauthenticated={signOut} />} />
         <Route path="/player-data-fields" element={<PlayerDataFields target={target} onUnauthenticated={signOut} />} />
         <Route path="/schema-changes" element={<SchemaChanges target={target} onUnauthenticated={signOut} />} />
+        {__MOCK__ && <Route path="/design-sample" element={<DesignSample />} />}
         <Route path="/operators" element={<Operators target={target} isMaster={me.isMaster} onUnauthenticated={signOut} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

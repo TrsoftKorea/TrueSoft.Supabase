@@ -928,7 +928,7 @@ function ConsoleIdentityCard({
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
         title="프로젝트 이름 · 아이콘"
-        description="프로젝트 목록·메뉴·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
+        description="프로젝트 목록·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
       />
 
       <div className="space-y-1">

@@ -1,21 +1,19 @@
-import { startTransition, useEffect, useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
-import { NavLink, useLocation, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode, type ComponentType, type CSSProperties } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Database, FilePen, Trophy, Settings, Users, ReceiptText, Package, Ticket,
   MessageSquare, Send, Inbox, Tags, CalendarClock, ScrollText, History, UserCog,
   Swords, Medal, SlidersHorizontal, Server, ClipboardList, ShieldBan,
   UserRound, MessagesSquare, Mail, Gift, Crown, Settings2, Gauge,
-  ChevronDown, LogOut, AlertTriangle, BookOpen, LayoutGrid, Timer, BarChart3, Headset, Activity,
+  ChevronDown, LogOut, AlertTriangle, BookOpen, Timer, BarChart3, Headset, Activity, Palette, Menu, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
-import { PROJECTS, setTarget, type ProjectTarget } from '../lib/projectTarget'
+import { type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from './ui/ProjectIcon'
 import { ThemeToggle } from './ThemeToggle'
-import { signedInTargets } from '../lib/googleAuth'
-import { blockedReason, callAdmin, isForbiddenProject, type SignInOutcome } from '../lib/api'
+import { callAdmin } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
 import { PublishBar } from '../mock/PublishBar'
-import { dropGameParams } from './ui/PlayerLink'
 
 // 사이드바 색은 화면 모드를 따른다 — 값은 index.css 의 .sidebar 변수(--sb-*)에 있다.
 const NAV_BASE = 'flex items-center gap-2 h-9 px-3 rounded-md text-sm transition-colors'
@@ -162,6 +160,28 @@ function saveOpen(labels: string[]) {
   }
 }
 
+// 넓은 화면에서 메뉴를 접어 둔 것 — 이 브라우저에만 기억한다.
+const COLLAPSED_KEY = 'tb_sidebar_collapsed'
+
+function loadCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveCollapsed(v: boolean) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, v ? '1' : '0')
+  } catch {
+    // 저장이 막힌 브라우저에서는 새로 열 때 다시 펴질 뿐이다.
+  }
+}
+
+// 사이드바가 화면 옆에 붙어 있는 폭(lg) — 그 아래에서는 위에 덮어 여는 메뉴가 된다.
+const isWide = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+
 // '/server' 가 '/servers' 까지 잡지 않게 경로 단위로 본다.
 const isUnder = (pathname: string, to: string) => pathname === to || pathname.startsWith(`${to}/`)
 
@@ -190,8 +210,6 @@ function NavSection({ label, icon: Icon, open, active, onToggle, children }: {
 
 export function Layout({
   target,
-  onTargetChange,
-  outcomes,
   email,
   isMaster,
   onSignOut,
@@ -199,8 +217,6 @@ export function Layout({
   children,
 }: {
   target: ProjectTarget
-  onTargetChange: (t: ProjectTarget) => void
-  outcomes: SignInOutcome[]
   email: string
   isMaster: boolean
   onSignOut: () => void
@@ -209,16 +225,6 @@ export function Layout({
 }) {
   const location = useLocation()
   const look = useProjectLook()
-  const colorOf = look.color
-  const [, setSearchParams] = useSearchParams()
-  const switchTarget = (t: ProjectTarget) => {
-    setTarget(t)
-    // 한 번에 그린다 — 라우터의 주소 변경은 늦게 그려져서, 따로 하면 새 게임의 화면이 앞 게임 주소로 먼저 만들어진다.
-    startTransition(() => {
-      onTargetChange(t)
-      setSearchParams(dropGameParams, { replace: true })
-    })
-  }
 
   // 미게시 변경(draft) 개수 — 어느 화면에서든 사이드바 배지와 상단 배너로 안내한다.
   // 실제 조회는 PendingChangesProvider 하나가 맡는다 — 각 관리 화면도 같은 값을 구독하므로,
@@ -229,14 +235,27 @@ export function Layout({
   const waitingSupport = useWaitingSupportCount(target, location.pathname)
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
-  const accent = colorOf(target)
-  // 로그인 때 표를 받은 게임만 오갈 수 있다. 나머지는 그 게임에서 받은 실패 사유를 붙인다.
-  const allowedTargets = new Set(signedInTargets())
+  const accent = look.color(target)
 
   const [savedOpen, setSavedOpen] = useState<string[]>(loadOpen)
   // 지금 화면이 든 묶음은 위치가 보이게 잠시 편다. 기억하지 않아서 다른 화면으로 가면 다시 접힌다.
   const [currentOpen, setCurrentOpen] = useState<string | null>(() => sectionOf(location.pathname))
   useEffect(() => { setCurrentOpen(sectionOf(location.pathname)) }, [location.pathname])
+
+  // 넓은 화면: 접기 버튼으로 사이드바를 감추고 위 띠의 메뉴 버튼으로 다시 편다.
+  // 좁은 화면(lg 아래): 사이드바는 늘 접혀 있고 메뉴 버튼으로 위에 덮어 연다. 화면을 옮기면 닫는다.
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const setCollapsedSaved = (v: boolean) => { setCollapsed(v); saveCollapsed(v) }
+  const openMenu = () => { if (isWide()) setCollapsedSaved(false); else setNavOpen(true) }
+  const closeMenu = () => { if (isWide()) setCollapsedSaved(true); else setNavOpen(false) }
+  const [navOpen, setNavOpen] = useState(false)
+  useEffect(() => { setNavOpen(false) }, [location.pathname, target])
+  useEffect(() => {
+    if (!navOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setNavOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [navOpen])
 
   const isOpen = (label: string) => savedOpen.includes(label) || currentOpen === label
   const toggleSection = (label: string) => {
@@ -248,51 +267,39 @@ export function Layout({
 
   return (
     <div className="h-screen flex overflow-hidden">
+      {navOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden />}
       {/* 사이드바는 화면 높이에 고정한다 — 본문이 길어져도 늘어나며 아래 항목들을
           화면 밖으로 밀어내지 않도록. 스크롤은 본문 쪽(아래 div)에서만 일어난다. */}
       <aside
-        className="sidebar w-60 shrink-0 h-full flex flex-col border-r border-[color:var(--sb-border)] text-[color:var(--sb-text)]"
+        className={`sidebar w-60 shrink-0 h-full flex flex-col border-r border-[color:var(--sb-border)] text-[color:var(--sb-text)] fixed inset-y-0 left-0 z-40 transition-transform lg:static lg:translate-x-0 ${navOpen ? 'translate-x-0' : '-translate-x-full'} ${collapsed ? 'lg:hidden' : ''}`}
         style={{ backgroundColor: 'var(--sb-bg)', '--sb-accent': accent } as CSSProperties}
       >
-        <div className="h-14 flex items-center gap-2.5 px-4">
-          <span
-            className="w-7 h-7 rounded-md flex items-center justify-center text-white text-sm font-bold"
-            style={{ backgroundColor: accent }}
+        {/* 접기 버튼은 맨 왼쪽 — 접은 뒤 위 띠에 나오는 펴기 버튼과 같은 자리라 오가며 누르기 쉽다.
+            "트루베이스"를 누르면 프로젝트 목록으로 간다 — 다른 프로젝트로 갈 때는 목록을 거친다. */}
+        <div className="h-14 shrink-0 flex items-center gap-1.5 px-3">
+          <button
+            type="button"
+            onClick={closeMenu}
+            title="메뉴 접기"
+            aria-label="메뉴 접기"
+            className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-[var(--sb-hover)] hover:text-[color:var(--sb-text-strong)]"
           >
-            T
-          </span>
-          <span className="font-semibold text-[color:var(--sb-text-strong)]">트루베이스</span>
-        </div>
-
-        {/* 게임 고르기 — 색 점으로 게임을 구분한다. 지금 게임은 테두리도 그 색으로. */}
-        <div className="px-3 pb-2 space-y-1">
-          <div className="px-1 pb-0.5 text-[11px] font-medium text-[color:var(--sb-muted)]">프로젝트</div>
-          {PROJECTS.filter((p) => p.key === target || (!look.hidden(p.key) && !isForbiddenProject(outcomes, p.key))).map((p) => {
-            const on = p.key === target
-            const allowed = allowedTargets.has(p.key)
-            const reason = allowed ? null : blockedReason(outcomes.find((o) => o.target === p.key))
-            const c = colorOf(p.key)
-            return (
-              <button
-                key={p.key}
-                type="button"
-                disabled={!allowed}
-                title={reason?.full}
-                onClick={() => { if (!on) switchTarget(p.key) }}
-                aria-pressed={on}
-                className={`w-full flex items-center gap-2.5 h-9 px-3 rounded-md text-sm border transition-colors disabled:cursor-not-allowed disabled:text-[color:var(--sb-muted)] ${
-                  on
-                    ? 'bg-[var(--sb-active-bg)] text-[color:var(--sb-text-strong)] font-semibold'
-                    : 'border-[color:var(--sb-border)] hover:enabled:bg-[var(--sb-hover)] hover:enabled:text-[color:var(--sb-text-strong)]'
-                }`}
-                style={on ? { borderColor: c } : undefined}
-              >
-                <ProjectIcon target={p.key} size={20} dim={!allowed} />
-                <span className="truncate">{look.name(p.key)}</span>
-                {reason && <span className="ml-auto text-[11px] whitespace-nowrap">{reason.short}</span>}
-              </button>
-            )
-          })}
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onBackToList}
+            title="프로젝트 목록"
+            className="flex items-center gap-2.5 h-9 px-1.5 rounded-md transition-colors hover:bg-[var(--sb-hover)]"
+          >
+            <span
+              className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center text-white text-sm font-bold"
+              style={{ backgroundColor: accent }}
+            >
+              T
+            </span>
+            <span className="font-semibold whitespace-nowrap text-[color:var(--sb-text-strong)]">트루베이스</span>
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3 scroll-area scroll-area-dark">
@@ -324,6 +331,7 @@ export function Layout({
           <NavLinkRow to="/schema-changes" label="변경 관리" icon={History} badge={pendingCount ?? undefined} accent={accent} />
           {/* 운영자 관리는 마스터만. 서버도 같은 조건으로 다시 막는다. */}
           <NavLinkRow to="/operators" label="운영자 관리" icon={UserCog} accent={accent} />
+          {__MOCK__ && <NavLinkRow to="/design-sample" label="디자인 견본" icon={Palette} accent={accent} />}
           <a
             href="https://trsoftkorea.github.io/TrueSoft.Supabase/"
             target="_blank"
@@ -338,39 +346,54 @@ export function Layout({
 
       <div className="flex-1 min-w-0 overflow-y-auto bg-neutral-100 scroll-area">
         {/* 상단 띠 — 지금 어느 게임에서 작업 중인지 화면 어디서든 보이게 그 게임 색으로 깐다. */}
-        <header className="text-white" style={{ backgroundColor: accent }}>
-          <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-3">
+        <header className="text-white flex items-center" style={{ backgroundColor: accent }}>
+          {/* 넓은 화면에서 메뉴를 접었을 때의 펴기 버튼 — 화면 왼쪽 끝, 접기 버튼이 있던 자리. 가운데 내용이 본문과
+              줄이 맞게 오른쪽에 같은 폭의 빈칸을 둔다. */}
+          {collapsed && (
             <button
               type="button"
-              onClick={onBackToList}
-              title="프로젝트 목록으로"
-              className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"
+              onClick={openMenu}
+              title="메뉴 펴기"
+              aria-label="메뉴 펴기"
+              className="hidden lg:inline-flex shrink-0 ml-3 items-center justify-center w-8 h-8 rounded-md border border-white/60 text-white hover:bg-white/10"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              프로젝트 목록
+              <PanelLeftOpen className="w-4 h-4" />
             </button>
-            <ProjectIcon target={target} size={32} className="ring-2 ring-white/70" />
+          )}
+          {/* 좁은 화면에서는 글자를 접고 아이콘만 남긴다 — 이메일은 넓은 화면에서만. */}
+          <div className="flex-1 min-w-0 max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={openMenu}
+              aria-label="메뉴"
+              className="lg:hidden shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md border border-white/60 text-white hover:bg-white/10"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <ProjectIcon target={target} size={32} className="ring-2 ring-white/70 shrink-0" />
             <span className="text-lg font-bold tracking-tight truncate">{look.name(target)}</span>
-            <div className="ml-auto flex items-center gap-3 text-sm min-w-0">
-              <span className="truncate">
+            <div className="ml-auto flex items-center gap-2 sm:gap-3 text-sm min-w-0">
+              <span className="hidden md:inline truncate">
                 {email}
                 {isMaster && <span className="ml-1.5 font-semibold">· 마스터</span>}
               </span>
               <ThemeToggle compact className="shrink-0 border-white/60 text-white hover:bg-white/10" />
               <button
                 onClick={onSignOut}
-                className="shrink-0 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"
+                title="로그아웃"
+                className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2 sm:px-3 rounded-md border border-white/60 text-sm text-white hover:bg-white/10 whitespace-nowrap"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                로그아웃
+                <span className="hidden sm:inline">로그아웃</span>
               </button>
             </div>
           </div>
+          {collapsed && <div className="hidden lg:block shrink-0 w-8 mr-3" aria-hidden />}
         </header>
 
         {__MOCK__ && <PublishBar />}
 
-        <main className="max-w-6xl mx-auto px-6 py-6">
+        <main className="max-w-6xl mx-auto px-4 py-4 sm:px-6 sm:py-6">
           {showPendingBanner && (
             <NavLink
               to="/schema-changes"

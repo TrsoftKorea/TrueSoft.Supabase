@@ -286,7 +286,8 @@ export function PublishBar() {
     <>
       {/* 띠는 화면 모드를 따르지 않는다 — 색 이름(amber 등)은 어두운 화면에서 값이 바뀌어 글자만 뒤집히므로 띠 안은 고정 색으로 쓴다. */}
       <div className="bg-[#fbbf24] text-[#451a03] text-xs">
-        <div className="max-w-6xl mx-auto px-6 h-8 flex items-center gap-3">
+        {/* 좁은 화면에서는 상태·게시 버튼이 다음 줄로 내려간다 — 한 줄에 우겨 넣으면 게시 버튼이 화면 밖으로 밀린다. */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-8 py-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-semibold whitespace-nowrap">미리보기</span>
           <span className="text-[#451a03]/70 truncate hidden sm:inline">가짜 데이터로 보는 화면 · 실제 서버와 연결되지 않습니다</span>
           <button type="button" onClick={() => setExpanded((v) => !v)}
@@ -317,7 +318,7 @@ export function PublishBar() {
 
       {expanded && (
         <div className="bg-white border-b border-neutral-200">
-          <div className="max-w-6xl mx-auto px-6 py-3 space-y-3">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 space-y-3">
             {publishError && <p className="text-xs text-red-600">{publishError}</p>}
             {deployError && <p className="text-xs text-red-600">{deployError}</p>}
             {local ? (
