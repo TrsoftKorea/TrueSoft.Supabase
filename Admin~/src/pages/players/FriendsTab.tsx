@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { InfoList } from '../../components/ui/InfoList'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { CardStack, TableCard, type Column } from '../../components/ui/DataTable'
 import { AccountIdCell, PlayerLink } from '../../components/ui/PlayerLink'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
@@ -72,91 +71,46 @@ export default function FriendsTab({
         <RefreshButton onClick={() => void load()} loading={loading} />
       </div>
 
-      <WhiteCard>
-        <div className="p-5 pb-3">
-          <CardHeader title="친구 목록" description="이 플레이어와 친구인 계정을 봅니다." />
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
-                <th className="text-left px-4 py-2.5 font-medium w-72">계정 ID</th>
-                <th className="text-left px-4 py-2.5 font-medium w-44">친구가 된 시각</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || friends.length === 0 ? (
-                <TableStatusRow loading={loading} empty={friends.length === 0} failed={failed} colSpan={3} emptyText="친구가 없습니다." />
-              ) : (
-                friends.map((f) => (
-                  <tr key={f.account_id} className="border-t border-neutral-100">
-                    <td className="px-4 py-3">
-                      <PlayerLink accountId={f.account_id} name={f.display_name} />
-                    </td>
-                    <td className="px-4 py-3"><AccountIdCell accountId={f.account_id} /></td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(f.since)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PendingCard title="받은 요청" description="이 플레이어가 받고 아직 답하지 않은 친구 요청을 봅니다." rows={incoming} loading={loading} failed={failed} />
-        <PendingCard title="보낸 요청" description="이 플레이어가 보내고 상대가 아직 답하지 않은 친구 요청을 봅니다." rows={outgoing} loading={loading} failed={failed} />
-      </div>
+      <CardStack>
+        <TableCard
+          title="친구 목록"
+          columns={FRIEND_COLUMNS}
+          rows={friends}
+          rowKey={(f) => f.account_id}
+          loading={loading}
+          failed={failed}
+          emptyText="친구가 없습니다."
+        />
+        <TableCard
+          title={<>받은 요청 <span className="text-neutral-400 font-normal">{incoming.length}</span></>}
+          columns={REQUEST_COLUMNS}
+          rows={incoming}
+          rowKey={(r) => r.request_id}
+          loading={loading}
+          failed={failed}
+          emptyText="대기 중인 요청이 없습니다."
+        />
+        <TableCard
+          title={<>보낸 요청 <span className="text-neutral-400 font-normal">{outgoing.length}</span></>}
+          columns={REQUEST_COLUMNS}
+          rows={outgoing}
+          rowKey={(r) => r.request_id}
+          loading={loading}
+          failed={failed}
+          emptyText="대기 중인 요청이 없습니다."
+        />
+      </CardStack>
     </div>
   )
 }
 
-function PendingCard({
-  title,
-  description,
-  rows,
-  loading,
-  failed,
-}: {
-  title: string
-  description: string
-  rows: RequestRow[]
-  loading: boolean
-  failed: boolean
-}) {
-  return (
-    <WhiteCard>
-      <div className="p-5 pb-3">
-        <CardHeader
-          title={<>{title} <span className="text-neutral-400 font-normal">{rows.length}</span></>}
-          description={description}
-        />
-      </div>
-      <div className="overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
-              <th className="text-left px-4 py-2.5 font-medium w-44">보낸 시각</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={2} emptyText="대기 중인 요청이 없습니다." />
-            ) : (
-              rows.map((r) => (
-                <tr key={r.request_id} className="border-t border-neutral-100">
-                  <td className="px-4 py-3">
-                    <PlayerLink accountId={r.account_id} name={r.display_name} />
-                  </td>
-                  <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </WhiteCard>
-  )
-}
+const FRIEND_COLUMNS: Column<FriendRow>[] = [
+  { key: 'name', header: '닉네임', kind: 'name', cell: (f) => <PlayerLink accountId={f.account_id} name={f.display_name} /> },
+  { key: 'id', header: '계정 ID', kind: 'name', cell: (f) => <AccountIdCell accountId={f.account_id} /> },
+  { key: 'since', header: '친구가 된 시각', kind: 'datetime', cell: (f) => formatDateTime(f.since) },
+]
+
+const REQUEST_COLUMNS: Column<RequestRow>[] = [
+  { key: 'name', header: '닉네임', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
+  { key: 'at', header: '보낸 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+]

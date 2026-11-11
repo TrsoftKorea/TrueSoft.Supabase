@@ -17,15 +17,16 @@ export function WhiteCard({
 }
 
 /**
- * 카드 맨 위 제목과 한 줄 설명. 카드는 전부 이것을 쓴다 — 화면마다 굵기·설명 유무가 달라지지 않게. 오른쪽 버튼은 actions.
- * 좁은 화면에서는 버튼이 제목 아래로 내려간다.
+ * 카드 맨 위 제목과 설명. 카드는 전부 이것을 쓴다 — 화면마다 굵기가 달라지지 않게. 오른쪽 버튼은 actions.
+ * 설명은 제목만으로 뜻이 분명하지 않을 때만 넣는다. 좁은 화면에서는 버튼이 제목 아래로 내려간다.
  */
 export function CardHeader({ title, description, actions }: { title?: ReactNode; description?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
       <div className="min-w-0">
-        {title && <h2 className="text-sm font-medium text-neutral-900">{title}</h2>}
-        {description && <p className="mt-1 text-xs text-neutral-500">{description}</p>}
+        {/* 제목 16px 굵게·설명 14px — 본문(14px)과 제목이 한눈에 갈리게(2026-11-10 디자인 견본). */}
+        {title && <h2 className="text-base font-semibold text-neutral-900">{title}</h2>}
+        {description && <p className="mt-1 text-sm text-neutral-500">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>

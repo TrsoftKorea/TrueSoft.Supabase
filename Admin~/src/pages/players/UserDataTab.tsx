@@ -7,7 +7,8 @@ import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataF
 import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { TableStatusRow } from '../../components/ui/TableStatusRow'
-import { formatDateTime, diffSummary, formatTotal } from '../../components/ui/format'
+import { formatDateTime, diffPairs, diffSummary, formatTotal } from '../../components/ui/format'
+import { Pairs } from '../../components/ui/Pairs'
 import { pgTypeLabel } from '../../lib/schemaLabels'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
@@ -404,8 +405,8 @@ export default function UserDataTab({
                   <tr key={l.id} className="border-t border-neutral-100">
                     <td className="px-5 py-3 whitespace-nowrap">{formatDateTime(l.created_at)}</td>
                     <td className="px-4 py-3 text-xs text-neutral-500">{l.source ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs text-neutral-500 max-w-[420px] truncate" title={diffSummary(l.diff)}>
-                      {diffSummary(l.diff)}
+                    <td className="px-4 py-3 max-w-[420px] truncate" title={diffSummary(l.diff)}>
+                      {diffPairs(l.diff).length ? <Pairs items={diffPairs(l.diff)} /> : <span className="text-neutral-400">-</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>이 변경 전으로</Button>

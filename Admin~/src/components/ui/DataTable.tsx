@@ -56,7 +56,8 @@ export const EMPTY_MARK = <span className="text-neutral-400">-</span>
 export type DataTableProps<T> = {
   columns: Column<T>[]
   rows: T[]
-  rowKey: (row: T) => string
+  /** 줄마다 다른 값. 겹칠 수 있는 목록은 두 번째 인자(줄 번호)를 섞는다. */
+  rowKey: (row: T, index: number) => string
   loading?: boolean
   failed?: boolean
   emptyText?: string
@@ -64,6 +65,17 @@ export type DataTableProps<T> = {
   onRowClick?: (row: T) => void
   /** 줄을 누르면 그 아래로 펼칠 내용. null 이면 그 줄은 펼칠 것이 없다(화살표도 안 보인다). 한 번에 한 줄만 펼친다. */
   expand?: (row: T) => ReactNode
+  /**
+   * text 칸이 없어도 전체 폭으로 편다 — 위에 검색 칸이 있는 목록용(검색 칸과 폭이 같고, 화면끼리 같은 꼴이 된다).
+   * 남는 폭은 칸마다 고루 나누지 않고 버튼 앞 마지막 칸이 받는다 — 나누면 짧은 계정 ID 칸까지 휑하게 넓어진다.
+   */
+  wide?: boolean
+}
+
+/** text 칸이 없는 wide 표에서 남는 폭을 받을 칸 — 버튼 칸을 뺀 마지막 칸. */
+function stretchKey<T>(columns: Column<T>[], wide: boolean): string | null {
+  if (!wide || columns.some((c) => c.kind === 'text')) return null
+  return [...columns].reverse().find((c) => c.kind !== 'actions')?.key ?? null
 }
 
 export function DataTable<T>({
@@ -75,8 +87,10 @@ export function DataTable<T>({
   emptyText,
   onRowClick,
   expand,
+  wide = false,
 }: DataTableProps<T>) {
-  const fill = columns.some((c) => c.kind === 'text')
+  const fill = wide || columns.some((c) => c.kind === 'text')
+  const stretch = stretchKey(columns, wide)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
 
@@ -100,20 +114,20 @@ export function DataTable<T>({
   const span = columns.length + (expand ? 1 : 0)
   return (
     <div className="overflow-x-auto">
-      <table ref={tableRef} className="min-w-full text-sm">
+      <table ref={tableRef} className={`min-w-full text-sm ${stretch ? 'w-full' : ''}`}>
         <thead className="bg-neutral-50 text-xs text-neutral-500">
           <tr>
             {expand && <th className="w-8 pl-3 pr-0" aria-label="펼치기" />}
             {columns.map((c) => (
-              <th key={c.key} className={`px-4 py-2.5 font-medium whitespace-nowrap ${HEAD[c.kind]}`}>{c.header}</th>
+              <th key={c.key} className={`px-4 py-2.5 font-medium whitespace-nowrap ${HEAD[c.kind]} ${c.key === stretch ? 'w-full' : ''}`}>{c.header}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {loading || failed || rows.length === 0 ? (
             <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={span} {...(emptyText !== undefined ? { emptyText } : {})} />
-          ) : rows.map((r) => {
-            const key = rowKey(r)
+          ) : rows.map((r, i) => {
+            const key = rowKey(r, i)
             const detail = expand ? expand(r) : null
             const canOpen = !isEmpty(detail)
             const open = canOpen && openKey === key
@@ -163,7 +177,7 @@ export function TableCard<T>({
   footer,
   ...table
 }: DataTableProps<T> & { title?: ReactNode; description?: ReactNode; actions?: ReactNode; footer?: ReactNode }) {
-  const fill = table.columns.some((c) => c.kind === 'text')
+  const fill = table.wide || table.columns.some((c) => c.kind === 'text')
   return (
     <WhiteCard className={`overflow-hidden ${fill ? '' : 'w-fit max-w-full'}`}>
       {(title || actions) && (

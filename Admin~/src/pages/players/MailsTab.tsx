@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { WhiteCard } from '../../components/ui/Card'
 import { TableFooter } from '../../components/ui/TableFooter'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../../components/ui/DataTable'
+import { StatusText, type Tone } from '../../components/ui/StatusText'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime, formatTotal, itemsText } from '../../components/ui/format'
 
@@ -22,11 +22,11 @@ type MailRow = {
 type MailData = { rows: MailRow[]; total: number; pageSize: number }
 
 // 우편 내역 화면의 상태 구분에 "기한 만료"를 더한다 — 문의 대응에서는 "왜 못 받았나"가 가장 먼저 나온다.
-function statusOf(r: MailRow): { label: string; cls: string } {
-  if (r.deleted_at) return { label: '삭제', cls: 'bg-neutral-200 text-neutral-600' }
-  if (r.items_claimed_at) return { label: '수령', cls: 'bg-emerald-100 text-emerald-700' }
-  if (new Date(r.expires_at).getTime() <= Date.now()) return { label: '기한 만료', cls: 'bg-amber-100 text-amber-700' }
-  return { label: '미수령', cls: 'bg-brand-soft text-[#1677ff]' }
+function statusOf(r: MailRow): { label: string; tone: Tone } {
+  if (r.deleted_at) return { label: '삭제', tone: 'muted' }
+  if (r.items_claimed_at) return { label: '수령', tone: 'ok' }
+  if (new Date(r.expires_at).getTime() <= Date.now()) return { label: '기한 만료', tone: 'warn' }
+  return { label: '미수령', tone: 'plain' }
 }
 
 export default function MailsTab({
@@ -73,6 +73,14 @@ export default function MailsTab({
       .catch((e: unknown) => report(e, '아이템 목록을 불러오지 못했습니다.'))
   }, [target, report])
 
+  const columns: Column<MailRow>[] = [
+    { key: 'at', header: '받은 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+    { key: 'title', header: '제목', kind: 'text', cell: (r) => r.title },
+    { key: 'items', header: '보상', kind: 'text', cell: (r) => itemsText(r.items, catalog) },
+    { key: 'status', header: '상태', kind: 'status', cell: (r) => { const st = statusOf(r); return <StatusText tone={st.tone}>{st.label}</StatusText> } },
+    { key: 'expires', header: '수령 기한', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
+  ]
+
   const rows = data?.rows ?? []
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / (data?.pageSize ?? 20)))
@@ -80,44 +88,15 @@ export default function MailsTab({
   return (
     <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">받은 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium">제목</th>
-                <th className="text-left px-4 py-2.5 font-medium">보상</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">수령 기한</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="받은 우편이 없습니다." />
-              ) : (
-                rows.map((r) => {
-                  const st = statusOf(r)
-                  return (
-                    <tr key={r.id} className="border-t border-neutral-100">
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
-                      <td className="px-4 py-3 text-neutral-800">{r.title}</td>
-                      <td className="px-4 py-3 text-neutral-600 text-xs">
-                        {itemsText(r.items, catalog)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block whitespace-nowrap rounded px-2 py-0.5 text-xs ${st.cls}`}>{st.label}</span>
-                      </td>
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.expires_at)}</td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={<>{formatTotal(total)} · 보관 기간이 지나 정리된 우편은 나오지 않습니다</>} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        loading={loading}
+        failed={failed}
+        emptyText="받은 우편이 없습니다."
+        footer={<TableFooter summary={<>{formatTotal(total)} · 보관 기간이 지난 우편은 빠집니다</>} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
     </div>
   )
 }

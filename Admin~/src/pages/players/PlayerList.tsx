@@ -9,7 +9,7 @@ import { inputCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { formatDateTime, formatKRW, formatTotal } from '../../components/ui/format'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../../components/ui/DataTable'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
 import { AccountIdCell } from '../../components/ui/PlayerLink'
@@ -115,6 +115,24 @@ export default function PlayerList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
+  // 플레이어 메뉴의 표는 같은 순서다 — 정렬 기준 시각 · 플레이어 · 계정 ID · 나머지(이 목록은 마지막 활동 순).
+  const columns: Column<PlayerRow>[] = [
+    { key: 'active', header: '마지막 활동', kind: 'datetime', cell: (r) => r.last_activity_at && formatDateTime(r.last_activity_at) },
+    {
+      key: 'name', header: '플레이어', kind: 'name', cell: (r) => r.account_id && (
+        <button onClick={() => onSelect(r.account_id, r.display_name ?? '')} className="text-[#1677ff] hover:underline">
+          {r.display_name || <span className="font-mono text-xs">{r.account_id.slice(0, 8)}</span>}
+        </button>
+      ),
+    },
+    { key: 'id', header: '계정 ID', kind: 'name', cell: (r) => r.account_id && <AccountIdCell accountId={r.account_id} /> },
+    { key: 'guest', header: '게스트', kind: 'status', cell: (r) => r.is_guest && <Check className="w-4 h-4 text-emerald-600" aria-label="게스트" /> },
+    { key: 'platform', header: '플랫폼', kind: 'name', cell: (r) => platformLabel(r.platform) },
+    { key: 'country', header: '국가', kind: 'name', cell: (r) => r.country_code },
+    { key: 'paid', header: '총 결제금액', kind: 'number', cell: (r) => formatKRW(r.total_paid_krw) },
+    { key: 'created', header: '가입 시각', kind: 'datetime', cell: (r) => r.created_at && formatDateTime(r.created_at) },
+  ]
+
   const submitSearch = () => setListState({ search: input, page: 1 })
 
   const resetSearch = () => {
@@ -152,65 +170,16 @@ export default function PlayerList({
         </FilterBar>
       </WhiteCard>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium">계정 ID</th>
-                <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
-                <th className="text-center px-4 py-2.5 font-medium w-16 whitespace-nowrap">게스트</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">플랫폼</th>
-                <th className="text-left px-4 py-2.5 font-medium w-16">국가</th>
-                <th className="text-right px-4 py-2.5 font-medium w-32">총 결제금액</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">가입 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">마지막 활동</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={8} emptyText="결과가 없습니다." />
-              ) : (
-                rows.map((r) => (
-                  <tr
-                    key={r.account_id ?? Math.random()}
-                    className="border-t border-neutral-100 hover:bg-neutral-50/50"
-                  >
-                    <td className="px-4 py-3">
-                      {r.account_id ? <AccountIdCell accountId={r.account_id} /> : <span className="text-neutral-400">-</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.account_id ? (
-                        <button
-                          onClick={() => onSelect(r.account_id, r.display_name ?? '')}
-                          className="text-[#1677ff] hover:underline"
-                        >
-                          {r.display_name || <span className="font-mono text-xs">{r.account_id.slice(0, 8)}</span>}
-                        </button>
-                      ) : (
-                        <span className="text-neutral-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {r.is_guest ? <Check className="w-4 h-4 inline text-emerald-600" /> : <span className="text-neutral-300">-</span>}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-700">{platformLabel(r.platform) || '-'}</td>
-                    <td className="px-4 py-3 text-neutral-700">{r.country_code ?? '-'}</td>
-                    <td className="px-4 py-3 text-right text-neutral-800">
-                      {formatKRW(r.total_paid_krw)}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.created_at)}</td>
-                    <td className="px-4 py-3 text-neutral-600">
-                      {formatDateTime(r.last_activity_at)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        wide
+        columns={columns}
+        rows={rows}
+        rowKey={(r, i) => r.account_id ?? `row-${i}`}
+        loading={loading}
+        failed={failed}
+        emptyText="결과가 없습니다."
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
     </div>
   )
 }

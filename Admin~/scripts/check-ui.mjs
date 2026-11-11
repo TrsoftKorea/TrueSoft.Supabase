@@ -40,6 +40,10 @@ function luminance(hex) {
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 }
 
+// U18 — 제목을 받는 공용 부품과 그 제목 길이 상한. 규칙 이름에 쓰므로 RULES 보다 먼저 둔다.
+const TITLE_TAGS = /<(PageHeader|CardHeader|GroupBox|EditDialog|ConfirmDialog|TableCard)\b/g
+const TITLE_MAX = 10
+
 // 각 규칙: find(text) 가 [위치…] 를 돌려준다. bad 는 반드시 걸려야 하고 good 은 걸리면 안 된다(검사기가 살아 있는지
 // 매번 확인 — 정규식이 망가져 아무것도 못 잡으면 "깨끗함"과 구분되지 않는다).
 const RULES = [
@@ -142,13 +146,35 @@ const RULES = [
     bad: '<Button>{busy ? <Loader2 /> : <RefreshCw onClick={() => x()} />}새로고침</Button>', good: '<RefreshCw />구글 환불 확인</Button><RefreshButton />새로고침',
   },
   {
-    id: 'U16', name: '카드 제목을 글자만 든 칸으로 직접 짬(설명 없음)', fix: 'CardHeader(title + 설명 한 줄 description)를 쓴다. 표 카드는 <div className="p-5 pb-3"> 안에 둔다',
-    // 카드의 첫 자식이 굵은 글자(font-medium 등) 칸이면 손으로 짠 제목이다 — 작은 회색 글자라 아래 칸 이름과 안 갈렸고(운영자·아이템·분류 추가)
-    // 설명이 빠졌다(플레이어 친구·대전 기록 탭). 맨 위 띠(border-b) 안에 굵은 글자를 둔 꼴도 같다(대시보드·통계).
+    id: 'U16', name: '카드 제목을 글자만 든 칸으로 직접 짬', fix: 'CardHeader 를 쓴다(설명은 제목만으로 뜻이 분명하지 않을 때만). 표 카드는 TableCard 의 title',
+    // 카드의 첫 자식이 굵은 글자(font-medium 등) 칸이면 손으로 짠 제목이다 — 작은 회색 글자라 아래 칸 이름과 안 갈렸다
+    // (운영자·아이템·분류 추가). 맨 위 띠(border-b) 안에 굵은 글자를 둔 꼴도 같다(대시보드·통계).
     // 2026-11-10 에 카드 첫 자식 80곳을 나열해 대 보니 이 꼴만 걸리고 본문 칸은 안 걸렸다.
     find: (t) => matchAll(t, /<WhiteCard\b[^>]*>\s*(?:<div\b[^>]*className="[^"]*\bborder-b\b[^"]*"[^>]*>\s*(?:<div\b[^>]*>\s*)?)?<(?:div|p|span)\b[^>]*className="[^"]*\bfont-(?:medium|semibold|bold)\b/g),
     bad: '<WhiteCard>\n  <div className="border-b border-neutral-100 px-5 py-3">\n    <span className="text-sm font-medium text-neutral-800">리텐션</span>',
     good: '<WhiteCard className="p-5">\n  <CardHeader title="새 분류 추가" description="…" />\n</WhiteCard><WhiteCard><div className="border-b p-5 pb-3">\n<CardHeader title="리텐션" description="…" />',
+  },
+  {
+    id: 'U17', name: '표를 직접 짬', fix: 'TableCard(또는 DataTable)를 쓰고 칸마다 종류(kind)를 정한다 — 폭·정렬·줄바꿈은 종류가 맡는다',
+    // 화면마다 칸 폭을 박아 이름이 두 줄로 깨지거나 칸 사이가 벌어졌다(2026-11-10). 공용 부품 안의 <table> 은 UI_DIR 이라 안 본다.
+    find: (t) => matchAll(maskComments(t), /<table\b/g),
+    bad: '<table className="w-full text-sm">', good: '<TableCard columns={COLUMNS} rows={rows} rowKey={(r) => r.id} />',
+  },
+  {
+    id: 'U18', name: `제목이 ${TITLE_MAX}자를 넘음`, fix: '위에서 이미 보이는 말("이 플레이어의"·"프로젝트"·"새")을 빼고 줄인다. 뜻이 더 필요하면 설명으로',
+    // 글자를 그대로 넣은 제목만 본다 — 값·식으로 넣은 제목은 길이를 모른다. 띄어쓰기도 센다(화면에서 차지하는 폭이라서).
+    find: (t) => longTitles(maskComments(t)),
+    bad: '<TableCard rowKey={(r) => r.id} title="이 플레이어의 최근 변경 이력" />',
+    good: '<TableCard rowKey={(r) => r.id} title="변경 이력" actions={<Button title="이 줄을 처음부터 다시 불러오기">새로</Button>} /><PageHeader title={name} />',
+  },
+  {
+    id: 'U19', name: '이름·값 쌍을 글자로 이어 붙임', fix: 'Pairs(이름 옅게·값 진하게·쌍 사이 간격)를 쓴다. 마우스를 올리면 보이는 글처럼 글자만 쓸 곳은 pairsText',
+    alsoUi: true,
+    // "이름: 값"·"이름=값"을 템플릿 글자로 만드는 곳 — "gold: 이전값 900 · level: 이전값 11"이 한눈에 안 갈렸다(2026-11-10).
+    // 시각(`${hh}:${mm}`)은 쌍점 뒤에 띄어쓰기가 없어 안 걸린다. 2026-11-10 저장소 전체에서 걸린 6곳이 전부 이 꼴이었다.
+    // JSX 글자로 쓴 {k}: {v} 는 못 잡는다 — 구조 분해 타입({ a }: { a: T })과 글자로 안 갈린다.
+    find: (t) => matchAll(maskComments(t), /`[^`\n]*\$\{[^}]+\}(?:: |=)/g),
+    bad: 'const s = `${k}: 이전값 ${v}`', good: 'const t = `${pad2(hh)}:${pad2(mm)}`; const u = `${p.label} ${p.value}`',
   },
   {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
@@ -171,6 +197,35 @@ const EXEMPT = {
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.
 const ASIDE_PAREN = /[가-힣]\s?\(|[A-Za-z0-9.%] \(|\} \(/
+
+/**
+ * 부품의 여는 태그에서 바깥 층(중괄호 밖)의 title="…"·title={'…'} 를 찾아 상한을 넘는 것만 돌려준다.
+ * 중괄호 안의 > (화살표 함수·actions 에 든 버튼)에서 태그가 끝난 것으로 보지 않게 깊이를 센다 — 안쪽 버튼의 title(툴팁)도 빼야 한다.
+ */
+function longTitles(t) {
+  const out = []
+  for (const m of t.matchAll(TITLE_TAGS)) {
+    const from = m.index + m[0].length
+    let depth = 0, quote = null, end = t.length
+    const outer = [] // 바깥 층 글자의 위치
+    for (let i = from; i < t.length; i++) {
+      const c = t[i]
+      if (quote) { if (c === quote) quote = null; if (depth === 0) outer.push(i); continue }
+      if (c === '"' || c === "'" || c === '`') quote = c
+      else if (c === '{') depth++
+      else if (c === '}') depth--
+      else if (c === '>' && depth === 0) { end = i; break }
+      if (depth === 0 || (depth === 1 && c === '{')) outer.push(i)
+    }
+    const attrs = t.slice(from, end)
+    for (const a of attrs.matchAll(/\btitle=(?:"([^"]*)"|\{\s*(['"])([^'"]*)\2\s*\})/g)) {
+      if (!outer.includes(from + a.index)) continue
+      const text = a[1] ?? a[3] ?? ''
+      if ([...text].length > TITLE_MAX) out.push({ index: from + a.index, 1: text })
+    }
+  }
+  return out
+}
 
 function matchAll(text, re) {
   return [...text.matchAll(re)]

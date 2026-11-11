@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { StatusText, TONE_TEXT, type Tone } from './StatusText'
+import { StatusText, type Tone } from './StatusText'
+import { Pairs } from './Pairs'
 
 export type StatusFact = { label: string; value: ReactNode; tone?: Tone }
 
@@ -12,6 +13,8 @@ export type StatusRowItem = {
   at: string | null
   /** 이번 실행의 숫자들. 이름은 옅게, 숫자는 굵게 — 문장으로 이어 붙이지 않는다. */
   facts?: StatusFact[]
+  /** 숫자로 나눌 수 없는 한마디(실패 사유 등). 숫자들 뒤에 붙는다. */
+  note?: string
 }
 
 /**
@@ -29,12 +32,8 @@ export function StatusRows({ items }: { items: StatusRowItem[] }) {
           <StatusText tone={i.tone}>{i.state}</StatusText>
           <span className="tabular-nums text-neutral-600 whitespace-nowrap">{i.at ?? <span className="text-neutral-400">-</span>}</span>
           <span className="flex flex-wrap gap-x-5 gap-y-1">
-            {(i.facts ?? []).map((f) => (
-              <span key={f.label} className="whitespace-nowrap">
-                <span className="text-neutral-500">{f.label}</span>{' '}
-                <span className={`font-semibold tabular-nums ${TONE_TEXT[f.tone ?? 'plain']}`}>{f.value}</span>
-              </span>
-            ))}
+            {!!i.facts?.length && <Pairs items={i.facts} wrap />}
+            {i.note && <span className={i.tone === 'bad' ? 'text-red-600' : 'text-neutral-600'}>{i.note}</span>}
           </span>
         </div>
       ))}

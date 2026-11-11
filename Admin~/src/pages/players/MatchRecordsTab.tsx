@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { TableFooter } from '../../components/ui/TableFooter'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { CardStack, TableCard, type Column } from '../../components/ui/DataTable'
+import { StatusText, type Tone } from '../../components/ui/StatusText'
 import { PlayerLink } from '../../components/ui/PlayerLink'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime, formatTotal } from '../../components/ui/format'
@@ -26,11 +26,9 @@ type Data = { summary: SummaryRow[]; rows: RecordRow[]; total: number; pageSize:
 const STATUS_LABEL: Record<Status, string> = {
   verified: '확인됨', pending: '상대 미신고', solo: '상대 없음', mismatch: '무효',
 }
-const STATUS_CLS: Record<Status, string> = {
-  verified: 'text-emerald-600', pending: 'text-amber-600', solo: 'text-neutral-500', mismatch: 'text-red-600',
+const STATUS_TONE: Record<Status, Tone> = {
+  verified: 'ok', pending: 'warn', solo: 'plain', mismatch: 'bad',
 }
-
-const fmtScore = (v: number | null) => (v == null ? '-' : v.toLocaleString())
 
 export default function MatchRecordsTab({
   target,
@@ -95,88 +93,57 @@ export default function MatchRecordsTab({
         <RefreshButton onClick={() => void load()} loading={loading} />
       </div>
 
-      <WhiteCard>
-        <div className="p-5 pb-3">
-          <CardHeader title="요약" description="게임 코드와 상태마다 승패와 점수 범위를 봅니다." />
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-44">게임 코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28">상태</th>
-                <th className="text-right px-4 py-2.5 font-medium w-20">승</th>
-                <th className="text-right px-4 py-2.5 font-medium w-20">패</th>
-                <th className="text-right px-4 py-2.5 font-medium w-28">최고 점수</th>
-                <th className="text-right px-4 py-2.5 font-medium">최저 점수</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summaryLoading || shownSummary.length === 0 ? (
-                <TableStatusRow loading={summaryLoading} empty={shownSummary.length === 0} failed={failed} colSpan={6} emptyText="대전 기록이 없습니다." />
-              ) : (
-                shownSummary.map((s) => (
-                  <tr key={`${s.game_code}/${s.status}`} className="border-t border-neutral-100">
-                    <td className="px-4 py-3 font-mono text-neutral-700 whitespace-nowrap">{s.game_code}</td>
-                    <td className={`px-4 py-3 whitespace-nowrap ${STATUS_CLS[s.status] ?? ''}`}>{STATUS_LABEL[s.status] ?? s.status}</td>
-                    <td className="px-4 py-3 text-right text-neutral-700 whitespace-nowrap">{s.wins.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-neutral-700 whitespace-nowrap">{s.losses.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-neutral-600 whitespace-nowrap">{fmtScore(s.max_score)}</td>
-                    <td className="px-4 py-3 text-right text-neutral-600 whitespace-nowrap">{fmtScore(s.min_score)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+      <CardStack>
+        <TableCard
+          title="요약"
+          columns={SUMMARY_COLUMNS}
+          rows={shownSummary}
+          rowKey={(s) => `${s.game_code}/${s.status}`}
+          loading={summaryLoading}
+          failed={failed}
+          emptyText="대전 기록이 없습니다."
+        />
 
-      <WhiteCard>
-        <div className="p-5 pb-3">
-          <CardHeader title="기록" description="이 플레이어가 신고한 대전을 최근 순으로 봅니다." />
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">신고 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">게임 코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-16">결과</th>
-                <th className="text-right px-4 py-2.5 font-medium w-24">점수</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium">상대</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">보상 우편</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={7} emptyText="대전 기록이 없습니다." />
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.session_id} className="border-t border-neutral-100" title={`세션 ${r.session_id}`}>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.reported_at)}</td>
-                    <td className="px-4 py-3 font-mono text-neutral-700 whitespace-nowrap">{r.game_code}</td>
-                    <td className={`px-4 py-3 whitespace-nowrap ${r.is_win ? 'text-[#1677ff]' : 'text-neutral-500'}`}>{r.is_win ? '승' : '패'}</td>
-                    <td className="px-4 py-3 text-right text-neutral-600 whitespace-nowrap">{fmtScore(r.score)}</td>
-                    <td className={`px-4 py-3 whitespace-nowrap ${STATUS_CLS[r.status] ?? ''}`}>{STATUS_LABEL[r.status] ?? r.status}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {r.opponent_account_id && !r.opponent_exists ? (
-                        <span className="text-neutral-400" title={r.opponent_account_id}>탈퇴한 계정</span>
-                      ) : r.opponent_account_id ? (
-                        <PlayerLink accountId={r.opponent_account_id} name={r.opponent_name} />
-                      ) : (
-                        <span className="text-neutral-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{r.rewarded ? '보냄' : ''}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+        <TableCard
+          title="기록"
+          columns={RECORD_COLUMNS}
+          rows={rows}
+          rowKey={(r) => r.session_id}
+          loading={loading}
+          failed={failed}
+          emptyText="대전 기록이 없습니다."
+          footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+        />
+      </CardStack>
     </div>
   )
 }
+
+const statusCell = (s: Status) => <StatusText tone={STATUS_TONE[s] ?? 'plain'}>{STATUS_LABEL[s] ?? s}</StatusText>
+const score = (v: number | null) => (v == null ? null : v.toLocaleString())
+
+const SUMMARY_COLUMNS: Column<SummaryRow>[] = [
+  { key: 'code', header: '게임 코드', kind: 'mono', cell: (s) => s.game_code },
+  { key: 'status', header: '상태', kind: 'status', cell: (s) => statusCell(s.status) },
+  { key: 'wins', header: '승', kind: 'number', cell: (s) => s.wins.toLocaleString() },
+  { key: 'losses', header: '패', kind: 'number', cell: (s) => s.losses.toLocaleString() },
+  { key: 'max', header: '최고 점수', kind: 'number', cell: (s) => score(s.max_score) },
+  { key: 'min', header: '최저 점수', kind: 'number', cell: (s) => score(s.min_score) },
+]
+
+const RECORD_COLUMNS: Column<RecordRow>[] = [
+  // 세션 ID 는 시각에 마우스를 올리면 보인다.
+  { key: 'at', header: '신고 시각', kind: 'datetime', cell: (r) => <span title={`세션 ${r.session_id}`}>{formatDateTime(r.reported_at)}</span> },
+  { key: 'code', header: '게임 코드', kind: 'mono', cell: (r) => r.game_code },
+  { key: 'win', header: '결과', kind: 'status', cell: (r) => <span className={r.is_win ? 'text-[#1677ff]' : 'text-neutral-500'}>{r.is_win ? '승' : '패'}</span> },
+  { key: 'score', header: '점수', kind: 'number', cell: (r) => score(r.score) },
+  { key: 'status', header: '상태', kind: 'status', cell: (r) => statusCell(r.status) },
+  {
+    key: 'opponent', header: '상대', kind: 'name', cell: (r) => (
+      r.opponent_account_id && !r.opponent_exists
+        ? <span className="text-neutral-400" title={r.opponent_account_id}>탈퇴한 계정</span>
+        : r.opponent_account_id ? <PlayerLink accountId={r.opponent_account_id} name={r.opponent_name} /> : null
+    ),
+  },
+  { key: 'reward', header: '보상 우편', kind: 'name', cell: (r) => (r.rewarded ? '보냄' : null) },
+]

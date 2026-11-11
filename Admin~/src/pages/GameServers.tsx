@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { Loader2, Plus, Pencil } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
+import { StatusText, Tag } from '../components/ui/StatusText'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { EditDialog } from '../components/ui/EditDialog'
 import { Button } from '../components/ui/Button'
@@ -87,7 +87,7 @@ export default function GameServers({
     <div className="space-y-4">
       <PageHeader
         title="게임 서버"
-        description="플레이어가 속하는 서버를 추가하고 이름·이전 허용 여부를 정합니다."
+        description="플레이어가 속하는 서버를 관리합니다."
         actions={<>
           <RefreshButton onClick={() => void load()} loading={loading} />
           <Button variant="primary" onClick={() => setDraft({ id: null, serverCode: '', displayName: '', allowTransfers: true })}>
@@ -97,58 +97,34 @@ export default function GameServers({
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium">이름</th>
-                <th className="text-right px-4 py-2.5 font-medium">플레이어</th>
-                <th className="text-left px-4 py-2.5 font-medium">이전 받기</th>
-                <th className="text-left px-4 py-2.5 font-medium">등록 시각</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading || loadFailed || rows.length === 0 ? (
-                <TableStatusRow loading={loading} failed={loadFailed} empty={rows.length === 0} colSpan={6} emptyText="서버가 없습니다." />
-              ) : (
-                rows.map((s) => (
-                  <tr key={s.id} className="border-t border-neutral-100">
-                    <td className="px-4 py-3 font-mono text-neutral-800 whitespace-nowrap">
-                      {s.server_code}
-                      {s.is_default && (
-                        <span className="ml-2 rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-sans text-[#1677ff]">기본</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-800">{s.display_name}</td>
-                    <td className="px-4 py-3 text-right text-neutral-700">{s.player_count.toLocaleString('ko-KR')}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {s.allow_transfers
-                        ? <span className="text-emerald-600">허용</span>
-                        : <span className="text-neutral-400">막음</span>}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(s.created_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        size="sm"
-                        onClick={() => setDraft({ id: s.id, serverCode: s.server_code, displayName: s.display_name, allowTransfers: s.allow_transfers })}
-                      >
-                        <Pencil className="w-3 h-3" />수정
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
-
-      <p className="text-xs text-neutral-500">
-        새로 가입한 플레이어는 "기본" 표시가 붙은 서버에 들어갑니다. 서버 코드는 게임이 서버를 고를 때 쓰므로 추가한 뒤에는 바꿀 수 없습니다.
-      </p>
+      <TableCard
+        columns={[
+          {
+            key: 'code', header: '코드', kind: 'mono', cell: (s) => (
+              <>
+                {s.server_code}
+                {s.is_default && <span className="ml-2"><Tag tone="brand" title="새로 가입한 플레이어가 들어가는 서버">기본</Tag></span>}
+              </>
+            ),
+          },
+          { key: 'name', header: '이름', kind: 'name', cell: (s) => s.display_name },
+          { key: 'players', header: '플레이어', kind: 'number', cell: (s) => s.player_count.toLocaleString('ko-KR') },
+          { key: 'transfer', header: '이전 받기', kind: 'status', cell: (s) => <StatusText tone={s.allow_transfers ? 'ok' : 'muted'}>{s.allow_transfers ? '허용' : '막음'}</StatusText> },
+          { key: 'created', header: '등록 시각', kind: 'datetime', cell: (s) => formatDateTime(s.created_at) },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (s) => (
+              <Button size="sm" onClick={() => setDraft({ id: s.id, serverCode: s.server_code, displayName: s.display_name, allowTransfers: s.allow_transfers })}>
+                <Pencil className="w-3 h-3" />수정
+              </Button>
+            ),
+          },
+        ]}
+        rows={rows}
+        rowKey={(s) => s.id}
+        loading={loading}
+        failed={loadFailed}
+        emptyText="서버가 없습니다."
+      />
 
         {draft && (
         <EditDialog

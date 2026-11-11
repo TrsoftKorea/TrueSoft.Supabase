@@ -1,12 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { WhiteCard } from '../../components/ui/Card'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../../components/ui/DataTable'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime } from '../../components/ui/format'
 
 type RedemptionRow = { code: string; kind: string; title: string; mail_id: string | null; redeemed_at: string }
+
+const COLUMNS: Column<RedemptionRow>[] = [
+  { key: 'at', header: '사용 시각', kind: 'datetime', cell: (r) => formatDateTime(r.redeemed_at) },
+  { key: 'title', header: '쿠폰', kind: 'name', cell: (r) => r.title },
+  { key: 'code', header: '코드', kind: 'mono', cell: (r) => r.code },
+  { key: 'mail', header: '보상 우편', kind: 'name', cell: (r) => (r.mail_id ? '보냄' : null) },
+]
 
 export default function CouponsTab({
   target,
@@ -41,37 +47,15 @@ export default function CouponsTab({
   return (
     <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">사용 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium">쿠폰</th>
-                <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28">보상 우편</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="사용한 쿠폰이 없습니다." />
-              ) : (
-                rows.map((r, i) => (
-                  <tr key={`${r.code}-${r.redeemed_at}-${i}`} className="border-t border-neutral-100">
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.redeemed_at)}</td>
-                    <td className="px-4 py-3 text-neutral-800">{r.title || '-'}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-neutral-700">{r.code}</td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{r.mail_id ? '보냄' : '-'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-          최근 100건 · 삭제한 쿠폰의 사용 이력은 함께 지워져 나오지 않습니다
-        </div>
-      </WhiteCard>
+      <TableCard
+        columns={COLUMNS}
+        rows={rows}
+        rowKey={(r, i) => `${r.code}-${r.redeemed_at}-${i}`}
+        loading={loading}
+        failed={failed}
+        emptyText="사용한 쿠폰이 없습니다."
+        footer={<div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">최근 100건 · 지운 쿠폰의 사용 기록은 빠집니다</div>}
+      />
     </div>
   )
 }

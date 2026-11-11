@@ -70,16 +70,23 @@ export function itemsText(
 ): string {
   if (!items || items.length === 0) return '-'
   const name = (key: string) => catalog.find((c) => c.key === key)?.display_name || key
-  return items.map((it) => `${name(it.key)} ×${formatCount(it.count)}`).join(', ')
+  // 쉼표로 이으면 "골드 ×1,000, 보석 ×50"처럼 천 단위 쉼표와 섞인다 — 같은 종류 나열은 가운뎃점.
+  return items.map((it) => `${name(it.key)} ×${formatCount(it.count)}`).join(' · ')
 }
 
-/** user_data_logs.diff(바뀌기 전 값)를 "필드: 이전값" 목록 한 줄로 요약합니다. */
+/** Pairs(이름 값 쌍)를 글자만 쓸 수 있는 곳(마우스를 올리면 보이는 전체 글)에 쓰는 꼴 — "gold 900 · level 11". */
+export function pairsText(items: { label: string; value: string }[]): string {
+  return items.map((p) => `${p.label} ${p.value}`).join(' · ')
+}
+
+/** 데이터 로그의 바뀌기 전 값(user_data_logs.diff) — 칸 이름과 그 값의 쌍. 표에서는 Pairs 로, 글자만 쓸 곳은 diffSummary 로. */
+export function diffPairs(diff: Record<string, unknown> | null | undefined): { label: string; value: string }[] {
+  return Object.entries(diff ?? {}).map(([k, v]) => ({ label: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }))
+}
+
+/** diffPairs 의 글자 꼴 — "gold 900 · level 11". 바뀐 칸이 없으면 빈 글자. */
 export function diffSummary(diff: Record<string, unknown> | null | undefined): string {
-  const entries = Object.entries(diff ?? {})
-  if (entries.length === 0) return '—'
-  return entries
-    .map(([k, v]) => `${k}: 이전값 ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ')
+  return pairsText(diffPairs(diff))
 }
 
 /** 점수를 천 단위 쉼표로. formatCount 는 소수 3자리에서 반올림해 12.34567 이 12.346 으로 보이므로 따로 둔다. */

@@ -10,6 +10,7 @@ import { formatDateTime, formatCount, formatTotal } from '../components/ui/forma
 import { inputCls } from '../components/ui/Input'
 import { FilterBar, FilterField, RefreshButton } from '../components/ui/FilterBar'
 import { PlayerLink } from '../components/ui/PlayerLink'
+import { Pairs } from '../components/ui/Pairs'
 
 type Meta = Record<string, unknown>
 type LobbyMember = {
@@ -39,9 +40,9 @@ function MetaText({ meta, label }: { meta: Meta | null; label?: string }) {
   const entries = Object.entries(meta ?? {})
   if (entries.length === 0) return null
   return (
-    <div className="text-xs text-neutral-400 whitespace-nowrap">
-      {label ? `${label} · ` : ''}
-      {entries.map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : String(v)}`).join(', ')}
+    <div className="text-xs whitespace-nowrap">
+      {label && <span className="mr-2 text-neutral-400">{label}</span>}
+      <Pairs items={entries.map(([k, v]) => ({ label: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }))} />
     </div>
   )
 }

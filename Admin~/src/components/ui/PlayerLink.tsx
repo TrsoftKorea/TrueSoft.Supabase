@@ -50,7 +50,10 @@ export function PlayerLink({
   )
 }
 
-/** 계정 ID 칸 — 표에서는 줄여 보이고 복사로 전체를 가져간다. */
+/**
+ * 계정 ID 칸 — 표에서는 앞 8자만 보이고(닉네임 없는 플레이어 표시와 같은 길이) 복사로 전체를 가져간다.
+ * 폭으로 자르면 36자 ID 가 "b0c7e1d2-0000-4000-8…"처럼 반쯤 보여 칸만 넓히고 알아보는 데는 보탬이 없었다.
+ */
 export function AccountIdCell({ accountId }: { accountId: string }) {
   const [copied, setCopied] = useState(false)
   const copy = async (e: React.MouseEvent) => {
@@ -62,7 +65,7 @@ export function AccountIdCell({ accountId }: { accountId: string }) {
   }
   return (
     <div className="flex items-center gap-1.5 font-mono text-xs text-neutral-600">
-      <span className="truncate max-w-[140px]" title={accountId}>{accountId}</span>
+      <span title={accountId}>{accountId.length > 8 ? `${accountId.slice(0, 8)}…` : accountId}</span>
       <button
         type="button"
         onClick={(e) => void copy(e)}

@@ -4,11 +4,12 @@ import { callAdmin, callHub, NotAuthenticatedError } from '../lib/api'
 import { getHubToken } from '../lib/googleAuth'
 import { type ProjectTarget } from '../lib/projectTarget'
 import { projectName } from '../lib/projectLook'
-import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../components/ui/DataTable'
+import { StatusText } from '../components/ui/StatusText'
+import { EditDialog } from '../components/ui/EditDialog'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
@@ -43,6 +44,8 @@ export default function Operators({
   const [members, setMembers] = useState<Member[] | null>(null)
   const [email, setEmail] = useState('')
   const [adding, setAdding] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [addError, setAddError] = useState('')
   const [disableTarget, setDisableTarget] = useState<Operator | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Operator | null>(null)
   const [busy, setBusy] = useState(false)
@@ -97,7 +100,7 @@ export default function Operators({
     const picked = candidates.find((m) => m.email === email)
     if (!picked || adding) return
     setAdding(true)
-    setError('')
+    setAddError('')
     try {
       const hubToken = getHubToken()
       if (!hubToken) throw new Error('초대 확인이 만료됐습니다. 다시 로그인해 주세요.')
@@ -107,12 +110,45 @@ export default function Operators({
         hubToken,
       })
       setEmail('')
+      setAddOpen(false)
       await load()
     } catch (e: unknown) {
-      report(e, '추가하지 못했습니다.')
+      // 창은 열어 둔다 — 실패 사유가 창 배경에 가리지 않게.
+      if (e instanceof NotAuthenticatedError) { setAddOpen(false); onUnauthenticated(); return }
+      setAddError(e instanceof Error ? e.message : '추가하지 못했습니다.')
     } finally {
       setAdding(false)
     }
+  }
+
+  const columns: Column<Operator>[] = [
+    { key: 'email', header: '이메일', kind: 'name', cell: (op) => op.email },
+    { key: 'name', header: '이름', kind: 'name', cell: (op) => op.display_name },
+    { key: 'state', header: '상태', kind: 'status', cell: (op) => (op.disabled_at ? <StatusText tone="muted">비활성</StatusText> : <StatusText tone="ok">활성</StatusText>) },
+    { key: 'created', header: '등록 시각', kind: 'datetime', cell: (op) => formatDateTime(op.created_at) },
+  ]
+  // 빼기(비활성화·삭제)는 마스터만 — 아니면 버튼 칸을 아예 두지 않는다.
+  if (isMaster) {
+    columns.push({
+      key: 'actions', header: '', kind: 'actions', cell: (op) => (
+        <span className="inline-flex gap-1.5">
+          {op.disabled_at ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => void setDisabled(op, false)} disabled={busy}>
+                <RotateCcw className="w-3 h-3" /> 복구
+              </Button>
+              <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDeleteTarget(op) }} disabled={busy}>
+                <Trash2 className="w-3 h-3" /> 삭제
+              </Button>
+            </>
+          ) : (
+            <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDisableTarget(op) }} disabled={busy}>
+              <UserMinus className="w-3 h-3" /> 비활성화
+            </Button>
+          )}
+        </span>
+      ),
+    })
   }
 
   const setDisabled = async (op: Operator, disabled: boolean) => {
@@ -155,23 +191,46 @@ export default function Operators({
     <div className="space-y-4">
       <PageHeader
         title="운영자 관리"
-        actions={<RefreshButton onClick={() => void load()} loading={loading} />}
+        actions={<>
+          <RefreshButton onClick={() => void load()} loading={loading} />
+          <Button variant="primary" onClick={() => { setEmail(''); setAddError(''); setAddOpen(true) }}>
+            <Plus className="w-4 h-4" />운영자 추가
+          </Button>
+        </>}
         description={`${projectName(target)}의 운영 콘솔에 들어올 계정을 관리합니다.`}
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-5 space-y-4">
-        <CardHeader title="운영자 추가" description="트루베이스 구성원을 이 프로젝트의 운영자로 더합니다." />
-        <div>
-        <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+      <TableCard
+        columns={columns}
+        rows={rows}
+        rowKey={(op) => op.email}
+        loading={loading}
+        failed={failed}
+        emptyText="등록된 운영자가 없습니다."
+      />
+
+      {addOpen && (
+        <EditDialog
+          title="운영자 추가"
+          busy={adding}
+          onClose={() => setAddOpen(false)}
+          error={addError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>취소</Button>
+            <Button variant="primary" onClick={() => void add()} disabled={adding || !email}>
+              {adding && <Loader2 className="w-4 h-4 animate-spin" />}추가
+            </Button>
+          </>}
+        >
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">트루베이스 구성원</span>
+            <span className="text-xs font-medium text-neutral-500">트루베이스 구성원</span>
             <select
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={members === null || candidates.length === 0}
-              className={inputCls}
+              className={inputCls + ' w-full'}
             >
               <option value="" />
               {candidates.map((m) => (
@@ -179,80 +238,11 @@ export default function Operators({
               ))}
             </select>
           </label>
-          <Button variant="primary" onClick={() => void add()} disabled={adding || !email}>
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            추가
-          </Button>
-        </div>
-        {members !== null && candidates.length === 0 && (
-          <p className="mt-2 text-xs text-neutral-400">더할 수 있는 구성원이 없습니다.</p>
-        )}
-        </div>
-      </WhiteCard>
-
-      <WhiteCard>
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">이메일</th>
-              <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-20">상태</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
-              <th className="px-4 py-2.5 w-48"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading || rows.length === 0 ? (
-              <TableStatusRow
-                loading={loading}
-                empty={rows.length === 0}
-                failed={failed}
-                colSpan={5}
-                emptyText="등록된 운영자가 없습니다."
-              />
-            ) : (
-              rows.map((op) => {
-                const disabled = op.disabled_at !== null
-                return (
-                  <tr
-                    key={op.email}
-                    className={`border-t border-neutral-100 ${disabled ? 'bg-neutral-50/60' : ''}`}
-                  >
-                    <td className="px-4 py-2.5 font-mono text-xs">{op.email}</td>
-                    <td className="px-4 py-2.5 whitespace-nowrap">{op.display_name || '-'}</td>
-                    <td className="px-4 py-2.5 whitespace-nowrap">
-                      {disabled ? (
-                        <span className="text-xs text-neutral-500">비활성</span>
-                      ) : (
-                        <span className="text-xs text-emerald-600">활성</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(op.created_at)}</td>
-                    <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                      {!isMaster ? null : disabled ? (
-                        <>
-                          <Button variant="outline" size="sm" onClick={() => void setDisabled(op, false)} disabled={busy}>
-                            <RotateCcw className="w-3 h-3" /> 복구
-                          </Button>
-                          <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDeleteTarget(op) }} disabled={busy}>
-                            <Trash2 className="w-3 h-3" /> 삭제
-                          </Button>
-                        </>
-                      ) : (
-                        <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setDisableTarget(op) }} disabled={busy}>
-                          <UserMinus className="w-3 h-3" /> 비활성화
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-        </div>
-      </WhiteCard>
+          {members !== null && candidates.length === 0 && (
+            <p className="mt-2 text-xs text-neutral-400">더할 수 있는 구성원이 없습니다.</p>
+          )}
+        </EditDialog>
+      )}
 
       <ConfirmDialog
         open={!!disableTarget}

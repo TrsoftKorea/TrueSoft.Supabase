@@ -5,13 +5,14 @@ import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { formatDateTime, diffSummary, formatTotal } from '../components/ui/format'
+import { formatDateTime, diffPairs, diffSummary, formatTotal } from '../components/ui/format'
+import { Pairs } from '../components/ui/Pairs'
 import { Button } from '../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
-import { PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
+import { AccountIdCell, PlayerFilterChip, PlayerLink, playerLabel, useFilterPlayer, useOnChange } from '../components/ui/PlayerLink'
 import { RestoreSaveModal } from './players/RestoreSaveModal'
 
 type LogRow = { id: number; account_id: string; display_name: string | null; diff: Record<string, unknown>; source: string | null; created_at: string }
@@ -85,7 +86,7 @@ export default function DataLogs({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="데이터 로그" description="플레이어 세이브 데이터가 언제 어떻게 바뀌었는지 계정을 가로질러 조회합니다." />
+      <PageHeader title="데이터 로그" description="플레이어 데이터가 바뀐 기록을 봅니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
@@ -142,43 +143,23 @@ export default function DataLogs({
         )}
       </WhiteCard>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">플레이어</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">출처</th>
-                <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
-                <th className="w-28" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="데이터 로그가 없습니다." />
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <PlayerLink accountId={r.account_id} name={r.display_name} />
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">{r.source ?? '-'}</td>
-                    <td className="px-4 py-3 text-neutral-700 max-w-[480px] truncate" title={diffSummary(r.diff)}>
-                      {diffSummary(r.diff)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Button variant="outline" size="sm" onClick={() => setRestoreRow(r)}>이 변경 전으로</Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        wide
+        columns={[
+          { key: 'at', header: '시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+          { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
+          { key: 'account', header: '계정 ID', kind: 'name', cell: (r) => <AccountIdCell accountId={r.account_id} /> },
+          { key: 'source', header: '출처', kind: 'name', cell: (r) => r.source },
+          { key: 'diff', header: '바뀌기 전 값', kind: 'text', full: (r) => diffSummary(r.diff), cell: (r) => { const p = diffPairs(r.diff); return p.length ? <Pairs items={p} /> : null } },
+          { key: 'actions', header: '', kind: 'actions', cell: (r) => <Button variant="outline" size="sm" onClick={() => setRestoreRow(r)}>이 변경 전으로</Button> },
+        ]}
+        rows={rows}
+        rowKey={(r) => String(r.id)}
+        loading={loading}
+        failed={failed}
+        emptyText="데이터 로그가 없습니다."
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
     </div>
   )
 }

@@ -607,6 +607,9 @@ function operatorsOf(target: ProjectTarget): MockOperator[] {
   ])
 }
 
+// 우편 › 예약 목록에서 켜고 끈 값. 새로고침하면 처음 값으로 돌아간다.
+const scheduleActive = new Map<string, boolean>()
+
 const HANDLERS: Record<string, Handler> = {
   'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
   'push.updateTrigger': (_t, p) => {
@@ -882,7 +885,8 @@ const HANDLERS: Record<string, Handler> = {
   'dataLogs.list': (_t, p) => {
     const search = String(p['search'] ?? '').trim()
     const rows = [
-      { id: 12, account_id: 'a9', diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
+      // 한 번에 여러 칸이 바뀐 저장 — 값이 여럿 든 칸의 꼴을 보려고 둔다.
+      { id: 12, account_id: 'a9', diff: { level: 11, exp: 2480, stage: 'forest_03' }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
       { id: 11, account_id: 'a8', diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
       { id: 10, account_id: 'a9', diff: { gold: 900 }, source: 'client', created_at: addDays(kstToday(), -1) + 'T11:05:00+09:00' },
     ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
@@ -930,7 +934,7 @@ const HANDLERS: Record<string, Handler> = {
   'matchLobby.list': () => {
     const member = (account_id: string, status: string) => ({ account_id, display_name: playerNameOf(account_id) ?? '', status, metadata: null, invited_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', responded_at: null })
     const rows = [
-      { lobby_id: 'l1', game_code: 'pvp_1v1', name: '친선전', metadata: null, host_account_id: 'a9', status: 'open', max_members: 2, created_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', started_at: null, ended_at: null, expires_at: addDays(kstToday(), 1) + 'T09:00:00+09:00', members: [member('a9', 'accepted'), member('a8', 'invited')] },
+      { lobby_id: 'l1', game_code: 'pvp_1v1', name: '친선전', metadata: { map: 'desert', mode: 'ranked' }, host_account_id: 'a9', status: 'open', max_members: 2, created_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', started_at: null, ended_at: null, expires_at: addDays(kstToday(), 1) + 'T09:00:00+09:00', members: [member('a9', 'accepted'), member('a8', 'invited')] },
     ]
     return { rows, total: rows.length, pageSize: 20 }
   },
@@ -1003,8 +1007,12 @@ const HANDLERS: Record<string, Handler> = {
         next_run_at: addDays(kstToday(), 3) + 'T12:00:00+09:00', is_active: false, run_count: 0,
         created_by: MOCK_EMAIL, server_code: 'KR', open_for_new: true,
       },
-    ],
+    ].map((r) => ({ ...r, is_active: scheduleActive.get(r.id) ?? r.is_active })),
   }),
+  'mails.setScheduleActive': (_t, p) => {
+    scheduleActive.set(String(p['id']), p['isActive'] === true)
+    return null
+  },
   'remoteConfig.list': () => ({
     rows: [
       { key: 'game', value_json: { stamina: { max: 120, regen_seconds: 300 }, notice_url: 'https://example.com/notice' }, enabled: true, requires_auth: false, description: null, version: 3 },

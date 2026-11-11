@@ -15,6 +15,7 @@ import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
 import { TableFooter } from '../../components/ui/TableFooter'
+import { TableCard, type Column } from '../../components/ui/DataTable'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
 import { AccountIdCell, PlayerLink, playerLabel, withPlayer } from '../../components/ui/PlayerLink'
 import { ResetSaveDialog } from '../players/UserDataTab'
@@ -535,26 +536,15 @@ export default function PlayersTab({
         </div>
       ))}
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">계정 ID</th>
-              <th className="text-left px-4 py-2.5 font-medium">닉네임</th>
-              <th className="text-left px-4 py-2.5 font-medium">마지막 저장</th>
-              <th className="px-4 py-2.5 w-44" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="결과가 없습니다." />
-            ) : (
-              rows.map((r) => (
-                <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
-                  <td className="px-4 py-3"><AccountIdCell accountId={r.account_id} /></td>
-                  <td className="px-4 py-3"><PlayerLink accountId={r.account_id} name={r.display_name} /></td>
-                  <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.updated_at)}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
+      <TableCard
+        wide
+        columns={[
+          // 플레이어 메뉴의 표는 같은 순서다 — 정렬 기준 시각 · 플레이어 · 계정 ID · 나머지(이 목록은 마지막 저장 순).
+          { key: 'saved', header: '마지막 저장', kind: 'datetime', cell: (r) => formatDateTime(r.updated_at) },
+          { key: 'name', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
+          { key: 'account', header: '계정 ID', kind: 'name', cell: (r) => <AccountIdCell accountId={r.account_id} /> },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (r) => (
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => void handleCopy(r)}
@@ -602,14 +592,16 @@ export default function PlayersTab({
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+            ),
+          },
+        ] satisfies Column<Row>[]}
+        rows={rows}
+        rowKey={(r) => r.account_id}
+        loading={loading}
+        failed={failed}
+        emptyText="결과가 없습니다."
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
 
       {selected && (
         <PlayerEditModal
