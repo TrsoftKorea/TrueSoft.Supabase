@@ -8,7 +8,7 @@ Task<SupabaseResult> Supabase.ReportSoloMatchResultAsync(
     double? score = null)
 ```
 
-봇을 상대했거나 혼자 한 판의 결과를 기록합니다. 맞춰 볼 상대 신고가 없어 보상은 지급하지 않고, [전적 요약](/guide/match-result/stats)의 `.Solo`에만 셉니다.
+봇을 상대했거나 혼자 한 판의 결과를 기록합니다. 맞춰 볼 상대 신고가 없어 [전적 요약](/guide/match-result/stats)의 `.Solo`에만 셉니다.
 
 ```csharp
 if (opponentIsBot)
@@ -41,5 +41,5 @@ else
 :::
 
 ::: warning 상대 없는 판은 검증되지 않습니다
-플레이어 본인의 신고만으로 기록되므로 조작할 수 있습니다. 재화를 주는 보상의 근거로 쓰지 마세요.
+플레이어 본인의 신고만으로 기록되므로 조작할 수 있습니다. 게임이 재화를 주는 근거로 쓰지 마세요.
 :::

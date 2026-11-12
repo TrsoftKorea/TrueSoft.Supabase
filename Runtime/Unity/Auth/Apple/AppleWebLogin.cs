@@ -1,4 +1,6 @@
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using TrueBase.Core.Common;
 using UnityEngine;
@@ -10,8 +12,8 @@ namespace TrueBase.Unity.Auth.Apple
     /// 딥링크로 Apple 로그인을 수행하는 헬퍼입니다.
     ///
     /// 흐름: 시스템 브라우저로 Supabase authorize URL을 열고 → Apple 로그인 →
-    /// Supabase가 앱 딥링크(<c>{scheme}://login-callback</c>)로 세션을 붙여 돌려보내면 →
-    /// <see cref="SupabaseSDK.TryCompleteOAuthRedirectAsync"/>로 로그인을 완료합니다.
+    /// Supabase가 앱 딥링크(<c>{scheme}://login-callback</c>)로 일회용 code를 붙여 돌려보내면 →
+    /// <see cref="SupabaseSDK.TryCompleteOAuthRedirectAsync"/>가 이 기기의 원래 값과 함께 세션으로 바꿔 로그인을 완료합니다(PKCE).
     ///
     /// 사전 준비: Supabase 대시보드 Apple provider 설정, Redirect URL 허용목록에 딥링크 등록,
     /// AndroidManifest에 해당 스킴의 deep link intent-filter 추가.
@@ -20,6 +22,8 @@ namespace TrueBase.Unity.Auth.Apple
     {
         private static TaskCompletionSource<SupabaseResult> _pending;
         private static string _expectedScheme;
+        // 로그인을 시작한 이 기기만 아는 값. 돌아온 code 는 이것과 함께여야 세션으로 바뀐다(PKCE).
+        private static string _codeVerifier;
 
         /// <summary>
         /// 브라우저로 Apple 로그인을 띄우고, 딥링크로 돌아온 세션으로 로그인을 완료합니다.
@@ -49,9 +53,14 @@ namespace TrueBase.Unity.Auth.Apple
 
             _expectedScheme = redirectScheme.Trim();
             _pending = new TaskCompletionSource<SupabaseResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _codeVerifier = RandomBase64Url(32);
+
+            string challenge;
+            using (var sha = SHA256.Create())
+                challenge = Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(_codeVerifier)));
 
             var redirectTo = $"{_expectedScheme}://{redirectHost}";
-            var url = SupabaseSDK.BuildOAuthAuthorizeUrl("apple", redirectTo);
+            var url = SupabaseSDK.BuildOAuthAuthorizeUrl("apple", redirectTo, challenge);
 
             Application.deepLinkActivated += OnDeepLink;
             Application.OpenURL(url);
@@ -74,12 +83,25 @@ namespace TrueBase.Unity.Auth.Apple
 
             Application.deepLinkActivated -= OnDeepLink;
             var tcs = _pending;
+            var verifier = _codeVerifier;
             _pending = null;
+            _codeVerifier = null;
             if (tcs == null)
                 return;
 
-            var result = await SupabaseSDK.TryCompleteOAuthRedirectAsync(url);
+            var result = await SupabaseSDK.TryCompleteOAuthRedirectAsync(url, verifier);
             tcs.TrySetResult(result);
         }
+
+        private static string RandomBase64Url(int byteCount)
+        {
+            var bytes = new byte[byteCount];
+            using (var rng = RandomNumberGenerator.Create())
+                rng.GetBytes(bytes);
+            return Base64Url(bytes);
+        }
+
+        private static string Base64Url(byte[] bytes) =>
+            Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 }

@@ -301,6 +301,37 @@ namespace TrueBase.Core.Auth
             return HandleSessionResponse(response, "refresh_failed");
         }
 
+        /// <summary>
+        /// 브라우저 로그인(PKCE)이 돌려준 일회용 코드를 세션으로 바꿉니다 (<c>POST /auth/v1/token?grant_type=pkce</c>).
+        /// 로그인을 시작한 기기만 가진 <paramref name="codeVerifier"/>가 있어야 바뀌므로, 돌아오는 주소를 다른 앱이 가로채도 쓸 수 없습니다.
+        /// </summary>
+        /// <param name="authCode">돌아온 주소의 <c>code</c> 값. 필수.</param>
+        /// <param name="codeVerifier">로그인을 시작할 때 만든 원래 값(해시를 <c>code_challenge</c>로 보낸 것). 필수.</param>
+        public async Task<SupabaseResult<SupabaseSession>> ExchangeCodeForSessionAsync(string authCode, string codeVerifier)
+        {
+            if (string.IsNullOrWhiteSpace(authCode))
+                return SupabaseResult<SupabaseSession>.Fail("auth_code_empty");
+
+            if (string.IsNullOrWhiteSpace(codeVerifier))
+                return SupabaseResult<SupabaseSession>.Fail("code_verifier_empty");
+
+            var url = $"{_supabaseUrl}/auth/v1/token?grant_type=pkce";
+
+            var bodyJson = _jsonSerializer.ToJson(new PkceExchangeRequest
+            {
+                auth_code = authCode.Trim(),
+                code_verifier = codeVerifier
+            });
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: url,
+                jsonBody: bodyJson,
+                headers: _defaultHeaders);
+
+            return HandleSessionResponse(response, "pkce_exchange_failed");
+        }
+
         private SupabaseResult<SupabaseSession> HandleSessionResponse(SupabaseHttpResponse response, string defaultError)
         {
             if (response == null)
@@ -609,6 +640,13 @@ namespace TrueBase.Core.Auth
         private sealed class RefreshTokenRequest
         {
             public string refresh_token;
+        }
+
+        [Serializable]
+        private sealed class PkceExchangeRequest
+        {
+            public string auth_code;
+            public string code_verifier;
         }
 
         [Serializable]

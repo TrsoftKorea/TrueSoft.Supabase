@@ -8,8 +8,8 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// 매치 기록 RPC. 대인전 신고(<c>ts_match_report_result</c>)는 신고·상호 교차검증·보상 지급(우편함 경유)을
-    /// 서버가 한 번에 처리하므로 별도의 "검증 요청"·"지급 요청" API가 없습니다. 상대 없는 판 기록과 본인 기록 조회는 지급과 무관합니다.
+    /// 매치 기록 RPC. 기록 전용이라 보상은 없습니다. 대인전 신고(<c>ts_match_report_result</c>)는 신고와 상호 교차검증을
+    /// 서버가 한 번에 처리하므로 별도의 "검증 요청" API가 없습니다.
     /// </summary>
     public sealed class SupabaseMatchResultService
     {
@@ -28,14 +28,14 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 본인이 겪은 매치 결과를 신고합니다. 같은 (세션 ID, 본인 계정)을 다시 신고해도 중복 지급되지 않습니다(멱등).
+        /// 본인이 겪은 매치 결과를 신고합니다. 같은 (세션 ID, 본인 계정)을 다시 신고해도 기록이 늘지 않습니다(멱등).
         /// 상대가 아직 신고하지 않았으면 <see cref="MatchResultStatus.Pending"/>으로 성공합니다 — 오류가 아닙니다.
         /// 상호 지목이 어긋나거나 승패 결과가 게임 코드의 검증 정책과 맞지 않으면 <see cref="SupabaseErrorCode.MatchResultMismatch"/>로 실패합니다.
         /// 이때 서버는 그 판을 무효로 저장한 뒤 상태로 알려 주므로(예외로 알리면 무효 기록까지 되돌려진다) 여기서 실패로 바꾼다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="sessionId">게임이 부여한 매치 세션 식별자(예: Photon 룸 이름). 서버는 형식을 검증하지 않습니다.</param>
-        /// <param name="gameCode">보상 설정을 구분하는 코드. 운영이 <c>match_reward_configs</c>에 미리 등록해야 합니다.</param>
+        /// <param name="gameCode">게임 모드를 구분하는 코드. 운영이 콘솔 "매치 기록"(<c>match_reward_configs</c>)에 미리 등록해야 합니다.</param>
         /// <param name="isWin">본인 기준 승패.</param>
         /// <param name="opponentAccountId">상대로 지목하는 계정 ID.</param>
         /// <param name="score">게임이 정하는 판 점수. 상대 신고와 맞춰 보지 않습니다. 재신고하면 처음 값이 남습니다.</param>
@@ -97,7 +97,7 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 상대 없는 판(봇·혼자)을 기록합니다. 맞춰 볼 상대 신고가 없으므로 보상은 지급하지 않습니다. 같은 세션 재신고는 멱등입니다.
+        /// 상대 없는 판(봇·혼자)을 기록합니다. 맞춰 볼 상대 신고가 없어 교차검증 없이 남깁니다. 같은 세션 재신고는 멱등입니다.
         /// 같은 세션을 대인전으로 이미 신고했으면 <see cref="SupabaseErrorCode.MatchResultMismatch"/>로 실패합니다.
         /// </summary>
         public async Task<SupabaseResult> ReportSoloResultAsync(

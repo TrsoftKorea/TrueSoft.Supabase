@@ -48,7 +48,7 @@ ShowBestWave(all.MaxScore ?? 0);
 |--------|------|
 | `SupabaseReason.MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
 
-::: warning 화면 표시에는 Total, 지급 판단에는 Verified
+::: warning 화면 표시에는 Total, 재화 판단에는 Verified
 상대가 신고 전에 게임을 끄면 그 판은 계속 `Pending`으로 남습니다. 그래서 화면에 보여 줄 값은 `Total`이 맞습니다. 다만 `Pending`과 `Solo`는 플레이어 본인의 신고뿐이라 조작할 수 있으니, 재화를 주는 판단에는 `Verified`만 쓰세요. 점수는 `Verified` 판이라도 각자 보낸 값입니다.
 :::
 

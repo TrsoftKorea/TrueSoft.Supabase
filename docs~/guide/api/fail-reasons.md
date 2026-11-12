@@ -115,7 +115,7 @@ bool Handle(SupabaseResult result)
 
 | Reason | 설명 |
 |--------|------|
-| `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 refresh_token이 없습니다 |
+| `OAuthRefreshTokenMissing` | 웹 OAuth 리다이렉트에 로그인 코드(`code`)가 없습니다 |
 | `OAuthRedirectSchemeEmpty` | OAuth 리다이렉트 스킴이 비어있습니다 |
 | `OAuthLoginInProgress` | 다른 로그인 창이 이미 진행 중입니다. Apple 웹 로그인은 새 요청이 앞 요청을 대신하고, iOS Google 로그인은 새 요청을 돌려보냅니다. 플레이나누 Android Apple 로그인은 창을 여는 중이거나 로그인 처리 중에 다시 누를 때 돌려보냅니다 |
 
@@ -209,8 +209,8 @@ bool Handle(SupabaseResult result)
 | `MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
 | `MatchOpponentRequired` | 상대 계정이 지정되지 않았습니다 |
 | `MatchOpponentInvalid` | 상대 계정으로 본인을 지목했습니다 |
-| `MatchRewardConfigNotFound` | 해당 게임 코드에 등록된 보상 설정이 없습니다. 운영이 먼저 설정해야 합니다 |
-| `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 지급되지 않았습니다. 같은 세션을 다른 상대·게임 코드·종류로 이미 신고했을 때도 나옵니다 |
+| `MatchRewardConfigNotFound` | 해당 게임 코드가 운영 콘솔에 등록돼 있지 않습니다. 운영이 먼저 등록해야 합니다 |
+| `MatchResultMismatch` | 양쪽이 신고한 결과가 서로 맞지 않아 그 판이 무효가 됐습니다. 같은 세션을 다른 상대·게임 코드·종류로 이미 신고했을 때도 나옵니다 |
 | `MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 | `MatchResultStatusUnknown` | 서버가 이 SDK가 모르는 신고 결과를 돌려줬습니다. SDK를 갱신해야 하며, 다시 시도해도 같습니다 |
 

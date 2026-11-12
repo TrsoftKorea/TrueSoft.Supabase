@@ -7,7 +7,7 @@ using TrueBase.Core.Data;
 
 namespace TrueBase.Unity
 {
-    /// <summary>매치 기록 신고·조회. 보상 설정 등록·수정은 운영 전용입니다.</summary>
+    /// <summary>매치 기록 신고·조회(보상 없음). 게임 코드 등록은 운영 전용입니다.</summary>
     internal sealed class MatchResultFacade
     {
         private readonly SupabaseMatchResultService _matchResult;

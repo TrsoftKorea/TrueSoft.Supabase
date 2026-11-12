@@ -119,11 +119,10 @@ Deno.serve(async (req) => {
     );
   }
 
-  const playerUserId = (body?.user_id ?? "").trim() || user.id;
-
+  // 본문의 user_id 는 받지 않는다 — 남의 값을 넣으면 그 사람 이름 조회에 내 닉네임이 나올 수 있다. 프로필 값을 쓴다.
   const myProfile = await userClient
     .from("user_profiles")
-    .select("server_id")
+    .select("server_id, user_id")
     .eq("account_id", user.id)
     .maybeSingle();
 
@@ -140,7 +139,7 @@ Deno.serve(async (req) => {
     .upsert(
       {
         account_id: user.id,
-        user_id: playerUserId,
+        user_id: myProfile.data.user_id ?? user.id,
         server_id: myProfile.data.server_id,
         display_name: displayName,
         updated_at: new Date().toISOString(),

@@ -1,6 +1,6 @@
 {
   "name": "com.truesoft.supabase",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "TrueBase",
   "description": "Unity UPM package for Supabase Auth, REST API, and Edge Functions.",
   "unity": "2022.3",

@@ -1436,22 +1436,26 @@ namespace TrueBase.Unity
         // 웹 OAuth 리다이렉트 (Android Apple 로그인 등)
 
         /// <summary>
-        /// Supabase 호스팅 OAuth authorize URL을 만듭니다. 브라우저/Custom Tab으로 열면 됩니다.
-        /// 로그인 완료 후 Supabase가 <paramref name="redirectTo"/>(앱 딥링크)로 세션 토큰을 붙여 돌려보냅니다.
+        /// Supabase 호스팅 OAuth authorize URL을 PKCE 방식으로 만듭니다. 브라우저/Custom Tab으로 열면 됩니다.
+        /// 로그인 완료 후 Supabase가 <paramref name="redirectTo"/>(앱 딥링크)로 일회용 <c>code</c>를 붙여 돌려보냅니다.
         /// </summary>
-        public static string BuildOAuthAuthorizeUrl(string provider, string redirectTo)
+        /// <param name="codeChallenge">로그인을 시작하는 기기가 만든 원래 값의 SHA-256 해시(base64url). 필수.</param>
+        public static string BuildOAuthAuthorizeUrl(string provider, string redirectTo, string codeChallenge)
         {
             var baseUrl = (_initializedProjectUrl ?? string.Empty).TrimEnd('/');
             return $"{baseUrl}/auth/v1/authorize"
                  + $"?provider={Uri.EscapeDataString(provider ?? string.Empty)}"
-                 + $"&redirect_to={Uri.EscapeDataString(redirectTo ?? string.Empty)}";
+                 + $"&redirect_to={Uri.EscapeDataString(redirectTo ?? string.Empty)}"
+                 + $"&code_challenge={Uri.EscapeDataString(codeChallenge ?? string.Empty)}"
+                 + "&code_challenge_method=s256";
         }
 
         /// <summary>
-        /// 웹 OAuth 리다이렉트(딥링크) URL에서 세션 토큰을 꺼내 로그인을 완료합니다.
-        /// URL fragment/query의 <c>refresh_token</c>으로 세션을 복원하고 로그인 후처리(차단·탈퇴 게이트·프로필 보장)를 수행합니다.
+        /// 웹 OAuth 리다이렉트(딥링크) URL의 일회용 <c>code</c>를 세션으로 바꿔 로그인을 완료하고 로그인 후처리(차단·탈퇴 게이트·프로필 보장)를 수행합니다.
+        /// 주소에 실린 토큰은 받지 않는다 — 같은 딥링크 스킴은 다른 앱도 등록할 수 있어, 주소만 믿으면 남이 넣은 계정으로 로그인되거나 토큰이 새어 나간다.
         /// </summary>
-        public static async Task<SupabaseResult<SupabaseSession>> CompleteOAuthRedirectAsync(string redirectUrl)
+        /// <param name="codeVerifier">로그인을 시작할 때 만든 원래 값. 이 기기에만 있어 가로챈 코드로는 세션을 못 받는다.</param>
+        public static async Task<SupabaseResult<SupabaseSession>> CompleteOAuthRedirectAsync(string redirectUrl, string codeVerifier)
         {
             if (!await EnsureInitializedAsync())
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
@@ -1469,10 +1473,10 @@ namespace TrueBase.Unity
                 return SupabaseResult<SupabaseSession>.Fail(string.IsNullOrWhiteSpace(desc) ? err : desc);
             }
 
-            if (!values.TryGetValue("refresh_token", out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
+            if (!values.TryGetValue("code", out var authCode) || string.IsNullOrWhiteSpace(authCode))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.OAuthRefreshTokenMissing);
 
-            var result = await Auth.RefreshSessionAsync(refreshToken.Trim());
+            var result = await Auth.ExchangeCodeForSessionAsync(authCode, codeVerifier);
             if (result.IsSuccess && result.Data != null)
             {
                 SetSession(result.Data, SupabaseSessionChangeKind.NewSignIn);
@@ -1487,9 +1491,9 @@ namespace TrueBase.Unity
         }
 
         /// <summary><see cref="CompleteOAuthRedirectAsync"/>를 값 기반으로 호출합니다.</summary>
-        public static async Task<SupabaseResult> TryCompleteOAuthRedirectAsync(string redirectUrl)
+        public static async Task<SupabaseResult> TryCompleteOAuthRedirectAsync(string redirectUrl, string codeVerifier)
         {
-            var r = await CompleteOAuthRedirectAsync(redirectUrl);
+            var r = await CompleteOAuthRedirectAsync(redirectUrl, codeVerifier);
             return LogAndReturn(ApiLogTags.AuthAppleIdToken, r);
         }
 
@@ -2717,12 +2721,12 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <c>ts_match_report_result</c> — 본인이 겪은 매치 결과를 신고합니다. 상대의 신고와 교차검증되어야
-        /// 보상이 지급됩니다. 상대가 아직 신고 전이면 <see cref="MatchResultStatus.Pending"/>으로 성공(오류 아님).
-        /// 같은 (세션 ID, 본인 계정) 재신고는 멱등 — 중복 지급되지 않습니다.
+        /// <c>ts_match_report_result</c> — 본인이 겪은 매치 결과를 기록합니다(보상 없음). 상대의 신고와 맞춰 보고
+        /// 확인 상태를 남깁니다. 상대가 아직 신고 전이면 <see cref="MatchResultStatus.Pending"/>으로 성공(오류 아님).
+        /// 같은 (세션 ID, 본인 계정) 재신고는 멱등입니다.
         /// </summary>
         /// <param name="sessionId">게임이 부여한 매치 세션 식별자(예: Photon 룸 이름).</param>
-        /// <param name="gameCode">보상 설정을 구분하는 코드. 운영이 미리 등록해야 합니다.</param>
+        /// <param name="gameCode">게임 모드를 구분하는 코드. 운영이 미리 등록해야 합니다.</param>
         /// <param name="isWin">본인 기준 승패.</param>
         /// <param name="opponentAccountId">상대로 지목하는 계정 ID.</param>
         /// <param name="score">게임이 정하는 판 점수. 상대와 맞춰 보지 않으며, 재신고하면 처음 값이 남습니다.</param>
@@ -2737,11 +2741,11 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// <c>ts_match_report_solo_result</c> — 상대 없는 판(봇·혼자)을 기록합니다. 맞춰 볼 상대 신고가 없어 보상은 지급하지 않고,
+        /// <c>ts_match_report_solo_result</c> — 상대 없는 판(봇·혼자)을 기록합니다. 맞춰 볼 상대 신고가 없어 교차검증 없이,
         /// <see cref="GetMatchStatsAsync"/>의 <see cref="MatchStats.Solo"/>에만 셉니다. 같은 세션 재신고는 멱등입니다.
         /// </summary>
         /// <param name="sessionId">게임이 부여한 매치 세션 식별자. 판마다 새로 만들어야 합니다.</param>
-        /// <param name="gameCode">운영이 보상 설정에 등록한 코드.</param>
+        /// <param name="gameCode">운영이 콘솔 "매치 기록"에 등록한 코드.</param>
         /// <param name="isWin">본인 기준 승패.</param>
         /// <param name="score">게임이 정하는 판 점수.</param>
         public static async Task<SupabaseResult> ReportSoloMatchResultAsync(

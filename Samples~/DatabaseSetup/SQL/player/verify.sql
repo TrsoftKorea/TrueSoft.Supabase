@@ -194,6 +194,7 @@ from (
       ('ts_usage_row_size'),
       ('ts_usage_collect'),
       ('ts_usage_check'),
+      ('ts_auth_config_sync_check'),
       ('ts_owned_user_id'),
       ('ts_leaderboard_next_rotation_at'),
       ('ts_leaderboard_columns_of'),

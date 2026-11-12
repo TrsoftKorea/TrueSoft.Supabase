@@ -684,9 +684,45 @@ create policy "display_names_update_own"
 on public.display_names for update
 using (account_id is not null and account_id = auth.uid())
 with check (
-  server_id is not null
+  account_id = auth.uid()
+  and server_id is not null
   and server_id = public.auth_user_server_id()
 );
+
+-- 남의 닉네임 조회(displayname-get)는 user_id 로 찾는다. 플레이어가 자기 줄의 user_id 를 남의 값으로 바꾸면
+-- 그 사람 이름 대신 자기 닉네임이 나올 수 있어, 프로필이 있으면 늘 프로필의 값으로 덮는다.
+create or replace function public.ts_display_names_force_owner()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id text;
+begin
+  select p.user_id into v_user_id from public.user_profiles p where p.account_id = new.account_id limit 1;
+  if v_user_id is not null then
+    new.user_id := v_user_id;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.ts_display_names_force_owner() from public, anon, authenticated;
+
+drop trigger if exists trg_display_names_force_owner on public.display_names;
+create trigger trg_display_names_force_owner
+before insert or update on public.display_names
+for each row execute function public.ts_display_names_force_owner();
+
+-- 닉네임 길이는 displayname-set 이 64자로 막지만, 표를 직접 쓰는 길도 있어 표에도 건다.
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'display_names_display_name_len') then
+    alter table public.display_names
+      add constraint display_names_display_name_len check (char_length(display_name) <= 64);
+  end if;
+end $$;
 
 -- 닉네임 전역 고유(서버 무관).
 create unique index if not exists display_names_display_name_unique
@@ -1261,6 +1297,7 @@ create or replace function public.ts_session_is_online(p_last_seen timestamptz, 
 returns boolean
 language sql
 stable
+set search_path = public
 as $$
   select greatest(case when p_last_seen <= now() + interval '1 minute' then p_last_seen end,
                   case when p_updated   <= now() + interval '1 minute' then p_updated end)
@@ -1699,8 +1736,10 @@ begin
 end;
 $$;
 
+-- SDK 는 세 함수를 로그인 표 없이(anon) 부른다 — 재설치로 세션이 없는 기기에서 쓰는 것이 목적이라서다.
+-- 그래서 지문(기기 ID 해시)이 곧 열쇠다. 기기 ID 는 그 게임(같은 서명 키의 앱)만 읽으므로 막을 수 있는 건 그 값이 밖으로 새는 경우뿐이다.
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text) to anon, authenticated;
-grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, uuid, text) to authenticated;
+grant execute on function public.ts_anon_recovery_upsert_refresh_token(text, text, uuid, text) to anon, authenticated;
 grant execute on function public.ts_anon_recovery_delete_by_fingerprint(text, text) to anon, authenticated;
 
 -- 본인 account_id(auth.uid())에 매달린 익명 복구 행만 삭제. 탈퇴 RPC(ts_request_withdrawal) 등에서 호출.
@@ -1878,6 +1917,7 @@ end $$;
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -1975,7 +2015,7 @@ create table if not exists public.user_data (
   updated_at timestamptz not null default now(),
 
   -- ─── 게임 데이터 컬럼 ─────────────────────────────────────────────────────
-  -- 새 컬럼 추가: SELECT admin_add_user_data_column('컬럼명', '타입 NOT NULL DEFAULT 값');
+  -- 새 컬럼 추가: SELECT admin_add_user_data_column('컬럼명', '타입', false, '기본값');
   -- [append-only 정책] 컬럼 삭제·이름 변경은 클라이언트 호환성 문제를 유발하므로 금지합니다.
   level      int         not null default 1,
   coins      int         not null default 0
@@ -2023,59 +2063,44 @@ create trigger update_last_activity_at
   for each row execute function public.ts_update_last_activity_at();
 
 -- ---------------------------------------------------------------------------
--- admin_add_user_data_column — user_data 테이블에 컬럼 추가 (어드민 전용)
+-- ts_schema_type_ok · ts_schema_default_ok — 필드 추가·수정이 DB 명령에 그대로 붙이는 칸 종류·기본값 검사
 -- ---------------------------------------------------------------------------
--- 새 게임 데이터 컬럼을 서비스 중 무중단으로 추가합니다.
--- 이미 존재하는 컬럼이면 아무것도 하지 않습니다(IF NOT EXISTS).
--- [append-only 정책] 컬럼 삭제·이름 변경은 지원하지 않습니다.
---
--- 파라미터:
---   p_column_name — 컬럼명 (^[a-z][a-z0-9_]*$ 패턴, 예약명 금지)
---   p_column_def  — 컬럼 정의 (세미콜론 금지, 예: 'int not null default 0')
---
--- 사용 예:
---   SELECT admin_add_user_data_column('exp',           'int not null default 0');
---   SELECT admin_add_user_data_column('last_login_at', 'timestamptz');
--- ---------------------------------------------------------------------------
-create or replace function public.admin_add_user_data_column(
-  p_column_name text,
-  p_column_def  text
-)
-returns void
-language plpgsql
-security definer
+-- 칸 종류와 기본값은 식별자로 감쌀 수 없어 문장에 그대로 들어간다. 여기서 거르지 않으면 콘솔 요청을 직접 보내는
+-- 운영자가 기본값 자리에 함수 호출(비밀값 읽기 등)이나 다른 명령을 끼워 넣을 수 있다.
+-- 받는 꼴은 콘솔 화면이 보내는 값과, 되돌리기가 그대로 넘기는 DB 의 기존 기본값 꼴뿐이다.
+create or replace function public.ts_schema_type_ok(p_type text)
+returns boolean
+language sql
+immutable
 set search_path = public
-set lock_timeout = '3s'   -- DDL은 ACCESS EXCLUSIVE 락. 오래 잡히면 게임 전체가 멈추므로 빨리 포기한다.
 as $$
-declare
-  v_reserved text[] := array['id','user_id','account_id','server_id','updated_at'];
-begin
-  if p_column_name is null or p_column_name !~ '^[a-z][a-z0-9_]*$' then
-    raise exception 'Invalid column_name: % (must match ^[a-z][a-z0-9_]*$)', p_column_name;
-  end if;
-
-  if p_column_name = any(v_reserved) then
-    raise exception 'Reserved column_name: %', p_column_name;
-  end if;
-
-  if position(';' in coalesce(p_column_def, '')) > 0 then
-    raise exception 'Invalid column_def: semicolon is not allowed';
-  end if;
-
-  if coalesce(trim(p_column_def), '') = '' then
-    raise exception 'column_def is required';
-  end if;
-
-  execute format(
-    'alter table public.user_data add column if not exists %I %s',
-    p_column_name, p_column_def
-  );
-end;
+  select lower(btrim(coalesce(p_type, ''))) = any (array[
+    'text', 'varchar', 'character varying',
+    'int2', 'smallint', 'int4', 'int', 'integer', 'int8', 'bigint',
+    'float4', 'real', 'float8', 'double precision', 'numeric',
+    'bool', 'boolean',
+    'timestamptz', 'timestamp with time zone', 'timestamp', 'timestamp without time zone',
+    'date', 'time', 'time without time zone',
+    'jsonb', 'json'])
 $$;
 
-comment on function public.admin_add_user_data_column(text, text) is
-  'user_data 테이블에 컬럼 추가. 이미 존재하면 무시(IF NOT EXISTS). append-only 정책.';
--- [의도적] grant 없음 — service_role 전용.
+-- 숫자 · (음수) · 참거짓 · now()·current_date 같은 시각 · 따옴표 글자, 그 뒤에 형 변환(::타입) 하나만.
+create or replace function public.ts_schema_default_ok(p_default text)
+returns boolean
+language sql
+immutable
+set search_path = public
+as $$
+  select p_default is null
+      or btrim(p_default) = ''
+      or p_default ~* '^\s*(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|\(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?\)|true|false|null|now\(\)|current_date|current_timestamp|gen_random_uuid\(\)|''([^'']|'''')*'')(::[a-z][a-z0-9_ ]*(\[\])?)?\s*$'
+$$;
+
+revoke all on function public.ts_schema_type_ok(text)    from public, anon, authenticated;
+revoke all on function public.ts_schema_default_ok(text) from public, anon, authenticated;
+
+-- 컬럼 정의를 글자 하나로 받던 옛 판. 정의 전체가 문장에 그대로 들어가 위 검사를 걸 수 없어 없앴다 — 콘솔은 아래 구조화 인자판만 쓴다.
+drop function if exists public.admin_add_user_data_column(text, text);
 
 
 -- ---------------------------------------------------------------------------
@@ -2114,6 +2139,12 @@ begin
   end if;
   if colname in ('id','user_id','account_id','server_id','updated_at') then
     raise exception 'Reserved column name: %', colname;
+  end if;
+  if not public.ts_schema_type_ok(coltype) then
+    raise exception 'Invalid column type: %', coltype;
+  end if;
+  if not public.ts_schema_default_ok(default_sql) then
+    raise exception 'Invalid default: %', default_sql;
   end if;
   if exists (
     select 1 from information_schema.columns
@@ -2174,8 +2205,8 @@ begin
   ) then
     raise exception 'Column does not exist: %', colname;
   end if;
-  if position(';' in coalesce(p_default_sql, '')) > 0 then
-    raise exception 'Invalid default: semicolon is not allowed';
+  if not public.ts_schema_default_ok(default_sql) then
+    raise exception 'Invalid default: %', default_sql;
   end if;
 
   if p_nullable then
@@ -2330,6 +2361,11 @@ begin
          with check (%s)',
         v_ti,
         array_to_string(v_chk, E'\n        and '));
+
+    -- ⑤ 직접 넣는 행의 보호 컬럼을 기본값으로(지웠다 다시 넣기 차단). 함수는 아래에 있어 이름으로 부른다.
+    execute format('drop trigger if exists trg_protected_fields_on_insert on public.%s', v_ti);
+    execute format('create trigger trg_protected_fields_on_insert before insert on public.%s
+                    for each row execute function public.ts_protected_fields_on_insert()', v_ti);
 end;
 $$;
 
@@ -2401,6 +2437,63 @@ comment on function public.ts_unprotect_field(text, text) is
 grant execute on function public.ts_unprotect_field(text, text) to service_role;
 revoke execute on function public.ts_unprotect_field(text, text) from authenticated;
 revoke execute on function public.ts_unprotect_field(text, text) from anon;
+
+-- ---------------------------------------------------------------------------
+-- ts_protected_fields_on_insert — 새 행을 직접 넣을 때 보호 컬럼을 기본값으로
+-- ---------------------------------------------------------------------------
+-- 수정 규칙만으로는 "행을 지우고 원하는 값으로 다시 넣기"가 막히지 않는다. 플레이어가 표에 직접 넣는 행은
+-- 보호 컬럼을 그 컬럼의 기본값으로 덮는다. SDK 는 행을 ts_ensure_my_row(SECURITY DEFINER — 여기서 current_user 가
+-- 함수 주인이라 건드리지 않는다)로 만들어 영향이 없다. 보호 컬럼이 없는 표는 바로 돌아간다.
+create or replace function public.ts_protected_fields_on_insert()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_rec record;
+  v_def text;
+  v_val jsonb;
+  v_set jsonb := '{}'::jsonb;
+begin
+  if current_user <> 'authenticated' then
+    return new;
+  end if;
+  for v_rec in
+    select f.column_name from public.ts_protected_fields f where f.table_name = tg_table_name
+  loop
+    select pg_get_expr(d.adbin, d.adrelid) into v_def
+      from pg_attrdef d
+      join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+     where d.adrelid = tg_relid and a.attname = v_rec.column_name;
+    v_val := null;
+    if v_def is not null then
+      execute format('select to_jsonb(%s)', v_def) into v_val;
+    end if;
+    v_set := v_set || jsonb_build_object(v_rec.column_name, v_val);
+  end loop;
+  if v_set <> '{}'::jsonb then
+    new := jsonb_populate_record(new, v_set);
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.ts_protected_fields_on_insert() is
+  '보호 컬럼이 있는 표에 플레이어가 직접 넣는 행의 보호 컬럼을 기본값으로 덮는다(지웠다 다시 넣기로 재화 올리기 차단).';
+revoke all on function public.ts_protected_fields_on_insert() from public, anon, authenticated;
+
+-- 보호 컬럼을 가진 표마다 붙인다. ts_protect_field 도 새 표에 붙인다.
+do $$
+declare
+  v_t text;
+begin
+  for v_t in select distinct table_name from public.ts_protected_fields loop
+    execute format('drop trigger if exists trg_protected_fields_on_insert on public.%I', v_t);
+    execute format('create trigger trg_protected_fields_on_insert before insert on public.%I
+                    for each row execute function public.ts_protected_fields_on_insert()', v_t);
+  end loop;
+end $$;
 
 
 -- #############################################################################
@@ -3874,6 +3967,7 @@ create or replace function public.ts_purchase_paid_share(p_krw bigint, p_refunde
 returns bigint
 language sql
 immutable
+set search_path = public
 as $$
   select case when coalesce(p_krw, 0) > 0 and p_refunded_at is null and p_is_test is not true and p_is_free is not true
               then p_krw else 0 end;
@@ -4108,6 +4202,7 @@ create or replace function public.ts_server_config_keys()
 returns text[]
 language sql
 immutable
+set search_path = public
 as $$
   select array['APPLE_BUNDLE_ID', 'APPLE_SHARED_SECRET', 'GOOGLE_PACKAGE_NAME', 'GOOGLE_SERVICE_ACCOUNT_JSON',
                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
@@ -4306,6 +4401,7 @@ alter table public.remote_config add column if not exists requires_auth boolean 
 create or replace function public.ts_remote_config_set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at := now();
@@ -4586,6 +4682,52 @@ select cron.schedule(
   'auth-config-sync',
   '15 5 * * 1',
   'select public.ts_auth_config_sync_kick()'
+);
+
+-- 3-3. 그 결과 확인 — 매일 UTC 5시 45분. 위 작업은 요청만 보내 엣지 함수가 안 돌거나 실패해도 자동 작업 기록엔
+--      성공으로 남는다. 반영을 쓰는 프로젝트(마지막 결과가 성공·실패로 남은 곳)에서 마지막 반영이 실패했거나
+--      8일 넘게 안 돌았으면 실패로 끝내 "자동 작업" 화면에 빨갛게 보이게 한다 — 애플 Secret Key 는 그대로 두면 만료된다.
+--      관리 열쇠가 없어 건너뛴 결과(last_ok 가 비어 있음)와 아직 한 번도 안 돈 곳은 보지 않는다.
+create or replace function public.ts_auth_config_sync_check()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v public.purchase_refund_sync;
+begin
+  select * into v from public.purchase_refund_sync where store = 'auth_sync';
+  if v.last_finished_at is null or v.last_ok is null then
+    return 0;
+  end if;
+  -- 매주 월요일 5시 15분 실행·매일 5시 45분 확인이라 제때 돌면 길어야 7일 30분 — 한 번 빠지면 다음 날 걸린다.
+  if v.last_finished_at < now() - interval '8 days' then
+    raise exception 'auth_sync_stale: 로그인 설정 반영이 % 뒤로 돌지 않았습니다',
+      to_char(v.last_finished_at at time zone public.ts_game_time_zone(), 'MM-DD HH24:MI');
+  end if;
+  if v.last_ok is false then
+    raise exception 'auth_sync_failed: %', coalesce(v.last_message, '마지막 반영에 실패했습니다');
+  end if;
+  return 0;
+end;
+$$;
+
+comment on function public.ts_auth_config_sync_check() is
+  '로그인 설정 반영이 제때 됐는지 확인한다(마지막 실패 또는 8일 넘게 안 돌았으면 실패). cron 이 매일 부른다.';
+
+revoke all on function public.ts_auth_config_sync_check() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'auth-config-sync-check') then
+    perform cron.unschedule('auth-config-sync-check');
+  end if;
+end $$;
+select cron.schedule(
+  'auth-config-sync-check',
+  '45 5 * * *',
+  'select public.ts_auth_config_sync_check()'
 );
 
 -- 4. 탈퇴 계정 정리 — 30분마다. 엣지 함수 withdrawal-sweep 이 유예 지난 계정을 지운다(3번과 같이 project_url 필요).
@@ -4946,6 +5088,7 @@ create or replace function public.ts_usage_feature(p_kind text, p_target text)
 returns text
 language sql
 immutable
+set search_path = public
 as $$
   select case
     when p_kind = 'request' and p_target like '/auth/%'     then '로그인'
@@ -4985,6 +5128,7 @@ create or replace function public.ts_usage_header_bytes()
 returns int
 language sql
 immutable
+set search_path = public
 as $$ select 1000 $$;
 
 revoke all on function public.ts_usage_header_bytes() from public, anon, authenticated;
@@ -5708,6 +5852,7 @@ $$;
 create or replace function public.ts_request_limit_ping()
 returns void
 language plpgsql
+set search_path = public
 as $$
 begin
 end;
@@ -5860,8 +6005,8 @@ ALTER TABLE public.user_data_logs ENABLE ROW LEVEL SECURITY;
 -- 플레이어 직접 접근 없음 (서비스 롤 + 어드민 전용)
 
 -- ── 트리거 함수 ────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION ts_log_user_data_diff()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION public.ts_log_user_data_diff()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_old  jsonb := to_jsonb(OLD);
   v_new  jsonb := to_jsonb(NEW);
@@ -7029,6 +7174,7 @@ create or replace function public.ts_mail_schedule_next_run(
 returns timestamptz
 language plpgsql
 stable
+set search_path = public
 as $$
 declare
   v_tz        text := coalesce(p_repeat_tz, public.ts_game_time_zone());
@@ -7541,6 +7687,7 @@ create or replace function public.ts_leaderboard_next_rotation_at(
 returns timestamptz
 language plpgsql
 stable
+set search_path = public
 as $$
 declare
   v_tz     text        := coalesce(nullif(btrim(p_tz), ''), public.ts_game_time_zone());
@@ -7834,6 +7981,10 @@ begin
   end if;
   if p_score is null then
     raise exception 'leaderboard_score_required';
+  end if;
+  -- NaN 은 어떤 점수보다 크게 정렬돼 최고점 기록이 영구히 굳는다.
+  if p_score = 'NaN'::numeric or p_score in ('Infinity'::numeric, '-Infinity'::numeric) then
+    raise exception 'leaderboard_score_invalid';
   end if;
 
   select * into t from public.leaderboard_tables where code = p_code for share;
@@ -8554,8 +8705,11 @@ begin
   if colname = any(v_reserved) then
     raise exception 'Reserved column name: %', colname;
   end if;
-  if position(';' in coalesce(p_coltype, '')) > 0 or position(';' in coalesce(default_sql, '')) > 0 then
-    raise exception 'Invalid definition: semicolon is not allowed';
+  if not public.ts_schema_type_ok(coltype) then
+    raise exception 'Invalid column type: %', coltype;
+  end if;
+  if not public.ts_schema_default_ok(default_sql) then
+    raise exception 'Invalid default: %', default_sql;
   end if;
   if exists (
     select 1 from information_schema.columns
@@ -8605,8 +8759,8 @@ begin
   if colname = any(v_reserved) then
     raise exception 'Reserved column name: %', colname;
   end if;
-  if position(';' in coalesce(p_default_sql, '')) > 0 then
-    raise exception 'Invalid default: semicolon is not allowed';
+  if not public.ts_schema_default_ok(default_sql) then
+    raise exception 'Invalid default: %', default_sql;
   end if;
   if not exists (
     select 1 from information_schema.columns
@@ -9025,6 +9179,21 @@ begin
                             where status = 'pending' and feature = 'leaderboard_table'
                               and action = 'delete' and object_name = p_object_name)) then
       raise exception 'leaderboard_code_exists: %', p_object_name;
+    end if;
+  end if;
+
+  -- 게시는 object_name 이 아니라 params 의 칸 이름·종류·기본값으로 DDL 을 만든다. 담을 때 둘을 묶고 값을 걸러 둔다
+  -- (게시 함수에도 같은 검사가 있지만, 여기서 막아야 대기 목록에 못 들어가 다른 변경의 게시를 막지 않는다).
+  if p_feature in ('leaderboard_field', 'user_data_field') and p_params ? 'colname'
+     and p_params->>'colname' is distinct from p_object_name then
+    raise exception 'field_name_mismatch: %', p_object_name;
+  end if;
+  if p_feature in ('leaderboard_field', 'user_data_field') and p_action in ('add', 'update') then
+    if p_action = 'add' and not public.ts_schema_type_ok(p_params->>'coltype') then
+      raise exception 'field_type_invalid: %', p_params->>'coltype';
+    end if;
+    if not public.ts_schema_default_ok(p_params->>'default_sql') then
+      raise exception 'field_default_invalid: %', p_params->>'default_sql';
     end if;
   end if;
 
@@ -11632,12 +11801,14 @@ notify pgrst, 'reload schema';
 -- 19. 매치 결과 신고
 -- #############################################################################
 
--- 참가자 각자가 자기 쪽 결과를 신고합니다(ts_match_report_result). 클라이언트 신고를 그대로 믿지 않고
--- 상대의 신고와 상호 지목·승패(또는 협동 결과)가 맞아야만 지급합니다. 지급 금액도 클라가 보내지 않고,
--- game_code 별로 이 절에서 만드는 match_reward_configs 를 서버가 읽어 계산해 우편함으로 보냅니다.
+-- 참가자 각자가 자기 쪽 결과를 신고합니다(ts_match_report_result). 기록 전용이다 — 보상은 보내지 않고, 상대의 신고와
+-- 상호 지목·승패(또는 협동 결과)가 맞는지만 가려 고객 응대·전적용 기록으로 남깁니다.
+-- 보상을 서버가 보내던 때는 계정 둘로 서로 신고해 보상을 받아 가는 길이 있었다(2026-11-12 사용자 결정으로 지급을 없앰).
+-- game_code 는 match_reward_configs 에 등록된 것만 받고(오타 방지), 그 행의 mode 로 결과가 맞는지 본다.
+-- 표 이름과 win_items·mail_* 칸은 옛 콘솔·옛 데이터 호환으로 남아 있을 뿐 쓰지 않는다.
 -- game_code 로 프로젝트·모드를 구분하므로 여러 게임이 이 한 벌의 테이블·RPC 를 함께 씁니다.
 --
--- 상대가 없는 판(봇·혼자 하는 판)은 ts_match_report_solo_result 로 기록만 남깁니다(status='solo', 지급 없음).
+-- 상대가 없는 판(봇·혼자 하는 판)은 ts_match_report_solo_result 로 기록만 남깁니다(status='solo').
 -- 쌓인 기록은 본인 것만 ts_match_stats(승·패·점수 요약)·ts_match_history(최근 목록)로 읽습니다.
 -- 확인 단계(verified·pending·solo)를 나눠 돌려주므로, 어디까지 믿을지는 게임이 고릅니다.
 -- 랭킹·시즌은 15절 리더보드가 맡습니다.
@@ -11735,8 +11906,6 @@ declare
   v_cfg          public.match_reward_configs%rowtype;
   v_mine         public.match_results%rowtype;
   v_opp          public.match_results%rowtype;
-  v_mail_id      uuid;
-  v_mine_mail_id uuid;
   v_now          timestamptz := now();
 begin
   if v_uid is null then
@@ -11759,14 +11928,14 @@ begin
     raise exception 'match_score_invalid';
   end if;
 
-  -- 세션 단위 직렬화 — 두 참가자가 거의 동시에 불러도 한 쪽씩 처리되어 이중 지급이 나지 않는다.
+  -- 세션 단위 직렬화 — 두 참가자가 거의 동시에 불러도 한 쪽씩 처리되어 판정이 엇갈리지 않는다.
   perform pg_advisory_xact_lock(hashtextextended(btrim(p_session_id), 0));
 
   select * into v_mine from public.match_results
   where session_id = btrim(p_session_id) and account_id = v_uid
   for update;
 
-  -- 보상 설정은 새로 기록할 때만 본다 — 이미 끝난 판의 재시도는 그사이 설정이 지워져도 같은 답을 받아야 한다.
+  -- 게임 코드 등록은 새로 기록할 때만 본다 — 이미 끝난 판의 재시도는 그사이 설정이 지워져도 같은 답을 받아야 한다.
   if not found then
     if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
       raise exception 'match_reward_config_not_found';
@@ -11788,8 +11957,8 @@ begin
       and account_id <> p_opponent_account_id and status = 'pending';
   end if;
 
-  -- 상대 없는 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 신고와 맞춰 지급받는 길이 열린다.
-  -- 처음과 다른 상대·게임 코드로 재신고하는 것도 같다 — 지급은 처음 신고를 기준으로만 한다.
+  -- 상대 없는 판으로 이미 기록한 세션을 대인전으로 다시 신고하면, 상대 없는 판이 확인된 판으로 바뀌는 길이 열린다.
+  -- 처음과 다른 상대·게임 코드로 재신고하는 것도 같다 — 판정은 처음 신고를 기준으로만 한다.
   if v_mine.status = 'solo'
      or v_mine.opponent_account_id is distinct from p_opponent_account_id
      or v_mine.game_code is distinct from btrim(p_game_code) then
@@ -11813,7 +11982,7 @@ begin
   end if;
 
   -- 무효는 예외 대신 상태로 돌려준다 — raise 하면 같은 호출의 쓰기가 전부 되돌려져 무효 표시가 남지 않는다.
-  -- 상대가 나를 지목하지 않았거나 상대 기록이 이미 다른 판정으로 끝났으면(지급·무효·상대 없는 판)
+  -- 상대가 나를 지목하지 않았거나 상대 기록이 이미 다른 판정으로 끝났으면(확인·무효·상대 없는 판)
   -- 상대 기록은 다른 판의 것이다 — 내 기록만 무효로 한다.
   if v_opp.opponent_account_id is distinct from v_uid or v_opp.status <> 'pending' then
     update public.match_results set status = 'mismatch', resolved_at = v_now
@@ -11828,7 +11997,7 @@ begin
     return jsonb_build_object('status', 'mismatch', 'rewarded', false);
   end if;
 
-  -- 보상 설정은 저장된 기록의 game_code 로 읽는다(이번 호출 인자가 아니라).
+  -- 확인 방식은 저장된 기록의 game_code 로 읽는다(이번 호출 인자가 아니라).
   select * into v_cfg from public.match_reward_configs where game_code = v_mine.game_code;
   if not found then
     raise exception 'match_reward_config_not_found';
@@ -11842,47 +12011,25 @@ begin
     return jsonb_build_object('status', 'mismatch', 'rewarded', false);
   end if;
 
-  -- 검증 통과 — 승리 쪽에만 우편으로 지급하고, 양쪽 모두 처리 완료로 표시한다.
-  v_mine_mail_id := null;
-  if v_mine.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
-    insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
-    values (v_uid, v_mine.user_id, 'system', v_cfg.mail_title, v_cfg.mail_content,
-            v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
-    returning id into v_mine_mail_id;
-  end if;
-
+  -- 검증 통과 — 양쪽 모두 확인 완료로 표시한다. 보상은 보내지 않는다.
+  -- 상태 이름 'paid'·응답의 rewarded 는 깔린 게임이 읽는 모양이라 그대로 둔다(뜻은 "확인됨", rewarded 는 늘 false).
   update public.match_results
-  set status = 'paid', paid_mail_id = v_mine_mail_id, resolved_at = v_now,
-      rewarded_at = case when v_mine_mail_id is null then null else v_now end
-  where id = v_mine.id;
+  set status = 'paid', resolved_at = v_now
+  where id in (v_mine.id, v_opp.id);
 
-  v_mail_id := null;
-  if v_opp.is_win and jsonb_array_length(v_cfg.win_items) > 0 then
-    insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, items, category)
-    values (v_opp.account_id, v_opp.user_id, 'system', v_cfg.mail_title, v_cfg.mail_content,
-            v_now + make_interval(days => v_cfg.mail_expires_days), v_cfg.win_items, 'match_result')
-    returning id into v_mail_id;
-  end if;
-
-  update public.match_results
-  set status = 'paid', paid_mail_id = v_mail_id, resolved_at = v_now,
-      rewarded_at = case when v_mail_id is null then null else v_now end
-  where id = v_opp.id;
-
-  -- rewarded는 승패가 아니라 실제로 우편이 갔는지를 반영한다(win_items가 비어 있으면 승리해도 우편 없음).
-  return jsonb_build_object('status', 'paid', 'rewarded', v_mine_mail_id is not null);
+  return jsonb_build_object('status', 'paid', 'rewarded', false);
 end;
 $$;
 
 comment on function public.ts_match_report_result(text, text, boolean, uuid, double precision) is
-  '본인 매치 결과 신고. 상대 신고와 교차검증돼야 지급. 재신고는 멱등(점수도 처음 값 유지). SECURITY DEFINER.';
+  '본인 매치 결과 신고. 상대 신고와 교차검증해 기록만 남긴다(보상 없음). 재신고는 멱등(점수도 처음 값 유지). SECURITY DEFINER.';
 
 revoke all on function public.ts_match_report_result(text, text, boolean, uuid, double precision) from public, anon;
 grant execute on function public.ts_match_report_result(text, text, boolean, uuid, double precision) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- ts_match_report_solo_result — 상대 없는 판(봇·혼자)을 기록한다. 맞춰 볼 상대 신고가 없어 검증할 수 없으므로
--- 우편 지급은 하지 않는다. game_code 는 보상 설정에 등록된 것만 받는다(오타로 다른 코드에 쌓이지 않게).
+-- ts_match_report_solo_result — 상대 없는 판(봇·혼자)을 기록한다. 맞춰 볼 상대 신고가 없어 검증하지 않는다.
+-- game_code 는 콘솔에 등록된 것만 받는다(오타로 다른 코드에 쌓이지 않게).
 -- ---------------------------------------------------------------------------
 
 drop function if exists public.ts_match_report_bot_result(text, text, boolean);
@@ -11929,7 +12076,7 @@ begin
     return;
   end if;
 
-  -- 보상 설정은 새로 기록할 때만 본다 — 이미 남긴 판의 재시도는 그사이 설정이 지워져도 성공해야 한다.
+  -- 게임 코드 등록은 새로 기록할 때만 본다 — 이미 남긴 판의 재시도는 그사이 설정이 지워져도 성공해야 한다.
   if not exists (select 1 from public.match_reward_configs where game_code = btrim(p_game_code)) then
     raise exception 'match_reward_config_not_found';
   end if;
@@ -11949,7 +12096,7 @@ end;
 $$;
 
 comment on function public.ts_match_report_solo_result(text, text, boolean, double precision) is
-  '상대 없는 판(봇·혼자) 기록. 교차검증·우편 지급 없음. 재신고는 멱등. SECURITY DEFINER.';
+  '상대 없는 판(봇·혼자) 기록. 교차검증 없음. 재신고는 멱등. SECURITY DEFINER.';
 
 revoke all on function public.ts_match_report_solo_result(text, text, boolean, double precision) from public, anon;
 grant execute on function public.ts_match_report_solo_result(text, text, boolean, double precision) to authenticated;
@@ -12862,6 +13009,7 @@ create or replace function public.ts_chat_direct_scope_key(p_a uuid, p_b uuid)
 returns text
 language sql
 immutable
+set search_path = public
 as $$
   select least(p_a, p_b)::text || ':' || greatest(p_a, p_b)::text;
 $$;
@@ -15271,6 +15419,27 @@ create trigger trg_push_on_support_message
   after insert on public.support_messages
   for each row execute function public.ts_push_on_support_message();
 
+-- 플레이어끼리 보내는 알림(친구 요청·로비 초대)의 도배 막기. 요청을 취소하고 다시 보내면 줄이 새로 생겨,
+-- 막지 않으면 한 사람에게 몇 초마다 알림을 보낼 수 있다. 같은 사람이 10분 안에 또 보낸 것과, 받는 사람에게
+-- 같은 종류가 한 시간에 20개를 넘은 것은 넣지 않는다(요청·초대 자체는 그대로 된다).
+create or replace function public.ts_push_peer_flooded(p_user text, p_trigger text, p_from uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+           select 1 from public.push_outbox o
+            where o.user_id = p_user and o.trigger_code = p_trigger
+              and o.created_at > now() - interval '10 minutes'
+              and o.data->>'from' = p_from::text)
+      or (select count(*) from public.push_outbox o
+           where o.user_id = p_user and o.trigger_code = p_trigger
+             and o.created_at > now() - interval '1 hour') >= 20
+$$;
+revoke all on function public.ts_push_peer_flooded(text, text, uuid) from public, anon, authenticated;
+
 -- 친구 요청 — 새 요청을 받은 사람에게. 상호 요청으로 바로 친구가 되는 경우는 새 줄이 생기지 않아 보내지 않는다.
 create or replace function public.ts_push_on_friend_request()
 returns trigger
@@ -15284,10 +15453,11 @@ declare
 begin
   if new.status <> 'pending' then return null; end if;
   select user_id into v_user from public.user_profiles where account_id = new.addressee_account_id;
+  if public.ts_push_peer_flooded(v_user, 'friend_request', new.requester_account_id) then return null; end if;
   select display_name into v_name from public.display_names where account_id = new.requester_account_id;
   perform public.ts_push_enqueue(array[v_user], 'friend_request',
                                  jsonb_build_object('name', coalesce(v_name, '')), '{}'::jsonb,
-                                 jsonb_build_object('request_id', new.id));
+                                 jsonb_build_object('request_id', new.id, 'from', new.requester_account_id));
   return null;
 exception
   when others then
@@ -15321,11 +15491,12 @@ begin
   select host_account_id, name, expires_at into v_host, v_lobby, v_until from public.match_lobbies where id = new.lobby_id;
   if v_host = new.account_id then return null; end if;
   select user_id into v_user from public.user_profiles where account_id = new.account_id;
+  if public.ts_push_peer_flooded(v_user, 'lobby_invite', v_host) then return null; end if;
   select display_name into v_name from public.display_names where account_id = v_host;
   -- 방이 닫힌 뒤에 도착하는 초대 알림은 소용이 없다.
   perform public.ts_push_enqueue(array[v_user], 'lobby_invite',
                                  jsonb_build_object('name', coalesce(v_name, ''), 'lobby', coalesce(v_lobby, '')), '{}'::jsonb,
-                                 jsonb_build_object('lobby_id', new.lobby_id), false, null, v_until);
+                                 jsonb_build_object('lobby_id', new.lobby_id, 'from', v_host), false, null, v_until);
   return null;
 exception
   when others then
