@@ -1,10 +1,9 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
+import { StatusText, type Tone } from '../components/ui/StatusText'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { formatDateTime, formatCount } from '../components/ui/format'
@@ -75,20 +74,20 @@ function scheduleInfo(s: string, tz: string): { text: string; minutes: number | 
   return { text: s, minutes: null }
 }
 
-type Health = { label: string; cls: string; bad: boolean }
+type Health = { label: string; tone: Tone; bad: boolean }
 
 function healthOf(j: Job, now: number): Health {
-  if (!j.active) return { label: '꺼짐', cls: 'bg-neutral-200 text-neutral-600', bad: true }
-  if (j.last_status === 'failed') return { label: '실패', cls: 'bg-red-100 text-red-700', bad: true }
-  if (!j.last_start) return { label: '최근 기록 없음', cls: 'bg-amber-100 text-amber-700', bad: true }
+  if (!j.active) return { label: '꺼짐', tone: 'muted', bad: true }
+  if (j.last_status === 'failed') return { label: '실패', tone: 'bad', bad: true }
+  if (!j.last_start) return { label: '최근 기록 없음', tone: 'warn', bad: true }
   // 일정 간격의 두 배가 넘도록 안 돌았으면 작업이 멈춘 것이다. 실패 기록도 안 남아 가장 놓치기 쉽다.
   const { minutes } = scheduleInfo(j.schedule, 'UTC')
   if (minutes !== null && now - new Date(j.last_start).getTime() > (minutes * 2 + 2) * 60_000) {
-    return { label: '멈춤', cls: 'bg-red-100 text-red-700', bad: true }
+    return { label: '멈춤', tone: 'bad', bad: true }
   }
-  if (j.last_status === 'running' || j.last_status === 'starting') return { label: '도는 중', cls: 'bg-brand-soft text-[#1677ff]', bad: false }
-  if (j.failures_24h > 0) return { label: '최근 실패 있음', cls: 'bg-amber-100 text-amber-700', bad: true }
-  return { label: '정상', cls: 'bg-emerald-100 text-emerald-700', bad: false }
+  if (j.last_status === 'running' || j.last_status === 'starting') return { label: '도는 중', tone: 'plain', bad: false }
+  if (j.failures_24h > 0) return { label: '최근 실패 있음', tone: 'warn', bad: true }
+  return { label: '정상', tone: 'ok', bad: false }
 }
 
 export default function CronJobs({
@@ -103,7 +102,6 @@ export default function CronJobs({
   const [failed, setFailed] = useState(false)
   const [error, setError] = useState('')
   const [loadedAt, setLoadedAt] = useState<number>(Date.now())
-  const [open, setOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,70 +144,44 @@ export default function CronJobs({
         <span className="text-xs text-neutral-500">조회 {formatDateTime(new Date(loadedAt).toISOString())}</span>
       </div>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="w-8" />
-                <th className="text-left px-4 py-2.5 font-medium">작업</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28">일정</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">마지막 실행</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">마지막 성공</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">24시간 실패</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={7} emptyText="등록된 자동 작업이 없습니다." />
-              ) : (
-                rows.map(({ j, h, s }) => {
-                  const message = j.last_status === 'failed' ? j.last_message : j.last_failure_message
-                  const expandable = !!message
-                  const isOpen = open === j.jobname
-                  return (
-                    <Fragment key={j.jobname}>
-                      <tr
-                        className={`border-t border-neutral-100 ${expandable ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
-                        onClick={() => expandable && setOpen(isOpen ? null : j.jobname)}
-                      >
-                        <td className="pl-3 text-neutral-400">
-                          {expandable && (isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-neutral-800">{JOB_LABELS[j.jobname] ?? j.jobname}</div>
-                          {JOB_LABELS[j.jobname] && <div className="text-xs text-neutral-400 font-mono">{j.jobname}</div>}
-                        </td>
-                        <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{s.text}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs whitespace-nowrap ${h.cls}`}>{h.label}</span>
-                        </td>
-                        <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{j.last_start ? formatDateTime(j.last_start) : '-'}</td>
-                        <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{j.last_success ? formatDateTime(j.last_success) : '-'}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={j.failures_24h > 0 ? 'text-red-600 font-medium' : 'text-neutral-500'}>
-                            {formatCount(j.failures_24h)} / {formatCount(j.runs_24h)}회
-                          </span>
-                        </td>
-                      </tr>
-                      {isOpen && message && (
-                        <tr className="border-t border-neutral-100 bg-neutral-50">
-                          <td />
-                          <td colSpan={6} className="px-4 py-3">
-                            <div className="text-xs text-neutral-500 mb-1">{j.last_status === 'failed' ? '마지막 실행의 오류' : '최근 24시간 안의 마지막 오류'}</div>
-                            <pre className="text-xs text-red-700 whitespace-pre-wrap break-all font-mono">{message}</pre>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+      <TableCard
+        columns={[
+          {
+            key: 'job', header: '작업', kind: 'name', cell: ({ j }) => (
+              <>
+                <div className="font-medium text-neutral-800">{JOB_LABELS[j.jobname] ?? j.jobname}</div>
+                {JOB_LABELS[j.jobname] && <div className="text-xs text-neutral-400 font-mono">{j.jobname}</div>}
+              </>
+            ),
+          },
+          { key: 'schedule', header: '일정', kind: 'datetime', cell: ({ s }) => s.text },
+          { key: 'health', header: '상태', kind: 'status', cell: ({ h }) => <StatusText tone={h.tone}>{h.label}</StatusText> },
+          { key: 'last_start', header: '마지막 실행', kind: 'datetime', cell: ({ j }) => j.last_start ? formatDateTime(j.last_start) : null },
+          { key: 'last_success', header: '마지막 성공', kind: 'datetime', cell: ({ j }) => j.last_success ? formatDateTime(j.last_success) : null },
+          {
+            key: 'failures', header: '24시간 실패', kind: 'number', cell: ({ j }) => (
+              <span className={j.failures_24h > 0 ? 'text-red-600 font-medium' : 'text-neutral-500'}>
+                {formatCount(j.failures_24h)} / {formatCount(j.runs_24h)}회
+              </span>
+            ),
+          },
+        ]}
+        rows={rows}
+        rowKey={({ j }) => j.jobname}
+        loading={loading}
+        failed={failed}
+        emptyText="등록된 자동 작업이 없습니다."
+        expand={({ j }) => {
+          const message = j.last_status === 'failed' ? j.last_message : j.last_failure_message
+          if (!message) return null
+          return (
+            <>
+              <div className="text-xs text-neutral-500 mb-1">{j.last_status === 'failed' ? '마지막 실행의 오류' : '최근 24시간 안의 마지막 오류'}</div>
+              <pre className="text-xs text-red-700 whitespace-pre-wrap break-all font-mono">{message}</pre>
+            </>
+          )
+        }}
+      />
     </div>
   )
 }

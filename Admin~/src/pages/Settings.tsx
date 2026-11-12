@@ -5,7 +5,7 @@ import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLoo
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { CardHeader, GroupBox, WhiteCard } from '../components/ui/Card'
+import { CardHeader, GroupBox, GroupTable, WhiteCard } from '../components/ui/Card'
 import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -19,7 +19,7 @@ import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, ExternalLink, Loader2,
 import { copyToClipboard } from '../lib/clipboard'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { RefreshButton } from '../components/ui/FilterBar'
 
@@ -515,7 +515,7 @@ function StoreStatusCard({
         description="이 프로젝트를 바깥 서비스와 잇는 값을 관리합니다."
       />
       <Segmented value={tab} onChange={setTab} options={SERVICE_TABS.map(([v, label]) => ({ v, label }))} />
-      {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(table-fixed + colgroup) 상태·버튼이 위아래로 줄을 선다. */}
+      {/* 가게마다 테두리 상자 하나. 상자끼리 칸 폭을 맞춰(GroupTable) 상태·버튼이 위아래로 줄을 선다. */}
       <div className="space-y-4">
         {tab === 'supabase' && <ConnectionBox target={target} report={report} />}
         {groups.map((g) => (
@@ -530,14 +530,7 @@ function StoreStatusCard({
             </>}
           >
             {(!rows || isEnabled(g.id)) && (
-            <table className="w-full text-sm table-fixed">
-              <colgroup>
-                <col className="w-[34%]" />
-                <col />
-                <col className="w-[76px]" />
-                <col className="w-[164px]" />
-              </colgroup>
-              <tbody>
+            <GroupTable status>
                 {STORE_KEYS.filter((k) => k.group === g.id || k.alsoIn?.includes(g.id)).flatMap((k, i, list) => {
                   const row = byKey.get(k.key)
                   const view = !row ? null : row.status === 'missing' && !k.required ? OPTIONAL_MISSING_VIEW : STATUS_VIEW[row.status]
@@ -605,8 +598,7 @@ function StoreStatusCard({
                     </tr>,
                   ]
                 })}
-              </tbody>
-            </table>
+            </GroupTable>
             )}
           </GroupBox>
         ))}
@@ -773,48 +765,29 @@ function RequestLimitBlocksCard({ target, report }: { target: ProjectTarget; rep
   }
 
   return (
-    <WhiteCard>
-      <div className="p-5 pb-3">
-        <CardHeader
-          title="제한 중인 계정"
-          description="지금 요청이 막혀 있는 계정입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
-          actions={
-            <RefreshButton onClick={() => void load()} loading={rows === null} />
-          }
-        />
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="px-5 py-2 text-left font-medium whitespace-nowrap">대상</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 시작</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">제한 끝</th>
-              <th className="px-5 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null || rows.length === 0 ? (
-              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={4} emptyText="제한 중인 계정이 없습니다." />
-            ) : rows.map((r) => (
-              <tr key={r.key} className="border-t border-neutral-100">
-                <td className="px-5 py-2 text-neutral-800">
-                  {r.display_name || r.account_id?.slice(0, 8) || r.key}
-                </td>
-                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_at)}</td>
-                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{formatDateTime(r.blocked_until)}</td>
-                <td className="px-5 py-2 text-right whitespace-nowrap">
-                  <Button size="sm" onClick={() => void unblock(r.key)} disabled={unblocking !== ''}>
-                    {unblocking === r.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlock className="w-3 h-3" />}
-                    해제
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </WhiteCard>
+    <TableCard
+      title="제한 중인 계정"
+      description="지금 요청이 막혀 있는 계정입니다. 해제하면 곧바로 다시 요청할 수 있습니다."
+      actions={<RefreshButton onClick={() => void load()} loading={rows === null} />}
+      columns={[
+        { key: 'who', header: '대상', kind: 'name', cell: (r) => r.display_name || r.account_id?.slice(0, 8) || r.key },
+        { key: 'at', header: '제한 시작', kind: 'datetime', cell: (r) => formatDateTime(r.blocked_at) },
+        { key: 'until', header: '제한 끝', kind: 'datetime', cell: (r) => formatDateTime(r.blocked_until) },
+        {
+          key: 'actions', header: '', kind: 'actions', cell: (r) => (
+            <Button size="sm" onClick={() => void unblock(r.key)} disabled={unblocking !== ''}>
+              {unblocking === r.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlock className="w-3 h-3" />}
+              해제
+            </Button>
+          ),
+        },
+      ]}
+      rows={rows ?? []}
+      rowKey={(r) => r.key}
+      loading={rows === null}
+      failed={failed}
+      emptyText="제한 중인 계정이 없습니다."
+    />
   )
 }
 
@@ -934,7 +907,7 @@ function ConsoleIdentityCard({
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
-        title="프로젝트 이름 · 아이콘"
+        title="이름 · 아이콘"
         description="프로젝트 목록·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
       />
 
@@ -1017,7 +990,7 @@ type Connection = { url: string; publishableKey: string | null }
 
 /**
  * 서비스 연결 › Supabase — 게임의 SupabaseSettings 에 넣을 이 프로젝트의 주소와 공개 키. 새 프로젝트를 만든 뒤 개발자에게 넘긴다.
- * 다른 묶음과 같은 칸 폭(table-fixed + colgroup)이라 복사 버튼이 다른 탭의 입력 버튼 자리에 선다.
+ * 다른 묶음과 같은 칸 폭(GroupTable)이라 복사 버튼이 다른 탭의 입력 버튼 자리에 선다.
  */
 function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
   const [conn, setConn] = useState<Connection | null>(null)
@@ -1047,13 +1020,7 @@ function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: 
 
   return (
     <GroupBox title="프로젝트 연결 정보">
-      <table className="w-full text-sm table-fixed">
-        <colgroup>
-          <col className="w-[34%]" />
-          <col />
-          <col className="w-[164px]" />
-        </colgroup>
-        <tbody>
+      <GroupTable>
           {rows.map(([label, about, value]) => (
             <tr key={label} className="border-t border-neutral-100 first:border-t-0">
               <td className="py-2 pl-4 pr-4">
@@ -1074,8 +1041,7 @@ function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: 
               </td>
             </tr>
           ))}
-        </tbody>
-      </table>
+      </GroupTable>
     </GroupBox>
   )
 }
@@ -1253,7 +1219,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   return (
     <WhiteCard className="p-5 space-y-5 max-w-2xl">
       <CardHeader
-        title="프로젝트 시간대"
+        title="시간대"
         description="날짜를 나누는 기준 시간대를 정합니다."
       />
       <div className="space-y-1.5">
@@ -1282,7 +1248,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
       </div>
       <ConfirmDialog
         open={asking}
-        title="프로젝트 시간대를 바꿀까요?"
+        title="시간대를 바꿀까요?"
         confirmLabel="바꾸기"
         busy={busy}
         error={saveError || undefined}

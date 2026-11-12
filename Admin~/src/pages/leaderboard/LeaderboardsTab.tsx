@@ -3,8 +3,8 @@ import { Plus, Trash2, RotateCw, Pencil, Loader2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
-import { WhiteCard } from '../../components/ui/Card'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard } from '../../components/ui/DataTable'
+import { StatusText, Tag } from '../../components/ui/StatusText'
 import { formatCount, formatDateTime } from '../../components/ui/format'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
@@ -349,105 +349,71 @@ export default function LeaderboardsTab({
         </Button>
       </div>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium">이름</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">범위</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">기록</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">정렬</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">주기</th>
-                <th className="text-right px-4 py-2.5 font-medium">회차</th>
-                <th className="text-right px-4 py-2.5 font-medium">참여</th>
-                <th className="text-left px-4 py-2.5 font-medium">다음 초기화</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading || loadFailed || rows.length === 0 ? (
-                <TableStatusRow
-                  loading={loading}
-                  failed={loadFailed}
-                  empty={rows.length === 0}
-                  colSpan={11}
-                  emptyText="등록된 리더보드가 없습니다."
-                />
-              ) : (
-                rows.map((r) => {
-                  const draftState = draftStateOf(r.code)
-                  const noCycle = r.rotation === 'none'
-                  return (
-                  <tr
-                    key={r.code}
-                    className={
-                      'border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer' +
-                      (selectedCode === r.code ? ' bg-brand-soft' : '')
-                    }
-                    onClick={() => onSelect(selectedCode === r.code ? '' : r.code)}
+      <TableCard
+        columns={[
+          {
+            key: 'state', header: '상태', kind: 'status', cell: (r) => {
+              const draftState = draftStateOf(r.code)
+              return (
+                <span className="inline-flex items-center gap-1.5">
+                  <StatusText tone={r.is_ended ? 'muted' : 'ok'}>{r.is_ended ? '종료' : '진행 중'}</StatusText>
+                  {draftState === 'delete' ? <Tag tone="bad">삭제 대기</Tag> : draftState ? <Tag title="게시하면 적용됩니다">대기 중</Tag> : null}
+                </span>
+              )
+            },
+          },
+          { key: 'code', header: '코드', kind: 'mono', cell: (r) => r.code },
+          { key: 'name', header: '이름', kind: 'name', cell: (r) => r.display_name },
+          { key: 'scope', header: '범위', kind: 'name', cell: (r) => SCOPE_LABEL[r.scope] ?? r.scope },
+          { key: 'record', header: '기록', kind: 'name', cell: (r) => RECORD_LABEL[r.record_type] ?? r.record_type },
+          { key: 'sort', header: '정렬', kind: 'name', cell: (r) => SORT_LABEL[r.sort_type] ?? r.sort_type },
+          { key: 'rotation', header: '주기', kind: 'name', cell: (r) => ROTATION_LABEL[r.rotation] ?? r.rotation },
+          { key: 'count', header: '회차', kind: 'number', cell: (r) => formatCount(r.rotation_count) },
+          { key: 'entries', header: '참여', kind: 'number', cell: (r) => formatCount(r.current_entries) },
+          { key: 'next', header: '다음 초기화', kind: 'datetime', cell: (r) => (r.next_rotation_at ? formatDateTime(r.next_rotation_at) : null) },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (r) => {
+              const noCycle = r.rotation === 'none'
+              return (
+                <span className="inline-flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => openEdit(r)}
+                    title="수정"
+                    className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {r.is_ended ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-neutral-100 text-neutral-600">종료</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700">진행 중</span>
-                        )}
-                        {draftState === 'delete' ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">삭제 대기</span>
-                        ) : draftState ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700" title="게시하면 적용됩니다">대기 중</span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{r.code}</td>
-                    <td className="px-4 py-3">{r.display_name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{SCOPE_LABEL[r.scope] ?? r.scope}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{RECORD_LABEL[r.record_type] ?? r.record_type}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{SORT_LABEL[r.sort_type] ?? r.sort_type}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{ROTATION_LABEL[r.rotation] ?? r.rotation}</td>
-                    <td className="px-4 py-3 text-right">{formatCount(r.rotation_count)}</td>
-                    <td className="px-4 py-3 text-right">{formatCount(r.current_entries)}</td>
-                    <td className="px-4 py-3">{formatDateTime(r.next_rotation_at)}</td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(r)}
-                          title="수정"
-                          className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        {/* 주기 없는 리더보드는 기록 탭에 회차 선택이 없어, 넘기면 이전 기록을 다시 볼 길이 없다. */}
-                        <button
-                          onClick={() => { setDialogError(''); setRotateTarget(r) }}
-                          disabled={noCycle}
-                          title={noCycle ? '초기화 주기가 없는 리더보드는 회차를 넘길 수 없습니다' : '회차 넘기기'}
-                          aria-label="회차 넘기기"
-                          className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                        >
-                          <RotateCw className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => { setDialogError(''); setDelTarget(r) }}
-                          title="삭제"
-                          className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  {/* 주기 없는 리더보드는 기록 탭에 회차 선택이 없어, 넘기면 이전 기록을 다시 볼 길이 없다. */}
+                  <button
+                    onClick={() => { setDialogError(''); setRotateTarget(r) }}
+                    disabled={noCycle}
+                    title={noCycle ? '초기화 주기가 없는 리더보드는 회차를 넘길 수 없습니다' : '회차 넘기기'}
+                    aria-label="회차 넘기기"
+                    className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => { setDialogError(''); setDelTarget(r) }}
+                    title="삭제"
+                    className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+
+                </span>
+              )
+            },
+          },
+        ]}
+        rows={rows}
+        rowKey={(r) => r.code}
+        loading={loading}
+        failed={loadFailed}
+        emptyText="등록된 리더보드가 없습니다."
+        onRowClick={(r) => onSelect(selectedCode === r.code ? '' : r.code)}
+        rowClassName={(r) => (selectedCode === r.code ? 'bg-brand-soft hover:bg-brand-soft' : undefined)}
+      />
 
       {modalOpen && (
         <EditDialog

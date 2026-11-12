@@ -8,7 +8,8 @@ import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs } from '../components/ui/Tabs'
 import { Segmented } from '../components/ui/Segmented'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable, TableCard, type Column } from '../components/ui/DataTable'
+import { Tag } from '../components/ui/StatusText'
 import { TableFooter } from '../components/ui/TableFooter'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -249,37 +250,29 @@ function TicketsTab({ target, report }: { target: ProjectTarget; report: (e: unk
           <RefreshButton className="ml-auto" onClick={() => void load()} loading={data === null && !failed} />
         </FilterBar>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="px-5 py-2 text-left font-medium whitespace-nowrap">상태</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">분류</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">플레이어</th>
-              <th className="px-3 py-2 text-left font-medium min-w-[16rem]">내용</th>
-              <th className="px-5 py-2 text-left font-medium whitespace-nowrap">마지막 대화</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data === null || rows.length === 0 ? (
-              <TableStatusRow loading={data === null && !failed} empty={data !== null && rows.length === 0} failed={failed}
-                colSpan={5} emptyText="문의가 없습니다." />
-            ) : rows.map((r) => (
-              <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => setOpenId(r.id)}>
-                <td className="px-5 py-2 whitespace-nowrap"><StatusBadge status={r.status} /></td>
-                <td className="px-3 py-2 text-neutral-700 whitespace-nowrap">{r.category ?? '없음'}</td>
-                <td className="px-3 py-2 text-neutral-800 whitespace-nowrap">
-                  <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
-                  {r.was_banned && <span className="ml-1.5 text-[11px] text-red-600">차단</span>}
-                  {r.via_web && <span className="ml-1.5 text-[11px] text-amber-700">게임 밖 접수</span>}
-                </td>
-                <td className="px-3 py-2 text-neutral-600 truncate max-w-[28rem]">{r.preview || '(그림만 보냄)'}</td>
-                <td className="px-5 py-2 text-neutral-500 whitespace-nowrap">{formatDateTime(r.last_message_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { key: 'status', header: '상태', kind: 'status', cell: (r) => <StatusBadge status={r.status} /> },
+          { key: 'category', header: '분류', kind: 'name', cell: (r) => r.category },
+          {
+            key: 'player', header: '플레이어', kind: 'name', cell: (r) => (
+              <span className="inline-flex items-center gap-1.5">
+                {r.was_banned && <Tag tone="bad">차단</Tag>}
+                {r.via_web && <Tag>게임 밖 접수</Tag>}
+                <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
+              </span>
+            ),
+          },
+          { key: 'preview', header: '내용', kind: 'text', cell: (r) => r.preview || '(그림만 보냄)' },
+          { key: 'last', header: '마지막 대화', kind: 'datetime', cell: (r) => formatDateTime(r.last_message_at) },
+        ] satisfies Column<TicketRow>[]}
+        rows={rows}
+        rowKey={(r) => r.id}
+        loading={data === null && !failed}
+        failed={failed}
+        emptyText="문의가 없습니다."
+        onRowClick={(r) => setOpenId(r.id)}
+      />
       <TableFooter summary={`${formatCount(data?.total ?? 0)}건`} page={page} totalPages={totalPages} onPageChange={setPage} />
       {openId && (
         <TicketDialog target={target} ticketId={openId} report={report} onClose={closeDialog} onChanged={reloadList} />
@@ -555,9 +548,8 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
     && !!draft.answer.trim() && draft.answer.trim().length <= 4000 && enPaired
 
   return (
-    <WhiteCard>
-      <div className="p-5 pb-3">
-        <CardHeader
+    <>
+      <TableCard
           title="자주 묻는 질문"
           description="플레이어가 고객센터 창에서 문의하기 전에 보는 질문과 답입니다. 줄을 끌어 놓으면 창에 보이는 순서가 바뀝니다."
           actions={
@@ -568,58 +560,54 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
               <Plus className="w-3.5 h-3.5" />질문 추가
             </Button>
           }
-        />
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="pl-3 pr-0 py-2 w-8" />
-              <th className="px-3 py-2 text-left font-medium min-w-[16rem]">질문</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">분류</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">영어</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">사용</th>
-              <th className="px-5 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null || rows.length === 0 ? (
-              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={6} emptyText="자주 묻는 질문이 없습니다." />
-            ) : rows.map((f) => (
-              <tr key={f.id} draggable={!reordering}
-                onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragId(f.id) }}
-                onDragOver={(e) => { if (dragId == null) return; e.preventDefault(); if (overId !== f.id) setOverId(f.id) }}
-                onDrop={(e) => { e.preventDefault(); void drop(f.id) }}
-                onDragEnd={() => { setDragId(null); setOverId(null) }}
-                className={`border-t border-neutral-100 ${dragId === f.id ? 'opacity-40' : ''} ${overId === f.id && dragId !== f.id ? 'bg-brand-soft' : ''}`}>
-                <td className="pl-3 pr-0 py-2 text-neutral-400 cursor-grab active:cursor-grabbing" title="끌어서 순서 바꾸기">
-                  <GripVertical className="w-4 h-4" />
-                </td>
-                <td className="px-3 py-2 text-neutral-800">{f.question}</td>
-                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{f.category ?? '전체'}</td>
-                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{f.localized?.['en']?.question ? '있음' : '없음'}</td>
-                <td className="px-3 py-2">
-                  <Switch label={`${f.question} 사용`} value={f.is_active} disabled={toggling !== null} onChange={(v) => void toggle(f, v)} />
-                </td>
-                <td className="px-5 py-2 text-right whitespace-nowrap space-x-2">
-                  <Button size="sm" onClick={() => {
-                    setSaveError('')
-                    setDraft({
-                      id: f.id, categoryId: f.category_id ? String(f.category_id) : '', question: f.question, answer: f.answer,
-                      enQuestion: f.localized?.['en']?.question ?? '', enAnswer: f.localized?.['en']?.answer ?? '',
-                    })
-                  }}>
-                    <Pencil className="w-3 h-3" />바꾸기
-                  </Button>
-                  <Button size="sm" variant="dangerOutline" onClick={() => { setDeleteError(''); setDeleting(f) }}>
-                    <Trash2 className="w-3 h-3" />지우기
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        
+        columns={[
+          {
+            key: 'grip', header: '', kind: 'status', cell: () => (
+              <span className="text-neutral-400 cursor-grab active:cursor-grabbing" title="끌어서 순서 바꾸기"><GripVertical className="w-4 h-4" /></span>
+            ),
+          },
+          { key: 'question', header: '질문', kind: 'text', cell: (f) => f.question },
+          { key: 'category', header: '분류', kind: 'name', cell: (f) => f.category ?? '전체' },
+          { key: 'en', header: '영어', kind: 'status', cell: (f) => (f.localized?.['en']?.question ? '있음' : '없음') },
+          {
+            key: 'active', header: '사용', kind: 'status', cell: (f) => (
+              <Switch label={`${f.question} 사용`} value={f.is_active} disabled={toggling !== null} onChange={(v) => void toggle(f, v)} />
+            ),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (f) => (
+              <span className="inline-flex gap-1.5">
+                <Button size="sm" onClick={() => {
+                  setSaveError('')
+                  setDraft({
+                    id: f.id, categoryId: f.category_id ? String(f.category_id) : '', question: f.question, answer: f.answer,
+                    enQuestion: f.localized?.['en']?.question ?? '', enAnswer: f.localized?.['en']?.answer ?? '',
+                  })
+                }}>
+                  <Pencil className="w-3 h-3" />바꾸기
+                </Button>
+                <Button size="sm" variant="dangerOutline" onClick={() => { setDeleteError(''); setDeleting(f) }}>
+                  <Trash2 className="w-3 h-3" />지우기
+                </Button>
+              </span>
+            ),
+          },
+        ]}
+        rows={rows ?? []}
+        rowKey={(f) => String(f.id)}
+        loading={rows === null && !failed}
+        failed={failed}
+        emptyText="자주 묻는 질문이 없습니다."
+        rowProps={(f) => ({
+          draggable: !reordering,
+          onDragStart: (e) => { e.dataTransfer.effectAllowed = 'move'; setDragId(f.id) },
+          onDragOver: (e) => { if (dragId == null) return; e.preventDefault(); if (overId !== f.id) setOverId(f.id) },
+          onDrop: (e) => { e.preventDefault(); void drop(f.id) },
+          onDragEnd: () => { setDragId(null); setOverId(null) },
+        })}
+        rowClassName={(f) => `${dragId === f.id ? 'opacity-40' : ''} ${overId === f.id && dragId !== f.id ? 'bg-brand-soft' : ''}`}
+      />
       {draft && (
         <EditDialog
           size="lg"
@@ -683,7 +671,7 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
         onConfirm={() => void remove()}
         onCancel={() => setDeleting(null)}
       />
-    </WhiteCard>
+    </>
   )
 }
 
@@ -750,52 +738,39 @@ function CategoriesTab({ target, report }: { target: ProjectTarget; report: (e: 
   const sortOk = draft ? draft.sortOrder.trim() === '' || /^\d{1,5}$/.test(draft.sortOrder.trim()) : true
 
   return (
-    <WhiteCard>
-      <div className="p-5 pb-3">
-        <CardHeader
-          title="문의 분류"
-          description="플레이어가 문의를 보낼 때 고르는 분류입니다. 끄면 새 문의에서 고를 수 없고, 이미 받은 문의는 그대로 남습니다."
-          actions={
-            <Button variant="primary" size="compact" onClick={() => { setSaveError(''); setDraft({ id: null, name: '', en: '', sortOrder: String(nextOrder) }) }}>
-              <Plus className="w-3.5 h-3.5" />분류 추가
-            </Button>
-          }
-        />
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="px-5 py-2 text-left font-medium whitespace-nowrap">순서</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">이름</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">영어 이름</th>
-              <th className="px-3 py-2 text-right font-medium whitespace-nowrap">문의 수</th>
-              <th className="px-3 py-2 text-left font-medium whitespace-nowrap">사용</th>
-              <th className="px-5 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows === null || rows.length === 0 ? (
-              <TableStatusRow loading={rows === null} empty={rows !== null && rows.length === 0} failed={failed} colSpan={6} emptyText="분류가 없습니다." />
-            ) : rows.map((c) => (
-              <tr key={c.id} className="border-t border-neutral-100">
-                <td className="px-5 py-2 tabular-nums text-neutral-500">{c.sort_order}</td>
-                <td className="px-3 py-2 text-neutral-800 whitespace-nowrap">{c.name}</td>
-                <td className="px-3 py-2 text-neutral-600 whitespace-nowrap">{c.localized?.['en'] || '없음'}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatCount(c.tickets)}</td>
-                <td className="px-3 py-2">
-                  <Switch label={`${c.name} 사용`} value={c.is_active} disabled={toggling !== null} onChange={(v) => void toggle(c, v)} />
-                </td>
-                <td className="px-5 py-2 text-right whitespace-nowrap">
-                  <Button size="sm" onClick={() => { setSaveError(''); setDraft({ id: c.id, name: c.name, en: c.localized?.['en'] ?? '', sortOrder: String(c.sort_order) }) }}>
-                    <Pencil className="w-3 h-3" />바꾸기
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <>
+      <TableCard
+        title="문의 분류"
+        description="플레이어가 문의를 보낼 때 고르는 분류입니다. 끄면 새 문의에서 고를 수 없고, 이미 받은 문의는 그대로 남습니다."
+        actions={
+          <Button variant="primary" size="compact" onClick={() => { setSaveError(''); setDraft({ id: null, name: '', en: '', sortOrder: String(nextOrder) }) }}>
+            <Plus className="w-3.5 h-3.5" />분류 추가
+          </Button>
+        }
+        columns={[
+          { key: 'order', header: '순서', kind: 'number', cell: (c) => c.sort_order },
+          { key: 'name', header: '이름', kind: 'name', cell: (c) => c.name },
+          { key: 'en', header: '영어 이름', kind: 'name', cell: (c) => c.localized?.['en'] || null },
+          { key: 'tickets', header: '문의 수', kind: 'number', cell: (c) => formatCount(c.tickets) },
+          {
+            key: 'active', header: '사용', kind: 'status', cell: (c) => (
+              <Switch label={`${c.name} 사용`} value={c.is_active} disabled={toggling !== null} onChange={(v) => void toggle(c, v)} />
+            ),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (c) => (
+              <Button size="sm" onClick={() => { setSaveError(''); setDraft({ id: c.id, name: c.name, en: c.localized?.['en'] ?? '', sortOrder: String(c.sort_order) }) }}>
+                <Pencil className="w-3 h-3" />바꾸기
+              </Button>
+            ),
+          },
+        ] satisfies Column<Category>[]}
+        rows={rows ?? []}
+        rowKey={(c) => String(c.id)}
+        loading={rows === null}
+        failed={failed}
+        emptyText="분류가 없습니다."
+      />
       {draft && (
         <EditDialog
           title={draft.id == null ? '분류 추가' : '분류 바꾸기'}
@@ -834,6 +809,6 @@ function CategoriesTab({ target, report }: { target: ProjectTarget; report: (e: 
           </div>
         </EditDialog>
       )}
-    </WhiteCard>
+    </>
   )
 }

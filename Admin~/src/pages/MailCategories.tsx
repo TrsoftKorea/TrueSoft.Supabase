@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
+import { TableCard, type Column } from '../components/ui/DataTable'
 import { EditDialog } from '../components/ui/EditDialog'
 import { dangerInputCls, inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
@@ -184,91 +183,61 @@ export default function MailCategories({
         </EditDialog>
       )}
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">코드</th>
-              <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
-              <th className="px-4 py-2.5 w-24"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading || rows.length === 0 ? (
-              <TableStatusRow
-                loading={loading}
-                empty={rows.length === 0}
-                failed={failed}
-                colSpan={4}
-                emptyText="등록된 분류가 없습니다."
+      <TableCard
+        columns={[
+          { key: 'key', header: '코드', kind: 'mono', cell: (c) => c.key },
+          {
+            key: 'name', header: '이름', kind: 'name', cell: (c) => editingKey === c.key ? (
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEdit(c.key)
+                  if (e.key === 'Escape') cancelEdit()
+                }}
+                autoFocus
+                className={inputCompactCls + ' w-56'}
               />
+            ) : c.display_name,
+          },
+          { key: 'created', header: '등록 시각', kind: 'datetime', cell: (c) => formatDateTime(c.created_at) },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (c) => editingKey === c.key ? (
+              <span className="inline-flex gap-1.5">
+                <button
+                  onClick={() => saveEdit(c.key)}
+                  disabled={rowSaving}
+                  className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
+                  title="저장"
+                  aria-label="저장"
+                >
+                  {rowSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </button>
+                <button onClick={cancelEdit} className="text-neutral-400 hover:text-neutral-700" title="취소" aria-label="취소">
+                  <X className="w-4 h-4" />
+                </button>
+              </span>
             ) : (
-              rows.map((c) => {
-                const isEditing = editingKey === c.key
-                const isDefault = c.key === 'default'
-                return (
-                  <tr key={c.key} className="border-t border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-4 py-2.5 font-mono text-xs">{c.key}</td>
-                    <td className="px-4 py-2.5">
-                      {isEditing ? (
-                        <input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEdit(c.key)
-                            if (e.key === 'Escape') cancelEdit()
-                          }}
-                          autoFocus
-                          className={inputCompactCls + ' w-full max-w-xs'}
-                        />
-                      ) : (
-                        <span className="text-neutral-800">{c.display_name || '-'}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-neutral-600">{formatDateTime(c.created_at)}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-3">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => saveEdit(c.key)}
-                              disabled={rowSaving}
-                              className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"
-                              title="저장"
-                              aria-label="저장"
-                            >
-                              {rowSaving ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Check className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button onClick={cancelEdit} className="text-neutral-400 hover:text-neutral-700" title="취소" aria-label="취소">
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => startEdit(c)} className="text-neutral-400 hover:text-[#1677ff]" title="이름 수정" aria-label="이름 수정">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            {!isDefault && (
-                              <button onClick={() => { setError(''); setDelTarget(c) }} className="text-neutral-400 hover:text-red-500" title="삭제" aria-label="삭제">
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </WhiteCard>
+              <span className="inline-flex gap-1.5">
+                <button onClick={() => startEdit(c)} className="text-neutral-400 hover:text-[#1677ff]" title="이름 수정" aria-label="이름 수정">
+                  <Pencil className="w-4 h-4" />
+                </button>
+                {/* 기본 분류는 지울 수 없다 — 자리는 비워 두어 줄마다 버튼 위치가 같게. */}
+                {c.key !== 'default' ? (
+                  <button onClick={() => { setError(''); setDelTarget(c) }} className="text-neutral-400 hover:text-red-500" title="삭제" aria-label="삭제">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                ) : <span className="w-4 h-4" aria-hidden />}
+              </span>
+            ),
+          },
+        ] satisfies Column<Category>[]}
+        rows={rows}
+        rowKey={(c) => c.key}
+        loading={loading}
+        failed={failed}
+        emptyText="등록된 분류가 없습니다."
+      />
 
       <ConfirmDialog
         open={!!delTarget}

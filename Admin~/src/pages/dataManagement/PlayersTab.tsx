@@ -6,7 +6,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
 import { WhiteCard } from '../../components/ui/Card'
 import { inputCls } from '../../components/ui/Input'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { Tag } from '../../components/ui/StatusText'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
@@ -15,7 +15,7 @@ import { pgTypeLabel } from '../../lib/schemaLabels'
 import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValueField'
 import { Button } from '../../components/ui/Button'
 import { TableFooter } from '../../components/ui/TableFooter'
-import { TableCard, type Column } from '../../components/ui/DataTable'
+import { DataTable, TableCard, type Column } from '../../components/ui/DataTable'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
 import { AccountIdCell, PlayerLink, playerLabel, withPlayer } from '../../components/ui/PlayerLink'
 import { ResetSaveDialog } from '../players/UserDataTab'
@@ -146,6 +146,7 @@ function PlayerEditModal({
 
   const filteredRows = rows.filter((r) => r.column_name.toLowerCase().includes(colSearch.trim().toLowerCase()))
   const pendingCount = Object.keys(edits).length
+  const shownValue = (r: UserDataField) => valueToString(r.column_name in edits ? edits[r.column_name] : r.value)
 
   const requestClose = () => {
     if (pendingCount > 0) { setAskDiscard(true); return }
@@ -201,53 +202,40 @@ function PlayerEditModal({
             </div>
           )}
         </div>
-          {loading ? (
-            <div className="p-8 text-center text-sm text-neutral-500"><Loader2 className="w-5 h-5 animate-spin text-neutral-300 mx-auto" /></div>
-          ) : (
-            // 필드·타입 칸은 글자 길이만큼 넓어지고, 남은 폭을 값 칸이 쓴다. 긴 값만 말줄임으로 자른다.
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                <tr>
-                  <th className="text-left px-5 py-2 font-medium">필드</th>
-                  <th className="text-left px-5 py-2 font-medium">타입</th>
-                  <th className="text-left px-5 py-2 font-medium">값</th>
-                  <th className="text-right px-5 py-2 font-medium w-16" />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((r) => {
+          <DataTable
+            columns={[
+              { key: 'name', header: '필드', kind: 'mono', cell: (r) => r.column_name },
+              {
+                key: 'type', header: '타입', kind: 'name', cell: (r) => (
+                  <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(r.data_type)}</span>
+                ),
+              },
+              {
+                key: 'value', header: '값', kind: 'text',
+                cell: (r) => {
                   const isEdited = r.column_name in edits
-                  const displayValue = isEdited ? valueToString(edits[r.column_name]) : valueToString(r.value)
-                  return (
-                    <tr key={r.column_name} className="border-t border-neutral-100">
-                      <td className="px-5 py-3 font-medium whitespace-nowrap">{r.column_name}</td>
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(r.data_type)}</span>
-                      </td>
-                      <td title={displayValue || undefined} className={`px-5 py-3 font-mono text-xs truncate w-full max-w-0 ${isEdited ? 'text-amber-700' : 'text-neutral-700'}`}>
-                        {displayValue || <span className="text-neutral-400">—</span>}
-                        {isEdited && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded ml-1">수정됨</span>}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <button onClick={() => setEditField(r)} title="값 수정" aria-label="값 수정" className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-                {filteredRows.length === 0 && (
-                  <TableStatusRow
-                    loading={false}
-                    empty
-                    failed={loadFailed}
-                    colSpan={4}
-                    emptyText={rows.length === 0 ? '편집 가능한 필드가 없습니다.' : '검색 결과가 없습니다.'}
-                  />
-                )}
-              </tbody>
-            </table>
-          )}
+                  const v = shownValue(r)
+                  if (!isEdited) return v === '' ? null : <span className="font-mono text-xs text-neutral-700">{v}</span>
+                  return <><Tag tone="brand">수정됨</Tag> <span className="font-mono text-xs text-amber-700">{v || '-'}</span></>
+                },
+                full: (r) => shownValue(r),
+              },
+              {
+                key: 'actions', header: '', kind: 'actions', cell: (r) => (
+                  <span className="inline-flex gap-1.5">
+                    <button onClick={() => setEditField(r)} title="값 수정" aria-label="값 수정" className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-neutral-100 text-neutral-500 hover:text-[#1677ff]">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ),
+              },
+            ] satisfies Column<UserDataField>[]}
+            rows={filteredRows}
+            rowKey={(r) => r.column_name}
+            loading={loading}
+            failed={loadFailed}
+            emptyText={rows.length === 0 ? '편집 가능한 필드가 없습니다.' : '검색 결과가 없습니다.'}
+          />
     </EditDialog>
 
       {editField && (
@@ -545,7 +533,7 @@ export default function PlayersTab({
           { key: 'account', header: '계정 ID', kind: 'name', cell: (r) => <AccountIdCell accountId={r.account_id} /> },
           {
             key: 'actions', header: '', kind: 'actions', cell: (r) => (
-                    <div className="inline-flex items-center gap-1">
+                    <span className="inline-flex gap-1.5">
                       <button
                         onClick={() => void handleCopy(r)}
                         disabled={copyingId === r.account_id}
@@ -591,7 +579,7 @@ export default function PlayersTab({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    </div>
+                    </span>
             ),
           },
         ] satisfies Column<Row>[]}

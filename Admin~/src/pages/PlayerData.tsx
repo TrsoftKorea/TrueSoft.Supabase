@@ -17,7 +17,7 @@ export default function PlayerData({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="플레이어 데이터" description="플레이어의 저장 데이터를 찾아 고치거나 다른 플레이어로 복사합니다." actions={<Button onClick={() => navigate('/player-data-fields')}><SlidersHorizontal className="w-3.5 h-3.5" />플레이어 데이터 필드</Button>} />
+      <PageHeader title="플레이어 데이터" description="플레이어의 저장 데이터를 찾아 고치거나 다른 플레이어로 복사합니다." actions={<Button onClick={() => navigate('/player-data-fields')}><SlidersHorizontal className="w-3.5 h-3.5" />데이터 필드</Button>} />
       <PlayersTab
         target={target}
         onUnauthenticated={onUnauthenticated}

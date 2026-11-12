@@ -6,7 +6,8 @@ import { usePendingChanges } from '../lib/pendingChanges'
 import { PageHeader } from '../components/ui/PageHeader'
 import { inputCls } from '../components/ui/Input'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable, TableCard, type Column } from '../components/ui/DataTable'
+import { StatusText, Tag } from '../components/ui/StatusText'
 import { PendingChanges, type PendingItem } from '../components/ui/PendingChanges'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -344,61 +345,52 @@ export default function RemoteConfig({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={busy} />
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-5 py-2.5 font-medium">키</th>
-              <th className="text-left px-4 py-2.5 font-medium">상태</th>
-              <th className="text-left px-4 py-2.5 font-medium">필드 수</th>
-              <th className="px-3 py-2.5 w-20" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading || keys.length === 0 ? (
-              <TableStatusRow loading={loading} empty={keys.length === 0} failed={loadFailed && keys.length === 0} colSpan={4} emptyText="설정이 없습니다." />
-            ) : (
-              keys.map((key) => {
-                const eff = effectiveOf(key)
-                const itemCount = Object.keys(eff.value_json).filter((k) => k !== '__meta').length
-                return (
-                  <tr
-                    key={key}
-                    onClick={() => setSelectedKey(key)}
-                    className={`border-t border-neutral-100 cursor-pointer hover:bg-neutral-50 ${selectedKey === key ? 'bg-brand-soft' : ''}`}
-                  >
-                    <td className="px-5 py-3 font-medium font-mono">{key}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        {eff.deleted ? (
-                          <span className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700">삭제 대기</span>
-                        ) : (
-                          <span className={`px-2 py-0.5 text-xs rounded ${eff.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
-                            {eff.enabled ? '활성' : '비활성'}
-                          </span>
-                        )}
-                        {eff.requires_auth && <span className="px-2 py-0.5 text-xs rounded bg-brand-soft text-[#1677ff]">인증 필요</span>}
-                        {eff.pendingId != null && !eff.deleted && <span className="px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-700">대기 중</span>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600">{itemCount}</td>
-                    <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => { setDialogError(''); setDeleteKey(key) }}
-                        title="설정 삭제"
-                        aria-label="설정 삭제"
-                        className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </WhiteCard>
+      <TableCard
+        columns={[
+          {
+            key: 'key', header: '키', kind: 'mono', cell: (key) => key,
+          },
+          {
+            key: 'status', header: '상태', kind: 'status', cell: (key) => {
+              const eff = effectiveOf(key)
+              return (
+                <span className="inline-flex items-center gap-1.5">
+                  {eff.requires_auth && <Tag tone="brand">인증 필요</Tag>}
+                  {eff.pendingId != null && !eff.deleted && <Tag>대기 중</Tag>}
+                  {eff.deleted
+                    ? <StatusText tone="bad">삭제 대기</StatusText>
+                    : <StatusText tone={eff.enabled ? 'ok' : 'muted'}>{eff.enabled ? '활성' : '비활성'}</StatusText>}
+                </span>
+              )
+            },
+          },
+          {
+            key: 'count', header: '필드 수', kind: 'number',
+            cell: (key) => Object.keys(effectiveOf(key).value_json).filter((k) => k !== '__meta').length.toLocaleString('ko-KR'),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (key) => (
+              <span className="inline-flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => { setDialogError(''); setDeleteKey(key) }}
+                  title="설정 삭제"
+                  aria-label="설정 삭제"
+                  className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ),
+          },
+        ] satisfies Column<string>[]}
+        rows={keys}
+        rowKey={(key) => key}
+        loading={loading}
+        failed={loadFailed && keys.length === 0}
+        emptyText="설정이 없습니다."
+        onRowClick={(key) => setSelectedKey(key)}
+        rowClassName={(key) => (selectedKey === key ? 'bg-brand-soft hover:bg-brand-soft' : undefined)}
+      />
 
       {selected && selectedKey && (
         <WhiteCard className="p-5 space-y-4">
@@ -428,37 +420,31 @@ export default function RemoteConfig({
             </Button>
           </div>
 
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2 font-medium">필드명</th>
-                <th className="text-left px-4 py-2 font-medium">값</th>
-                <th className="px-3 py-2 w-20" />
-              </tr>
-            </thead>
-            <tbody>
-              {selectedItems.length === 0 ? (
-                <TableStatusRow loading={false} empty colSpan={3} emptyText="필드가 없습니다." />
-              ) : (
-                selectedItems.map(([k, v]) => (
-                  <tr key={k} className="border-t border-neutral-100">
-                    <td className="px-4 py-2.5 font-mono">{k}</td>
-                    <td className="px-4 py-2.5 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatItemValue(v)}>{formatItemValue(v)}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => setItemModal({ itemKey: k, value: v })} disabled={selected.deleted} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 disabled:opacity-40">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => { setDialogError(''); setDeleteItemTarget({ itemKey: k, value: v }) }} disabled={selected.deleted || busy} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <DataTable
+            columns={[
+              { key: 'name', header: '필드명', kind: 'mono', cell: ([k]) => k },
+              {
+                key: 'value', header: '값', kind: 'text',
+                cell: ([, v]) => <span className="font-mono text-xs text-neutral-600">{formatItemValue(v)}</span>,
+                full: ([, v]) => formatItemValue(v),
+              },
+              {
+                key: 'actions', header: '', kind: 'actions', cell: ([k, v]) => (
+                  <span className="inline-flex gap-1.5">
+                    <button onClick={() => setItemModal({ itemKey: k, value: v })} disabled={selected.deleted} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 disabled:opacity-40">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => { setDialogError(''); setDeleteItemTarget({ itemKey: k, value: v }) }} disabled={selected.deleted || busy} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ),
+              },
+            ] satisfies Column<[string, unknown]>[]}
+            rows={selectedItems}
+            rowKey={([k]) => k}
+            emptyText="필드가 없습니다."
+          />
         </WhiteCard>
       )}
 

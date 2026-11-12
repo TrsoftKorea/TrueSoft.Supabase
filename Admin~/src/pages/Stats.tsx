@@ -4,6 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
+import { DataTable, TableCard } from '../components/ui/DataTable'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Tabs } from '../components/ui/Tabs'
@@ -161,40 +162,25 @@ function RevenueTab({ target, days, reloadKey, onUnauthenticated, onError }: {
           금액을 모르는 결제 {n(data.unknown_amount)}건은 합계에 들어가지 않았습니다. 채우는 상태는 구매 내역 화면 위쪽에 보입니다.
         </p>
       )}
-      {data.countries.length === 0 ? (
-        <div className="p-8 text-center text-sm text-neutral-400">이 기간에 결제가 없습니다.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-neutral-500 border-b border-neutral-100">
-                <th className="px-5 py-2 text-left font-medium">국가</th>
-                <th className="px-3 py-2 text-left font-medium w-2/5">매출</th>
-                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">금액</th>
-                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">비율</th>
-                <th className="px-3 py-2 text-right font-medium whitespace-nowrap">건수</th>
-                <th className="px-5 py-2 text-right font-medium whitespace-nowrap">결제자</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.countries.map((c) => (
-                <tr key={c.country} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-5 py-2 whitespace-nowrap text-neutral-800">{countryName(c.country)}</td>
-                  <td className="px-3 py-2">
-                    <div className="h-2.5 rounded-full bg-[#1677ff]" style={{ width: `${Math.max(1, (c.revenue_krw / max) * 100)}%` }} />
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatKRW(c.revenue_krw)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
-                    {data.total_krw > 0 ? `${((c.revenue_krw / data.total_krw) * 100).toFixed(1)}%` : '-'}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{n(c.purchases)}</td>
-                  <td className="px-5 py-2 text-right tabular-nums">{n(c.payers)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={[
+          { key: 'country', header: '국가', kind: 'name', cell: (c) => countryName(c.country) },
+          {
+            key: 'bar', header: '매출', kind: 'text',
+            cell: (c) => <div className="h-2.5 rounded-full bg-[#1677ff]" style={{ width: `${Math.max(1, (c.revenue_krw / max) * 100)}%` }} />,
+          },
+          { key: 'amount', header: '금액', kind: 'number', cell: (c) => <span className="font-medium">{formatKRW(c.revenue_krw)}</span> },
+          {
+            key: 'share', header: '비율', kind: 'number',
+            cell: (c) => data.total_krw > 0 ? <span className="text-neutral-500">{((c.revenue_krw / data.total_krw) * 100).toFixed(1)}%</span> : null,
+          },
+          { key: 'purchases', header: '건수', kind: 'number', cell: (c) => n(c.purchases) },
+          { key: 'payers', header: '결제자', kind: 'number', cell: (c) => n(c.payers) },
+        ]}
+        rows={data.countries}
+        rowKey={(c) => c.country}
+        emptyText="이 기간에 결제가 없습니다."
+      />
     </WhiteCard>
   )
 }
@@ -287,51 +273,53 @@ function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; 
   )
 }
 
-/** 비율이 높을수록 진한 파랑. 아직 오지 않은 날은 빈칸. */
-function RetentionCell({ kept, size }: { kept: number | null; size: number }) {
-  if (kept === null) return <td className="px-2 py-1.5 text-center text-neutral-300">·</td>
+/** 비율이 높을수록 진한 파랑. 글자색은 화면 기본값 그대로 둔다 — 밝은 화면에서 흰 글자로 바꾸면 중간 칸(50~70%)이 대비 2.2~2.4 로 안 읽혔다. */
+const retentionStyle = (kept: number | null, size: number) => {
+  if (kept === null) return undefined
   const pct = size > 0 ? (kept / size) * 100 : 0
-  const alpha = Math.min(0.85, pct / 100 + 0.05)
+  return { background: `rgba(22, 119, 255, ${Math.min(0.85, pct / 100 + 0.05)})` }
+}
+
+/** 아직 오지 않은 날은 빈칸("-"). */
+const retentionText = (kept: number | null, size: number) =>
+  kept === null ? null : `${(size > 0 ? (kept / size) * 100 : 0).toFixed(0)}%`
+
+function RetentionTable({ offsets, cohorts }: { offsets: number[]; cohorts: Cohort[] }) {
   return (
-    // 글자색은 화면 기본값 그대로 둔다. 밝은 화면에서 흰 글자로 바꾸면 중간 칸(50~70%)이 대비 2.2~2.4 로 안 읽혔다.
-    <td className="px-2 py-1.5 text-center tabular-nums whitespace-nowrap" title={`${n(kept)} / ${n(size)}명`}
-      style={{ background: `rgba(22, 119, 255, ${alpha})` }}>
-      {pct.toFixed(0)}%
-    </td>
+    <DataTable
+      columns={[
+        { key: 'day', header: '가입일', kind: 'datetime', cell: (c: Cohort) => c.day },
+        { key: 'size', header: '가입', kind: 'number', cell: (c: Cohort) => n(c.size) },
+        ...offsets.map((o, i) => ({
+          key: `d${o}`, header: `D${o}`, kind: 'number' as const,
+          cell: (c: Cohort) => retentionText(c.kept[i] ?? null, c.size),
+          cellStyle: (c: Cohort) => retentionStyle(c.kept[i] ?? null, c.size),
+          cellTitle: (c: Cohort) => (c.kept[i] == null ? undefined : `${n(c.kept[i]!)} / ${n(c.size)}명`),
+        })),
+      ]}
+      rows={cohorts}
+      rowKey={(c) => c.day}
+      emptyText="이 기간에 가입한 플레이어가 없습니다."
+    />
   )
 }
 
 function DailyTable({ days }: { days: Day[] }) {
   return (
-    <WhiteCard>
-      <div className="border-b border-neutral-100 p-5 pb-3">
-        <CardHeader title="날짜별 숫자" description="날마다 접속한 사용자 수를 표로 봅니다." />
-      </div>
-      <div className="overflow-x-auto max-h-96">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-surface">
-            <tr className="text-xs text-neutral-500 border-b border-neutral-100">
-              <th className="px-5 py-2 text-left font-medium">날짜</th>
-              <th className="px-3 py-2 text-right font-medium">전체</th>
-              <th className="px-3 py-2 text-right font-medium">신규</th>
-              <th className="px-3 py-2 text-right font-medium">재방문</th>
-              <th className="px-5 py-2 text-right font-medium">복귀</th>
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((d) => (
-              <tr key={d.day} className="border-b border-neutral-100 last:border-0">
-                <td className="px-5 py-1.5 whitespace-nowrap text-neutral-700">{d.day}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums font-medium">{n(d.total)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{n(d.new)}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{n(d.returning)}</td>
-                <td className="px-5 py-1.5 text-right tabular-nums">{n(d.comeback)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </WhiteCard>
+    <TableCard
+      title="날짜별 숫자"
+      description="날마다 접속한 사용자 수를 표로 봅니다."
+      maxHeight="max-h-96"
+      columns={[
+        { key: 'day', header: '날짜', kind: 'datetime', cell: (d) => d.day },
+        { key: 'total', header: '전체', kind: 'number', cell: (d) => n(d.total) },
+        { key: 'new', header: '신규', kind: 'number', cell: (d) => n(d.new) },
+        { key: 'returning', header: '재방문', kind: 'number', cell: (d) => n(d.returning) },
+        { key: 'comeback', header: '복귀', kind: 'number', cell: (d) => n(d.comeback) },
+      ]}
+      rows={days}
+      rowKey={(d) => d.day}
+    />
   )
 }
 
@@ -439,30 +427,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
             <div className="border-b border-neutral-100 p-5 pb-3">
               <CardHeader title="리텐션" description="가입한 날로부터 N일째에 다시 접속한 비율을 봅니다. 칸에 마우스를 올리면 인원이 보입니다." />
             </div>
-            {data.retention.length === 0 ? (
-              <div className="p-8 text-center text-sm text-neutral-400">이 기간에 가입한 플레이어가 없습니다.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-neutral-500 border-b border-neutral-100">
-                      <th className="px-3 py-2 text-left font-medium whitespace-nowrap">가입일</th>
-                      <th className="px-2 py-2 text-right font-medium whitespace-nowrap">가입</th>
-                      {data.offsets.map((o) => <th key={o} className="px-2 py-2 font-medium whitespace-nowrap">D{o}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.retention.map((c) => (
-                      <tr key={c.day} className="border-b border-neutral-100 last:border-0">
-                        <td className="px-3 py-1.5 whitespace-nowrap text-neutral-700">{c.day}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{n(c.size)}</td>
-                        {c.kept.map((k, i) => <RetentionCell key={i} kept={k} size={c.size} />)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <RetentionTable offsets={data.offsets} cohorts={data.retention} />
           </WhiteCard>
           )}
         </>

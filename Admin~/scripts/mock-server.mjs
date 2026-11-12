@@ -236,11 +236,50 @@ function sameAsSeen(seen, files) {
   return seen.every((s) => s && now.get(s.file) === s.hash)
 }
 
+/**
+ * 이 PC 에만 있고 GitHub 에 없는 판 이름표. 앞 게시에서 이름표만 못 올린 경우다.
+ * 지금 브랜치에 든 이름표만 본다 — 다른 로컬 브랜치의 이름표까지 올리면 그 브랜치 커밋도 GitHub 에 올라간다.
+ * GitHub 조회는 1분 기억한다 — 상태 조회마다 물으면 연결이 느릴 때 그동안 미리보기 서버 전체가 멈춘다.
+ */
+let remoteTagCache = null
+function missingRemoteTags({ fresh = false } = {}) {
+  const local = git('tag', '-l', 'v*', '--merged', 'HEAD').split('\n').filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
+  if (!local.length) return []
+  try {
+    if (fresh || !remoteTagCache || Date.now() - remoteTagCache.at > 60_000) {
+      remoteTagCache = {
+        at: Date.now(),
+        tags: new Set(git('ls-remote', '--tags', 'origin').split('\n')
+          .map((l) => l.split('\t')[1]?.replace(/^refs\/tags\//, '').replace(/\^\{\}$/, '')).filter(Boolean)),
+      }
+    }
+    return local.filter((t) => !remoteTagCache.tags.has(t))
+  } catch { return [] } // GitHub 에 못 물으면 모른다 — 게시를 막지 않는다(이번에 만든 이름표는 publish 가 따로 올린다)
+}
+
+/** 이름표를 올린다. 실패하면 사유 한 줄, 성공하면 빈 글. */
+function pushTags(tags) {
+  if (!tags.length) return ''
+  try {
+    git('push', '-q', 'origin', ...tags.map((t) => `refs/tags/${t}`))
+    remoteTagCache = null
+    return ''
+  } catch (e) {
+    return `${e.stderr || e.message || e}`.trim().split('\n')[0]
+  }
+}
+
 function publish(seen) {
   let { consoleFiles, sdkFiles } = groups()
   let all = [...sdkFiles, ...consoleFiles]
   const before = unpushed()
-  if (all.length === 0 && before.length === 0) return { ok: false, error: '게시할 변경이 없습니다.' }
+  if (all.length === 0 && before.length === 0) {
+    // 올릴 변경은 없어도 앞 게시에서 못 올린 이름표가 있으면 그것만 올린다.
+    const left = missingRemoteTags({ fresh: true })
+    if (!left.length) return { ok: false, error: '게시할 변경이 없습니다.' }
+    const tagError = pushTags(left)
+    return tagError ? { ok: false, error: `판 이름표(${left.join(', ')})를 올리지 못했습니다: ${tagError}` } : { ok: true, commits: [], tags: left, alsoPushed: 0 }
+  }
   const secrets = secretLike(all)
   if (secrets.length) return { ok: false, error: `비밀값이 들었을 수 있는 새 파일이 있어 게시하지 않았습니다: ${secrets.join(', ')}` }
   const unplanned = unplannedFiles(all)
@@ -302,8 +341,6 @@ function publish(seen) {
   for (const f of [MESSAGE_FILE, SDK_MESSAGE_FILE, FILES_FILE]) if (fs.existsSync(f)) fs.rmSync(f)
   try {
     git('push', '-q')
-    // 이름표는 커밋이 올라간 뒤에 올린다 — 먼저 올리면 GitHub 에 커밋 없는 이름표만 남을 수 있다.
-    if (tags.length) git('push', '-q', 'origin', ...tags.map((t) => `refs/tags/${t}`))
   } catch (e) {
     // 받아온 뒤 커밋이 다시 얹히면 이름표가 옛 커밋을 가리킨다 — 지우고, 다시 게시할 때 새로 단다.
     for (const t of tags) gitOk('tag', '-d', t)
@@ -316,6 +353,13 @@ function publish(seen) {
     return { ok: false, error: `커밋(${made})은 했지만 푸시하지 못했습니다. 다시 게시하면 이 커밋도 함께 올라갑니다: ${text.split('\n')[0]}` }
   }
   deployCache = null
+  // 이름표는 커밋이 올라간 뒤에 올린다 — 먼저 올리면 GitHub 에 커밋 없는 이름표만 남을 수 있다.
+  // 여기서 실패해도 커밋은 이미 올라갔다. 이름표는 남겨 두고, 다음 게시(변경이 없어도)가 올린다.
+  // 이번에 만든 이름표는 GitHub 조회와 상관없이 올린다 — 조회가 실패해 빈 목록이 오면 안 올리고도 성공으로 보인다.
+  const tagError = pushTags([...new Set([...tags, ...missingRemoteTags({ fresh: true })])])
+  if (tagError) {
+    return { ok: false, error: `커밋(${commits.map((c) => c.hash).join(', ')})은 올렸지만 판 이름표(${tags.join(', ') || '-'})를 올리지 못했습니다. 게시를 다시 누르면 이름표만 올라갑니다: ${tagError}` }
+  }
   return { ok: true, commits, tags, version: chosen, alsoPushed: before.length, actionsUrl: ACTIONS_URL }
 }
 
@@ -452,6 +496,7 @@ http.createServer(async (req, res) => {
         blocked: secretLike([...consoleFiles, ...sdkFiles]),
         unplanned: unplannedFiles([...consoleFiles, ...sdkFiles]),
         version: versionInfo([...consoleFiles, ...sdkFiles]),
+        tagsToPush: missingRemoteTags(),
       })
     }
     if (req.url === '/__publish/deploy' && req.method === 'GET') {

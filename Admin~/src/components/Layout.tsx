@@ -124,7 +124,7 @@ const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
     icon: Settings2,
     items: [
       { to: '/remote-config', label: '원격 설정', icon: Settings },
-      { to: '/player-data-fields', label: '플레이어 데이터 필드', icon: Database },
+      { to: '/player-data-fields', label: '데이터 필드', icon: Database },
       { to: '/servers', label: '게임 서버', icon: Server },
     ],
   },

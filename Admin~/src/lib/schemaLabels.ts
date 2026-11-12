@@ -2,7 +2,7 @@
 export const FEATURE_LABEL: Record<string, string> = {
   leaderboard_field: '리더보드 필드',
   leaderboard_table: '리더보드',
-  user_data_field: '플레이어 데이터 필드',
+  user_data_field: '데이터 필드',
   remote_config: '원격 설정',
 }
 export const ACTION_LABEL: Record<string, string> = {

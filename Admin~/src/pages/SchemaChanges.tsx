@@ -9,7 +9,9 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { inputCls } from '../components/ui/Input'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable, TableCard } from '../components/ui/DataTable'
+import { Pairs } from '../components/ui/Pairs'
+import { StatusText } from '../components/ui/StatusText'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
@@ -76,16 +78,22 @@ function tableSummary(params: Record<string, unknown>): string {
   return parts.join(' · ')
 }
 
-// 아직 전용 요약이 없는 기능(원격 설정 등)은 대상과 겹치는 키만 걸러 남긴다.
-function genericSummary(params: Record<string, unknown>): string {
+// 요약 한 조각. 이름이 있으면 "이름 값" 쌍(Pairs), 없으면 그 글 하나.
+type SumItem = { label?: string; value: string }
+
+const summaryText = (items: SumItem[]) => items.map((i) => (i.label ? `${i.label} ${i.value}` : i.value)).join(' · ')
+
+function SummaryView({ items, wrap = false }: { items: SumItem[]; wrap?: boolean }) {
+  if (!items.some((i) => i.label)) return <>{summaryText(items)}</>
+  return <Pairs wrap={wrap} items={items.map((i) => ({ label: i.label ?? '', value: i.value }))} />
+}
+
+// 아직 전용 요약이 없는 기능은 대상과 겹치는 키만 걸러 남긴다.
+function genericSummary(params: Record<string, unknown>): SumItem[] {
   const skip = new Set(['colname', 'code', 'key', 'name'])
-  const entries = Object.entries(params ?? {}).filter(
-    ([k, v]) => !skip.has(k) && v !== null && v !== undefined && v !== '',
-  )
-  if (entries.length === 0) return '—'
-  return entries
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(' · ')
+  return Object.entries(params ?? {})
+    .filter(([k, v]) => !skip.has(k) && v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => ({ label: k, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }))
 }
 
 type LiveConfig = { key: string; value_json: Record<string, unknown>; enabled: boolean; requires_auth: boolean }
@@ -100,30 +108,30 @@ function valueText(v: unknown): string {
 
 // 원격 설정 — 스테이징이 키 단위 스냅샷이라, 지금 게임에 나가는 값과 비교해 바뀌는 필드만 보여 준다.
 // 지금 값을 못 받았으면(live === undefined) 게시 후 상태만 요약한다.
-function configSummary(params: Record<string, unknown>, live: LiveConfig | null | undefined): string {
+function configSummary(params: Record<string, unknown>, live: LiveConfig | null | undefined): SumItem[] {
   const next = configItems(params['value_json'])
   const enabled = params['enabled'] !== false
   const requiresAuth = !!params['requires_auth']
   if (live === undefined) {
     return [
-      next.length === 0 ? '필드 없음' : `필드 ${next.length}개`,
-      enabled ? '활성' : '비활성',
-      requiresAuth ? '인증 필요' : '인증 불필요',
-    ].join(' · ')
+      { value: next.length === 0 ? '필드 없음' : `필드 ${next.length}개` },
+      { value: enabled ? '활성' : '비활성' },
+      { value: requiresAuth ? '인증 필요' : '인증 불필요' },
+    ]
   }
 
   const before = new Map(configItems(live?.value_json))
-  const parts: string[] = []
-  if (!live) parts.push('새 설정')
+  const parts: SumItem[] = []
+  if (!live) parts.push({ value: '새 설정' })
   for (const [k, v] of next) {
-    if (!before.has(k)) parts.push(`${k} 추가: ${valueText(v)}`)
-    else if (JSON.stringify(before.get(k)) !== JSON.stringify(v)) parts.push(`${k}: ${valueText(before.get(k))} → ${valueText(v)}`)
+    if (!before.has(k)) parts.push({ label: `${k} 추가`, value: valueText(v) })
+    else if (JSON.stringify(before.get(k)) !== JSON.stringify(v)) parts.push({ label: k, value: `${valueText(before.get(k))} → ${valueText(v)}` })
     before.delete(k)
   }
-  for (const k of before.keys()) parts.push(`${k} 삭제`)
-  if (live && live.enabled !== enabled) parts.push(enabled ? '활성으로' : '비활성으로')
-  if (live && live.requires_auth !== requiresAuth) parts.push(requiresAuth ? '인증 필요로' : '인증 불필요로')
-  return parts.length === 0 ? '바뀌는 값 없음' : parts.join(' · ')
+  for (const k of before.keys()) parts.push({ label: k, value: '삭제' })
+  if (live && live.enabled !== enabled) parts.push({ value: enabled ? '활성으로' : '비활성으로' })
+  if (live && live.requires_auth !== requiresAuth) parts.push({ value: requiresAuth ? '인증 필요로' : '인증 불필요로' })
+  return parts.length === 0 ? [{ value: '바뀌는 값 없음' }] : parts
 }
 
 function formatSummary(
@@ -131,25 +139,26 @@ function formatSummary(
   action: string,
   params: Record<string, unknown>,
   liveConfig?: LiveConfig | null,
-): string {
+): SumItem[] {
   const p = params ?? {}
+  const one = (value: string): SumItem[] => (value ? [{ value }] : [])
   if (feature === 'remote_config') {
-    if (action === 'delete') return '설정과 모든 필드 삭제'
+    if (action === 'delete') return one('설정과 모든 필드 삭제')
     return configSummary(p, liveConfig)
   }
   if (feature === 'leaderboard_field') {
-    if (action === 'attach') return `${str(p['code'])} 리더보드에서 사용으로 변경`
-    if (action === 'detach') return `${str(p['code'])} 리더보드에서 사용 안 함으로 변경`
-    if (action === 'drop') return '필드 목록에서 삭제'
-    return fieldSummary(p, action)
+    if (action === 'attach') return one(`${str(p['code'])} 리더보드에서 사용으로 변경`)
+    if (action === 'detach') return one(`${str(p['code'])} 리더보드에서 사용 안 함으로 변경`)
+    if (action === 'drop') return one('필드 목록에서 삭제')
+    return one(fieldSummary(p, action))
   }
   if (feature === 'user_data_field') {
-    if (action === 'drop') return '필드 목록에서 삭제'
-    return fieldSummary(p, action)
+    if (action === 'drop') return one('필드 목록에서 삭제')
+    return one(fieldSummary(p, action))
   }
   if (feature === 'leaderboard_table') {
-    if (action === 'delete') return '리더보드와 기록 전체 삭제'
-    return tableSummary(p)
+    if (action === 'delete') return one('리더보드와 기록 전체 삭제')
+    return one(tableSummary(p))
   }
   return genericSummary(p)
 }
@@ -232,6 +241,8 @@ export default function SchemaChanges({
   }, [target, hasConfigDraft, drafts])
   const liveConfigOf = (key: string): LiveConfig | null | undefined =>
     liveConfigs ? liveConfigs.get(key) ?? null : undefined
+  const draftSummaryItems = (d: DraftRow) => formatSummary(d.feature, d.action, d.params, liveConfigOf(d.object_name))
+  const opsSummaryOf = (v: VersionRow) => (v.ops ?? []).map((o) => opLabel(o.feature, o.action)).join(' · ')
 
   const hasDestructiveDraft = drafts.some((d) => isDestructive(d.feature, d.action))
   const summaryOf = (rows: DraftRow[]) => Array.from(new Set(rows.map((d) => opLabel(d.feature, d.action)))).join(', ')
@@ -346,131 +357,84 @@ export default function SchemaChanges({
             삭제 작업이 포함돼 있습니다. 게시 후에는 자동 되돌리기가 불가하며 데이터가 사라집니다.
           </div>
         )}
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-5 py-2.5 font-medium">작업</th>
-                <th className="text-left px-4 py-2.5 font-medium">대상</th>
-                <th className="text-left px-4 py-2.5 font-medium">내용</th>
-                <th className="px-4 py-2.5 w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {draftLoading || draftFailed || drafts.length === 0 ? (
-                <TableStatusRow
-                  loading={draftLoading}
-                  failed={draftFailed}
-                  empty={drafts.length === 0}
-                  colSpan={4}
-                  emptyText="대기 중 변경이 없습니다. 각 관리 화면에서 변경을 담으세요."
-                />
-              ) : (
-                drafts.map((d) => (
-                  <tr key={d.id} className="border-t border-neutral-100">
-                    <td className="px-5 py-3">
-                      <span className={isDestructive(d.feature, d.action) ? 'text-red-600' : ''}>
-                        {opLabel(d.feature, d.action)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{d.object_name}</td>
-                    {d.feature === 'remote_config' ? (
-                      <td className="px-4 py-3 text-xs text-neutral-500 max-w-[360px] break-words">
-                        {formatSummary(d.feature, d.action, d.params, liveConfigOf(d.object_name))}
-                      </td>
-                    ) : (
-                      <td className="px-4 py-3 text-xs text-neutral-500 max-w-[360px] truncate" title={formatSummary(d.feature, d.action, d.params)}>
-                        {formatSummary(d.feature, d.action, d.params)}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => void discardOne(d.id)}
-                        disabled={busy}
-                        title="취소"
-                        className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-red-600"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            {
+              key: 'op', header: '작업', kind: 'name',
+              cell: (d) => <span className={isDestructive(d.feature, d.action) ? 'text-red-600' : ''}>{opLabel(d.feature, d.action)}</span>,
+            },
+            { key: 'target', header: '대상', kind: 'mono', cell: (d) => d.object_name },
+            {
+              key: 'summary', header: '내용', kind: 'text',
+              full: (d) => summaryText(draftSummaryItems(d)),
+              cell: (d) => { const s = draftSummaryItems(d); return s.length ? <SummaryView items={s} /> : null },
+            },
+            {
+              key: 'actions', header: '', kind: 'actions', cell: (d) => (
+                <Button variant="dangerOutline" size="sm" disabled={busy}
+                  onClick={(e) => { e.stopPropagation(); void discardOne(d.id) }}
+                >
+                  <Trash2 className="w-3 h-3" />취소
+                </Button>
+              ),
+            },
+          ]}
+          rows={drafts}
+          rowKey={(d) => String(d.id)}
+          loading={draftLoading}
+          failed={draftFailed}
+          emptyText="대기 중 변경이 없습니다. 각 관리 화면에서 변경을 담으세요."
+          // 원격 설정은 바뀌는 필드가 여럿이라 한 줄에 다 안 들어간다 — 눌러서 전부 본다.
+          expand={(d) => {
+            if (d.feature !== 'remote_config') return null
+            const s = draftSummaryItems(d)
+            return s.length ? <SummaryView items={s} wrap /> : null
+          }}
+        />
       </WhiteCard>
 
-      <WhiteCard>
-        <div className="p-5 pb-3">
-          <CardHeader title="게시 이력" description="게시한 변경을 버전마다 보고 되돌립니다." />
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-5 py-2.5 font-medium">버전</th>
-                <th className="text-left px-4 py-2.5 font-medium">게시 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium">이름</th>
-                <th className="text-left px-4 py-2.5 font-medium">게시자</th>
-                <th className="text-right px-4 py-2.5 font-medium">변경 수</th>
-                <th className="text-left px-4 py-2.5 font-medium">상태</th>
-                <th className="px-4 py-2.5 w-28"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {versionsLoading || versionsFailed || versions.length === 0 ? (
-                <TableStatusRow
-                  loading={versionsLoading}
-                  failed={versionsFailed}
-                  empty={versions.length === 0}
-                  colSpan={7}
-                  emptyText="게시된 버전이 없습니다."
-                />
+      <TableCard
+        title="게시 이력"
+        description="게시한 변경을 버전마다 보고 되돌립니다."
+        columns={[
+          { key: 'id', header: '버전', kind: 'name', cell: (v) => `#${v.id}` },
+          { key: 'at', header: '게시 시각', kind: 'datetime', cell: (v) => formatDateTime(v.published_at) },
+          { key: 'label', header: '이름', kind: 'text', cell: (v) => v.label || opsSummaryOf(v) || null },
+          { key: 'operator', header: '게시자', kind: 'name', cell: (v) => v.operator },
+          { key: 'count', header: '변경 수', kind: 'number', cell: (v) => formatCount(v.op_count) },
+          {
+            key: 'status', header: '상태', kind: 'status', cell: (v) =>
+              v.status === 'reverted' ? (
+                <span title={v.reverted_at ? `${formatDateTime(v.reverted_at)}${v.reverted_by ? ` · ${v.reverted_by}` : ''}` : undefined}>
+                  <StatusText tone="muted">되돌림</StatusText>
+                </span>
+              ) : v.reversible ? (
+                <StatusText tone="ok">게시됨</StatusText>
               ) : (
-                versions.map((v) => {
-                  const opsSummary = (v.ops ?? []).map((o) => opLabel(o.feature, o.action)).join(', ')
-                  const reverted = v.status === 'reverted'
-                  return (
-                    <tr key={v.id} className="border-t border-neutral-100">
-                      <td className="px-5 py-3">#{v.id}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(v.published_at)}</td>
-                      <td className="px-4 py-3 max-w-[220px] truncate" title={v.label || opsSummary}>
-                        {v.label || opsSummary || <span className="text-neutral-400">(이름 없음)</span>}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-neutral-600">{v.operator ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{formatCount(v.op_count)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {reverted ? (
-                          <span
-                            className="text-xs text-neutral-500"
-                            title={v.reverted_at ? `${formatDateTime(v.reverted_at)}${v.reverted_by ? ` · ${v.reverted_by}` : ''}` : undefined}
-                          >
-                            되돌림
-                          </span>
-                        ) : v.reversible ? (
-                          <span className="text-xs text-emerald-600">게시됨</span>
-                        ) : (
-                          <span className="text-xs text-amber-600">게시됨 · 되돌리기 불가</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button variant="outline" size="sm"
-                          onClick={() => { setDialogError(''); setRevertTarget(v) }}
-                          disabled={busy || reverted || !v.reversible}
-                          title={!v.reversible ? '삭제 작업이 포함돼 되돌릴 수 없습니다' : reverted ? '이미 되돌림' : '되돌리기'}
-                        >
-                          <RotateCcw className="w-3 h-3" /> 되돌리기
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+                <StatusText tone="warn">게시됨 · 되돌리기 불가</StatusText>
+              ),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (v) => {
+              const reverted = v.status === 'reverted'
+              return (
+                <Button variant="outline" size="sm"
+                  onClick={() => { setDialogError(''); setRevertTarget(v) }}
+                  disabled={busy || reverted || !v.reversible}
+                  title={!v.reversible ? '삭제 작업이 포함돼 되돌릴 수 없습니다' : reverted ? '이미 되돌림' : '되돌리기'}
+                >
+                  <RotateCcw className="w-3 h-3" /> 되돌리기
+                </Button>
+              )
+            },
+          },
+        ]}
+        rows={versions}
+        rowKey={(v) => String(v.id)}
+        loading={versionsLoading}
+        failed={versionsFailed}
+        emptyText="게시된 버전이 없습니다."
+      />
 
       {/* 게시 확인 모달 — 이름은 여기서 선택 입력 */}
       {showPublish && (
@@ -511,7 +475,7 @@ export default function SchemaChanges({
 
       <ConfirmDialog
         open={askDiscardAll}
-        title="대기 중 변경 모두 취소"
+        title="변경 모두 취소"
         confirmLabel="모두 취소"
         danger
         busy={busy}

@@ -5,14 +5,22 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { Button } from '../../components/ui/Button'
 import { EditDialog } from '../../components/ui/EditDialog'
 import { formatDateTime } from '../../components/ui/format'
+import { DataTable, type Column } from '../../components/ui/DataTable'
 
 type PreviewRow = { column: string; data_type: string; current: unknown; restored: unknown }
 
 function show(v: unknown): string {
-  if (v === null || v === undefined) return '—'
+  if (v === null || v === undefined) return ''
   if (typeof v === 'object') return JSON.stringify(v)
   if (typeof v === 'boolean') return v ? '참' : '거짓'
   return String(v)
+}
+
+// 값 없음(NULL)은 표가 "-" 로 채우고, 빈 글자는 따옴표 둘로 보인다 — 둘 사이만 바뀌는 칸도 무엇이 바뀌는지 갈린다.
+function valueCell(v: unknown, tone: string) {
+  if (v === null || v === undefined) return null
+  const s = show(v)
+  return <span className={`font-mono text-xs ${tone}`}>{s === '' ? '""' : s}</span>
 }
 
 /** 세이브를 어떤 변경 직전 상태로 되돌린다. 바뀌는 칸을 먼저 보여 주고, 고른 칸만 쓴다. */
@@ -74,7 +82,7 @@ export function RestoreSaveModal({
 
   return (
     <EditDialog
-      title="이 변경 전으로 되돌리기"
+      title="데이터 되돌리기"
       description={playerName}
       size="xl"
       busy={busy}
@@ -96,27 +104,23 @@ export function RestoreSaveModal({
           ) : rows.length === 0 ? (
             !error && <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm text-neutral-600">지금 값이 그때와 같아 되돌릴 칸이 없습니다.</div>
           ) : (
-            <div className="max-h-80 overflow-auto border border-neutral-200 rounded-md">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-500 text-xs sticky top-0">
-                  <tr>
-                    <th className="w-8" />
-                    <th className="text-left px-3 py-2 font-medium">필드</th>
-                    <th className="text-left px-3 py-2 font-medium">지금</th>
-                    <th className="text-left px-3 py-2 font-medium">되돌린 뒤</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.column} className="border-t border-neutral-100 cursor-pointer" onClick={() => toggle(r.column)}>
-                      <td className="pl-3"><input type="checkbox" checked={picked.has(r.column)} onChange={() => toggle(r.column)} onClick={(e) => e.stopPropagation()} /></td>
-                      <td className="px-3 py-2 font-medium">{r.column}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-neutral-500 max-w-[220px] truncate" title={show(r.current)}>{show(r.current)}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-neutral-800 max-w-[220px] truncate" title={show(r.restored)}>{show(r.restored)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="border border-neutral-200 rounded-md overflow-hidden">
+              <DataTable
+                maxHeight="max-h-80"
+                columns={[
+                  {
+                    key: 'pick', header: '', kind: 'status', cell: (r) => (
+                      <input type="checkbox" checked={picked.has(r.column)} onChange={() => toggle(r.column)} onClick={(e) => e.stopPropagation()} />
+                    ),
+                  },
+                  { key: 'column', header: '필드', kind: 'mono', cell: (r) => r.column },
+                  { key: 'current', header: '지금', kind: 'text', cell: (r) => valueCell(r.current, 'text-neutral-500'), full: (r) => show(r.current) },
+                  { key: 'restored', header: '되돌린 뒤', kind: 'text', cell: (r) => valueCell(r.restored, 'text-neutral-800'), full: (r) => show(r.restored) },
+                ] satisfies Column<PreviewRow>[]}
+                rows={rows}
+                rowKey={(r) => r.column}
+                onRowClick={(r) => toggle(r.column)}
+              />
             </div>
           )}
 

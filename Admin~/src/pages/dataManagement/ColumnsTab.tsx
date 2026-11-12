@@ -4,9 +4,8 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { SYSTEM_COLS } from '../../lib/userData'
 import { usePendingChanges } from '../../lib/pendingChanges'
-import { WhiteCard } from '../../components/ui/Card'
+import { TableCard } from '../../components/ui/DataTable'
 import { TableFooter } from '../../components/ui/TableFooter'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel, fieldTypeLabel, pgTypeLabel } from '../../lib/schemaLabels'
@@ -88,7 +87,7 @@ function fromPgDefault(pgDefault: string | null, type: CSharpType): string {
 // 목록의 기본값 칸 — DB 표기('abc'::text, now())를 운영자가 읽는 값으로.
 function defaultLabel(col: Col): string {
   const t = PG_TO_CSHARP[col.data_type]
-  if (!col.column_default) return '—'
+  if (!col.column_default) return ''
   if (!t) return col.column_default
   const v = fromPgDefault(col.column_default, t)
   if (v === 'now()') return '저장되는 시각'
@@ -489,52 +488,37 @@ export default function ColumnsTab({
         </div>
       </div>
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-5 py-2.5 font-medium">필드</th>
-              <th className="text-left px-5 py-2.5 font-medium">타입</th>
-              <th className="text-left px-5 py-2.5 font-medium">기본값</th>
-              <th className="px-3 py-2.5 w-16" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading || filtered.length === 0 ? (
-              <TableStatusRow
-                loading={loading}
-                empty={filtered.length === 0}
-                failed={failed}
-                colSpan={4}
-                emptyText={cols.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
-              />
-            ) : (
-              pageRows.map((c) => (
-                <tr key={c.column_name} className="border-t border-neutral-100">
-                  <td className="px-5 py-3 font-medium">{c.column_name}</td>
-                  <td className="px-5 py-3">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">{pgTypeLabel(c.data_type)}</span>
-                  </td>
-                  <td className="px-5 py-3 text-neutral-600 text-xs" title={c.column_default ?? undefined}>{defaultLabel(c)}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setEditCol(c)} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => setDeleteCol(c)} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        {total > 0 && (
+      <TableCard
+        columns={[
+          { key: 'name', header: '필드', kind: 'mono', cell: (c) => c.column_name },
+          {
+            key: 'type', header: '타입', kind: 'name', cell: (c) => (
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(c.data_type)}</span>
+            ),
+          },
+          { key: 'default', header: '기본값', kind: 'text', cell: (c) => defaultLabel(c), full: (c) => c.column_default ?? '' },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (c) => (
+              <span className="inline-flex gap-1.5">
+                <button onClick={() => setEditCol(c)} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setDeleteCol(c)} title="필드 삭제" aria-label="필드 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ),
+          },
+        ]}
+        rows={pageRows}
+        rowKey={(c) => c.column_name}
+        loading={loading}
+        failed={failed}
+        emptyText={cols.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
+        footer={total > 0 && (
           <TableFooter summary={<>{start}–{end} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
-      </WhiteCard>
+      />
 
       {showAdd && (
         <AddColumnModal

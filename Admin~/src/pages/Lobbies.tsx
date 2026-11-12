@@ -4,7 +4,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { WhiteCard } from '../components/ui/Card'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../components/ui/DataTable'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime, formatCount, formatTotal } from '../components/ui/format'
 import { inputCls } from '../components/ui/Input'
@@ -82,7 +82,6 @@ function LobbyList({
   const [failed, setFailed] = useState(false)
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
-  const [openId, setOpenId] = useState<string | null>(null)
 
   // 쪽을 빠르게 넘기면 늦게 온 앞 쪽 응답이 지금 쪽을 덮는다. 마지막 요청만 반영한다.
   const loadReq = useRef(0)
@@ -132,63 +131,39 @@ function LobbyList({
         </FilterBar>
       </WhiteCard>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">만든 시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">방</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">게임 코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium w-28 whitespace-nowrap">참가·초대 / 최대</th>
-                <th className="text-left px-4 py-2.5 font-medium">참가자</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={6} emptyText="로비가 없습니다." />
-              ) : (
-                rows.map((l) => {
-                  const active = l.members.filter((m) => m.status === 'invited' || m.status === 'accepted').length
-                  const expanded = openId === l.lobby_id
-                  return (
-                    <tr key={l.lobby_id} className="border-t border-neutral-100 align-top">
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(l.created_at)}</td>
-                      <td className="px-4 py-3 text-neutral-700">{l.name || <span className="text-neutral-400">이름 없음</span>}</td>
-                      <td className="px-4 py-3 text-neutral-700">{l.game_code}</td>
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{LOBBY_STATUS_LABEL[l.status] ?? l.status}</td>
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{active} / {l.max_members}</td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => setOpenId(expanded ? null : l.lobby_id)}
-                          className="text-[#1677ff] hover:underline text-xs whitespace-nowrap"
-                        >
-                          {expanded ? '접기' : `참가자 ${formatCount(l.members.length)}명 보기`}
-                        </button>
-                        {expanded && (
-                          <div className="mt-2 space-y-1">
-                            {l.members.map((m) => (
-                              <div key={m.account_id} className="flex items-center gap-2 text-xs">
-                                <PlayerLink accountId={m.account_id} name={m.display_name} />
-                                {m.account_id === l.host_account_id && <span className="text-neutral-400">방장</span>}
-                                <span className="text-neutral-500">{MEMBER_STATUS_LABEL[m.status] ?? m.status}</span>
-                                <MetaText meta={m.metadata} />
-                              </div>
-                            ))}
-                            <MetaText meta={l.metadata} label="방 정보" />
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        wide
+        columns={[
+          { key: 'created', header: '만든 시각', kind: 'datetime', cell: (l) => formatDateTime(l.created_at) },
+          { key: 'name', header: '방', kind: 'name', cell: (l) => l.name },
+          { key: 'game', header: '게임 코드', kind: 'mono', cell: (l) => l.game_code },
+          { key: 'status', header: '상태', kind: 'status', cell: (l) => LOBBY_STATUS_LABEL[l.status] ?? l.status },
+          {
+            key: 'capacity', header: '참가·초대 / 최대', kind: 'number',
+            cell: (l) => `${l.members.filter((m) => m.status === 'invited' || m.status === 'accepted').length} / ${l.max_members}`,
+          },
+          { key: 'members', header: '참가자', kind: 'number', cell: (l) => `${formatCount(l.members.length)}명` },
+        ] satisfies Column<LobbyRow>[]}
+        rows={rows}
+        rowKey={(l) => l.lobby_id}
+        loading={loading}
+        failed={failed}
+        emptyText="로비가 없습니다."
+        expand={(l) => (l.members.length === 0 && Object.keys(l.metadata ?? {}).length === 0 ? null : (
+          <div className="space-y-1">
+            {l.members.map((m) => (
+              <div key={m.account_id} className="flex items-center gap-2 text-xs">
+                <PlayerLink accountId={m.account_id} name={m.display_name} />
+                {m.account_id === l.host_account_id && <span className="text-neutral-400">방장</span>}
+                <span className="text-neutral-500">{MEMBER_STATUS_LABEL[m.status] ?? m.status}</span>
+                <MetaText meta={m.metadata} />
+              </div>
+            ))}
+            <MetaText meta={l.metadata} label="방 정보" />
+          </div>
+        ))}
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
     </>
   )
 }

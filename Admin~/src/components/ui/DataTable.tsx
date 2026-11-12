@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { TableStatusRow } from './TableStatusRow'
 import { CardHeader, WhiteCard } from './Card'
@@ -24,6 +24,10 @@ export type Column<T> = {
   cell: (row: T) => ReactNode
   /** text 칸에서 "…"로 잘렸을 때 마우스를 올리면 보일 전체 글. cell 이 글자 하나면 생략해도 그 글이 보인다. */
   full?: (row: T) => string
+  /** 값에 따라 칸 바탕이 달라지는 표(리텐션 색 지도 등)만 쓴다. 폭·정렬은 여전히 kind 가 정한다. */
+  cellStyle?: (row: T) => CSSProperties | undefined
+  /** 칸에 마우스를 올리면 보일 글(text 칸이 아닌 칸용 — text 칸은 full). */
+  cellTitle?: (row: T) => string | undefined
 }
 
 const HEAD: Record<ColumnKind, string> = {
@@ -70,6 +74,12 @@ export type DataTableProps<T> = {
    * 남는 폭은 칸마다 고루 나누지 않고 버튼 앞 마지막 칸이 받는다 — 나누면 짧은 계정 ID 칸까지 휑하게 넓어진다.
    */
   wide?: boolean
+  /** 표 높이 상한(예: 'max-h-96'). 넘치면 표 안에서 스크롤되고 머리 줄은 위에 붙어 있다. */
+  maxHeight?: string
+  /** 줄 꾸밈 — 선택한 줄·지운 줄처럼 상태를 줄 전체로 보일 때. */
+  rowClassName?: (row: T) => string | undefined
+  /** 줄에 붙일 속성 — 끌어서 순서 바꾸기처럼 줄 단위 이벤트가 필요할 때. className 은 rowClassName, 누르기는 onRowClick 으로(여기 넣으면 덮인다). */
+  rowProps?: (row: T, index: number) => HTMLAttributes<HTMLTableRowElement>
 }
 
 /** text 칸이 없는 wide 표에서 남는 폭을 받을 칸 — 버튼 칸을 뺀 마지막 칸. */
@@ -88,6 +98,9 @@ export function DataTable<T>({
   onRowClick,
   expand,
   wide = false,
+  maxHeight,
+  rowClassName,
+  rowProps,
 }: DataTableProps<T>) {
   const fill = wide || columns.some((c) => c.kind === 'text')
   const stretch = stretchKey(columns, wide)
@@ -113,9 +126,9 @@ export function DataTable<T>({
 
   const span = columns.length + (expand ? 1 : 0)
   return (
-    <div className="overflow-x-auto">
+    <div className={maxHeight ? `overflow-auto ${maxHeight}` : 'overflow-x-auto'}>
       <table ref={tableRef} className={`min-w-full text-sm ${stretch ? 'w-full' : ''}`}>
-        <thead className="bg-neutral-50 text-xs text-neutral-500">
+        <thead className={`bg-neutral-50 text-xs text-neutral-500 ${maxHeight ? 'sticky top-0 z-10' : ''}`}>
           <tr>
             {expand && <th className="w-8 pl-3 pr-0" aria-label="펼치기" />}
             {columns.map((c) => (
@@ -134,7 +147,11 @@ export function DataTable<T>({
             const click = canOpen ? () => setOpenKey(open ? null : key) : onRowClick && !expand ? () => onRowClick(r) : undefined
             return (
               <Fragment key={key}>
-                <tr onClick={click} className={`border-t border-neutral-100 ${click ? 'cursor-pointer hover:bg-neutral-50' : ''}`}>
+                <tr
+                  {...rowProps?.(r, i)}
+                  onClick={click}
+                  className={`border-t border-neutral-100 ${click ? 'cursor-pointer hover:bg-neutral-50' : ''} ${rowClassName?.(r) ?? ''}`}
+                >
                   {expand && (
                     <td className="w-8 pl-3 pr-0 text-neutral-400">
                       {canOpen && (open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
@@ -143,7 +160,14 @@ export function DataTable<T>({
                   {columns.map((c) => {
                     const v = c.cell(r)
                     return (
-                      <td key={c.key} className={`px-4 py-2.5 ${CELL[c.kind]}`}>
+                      <td
+                        key={c.key}
+                        className={`px-4 py-2.5 ${CELL[c.kind]}`}
+                        style={c.cellStyle?.(r)}
+                        title={c.cellTitle?.(r)}
+                        // 버튼 칸은 버튼 사이·옆 여백을 눌러도 줄이 눌린 것으로 치지 않는다(줄 고르기·펼치기).
+                        onClick={c.kind === 'actions' ? (e) => e.stopPropagation() : undefined}
+                      >
                         {isEmpty(v) ? EMPTY_MARK : c.kind === 'text'
                           ? <div className="truncate" title={c.full ? c.full(r) : typeof v === 'string' ? v : undefined}>{v}</div>
                           : v}

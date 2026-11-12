@@ -4,9 +4,9 @@ import { Search, Pencil, ExternalLink, History, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { fetchUserDataFields, isIntegerPgType, pgTypeToValueType, type UserDataField } from '../../lib/userData'
-import { CardHeader, WhiteCard } from '../../components/ui/Card'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../../components/ui/DataTable'
+import { TableFooter } from '../../components/ui/TableFooter'
 import { formatDateTime, diffPairs, diffSummary, formatTotal } from '../../components/ui/format'
 import { Pairs } from '../../components/ui/Pairs'
 import { pgTypeLabel } from '../../lib/schemaLabels'
@@ -24,7 +24,7 @@ type LogRow = { id: number; diff: Record<string, unknown>; source: string | null
 const PAGE_SIZE = 15
 
 function formatValue(v: unknown, dataType: string): string {
-  if (v === null || v === undefined) return '—'
+  if (v === null || v === undefined) return ''
   if (dataType === 'jsonb') return JSON.stringify(v)
   if (dataType === 'boolean') return v ? '참' : '거짓'
   return String(v)
@@ -313,111 +313,70 @@ export default function UserDataTab({
         </div>
       )}
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-5 py-2.5 font-medium">필드</th>
-              <th className="text-left px-4 py-2.5 font-medium">타입</th>
-              <th className="text-left px-4 py-2.5 font-medium">값</th>
-              <th className="px-3 py-2.5 w-16" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading || pageRows.length === 0 ? (
-              <TableStatusRow
-                loading={loading}
-                empty={pageRows.length === 0}
-                failed={failed}
-                colSpan={4}
-                emptyText={q ? '검색 결과가 없습니다.' : '필드가 없습니다.'}
-              />
-            ) : (
-              pageRows.map((f) => (
-                <tr key={f.column_name} className="border-t border-neutral-100">
-                  <td className="px-5 py-3 font-medium">{f.column_name}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
-                      {pgTypeLabel(f.data_type)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-neutral-600 font-mono text-xs max-w-[360px] truncate" title={formatValue(f.value, f.data_type)}>
-                    {formatValue(f.value, f.data_type)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <button
-                      onClick={() => setEditField(f)}
-                      title="값 수정"
-                      aria-label="값 수정"
-                      className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        {total > 0 && (
-          <div className="flex items-center justify-between border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">
-            <span>{start}–{end} / {formatTotal(total)}</span>
-            <div className="flex items-center gap-1">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-              >
-                이전
-              </button>
-              <span className="px-2">{page} / {totalPages}</span>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-2 py-1 rounded border border-neutral-200 disabled:opacity-40 hover:bg-neutral-50"
-              >
-                다음
-              </button>
-            </div>
-          </div>
+      <TableCard
+        columns={[
+          { key: 'name', header: '필드', kind: 'mono', cell: (f) => f.column_name },
+          {
+            key: 'type', header: '타입', kind: 'name', cell: (f) => (
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(f.data_type)}</span>
+            ),
+          },
+          {
+            key: 'value', header: '값', kind: 'text',
+            cell: (f) => {
+              const v = formatValue(f.value, f.data_type)
+              return v === '' ? null : <span className="font-mono text-xs text-neutral-600">{v}</span>
+            },
+            full: (f) => formatValue(f.value, f.data_type),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (f) => (
+              <span className="inline-flex gap-1.5">
+                <button
+                  onClick={() => setEditField(f)}
+                  title="값 수정"
+                  aria-label="값 수정"
+                  className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ),
+          },
+        ] satisfies Column<UserDataField>[]}
+        rows={pageRows}
+        rowKey={(f) => f.column_name}
+        loading={loading}
+        failed={failed}
+        emptyText={q ? '검색 결과가 없습니다.' : '필드가 없습니다.'}
+        footer={total > 0 && (
+          <TableFooter summary={<>{start}–{end} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
-      </WhiteCard>
+      />
 
-      <WhiteCard>
-        <div className="p-5 pb-3">
-          <CardHeader title="변경 이력" description="바뀌기 전 값을 최근 순으로 봅니다." />
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-5 py-2.5 font-medium whitespace-nowrap">시각</th>
-                <th className="text-left px-4 py-2.5 font-medium">출처</th>
-                <th className="text-left px-4 py-2.5 font-medium">바뀌기 전 값</th>
-                <th className="w-28" />
-              </tr>
-            </thead>
-            <tbody>
-              {logsLoading || logs.length === 0 ? (
-                <TableStatusRow loading={logsLoading} empty={logs.length === 0} failed={logsFailed} colSpan={4} emptyText="변경 이력이 없습니다." />
-              ) : (
-                logs.map((l) => (
-                  <tr key={l.id} className="border-t border-neutral-100">
-                    <td className="px-5 py-3 whitespace-nowrap">{formatDateTime(l.created_at)}</td>
-                    <td className="px-4 py-3 text-xs text-neutral-500">{l.source ?? '—'}</td>
-                    <td className="px-4 py-3 max-w-[420px] truncate" title={diffSummary(l.diff)}>
-                      {diffPairs(l.diff).length ? <Pairs items={diffPairs(l.diff)} /> : <span className="text-neutral-400">-</span>}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>이 변경 전으로</Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+      <TableCard
+        title="변경 이력"
+        description="바뀌기 전 값을 최근 순으로 봅니다."
+        columns={[
+          { key: 'at', header: '시각', kind: 'datetime', cell: (l) => formatDateTime(l.created_at) },
+          { key: 'source', header: '출처', kind: 'name', cell: (l) => l.source },
+          {
+            key: 'diff', header: '바뀌기 전 값', kind: 'text',
+            cell: (l) => diffPairs(l.diff).length ? <Pairs items={diffPairs(l.diff)} /> : null,
+            full: (l) => diffSummary(l.diff),
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (l) => (
+              <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>이 변경 전으로</Button>
+            ),
+          },
+        ] satisfies Column<LogRow>[]}
+        rows={logs}
+        rowKey={(l) => String(l.id)}
+        loading={logsLoading}
+        failed={logsFailed}
+        emptyText="변경 이력이 없습니다."
+      />
 
       {resetOpen && (
         <ResetSaveDialog

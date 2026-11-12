@@ -7,7 +7,8 @@ import { CardHeader, GroupBox, WhiteCard } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { EditDialog } from '../components/ui/EditDialog'
 import { InfoList } from '../components/ui/InfoList'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable } from '../components/ui/DataTable'
+import { StatusText } from '../components/ui/StatusText'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 
@@ -200,39 +201,36 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
             { label: 'iOS 기기', value: settings ? `${formatCount(settings.devices.ios)}대` : loading ? '…' : null },
             { label: '광고 수신 동의', value: settings ? `${formatCount(settings.devices.ad_consent)}명` : loading ? '…' : null },
           ]} />
-          <div className="overflow-auto border border-neutral-200 rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                <tr>
-                  <th className="text-left px-4 py-2.5 font-medium w-36">상황</th>
-                  <th className="text-left px-4 py-2.5 font-medium min-w-[14rem]">문구</th>
-                  <th className="text-right px-4 py-2.5 font-medium w-28 whitespace-nowrap">끈 플레이어</th>
-                  <th className="px-4 py-2.5 w-24" />
-                </tr>
-              </thead>
-              <tbody>
-                {loading || failed || !settings ? (
-                  <TableStatusRow loading={loading} failed={failed} empty={!settings} colSpan={4} />
-                ) : settings.triggers.map((t) => (
-                  <tr key={t.code} className="border-t border-neutral-100 align-top">
-                    <td className="px-4 py-3 text-neutral-800 whitespace-nowrap">{TRIGGER_LABEL[t.code] ?? t.code}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-neutral-900">{t.title}</div>
-                      <div className="text-neutral-600 break-words">{t.body}</div>
-                      {Object.keys(t.localized ?? {}).length > 0 && (
-                        <div className="mt-1 text-xs text-neutral-400">
-                          {Object.keys(t.localized).map((l) => LANG_LABEL[l] ?? l).join(' · ')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-neutral-700 whitespace-nowrap">{formatCount(t.off_count)}명</td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <Button variant="outline" size="compact" onClick={() => openEdit(t)}><Pencil className="w-3.5 h-3.5" />수정</Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="overflow-hidden border border-neutral-200 rounded-md">
+            <DataTable
+              columns={[
+                { key: 'code', header: '상황', kind: 'name', cell: (t) => TRIGGER_LABEL[t.code] ?? t.code },
+                {
+                  key: 'text', header: '문구', kind: 'text',
+                  full: (t) => `${t.title} · ${t.body}`,
+                  cell: (t) => (
+                    <>
+                      <div className="truncate font-medium">{t.title}</div>
+                      <div className="truncate text-neutral-600">{t.body}</div>
+                    </>
+                  ),
+                },
+                {
+                  key: 'langs', header: '다른 언어', kind: 'name',
+                  cell: (t) => Object.keys(t.localized ?? {}).map((l) => LANG_LABEL[l] ?? l).join(' · ') || null,
+                },
+                { key: 'off', header: '끈 플레이어', kind: 'number', cell: (t) => `${formatCount(t.off_count)}명` },
+                {
+                  key: 'actions', header: '', kind: 'actions', cell: (t) => (
+                    <Button variant="outline" size="sm" onClick={() => openEdit(t)}><Pencil className="w-3 h-3" />수정</Button>
+                  ),
+                },
+              ]}
+              rows={settings?.triggers ?? []}
+              rowKey={(t) => t.code}
+              loading={loading}
+              failed={failed}
+            />
           </div>
           <p className="text-xs text-neutral-500">알림을 받을지는 플레이어가 게임 설정에서 상황마다 정합니다.</p>
         </div>
@@ -353,60 +351,42 @@ function Results({ target, report }: { target: ProjectTarget; report: (e: unknow
   return (
     <div className="space-y-4">
       <GroupBox title="최근 7일">
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium">상황</th>
-                {['sent', 'skipped', 'failed', 'pending'].map((s) => (
-                  <th key={s} className="text-right px-4 py-2.5 font-medium w-24">{STATUS_LABEL[s]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading || failed || !stats ? (
-                <TableStatusRow loading={loading} failed={failed} empty={!stats} colSpan={5} />
-              ) : triggers.map((t) => (
-                <tr key={t} className="border-t border-neutral-100">
-                  <td className="px-4 py-2.5 text-neutral-800 whitespace-nowrap">{TRIGGER_LABEL[t]}</td>
-                  {['sent', 'skipped', 'failed', 'pending'].map((s) => (
-                    <td key={s} className={`px-4 py-2.5 text-right tabular-nums ${s === 'failed' && count(t, s) > 0 ? 'text-red-600' : 'text-neutral-700'}`}>
-                      {formatCount(count(t, s))}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          wide
+          columns={[
+            { key: 'trigger', header: '상황', kind: 'name', cell: (t) => TRIGGER_LABEL[t] },
+            ...(['sent', 'skipped', 'failed', 'pending'] as const).map((s) => ({
+              key: s, header: STATUS_LABEL[s], kind: 'number' as const,
+              cell: (t: string) => {
+                const n = count(t, s)
+                return s === 'failed' && n > 0 ? <span className="text-red-600">{formatCount(n)}</span> : formatCount(n)
+              },
+            })),
+          ]}
+          rows={stats ? triggers : []}
+          rowKey={(t) => t}
+          loading={loading}
+          failed={failed}
+        />
       </GroupBox>
 
       <GroupBox title="최근 실패·건너뜀">
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-44">시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-32">상황</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24">결과</th>
-                <th className="text-left px-4 py-2.5 font-medium min-w-[12rem]">사유</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || failed || !stats || stats.recent_problems.length === 0 ? (
-                <TableStatusRow loading={loading} failed={failed} empty={!stats || stats.recent_problems.length === 0} colSpan={4}
-                  emptyText="최근 7일 동안 실패·건너뜀이 없습니다." />
-              ) : stats.recent_problems.map((p) => (
-                <tr key={p.id} className="border-t border-neutral-100">
-                  <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(p.created_at)}</td>
-                  <td className="px-4 py-2.5 text-neutral-800 whitespace-nowrap">{TRIGGER_LABEL[p.trigger] ?? p.trigger}</td>
-                  <td className={`px-4 py-2.5 whitespace-nowrap ${p.status === 'failed' ? 'text-red-600' : 'text-neutral-600'}`}>{STATUS_LABEL[p.status] ?? p.status}</td>
-                  <td className="px-4 py-2.5 text-neutral-700 break-words">{p.result ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            { key: 'at', header: '시각', kind: 'datetime', cell: (p) => formatDateTime(p.created_at) },
+            { key: 'trigger', header: '상황', kind: 'name', cell: (p) => TRIGGER_LABEL[p.trigger] ?? p.trigger },
+            {
+              key: 'status', header: '결과', kind: 'status',
+              cell: (p) => <StatusText tone={p.status === 'failed' ? 'bad' : 'plain'}>{STATUS_LABEL[p.status] ?? p.status}</StatusText>,
+            },
+            { key: 'result', header: '사유', kind: 'text', cell: (p) => p.result },
+          ]}
+          rows={stats?.recent_problems ?? []}
+          rowKey={(p) => String(p.id)}
+          loading={loading}
+          failed={failed}
+          emptyText="최근 7일 동안 실패·건너뜀이 없습니다."
+        />
       </GroupBox>
     </div>
   )

@@ -7,7 +7,8 @@ import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
+import { StatusText, Tag, type Tone } from '../components/ui/StatusText'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
@@ -52,10 +53,10 @@ type BatchDetail = {
 const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어' }
 const STATUS_OPTIONS = ['전체', '미수령', '수령', '삭제']
 
-function statusOf(r: MailRow): { label: string; cls: string } {
-  if (r.deleted_at) return { label: '삭제', cls: 'bg-neutral-200 text-neutral-600' }
-  if (r.items_claimed_at) return { label: '수령', cls: 'bg-emerald-100 text-emerald-700' }
-  return { label: '미수령', cls: 'bg-brand-soft text-[#1677ff]' }
+function statusOf(r: MailRow): { label: string; tone: Tone } {
+  if (r.deleted_at) return { label: '삭제', tone: 'muted' }
+  if (r.items_claimed_at) return { label: '수령', tone: 'ok' }
+  return { label: '미수령', tone: 'plain' }
 }
 
 export default function MailRecords({
@@ -284,41 +285,44 @@ export default function MailRecords({
             </FilterBar>
           </WhiteCard>
 
-          <WhiteCard>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium w-20">대상</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-28">분류</th>
-                    <th className="text-left px-4 py-2.5 font-medium">제목</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-20">수신자</th>
-                    <th className="text-left px-4 py-2.5 font-medium">아이템</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-24">운영자</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">보낸 시각</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batchLoading || batches.length === 0 ? (
-                    <TableStatusRow loading={batchLoading} empty={batches.length === 0} failed={batchFailed} colSpan={7} emptyText="발송 이력이 없습니다." />
-                  ) : (
-                    batches.map((b) => (
-                      <tr key={b.id} className="border-t border-neutral-100 hover:bg-neutral-50 cursor-pointer" onClick={() => openBatch(b)}>
-                        <td className="px-4 py-3 whitespace-nowrap">{b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}{b.open_until ? ' · 나중에 들어온 플레이어도' : ''}{b.recalled_at ? ' · 거둠' : ''}</td>
-                        <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(b.category)}</td>
-                        <td className="px-4 py-3">{b.title}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{formatCount(b.recipient_count)}</td>
-                        <td className="px-4 py-3 text-neutral-600">{itemsText(b.items, catalog)}</td>
-                        <td className="px-4 py-3 text-neutral-600">{b.created_by ?? '-'}</td>
-                        <td className="px-4 py-3 text-neutral-600">{formatDateTime(b.created_at)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TableFooter summary={formatTotal(batchTotal)} page={batchPage} totalPages={batchTotalPages} onPageChange={setBatchPage} />
-          </WhiteCard>
+          <TableCard
+            wide
+            columns={[
+              {
+                key: 'target', header: '대상', kind: 'name', cell: (b) => (
+                  <>
+                    <span className="inline-flex items-center gap-1.5">
+                      {b.recalled_at && <Tag>거둠</Tag>}
+                      {b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}
+                    </span>
+                    {b.open_until && <div className="text-xs text-neutral-500">나중에 들어온 플레이어도</div>}
+                  </>
+                ),
+              },
+              { key: 'category', header: '분류', kind: 'name', cell: (b) => (b.category ? catLabel(b.category) : null) },
+              {
+                // 아이템은 제목 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 표가 옆으로 넘친다.
+                key: 'title', header: '제목', kind: 'text',
+                full: (b) => (b.items?.length ? `${b.title} · ${itemsText(b.items, catalog)}` : b.title),
+                cell: (b) => (
+                  <>
+                    <div className="truncate">{b.title}</div>
+                    {!!b.items?.length && <div className="truncate text-xs text-neutral-500">{itemsText(b.items, catalog)}</div>}
+                  </>
+                ),
+              },
+              { key: 'recipients', header: '수신자', kind: 'number', cell: (b) => formatCount(b.recipient_count) },
+              { key: 'by', header: '운영자', kind: 'name', cell: (b) => b.created_by },
+              { key: 'at', header: '보낸 시각', kind: 'datetime', cell: (b) => formatDateTime(b.created_at) },
+            ]}
+            rows={batches}
+            rowKey={(b) => b.id}
+            loading={batchLoading}
+            failed={batchFailed}
+            emptyText="발송 이력이 없습니다."
+            onRowClick={openBatch}
+            footer={<TableFooter summary={formatTotal(batchTotal)} page={batchPage} totalPages={batchTotalPages} onPageChange={setBatchPage} />}
+          />
         </>
       )}
 
@@ -397,48 +401,34 @@ export default function MailRecords({
             </FilterBar>
           </WhiteCard>
 
-          <WhiteCard>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium w-20">상태</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-24">분류</th>
-                    <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
-                    <th className="text-left px-4 py-2.5 font-medium">아이템</th>
-                    <th className="text-left px-4 py-2.5 font-medium">메시지</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">받은 시각</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">만료 시각</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">등록 시각</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recLoading || rows.length === 0 ? (
-                    <TableStatusRow loading={recLoading} empty={rows.length === 0} failed={recFailed} colSpan={8} emptyText="우편 내역이 없습니다." />
-                  ) : (
-                    rows.map((r) => {
-                      const st = statusOf(r)
-                      return (
-                        <tr key={r.id} className="border-t border-neutral-100 hover:bg-neutral-50/50">
-                          <td className="px-4 py-3 whitespace-nowrap"><span className={'inline-flex items-center px-2 py-0.5 rounded text-xs ' + st.cls}>{st.label}</span></td>
-                          <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{catLabel(r.category)}</td>
-                          <td className="px-4 py-3">
-                            <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />
-                          </td>
-                          <td className="px-4 py-3 text-neutral-600">{itemsText(r.items, catalog)}</td>
-                          <td className="px-4 py-3 text-neutral-700">{r.title || '-'}</td>
-                          <td className="px-4 py-3 text-neutral-600">{r.items_claimed_at ? formatDateTime(r.items_claimed_at) : '-'}</td>
-                          <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.expires_at)}</td>
-                          <td className="px-4 py-3 text-neutral-600">{formatDateTime(r.created_at)}</td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-          </WhiteCard>
+          <TableCard
+            wide
+            columns={[
+              { key: 'status', header: '상태', kind: 'status', cell: (r) => { const st = statusOf(r); return <StatusText tone={st.tone}>{st.label}</StatusText> } },
+              { key: 'category', header: '분류', kind: 'name', cell: (r) => (r.category ? catLabel(r.category) : null) },
+              { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} /> },
+              {
+                // 아이템은 메시지 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 표가 옆으로 넘친다.
+                key: 'title', header: '메시지', kind: 'text',
+                full: (r) => [r.title, r.items?.length ? itemsText(r.items, catalog) : ''].filter(Boolean).join(' · '),
+                cell: (r) => (!r.title && !r.items?.length ? null : (
+                  <>
+                    <div className="truncate">{r.title || '-'}</div>
+                    {!!r.items?.length && <div className="truncate text-xs text-neutral-500">{itemsText(r.items, catalog)}</div>}
+                  </>
+                )),
+              },
+              { key: 'claimed', header: '받은 시각', kind: 'datetime', cell: (r) => (r.items_claimed_at ? formatDateTime(r.items_claimed_at) : null) },
+              { key: 'expires', header: '만료 시각', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
+              { key: 'created', header: '등록 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+            ]}
+            rows={rows}
+            rowKey={(r) => r.id}
+            loading={recLoading}
+            failed={recFailed}
+            emptyText="우편 내역이 없습니다."
+            footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+          />
         </>
       )}
     </div>

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
+import { StatusText } from '../components/ui/StatusText'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -152,7 +152,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
 
       <ConfirmDialog
         open={confirmMode}
-        title="결과 확인 방식 변경"
+        title="확인 방식 변경"
         confirmLabel="바꾸기"
         danger
         busy={saving}
@@ -249,59 +249,38 @@ export default function MatchRewards({
       />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-44">게임 코드</th>
-                <th className="text-left px-4 py-2.5 font-medium w-24 whitespace-nowrap">확인 방식</th>
-                <th className="text-right px-4 py-2.5 font-medium w-24">기록</th>
-                <th className="text-right px-4 py-2.5 font-medium w-24">플레이어</th>
-                <th className="text-left px-4 py-2.5 font-medium w-40">최근 신고</th>
-                <th className="px-4 py-2.5 w-20" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow
-                  loading={loading}
-                  empty={rows.length === 0}
-                  failed={listFailed}
-                  colSpan={6}
-                  emptyText="등록된 게임 코드가 없습니다."
-                />
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.game_code} className="border-t border-neutral-100">
-                    <td className="px-4 py-3 font-mono text-neutral-800 whitespace-nowrap">{r.game_code}</td>
-                    {r.config ? (
-                      <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{MODE_LABEL[r.config.mode] ?? r.config.mode}</td>
-                    ) : (
-                      <td className="px-4 py-3 text-red-600 whitespace-nowrap">등록 안 됨</td>
-                    )}
-                    <td className="px-4 py-3 text-right text-neutral-600 whitespace-nowrap">{r.record_count.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-neutral-600 whitespace-nowrap">{r.player_count.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.last_reported_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setEditRow(r)} title={r.config ? '수정' : '설정 만들기'} aria-label={r.config ? '수정' : '설정 만들기'} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-                          {r.config ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                        </button>
-                        {r.config && (
-                          <button onClick={() => { setDelError(''); setDelRow(r) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+      <TableCard
+        columns={[
+          { key: 'code', header: '게임 코드', kind: 'mono', cell: (r) => r.game_code },
+          {
+            key: 'mode', header: '확인 방식', kind: 'status', cell: (r) => r.config
+              ? MODE_LABEL[r.config.mode] ?? r.config.mode
+              : <StatusText tone="bad">등록 안 됨</StatusText>,
+          },
+          { key: 'records', header: '기록', kind: 'number', cell: (r) => r.record_count.toLocaleString() },
+          { key: 'players', header: '플레이어', kind: 'number', cell: (r) => r.player_count.toLocaleString() },
+          { key: 'last', header: '최근 신고', kind: 'datetime', cell: (r) => r.last_reported_at ? formatDateTime(r.last_reported_at) : null },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (r) => (
+              <span className="inline-flex gap-1.5">
+                <button onClick={() => setEditRow(r)} title={r.config ? '수정' : '설정 만들기'} aria-label={r.config ? '수정' : '설정 만들기'} className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                  {r.config ? <Pencil className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                </button>
+                {r.config ? (
+                  <button onClick={() => { setDelError(''); setDelRow(r) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                ) : <span className="w-7 h-7" />}
+              </span>
+            ),
+          },
+        ]}
+        rows={rows}
+        rowKey={(r) => r.game_code}
+        loading={loading}
+        failed={listFailed}
+        emptyText="등록된 게임 코드가 없습니다."
+      />
 
       {(creating || editRow) && (
         <RewardModal

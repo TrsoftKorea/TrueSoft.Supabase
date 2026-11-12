@@ -77,7 +77,7 @@ function ensureSchema(db: D1Database): Promise<void> {
       // 이 시각보다 먼저 받은 표는 무효다(verifyToken). 초대를 지우면 비밀번호 행도 지워지므로 끊는 시각을 따로 둔다 —
       // 그 행에만 두면 다시 초대했을 때 지우기 전에 받은 표가 되살아난다.
       db.prepare('create table if not exists token_cutoffs (email text primary key, cut_at text not null)'),
-      // 비밀번호 로그인 시도 수(성공하면 지운다). 이메일마다 LOGIN_WINDOW 안에 LOGIN_MAX_FAILURES 번 틀리면 그만큼 막는다.
+      // 비밀번호 로그인 시도 수(성공하면 지운다). email 칸은 세는 단위다 — 이메일 하나 또는 "이메일 접속주소"(loginKeys).
       db.prepare(`create table if not exists login_failures (
         email text primary key,
         count integer not null,
@@ -194,15 +194,50 @@ async function passwordMatches(password: string, stored: string): Promise<boolea
 const DUMMY_HASH = `pbkdf2$${PBKDF2_ITERATIONS}$${'A'.repeat(22)}==$${'A'.repeat(43)}=`
 
 // ── 비밀번호 로그인 실패 제한 ─────────────────────────────────────────────────────
-const LOGIN_MAX_FAILURES = 5
+// 같은 접속 주소에서는 5번, 이메일 하나에는 주소를 가리지 않고 50번. 이메일 하나에만 5번을 걸면 이메일만 아는 남이
+// 15분마다 틀리게 보내 그 운영자를 계속 막을 수 있다. 주소를 바꿔 가며 맞혀 보는 쪽은 이메일 기준 50번이 막는다.
+const LOGIN_MAX_PER_ADDRESS = 5
+const LOGIN_MAX_PER_EMAIL = 50
 const LOGIN_WINDOW_MS = 15 * 60_000
+
+/**
+ * 주소별로 셀 단위. IPv6 는 한 사람(회선)이 앞 64비트 묶음 하나를 통째로 받아 그 안에서 주소를 마음대로 바꿀 수 있어
+ * 주소 하나로 세면 주소별 한도가 의미가 없다 — 앞 네 덩어리로 묶는다.
+ */
+function addressKey(ip: string): string {
+  if (!ip.includes(':')) return ip
+  const [head = '', tail = ''] = ip.toLowerCase().split('::')
+  const h = head ? head.split(':') : []
+  const t = ip.includes('::') ? (tail ? tail.split(':') : []) : []
+  const full = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t]
+  return `${full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, '')).join(':')}::/64`
+}
+
+const loginKeys = (email: string, ip: string) => ({ email, pair: `${email} ${addressKey(ip)}` })
+
+// 이메일에 공백이 없으므로(EMAIL_RE) "이메일 " 로 시작하는 줄은 그 이메일의 주소별 줄뿐이다.
+const clearLoginFailures = (db: D1Database, email: string) =>
+  db.prepare("delete from login_failures where email = ?1 or substr(email, 1, length(?1) + 1) = ?1 || ' '").bind(email)
+
+/** 맞혀 보기 전에 주소별·이메일별로 하나씩 센다. 주소에서 막혔으면 이메일 쪽은 세지 않는다. */
+async function claimLoginAttempts(db: D1Database, email: string, ip: string): Promise<void> {
+  const k = loginKeys(email, ip)
+  await claimLoginAttempt(db, k.pair, LOGIN_MAX_PER_ADDRESS)
+  await claimLoginAttempt(db, k.email, LOGIN_MAX_PER_EMAIL)
+}
+
+/** 맞혔으면 이 주소의 줄과 이메일 줄을 지운다. 다른 주소의 줄은 남긴다 — 남이 쌓은 잠금까지 풀어 주지 않게. */
+const clearLoginSuccess = (db: D1Database, email: string, ip: string) => {
+  const k = loginKeys(email, ip)
+  return db.prepare('delete from login_failures where email in (?1, ?2)').bind(k.email, k.pair).run()
+}
 
 /**
  * 비밀번호를 맞춰 보기 전에 시도 하나를 센다 — 맞춰 본 뒤에 세면 한꺼번에 보낸 요청이 모두 확인을 통과한다.
  * 한 문장으로 세므로 동시 요청도 저마다 다른 번호를 받는다. 성공하면 기록을 지우므로 남은 수는 곧 틀린 수다.
- * 창 안에서 LOGIN_MAX_FAILURES 번을 넘는 시도부터 막고, 막힌 동안은 세지 않는다.
+ * 창 안에서 max 번을 넘는 시도부터 막고, 막힌 동안은 세지 않는다.
  */
-async function claimLoginAttempt(db: D1Database, email: string): Promise<void> {
+async function claimLoginAttempt(db: D1Database, key: string, max: number): Promise<void> {
   const now = Date.now()
   const nowIso = new Date(now).toISOString()
   // 없는 이메일로도 줄이 생기므로, 창도 잠금도 끝난 줄은 그때그때 지운다 — 안 지우면 아무나 줄을 끝없이 쌓는다.
@@ -224,7 +259,7 @@ async function claimLoginAttempt(db: D1Database, email: string): Promise<void> {
                                     when login_failures.count + 1 > ?5 then ?4
                                     else null end
               returning count, locked_until`)
-    .bind(email, nowIso, new Date(now - LOGIN_WINDOW_MS).toISOString(), new Date(now + LOGIN_WINDOW_MS).toISOString(), LOGIN_MAX_FAILURES)
+    .bind(key, nowIso, new Date(now - LOGIN_WINDOW_MS).toISOString(), new Date(now + LOGIN_WINDOW_MS).toISOString(), max)
     .first<{ count: number; locked_until: string | null }>()
   // 기록을 못 남겼으면 확인하지 않는다 — 세지 못한 채 비밀번호를 맞춰 보게 두지 않는다.
   if (!row) throw new HubError('로그인을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', 503)
@@ -303,7 +338,7 @@ const cleanEmail = (raw: string): string => {
   return email
 }
 
-async function handle(env: Env, action: string, params: Params, bearer: string): Promise<unknown> {
+async function handle(env: Env, action: string, params: Params, bearer: string, ip: string): Promise<unknown> {
   const db = env.HUB_DB
   await ensureSchema(db)
 
@@ -315,14 +350,14 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       let mustChange = false
       if (typeof params['password'] === 'string') {
         email = cleanEmail(str(params, 'email'))
-        await claimLoginAttempt(db, email)
+        await claimLoginAttempts(db, email, ip)
         const row = await db
           .prepare('select password_hash, must_change from passwords where email = ?')
           .bind(email)
           .first<{ password_hash: string; must_change: number }>()
         const matched = await passwordMatches(params['password'], row?.password_hash ?? DUMMY_HASH)
         if (!row || !matched) throw new HubError('이메일 또는 비밀번호가 올바르지 않습니다.', 401)
-        await db.prepare('delete from login_failures where email = ?').bind(email).run()
+        await clearLoginSuccess(db, email, ip)
         mustChange = row.must_change === 1
       } else {
         email = await verifyGoogleIdToken(str(params, 'idToken'), env.GOOGLE_CLIENT_ID)
@@ -347,9 +382,9 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       if (!row) throw new HubError('비밀번호로 들어온 계정만 바꿀 수 있습니다.', 400)
       const current = typeof params['currentPassword'] === 'string' ? params['currentPassword'] : ''
       // 지금 비밀번호 맞혀 보기도 로그인과 같은 횟수 제한을 받는다 — 표를 훔친 사람이 무제한으로 맞혀 보고 비밀번호를 바꾸지 못하게.
-      await claimLoginAttempt(db, email)
+      await claimLoginAttempts(db, email, ip)
       if (!(await passwordMatches(current, row.password_hash))) throw new HubError('지금 비밀번호가 올바르지 않습니다.', 400)
-      await db.prepare('delete from login_failures where email = ?').bind(email).run()
+      await clearLoginSuccess(db, email, ip)
       const next = typeof params['newPassword'] === 'string' ? params['newPassword'] : ''
       if (next.length < MIN_PASSWORD_LENGTH) throw new HubError(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400)
       if (next === current) throw new HubError('지금과 다른 비밀번호를 넣어 주세요.', 400)
@@ -415,7 +450,7 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
                     on conflict (email) do update set password_hash = excluded.password_hash,
                       updated_at = excluded.updated_at, updated_by = excluded.updated_by, must_change = 1`)
           .bind(email, await hashPassword(password), new Date().toISOString(), caller),
-        db.prepare('delete from login_failures where email = ?').bind(email),
+        clearLoginFailures(db, email),
       ])
       return { password }
     }
@@ -436,7 +471,7 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       await db.batch([
         db.prepare('delete from invites where email = ?').bind(email),
         db.prepare('delete from passwords where email = ?').bind(email),
-        db.prepare('delete from login_failures where email = ?').bind(email),
+        clearLoginFailures(db, email),
         db.prepare(`insert into token_cutoffs (email, cut_at) values (?, ?)
                     on conflict (email) do update set cut_at = excluded.cut_at`).bind(email, new Date().toISOString()),
       ])
@@ -461,8 +496,10 @@ export const onRequestPost = async ({ request, env }: Ctx): Promise<Response> =>
   }
   const auth = request.headers.get('Authorization') ?? ''
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  // 클라우드플레어가 넣는 접속 주소. 바깥 요청이 이 머리글을 꾸며 넣어도 클라우드플레어가 덮어쓴다. 로컬 실행에는 없다.
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'local'
   try {
-    return json({ ok: true, data: await handle(env, action, params, bearer) })
+    return json({ ok: true, data: await handle(env, action, params, bearer, ip) })
   } catch (e) {
     if (e instanceof HubError) return json({ ok: false, error: e.message }, e.status)
     console.error(`[hub] ${action} 실패: ${e}`)

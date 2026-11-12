@@ -8,7 +8,8 @@ import { callAdmin, callHub, NotAuthenticatedError } from '../lib/api'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable } from '../components/ui/DataTable'
+import { StatusText } from '../components/ui/StatusText'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
@@ -201,38 +202,33 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
         <p className="mt-2 text-xs text-neutral-400">초대할 사람의 이메일을 넣습니다.</p>
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-neutral-200">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">이메일</th>
-              <th className="text-left px-4 py-2.5 font-medium">이름</th>
-              <th className="text-left px-4 py-2.5 font-medium">초대한 사람</th>
-              <th className="text-left px-4 py-2.5 font-medium w-40">초대 시각</th>
-              <th className="px-4 py-2.5 w-56"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading || rows.length === 0 ? (
-              <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={5} emptyText="초대된 사람이 없습니다." />
-            ) : rows.map((r) => (
-              <tr key={r.email} className="border-t border-neutral-100">
-                <td className="px-4 py-2.5 font-mono text-xs">{r.email}</td>
-                <td className="px-4 py-2.5 whitespace-nowrap">{r.display_name || '-'}</td>
-                <td className="px-4 py-2.5 text-xs text-neutral-500">{r.invited_by ?? '-'}</td>
-                <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">{formatDateTime(r.invited_at)}</td>
-                <td className="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+      <div className="overflow-hidden rounded-md border border-neutral-200">
+        <DataTable
+          columns={[
+            { key: 'email', header: '이메일', kind: 'name', cell: (r) => r.email },
+            { key: 'name', header: '이름', kind: 'name', cell: (r) => r.display_name || null },
+            { key: 'by', header: '초대한 사람', kind: 'name', cell: (r) => r.invited_by },
+            { key: 'at', header: '초대 시각', kind: 'datetime', cell: (r) => formatDateTime(r.invited_at) },
+            {
+              key: 'actions', header: '', kind: 'actions', cell: (r) => (
+                <span className="inline-flex gap-1.5">
                   <Button variant="outline" size="sm" onClick={() => setPasswordTarget(r)}>
                     <RotateCcw className="w-3 h-3" /> 비밀번호 초기화
                   </Button>
                   <Button variant="dangerOutline" size="sm" onClick={() => { setDialogError(''); setRemoveTarget(r) }}>
                     <Trash2 className="w-3 h-3" /> 삭제
                   </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              ),
+            },
+          ]}
+          rows={rows}
+          rowKey={(r) => r.email}
+          loading={loading}
+          failed={failed}
+          emptyText="초대된 사람이 없습니다."
+          wide
+        />
       </div>
 
       <ConfirmDialog
@@ -421,57 +417,63 @@ function KeysCard({ report }: { report: (e: unknown, fallback: string) => void }
         description="프로젝트마다 Supabase 로그인 설정을 바꾸는 열쇠를 넣습니다."
         actions={<RefreshButton onClick={() => void load()} loading={rows.some((r) => r.state === 'loading')} />}
       />
-      <div className="overflow-x-auto rounded-md border border-neutral-200">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-4 py-2.5 font-medium">프로젝트</th>
-              <th className="text-left px-4 py-2.5 font-medium w-24">열쇠</th>
-              <th className="text-left px-4 py-2.5 font-medium">마지막 반영</th>
-              <th className="px-4 py-2.5 w-48"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const hasKey = r.key?.status === 'ok'
-              const failed = r.sync?.ok === false
-              const syncText = r.state !== 'ready' ? '' : !hasKey ? '-' : !r.sync || r.sync.ok === null ? '아직 반영 안 함' : failed ? r.sync.message ?? '반영 실패' : '반영됨'
-              return (
-                <tr key={r.target} className="border-t border-neutral-100">
-                  <td className="px-4 py-2.5">
-                    <div className="text-neutral-800">{look.hidden(r.target) ? '대기 중' : look.name(r.target)}</div>
-                    <div className="text-xs text-neutral-400 font-mono">{refOf(r.target)}</div>
-                  </td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">
-                    {r.state === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-300" />
-                      : r.state === 'blocked' ? <span className="text-xs text-neutral-500">{r.error}</span>
-                      : hasKey ? <span className="inline-flex rounded px-2 py-0.5 text-xs bg-green-50 text-green-700">등록됨</span>
-                      : <span className="inline-flex rounded px-2 py-0.5 text-xs bg-red-50 text-red-600">없음</span>}
-                  </td>
-                  <td className={`px-4 py-2.5 text-xs ${failed ? 'text-red-600' : 'text-neutral-500'}`}>
-                    {syncText}
-                    {r.sync?.ok === true && r.sync.finishedAt && <span className="ml-2 text-neutral-400">{formatDateTime(r.sync.finishedAt)}</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {r.state === 'ready' && (
-                      <div className="inline-flex gap-1.5">
-                        <Button size="sm" variant={hasKey ? 'outline' : 'primary'} className="w-[76px]"
-                          onClick={() => { setValue(''); setSaveError(''); setEditing(r.target) }}>
-                          {hasKey ? <Pencil className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                          {hasKey ? '바꾸기' : '입력'}
-                        </Button>
-                        <Button size="sm" className="w-[84px]" onClick={() => void syncNow(r.target)} disabled={!hasKey || syncing === r.target}>
-                          {syncing === r.target ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                          다시 반영
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-md border border-neutral-200">
+        <DataTable
+          columns={[
+            {
+              key: 'project', header: '프로젝트', kind: 'name', cell: (r) => (
+                <>
+                  <div className="text-neutral-800">{look.hidden(r.target) ? '대기 중' : look.name(r.target)}</div>
+                  <div className="text-xs text-neutral-400 font-mono">{refOf(r.target)}</div>
+                </>
+              ),
+            },
+            {
+              key: 'key', header: '열쇠', kind: 'status', cell: (r) =>
+                r.state === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-300" />
+                  : r.state === 'blocked' ? <StatusText tone="muted">{r.error}</StatusText>
+                  : r.key?.status === 'ok' ? <StatusText tone="ok">등록됨</StatusText>
+                  : <StatusText tone="bad">없음</StatusText>,
+            },
+            {
+              key: 'sync', header: '마지막 반영', kind: 'text',
+              full: (r) => (r.sync?.ok === false ? r.sync.message ?? '반영 실패' : ''),
+              cell: (r) => {
+                if (r.state !== 'ready' || r.key?.status !== 'ok') return null
+                if (!r.sync || r.sync.ok === null) return <span className="text-neutral-500">아직 반영 안 함</span>
+                if (r.sync.ok === false) return <span className="text-red-600">{r.sync.message ?? '반영 실패'}</span>
+                return (
+                  <>
+                    <div className="text-neutral-500">반영됨</div>
+                    {r.sync.finishedAt && <div className="text-xs text-neutral-500">{formatDateTime(r.sync.finishedAt)}</div>}
+                  </>
+                )
+              },
+            },
+            {
+              key: 'actions', header: '', kind: 'actions', cell: (r) => {
+                if (r.state !== 'ready') return null
+                const hasKey = r.key?.status === 'ok'
+                return (
+                  <span className="inline-flex gap-1.5">
+                    <Button size="sm" variant={hasKey ? 'outline' : 'primary'} className="w-[76px]"
+                      onClick={() => { setValue(''); setSaveError(''); setEditing(r.target) }}>
+                      {hasKey ? <Pencil className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                      {hasKey ? '바꾸기' : '입력'}
+                    </Button>
+                    <Button size="sm" className="w-[84px]" onClick={() => void syncNow(r.target)} disabled={!hasKey || syncing === r.target}>
+                      {syncing === r.target ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      다시 반영
+                    </Button>
+                  </span>
+                )
+              },
+            },
+          ]}
+          rows={rows}
+          rowKey={(r) => r.target}
+          emptyText="프로젝트가 없습니다."
+        />
       </div>
 
       {editing && (

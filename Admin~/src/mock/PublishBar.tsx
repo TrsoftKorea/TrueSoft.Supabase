@@ -15,6 +15,7 @@ type PublishStatus = {
   blocked: string[]
   unplanned: string[]
   version: { before: string; now: string; sdkChanged: boolean; choices: string[] }
+  tagsToPush: string[]
 }
 type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; tags?: string[]; version?: string; alsoPushed?: number; error?: string }
 type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'elsewhere' | 'unknown'
@@ -307,7 +308,8 @@ export function PublishBar() {
 
   const summary = summarize(deploy, deployError, elapsed, finished, local)
   const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
-  const empty = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
+  const nothingButTags = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
+  const empty = nothingButTags && status.tagsToPush.length === 0
   const run = deploy?.run
   const runState: 'done' | 'busy' | 'todo' | 'bad' = phase === 'starting' || phase === 'running' ? 'busy'
     : phase === 'failed' ? 'bad'
@@ -447,7 +449,12 @@ export function PublishBar() {
             <FileGroup title="콘솔 화면" group={status.console}
               note={status.console.deploys ? undefined : '화면 코드는 그대로라 실제 콘솔은 다시 배포되지 않습니다.'} />
             <FileGroup title="SDK·DB·문서" group={status.sdk} />
-            <VersionPicker info={status.version} value={version} onChange={setVersion} />
+            {!nothingButTags && <VersionPicker info={status.version} value={version} onChange={setVersion} />}
+            {status.tagsToPush.length > 0 && (
+              <p className="text-sm text-neutral-700">
+                앞 게시에서 못 올린 판 이름표 {status.tagsToPush.join(', ')} 도 함께 올라갑니다.
+              </p>
+            )}
             {status.unpushed.length > 0 && (
               <div className="space-y-1">
                 <span className="text-sm font-semibold text-neutral-900">앞서 만들어 둔 커밋 {status.unpushed.length}개도 함께 올라갑니다</span>

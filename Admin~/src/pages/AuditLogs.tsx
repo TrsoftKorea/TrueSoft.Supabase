@@ -5,12 +5,13 @@ import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard } from '../components/ui/DataTable'
+import { Pairs } from '../components/ui/Pairs'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
 import { PlayerLink } from '../components/ui/PlayerLink'
-import { formatDateTime, formatTotal } from '../components/ui/format'
+import { formatDateTime, formatTotal, pairsText } from '../components/ui/format'
 
 type AuditRow = { id: number; email: string; action: string; params: Record<string, unknown>; created_at: string }
 type AuditData = { rows: AuditRow[]; total: number; pageSize: number }
@@ -137,15 +138,12 @@ function scalarText(v: unknown): string {
   return String(v)
 }
 
-/** 상세 칸 한 줄 요약. 전체 값은 행을 펼쳐서 본다. */
-function paramsSummary(p: Record<string, unknown>): string {
-  return Object.entries(p)
-    .map(([k, v]) => {
-      if (Array.isArray(v)) return `${paramLabel(k)}: ${v.length}개`
-      if (v !== null && typeof v === 'object') return `${paramLabel(k)}: {…}`
-      return `${paramLabel(k)}: ${scalarText(v)}`
-    })
-    .join(' · ')
+/** 상세 칸 한 줄 요약 — 이름과 값의 쌍. 전체 값은 행을 펼쳐서 본다. */
+function paramsPairs(p: Record<string, unknown>): { label: string; value: string }[] {
+  return Object.entries(p).map(([k, v]) => ({
+    label: paramLabel(k),
+    value: Array.isArray(v) ? `${v.length}개` : v !== null && typeof v === 'object' ? '{…}' : scalarText(v),
+  }))
 }
 
 export default function AuditLogs({
@@ -165,7 +163,6 @@ export default function AuditLogs({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
-  const [openId, setOpenId] = useState<number | null>(null)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -238,60 +235,41 @@ export default function AuditLogs({
         </FilterBar>
       </WhiteCard>
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
-                <th className="text-left px-4 py-2.5 font-medium w-52">운영자</th>
-                <th className="text-left px-4 py-2.5 font-medium w-48">한 일</th>
-                <th className="text-left px-4 py-2.5 font-medium">내용</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={4} emptyText="운영 기록이 없습니다." />
-              ) : (
-                rows.map((r) => (
-                  <Fragment key={r.id}>
-                    <tr
-                      onClick={() => setOpenId((o) => (o === r.id ? null : r.id))}
-                      className="border-t border-neutral-100 hover:bg-neutral-50/50 cursor-pointer"
-                    >
-                      <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(r.created_at)}</td>
-                      <td className="px-4 py-3 text-neutral-700 truncate max-w-[13rem]" title={r.email}>{r.email}</td>
-                      <td className="px-4 py-3 text-neutral-800 whitespace-nowrap" title={r.action}>{ACTION_LABELS[r.action] ?? r.action}</td>
-                      <td className="px-4 py-3 text-neutral-600 max-w-[420px] truncate">{paramsSummary(r.params)}</td>
-                    </tr>
-                    {openId === r.id && (
-                      <tr className="bg-neutral-50/60">
-                        <td colSpan={4} className="px-4 py-3">
-                          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
-                            {Object.entries(r.params).map(([k, v]) => (
-                              <Fragment key={k}>
-                                <dt className="text-neutral-500 whitespace-nowrap" title={k}>{paramLabel(k)}</dt>
-                                <dd className="text-neutral-700 break-all">
-                                  {k === 'accountId' && typeof v === 'string'
-                                    ? <PlayerLink accountId={v}>{v}</PlayerLink>
-                                    : v !== null && typeof v === 'object'
-                                    ? <pre className="whitespace-pre-wrap font-mono">{JSON.stringify(v, null, 2)}</pre>
-                                    : scalarText(v)}
-                                </dd>
-                              </Fragment>
-                            ))}
-                          </dl>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        wide
+        columns={[
+          { key: 'at', header: '시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+          { key: 'email', header: '운영자', kind: 'name', cell: (r) => r.email },
+          { key: 'action', header: '한 일', kind: 'name', cell: (r) => <span title={r.action}>{ACTION_LABELS[r.action] ?? r.action}</span> },
+          {
+            key: 'params', header: '내용', kind: 'text',
+            full: (r) => pairsText(paramsPairs(r.params)),
+            cell: (r) => { const p = paramsPairs(r.params); return p.length ? <Pairs items={p} /> : null },
+          },
+        ]}
+        rows={rows}
+        rowKey={(r) => String(r.id)}
+        loading={loading}
+        failed={failed}
+        emptyText="운영 기록이 없습니다."
+        expand={(r) => Object.keys(r.params).length === 0 ? null : (
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
+            {Object.entries(r.params).map(([k, v]) => (
+              <Fragment key={k}>
+                <dt className="text-neutral-500 whitespace-nowrap" title={k}>{paramLabel(k)}</dt>
+                <dd className="text-neutral-700 break-all">
+                  {k === 'accountId' && typeof v === 'string'
+                    ? <PlayerLink accountId={v}>{v}</PlayerLink>
+                    : v !== null && typeof v === 'object'
+                    ? <pre className="whitespace-pre-wrap font-mono">{JSON.stringify(v, null, 2)}</pre>
+                    : scalarText(v)}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        )}
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
     </div>
   )
 }

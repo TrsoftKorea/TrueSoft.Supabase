@@ -3,10 +3,10 @@ import { Plus, Pencil, Trash2, X, Loader2, List, Download } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { downloadCsv, todayStamp } from '../lib/csv'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { DataTable, TableCard, type Column } from '../components/ui/DataTable'
+import { StatusText } from '../components/ui/StatusText'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -103,6 +103,7 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
     <EditDialog
       title="발급 코드"
       description={coupon.title}
+      size="xl"
       flush
       error={exportError ? `CSV를 내려받지 못했습니다. ${exportError}` : undefined}
       onClose={onClose}
@@ -117,37 +118,22 @@ function CodesModal({ target, onUnauthenticated, coupon, onClose }: {
         </p>
       ) : undefined}
     >
-          {loading ? (
-            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-neutral-300" /></div>
-          ) : error ? (
+          {error ? (
             <div className="p-5 text-sm text-red-500">{error}</div>
-          ) : rows.length === 0 ? (
-            <div className="p-5 text-sm text-neutral-500 text-center">발급된 코드가 없습니다.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-neutral-500 text-xs sticky top-0">
-                <tr>
-                  <th className="text-left px-4 py-2 font-medium">코드</th>
-                  <th className="text-left px-4 py-2 font-medium">상태</th>
-                  <th className="text-left px-4 py-2 font-medium">사용 시각</th>
-                  <th className="text-left px-4 py-2 font-medium">플레이어</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.code}-${i}`} className="border-t border-neutral-100">
-                    <td className="px-4 py-2 font-mono">{r.code}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">
-                      {r.redeemed_at
-                        ? <span className="text-xs text-neutral-500">사용됨</span>
-                        : <span className="text-xs text-emerald-600">미사용</span>}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-neutral-600 whitespace-nowrap">{r.redeemed_at ? formatDateTime(r.redeemed_at) : ''}</td>
-                    <td className="px-4 py-2">{r.redeemed_at && <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} />}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              maxHeight="max-h-[60vh]"
+              loading={loading}
+              emptyText="발급된 코드가 없습니다."
+              columns={[
+                { key: 'code', header: '코드', kind: 'mono', cell: (r) => r.code },
+                { key: 'state', header: '상태', kind: 'status', cell: (r) => <StatusText tone={r.redeemed_at ? 'muted' : 'ok'}>{r.redeemed_at ? '사용됨' : '미사용'}</StatusText> },
+                { key: 'at', header: '사용 시각', kind: 'datetime', cell: (r) => (r.redeemed_at ? formatDateTime(r.redeemed_at) : null) },
+                { key: 'player', header: '플레이어', kind: 'name', cell: (r) => (r.redeemed_at ? <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} /> : null) },
+              ]}
+              rows={rows}
+              rowKey={(r, i) => `${r.code}-${i}`}
+            />
           )}
     </EditDialog>
   )
@@ -440,65 +426,43 @@ export default function Coupons({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-left px-5 py-2.5 font-medium min-w-[10rem]">제목</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">종류</th>
-                <th className="text-left px-4 py-2.5 font-medium">코드</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">사용률</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">상태</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">사용 마감</th>
-                <th className="px-3 py-2.5 w-28" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading || rows.length === 0 ? (
-                <TableStatusRow loading={loading} empty={rows.length === 0} failed={failed} colSpan={7} emptyText="쿠폰이 없습니다." />
-              ) : (
-                rows.map((c) => (
-                  <tr key={c.id} className="border-t border-neutral-100">
-                    <td className="px-5 py-3">{c.title}</td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{KIND_NAME[c.kind]}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {c.kind === 'keyword'
-                        ? <span className="font-mono text-xs text-neutral-800">{c.code}</span>
-                        : <span className="text-neutral-600">코드 {formatCount(c.issued_count)}개</span>}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">
-                      {usageText(c)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 text-xs rounded ${c.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
-                        {c.is_active ? '활성' : '비활성'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{c.expires_at ? formatDateTime(c.expires_at) : '무기한'}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* 공용 코드는 볼 코드 목록이 없다 — 자리는 비워 두어 수정·삭제가 줄마다 같은 위치에 선다. */}
-                        {c.kind === 'normal' ? (
-                          <button onClick={() => setCodesTarget(c)} title="코드 보기" aria-label="코드 보기" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-                            <List className="w-3.5 h-3.5" />
-                          </button>
-                        ) : <span className="w-7 h-7" aria-hidden />}
-                        <button onClick={() => { setNotice(''); setEditTarget(c) }} title="수정" aria-label="수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => { setDelError(''); setDelTarget(c) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </WhiteCard>
+      <TableCard
+        columns={[
+          { key: 'title', header: '제목', kind: 'text', cell: (c) => c.title },
+          { key: 'kind', header: '종류', kind: 'name', cell: (c) => KIND_NAME[c.kind] },
+          {
+            key: 'code', header: '코드', kind: 'name', cell: (c) => c.kind === 'keyword'
+              ? <span className="font-mono text-[13px]">{c.code}</span>
+              : `코드 ${formatCount(c.issued_count)}개`,
+          },
+          { key: 'usage', header: '사용률', kind: 'number', cell: (c) => usageText(c) },
+          { key: 'status', header: '상태', kind: 'status', cell: (c) => <StatusText tone={c.is_active ? 'ok' : 'muted'}>{c.is_active ? '활성' : '비활성'}</StatusText> },
+          { key: 'expires', header: '사용 마감', kind: 'datetime', cell: (c) => (c.expires_at ? formatDateTime(c.expires_at) : '무기한') },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (c) => (
+              <span className="inline-flex gap-1.5">
+                {/* 공용 코드는 볼 코드 목록이 없다 — 자리는 비워 두어 수정·삭제가 줄마다 같은 위치에 선다. */}
+                {c.kind === 'normal' ? (
+                  <button onClick={() => setCodesTarget(c)} title="코드 보기" aria-label="코드 보기" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                    <List className="w-3.5 h-3.5" />
+                  </button>
+                ) : <span className="w-7 h-7" aria-hidden />}
+                <button onClick={() => { setNotice(''); setEditTarget(c) }} title="수정" aria-label="수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => { setDelError(''); setDelTarget(c) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ),
+          },
+        ] satisfies Column<Coupon>[]}
+        rows={rows}
+        rowKey={(c) => c.id}
+        loading={loading}
+        failed={failed}
+        emptyText="쿠폰이 없습니다."
+      />
 
       {showModal && (
         <CouponModal target={target} onUnauthenticated={onUnauthenticated} coupon={null} categories={categories} catalog={catalog}

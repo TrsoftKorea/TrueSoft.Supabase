@@ -12,6 +12,7 @@ import { InfoList } from '../components/ui/InfoList'
 import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
 import { formatDateTime } from '../components/ui/format'
 import { RefreshButton } from '../components/ui/FilterBar'
+import { DataTable, type Column } from '../components/ui/DataTable'
 
 type Kind = 'request' | 'function'
 type Feature = {
@@ -297,49 +298,56 @@ function StackedChart({ rows, metric, data, hours, gaps, selectedAt, onSelect }:
 }
 
 /** 기능별 값·비율. 색은 막대 그래프와 같게 기능 이름으로 정한다 — 고른 막대에서는 순서가 바뀌어도 색이 따라간다. */
+type ShareRow = { feature: string; v: number; unsized: number }
+
 function ShareTable({ rows, metric, colorOf }: {
-  rows: { feature: string; v: number; unsized: number }[]; metric: Metric; colorOf: (feature: string) => string
+  rows: ShareRow[]; metric: Metric; colorOf: (feature: string) => string
 }) {
   const total = rows.reduce((a, f) => a + f.v, 0)
   const sorted = [...rows].sort((a, b) => b.v - a.v)
   return (
-    <div className="overflow-auto rounded-md border border-neutral-200">
-      <table className="w-full text-sm">
-        <thead className="bg-neutral-50 text-neutral-500 text-xs">
-          <tr>
-            <th className="text-left px-4 py-2 font-medium">기능</th>
-            <th className="text-right px-4 py-2 font-medium w-32">{metric.head}</th>
-            <th className="text-left px-4 py-2 font-medium w-56">비율</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((f) => {
-            const share = total > 0 ? (f.v / total) * 100 : 0
-            return (
-              <tr key={f.feature} className="border-t border-neutral-100">
-                <td className="px-4 py-2 text-neutral-800">
-                  {f.feature}
-                  {FEATURE_INFO[f.feature] && <div className="text-xs text-neutral-500 mt-0.5">{FEATURE_INFO[f.feature]}</div>}
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
-                  {f.v === 0 && f.unsized > 0 ? <span className="text-neutral-400">알 수 없음</span> : metric.text(f.v)}
-                  {f.unsized > 0 && <div className="text-[11px] text-neutral-400">크기 모름 {n(f.unsized)}건</div>}
-                </td>
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: colorOf(f.feature) }} />
-                    </div>
-                    <span className="w-12 text-right tabular-nums text-xs text-neutral-600">
-                      {share.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%
-                    </span>
+    <div className="overflow-hidden rounded-md border border-neutral-200">
+      <DataTable
+        columns={[
+          {
+            key: 'feature', header: '기능', kind: 'text',
+            cell: (f) => (
+              <>
+                <div className="truncate">{f.feature}</div>
+                {FEATURE_INFO[f.feature] && <div className="truncate text-xs text-neutral-500 mt-0.5">{FEATURE_INFO[f.feature]}</div>}
+              </>
+            ),
+            full: (f) => FEATURE_INFO[f.feature] ? `${f.feature} — ${FEATURE_INFO[f.feature]}` : f.feature,
+          },
+          {
+            key: 'value', header: metric.head, kind: 'number',
+            cell: (f) => (
+              <>
+                {f.v === 0 && f.unsized > 0 ? <span className="text-neutral-400">알 수 없음</span> : metric.text(f.v)}
+                {f.unsized > 0 && <div className="text-xs text-neutral-500">크기 모름 {n(f.unsized)}건</div>}
+              </>
+            ),
+          },
+          {
+            key: 'share', header: '비율', kind: 'status',
+            cell: (f) => {
+              const share = total > 0 ? (f.v / total) * 100 : 0
+              return (
+                <div className="flex items-center gap-2">
+                  <div className="w-40 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: colorOf(f.feature) }} />
                   </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                  <span className="w-12 text-right tabular-nums text-xs text-neutral-600">
+                    {share.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%
+                  </span>
+                </div>
+              )
+            },
+          },
+        ] satisfies Column<ShareRow>[]}
+        rows={sorted}
+        rowKey={(f) => f.feature}
+      />
     </div>
   )
 }

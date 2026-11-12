@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { Trash2, ShieldOff, X, Megaphone } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
@@ -6,7 +6,7 @@ import { WhiteCard } from '../components/ui/Card'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
-import { TableStatusRow } from '../components/ui/TableStatusRow'
+import { TableCard, type Column } from '../components/ui/DataTable'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -30,6 +30,10 @@ type MuteData = { rows: MuteRow[]; total: number; pageSize: number }
 type PlayerRow = { account_id: string; display_name: string | null }
 
 const NOTICE_MAX = 1000
+
+const muteEnded = (m: MuteRow) => new Date(m.until).getTime() <= Date.now()
+/** 이미 끝난 차단은 줄을 흐리게 보인다. */
+const dimIfEnded = (m: MuteRow, v: ReactNode) => (muteEnded(m) ? <span className="text-neutral-400">{v}</span> : v)
 
 type ServerRow = { id: string; server_code: string; display_name: string | null }
 
@@ -476,62 +480,46 @@ export default function ChatModeration({
             </FilterBar>
           </WhiteCard>
 
-          <WhiteCard>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">시각</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-28">채널</th>
-                    <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-36">받는 사람</th>
-                    <th className="text-left px-4 py-2.5 font-medium">내용</th>
-                    <th className="px-3 py-2.5 w-24" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {msgLoading || rows.length === 0 ? (
-                    <TableStatusRow loading={msgLoading} empty={rows.length === 0} failed={msgFailed} colSpan={6} emptyText="메시지가 없습니다." />
-                  ) : (
-                    rows.map((m) => (
-                      <tr key={m.id} className={`border-t border-neutral-100 ${m.deleted_at ? 'bg-neutral-50/50' : ''}`}>
-                        <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(m.created_at)}</td>
-                        <td className="px-4 py-3 text-neutral-600">{channelLabel(m.channel_id)}</td>
-                        <td className="px-4 py-3">
-                          {m.is_notice ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap">공지</span>
-                          ) : <PlayerLink accountId={m.account_id} name={m.display_name} userId={m.user_id} />}
-                        </td>
-                        <td className="px-4 py-3 max-w-[9rem]">
-                          {m.to_account_id
-                            ? <PlayerLink accountId={m.to_account_id} name={m.to_display_name} className="block truncate" />
-                            : <span className="text-neutral-300">-</span>}
-                        </td>
-                        <td className="px-4 py-3 text-neutral-700 max-w-[420px] truncate" title={m.content}>
-                          {m.deleted_at ? <span className="text-neutral-400 line-through">{m.content}</span> : m.content}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {m.account_id && !m.is_notice && (
-                              <button onClick={() => { setNotice(''); setMuteModal({ accountId: m.account_id!, displayName: m.display_name }) }} title="채팅 차단" aria-label="채팅 차단" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
-                                <ShieldOff className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            {!m.deleted_at && (
-                              <button onClick={() => { setDelError(''); setDelTarget(m) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-          </WhiteCard>
+          <TableCard
+            columns={[
+              { key: 'time', header: '시각', kind: 'datetime', cell: (m) => formatDateTime(m.created_at) },
+              { key: 'channel', header: '채널', kind: 'name', cell: (m) => channelLabel(m.channel_id) },
+              {
+                key: 'player', header: '플레이어', kind: 'name', cell: (m) => m.is_notice
+                  ? <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap">공지</span>
+                  : <PlayerLink accountId={m.account_id} name={m.display_name} userId={m.user_id} />,
+              },
+              { key: 'to', header: '받는 사람', kind: 'name', cell: (m) => m.to_account_id && <PlayerLink accountId={m.to_account_id} name={m.to_display_name} /> },
+              {
+                key: 'content', header: '내용', kind: 'text', full: (m) => m.content,
+                cell: (m) => m.deleted_at ? <span className="text-neutral-400 line-through">{m.content}</span> : m.content,
+              },
+              {
+                // 없는 버튼 자리도 비워 둔다 — 줄마다 버튼 위치가 흔들리지 않게.
+                key: 'actions', header: '', kind: 'actions', cell: (m) => (
+                  <span className="inline-flex gap-1.5">
+                    {m.account_id && !m.is_notice ? (
+                      <button onClick={() => { setNotice(''); setMuteModal({ accountId: m.account_id!, displayName: m.display_name }) }} title="채팅 차단" aria-label="채팅 차단" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
+                        <ShieldOff className="w-3.5 h-3.5" />
+                      </button>
+                    ) : <span className="w-7 h-7" />}
+                    {!m.deleted_at ? (
+                      <button onClick={() => { setDelError(''); setDelTarget(m) }} title="삭제" aria-label="삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : <span className="w-7 h-7" />}
+                  </span>
+                ),
+              },
+            ] satisfies Column<MessageRow>[]}
+            rows={rows}
+            rowKey={(m) => String(m.id)}
+            rowClassName={(m) => (m.deleted_at ? 'bg-neutral-50' : undefined)}
+            loading={msgLoading}
+            failed={msgFailed}
+            emptyText="메시지가 없습니다."
+            footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+          />
         </>
       )}
 
@@ -543,48 +531,26 @@ export default function ChatModeration({
               <ShieldOff className="w-4 h-4" />차단 추가
             </Button>
           </div>
-          <WhiteCard>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-neutral-500 text-xs">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-28">채널</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-40">해제 시각</th>
-                    <th className="text-left px-4 py-2.5 font-medium">사유</th>
-                    <th className="text-left px-4 py-2.5 font-medium w-24">등록자</th>
-                    <th className="px-3 py-2.5 w-20" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {mutesLoading || mutes.length === 0 ? (
-                    <TableStatusRow loading={mutesLoading} empty={mutes.length === 0} failed={mutesFailed} colSpan={6} emptyText="차단된 플레이어가 없습니다." />
-                  ) : (
-                    mutes.map((m) => {
-                      const ended = new Date(m.until).getTime() <= Date.now()
-                      return (
-                        <tr key={m.id} className={`border-t border-neutral-100 ${ended ? 'text-neutral-400' : ''}`}>
-                          <td className="px-4 py-3"><PlayerLink accountId={m.account_id} name={m.display_name} /></td>
-                          <td className="px-4 py-3 text-neutral-600">{m.channel_id ? channelLabel(m.channel_id) : '전체'}</td>
-                          <td className="px-4 py-3 text-neutral-600 whitespace-nowrap">{formatDateTime(m.until)}</td>
-                          <td className="px-4 py-3 text-neutral-700">{m.reason || '-'}</td>
-                          <td className="px-4 py-3 text-neutral-600">{m.created_by ?? '-'}</td>
-                          <td className="px-3 py-3 text-right whitespace-nowrap">
-                            {ended ? (
-                              <span className="text-xs text-neutral-400">종료</span>
-                            ) : (
-                              <Button variant="outline" size="sm" onClick={() => { setUnmuteError(''); setUnmuteTarget(m) }}>해제</Button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <TableFooter summary={formatTotal(muteTotal)} page={mutePage} totalPages={muteTotalPages} onPageChange={setMutePage} />
-          </WhiteCard>
+          <TableCard
+            columns={[
+              { key: 'player', header: '플레이어', kind: 'name', cell: (m) => <PlayerLink accountId={m.account_id} name={m.display_name} /> },
+              { key: 'channel', header: '채널', kind: 'name', cell: (m) => dimIfEnded(m, m.channel_id ? channelLabel(m.channel_id) : '전체') },
+              { key: 'until', header: '해제 시각', kind: 'datetime', cell: (m) => dimIfEnded(m, formatDateTime(m.until)) },
+              { key: 'reason', header: '사유', kind: 'text', full: (m) => m.reason, cell: (m) => m.reason && dimIfEnded(m, m.reason) },
+              { key: 'by', header: '등록자', kind: 'name', cell: (m) => m.created_by && dimIfEnded(m, m.created_by) },
+              {
+                key: 'actions', header: '', kind: 'actions', cell: (m) => muteEnded(m)
+                  ? <span className="text-xs text-neutral-400">종료</span>
+                  : <Button variant="outline" size="sm" onClick={() => { setUnmuteError(''); setUnmuteTarget(m) }}>해제</Button>,
+              },
+            ] satisfies Column<MuteRow>[]}
+            rows={mutes}
+            rowKey={(m) => String(m.id)}
+            loading={mutesLoading}
+            failed={mutesFailed}
+            emptyText="차단된 플레이어가 없습니다."
+            footer={<TableFooter summary={formatTotal(muteTotal)} page={mutePage} totalPages={muteTotalPages} onPageChange={setMutePage} />}
+          />
         </>
       )}
 

@@ -5,7 +5,7 @@ import type { ProjectTarget } from '../../lib/projectTarget'
 import { WhiteCard } from '../../components/ui/Card'
 import { inputCls, inputCompactCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard } from '../../components/ui/DataTable'
 import { formatCount, formatDateTime, formatScore, formatTotal } from '../../components/ui/format'
 import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -55,8 +55,8 @@ function coerce(dataType: string, raw: string): unknown {
   return raw
 }
 
-function cell(v: unknown): string {
-  if (v === null || v === undefined || v === '') return '-'
+function cell(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
@@ -307,8 +307,6 @@ export default function ScoresTab({
   const rotationOptions: number[] =
     maxRotation !== null ? Array.from({ length: maxRotation }, (_, i) => maxRotation - i) : []
 
-  const colSpan = 7 + attachedCols.length
-
   return (
     <div className="space-y-4">
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -380,128 +378,98 @@ export default function ScoresTab({
       </WhiteCard>
 
       {/* 기록 테이블 */}
-      <WhiteCard>
-        <div className="overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs">
-              <tr>
-                <th className="text-right px-4 py-2.5 font-medium">순위</th>
-                <th className="text-left px-4 py-2.5 font-medium">플레이어</th>
-                <th className="text-left px-4 py-2.5 font-medium whitespace-nowrap">서버</th>
-                <th className="text-right px-4 py-2.5 font-medium">점수</th>
-                <th className="text-right px-4 py-2.5 font-medium">기록 수</th>
-                <th className="text-left px-4 py-2.5 font-medium">점수 달성</th>
-                {attachedCols.map((c) => (
-                  <th key={c.name} className="text-left px-4 py-2.5 font-medium whitespace-nowrap">{c.name}</th>
-                ))}
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {scoresLoading || scoresFailed || rows.length === 0 ? (
-                <TableStatusRow
-                  loading={scoresLoading}
-                  failed={scoresFailed}
-                  empty={rows.length === 0}
-                  colSpan={colSpan}
-                  emptyText={selectedCode ? '기록이 없습니다.' : '선택한 리더보드가 없습니다.'}
-                />
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.account_id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                    <td className="px-4 py-3 text-right">{formatCount(r.rank)}</td>
-                    <td className="px-4 py-3">
-                      <PlayerLink accountId={r.account_id} name={r.display_name} />
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{serverName(r.server_code)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {editingId === r.account_id ? (
-                        <div className="space-y-1">
-                        <div className="flex items-center justify-end gap-1">
-                          <input
-                            type="number"
-                            value={editScore}
-                            onChange={(e) => { setEditScore(e.target.value); setEditError('') }}
-                            disabled={saving}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') void confirmEdit(r.account_id)
-                              if (e.key === 'Escape') cancelEdit()
-                            }}
-                            className={inputCompactCls + ' w-28 text-right'}
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => void confirmEdit(r.account_id)}
-                            disabled={saving}
-                            title="저장"
-                            className="p-1 rounded hover:bg-emerald-50 text-emerald-600 disabled:opacity-40"
-                          >
-                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            disabled={saving}
-                            title="취소"
-                            className="p-1 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-40"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        {editError && <p className="text-xs text-red-600 text-right">{editError}</p>}
-                        </div>
-                      ) : (
-                        formatScore(r.score)
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">{formatCount(r.score_count)}</td>
-                    <td className="px-4 py-3">{formatDateTime(r.score_achieved_at)}</td>
-                    {attachedCols.map((c) => (
-                      <td key={c.name} className="px-4 py-3 whitespace-nowrap">{cell(r[c.name])}</td>
-                    ))}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {editingId !== r.account_id && (
-                          <button
-                            onClick={() => startEdit(r)}
-                            title="점수 수정"
-                            className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        {attachedCols.length > 0 && (
-                          <button
-                            onClick={() => openDataEdit(r)}
-                            title="플레이어 데이터 수정"
-                            className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => { setDialogError(''); setDelTarget(r) }}
-                          title="삭제"
-                          className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 페이지네이션 */}
-        <TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+      <TableCard
+        wide
+        columns={[
+          { key: 'rank', header: '순위', kind: 'number', cell: (r) => formatCount(r.rank) },
+          { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
+          { key: 'server', header: '서버', kind: 'name', cell: (r) => r.server_code ? serverName(r.server_code) : null },
+          {
+            key: 'score', header: '점수', kind: 'number', cell: (r) => editingId === r.account_id ? (
+              <div className="space-y-1">
+                <div className="flex items-center justify-end gap-1">
+                  <input
+                    type="number"
+                    value={editScore}
+                    onChange={(e) => { setEditScore(e.target.value); setEditError('') }}
+                    disabled={saving}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void confirmEdit(r.account_id)
+                      if (e.key === 'Escape') cancelEdit()
+                    }}
+                    className={inputCompactCls + ' w-28 text-right'}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => void confirmEdit(r.account_id)}
+                    disabled={saving}
+                    title="저장"
+                    className="p-1 rounded hover:bg-emerald-50 text-emerald-600 disabled:opacity-40"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    disabled={saving}
+                    title="취소"
+                    className="p-1 rounded hover:bg-neutral-100 text-neutral-500 disabled:opacity-40"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {editError && <p className="text-xs text-red-600 text-right">{editError}</p>}
+              </div>
+            ) : formatScore(r.score),
+          },
+          { key: 'count', header: '기록 수', kind: 'number', cell: (r) => formatCount(r.score_count) },
+          { key: 'achieved', header: '점수 달성', kind: 'datetime', cell: (r) => r.score_achieved_at ? formatDateTime(r.score_achieved_at) : null },
+          ...attachedCols.map((c) => ({
+            key: `col:${c.name}`, header: c.name, kind: 'name' as const, cell: (r: ScoreRow) => cell(r[c.name]),
+          })),
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (r) => (
+              <span className="inline-flex gap-1.5">
+                {editingId !== r.account_id ? (
+                  <button
+                    onClick={() => startEdit(r)}
+                    title="점수 수정"
+                    className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                ) : <span className="w-[26px]" />}
+                {attachedCols.length > 0 && (
+                  <button
+                    onClick={() => openDataEdit(r)}
+                    title="플레이어 데이터 수정"
+                    className="p-1.5 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-800"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => { setDialogError(''); setDelTarget(r) }}
+                  title="삭제"
+                  className="p-1.5 rounded hover:bg-red-50 text-neutral-500 hover:text-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            ),
+          },
+        ]}
+        rows={rows}
+        rowKey={(r) => r.account_id}
+        loading={scoresLoading}
+        failed={scoresFailed}
+        emptyText={selectedCode ? '기록이 없습니다.' : '선택한 리더보드가 없습니다.'}
+        footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
 
       {/* 플레이어 데이터 수정 모달 */}
       {dataEditRow && (
         <EditDialog
-          title="플레이어 데이터 수정"
+          title="데이터 수정"
           description={`${playerLabel(dataEditRow.display_name, dataEditRow.account_id)}${hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}`}
           busy={saving}
           onClose={() => setDataEditRow(null)}

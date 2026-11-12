@@ -48,3 +48,21 @@ export function GroupBox({ title, actions, children }: { title: ReactNode; actio
     </section>
   )
 }
+
+/**
+ * 묶음 상자 안의 줄 목록. 머리 줄이 없고 칸 폭이 고정이라, 여러 상자에 나눠 담아도 상태·버튼이 위아래로 줄을 선다.
+ * 칸: 이름 · 값 · 상태(status 일 때만) · 버튼. 줄(<tr>)은 화면이 짠다 — 상자마다 들여 쓴 소제목 줄이 들어가기도 한다.
+ */
+export function GroupTable({ status = false, children }: { status?: boolean; children: ReactNode }) {
+  return (
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        <col className="w-[34%]" />
+        <col />
+        {status && <col className="w-[76px]" />}
+        <col className="w-[164px]" />
+      </colgroup>
+      <tbody>{children}</tbody>
+    </table>
+  )
+}

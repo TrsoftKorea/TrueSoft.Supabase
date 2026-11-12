@@ -856,7 +856,7 @@ const HANDLERS: Record<string, Handler> = {
     mockServices = { ...mockServices, [String(p['service'])]: p['enabled'] === true }
     return { services: mockServices }
   },
-  // 플레이어 데이터·플레이어 데이터 필드 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
+  // 플레이어 데이터·데이터 필드 — 목록(배열)을 받는 화면이라 기본 응답(묶음)으로는 화면이 멈춘다.
   'players.list': (_t, p) => playerList(p),
   'players.profile': (_t, p) => {
     const { banned_until: _b, ban_message: _m, ...profile } = playerOf(p)

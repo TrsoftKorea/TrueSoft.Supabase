@@ -3,7 +3,6 @@ import { Plus, Pencil, Trash2, Search } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { usePendingChanges } from '../../lib/pendingChanges'
-import { WhiteCard } from '../../components/ui/Card'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { PendingChanges, type PendingItem } from '../../components/ui/PendingChanges'
@@ -12,7 +11,7 @@ import { fieldTypeLabel, opLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
-import { TableStatusRow } from '../../components/ui/TableStatusRow'
+import { TableCard } from '../../components/ui/DataTable'
 import { formatCount, formatTotal } from '../../components/ui/format'
 import { RefreshButton } from '../../components/ui/FilterBar'
 
@@ -706,116 +705,95 @@ export default function ColumnsTab({
         </div>
       </div>
 
-      <WhiteCard>
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs">
-            <tr>
-              <th className="text-left px-5 py-2.5 font-medium w-28">사용</th>
-              <th className="text-left px-5 py-2.5 font-medium">필드</th>
-              <th className="text-left px-5 py-2.5 font-medium">타입</th>
-              <th className="text-left px-5 py-2.5 font-medium">기본값</th>
-              <th className="px-3 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {colsLoading || filtered.length === 0 || colsFailed ? (
-              <TableStatusRow
-                loading={colsLoading}
-                empty={filtered.length === 0}
-                failed={colsFailed}
-                colSpan={5}
-                emptyText={!selectedCode
-                  ? '리더보드를 선택하면 필드가 표시됩니다.'
-                  : all.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
-              />
-            ) : (
-              pageRows.map((c) => {
-                const att = isAttached(c.column_name)
-                const pend = pendingByCol[c.column_name]
-                // 담아 둔 변경이 있으면 그 상태를 보여준다 — 라이브만 보이면 다시 눌러 취소한 줄 모른다.
-                const toggleView = pend?.action === 'attach'
-                  ? { text: '사용 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
-                  : pend?.action === 'detach'
-                    ? { text: '해제 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
-                    : att
-                      ? { text: '사용 중', cls: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' }
-                      : { text: '사용 안 함', cls: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' }
-                const inUse = usedFields.has(c.column_name)
-                if (pendingAddNames.has(c.column_name)) {
-                  return (
-                    <tr key={c.column_name} className="border-t border-neutral-100 bg-amber-50/40">
-                      <td className="px-5 py-3">
-                        <span
-                          title="게시한 뒤 이 리더보드에서 사용으로 켤 수 있습니다"
-                          className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap"
-                        >
-                          추가 예정
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-medium">{c.column_name}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
-                          {typeText(c.data_type)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-neutral-600 text-xs">{c.column_default == null ? '-' : defaultText(c)}</td>
-                      <td className="px-3 py-3" />
-                    </tr>
-                  )
-                }
+      <TableCard
+        columns={[
+          {
+            key: 'use', header: '사용', kind: 'status', cell: (c) => {
+              if (pendingAddNames.has(c.column_name)) {
                 return (
-                  <tr key={c.column_name} className="border-t border-neutral-100">
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => { void handleToggle(c, att, pend) }}
-                        disabled={!selectedCode || busy}
-                        title={pend ? '다시 누르면 담아 둔 변경을 취소합니다' : att ? '누르면 사용 해제를 담습니다' : '누르면 사용을 담습니다'}
-                        className={[
-                          'inline-flex items-center px-2.5 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap',
-                          toggleView.cls,
-                          !selectedCode || busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                        ].join(' ')}
-                      >
-                        {toggleView.text}
-                      </button>
-                    </td>
-                    <td className="px-5 py-3 font-medium">{c.column_name}</td>
-                    <td className="px-5 py-3">
-                      <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 whitespace-nowrap">
-                        {typeText(c.data_type)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-neutral-600 text-xs">
-                      {defaultText(c)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditCol(c)}
-                          title="기본값 수정"
-                          aria-label="기본값 수정"
-                          className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteCol(c)}
-                          disabled={inUse}
-                          title={inUse ? '사용 중인 리더보드가 있습니다. 먼저 각 리더보드에서 사용 해제 → 변경 관리에서 게시한 뒤 삭제하세요.' : '삭제'}
-                          className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <span
+                    title="게시한 뒤 이 리더보드에서 사용으로 켤 수 있습니다"
+                    className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700"
+                  >
+                    추가 예정
+                  </span>
                 )
-              })
-            )}
-          </tbody>
-        </table>
-        <TableFooter summary={<>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />
-      </WhiteCard>
+              }
+              const att = isAttached(c.column_name)
+              const pend = pendingByCol[c.column_name]
+              // 담아 둔 변경이 있으면 그 상태를 보여준다 — 라이브만 보이면 다시 눌러 취소한 줄 모른다.
+              const toggleView = pend?.action === 'attach'
+                ? { text: '사용 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
+                : pend?.action === 'detach'
+                  ? { text: '해제 예정', cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' }
+                  : att
+                    ? { text: '사용 중', cls: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' }
+                    : { text: '사용 안 함', cls: 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' }
+              return (
+                <button
+                  onClick={() => { void handleToggle(c, att, pend) }}
+                  disabled={!selectedCode || busy}
+                  title={pend ? '다시 누르면 담아 둔 변경을 취소합니다' : att ? '누르면 사용 해제를 담습니다' : '누르면 사용을 담습니다'}
+                  className={[
+                    'inline-flex items-center px-2.5 py-1 rounded text-xs font-medium transition-colors',
+                    toggleView.cls,
+                    !selectedCode || busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                  ].join(' ')}
+                >
+                  {toggleView.text}
+                </button>
+              )
+            },
+          },
+          { key: 'name', header: '필드', kind: 'mono', cell: (c) => c.column_name },
+          {
+            key: 'type', header: '타입', kind: 'name', cell: (c) => (
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">
+                {typeText(c.data_type)}
+              </span>
+            ),
+          },
+          {
+            key: 'default', header: '기본값', kind: 'text', cell: (c) =>
+              pendingAddNames.has(c.column_name) && c.column_default == null ? null : defaultText(c) || null,
+          },
+          {
+            key: 'actions', header: '', kind: 'actions', cell: (c) => {
+              if (pendingAddNames.has(c.column_name)) return <span className="inline-block w-[3.875rem]" />
+              const inUse = usedFields.has(c.column_name)
+              return (
+                <span className="inline-flex gap-1.5">
+                  <button
+                    onClick={() => setEditCol(c)}
+                    title="기본값 수정"
+                    aria-label="기본값 수정"
+                    className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteCol(c)}
+                    disabled={inUse}
+                    title={inUse ? '사용 중인 리더보드가 있습니다. 먼저 각 리더보드에서 사용 해제 → 변경 관리에서 게시한 뒤 삭제하세요.' : '삭제'}
+                    className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              )
+            },
+          },
+        ]}
+        rows={pageRows}
+        rowKey={(c) => c.column_name}
+        rowClassName={(c) => (pendingAddNames.has(c.column_name) ? 'bg-amber-50/40' : undefined)}
+        loading={colsLoading}
+        failed={colsFailed}
+        emptyText={!selectedCode
+          ? '리더보드를 선택하면 필드가 표시됩니다.'
+          : all.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
+        footer={<TableFooter summary={<>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />}
+      />
 
       <p className="text-xs text-neutral-500">
         이 리더보드에서 사용할 필드는 '사용'으로 켜 두세요. 켠 필드만 순위와 함께 주고받을 수 있습니다.
