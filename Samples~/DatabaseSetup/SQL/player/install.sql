@@ -2085,6 +2085,8 @@ as $$
 $$;
 
 -- 숫자 · (음수) · 참거짓 · now()·current_date 같은 시각 · 따옴표 글자, 그 뒤에 형 변환(::타입) 하나만.
+-- 형 변환 뒤는 타입 이름 목록으로만 받는다 — 아무 낱말이나 받으면 'x'::text references … on delete cascade 처럼
+-- 제약을 덧붙일 수 있다.
 create or replace function public.ts_schema_default_ok(p_default text)
 returns boolean
 language sql
@@ -2093,7 +2095,7 @@ set search_path = public
 as $$
   select p_default is null
       or btrim(p_default) = ''
-      or p_default ~* '^\s*(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|\(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?\)|true|false|null|now\(\)|current_date|current_timestamp|gen_random_uuid\(\)|''([^'']|'''')*'')(::[a-z][a-z0-9_ ]*(\[\])?)?\s*$'
+      or p_default ~* '^\s*(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?|\(-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?\)|true|false|null|now\(\)|current_date|current_timestamp|gen_random_uuid\(\)|''([^'']|'''')*'')(::(text|varchar|character varying|int2|smallint|int4|int|integer|int8|bigint|float4|real|float8|double precision|numeric|bool|boolean|timestamptz|timestamp with time zone|timestamp without time zone|timestamp|date|time without time zone|time|jsonb|json|uuid)(\[\])?)?\s*$'
 $$;
 
 revoke all on function public.ts_schema_type_ok(text)    from public, anon, authenticated;

@@ -78,7 +78,10 @@ async function syncAuthConfig(values: Record<string, string>): Promise<AuthSyncR
   };
 
   // 이메일 가입은 끈다 — SDK 에 이메일 로그인이 없고, 켜 두면 남의 지메일 주소로 먼저 가입해 두었다가 그 사람이
-  // 같은 주소의 구글 계정으로 처음 로그인할 때 계정을 가로채는 길이 생긴다(확인 메일을 건너뛰면 더 쉽다).
+  // 같은 주소의 구글 계정으로 처음 로그인할 때 계정을 가로채는 길이 생긴다.
+  // 이메일 자동 확인(mailer_autoconfirm)도 끈다 — 이메일 가입을 꺼도 게스트가 자기 정보 수정으로 이메일을 넣을 수 있고,
+  // 자동 확인이 켜져 있으면 그 이메일이 확인 메일 없이 확인된 것으로 적혀 같은 주소의 구글·애플 첫 로그인이 그 게스트 계정에 붙는다.
+  // 구글·애플은 확인된 이메일만 주므로 꺼도 소셜 첫 가입은 막히지 않는다.
   const patch: Record<string, unknown> = {
     external_anonymous_users_enabled: true,
     external_email_enabled: false,

@@ -30,6 +30,7 @@ await Supabase.SubmitScoreAsync(1250, row);
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 필드를 보냈습니다 |
+| `SupabaseReason.LeaderboardScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
 ::: info 행에 담긴 값은 전부 전송됩니다
 `Row`의 필드는 값을 바꾸지 않은 것까지 모두 보내집니다. 특정 필드만 갱신하는 개념이 아니라 "지금 이 값들로 채워라"에 가깝습니다.

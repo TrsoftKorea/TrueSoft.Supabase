@@ -4,34 +4,51 @@
     {
       "name": "docs",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "docs~", "run", "dev", "--", "--port", "5199"],
+      "runtimeArgs": [
+        "--prefix",
+        "docs~",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5199"
+      ],
       "port": 5199
     },
     {
       "name": "admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "Admin~",
       "port": 5273
     },
     {
       "name": "admin-build",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
+      "runtimeArgs": [
+        "run",
+        "preview",
+        "--",
+        "--port",
+        "4173"
+      ],
       "cwd": "Admin~",
       "port": 4173
     },
     {
       "name": "admin-mock",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "preview:mock"],
-      "cwd": "Admin~",
-      "port": 4174
+      "url": "http://localhost:4174"
     },
     {
       "name": "support-mock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "preview:support"],
+      "runtimeArgs": [
+        "run",
+        "preview:support"
+      ],
       "cwd": "Admin~",
       "port": 4175
     }

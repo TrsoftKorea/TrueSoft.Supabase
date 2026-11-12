@@ -312,6 +312,9 @@ namespace TrueBase.Core.Common
         /// <summary>기록할 점수가 전달되지 않았습니다.</summary>
         public const string LeaderboardScoreRequired = "leaderboard_score_required";
 
+        /// <summary>점수가 NaN이거나 무한대입니다.</summary>
+        public const string LeaderboardScoreInvalid = "leaderboard_score_invalid";
+
         /// <summary>리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다.</summary>
         public const string LeaderboardRowRequired = "leaderboard_row_required";
 

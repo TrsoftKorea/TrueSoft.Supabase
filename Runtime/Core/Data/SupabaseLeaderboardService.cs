@@ -87,6 +87,9 @@ namespace TrueBase.Core.Data
             if (string.IsNullOrWhiteSpace(code))
                 return SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardTableNotFound);
 
+            if (double.IsNaN(score) || double.IsInfinity(score))
+                return SupabaseResult<LeaderboardSubmitResult>.Fail(SupabaseErrorCode.LeaderboardScoreInvalid);
+
             var built = SupabaseRestHelpers.TrySerializeBody(new Dictionary<string, object>
             {
                 ["p_code"] = code.Trim(),

@@ -227,7 +227,8 @@ Temporary debug/session log files (e.g., `debug-*.log`) go at the **workspace ro
 
 콘솔(`Admin~/src`)을 고치면 **가짜 데이터 모드로 띄워 직접 확인한 뒤 사용자가 게시한다.** 실제 콘솔은 로그인이 필요해 에이전트가 볼 수 없고, 운영 서버 로그인에 비밀번호를 넣을 수도 없다.
 
-- 띄우기: 미리보기 설정 `admin-mock`(`npm run preview:mock`, http://localhost:4174) → "가짜 데이터로 들어가기". 밝은·어두운 화면을 둘 다 본다.
+- 띄우기: 미리보기 설정 `admin-mock`(http://localhost:4174) → "가짜 데이터로 들어가기". 밝은·어두운 화면을 둘 다 본다.
+  이 미리보기는 앱이 띄우지 않고 늘 떠 있다 — 로그인 때 시작 프로그램(`Startup\TrueBasePreview.vbs` — 저장소 밖이라 PC마다 등록한다)이 `Admin~/scripts/preview-service.mjs` 를 부르고, 화면 코드를 고치면 저절로 다시 빌드한다(새로고침하면 보인다). 응답이 없으면 `npm run preview:service`(Admin~)를 창 없이 띄운다 — 앱이 띄운 미리보기는 앱이 정리할 때 함께 꺼진다. 기록은 저장소 맨 위 `debug-preview-service.log`.
 - 가짜 응답은 `Admin~/src/mock/mockAdmin.ts` 의 HANDLERS. 새 화면을 만들면 그 화면의 action 도 여기 더한다(없으면 빈 목록). 가짜 데이터도 규칙(같은 날짜는 기간과 무관하게 같은 값, 나눈 값의 합 = 전체, 화면끼리 같은 숫자)을 지킨다 — 파일 맨 위에 적혀 있고 `npm run check:mock` 이 검사한다. 가짜 데이터를 고치면 돌린다.
 - 게시는 위 「게시」 절. **배포되는 건 화면뿐이다** — 화면이 새로 부르는 서버 쪽(`admin-api` 엣지 함수·`install.sql` 의 DB 함수)은 게시 전에 두 게임에 직접 올려 둔다. 안 올리면 새 화면에 "알 수 없는 action" 오류가 뜬다. 서버 쪽에서 옛 화면이 쓰던 것을 없애면 게시 전까지 실제 콘솔의 그 화면이 깨진다 — 그런 변경은 안내할 때 밝힌다.
 - 화면 꼴은 `.claude/rules/console.md` 가 정한다. 그중 기계가 가를 수 있는 것은 `npm run check:ui` 가 작업 끝마다(콘솔 파일이 바뀌었을 때) 검사해 새 어긋남을 막는다 — 이미 있는 어긋남은 기준선(`scripts/check-ui-baseline.json`)으로 남아 정리를 기다린다.
