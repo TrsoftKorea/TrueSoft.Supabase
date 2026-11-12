@@ -162,7 +162,7 @@ export default function CcuSection({
   return (
     <WhiteCard>
       <div className="border-b border-neutral-100 p-5 pb-3">
-        <CardHeader title="동시접속자" description="지금 접속 중인 플레이어 수와 그동안의 흐름을 봅니다." actions={
+        <CardHeader title="동시접속자" actions={
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <button key={r.hours} type="button" onClick={() => setHours(r.hours)}

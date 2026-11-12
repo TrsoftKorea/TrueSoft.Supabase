@@ -385,7 +385,7 @@ export default function UserDataTab({
 
       <WhiteCard>
         <div className="p-5 pb-3">
-          <CardHeader title="최근 변경 이력" description="이 플레이어의 데이터가 바뀌기 전 값을 최근 순으로 봅니다." />
+          <CardHeader title="변경 이력" description="바뀌기 전 값을 최근 순으로 봅니다." />
         </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">

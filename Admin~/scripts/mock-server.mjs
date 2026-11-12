@@ -93,15 +93,71 @@ function plannedFiles() {
 /** 목록에 없는 변경 — 다른 세션이 하던 것일 수 있다. 이름 변경은 새 이름으로 본다. */
 function unplannedFiles(files) {
   const plan = plannedFiles()
-  return plan ? files.filter((f) => !plan.has(f.file)).map((f) => f.file) : []
+  // 판 번호만 바뀐 package.json 은 확인 창에서 고른 것이라 목록에 없어도 된다.
+  const skipPkg = pkgVersionOnly()
+  return plan ? files.filter((f) => !plan.has(f.file) && !(skipPkg && f.file === PKG)).map((f) => f.file) : []
+}
+
+/** package.json 이 마지막 게시와 판 번호만 다른지(또는 같은지). */
+function pkgVersionOnly() {
+  try { return withoutVersion(fs.readFileSync(PKG_PATH, 'utf8')) === withoutVersion(headPkgText()) } catch { return false }
 }
 
 const textHash = (s) => crypto.createHash('sha1').update(s).digest('hex')
+
+// 게임이 받아 쓰는 SDK 코드. 이것이 바뀌면 package.json 의 판 번호도 올라가야 게시한다(2026-11-12 사용자 결정) —
+// 게임은 판 번호로 무엇이 바뀌었는지 가른다. DB·서버 함수(Samples~/DatabaseSetup)·문서·검사 도구는 게임 빌드에 안 들어가 뺀다.
+const SDK_CODE = /^(Runtime\/|Editor\/|Samples~\/(?!DatabaseSetup\/))/
+const parseVersion = (s) => (/^(\d+)\.(\d+)\.(\d+)/.exec(s ?? '') ?? []).slice(1).map(Number)
+// 게시 한 번에 한 단계만 오른다 — 게시 전에 쌓인 변경은 모두 같은 판이다. 다음 판이 될 수 있는 셋 중 하나여야 한다.
+const nextVersions = (v) => {
+  const [x = 0, y = 0, z = 0] = parseVersion(v)
+  return [`${x}.${y}.${z + 1}`, `${x}.${y + 1}.0`, `${x + 1}.0.0`]
+}
+const PKG = 'package.json'
+const PKG_PATH = path.join(REPO, PKG)
+const VERSION_FIELD = /("version"\s*:\s*")([^"]*)(")/
+const headPkgText = () => { try { return gitRaw('show', `HEAD:${PKG}`) } catch { return '' } }
+const versionOf = (text) => { try { return JSON.parse(text).version ?? '' } catch { return '' } }
+// 판 번호만 빼고 본 package.json — 확인 창에서 판을 고르면 이 파일이 바뀌므로, 창이 본 내용과 대조할 때 판 번호는 뺀다.
+const withoutVersion = (text) => text.replace(/\r\n/g, '\n').replace(VERSION_FIELD, '$1$3')
+const hasSdkCode = (files) => files.some((f) => SDK_CODE.test(f.file) || (f.orig && SDK_CODE.test(f.orig)))
+const tagName = (v) => `v${v}`
+const tagExists = (tag) => gitOk('rev-parse', '-q', '--verify', `refs/tags/${tag}`)
+
+/** 확인 창에 보일 판 번호 — 마지막 게시 판, 지금 적힌 판, 고를 수 있는 판. SDK 코드가 그대로면 "올리지 않음"도 고를 수 있다. */
+function versionInfo(files) {
+  const before = versionOf(headPkgText())
+  const now = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
+  const sdkChanged = hasSdkCode(files)
+  const choices = [...(sdkChanged ? [] : [before]), ...nextVersions(before)]
+  return { before, now, sdkChanged, choices }
+}
+
+/** 고른 판 번호를 package.json 에 적는다. 다른 줄은 건드리지 않는다. */
+function writeVersion(v) {
+  const text = fs.readFileSync(PKG_PATH, 'utf8')
+  if (versionOf(text) === v) return
+  fs.writeFileSync(PKG_PATH, text.replace(VERSION_FIELD, `$1${v}$3`))
+}
+
+function versionNotRaised(files) {
+  const code = files.filter((f) => SDK_CODE.test(f.file) || (f.orig && SDK_CODE.test(f.orig)))
+  const now = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
+  const before = versionOf(headPkgText())
+  if (now === before) {
+    return code.length ? { now, files: code.map((f) => f.file) } : null
+  }
+  // 판 번호를 바꿨으면 SDK 코드가 없어도 한 단계인지 본다.
+  const allowed = nextVersions(before)
+  return allowed.includes(now) ? null : { now, before, allowed }
+}
 
 /** 확인 창이 본 내용과 누를 때의 내용이 같은지 가르는 지문. 커밋은 작업 폴더 내용을 담으므로 파일 내용으로 잰다. */
 function fingerprint(f) {
   const full = path.join(REPO, f.file)
   if (!fs.existsSync(full)) return 'deleted'
+  if (f.file === PKG) return textHash(withoutVersion(fs.readFileSync(full, 'utf8')))
   try { return git('hash-object', '--', f.file) } catch { return 'unreadable' }
 }
 
@@ -169,14 +225,20 @@ function commitFiles(files, message) {
 
 /** 확인 창이 본 목록·내용과 지금이 같은지. 다르면 그사이 누가 고친 것이다 — 본 적 없는 것을 올리지 않는다. */
 function sameAsSeen(seen, files) {
-  if (!Array.isArray(seen) || seen.length !== files.length) return false
+  if (!Array.isArray(seen)) return false
+  // 판 번호만 바뀐 package.json 은 창에서 판을 고르면 생기거나 사라진다 — 양쪽에서 빼고 본다.
+  if (pkgVersionOnly()) {
+    seen = seen.filter((s) => s?.file !== PKG)
+    files = files.filter((f) => f.file !== PKG)
+  }
+  if (seen.length !== files.length) return false
   const now = new Map(files.map((f) => [f.file, fingerprint(f)]))
   return seen.every((s) => s && now.get(s.file) === s.hash)
 }
 
 function publish(seen) {
-  const { consoleFiles, sdkFiles } = groups()
-  const all = [...sdkFiles, ...consoleFiles]
+  let { consoleFiles, sdkFiles } = groups()
+  let all = [...sdkFiles, ...consoleFiles]
   const before = unpushed()
   if (all.length === 0 && before.length === 0) return { ok: false, error: '게시할 변경이 없습니다.' }
   const secrets = secretLike(all)
@@ -192,17 +254,59 @@ function publish(seen) {
     return { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이나 요약이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 내용을 확인해 주세요.' }
   }
 
+  // 확인 창에서 고른 판 번호를 적는다. 고를 수 있는 판이 아니면 거절한다(창을 연 사이 마지막 게시가 바뀐 경우 등).
+  const info = versionInfo(all)
+  const chosen = typeof seen?.version === 'string' ? seen.version : info.now
+  if (!info.choices.includes(chosen)) {
+    return { ok: false, error: `판 번호 ${chosen} 은 고를 수 없습니다. 고를 수 있는 판: ${info.choices.join(' · ')}` }
+  }
+  const raised = chosen !== info.before
+  if (raised && tagExists(tagName(chosen))) {
+    return { ok: false, error: `판 ${chosen} 은 이미 게시된 적이 있어(이름표 ${tagName(chosen)}) 다시 쓸 수 없습니다.` }
+  }
+  writeVersion(chosen)
+  ;({ consoleFiles, sdkFiles } = groups())
+  all = [...sdkFiles, ...consoleFiles]
+
+  const stale = versionNotRaised(all)
+  if (stale?.allowed) {
+    return { ok: false, error: `판 번호가 ${stale.before} 에서 ${stale.now} 로 한 번에 두 단계 이상 바뀌어 게시하지 않았습니다. 게시 한 번에는 ${stale.allowed.join(' · ')} 중 하나만 됩니다.` }
+  }
+  if (stale) {
+    return { ok: false, error: `SDK 코드가 바뀌었는데 판 번호(${stale.now})가 그대로라 게시하지 않았습니다. 판 번호를 올려 주세요: ${stale.files.slice(0, 5).join(', ')}${stale.files.length > 5 ? ' 외' : ''}` }
+  }
+
+  // 게임이 판 번호로 골라 받을 수 있게 이름표(태그)를 단다. 지난 판에 이름표가 없으면(이 기능 전에 낸 판) 그 판에도 단다 —
+  // 마지막 게시 커밋이 곧 그 판의 마지막 모습이다.
+  const tags = []
+  const headBefore = git('rev-parse', 'HEAD')
+  if (raised && info.before && !tagExists(tagName(info.before))) {
+    git('tag', '-a', tagName(info.before), '-m', `SDK ${info.before}`, headBefore)
+    tags.push(tagName(info.before))
+  }
+
   const commits = []
   const sdkMessage = readMessage(SDK_MESSAGE_FILE) || 'SDK·DB 변경 게시'
   const consoleMessage = readMessage(MESSAGE_FILE) || '콘솔 화면 게시'
   // SDK·DB 먼저 — 배포 작업은 푸시의 마지막 커밋을 빌드하므로 콘솔 커밋이 맨 위에 오게 한다.
   if (sdkFiles.length) commits.push({ kind: 'sdk', hash: commitFiles(sdkFiles, sdkMessage) })
+  // 이번 판의 이름표는 판 번호를 마지막으로 바꾼 커밋(= 그 판의 SDK 커밋)에 단다. 판을 올린 게시가 푸시에 실패해
+  // 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라 "이름표가 있는지"로 가른다.
+  const current = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
+  if (current && !tagExists(tagName(current))) {
+    git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('log', '-1', '--format=%H', '--', PKG))
+    tags.push(tagName(current))
+  }
   if (consoleFiles.length) commits.push({ kind: 'console', hash: commitFiles(consoleFiles, consoleMessage) })
   // 요약은 커밋에 쓰였으니 바로 지운다 — 푸시가 실패해 남으면 다음 게시에 엉뚱한 요약이 붙는다.
   for (const f of [MESSAGE_FILE, SDK_MESSAGE_FILE, FILES_FILE]) if (fs.existsSync(f)) fs.rmSync(f)
   try {
     git('push', '-q')
+    // 이름표는 커밋이 올라간 뒤에 올린다 — 먼저 올리면 GitHub 에 커밋 없는 이름표만 남을 수 있다.
+    if (tags.length) git('push', '-q', 'origin', ...tags.map((t) => `refs/tags/${t}`))
   } catch (e) {
+    // 받아온 뒤 커밋이 다시 얹히면 이름표가 옛 커밋을 가리킨다 — 지우고, 다시 게시할 때 새로 단다.
+    for (const t of tags) gitOk('tag', '-d', t)
     const made = commits.map((c) => c.hash).join(', ')
     const text = `${e.stderr || ''}\n${e.message ?? e}`.trim()
     // GitHub 에 더 새 커밋이 있으면(다른 PC 에서 게시) 받아오기 전까지 몇 번을 눌러도 거절된다.
@@ -212,7 +316,7 @@ function publish(seen) {
     return { ok: false, error: `커밋(${made})은 했지만 푸시하지 못했습니다. 다시 게시하면 이 커밋도 함께 올라갑니다: ${text.split('\n')[0]}` }
   }
   deployCache = null
-  return { ok: true, commits, alsoPushed: before.length, actionsUrl: ACTIONS_URL }
+  return { ok: true, commits, tags, version: chosen, alsoPushed: before.length, actionsUrl: ACTIONS_URL }
 }
 
 function readBody(req) {
@@ -347,6 +451,7 @@ http.createServer(async (req, res) => {
         messages: messagesNow(),
         blocked: secretLike([...consoleFiles, ...sdkFiles]),
         unplanned: unplannedFiles([...consoleFiles, ...sdkFiles]),
+        version: versionInfo([...consoleFiles, ...sdkFiles]),
       })
     }
     if (req.url === '/__publish/deploy' && req.method === 'GET') {

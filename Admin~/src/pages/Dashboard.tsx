@@ -30,7 +30,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
   )
 }
 
-function StatSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function StatSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
     <WhiteCard>
       <div className="border-b border-neutral-100 p-5 pb-3">
@@ -96,7 +96,7 @@ export default function Dashboard({
         </WhiteCard>
       ) : stats && (
         <div className="space-y-4">
-          <StatSection title="플레이어" description="가입하고 활동하는 플레이어 수를 봅니다.">
+          <StatSection title="플레이어">
             <StatTile label="총 가입자" value={n(stats.total_players)} />
             <StatTile label="오늘 신규 가입" value={n(stats.new_today)} />
             <StatTile label="최근 7일 신규 가입" value={n(stats.new_7d)} />

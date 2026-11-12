@@ -152,7 +152,7 @@ const RULES = [
     // 2026-11-10 에 카드 첫 자식 80곳을 나열해 대 보니 이 꼴만 걸리고 본문 칸은 안 걸렸다.
     find: (t) => matchAll(t, /<WhiteCard\b[^>]*>\s*(?:<div\b[^>]*className="[^"]*\bborder-b\b[^"]*"[^>]*>\s*(?:<div\b[^>]*>\s*)?)?<(?:div|p|span)\b[^>]*className="[^"]*\bfont-(?:medium|semibold|bold)\b/g),
     bad: '<WhiteCard>\n  <div className="border-b border-neutral-100 px-5 py-3">\n    <span className="text-sm font-medium text-neutral-800">리텐션</span>',
-    good: '<WhiteCard className="p-5">\n  <CardHeader title="새 분류 추가" description="…" />\n</WhiteCard><WhiteCard><div className="border-b p-5 pb-3">\n<CardHeader title="리텐션" description="…" />',
+    good: '<WhiteCard className="p-5">\n  <CardHeader title="분류 추가" description="…" />\n</WhiteCard><WhiteCard><div className="border-b p-5 pb-3">\n<CardHeader title="리텐션" description="…" />',
   },
   {
     id: 'U17', name: '표를 직접 짬', fix: 'TableCard(또는 DataTable)를 쓰고 칸마다 종류(kind)를 정한다 — 폭·정렬·줄바꿈은 종류가 맡는다',
@@ -164,7 +164,7 @@ const RULES = [
     id: 'U18', name: `제목이 ${TITLE_MAX}자를 넘음`, fix: '위에서 이미 보이는 말("이 플레이어의"·"프로젝트"·"새")을 빼고 줄인다. 뜻이 더 필요하면 설명으로',
     // 글자를 그대로 넣은 제목만 본다 — 값·식으로 넣은 제목은 길이를 모른다. 띄어쓰기도 센다(화면에서 차지하는 폭이라서).
     find: (t) => longTitles(maskComments(t)),
-    bad: '<TableCard rowKey={(r) => r.id} title="이 플레이어의 최근 변경 이력" />',
+    bad: '<TableCard rowKey={(r) => r.id} title="이 플레이어의 최근 변경 이력" /><ConfirmDialog open title={a ? \'거두기\' : \'새로 들어온 플레이어에게 그만 보내기\'} />',
     good: '<TableCard rowKey={(r) => r.id} title="변경 이력" actions={<Button title="이 줄을 처음부터 다시 불러오기">새로</Button>} /><PageHeader title={name} />',
   },
   {
@@ -218,10 +218,12 @@ function longTitles(t) {
       if (depth === 0 || (depth === 1 && c === '{')) outer.push(i)
     }
     const attrs = t.slice(from, end)
-    for (const a of attrs.matchAll(/\btitle=(?:"([^"]*)"|\{\s*(['"])([^'"]*)\2\s*\})/g)) {
+    // title={조건 ? '…' : '…'} 처럼 식 안에 글자를 넣은 것도 글자마다 잰다 — 변수만 든 식은 글자가 없어 안 걸린다.
+    for (const a of attrs.matchAll(/\btitle=(?:"([^"]*)"|\{([^{}]*)\})/g)) {
       if (!outer.includes(from + a.index)) continue
-      const text = a[1] ?? a[3] ?? ''
-      if ([...text].length > TITLE_MAX) out.push({ index: from + a.index, 1: text })
+      const texts = a[1] !== undefined ? [a[1]] : [...a[2].matchAll(/(['"])([^'"]*)\1/g)].map((q) => q[2])
+      const long = texts.find((text) => [...text].length > TITLE_MAX)
+      if (long !== undefined) out.push({ index: from + a.index, 1: long })
     }
   }
   return out

@@ -42,6 +42,8 @@ const JOB_LABELS: Record<string, string> = {
   'usage-sync-check': 'Supabase 사용량 기록이 제때 됐는지 확인',
   'purchase-refund-sync-google': '구글 환불 확인',
   'purchase-price-sync': '환율표·빈 결제 금액 채우기',
+  'auth-config-sync': '로그인 설정 반영',
+  'auth-config-sync-check': '로그인 설정 반영이 제때 됐는지 확인',
   'push-send': '남은 푸시 알림 보내기',
   'push-outbox-cleanup': '30일 지난 푸시 기록 정리',
 }
@@ -49,9 +51,18 @@ const JOB_LABELS: Record<string, string> = {
 // pg_cron 일정은 UTC 다. 화면에는 게임 시간대로 보인다(서머타임이 있으면 오늘 기준 시차).
 function scheduleInfo(s: string, tz: string): { text: string; minutes: number | null } {
   const p = s.trim().split(/\s+/)
-  if (p.length !== 5 || p[2] !== '*' || p[3] !== '*' || p[4] !== '*') return { text: s, minutes: null }
   const m = p[0] ?? ''
   const h = p[1] ?? ''
+  // 매주 한 요일 — 시차로 요일이 바뀔 수 있어 그 요일의 UTC 시각 하나를 게임 시간대로 옮겨 읽는다.
+  if (p.length === 5 && p[2] === '*' && p[3] === '*' && /^[0-6]$/.test(p[4] ?? '') && /^\d+$/.test(m) && /^\d+$/.test(h)) {
+    const now = new Date()
+    const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), Number(h), Number(m))
+    const at = new Date(base + ((Number(p[4]) - now.getUTCDay() + 7) % 7) * 86_400_000)
+    const local = zonedParts(at, tz)
+    const day = '일월화수목금토'[local.dow] ?? ''
+    return { text: `매주 ${day}요일 ${String(local.hh).padStart(2, '0')}:${String(local.mm).padStart(2, '0')}`, minutes: 7 * 1440 }
+  }
+  if (p.length !== 5 || p[2] !== '*' || p[3] !== '*' || p[4] !== '*') return { text: s, minutes: null }
   if (m === '*' && h === '*') return { text: '매분', minutes: 1 }
   const every = /^\*\/(\d+)$/.exec(m)
   if (every && h === '*') return { text: `${every[1]}분마다`, minutes: Number(every[1]) }

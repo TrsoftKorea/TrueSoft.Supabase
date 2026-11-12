@@ -14,8 +14,9 @@ type PublishStatus = {
   messages: string
   blocked: string[]
   unplanned: string[]
+  version: { before: string; now: string; sdkChanged: boolean; choices: string[] }
 }
-type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; alsoPushed?: number; error?: string }
+type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; tags?: string[]; version?: string; alsoPushed?: number; error?: string }
 type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'elsewhere' | 'unknown'
 type Deploy = {
   ok: boolean; error?: string; checkedAt: string; phase: Phase
@@ -144,6 +145,40 @@ function FileGroup({ title, note, group }: { title: string; note?: string | unde
   )
 }
 
+/** 마지막 게시 판에서 어느 자리가 올랐는지로 붙이는 이름. */
+function versionKind(before: string, v: string): string {
+  if (v === before) return '올리지 않음'
+  const [a = 0, b = 0] = before.split('.').map(Number)
+  const [x = 0, y = 0] = v.split('.').map(Number)
+  return x > a ? '큰 변경' : y > b ? '기능 추가' : '고침'
+}
+
+/** 게시할 SDK 판 번호 고르기. 게시 한 번에는 한 단계만 오를 수 있어 고를 수 있는 판만 보인다. */
+function VersionPicker({ info, value, onChange }: { info: PublishStatus['version']; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="rounded-lg border border-neutral-200 px-3.5 py-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium whitespace-nowrap">SDK 판</span>
+        <span className="text-neutral-500 whitespace-nowrap">마지막 게시 {info.before || '-'}</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {info.choices.map((v) => (
+          <button key={v} type="button" onClick={() => onChange(v)}
+            className={['px-3 py-1.5 rounded-md border text-sm whitespace-nowrap',
+              value === v ? 'border-[#1677ff] bg-brand-soft text-[#1677ff] font-medium' : 'border-neutral-200 text-neutral-700 hover:bg-neutral-50'].join(' ')}>
+            <span className="tabular-nums">{v}</span>
+            <span className="ml-1.5 text-xs opacity-70">{versionKind(info.before, v)}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-neutral-500">
+        {info.sdkChanged ? '게임이 받는 SDK 코드가 바뀌어 판을 올려야 합니다. ' : ''}
+        올린 판은 게임에서 판 번호로 골라 받을 수 있습니다.
+      </p>
+    </div>
+  )
+}
+
 type StepState = 'done' | 'busy' | 'todo' | 'bad'
 
 function StepMark({ state }: { state: StepState }) {
@@ -177,6 +212,7 @@ export function PublishBar() {
   const [deploy, setDeploy] = useState<Deploy | null>(null)
   const [deployError, setDeployError] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const [version, setVersion] = useState('')
 
   const refresh = useCallback(async () => {
     try {
@@ -231,6 +267,9 @@ export function PublishBar() {
     try {
       const s = await call<PublishStatus>('/__publish/status', 'GET')
       if (!s.ok) throw new Error(s.error ?? '게시할 내용을 읽지 못했습니다.')
+      // 지금 적힌 판이 고를 수 있는 판이면 그대로, 아니면 끝자리를 올린 판을 먼저 고른다.
+      const v = s.version
+      setVersion(v.choices.includes(v.now) ? v.now : v.choices.find((c) => c !== v.before) ?? v.now)
       setStatus(s)
     } catch (e) {
       setError(e instanceof Error ? e.message : '게시할 내용을 읽지 못했습니다.')
@@ -252,7 +291,7 @@ export function PublishBar() {
     setPublishedAt(Date.now())
     setLocal({ stage: 'pushing', hash: '', at: Date.now() })
     try {
-      const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.map((c) => c.full), messages: status.messages })
+      const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.map((c) => c.full), messages: status.messages, version })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
       const hash = r.commits?.find((c) => c.kind === 'console')?.hash ?? ''
       setLocal(deploys && hash ? { stage: 'pushed', hash, at: Date.now() } : null)
@@ -264,7 +303,7 @@ export function PublishBar() {
       setPublishError(e instanceof Error ? e.message : '게시하지 못했습니다.')
       void refresh()
     }
-  }, [refresh, status])
+  }, [refresh, status, version])
 
   const summary = summarize(deploy, deployError, elapsed, finished, local)
   const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
@@ -408,6 +447,7 @@ export function PublishBar() {
             <FileGroup title="콘솔 화면" group={status.console}
               note={status.console.deploys ? undefined : '화면 코드는 그대로라 실제 콘솔은 다시 배포되지 않습니다.'} />
             <FileGroup title="SDK·DB·문서" group={status.sdk} />
+            <VersionPicker info={status.version} value={version} onChange={setVersion} />
             {status.unpushed.length > 0 && (
               <div className="space-y-1">
                 <span className="text-sm font-semibold text-neutral-900">앞서 만들어 둔 커밋 {status.unpushed.length}개도 함께 올라갑니다</span>

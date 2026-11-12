@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { TableFooter } from '../../components/ui/TableFooter'
@@ -50,18 +50,23 @@ export default function MailsTab({
     setError(e instanceof Error ? e.message : fallback)
   }, [onUnauthenticated])
 
+  // 쪽을 빠르게 넘기면 늦게 온 옛 응답이 새 쪽을 덮는다 — 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setFailed(false)
     try {
       // 검색어 칸이 계정 ID 도 찾는다. 전체 ID 를 넣으므로 이 사람 것만 걸린다.
-      setData(await callAdmin<MailData>(target, 'mails.getRecords', { search: accountId, page }))
+      const res = await callAdmin<MailData>(target, 'mails.getRecords', { search: accountId, page })
+      if (req === loadReq.current) setData(res)
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       report(e, '받은 우편을 불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, accountId, page, report])
 

@@ -435,6 +435,7 @@ function StoreStatusCard({
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [savedKey, setSavedKey] = useState('')
+  const [syncProblem, setSyncProblem] = useState('')
   const [saveError, setSaveError] = useState('')
   const [tab, setTab] = useState<ServiceTab>('supabase')
 
@@ -488,7 +489,11 @@ function StoreStatusCard({
     setSaving(true)
     setSaveError('')
     try {
-      await callAdmin(target, 'settings.setServerConfig', { key: editing.key, secretValue: editing.clear ? '' : value })
+      const res = await callAdmin<{ authSync?: { ok: boolean; message: string } } | null>(
+        target, 'settings.setServerConfig', { key: editing.key, secretValue: editing.clear ? '' : value },
+      )
+      // 값은 저장됐지만 로그인 설정에 다 반영하지 못한 경우 — 저장 표시 옆에 그 사유를 빨갛게 보인다.
+      setSyncProblem(res?.authSync && !res.authSync.ok ? res.authSync.message : '')
       setSavedKey(editing.key)
       setEditing(null)
       setValue('')
@@ -564,7 +569,9 @@ function StoreStatusCard({
                           </>
                         )}
                         {row?.source === 'supabase' && <span>콘솔 밖에서 넣은 값 사용 중</span>}
-                        {savedKey === k.key && <span className="ml-2 text-green-600 whitespace-nowrap">저장했습니다.</span>}
+                        {savedKey === k.key && (syncProblem
+                          ? <span className="ml-2 text-red-600">저장했습니다. {syncProblem}</span>
+                          : <span className="ml-2 text-green-600 whitespace-nowrap">저장했습니다.</span>)}
                       </td>
                       <td className="py-2 pr-3 text-right">
                         {view

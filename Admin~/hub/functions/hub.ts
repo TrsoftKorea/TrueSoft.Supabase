@@ -74,6 +74,16 @@ function ensureSchema(db: D1Database): Promise<void> {
         updated_by text,
         must_change integer not null default 0
       )`),
+      // 이 시각보다 먼저 받은 표는 무효다(verifyToken). 초대를 지우면 비밀번호 행도 지워지므로 끊는 시각을 따로 둔다 —
+      // 그 행에만 두면 다시 초대했을 때 지우기 전에 받은 표가 되살아난다.
+      db.prepare('create table if not exists token_cutoffs (email text primary key, cut_at text not null)'),
+      // 비밀번호 로그인 시도 수(성공하면 지운다). 이메일마다 LOGIN_WINDOW 안에 LOGIN_MAX_FAILURES 번 틀리면 그만큼 막는다.
+      db.prepare(`create table if not exists login_failures (
+        email text primary key,
+        count integer not null,
+        window_start text not null,
+        locked_until text
+      )`),
     ])
     // must_change 가 생기기 전에 만든 표에 칸을 더한다.
     const { results: cols } = await db.prepare('pragma table_info(passwords)').all<{ name: string }>()
@@ -131,10 +141,14 @@ async function verifyToken(db: D1Database, token: string, allowPending = false):
     if (payload.aud !== 'truebase-hub' || typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null
     if (typeof payload.email !== 'string' || typeof payload.iat !== 'number') return null
     if (payload.pwc === true && !allowPending) return null
-    // 비밀번호를 바꾸면 그 전에 받은 표를 끊는다 — 유출이 의심돼 바꿨을 때 남의 로그인을 바로 막으려는 것이다.
+    // 비밀번호를 바꾸거나 초대를 지우면 그 전에 받은 표를 끊는다 — 유출이 의심돼 바꿨을 때 남의 로그인을 바로 막으려는 것이다.
     // 발급 시각은 초까지만 있어 초로 맞춘다(바꾼 바로 그 초에 다시 로그인한 표까지 끊지 않게).
-    const pw = await db.prepare('select updated_at from passwords where email = ?').bind(payload.email).first<{ updated_at: string }>()
-    if (pw && payload.iat < Math.floor(Date.parse(pw.updated_at) / 1000)) return null
+    const cut = await db
+      .prepare(`select max(t) as t from (select updated_at as t from passwords where email = ?1
+                                         union all select cut_at from token_cutoffs where email = ?1)`)
+      .bind(payload.email)
+      .first<{ t: string | null }>()
+    if (cut?.t && payload.iat < Math.floor(Date.parse(cut.t) / 1000)) return null
     return payload.email
   } catch {
     return null
@@ -173,6 +187,49 @@ async function passwordMatches(password: string, stored: string): Promise<boolea
     return diff === 0
   } catch {
     return false
+  }
+}
+
+// 없는 이메일에도 같은 시간을 들인다 — 응답 시간으로 비밀번호가 있는 계정을 가려내지 못하게.
+const DUMMY_HASH = `pbkdf2$${PBKDF2_ITERATIONS}$${'A'.repeat(22)}==$${'A'.repeat(43)}=`
+
+// ── 비밀번호 로그인 실패 제한 ─────────────────────────────────────────────────────
+const LOGIN_MAX_FAILURES = 5
+const LOGIN_WINDOW_MS = 15 * 60_000
+
+/**
+ * 비밀번호를 맞춰 보기 전에 시도 하나를 센다 — 맞춰 본 뒤에 세면 한꺼번에 보낸 요청이 모두 확인을 통과한다.
+ * 한 문장으로 세므로 동시 요청도 저마다 다른 번호를 받는다. 성공하면 기록을 지우므로 남은 수는 곧 틀린 수다.
+ * 창 안에서 LOGIN_MAX_FAILURES 번을 넘는 시도부터 막고, 막힌 동안은 세지 않는다.
+ */
+async function claimLoginAttempt(db: D1Database, email: string): Promise<void> {
+  const now = Date.now()
+  const nowIso = new Date(now).toISOString()
+  // 없는 이메일로도 줄이 생기므로, 창도 잠금도 끝난 줄은 그때그때 지운다 — 안 지우면 아무나 줄을 끝없이 쌓는다.
+  await db
+    .prepare('delete from login_failures where window_start < ?1 and (locked_until is null or locked_until < ?2)')
+    .bind(new Date(now - LOGIN_WINDOW_MS).toISOString(), nowIso)
+    .run()
+  const row = await db
+    .prepare(`insert into login_failures (email, count, window_start, locked_until) values (?1, 1, ?2, null)
+              on conflict (email) do update set
+                count = case when login_failures.locked_until > ?2 then login_failures.count
+                             when login_failures.window_start < ?3 then 1
+                             else login_failures.count + 1 end,
+                window_start = case when login_failures.locked_until > ?2 then login_failures.window_start
+                                    when login_failures.window_start < ?3 then ?2
+                                    else login_failures.window_start end,
+                locked_until = case when login_failures.locked_until > ?2 then login_failures.locked_until
+                                    when login_failures.window_start < ?3 then null
+                                    when login_failures.count + 1 > ?5 then ?4
+                                    else null end
+              returning count, locked_until`)
+    .bind(email, nowIso, new Date(now - LOGIN_WINDOW_MS).toISOString(), new Date(now + LOGIN_WINDOW_MS).toISOString(), LOGIN_MAX_FAILURES)
+    .first<{ count: number; locked_until: string | null }>()
+  // 기록을 못 남겼으면 확인하지 않는다 — 세지 못한 채 비밀번호를 맞춰 보게 두지 않는다.
+  if (!row) throw new HubError('로그인을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', 503)
+  if (row.locked_until && row.locked_until > nowIso) {
+    throw new HubError('비밀번호를 여러 번 틀려 15분 동안 로그인이 막혔습니다.', 429)
   }
 }
 
@@ -258,13 +315,14 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       let mustChange = false
       if (typeof params['password'] === 'string') {
         email = cleanEmail(str(params, 'email'))
+        await claimLoginAttempt(db, email)
         const row = await db
           .prepare('select password_hash, must_change from passwords where email = ?')
           .bind(email)
           .first<{ password_hash: string; must_change: number }>()
-        if (!row || !(await passwordMatches(params['password'], row.password_hash))) {
-          throw new HubError('이메일 또는 비밀번호가 올바르지 않습니다.', 401)
-        }
+        const matched = await passwordMatches(params['password'], row?.password_hash ?? DUMMY_HASH)
+        if (!row || !matched) throw new HubError('이메일 또는 비밀번호가 올바르지 않습니다.', 401)
+        await db.prepare('delete from login_failures where email = ?').bind(email).run()
         mustChange = row.must_change === 1
       } else {
         email = await verifyGoogleIdToken(str(params, 'idToken'), env.GOOGLE_CLIENT_ID)
@@ -288,7 +346,10 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       const row = await db.prepare('select password_hash from passwords where email = ?').bind(email).first<{ password_hash: string }>()
       if (!row) throw new HubError('비밀번호로 들어온 계정만 바꿀 수 있습니다.', 400)
       const current = typeof params['currentPassword'] === 'string' ? params['currentPassword'] : ''
+      // 지금 비밀번호 맞혀 보기도 로그인과 같은 횟수 제한을 받는다 — 표를 훔친 사람이 무제한으로 맞혀 보고 비밀번호를 바꾸지 못하게.
+      await claimLoginAttempt(db, email)
       if (!(await passwordMatches(current, row.password_hash))) throw new HubError('지금 비밀번호가 올바르지 않습니다.', 400)
+      await db.prepare('delete from login_failures where email = ?').bind(email).run()
       const next = typeof params['newPassword'] === 'string' ? params['newPassword'] : ''
       if (next.length < MIN_PASSWORD_LENGTH) throw new HubError(`비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`, 400)
       if (next === current) throw new HubError('지금과 다른 비밀번호를 넣어 주세요.', 400)
@@ -299,7 +360,8 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       return { token: await issueToken(db, email), email, invited, isMaster, mustChange: false }
     }
 
-    // 프로젝트 admin-api 가 운영자의 표를 확인한다. 초대 여부는 지금 다시 본다 — 초대를 지우면 바로 막힌다.
+    // 프로젝트 admin-api 가 운영자의 표를 확인한다. 초대 여부는 지금 다시 본다 — 부르는 쪽이 invited·isMaster 로 막는다.
+    // 초대를 지우면 그 전에 받은 표는 여기서 바로 무효가 된다(token_cutoffs).
     case 'verify': {
       const email = await verifyToken(db, str(params, 'token'))
       if (!email) throw new HubError('초대 표가 없거나 만료됐습니다. 다시 로그인해 주세요.', 401)
@@ -347,12 +409,14 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       const email = cleanEmail(str(params, 'email'))
       if (!(await isInvited(db, email))) throw new HubError('트루베이스에 초대된 사람만 비밀번호를 받을 수 있습니다.', 400)
       const password = tempPassword()
-      await db
-        .prepare(`insert into passwords (email, password_hash, updated_at, updated_by, must_change) values (?, ?, ?, ?, 1)
-                  on conflict (email) do update set password_hash = excluded.password_hash,
-                    updated_at = excluded.updated_at, updated_by = excluded.updated_by, must_change = 1`)
-        .bind(email, await hashPassword(password), new Date().toISOString(), caller)
-        .run()
+      // 막혀 있던 로그인도 푼다 — 새 임시 비밀번호를 받은 사람이 15분을 기다리지 않게.
+      await db.batch([
+        db.prepare(`insert into passwords (email, password_hash, updated_at, updated_by, must_change) values (?, ?, ?, ?, 1)
+                    on conflict (email) do update set password_hash = excluded.password_hash,
+                      updated_at = excluded.updated_at, updated_by = excluded.updated_by, must_change = 1`)
+          .bind(email, await hashPassword(password), new Date().toISOString(), caller),
+        db.prepare('delete from login_failures where email = ?').bind(email),
+      ])
       return { password }
     }
 
@@ -372,6 +436,9 @@ async function handle(env: Env, action: string, params: Params, bearer: string):
       await db.batch([
         db.prepare('delete from invites where email = ?').bind(email),
         db.prepare('delete from passwords where email = ?').bind(email),
+        db.prepare('delete from login_failures where email = ?').bind(email),
+        db.prepare(`insert into token_cutoffs (email, cut_at) values (?, ?)
+                    on conflict (email) do update set cut_at = excluded.cut_at`).bind(email, new Date().toISOString()),
       ])
       return null
     }

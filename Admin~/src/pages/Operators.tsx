@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Plus, RotateCcw, Trash2, UserMinus } from 'lucide-react'
 import { callAdmin, callHub, NotAuthenticatedError } from '../lib/api'
 import { getHubToken } from '../lib/googleAuth'
@@ -40,8 +40,11 @@ export default function Operators({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // 더할 수 있는 사람은 트루베이스 구성원(초대된 사람)뿐이라 목록에서 고른다. null 은 아직 못 불러온 것.
-  const [members, setMembers] = useState<Member[] | null>(null)
+  // 더할 수 있는 사람은 트루베이스 구성원(초대된 사람)뿐이라 목록에서 고른다. null 은 아직 못 불러온 것,
+  // 'failed' 는 못 불러온 것 — 빈 목록으로 두면 실패가 "더할 수 있는 구성원이 없습니다"로 보인다.
+  // 'expired' 는 트루베이스 로그인이 끝난 것 — 다시 불러와도 안 되므로 다시 로그인하라고 보인다.
+  const [members, setMembers] = useState<Member[] | null | 'failed' | 'expired'>(null)
+  const membersReq = useRef(0)
   const [email, setEmail] = useState('')
   const [adding, setAdding] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -84,17 +87,23 @@ export default function Operators({
     void load()
   }, [load])
 
-  useEffect(() => {
+  // 추가 창을 열 때마다 다시 부른다 — 화면을 연 뒤 새로 초대된 사람도 고를 수 있고, 한 번 실패해도 다시 열면 된다.
+  // 실패는 창 안에 보인다(페이지 띠는 창 뒤에 가린다). 저장소 표가 없거나 만료돼도 콘솔에서 내보내지 않는다 —
+  // 이 프로젝트의 다른 화면은 그대로 쓸 수 있다.
+  // 창을 닫았다 다시 열면 앞 요청이 늦게 올 수 있다 — 마지막 요청의 답만 반영한다.
+  const loadMembers = useCallback(() => {
+    const req = ++membersReq.current
+    setMembers(null)
     callHub<Member[]>('members.list')
-      .then(setMembers)
+      .then((list) => { if (req === membersReq.current) setMembers(list) })
       .catch((e: unknown) => {
-        setMembers([])
-        report(e, '트루베이스 구성원을 불러오지 못했습니다.')
+        if (req === membersReq.current) setMembers(e instanceof NotAuthenticatedError ? 'expired' : 'failed')
       })
-  }, [report])
+  }, [])
 
+  const memberList = Array.isArray(members) ? members : []
   // 이미 이 프로젝트에 있는 사람(비활성 포함 — 되살리기는 마스터의 "복구")은 빼고 보인다.
-  const candidates = (members ?? []).filter((m) => !rows.some((r) => r.email === m.email))
+  const candidates = memberList.filter((m) => !rows.some((r) => r.email === m.email))
 
   const add = async () => {
     const picked = candidates.find((m) => m.email === email)
@@ -193,7 +202,7 @@ export default function Operators({
         title="운영자 관리"
         actions={<>
           <RefreshButton onClick={() => void load()} loading={loading} />
-          <Button variant="primary" onClick={() => { setEmail(''); setAddError(''); setAddOpen(true) }}>
+          <Button variant="primary" onClick={() => { setEmail(''); setAddError(''); setAddOpen(true); loadMembers() }}>
             <Plus className="w-4 h-4" />운영자 추가
           </Button>
         </>}
@@ -229,7 +238,7 @@ export default function Operators({
             <select
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={members === null || candidates.length === 0}
+              disabled={!Array.isArray(members) || candidates.length === 0}
               className={inputCls + ' w-full'}
             >
               <option value="" />
@@ -238,7 +247,14 @@ export default function Operators({
               ))}
             </select>
           </label>
-          {members !== null && candidates.length === 0 && (
+          {members === 'expired' ? (
+            <p className="mt-2 text-xs text-red-600">트루베이스 로그인이 만료됐습니다. 다시 로그인해 주세요.</p>
+          ) : members === 'failed' ? (
+            <p className="mt-2 flex items-center gap-2 text-xs text-red-600">
+              트루베이스 구성원을 불러오지 못했습니다.
+              <button type="button" onClick={loadMembers} className="text-[#1677ff] hover:underline">다시 불러오기</button>
+            </p>
+          ) : Array.isArray(members) && candidates.length === 0 && (
             <p className="mt-2 text-xs text-neutral-400">더할 수 있는 구성원이 없습니다.</p>
           )}
         </EditDialog>

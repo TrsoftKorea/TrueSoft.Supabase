@@ -116,7 +116,7 @@ const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
     items: [
       { to: '/leaderboard', label: '리더보드', icon: Trophy },
       { to: '/lobbies', label: '매치 로비', icon: Swords },
-      { to: '/match-rewards', label: '매치 보상', icon: Medal },
+      { to: '/match-rewards', label: '매치 기록', icon: Medal },
     ],
   },
   {
@@ -302,7 +302,11 @@ export function Layout({
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3 scroll-area scroll-area-dark">
+        {/* 좁은 화면에서 연 메뉴는 항목을 누르면 닫는다 — 주소가 바뀔 때만 닫으면 지금 보는 화면의 항목을 눌렀을 때 그대로 남는다. */}
+        <nav
+          className="flex-1 overflow-y-auto px-3 py-3 scroll-area scroll-area-dark"
+          onClick={(e) => { if ((e.target as HTMLElement).closest('a')) setNavOpen(false) }}
+        >
           <div className="space-y-0.5">
             <NavLinkRow to="/" label="대시보드" icon={LayoutDashboard} end accent={accent} />
             <NavLinkRow to="/stats" label="통계" icon={BarChart3} accent={accent} />

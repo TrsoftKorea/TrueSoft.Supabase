@@ -377,10 +377,10 @@ function playerList(p: Record<string, unknown>) {
 
 // ── 대전 기록 ── 플레이어마다 고정된 판 기록. 요약은 이 기록을 게임 코드·상태별로 묶은 값이다(규칙 2).
 // 상태가 다 보이게 섞는다: 확인됨·상대 미신고·상대 없음(혼자 하는 판)·무효, 지워진 상대 하나.
-// pvp_1v1 은 매치 보상 화면의 게임 코드와 같다.
+// pvp_1v1 은 매치 기록 화면의 게임 코드와 같다.
 type MockMatch = {
   session_id: string; game_code: string; is_win: boolean; score: number; status: 'verified' | 'pending' | 'solo' | 'mismatch'
-  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
+  opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
   reported_at: string; resolved_at: string | null
 }
 
@@ -396,7 +396,6 @@ function matchesOf(accountId: string): MockMatch[] {
     const reported_at = `${addDays(kstToday(), -i)}T${String(9 + (i % 12)).padStart(2, '0')}:${String(Math.floor(h * 60)).padStart(2, '0')}:00+09:00`
     return {
       session_id: `${accountId}-m${i}`, game_code: solo ? 'stage_clear' : 'pvp_1v1', is_win, score: Math.round(800 + h * 1200), status,
-      rewarded: status === 'verified' && is_win,
       // i === 2 는 탈퇴로 지워진 상대 — 실제 서버도 계정은 없고 번호만 남는다.
       opponent_account_id: solo ? null : opp ? opp.account_id : 'a1',
       opponent_exists: !!opp, opponent_name: opp ? opp.display_name : '',
@@ -435,13 +434,13 @@ const CRON_SCHEDULES: [string, string][] = [
   ['ccu-snapshot', '*/5 * * * *'], ['usage-sync', '5 * * * *'], ['ts_match_lobby_cleanup', '*/5 * * * *'], ['withdrawal-cleanup', '0,30 * * * *'],
   ['withdrawal-overdue-check', '15 * * * *'], ['usage-sync-check', '15 * * * *'], ['ts_chat_cleanup', '17 * * * *'], ['cleanup-expired-mails', '0 3 * * *'],
   ['cleanup-user-data-logs', '0 3 * * *'], ['cleanup-cron-run-details', '40 3 * * *'], ['purchase-refund-sync-google', '0 4 * * *'],
-  ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'],
+  ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'], ['auth-config-sync', '15 5 * * 1'], ['auth-config-sync-check', '45 5 * * *'],
   ['push-send', '* * * * *'], ['push-outbox-cleanup', '50 3 * * *'],
 ]
 
 /** 분·시 칸만 읽어 마지막 실행 시각과 하루 실행 횟수를 낸다(여기 쓰는 꼴만). */
 function cronTimes(schedule: string, now: number): { last: number; prev: number; perDay: number } {
-  const [min = '*', hour = '*'] = schedule.split(' ')
+  const [min = '*', hour = '*', , , dow = '*'] = schedule.split(' ')
   const step = min === '*' ? 1 : min.startsWith('*/') ? Number(min.slice(2)) : 0
   if (step) {
     const last = Math.floor(now / (step * 60_000)) * step * 60_000
@@ -450,11 +449,15 @@ function cronTimes(schedule: string, now: number): { last: number; prev: number;
   const mins = min.split(',').map(Number)
   const hits: number[] = []
   const base = Math.floor(now / 60_000) * 60_000
-  for (let back = 0; hits.length < 2 && back < 3 * 1440; back++) {
+  // 요일 칸이 있는 주간 작업은 두 번 찾으려면 2주를 거슬러 본다.
+  for (let back = 0; hits.length < 2 && back < 15 * 1440; back++) {
     const t = new Date(base - back * 60_000)
-    if (mins.includes(t.getUTCMinutes()) && (hour === '*' || Number(hour) === t.getUTCHours())) hits.push(t.getTime())
+    if (mins.includes(t.getUTCMinutes()) && (hour === '*' || Number(hour) === t.getUTCHours())
+      && (dow === '*' || Number(dow) === t.getUTCDay())) hits.push(t.getTime())
   }
-  return { last: hits[0] ?? now, prev: hits[1] ?? now, perDay:hour === '*' ? mins.length * 24 : 1 }
+  const last = hits[0] ?? now
+  const perDay = hour === '*' ? mins.length * 24 : dow === '*' ? 1 : now - last < 86_400_000 ? 1 : 0
+  return { last, prev: hits[1] ?? now, perDay }
 }
 
 function cronJobs() {
@@ -833,6 +836,13 @@ const HANDLERS: Record<string, Handler> = {
     services: mockServices,
     authSync: mockAuthSync,
   }),
+  // 값 저장 — Sign in with Apple Private key 를 넣으면 Secret Key 를 못 만든 것처럼 답해 반영 실패 표시를 볼 수 있게 한다.
+  'settings.setServerConfig': (_t, p) => {
+    if (p['key'] !== 'APPLE_PRIVATE_KEY') return null
+    const message = 'Sign in with Apple 키로 Secret Key 를 만들지 못해 그것만 빼고 반영했습니다. Private key 를 확인해 주세요.'
+    mockAuthSync = { finishedAt: new Date().toISOString(), ok: false, message }
+    return { authSync: { ok: false, message } }
+  },
   // 가짜 반영 — 한 번은 실패, 다음은 성공으로 번갈아 답해 두 상태 줄을 다 볼 수 있게 한다.
   'settings.syncAuth': () => {
     const ok = mockAuthSync.ok !== true
@@ -885,8 +895,8 @@ const HANDLERS: Record<string, Handler> = {
   'dataLogs.list': (_t, p) => {
     const search = String(p['search'] ?? '').trim()
     const rows = [
-      // 한 번에 여러 칸이 바뀐 저장 — 값이 여럿 든 칸의 꼴을 보려고 둔다.
-      { id: 12, account_id: 'a9', diff: { level: 11, exp: 2480, stage: 'forest_03' }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
+      // 한 번에 여러 칸이 바뀐 저장 — 값이 여럿 든 칸의 꼴을 보려고 둔다. 칸 이름은 플레이어 데이터 칸 목록, 값은 플레이어 상세 로그와 같다.
+      { id: 12, account_id: 'a9', diff: { level: 11, gold: 4800 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
       { id: 11, account_id: 'a8', diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
       { id: 10, account_id: 'a9', diff: { gold: 900 }, source: 'client', created_at: addDays(kstToday(), -1) + 'T11:05:00+09:00' },
     ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
@@ -986,10 +996,7 @@ const HANDLERS: Record<string, Handler> = {
     {
       game_code: 'pvp_1v1', record_count: 1240, player_count: 380, pending_count: 4,
       last_reported_at: addDays(kstToday(), 0) + 'T12:40:00+09:00',
-      config: {
-        mode: 'competitive', win_items: [{ key: 'gem', count: 10 }], mail_title: '승리 보상', mail_content: '승리를 축하합니다.',
-        mail_expires_days: 7, updated_at: addDays(kstToday(), -2) + 'T15:00:00+09:00', updated_by: 'mock@local',
-      },
+      config: { mode: 'competitive', updated_at: addDays(kstToday(), -2) + 'T15:00:00+09:00', updated_by: 'mock@local' },
     },
   ],
   // 우편 › 예약 목록 — 켜진 반복 발송 하나, 꺼진 예약 발송 하나. 아이템 키는 아이템 카탈로그와 같다.
@@ -1068,7 +1075,7 @@ const HANDLERS: Record<string, Handler> = {
     ...(resetAccounts.has(String(p['accountId']))
       ? [{ id: 3, diff: SAVE_VALUES, source: 'admin:' + MOCK_EMAIL, created_at: new Date().toISOString() }]
       : []),
-    { id: 2, diff: { level: 11 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
+    { id: 2, diff: { level: 11, gold: 4800 }, source: 'client', created_at: addDays(kstToday(), 0) + 'T09:12:00+09:00' },
     { id: 1, diff: { inventory: { gem: 40 } }, source: 'admin', created_at: addDays(kstToday(), -1) + 'T18:40:00+09:00' },
   ],
   'userData.getRestorePreview': () => [

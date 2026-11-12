@@ -105,12 +105,12 @@ export default function FriendsTab({
 }
 
 const FRIEND_COLUMNS: Column<FriendRow>[] = [
-  { key: 'name', header: '닉네임', kind: 'name', cell: (f) => <PlayerLink accountId={f.account_id} name={f.display_name} /> },
+  { key: 'name', header: '플레이어', kind: 'name', cell: (f) => <PlayerLink accountId={f.account_id} name={f.display_name} /> },
   { key: 'id', header: '계정 ID', kind: 'name', cell: (f) => <AccountIdCell accountId={f.account_id} /> },
   { key: 'since', header: '친구가 된 시각', kind: 'datetime', cell: (f) => formatDateTime(f.since) },
 ]
 
 const REQUEST_COLUMNS: Column<RequestRow>[] = [
-  { key: 'name', header: '닉네임', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
+  { key: 'name', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
   { key: 'at', header: '보낸 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
 ]

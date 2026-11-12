@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { TableFooter } from '../../components/ui/TableFooter'
@@ -18,7 +18,7 @@ type SummaryRow = {
 }
 type RecordRow = {
   session_id: string; game_code: string; is_win: boolean; score: number | null; status: Status
-  rewarded: boolean; opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
+  opponent_account_id: string | null; opponent_exists: boolean; opponent_name: string | null
   reported_at: string; resolved_at: string | null
 }
 type Data = { summary: SummaryRow[]; rows: RecordRow[]; total: number; pageSize: number }
@@ -48,20 +48,25 @@ export default function MatchRecordsTab({
   // 선택지는 마지막으로 성공한 요약에서 만든다 — 불러오기가 실패해도 고른 코드가 드롭다운에서 사라지지 않게.
   const [codes, setCodes] = useState<string[]>([])
 
+  // 쪽이나 게임 코드를 빠르게 바꾸면 늦게 온 옛 응답이 새 목록을 덮는다 — 마지막 요청만 반영한다.
+  const loadReq = useRef(0)
   const load = useCallback(async () => {
+    const req = ++loadReq.current
     setLoading(true)
     setFailed(false)
     try {
       const d = await callAdmin<Data>(target, 'matchRecords.player', { accountId, gameCode, page })
+      if (req !== loadReq.current) return
       setData(d)
       setCodes(Array.from(new Set(d.summary.map((s) => s.game_code))))
     } catch (e: unknown) {
+      if (req !== loadReq.current) return
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
       setError(e instanceof Error ? e.message : '대전 기록을 불러오지 못했습니다.')
       setData(null)
       setFailed(true)
     } finally {
-      setLoading(false)
+      if (req === loadReq.current) setLoading(false)
     }
   }, [target, accountId, gameCode, page, onUnauthenticated])
 
@@ -145,5 +150,4 @@ const RECORD_COLUMNS: Column<RecordRow>[] = [
         : r.opponent_account_id ? <PlayerLink accountId={r.opponent_account_id} name={r.opponent_name} /> : null
     ),
   },
-  { key: 'reward', header: '보상 우편', kind: 'name', cell: (r) => (r.rewarded ? '보냄' : null) },
 ]

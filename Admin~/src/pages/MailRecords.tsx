@@ -352,7 +352,7 @@ export default function MailRecords({
 
           <ConfirmDialog
             open={undo !== null}
-            title={undo === 'recall' ? '안 받은 우편 거두기' : '새로 들어온 플레이어에게 그만 보내기'}
+            title={undo === 'recall' ? '우편 거두기' : '그만 보내기'}
             confirmLabel={undo === 'recall' ? '거두기' : '그만 보내기'}
             danger={undo === 'recall'}
             busy={undoBusy}
@@ -361,7 +361,7 @@ export default function MailRecords({
             onCancel={() => setUndo(null)}
             description={undo === 'recall'
               ? '아직 받지 않은 플레이어의 우편함에서 이 우편이 사라집니다. 이미 받은 플레이어의 우편과 아이템은 그대로입니다. 새로 들어온 플레이어에게도 더 가지 않습니다.'
-              : '이미 받은 플레이어의 우편은 그대로 둡니다.'}
+              : '새로 들어온 플레이어에게 더 보내지 않습니다. 이미 받은 플레이어의 우편은 그대로 둡니다.'}
           >
             <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
               <div className="text-neutral-800">{selectedBatch?.title}</div>

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { CardHeader, WhiteCard } from '../components/ui/Card'
+import { WhiteCard } from '../components/ui/Card'
+import { EditDialog } from '../components/ui/EditDialog'
 import { inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
@@ -29,6 +30,9 @@ export default function GameItems({
 
   const [form, setForm] = useState<FormItem>(EMPTY)
   const [adding, setAdding] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  // 추가 실패는 창 안에 보인다 — 페이지 띠는 창 뒤에 가린다.
+  const [addError, setAddError] = useState('')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [rowSaving, setRowSaving] = useState(false)
@@ -81,20 +85,27 @@ export default function GameItems({
     }
   }
 
-  const add = () => {
-    if (!form.key.trim() || adding) return
-    // 서버는 같은 코드면 이름을 덮어쓴다 — 추가 칸에서 기존 아이템 이름이 몰래 바뀌지 않게 막는다.
-    if (rows.some((r) => r.key === form.key.trim())) {
-      setError('이미 있는 아이템 코드입니다.')
+  const add = async () => {
+    const key = form.key.trim()
+    if (!key || adding) return
+    // 서버는 같은 코드면 이름을 덮어쓴다 — 추가 창에서 기존 아이템 이름이 몰래 바뀌지 않게 막는다.
+    if (rows.some((r) => r.key === key)) {
+      setAddError('이미 있는 아이템 코드입니다.')
       return
     }
-    void run(async () => {
-      await callAdmin(target, 'gameItems.upsert', {
-        key: form.key.trim(),
-        displayName: form.display_name,
-      })
+    setAdding(true)
+    setAddError('')
+    try {
+      await callAdmin(target, 'gameItems.upsert', { key, displayName: form.display_name })
       setForm(EMPTY)
-    }, setAdding)
+      setAddOpen(false)
+      await load()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { setAddOpen(false); onUnauthenticated(); return }
+      setAddError(e instanceof Error ? e.message : '추가하지 못했습니다.')
+    } finally {
+      setAdding(false)
+    }
   }
 
   const startEdit = (it: Item) => {
@@ -136,42 +147,53 @@ export default function GameItems({
     <div className="space-y-4">
       <PageHeader
         title="아이템 카탈로그"
-        description="우편·쿠폰·매치 보상으로 지급할 아이템을 등록합니다."
-        actions={<RefreshButton onClick={() => void load()} loading={loading} />}
+        description="우편·쿠폰으로 지급할 아이템을 등록합니다."
+        actions={<>
+          <RefreshButton onClick={() => void load()} loading={loading} />
+          <Button variant="primary" onClick={() => { setForm(EMPTY); setAddError(''); setAddOpen(true) }}>
+            <Plus className="w-4 h-4" />아이템 추가
+          </Button>
+        </>}
       />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-5 space-y-4">
-        <CardHeader title="새 아이템 추가" description="보상으로 고를 수 있는 아이템을 더합니다." />
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">코드</span>
-            <input
-              value={form.key}
-              onChange={(e) => setForm({ ...form, key: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && add()}
-              className={inputCls}
-            />
+      {addOpen && (
+        <EditDialog
+          title="아이템 추가"
+          busy={adding}
+          onClose={() => setAddOpen(false)}
+          error={addError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>취소</Button>
+            <Button variant="primary" onClick={() => void add()} disabled={adding || !form.key.trim()}>
+              {adding && <Loader2 className="w-4 h-4 animate-spin" />}추가
+            </Button>
+          </>}
+        >
+          <div className="space-y-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-neutral-500">코드</span>
+              <input
+                value={form.key}
+                onChange={(e) => setForm({ ...form, key: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && void add()}
+                className={inputCls + ' w-full'}
+                autoFocus
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-neutral-500">이름</span>
+              <input
+                value={form.display_name}
+                onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && void add()}
+                className={inputCls + ' w-full'}
+              />
+            </label>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">이름</span>
-            <input
-              value={form.display_name}
-              onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && add()}
-              className={inputCls}
-            />
-          </div>
-          <Button variant="primary"
-            onClick={add}
-            disabled={adding || !form.key.trim()}
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            추가
-          </Button>
-        </div>
-      </WhiteCard>
+        </EditDialog>
+      )}
 
       <WhiteCard>
         <table className="w-full text-sm">

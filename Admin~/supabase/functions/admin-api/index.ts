@@ -292,12 +292,16 @@ async function verifyIdentity(db: SupabaseClient, token: string): Promise<Identi
 const HUB_CHECK_TTL_MS = 5 * 60_000;
 const hubChecked = new Map<string, number>();
 
-/** 세션에 실린 저장소 표가 아직 유효한지. 저장소가 거절하면 false, 저장소에 닿지 못하면 예외. */
+/** 세션에 실린 저장소 표가 아직 유효한지. 저장소가 거절하거나 초대가 지워졌으면 false, 저장소에 닿지 못하면 예외. */
 async function stillValidHubToken(hubToken: string): Promise<boolean> {
   const until = hubChecked.get(hubToken);
   if (until && until > Date.now()) return true;
   try {
-    await hubVerify(hubToken);
+    const who = await hubVerify(hubToken);
+    if (!who.invited && !who.isMaster) {
+      hubChecked.delete(hubToken);
+      return false;
+    }
   } catch (e) {
     if (e instanceof HubRequestError && e.status === 401) {
       hubChecked.delete(hubToken);
@@ -344,7 +348,8 @@ function authSyncList(v: string | null | undefined): string[] {
   return (v ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 }
 
-// 앞의 것을 앞에 두고 겹치는 것은 한 번만 — 애플은 Services ID 가 맨 앞이어야 웹·Android 로그인이 된다.
+// 앞의 것을 앞에 두고 겹치는 것은 한 번만 — 애플은 Services ID, 구글은 웹 클라이언트 ID 가 맨 앞이어야 웹·Android 로그인이 된다.
+// 맨 앞에 둘 값이 콘솔에 없으면 기존 목록을 앞에 두고 뒤에 더한다 — 대시보드에서 넣어 둔 맨 앞 값이 밀려나지 않게.
 function authSyncMerge(first: string[], existing: string[]): string {
   const out: string[] = [];
   for (const s of [...first, ...existing]) if (!out.includes(s)) out.push(s);
@@ -394,17 +399,25 @@ async function syncAuthConfig(values: Record<string, string>): Promise<AuthSyncR
     uri_allow_list?: string | null; external_google_client_id?: string | null; external_apple_client_id?: string | null;
   };
 
+  // 이메일 가입은 끈다 — SDK 에 이메일 로그인이 없고, 켜 두면 남의 지메일 주소로 먼저 가입해 두었다가 그 사람이
+  // 같은 주소의 구글 계정으로 처음 로그인할 때 계정을 가로채는 길이 생긴다(확인 메일을 건너뛰면 더 쉽다).
   const patch: Record<string, unknown> = {
     external_anonymous_users_enabled: true,
-    mailer_autoconfirm: true,
+    external_email_enabled: false,
+    mailer_autoconfirm: false,
     security_manual_linking_enabled: true,
   };
   const done: string[] = ["기본 설정"];
+  let problem = "";
 
-  const googleIds = [...authSyncList(values["GOOGLE_WEB_CLIENT_ID"]), ...authSyncList(values["GOOGLE_IOS_CLIENT_ID"])];
-  if (googleIds.length > 0) {
+  const googleWeb = authSyncList(values["GOOGLE_WEB_CLIENT_ID"]);
+  const googleIos = authSyncList(values["GOOGLE_IOS_CLIENT_ID"]);
+  if (googleWeb.length + googleIos.length > 0) {
+    const existing = authSyncList(cfg.external_google_client_id);
     patch.external_google_enabled = true;
-    patch.external_google_client_id = authSyncMerge(googleIds, authSyncList(cfg.external_google_client_id));
+    patch.external_google_client_id = googleWeb.length > 0
+      ? authSyncMerge([...googleWeb, ...googleIos], existing)
+      : authSyncMerge(existing, googleIos);
     if (v("GOOGLE_WEB_CLIENT_SECRET")) patch.external_google_secret = v("GOOGLE_WEB_CLIENT_SECRET");
     done.push("Google");
   }
@@ -412,16 +425,18 @@ async function syncAuthConfig(values: Record<string, string>): Promise<AuthSyncR
   const bundles = authSyncList(values["APPLE_BUNDLE_ID"]);
   const servicesId = v("APPLE_SERVICES_ID");
   if (bundles.length > 0) {
+    const existing = authSyncList(cfg.external_apple_client_id);
     patch.external_apple_enabled = true;
-    patch.external_apple_client_id = authSyncMerge(
-      [...(servicesId ? [servicesId] : []), ...bundles], authSyncList(cfg.external_apple_client_id));
+    patch.external_apple_client_id = servicesId ? authSyncMerge([servicesId, ...bundles], existing) : authSyncMerge(existing, bundles);
     if (servicesId && v("APPLE_TEAM_ID") && v("APPLE_KEY_ID") && v("APPLE_PRIVATE_KEY")) {
+      // Secret Key 를 못 만들면 그것만 빼고 나머지는 반영한다 — 키 하나 때문에 구글·돌아올 주소까지 멈추지 않게.
       try {
         patch.external_apple_secret = await authSyncAppleSecret(v("APPLE_TEAM_ID"), v("APPLE_KEY_ID"), v("APPLE_PRIVATE_KEY"), servicesId);
+        done.push("Apple · Secret Key");
       } catch {
-        return { ok: false, message: "Sign in with Apple 키로 Secret Key 를 만들지 못했습니다. Private key 를 확인해 주세요." };
+        problem = "Sign in with Apple 키로 Secret Key 를 만들지 못해 그것만 빼고 반영했습니다. Private key 를 확인해 주세요.";
+        done.push("Apple");
       }
-      done.push("Apple · Secret Key");
     } else {
       done.push("Apple");
     }
@@ -442,6 +457,7 @@ async function syncAuthConfig(values: Record<string, string>): Promise<AuthSyncR
   }
   await res.body?.cancel();
   if (!res.ok) return failed(res.status, "로그인 설정 저장");
+  if (problem) return { ok: false, message: problem };
   return { ok: true, message: done.join(" · ") };
 }
 
@@ -506,6 +522,7 @@ Deno.serve(async (req) => {
         case "auth.hubLogin": {
           const hubToken = str(params, "hubToken");
           const who = await hubVerify(hubToken);
+          if (!who.invited && !who.isMaster) return fail("트루베이스에 초대되지 않은 계정입니다.", 403);
           if (!(await isAllowedIdentity(db, who.email))) {
             return fail("운영자 권한이 없습니다.", 403);
           }
@@ -551,7 +568,9 @@ Deno.serve(async (req) => {
             p_by: who.email,
           });
           if (error) throw new Error(ACTIVATE_ERRORS[error.message] ?? error.message);
-          if (!who.isMaster) {
+          // 이 프로젝트의 마스터(ADMIN_EMAILS)만 운영자 표에서 뺀다 — 저장소의 마스터라도 여기 마스터가 아니면
+          // 운영자로 넣어야 방금 꺼낸 프로젝트에 들어온다.
+          if (!MASTER_EMAILS.has(who.email)) {
             const { error: opError } = await db.rpc("ts_admin_upsert_operator", {
               p_email: who.email, p_display_name: "", p_by: who.email,
             });
@@ -1854,30 +1873,17 @@ async function handleAction(
       }
 
       case "matchRewards.upsert": {
-        // 형식·범위는 ts_admin_match_reward_config_upsert 와 같게 둔다. 아이템 키가 카탈로그에
-        // 있는지는 DB 만 본다(카탈로그를 여기서 다시 읽지 않는다).
+        // 매치는 기록 전용이다 — 게임 코드와 결과 확인 방식만 받는다. 보상 칸은 비워 저장한다(서버가 보상을 보내지 않는다).
         const gameCode = str(params, "gameCode").trim();
         if (!/^[a-z0-9_]{1,64}$/.test(gameCode)) {
           throw new Error("게임 코드는 영문 소문자·숫자·밑줄로 64자 이내여야 합니다.");
         }
         const mode = str(params, "mode");
         if (mode !== "competitive" && mode !== "coop") throw new Error("판정 방식이 올바르지 않습니다.");
-        const items = params["winItems"];
-        if (!Array.isArray(items)) throw new Error("보상 아이템 형식이 올바르지 않습니다.");
-        for (const it of items as Array<{ key?: unknown; count?: unknown }>) {
-          if (typeof it?.key !== "string" || it.key.trim() === "") throw new Error("보상 아이템을 고르세요.");
-          // SDK 가 수량을 int 로 읽는다 — 넘으면 그 플레이어의 우편함이 통째로 안 열린다.
-          if (!Number.isInteger(it.count) || (it.count as number) <= 0 || (it.count as number) > 2147483647) {
-            throw new Error("보상 아이템 수량은 1 이상 2,147,483,647 이하의 정수여야 합니다.");
-          }
-        }
         const { error } = await db.rpc("ts_admin_match_reward_config_upsert", {
           p_game_code: gameCode,
           p_mode: mode,
-          p_win_items: items,
-          p_mail_title: optStr(params, "mailTitle").trim() || "매치 보상",
-          p_mail_content: optStr(params, "mailContent"),
-          p_mail_expires_days: intInRange(params, "mailExpiresDays", "우편 수령 기한", 1, 365),
+          p_win_items: [],
           p_create_only: params["createOnly"] === true,
           p_by: email,
         });

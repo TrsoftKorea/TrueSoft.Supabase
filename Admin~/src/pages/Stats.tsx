@@ -413,7 +413,7 @@ export default function Stats({ target, onUnauthenticated }: { target: ProjectTa
           {tab === 'users' && (<>
           <WhiteCard>
             <div className="border-b border-neutral-100 p-5 pb-3">
-              <CardHeader title="일일 사용자" description="날마다 접속한 사용자 수를 봅니다."
+              <CardHeader title="일일 사용자"
                 actions={<ChartLegend series={USER_SERIES} />} />
             </div>
             <div className="p-5">

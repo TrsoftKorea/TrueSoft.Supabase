@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
-import { CardHeader, WhiteCard } from '../components/ui/Card'
-import { inputCls, inputCompactCls } from '../components/ui/Input'
+import { WhiteCard } from '../components/ui/Card'
+import { EditDialog } from '../components/ui/EditDialog'
+import { dangerInputCls, inputCls, inputCompactCls } from '../components/ui/Input'
 import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { TableStatusRow } from '../components/ui/TableStatusRow'
@@ -30,6 +31,9 @@ export default function MailCategories({
 
   const [form, setForm] = useState<FormCategory>(EMPTY)
   const [adding, setAdding] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  // 추가 실패는 창 안에 보인다 — 페이지 띠는 창 뒤에 가린다.
+  const [addError, setAddError] = useState('')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [rowSaving, setRowSaving] = useState(false)
@@ -83,12 +87,21 @@ export default function MailCategories({
   // 같은 코드로 추가하면 기존 분류 이름이 조용히 바뀌므로 막는다. 이름 변경은 목록의 수정으로.
   const keyTaken = rows.some((r) => r.key === form.key.trim())
 
-  const add = () => {
+  const add = async () => {
     if (!form.key.trim() || keyTaken || adding) return
-    void run(async () => {
+    setAdding(true)
+    setAddError('')
+    try {
       await callAdmin(target, 'mails.upsertCategory', { key: form.key.trim(), displayName: form.display_name })
       setForm(EMPTY)
-    }, setAdding)
+      setAddOpen(false)
+      await load()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { setAddOpen(false); onUnauthenticated(); return }
+      setAddError(e instanceof Error ? e.message : '추가하지 못했습니다.')
+    } finally {
+      setAdding(false)
+    }
   }
 
   const startEdit = (c: Category) => {
@@ -120,43 +133,56 @@ export default function MailCategories({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="우편 분류" description="우편을 보낼 때 고르는 분류를 관리합니다." actions={<RefreshButton onClick={() => void load()} loading={loading} />} />
+      <PageHeader
+        title="우편 분류"
+        description="우편을 보낼 때 고르는 분류를 관리합니다."
+        actions={<>
+          <RefreshButton onClick={() => void load()} loading={loading} />
+          <Button variant="primary" onClick={() => { setForm(EMPTY); setAddError(''); setAddOpen(true) }}>
+            <Plus className="w-4 h-4" />분류 추가
+          </Button>
+        </>}
+      />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <WhiteCard className="p-5 space-y-4">
-        <CardHeader title="새 분류 추가" description="우편을 보낼 때 고를 수 있는 분류를 더합니다." />
-        <div>
-        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">코드</span>
-            <input
-              value={form.key}
-              onChange={(e) => setForm({ ...form, key: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && add()}
-              className={inputCls + (keyTaken ? ' border-red-400' : '')}
-            />
+      {addOpen && (
+        <EditDialog
+          title="분류 추가"
+          busy={adding}
+          onClose={() => setAddOpen(false)}
+          error={addError || undefined}
+          footer={<>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>취소</Button>
+            <Button variant="primary" onClick={() => void add()} disabled={adding || !form.key.trim() || keyTaken}>
+              {adding && <Loader2 className="w-4 h-4 animate-spin" />}추가
+            </Button>
+          </>}
+        >
+          <div className="space-y-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-neutral-500">코드</span>
+              <input
+                value={form.key}
+                onChange={(e) => setForm({ ...form, key: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && void add()}
+                className={(keyTaken ? dangerInputCls : inputCls) + ' w-full'}
+                autoFocus
+              />
+              {keyTaken && <span className="text-xs text-red-600">이미 있는 분류 코드입니다.</span>}
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-neutral-500">이름</span>
+              <input
+                value={form.display_name}
+                onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && void add()}
+                className={inputCls + ' w-full'}
+              />
+            </label>
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-neutral-500">이름</span>
-            <input
-              value={form.display_name}
-              onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && add()}
-              className={inputCls}
-            />
-          </div>
-          <Button variant="primary"
-            onClick={add}
-            disabled={adding || !form.key.trim() || keyTaken}
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            추가
-          </Button>
-        </div>
-        {keyTaken && <p className="mt-1.5 text-xs text-red-600">이미 있는 분류 코드입니다.</p>}
-        </div>
-      </WhiteCard>
+        </EditDialog>
+      )}
 
       <WhiteCard>
         <table className="w-full text-sm">
