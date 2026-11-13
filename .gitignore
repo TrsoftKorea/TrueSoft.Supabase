@@ -141,6 +141,8 @@ GameAnalytics.meta
 
 # Cursor/agent session NDJSON logs (written at repo / Unity project root)
 /debug-*.log
+# 이 저장소를 로컬 경로로 받은 유니티 프로젝트(SDK Host 등)가 그 로그에 붙이는 짝 파일
+/debug-*.log.meta
 
 # Claude Code worktrees
 .claude/worktrees/
