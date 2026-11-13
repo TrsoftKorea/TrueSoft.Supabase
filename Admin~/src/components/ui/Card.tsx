@@ -55,7 +55,9 @@ export function GroupBox({ title, actions, children }: { title: ReactNode; actio
  */
 export function GroupTable({ status = false, children }: { status?: boolean; children: ReactNode }) {
   return (
-    <table className="w-full text-sm table-fixed">
+    // 휴대폰에서는 고정 칸 폭이 이름을 낱말 중간에서 끊는다 — 줄마다 이름 한 줄, 그 아래 값·상태·버튼 한 줄로 나눈다.
+    // 상태가 있는 표의 값 칸(수정 시각 등)은 상태·버튼 사이에 끼면 접히므로 따로 한 줄을 쓰고, 비었으면 숨긴다.
+    <table className={`w-full text-sm table-fixed max-sm:block max-sm:[&_colgroup]:hidden max-sm:[&_tbody]:block max-sm:[&_tr]:flex max-sm:[&_tr]:flex-wrap max-sm:[&_tr]:items-center max-sm:[&_td:first-child]:basis-full max-sm:[&_td:first-child]:pb-0 max-sm:[&_td:nth-child(2)]:min-w-0 max-sm:[&_td:nth-child(2)]:flex-1 max-sm:[&_td:nth-child(2)]:pl-4 max-sm:[&_span[aria-hidden]]:hidden ${status ? 'max-sm:[&_td:nth-child(2)]:basis-full max-sm:[&_td:nth-child(2)]:pb-0 max-sm:[&_td:nth-child(2):empty]:hidden max-sm:[&_td:nth-child(3)]:ml-auto' : ''}`}>
       <colgroup>
         <col className="w-[34%]" />
         <col />

@@ -666,7 +666,7 @@ export default function ColumnsTab({
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={busy} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedCode}
             onChange={(e) => onSelect(e.target.value)}
@@ -684,7 +684,7 @@ export default function ColumnsTab({
               </>
             )}
           </select>
-          <div className="relative w-64">
+          <div className="relative w-64 max-w-full">
             <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={search}

@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
+import { Fragment, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { TableStatusRow } from './TableStatusRow'
 import { CardHeader, WhiteCard } from './Card'
@@ -52,6 +52,25 @@ const CELL: Record<ColumnKind, string> = {
   actions: 'whitespace-nowrap text-right',
 }
 
+// 좁은 화면(카드 목록)에서 값의 꼴. 표에서처럼 한 줄로 고집하지 않는다 — 카드 폭이 좁아 긴 이메일·ID 는 접혀야 한다.
+const CARD_VALUE: Record<Exclude<ColumnKind, 'text'>, string> = {
+  actions: '',
+  name: 'break-words text-neutral-900',
+  mono: 'break-all font-mono text-[13px] text-neutral-700',
+  datetime: 'whitespace-nowrap tabular-nums text-neutral-600',
+  number: 'whitespace-nowrap tabular-nums text-neutral-900',
+  status: '',
+}
+
+// 표를 카드 목록으로 바꾸는 폭 — Tailwind 의 sm(640px) 아래.
+const NARROW = '(max-width: 639px)'
+const subscribeNarrow = (cb: () => void) => {
+  const m = window.matchMedia(NARROW)
+  m.addEventListener('change', cb)
+  return () => m.removeEventListener('change', cb)
+}
+const isNarrow = () => window.matchMedia(NARROW).matches
+
 const isEmpty = (v: ReactNode) => v === null || v === undefined || v === '' || v === false
 
 /** 빈 값 표시는 하나로 — 회색 "-". */
@@ -80,6 +99,11 @@ export type DataTableProps<T> = {
   rowClassName?: (row: T) => string | undefined
   /** 줄에 붙일 속성 — 끌어서 순서 바꾸기처럼 줄 단위 이벤트가 필요할 때. className 은 rowClassName, 누르기는 onRowClick 으로(여기 넣으면 덮인다). */
   rowProps?: (row: T, index: number) => HTMLAttributes<HTMLTableRowElement>
+  /**
+   * 좁은 화면(휴대폰)에서 줄마다 카드로 보일지. 기본은 켬 — 옆으로 밀어 보는 표가 휴대폰에서 불편했다(2026-11-13 사용자 요청).
+   * 칸을 나란히 봐야 뜻이 통하는 표(색 지도 cellStyle)와 줄을 끌어 옮기는 표(rowProps)는 저절로 표로 남는다.
+   */
+  cards?: boolean
 }
 
 /** text 칸이 없는 wide 표에서 남는 폭을 받을 칸 — 버튼 칸을 뺀 마지막 칸. */
@@ -101,11 +125,14 @@ export function DataTable<T>({
   maxHeight,
   rowClassName,
   rowProps,
+  cards = true,
 }: DataTableProps<T>) {
   const fill = wide || columns.some((c) => c.kind === 'text')
   const stretch = stretchKey(columns, wide)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const tableRef = useRef<HTMLTableElement>(null)
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false)
+  const asCards = narrow && cards && !rowProps && !columns.some((c) => c.cellStyle)
 
   // 내용 폭 표는 한 번 넓어지면 줄지 않는다 — 쪽을 넘기거나 다시 불러올 때마다 이름 길이에 따라 카드 폭이
   // 흔들리지 않게(2026-11-10 실측: 이름 하나가 길어지자 942→982px). 화면을 다시 열면 처음부터 잰다.
@@ -122,9 +149,18 @@ export function DataTable<T>({
     })
     ro.observe(t)
     return () => ro.disconnect()
-  }, [fill])
+  }, [fill, asCards])
 
   const span = columns.length + (expand ? 1 : 0)
+  if (asCards) {
+    return (
+      <CardList
+        columns={columns} rows={rows} rowKey={rowKey} loading={loading} failed={failed} emptyText={emptyText}
+        onRowClick={onRowClick} expand={expand} maxHeight={maxHeight} rowClassName={rowClassName}
+        openKey={openKey} setOpenKey={setOpenKey}
+      />
+    )
+  }
   return (
     <div className={maxHeight ? `overflow-auto ${maxHeight}` : 'overflow-x-auto'}>
       <table ref={tableRef} className={`min-w-full text-sm ${stretch ? 'w-full' : ''}`}>
@@ -190,6 +226,93 @@ export function DataTable<T>({
 }
 
 /**
+ * 좁은 화면의 표 — 줄 하나가 카드 한 장이고, 칸은 "이름 · 값"으로 위아래로 쌓인다.
+ * 긴 글(text) 칸은 이름 아래 한 줄을 다 쓰고, 버튼(actions) 칸은 이름 없이 카드 맨 아래 오른쪽에 둔다.
+ * 머리 줄이 빈 칸(고르기 단추 등)은 이름 없이 값만 오른쪽에.
+ */
+function CardList<T>({
+  columns, rows, rowKey, loading, failed, emptyText, onRowClick, expand, maxHeight, rowClassName, openKey, setOpenKey,
+}: Pick<DataTableProps<T>, 'columns' | 'rows' | 'rowKey'> & {
+  onRowClick: DataTableProps<T>['onRowClick'] | undefined
+  expand: DataTableProps<T>['expand'] | undefined
+  maxHeight: string | undefined
+  rowClassName: DataTableProps<T>['rowClassName'] | undefined
+  emptyText: string | undefined
+  loading: boolean
+  failed: boolean
+  openKey: string | null
+  setOpenKey: (k: string | null) => void
+}) {
+  // 카드 첫 줄: 첫 이름 칸(무엇의 줄인지)을 제목처럼, 표의 맨 앞이 시각이면(정렬 기준) 그 오른쪽에 작게 — 둘 다 칸 이름 없이.
+  const title = columns.find((c) => c.kind === 'name' && !isEmpty(c.header))
+  const when = title && columns[0]?.kind === 'datetime' ? columns[0] : undefined
+  const fields = columns.filter((c) => c.kind !== 'actions' && c !== title && c !== when)
+  const actions = columns.filter((c) => c.kind === 'actions')
+  return (
+    <div className={`border-t border-neutral-100 text-sm ${maxHeight ? `overflow-y-auto ${maxHeight}` : ''}`}>
+      {loading || failed || rows.length === 0 ? (
+        <TableStatusRow block loading={loading} empty={rows.length === 0} failed={failed} colSpan={1} {...(emptyText !== undefined ? { emptyText } : {})} />
+      ) : rows.map((r, i) => {
+        const key = rowKey(r, i)
+        const detail = expand ? expand(r) : null
+        const canOpen = !isEmpty(detail)
+        const open = canOpen && openKey === key
+        const click = canOpen ? () => setOpenKey(open ? null : key) : onRowClick && !expand ? () => onRowClick(r) : undefined
+        const buttons = actions.map((c) => c.cell(r)).filter((v) => !isEmpty(v))
+        return (
+          <div key={key} className={`border-b border-neutral-100 last:border-b-0 ${rowClassName?.(r) ?? ''}`}>
+            <div onClick={click} className={`flex gap-2 px-4 py-3 ${click ? 'cursor-pointer active:bg-neutral-50' : ''}`}>
+              <dl className="min-w-0 flex-1 space-y-1">
+                {title && (() => {
+                  const t = title.cell(r)
+                  const w = when?.cell(r)
+                  return (
+                    <div className="flex items-baseline justify-between gap-3 pb-0.5">
+                      <dd className="min-w-0 break-words font-medium text-neutral-900">{isEmpty(t) ? EMPTY_MARK : t}</dd>
+                      {when && <dd className="shrink-0 whitespace-nowrap text-xs tabular-nums text-neutral-500">{isEmpty(w) ? EMPTY_MARK : w}</dd>}
+                    </div>
+                  )
+                })()}
+                {fields.map((c) => {
+                  const v = c.cell(r)
+                  const value = isEmpty(v) ? EMPTY_MARK : v
+                  const label = isEmpty(c.header) ? null : <dt className="shrink-0 text-xs text-neutral-500">{c.header}</dt>
+                  if (c.kind === 'text') {
+                    return (
+                      <div key={c.key}>
+                        {label}
+                        <dd className="mt-0.5 break-words text-neutral-900" title={c.full?.(r)}>{value}</dd>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={c.key} className="flex items-baseline justify-between gap-3" title={c.cellTitle?.(r)}>
+                      {label}
+                      <dd className={`min-w-0 text-right ${label ? '' : 'ml-auto'} ${CARD_VALUE[c.kind]}`}>{value}</dd>
+                    </div>
+                  )
+                })}
+              </dl>
+              {expand && (
+                <span className="mt-0.5 w-4 shrink-0 text-neutral-400">
+                  {canOpen && (open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
+                </span>
+              )}
+            </div>
+            {buttons.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-1.5 px-4 pb-3 -mt-1">
+                {buttons.map((b, bi) => <Fragment key={bi}>{b}</Fragment>)}
+              </div>
+            )}
+            {open && <div className="bg-neutral-50 px-4 py-3">{detail}</div>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
  * 표 하나를 담는 카드. 제목·버튼(위)과 쪽 넘김(footer, 아래)을 함께 둔다.
  * text 칸이 없는 표는 카드째 내용 폭으로 줄어든다 — 표만 줄이면 카드 오른쪽이 텅 빈다.
  * 같은 화면에 위아래로 쌓인 표 카드는 CardStack 에 넣어 폭을 맞춘다.
@@ -203,7 +326,8 @@ export function TableCard<T>({
 }: DataTableProps<T> & { title?: ReactNode; description?: ReactNode; actions?: ReactNode; footer?: ReactNode }) {
   const fill = table.wide || table.columns.some((c) => c.kind === 'text')
   return (
-    <WhiteCard className={`overflow-hidden ${fill ? '' : 'w-fit max-w-full'}`}>
+    // 휴대폰에서는 줄이 카드로 바뀌므로 내용 폭으로 줄이지 않고 화면 폭을 다 쓴다.
+    <WhiteCard className={`overflow-hidden ${fill ? '' : 'w-full sm:w-fit max-w-full'}`}>
       {(title || actions) && (
         <div className="p-5 pb-3">
           <CardHeader title={title} description={description} actions={actions} />
@@ -217,5 +341,5 @@ export function TableCard<T>({
 
 /** 위아래로 쌓인 표 카드의 폭을 가장 넓은 것에 맞춘다. text 칸이 있는(전체 폭) 카드는 넣지 않는다. */
 export function CardStack({ children }: { children: ReactNode }) {
-  return <div className="flex w-fit max-w-full flex-col gap-4 [&>*]:w-full">{children}</div>
+  return <div className="flex w-full sm:w-fit max-w-full flex-col gap-4 [&>*]:w-full">{children}</div>
 }

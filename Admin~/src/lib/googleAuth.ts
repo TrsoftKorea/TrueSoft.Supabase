@@ -202,5 +202,7 @@ export async function renderGoogleButton(
     cancel_on_tap_outside: true,
   })
   parent.replaceChildren()
-  api.renderButton(parent, { theme: 'outline', size: 'large', width: 320, locale: 'ko' })
+  // 단추 폭은 픽셀로만 받는다(구글 허용 200~400) — 놓일 자리 폭에 맞춰야 좁은 휴대폰에서 카드 밖으로 안 나간다.
+  const width = Math.max(200, Math.min(400, Math.floor(parent.clientWidth || 320)))
+  api.renderButton(parent, { theme: 'outline', size: 'large', width, locale: 'ko' })
 }

@@ -469,8 +469,8 @@ export default function ColumnsTab({
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       <PendingChanges items={pendingItems} onDiscard={(id) => void discardOne(id)} busy={busy} />
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="relative w-64">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="relative w-64 max-w-full">
           <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={search}
