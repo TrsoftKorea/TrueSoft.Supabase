@@ -75,7 +75,7 @@ Package Manager에서 **TrueBase** 패키지를 선택하고 **Samples** 탭에�
 | `auth-config-sync` | 로그인 · 운영 콘솔에 넣은 로그인 값을 Supabase 로그인 설정에 반영 |
 
 ::: warning 열 함수는 Verify JWT를 끕니다
-`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`·`push-send`·`auth-config-sync`는 DB 정기 작업이 로그인 없이 부릅니다. `support-api`·`get-ban-info`는 차단돼 로그인할 수 없는 플레이어도 부를 수 있어야 합니다. `withdrawal-guard`·`admin-displayname-set`은 함수가 직접 부른 쪽을 확인합니다. 열 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않고, 푸시 알림이 나가지 않습니다.
+`purchase-notify-apple`은 애플 서버가, `purchase-refund-sync-google`·`purchase-price-sync`·`withdrawal-sweep`·`push-send`·`auth-config-sync`는 DB 정기 작업이 로그인 없이 부릅니다. `support-api`·`get-ban-info`는 차단돼 로그인할 수 없는 플레이어도 부를 수 있어야 합니다. `withdrawal-guard`·`displayname-set`·`admin-displayname-set`은 함수가 직접 부른 쪽을 확인합니다. 열 함수는 배포 후 함수 설정에서 **Verify JWT**를 끄세요. 켜 두면 환불이 기록되지 않고, 비어 있는 원화 금액과 옛 방식 iOS 결제 금액이 채워지지 않으며, 탈퇴 유예가 지난 계정이 지워지지 않고, 고객센터 창이 열리지 않고, 푸시 알림이 나가지 않습니다.
 :::
 
 ## 4. 서비스 연결값 입력 {#secrets}

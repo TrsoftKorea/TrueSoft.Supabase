@@ -15,7 +15,7 @@ TrueBase SDK — Unity UPM package (`com.truesoft.supabase`) for integrating Sup
 | ProjectR (DefenceR) | `wxivrmvtpufeczltward` |
 | DevilSlayer | `owumqjyctqhuyailqutd` |
 
-**사용자가 "새 프로젝트에 SDK를 적용했다"고 알리면 이 표에 추가하고, 이후 SQL 변경 대상에 함께 넣는다.** 표에 없는 Supabase 프로젝트는 건드리지 않는다.
+**사용자가 "새 프로젝트에 SDK를 적용했다"고 알리면 이 표에 추가하고, 이후 SQL 변경 대상에 함께 넣는다.** 표에 없는 Supabase 프로젝트는 건드리지 않는다. 콘솔의 "새 프로젝트 만들기"로 꺼낼 대기 프로젝트는 `node "Tools~/StandbyProject/prepare.mjs"` 로 준비한다 — 이 표에도 저절로 더해진다(사용법은 그 폴더의 README).
 
 `Samples~/DatabaseSetup/SQL/player/install.sql`이 유일한 캐노니컬 소스다. 프로젝트별 분기 SQL을 만들지 않고, 라이브 DB와 파일이 어긋나면 파일을 기준으로 수렴시킨다.
 
