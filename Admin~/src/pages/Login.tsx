@@ -61,7 +61,8 @@ export default function Login({ onSignedIn }: { onSignedIn: (outcomes: SignInOut
           <div className="h-px flex-1 bg-neutral-200" />
         </div>
 
-        <div ref={buttonRef} className="flex justify-center" />
+        {/* 구글 단추(밝은 화면 전용)와 페이지의 색 모드가 다르면 브라우저가 단추 둘레를 흰 바탕으로 채운다 — 이 자리만 밝은 모드로 맞춘다. */}
+        <div ref={buttonRef} className="flex justify-center [color-scheme:light]" />
         {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
 
         <p className="mt-4 text-xs text-neutral-500">허용된 운영자 계정만 들어올 수 있습니다.</p>

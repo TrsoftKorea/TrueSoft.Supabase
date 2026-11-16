@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useEscapeToClose } from './useEscapeToClose'
@@ -47,12 +47,26 @@ export function EditDialog({
   children: ReactNode
 }) {
   useEscapeToClose(true, busy, onClose)
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  // 휴대폰 화면 자판이 올라오면 창이 줄어드는데, 브라우저는 창 안쪽 스크롤까지 맞춰 주지 않아 입력 중인 칸이 아래로 숨는다.
+  // 창 높이가 바뀔 때 입력 중인 칸이 본문 안에 보이도록 내린다.
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      const el = document.activeElement
+      if (el instanceof HTMLElement && el !== body && body.contains(el)) el.scrollIntoView({ block: 'nearest' })
+    })
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [])
 
   // 문서 맨 바깥(body)에 띄운다 — 화면 안에 그대로 두면 부모의 간격(space-y 의 margin-top)이 어두운 배경에도 붙어
   // 화면 위쪽 16px 이 덮이지 않았다(2026-10-28 사용자 지적).
   return createPortal(
     <div className={`fixed inset-0 ${layer === 'top' ? 'z-[60]' : 'z-50'} bg-black/40 flex items-center justify-center p-4`}>
-      <div className={`bg-white rounded-lg shadow-xl w-full ${SIZE_CLS[size]} max-h-[90vh] flex flex-col`}>
+      <div className={`bg-white rounded-lg shadow-xl w-full ${SIZE_CLS[size]} max-h-full flex flex-col`}>
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-neutral-200 shrink-0">
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-neutral-900 truncate">{title}</h3>
@@ -72,7 +86,7 @@ export function EditDialog({
           </div>
         </div>
         {/* flex-auto(기준 = 제 높이): flex-1 은 기준이 0 이라 bodyClassName 의 고정 높이가 무시된다. 창보다 길면 줄고 스크롤된다. */}
-        <div className={`flex-auto min-h-0 overflow-auto ${flush ? '' : 'p-5 space-y-4'} ${bodyClassName}`}>{children}</div>
+        <div ref={bodyRef} className={`flex-auto min-h-0 overflow-auto ${flush ? '' : 'p-5 space-y-4'} ${bodyClassName}`}>{children}</div>
         {error && (
           <div className="px-5 py-2 border-t border-red-200 bg-red-50 text-sm text-red-700 shrink-0">{error}</div>
         )}
