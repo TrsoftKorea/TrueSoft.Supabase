@@ -227,7 +227,7 @@ export default function Mails({
   const tz = useGameTimeZone(target)
   const tzText = tz ? `${timeZoneName(tz)} 기준` : ''
   const pushApplies = push
-  const pushSummary = pushApplies ? (pushIsAd ? '보냄 · 광고성' : '보냄') : null
+  const pushSummary = pushApplies ? (pushIsAd ? '보냄 · 광고' : '보냄') : null
   const canSend = msgOk && expiresDays > 0 && targetOk && schedOk && (sched === 'immediate' || !!tz)
     && items.every((it) => it.key && Number(it.count) > 0)
 
@@ -497,7 +497,7 @@ export default function Mails({
             </div>
             {pushApplies && (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-neutral-600 shrink-0 w-24">광고성 알림</span>
+                <span className="text-sm text-neutral-600 shrink-0 w-24">광고 여부</span>
                 <Switch value={pushIsAd} onChange={setPushIsAd} />
               </div>
             )}
