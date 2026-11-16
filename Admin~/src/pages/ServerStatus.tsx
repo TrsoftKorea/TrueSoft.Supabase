@@ -310,7 +310,7 @@ function ShareTable({ rows, metric, colorOf }: {
       <DataTable
         columns={[
           {
-            key: 'feature', header: '기능', kind: 'text',
+            key: 'feature', header: '기능', kind: 'text', cardTitle: true,
             cell: (f) => (
               <>
                 <div className="truncate">{f.feature}</div>

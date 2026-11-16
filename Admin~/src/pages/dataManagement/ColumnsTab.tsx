@@ -490,7 +490,7 @@ export default function ColumnsTab({
 
       <TableCard
         columns={[
-          { key: 'name', header: '필드', kind: 'mono', cell: (c) => c.column_name },
+          { key: 'name', header: '필드', kind: 'mono', cardTitle: true, cell: (c) => c.column_name },
           {
             key: 'type', header: '타입', kind: 'name', cell: (c) => (
               <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(c.data_type)}</span>

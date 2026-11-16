@@ -161,7 +161,7 @@ export default function MailSchedules({
           },
           {
             // 아이템은 제목 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 넓은 화면에서도 표가 옆으로 넘친다.
-            key: 'title', header: '제목', kind: 'text',
+            key: 'title', header: '제목', kind: 'text', cardTitle: true,
             full: (r) => (r.items?.length ? `${r.title} · ${itemsText(r.items, catalog)}` : r.title),
             cell: (r) => (
               <>

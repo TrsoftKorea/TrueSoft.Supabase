@@ -348,7 +348,7 @@ export default function RemoteConfig({
       <TableCard
         columns={[
           {
-            key: 'key', header: '키', kind: 'mono', cell: (key) => key,
+            key: 'key', header: '키', kind: 'mono', cardTitle: true, cell: (key) => key,
           },
           {
             key: 'status', header: '상태', kind: 'status', cell: (key) => {

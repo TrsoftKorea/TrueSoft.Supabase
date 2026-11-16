@@ -28,6 +28,11 @@ export type Column<T> = {
   cellStyle?: (row: T) => CSSProperties | undefined
   /** 칸에 마우스를 올리면 보일 글(text 칸이 아닌 칸용 — text 칸은 full). */
   cellTitle?: (row: T) => string | undefined
+  /**
+   * 휴대폰 카드에서 맨 위 제목으로 쓸 칸 — 그 줄이 "무엇"인지 보이는 칸(쿠폰 제목·설정 키 등).
+   * 안 정하면 "플레이어" 칸, 없으면 첫 이름(name) 칸이 제목이 된다.
+   */
+  cardTitle?: boolean
 }
 
 const HEAD: Record<ColumnKind, string> = {
@@ -244,8 +249,11 @@ function CardList<T>({
   setOpenKey: (k: string | null) => void
 }) {
   // 카드 첫 줄: 첫 이름 칸(무엇의 줄인지)을 제목처럼, 표의 맨 앞이 시각이면(정렬 기준) 그 오른쪽에 작게 — 둘 다 칸 이름 없이.
-  const title = columns.find((c) => c.kind === 'name' && !isEmpty(c.header))
-  const when = title && columns[0]?.kind === 'datetime' ? columns[0] : undefined
+  const title = columns.find((c) => c.cardTitle)
+    ?? columns.find((c) => c.header === '플레이어')
+    ?? columns.find((c) => c.kind === 'name' && !isEmpty(c.header))
+    ?? (columns[0]?.kind === 'datetime' ? columns[0] : undefined)
+  const when = title && title !== columns[0] && columns[0]?.kind === 'datetime' ? columns[0] : undefined
   const fields = columns.filter((c) => c.kind !== 'actions' && c !== title && c !== when)
   const actions = columns.filter((c) => c.kind === 'actions')
   return (
@@ -268,7 +276,7 @@ function CardList<T>({
                   const w = when?.cell(r)
                   return (
                     <div className="flex items-baseline justify-between gap-3 pb-0.5">
-                      <dd className="min-w-0 break-words font-medium text-neutral-900">{isEmpty(t) ? EMPTY_MARK : t}</dd>
+                      <dd className={`min-w-0 font-medium text-neutral-900 ${title.kind === 'mono' ? 'break-all font-mono' : 'break-words'}`}>{isEmpty(t) ? EMPTY_MARK : t}</dd>
                       {when && <dd className="shrink-0 whitespace-nowrap text-xs tabular-nums text-neutral-500">{isEmpty(w) ? EMPTY_MARK : w}</dd>}
                     </div>
                   )

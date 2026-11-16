@@ -201,8 +201,20 @@ export async function renderGoogleButton(
     auto_select: false,
     cancel_on_tap_outside: true,
   })
-  parent.replaceChildren()
   // 단추 폭은 픽셀로만 받는다(구글 허용 200~400) — 놓일 자리 폭에 맞춰야 좁은 휴대폰에서 카드 밖으로 안 나간다.
-  const width = Math.max(200, Math.min(400, Math.floor(parent.clientWidth || 320)))
-  api.renderButton(parent, { theme: 'outline', size: 'large', width, locale: 'ko' })
+  // 자리 폭이 바뀌면(휴대폰을 돌리거나 창을 줄이면) 다시 그린다 — 처음 폭으로 남으면 카드 밖으로 삐져나간다.
+  const widthOf = () => Math.max(200, Math.min(400, Math.floor(parent.clientWidth || 320)))
+  let drawn = 0
+  const draw = () => {
+    drawn = widthOf()
+    parent.replaceChildren()
+    api.renderButton(parent, { theme: 'outline', size: 'large', width: drawn, locale: 'ko' })
+  }
+  draw()
+  if (typeof ResizeObserver === 'undefined') return
+  const ro = new ResizeObserver(() => {
+    if (isCancelled() || !parent.isConnected) { ro.disconnect(); return }
+    if (widthOf() !== drawn) draw()
+  })
+  ro.observe(parent)
 }

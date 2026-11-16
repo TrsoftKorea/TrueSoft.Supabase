@@ -302,7 +302,7 @@ export default function MailRecords({
               { key: 'category', header: '분류', kind: 'name', cell: (b) => (b.category ? catLabel(b.category) : null) },
               {
                 // 아이템은 제목 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 표가 옆으로 넘친다.
-                key: 'title', header: '제목', kind: 'text',
+                key: 'title', header: '제목', kind: 'text', cardTitle: true,
                 full: (b) => (b.items?.length ? `${b.title} · ${itemsText(b.items, catalog)}` : b.title),
                 cell: (b) => (
                   <>

@@ -428,7 +428,7 @@ export default function Coupons({
 
       <TableCard
         columns={[
-          { key: 'title', header: '제목', kind: 'text', cell: (c) => c.title },
+          { key: 'title', header: '제목', kind: 'text', cardTitle: true, cell: (c) => c.title },
           { key: 'kind', header: '종류', kind: 'name', cell: (c) => KIND_NAME[c.kind] },
           {
             key: 'code', header: '코드', kind: 'name', cell: (c) => c.kind === 'keyword'

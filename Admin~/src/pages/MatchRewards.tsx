@@ -251,7 +251,7 @@ export default function MatchRewards({
 
       <TableCard
         columns={[
-          { key: 'code', header: '게임 코드', kind: 'mono', cell: (r) => r.game_code },
+          { key: 'code', header: '게임 코드', kind: 'mono', cardTitle: true, cell: (r) => r.game_code },
           {
             key: 'mode', header: '확인 방식', kind: 'status', cell: (r) => r.config
               ? MODE_LABEL[r.config.mode] ?? r.config.mode

@@ -941,6 +941,29 @@ const HANDLERS: Record<string, Handler> = {
     ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
     return { rows, total: rows.length, pageSize: 20 }
   },
+  // 우편 내역 › 발송 단위. 'mails.getRecords' 의 "점검 보상"이 첫 묶음이다.
+  'mails.getBatches': () => {
+    const at = (d: number, t: string) => addDays(kstToday(), d) + `T${t}+09:00`
+    const rows = [
+      { id: 'b1', target_mode: 'all', title: '점검 보상', items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: at(7, '00:00:00'), created_by: MOCK_EMAIL, created_at: at(-1, '12:00:00'), server_code: 'GLOBAL', open_until: at(2, '00:00:00'), recalled_at: null },
+      { id: 'b2', target_mode: 'players', title: '문의 보상 — 결제 누락 지급', items: [{ key: 'gem', count: 1200 }, { key: 'gold', count: 5000 }], recipient_count: 1, category: 'default', expires_at: at(30, '00:00:00'), created_by: MOCK_EMAIL, created_at: at(-3, '15:20:00'), server_code: null, open_until: null, recalled_at: null },
+      { id: 'b3', target_mode: 'server', title: '잘못 보낸 우편', items: [{ key: 'gold', count: 100 }], recipient_count: 6, category: 'default', expires_at: at(7, '00:00:00'), created_by: MOCK_EMAIL, created_at: at(-5, '09:05:00'), server_code: 'KR', open_until: null, recalled_at: at(-5, '09:30:00') },
+    ]
+    return { rows, total: rows.length, pageSize: 20 }
+  },
+  'mails.getBatchDetail': (_t, p) => ({
+    batch: { id: String(p['batchId'] ?? 'b1'), target_mode: 'all', title: '점검 보상', items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL', open_until: null, recalled_at: null, recalled_count: 0 },
+    stats: { claimed_count: 1, deleted_count: 0, unclaimed_count: 1 },
+  }),
+  'audit.list': () => {
+    const at = (d: number, t: string) => addDays(kstToday(), d) + `T${t}+09:00`
+    const rows = [
+      { id: 3, email: MOCK_EMAIL, action: 'mails.send', params: { title: '점검 보상', targetMode: 'all' }, created_at: at(-1, '12:00:00') },
+      { id: 2, email: MOCK_EMAIL, action: 'players.ban', params: { accountId: 'a2', reason: '부정 결제 의심', minutes: 1440 }, created_at: at(-2, '18:42:00') },
+      { id: 1, email: 'operator@example.com', action: 'coupons.create', params: { title: '오픈 기념', code: 'WELCOME2026' }, created_at: at(-4, '10:15:00') },
+    ]
+    return { rows, total: rows.length, pageSize: 20 }
+  },
   'matchLobby.list': () => {
     const member = (account_id: string, status: string) => ({ account_id, display_name: playerNameOf(account_id) ?? '', status, metadata: null, invited_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', responded_at: null })
     const rows = [

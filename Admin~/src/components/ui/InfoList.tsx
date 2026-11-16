@@ -19,13 +19,14 @@ export type InfoItem = {
  */
 export function InfoList({ items, className = '' }: { items: InfoItem[]; className?: string }) {
   return (
-    <dl className={`grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-2 ${className}`}>
+    // 휴대폰에서는 한 칸씩 세로로 쌓여 화면을 다 차지한다 — 표 카드처럼 "이름 왼쪽 · 값 오른쪽" 한 줄로 둔다.
+    <dl className={`grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-2 max-sm:grid-cols-1 max-sm:gap-y-1.5 ${className}`}>
       {items.map((i, n) => {
         const empty = i.value === null || i.value === undefined || i.value === false || i.value === ''
         return (
-          <div key={n} className={`min-w-0 ${i.wide ? 'col-span-full' : ''}`}>
-            <dt className="text-xs text-neutral-500">{i.label}</dt>
-            <dd className={`text-sm break-words ${empty ? 'text-neutral-400' : i.tone === 'danger' ? 'text-red-600 font-semibold' : 'text-neutral-900'}`}>
+          <div key={n} className={`min-w-0 ${i.wide ? 'col-span-full' : 'max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-3'}`}>
+            <dt className="text-xs text-neutral-500 max-sm:shrink-0">{i.label}</dt>
+            <dd className={`text-sm break-words ${i.wide ? '' : 'max-sm:min-w-0 max-sm:text-right'} ${empty ? 'text-neutral-400' : i.tone === 'danger' ? 'text-red-600 font-semibold' : 'text-neutral-900'}`}>
               {empty ? '없음' : i.value}
             </dd>
           </div>
