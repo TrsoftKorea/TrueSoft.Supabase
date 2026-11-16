@@ -1579,6 +1579,11 @@ async function handleAction(
         return json({ ok: true, data: { url: SUPABASE_URL, publishableKey: publishable["default"] ?? null } });
       }
 
+      // 에디터의 클래스 생성기용 Secret key. 모든 데이터에 닿는 키라 누를 때만 내주고, 읽기 이름이 아니어서 운영 기록에 남는다.
+      case "project.revealSecretKey": {
+        return json({ ok: true, data: { secretKey: SUPABASE_SECRET_KEY ?? null } });
+      }
+
       case "settings.setConsoleIdentity": {
         const { data, error } = await db.rpc("ts_admin_console_identity_update", {
           p_display_name: optStr(params, "displayName"),

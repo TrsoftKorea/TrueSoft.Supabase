@@ -15,7 +15,7 @@ import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { contrastWithWhite } from '../lib/color'
 import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, ExternalLink, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, ExternalLink, Eye, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
 import { copyToClipboard } from '../lib/clipboard'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
@@ -1012,6 +1012,22 @@ function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: 
     }
   }
 
+  // Secret key 는 누를 때만 받는다 — 받은 뒤에 복사해야 브라우저가 복사를 막지 않는다(누름 직후에만 허용하는 브라우저가 있다).
+  const [secret, setSecret] = useState<string | null | undefined>(undefined)
+  const [revealing, setRevealing] = useState(false)
+  useEffect(() => { setSecret(undefined) }, [target])
+  const reveal = async () => {
+    setRevealing(true)
+    try {
+      const d = await callAdmin<{ secretKey: string | null }>(target, 'project.revealSecretKey')
+      setSecret(d.secretKey)
+    } catch (e: unknown) {
+      report(e, 'Secret key 를 불러오지 못했습니다.')
+    } finally {
+      setRevealing(false)
+    }
+  }
+
   // 이름은 Supabase 화면·SupabaseSettings 칸에 적힌 그대로.
   const rows: [string, string, string | null | undefined][] = [
     ['Project URL', '이 프로젝트의 주소', conn?.url],
@@ -1041,6 +1057,31 @@ function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: 
               </td>
             </tr>
           ))}
+          <tr className="border-t border-neutral-100">
+            <td className="py-2 pl-4 pr-4">
+              <div className="text-neutral-800">Secret key</div>
+              <div className="text-xs text-neutral-500">이 프로젝트의 서버 키</div>
+            </td>
+            <td className="py-2 pr-4">
+              <code className={`block truncate text-xs ${secret ? 'text-neutral-900' : 'text-neutral-400'}`} title={secret ?? undefined}>
+                {secret === undefined ? '••••••••' : secret || '없음'}
+              </code>
+            </td>
+            <td className="py-2 pr-4 text-right whitespace-nowrap">
+              {secret === undefined ? (
+                <Button size="sm" className="w-[76px]" onClick={() => void reveal()} disabled={revealing}>
+                  <Eye className="w-3 h-3" />
+                  보기
+                </Button>
+              ) : (
+                <Button size="sm" className="w-[76px]" onClick={() => secret && void copy('Secret key', secret)} disabled={!secret}>
+                  {copied === 'Secret key' ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                  {copied === 'Secret key' ? '복사함' : '복사'}
+                </Button>
+              )}
+              <span className="inline-block w-[64px] ml-1.5" aria-hidden />
+            </td>
+          </tr>
       </GroupTable>
     </GroupBox>
   )

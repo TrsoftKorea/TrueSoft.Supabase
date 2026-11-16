@@ -795,6 +795,7 @@ const HANDLERS: Record<string, Handler> = {
     url: `https://${target}-mock.supabase.co`,
     publishableKey: `sb_publishable_${target}_mock`,
   }),
+  'project.revealSecretKey': (target) => ({ secretKey: `sb_secret_${target}_mock` }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
   'schema.getDraft': () => ({ rows: [] }),
   'dashboard.stats': () => {
