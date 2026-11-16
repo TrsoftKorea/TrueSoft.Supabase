@@ -90,6 +90,7 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.setConsoleIdentity': '프로젝트 이름·아이콘 변경',
   'project.activate': '새 프로젝트 만들기',
   'project.revealSecretKey': 'Secret key 보기',
+  'project.issueGeneratorToken': '생성기 열쇠 발급',
   'matchRewards.upsert': '매치 게임 코드 추가·수정',
   'matchRewards.delete': '매치 게임 코드 삭제',
   'coupons.create': '쿠폰 생성',

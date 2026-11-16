@@ -795,7 +795,10 @@ const HANDLERS: Record<string, Handler> = {
     url: `https://${target}-mock.supabase.co`,
     publishableKey: `sb_publishable_${target}_mock`,
   }),
-  'project.revealSecretKey': (target) => ({ secretKey: `sb_secret_${target}_mock` }),
+  'project.issueGeneratorToken': (target) => ({
+    token: `eyJhbGciOiJIUzI1NiJ9.${target}-generator-mock.signature`,
+    expiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+  }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
   'schema.getDraft': () => ({ rows: [] }),
   'dashboard.stats': () => {

@@ -259,9 +259,28 @@ async function issueSessionToken(db: SupabaseClient, email: string, hubToken?: s
     .sign(key);
 }
 
-type Identity = { email: string; hubToken: string | null };
+/**
+ * 에디터 클래스 생성기용 열쇠. 운영자가 콘솔에서 발급해 유니티에 넣는다 — 프로젝트 Secret key 를 내주지 않으려고 둔다.
+ * GENERATOR_ACTIONS(테이블 구조·원격 설정 읽기)만 통하고, 요청마다 발급한 사람이 아직 운영자인지 본다(빼면 바로 막힌다).
+ */
+const GENERATOR_TOKEN_TTL = "365d";
+const GENERATOR_ACTIONS = new Set(["generator.getOpenApi", "generator.getRemoteConfig"]);
 
-/** 우리가 발급한 세션 토큰을 검증한다. 실패하면 null. */
+async function issueGeneratorToken(db: SupabaseClient, email: string): Promise<{ token: string; expiresAt: string }> {
+  const key = await sessionKey(db);
+  if (!key) throw new Error("로그인 서명 비밀값이 없습니다. 설치 SQL 을 다시 실행해 주세요.");
+  const token = await new SignJWT({ email, use: "generator" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(GENERATOR_TOKEN_TTL)
+    .sign(key);
+  const { payload } = await jwtVerify(token, key);
+  return { token, expiresAt: new Date((payload.exp ?? 0) * 1000).toISOString() };
+}
+
+type Identity = { email: string; hubToken: string | null; generator: boolean };
+
+/** 우리가 발급한 세션 토큰(또는 생성기 열쇠)을 검증한다. 실패하면 null. */
 async function verifySessionToken(db: SupabaseClient, token: string): Promise<Identity | null> {
   const key = await sessionKey(db);
   if (!key) return null;
@@ -270,7 +289,7 @@ async function verifySessionToken(db: SupabaseClient, token: string): Promise<Id
     const email = payload["email"];
     if (typeof email !== "string") return null;
     const hub = payload["hub"];
-    return { email: email.toLowerCase(), hubToken: typeof hub === "string" ? hub : null };
+    return { email: email.toLowerCase(), hubToken: typeof hub === "string" ? hub : null, generator: payload["use"] === "generator" };
   } catch {
     return null;
   }
@@ -279,7 +298,7 @@ async function verifySessionToken(db: SupabaseClient, token: string): Promise<Id
 /** 구글 ID 토큰이거나 우리가 발급한 세션 토큰이거나 — 신원을 확인한다. */
 async function verifyIdentity(db: SupabaseClient, token: string): Promise<Identity | null> {
   const google = await verifyGoogleIdToken(token);
-  if (google) return { email: google, hubToken: null };
+  if (google) return { email: google, hubToken: null, generator: false };
   const session = await verifySessionToken(db, token);
   if (session) return session;
   // 둘 다 아니면 그때만 로그를 남긴다 — 어느 한쪽만 실패하는 건 정상(로그인 방식이 둘이라
@@ -605,6 +624,8 @@ Deno.serve(async (req) => {
   const identity = await verifyIdentity(db, idToken);
   if (!identity) return fail("로그인이 필요합니다.", 401);
   const email = identity.email;
+  // 생성기 열쇠는 생성기 읽기만. 반대로 생성기 읽기는 콘솔 로그인으로도 된다.
+  if (identity.generator && !GENERATOR_ACTIONS.has(action)) return fail("생성기 열쇠로는 할 수 없는 요청입니다.", 403);
 
   // 트루베이스 저장소의 표로 받은 로그인은 그 표가 아직 유효해야 한다(비밀번호를 바꾸면 무효).
   // 마스터도 거친다 — 마스터는 비활성화가 안 되므로 이것이 그 로그인을 끊는 수단이다.
@@ -1579,9 +1600,26 @@ async function handleAction(
         return json({ ok: true, data: { url: SUPABASE_URL, publishableKey: publishable["default"] ?? null } });
       }
 
-      // 에디터의 클래스 생성기용 Secret key. 모든 데이터에 닿는 키라 누를 때만 내주고, 읽기 이름이 아니어서 운영 기록에 남는다.
-      case "project.revealSecretKey": {
-        return json({ ok: true, data: { secretKey: SUPABASE_SECRET_KEY ?? null } });
+      // 에디터 클래스 생성기용 열쇠 발급. 읽기 이름이 아니어서 누가 받았는지 운영 기록에 남는다.
+      case "project.issueGeneratorToken": {
+        return json({ ok: true, data: await issueGeneratorToken(db, email) });
+      }
+
+      // 유저 데이터 생성기 — 테이블 구조(PostgREST OpenAPI). 행 내용은 담기지 않는다.
+      case "generator.getOpenApi": {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+          headers: { apikey: SUPABASE_SECRET_KEY, Accept: "application/openapi+json" },
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error(`테이블 구조를 읽지 못했습니다(HTTP ${res.status}).`);
+        return json({ ok: true, data: { openApi: text } });
+      }
+
+      // 원격 설정 생성기 — 키·값·설명.
+      case "generator.getRemoteConfig": {
+        const { data, error } = await db.from("remote_config").select("key,value_json,description").order("key");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { rows: data ?? [] } });
       }
 
       case "settings.setConsoleIdentity": {
