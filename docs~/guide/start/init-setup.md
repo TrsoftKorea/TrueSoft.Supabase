@@ -8,7 +8,7 @@
 |------|-----------|--------|
 | **Project URL** | 운영&nbsp;콘솔&nbsp;[**프로젝트&nbsp;연결&nbsp;정보**](/guide/start/project#connection) | `SupabaseSettings.projectUrl` |
 | **Publishable Key** | 운영&nbsp;콘솔&nbsp;[**프로젝트&nbsp;연결&nbsp;정보**](/guide/start/project#connection) | `SupabaseSettings.publishableKey` |
-| **Secret key** | 운영&nbsp;콘솔&nbsp;[**프로젝트&nbsp;연결&nbsp;정보**](/guide/start/project#connection)에서&nbsp;**보기** | 유저 데이터·Remote Config 클래스 생성기 전용. EditorPrefs 저장, 빌드 미포함 |
+| **생성기 열쇠** | 운영&nbsp;콘솔&nbsp;[**프로젝트&nbsp;연결&nbsp;정보**](/guide/start/project#connection)에서&nbsp;**발급** | 유저 데이터·Remote Config 클래스 생성기 전용. EditorPrefs 저장, 빌드 미포함 |
 
 ## 2. 설정 에셋 생성
 

@@ -236,7 +236,7 @@ namespace TrueBase.Editor
             try
             {
                 EditorUtility.DisplayProgressBar(RcDialogTitle, "remote_config 키 목록을 가져오는 중…", 0.4f);
-                _rcKeyList     = RemoteConfigClassGenerator.FetchConfigRows(settings.projectUrl, GC.GetSecretKey(), settings.timeoutSeconds);
+                _rcKeyList     = RemoteConfigClassGenerator.FetchConfigRows(settings.projectUrl, GC.GetGeneratorToken(), settings.timeoutSeconds);
                 _rcKeyIndex    = 0;
                 _rcKeysFetched = true;
             }

@@ -254,8 +254,7 @@ namespace TrueBase.Editor
             {
                 EditorUtility.DisplayProgressBar(DialogTitle, "user_data 필드 목록을 가져오는 중…", 0.4f);
 
-                var url = PostgrestOpenApiUserSaveClass.BuildRestRootUrl(settings.projectUrl);
-                var json = PostgrestOpenApiUserSaveClass.FetchOpenApiJson(url, GC.GetSecretKey(), settings.timeoutSeconds);
+                var json = PostgrestOpenApiUserSaveClass.FetchOpenApiJson(settings.projectUrl, GC.GetGeneratorToken(), settings.timeoutSeconds);
 
                 var skip = ParseSkip(SkipColumns);
                 var parsed = PostgrestOpenApiUserSaveClass.ParseTableColumns(json, "user_data", skip);

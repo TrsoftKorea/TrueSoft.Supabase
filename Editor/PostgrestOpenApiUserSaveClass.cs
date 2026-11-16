@@ -61,48 +61,54 @@ namespace TrueBase.Editor
             return baseUrl.TrimEnd('/') + "/rest/v1/";
         }
 
-        private static void SetOpenApiFetchHeaders(UnityWebRequest req, string apiKey)
-        {
-            req.SetRequestHeader("apikey", apiKey);
-            if (IsLegacyJwtStyleApiKey(apiKey))
-                req.SetRequestHeader("Authorization", "Bearer " + apiKey);
-            req.SetRequestHeader("Accept", "application/openapi+json");
-        }
-
         /// <summary>
-        /// PostgREST 루트에 <c>Accept: application/openapi+json</c>으로 GET 해 OpenAPI 스키마 JSON을 받습니다.
-        /// 에디터 UI에서 쓰는 동기 호출이라 완료까지 블로킹합니다. 실패 시 응답 일부를 포함한 <c>IOException</c>.
+        /// 운영 콘솔 서버 함수(<c>admin-api</c>)에 생성기 열쇠로 요청하고 응답의 <c>data</c>를 돌려줍니다.
+        /// 프로젝트 Secret key 를 개발 PC 에 두지 않으려고 콘솔 서버가 대신 읽는다 — 열쇠는 콘솔 "서비스 연결 › Supabase"에서 발급한다.
+        /// 에디터 UI에서 쓰는 동기 호출이라 완료까지 블로킹합니다. 실패 시 서버 안내를 담은 <c>IOException</c>.
         /// </summary>
-        public static string FetchOpenApiJson(string restRootUrl, string apiKey, int timeoutSeconds)
+        public static JToken CallConsole(string projectUrl, string generatorToken, string action, int timeoutSeconds)
         {
-            var key = NormalizeApiKey(apiKey);
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("API 키가 비어 있습니다.", nameof(apiKey));
+            var token = NormalizeApiKey(generatorToken);
+            if (string.IsNullOrWhiteSpace(token))
+                throw new ArgumentException("생성기 열쇠가 비어 있습니다.", nameof(generatorToken));
+            var baseUrl = NormalizeProjectUrl(projectUrl);
+            if (string.IsNullOrWhiteSpace(baseUrl))
+                throw new ArgumentException("프로젝트 URL이 비어 있습니다.", nameof(projectUrl));
 
-            using var req = UnityWebRequest.Get(restRootUrl);
-            req.timeout = Math.Max(5, timeoutSeconds);
-            SetOpenApiFetchHeaders(req, key);
+            var payload = new JObject { ["action"] = action, ["params"] = new JObject() }.ToString(Newtonsoft.Json.Formatting.None);
+            using var req = new UnityWebRequest(baseUrl + "/functions/v1/admin-api", "POST")
+            {
+                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(payload)),
+                downloadHandler = new DownloadHandlerBuffer(),
+                timeout = Math.Max(5, timeoutSeconds),
+            };
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.SetRequestHeader("Authorization", "Bearer " + token);
 
             var op = req.SendWebRequest();
             while (op.isDone == false)
                 System.Threading.Thread.Sleep(16);
 
             var body = req.downloadHandler?.text ?? string.Empty;
+            JObject parsed = null;
+            try { parsed = JObject.Parse(body); } catch (Exception) { /* 아래에서 원문으로 알린다 */ }
+            if (parsed != null && parsed.Value<bool?>("ok") == true)
+                return parsed["data"];
 
-#if UNITY_2020_2_OR_NEWER
-            var ok = req.result == UnityWebRequest.Result.Success;
-#else
-            var ok = req.isNetworkError == false && req.isHttpError == false;
-#endif
-            if (!ok)
-            {
-                var snippet = body.Length > 800 ? body.Substring(0, 800) + "…" : body;
-                if (string.IsNullOrWhiteSpace(snippet))
-                    snippet = "(no response body)";
-                throw new IOException($"{req.error} (HTTP {req.responseCode})\n{snippet}");
-            }
+            var message = parsed?.Value<string>("error");
+            if (string.IsNullOrWhiteSpace(message))
+                message = body.Length > 800 ? body.Substring(0, 800) + "…" : (string.IsNullOrWhiteSpace(body) ? "(no response body)" : body);
+            throw new IOException($"{req.error} (HTTP {req.responseCode})\n{message}");
+        }
 
-            return body;
+        /// <summary>user_data 등 테이블 구조가 담긴 PostgREST OpenAPI JSON을 콘솔 서버에서 받습니다.</summary>
+        public static string FetchOpenApiJson(string projectUrl, string generatorToken, int timeoutSeconds)
+        {
+            var data = CallConsole(projectUrl, generatorToken, "generator.getOpenApi", timeoutSeconds);
+            var json = data?["openApi"]?.Value<string>();
+            if (string.IsNullOrWhiteSpace(json))
+                throw new IOException("콘솔 서버가 테이블 구조를 돌려주지 않았습니다.");
+            return json;
         }
 
         /// <summary>

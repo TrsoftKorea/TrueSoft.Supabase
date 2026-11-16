@@ -13,11 +13,21 @@ namespace TrueBase.Editor
     /// </summary>
     internal static class GeneratorEditorCommon
     {
-        /// <summary>Secret API 키(EditorPrefs 저장). 여러 생성기가 같은 키를 공유합니다.</summary>
-        public const string PrefsKeySecret = "TrueBase.UserSaveClassGenerator.SecretKey";
+        /// <summary>생성기 열쇠(EditorPrefs 저장). 운영 콘솔에서 발급하며 여러 생성기가 함께 씁니다.</summary>
+        public const string PrefsKeyGeneratorToken = "TrueBase.ClassGenerator.GeneratorToken";
 
-        /// <summary>EditorPrefs에 저장된 Secret 키를 읽습니다. 없으면 빈 문자열.</summary>
-        public static string GetSecretKey() => EditorPrefs.GetString(PrefsKeySecret, "");
+        /// <summary>EditorPrefs에 저장된 생성기 열쇠를 읽습니다. 없으면 빈 문자열.</summary>
+        public static string GetGeneratorToken() => EditorPrefs.GetString(PrefsKeyGeneratorToken, "");
+
+        /// <summary>생성기 열쇠를 저장합니다. 예전에 저장해 둔 프로젝트 Secret key 가 남아 있으면 함께 지웁니다.</summary>
+        public static void SetGeneratorToken(string value)
+        {
+            EditorPrefs.SetString(PrefsKeyGeneratorToken, value ?? "");
+            EditorPrefs.DeleteKey(LegacyPrefsKeySecret);
+        }
+
+        // 생성기가 프로젝트 Secret key 로 직접 읽던 때의 저장 자리. 이제 쓰지 않는다.
+        private const string LegacyPrefsKeySecret = "TrueBase.UserSaveClassGenerator.SecretKey";
 
         // ── GUI 스타일 ────────────────────────────────────────────────────────
 
@@ -273,8 +283,7 @@ namespace TrueBase.Editor
 
         // ── 생성기 연결 설정 UI ─────────────────────────────────────────────────
 
-        private static string _secretKeyDraft;
-        private static bool _secretWarned;
+        private static string _tokenDraft;
 
         /// <summary>
         /// 가져오기 실패 예외를 사람이 읽기 쉬운 안내로 바꿉니다. 흔한 원인(키·URL·네트워크)을 짚어주고,
@@ -286,8 +295,10 @@ namespace TrueBase.Editor
             var s = raw.ToLowerInvariant();
 
             string hint = null;
-            if (s.Contains("http 401") || s.Contains("http 403") || s.Contains("jwt") || s.Contains("apikey") || s.Contains("api 키가 비어"))
-                hint = "Secret 키가 올바른지 확인하세요. 창 상단에서 다시 입력할 수 있습니다.";
+            if (s.Contains("http 401") || s.Contains("http 403") || s.Contains("생성기 열쇠"))
+                hint = "생성기 열쇠가 이 프로젝트에서 발급한 것인지, 발급한 사람이 아직 운영자인지 확인하세요. 열쇠는 운영 콘솔 설정 › 서비스 연결 › Supabase에서 새로 발급할 수 있습니다.";
+            else if (s.Contains("알 수 없는 action"))
+                hint = "프로젝트의 운영 콘솔 서버가 옛 판입니다. 운영 콘솔 서버 함수를 새로 배포해야 합니다.";
             else if (s.Contains("http 404"))
                 hint = "요청한 테이블·RPC가 프로젝트에 있는지, 프로젝트 URL이 맞는지 확인하세요.";
             else if (s.Contains("http 5"))
@@ -305,10 +316,10 @@ namespace TrueBase.Editor
 
         /// <summary>
         /// 생성기 창 상단의 공통 연결 설정 바. 설정 에셋을 창 안에서 만들거나 선택하고,
-        /// Secret 키를 쓰는 생성기는 여기서 바로 입력·수정할 수 있습니다.
-        /// 필드 목록을 가져올 준비(설정 에셋 존재 + URL + 필요 시 Secret 키)가 됐으면 true.
+        /// 생성기 열쇠를 쓰는 생성기는 여기서 바로 입력·수정할 수 있습니다.
+        /// 필드 목록을 가져올 준비(설정 에셋 존재 + URL + 필요 시 생성기 열쇠)가 됐으면 true.
         /// </summary>
-        /// <param name="needsSecret">Secret 키로 인증하는 생성기(유저 데이터·원격 설정)면 true. 리더보드는 publishable 키를 써서 false.</param>
+        /// <param name="needsSecret">생성기 열쇠로 콘솔 서버에 묻는 생성기(유저 데이터·원격 설정)면 true. 리더보드는 publishable 키를 써서 false.</param>
         public static bool DrawConnectionSetup(SupabaseSettings settings, bool needsSecret)
         {
             if (settings == null)
@@ -325,24 +336,17 @@ namespace TrueBase.Editor
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (_secretKeyDraft == null) _secretKeyDraft = GetSecretKey();
+                    if (_tokenDraft == null) _tokenDraft = GetGeneratorToken();
                     EditorGUI.BeginChangeCheck();
-                    _secretKeyDraft = EditorGUILayout.PasswordField("Secret 키", _secretKeyDraft);
+                    _tokenDraft = EditorGUILayout.PasswordField("생성기 열쇠", _tokenDraft);
                     if (EditorGUI.EndChangeCheck())
-                    {
-                        EditorPrefs.SetString(PrefsKeySecret, _secretKeyDraft ?? "");
-                        if (!string.IsNullOrWhiteSpace(_secretKeyDraft) && !_secretWarned)
-                        {
-                            _secretWarned = true; // 입력 중 글자마다 로그가 찍히지 않도록 세션당 한 번만
-                            Debug.LogWarning("[Supabase] Secret 키가 EditorPrefs에 저장됩니다. 공유 PC 환경에서는 주의하세요.");
-                        }
-                    }
+                        SetGeneratorToken(_tokenDraft);
                     if (GUILayout.Button(new GUIContent("설정 열기", "SupabaseSettings 에셋을 선택합니다 — URL·타임아웃 등을 고칠 때"), GUILayout.Width(70)))
                         PingSettings(settings);
                 }
-                if (string.IsNullOrWhiteSpace(GetSecretKey()))
+                if (string.IsNullOrWhiteSpace(GetGeneratorToken()))
                 {
-                    EditorGUILayout.HelpBox("Secret 키를 입력해야 필드 목록을 가져올 수 있습니다.", MessageType.Info);
+                    EditorGUILayout.HelpBox("운영 콘솔 설정 › 서비스 연결 › Supabase에서 발급한 생성기 열쇠를 넣습니다.", MessageType.Info);
                     ready = false;
                 }
             }

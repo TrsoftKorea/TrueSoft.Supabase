@@ -3,7 +3,7 @@
 DB 스키마와 Edge Function은 **Database Setup** 샘플에 포함된 파일로 설정합니다.
 
 ::: tip 운영 콘솔에서 만든 프로젝트
-[운영 콘솔에서 만든 프로젝트](/guide/start/project)는 1~3과 5가 이미 되어 있습니다. [서비스 연결값 입력](#secrets)만 하면 됩니다.
+[운영 콘솔에서 만든 프로젝트](/guide/start/project)는 1~3과 5가 필요 없습니다. [서비스 연결값 입력](#secrets)만 하면 됩니다.
 :::
 
 ## 1. 샘플 임포트

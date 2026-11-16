@@ -12,46 +12,12 @@ namespace TrueBase.Editor
     internal static class RemoteConfigClassGenerator
     {
 
-        /// <summary>
-        /// remote_config 테이블 전체 행을 가져옵니다.
-        /// GET /rest/v1/remote_config?select=key,value_json,description
-        /// </summary>
-        public static List<RcKeyRow> FetchConfigRows(string projectUrl, string secretKey, int timeoutSeconds)
+        /// <summary>remote_config 테이블 전체 행(키·값·설명)을 콘솔 서버에서 키 순으로 가져옵니다.</summary>
+        public static List<RcKeyRow> FetchConfigRows(string projectUrl, string generatorToken, int timeoutSeconds)
         {
-            var key = PostgrestOpenApiUserSaveClass.NormalizeApiKey(secretKey);
-            if (string.IsNullOrWhiteSpace(key))
-                throw new ArgumentException("Secret 키가 비어 있습니다.", nameof(secretKey));
-
-            var baseUrl = PostgrestOpenApiUserSaveClass.NormalizeProjectUrl(projectUrl);
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                throw new ArgumentException("프로젝트 URL이 비어 있습니다.", nameof(projectUrl));
-
-            var url = baseUrl.TrimEnd('/') + "/rest/v1/remote_config?select=key,value_json,description&order=key.asc";
-
-            using var req = UnityWebRequest.Get(url);
-            req.timeout = Math.Max(5, timeoutSeconds);
-            req.SetRequestHeader("apikey", key);
-            if (IsLegacyJwtStyleApiKey(key))
-                req.SetRequestHeader("Authorization", "Bearer " + key);
-
-            var op = req.SendWebRequest();
-            while (!op.isDone)
-                System.Threading.Thread.Sleep(16);
-
-            var body = req.downloadHandler?.text ?? string.Empty;
-
-#if UNITY_2020_2_OR_NEWER
-            var ok = req.result == UnityWebRequest.Result.Success;
-#else
-            var ok = !req.isNetworkError && !req.isHttpError;
-#endif
-            if (!ok)
-            {
-                var snippet = body.Length > 600 ? body.Substring(0, 600) + "…" : body;
-                throw new IOException($"{req.error} (HTTP {req.responseCode})\n{snippet}");
-            }
-
-            var arr = JArray.Parse(body);
+            var data = PostgrestOpenApiUserSaveClass.CallConsole(projectUrl, generatorToken, "generator.getRemoteConfig", timeoutSeconds);
+            if (!(data?["rows"] is JArray arr))
+                throw new IOException("콘솔 서버가 원격 설정 목록을 돌려주지 않았습니다.");
             var result = new List<RcKeyRow>(arr.Count);
             foreach (var item in arr)
             {
