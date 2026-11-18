@@ -1,5 +1,6 @@
 // 가짜 데이터 모드 미리보기 서버 + "게시" 버튼 처리. 이 PC(127.0.0.1)에서만 듣는다.
-// 게시 = 저장소의 변경을 전부 올린다. 콘솔 화면(Admin~)과 그 밖(SDK·DB·문서)을 커밋 두 개로 나눠 만들고 한 번에 푸시한다.
+// 게시 = 고른 게시 묶음의 변경을 올린다. 묶음마다 콘솔 화면(Admin~)과 그 밖(SDK·DB·문서)을 커밋 둘로 나눠 만들고 한 번에 푸시한다.
+// 묶음에 안 든 변경(다른 세션이 하던 것)은 그대로 둔다.
 // 푸시되면 GitHub Actions(admin-deploy.yml)가 실제 콘솔에 배포한다. 게시 버튼이 사용자 승인이다(CLAUDE.md「운영 콘솔 화면 수정」).
 //
 // 다른 사이트가 이 PC 의 게시 기능을 몰래 부르지 못하게, 띄울 때마다 새 암호값을 만들어 미리보기 화면에만 심고
@@ -10,6 +11,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { PUBLISH_DIR, foreignRoles, readLedger, releaseRole, roleName } from '../../.claude/zones/zones.mjs'
 
 const PORT = 4174
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -19,12 +21,13 @@ const REPO = path.resolve(ADMIN_DIR, '..')
 const SCOPE = 'Admin~/'
 // 실제 콘솔(Cloudflare Pages)에 배포되는 건 화면 코드뿐이다 — 콘솔 서버(admin-api)는 따로 올린다.
 const SERVER_SCOPE = 'Admin~/supabase/'
-// 제가(에이전트) 미리 적어 두는 커밋 요약. 없으면 기본 문구.
+// 게시 묶음. 에이전트가 일을 마치면 올릴 파일 목록(files, 한 줄에 저장소 기준 경로 하나)과 커밋 요약(message 콘솔 ·
+// message-sdk 그 밖)을 적어 둔다. 역할을 선언한 세션은 Admin~/.publish/<역할>/ 에, 역할 없는 세션은 아래 옛 파일에 쓴다
+// (어느 쪽에 쓸지는 .claude/hooks/zone-guard.mjs 가 막아서 지킨다). 게시는 고른 묶음만 올리고 나머지 변경은 그대로 둔다.
 const MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message')
 const SDK_MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message-sdk')
-// 이번에 올릴 파일 목록(한 줄에 경로 하나, 저장소 기준). 요약과 함께 적어 둔다 — 같은 폴더를 쓰는 다른 세션의
-// 하다 만 변경이 이 요약을 달고 섞여 올라가지 않게, 목록에 없는 파일이 있으면 게시를 멈춘다. 없으면 검사하지 않는다.
 const FILES_FILE = path.join(ADMIN_DIR, '.publish-files')
+const BATCH_ROOT = path.join(REPO, PUBLISH_DIR)
 const LIVE_URL = 'https://truebase-admin.pages.dev'
 const ACTIONS_URL = 'https://github.com/TrsoftKorea/TrueSoft.Supabase/actions/workflows/admin-deploy.yml'
 const TOKEN = crypto.randomBytes(24).toString('hex')
@@ -84,19 +87,62 @@ function secretLike(files) {
     .map((f) => f.file)
 }
 
-/** 요약과 함께 적어 둔 파일 목록. 없으면 null — 그때는 섞임 검사를 하지 않는다. */
-function plannedFiles() {
-  if (!fs.existsSync(FILES_FILE)) return null
-  return new Set(fs.readFileSync(FILES_FILE, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean))
+const readList = (file) => (fs.existsSync(file)
+  ? new Set(fs.readFileSync(file, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter(Boolean))
+  : null)
+
+/**
+ * 게시 묶음들. 역할 묶음은 목록에 적은 파일만 담는다(목록이 없으면 빈 묶음).
+ * 옛 묶음(역할 없음)은 옛 파일이 하나라도 있거나 역할 묶음이 하나도 없을 때 생긴다. 그 목록이 없으면 다른 묶음에 안 든
+ * 변경 전체가 그 묶음이다 — 세션 하나로 일할 때의 예전 동작이다.
+ */
+function readBatches() {
+  const out = []
+  if (fs.existsSync(BATCH_ROOT)) {
+    for (const d of fs.readdirSync(BATCH_ROOT, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue
+      const dir = path.join(BATCH_ROOT, d.name)
+      out.push({ name: d.name, list: readList(path.join(dir, 'files')) ?? new Set(), message: readMessage(path.join(dir, 'message')), sdkMessage: readMessage(path.join(dir, 'message-sdk')), remove: [dir] })
+    }
+  }
+  const legacy = [FILES_FILE, MESSAGE_FILE, SDK_MESSAGE_FILE]
+  if (!out.length || legacy.some((f) => fs.existsSync(f))) {
+    out.unshift({ name: '', list: readList(FILES_FILE), message: readMessage(MESSAGE_FILE), sdkMessage: readMessage(SDK_MESSAGE_FILE), remove: legacy })
+  }
+  return out
 }
 
-/** 목록에 없는 변경 — 다른 세션이 하던 것일 수 있다. 이름 변경은 새 이름으로 본다. */
-function unplannedFiles(files) {
-  const plan = plannedFiles()
-  // 판 번호만 바뀐 package.json 은 확인 창에서 고른 것이라 목록에 없어도 된다.
-  const skipPkg = pkgVersionOnly()
-  return plan ? files.filter((f) => !plan.has(f.file) && !(skipPkg && f.file === PKG)).map((f) => f.file) : []
+const lastCommitMs = (file) => { try { return Number(git('log', '-1', '--format=%ct', '--', file)) * 1000 || 0 } catch { return 0 } }
+
+/**
+ * 지금 변경을 묶음으로 나눈다. 묶음마다 "다른 역할도 고친 파일"(foreign)을 붙인다 — 그 파일의 마지막 커밋 뒤에
+ * 다른 역할 세션이 고친 기록(.claude/zones)이 있거나 다른 묶음 목록에도 있으면, 그 묶음과 함께 올려야 섞이지 않는다.
+ * 판 번호만 바뀐 package.json(pkg)은 묶음과 상관없이 게시 때 고른 판을 따라간다.
+ */
+function plan() {
+  const pending = pendingFiles()
+  const pkg = pkgVersionOnly() ? pending.find((f) => f.file === PKG) ?? null : null
+  const files = pending.filter((f) => f !== pkg)
+  const batches = readBatches()
+  const listed = (b, f) => b.list.has(f.file) || (!!f.orig && b.list.has(f.orig))
+  const claimed = new Set(files.filter((f) => batches.some((b) => b.list && listed(b, f))).map((f) => f.file))
+  const ledger = readLedger()
+  const out = batches.map((b) => {
+    const mine = files.filter((f) => (b.list ? listed(b, f) : !claimed.has(f.file)))
+    const foreign = []
+    for (const f of mine) {
+      const by = new Set(foreignRoles(f.file, b.name, lastCommitMs(f.file), ledger))
+      for (const o of batches) if (o !== b && o.list && listed(o, f)) by.add(o.name)
+      if (by.size) foreign.push({ file: f.file, by: [...by] })
+    }
+    return { ...b, files: mine, foreign }
+  })
+  const inBatch = new Set(out.flatMap((b) => b.files.map((f) => f.file)))
+  return { batches: out, others: files.filter((f) => !inBatch.has(f.file)), pkg }
 }
+
+const batchMessages = (b) => textHash(`${b.name}\n\0\n${b.sdkMessage}\n\0\n${b.message}`)
+const uniqueFiles = (files) => [...new Map(files.map((f) => [f.file, f])).values()]
 
 /** package.json 이 마지막 게시와 판 번호만 다른지(또는 같은지). */
 function pkgVersionOnly() {
@@ -192,9 +238,6 @@ function unpushed() {
   return out ? out.split('\n').map((l) => { const [full, subject] = l.split('\t'); return { hash: full.slice(0, 7), full, subject } }) : []
 }
 
-/** 확인 창이 본 요약 글 — 창을 연 사이 요약이 바뀌면 사용자가 못 본 메시지로 커밋된다. */
-const messagesNow = () => textHash(`${readMessage(SDK_MESSAGE_FILE)}\n\0\n${readMessage(MESSAGE_FILE)}`)
-
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
   res.end(JSON.stringify(body))
@@ -269,9 +312,18 @@ function pushTags(tags) {
   }
 }
 
+/** 고른 묶음. 확인 창을 연 뒤 묶음이 없어졌으면 null. */
+function selected(p, names) {
+  if (names.some((n) => !p.batches.some((b) => b.name === n))) return null
+  return p.batches.filter((b) => names.includes(b.name) && b.files.length)
+}
+
 function publish(seen) {
-  let { consoleFiles, sdkFiles } = groups()
-  let all = [...sdkFiles, ...consoleFiles]
+  const names = Array.isArray(seen?.batches) ? seen.batches.filter((n) => typeof n === 'string') : []
+  let p = plan()
+  let sel = selected(p, names)
+  if (!sel) return { ok: false, stale: true, error: '확인 창을 연 뒤에 게시 묶음이 바뀌었습니다. 창을 닫고 다시 열어 확인해 주세요.' }
+  let all = uniqueFiles(sel.flatMap((b) => b.files))
   const before = unpushed()
   if (all.length === 0 && before.length === 0) {
     // 올릴 변경은 없어도 앞 게시에서 못 올린 이름표가 있으면 그것만 올린다.
@@ -282,14 +334,20 @@ function publish(seen) {
   }
   const secrets = secretLike(all)
   if (secrets.length) return { ok: false, error: `비밀값이 들었을 수 있는 새 파일이 있어 게시하지 않았습니다: ${secrets.join(', ')}` }
-  const unplanned = unplannedFiles(all)
-  if (unplanned.length) {
-    return { ok: false, error: `이번 요약에 없는 파일이 섞여 있어 게시하지 않았습니다(다른 작업일 수 있습니다): ${unplanned.join(', ')}` }
+  // 다른 역할도 고친 파일은 그 역할의 묶음과 함께 올라갈 때만 — 아니면 그 세션의 하다 만 변경이 이 요약을 달고 올라간다.
+  const picked = new Set(sel.map((b) => b.name))
+  const mixed = sel.flatMap((b) => b.foreign
+    .map((x) => ({ file: x.file, by: x.by.filter((r) => !picked.has(r)) }))
+    .filter((x) => x.by.length)
+    .map((x) => `${x.file}(${x.by.map(roleName).join('·')})`))
+  if (mixed.length) {
+    return { ok: false, error: `다른 세션도 고친 파일이 있어 게시하지 않았습니다. 그 세션의 묶음과 함께 고르거나 그 세션이 게시를 마친 뒤 게시하세요(그 세션이 이미 닫혔으면 아무 세션에 "역할 해제 <역할>"): ${mixed.join(', ')}` }
   }
   const seenUnpushed = Array.isArray(seen?.unpushed) ? seen.unpushed : []
+  const seenMessages = Array.isArray(seen?.messages) ? seen.messages : []
   if (!sameAsSeen(seen?.files, all)
       || seenUnpushed.length !== before.length || !before.every((c, i) => seenUnpushed[i] === c.full)
-      || seen?.messages !== messagesNow()) {
+      || seenMessages.length !== sel.length || !sel.every((b) => seenMessages.includes(batchMessages(b)))) {
     return { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이나 요약이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 내용을 확인해 주세요.' }
   }
 
@@ -304,10 +362,13 @@ function publish(seen) {
     return { ok: false, error: `판 ${chosen} 은 이미 게시된 적이 있어(이름표 ${tagName(chosen)}) 다시 쓸 수 없습니다.` }
   }
   writeVersion(chosen)
-  ;({ consoleFiles, sdkFiles } = groups())
-  all = [...sdkFiles, ...consoleFiles]
+  // 판을 적으면 package.json 이 바뀐다 — 묶음을 다시 나눈다(판 번호만 바뀐 package.json 은 pkg 로 따라간다).
+  p = plan()
+  sel = selected(p, names) ?? []
+  all = uniqueFiles(sel.flatMap((b) => b.files))
+  const pkg = p.pkg
 
-  const stale = versionNotRaised(all)
+  const stale = versionNotRaised(pkg ? [...all, pkg] : all)
   if (stale?.allowed) {
     return { ok: false, error: `판 번호가 ${stale.before} 에서 ${stale.now} 로 한 번에 두 단계 이상 바뀌어 게시하지 않았습니다. 게시 한 번에는 ${stale.allowed.join(' · ')} 중 하나만 됩니다.` }
   }
@@ -325,10 +386,18 @@ function publish(seen) {
   }
 
   const commits = []
-  const sdkMessage = readMessage(SDK_MESSAGE_FILE) || 'SDK·DB 변경 게시'
-  const consoleMessage = readMessage(MESSAGE_FILE) || '콘솔 화면 게시'
+  // 묶음마다 커밋을 따로 만든다. 두 묶음 목록에 다 든 파일은 앞 묶음 커밋에 한 번만 담는다.
+  const taken = new Set()
+  const take = (files) => files.filter((f) => !taken.has(f.file) && (taken.add(f.file), true))
+  // 판 번호만 바뀐 package.json 은 SDK 쪽 변경이 있는 첫 묶음의 커밋에(없으면 첫 묶음에) 함께 담는다.
+  const pkgHost = sel.find((b) => b.files.some((f) => !f.file.startsWith(SCOPE))) ?? sel[0]
   // SDK·DB 먼저 — 배포 작업은 푸시의 마지막 커밋을 빌드하므로 콘솔 커밋이 맨 위에 오게 한다.
-  if (sdkFiles.length) commits.push({ kind: 'sdk', hash: commitFiles(sdkFiles, sdkMessage) })
+  for (const b of sel) {
+    const files = take(b.files.filter((f) => !f.file.startsWith(SCOPE)))
+    if (pkg && b === pkgHost) files.push(pkg)
+    if (files.length) commits.push({ kind: 'sdk', hash: commitFiles(files, b.sdkMessage || 'SDK·DB 변경 게시') })
+  }
+  if (pkg && !pkgHost) commits.push({ kind: 'sdk', hash: commitFiles([pkg], `SDK 판 ${chosen}`) })
   // 이번 판의 이름표는 판 번호를 마지막으로 바꾼 커밋(= 그 판의 SDK 커밋)에 단다. 판을 올린 게시가 푸시에 실패해
   // 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라 "이름표가 있는지"로 가른다.
   const current = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
@@ -336,9 +405,14 @@ function publish(seen) {
     git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('log', '-1', '--format=%H', '--', PKG))
     tags.push(tagName(current))
   }
-  if (consoleFiles.length) commits.push({ kind: 'console', hash: commitFiles(consoleFiles, consoleMessage) })
-  // 요약은 커밋에 쓰였으니 바로 지운다 — 푸시가 실패해 남으면 다음 게시에 엉뚱한 요약이 붙는다.
-  for (const f of [MESSAGE_FILE, SDK_MESSAGE_FILE, FILES_FILE]) if (fs.existsSync(f)) fs.rmSync(f)
+  for (const b of sel) {
+    const files = take(b.files.filter((f) => f.file.startsWith(SCOPE)))
+    if (files.length) commits.push({ kind: 'console', hash: commitFiles(files, b.message || '콘솔 화면 게시') })
+  }
+  // 올린 묶음의 요약은 커밋에 쓰였으니 바로 지운다 — 푸시가 실패해 남으면 다음 게시에 엉뚱한 요약이 붙는다. 고르지 않은 묶음은 그대로 둔다.
+  for (const b of sel) for (const f of b.remove) fs.rmSync(f, { recursive: true, force: true })
+  // 올린 역할이 지금까지 고친 기록은 놓는다 — 그 세션이 목록에 안 넣고 끝낸 파일이 다른 묶음을 영영 막지 않게.
+  for (const b of sel) releaseRole(b.name)
   try {
     git('push', '-q')
   } catch (e) {
@@ -485,17 +559,30 @@ http.createServer(async (req, res) => {
     if (!ALLOWED_HOSTS.has(req.headers.host ?? '')) return json(res, 403, { ok: false, error: 'forbidden host' })
     if (req.url === '/__publish/status' && req.method === 'GET') {
       if (!checkCaller(req)) return json(res, 403, { ok: false, error: 'forbidden' })
-      const { consoleFiles, sdkFiles } = groups()
+      const p = plan()
       const withHash = (files) => files.map((f) => ({ ...f, hash: fingerprint(f) }))
+      // 판을 고를 수 있는 범위는 고른 묶음에 SDK 코드가 있느냐로 갈린다 — 창이 묶음을 고를 때마다 서버에 묻지 않게 둘 다 보낸다.
+      const withSdk = versionInfo([{ file: 'Runtime/' }])
+      const withoutSdk = versionInfo([])
       return json(res, 200, {
         ok: true,
-        console: { files: withHash(consoleFiles), message: readMessage(MESSAGE_FILE), lines: lineCounts(consoleFiles), deploys: consoleFiles.some((f) => !f.file.startsWith(SERVER_SCOPE)) },
-        sdk: { files: withHash(sdkFiles), message: readMessage(SDK_MESSAGE_FILE), lines: lineCounts(sdkFiles) },
+        batches: p.batches.map((b) => {
+          const consoleFiles = b.files.filter((f) => f.file.startsWith(SCOPE))
+          const sdkFiles = b.files.filter((f) => !f.file.startsWith(SCOPE))
+          return {
+            name: b.name,
+            label: roleName(b.name),
+            console: { files: withHash(consoleFiles), message: b.message, lines: lineCounts(consoleFiles), deploys: consoleFiles.some((f) => !f.file.startsWith(SERVER_SCOPE)) },
+            sdk: { files: withHash(sdkFiles), message: b.sdkMessage, lines: lineCounts(sdkFiles) },
+            messages: batchMessages(b),
+            foreign: b.foreign.map((x) => ({ ...x, labels: x.by.map(roleName) })),
+            blocked: secretLike(b.files),
+            sdkChanged: hasSdkCode(b.files),
+          }
+        }),
+        others: p.others,
         unpushed: unpushed(),
-        messages: messagesNow(),
-        blocked: secretLike([...consoleFiles, ...sdkFiles]),
-        unplanned: unplannedFiles([...consoleFiles, ...sdkFiles]),
-        version: versionInfo([...consoleFiles, ...sdkFiles]),
+        version: { before: withoutSdk.before, now: withoutSdk.now, withSdk: withSdk.choices, withoutSdk: withoutSdk.choices },
         tagsToPush: missingRemoteTags(),
       })
     }

@@ -1,22 +1,32 @@
 // 가짜 데이터 모드 맨 위 띠 + "게시" 버튼 + 실제 반영 상태.
-// 게시는 미리보기 서버(scripts/mock-server.mjs)가 콘솔 화면과 SDK·DB 변경을 커밋 두 개로 나눠 한 번에 푸시한다.
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+// 게시는 미리보기 서버(scripts/mock-server.mjs)가 고른 게시 묶음만 콘솔 화면과 SDK·DB 변경 커밋으로 나눠 한 번에 푸시한다.
+// 묶음은 세션(역할)마다 하나다 — 여러 세션이 같은 폴더에서 일해도 끝난 쪽만 골라 올린다.
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { UploadCloud, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Check, X, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
 type Pending = { status: string; file: string; orig?: string; hash: string }
 type Group = { files: Pending[]; message: string; lines: { added: number; removed: number } }
-type PublishStatus = {
-  ok: boolean; error?: string
+type Batch = {
+  name: string; label: string
   console: Group & { deploys: boolean }
   sdk: Group
-  unpushed: { hash: string; full: string; subject: string }[]
   messages: string
+  /** 다른 역할도 고친 파일 — by 의 묶음과 함께 골라야 게시된다. */
+  foreign: { file: string; by: string[]; labels: string[] }[]
   blocked: string[]
-  unplanned: string[]
-  version: { before: string; now: string; sdkChanged: boolean; choices: string[] }
+  sdkChanged: boolean
+}
+type PublishStatus = {
+  ok: boolean; error?: string
+  batches: Batch[]
+  /** 어느 묶음에도 안 든 변경 — 이번 게시에 안 올라간다. */
+  others: { status: string; file: string; orig?: string }[]
+  unpushed: { hash: string; full: string; subject: string }[]
+  version: { before: string; now: string; withSdk: string[]; withoutSdk: string[] }
   tagsToPush: string[]
 }
+const batchSize = (b: Batch) => b.console.files.length + b.sdk.files.length
 type PublishResult = { ok: boolean; commits?: { kind: string; hash: string }[]; tags?: string[]; version?: string; alsoPushed?: number; error?: string }
 type Phase = 'unpushed' | 'starting' | 'running' | 'failed' | 'propagating' | 'live' | 'elsewhere' | 'unknown'
 type Deploy = {
@@ -155,7 +165,7 @@ function versionKind(before: string, v: string): string {
 }
 
 /** 게시할 SDK 판 번호 고르기. 게시 한 번에는 한 단계만 오를 수 있어 고를 수 있는 판만 보인다. */
-function VersionPicker({ info, value, onChange }: { info: PublishStatus['version']; value: string; onChange: (v: string) => void }) {
+function VersionPicker({ info, value, onChange }: { info: { before: string; choices: string[]; sdkChanged: boolean }; value: string; onChange: (v: string) => void }) {
   return (
     <div className="rounded-lg border border-neutral-200 px-3.5 py-3 space-y-2">
       <div className="flex items-center gap-2 text-xs">
@@ -214,6 +224,30 @@ export function PublishBar() {
   const [deployError, setDeployError] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [version, setVersion] = useState('')
+  // 올릴 묶음. 창을 열면 내용이 있는 묶음을 모두 고른다 — 묶음은 세션이 일을 마쳤을 때만 적으므로 고른 채로 두는 게 보통이다.
+  const [picked, setPicked] = useState<string[]>([])
+
+  const chosen = useMemo(() => status?.batches.filter((b) => picked.includes(b.name) && batchSize(b) > 0) ?? [], [status, picked])
+  const sdkChanged = chosen.some((b) => b.sdkChanged)
+  const versionInfo = status && {
+    before: status.version.before,
+    choices: sdkChanged ? status.version.withSdk : status.version.withoutSdk,
+    sdkChanged,
+  }
+  // 고른 묶음에 따라 고를 수 있는 판이 달라진다 — 지금 판이 범위 밖이 되면 고쳐 고른다.
+  const choicesKey = versionInfo?.choices.join(',') ?? ''
+  useEffect(() => {
+    if (!status || !choicesKey) return
+    const choices = choicesKey.split(',')
+    setVersion((cur) => (choices.includes(cur) ? cur
+      : choices.includes(status.version.now) ? status.version.now
+      : choices.find((c) => c !== status.version.before) ?? status.version.now))
+  }, [status, choicesKey])
+  // 다른 역할도 고친 파일인데 그 역할 묶음을 안 골랐으면 못 올린다 — 서버도 같은 이유로 거절한다.
+  const mixed = chosen.flatMap((b) => b.foreign
+    .map((x) => ({ file: x.file, labels: x.labels.filter((_, i) => !picked.includes(x.by[i] ?? '')) }))
+    .filter((x) => x.labels.length))
+  const blocked = chosen.flatMap((b) => b.blocked)
 
   const refresh = useCallback(async () => {
     try {
@@ -268,9 +302,8 @@ export function PublishBar() {
     try {
       const s = await call<PublishStatus>('/__publish/status', 'GET')
       if (!s.ok) throw new Error(s.error ?? '게시할 내용을 읽지 못했습니다.')
-      // 지금 적힌 판이 고를 수 있는 판이면 그대로, 아니면 끝자리를 올린 판을 먼저 고른다.
-      const v = s.version
-      setVersion(v.choices.includes(v.now) ? v.now : v.choices.find((c) => c !== v.before) ?? v.now)
+      setPicked(s.batches.filter((b) => batchSize(b) > 0).map((b) => b.name))
+      setVersion('')
       setStatus(s)
     } catch (e) {
       setError(e instanceof Error ? e.message : '게시할 내용을 읽지 못했습니다.')
@@ -280,10 +313,11 @@ export function PublishBar() {
   // 누르는 즉시 창을 닫고 진행 표시를 연다 — 커밋·푸시가 끝날 때까지 앞 판 상태로 멈춰 보이지 않게.
   const publish = useCallback(async () => {
     if (!status) return
-    // 이 창에서 본 목록·내용만 올린다 — 그사이 바뀌었으면 서버가 거절한다.
-    const seen = [...status.sdk.files, ...status.console.files].map((f) => ({ file: f.file, hash: f.hash }))
+    // 이 창에서 본 목록·내용만 올린다 — 그사이 바뀌었으면 서버가 거절한다. 두 묶음에 다 든 파일은 한 번만 센다.
+    const seen = [...new Map(chosen.flatMap((b) => [...b.sdk.files, ...b.console.files])
+      .map((f) => [f.file, { file: f.file, hash: f.hash }])).values()]
     // 콘솔 화면 코드가 없으면 실제 콘솔은 다시 배포되지 않는다 — 배포 단계를 기다리지 않는다.
-    const deploys = status.console.files.length > 0 && status.console.deploys
+    const deploys = chosen.some((b) => b.console.files.length > 0 && b.console.deploys)
     setOpen(false)
     setExpanded(true)
     setPublishError('')
@@ -292,7 +326,10 @@ export function PublishBar() {
     setPublishedAt(Date.now())
     setLocal({ stage: 'pushing', hash: '', at: Date.now() })
     try {
-      const r = await call<PublishResult>('/__publish', 'POST', { files: seen, unpushed: status.unpushed.map((c) => c.full), messages: status.messages, version })
+      const r = await call<PublishResult>('/__publish', 'POST', {
+        batches: chosen.map((b) => b.name), files: seen, unpushed: status.unpushed.map((c) => c.full),
+        messages: chosen.map((b) => b.messages), version,
+      })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
       const hash = r.commits?.find((c) => c.kind === 'console')?.hash ?? ''
       setLocal(deploys && hash ? { stage: 'pushed', hash, at: Date.now() } : null)
@@ -304,11 +341,11 @@ export function PublishBar() {
       setPublishError(e instanceof Error ? e.message : '게시하지 못했습니다.')
       void refresh()
     }
-  }, [refresh, status, version])
+  }, [refresh, status, version, chosen])
 
   const summary = summarize(deploy, deployError, elapsed, finished, local)
   const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
-  const nothingButTags = !!status && status.console.files.length === 0 && status.sdk.files.length === 0 && status.unpushed.length === 0
+  const nothingButTags = !!status && chosen.length === 0 && status.unpushed.length === 0
   const empty = nothingButTags && status.tagsToPush.length === 0
   const run = deploy?.run
   const runState: 'done' | 'busy' | 'todo' | 'bad' = phase === 'starting' || phase === 'running' ? 'busy'
@@ -425,7 +462,7 @@ export function PublishBar() {
         title="변경을 게시할까요?"
         description="콘솔 화면은 몇 분 뒤 모든 게임의 실제 운영 콘솔에 반영됩니다. SDK 변경은 GitHub 에 올라가 게임이 패키지를 새로 받을 때 반영됩니다."
         confirmLabel="게시"
-        confirmDisabled={!status || empty || status.blocked.length > 0 || status.unplanned.length > 0}
+        confirmDisabled={!status || empty || blocked.length > 0 || mixed.length > 0}
         error={error || undefined}
         onConfirm={() => void publish()}
         onCancel={() => setOpen(false)}
@@ -436,20 +473,47 @@ export function PublishBar() {
           <p className="text-sm text-neutral-600">게시할 변경이 없습니다.</p>
         ) : (
           <div className="space-y-2">
-            {status.blocked.length > 0 && (
+            {blocked.length > 0 && (
               <p className="text-sm text-red-600">
-                비밀값이 들었을 수 있는 새 파일이 있어 게시할 수 없습니다: {status.blocked.join(', ')}
+                비밀값이 들었을 수 있는 새 파일이 있어 게시할 수 없습니다: {blocked.join(', ')}
               </p>
             )}
-            {status.unplanned.length > 0 && (
+            {mixed.length > 0 && (
               <p className="text-sm text-red-600">
-                이번 요약에 없는 파일이 섞여 있어 게시할 수 없습니다(다른 작업일 수 있습니다): {status.unplanned.join(', ')}
+                다른 세션도 고친 파일이 있어 그 세션의 묶음과 함께 골라야 합니다. 그 세션이 이미 닫혔으면 아무 세션에 "역할 해제 역할이름"을 보내면 풀립니다: {mixed.map((x) => `${x.file}(${x.labels.join('·')})`).join(', ')}
               </p>
             )}
-            <FileGroup title="콘솔 화면" group={status.console}
-              note={status.console.deploys ? undefined : '화면 코드는 그대로라 실제 콘솔은 다시 배포되지 않습니다.'} />
-            <FileGroup title="SDK·DB·문서" group={status.sdk} />
-            {!nothingButTags && <VersionPicker info={status.version} value={version} onChange={setVersion} />}
+            {status.batches.filter((b) => batchSize(b) > 0).map((b, _, shown) => {
+              const groups = (
+                <>
+                  <FileGroup title="콘솔 화면" group={b.console}
+                    note={b.console.deploys ? undefined : '화면 코드는 그대로라 실제 콘솔은 다시 배포되지 않습니다.'} />
+                  <FileGroup title="SDK·DB·문서" group={b.sdk} />
+                </>
+              )
+              // 묶음이 하나뿐이면 고를 것이 없다 — 예전처럼 내용만 보인다.
+              if (shown.length === 1) return <div key={b.name} className="space-y-2">{groups}</div>
+              const on = picked.includes(b.name)
+              return (
+                <div key={b.name} className={`space-y-2 rounded-lg border p-2 ${on ? 'border-[#1677ff]' : 'border-neutral-200 opacity-60'}`}>
+                  <label className="flex items-center gap-2 px-1 text-sm font-medium text-neutral-900 cursor-pointer">
+                    <input type="checkbox" checked={on} className="accent-[#1677ff]"
+                      onChange={() => setPicked((cur) => (on ? cur.filter((n) => n !== b.name) : [...cur, b.name]))} />
+                    {b.label} 세션
+                  </label>
+                  {groups}
+                </div>
+              )
+            })}
+            {status.others.length > 0 && (
+              <details className="text-xs text-neutral-500">
+                <summary className="cursor-pointer">게시 묶음에 없는 변경 {status.others.length}개는 이번에 올라가지 않습니다</summary>
+                <ul className="mt-1 max-h-24 overflow-y-auto font-mono">
+                  {status.others.map((f) => <li key={f.file}>{f.orig ? `${f.orig} → ${f.file}` : f.file}</li>)}
+                </ul>
+              </details>
+            )}
+            {!nothingButTags && versionInfo && <VersionPicker info={versionInfo} value={version} onChange={setVersion} />}
             {status.tagsToPush.length > 0 && (
               <p className="text-sm text-neutral-700">
                 앞 게시에서 못 올린 판 이름표 {status.tagsToPush.join(', ')} 도 함께 올라갑니다.
