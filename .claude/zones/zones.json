@@ -1,0 +1,18 @@
+{
+  "collisionWindowMinutes": 15,
+  "roles": {
+    "콘솔": {
+      "label": "운영 콘솔 화면·콘솔 서버·고객센터 창",
+      "allow": ["Admin~/"]
+    },
+    "SDK": {
+      "label": "게임이 받는 SDK 코드",
+      "allow": ["Runtime/", "Editor/", "Samples~/Examples/", "Samples~/PlayNanooMigration/", "package.json"]
+    },
+    "문서": {
+      "label": "가이드 문서",
+      "allow": []
+    }
+  },
+  "shared": ["Samples~/DatabaseSetup/", "docs~/", "Tools~/", "CLAUDE.md", ".claude/", "README.md"]
+}
