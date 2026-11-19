@@ -101,7 +101,7 @@ function ChatTab({ target, days, reloadKey, onUnauthenticated, onError }: {
       )}
       <WhiteCard>
         <div className="border-b border-neutral-100 p-5 pb-3">
-          <CardHeader title="일일 채팅 개수" description="날마다 오간 채팅 메시지 수를 봅니다. 운영자 공지는 뺍니다."
+          <CardHeader title="채팅 수" description="날마다 오간 채팅 메시지 수를 봅니다. 운영자 공지는 뺍니다."
             actions={<ChartLegend series={CHAT_KINDS} />} />
         </div>
         <div className="p-5">

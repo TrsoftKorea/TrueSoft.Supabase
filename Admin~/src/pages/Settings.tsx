@@ -1034,7 +1034,7 @@ function ConnectionBox({ target, report }: { target: ProjectTarget; report: (e: 
   ]
 
   return (
-    <GroupBox title="프로젝트 연결 정보">
+    <GroupBox title="연결 정보">
       <GroupTable>
           {rows.map(([label, about, value]) => (
             <tr key={label} className="border-t border-neutral-100 first:border-t-0">
