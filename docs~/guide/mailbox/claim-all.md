@@ -29,4 +29,4 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.Unknown` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않은 key가 있어 수령 전에 멈췄습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 대상 우편 중 하나라도 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않은 key가 있어 수령 전에 멈췄습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |

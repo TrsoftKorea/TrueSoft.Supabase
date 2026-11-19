@@ -735,7 +735,7 @@ namespace TrueBase.Unity
                 nonce: null,
                 oauthAccessToken: googleAccessToken);
             if (linked == null || !linked.IsSuccess || linked.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorCode ?? "google_link_failed");
+                return await LinkFailedAsync(session, linked?.ErrorCode ?? "google_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.GoogleLinkNotCleared);
@@ -802,7 +802,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkGoogleToGuestWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.GoogleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.GoogleLinkFailed, ok.BanInfo);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Google identity를 추가 연동합니다(네이티브 Google 로그인 사용).</summary>
@@ -820,7 +820,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkGoogleWithIdTokenAsync(google.IdToken, google.AccessToken);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_link_failed");
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? "google_link_failed", ok.BanInfo);
         }
 
         /// <summary><see cref="SignInWithGoogleAsync"/>를 bool 기반으로 호출합니다.</summary>
@@ -1068,7 +1068,7 @@ namespace TrueBase.Unity
         {
             var linked = await Auth.LinkIdentityWithIdTokenAsync(session.AccessToken, "apple", idToken.Trim(), rawNonce, null);
             if (linked == null || !linked.IsSuccess || linked.Data == null)
-                return SupabaseResult<SupabaseSession>.Fail(linked?.ErrorCode ?? "apple_link_failed");
+                return await LinkFailedAsync(session, linked?.ErrorCode ?? "apple_link_failed");
 
             if (linked.Data.User == null || linked.Data.User.IsAnonymous)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.AppleLinkNotCleared);
@@ -1250,7 +1250,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleToGuestWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed, ok.BanInfo);
         }
 
         /// <summary>현재 세션(익명 여부 무관)에 Apple identity를 추가 연동합니다(iOS 네이티브 Sign in with Apple 사용).</summary>
@@ -1273,7 +1273,7 @@ namespace TrueBase.Unity
             var ok = await TryLinkAppleWithIdTokenAsync(login.Data.IdToken.Trim(), rawNonce, login.Data.AuthorizationCode);
             return ok
                 ? SupabaseResult<SupabaseSession>.Success(_currentSession)
-                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed);
+                : SupabaseResult<SupabaseSession>.Fail(ok.ErrorCode ?? SupabaseErrorCode.AppleLinkFailed, ok.BanInfo);
         }
 
         /// <summary>
@@ -4993,6 +4993,17 @@ namespace TrueBase.Unity
             _bannedIdProvider = provider;
             _bannedIdToken = idToken;
             _bannedIdNonce = rawNonce;
+        }
+
+        /// <summary>
+        /// 계정 연동 실패를 돌려준다. 차단으로 거절됐으면 연동하려던 지금 계정의 차단 정보를 싣는다 — 새 신원은 계정에 붙지 않았으므로
+        /// <see cref="WithBanInfoAsync"/>처럼 ID 토큰으로 묻지 않고 계정 ID로 묻는다.
+        /// </summary>
+        private static async Task<SupabaseResult<SupabaseSession>> LinkFailedAsync(SupabaseSession session, string errorCode)
+        {
+            if (errorCode != SupabaseErrorCode.UserBanned)
+                return SupabaseResult<SupabaseSession>.Fail(errorCode);
+            return SupabaseResult<SupabaseSession>.Fail(errorCode, await FetchBanInfoAsync(session?.User?.Id));
         }
 
         /// <summary>

@@ -30,7 +30,7 @@ foreach (var lobby in r.Data)
 | `Metadata` | `Dictionary<string, object>` | 생성 시 넘긴 자유 값. 넘기지 않았으면 빈 사전 |
 | `MaxMembers` | `int` | 정원 |
 | `HostAccountId` | `string` | 호스트 계정 ID |
-| `Status` | `MatchLobbyState` | `Open`·`Started`·`Cancelled`·`Expired` |
+| `Status` | `MatchLobbyState` | `Open`·`Started`·`Cancelled`·`Expired`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `CreatedAt` | `DateTimeOffset` | 생성 시각 |
 | `ExpiresAt` | `DateTimeOffset` | 아무도 시작하지 않으면 이 시각에 닫힙니다 |
 | `StartedAt` | `DateTimeOffset?` | 시작 알림 시각. 아직이면 null |
@@ -42,7 +42,7 @@ foreach (var lobby in r.Data)
 |---------|------|------|
 | `AccountId` | `string` | 멤버 계정 ID |
 | `Name` | `string` | 멤버 닉네임 |
-| `Status` | `MatchLobbyMemberState` | `Invited`·`Accepted`·`Declined`·`Left` |
+| `Status` | `MatchLobbyMemberState` | `Invited`·`Accepted`·`Declined`·`Left`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `Metadata` | `Dictionary<string, object>` | [지정한 참가자 칸](/guide/match-lobby/set-member-meta). 지정한 적이 없으면 빈 사전 |
 
 ::: info 응답하지 않고 방치된 초대

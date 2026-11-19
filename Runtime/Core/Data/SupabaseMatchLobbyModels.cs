@@ -18,6 +18,9 @@ namespace TrueBase.Core.Data
 
         /// <summary>아무도 응답하지 않아 시간 초과로 닫혔습니다.</summary>
         Expired,
+
+        /// <summary>이 SDK가 모르는 상태입니다. 서버가 SDK보다 새로울 때 나옵니다.</summary>
+        Unknown,
     }
 
     /// <summary>로비 멤버 상태.</summary>
@@ -34,6 +37,9 @@ namespace TrueBase.Core.Data
 
         /// <summary>참가 후 나감.</summary>
         Left,
+
+        /// <summary>이 SDK가 모르는 상태입니다. 서버가 SDK보다 새로울 때 나옵니다.</summary>
+        Unknown,
     }
 
     /// <summary><c>ts_match_lobby_create</c> 결과.</summary>
@@ -68,7 +74,8 @@ namespace TrueBase.Core.Data
             "accepted" => MatchLobbyMemberState.Accepted,
             "declined" => MatchLobbyMemberState.Declined,
             "left" => MatchLobbyMemberState.Left,
-            _ => MatchLobbyMemberState.Invited,
+            "invited" => MatchLobbyMemberState.Invited,
+            _ => MatchLobbyMemberState.Unknown,
         };
     }
 
@@ -119,7 +126,8 @@ namespace TrueBase.Core.Data
             "started" => MatchLobbyState.Started,
             "cancelled" => MatchLobbyState.Cancelled,
             "expired" => MatchLobbyState.Expired,
-            _ => MatchLobbyState.Open,
+            "open" => MatchLobbyState.Open,
+            _ => MatchLobbyState.Unknown,
         };
     }
 }

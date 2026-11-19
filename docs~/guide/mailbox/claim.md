@@ -35,7 +35,7 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.Unknown` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 전에 검증해 서버 상태는 바뀌지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 전에 검증해 서버 상태는 바뀌지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 | `SupabaseReason.MailExpired` | 만료된 우편입니다 |
 | `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
 | `SupabaseReason.AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |

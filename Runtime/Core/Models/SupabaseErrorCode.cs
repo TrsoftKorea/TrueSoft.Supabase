@@ -249,6 +249,9 @@ namespace TrueBase.Core.Common
         /// <summary>우편 아이템 핸들러가 null이거나 <c>ItemKey</c>가 비어 있습니다.</summary>
         public const string MailItemHandlerInvalid = "mail_item_handler_invalid";
 
+        /// <summary>우편 아이템 key에 등록된 핸들러가 없어 수령 전에 멈췄습니다. 뒤에 <c>:</c>와 그 key가 붙습니다.</summary>
+        public const string MailItemHandlerMissing = "mail_item_handler_missing";
+
         /// <summary>해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다.</summary>
         public const string MailNotFound = "mail_not_found";
 

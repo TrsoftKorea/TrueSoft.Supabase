@@ -85,6 +85,7 @@
         UserSaveTimeout,
         UserSaveSerializeFailed,
         MailItemHandlerInvalid,
+        MailItemHandlerMissing,
         MailNotFound,
         Forbidden,
         ForbiddenServer,
@@ -248,6 +249,7 @@
             SupabaseErrorCode.UserSaveTimeout => SupabaseReason.UserSaveTimeout,
             SupabaseErrorCode.UserSaveSerializeFailed => SupabaseReason.UserSaveSerializeFailed,
             SupabaseErrorCode.MailItemHandlerInvalid => SupabaseReason.MailItemHandlerInvalid,
+            SupabaseErrorCode.MailItemHandlerMissing => SupabaseReason.MailItemHandlerMissing,
             SupabaseErrorCode.MailNotFound => SupabaseReason.MailNotFound,
             SupabaseErrorCode.Forbidden => SupabaseReason.Forbidden,
             SupabaseErrorCode.ForbiddenServer => SupabaseReason.ForbiddenServer,
@@ -335,6 +337,8 @@
             string s when s.Contains(SupabaseErrorCode.RequestLimited) => SupabaseReason.RequestLimited,
             // 뒤에 변환 오류 원문이 붙는다(원문은 ErrorCode 로 읽는다).
             _ when errorCode.StartsWith(SupabaseErrorCode.UserSaveSerializeFailed + ":", System.StringComparison.Ordinal) => SupabaseReason.UserSaveSerializeFailed,
+            // 뒤에 핸들러가 없는 아이템 key 가 붙는다.
+            _ when errorCode.StartsWith(SupabaseErrorCode.MailItemHandlerMissing + ":", System.StringComparison.Ordinal) => SupabaseReason.MailItemHandlerMissing,
             _ => SupabaseReason.Unknown,
         };
     }

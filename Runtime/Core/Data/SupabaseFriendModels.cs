@@ -18,6 +18,9 @@ namespace TrueBase.Core.Data
 
         /// <summary>상대가 보낸 요청이 대기 중입니다(내가 수락·거절 가능).</summary>
         RequestReceived,
+
+        /// <summary>이 SDK가 모르는 관계입니다. 서버가 SDK보다 새로울 때 나옵니다.</summary>
+        Unknown,
     }
 
     /// <summary><c>ts_friend_search</c> 결과.</summary>
@@ -41,7 +44,8 @@ namespace TrueBase.Core.Data
             "friends" => FriendRelation.Friends,
             "request_sent" => FriendRelation.RequestSent,
             "request_received" => FriendRelation.RequestReceived,
-            _ => FriendRelation.None,
+            "none" => FriendRelation.None,
+            _ => FriendRelation.Unknown,
         };
     }
 

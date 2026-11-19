@@ -263,7 +263,7 @@ namespace TrueBase.Unity
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_key_empty");
 
                 if (!MailItemHandlerRegistry.TryGetHandler(it.Key, out _))
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_handler_missing:" + it.Key);
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + it.Key);
             }
 
             return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(Array.Empty<ClaimResult>());
@@ -291,7 +291,7 @@ namespace TrueBase.Unity
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_key_empty");
 
                 if (!MailItemHandlerRegistry.TryGetHandler(line.Key, out var handler))
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_handler_missing:" + line.Key);
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + line.Key);
 
                 var r = await handler.HandleAsync(mailId, line.Index, line.Key, line.Count);
                 if (!r.IsSuccess)
