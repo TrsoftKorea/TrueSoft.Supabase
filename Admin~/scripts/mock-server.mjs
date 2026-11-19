@@ -10,8 +10,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
-import { PUBLISH_DIR, foreignRoles, readLedger, releaseRole, roleName } from '../../.claude/zones/zones.mjs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { homedir } from 'node:os'
 
 const PORT = 4174
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -23,10 +23,20 @@ const SCOPE = 'Admin~/'
 const SERVER_SCOPE = 'Admin~/supabase/'
 // 게시 묶음. 에이전트가 일을 마치면 올릴 파일 목록(files, 한 줄에 저장소 기준 경로 하나)과 커밋 요약(message 콘솔 ·
 // message-sdk 그 밖)을 적어 둔다. 역할을 선언한 세션은 Admin~/.publish/<역할>/ 에, 역할 없는 세션은 아래 옛 파일에 쓴다
-// (어느 쪽에 쓸지는 .claude/hooks/zone-guard.mjs 가 막아서 지킨다). 게시는 고른 묶음만 올리고 나머지 변경은 그대로 둔다.
+// (어느 쪽에 쓸지는 전역 훅 ~/.claude/hooks/zone-guard.mjs 가 zones.json 의 batches 로 막아서 지킨다). 게시는 고른 묶음만 올리고 나머지 변경은 그대로 둔다.
 const MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message')
 const SDK_MESSAGE_FILE = path.join(ADMIN_DIR, '.publish-message-sdk')
 const FILES_FILE = path.join(ADMIN_DIR, '.publish-files')
+// 역할·수정 기록 판정은 모든 프로젝트가 함께 쓰는 한 벌(~/.claude/scripts/lib/zones.mjs)을 읽는다 — 훅과 같은 판정이어야
+// "다른 역할도 고친 파일"이 훅이 남긴 기록과 맞는다. 묶음 폴더 위치는 .claude/zones/zones.json 의 batches.dir.
+// 없으면 게시 섞임을 가를 수 없으니 서버가 뜨지 않게 둔다(조용히 옛 방식으로 돌면 섞임을 못 막는다).
+const { openZones, sameKey } = await import(pathToFileURL(path.join(homedir(), '.claude', 'scripts', 'lib', 'zones.mjs')).href)
+// 역할 없는 세션은 이 저장소에서 총괄 세션이다. 화면이 이름 뒤에 "세션"을 붙인다.
+const roleName = (r) => r || '총괄'
+const zones = openZones(REPO)
+const PUBLISH_DIR = zones.loadConfig()?.batches?.dir
+if (!PUBLISH_DIR) throw new Error('.claude/zones/zones.json 에 batches.dir 이 없어 게시 묶음을 가를 수 없습니다.')
+const { foreignRoles, readLedger, releaseRole } = zones
 const BATCH_ROOT = path.join(REPO, PUBLISH_DIR)
 const LIVE_URL = 'https://truebase-admin.pages.dev'
 const ACTIONS_URL = 'https://github.com/TrsoftKorea/TrueSoft.Supabase/actions/workflows/admin-deploy.yml'
@@ -140,6 +150,16 @@ function plan() {
   const inBatch = new Set(out.flatMap((b) => b.files.map((f) => f.file)))
   return { batches: out, others: files.filter((f) => !inBatch.has(f.file)), pkg }
 }
+
+/**
+ * 묶음 파일 중 한 세션이 넣은 줄이 그 뒤 다른 세션의 수정으로 사라진 것(덮어쓰기 의심). 판정은 공통 판(lostChanges) —
+ * 명령줄 커밋은 훅이 한 번 막고 보이지만 게시 버튼은 셸을 안 거쳐서 여기서 따로 본다. 한 번 보여 주고 올린 것은 다시 묻지 않는다.
+ */
+function lostIn(files, lost) {
+  const keys = new Set(files.map((f) => sameKey(f.file)))
+  return zones.unseen(lost.filter((c) => keys.has(sameKey(c.path))))
+}
+const lostView = (c) => ({ path: c.path, by: roleName(c.by.role), after: c.after ? roleName(c.after.role) : null, missing: c.missing })
 
 const batchMessages = (b) => textHash(`${b.name}\n\0\n${b.sdkMessage}\n\0\n${b.message}`)
 const uniqueFiles = (files) => [...new Map(files.map((f) => [f.file, f])).values()]
@@ -343,6 +363,10 @@ function publish(seen) {
   if (mixed.length) {
     return { ok: false, error: `다른 세션도 고친 파일이 있어 게시하지 않았습니다. 그 세션의 묶음과 함께 고르거나 그 세션이 게시를 마친 뒤 게시하세요(그 세션이 이미 닫혔으면 아무 세션에 "역할 해제 <역할>"): ${mixed.join(', ')}` }
   }
+  const lost = lostIn(all, zones.lostChanges())
+  if (lost.length && seen?.ackLost !== true) {
+    return { ok: false, stale: true, error: `다른 세션이 넣은 내용이 사라진 파일이 있어 게시하지 않았습니다. 창을 다시 열어 확인해 주세요: ${lost.map((c) => c.path).join(', ')}` }
+  }
   const seenUnpushed = Array.isArray(seen?.unpushed) ? seen.unpushed : []
   const seenMessages = Array.isArray(seen?.messages) ? seen.messages : []
   if (!sameAsSeen(seen?.files, all)
@@ -413,6 +437,8 @@ function publish(seen) {
   for (const b of sel) for (const f of b.remove) fs.rmSync(f, { recursive: true, force: true })
   // 올린 역할이 지금까지 고친 기록은 놓는다 — 그 세션이 목록에 안 넣고 끝낸 파일이 다른 묶음을 영영 막지 않게.
   for (const b of sel) releaseRole(b.name)
+  // 확인하고 올린 덮어쓰기 의심은 본 것으로 적는다 — 명령줄 커밋 훅도 같은 표시를 읽어 다시 막지 않는다.
+  if (lost.length) zones.markSeen(lost)
   try {
     git('push', '-q')
   } catch (e) {
@@ -560,6 +586,7 @@ http.createServer(async (req, res) => {
     if (req.url === '/__publish/status' && req.method === 'GET') {
       if (!checkCaller(req)) return json(res, 403, { ok: false, error: 'forbidden' })
       const p = plan()
+      const lost = zones.lostChanges()
       const withHash = (files) => files.map((f) => ({ ...f, hash: fingerprint(f) }))
       // 판을 고를 수 있는 범위는 고른 묶음에 SDK 코드가 있느냐로 갈린다 — 창이 묶음을 고를 때마다 서버에 묻지 않게 둘 다 보낸다.
       const withSdk = versionInfo([{ file: 'Runtime/' }])
@@ -577,6 +604,7 @@ http.createServer(async (req, res) => {
             messages: batchMessages(b),
             foreign: b.foreign.map((x) => ({ ...x, labels: x.by.map(roleName) })),
             blocked: secretLike(b.files),
+            lost: lostIn(b.files, lost).map(lostView),
             sdkChanged: hasSdkCode(b.files),
           }
         }),

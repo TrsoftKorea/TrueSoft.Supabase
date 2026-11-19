@@ -15,6 +15,8 @@ type Batch = {
   /** 다른 역할도 고친 파일 — by 의 묶음과 함께 골라야 게시된다. */
   foreign: { file: string; by: string[]; labels: string[] }[]
   blocked: string[]
+  /** 한 세션이 넣은 줄이 그 뒤 다른 세션의 수정으로 사라진 파일(덮어쓰기 의심). after 가 null 이면 기록 밖에서 사라졌다. */
+  lost: { path: string; by: string; after: string | null; missing: string[] }[]
   sdkChanged: boolean
 }
 type PublishStatus = {
@@ -248,6 +250,9 @@ export function PublishBar() {
     .map((x) => ({ file: x.file, labels: x.labels.filter((_, i) => !picked.includes(x.by[i] ?? '')) }))
     .filter((x) => x.labels.length))
   const blocked = chosen.flatMap((b) => b.blocked)
+  // 두 묶음에 다 든 파일은 같은 의심이 두 번 온다 — 파일·사라진 줄로 한 번만.
+  const lost = [...new Map(chosen.flatMap((b) => b.lost).map((c) => [`${c.path}|${c.missing.join('\n')}`, c])).values()]
+  const [ackLost, setAckLost] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -304,6 +309,7 @@ export function PublishBar() {
       if (!s.ok) throw new Error(s.error ?? '게시할 내용을 읽지 못했습니다.')
       setPicked(s.batches.filter((b) => batchSize(b) > 0).map((b) => b.name))
       setVersion('')
+      setAckLost(false)
       setStatus(s)
     } catch (e) {
       setError(e instanceof Error ? e.message : '게시할 내용을 읽지 못했습니다.')
@@ -328,7 +334,7 @@ export function PublishBar() {
     try {
       const r = await call<PublishResult>('/__publish', 'POST', {
         batches: chosen.map((b) => b.name), files: seen, unpushed: status.unpushed.map((c) => c.full),
-        messages: chosen.map((b) => b.messages), version,
+        messages: chosen.map((b) => b.messages), version, ackLost: lost.length > 0 && ackLost,
       })
       if (!r.ok) throw new Error(r.error ?? '게시하지 못했습니다.')
       const hash = r.commits?.find((c) => c.kind === 'console')?.hash ?? ''
@@ -341,7 +347,7 @@ export function PublishBar() {
       setPublishError(e instanceof Error ? e.message : '게시하지 못했습니다.')
       void refresh()
     }
-  }, [refresh, status, version, chosen])
+  }, [refresh, status, version, chosen, lost.length, ackLost])
 
   const summary = summarize(deploy, deployError, elapsed, finished, local)
   const waitingCount = deploy ? deploy.waiting.console + deploy.waiting.sdk + deploy.waiting.unpushed : 0
@@ -462,7 +468,7 @@ export function PublishBar() {
         title="변경을 게시할까요?"
         description="콘솔 화면은 몇 분 뒤 모든 게임의 실제 운영 콘솔에 반영됩니다. SDK 변경은 GitHub 에 올라가 게임이 패키지를 새로 받을 때 반영됩니다."
         confirmLabel="게시"
-        confirmDisabled={!status || empty || blocked.length > 0 || mixed.length > 0}
+        confirmDisabled={!status || empty || blocked.length > 0 || mixed.length > 0 || (lost.length > 0 && !ackLost)}
         error={error || undefined}
         onConfirm={() => void publish()}
         onCancel={() => setOpen(false)}
@@ -482,6 +488,29 @@ export function PublishBar() {
               <p className="text-sm text-red-600">
                 다른 세션도 고친 파일이 있어 그 세션의 묶음과 함께 골라야 합니다. 그 세션이 이미 닫혔으면 아무 세션에 "역할 해제 역할이름"을 보내면 풀립니다: {mixed.map((x) => `${x.file}(${x.labels.join('·')})`).join(', ')}
               </p>
+            )}
+            {lost.length > 0 && (
+              <div className="rounded-lg border border-[#f59e0b] px-3.5 py-3 space-y-2 text-sm">
+                <p className="font-medium text-neutral-900">한 세션이 넣은 내용이 다른 세션이 고친 뒤 사라졌습니다</p>
+                <ul className="space-y-1.5 text-neutral-700">
+                  {lost.map((c) => (
+                    <li key={`${c.path}|${c.missing.join('\n')}`}>
+                      <span className="font-mono text-xs">{c.path}</span>
+                      <span className="block text-xs text-neutral-500">
+                        {c.by} 세션이 넣은 내용 · {c.after ? `${c.after} 세션이 고친 뒤 없음` : '기록 밖에서 없어짐'}
+                      </span>
+                      <details className="text-xs text-neutral-500">
+                        <summary className="cursor-pointer">사라진 줄</summary>
+                        <pre className="mt-1 whitespace-pre-wrap break-all font-mono">{c.missing.join('\n')}</pre>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+                <label className="flex items-center gap-2 cursor-pointer text-neutral-900">
+                  <input type="checkbox" checked={ackLost} className="accent-[#1677ff]" onChange={() => setAckLost((v) => !v)} />
+                  확인했고 이대로 올립니다
+                </label>
+              </div>
             )}
             {status.batches.filter((b) => batchSize(b) > 0).map((b, _, shown) => {
               const groups = (
