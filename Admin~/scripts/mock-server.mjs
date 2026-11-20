@@ -413,8 +413,9 @@ function publish(seen) {
   // 묶음마다 커밋을 따로 만든다. 두 묶음 목록에 다 든 파일은 앞 묶음 커밋에 한 번만 담는다.
   const taken = new Set()
   const take = (files) => files.filter((f) => !taken.has(f.file) && (taken.add(f.file), true))
-  // 판 번호만 바뀐 package.json 은 SDK 쪽 변경이 있는 첫 묶음의 커밋에(없으면 첫 묶음에) 함께 담는다.
-  const pkgHost = sel.find((b) => b.files.some((f) => !f.file.startsWith(SCOPE))) ?? sel[0]
+  // 판 번호만 바뀐 package.json 은 SDK 코드가 든 묶음의 커밋에 함께 담는다(없으면 콘솔 밖 변경이 있는 첫 묶음, 그도 없으면 첫 묶음).
+  const outside = (b) => b.files.filter((f) => !f.file.startsWith(SCOPE))
+  const pkgHost = sel.find((b) => hasSdkCode(outside(b))) ?? sel.find((b) => outside(b).length) ?? sel[0]
   // SDK·DB 먼저 — 배포 작업은 푸시의 마지막 커밋을 빌드하므로 콘솔 커밋이 맨 위에 오게 한다.
   for (const b of sel) {
     const files = take(b.files.filter((f) => !f.file.startsWith(SCOPE)))
@@ -422,11 +423,12 @@ function publish(seen) {
     if (files.length) commits.push({ kind: 'sdk', hash: commitFiles(files, b.sdkMessage || 'SDK·DB 변경 게시') })
   }
   if (pkg && !pkgHost) commits.push({ kind: 'sdk', hash: commitFiles([pkg], `SDK 판 ${chosen}`) })
-  // 이번 판의 이름표는 판 번호를 마지막으로 바꾼 커밋(= 그 판의 SDK 커밋)에 단다. 판을 올린 게시가 푸시에 실패해
-  // 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라 "이름표가 있는지"로 가른다.
+  // 이번 판의 이름표는 SDK·DB 커밋을 다 만든 지금 위치에 단다 — 판 번호를 바꾼 커밋에 달면 그 뒤 묶음의 SDK 코드가
+  // 빠진다(묶음이 여럿일 때). 판을 올린 게시가 푸시에 실패해 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라
+  // "이름표가 있는지"로 가른다.
   const current = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
   if (current && !tagExists(tagName(current))) {
-    git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('log', '-1', '--format=%H', '--', PKG))
+    git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('rev-parse', 'HEAD'))
     tags.push(tagName(current))
   }
   for (const b of sel) {
