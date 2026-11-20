@@ -42,3 +42,24 @@ if (!result.IsSaved)
 | `SupabaseReason.UserSaveFlushFailed` | 전송에 실패했습니다. 원문은 `ErrorCode`에 있습니다 |
 | `SupabaseReason.UserSaveSerializeFailed` | 세이브 값을 전송 형식으로 변환하지 못했습니다. 원문은 `ErrorCode`에 있습니다 |
 | `SupabaseReason.DuplicateLogin` | 다른 기기에서 로그인해 전송이 막혔습니다 |
+
+**실사용 예시**
+
+로그아웃 버튼에서 남은 변경을 보낸 뒤 로그아웃하고, 저장하지 못했으면 한 번 묻습니다.
+
+```csharp
+public async void OnClickLogout()
+{
+    var save = await Supabase.SaveNowAsync();   // 보낼 변경이 없었어도 IsSaved는 true입니다
+    if (save.Reason == SupabaseReason.DuplicateLogin)
+        ShowToast("다른 기기에서 접속 중이라 저장하지 못했습니다");
+    else if (!save.IsSaved)
+    {
+        bool leave = await ShowConfirmAsync("저장하지 못한 진행이 있습니다. 그래도 로그아웃할까요?");
+        if (!leave) return;
+    }
+
+    await Supabase.SignOutFullyAsync();
+    LoadScene("Title");
+}
+```

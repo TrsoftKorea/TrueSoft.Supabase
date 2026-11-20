@@ -24,6 +24,24 @@ if (result.IsSuccess)
 |--------|------|
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 
+**실사용 예시**
+
+설정 화면의 기록 지우기 버튼에서 한 번 더 확인받고 지운 뒤 순위표를 새로 고칩니다.
+
+```csharp
+public void OnClickClearArenaRecord()
+{
+    ShowConfirm("이번 회차 기록을 지울까요?", async () =>
+    {
+        var result = await Supabase.DeleteMyScoreAsync<ArenaLeaderboard>();
+        if (!result.IsSuccess) { ShowToast("기록을 지우지 못했습니다"); return; }
+
+        myRankLabel.text = "기록 없음";
+        RefreshLeaderboard();
+    });
+}
+```
+
 ::: info 다른 플레이어 기록 삭제
 운영자가 특정 플레이어의 기록을 지우거나 점수를 정정하는 기능은 운영 콘솔에 있습니다. 게임에서는 본인 기록만 지울 수 있습니다.
 :::

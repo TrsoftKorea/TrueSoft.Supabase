@@ -61,6 +61,32 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 |--------|------|
 | `SupabaseReason.ChatChannelsEmpty` | 채널 코드가 하나도 없습니다 |
 
+**실사용 예시**
+
+채팅 버튼을 누르면 열린 채널을 모두 구독하고, 창을 닫을 때 해제합니다.
+
+```csharp
+public async void OnClickOpenChat()
+{
+    var channels = await Supabase.GetChatChannelsAsync();
+    if (!channels.IsSuccess) { ShowToast("채팅을 열 수 없습니다"); return; }
+
+    var result = Supabase.SubscribeChat(channels.Data.Select(c => c.Code), OnMessages);
+    if (result.Reason == SupabaseReason.ChatChannelsEmpty) { ShowToast("지금은 열린 채널이 없습니다"); return; }
+    if (!result.IsSuccess) return;
+
+    _sub = result.Data;
+    chatPanel.SetActive(true);
+}
+
+public void OnClickCloseChat()
+{
+    _sub?.Dispose();   // 닫힌 창의 조회를 멈춥니다
+    _sub = null;
+    chatPanel.SetActive(false);
+}
+```
+
 ## 콜백이 넘겨주는 메시지 {#message}
 
 | 프로퍼티 | 타입 | 설명 |

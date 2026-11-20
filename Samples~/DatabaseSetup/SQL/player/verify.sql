@@ -136,6 +136,7 @@ from (
     values
       ('set_updated_at'),
       ('ts_update_last_activity_at'),
+      ('ts_user_data_session_guard'),
       ('admin_add_user_data_column'),
       ('admin_update_user_data_column'),
       ('admin_drop_user_data_column'),
@@ -157,6 +158,7 @@ from (
       ('ts_view_mail_for_user'),
       ('ts_claim_mail_items'),
       ('ts_claim_all_mail_items'),
+      ('ts_mail_grant_items'),
       ('ts_delete_mail_for_user'),
       ('ts_delete_claimed_mails_for_user'),
       ('ts_cleanup_expired_mails'),

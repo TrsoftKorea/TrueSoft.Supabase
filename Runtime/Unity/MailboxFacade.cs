@@ -112,8 +112,8 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 우편 1건의 첨부 보상을 수령합니다.
-        /// RPC 호출 전에 모든 아이템 key의 핸들러가 <see cref="MailItemHandlerRegistry"/>에 등록돼 있는지 먼저 검증합니다
-        /// (수령 처리 후 핸들러 누락으로 아이템이 유실되는 것을 방지).
+        /// 처리기가 등록된 키는 게임 처리기가, 그 밖의 키는 서버가 받기와 같은 처리 안에서 세이브의 같은 이름 숫자 칸에 지급합니다.
+        /// 처리기도 없고 숫자 칸도 아닌 키가 있으면 서버가 받기 전체를 되돌립니다(<c>mail_item_handler_missing</c>).
         /// </summary>
         public Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimMailItemsAsync(string mailId) =>
             ClaimMailItemsAsync(_sessionGetter?.Invoke(), mailId);
@@ -126,34 +126,19 @@ namespace TrueBase.Unity
             if (token == null)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("auth_not_signed_in");
 
-            var detail = await _mailbox.GetMailByIdAsync(token, mailId);
-            if (!detail.IsSuccess)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(detail.ErrorCode ?? "mail_load_failed");
+            var save = SupabaseSDK._userSave;
+            var mark = save?.BeginServerAdd() ?? default;
 
-            var mail = detail.Data;
-            if (mail == null)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_not_found");
-
-            if (mail.IsExpired)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_expired");
-
-            if (mail.HasUnclaimedItems)
-            {
-                var pre = ValidateHandlers(mail.Items);
-                if (!pre.IsSuccess)
-                    return pre;
-            }
-
-            var rpc = await _mailbox.ClaimMailItemsRpcAsync(token, mailId);
+            var rpc = await _mailbox.ClaimMailItemsRpcAsync(token, mailId, MailItemHandlerRegistry.Keys());
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_rpc_failed");
 
-            return await RunHandlersAsync(mailId, rpc.Data);
+            return await DeliverAsync(mailId, rpc.Data, save, mark, session.User?.Id);
         }
 
         /// <summary>
-        /// 미수령 보상이 있는 모든 우편의 보상을 일괄 수령합니다.
-        /// RPC 호출 전에 모든 아이템 key의 핸들러 등록 여부를 먼저 검증합니다.
+        /// 미수령 보상이 있는 모든 우편의 보상을 일괄 수령합니다. 지급 방식은 <see cref="ClaimMailItemsAsync(string)"/>와 같고,
+        /// 한 우편이라도 지급할 수 없는 키가 있으면 전체가 받아지지 않습니다.
         /// </summary>
         public Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync(string category = null) =>
             ClaimAllMailItemsAsync(_sessionGetter?.Invoke(), category);
@@ -166,31 +151,10 @@ namespace TrueBase.Unity
             if (token == null)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("auth_not_signed_in");
 
-            // 수령 RPC 는 개수 제한 없이 전부 받으므로 검증도 목록 끝까지 본다. 한 쪽만 보면 만료 우편(보관 기간 동안
-            // 목록에 남음)이 자리를 차지해 뒤쪽 우편의 핸들러 누락을 놓치고, 그 보상은 지급 없이 수령 처리된다.
-            const int pageSize = 200;
-            for (var offset = 0; ; offset += pageSize)
-            {
-                var list = await _mailbox.GetMailsAsync(token, limit: pageSize, offset: offset, category: category);
-                if (!list.IsSuccess)
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(list.ErrorCode ?? "mail_list_failed");
+            var save = SupabaseSDK._userSave;
+            var mark = save?.BeginServerAdd() ?? default;
 
-                var page = list.Data ?? Array.Empty<Mail>();
-                foreach (var m in page)
-                {
-                    if (!m.HasUnclaimedItems)
-                        continue;
-
-                    var pre = ValidateHandlers(m.Items);
-                    if (!pre.IsSuccess)
-                        return pre;
-                }
-
-                if (page.Count < pageSize)
-                    break;
-            }
-
-            var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category);
+            var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category, MailItemHandlerRegistry.Keys());
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_all_rpc_failed");
 
@@ -200,7 +164,7 @@ namespace TrueBase.Unity
                 if (string.IsNullOrWhiteSpace(bundle.MailId))
                     continue;
 
-                var part = await RunHandlersAsync(bundle.MailId, bundle.Items);
+                var part = await DeliverAsync(bundle.MailId, bundle.Items, save, mark, session.User?.Id);
                 if (!part.IsSuccess)
                     return part;
 
@@ -248,36 +212,20 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 모든 아이템 key의 핸들러가 <see cref="MailItemHandlerRegistry"/>에 등록돼 있는지 검증합니다.
-        /// RPC로 수령 처리하기 전에 호출해, 핸들러 누락으로 이미 수령 처리된 아이템이 유실되는 것을 막습니다.
+        /// 받은 보상을 <c>Index</c> 오름차순으로 게임에 넘깁니다. 서버가 이미 세이브 칸에 더한 보상은 로컬 세이브에 맞추고,
+        /// 나머지는 처리기에 넘깁니다. 처리기가 하나라도 실패하면 즉시 실패를 반환합니다(이후 아이템은 처리하지 않음).
         /// </summary>
-        /// <param name="items">검증할 첨부 아이템 목록. null 또는 빈 목록이면 성공으로 간주합니다.</param>
-        private static SupabaseResult<IReadOnlyList<ClaimResult>> ValidateHandlers(IReadOnlyList<MailItemPayload> items)
-        {
-            if (items == null || items.Count == 0)
-                return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(Array.Empty<ClaimResult>());
-
-            foreach (var it in items)
-            {
-                if (it == null || string.IsNullOrWhiteSpace(it.Key))
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_key_empty");
-
-                if (!MailItemHandlerRegistry.TryGetHandler(it.Key, out _))
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + it.Key);
-            }
-
-            return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(Array.Empty<ClaimResult>());
-        }
-
-        /// <summary>
-        /// RPC 응답의 아이템들을 <c>Index</c> 오름차순으로 핸들러에 전달해 지급 처리합니다.
-        /// 중간에 하나라도 실패하면 즉시 실패를 반환합니다(이후 아이템은 처리하지 않음).
-        /// </summary>
-        /// <param name="mailId">핸들러에 전달할 우편 ID.</param>
-        /// <param name="lines">지급할 아이템 목록. null 또는 빈 목록이면 빈 결과로 성공합니다.</param>
-        private static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> RunHandlersAsync(
+        /// <param name="mailId">처리기에 넘길 우편 ID.</param>
+        /// <param name="lines">받은 보상 목록. null 또는 빈 목록이면 빈 결과로 성공합니다.</param>
+        /// <param name="save">로컬 세이브. 없으면 서버 지급분은 다음 로드에서 들어옵니다.</param>
+        /// <param name="mark">받기 요청을 보내기 직전의 저장 상태.</param>
+        /// <param name="accountAtCall">받기를 요청한 계정.</param>
+        private static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> DeliverAsync(
             string mailId,
-            IReadOnlyList<MailItemPayload> lines)
+            IReadOnlyList<MailItemPayload> lines,
+            IUserSaveOperations save,
+            ServerAddMark mark,
+            string accountAtCall)
         {
             if (lines == null || lines.Count == 0)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(Array.Empty<ClaimResult>());
@@ -289,6 +237,16 @@ namespace TrueBase.Unity
             {
                 if (line == null || string.IsNullOrWhiteSpace(line.Key))
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail("mail_item_key_empty");
+
+                if (line.GrantedByServer)
+                {
+                    // 받는 사이 다른 계정으로 바뀌었으면 그 세이브에 더하지 않는다 — 다음 로드가 서버 값을 가져온다.
+                    if (save != null && accountAtCall != null && accountAtCall == SupabaseSDK.CurrentAccountId)
+                        save.ApplyServerAdd(line.Key, line.Count, mark);
+
+                    results.Add(new ClaimResult { MailId = mailId, ItemIndex = line.Index, ItemKey = line.Key, Count = line.Count });
+                    continue;
+                }
 
                 if (!MailItemHandlerRegistry.TryGetHandler(line.Key, out var handler))
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + line.Key);

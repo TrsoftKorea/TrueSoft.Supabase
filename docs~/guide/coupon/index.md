@@ -7,23 +7,9 @@ Task<SupabaseResult> Supabase.RedeemCouponAsync(string code)
 플레이어가 입력한 쿠폰 코드를 사용합니다. 성공하면 서버가 보상 우편을 만듭니다. 쿠폰 생성·수정·삭제와 코드 발급은 운영 콘솔에서만 하므로 SDK에 없습니다.
 
 ```csharp
-var result = await Supabase.RedeemCouponAsync(input.text);
+var result = await Supabase.RedeemCouponAsync(code);
 if (result.IsSuccess)
-{
     ShowToast("쿠폰을 사용했습니다. 우편함을 확인하세요.");
-    await RefreshMailboxAsync();
-    return;
-}
-
-ShowToast(result.Reason switch
-{
-    SupabaseReason.CouponNotFound    => "존재하지 않는 코드입니다.",
-    SupabaseReason.CouponInactive    => "지금은 사용할 수 없는 쿠폰입니다.",
-    SupabaseReason.CouponExpired     => "사용 기한이 지났습니다.",
-    SupabaseReason.CouponAlreadyUsed => "이미 사용한 쿠폰입니다.",
-    SupabaseReason.CouponExhausted   => "쿠폰이 모두 소진되었습니다.",
-    _                                => "쿠폰 사용에 실패했습니다.",
-});
 ```
 
 **파라미터**
@@ -42,8 +28,36 @@ ShowToast(result.Reason switch
 | `SupabaseReason.CouponAlreadyUsed` | 일반 쿠폰은 그 코드가 이미 쓰였고, 키워드 쿠폰은 본인이 이미 썼습니다 |
 | `SupabaseReason.CouponExhausted` | 키워드 쿠폰의 최대 사용 횟수가 소진되었습니다 |
 
+**실사용 예시**
+
+쿠폰 입력 창의 사용 버튼에서 코드를 보내고, 성공하면 창을 닫고 우편함 배지를 새로 고칩니다.
+
+```csharp
+public async void OnClickRedeem()
+{
+    redeemButton.interactable = false;   // 연타로 같은 코드를 두 번 보내지 않게 합니다
+    var result = await Supabase.RedeemCouponAsync(couponInput.text);
+    redeemButton.interactable = true;
+
+    if (result.IsSuccess)
+    {
+        CloseCouponPopup();
+        ShowToast("보상을 우편으로 보냈습니다");
+        RefreshMailBadge();
+        return;
+    }
+
+    ShowToast(result.Reason switch
+    {
+        SupabaseReason.CouponNotFound    => "존재하지 않는 코드입니다",
+        SupabaseReason.CouponAlreadyUsed => "이미 사용한 쿠폰입니다",
+        _                                => "쿠폰을 사용할 수 없습니다",
+    });
+}
+```
+
 ::: info 보상은 우편으로 옵니다
-쿠폰 사용 응답에는 보상이 들어 있지 않습니다. 서버가 [우편](/guide/mailbox/)을 만들어 넣으므로, 게임은 사용에 성공한 뒤 우편함을 새로 조회하면 됩니다. 실제 지급은 기존 [아이템 핸들러](/guide/mailbox/item-handler)를 그대로 탑니다.
+쿠폰 사용 응답에는 보상이 들어 있지 않습니다. 서버가 [우편](/guide/mailbox/)을 만들어 넣으므로, 게임은 사용에 성공한 뒤 우편함을 새로 조회하면 됩니다. 실제 지급은 우편 [보상 수령](/guide/mailbox/claim)과 같습니다.
 :::
 
 ::: info 두 가지 쿠폰

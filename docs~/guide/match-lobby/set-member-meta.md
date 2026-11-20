@@ -31,6 +31,27 @@ await Supabase.SetMatchLobbyMemberMetaAsync(
 | `SupabaseReason.MatchLobbyNotFound` | 남의 칸을 바꾸려는데 호스트가 아니거나, 그런 로비가 없습니다 |
 | `SupabaseReason.MatchLobbyMemberNotFound` | 지정하려는 멤버가 로비에 없습니다 |
 
+**실사용 예시**
+
+대기실의 준비 버튼에서 내 칸의 `ready` 값만 바꿔 다시 넘깁니다.
+
+```csharp
+public async void OnToggleReady(MatchLobbyMember me, bool ready)
+{
+    var meta = new Dictionary<string, object>(me.Metadata) { ["ready"] = ready };   // 기존 칸을 복사해 다른 키를 지키기
+    var result = await Supabase.SetMatchLobbyMemberMetaAsync(_currentLobbyId, me.AccountId, meta);
+    if (result.IsSuccess) { SetReadyButton(ready); return; }
+
+    if (result.Reason == SupabaseReason.MatchLobbyMemberNotFound)
+    {
+        ShowToast("이미 방에서 나왔습니다");
+        CloseWaitingRoom();
+        return;
+    }
+    ShowToast("준비 상태를 바꾸지 못했습니다");
+}
+```
+
 ::: warning 일부만 바꿀 수 없습니다
 넘긴 값이 기존 값을 통째로 대체합니다. `ready`만 바꾸려면 [목록](/guide/match-lobby/list)에서 읽은 기존 칸에 그 키만 덮어써서 전체를 다시 넘기세요.
 :::

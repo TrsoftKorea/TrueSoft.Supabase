@@ -28,6 +28,27 @@ else
 | `SupabaseReason.AppleLinkFailed` | Apple 연동에 실패했습니다 |
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Apple 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 
+**실사용 예시**
+
+설정 화면의 Apple 연결 버튼에서 연결하고, 플레이어가 창을 닫았으면 아무것도 띄우지 않습니다.
+
+```csharp
+public async void OnClickLinkApple()
+{
+    var result = await Supabase.LinkAppleNativeAsync();
+    if (result.IsSuccess) { appleLinkedMark.SetActive(Supabase.IsLinkedWithApple); return; }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.AppleSignInCancelled: break;
+        case SupabaseReason.IdentityAlreadyLinked:
+            ShowPopup("이 Apple 계정은 다른 게임 계정에서 쓰고 있습니다"); break;
+        default:
+            ShowToast("Apple 계정을 연결하지 못했습니다"); break;
+    }
+}
+```
+
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 추가 연동 · 커스텀](/guide/social/apple/add-token)을 사용하세요.
 :::

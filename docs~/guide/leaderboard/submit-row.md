@@ -32,6 +32,26 @@ await Supabase.SubmitScoreAsync(1250, row);
 | `SupabaseReason.LeaderboardColumnNotAllowed` | 이 리더보드에 등록되지 않은 필드를 보냈습니다 |
 | `SupabaseReason.LeaderboardScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
+**실사용 예시**
+
+판이 끝나면 점수와 함께 지금 레벨과 길드를 보내고, 리더보드가 끝났으면 안내합니다.
+
+```csharp
+async void OnStageCleared(int score)
+{
+    var row = new GuildLeaderboard.Row
+    {
+        CharacterLevel = PlayerSave.Level,
+        GuildName      = PlayerSave.GuildName,   // 바뀌지 않은 칸도 매번 채워 보냅니다
+    };
+
+    var result = await Supabase.SubmitScoreAsync(score, row);
+    if (result.IsSuccess) ShowResultScore(result.Data.Score);
+    else if (result.Reason == SupabaseReason.LeaderboardEnded) ShowToast("기간이 끝나 순위에 기록되지 않았습니다");
+    else ShowToast("점수를 기록하지 못했습니다");
+}
+```
+
 ::: info 행에 담긴 값은 전부 전송됩니다
 `Row`의 필드는 값을 바꾸지 않은 것까지 모두 보내집니다. 특정 필드만 갱신하는 개념이 아니라 "지금 이 값들로 채워라"에 가깝습니다.
 :::

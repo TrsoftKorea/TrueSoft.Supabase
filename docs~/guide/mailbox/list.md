@@ -43,3 +43,26 @@ if (result.IsSuccess)
 | `Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
 다국어 우편의 언어별 제목·본문은 [다국어 메시지](/guide/mailbox/localized)로 읽습니다.
+
+**실사용 예시**
+
+우편함을 열 때 첫 페이지를 그리고, 목록 끝까지 내리면 다음 페이지를 이어 붙입니다.
+
+```csharp
+async void OnOpenMailbox()
+{
+    mailList.Clear();
+    await LoadNextPageAsync();
+}
+
+// 목록 끝까지 내리면 불립니다
+async Task LoadNextPageAsync()
+{
+    var result = await Supabase.GetMailsAsync(limit: 30, offset: mailList.Count, category: currentTab);
+    if (!result.IsSuccess) { ShowToast("우편함을 불러오지 못했습니다"); return; }
+
+    foreach (var mail in result.Data)
+        mailList.Add(mail, claimable: mail.HasUnclaimedItems, expired: mail.IsExpired);
+    mailList.HasMore = result.Data.Count == 30;
+}
+```

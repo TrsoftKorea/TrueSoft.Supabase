@@ -22,3 +22,20 @@ maxStamina = cfg.Data.maxStamina;
 **반환**
 
 `.Data`는 역직렬화된 설정 객체 `T`입니다.
+
+**실사용 예시**
+
+상점 버튼을 누르면 최신 가격 설정을 읽고, 받지 못하면 상점을 열지 않습니다.
+
+```csharp
+public async void OnClickOpenShop()
+{
+    loadingSpinner.SetActive(true);
+    var result = await RemoteConfig<ShopConfig>.GetAsync(maxStale: 60);   // 가격은 1분 넘은 값을 쓰지 않습니다
+    loadingSpinner.SetActive(false);
+
+    if (!result.IsSuccess) { ShowToast("상점 정보를 불러오지 못했습니다"); return; }
+
+    shopPanel.Open(result.Data.products);
+}
+```

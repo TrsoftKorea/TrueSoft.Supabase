@@ -20,3 +20,18 @@ if (info.IsSuccess)
 |---------|------|------|
 | `ServerId` | `string` | 서버의 내부 ID |
 | `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
+
+**실사용 예시**
+
+계정 정보 창을 열 때 내 서버를 플레이어가 읽는 이름으로 보여 줍니다.
+
+```csharp
+async void OnOpenAccountInfo()
+{
+    serverLabel.text = "-";
+    var info = await Supabase.GetServerInfoAsync();
+    if (!info.IsSuccess) return;   // 로그인 전이거나 네트워크 오류면 비워 둡니다
+
+    serverLabel.text = ServerNames.DisplayName(info.Data.ServerCode);   // "KR1" → "한국 1서버"
+}
+```

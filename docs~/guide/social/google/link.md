@@ -35,3 +35,29 @@ else
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |
+
+**실사용 예시**
+
+게스트 플레이어가 설정 화면에서 Google 연결을 누르면 진행 상황을 그 계정에 묶고 버튼을 숨깁니다.
+
+```csharp
+public async void OnClickSaveWithGoogle()
+{
+    var result = await Supabase.LinkGoogleToGuestAsync();
+    if (result.IsSuccess)
+    {
+        linkGoogleButton.SetActive(Supabase.IsAnonymous);
+        ShowToast("Google 계정에 진행 상황을 저장했습니다");
+        return;
+    }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.GoogleSignInCancelled: break;
+        case SupabaseReason.IdentityAlreadyLinked:
+            ShowPopup("이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다"); break;
+        default:
+            ShowToast("Google 계정을 연결하지 못했습니다"); break;
+    }
+}
+```

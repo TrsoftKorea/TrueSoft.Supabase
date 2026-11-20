@@ -167,7 +167,7 @@ bool Handle(SupabaseResult result)
 | Reason | 설명 |
 |--------|------|
 | `MailItemHandlerInvalid` | 우편 아이템 핸들러가 null이거나 `ItemKey`가 비어 있습니다 |
-| `MailItemHandlerMissing` | 우편 아이템 key에 등록된 핸들러가 없어 수령 전에 멈췄습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `MailItemHandlerMissing` | 우편 아이템 key에 핸들러도 같은 이름의 세이브 숫자 칸도 없어 우편이 수령되지 않았습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 | `MailNotFound` | 해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다 |
 | `MailDeleted` | 이미 삭제한 우편입니다 |
 | `MailExpired` | 수령 기간이 지난 우편입니다 |

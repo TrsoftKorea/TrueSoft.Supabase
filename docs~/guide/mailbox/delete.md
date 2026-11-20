@@ -26,3 +26,28 @@ if (result.IsSuccess)
 |--------|------|
 | `SupabaseReason.CannotDeleteUnclaimed` | 미수령 보상이 있어 삭제할 수 없습니다. 먼저 수령하세요 |
 | `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
+
+**실사용 예시**
+
+우편 목록의 삭제 버튼에서 지우고, 받지 않은 보상이 남았으면 먼저 받으라고 안내합니다.
+
+```csharp
+public async void OnClickDelete(Mail mail)
+{
+    var result = await Supabase.DeleteMailAsync(mail.Id);
+    if (result.IsSuccess) { RemoveMailRow(mail.Id); return; }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.CannotDeleteUnclaimed:
+            ShowToast("보상을 먼저 받아 주세요");
+            break;
+        case SupabaseReason.MailNotFound:
+            RemoveMailRow(mail.Id);   // 이미 없는 우편이라 목록에서만 뺍니다
+            break;
+        default:
+            ShowToast("우편을 지우지 못했습니다");
+            break;
+    }
+}
+```

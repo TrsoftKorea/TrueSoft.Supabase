@@ -48,6 +48,30 @@ ShowToast(r.Reason switch
 | `SupabaseReason.ChatChannelNotFound` | 존재하지 않는 채널입니다 |
 | `SupabaseReason.ChatScopeUnavailable` | 서버가 정해지지 않아 서버 채팅을 쓸 수 없습니다 |
 
+**실사용 예시**
+
+채팅창의 보내기 버튼에서 보내고, 채팅 간격에 걸리면 버튼을 잠시 막습니다.
+
+```csharp
+public async void OnClickSendChat()
+{
+    var result = await Supabase.SendChatAsync(_channel.Code, input.text);
+    if (result.IsSuccess)
+    {
+        input.text = "";   // 말풍선은 구독 콜백에서 그립니다
+        LockSendButton(_channel.SlowModeSeconds);
+        return;
+    }
+
+    if (result.Reason == SupabaseReason.ChatTooFast)
+        LockSendButton(_channel.SlowModeSeconds);
+    else if (result.Reason == SupabaseReason.ChatMuted)
+        ShowPopup("채팅이 제한된 계정입니다");
+    else
+        ShowToast("보내지 못했습니다");
+}
+```
+
 ::: tip 입력창 길이 제한
 `ChatChannelInfo.MaxLength`를 입력창에 그대로 걸어 두면 `ChatMessageTooLong`을 만날 일이 없습니다. 서버 검사는 그래도 남겨 두는 안전장치입니다.
 :::

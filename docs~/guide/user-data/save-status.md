@@ -18,6 +18,28 @@ void OnSaveStatusChanged(SupabaseResult status)
 
 실패한 변경은 사라지지 않고 쉬는 시간을 늘려 가며 자동으로 다시 보냅니다. 재시도마다 다시 알리지 않고, 자동 저장과 즉시 저장의 실패를 함께 알립니다. 다시 저장되거나, 다시 로드·로그아웃으로 보낼 변경이 사라지면 성공 결과로 한 번 알립니다. 실패로 알릴 때는 `Reason`이 그 사유입니다.
 
+**실사용 예시**
+
+저장 대기 표시를 켜고 끄며, 저장이 밀린 동안 종료 버튼을 누르면 한 번 묻습니다.
+
+```csharp
+private bool _saveFailing;
+
+void OnSaveStatusChanged(SupabaseResult status)
+{
+    _saveFailing = !status.IsSuccess;
+    saveWaitingIcon.SetActive(_saveFailing);
+}
+
+public void OnClickQuitGame()
+{
+    if (_saveFailing)
+        ShowConfirm("아직 저장되지 않은 진행이 있습니다. 그래도 종료할까요?", Application.Quit);
+    else
+        Application.Quit();
+}
+```
+
 ::: warning
 실패 상태에서 앱이 종료되면 보내지 못한 변경은 사라집니다. 기기에 따로 보관하지 않습니다.
 :::

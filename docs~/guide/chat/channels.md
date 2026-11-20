@@ -32,6 +32,28 @@ foreach (var ch in r.Data)
 | `MaxLength` | `int` | 보낼 수 있는 최대 글자 수. 입력창 제한에 그대로 쓰세요 |
 | `SlowModeSeconds` | `int` | 같은 사람의 연속 채팅 최소 간격. 0이면 제한 없음 |
 
+**실사용 예시**
+
+채팅 버튼을 누르면 채널 탭을 만들고, 탭을 고를 때 입력창 제한을 그 채널에 맞춥니다.
+
+```csharp
+public async void OnClickOpenChat()
+{
+    var result = await Supabase.GetChatChannelsAsync();
+    if (!result.IsSuccess) { ShowToast("채팅을 불러오지 못했습니다"); return; }
+
+    chatPanel.SetActive(true);
+    foreach (var ch in result.Data)
+        AddChatTab(ch, onSelect: OnSelectChatTab);
+}
+
+void OnSelectChatTab(ChatChannelInfo ch)
+{
+    input.characterLimit = ch.MaxLength;   // 글자 수 초과를 보내기 전에 막습니다
+    _sendCooldownSeconds = ch.SlowModeSeconds;
+}
+```
+
 ::: tip 한 번만 받으면 됩니다
 채널 설정은 운영자가 가끔 바꾸는 값이라 SDK가 캐시합니다. 매번 호출해도 네트워크를 타지 않으므로 채팅창을 열 때마다 불러도 됩니다.
 :::

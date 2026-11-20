@@ -27,6 +27,30 @@ void Update()
 
 실패한 그 호출이 백그라운드 동기화를 시작합니다. 게임이 따로 동기화를 부를 필요는 없습니다.
 
+**실사용 예시**
+
+이벤트 배너가 떠 있는 동안 1초마다 남은 시간을 고치고, 서버 시각을 아직 못 받았으면 입장 버튼을 막아 둡니다.
+
+```csharp
+void OnEnable()  => InvokeRepeating(nameof(Tick), 0f, 1f);
+void OnDisable() => CancelInvoke(nameof(Tick));
+
+void Tick()
+{
+    var now = Supabase.GetServerNow();
+    if (now.Reason == SupabaseReason.ServerTimeNotSynced)
+    {
+        enterButton.interactable = false;   // 동기화가 끝나면 다음 틱부터 성공합니다
+        return;
+    }
+    if (!now.IsSuccess) return;
+
+    bool open = now.Data < eventEndUtc;
+    enterButton.interactable = open;
+    remainLabel.text = open ? (eventEndUtc - now.Data).ToString(@"hh\:mm\:ss") : "종료";
+}
+```
+
 ::: tip 처음부터 값이 있게 하려면
 로딩 화면에서 [서버 시각 조회](/guide/server-time/now)를 한 번 기다리면 그 뒤로는 계속 성공합니다.
 :::

@@ -25,3 +25,23 @@ if (result.IsSuccess)
 | 파라미터 | 설명 |
 |----------|------|
 | `lang` | 언어코드. 예: `"ja"`, `"en"`. 해당 언어가 없으면 기본값 반환 |
+
+**실사용 예시**
+
+우편 목록 줄을 게임 옵션의 언어로 채우고, 플레이어가 언어를 바꾸면 받아 둔 우편으로 다시 그립니다.
+
+```csharp
+void BindMailRow(MailRowView row, Mail mail)
+{
+    string lang = GameSettings.LanguageCode;   // 게임 옵션에서 고른 언어
+    row.Title.text   = mail.TitleFor(lang);
+    row.Preview.text = mail.ContentFor(lang);
+}
+
+// 서버에 다시 묻지 않습니다
+void OnLanguageChanged()
+{
+    foreach (var (row, mail) in mailRows)
+        BindMailRow(row, mail);
+}
+```

@@ -48,6 +48,23 @@ ShowBestWave(all.MaxScore ?? 0);
 |--------|------|
 | `SupabaseReason.MatchGameCodeEmpty` | 게임 코드가 비어 있습니다 |
 
+**실사용 예시**
+
+프로필 화면을 열 때 승패·승률과 최고 기록을 띄웁니다.
+
+```csharp
+public async void OnOpenProfile()
+{
+    var result = await Supabase.GetMatchStatsAsync("arena_1v1");
+    if (!result.IsSuccess) { SetStatsLabel("-"); return; }
+
+    var total = result.Data.Total;
+    int games = total.Wins + total.Losses;
+    SetStatsLabel(games == 0 ? "기록 없음" : $"{total.Wins}승 {total.Losses}패 · 승률 {total.Wins * 100 / games}%");
+    SetBestScore(total.MaxScore);   // 점수를 보낸 판이 없으면 null
+}
+```
+
 ::: warning 화면 표시에는 Total, 재화 판단에는 Verified
 상대가 신고 전에 게임을 끄면 그 판은 계속 `Pending`으로 남습니다. 그래서 화면에 보여 줄 값은 `Total`이 맞습니다. 다만 `Pending`과 `Solo`는 플레이어 본인의 신고뿐이라 조작할 수 있으니, 재화를 주는 판단에는 `Verified`만 쓰세요. 점수는 `Verified` 판이라도 각자 보낸 값입니다.
 :::

@@ -38,22 +38,17 @@ async Task PollLobby()
     if (!mine.IsSuccess) return;
 
     var lobby = mine.Data.FirstOrDefault(l => l.LobbyId == _lobbyId);
-    if (lobby == null) return;
-
-    switch (lobby.Status)
+    if (lobby == null)   // 취소·만료된 로비는 목록에서 빠진다.
     {
-        case MatchLobbyState.Open:
-            ShowMembers(lobby.Members.Where(m => m.Status == MatchLobbyMemberState.Accepted));
-            break;
-        case MatchLobbyState.Started:
-            EnterGame(lobby.SessionId, lobby.Members);   // 실제 접속은 게임이 한다.
-            break;
-        case MatchLobbyState.Cancelled:
-        case MatchLobbyState.Expired:
-            ShowToast("방이 닫혔습니다.");
-            _lobbyId = null;
-            break;
+        ShowToast("방이 닫혔습니다.");
+        _lobbyId = null;
+        return;
     }
+
+    if (lobby.Status == MatchLobbyState.Started)
+        EnterGame(lobby.SessionId, lobby.Members);   // 실제 접속은 게임이 한다.
+    else
+        ShowMembers(lobby.Members.Where(m => m.Status == MatchLobbyMemberState.Accepted));
 }
 
 // 호스트 — 인원이 찼으면 시작을 알린다. 멤버들은 위 폴링에서 Started 를 보게 된다.

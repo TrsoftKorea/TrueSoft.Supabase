@@ -30,6 +30,25 @@ else
 |--------|------|
 | `SupabaseReason.RestoreSessionFailed` | 저장된 토큰이 없거나 복원에 실패했습니다 |
 
+**실사용 예시**
+
+로딩 화면에서 저장된 세션으로 바로 들어가고, 복원하지 못하면 로그인 화면을 띄웁니다.
+
+```csharp
+async void Start()
+{
+    ShowLoading(true);
+    var result = await Supabase.RestoreSessionAsync();
+    ShowLoading(false);
+
+    if (result.Reason == SupabaseReason.RestoreSessionFailed) { ShowLoginScreen(); return; }
+    if (!result.IsSuccess) { ShowRetryPopup(); return; }
+
+    await Supabase.LoadUserSaveAsync();
+    SceneManager.LoadScene("Lobby");
+}
+```
+
 ::: info
 세션만 복원하므로 유저 데이터는 따로 로드해야 합니다. 로그인과 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](/guide/auth/auto-login#login-load-separate)를 참고하세요.
 :::

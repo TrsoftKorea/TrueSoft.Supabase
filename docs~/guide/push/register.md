@@ -24,3 +24,22 @@ if (push.Reason == SupabaseReason.PushPermissionDenied)
 | `SupabaseReason.PushTokenUnavailable` | 기기에서 푸시 주소를 받지 못했습니다 |
 | `SupabaseReason.PushTokenInvalid` | 서버가 기기 푸시 주소의 형식을 거절했습니다 |
 | `SupabaseReason.ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |
+
+**실사용 예시**
+
+실행할 때마다 로그인과 세이브 로드가 끝난 뒤 기기를 등록하고, 알림 권한을 거절한 플레이어에게는 한 번만 안내합니다.
+
+```csharp
+async Task OnSignedInAsync()
+{
+    await Supabase.LoadUserSaveAsync();
+
+    // 등록이 실패해도 게임 진행은 막지 않습니다
+    var push = await Supabase.RegisterPushAsync();
+    if (push.Reason == SupabaseReason.PushPermissionDenied && !PlayerSave.PushNoticeShown)
+    {
+        ShowPopup("알림을 받으려면 기기 설정에서 알림을 켜 주세요");
+        PlayerSave.PushNoticeShown = true;
+    }
+}
+```

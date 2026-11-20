@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
@@ -17,6 +18,10 @@ namespace TrueBase.Core.Data
         /// <summary>배열 순서(0-based). DB에 없고 클라이언트/수령 RPC 응답에서 채움.</summary>
         [JsonIgnore]
         public int Index { get; set; }
+
+        /// <summary>받기 응답에서만 채운다 — 서버가 세이브 칸에 이미 더했으면 true(게임 처리기를 부르지 않는다).</summary>
+        [JsonIgnore]
+        internal bool GrantedByServer { get; set; }
     }
 
     /// <summary>메일 <c>localized</c> jsonb의 언어별 제목·본문.</summary>
@@ -205,6 +210,15 @@ namespace TrueBase.Core.Data
             lock (Gate)
             {
                 return Map.TryGetValue(itemKey.Trim(), out handler);
+            }
+        }
+
+        /// <summary>지금 등록된 처리기 키. 받기 요청에 실어, 서버가 이 키는 지급하지 않고 게임 처리기에 넘기게 한다.</summary>
+        public static string[] Keys()
+        {
+            lock (Gate)
+            {
+                return Map.Keys.ToArray();
             }
         }
     }

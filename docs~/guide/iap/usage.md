@@ -44,6 +44,28 @@ var iap = result.Data;
 | `SupabaseReason.IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
 | `SupabaseReason.IapInitTimeout` | 제한 시간 안에 초기화가 끝나지 않았습니다 |
 
+**실사용 예시**
+
+로그인이 끝난 뒤 상점을 준비하고, 상품 버튼에서 결제창을 엽니다.
+
+```csharp
+async Task OnSignedInAsync()
+{
+    var result = await SupabaseIAP.CreateIAPAsync(ShopCatalog.ProductIds, GrantAsync,
+        onFailed: info => ShowToast("결제가 완료되지 않았습니다"));
+    if (result.Reason == SupabaseReason.IapInitTimeout) { ShowToast("상점을 불러오지 못했습니다"); return; }
+    if (!result.IsSuccess) return;
+
+    iap = result.Data;
+}
+
+public void OnClickBuy(string productId)
+{
+    if (iap == null || !iap.Purchase(productId))
+        ShowToast("지금은 구매할 수 없습니다");
+}
+```
+
 ::: warning 로그인 완료 후 호출
 `CreateIAPAsync`는 로그인 완료 후에 호출하세요. 자동 로그인 경로에서도 동일합니다. 초기화 도중 스토어에 남아있는 미처리 주문이 있으면 [구매 처리 흐름](#purchase-flow)이 곧바로 재시작되는데, 이때 세션이 없으면 서버 검증이 실패해 불필요한 재시도가 한 번 낍니다.
 :::

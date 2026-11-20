@@ -33,3 +33,23 @@ if (info != null)
 | `IsAvailable` | `bool` | 스토어에서 구매 가능한 상품인지 |
 
 `GooglePlayIAPFacade`·`AppleIAPFacade`에도 같은 메서드가 있습니다.
+
+**실사용 예시**
+
+상점 화면을 열 때 상품마다 가격을 채우고, 살 수 없는 상품은 버튼을 막습니다.
+
+```csharp
+void OnOpenShop()
+{
+    foreach (var slot in shopSlots)
+    {
+        var info = iap?.GetProductInfo(slot.ProductId);
+        if (info == null || !info.IsAvailable)
+        {
+            slot.SetUnavailable();   // 초기화 전이거나 스토어에 없는 상품입니다
+            continue;
+        }
+        slot.SetPrice(info.Title, info.PriceString);
+    }
+}
+```

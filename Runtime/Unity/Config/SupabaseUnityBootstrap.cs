@@ -39,12 +39,6 @@ namespace TrueBase.Unity.Config
         public SupabasePushService PushService { get; private set; }
         /// <summary>푸시 사용 여부·Firebase 값. 기기 플러그인을 시작할 때 읽는다.</summary>
         public SupabaseSettings PushSettings { get; private set; }
-        /// <summary><see cref="SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
-        public float DuplicateSessionPollSeconds { get; private set; }
-
-        /// <summary><see cref="SupabaseSettings.duplicateSessionActionCheckCooldownSeconds"/>.</summary>
-        public float DuplicateSessionActionCheckCooldownSeconds { get; private set; }
-
         /// <summary><see cref="SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
         public float WithdrawalRequestDelayDays { get; private set; }
 
@@ -75,7 +69,8 @@ namespace TrueBase.Unity.Config
             ProjectUrl = options.ProjectURL ?? string.Empty;
             EnableApiResultLogs = settings.enableApiResultLogs;
 
-            var http = new UnitySupabaseHttpClient(options.TimeoutSeconds);
+            const string sessionsTable = "user_sessions";
+            var http = new SessionTokenHttpClient(new UnitySupabaseHttpClient(options.TimeoutSeconds), sessionsTable);
             var json = new UnitySupabaseJsonSerializer();
 
             AuthService = new SupabaseAuthService(
@@ -115,7 +110,7 @@ namespace TrueBase.Unity.Config
                 options.PublishableKey,
                 http,
                 json,
-                "user_sessions");
+                sessionsTable);
 
             AnonymousRecoveryService = new SupabaseAnonymousRecoveryService(
                 options.ProjectURL,
@@ -183,8 +178,6 @@ namespace TrueBase.Unity.Config
                 options.PublishableKey,
                 http);
 
-            DuplicateSessionPollSeconds = settings.duplicateSessionPollSeconds;
-            DuplicateSessionActionCheckCooldownSeconds = options.DuplicateSessionActionCheckCooldownSeconds;
             WithdrawalRequestDelayDays = options.WithdrawalRequestDelayDays;
             DefaultServerCode = string.IsNullOrWhiteSpace(options.DefaultServerCode) ? "GLOBAL" : options.DefaultServerCode.Trim();
             SupabaseSDK.Initialize(this);

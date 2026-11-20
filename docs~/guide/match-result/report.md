@@ -61,6 +61,28 @@ ShowVerifiedBadge(); // Paid·AlreadyPaid — 상대 신고와 맞춰 본 판
 | `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 | `SupabaseReason.MatchResultStatusUnknown` | 서버가 이 SDK가 모르는 결과를 돌려줬습니다. SDK를 갱신해야 하며, 다시 시도해도 같습니다 |
 
+**실사용 예시**
+
+대전이 끝나 결과 화면을 띄울 때 신고하고, 기록 상태를 결과 화면에 표시합니다.
+
+```csharp
+public async void OnMatchEnded(string roomName, bool didWin, string opponentAccountId, int score)
+{
+    ShowResultScreen(didWin, score);
+
+    var result = await Supabase.ReportMatchResultAsync(roomName, "arena_1v1", didWin, opponentAccountId, score);
+    if (!result.IsSuccess)
+    {
+        if (result.Reason == SupabaseReason.MatchResultMismatch)
+            SetResultBadge("기록되지 않은 판");
+        else if (result.Reason == SupabaseReason.MatchResultStatusUnknown)
+            ShowPopup("새 버전으로 업데이트해 주세요");
+        return;
+    }
+    SetResultBadge(result.Data.Status == MatchResultStatus.Pending ? "상대 확인 대기" : "기록 완료");
+}
+```
+
 ::: info 대기 상태는 폴링하지 않습니다
 `Pending`은 오류가 아니라 상대의 신고를 기다리는 정상 상태입니다. 상대가 신고하면 그 호출에서 양쪽 모두 함께 처리되므로, 게임이 따로 재확인 요청을 보낼 필요가 없습니다.
 :::

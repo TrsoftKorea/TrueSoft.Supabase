@@ -25,3 +25,24 @@ if (result.IsSuccess)
 | `SupabaseReason.GoogleIosClientIdInvalid` | iOS에서 `googleIosClientId`가 비었거나, 형식이 틀리거나, 웹 클라이언트 ID와 같습니다 |
 | `SupabaseReason.GoogleLinkFailed` | Supabase 계정 연동에 실패했습니다 |
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
+
+**실사용 예시**
+
+설정 화면의 Google 연결 버튼에서 연결하고, 플레이어가 선택 창을 닫았으면 아무것도 띄우지 않습니다.
+
+```csharp
+public async void OnClickLinkGoogle()
+{
+    var result = await Supabase.LinkGoogleNativeAsync();
+    if (result.IsSuccess) { googleLinkedMark.SetActive(Supabase.IsLinkedWithGoogle); return; }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.GoogleSignInCancelled: break;
+        case SupabaseReason.IdentityAlreadyLinked:
+            ShowPopup("이 Google 계정은 다른 게임 계정에서 쓰고 있습니다"); break;
+        default:
+            ShowToast("Google 계정을 연결하지 못했습니다"); break;
+    }
+}
+```

@@ -30,7 +30,7 @@ foreach (var lobby in r.Data)
 | `Metadata` | `Dictionary<string, object>` | 생성 시 넘긴 자유 값. 넘기지 않았으면 빈 사전 |
 | `MaxMembers` | `int` | 정원 |
 | `HostAccountId` | `string` | 호스트 계정 ID |
-| `Status` | `MatchLobbyState` | `Open`·`Started`·`Cancelled`·`Expired`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
+| `Status` | `MatchLobbyState` | `Open`·`Started`. 취소·만료된 로비는 목록에서 빠집니다. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `CreatedAt` | `DateTimeOffset` | 생성 시각 |
 | `ExpiresAt` | `DateTimeOffset` | 아무도 시작하지 않으면 이 시각에 닫힙니다 |
 | `StartedAt` | `DateTimeOffset?` | 시작 알림 시각. 아직이면 null |
@@ -44,6 +44,28 @@ foreach (var lobby in r.Data)
 | `Name` | `string` | 멤버 닉네임 |
 | `Status` | `MatchLobbyMemberState` | `Invited`·`Accepted`·`Declined`·`Left`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `Metadata` | `Dictionary<string, object>` | [지정한 참가자 칸](/guide/match-lobby/set-member-meta). 지정한 적이 없으면 빈 사전 |
+
+**실사용 예시**
+
+로비 화면에서 몇 초마다 불러 새 초대를 띄우고, 들어가 있던 방이 시작되거나 닫힌 것을 알아챕니다.
+
+```csharp
+public async void PollLobbies()
+{
+    var result = await Supabase.ListMatchLobbiesAsync();
+    if (!result.IsSuccess) return;   // 다음 주기에 다시 묻습니다
+
+    var current = result.Data.FirstOrDefault(l => l.LobbyId == _currentLobbyId);
+    if (_currentLobbyId != null && current == null) { ShowToast("방이 닫혔습니다"); CloseWaitingRoom(); }   // 취소·만료된 방은 목록에서 빠집니다
+    else if (current?.Status == MatchLobbyState.Started) EnterMatch(current.SessionId);
+
+    foreach (var lobby in result.Data)
+    {
+        var me = lobby.Members.Find(m => m.AccountId == Supabase.UserId);
+        if (me?.Status == MatchLobbyMemberState.Invited) ShowInvitePopupOnce(lobby.LobbyId, lobby.Name);
+    }
+}
+```
 
 ::: info 응답하지 않고 방치된 초대
 아무도 시작하지 않은 로비는 `ExpiresAt`이 지나면 서버가 자동으로 `Expired`로 정리합니다. 그 시간은 운영 콘솔에서 정하므로 게임이 따로 시간 제한을 관리할 필요는 없습니다.

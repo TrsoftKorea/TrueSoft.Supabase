@@ -51,3 +51,23 @@ async void OnPush(SupabasePushMessage push)
 구독하기 전에 온 알림은 1분 안의 것만 구독한 뒤에 발행됩니다. 로그아웃하거나 다른 계정으로 로그인하면 아직 발행하지 않은 알림은 버립니다.
 
 게임이 뒤에 있거나 꺼져 있을 때 온 알림은 기기에 뜨고 이 이벤트는 발행되지 않습니다. 그 알림을 눌러 게임이 열려도 어떤 알림이었는지는 전달되지 않습니다.
+
+**실사용 예시**
+
+우편함 창이 열려 있는 동안 우편 알림이 오면 보고 있는 분류의 목록을 바로 새로 고칩니다.
+
+```csharp
+void OnEnable()  => Supabase.OnPushReceived += OnPushWhileMailboxOpen;
+void OnDisable() => Supabase.OnPushReceived -= OnPushWhileMailboxOpen;
+
+void OnPushWhileMailboxOpen(SupabasePushMessage push)
+{
+    if (push.Kind != SupabasePushKind.Mail) return;
+
+    push.Data.TryGetValue("category", out var category);
+    if (currentTab == null || currentTab == category)
+        ReloadMailList();
+    else
+        categoryTabs.MarkNew(category);   // 다른 분류면 탭에 새 우편 표시만 합니다
+}
+```

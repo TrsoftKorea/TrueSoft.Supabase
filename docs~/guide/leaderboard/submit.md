@@ -43,4 +43,25 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardEnded` | 종료·비활성 리더보드라 기록할 수 없습니다 |
 
+**실사용 예시**
+
+전투 결과 화면이 뜰 때 점수를 기록하고, 리더보드가 끝났으면 안내합니다.
+
+```csharp
+async void OnBattleFinished(int score)
+{
+    var result = await Supabase.SubmitScoreAsync<ArenaLeaderboard>(score);
+    if (result.IsSuccess)
+    {
+        resultPanel.ShowRecord(result.Data.Score);   // 최고 기록 방식이면 이번 점수보다 클 수 있습니다
+        return;
+    }
+
+    if (result.Reason == SupabaseReason.LeaderboardEnded)
+        ShowToast("기간이 끝나 이번 점수는 순위에 들어가지 않습니다");
+    else
+        ShowToast("점수를 기록하지 못했습니다");
+}
+```
+
 순위와 함께 값을 보내려면 [점수 기록 · 생성 클래스](/guide/leaderboard/submit-row)를 참고하세요.

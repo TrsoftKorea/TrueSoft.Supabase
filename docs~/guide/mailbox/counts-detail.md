@@ -25,3 +25,23 @@ if (result.IsSuccess)
 | `ByCategory` | `Dictionary<string, MailCategoryCounts>` | 분류별 세부 내역. 활성 우편이 있는 분류만 키로 존재 |
 
 `MailCategoryCounts`는 `.Unclaimed` 값을 가집니다.
+
+**실사용 예시**
+
+우편함을 열 때 분류 탭마다 받을 우편 수를 배지로 붙입니다.
+
+```csharp
+async void OnOpenMailbox()
+{
+    var result = await Supabase.GetMailInboxCountsAsync();
+    if (!result.IsSuccess) return;   // 실패하면 배지 없이 엽니다
+
+    allTab.SetBadge(result.Data.Unclaimed);
+    foreach (var tab in categoryTabs)
+    {
+        // 우편이 없는 분류는 키가 없습니다
+        var found = result.Data.ByCategory.TryGetValue(tab.Category, out var counts);
+        tab.SetBadge(found ? counts.Unclaimed : 0);
+    }
+}
+```

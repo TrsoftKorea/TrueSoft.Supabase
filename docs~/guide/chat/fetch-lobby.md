@@ -54,6 +54,29 @@ async Task PollLobbyChat()
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 취소·만료되었습니다 |
 | `SupabaseReason.MatchLobbyMemberNotFound` | 아직 수락하지 않았거나 나간 방입니다 |
 
+**실사용 예시**
+
+대기방이 떠 있는 동안 3초마다 대화를 받고, 방이 닫혔거나 내보내졌으면 대기방을 닫습니다.
+
+```csharp
+async void PollLobbyChat()   // 대기방을 열 때 InvokeRepeating으로 3초마다
+{
+    var result = await Supabase.GetLobbyChatAsync(_lobbyId, _lastChatId);
+    if (result.IsSuccess)
+    {
+        foreach (var m in result.Data) { AddBubble(m); _lastChatId = m.Id; }
+        return;
+    }
+
+    if (result.Reason == SupabaseReason.MatchLobbyNotOpen
+        || result.Reason == SupabaseReason.MatchLobbyMemberNotFound)
+    {
+        CancelInvoke(nameof(PollLobbyChat));
+        ShowPopup("대기방이 닫혔습니다", onClose: CloseLobbyPanel);
+    }
+}
+```
+
 ::: warning 로비가 닫히면 조회도 막힙니다
 귓속말과 달리 지난 대화를 나중에 볼 수 없습니다. 방이 취소·만료되면 그 대화는 더 이상 읽히지 않고, 하루 뒤 서버가 지웁니다. 남겨야 할 내용이면 게임이 따로 보관하세요.
 :::

@@ -26,3 +26,24 @@ if (result.Reason == SupabaseReason.CustomerCenterLoginRequired)
 |--------|------|
 | `SupabaseReason.CustomerCenterLoginRequired` | 로그인 상태가 아니고, 차단된 계정의 본인 증명도 없습니다 |
 | `SupabaseReason.CustomerCenterNotShown` | 기기가 6초 안에 창을 띄우지 못했습니다. 다른 화면이 이미 떠 있을 때 주로 생깁니다 |
+
+**실사용 예시**
+
+설정 화면의 고객센터 버튼에서 창을 열고, 창이 닫히면 새 답변 배지를 다시 셉니다.
+
+```csharp
+public async void OnClickCustomerCenter()
+{
+    var result = await Supabase.OpenCustomerCenterAsync(GameSettings.LanguageCode);
+    if (result.Reason == SupabaseReason.CustomerCenterNotShown)
+    {
+        ShowToast("잠시 뒤 다시 눌러 주세요");
+        return;
+    }
+    if (!result.IsSuccess) { ShowToast("고객센터를 열지 못했습니다"); return; }
+
+    // 창에서 읽은 답변만큼 배지가 줄어듭니다
+    var unread = await Supabase.GetCustomerCenterUnreadCountAsync();
+    supportBadge.SetActive(unread.IsSuccess && unread.Data > 0);
+}
+```

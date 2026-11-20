@@ -28,3 +28,22 @@ if (r.IsSuccess)
 | `SupabaseReason.MatchLobbyInviteLimitReached` | 상대가 떠안고 있는 대기 초대가 상한에 도달했습니다 |
 | `SupabaseReason.MatchLobbyInviteTooFast` | 연속 초대 최소 간격을 지키지 않았습니다 |
 | `SupabaseReason.MatchLobbyFull` | 로비 정원이 가득 찼습니다 |
+
+**실사용 예시**
+
+대기실의 초대 창에서 닉네임으로 찾은 플레이어를 초대하고, 자리가 없거나 닫힌 방이면 알려 줍니다.
+
+```csharp
+public async void OnClickInvite(FriendSearchResult target)
+{
+    var result = await Supabase.InviteToMatchLobbyAsync(_currentLobbyId, target.AccountId);
+    if (result.IsSuccess) { AddPendingMemberRow(target.Name); return; }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.MatchLobbyFull:    ShowToast("방이 가득 찼습니다"); break;
+        case SupabaseReason.MatchLobbyNotOpen: ShowToast("이미 시작했거나 닫힌 방입니다"); CloseWaitingRoom(); break;
+        default:                               ShowToast("초대하지 못했습니다"); break;
+    }
+}
+```

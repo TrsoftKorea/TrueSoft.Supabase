@@ -24,3 +24,16 @@ if (result.IsSuccess)
 **반환**
 
 `.Data`는 조회한 플레이어의 닉네임 `string`입니다.
+
+**실사용 예시**
+
+길드원 목록처럼 게임이 플레이어 ID만 들고 있는 화면에서 줄마다 이름을 채웁니다.
+
+```csharp
+public async void FillMemberName(MemberRow row, string userId)
+{
+    row.SetName("...");
+    var result = await Supabase.GetPublicNameAsync(userId);
+    row.SetName(result.IsSuccess && !string.IsNullOrEmpty(result.Data) ? result.Data : "알 수 없는 플레이어");
+}
+```

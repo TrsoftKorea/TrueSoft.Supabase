@@ -20,3 +20,19 @@ else
 ```
 
 iOS는 앱이 들고 있는 Google 계정 상태가 없어 다음 로그인 때 계정을 다시 고릅니다.
+
+**실사용 예시**
+
+설정 화면의 로그아웃 버튼에서 남은 변경을 저장한 뒤 로그아웃하고 타이틀로 돌아갑니다.
+
+```csharp
+public async void OnClickLogout()
+{
+    var save = await Supabase.SaveNowAsync();
+    if (!save.IsSaved) { ShowToast("저장하지 못해 로그아웃을 멈췄습니다"); return; }
+
+    var result = await Supabase.SignOutFullyAsync();
+    if (!result.IsSuccess) { ShowToast("로그아웃하지 못했습니다. 다시 시도해 주세요"); return; }
+    SceneManager.LoadScene("Title");
+}
+```

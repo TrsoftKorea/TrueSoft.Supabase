@@ -114,9 +114,11 @@ namespace TrueBase.Core.Data
         /// <summary>단일 메일의 보상을 수령 처리합니다. RPC <c>ts_claim_mail_items</c>. 보상 없음이면 빈 목록(no-op).</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="mailId">수령할 메일 UUID. 필수.</param>
+        /// <param name="clientKeys">게임 처리기가 지급할 키. 그 밖의 보상은 서버가 세이브 칸에 바로 더하고, 더할 칸이 없으면 받기 전체가 실패합니다.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailItemPayload>>> ClaimMailItemsRpcAsync(
             string accessToken,
-            string mailId)
+            string mailId,
+            IReadOnlyCollection<string> clientKeys)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -125,7 +127,11 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail("mail_id_empty");
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_mail_items";
-            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object> { ["p_mail_id"] = mailId.Trim() });
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object>
+            {
+                ["p_mail_id"] = mailId.Trim(),
+                ["p_client_keys"] = clientKeys ?? Array.Empty<string>()
+            });
 
             var response = await _httpClient.SendAsync(
                 method: "POST",
@@ -138,24 +144,29 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(
-                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "claim_mail_items"));
+                    ClaimErrorCode(response, "claim_mail_items"));
 
             return ParseClaimItemsArray(response.Body);
         }
 
         /// <summary>수령 가능한 모든 메일의 보상을 한 번에 수령 처리합니다. RPC <c>ts_claim_all_mail_items</c>. 메일별 보상 묶음 목록을 반환합니다.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="category">수령 대상 분류. null·공백이면 전체 분류. (기본값: null).</param>
+        /// <param name="category">수령 대상 분류. null·공백이면 전체 분류.</param>
+        /// <param name="clientKeys">게임 처리기가 지급할 키. <see cref="ClaimMailItemsRpcAsync"/>와 같습니다.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailClaimBundle>>> ClaimAllMailItemsRpcAsync(
             string accessToken,
-            string category = null)
+            string category,
+            IReadOnlyCollection<string> clientKeys)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_claim_all_mail_items";
-            var bodyJson = JsonConvert.SerializeObject(
-                new Dictionary<string, object> { ["p_category"] = string.IsNullOrWhiteSpace(category) ? null : category.Trim() });
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object>
+            {
+                ["p_category"] = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
+                ["p_client_keys"] = clientKeys ?? Array.Empty<string>()
+            });
             var response = await _httpClient.SendAsync(
                 method: "POST",
                 url: url,
@@ -167,7 +178,7 @@ namespace TrueBase.Core.Data
 
             if (response.IsSuccess == false)
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(
-                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "claim_all_mail_items"));
+                    ClaimErrorCode(response, "claim_all_mail_items"));
 
             return ParseClaimAllResponse(response.Body);
         }
@@ -350,6 +361,37 @@ namespace TrueBase.Core.Data
             }
         }
 
+        /// <summary>
+        /// 받기 실패 사유. 지급할 곳이 없는 키(<c>mail_item_handler_missing: 키</c>)는 어느 키인지 남겨
+        /// <c>mail_item_handler_missing:키</c> 로 돌려준다 — 운영자가 보낸 키와 게임 처리기를 맞춰 볼 수 있게.
+        /// </summary>
+        private static string ClaimErrorCode(SupabaseHttpResponse response, string rpcName)
+        {
+            var code = SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, rpcName);
+            if (code != SupabaseErrorCode.MailItemHandlerMissing || string.IsNullOrWhiteSpace(response.Body))
+                return code;
+
+            try
+            {
+                var message = JObject.Parse(response.Body)["message"]?.Value<string>();
+                var colon = message?.IndexOf(':') ?? -1;
+                var key = colon > 0 ? message.Substring(colon + 1).Trim() : null;
+                return string.IsNullOrEmpty(key) ? code : code + ":" + key;
+            }
+            catch
+            {
+                return code;
+            }
+        }
+
+        private static MailItemPayload ToPayload(MailClaimLineDto x) => new MailItemPayload
+        {
+            Index = x.Index,
+            Key = x.Key?.Trim() ?? string.Empty,
+            Count = x.Count,
+            GrantedByServer = x.Granted
+        };
+
         private static SupabaseResult<IReadOnlyList<MailItemPayload>> ParseClaimItemsArray(string body)
         {
             try
@@ -358,15 +400,7 @@ namespace TrueBase.Core.Data
                 if (arr == null)
                     return SupabaseResult<IReadOnlyList<MailItemPayload>>.Success(Array.Empty<MailItemPayload>());
 
-                var list = arr
-                    .Select(
-                        x => new MailItemPayload
-                        {
-                            Index = x.Index,
-                            Key = x.Key?.Trim() ?? string.Empty,
-                            Count = x.Count
-                        })
-                    .ToList();
+                var list = arr.Select(ToPayload).ToList();
 
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Success(list);
             }
@@ -387,15 +421,7 @@ namespace TrueBase.Core.Data
                 var bundles = new List<MailClaimBundle>();
                 foreach (var e in arr)
                 {
-                    var items = (e.Items ?? new List<MailClaimLineDto>())
-                        .Select(
-                            x => new MailItemPayload
-                            {
-                                Index = x.Index,
-                                Key = x.Key?.Trim() ?? string.Empty,
-                                Count = x.Count
-                            })
-                        .ToList();
+                    var items = (e.Items ?? new List<MailClaimLineDto>()).Select(ToPayload).ToList();
 
                     bundles.Add(
                         new MailClaimBundle
@@ -517,6 +543,9 @@ namespace TrueBase.Core.Data
 
             [JsonProperty("count")]
             public int Count { get; set; }
+
+            [JsonProperty("granted")]
+            public bool Granted { get; set; }
         }
 
         private sealed class ClaimAllMailEntryDto

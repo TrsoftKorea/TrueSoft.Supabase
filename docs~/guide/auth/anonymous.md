@@ -33,3 +33,25 @@ else
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정이라 새 계정으로 다시 가입되었습니다 |
 
 로그인하면 세션이 기기에 저장되어 다음 실행 때 `Supabase.TriggerAutoLoginAsync()`로 복원할 수 있습니다. 소셜 로그인은 [소셜 로그인](/guide/social/google/)을 참고하세요. 로그인과 데이터 로드가 별개 단계인 이유는 [로그인과 로드는 별개 단계](/guide/auth/auto-login#login-load-separate)를 참고하세요.
+
+**실사용 예시**
+
+타이틀 화면의 게스트 시작 버튼에서 로그인하고, 처음 온 플레이어면 튜토리얼로 보냅니다.
+
+```csharp
+public async void OnClickGuestStart()
+{
+    var result = await Supabase.SignInAnonymouslyAsync();
+    if (!result.IsSuccess)
+    {
+        if (result.Reason == SupabaseReason.UserBanned) ShowBanPopup(result.BanInfo);
+        else ShowToast("로그인하지 못했습니다. 다시 시도해 주세요");
+        return;
+    }
+
+    var load = await Supabase.LoadUserSaveAsync();
+    if (!load.IsSuccess) { ShowToast("데이터를 불러오지 못했습니다"); return; }
+    if (load.IsNewUser) StartTutorial();
+    else SceneManager.LoadScene("Lobby");
+}
+```

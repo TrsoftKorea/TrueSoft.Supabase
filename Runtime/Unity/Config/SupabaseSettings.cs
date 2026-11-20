@@ -74,17 +74,6 @@ namespace TrueBase.Unity
         [Tooltip("게임 서버 배정에 사용할 기본 server_code.")]
         public string defaultServerCode = "GLOBAL";
 
-        [Header("중복 로그인")]
-        [Label("중복 감지 폴링 주기")]
-        [Tooltip("중복 로그인 감지 확인 주기(초). 같은 요청이 운영 콘솔의 동시접속자 집계에도 쓰입니다. 0이면 중복 감지를 끄고 접속 확인만 2분마다 보냅니다.")]
-        [Min(0f)]
-        public float duplicateSessionPollSeconds = 60f;
-
-        [Label("중복 로그인 쿨다운")]
-        [Tooltip("중복 로그인 감지 후 다음 검사까지의 대기 시간(초).")]
-        [Min(0f)]
-        public float duplicateSessionActionCheckCooldownSeconds = 5f;
-
         [Header("탈퇴")]
         [Label("탈퇴 유예 기간")]
         [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수(최소 1일). 유예가 끝난 다음 자정(운영 콘솔에서 정한 시간대)에 삭제됩니다. 바로 지우려면 즉시 탈퇴를 쓰세요.")]
@@ -135,9 +124,6 @@ namespace TrueBase.Unity
                 DefaultMailExpirationDays = defaultMailExpirationDays < 1 ? 1 : defaultMailExpirationDays,
                 MailPollingIntervalSeconds = mailPollingIntervalSeconds < 0 ? 0 : mailPollingIntervalSeconds,
                 DefaultServerCode = string.IsNullOrWhiteSpace(defaultServerCode) ? "GLOBAL" : defaultServerCode.Trim(),
-                DuplicateSessionActionCheckCooldownSeconds = duplicateSessionActionCheckCooldownSeconds < 0f
-                    ? 0f
-                    : duplicateSessionActionCheckCooldownSeconds,
                 WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 1f
                     ? 1f
                     : withdrawalRequestDelayDays,

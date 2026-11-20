@@ -39,6 +39,30 @@ Android도 같은 호출로 동작합니다. 다만 Services ID·키 발급 같�
 | `SupabaseReason.AnonymousRequiresLink` | 익명 세션입니다. 연동은 [게스트 연동](/guide/social/apple/link)을 쓰세요 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 
+**실사용 예시**
+
+타이틀 화면의 Apple 로그인 버튼에서 로그인하고, 플레이어가 창을 닫았으면 그대로 둡니다.
+
+```csharp
+public async void OnClickAppleLogin()
+{
+    var result = await Supabase.SignInWithAppleAsync();
+    if (!result.IsSuccess)
+    {
+        switch (result.Reason)
+        {
+            case SupabaseReason.AppleSignInCancelled: break;
+            case SupabaseReason.UserBanned: ShowBanPopup(result.BanInfo); break;
+            default: ShowToast("Apple 로그인에 실패했습니다"); break;
+        }
+        return;
+    }
+
+    await Supabase.LoadUserSaveAsync();
+    SceneManager.LoadScene("Lobby");
+}
+```
+
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 신규 로그인 · 커스텀](/guide/social/apple/signin-token)을 사용하세요.
 :::

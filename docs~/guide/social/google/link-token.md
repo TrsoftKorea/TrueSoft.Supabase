@@ -41,3 +41,22 @@ else
 | `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 Supabase에 등록한 클라이언트 ID용이 아닙니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |
+
+**실사용 예시**
+
+외부 Google 로그인 플러그인이 토큰을 돌려주면 게스트 계정에 연결해 진행 상황을 지킵니다.
+
+```csharp
+public async void OnGoogleCredential(string idToken)
+{
+    if (!Supabase.IsAnonymous) return;
+
+    var result = await Supabase.LinkGoogleToGuestWithIdTokenAsync(idToken);
+    if (result.IsSuccess) { ShowToast("Google 계정에 진행 상황을 저장했습니다"); return; }
+
+    if (result.Reason == SupabaseReason.IdentityAlreadyLinked)
+        ShowPopup("이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다");
+    else
+        ShowToast("Google 계정을 연결하지 못했습니다");
+}
+```

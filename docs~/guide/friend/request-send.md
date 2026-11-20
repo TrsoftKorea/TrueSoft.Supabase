@@ -40,3 +40,26 @@ ShowToast(r.Data.Accepted ? "서로 요청이 있어 바로 친구가 되었습�
 | `SupabaseReason.FriendSelfRequest` | 자기 자신에게 보내려 했습니다 |
 | `SupabaseReason.FriendAlreadyFriends` | 이미 친구입니다 |
 | `SupabaseReason.FriendRequestAlreadySent` | 이미 보낸 요청이 대기 중입니다 |
+
+**실사용 예시**
+
+검색 결과 카드의 친구 추가 버튼에서 보내고, 결과에 맞춰 버튼 모양을 바꿉니다.
+
+```csharp
+public async void OnClickAddFriend(FriendSearchResult target)
+{
+    var result = await Supabase.SendFriendRequestAsync(target.AccountId);
+    if (result.IsSuccess)
+    {
+        SetAddButtonState(result.Data.Accepted ? FriendRelation.Friends : FriendRelation.RequestSent);
+        return;
+    }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.FriendRequestAlreadySent:  SetAddButtonState(FriendRelation.RequestSent); break;
+        case SupabaseReason.FriendPendingLimitReached: ShowPopup("응답을 기다리는 요청이 너무 많습니다. 보낸 요청을 정리해 주세요"); break;
+        default:                                       ShowToast("요청을 보내지 못했습니다"); break;
+    }
+}
+```

@@ -27,3 +27,20 @@ if (result.IsSuccess)
 |--------|------|
 | `SupabaseReason.IdentityAlreadyLinked` | 이 Google 계정은 이미 다른 게임 계정에 연결되어 있습니다 |
 | `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 Supabase에 등록한 클라이언트 ID용이 아닙니다 |
+
+**실사용 예시**
+
+외부 Google 로그인 플러그인이 토큰을 돌려주면 지금 계정에 연결하고 설정 화면의 연결 표시를 갱신합니다.
+
+```csharp
+public async void OnGoogleCredential(string idToken)
+{
+    var result = await Supabase.LinkGoogleWithIdTokenAsync(idToken);
+    if (result.IsSuccess) { googleLinkedMark.SetActive(Supabase.IsLinkedWithGoogle); return; }
+
+    if (result.Reason == SupabaseReason.IdentityAlreadyLinked)
+        ShowPopup("이 Google 계정은 다른 게임 계정에서 쓰고 있습니다");
+    else
+        ShowToast("Google 계정을 연결하지 못했습니다");
+}
+```

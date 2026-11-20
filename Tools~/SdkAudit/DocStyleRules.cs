@@ -267,6 +267,16 @@ namespace SdkAudit
             else if (labelAfterSig >= 0 && csharpFences[sigIndex + 1] > labelAfterSig)
                 ctx.Report.Error($"[R22 예제순서] {rel}:{csharpFences[sigIndex + 1] + 1} 호출 예제는 파라미터·반환·에러 코드 표보다 앞에 둡니다.");
 
+            // 실사용 예시 = 게임 코드에서 실제로 부르는 모습. 표들 다음, ::: 상자 앞.
+            var practical = Array.FindIndex(lines, sigFence, l => l.Trim() == "**실사용 예시**");
+            var lastLabel = Array.FindLastIndex(lines, l => FunctionLabel.IsMatch(l));
+            if (practical < 0)
+                ctx.Report.Error($"[R22 실사용없음] {rel} 함수 페이지에 **실사용 예시** 가 없습니다. 에러 코드 표 다음에 게임 코드에서 부르는 모습을 넣습니다.");
+            else if (lastLabel > practical)
+                ctx.Report.Error($"[R22 실사용순서] {rel}:{practical + 1} **실사용 예시** 는 파라미터·반환·에러 코드 표 다음에 둡니다.");
+            else if (!csharpFences.Any(f => f > practical && !lines.Skip(practical + 1).Take(f - practical - 1).Any(l => l.StartsWith("#") || l.StartsWith(":::"))))
+                ctx.Report.Error($"[R22 실사용없음] {rel}:{practical + 1} **실사용 예시** 아래에 csharp 코드 블록이 없습니다.");
+
             // 시그니처 닫는 줄 다음 문단이 설명이다.
             var close = Array.FindIndex(lines, sigFence + 1, l => l.TrimStart().StartsWith("```", StringComparison.Ordinal));
             if (close > 0)

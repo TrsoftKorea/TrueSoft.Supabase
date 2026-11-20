@@ -37,3 +37,24 @@ if (pref.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |
+
+**실사용 예시**
+
+설정 화면을 열 때 알림 스위치를 서버 값으로 맞추고, 읽기 전에는 스위치를 막아 둡니다.
+
+```csharp
+async void OnOpenSettings()
+{
+    SetPushTogglesInteractable(false);
+    var result = await Supabase.GetPushPreferencesAsync();
+    if (result.Reason == SupabaseReason.ProfileNotFound) return;   // 다음에 열 때 다시 읽습니다
+    if (!result.IsSuccess) { ShowToast("알림 설정을 불러오지 못했습니다"); return; }
+
+    var p = result.Data;
+    pushToggle.SetIsOnWithoutNotify(p.Enabled);
+    mailAlarmToggle.SetIsOnWithoutNotify(p.Mail);
+    nightToggle.SetIsOnWithoutNotify(p.NightConsent);
+    SetPushTogglesInteractable(true);
+    nightToggle.interactable = p.AdConsent;   // 야간 수신은 광고 수신 동의가 있어야 켭니다
+}
+```

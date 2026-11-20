@@ -60,3 +60,21 @@ else
 | `IsPermanentBan` | `bool` | 영구 차단 여부. 운영 콘솔의 영구 차단처럼 해제까지 50년 넘게 남은 차단도 영구로 봅니다 |
 | `BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 `null` |
 | `BanMessage` | `string` | 운영자가 설정한 차단 사유 메시지. 없으면 빈 문자열 |
+
+**실사용 예시**
+
+로그인이 차단으로 막히면 해제 시각과 사유를 담은 안내 팝업을 띄웁니다.
+
+```csharp
+public async void OnClickGoogleLogin()
+{
+    var result = await Supabase.SignInWithGoogleAsync();
+    if (result.Reason != SupabaseReason.UserBanned) { HandleLogin(result); return; }
+
+    var ban = result.BanInfo;
+    string period = ban.IsPermanentBan
+        ? "영구 이용 정지"
+        : $"{ban.BannedUntil.Value.ToLocalTime():yyyy-MM-dd HH:mm}까지 이용 정지";
+    ShowPopup("이용이 제한된 계정입니다", $"{period}\n{ban.BanMessage}");
+}
+```

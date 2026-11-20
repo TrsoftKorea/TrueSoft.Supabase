@@ -24,6 +24,29 @@ if (r.IsSuccess)
 |--------|------|
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 없거나 호스트가 아니거나 이미 시작·취소·만료되었습니다 |
 
+**실사용 예시**
+
+호스트가 시작 버튼을 누르면 수락한 인원을 확인한 뒤 알리고 게임에 들어갑니다.
+
+```csharp
+public async void OnClickStart(MatchLobbySummary lobby)
+{
+    int accepted = lobby.Members.Count(m => m.Status == MatchLobbyMemberState.Accepted);   // 호스트 포함
+    if (accepted < 2) { ShowToast("함께할 플레이어가 아직 없습니다"); return; }
+
+    var result = await Supabase.StartMatchLobbyAsync(lobby.LobbyId);
+    if (result.IsSuccess) { EnterMatch(lobby.SessionId); return; }
+
+    if (result.Reason == SupabaseReason.MatchLobbyNotOpen)
+    {
+        ShowToast("만료되었거나 이미 닫힌 방입니다");
+        CloseWaitingRoom();
+        return;
+    }
+    ShowToast("시작하지 못했습니다");
+}
+```
+
 ::: warning 시작하면 되돌릴 수 없습니다
 시작한 뒤에는 [로비 취소](/guide/match-lobby/cancel)가 `MatchLobbyNotOpen`으로 실패합니다. 시작된 로비를 닫으려면 호스트가 [로비 나가기](/guide/match-lobby/leave)를 부르세요.
 :::

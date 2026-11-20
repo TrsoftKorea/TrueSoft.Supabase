@@ -46,3 +46,22 @@ if (result.IsSuccess)
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
+
+**실사용 예시**
+
+순위 화면을 열 때 회차와 남은 시간을 띄우고, 끝난 리더보드면 도전 버튼을 막습니다.
+
+```csharp
+public async void OnOpenArenaRanking()
+{
+    var result = await Supabase.GetLeaderboardAsync<ArenaLeaderboard>();
+    if (!result.IsSuccess) { ShowToast("순위표를 불러오지 못했습니다"); return; }
+
+    var t = result.Data;
+    seasonLabel.text = $"{t.DisplayName} {t.RotationCount}회차";
+    challengeButton.interactable = !t.IsEnded;
+
+    if (t.RotationTimeLeft.HasValue)   // 받은 뒤로는 화면이 직접 줄여 나갑니다
+        StartCountdown(t.RotationTimeLeft.Value, onZero: OnOpenArenaRanking);
+}
+```

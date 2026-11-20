@@ -26,6 +26,31 @@ if (r.IsSuccess)
 | `SupabaseReason.FriendRequestNotFound` | 해당 요청이 없거나 본인이 받는 쪽이 아닙니다 |
 | `SupabaseReason.FriendRequestNotPending` | 이미 처리된 요청입니다 |
 
+**실사용 예시**
+
+받은 요청 창의 수락·거절 버튼에서 부르고, 이미 처리된 요청이면 줄만 지웁니다.
+
+```csharp
+public async void OnClickRespond(FriendRequestSummary request, bool accept)
+{
+    var result = await Supabase.RespondFriendRequestAsync(request.RequestId, accept);
+    if (result.IsSuccess)
+    {
+        RemoveFromRequestList(request);
+        if (accept) { ShowToast($"{request.Name}님과 친구가 되었습니다"); RefreshFriendList(); }
+        return;
+    }
+
+    if (result.Reason == SupabaseReason.FriendRequestNotPending || result.Reason == SupabaseReason.FriendRequestNotFound)
+    {
+        ShowToast("상대가 취소했거나 이미 처리된 요청입니다");
+        RemoveFromRequestList(request);
+        return;
+    }
+    ShowToast("응답하지 못했습니다");
+}
+```
+
 ::: info 화면을 갱신하는 시점
 호출이 성공하면 요청은 그 자리에서 목록에서 빼면 됩니다. 수락했으면 [친구 목록](/guide/friend/list)을 다시 불러 화면을 맞춥니다.
 :::

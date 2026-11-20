@@ -11,7 +11,7 @@ namespace TrueBase.Core.Data
     /// <para>주의: 기본값 인덱서는 정적 타입이 <see cref="AutoDict{TKey,TValue}"/>일 때만 적용됩니다.
     /// 세이브 필드·프로퍼티를 모두 <c>AutoDict&lt;TKey,TValue&gt;</c>로 선언하세요.</para>
     /// </summary>
-    public class AutoDict<TKey, TValue> : Dictionary<TKey, TValue>, IAutoDefaultable
+    public class AutoDict<TKey, TValue> : Dictionary<TKey, TValue>, IAutoDefaultable, IContentComparable
     {
         [JsonIgnore] private TValue _default;
         // null이 아니면 TValue가 참조 타입([AutoDefault]로 주입됨) → 읽을 때마다 이 인자로 새 인스턴스를 생성(aliasing 방지).
@@ -52,6 +52,58 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 키가 단순 값일 때만 처리한다(키를 JSON 글이 아니라 키 자체로 찾으므로).
+        //  · 값도 단순 값: 개수와 키마다 값이 같으면 같다. 항목 순서만 다른 것은 같다고 본다.
+        //  · 값이 묶음(참조 타입): JSON 비교와 같은 규칙 — 기본값과 같은 항목은 없는 것으로 보고, 나머지는 값의 JSON 을 맞춘다.
+        //    문자열·정렬 사전을 만들지 않고 재사용 버퍼로 맞춰 본다. 양쪽 기본값이 서로 다르면 JSON 비교로 넘긴다.
+        bool IContentComparable.TryContentEquals(object other, out bool equal)
+        {
+            equal = false;
+            if (!PlainCompare<TKey>.Is)
+                return false;
+
+            if (PlainCompare<TValue>.Is)
+            {
+                if (other is not Dictionary<TKey, TValue> o)
+                    return false;
+                if (Count != o.Count)
+                    return true;
+
+                var cmp = EqualityComparer<TValue>.Default;
+                foreach (var pair in (Dictionary<TKey, TValue>)this)
+                    if (!o.TryGetValue(pair.Key, out var value) || !cmp.Equals(pair.Value, value))
+                        return true;
+
+                equal = true;
+                return true;
+            }
+
+            if (!AutoDefaultConvert.IsReferenceKind(typeof(TValue)) || other is not AutoDict<TKey, TValue> b)
+                return false;
+
+            var defaultValue = FreshDefault();
+            if (!DataSchema.JsonValueEquals(defaultValue, b.FreshDefault()))
+                return false;
+
+            foreach (var pair in (Dictionary<TKey, TValue>)this)
+            {
+                var compareTo = b.TryGetValue(pair.Key, out var value) ? (object)value : defaultValue;
+                if (!DataSchema.JsonValueEquals(pair.Value, compareTo))
+                    return true;
+            }
+
+            foreach (var pair in (Dictionary<TKey, TValue>)b)
+            {
+                if (ContainsKey(pair.Key))
+                    continue;
+                if (!DataSchema.JsonValueEquals(pair.Value, defaultValue))
+                    return true;
+            }
+
+            equal = true;
+            return true;
+        }
 
         // 서버에 없거나 값이 기본값인 키를 fallback에서 채운다. 서버의 "비기본값"은 유지한다.
         void IAutoDefaultable.FillMissingFrom(object other)

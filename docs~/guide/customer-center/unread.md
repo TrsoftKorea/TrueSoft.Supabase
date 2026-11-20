@@ -14,3 +14,19 @@ supportBadge.SetActive(unread.IsSuccess && unread.Data > 0);
 **반환**
 
 `.Data`는 새 답변이 있는 문의 수입니다.
+
+**실사용 예시**
+
+로비 화면이 열릴 때 고객센터 버튼에 새 답변 수를 붙입니다.
+
+```csharp
+async void OnEnable()
+{
+    supportBadge.SetActive(false);
+    var unread = await Supabase.GetCustomerCenterUnreadCountAsync();
+    if (!unread.IsSuccess) return;   // 실패하면 배지를 숨긴 채 둡니다
+
+    supportBadge.SetActive(unread.Data > 0);
+    supportBadgeLabel.text = unread.Data.ToString();
+}
+```

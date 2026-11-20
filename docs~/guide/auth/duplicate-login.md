@@ -17,10 +17,33 @@ void OnDuplicateLogin()
 }
 ```
 
-::: info 감지 주기
-60초 주기로 서버와 세션 토큰을 비교해 감지하며, 주기는 `SupabaseSettings`의 **중복 감지 폴링 주기**에서 조정합니다. 같은 요청이 운영 콘솔 대시보드의 동시접속자 집계에도 쓰입니다. 주기를 0으로 두면 중복 감지만 꺼지고 접속 확인은 2분마다 계속 보냅니다.
+**실사용 예시**
+
+다른 기기에서 로그인되면 안내 팝업을 띄워 타이틀로 돌려보내고, 그 사이 실패한 호출은 따로 알리지 않습니다.
+
+```csharp
+void OnDuplicateLogin()
+{
+    ShowPopup("다른 기기에서 로그인되어 접속을 종료합니다", onConfirm: async () =>
+    {
+        await Supabase.SignOutFullyAsync();
+        SceneManager.LoadScene("Title");
+    });
+}
+
+public async void OnOpenMailbox()
+{
+    var result = await Supabase.GetMailsAsync();
+    if (result.Reason == SupabaseReason.DuplicateLogin) return;   // 안내는 위 이벤트가 띄웁니다
+    if (!result.IsSuccess) { ShowToast("우편을 불러오지 못했습니다"); return; }
+    RenderMailList(result.Data);
+}
+```
+
+::: info 감지 시점
+SDK 가 데이터를 읽거나 쓸 때마다 서버가 그 요청이 지금 로그인한 기기에서 왔는지 확인합니다. 따로 확인 요청을 보내지 않으므로 요청 수는 늘지 않습니다. 이와 별도로 60초마다 접속 확인을 보내고 앱으로 돌아올 때도 확인하므로, 아무것도 읽거나 쓰지 않는 동안에도 감지됩니다. 접속 확인은 운영 콘솔 대시보드의 동시접속자 집계에도 쓰이고, 세이브 저장이 성공하면 같은 일을 한 것이라 그 뒤 60초 동안은 보내지 않습니다. 로그인 직후 이 기기가 등록되기 전의 잠깐은 서버가 가를 수 없어 쓰기 전에 따로 확인합니다.
 :::
 
-::: info 저장·수령 같은 쓰기는 바로 막습니다
-데이터를 바꾸는 호출은 보내기 전에 한 번 더 확인해 `SupabaseReason.DuplicateLogin`으로 실패합니다. 우편 목록·순위 같은 조회는 이 확인을 하지 않아, 다른 기기에서 로그인한 뒤에도 다음 주기 확인까지 성공할 수 있습니다.
+::: info 감지된 뒤의 호출
+다른 기기에서 로그인한 뒤에 데이터를 읽거나 쓰면 서버가 거절해 `SupabaseReason.DuplicateLogin`으로 실패하고 `OnDuplicateLoginDetected`가 발행됩니다. 세이브 저장·우편 받기 같은 쓰기뿐 아니라 우편 목록·순위 같은 조회도 같습니다. 자동 로그인으로 되살린 계정이 이미 다른 기기에서 쓰이고 있으면 로그인도 같은 사유로 실패합니다.
 :::

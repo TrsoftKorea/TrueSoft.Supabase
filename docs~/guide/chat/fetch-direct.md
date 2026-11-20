@@ -52,6 +52,30 @@ async Task OpenDirectChatAsync(string friendAccountId)
 |--------|------|
 | `SupabaseReason.FriendTargetRequired` | 대화 상대가 지정되지 않았습니다 |
 
+**실사용 예시**
+
+친구 목록에서 대화 버튼을 누르면 창을 열고, 창이 떠 있는 동안 5초마다 새 대화를 받습니다.
+
+```csharp
+public void OnClickTalk(FriendSummary friend)
+{
+    _friendId = friend.AccountId;
+    _lastId = 0;   // 상대가 바뀌면 최근 대화부터 다시 받습니다
+    directChatPanel.SetActive(true);
+    InvokeRepeating(nameof(PollDirectChat), 0f, 5f);
+}
+
+async void PollDirectChat()
+{
+    var result = await Supabase.GetDirectChatAsync(_friendId, _lastId);
+    if (!result.IsSuccess) return;   // 다음 주기에 다시 받습니다
+
+    foreach (var m in result.Data) { AddBubble(m); _lastId = m.Id; }
+}
+
+public void OnClickCloseTalk() { CancelInvoke(nameof(PollDirectChat)); directChatPanel.SetActive(false); }
+```
+
 ::: tip 친구가 아니어도 조회는 됩니다
 이전에 친구였다가 삭제된 사이라도 지난 대화는 조회할 수 있습니다. 새로 보내려면 다시 친구여야 합니다.
 :::

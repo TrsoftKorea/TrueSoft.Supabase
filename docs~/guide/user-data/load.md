@@ -27,6 +27,27 @@ await Supabase.LoadUserSaveAsync();              // 2. 데이터 로드
 |---------|------|------|
 | `IsNewUser` | `bool` | 신규 플레이어의 최초 로드와 운영 콘솔에서 초기화한 뒤의 첫 로드에서만 `true`. 값은 호출에 묶여 불변이며, 판정 조건과 활용은 아래 [신규 플레이어 후처리](#new-user) |
 
+**실사용 예시**
+
+시작 버튼에서 로그인한 다음 세이브를 읽고, 신규 플레이어면 튜토리얼로 보냅니다.
+
+```csharp
+public async void OnClickGuestStart()
+{
+    var signIn = await Supabase.SignInAnonymouslyAsync();
+    if (!signIn.IsSuccess) { ShowPopup("로그인하지 못했습니다"); return; }
+
+    var load = await Supabase.LoadUserSaveAsync();
+    if (!load.IsSuccess)
+    {
+        ShowRetryPopup("데이터를 불러오지 못했습니다", OnClickGuestStart);   // 로드 전에는 저장도 막혀 있습니다
+        return;
+    }
+
+    LoadScene(load.IsNewUser ? "Tutorial" : "Lobby");
+}
+```
+
 ## 신규 플레이어 후처리 {#new-user}
 
 `LoadUserSaveAsync()`는 `SupabaseLoadResult`를 반환합니다. 그 `IsNewUser`로 신규 플레이어를 분기합니다. **DB에 본인 행이 없던 신규 플레이어의 최초 로드**에서만 `true`이고, 기존 플레이어 로드나 재로그인 시에는 `false`입니다. 값이 호출에 묶여 불변이므로, 이후 재로드해도 이 결과의 `IsNewUser`는 바뀌지 않습니다.

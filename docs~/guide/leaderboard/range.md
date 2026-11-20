@@ -47,6 +47,26 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
 
+**실사용 예시**
+
+순위표를 끝까지 내리면 다음 100위를 이어 붙입니다.
+
+```csharp
+private int _loadedCount;
+
+public async void OnRankListReachedBottom()
+{
+    int start = _loadedCount + 1;
+    var result = await Supabase.GetRanksAsync<ArenaLeaderboard>(start, start + 99);
+    if (!result.IsSuccess) { ShowToast("순위를 불러오지 못했습니다"); return; }
+    if (result.Data.Count == 0) return;   // 마지막 순위까지 다 받았습니다
+
+    foreach (var e in result.Data)
+        AddRankRow(e.Rank, e.DisplayName, e.Score);
+    _loadedCount += result.Data.Count;
+}
+```
+
 ::: tip 종료된 리더보드도 조회됩니다
 기록은 막히지만 순위 조회는 계속 됩니다. 시즌이 끝난 뒤 최종 순위를 보여줄 때 그대로 사용하세요.
 :::

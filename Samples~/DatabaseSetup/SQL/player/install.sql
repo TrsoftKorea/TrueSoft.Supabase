@@ -1281,7 +1281,7 @@ using (account_id = auth.uid());
 
 grant select, insert, update, delete on public.user_sessions to authenticated;
 
--- 동시접속자 집계용 생존 신호. SDK 의 중복 로그인 확인이 주기마다 ts_session_heartbeat 로 찍는다.
+-- 동시접속자 집계용 생존 신호. SDK 의 접속 신호가 ts_session_heartbeat 로, 세이브 저장이 4절 ts_user_data_session_guard 로 찍는다.
 alter table public.user_sessions add column if not exists last_seen_at      timestamptz;
 alter table public.user_sessions add column if not exists heartbeat_seconds integer;
 comment on column public.user_sessions.last_seen_at is '마지막 생존 신호 시각. 동시접속자 집계(ts_ccu_snapshot)가 본다.';
@@ -1409,7 +1409,7 @@ end;
 $$;
 
 comment on function public.ts_record_daily_activity(uuid) is
-  '그 계정의 오늘(게임 시간대 날짜) 첫 접속을 일별 접속 기록에 남긴다. 로그인(ts_after_sign_in)·접속 신호(ts_session_heartbeat)가 부른다.';
+  '그 계정의 오늘(게임 시간대 날짜) 첫 접속을 일별 접속 기록에 남긴다. 로그인(ts_after_sign_in)·접속 신호(ts_session_heartbeat)·세이브 저장(ts_user_data_session_guard)이 부른다.';
 revoke all on function public.ts_record_daily_activity(uuid) from public, anon, authenticated;
 
 -- 생존 신호 + 현재 세션 토큰 조회를 요청 하나로. 행이 없으면(로그아웃 직후 등) null.
@@ -1949,6 +1949,74 @@ comment on function public.ts_update_last_activity_at() is
   'user_data 테이블 UPDATE 시 user_profiles.last_activity_at을 갱신합니다.';
 
 -- ---------------------------------------------------------------------------
+-- ts_user_data_session_guard — 다른 기기에서 로그인된 기기의 저장을 거절
+-- ---------------------------------------------------------------------------
+-- SDK 는 저장(PATCH·ts_ensure_my_row)에 이 기기의 세션 토큰을 x-session-token 머리글로 싣는다.
+-- user_sessions 의 토큰과 다르면 'duplicate_login_detected' 로 거절하고, SDK 는 이 글을 중복 로그인으로 처리한다.
+-- 저장마다 user_sessions 를 따로 읽던 확인 요청이 전체 요청의 4할이었다(데빌 슬레이어 2026-11-17~19).
+-- 머리글이 없으면(옛 빌드·운영 콘솔·서버 함수) 지금처럼 통과하고, 서버 토큰이 비어 있어도 통과한다.
+-- 토큰이 맞으면 접속 신호(2절 ts_session_heartbeat)가 하던 기록도 대신 남기고, SDK 는 저장이 성공하면 신호를 미룬다 —
+-- 저장이 이어지는 동안에는 신호가 나가지 않는다. 기록은 신호와 같게 2분에 한 번, 주기는 SDK 신호 주기(60초)로 적는다.
+-- 기록이 실패해도 저장은 막지 않는다.
+-- 새 저장 표를 만들면 이 트리거도 함께 건다.
+create or replace function public.ts_user_data_session_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_sent text;
+  v_server text;
+  v_last timestamptz;
+begin
+  begin
+    v_sent := nullif(btrim(nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-session-token'), '');
+  exception when others then
+    v_sent := null;
+  end;
+
+  if v_sent is null or new.account_id is null then
+    return new;
+  end if;
+
+  select s.session_token::text, s.last_seen_at into v_server, v_last
+  from public.user_sessions s
+  where s.account_id = new.account_id;
+
+  if v_server is null then
+    return new;
+  end if;
+
+  if v_server <> lower(v_sent) then
+    raise exception 'duplicate_login_detected';
+  end if;
+
+  begin
+    update public.user_sessions
+       set last_seen_at = now(), heartbeat_seconds = 60
+     where account_id = new.account_id
+       and (last_seen_at is null
+            or last_seen_at < now() - interval '2 minutes'
+            or heartbeat_seconds is distinct from 60);
+
+    if v_last is null or (v_last at time zone public.ts_game_time_zone())::date < (now() at time zone public.ts_game_time_zone())::date then
+      perform public.ts_record_daily_activity(new.account_id);
+    end if;
+  exception when others then
+    null;
+  end;
+
+  return new;
+end;
+$$;
+
+comment on function public.ts_user_data_session_guard() is
+  'user_data 저장 전 트리거: 요청의 x-session-token 이 user_sessions 토큰과 다르면 duplicate_login_detected 로 거절합니다.';
+
+revoke all on function public.ts_user_data_session_guard() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- ts_ensure_my_row — 유저 세이브 행 보장 RPC
 -- ---------------------------------------------------------------------------
 -- 지정 테이블에 본인 행이 없으면 INSERT, 있으면 user_id·updated_at만 갱신합니다.
@@ -2061,6 +2129,11 @@ drop trigger if exists update_last_activity_at on public.user_data;
 create trigger update_last_activity_at
   after update on public.user_data
   for each row execute function public.ts_update_last_activity_at();
+
+drop trigger if exists session_guard on public.user_data;
+create trigger session_guard
+  before insert or update on public.user_data
+  for each row execute function public.ts_user_data_session_guard();
 
 -- ---------------------------------------------------------------------------
 -- ts_schema_type_ok · ts_schema_default_ok — 필드 추가·수정이 DB 명령에 그대로 붙이는 칸 종류·기본값 검사
@@ -3309,9 +3382,74 @@ revoke all on function public.ts_view_mail_for_user(uuid) from public;
 grant execute on function public.ts_view_mail_for_user(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- RPC: 단일 메일 보상 일괄 수령 — 반환 jsonb 배열 [{index,key,count}, ...] (빈 배열 = no-op)
+-- 우편 보상 서버 지급 — 받기와 같은 처리 안에서 세이브(user_data)의 같은 이름 숫자 칸에 수량을 더한다
 -- ---------------------------------------------------------------------------
-create or replace function public.ts_claim_mail_items(p_mail_id uuid)
+-- 받음 표시와 지급이 한 번에 일어나 "받았는데 지급이 안 됨"(지급 전에 앱이 꺼짐)·두 번 지급이 없다.
+-- p_client_keys 는 게임이 처리기로 직접 지급하겠다는 키 — 그 키는 건드리지 않고 granted=false 로 돌려준다.
+-- 처리기도 없고 숫자 칸도 아닌 키가 하나라도 있으면 mail_item_handler_missing 으로 받기 전체를 되돌린다(받음 표시도 안 남는다).
+-- 예약 칸(id·user_id·account_id·server_id·created_at·updated_at·last_activity_at)에는 더하지 않는다.
+-- 받기 함수 안에서만 부른다 — 클라이언트에 열지 않는다.
+create or replace function public.ts_mail_grant_items(p_items jsonb, p_client_keys text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid     uuid := auth.uid();
+  e         jsonb;
+  v_key     text;
+  v_rows    int;
+  v_granted boolean;
+  v_out     jsonb := '[]'::jsonb;
+begin
+  for e in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
+  loop
+    v_key := e->>'key';
+    v_granted := false;
+
+    if not (v_key = any(coalesce(p_client_keys, '{}'::text[]))) then
+      if v_key !~ '^[A-Za-z_][A-Za-z0-9_]*$'
+         or v_key in ('id', 'user_id', 'account_id', 'server_id', 'created_at', 'updated_at', 'last_activity_at')
+         or not exists (
+           select 1 from pg_attribute a
+            where a.attrelid = 'public.user_data'::regclass
+              and a.attname = v_key and a.attnum > 0 and not a.attisdropped
+              and a.atttypid in ('int2'::regtype, 'int4'::regtype, 'int8'::regtype,
+                                 'numeric'::regtype, 'float4'::regtype, 'float8'::regtype)) then
+        raise exception 'mail_item_handler_missing: %', v_key;
+      end if;
+
+      execute format('update public.user_data set %1$I = coalesce(%1$I, 0) + $1 where account_id = $2', v_key)
+        using (e->>'count')::int, v_uid;
+      get diagnostics v_rows = row_count;
+      -- 세이브를 한 번도 로드하지 않아 줄이 없다 — 받기를 되돌리고, 로드한 뒤 다시 받게 한다.
+      if v_rows = 0 then
+        raise exception 'user_save_not_ready';
+      end if;
+      v_granted := true;
+    end if;
+
+    v_out := v_out || jsonb_build_array(e || jsonb_build_object('granted', v_granted));
+  end loop;
+
+  return v_out;
+end;
+$$;
+
+comment on function public.ts_mail_grant_items(jsonb, text[]) is
+  '우편 받기 함수 전용: 처리기 키가 아닌 보상을 user_data 의 같은 이름 숫자 칸에 더하고 granted 표시를 붙여 돌려준다.';
+
+revoke all on function public.ts_mail_grant_items(jsonb, text[]) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- RPC: 단일 메일 보상 일괄 수령 — 반환 jsonb 배열 [{index,key,count[,granted]}, ...] (빈 배열 = no-op)
+-- ---------------------------------------------------------------------------
+-- p_client_keys 가 null 이면(옛 빌드) 받음 표시만 하고 지급은 게임 처리기에 맡긴다. null 이 아니면 그 키를 뺀 보상은
+-- 서버가 지급한다(ts_mail_grant_items).
+drop function if exists public.ts_claim_mail_items(uuid);
+
+create or replace function public.ts_claim_mail_items(p_mail_id uuid, p_client_keys text[] default null)
 returns jsonb
 language plpgsql
 security definer
@@ -3394,22 +3532,28 @@ begin
   into items_out
   from jsonb_array_elements(m.items) with ordinality as t(e, ord);
 
+  if p_client_keys is not null then
+    items_out := public.ts_mail_grant_items(items_out, p_client_keys);
+  end if;
+
   return items_out;
 end;
 $$;
 
-comment on function public.ts_claim_mail_items(uuid) is
-  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). items 비면 [] 반환(no-op). SECURITY DEFINER.';
+comment on function public.ts_claim_mail_items(uuid, text[]) is
+  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). p_client_keys 가 있으면 그 밖의 보상은 세이브 칸에 서버가 지급. items 비면 [] 반환(no-op). SECURITY DEFINER.';
 
-revoke all on function public.ts_claim_mail_items(uuid) from public;
-grant execute on function public.ts_claim_mail_items(uuid) to authenticated;
+revoke all on function public.ts_claim_mail_items(uuid, text[]) from public, anon, authenticated;
+grant execute on function public.ts_claim_mail_items(uuid, text[]) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- RPC: 우편함 전체 일괄 수령 — 반환 [{mail_id, items:[{index,key,count},...]}, ...]
+-- RPC: 우편함 전체 일괄 수령 — 반환 [{mail_id, items:[{index,key,count[,granted]},...]}, ...]
 -- ---------------------------------------------------------------------------
+-- p_client_keys 는 ts_claim_mail_items 와 같다. 한 우편이라도 지급할 수 없는 키가 있으면 전체를 되돌린다.
 drop function if exists public.ts_claim_all_mail_items();
+drop function if exists public.ts_claim_all_mail_items(text);
 
-create or replace function public.ts_claim_all_mail_items(p_category text default null)
+create or replace function public.ts_claim_all_mail_items(p_category text default null, p_client_keys text[] default null)
 returns jsonb
 language plpgsql
 security definer
@@ -3484,6 +3628,10 @@ begin
     into items_out
     from jsonb_array_elements(r.items) with ordinality as t(e, ord);
 
+    if p_client_keys is not null then
+      items_out := public.ts_mail_grant_items(items_out, p_client_keys);
+    end if;
+
     one_mail := jsonb_build_object('mail_id', r.id::text, 'items', items_out);
     acc := acc || jsonb_build_array(one_mail);
   end loop;
@@ -3492,11 +3640,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_claim_all_mail_items(text) is
-  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. SECURITY DEFINER.';
+comment on function public.ts_claim_all_mail_items(text, text[]) is
+  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. p_client_keys 가 있으면 그 밖의 보상은 세이브 칸에 서버가 지급. SECURITY DEFINER.';
 
-revoke all on function public.ts_claim_all_mail_items(text) from public;
-grant execute on function public.ts_claim_all_mail_items(text) to authenticated;
+revoke all on function public.ts_claim_all_mail_items(text, text[]) from public, anon, authenticated;
+grant execute on function public.ts_claim_all_mail_items(text, text[]) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC: 플레이어 소프트 삭제 (미수령 보상 있으면 거부)
@@ -5781,7 +5929,36 @@ declare
   v_hits     int;
   v_until    timestamptz;
   v_bucket   timestamptz;
+  v_sent     text;
+  v_server   text;
 begin
+  -- 중복 로그인: SDK 는 데이터 요청마다 이 기기의 세션 토큰을 x-session-token 머리글로 싣는다. user_sessions 의 토큰과
+  -- 다르면(다른 기기에서 로그인함) 읽기·쓰기를 가리지 않고 거절한다 — 앱이 따로 묻지 않아도 서버와 주고받는 순간 잡힌다.
+  -- 머리글이 없으면(옛 빌드·운영 콘솔·서버 함수) 지금처럼 통과하고, 서버 토큰이 비어 있어도 통과한다. 토큰을 등록·대조하는
+  -- user_sessions 와 접속 신호는 그 자리에서 직접 맞춰 보므로 빼고, 결제 지급 기록은 위 요청 제한과 같은 이유로 뺀다.
+  -- 제한 설정과 상관없이 늘 돈다. 이 확인이 고장 나면 통과시킨다.
+  begin
+    v_sent := nullif(btrim(nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-session-token'), '');
+    if v_sent is not null
+       and coalesce(nullif(current_setting('role', true), 'none'), '') = 'authenticated'
+       and coalesce(current_setting('request.path', true), '') not in
+           ('/user_sessions', '/rpc/ts_session_heartbeat', '/rpc/ts_mark_purchase_granted') then
+      select s.session_token::text into v_server from public.user_sessions s where s.account_id = auth.uid();
+    end if;
+  exception when others then
+    v_server := null;
+  end;
+
+  if v_server is not null and v_server <> lower(v_sent) then
+    raise sqlstate 'PGRST' using
+      message = json_build_object(
+        'code', 'duplicate_login_detected',
+        'message', 'duplicate_login_detected',
+        'details', null,
+        'hint', null)::text,
+      detail = json_build_object('status', 409, 'headers', json_build_object())::text;
+  end if;
+
   begin
     select * into v_settings from public.request_limit_settings where id = 1;
     if not found or not v_settings.enabled then return; end if;
@@ -5861,7 +6038,7 @@ end;
 $$;
 
 comment on function public.ts_request_limit_check() is
-  '요청 제한 사전 검사(pgrst.db_pre_request). 꺼져 있으면 아무것도 안 한다. anon·authenticated·service_role 실행 권한 필수.';
+  '데이터 요청 앞 검사(pgrst.db_pre_request): 다른 기기 로그인 거절(x-session-token 머리글이 있을 때) + 요청 제한(꺼져 있으면 건너뜀). anon·authenticated·service_role 실행 권한 필수.';
 comment on function public.ts_request_limit_ping() is
   '엣지 함수가 요청 제한 검사를 태우려고 부르는 빈 함수.';
 
@@ -16107,8 +16284,8 @@ grant execute on function public.ts_request_withdrawal(integer)            to au
 grant execute on function public.ts_transfer_my_server(text, text)         to authenticated;
 grant execute on function public.ts_delete_my_anon_recovery_tokens()       to authenticated;
 grant execute on function public.ts_view_mail_for_user(uuid)               to authenticated;
-grant execute on function public.ts_claim_mail_items(uuid)                 to authenticated;
-grant execute on function public.ts_claim_all_mail_items(text)             to authenticated;
+grant execute on function public.ts_claim_mail_items(uuid, text[])         to authenticated;
+grant execute on function public.ts_claim_all_mail_items(text, text[])     to authenticated;
 grant execute on function public.ts_delete_mail_for_user(uuid)             to authenticated;
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;
 grant execute on function public.ts_mail_inbox_counts()                    to authenticated;
@@ -16117,7 +16294,7 @@ grant execute on function public.ts_mail_client_settings()                 to au
 -- 본인 우편 RPC는 auth.uid() 기반이라 service_role로는 동작하지 않는다.
 -- 프로젝트 기본 권한 차이와 무관하게 같은 상태가 되도록 명시적으로 회수한다.
 revoke execute on function public.ts_view_mail_for_user(uuid)   from service_role;
-revoke execute on function public.ts_claim_mail_items(uuid)     from service_role;
+revoke execute on function public.ts_claim_mail_items(uuid, text[]) from service_role;
 revoke execute on function public.ts_delete_mail_for_user(uuid) from service_role;
 revoke execute on function public.ts_mail_inbox_counts()        from service_role;
 

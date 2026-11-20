@@ -46,3 +46,23 @@ if (page.Data.Count > 0)
 | `Status` | `MatchRecordStatus` | `Verified`·`Pending`·`Mismatch`·`Solo`. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
 | `OpponentAccountId` | `string` | 상대 계정 ID. 상대 없는 판이면 `null` |
 | `ReportedAt` | `DateTimeOffset` | 신고한 시각 |
+
+**실사용 예시**
+
+전적 창을 열거나 목록 끝까지 내리면 다음 쪽을 이어 받고, 무효가 된 판은 따로 표시합니다.
+
+```csharp
+public async void OnHistoryScrollReachedEnd()
+{
+    var before = HistoryList.LastReportedAt;   // 처음 열 때는 null
+    var result = await Supabase.GetMatchHistoryAsync("arena_1v1", limit: 20, before: before);
+    if (!result.IsSuccess) { ShowToast("전적을 불러오지 못했습니다"); return; }
+    if (result.Data.Count == 0) { HistoryList.SetNoMore(); return; }
+
+    foreach (var record in result.Data)
+    {
+        var label = record.Status == MatchRecordStatus.Mismatch ? "무효" : record.IsWin ? "승" : "패";
+        HistoryList.AddRow(label, record.Score, record.ReportedAt);
+    }
+}
+```

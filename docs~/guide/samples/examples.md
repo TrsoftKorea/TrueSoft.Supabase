@@ -125,7 +125,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 | `8` | 첫 삭제 가능 우편 삭제 |
 
 ::: tip
-키 `5`·`6`의 보상 수령은 `Demo Item Key`와 일치하는 [아이템 핸들러](/guide/mailbox/item-handler)가 등록돼 있을 때만 성공합니다. 샘플은 `Awake`에서 로그만 남기는 데모 핸들러를 자동 등록합니다.
+키 `5`·`6`의 보상 수령은 보상 키가 세이브의 숫자 칸 이름이거나 [아이템 핸들러](/guide/mailbox/item-handler)가 등록된 키일 때 성공합니다. 샘플은 `Awake`에서 `Demo Item Key`에 로그만 남기는 데모 핸들러를 자동 등록합니다.
 :::
 
 ## SampleFriend

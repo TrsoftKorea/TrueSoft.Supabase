@@ -20,3 +20,24 @@ Supabase.RequestSave();   // 완료를 기다리지 않음
 |--------|------|
 | `SupabaseReason.UserSaveNoChanges` | 변경분이 없어 요청하지 않았습니다. 오류가 아닙니다 |
 | `SupabaseReason.UserSaveNotReady` | 아직 [로드](/guide/user-data/load)하지 않았습니다. 로드 전 값이 서버 값을 덮지 않도록 보내지 않습니다 |
+
+**실사용 예시**
+
+구매처럼 놓치면 아까운 변경 직후에 부르고, 결과는 기다리지 않습니다.
+
+```csharp
+public void OnPurchaseCompleted(string itemId, int price)
+{
+    PlayerSave.Gems -= price;
+    PlayerSave.Inventory.Add(itemId);
+
+    var result = Supabase.RequestSave();   // 자동 저장 쿨다운을 기다리지 않습니다
+    if (result.Reason == SupabaseReason.UserSaveNotReady)
+        Debug.LogWarning("로드 전에 세이브 값을 바꿨습니다");   // 전송 실패는 저장 실패 알림으로 받습니다
+}
+
+void OnApplicationPause(bool paused)
+{
+    if (paused) Supabase.RequestSave();   // 백그라운드로 갈 때
+}
+```

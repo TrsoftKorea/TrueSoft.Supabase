@@ -174,6 +174,41 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
+        /// 숫자 칸 하나에 <paramref name="amount"/>를 더합니다. 서버가 이미 더한 우편 보상을 로컬 세이브에 맞출 때 씁니다.
+        /// 그 이름의 칸이 없거나 숫자 칸이 아니면 아무것도 하지 않고 false 를 돌려줍니다.
+        /// </summary>
+        internal static bool TryAddToNumericColumn<T>(T row, string column, long amount)
+        {
+            if (row == null || string.IsNullOrEmpty(column)) return false;
+
+            foreach (var m in GetMappedMembers(typeof(T)))
+            {
+                if (!string.Equals(ResolveColumnName(m), column, StringComparison.Ordinal))
+                    continue;
+
+                var type = m is FieldInfo f ? f.FieldType : ((PropertyInfo)m).PropertyType;
+                var t = Nullable.GetUnderlyingType(type) ?? type;
+                var current = GetValue(m, row);
+
+                object next;
+                if (t == typeof(int)) next = (int)((current is int i ? i : 0) + amount);
+                else if (t == typeof(long)) next = (current is long l ? l : 0L) + amount;
+                else if (t == typeof(short)) next = (short)((current is short s ? s : (short)0) + amount);
+                else if (t == typeof(float)) next = (current is float fl ? fl : 0f) + amount;
+                else if (t == typeof(double)) next = (current is double d ? d : 0d) + amount;
+                else if (t == typeof(decimal)) next = (current is decimal dc ? dc : 0m) + amount;
+                else return false;
+
+                if (m is FieldInfo fi) fi.SetValue(row, next);
+                else if (m is PropertyInfo pi && pi.CanWrite) pi.SetValue(row, next);
+                else return false;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// 컬럼명 → 값 사전을 <see cref="DataColumnAttribute"/> 멤버에 채웁니다(<see cref="BuildRow{T}"/>의 역방향).
         /// 사전에 없는 컬럼은 건드리지 않고, 타입이 다르면 <see cref="Convert.ChangeType(object, Type)"/>로 맞춥니다.
         /// </summary>
@@ -306,6 +341,11 @@ namespace TrueBase.Core.Data
             if (ReferenceEquals(a, b))
                 return false;
 
+            // AutoList·AutoDict 가 JSON 을 거치지 않고 내용을 비교할 수 있으면 그 결과를 쓴다(원소마다 박싱·문자열이 안 생긴다).
+            // 판정은 아래 JSON 비교와 같고, 사전은 항목 순서만 다른 것을 같다고 본다. 처리할 수 없는 모양이면 아래로 넘어간다.
+            if (a is IContentComparable comparable && comparable.TryContentEquals(b, out var sameContent))
+                return sameContent;
+
             // AutoDict/AutoDict2D(참조 타입 값)는 "기본값과 같은 항목=없는 것"으로 정규화한 뒤 비교합니다.
             // 조회만으로 자동 생성된, 아직 손대지 않은 항목이 변경으로 잡혀 불필요한 저장을 유발하지 않게 하기 위함입니다.
             // AutoList 계열·값 타입 등 대상이 아니면 false를 반환해 아래 전체 JSON 비교로 폴백합니다.
@@ -327,25 +367,49 @@ namespace TrueBase.Core.Data
 
         [ThreadStatic] private static StringBuilder _cmpSbA;
         [ThreadStatic] private static StringBuilder _cmpSbB;
+        [ThreadStatic] private static StringWriter _cmpWriterA;
+        [ThreadStatic] private static StringWriter _cmpWriterB;
+        [ThreadStatic] private static JsonSerializer _cmpSerializer;
+        [ThreadStatic] private static Func<JsonSerializerSettings> _cmpSerializerSettings;
 
         // JsonConvert.SerializeObject(a) == SerializeObject(b) 와 동일한 판정이지만,
         // 결과 문자열 2개를 새로 할당하지 않고 재사용 StringBuilder에 직렬화해 비교합니다.
-        // HasChanges가 빈번히 호출될 때 큰 JSON 문자열 할당으로 인한 GC 스파이크를 없앱니다.
-        private static bool JsonValueEquals(object a, object b)
+        // 직렬화기·쓰기 통로도 재사용한다 — 값 비교는 5초마다 칸·항목 수만큼 돌아 여기서 만드는 것이 그대로 쌓인다.
+        // 직렬화기는 JsonConvert.DefaultSettings 를 바꾸면 새로 만든다(CreateDefault 가 그 설정을 읽는다).
+        internal static bool JsonValueEquals(object a, object b)
         {
             var sbA = _cmpSbA ??= new StringBuilder(128);
             var sbB = _cmpSbB ??= new StringBuilder(128);
             sbA.Length = 0;
             sbB.Length = 0;
 
-            var serializer = JsonSerializer.CreateDefault();
-            using (var w = new StringWriter(sbA)) serializer.Serialize(w, a);
-            using (var w = new StringWriter(sbB)) serializer.Serialize(w, b);
+            var settings = JsonConvert.DefaultSettings;
+            if (_cmpSerializer == null || !ReferenceEquals(settings, _cmpSerializerSettings))
+            {
+                _cmpSerializer = JsonSerializer.CreateDefault();
+                _cmpSerializerSettings = settings;
+            }
+
+            var writerA = _cmpWriterA ??= new StringWriter(sbA);
+            var writerB = _cmpWriterB ??= new StringWriter(sbB);
+            _cmpSerializer.Serialize(writerA, a);
+            _cmpSerializer.Serialize(writerB, b);
 
             if (sbA.Length != sbB.Length) return false;
             for (int i = 0; i < sbA.Length; i++)
                 if (sbA[i] != sbB[i]) return false;
             return true;
+        }
+
+        /// <summary>
+        /// JSON 비교와 같은 판정을 박싱 없이 원소끼리 할 수 있는 타입인지. 정수·bool·char·string·열거형만이다 —
+        /// 실수(0 과 -0)·decimal(1.0 과 1.00)·날짜(Kind)는 값이 같아도 JSON 글이 달라 판정이 갈려 뺀다.
+        /// </summary>
+        internal static bool IsPlainCompareType(Type t)
+        {
+            if (t == typeof(string) || t.IsEnum) return true;
+            if (!t.IsPrimitive) return false;
+            return t != typeof(float) && t != typeof(double) && t != typeof(IntPtr) && t != typeof(UIntPtr);
         }
 
         /// <summary>
@@ -673,5 +737,22 @@ namespace TrueBase.Core.Data
                 _ => null
             };
         }
+    }
+
+    /// <summary>
+    /// 세이브 값 비교에서 JSON 을 거치지 않고 내용을 비교할 수 있는 컬렉션. 판정은 <see cref="DataSchema"/> 의 JSON 비교와 같아야 한다.
+    /// 그 모양을 처리할 수 없으면 false 를 돌려 JSON 비교로 넘긴다.
+    /// </summary>
+    internal interface IContentComparable
+    {
+        /// <param name="other">비교할 다른 쪽 값.</param>
+        /// <param name="equal">처리했을 때만 의미가 있다 — 내용이 같으면 true.</param>
+        bool TryContentEquals(object other, out bool equal);
+    }
+
+    /// <summary><see cref="DataSchema.IsPlainCompareType"/> 를 닫힌 타입마다 한 번만 계산해 둔다.</summary>
+    internal static class PlainCompare<T>
+    {
+        internal static readonly bool Is = DataSchema.IsPlainCompareType(typeof(T));
     }
 }

@@ -45,6 +45,9 @@ namespace TrueBase.Unity
         /// <summary>계정별 로컬 세션 토큰 저장 키 접두어. <c>PlayerPrefs</c> 키는 <c>{접두어}{account_id}</c> 입니다.</summary>
         internal const string SessionTokenPlayerPrefsKeyPrefix = "TrueBase.SessionToken.";
 
+        /// <summary>아직 서버에 등록하지 못한 이 기기의 세션 토큰 키 접두어. 등록에 성공하면 위 키로 옮기고 지웁니다.</summary>
+        internal const string SessionTokenPendingPlayerPrefsKeyPrefix = "TrueBase.SessionTokenPending.";
+
         private static SupabaseUnityBootstrap _bootstrap;
         private static SupabaseSession _currentSession;
         // 로그인이 조회한 내 프로필의 일회성 전달 슬롯. 세션 지속 캐시가 아니라 로그인→결과 구성 사이에만 값이 있고 ConsumePendingSignInProfile()가 소비 시 비운다.
@@ -65,8 +68,6 @@ namespace TrueBase.Unity
 
         private static Task _remoteConfigKeyPollTickTask;
 
-        private static float _duplicateSessionPollSeconds = 15f;
-        private static float _duplicateSessionActionCheckCooldownSeconds = 5f;
         private static float _withdrawalRequestDelayDays = 7f;
         private const string _withdrawalGuardFunctionName = "withdrawal-guard";
         private const string _withdrawalNowFunctionName = "withdrawal-now";
@@ -246,12 +247,6 @@ namespace TrueBase.Unity
         /// UI에서 팝업을 띄우세요.
         /// </summary>
         public static event Action OnDuplicateLoginDetected;
-
-        /// <summary><see cref="Config.SupabaseSettings.duplicateSessionPollSeconds"/>.</summary>
-        public static float DuplicateSessionPollSeconds => _duplicateSessionPollSeconds;
-
-        /// <summary><see cref="Config.SupabaseSettings.duplicateSessionActionCheckCooldownSeconds"/>.</summary>
-        public static float DuplicateSessionActionCheckCooldownSeconds => _duplicateSessionActionCheckCooldownSeconds;
 
         /// <summary><see cref="Config.SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
         public static float WithdrawalRequestDelayDays => _withdrawalRequestDelayDays;
@@ -2324,17 +2319,51 @@ namespace TrueBase.Unity
         /// 초기화 후 로그인 세션이 준비되었는지 확인합니다.
         /// 미로그인 상태면 실패를 반환하며, 자동 익명 로그인은 수행하지 않습니다.
         /// 데이터를 바꾸는 호출의 관문입니다 — 다른 기기에서 로그인했으면 <c>DuplicateLogin</c>으로 막습니다.
+        /// 다른 기기 로그인은 따로 묻지 않고 요청에 실은 이 기기의 세션 토큰으로 서버가 가립니다(<see cref="SessionTokenHttpClient"/>) —
+        /// 이 기기에 토큰이 아직 없을 때만 서버가 가를 수 없어 먼저 맞춰 봅니다(맞춰 보면서 토큰이 채워집니다).
         /// </summary>
         public static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionAsync() =>
             EnsureReadySessionCoreAsync(checkDuplicateLogin: true);
 
         /// <summary>
-        /// 데이터를 바꾸지 않는 조회의 관문입니다. <see cref="EnsureReadySessionAsync"/>와 같되 중복 로그인 확인 요청을 보내지 않습니다.
-        /// 다른 기기 로그인은 주기 확인(<c>duplicateSessionPollSeconds</c>)이나 다음 쓰기에서 잡힙니다.
-        /// 조회 전마다 확인하면 자주 부르는 조회의 요청이 두 배가 되는데, 잠깐 더 읽어도 잃는 것이 없기 때문입니다.
+        /// 데이터를 바꾸지 않는 조회의 관문입니다. <see cref="EnsureReadySessionAsync"/>와 같되 토큰이 없어도 먼저 맞춰 보지 않습니다 —
+        /// 잠깐 더 읽어도 잃는 것이 없습니다. 토큰이 있으면 조회도 서버가 가립니다.
         /// </summary>
         public static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionForReadAsync() =>
             EnsureReadySessionCoreAsync(checkDuplicateLogin: false);
+
+        /// <summary>세이브 저장의 관문입니다. 서버의 거절은 <see cref="AfterSave"/>가 중복 로그인으로 처리합니다.</summary>
+        private static Task<SupabaseResult<SupabaseSession>> EnsureReadySessionForSaveAsync() =>
+            EnsureReadySessionCoreAsync(checkDuplicateLogin: true);
+
+        /// <summary>이 기기의 세션 토큰. 없으면 null입니다.</summary>
+        internal static string LocalSessionTokenFor(string accountId)
+        {
+            if (string.IsNullOrWhiteSpace(accountId))
+                return null;
+
+            var token = PlayerPrefs.GetString(SessionTokenPlayerPrefsKeyPrefix + accountId, "");
+            return string.IsNullOrWhiteSpace(token) ? null : token.Trim();
+        }
+
+        /// <summary>
+        /// 저장 결과를 중복 로그인 감지에 반영합니다. 토큰을 실은 저장이 실제로 나가 성공했으면 서버가 토큰을 확인하고 접속 기록도 남긴 것이라
+        /// 접속 신호를 미룹니다. 그사이 로그아웃·계정 전환이 있었으면 건드리지 않습니다. 서버의 다른 기기 로그인 거절은
+        /// <see cref="SessionTokenHttpClient"/>가 그 요청을 보낸 로그인일 때만 처리합니다 — 여기서 계정만 보고 끊으면 같은 계정으로
+        /// 다시 로그인한 직후 앞 로그인의 늦은 거절이 새 로그인을 끊습니다.
+        /// </summary>
+        /// <param name="tokenSent">저장 요청에 이 기기의 세션 토큰을 실었는지.</param>
+        private static SupabaseResult<bool> AfterSave(SupabaseResult<bool> result, string accountAtCall, bool tokenSent)
+        {
+            if (result == null || accountAtCall == null || _currentSession?.User?.Id != accountAtCall)
+                return result;
+
+            // Data 가 false 면 변경이 없어 요청을 보내지 않은 것이다.
+            if (result.IsSuccess && tokenSent && result.Data)
+                SupabaseDuplicateSessionCoordinator.OnSaveAccepted(accountAtCall);
+
+            return result;
+        }
 
         private static async Task<SupabaseResult<SupabaseSession>> EnsureReadySessionCoreAsync(bool checkDuplicateLogin)
         {
@@ -2350,7 +2379,9 @@ namespace TrueBase.Unity
                 if (gate != null)
                     return SupabaseResult<SupabaseSession>.Fail(gate);
 
-                if (checkDuplicateLogin && await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync() == false)
+                if (checkDuplicateLogin
+                    && LocalSessionTokenFor(_currentSession?.User?.Id) == null
+                    && await SupabaseDuplicateSessionCoordinator.VerifyCurrentSessionForActionAsync() == false)
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin);
 
                 // 기다리는 사이 계정이 바뀌었으면 이 호출은 앞 계정 몫이다 — 앞 계정의 저장·삭제가 새 계정 줄에 닿으면 안 된다.
@@ -2394,7 +2425,7 @@ namespace TrueBase.Unity
                 if (_bootstrap == null)
                     throw new InvalidOperationException("SupabaseSDK is not initialized. Call SupabaseUnityBootstrap.Initialize first.");
 
-                return _userSaves ??= new UserSavesFacade(_bootstrap.UserDataService, () => _currentSession);
+                return _userSaves ??= new UserSavesFacade(_bootstrap.UserDataService, () => _currentSession, LocalSessionTokenFor);
             }
         }
 
@@ -3305,17 +3336,19 @@ namespace TrueBase.Unity
         /// </summary>
         public static async Task<SupabaseResult<bool>> EnsureMyRowAsync<T>()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForSaveAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.EnsureMyRowAsync<T>();
+            var accountId = ready.Data?.User?.Id;
+            var tokenSent = LocalSessionTokenFor(accountId) != null;
+            return AfterSave(await UserSaves.EnsureMyRowAsync<T>(), accountId, tokenSent);
         }
 
         /// <summary>운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.</summary>
         public static async Task<SupabaseResult<string>> TryGetUserDataPendingResetAsync()
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForReadAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<string>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
@@ -3331,11 +3364,13 @@ namespace TrueBase.Unity
             bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForSaveAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.PatchAsync(tableName, patch, ensureRow, setUpdatedAtIsoUtc);
+            var accountId = ready.Data?.User?.Id;
+            var tokenSent = LocalSessionTokenFor(accountId) != null;
+            return AfterSave(await UserSaves.PatchAsync(tableName, patch, ensureRow, setUpdatedAtIsoUtc), accountId, tokenSent);
         }
 
         /// <summary>
@@ -3349,11 +3384,13 @@ namespace TrueBase.Unity
             bool setUpdatedAtIsoUtc = true,
             ICollection<string> sentColumns = null)
         {
-            var ready = await EnsureReadySessionAsync();
+            var ready = await EnsureReadySessionForSaveAsync();
             if (!ready.IsSuccess)
                 return SupabaseResult<bool>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
 
-            return await UserSaves.PatchDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc, sentColumns);
+            var accountId = ready.Data?.User?.Id;
+            var tokenSent = LocalSessionTokenFor(accountId) != null;
+            return AfterSave(await UserSaves.PatchDiffAsync(previous, current, ensureRow, setUpdatedAtIsoUtc, sentColumns), accountId, tokenSent);
         }
 
         /// <summary>
@@ -4084,6 +4121,14 @@ namespace TrueBase.Unity
             if (kind == SupabaseSessionChangeKind.RestoredOrRefreshed && IsAnonymousSession(session))
                 _ = TryUpsertAnonymousRecoveryTokenAsync(session);
 
+            // 새 로그인은 곧 새 토큰을 등록한다. 그 전에 남아 있던 옛 토큰이 요청에 실리면, 그사이 다른 기기가 서버 토큰을 바꿔 놓은 경우
+            // 방금 로그인한 이 기기가 중복 로그인으로 거절된다 — 등록이 끝날 때까지는 싣지 않는다.
+            if (kind == SupabaseSessionChangeKind.NewSignIn)
+            {
+                PlayerPrefs.DeleteKey(SessionTokenPlayerPrefsKeyPrefix + session.User.Id);
+                PlayerPrefs.DeleteKey(SessionTokenPendingPlayerPrefsKeyPrefix + session.User.Id);
+            }
+
             SupabaseDuplicateSessionCoordinator.ScheduleSyncAfterSessionChange(kind);
         }
 
@@ -4172,7 +4217,10 @@ namespace TrueBase.Unity
             }
 
             if (string.IsNullOrWhiteSpace(accountId) == false)
+            {
                 PlayerPrefs.DeleteKey(SessionTokenPlayerPrefsKeyPrefix + accountId);
+                PlayerPrefs.DeleteKey(SessionTokenPendingPlayerPrefsKeyPrefix + accountId);
+            }
 
             PlayerPrefs.Save();
 
@@ -4189,9 +4237,22 @@ namespace TrueBase.Unity
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>
         internal static void RaiseDuplicateLoginDetected()
         {
+            _duplicateLoginCount++;
             ClearSession(clearStorage: true, deleteUserSessionRow: false, saveResetReason: SupabaseErrorCode.DuplicateLogin);
-            OnDuplicateLoginDetected?.Invoke();
+
+            // HTTP 응답을 받는 자리에서도 불린다 — 게임 처리기의 예외가 요청 결과 대신 밖으로 새지 않게 한다.
+            try
+            {
+                OnDuplicateLoginDetected?.Invoke();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
+
+        // 다른 기기 로그인으로 세션을 끊은 횟수. 로그인 처리 도중 끊겼는지 가르는 데 쓴다(DuplicateLoginSince).
+        private static int _duplicateLoginCount;
 
         /// <summary>내부: 현재 세션의 refresh_token을 PlayerPrefs에 저장. 로그인/연동/세션 갱신 성공 시 SDK가 자동 호출합니다.</summary>
         internal static void SaveSessionToStorage()
@@ -4297,8 +4358,6 @@ namespace TrueBase.Unity
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;
             _enableApiResultLogs = bootstrap.EnableApiResultLogs;
-            _duplicateSessionPollSeconds = bootstrap.DuplicateSessionPollSeconds;
-            _duplicateSessionActionCheckCooldownSeconds = bootstrap.DuplicateSessionActionCheckCooldownSeconds;
             _withdrawalRequestDelayDays = bootstrap.WithdrawalRequestDelayDays;
 
             if (!preserveSession)
@@ -5571,6 +5630,24 @@ namespace TrueBase.Unity
             SignInMethodKind method,
             bool allowRecreateOnDeletion = true)
         {
+            var before = _duplicateLoginCount;
+            var gated = await RunPostSignInStepsCoreAsync(method, allowRecreateOnDeletion);
+            return gated ?? DuplicateLoginSince(before);
+        }
+
+        /// <summary>
+        /// 로그인 처리 중 다른 기기 로그인이 감지돼 세션이 끊겼으면 그 실패를, 아니면 null 을 돌려줍니다.
+        /// 끊긴 뒤의 단계는 세션이 없어 조용히 건너뛰므로, 이걸 보지 않으면 로그인이 "성공"으로 끝난다.
+        /// </summary>
+        private static SupabaseResult<SupabaseSession> DuplicateLoginSince(int countBefore) =>
+            _duplicateLoginCount != countBefore && !IsLoggedIn
+                ? SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin)
+                : null;
+
+        private static async Task<SupabaseResult<SupabaseSession>> RunPostSignInStepsCoreAsync(
+            SignInMethodKind method,
+            bool allowRecreateOnDeletion)
+        {
             var outcome = await TryCompleteSignInInOneCallAsync();
             if (outcome == OneCallSignInOutcome.Completed)
                 return null;
@@ -5592,14 +5669,14 @@ namespace TrueBase.Unity
         /// </summary>
         private static async Task<SupabaseResult<SupabaseSession>> EnsureProfileAfterSignInAsync()
         {
+            var before = _duplicateLoginCount;
             var outcome = await TryCompleteSignInInOneCallAsync();
-            if (outcome == OneCallSignInOutcome.Completed)
-                return null;
             if (outcome == OneCallSignInOutcome.WithdrawalScheduled)
                 return StopSignInWithdrawalUnconfirmed("게이트 통과 뒤 탈퇴 예약이 보임", configProblem: false);
 
-            await TryEnsureProfileRowAfterSignInAsync();
-            return null;
+            if (outcome != OneCallSignInOutcome.Completed)
+                await TryEnsureProfileRowAfterSignInAsync();
+            return DuplicateLoginSince(before);
         }
 
         /// <summary>

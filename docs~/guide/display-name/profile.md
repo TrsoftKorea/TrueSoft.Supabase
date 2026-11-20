@@ -30,3 +30,19 @@ if (result.IsSuccess)
 | `Name` | `string` | 닉네임 |
 | `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
 | `IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
+
+**실사용 예시**
+
+랭킹 화면에서 다른 플레이어 줄을 누르면 프로필 팝업을 엽니다.
+
+```csharp
+public async void OnClickRankingRow(string userId)
+{
+    var result = await Supabase.GetPublicProfileAsync(userId);
+    if (!result.IsSuccess) { ShowToast("프로필을 불러오지 못했습니다"); return; }
+
+    var profile = result.Data;
+    if (profile.IsWithdrawn) { ShowToast("탈퇴를 앞둔 플레이어입니다"); return; }
+    ShowProfilePopup(profile.Name, profile.ServerCode);
+}
+```

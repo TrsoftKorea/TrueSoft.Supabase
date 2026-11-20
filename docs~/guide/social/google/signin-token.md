@@ -38,3 +38,24 @@ else
 | `SupabaseReason.IdTokenInvalid` | 인증 서버가 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나 Supabase에 등록한 클라이언트 ID용이 아닙니다 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정입니다 |
+
+**실사용 예시**
+
+외부 Google 로그인 플러그인이 토큰을 돌려주면 로그인하고 데이터를 불러와 로비로 들어갑니다.
+
+```csharp
+public async void OnGoogleCredential(string idToken)
+{
+    var result = await Supabase.SignInWithGoogleIdTokenAsync(idToken);
+    if (!result.IsSuccess)
+    {
+        if (result.Reason == SupabaseReason.UserBanned) ShowBanPopup(result.BanInfo);
+        else ShowToast("Google 로그인에 실패했습니다");
+        return;
+    }
+
+    var load = await Supabase.LoadUserSaveAsync();
+    if (load.IsSuccess) SceneManager.LoadScene("Lobby");
+    else ShowToast("데이터를 불러오지 못했습니다");
+}
+```

@@ -24,11 +24,6 @@
         public string DefaultServerCode = "GLOBAL";
 
         /// <summary>
-        /// 행동 시점 중복 로그인 검사 최소 간격(초). 0 이하면 행동마다 검사합니다.
-        /// </summary>
-        public float DuplicateSessionActionCheckCooldownSeconds = 5f;
-
-        /// <summary>
         /// 탈퇴 요청 시 실제 탈퇴 시각(<c>profiles.withdrawn_at</c>)으로 예약할 유예 기간(일).
         /// </summary>
         public float WithdrawalRequestDelayDays = 7f;

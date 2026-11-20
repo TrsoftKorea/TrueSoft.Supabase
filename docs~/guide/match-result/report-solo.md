@@ -36,6 +36,26 @@ else
 | `SupabaseReason.MatchResultMismatch` | 같은 세션을 대인전이나 다른 게임 코드로 이미 신고했습니다 |
 | `SupabaseReason.MatchScoreInvalid` | 점수가 NaN이거나 무한대입니다 |
 
+**실사용 예시**
+
+웨이브 모드가 끝나 결과 화면을 띄울 때 판마다 새 세션 ID로 기록을 남깁니다.
+
+```csharp
+public async void OnWaveRunEnded(bool cleared, int wave)
+{
+    ShowResultScreen(cleared, wave);   // 기록 성공과 상관없이 화면은 먼저 띄웁니다
+
+    var result = await Supabase.ReportSoloMatchResultAsync(
+        Guid.NewGuid().ToString(), "wave_survival", isWin: cleared, score: wave);
+    if (result.IsSuccess) return;
+
+    if (result.Reason == SupabaseReason.MatchRewardConfigNotFound)
+        Debug.LogError("운영 콘솔에 wave_survival 게임 코드를 등록해야 합니다");
+    else
+        Debug.LogWarning($"전적 기록 실패: {result.ErrorCode}");
+}
+```
+
 ::: warning 같은 세션 ID를 다시 쓰면 기록되지 않습니다
 같은 세션을 다시 신고하면 처음 기록이 그대로 남고 이번 결과는 무시됩니다. 실패 없이 넘어가므로, 판마다 세션 ID를 새로 만들지 않으면 두 번째 판부터 조용히 빠집니다.
 :::

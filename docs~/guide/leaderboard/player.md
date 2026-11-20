@@ -47,6 +47,27 @@ if (result.IsSuccess)
 | `SupabaseReason.LeaderboardTableNotFound` | 해당 코드의 리더보드가 없습니다 |
 | `SupabaseReason.LeaderboardRotationNotFound` | 존재하지 않는 회차입니다 |
 
+**실사용 예시**
+
+순위표에서 회차 탭을 고르면 그 회차의 내 순위 줄을 맨 아래에 붙입니다.
+
+```csharp
+public async void OnSelectRotationTab(int rotationCount)
+{
+    var result = await Supabase.GetRankAsync<ArenaLeaderboard>(rotationCount: rotationCount);
+    if (!result.IsSuccess)
+    {
+        if (result.Reason == SupabaseReason.LeaderboardRotationNotFound)
+            ShowToast("그 회차 기록이 없습니다");
+        return;
+    }
+
+    var me = result.Data;
+    myRankRow.SetActive(me.Registered);   // 기록이 없으면 내 줄을 숨깁니다
+    if (me.Registered) SetMyRankRow(me.Rank, me.DisplayName, me.Score);
+}
+```
+
 ::: warning 내 순위 조회 비용
 내 순위는 나보다 앞선 기록 수를 세어 계산하므로 리더보드가 커질수록 비용이 늘어납니다. 매 프레임 호출하지 말고 결과를 캐시해 두세요.
 :::

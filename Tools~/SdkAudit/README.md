@@ -120,7 +120,7 @@ dotnet run --project Tools~/SdkAudit -- --contract-history
 | R19 | 하드 오류 | `install.sql`에 `'Asia/Seoul'` 같은 시간대 이름을 직접 쓰지 않음. 날짜를 자르는 곳은 `public.ts_game_time_zone()`(게임 시간대)을 쓴다. 허용은 `game_settings`를 다루는 문장(기본값·대체값)뿐. `'UTC'` 는 잡지 않는다(UTC 로 바꾸는 계산은 정당한 쓰임) |
 | R20 | 하드 오류 | `install.sql`에서 `returns void`인 함수를 `Runtime/`이 `CallRpcAsync`로 부를 때 `allowEmptyBody: true`를 넘김. 없으면 성공해도 빈 본문이 `<rpc>_empty_body` 실패로 읽힌다(2026-10-30 푸시 기기 등록·해제 — 로그아웃 때 등록이 안 풀렸다) |
 | R21 | 하드 오류 | `Runtime/`의 `Fail(...)`에 응답 본문(`.Body`)·HTTP 상태 글(`.ErrorMessage`)을 그대로 넘기지 않음. 서버 사유가 JSON 째 들어가 게임의 `Reason`이 늘 `Unknown`이 된다 — `SupabaseRestHelpers.ExtractRpcErrorCode`로 사유만 뽑는다(2026-10-30 리뷰, 27곳) |
-| R22 | 하드 오류 | 가이드 페이지 꼴 — 제목에 사이드바 이름이 들어 있음, 함수 페이지의 호출 예제가 있고 표보다 앞, 에러 표(`SupabaseReason.이름` + 문장)·프로퍼티 표(이름에 점 없음, 타입은 코드 표시)·반환 첫 줄 꼴, 표 칸 안 줄표 없음, 다른 페이지 링크는 `/guide/` 로 시작, 낡은 용어(Retool·어드민·유저·메일) 없음, 굵은 라벨 뒤 쌍점 없음. 규칙 원문은 `.claude/rules/docs.md` 13·14절 |
+| R22 | 하드 오류 | 가이드 페이지 꼴 — 제목에 사이드바 이름이 들어 있음, 함수 페이지의 호출 예제가 있고 표보다 앞, 실사용 예시가 표 다음에 있음, 에러 표(`SupabaseReason.이름` + 문장)·프로퍼티 표(이름에 점 없음, 타입은 코드 표시)·반환 첫 줄 꼴, 표 칸 안 줄표 없음, 다른 페이지 링크는 `/guide/` 로 시작, 낡은 용어(Retool·어드민·유저·메일) 없음, 굵은 라벨 뒤 쌍점 없음. 규칙 원문은 `.claude/rules/docs.md` 13·14절 |
 | R22 | 하드 오류 | 사이드바에서 하위가 있는 항목은 깊이와 상관없이 `link` 가 있고 `collapsed: true`이며 하위가 둘 이상, 하위 항목 이름에 `개요` 없음, 모음 카드 이름이 사이드바 이름과 같음 |
 | R22 | 경고 | 함수 설명이 4문장 이상 |
 | R23 | 하드 오류 | `client-contract.txt`의 호출이 `install.sql` 최종 상태에서 그대로 통한다. DB 함수는 그 인자로 부를 판과 클라이언트 실행 권한, 서버 함수는 폴더, 표는 칸을 본다 |

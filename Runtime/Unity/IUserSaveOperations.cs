@@ -18,5 +18,27 @@ namespace TrueBase.Unity
         Task<SupabaseSaveResult> SaveNowAsync(int timeoutMs);
         SupabaseResult RequestSave();
         Task<SupabaseResult> DeleteAsync();
+
+        /// <summary>서버가 세이브 칸에 직접 더하는 요청(우편 받기)을 보내기 직전에 부릅니다. <see cref="ApplyServerAdd"/>에 넘깁니다.</summary>
+        ServerAddMark BeginServerAdd();
+
+        /// <summary>
+        /// 서버가 이미 더한 값을 로컬 세이브에 맞춥니다. 그 사이 저장이 나갔으면 그 저장이 서버 값을 옛 값으로 덮었을 수 있어,
+        /// 로컬에만 더하고 바뀐 것으로 표시해 다음 저장이 서버를 맞추게 합니다.
+        /// </summary>
+        void ApplyServerAdd(string column, long amount, ServerAddMark mark);
+    }
+
+    /// <summary>서버 지급 요청을 보낼 때의 저장 상태. 응답 사이에 저장이 나갔는지 가릅니다.</summary>
+    internal readonly struct ServerAddMark
+    {
+        public readonly int SendsStarted;
+        public readonly bool SendInFlight;
+
+        public ServerAddMark(int sendsStarted, bool sendInFlight)
+        {
+            SendsStarted = sendsStarted;
+            SendInFlight = sendInFlight;
+        }
     }
 }

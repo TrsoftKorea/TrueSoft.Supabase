@@ -54,6 +54,30 @@ ShowWaitingRoom();
 | `SupabaseReason.MatchLobbyInviteLimitReached` | 초대 대상 중 대기 초대가 상한에 찬 계정이 있습니다 |
 | `SupabaseReason.MatchLobbyInviteTooFast` | 연속 초대 최소 간격을 지키지 않았습니다 |
 
+**실사용 예시**
+
+친구 창의 같이 하기 버튼에서 둘만의 방을 만들고 대기실로 넘어갑니다.
+
+```csharp
+public async void OnClickPlayTogether(FriendSummary friend)
+{
+    var result = await Supabase.CreateMatchLobbyAsync("coop_raid", new[] { friend.AccountId }, maxMembers: 2);
+    if (result.IsSuccess)
+    {
+        _currentLobbyId = result.Data.LobbyId;
+        OpenWaitingRoom();
+        return;
+    }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.MatchLobbyInviteLimitReached: ShowToast($"{friend.Name}님이 받은 초대가 너무 많습니다"); break;
+        case SupabaseReason.MatchLobbyInviteTooFast:      ShowToast("잠시 뒤에 다시 초대해 주세요"); break;
+        default:                                          ShowToast("방을 만들지 못했습니다"); break;
+    }
+}
+```
+
 ::: info 방이 저절로 닫히기까지의 시간은 운영이 정합니다
 아무도 시작하지 않은 방은 일정 시간이 지나면 자동으로 닫힙니다. 그 시간은 게임이 넘기는 값이 아니라 운영 콘솔 **설정**의 매치 로비 항목에서 정하며, 기본값은 10분입니다. 남은 시간은 목록의 `ExpiresAt`으로 읽을 수 있습니다.
 :::

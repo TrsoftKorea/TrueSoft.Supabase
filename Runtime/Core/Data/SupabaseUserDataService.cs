@@ -45,10 +45,12 @@ namespace TrueBase.Core.Data
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="tableName">대상 테이블명(<c>schema.table</c> 허용). 필수.</param>
         /// <param name="playerUserId">안정 플레이어 id(<c>user_id</c> 컬럼용). null·공백이면 RPC에 null로 전달되어 DB가 기존 값을 유지합니다.</param>
+        /// <param name="sessionToken">이 기기의 세션 토큰. 있으면 서버가 다른 기기 로그인을 가려 <c>duplicate_login_detected</c>로 거절합니다.</param>
         public async Task<SupabaseResult<bool>> EnsureMyRowAsync(
             string accessToken,
             string tableName,
-            string playerUserId)
+            string playerUserId,
+            string sessionToken = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -69,7 +71,7 @@ namespace TrueBase.Core.Data
                 method: "POST",
                 url: url,
                 jsonBody: bodyJson,
-                headers: CreateAuthHeaders(accessToken, prefer: null));
+                headers: CreateAuthHeaders(accessToken, prefer: null, sessionToken: sessionToken));
 
             if (response == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
@@ -90,6 +92,7 @@ namespace TrueBase.Core.Data
         /// <param name="patch">변경할 컬럼과 값의 딕셔너리. 변경된 필드만 포함. 비어 있으면 실패.</param>
         /// <param name="ensureRow">true면 본인 행이 있도록 보장합니다(기본값: true). 이 계정·플레이어 id로 처음 저장할 때만 PATCH 전에 <see cref="EnsureMyRowAsync"/>를 부르고, 그 뒤로는 PATCH가 행을 못 찾았을 때만 부른 뒤 다시 보냅니다.</param>
         /// <param name="setUpdatedAtIsoUtc">true면 patch에 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
+        /// <param name="sessionToken">이 기기의 세션 토큰. <see cref="EnsureMyRowAsync"/>를 참고하세요.</param>
         public async Task<SupabaseResult<bool>> PatchAsync(
             string accessToken,
             string accountId,
@@ -97,7 +100,8 @@ namespace TrueBase.Core.Data
             string tableName,
             Dictionary<string, object> patch,
             bool ensureRow = true,
-            bool setUpdatedAtIsoUtc = true)
+            bool setUpdatedAtIsoUtc = true,
+            string sessionToken = null)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -117,7 +121,7 @@ namespace TrueBase.Core.Data
             var ensuredNow = false;
             if (ensureRow && (_ensuredRows.TryGetValue(rowKey, out var ensuredFor) == false || ensuredFor != stable))
             {
-                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
+                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable, sessionToken);
                 if (ensured == null || !ensured.IsSuccess)
                     return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
 
@@ -150,32 +154,32 @@ namespace TrueBase.Core.Data
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.UserSaveSerializeFailed + ":" + e.Message);
             }
 
-            var sent = await SendPatchAsync(accessToken, url, bodyJson);
+            var sent = await SendPatchAsync(accessToken, url, bodyJson, sessionToken);
 
             // 기억해 둔 행이 사라졌을 수 있다 — 다른 기기에서 세이브를 지운 경우 등.
             // 이 기기에서 방금 지운 것이면 되살리지 않는다.
             if (ensureRow && !ensuredNow && sent.ErrorCode == PatchNoRowsAffected && deleteCount == _deleteCount)
             {
-                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable);
+                var ensured = await EnsureMyRowAsync(accessToken, tableName, stable, sessionToken);
                 if (ensured == null || !ensured.IsSuccess)
                     return SupabaseResult<bool>.Fail(ensured?.ErrorCode ?? "ensure_row_failed");
 
                 if (deleteCount != _deleteCount)
                     return sent;
 
-                sent = await SendPatchAsync(accessToken, url, bodyJson);
+                sent = await SendPatchAsync(accessToken, url, bodyJson, sessionToken);
             }
 
             return sent;
         }
 
-        private async Task<SupabaseResult<bool>> SendPatchAsync(string accessToken, string url, string bodyJson)
+        private async Task<SupabaseResult<bool>> SendPatchAsync(string accessToken, string url, string bodyJson, string sessionToken)
         {
             var response = await _httpClient.SendAsync(
                 method: "PATCH",
                 url: url,
                 jsonBody: bodyJson,
-                headers: CreateAuthHeaders(accessToken, prefer: "return=representation"));
+                headers: CreateAuthHeaders(accessToken, prefer: "return=representation", sessionToken: sessionToken));
 
             if (response == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NetworkError);
@@ -332,6 +336,7 @@ namespace TrueBase.Core.Data
         /// <param name="ensureRow">true면 본인 행이 있도록 보장합니다(기본값: true). <see cref="PatchAsync"/>를 참고하세요.</param>
         /// <param name="setUpdatedAtIsoUtc">true면 <c>updated_at</c>을 현재 UTC 시각으로 자동 추가합니다(기본값: true).</param>
         /// <param name="sentColumns">null이 아니면 이번 요청에 담는 칸 이름을 채웁니다. 저장 요약 로그가 비교를 다시 하지 않게 하려는 것입니다.</param>
+        /// <param name="sessionToken">이 기기의 세션 토큰. <see cref="EnsureMyRowAsync"/>를 참고하세요.</param>
         public async Task<SupabaseResult<bool>> PatchDiffAsync<T>(
             string accessToken,
             string accountId,
@@ -340,7 +345,8 @@ namespace TrueBase.Core.Data
             T current,
             bool ensureRow = true,
             bool setUpdatedAtIsoUtc = true,
-            ICollection<string> sentColumns = null)
+            ICollection<string> sentColumns = null,
+            string sessionToken = null)
         {
             string tableName;
             Dictionary<string, object> patch;
@@ -370,11 +376,20 @@ namespace TrueBase.Core.Data
                 tableName,
                 patch,
                 ensureRow,
-                setUpdatedAtIsoUtc);
+                setUpdatedAtIsoUtc,
+                sessionToken);
         }
 
-        private Dictionary<string, string> CreateAuthHeaders(string accessToken, string prefer = null) =>
-            SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken, prefer);
+        private Dictionary<string, string> CreateAuthHeaders(string accessToken, string prefer = null, string sessionToken = null)
+        {
+            var headers = SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken, prefer);
+            // 서버 트리거(ts_user_data_session_guard)가 user_sessions 의 토큰과 맞춰 보고, 다르면 duplicate_login_detected 로 거절한다.
+            if (!string.IsNullOrWhiteSpace(sessionToken))
+                headers[SessionTokenHeader] = sessionToken.Trim();
+            return headers;
+        }
+
+        private const string SessionTokenHeader = "x-session-token";
 
         /// <summary>
         /// 운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.

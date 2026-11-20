@@ -29,6 +29,28 @@ if (limits.IsSuccess && friends.IsSuccess)
 |--------|------|
 | `SupabaseReason.FriendSettingsMissing` | 제한값 설정이 DB에 없습니다. 설치가 깨진 상태입니다 |
 
+**실사용 예시**
+
+친구 창을 열 때 한 번 받아 두고 친구 수 분모와 요청 간격 안내에 씁니다.
+
+```csharp
+public async void OnOpenFriendPanel()
+{
+    var result = await Supabase.GetFriendLimitsAsync();
+    if (!result.IsSuccess)
+    {
+        HideFriendCountLimit();   // 분모만 숨기고 창은 그대로 엽니다
+        if (result.Reason == SupabaseReason.FriendSettingsMissing)
+            Debug.LogError("친구 제한값 설정이 없습니다. install.sql 설치를 확인하세요");
+        return;
+    }
+
+    FriendPanel.MaxFriends = result.Data.MaxFriends;
+    FriendPanel.RequestCooldownSeconds = result.Data.RequestCooldownSeconds;
+    RefreshFriendCountLabel();
+}
+```
+
 ::: warning 게임에 숫자를 박아 두지 마세요
 이 값은 운영 콘솔에서 바뀝니다. 화면에 상수로 적어 두면 운영이 값을 바꾸는 순간 실제 동작과 표시가 어긋납니다.
 :::

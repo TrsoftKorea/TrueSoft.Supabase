@@ -26,3 +26,27 @@ if (r.IsSuccess)
 | `SupabaseReason.MatchLobbyNotOpen` | 로비가 이미 시작됐거나 취소·만료되었습니다 |
 | `SupabaseReason.MatchLobbyInviteNotFound` | 응답할 초대가 없습니다 |
 | `SupabaseReason.MatchLobbyFull` | 기다리는 사이 자리가 다 찼습니다 |
+
+**실사용 예시**
+
+초대 팝업의 수락·거절 버튼에서 부르고, 수락했으면 대기실로 넘어갑니다.
+
+```csharp
+public async void OnClickInviteAnswer(string lobbyId, bool accept)
+{
+    CloseInvitePopup();
+    var result = await Supabase.RespondMatchLobbyAsync(lobbyId, accept);
+    if (result.IsSuccess)
+    {
+        if (accept) { _currentLobbyId = lobbyId; OpenWaitingRoom(); }
+        return;
+    }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.MatchLobbyFull:    ShowToast("자리가 다 찼습니다"); break;
+        case SupabaseReason.MatchLobbyNotOpen: ShowToast("이미 시작했거나 닫힌 방입니다"); break;
+        default:                               ShowToast("응답하지 못했습니다"); break;
+    }
+}
+```

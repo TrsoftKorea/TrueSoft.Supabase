@@ -16,7 +16,7 @@ namespace TrueBase.Core.Data
     /// <para>주의: 자동 확장 인덱서는 정적 타입이 <see cref="AutoList{T}"/>일 때만 적용됩니다.
     /// 세이브 필드·프로퍼티를 모두 <c>AutoList&lt;T&gt;</c>로 선언하세요(<c>List&lt;T&gt;</c>로 캐스팅하면 기본 인덱서가 쓰입니다).</para>
     /// </summary>
-    public class AutoList<T> : List<T>, IAutoDefaultable
+    public class AutoList<T> : List<T>, IAutoDefaultable, IContentComparable
     {
         [JsonIgnore] private T _default;
         // null이 아니면 T가 참조 타입([AutoDefault]로 주입됨) → 슬롯마다 이 인자로 새 인스턴스를 생성(aliasing 방지).
@@ -77,6 +77,25 @@ namespace TrueBase.Core.Data
         }
 
         object IAutoDefaultable.GetDefaultValueBoxed() => FreshDefault();
+
+        // 원소가 정수·문자열·열거형 같은 단순 값이면 순서대로 원소끼리 비교한다(JSON 배열 비교와 같은 판정).
+        bool IContentComparable.TryContentEquals(object other, out bool equal)
+        {
+            equal = false;
+            if (!PlainCompare<T>.Is || other is not List<T> o)
+                return false;
+
+            if (Count != o.Count)
+                return true;
+
+            var cmp = EqualityComparer<T>.Default;
+            for (var i = 0; i < Count; i++)
+                if (!cmp.Equals(base[i], o[i]))
+                    return true;
+
+            equal = true;
+            return true;
+        }
 
         // 서버에 없거나 값이 기본값인 슬롯을 fallback에서 채운다. 서버의 "비기본값"은 유지, 서버가 더 길면 안 자른다.
         void IAutoDefaultable.FillMissingFrom(object other)

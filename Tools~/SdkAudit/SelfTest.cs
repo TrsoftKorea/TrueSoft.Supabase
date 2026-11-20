@@ -40,7 +40,7 @@ namespace SdkAudit
             "[R21 원문사유]",
             "[R23 옛빌드호환]", "[R23 기준누락]", "[R23 이유없음]", "[R23 뽑기고장]",
             "[R22 제목]", "[R22 예제순서]", "[R22 예제없음]", "[R22 에러표]", "[R22 프로퍼티표]", "[R22 반환]",
-            "[R22 표줄표]", "[R22 링크]", "[R22 용어]", "[R22 라벨쌍점]", "[R22 설명길이]",
+            "[R22 표줄표]", "[R22 링크]", "[R22 용어]", "[R22 라벨쌍점]", "[R22 설명길이]", "[R22 실사용없음]", "[R22 실사용순서]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -249,11 +249,14 @@ class Example { void M() { Supabase.NoSuchMemberAsync(); } }");
             Write(root, "docs~/guide/style/indented.md", "# 들여 쓴 표\n\n1. 단계\n\n   | 열 | 내용 |\n   |----|------|\n   | a | 줄표 — 남음 |\n");
             Write(root, "docs~/guide/style/box-first.md", "# 상자 먼저\n\n::: info 먼저\n안내\n:::\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n\n"
                 + "**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n| `SupabaseReason.RealReason` | 없습니다 |\n\n```csharp\nvar r = await Supabase.RealApiAsync();\n```\n");
+            Write(root, "docs~/guide/style/practical-early.md", "# 실사용 먼저\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n\n"
+                + "```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**실사용 예시**\n\n```csharp\nawait Supabase.RealApiAsync();\n```\n\n"
+                + "**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n| `SupabaseReason.RealReason` | 없습니다 |\n");
             Write(root, "docs~/guide/style/no-example.md", "# 예제 없는 함수\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n");
             Write(root, "docs~/guide/style/good.md", "# 잘 쓴 페이지\n\n```csharp\nTask<SupabaseResult<int>> Supabase.RealApiAsync()\n```\n\n"
                 + "개수를 읽습니다.\n\n```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**반환**\n\n`.Data`는 `int`입니다.\n\n"
                 + "| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `Count` | `int` | 개수 |\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n"
-                + "| `SupabaseReason.RealReason` | 없는 우편입니다 |\n\n유저 데이터·유저 ID·`유저`와 이메일, [같은 곳](#a)·[다른 곳](/guide/x)·[밖](https://x.y)·![그림](./a.png)은 괜찮습니다.\n");
+                + "| `SupabaseReason.RealReason` | 없는 우편입니다 |\n\n**실사용 예시**\n\n버튼에서 부릅니다.\n\n```csharp\npublic async void OnClick() => await Supabase.RealApiAsync();\n```\n\n유저 데이터·유저 ID·`유저`와 이메일, [같은 곳](#a)·[다른 곳](/guide/x)·[밖](https://x.y)·![그림](./a.png)은 괜찮습니다.\n");
 
             Write(root, "docs~/guide/broken.md", @"# 깨진 페이지 (부연 괄호)
 

@@ -24,3 +24,20 @@ if (result.IsSuccess)
 **반환**
 
 `.Data`는 삭제된 우편 개수 `int`입니다.
+
+**실사용 예시**
+
+우편함의 받은 우편 정리 버튼에서 확인을 받은 뒤 지우고, 몇 통을 지웠는지 알립니다.
+
+```csharp
+public async void OnClickDeleteClaimed()
+{
+    if (!await ConfirmPopup("받은 우편을 모두 지울까요?")) return;
+
+    var result = await Supabase.DeleteClaimedMailsAsync(currentTab);
+    if (!result.IsSuccess) { ShowToast("우편을 지우지 못했습니다"); return; }
+
+    ShowToast(result.Data > 0 ? $"우편 {result.Data}통을 지웠습니다" : "지울 우편이 없습니다");
+    RefreshMailbox();
+}
+```

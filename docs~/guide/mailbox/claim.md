@@ -4,7 +4,7 @@
 Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimMailItemsAsync(string mailId)
 ```
 
-우편 1건의 첨부 보상을 수령합니다. 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 이 호출 안에서 지급까지 끝내므로, 결과는 보상 표시에만 씁니다.
+우편 1건의 첨부 보상을 수령합니다. 보상 키와 같은 이름의 세이브 숫자 칸에는 서버가 수령과 함께 더하고, 그 밖의 키는 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 지급합니다. 이 호출 안에서 지급까지 끝나므로 결과는 보상 표시에만 씁니다.
 
 ```csharp
 var result = await Supabase.ClaimMailItemsAsync(mailId);
@@ -29,17 +29,38 @@ if (result.IsSuccess)
 |---------|------|------|
 | `ItemKey` | `string` | 아이템 키 |
 | `Count` | `int` | 지급 수량 |
-| `ItemIndex` | `int` | 배열 내 순서, 0부터 시작 |
+| `ItemIndex` | `int` | 우편의 몇 번째 보상인지, 0부터 시작 |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerMissing` | 해당 key의 [아이템 핸들러](/guide/mailbox/item-handler)가 등록되지 않았습니다. 수령 전에 검증해 서버 상태는 바뀌지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 핸들러도 없고 같은 이름의 세이브 숫자 칸도 없는 key가 있습니다. 우편은 수령되지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 | `SupabaseReason.MailExpired` | 만료된 우편입니다 |
 | `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
 | `SupabaseReason.AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
 
-::: warning
-수령 RPC를 호출하기 **전에** 대상 우편의 모든 아이템 key에 핸들러가 등록돼 있는지 검증합니다. 하나라도 없으면 즉시 실패하고 서버 상태는 바뀌지 않습니다 — 핸들러 누락으로 수령 처리만 되고 아이템이 유실되는 상황을 막기 위한 설계입니다.
+**실사용 예시**
+
+우편 상세 창의 받기 버튼에서 보상을 받고, 받을 수 없는 우편이면 까닭을 알린 뒤 목록을 새로 고칩니다.
+
+```csharp
+public async void OnClickClaim(Mail mail)
+{
+    var result = await Supabase.ClaimMailItemsAsync(mail.Id);
+    if (result.IsSuccess)
+        ShowRewardSummary(result.Data);   // 지급은 끝났고 표시만 합니다
+    else if (result.Reason == SupabaseReason.MailExpired)
+        ShowToast("받을 수 있는 기한이 지났습니다");
+    else if (result.Reason == SupabaseReason.AlreadyClaimed)
+        ShowToast("이미 받은 보상입니다");   // 다른 기기에서 먼저 받았습니다
+    else
+        ShowToast("보상을 받지 못했습니다");
+
+    RefreshMailbox();
+}
+```
+
+::: info 수령과 지급이 한 번에 일어납니다
+서버가 지급하는 보상은 수령 표시와 같은 처리 안에서 세이브에 더해지므로, 지급 도중 앱이 꺼져도 보상이 사라지거나 두 번 지급되지 않습니다. 게임 안의 세이브 값에도 SDK가 바로 반영합니다.
 :::

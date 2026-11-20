@@ -16,14 +16,19 @@ namespace TrueBase.Unity
     {
         private readonly SupabaseUserDataService _userDataService;
         private readonly Func<SupabaseSession> _sessionGetter;
+        private readonly Func<string, string> _sessionTokenFor;
 
         /// <param name="userDataService">REST 호출을 수행할 서비스. null이면 예외.</param>
         /// <param name="sessionGetter">현재 세션 제공자. null이면 세션 없는 오버로드는 <c>session_null</c>로 실패합니다.</param>
-        public UserSavesFacade(SupabaseUserDataService userDataService, Func<SupabaseSession> sessionGetter = null)
+        /// <param name="sessionTokenFor">계정 id → 이 기기의 세션 토큰. 저장 요청에 실어 서버가 다른 기기 로그인을 가르게 합니다.</param>
+        public UserSavesFacade(SupabaseUserDataService userDataService, Func<SupabaseSession> sessionGetter = null, Func<string, string> sessionTokenFor = null)
         {
             _userDataService = userDataService ?? throw new ArgumentNullException(nameof(userDataService));
             _sessionGetter = sessionGetter;
+            _sessionTokenFor = sessionTokenFor;
         }
+
+        private string SessionTokenFor(SupabaseSession session) => _sessionTokenFor?.Invoke(session?.User?.Id);
 
         /// <summary>
         /// 로그인 직후 <c>user_data</c> 테이블에 본인 행이 존재하도록 보장합니다.
@@ -49,7 +54,7 @@ namespace TrueBase.Unity
             try { tableName = DataSchema.ResolveTableName<T>(); }
             catch (Exception e) { return SupabaseResult<bool>.Fail("user_save_schema_invalid:" + e.Message); }
 
-            return await _userDataService.EnsureMyRowAsync(accessToken, tableName, session.User?.PlayerUserId);
+            return await _userDataService.EnsureMyRowAsync(accessToken, tableName, session.User?.PlayerUserId, SessionTokenFor(session));
         }
 
         /// <summary>운영 콘솔이 내 저장 데이터를 초기화한 뒤 아직 아무 저장도 없으면 그 초기화 시각을, 아니면 null을 돌려줍니다.</summary>
@@ -99,7 +104,8 @@ namespace TrueBase.Unity
                 tableName: tableName,
                 patch: patch,
                 ensureRow: ensureRow,
-                setUpdatedAtIsoUtc: setUpdatedAtIsoUtc);
+                setUpdatedAtIsoUtc: setUpdatedAtIsoUtc,
+                sessionToken: SessionTokenFor(session));
         }
 
         /// <inheritdoc cref="SupabaseUserDataService.LoadAttributedWithRowStateAsync{T}(string, string, bool)"/>
@@ -170,7 +176,8 @@ namespace TrueBase.Unity
                 current: current,
                 ensureRow: ensureRow,
                 setUpdatedAtIsoUtc: setUpdatedAtIsoUtc,
-                sentColumns: sentColumns);
+                sentColumns: sentColumns,
+                sessionToken: SessionTokenFor(session));
         }
 
         /// <summary>본인 세이브 행을 삭제합니다. 테이블은 <typeparamref name="T"/>에서 해석합니다.</summary>

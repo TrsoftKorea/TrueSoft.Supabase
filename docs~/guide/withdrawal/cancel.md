@@ -47,3 +47,25 @@ var cancel = await Supabase.RedeemWithdrawalCancelAsync();   // 저장된 토큰
 |--------|------|
 | `SupabaseReason.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
 | `SupabaseReason.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
+
+**실사용 예시**
+
+탈퇴 예약 안내 팝업의 취소 버튼에서 예약을 취소하고 로그인 화면으로 돌려보냅니다.
+
+```csharp
+public async void OnClickCancelWithdrawal()
+{
+    // _cancelToken 은 막힌 로그인 결과의 WithdrawalCancelToken 입니다
+    var result = await Supabase.RedeemWithdrawalCancelAsync(_cancelToken);
+    if (result.Reason == SupabaseReason.WithdrawalCancelTokenEmpty)
+    {
+        ShowToast("취소 정보가 없습니다. 다시 로그인해 주세요");
+        return;
+    }
+    if (!result.IsSuccess) { ShowToast("탈퇴를 취소하지 못했습니다"); return; }
+
+    CloseWithdrawalPopup();
+    ShowPopup("탈퇴가 취소되었습니다. 다시 로그인해 주세요");
+    ShowLoginScreen();
+}
+```

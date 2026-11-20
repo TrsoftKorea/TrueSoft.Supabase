@@ -29,6 +29,25 @@ else
 
 삭제 뒤 게임이 처음 부르는 로드의 `IsNewUser`는 앱을 다시 켜도 `true`입니다. 그 로드 전에 플레이어 진행이 저장되면 `false`입니다.
 
+**실사용 예시**
+
+설정 화면의 처음부터 다시 하기 버튼에서 한 번 더 확인받고 지운 뒤 타이틀로 돌아갑니다.
+
+```csharp
+public void OnClickRestartFromBeginning()
+{
+    ShowConfirm("모든 진행을 지우고 처음부터 시작할까요?", async () =>
+    {
+        SupabaseResult result = await Supabase.DeleteUserSaveAsync();
+        if (result.Reason == SupabaseReason.UserSaveLoadFailed)
+            result = await Supabase.LoadUserSaveAsync();   // 지우기는 끝났고 다시 읽기만 실패했습니다
+
+        if (result.IsSuccess) LoadScene("Title");
+        else ShowPopup("처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요");
+    });
+}
+```
+
 ::: info 로드 전 초기값도 함께 지워집니다
 [로드 전에 지정한 초기값](/guide/user-data/load#preload-fallback)은 삭제 시 함께 버려집니다. 남겨두면 다음 로드에서 재생성된 기본값 행 위에 옛 초기값이 다시 병합돼 "삭제했는데 기본값이 아닌 값으로 되살아나는" 문제가 생기기 때문입니다. 로드하기 전에 지웠으면 다음 로드 전에 다시 세팅하고, 로드한 뒤에 지웠으면 삭제가 끝난 다음 값을 넣으세요.
 :::

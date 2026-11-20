@@ -38,3 +38,27 @@ else
 | `SupabaseReason.AnonymousRequiresLink` | 익명 세션입니다. 연동은 [게스트 연동](/guide/social/google/link)을 쓰세요 |
 | `SupabaseReason.UserBanned` | 차단된 계정입니다. 자세한 내용은 `result.BanInfo`에 있습니다 |
 | `SupabaseReason.WithdrawalDeleted` | 탈퇴 처리된 계정이라 새 계정으로 다시 가입되었습니다 |
+
+**실사용 예시**
+
+타이틀 화면의 Google 로그인 버튼에서 로그인하고, 플레이어가 선택 창을 닫았으면 그대로 둡니다.
+
+```csharp
+public async void OnClickGoogleLogin()
+{
+    var result = await Supabase.SignInWithGoogleAsync();
+    if (!result.IsSuccess)
+    {
+        switch (result.Reason)
+        {
+            case SupabaseReason.GoogleSignInCancelled: break;
+            case SupabaseReason.UserBanned: ShowBanPopup(result.BanInfo); break;
+            default: ShowToast("Google 로그인에 실패했습니다"); break;
+        }
+        return;
+    }
+
+    await Supabase.LoadUserSaveAsync();
+    SceneManager.LoadScene("Lobby");
+}
+```

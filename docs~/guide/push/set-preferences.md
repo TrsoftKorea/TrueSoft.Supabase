@@ -52,3 +52,26 @@ public async void OnAdConsentToggle(bool on)
 |--------|------|
 | `SupabaseReason.ProfileNotFound` | 로그인한 계정의 플레이어 프로필이 없습니다. 로그인 후처리가 끝난 뒤 다시 부릅니다 |
 | `SupabaseReason.PushNightRequiresAdConsent` | 광고 수신에 동의하지 않은 플레이어의 야간 수신 동의만 켜려 했습니다. `adConsent: true`와 함께 넘깁니다 |
+
+**실사용 예시**
+
+설정 화면의 야간 알림 스위치를 켤 때 광고 수신 동의가 없으면 함께 동의를 받습니다.
+
+```csharp
+public async void OnNightToggle(bool on)
+{
+    var result = await Supabase.SetPushPreferencesAsync(nightConsent: on);
+    if (result.Reason == SupabaseReason.PushNightRequiresAdConsent)
+    {
+        if (!await ConfirmPopup("야간 알림을 받으려면 광고성 알림 수신에도 동의해야 합니다"))
+        {
+            nightToggle.SetIsOnWithoutNotify(false);
+            return;
+        }
+        result = await Supabase.SetPushPreferencesAsync(adConsent: true, nightConsent: true);
+    }
+
+    if (!result.IsSuccess) { nightToggle.SetIsOnWithoutNotify(!on); return; }
+    adToggle.SetIsOnWithoutNotify(result.Data.AdConsent);
+}
+```

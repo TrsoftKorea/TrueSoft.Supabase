@@ -46,6 +46,27 @@ ShowToast(r.Reason switch
 | `SupabaseReason.ChatMessageTooLong` | 최대 글자 수를 넘었습니다 |
 | `SupabaseReason.ChatMuted` | 채팅이 차단된 계정입니다 |
 
+**실사용 예시**
+
+대기방의 보내기 버튼에서 보내고, 방이 이미 닫혔으면 대기방을 닫습니다.
+
+```csharp
+public async void OnClickSendLobbyChat()
+{
+    if (string.IsNullOrWhiteSpace(input.text)) return;
+
+    var result = await Supabase.SendLobbyChatAsync(_lobbyId, input.text);
+    if (result.IsSuccess) { input.text = ""; return; }   // 말풍선은 다음 조회에서 그립니다
+
+    if (result.Reason == SupabaseReason.MatchLobbyNotOpen)
+        ShowPopup("대기방이 닫혔습니다", onClose: CloseLobbyPanel);
+    else if (result.Reason == SupabaseReason.ChatMuted)
+        ShowToast("채팅이 제한된 계정입니다");
+    else
+        ShowToast("보내지 못했습니다");
+}
+```
+
 ::: info 수락해야 대화가 열립니다
 초대만 받은 상태에서는 보내지도 읽지도 못합니다. 열어 두면 초대가 모르는 사람에게 말을 거는 통로가 되기 때문입니다. 수락 전에 물어볼 것이 있으면 들어와서 묻고 [나가면](/guide/match-lobby/leave) 됩니다.
 :::

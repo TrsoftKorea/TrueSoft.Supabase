@@ -27,5 +27,5 @@
 | [`GetMailSettingsAsync`](/guide/mailbox/settings) | 만료 우편 보관 일수 |
 
 ::: tip
-보상이 첨부된 우편을 수령하려면 먼저 [아이템 핸들러 등록](/guide/mailbox/item-handler)을 완료하세요.
+보상 키를 세이브의 숫자 칸 이름과 같게 두면 서버가 수령과 함께 그 칸에 지급합니다. 더하기만으로 안 되는 보상만 [아이템 핸들러](/guide/mailbox/item-handler)를 등록하세요.
 :::

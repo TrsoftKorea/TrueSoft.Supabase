@@ -42,6 +42,33 @@ else
 
 첫 실행이나 로그아웃 직후에는 `AutoLoginNoToken`이 정상입니다. 오류로 안내하지 말고 로그인 화면을 띄우세요.
 
+**실사용 예시**
+
+로딩 씬이 시작될 때 저장된 세션으로 들어가고, 막히면 사유에 맞는 화면으로 보냅니다.
+
+```csharp
+async void Start()
+{
+    var result = await Supabase.TriggerAutoLoginAsync();
+    if (result.IsSuccess)
+    {
+        await Supabase.LoadUserSaveAsync();
+        SceneManager.LoadScene("Lobby");
+        return;
+    }
+
+    switch (result.Reason)
+    {
+        case SupabaseReason.WithdrawalGateBlocked:
+            ShowWithdrawalPopup(result.WithdrawnAt, result.WithdrawalCancelToken); break;
+        case SupabaseReason.UserBanned:
+            ShowBanPopup(result.BanInfo); break;
+        default:
+            ShowLoginScreen(); break;   // 첫 실행·로그아웃 뒤에도 여기로 옵니다
+    }
+}
+```
+
 ## 로그인과 로드는 별개 단계 {#login-load-separate}
 
 `TriggerAutoLoginAsync()`는 세션만 복원하고 유저 데이터는 로드하지 않습니다. 수동 로그인과 동일하게 성공 후 [로드](/guide/user-data/load)를 직접 호출하세요.
