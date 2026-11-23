@@ -2174,6 +2174,102 @@ $$;
 revoke all on function public.ts_schema_type_ok(text)    from public, anon, authenticated;
 revoke all on function public.ts_schema_default_ok(text) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 리스트·딕셔너리 데이터 필드의 타입 — 칸 설명(comment) 첫 줄 "@type AutoDict<K, V>"
+-- ---------------------------------------------------------------------------
+-- DB 칸은 jsonb 하나라 서버는 그 안에 무엇이 드는지 모른다. 운영 콘솔이 필드를 만들 때 고른 타입을 칸 설명에 적어 두면
+-- 클래스 생성기(테이블 구조의 칸 설명으로 받음)와 우편 지급 판정(ts_mail_collection_kind)이 같은 값을 읽는다.
+-- 받는 꼴은 AutoList<T> · AutoList2D<T> · AutoDict<K, V> · AutoDict2D<K1, K2, V> 이고, T·K·V 는 C# 타입 이름
+-- (네임스페이스 포함, 제네릭 없음)이다. 생성 코드에 그대로 들어가므로 이 꼴 밖은 받지 않는다.
+create or replace function public.ts_schema_field_type_norm(p_type text)
+returns text
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v  text := regexp_replace(coalesce(p_type, ''), '\s+', '', 'g');
+  id text := '[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*';
+  m  text[];
+begin
+  if v = '' or length(v) > 300 then
+    return null;
+  end if;
+  m := regexp_match(v, '^(AutoList|AutoList2D)<(' || id || ')>$');
+  if m is not null then
+    return m[1] || '<' || m[2] || '>';
+  end if;
+  m := regexp_match(v, '^AutoDict<(' || id || '),(' || id || ')>$');
+  if m is not null then
+    return 'AutoDict<' || m[1] || ', ' || m[2] || '>';
+  end if;
+  m := regexp_match(v, '^AutoDict2D<(' || id || '),(' || id || '),(' || id || ')>$');
+  if m is not null then
+    return 'AutoDict2D<' || m[1] || ', ' || m[2] || ', ' || m[3] || '>';
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function public.ts_user_data_field_type(p_col text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select substring(col_description(a.attrelid, a.attnum) from '^@type ([^\n]+)')
+    from pg_attribute a
+   where a.attrelid = 'public.user_data'::regclass and a.attname = p_col
+     and a.attnum > 0 and not a.attisdropped;
+$$;
+
+-- 타입을 적거나(p_field_type) 지운다(null·빈 값). 칸 설명의 나머지 줄은 그대로 둔다.
+create or replace function public.admin_set_user_data_field_type(p_colname text, p_field_type text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+set lock_timeout = '3s'
+as $$
+declare
+  v_type    text := nullif(btrim(coalesce(p_field_type, '')), '');
+  v_norm    text;
+  v_typid   oid;
+  v_attnum  int;
+  v_rest    text;
+  v_comment text;
+begin
+  select a.atttypid, a.attnum into v_typid, v_attnum
+    from pg_attribute a
+   where a.attrelid = 'public.user_data'::regclass and a.attname = p_colname
+     and a.attnum > 0 and not a.attisdropped;
+  if v_attnum is null then
+    raise exception 'Column does not exist: %', p_colname;
+  end if;
+  if v_type is not null then
+    v_norm := public.ts_schema_field_type_norm(v_type);
+    if v_norm is null then
+      raise exception 'field_collection_type_invalid: %', v_type;
+    end if;
+    if v_typid not in ('jsonb'::regtype, 'json'::regtype) then
+      raise exception 'field_collection_type_needs_json: %', p_colname;
+    end if;
+  end if;
+
+  v_rest := regexp_replace(coalesce(col_description('public.user_data'::regclass, v_attnum), ''), '^@type [^\n]*\n?', '');
+  v_comment := nullif(concat_ws(E'\n', case when v_norm is not null then '@type ' || v_norm end, nullif(v_rest, '')), '');
+  execute format('comment on column public.user_data.%I is %L', p_colname, v_comment);
+end;
+$$;
+
+comment on function public.admin_set_user_data_field_type(text, text) is
+  '리스트·딕셔너리 데이터 필드의 타입을 칸 설명 첫 줄(@type …)에 적거나 지운다. 운영 콘솔 필드 추가·수정 게시 전용.';
+
+revoke all on function public.ts_schema_field_type_norm(text)               from public, anon, authenticated;
+revoke all on function public.ts_user_data_field_type(text)                 from public, anon, authenticated;
+revoke all on function public.admin_set_user_data_field_type(text, text)    from public, anon, authenticated;
+
 -- 컬럼 정의를 글자 하나로 받던 옛 판. 정의 전체가 문장에 그대로 들어가 위 검사를 걸 수 없어 없앴다 — 콘솔은 아래 구조화 인자판만 쓴다.
 drop function if exists public.admin_add_user_data_column(text, text);
 
@@ -3442,8 +3538,9 @@ comment on function public.ts_mail_element_key(text) is
 
 revoke all on function public.ts_mail_element_key(text) from public, anon, authenticated;
 
--- 리스트·딕셔너리 데이터 필드가 실제로 무엇을 담는지 저장된 값 표본(최대 50줄)으로 본다 — 서버는 게임의 C# 타입을 모른다.
--- list = 숫자 리스트, dict = 숫자 딕셔너리, other = 그 밖(값이 객체·글자이거나 모양이 섞임), null = 저장된 값이 없어 모름.
+-- 리스트·딕셔너리 데이터 필드가 무엇을 담는지 — 운영 콘솔에서 정한 타입(4절 ts_user_data_field_type)이 있으면 그것으로,
+-- 없으면 저장된 값 표본(최대 50줄)으로 본다.
+-- list = 숫자 리스트, dict = 숫자 딕셔너리, other = 그 밖(값이 객체·글자이거나 모양이 섞임), null = 타입도 저장된 값도 없어 모름.
 -- 콘솔 아이템 카탈로그가 원소 꼴 코드를 받을지·자동 지급으로 보일지 정한다. 실제 지급은 받을 때 SDK 의 원소 표로 다시 가른다.
 create or replace function public.ts_mail_collection_kind(p_col text)
 returns text
@@ -3454,11 +3551,27 @@ set search_path = public
 as $$
 declare
   v_kind text;
+  v_type text;
+  m      text[];
+  c_num  constant text := '(int|long|short|float|double|decimal)';
 begin
   if not exists (select 1 from pg_attribute a
                   where a.attrelid = 'public.user_data'::regclass and a.attname = p_col
                     and a.attnum > 0 and not a.attisdropped and a.atttypid = 'jsonb'::regtype) then
     return null;
+  end if;
+
+  -- 정한 타입: 원소가 숫자인 1차원 리스트·딕셔너리만 지급한다. 딕셔너리 키는 SDK 원소 표가 받는 글자·정수·열거형.
+  v_type := public.ts_user_data_field_type(p_col);
+  if v_type is not null then
+    if v_type ~ ('^AutoList<' || c_num || '>$') then
+      return 'list';
+    end if;
+    m := regexp_match(v_type, '^AutoDict<([^,]+), ' || c_num || '>$');
+    if m is not null and m[1] !~ '^(bool|byte|sbyte|short|ushort|uint|ulong|float|double|decimal|char|object|DateTime|DateTimeOffset|DateOnly|TimeOnly)$' then
+      return 'dict';
+    end if;
+    return 'other';
   end if;
 
   execute format($f$
@@ -3486,7 +3599,7 @@ end;
 $$;
 
 comment on function public.ts_mail_collection_kind(text) is
-  '리스트·딕셔너리 데이터 필드의 저장된 값 표본으로 본 모양(list·dict·other, 모르면 null). 아이템 카탈로그 판정용.';
+  '리스트·딕셔너리 데이터 필드의 모양(list·dict·other, 모르면 null). 정한 타입이 있으면 그것으로, 없으면 저장된 값 표본으로. 아이템 카탈로그 판정용.';
 
 revoke all on function public.ts_mail_collection_kind(text) from public, anon, authenticated;
 
@@ -6475,7 +6588,8 @@ set search_path = public
 as $$
   select coalesce(jsonb_agg(jsonb_build_object(
     'column_name', c.column_name, 'data_type', c.data_type,
-    'is_nullable', c.is_nullable, 'column_default', c.column_default
+    'is_nullable', c.is_nullable, 'column_default', c.column_default,
+    'field_type', public.ts_user_data_field_type(c.column_name::text)
   ) order by c.ordinal_position), '[]'::jsonb)
   from information_schema.columns c
   where c.table_schema = 'public' and c.table_name = 'user_data'
@@ -9539,6 +9653,10 @@ notify pgrst, 'reload schema';
 --     add    : {colname, coltype, nullable, default_sql}
 --     update : {colname, nullable, default_sql}
 --     drop   : {colname}
+--   user_data_field 전용
+--     add·update 의 field_type : 리스트·딕셔너리 타입(AutoDict<K, V> 등, 4절 ts_schema_field_type_norm).
+--                                update 에 이 키가 없으면 타입은 그대로, null 이면 지운다
+
 --   leaderboard_field 전용
 --     attach : {code, colname, sort_order}
 --     detach : {code, colname}
@@ -9657,6 +9775,15 @@ begin
       raise exception 'field_default_invalid: %', p_params->>'default_sql';
     end if;
   end if;
+  if p_feature = 'user_data_field' and p_action in ('add', 'update')
+     and nullif(btrim(coalesce(p_params->>'field_type', '')), '') is not null then
+    if public.ts_schema_field_type_norm(p_params->>'field_type') is null then
+      raise exception 'field_collection_type_invalid: %', p_params->>'field_type';
+    end if;
+    if p_action = 'add' and lower(btrim(coalesce(p_params->>'coltype', ''))) not in ('jsonb', 'json') then
+      raise exception 'field_collection_type_needs_json: %', p_object_name;
+    end if;
+  end if;
 
   -- 필드 추가는 게시 때 같은 이름의 칸이 있으면 실패하고, 그러면 함께 대기 중인 다른 변경까지 게시가 막힌다.
   -- 게시 때 검사(admin_add_user_data_column·ts_admin_leaderboard_add_column)와 같은 기준으로 담을 때 거절한다.
@@ -9710,7 +9837,8 @@ as $$
   select jsonb_build_object(
            'is_nullable',    c.is_nullable,
            'column_default', c.column_default,
-           'data_type',      c.data_type)
+           'data_type',      c.data_type,
+           'field_type',     case when p_table = 'user_data' then public.ts_user_data_field_type(p_column) end)
   from information_schema.columns c
   where c.table_schema = 'public' and c.table_name = p_table and c.column_name = p_column;
 $$;
@@ -9782,12 +9910,18 @@ begin
       perform public.admin_add_user_data_column(
         d.params->>'colname', d.params->>'coltype',
         coalesce((d.params->>'nullable')::boolean, true), d.params->>'default_sql');
+      if nullif(btrim(coalesce(d.params->>'field_type', '')), '') is not null then
+        perform public.admin_set_user_data_field_type(d.params->>'colname', d.params->>'field_type');
+      end if;
 
     elsif v_key = 'user_data_field.update' then
       v_before := public.ts_schema_col_snapshot('user_data', d.params->>'colname');
       perform public.admin_update_user_data_column(
         d.params->>'colname',
         coalesce((d.params->>'nullable')::boolean, true), d.params->>'default_sql');
+      if d.params ? 'field_type' then
+        perform public.admin_set_user_data_field_type(d.params->>'colname', d.params->>'field_type');
+      end if;
 
     elsif v_key = 'user_data_field.drop' then
       v_before := public.ts_schema_col_snapshot('user_data', d.params->>'colname');
@@ -9945,6 +10079,9 @@ begin
     elsif v_key = 'user_data_field.update' then
       perform public.admin_update_user_data_column(
         v_params->>'colname', coalesce((v_before->>'is_nullable') = 'YES', true), v_before->>'column_default');
+      if v_params ? 'field_type' then
+        perform public.admin_set_user_data_field_type(v_params->>'colname', v_before->>'field_type');
+      end if;
 
     -- 리더보드 테이블
     elsif v_key = 'leaderboard_table.create' then

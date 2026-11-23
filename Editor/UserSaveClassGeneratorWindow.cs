@@ -99,7 +99,7 @@ namespace TrueBase.Editor
                 if (unspecifiedNames.Count > 0)
                     EditorGUILayout.HelpBox(
                         "타입 미지정 필드: " + string.Join(", ", unspecifiedNames)
-                        + "\njsonb 컬럼은 CSV에서 Dictionary value 또는 리스트 요소 타입을 지정해야 소스를 생성할 수 있습니다.",
+                        + "\n운영 콘솔 데이터 필드에서 리스트·딕셔너리 타입을 정하거나 CSV에서 지정해야 소스를 생성할 수 있습니다.",
                         MessageType.Warning);
 
                 var defaultMissing = CollectDefaultMissingColumnNames();
@@ -234,7 +234,8 @@ namespace TrueBase.Editor
                             EditorGUILayout.Toggle(col.Include, GUILayout.Width(wInclude));
 
                         var typeTooltip = error ? resolvedType + " — 에디터가 찾지 못한 타입. 철자가 맞다면 생성 가능."
-                                        : warn  ? resolvedType + " — 타입 미지정. CSV에서 지정하세요."
+                                        : warn  ? resolvedType + " — 타입 미지정. 운영 콘솔 데이터 필드에서 정하거나 CSV에서 지정하세요."
+                                        : col.TypeFromConsole ? resolvedType + " — 운영 콘솔 데이터 필드에서 정한 타입"
                                         : resolvedType;
                         EditorGUILayout.LabelField(new GUIContent(resolvedType, typeTooltip), style, GUILayout.MinWidth(80), GUILayout.ExpandWidth(true));
                     }
@@ -275,22 +276,24 @@ namespace TrueBase.Editor
                 var stringIdx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, "string");
                 foreach (var col in parsed.Columns)
                 {
-                    var isAmbiguous = col.ClrType.Contains("/*");
-                    var typeIdx = isAmbiguous
+                    var fromConsole = col.TypeFromConsole;
+                    var isAmbiguous = !fromConsole && col.ClrType.Contains("/*");
+                    var typeIdx = isAmbiguous || fromConsole
                         ? GeneratorTypeCatalog.CustomTypeIndex
                         : Array.IndexOf(GeneratorTypeCatalog.TypeOptions, col.ClrType);
                     if (typeIdx < 0) typeIdx = stringIdx;
 
                     _editableColumns.Add(new EditableColumn
                     {
-                        Name         = col.Name,
-                        FieldName    = col.Name,
-                        Comment      = col.Comment,
-                        DefaultValue = col.DefaultValue ?? "",
-                        TypeIndex    = typeIdx,
-                        CustomType   = isAmbiguous ? "Dictionary<string, object>" : "",
-                        IsAmbiguous  = isAmbiguous,
-                        TypeCategory = isAmbiguous ? FieldTypeCategory.Json : GC.ResolveTypeCategory(col.ClrType)
+                        Name            = col.Name,
+                        FieldName       = col.Name,
+                        Comment         = col.Comment,
+                        DefaultValue    = col.DefaultValue ?? "",
+                        TypeIndex       = typeIdx,
+                        CustomType      = fromConsole ? col.ClrType : isAmbiguous ? "Dictionary<string, object>" : "",
+                        IsAmbiguous     = isAmbiguous,
+                        TypeFromConsole = fromConsole,
+                        TypeCategory    = isAmbiguous || fromConsole ? FieldTypeCategory.Json : GC.ResolveTypeCategory(col.ClrType)
                     });
                 }
 
@@ -305,6 +308,7 @@ namespace TrueBase.Editor
                 {
                     foreach (var col in _editableColumns)
                     {
+                        if (col.TypeFromConsole) continue;
                         if (!existing.TryGetValue(col.Name, out var existingType)) continue;
                         var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, existingType);
                         if (idx >= 0)
@@ -348,6 +352,9 @@ namespace TrueBase.Editor
                     else if (string.IsNullOrWhiteSpace(col.DefaultValue)
                              && fallbackDefaults.TryGetValue(col.Name, out var fv) && !string.IsNullOrWhiteSpace(fv))
                         col.DefaultValue = fv;
+                    else if (string.IsNullOrWhiteSpace(col.DefaultValue) && col.TypeFromConsole
+                             && GeneratorTypeCatalog.TryGetLeafElementDefault(col.CustomType, out var leafDefault))
+                        col.DefaultValue = leafDefault;
                 }
 
                 ValidateColumnTypes();
@@ -462,7 +469,7 @@ namespace TrueBase.Editor
                 if (!byName.TryGetValue(name, out var col)) { unknown.Add(name); continue; }
 
                 if (cells.Count > 1 && !string.IsNullOrWhiteSpace(cells[1])) col.FieldName = cells[1].Trim();
-                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2])) ApplyClrTypeToColumn(col, cells[2].Trim());
+                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2]) && !col.TypeFromConsole) ApplyClrTypeToColumn(col, cells[2].Trim());
                 if (cells.Count > 3 && !string.IsNullOrWhiteSpace(cells[3]))
                 {
                     col.Priority = GC.ParsePriority(cells[3].Trim(), out var legacyPri);
@@ -583,7 +590,7 @@ namespace TrueBase.Editor
             if (unspecified.Count > 0)
             {
                 EditorUtility.DisplayDialog(DialogTitle,
-                    "다음 필드의 타입이 미지정 상태입니다(jsonb). CSV에서 Dictionary value 또는 리스트 요소 타입을 지정한 뒤 다시 생성하세요:\n\n• "
+                    "다음 필드의 타입이 미지정 상태입니다(jsonb). 운영 콘솔 데이터 필드에서 리스트·딕셔너리 타입을 정하거나 CSV에서 지정한 뒤 다시 생성하세요:\n\n• "
                     + string.Join("\n• ", unspecified), "확인");
                 return;
             }
@@ -807,6 +814,8 @@ namespace TrueBase.Editor
             public bool              Include      = true;
             public int               TypeIndex;
             public bool              IsAmbiguous;
+            /// <summary>운영 콘솔이 정한 리스트·딕셔너리 타입 — 기존 클래스 파일·CSV 의 타입으로 덮지 않는다.</summary>
+            public bool              TypeFromConsole;
             public string            CustomType   = "";
             public bool              TypeUnresolved;
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;

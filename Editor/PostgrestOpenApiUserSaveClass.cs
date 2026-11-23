@@ -174,11 +174,30 @@ namespace TrueBase.Editor
                 if (string.IsNullOrWhiteSpace(desc))
                     desc = propObj["title"]?.Value<string>();
 
-                var clr = MapToClr(propObj);
-                list.Add(new OpenApiColumn(colName, clr, desc, defaultValue: ExtractDbDefaultRaw(propObj, clr)));
+                var declaredType = TakeDeclaredType(ref desc);
+                var clr = declaredType ?? MapToClr(propObj);
+                list.Add(new OpenApiColumn(colName, clr, desc, defaultValue: ExtractDbDefaultRaw(propObj, clr),
+                    typeFromConsole: declaredType != null));
             }
 
             return ParseTableResult.Ok(list, warnings);
+        }
+
+        /// <summary>
+        /// 운영 콘솔이 리스트·딕셔너리 데이터 필드에 정한 타입(칸 설명 첫 줄 <c>@type AutoDict&lt;K, V&gt;</c>)을 떼어 냅니다.
+        /// 나머지 줄은 설명으로 남깁니다. 서버가 꼴을 걸러 적으므로 여기서는 첫 줄만 봅니다.
+        /// </summary>
+        internal static string TakeDeclaredType(ref string description)
+        {
+            const string marker = "@type ";
+            if (string.IsNullOrEmpty(description) || !description.StartsWith(marker, StringComparison.Ordinal))
+                return null;
+
+            var newline = description.IndexOf('\n');
+            var type = (newline < 0 ? description.Substring(marker.Length) : description.Substring(marker.Length, newline - marker.Length)).Trim();
+            var rest = newline < 0 ? string.Empty : description.Substring(newline + 1).Trim();
+            description = rest.Length == 0 ? null : rest;
+            return type.Length == 0 ? null : type;
         }
 
         /// <summary>
@@ -814,14 +833,17 @@ namespace TrueBase.Editor
         /// <param name="priority">저장 우선순위. 0=Urgent, 1=Normal(기본), 2=Lazy.</param>
         /// <param name="fieldName">C# 필드명 커스터마이즈. null/빈 값이면 컬럼명(<paramref name="name"/>)을 사용.</param>
         /// <param name="defaultValue">기본값(원본 입력). 스칼라면 필드 초기화식으로, Auto 컬렉션이면 <c>[AutoDefault]</c>로 변환. null/빈 값이면 미지정.</param>
-        public OpenApiColumn(string name, string clrType, string comment, int priority = 1, string fieldName = null, string defaultValue = null)
+        /// <param name="typeFromConsole">타입을 운영 콘솔이 정했는지(칸 설명의 <c>@type</c>). 그러면 생성기 창이 다른 곳의 타입으로 덮지 않습니다.</param>
+        public OpenApiColumn(string name, string clrType, string comment, int priority = 1, string fieldName = null, string defaultValue = null,
+            bool typeFromConsole = false)
         {
-            Name         = name;
-            ClrType      = clrType;
-            Comment      = comment;
-            Priority     = priority;
-            FieldName    = fieldName;
-            DefaultValue = defaultValue;
+            Name            = name;
+            ClrType         = clrType;
+            Comment         = comment;
+            Priority        = priority;
+            FieldName       = fieldName;
+            DefaultValue    = defaultValue;
+            TypeFromConsole = typeFromConsole;
         }
 
         public string Name    { get; }
@@ -833,6 +855,8 @@ namespace TrueBase.Editor
         public string FieldName { get; }
         /// <summary>기본값(원본 입력). 스칼라→필드 초기화식, Auto 컬렉션→<c>[AutoDefault]</c>. null/빈 값이면 미지정.</summary>
         public string DefaultValue { get; }
+        /// <summary>운영 콘솔이 정한 리스트·딕셔너리 타입인지.</summary>
+        public bool   TypeFromConsole { get; }
     }
 
     internal sealed class ParseTableResult

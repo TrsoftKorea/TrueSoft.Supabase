@@ -155,11 +155,48 @@ namespace TrueBase.Editor
                 ok = IsResolvableClrType(elem, cache);
             else if (TryUnwrapDict(t, out var k, out var v))
                 ok = IsResolvableClrType(k, cache) && IsResolvableClrType(v, cache);
+            else if (TryUnwrapAuto(t, out var args))
+            {
+                ok = true;
+                foreach (var a in args)
+                    ok &= IsResolvableClrType(a, cache);
+            }
             else
                 ok = FindTypeByName(t) != null;
 
             cache[t] = ok;
             return ok;
+        }
+
+        /// <summary>AutoList·AutoList2D·AutoDict·AutoDict2D 의 제네릭 인자들.</summary>
+        private static bool TryUnwrapAuto(string t, out List<string> args)
+        {
+            args = null;
+            if (!t.EndsWith(">", StringComparison.Ordinal)) return false;
+            foreach (var prefix in new[] { "AutoList2D<", "AutoList<", "AutoDict2D<", "AutoDict<" })
+            {
+                if (!t.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                args = SplitTopLevelCommas(t.Substring(prefix.Length, t.Length - prefix.Length - 1));
+                for (var i = 0; i < args.Count; i++) args[i] = args[i].Trim();
+                return args.Count > 0 && args.TrueForAll(a => a.Length > 0);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 원소가 단순 값(숫자·bool·string)인 Auto 컬렉션이면 그 타입의 기본값을 <c>[AutoDefault]</c> 인자 꼴로 돌려줍니다.
+        /// 운영 콘솔이 타입만 정한 필드가 기본값 없이도 생성되게 합니다. 클래스·열거형 원소는 false.
+        /// </summary>
+        internal static bool TryGetLeafElementDefault(string clrType, out string defaultValue)
+        {
+            defaultValue = null;
+            if (!IsAutoDefaultableType(clrType, out var elem) || !IsAutoValueLeaf(elem)) return false;
+            switch (elem.Trim())
+            {
+                case "bool":   defaultValue = "false"; return true;
+                case "string": defaultValue = "\"\"";  return true;
+                default:       defaultValue = "0";     return true;
+            }
         }
 
         /// <summary>
