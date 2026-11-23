@@ -29,7 +29,8 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerMissing` | 대상 우편 중 하나라도 핸들러도 숫자 데이터 필드도 없는 key가 있어 어느 우편도 수령되지 않았습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 대상 우편 중 하나라도 핸들러도 서버가 더할 데이터 필드도 없는 key가 있어 어느 우편도 수령되지 않았습니다. 리스트·딕셔너리 원소를 지급할 수 없는 우편은 실패로 치지 않고 받지 않은 채 남깁니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerFailed` | 핸들러가 예외를 던졌습니다. 대상 우편은 모두 이미 수령됐고, 그 뒤 순서의 보상은 핸들러에 넘어가지 않습니다. `ErrorCode`는 `mail_item_handler_failed:<key>:<예외>`입니다 |
 
 **실사용 예시**
 

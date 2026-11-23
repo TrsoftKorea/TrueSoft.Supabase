@@ -3413,7 +3413,113 @@ comment on function public.ts_mail_grantable_columns() is
 
 revoke all on function public.ts_mail_grantable_columns() from public, anon, authenticated;
 
-create or replace function public.ts_mail_grant_items(p_items jsonb, p_client_keys text[])
+-- 보상 키가 리스트·딕셔너리 데이터 필드(user_data 의 jsonb 칸)의 원소를 가리키면 그 칸·원소를 돌려준다.
+-- 리스트는 `칸[번호]`(0부터), 딕셔너리는 `칸.키`(첫 점 뒤 전부가 키). 칸이 jsonb 가 아니면 줄이 없다.
+create or replace function public.ts_mail_element_key(p_key text)
+returns table (col text, is_list boolean, elem text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with m as (
+    select regexp_match(p_key, '^([A-Za-z_][A-Za-z0-9_]*)\[(0|[1-9][0-9]{0,5})\]$') as l,
+           regexp_match(p_key, '^([A-Za-z_][A-Za-z0-9_]*)\.(.+)$') as d
+  ), x as (
+    select m.l[1] as col, true as is_list, m.l[2] as elem from m where m.l is not null
+    union all
+    select m.d[1], false, m.d[2] from m where m.l is null and m.d is not null
+  )
+  select x.col, x.is_list, x.elem
+    from x
+   where exists (select 1 from pg_attribute a
+                  where a.attrelid = 'public.user_data'::regclass and a.attname = x.col
+                    and a.attnum > 0 and not a.attisdropped and a.atttypid = 'jsonb'::regtype)
+$$;
+
+comment on function public.ts_mail_element_key(text) is
+  '우편 보상 키가 리스트(칸[번호])·딕셔너리(칸.키) 데이터 필드의 원소를 가리키면 그 칸과 원소. 받기 지급과 아이템 카탈로그가 같은 판정을 쓴다.';
+
+revoke all on function public.ts_mail_element_key(text) from public, anon, authenticated;
+
+-- 리스트·딕셔너리 데이터 필드가 실제로 무엇을 담는지 저장된 값 표본(최대 50줄)으로 본다 — 서버는 게임의 C# 타입을 모른다.
+-- list = 숫자 리스트, dict = 숫자 딕셔너리, other = 그 밖(값이 객체·글자이거나 모양이 섞임), null = 저장된 값이 없어 모름.
+-- 콘솔 아이템 카탈로그가 원소 꼴 코드를 받을지·자동 지급으로 보일지 정한다. 실제 지급은 받을 때 SDK 의 원소 표로 다시 가른다.
+create or replace function public.ts_mail_collection_kind(p_col text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_kind text;
+begin
+  if not exists (select 1 from pg_attribute a
+                  where a.attrelid = 'public.user_data'::regclass and a.attname = p_col
+                    and a.attnum > 0 and not a.attisdropped and a.atttypid = 'jsonb'::regtype) then
+    return null;
+  end if;
+
+  execute format($f$
+    with s as (
+      select %1$I as v from public.user_data
+       where %1$I is not null and jsonb_typeof(%1$I) in ('array', 'object')
+       limit 50
+    ), e as (
+      select x.val
+        from s, lateral (
+          select value as val from jsonb_array_elements(case when jsonb_typeof(s.v) = 'array' then s.v else '[]'::jsonb end)
+          union all
+          select value from jsonb_each(case when jsonb_typeof(s.v) = 'object' then s.v else '{}'::jsonb end)
+        ) x
+    )
+    select case
+      when not exists (select 1 from s) then null
+      when (select count(distinct jsonb_typeof(v)) from s) > 1 then 'other'
+      when exists (select 1 from e where jsonb_typeof(val) not in ('number', 'null')) then 'other'
+      when (select jsonb_typeof(v) from s limit 1) = 'array' then 'list'
+      else 'dict' end
+  $f$, p_col) into v_kind;
+  return v_kind;
+end;
+$$;
+
+comment on function public.ts_mail_collection_kind(text) is
+  '리스트·딕셔너리 데이터 필드의 저장된 값 표본으로 본 모양(list·dict·other, 모르면 null). 아이템 카탈로그 판정용.';
+
+revoke all on function public.ts_mail_collection_kind(text) from public, anon, authenticated;
+
+-- 서버가 지급하는 보상 키인가 — 숫자 데이터 필드 이름이거나, 저장된 값으로 본 모양과 맞는 리스트·딕셔너리 원소 꼴.
+-- 저장된 값이 없어 모양을 모르면 원소 꼴은 받는다. 실제 지급은 받을 때 SDK 의 원소 표로 다시 가른다.
+create or replace function public.ts_mail_grantable_key(p_key text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.ts_mail_grantable_columns() c where c = p_key)
+      or exists (select 1 from public.ts_mail_element_key(p_key) k
+                  where coalesce(public.ts_mail_collection_kind(k.col), case when k.is_list then 'list' else 'dict' end)
+                        = case when k.is_list then 'list' else 'dict' end)
+$$;
+
+comment on function public.ts_mail_grantable_key(text) is
+  '우편 보상 키를 서버가 지급하는가(숫자 데이터 필드 이름, 또는 저장된 값의 모양과 맞는 리스트·딕셔너리 원소 꼴). 아이템 카탈로그의 자동 지급 판정.';
+
+revoke all on function public.ts_mail_grantable_key(text) from public, anon, authenticated;
+
+-- 리스트·딕셔너리 원소 지급은 SDK 가 보낸 원소 표(p_element_spec)에 맞는 키만 한다. 서버는 게임의 C# 타입을 모르므로,
+-- 표 없이 쓰면 값이 클래스인 칸에 숫자가 들어가 다음 로드가 깨지거나, 게임이 못 읽는 키에 쌓여 다음 저장에 덮인다.
+-- 표: {"칸": {"list": true, "num": "int"}} 또는 {"칸": {"keys": ["이름", ...] | "int" | "any", "num": "long"}}.
+-- num 은 원소의 숫자 종류(int·long·short·float·double·decimal) — 정수 종류는 범위를 넘으면 거절한다.
+-- 표가 없으면(원소 지급을 모르는 옛 SDK) 원소 꼴 키는 지급하지 않고 받기를 되돌린다 — 그 빌드는 서버가 더한 원소를
+-- 게임 안 값에 반영하지 못해, 다음 저장이 그 칸을 덮어 지급분이 사라진다. 우편은 남아 새 빌드에서 받는다.
+drop function if exists public.ts_mail_grant_items(jsonb, text[]);
+drop function if exists public.ts_mail_grant_items(jsonb, text[], boolean);
+
+create or replace function public.ts_mail_grant_items(p_items jsonb, p_client_keys text[], p_element_spec jsonb default null)
 returns jsonb
 language plpgsql
 security definer
@@ -3426,6 +3532,15 @@ declare
   v_rows    int;
   v_granted boolean;
   v_out     jsonb := '[]'::jsonb;
+  v_col     text;
+  v_is_list boolean;
+  v_elem    text;
+  v_spec    jsonb;
+  v_keys    jsonb;
+  v_num     text;
+  v_doc     jsonb;
+  v_cur     jsonb;
+  v_new     numeric;
 begin
   for e in select * from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
   loop
@@ -3433,17 +3548,78 @@ begin
     v_granted := false;
 
     if not (v_key = any(coalesce(p_client_keys, '{}'::text[]))) then
-      if v_key is null
-         or not exists (select 1 from public.ts_mail_grantable_columns() c where c = v_key) then
+      if v_key is null then
         raise exception 'mail_item_handler_missing: %', v_key;
       end if;
 
-      execute format('update public.user_data set %1$I = coalesce(%1$I, 0) + $1 where account_id = $2', v_key)
-        using (e->>'count')::int, v_uid;
-      get diagnostics v_rows = row_count;
-      -- 세이브를 한 번도 로드하지 않아 줄이 없다 — 받기를 되돌리고, 로드한 뒤 다시 받게 한다.
-      if v_rows = 0 then
-        raise exception 'user_save_not_ready';
+      if exists (select 1 from public.ts_mail_grantable_columns() c where c = v_key) then
+        execute format('update public.user_data set %1$I = coalesce(%1$I, 0) + $1 where account_id = $2', v_key)
+          using (e->>'count')::int, v_uid;
+        get diagnostics v_rows = row_count;
+        -- 세이브를 한 번도 로드하지 않아 줄이 없다 — 받기를 되돌리고, 로드한 뒤 다시 받게 한다.
+        if v_rows = 0 then
+          raise exception 'user_save_not_ready';
+        end if;
+      else
+        v_col := null;
+        select k.col, k.is_list, k.elem into v_col, v_is_list, v_elem from public.ts_mail_element_key(v_key) k;
+        v_spec := case when jsonb_typeof(p_element_spec) = 'object' then p_element_spec -> v_col end;
+        if v_col is null or v_spec is null or jsonb_typeof(v_spec) <> 'object'
+           or coalesce((v_spec->>'list')::boolean, false) <> v_is_list then
+          raise exception 'mail_item_handler_missing: %', v_key;
+        end if;
+
+        v_num := v_spec->>'num';
+        if v_num is null or v_num not in ('int', 'long', 'short', 'float', 'double', 'decimal') then
+          raise exception 'mail_item_handler_missing: %', v_key;
+        end if;
+
+        if not v_is_list then
+          v_keys := v_spec->'keys';
+          if not (   (jsonb_typeof(v_keys) = 'array' and v_keys ? v_elem)
+                  or (v_keys #>> '{}' = 'int' and v_elem ~ '^-?(0|[1-9][0-9]{0,17})$')
+                  or (v_keys #>> '{}' = 'any')) then
+            raise exception 'mail_item_handler_missing: %', v_key;
+          end if;
+        end if;
+
+        execute format('select %I from public.user_data where account_id = $1 for update', v_col)
+          into v_doc using v_uid;
+        get diagnostics v_rows = row_count;
+        if v_rows = 0 then
+          raise exception 'user_save_not_ready';
+        end if;
+
+        -- 리스트는 이미 있는 칸에만 더한다 — 서버가 칸을 늘리면 게임의 기본값 대신 빈 값이 들어간다.
+        -- 딕셔너리는 없는 키를 새로 만든다. 원소가 숫자가 아니면 받기를 되돌린다.
+        if v_is_list then
+          if v_doc is null or jsonb_typeof(v_doc) <> 'array' or v_elem::int >= jsonb_array_length(v_doc) then
+            raise exception 'mail_item_handler_missing: %', v_key;
+          end if;
+        elsif v_doc is null or jsonb_typeof(v_doc) = 'null' then
+          v_doc := '{}'::jsonb;
+        elsif jsonb_typeof(v_doc) <> 'object' then
+          raise exception 'mail_item_handler_missing: %', v_key;
+        end if;
+
+        v_cur := v_doc #> array[v_elem];
+        if v_cur is not null and jsonb_typeof(v_cur) not in ('number', 'null') then
+          raise exception 'mail_item_handler_missing: %', v_key;
+        end if;
+
+        v_new := coalesce((v_cur #>> '{}')::numeric, 0) + (e->>'count')::int;
+        if    (v_num = 'int'   and v_new not between -2147483648 and 2147483647)
+           or (v_num = 'short' and v_new not between -32768 and 32767)
+           or (v_num = 'long'  and v_new not between -9223372036854775808 and 9223372036854775807) then
+          raise exception 'mail_item_handler_missing: %', v_key;
+        end if;
+
+        -- 정수 종류는 소수점 없이 쓴다 — 기존 값이 5.0 꼴이어도 8 로(8.0 이면 게임의 int 로드가 깨진다).
+        v_doc := jsonb_set(v_doc, array[v_elem],
+                           case when v_num in ('int', 'long', 'short') then to_jsonb(trunc(v_new)::bigint) else to_jsonb(v_new) end,
+                           true);
+        execute format('update public.user_data set %I = $1 where account_id = $2', v_col)
+          using v_doc, v_uid;
       end if;
       v_granted := true;
     end if;
@@ -3455,19 +3631,24 @@ begin
 end;
 $$;
 
-comment on function public.ts_mail_grant_items(jsonb, text[]) is
-  '우편 받기 함수 전용: 처리기 키가 아닌 보상을 user_data 의 같은 이름 숫자 데이터 필드에 더하고 granted 표시를 붙여 돌려준다.';
+comment on function public.ts_mail_grant_items(jsonb, text[], jsonb) is
+  '우편 받기 함수 전용: 처리기 키가 아닌 보상을 user_data 의 같은 이름 숫자 데이터 필드나 리스트·딕셔너리 원소(칸[번호]·칸.키)에 더하고 granted 표시를 붙여 돌려준다.';
 
-revoke all on function public.ts_mail_grant_items(jsonb, text[]) from public, anon, authenticated;
+revoke all on function public.ts_mail_grant_items(jsonb, text[], jsonb) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC: 단일 메일 보상 일괄 수령 — 반환 jsonb 배열 [{index,key,count[,granted]}, ...] (빈 배열 = no-op)
 -- ---------------------------------------------------------------------------
 -- p_client_keys 가 null 이면(옛 빌드) 받음 표시만 하고 지급은 게임 처리기에 맡긴다. null 이 아니면 그 키를 뺀 보상은
--- 서버가 지급한다(ts_mail_grant_items).
+-- 서버가 지급한다(ts_mail_grant_items). p_element_spec 은 리스트·딕셔너리 원소 지급을 아는 SDK(0.4.0~)가 보내는 원소 표다.
 drop function if exists public.ts_claim_mail_items(uuid);
+drop function if exists public.ts_claim_mail_items(uuid, text[]);
+drop function if exists public.ts_claim_mail_items(uuid, text[], boolean);
 
-create or replace function public.ts_claim_mail_items(p_mail_id uuid, p_client_keys text[] default null)
+create or replace function public.ts_claim_mail_items(
+  p_mail_id        uuid,
+  p_client_keys    text[]  default null,
+  p_element_spec   jsonb   default null)
 returns jsonb
 language plpgsql
 security definer
@@ -3551,27 +3732,34 @@ begin
   from jsonb_array_elements(m.items) with ordinality as t(e, ord);
 
   if p_client_keys is not null then
-    items_out := public.ts_mail_grant_items(items_out, p_client_keys);
+    items_out := public.ts_mail_grant_items(items_out, p_client_keys, p_element_spec);
   end if;
 
   return items_out;
 end;
 $$;
 
-comment on function public.ts_claim_mail_items(uuid, text[]) is
-  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드에 서버가 지급. items 비면 [] 반환(no-op). SECURITY DEFINER.';
+comment on function public.ts_claim_mail_items(uuid, text[], jsonb) is
+  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드(p_element_spec 이 있으면 그 표에 맞는 리스트·딕셔너리 원소도)에 서버가 지급. items 비면 [] 반환(no-op). SECURITY DEFINER.';
 
-revoke all on function public.ts_claim_mail_items(uuid, text[]) from public, anon, authenticated;
-grant execute on function public.ts_claim_mail_items(uuid, text[]) to authenticated;
+revoke all on function public.ts_claim_mail_items(uuid, text[], jsonb) from public, anon, authenticated;
+grant execute on function public.ts_claim_mail_items(uuid, text[], jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC: 우편함 전체 일괄 수령 — 반환 [{mail_id, items:[{index,key,count[,granted]},...]}, ...]
 -- ---------------------------------------------------------------------------
--- p_client_keys 는 ts_claim_mail_items 와 같다. 한 우편이라도 지급할 수 없는 키가 있으면 전체를 되돌린다.
+-- p_client_keys·p_element_spec 은 ts_claim_mail_items 와 같다. 한 우편이라도 지급할 수 없는 키가 있으면 전체를 되돌린다.
+-- 단 리스트·딕셔너리 원소 키 때문에 지급할 수 없는 우편은 건너뛰고(받지 않은 채 남김) 나머지를 받는다 — 옛 빌드나
+-- 리스트에 없는 칸을 가리킨 우편 하나가 그 플레이어의 전체 받기를 만료 때까지 막지 않게.
 drop function if exists public.ts_claim_all_mail_items();
 drop function if exists public.ts_claim_all_mail_items(text);
+drop function if exists public.ts_claim_all_mail_items(text, text[]);
+drop function if exists public.ts_claim_all_mail_items(text, text[], boolean);
 
-create or replace function public.ts_claim_all_mail_items(p_category text default null, p_client_keys text[] default null)
+create or replace function public.ts_claim_all_mail_items(
+  p_category       text    default null,
+  p_client_keys    text[]  default null,
+  p_element_spec   jsonb   default null)
 returns jsonb
 language plpgsql
 security definer
@@ -3628,10 +3816,6 @@ begin
       end;
     end loop;
 
-    update public.mails
-    set items_claimed_at = now()
-    where id = r.id;
-
     select coalesce(
       jsonb_agg(
         jsonb_build_object(
@@ -3646,9 +3830,22 @@ begin
     into items_out
     from jsonb_array_elements(r.items) with ordinality as t(e, ord);
 
-    if p_client_keys is not null then
-      items_out := public.ts_mail_grant_items(items_out, p_client_keys);
-    end if;
+    begin
+      update public.mails
+      set items_claimed_at = now()
+      where id = r.id;
+
+      if p_client_keys is not null then
+        items_out := public.ts_mail_grant_items(items_out, p_client_keys, p_element_spec);
+      end if;
+    exception when raise_exception then
+      -- 원소 키 때문에 못 받는 우편은 받음 표시·지급을 이 우편만 되돌리고 건너뛴다. 그 밖의 실패는 지금처럼 전체를 되돌린다.
+      if sqlerrm like 'mail_item_handler_missing: %'
+         and exists (select 1 from public.ts_mail_element_key(substr(sqlerrm, length('mail_item_handler_missing: ') + 1))) then
+        continue;
+      end if;
+      raise;
+    end;
 
     one_mail := jsonb_build_object('mail_id', r.id::text, 'items', items_out);
     acc := acc || jsonb_build_array(one_mail);
@@ -3658,11 +3855,11 @@ begin
 end;
 $$;
 
-comment on function public.ts_claim_all_mail_items(text, text[]) is
-  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드에 서버가 지급. SECURITY DEFINER.';
+comment on function public.ts_claim_all_mail_items(text, text[], jsonb) is
+  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드(p_element_spec 이 있으면 그 표에 맞는 리스트·딕셔너리 원소도)에 서버가 지급. SECURITY DEFINER.';
 
-revoke all on function public.ts_claim_all_mail_items(text, text[]) from public, anon, authenticated;
-grant execute on function public.ts_claim_all_mail_items(text, text[]) to authenticated;
+revoke all on function public.ts_claim_all_mail_items(text, text[], jsonb) from public, anon, authenticated;
+grant execute on function public.ts_claim_all_mail_items(text, text[], jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RPC: 플레이어 소프트 삭제 (미수령 보상 있으면 거부)
@@ -6633,7 +6830,7 @@ drop index if exists public.game_items_active_idx;
 create unique index if not exists game_items_display_name_uniq
   on public.game_items (lower(btrim(display_name))) where btrim(display_name) <> '';
 
-comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 키가 숫자 데이터 필드 이름이면 받을 때 서버가 지급(ts_mail_grantable_columns), 아니면 게임 IMailItemHandler.';
+comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 키가 숫자 데이터 필드 이름이나 리스트·딕셔너리 원소 꼴이면 받을 때 서버가 지급(ts_mail_grantable_key), 아니면 게임 IMailItemHandler.';
 
 alter table public.game_items enable row level security;
 drop policy if exists "game_items_select_all" on public.game_items;
@@ -6976,8 +7173,7 @@ begin
   if p_source is not null and p_source not in ('save', 'manual') then
     raise exception 'item_source_invalid';
   end if;
-  if p_source = 'save'
-     and not exists (select 1 from public.ts_mail_grantable_columns() c where c = btrim(p_key)) then
+  if p_source = 'save' and not public.ts_mail_grantable_key(btrim(p_key)) then
     raise exception 'item_column_missing';
   end if;
   -- 새 아이템 코드가 서버가 더할 수 없는 데이터 필드(숫자 아님·예약)와 같으면 거절한다 — 운영자가 자동 지급으로
@@ -7003,7 +7199,7 @@ end;
 $$;
 
 comment on function public.ts_admin_upsert_game_item(text,text,text) is
-  '아이템 카탈로그 upsert(어드민). p_source=save 는 숫자 데이터 필드 이름만, 새 코드는 숫자가 아닌 데이터 필드 이름을 거절한다. 발송된 mails.items 에는 영향 없음.';
+  '아이템 카탈로그 upsert(어드민). p_source=save 는 숫자 데이터 필드 이름·리스트·딕셔너리 원소 꼴(ts_mail_grantable_key)만, 새 코드는 숫자가 아닌 데이터 필드 이름을 거절한다. 발송된 mails.items 에는 영향 없음.';
 
 create or replace function public.ts_admin_delete_game_item(p_key text)
 returns void
@@ -7025,6 +7221,8 @@ comment on function public.ts_admin_delete_game_item(text) is
 -- grant_mode: auto = 받을 때 서버가 지급, blocked = 코드가 숫자가 아닌 데이터 필드와 같음(등록 뒤에 그 필드가 생김),
 -- missing = 숫자 데이터 필드로 등록했는데 그 필드가 사라짐, game = 게임 처리기가 지급. blocked·missing 은 처리기가 없으면
 -- 받기 실패. 숫자 데이터 필드가 지금 있으면 등록 방식과 상관없이 auto 다 — 서버 지급 판정이 그렇다.
+-- 리스트·딕셔너리 원소 꼴(칸[번호]·칸.키)은 저장된 값의 모양과 맞으면 auto, 안 맞으면(값이 객체 등) blocked 다.
+-- 리스트 칸이 있는지·게임 타입과 맞는지는 받을 때만 안다.
 drop function if exists public.ts_admin_list_game_items(text);
 
 create or replace function public.ts_admin_list_game_items(p_search text default '')
@@ -7035,7 +7233,8 @@ security definer
 set search_path = public
 as $$
   select g.key, g.display_name, g.source,
-         case when exists (select 1 from public.ts_mail_grantable_columns() c where c = g.key) then 'auto'
+         case when public.ts_mail_grantable_key(g.key) then 'auto'
+              when exists (select 1 from public.ts_mail_element_key(g.key)) then 'blocked'
               when exists (select 1 from pg_attribute a
                             where a.attrelid = 'public.user_data'::regclass and a.attname = g.key
                               and a.attnum > 0 and not a.attisdropped) then 'blocked'
@@ -7052,12 +7251,14 @@ $$;
 comment on function public.ts_admin_list_game_items(text) is
   '아이템 카탈로그 조회(어드민 전용). 검색어가 비면 전체. grant_mode 는 받을 때 누가 지급하는지(auto·game·missing·blocked).';
 
--- ts_admin_game_item_columns — 데이터 필드 전부와 서버가 더할 수 있는지(grantable)·카탈로그 등록 여부.
+-- ts_admin_game_item_columns — 데이터 필드 전부와 서버가 더할 수 있는지(grantable)·카탈로그 등록 여부,
+-- 리스트·딕셔너리 필드인지(collection — 원소 꼴 칸[번호]·칸.키 로 등록할 수 있다)와 저장된 값으로 본 모양
+-- (collection_kind: list·dict·other·null=모름 — ts_mail_collection_kind).
 -- 화면이 grantable 필드를 제안하고, 아닌 필드 이름은 입력 단계에서 막는다.
 drop function if exists public.ts_admin_game_item_columns();
 
 create or replace function public.ts_admin_game_item_columns()
-returns table (column_name text, grantable boolean, registered boolean)
+returns table (column_name text, grantable boolean, registered boolean, collection boolean, collection_kind text)
 language sql
 stable
 security definer
@@ -7065,14 +7266,16 @@ set search_path = public
 as $$
   select a.attname::text,
          exists (select 1 from public.ts_mail_grantable_columns() c where c = a.attname::text),
-         exists (select 1 from public.game_items g where g.key = a.attname::text)
+         exists (select 1 from public.game_items g where g.key = a.attname::text),
+         a.atttypid = 'jsonb'::regtype,
+         case when a.atttypid = 'jsonb'::regtype then public.ts_mail_collection_kind(a.attname::text) end
     from pg_attribute a
    where a.attrelid = 'public.user_data'::regclass and a.attnum > 0 and not a.attisdropped
    order by a.attnum
 $$;
 
 comment on function public.ts_admin_game_item_columns() is
-  '데이터 필드 전부와 우편 보상 자동 지급 가능 여부·카탈로그 등록 여부(어드민 전용).';
+  '데이터 필드 전부와 우편 보상 자동 지급 가능 여부·카탈로그 등록 여부·리스트·딕셔너리 여부(어드민 전용).';
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_count_recipients — 발송 전 대상 수 프리뷰(all/server)
@@ -16393,8 +16596,8 @@ grant execute on function public.ts_request_withdrawal(integer)            to au
 grant execute on function public.ts_transfer_my_server(text, text)         to authenticated;
 grant execute on function public.ts_delete_my_anon_recovery_tokens()       to authenticated;
 grant execute on function public.ts_view_mail_for_user(uuid)               to authenticated;
-grant execute on function public.ts_claim_mail_items(uuid, text[])         to authenticated;
-grant execute on function public.ts_claim_all_mail_items(text, text[])     to authenticated;
+grant execute on function public.ts_claim_mail_items(uuid, text[], jsonb)       to authenticated;
+grant execute on function public.ts_claim_all_mail_items(text, text[], jsonb)   to authenticated;
 grant execute on function public.ts_delete_mail_for_user(uuid)             to authenticated;
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;
 grant execute on function public.ts_mail_inbox_counts()                    to authenticated;
@@ -16403,7 +16606,7 @@ grant execute on function public.ts_mail_client_settings()                 to au
 -- 본인 우편 RPC는 auth.uid() 기반이라 service_role로는 동작하지 않는다.
 -- 프로젝트 기본 권한 차이와 무관하게 같은 상태가 되도록 명시적으로 회수한다.
 revoke execute on function public.ts_view_mail_for_user(uuid)   from service_role;
-revoke execute on function public.ts_claim_mail_items(uuid, text[]) from service_role;
+revoke execute on function public.ts_claim_mail_items(uuid, text[], jsonb) from service_role;
 revoke execute on function public.ts_delete_mail_for_user(uuid) from service_role;
 revoke execute on function public.ts_mail_inbox_counts()        from service_role;
 

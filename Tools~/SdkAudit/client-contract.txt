@@ -105,3 +105,7 @@ table user_sessions account_id,session_token
 rpc ts_user_data_reset_pending
 rpc ts_claim_all_mail_items p_category,p_client_keys
 rpc ts_claim_mail_items p_client_keys,p_mail_id
+retired rpc ts_claim_all_mail_items p_category,p_client_keys,p_element_grants # 2026-11-23 게시 전에 p_element_spec 으로 바꿈. 이 인자를 보낸 빌드 없음
+retired rpc ts_claim_mail_items p_client_keys,p_element_grants,p_mail_id # 2026-11-23 게시 전에 p_element_spec 으로 바꿈. 이 인자를 보낸 빌드 없음
+rpc ts_claim_all_mail_items p_category,p_client_keys,p_element_spec
+rpc ts_claim_mail_items p_client_keys,p_element_spec,p_mail_id

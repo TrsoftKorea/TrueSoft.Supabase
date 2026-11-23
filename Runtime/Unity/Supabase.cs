@@ -622,6 +622,25 @@ namespace TrueBase.Unity
             return SupabaseResult.Ok;
         }
 
+        /// <summary>
+        /// 우편 보상 키마다 지급 함수를 한 번에 등록합니다. 함수는 지급 수량을 받습니다.
+        /// 키가 비었거나 함수가 null인 줄, 앞뒤 공백을 빼면 키가 같은 줄이 하나라도 있으면 아무것도 등록하지 않습니다.
+        /// </summary>
+        public static SupabaseResult RegisterMailItemHandlers(IReadOnlyDictionary<string, Action<int>> handlers)
+        {
+            if (handlers == null || handlers.Count == 0)
+                return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var pair in handlers)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || !keys.Add(pair.Key.Trim()))
+                    return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
+            }
+            foreach (var pair in handlers)
+                MailItemHandlerRegistry.Register(new DelegateMailItemHandler(pair.Key.Trim(), pair.Value));
+            return SupabaseResult.Ok;
+        }
+
         /// <summary>등록된 우편 아이템 핸들러를 해제합니다.</summary>
         public static SupabaseResult UnregisterMailItemHandler(string itemKey)
         {

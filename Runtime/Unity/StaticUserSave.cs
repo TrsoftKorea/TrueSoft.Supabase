@@ -680,28 +680,31 @@ namespace TrueBase.Unity
 
         ServerAddMark IUserSaveOperations.BeginServerAdd() => new ServerAddMark(_sendsStarted, _sendsInFlight > 0);
 
-        void IUserSaveOperations.ApplyServerAdd(string column, long amount, ServerAddMark mark)
+        IReadOnlyDictionary<string, object> IUserSaveOperations.ElementGrantSpec => DataSchema.GetElementGrantSpec<TRow>();
+
+        bool IUserSaveOperations.ApplyServerAdd(string key, long amount, ServerAddMark mark)
         {
             // 로드 전이면 다음 로드가 서버 값을 그대로 가져온다.
             if (!_hasLoadedOnce)
-                return;
+                return true;
 
-            if (!DataSchema.TryAddToNumericColumn(Current, column, amount))
-                return;
+            if (!DataSchema.TryAddServerGrant(Current, key, amount))
+                return false;
 
             // 요청을 보낸 뒤 저장이 하나도 안 나갔으면 서버 값 = 마지막 동기화본 + 지급분이다. 둘 다 더하면 다음 저장에 이 칸이 실리지 않고,
             // 그사이 게임이 바꾼 몫만 그대로 남는다.
             var raced = mark.SendInFlight || _sendsInFlight > 0 || _sendsStarted != mark.SendsStarted;
             if (!raced)
             {
-                DataSchema.TryAddToNumericColumn(_lastSynced, column, amount);
-                return;
+                DataSchema.TryAddServerGrant(_lastSynced, key, amount);
+                return true;
             }
 
             // 그사이 나간 저장이 옛 값으로 서버의 지급분을 덮었을 수 있다 — 로컬에만 더하고 다음 저장이 이 칸을 다시 보내게 한다.
             _isDirty = true;
             if ((int)DataSavePriority.Urgent < _scalarDirtyPri)
                 _scalarDirtyPri = (int)DataSavePriority.Urgent;
+            return true;
         }
 
         /// <summary>

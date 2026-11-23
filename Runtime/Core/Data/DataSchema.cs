@@ -173,31 +173,54 @@ namespace TrueBase.Core.Data
             return data;
         }
 
+        // 서버 ts_mail_element_key 와 같은 꼴 — 리스트 원소 `칸[번호]`. 아니면 첫 점으로 나눈 딕셔너리 원소 `칸.키`.
+        private static readonly System.Text.RegularExpressions.Regex ListElementKey =
+            new System.Text.RegularExpressions.Regex(@"^([A-Za-z_][A-Za-z0-9_]*)\[(0|[1-9][0-9]{0,5})\]$");
+
         /// <summary>
-        /// 숫자 칸 하나에 <paramref name="amount"/>를 더합니다. 서버가 이미 더한 우편 보상을 로컬 세이브에 맞출 때 씁니다.
-        /// 그 이름의 칸이 없거나 숫자 칸이 아니면 아무것도 하지 않고 false 를 돌려줍니다.
+        /// 서버가 이미 더한 우편 보상을 로컬 세이브에 맞춥니다. 보상 키는 숫자 칸 이름, 리스트 원소 <c>칸[번호]</c>,
+        /// 딕셔너리 원소 <c>칸.키</c> 중 하나입니다. 맞출 칸·원소가 없거나 숫자가 아니면 아무것도 하지 않고 false 를 돌려줍니다.
+        /// 딕셔너리에 없는 키는 새로 만들고, 리스트는 이미 있는 칸에만 더합니다(서버와 같다).
         /// </summary>
-        internal static bool TryAddToNumericColumn<T>(T row, string column, long amount)
+        internal static bool TryAddServerGrant<T>(T row, string key, long amount)
         {
-            if (row == null || string.IsNullOrEmpty(column)) return false;
+            if (row == null || string.IsNullOrEmpty(key)) return false;
+
+            var column = key;
+            string element = null;
+            var isList = false;
+            var match = ListElementKey.Match(key);
+            if (match.Success)
+            {
+                column = match.Groups[1].Value;
+                element = match.Groups[2].Value;
+                isList = true;
+            }
+            else
+            {
+                var dot = key.IndexOf('.');
+                if (dot > 0)
+                {
+                    column = key.Substring(0, dot);
+                    element = key.Substring(dot + 1);
+                }
+            }
 
             foreach (var m in GetMappedMembers(typeof(T)))
             {
                 if (!string.Equals(ResolveColumnName(m), column, StringComparison.Ordinal))
                     continue;
 
-                var type = m is FieldInfo f ? f.FieldType : ((PropertyInfo)m).PropertyType;
-                var t = Nullable.GetUnderlyingType(type) ?? type;
                 var current = GetValue(m, row);
+                if (element != null)
+                {
+                    return isList
+                        ? TryAddToListElement(current, int.Parse(element, System.Globalization.CultureInfo.InvariantCulture), amount)
+                        : TryAddToDictElement(current, element, amount);
+                }
 
-                object next;
-                if (t == typeof(int)) next = (int)((current is int i ? i : 0) + amount);
-                else if (t == typeof(long)) next = (current is long l ? l : 0L) + amount;
-                else if (t == typeof(short)) next = (short)((current is short s ? s : (short)0) + amount);
-                else if (t == typeof(float)) next = (current is float fl ? fl : 0f) + amount;
-                else if (t == typeof(double)) next = (current is double d ? d : 0d) + amount;
-                else if (t == typeof(decimal)) next = (current is decimal dc ? dc : 0m) + amount;
-                else return false;
+                var type = m is FieldInfo f ? f.FieldType : ((PropertyInfo)m).PropertyType;
+                if (!TryAddNumber(type, current, amount, out var next)) return false;
 
                 if (m is FieldInfo fi) fi.SetValue(row, next);
                 else if (m is PropertyInfo pi && pi.CanWrite) pi.SetValue(row, next);
@@ -206,6 +229,142 @@ namespace TrueBase.Core.Data
             }
 
             return false;
+        }
+
+        private static bool TryAddToListElement(object collection, int index, long amount)
+        {
+            if (!(collection is IList list) || index < 0 || index >= list.Count) return false;
+
+            var elementType = GetGenericArguments(collection.GetType(), typeof(IList<>))?[0];
+            if (elementType == null || !TryAddNumber(elementType, list[index], amount, out var next)) return false;
+
+            list[index] = next;
+            return true;
+        }
+
+        private static bool TryAddToDictElement(object collection, string key, long amount)
+        {
+            if (!(collection is IDictionary dict)) return false;
+
+            var args = GetGenericArguments(collection.GetType(), typeof(IDictionary<,>));
+            if (args == null || !TryConvertKey(key, args[0], out var typedKey)) return false;
+
+            var current = dict.Contains(typedKey) ? dict[typedKey] : null;
+            if (!TryAddNumber(args[1], current, amount, out var next)) return false;
+
+            dict[typedKey] = next;
+            return true;
+        }
+
+        /// <summary>
+        /// 우편 받기에 실어 보내는 원소 표입니다. 서버는 게임의 C# 타입을 모르므로, 이 표에 있는 리스트·딕셔너리 칸의
+        /// 숫자 원소에만 지급합니다(<c>ts_mail_grant_items</c>의 <c>p_element_spec</c>).
+        /// 칸마다 <c>{"list": true, "num": "int"}</c> 또는 <c>{"keys": [열거형 이름…] | "int" | "any", "num": "long"}</c>이고,
+        /// 원소가 숫자가 아니거나 키를 <see cref="TryAddServerGrant{T}"/>가 되돌릴 수 없는 칸은 빠집니다.
+        /// </summary>
+        internal static IReadOnlyDictionary<string, object> GetElementGrantSpec<T>() => ElementSpecCache<T>.Spec;
+
+        private static class ElementSpecCache<T>
+        {
+            public static readonly IReadOnlyDictionary<string, object> Spec = BuildElementGrantSpec(typeof(T));
+        }
+
+        private static Dictionary<string, object> BuildElementGrantSpec(Type rowType)
+        {
+            var spec = new Dictionary<string, object>(StringComparer.Ordinal);
+            foreach (var m in GetMappedMembers(rowType))
+            {
+                var column = ResolveColumnName(m);
+                if (string.IsNullOrEmpty(column)) continue;
+                var type = m is FieldInfo f ? f.FieldType : ((PropertyInfo)m).PropertyType;
+
+                var dictArgs = GetGenericArguments(type, typeof(IDictionary<,>));
+                if (dictArgs != null)
+                {
+                    var keys = KeySpec(dictArgs[0]);
+                    var num = NumberKind(dictArgs[1]);
+                    if (keys != null && num != null)
+                        spec[column] = new Dictionary<string, object> { ["keys"] = keys, ["num"] = num };
+                    continue;
+                }
+
+                var listArgs = GetGenericArguments(type, typeof(IList<>));
+                if (listArgs != null && type != typeof(string))
+                {
+                    var num = NumberKind(listArgs[0]);
+                    if (num != null)
+                        spec[column] = new Dictionary<string, object> { ["list"] = true, ["num"] = num };
+                }
+            }
+            return spec;
+        }
+
+        // TryConvertKey 가 글자를 같은 키로 되돌릴 수 있는 키 타입만. 열거형은 Newtonsoft 가 이름으로 적는다.
+        private static object KeySpec(Type keyType)
+        {
+            if (keyType == typeof(string)) return "any";
+            if (keyType.IsEnum) return Enum.GetNames(keyType);
+            if (keyType == typeof(int) || keyType == typeof(long)) return "int";
+            return null;
+        }
+
+        // TryAddNumber 가 더할 수 있는 숫자 타입만.
+        private static string NumberKind(Type type)
+        {
+            var t = Nullable.GetUnderlyingType(type) ?? type;
+            if (t == typeof(int)) return "int";
+            if (t == typeof(long)) return "long";
+            if (t == typeof(short)) return "short";
+            if (t == typeof(float)) return "float";
+            if (t == typeof(double)) return "double";
+            if (t == typeof(decimal)) return "decimal";
+            return null;
+        }
+
+        private static Type[] GetGenericArguments(Type type, Type openInterface)
+        {
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == openInterface)
+                return type.GetGenericArguments();
+            foreach (var i in type.GetInterfaces())
+            {
+                if (i.IsGenericType && i.GetGenericTypeDefinition() == openInterface)
+                    return i.GetGenericArguments();
+            }
+            return null;
+        }
+
+        // JSON 객체의 키는 글자라 딕셔너리 키 타입으로 되돌린다. 열거형은 Newtonsoft 가 이름으로 적는다.
+        private static bool TryConvertKey(string raw, Type keyType, out object key)
+        {
+            key = null;
+            try
+            {
+                if (keyType == typeof(string)) key = raw;
+                else if (keyType.IsEnum) key = Enum.Parse(keyType, raw);
+                else key = Convert.ChangeType(raw, keyType, System.Globalization.CultureInfo.InvariantCulture);
+                return key != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryAddNumber(Type type, object current, long amount, out object next)
+        {
+            var t = Nullable.GetUnderlyingType(type) ?? type;
+            if (t == typeof(int)) next = (int)((current is int i ? i : 0) + amount);
+            else if (t == typeof(long)) next = (current is long l ? l : 0L) + amount;
+            else if (t == typeof(short)) next = (short)((current is short s ? s : (short)0) + amount);
+            else if (t == typeof(float)) next = (current is float fl ? fl : 0f) + amount;
+            else if (t == typeof(double)) next = (current is double d ? d : 0d) + amount;
+            else if (t == typeof(decimal)) next = (current is decimal dc ? dc : 0m) + amount;
+            else
+            {
+                next = null;
+                return false;
+            }
+            return true;
         }
 
         /// <summary>

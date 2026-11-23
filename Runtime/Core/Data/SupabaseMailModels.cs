@@ -171,6 +171,29 @@ namespace TrueBase.Core.Data
         public IReadOnlyList<MailItemPayload> Items { get; set; }
     }
 
+    /// <summary><c>Supabase.RegisterMailItemHandlers</c>가 키마다 만드는 처리기. 수량만 넘겨 게임 함수를 부른다.</summary>
+    internal sealed class DelegateMailItemHandler : IMailItemHandler
+    {
+        private readonly Action<int> _grant;
+
+        public DelegateMailItemHandler(string itemKey, Action<int> grant)
+        {
+            ItemKey = itemKey;
+            _grant = grant;
+        }
+
+        public string ItemKey { get; }
+
+        public Task<Common.SupabaseResult<ClaimResult>> HandleAsync(string mailId, int itemIndex, string itemKey, int count)
+        {
+            _grant(count);
+            return Task.FromResult(Common.SupabaseResult<ClaimResult>.Success(new ClaimResult
+            {
+                MailId = mailId, ItemIndex = itemIndex, ItemKey = itemKey, Count = count
+            }));
+        }
+    }
+
     /// <summary>전역 핸들러 레지스트리. 게임은 <c>Supabase.RegisterMailItemHandler</c>로 등록한다.</summary>
     internal static class MailItemHandlerRegistry
     {

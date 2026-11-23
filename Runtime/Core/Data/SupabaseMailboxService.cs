@@ -114,11 +114,13 @@ namespace TrueBase.Core.Data
         /// <summary>단일 메일의 보상을 수령 처리합니다. RPC <c>ts_claim_mail_items</c>. 보상 없음이면 빈 목록(no-op).</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="mailId">수령할 메일 UUID. 필수.</param>
-        /// <param name="clientKeys">게임 처리기가 지급할 키. 그 밖의 보상은 서버가 세이브 칸에 바로 더하고, 더할 칸이 없으면 받기 전체가 실패합니다.</param>
+        /// <param name="clientKeys">게임 처리기가 지급할 키. 그 밖의 보상은 서버가 숫자 칸이나 리스트·딕셔너리 원소에 바로 더하고, 더할 곳이 없으면 받기 전체가 실패합니다. 원소는 <paramref name="elementSpec"/> 표에 맞는 것만 서버가 지급합니다.</param>
+        /// <param name="elementSpec">서버가 지급해도 되는 리스트·딕셔너리 원소 표(<c>DataSchema.GetElementGrantSpec</c>). 비어 있으면 원소 꼴 키는 지급하지 않습니다.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailItemPayload>>> ClaimMailItemsRpcAsync(
             string accessToken,
             string mailId,
-            IReadOnlyCollection<string> clientKeys)
+            IReadOnlyCollection<string> clientKeys,
+            IReadOnlyDictionary<string, object> elementSpec)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<MailItemPayload>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -130,7 +132,8 @@ namespace TrueBase.Core.Data
             var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
                 ["p_mail_id"] = mailId.Trim(),
-                ["p_client_keys"] = clientKeys ?? Array.Empty<string>()
+                ["p_client_keys"] = clientKeys ?? Array.Empty<string>(),
+                ["p_element_spec"] = elementSpec ?? new Dictionary<string, object>()
             });
 
             var response = await _httpClient.SendAsync(
@@ -153,10 +156,12 @@ namespace TrueBase.Core.Data
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="category">수령 대상 분류. null·공백이면 전체 분류.</param>
         /// <param name="clientKeys">게임 처리기가 지급할 키. <see cref="ClaimMailItemsRpcAsync"/>와 같습니다.</param>
+        /// <param name="elementSpec">원소 표. <see cref="ClaimMailItemsRpcAsync"/>와 같습니다. 원소 키 때문에 지급할 수 없는 우편은 서버가 건너뜁니다.</param>
         public async Task<SupabaseResult<IReadOnlyList<MailClaimBundle>>> ClaimAllMailItemsRpcAsync(
             string accessToken,
             string category,
-            IReadOnlyCollection<string> clientKeys)
+            IReadOnlyCollection<string> clientKeys,
+            IReadOnlyDictionary<string, object> elementSpec)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<IReadOnlyList<MailClaimBundle>>.Fail(SupabaseErrorCode.AccessTokenEmpty);
@@ -165,7 +170,8 @@ namespace TrueBase.Core.Data
             var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
                 ["p_category"] = string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
-                ["p_client_keys"] = clientKeys ?? Array.Empty<string>()
+                ["p_client_keys"] = clientKeys ?? Array.Empty<string>(),
+                ["p_element_spec"] = elementSpec ?? new Dictionary<string, object>()
             });
             var response = await _httpClient.SendAsync(
                 method: "POST",

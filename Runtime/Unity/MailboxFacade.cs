@@ -112,8 +112,9 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 우편 1건의 첨부 보상을 수령합니다.
-        /// 처리기가 등록된 키는 게임 처리기가, 그 밖의 키는 서버가 받기와 같은 처리 안에서 세이브의 같은 이름 숫자 칸에 지급합니다.
-        /// 처리기도 없고 숫자 칸도 아닌 키가 있으면 서버가 받기 전체를 되돌립니다(<c>mail_item_handler_missing</c>).
+        /// 처리기가 등록된 키는 게임 처리기가, 그 밖의 키는 서버가 받기와 같은 처리 안에서 세이브의 같은 이름 숫자 칸이나
+        /// 리스트·딕셔너리 원소(<c>칸[번호]</c>·<c>칸.키</c>)에 지급합니다.
+        /// 처리기도 없고 서버가 더할 곳도 없는 키가 있으면 서버가 받기 전체를 되돌립니다(<c>mail_item_handler_missing</c>).
         /// </summary>
         public Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimMailItemsAsync(string mailId) =>
             ClaimMailItemsAsync(_sessionGetter?.Invoke(), mailId);
@@ -129,7 +130,7 @@ namespace TrueBase.Unity
             var save = SupabaseSDK._userSave;
             var mark = save?.BeginServerAdd() ?? default;
 
-            var rpc = await _mailbox.ClaimMailItemsRpcAsync(token, mailId, MailItemHandlerRegistry.Keys());
+            var rpc = await _mailbox.ClaimMailItemsRpcAsync(token, mailId, MailItemHandlerRegistry.Keys(), ElementSpec(save));
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_rpc_failed");
 
@@ -139,7 +140,8 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 미수령 보상이 있는 모든 우편의 보상을 일괄 수령합니다. 지급 방식은 <see cref="ClaimMailItemsAsync(string)"/>와 같고,
-        /// 한 우편이라도 지급할 수 없는 키가 있으면 전체가 받아지지 않습니다.
+        /// 한 우편이라도 지급할 수 없는 키가 있으면 전체가 받아지지 않습니다. 단 리스트·딕셔너리 원소 키 때문에 지급할 수 없는 우편은
+        /// 받지 않은 채 건너뛰고 나머지를 받습니다.
         /// </summary>
         public Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync(string category = null) =>
             ClaimAllMailItemsAsync(_sessionGetter?.Invoke(), category);
@@ -155,7 +157,7 @@ namespace TrueBase.Unity
             var save = SupabaseSDK._userSave;
             var mark = save?.BeginServerAdd() ?? default;
 
-            var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category, MailItemHandlerRegistry.Keys());
+            var rpc = await _mailbox.ClaimAllMailItemsRpcAsync(token, category, MailItemHandlerRegistry.Keys(), ElementSpec(save));
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_all_rpc_failed");
 
@@ -236,10 +238,19 @@ namespace TrueBase.Unity
 
             foreach (var line in lines)
             {
-                if (line != null && line.GrantedByServer && !string.IsNullOrWhiteSpace(line.Key))
-                    save.ApplyServerAdd(line.Key, line.Count, mark);
+                if (line == null || !line.GrantedByServer || string.IsNullOrWhiteSpace(line.Key))
+                    continue;
+                // 서버는 원소 표에 맞는 키만 지급하므로 여기서 못 맞추는 일은 없어야 한다. 생기면 지급분이 다음 저장에 덮일 수 있다.
+                if (!save.ApplyServerAdd(line.Key, line.Count, mark))
+                    UnityEngine.Debug.LogError($"[Supabase.Mailbox] 서버가 지급한 '{line.Key}' x{line.Count} 를 게임 안 값에 반영하지 못했습니다. 다시 로드하기 전에 그 데이터 필드를 저장하면 지급분이 사라질 수 있습니다.");
             }
         }
+
+        // 세이브 클래스가 없으면 원소를 맞출 곳이 없다 — 빈 표를 보내 서버가 원소 지급을 하지 않게 한다.
+        private static IReadOnlyDictionary<string, object> ElementSpec(IUserSaveOperations save) =>
+            save?.ElementGrantSpec ?? EmptySpec;
+
+        private static readonly IReadOnlyDictionary<string, object> EmptySpec = new Dictionary<string, object>();
 
         /// <summary>
         /// 받은 보상을 <c>Index</c> 오름차순으로 게임에 넘깁니다. 서버가 지급한 보상은 결과에만 담고(로컬 반영은
@@ -271,9 +282,19 @@ namespace TrueBase.Unity
                 if (!MailItemHandlerRegistry.TryGetHandler(line.Key, out var handler))
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + line.Key);
 
-                var r = await handler.HandleAsync(mailId, line.Index, line.Key, line.Count);
-                if (!r.IsSuccess)
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(r.ErrorCode ?? "mail_handler_failed");
+                SupabaseResult<ClaimResult> r;
+                try
+                {
+                    r = await handler.HandleAsync(mailId, line.Index, line.Key, line.Count);
+                }
+                catch (Exception e)
+                {
+                    // 처리기 예외를 받기 결과의 실패로 돌려준다 — 받기 호출이 예외로 끝나면 게임이 결과를 못 본다. 우편은 이미 받음 처리됐다.
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(
+                        $"{SupabaseErrorCode.MailItemHandlerFailed}:{line.Key}:{e.GetType().Name}: {e.Message}");
+                }
+                if (r == null || !r.IsSuccess)
+                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(r?.ErrorCode ?? $"{SupabaseErrorCode.MailItemHandlerFailed}:{line.Key}");
 
                 if (r.Data != null)
                     results.Add(r.Data);

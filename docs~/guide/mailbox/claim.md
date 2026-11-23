@@ -4,7 +4,7 @@
 Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimMailItemsAsync(string mailId)
 ```
 
-우편 1건의 첨부 보상을 수령합니다. 보상 키와 같은 이름의 숫자 데이터 필드에는 서버가 수령과 함께 더하고, 그 밖의 키는 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 지급합니다. 이 호출 안에서 지급까지 끝나므로 결과는 보상 표시에만 씁니다.
+우편 1건의 첨부 보상을 수령합니다. 숫자 데이터 필드나 리스트·딕셔너리 원소를 가리키는 보상 키는 서버가 수령과 함께 더하고, 그 밖의 키는 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 지급합니다. 이 호출 안에서 지급까지 끝나므로 결과는 보상 표시에만 씁니다.
 
 ```csharp
 var result = await Supabase.ClaimMailItemsAsync(mailId);
@@ -35,7 +35,8 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerMissing` | 핸들러도 없고 같은 이름의 숫자 데이터 필드도 없는 key가 있습니다. 우편은 수령되지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 핸들러도 없고 서버가 더할 데이터 필드·원소도 없는 key가 있습니다. 우편은 수령되지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerFailed` | 핸들러가 예외를 던졌습니다. 우편은 이미 수령됐고, 그 뒤 순서의 보상은 핸들러에 넘어가지 않습니다. `ErrorCode`는 `mail_item_handler_failed:<key>:<예외>`입니다 |
 | `SupabaseReason.MailExpired` | 만료된 우편입니다 |
 | `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
 | `SupabaseReason.AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |

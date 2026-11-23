@@ -246,8 +246,11 @@ namespace TrueBase.Core.Common
         /// <summary>변경된 값이 없어 저장을 건너뛰었습니다. 오류가 아니라 "보낼 것이 없었다"는 뜻입니다.</summary>
         public const string UserSaveNoChanges = "user_save_no_changes";
 
-        /// <summary>우편 아이템 핸들러가 null이거나 <c>ItemKey</c>가 비어 있습니다.</summary>
+        /// <summary>우편 아이템 핸들러가 null이거나 키가 비어 있습니다. 일괄 등록이면 목록이 비었거나, 키가 같은 줄이 있습니다.</summary>
         public const string MailItemHandlerInvalid = "mail_item_handler_invalid";
+
+        /// <summary>우편 아이템 핸들러가 예외를 던졌습니다. 뒤에 <c>:</c>와 그 key, 예외가 붙습니다.</summary>
+        public const string MailItemHandlerFailed = "mail_item_handler_failed";
 
         /// <summary>우편 아이템 key에 등록된 핸들러가 없어 수령 전에 멈췄습니다. 뒤에 <c>:</c>와 그 key가 붙습니다.</summary>
         public const string MailItemHandlerMissing = "mail_item_handler_missing";

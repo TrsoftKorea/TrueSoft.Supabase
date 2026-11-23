@@ -171,6 +171,7 @@
         PushTokenInvalid,
         PushNightRequiresAdConsent,
         ProfileNotFound,
+        MailItemHandlerFailed,
     }
 
     /// <summary>실패 사유 문자열(<see cref="SupabaseResult.ErrorCode"/>)을 <see cref="SupabaseReason"/>로 매핑합니다.</summary>
@@ -251,6 +252,7 @@
             SupabaseErrorCode.UserSaveSerializeFailed => SupabaseReason.UserSaveSerializeFailed,
             SupabaseErrorCode.MailItemHandlerInvalid => SupabaseReason.MailItemHandlerInvalid,
             SupabaseErrorCode.MailItemHandlerMissing => SupabaseReason.MailItemHandlerMissing,
+            SupabaseErrorCode.MailItemHandlerFailed => SupabaseReason.MailItemHandlerFailed,
             SupabaseErrorCode.MailNotFound => SupabaseReason.MailNotFound,
             SupabaseErrorCode.Forbidden => SupabaseReason.Forbidden,
             SupabaseErrorCode.ForbiddenServer => SupabaseReason.ForbiddenServer,
@@ -341,6 +343,8 @@
             _ when errorCode.StartsWith(SupabaseErrorCode.UserSaveSerializeFailed + ":", System.StringComparison.Ordinal) => SupabaseReason.UserSaveSerializeFailed,
             // 뒤에 핸들러가 없는 아이템 key 가 붙는다.
             _ when errorCode.StartsWith(SupabaseErrorCode.MailItemHandlerMissing + ":", System.StringComparison.Ordinal) => SupabaseReason.MailItemHandlerMissing,
+            // 뒤에 아이템 key 와 처리기가 던진 예외가 붙는다.
+            _ when errorCode.StartsWith(SupabaseErrorCode.MailItemHandlerFailed + ":", System.StringComparison.Ordinal) => SupabaseReason.MailItemHandlerFailed,
             _ => SupabaseReason.Unknown,
         };
     }

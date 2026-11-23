@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using TrueBase.Core.Common;
 
@@ -23,10 +24,14 @@ namespace TrueBase.Unity
         ServerAddMark BeginServerAdd();
 
         /// <summary>
-        /// 서버가 이미 더한 값을 로컬 세이브에 맞춥니다. 그 사이 저장이 나갔으면 그 저장이 서버 값을 옛 값으로 덮었을 수 있어,
-        /// 로컬에만 더하고 바뀐 것으로 표시해 다음 저장이 서버를 맞추게 합니다.
+        /// 서버가 이미 더한 값을 로컬 세이브에 맞춥니다. <paramref name="key"/>는 숫자 칸 이름 또는 리스트·딕셔너리 원소(<c>칸[번호]</c>·<c>칸.키</c>)입니다.
+        /// 그 사이 저장이 나갔으면 그 저장이 서버 값을 옛 값으로 덮었을 수 있어, 로컬에만 더하고 바뀐 것으로 표시해 다음 저장이 서버를 맞추게 합니다.
         /// </summary>
-        void ApplyServerAdd(string column, long amount, ServerAddMark mark);
+        /// <returns>로컬에 맞출 칸·원소를 찾지 못하면 false. 로드 전이면 다음 로드가 서버 값을 가져오므로 true.</returns>
+        bool ApplyServerAdd(string key, long amount, ServerAddMark mark);
+
+        /// <summary>우편 받기에 실어 보내는 원소 표(<c>DataSchema.GetElementGrantSpec</c>). 서버는 이 표에 맞는 원소에만 지급합니다.</summary>
+        IReadOnlyDictionary<string, object> ElementGrantSpec { get; }
     }
 
     /// <summary>서버 지급 요청을 보낼 때의 저장 상태. 응답 사이에 저장이 나갔는지 가릅니다.</summary>
