@@ -15,6 +15,8 @@ import { formatCount, itemsText } from '../components/ui/format'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { playerLabel } from '../components/ui/PlayerLink'
+import { brokenItemsIn, itemOptionLabel, type CatalogItem } from '../lib/gameItems'
+import { BrokenItemNote, BrokenItemsConfirm } from '../components/ItemGrantNote'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -22,7 +24,7 @@ type RepeatUnit = 'day' | 'week' | 'month'
 type ItemRow = { key: string; count: number }
 type LangRow = { lang: string; title: string; content: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
-type GameItem = { key: string; display_name: string }
+type GameItem = CatalogItem
 type CategoryRow = { key: string; display_name: string }
 type PlayerRow = { account_id: string; display_name: string | null }
 
@@ -240,7 +242,7 @@ export default function Mails({
     setActive(0); setReached(0)
   }
 
-  // 보낸 우편은 회수할 수 없어, 대상과 상관없이 매번 확인 창을 거친다.
+  // 받은 우편은 거둘 수 없어(우편 내역의 거두기는 안 받은 것만 지운다), 대상과 상관없이 매번 확인 창을 거친다.
   const requestSubmit = () => {
     if (!canSend || sending) return
     setSendError('')
@@ -473,12 +475,15 @@ export default function Mails({
             </div>
             {items.length === 0 && <p className="text-xs text-neutral-400">첨부할 보상이 없으면 비워 두세요.</p>}
             {items.map((it, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
-                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
-                </select>
-                <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
-                <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+              <div key={i} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
+                    {catalog.map((c) => (<option key={c.key} value={c.key}>{itemOptionLabel(c)}</option>))}
+                  </select>
+                  <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
+                  <button onClick={() => delItem(i)} className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+                </div>
+                <BrokenItemNote mode={catalog.find((c) => c.key === it.key)?.grant_mode} />
               </div>
             ))}
             {catalog.length === 0 && <div className="text-xs text-amber-600">카탈로그가 비어 있습니다. 아이템 카탈로그 페이지에서 먼저 등록하세요.</div>}
@@ -536,8 +541,9 @@ export default function Mails({
         error={sendError || undefined}
         onConfirm={() => { void submit() }}
         onCancel={() => setAskSend(false)}
-        description="보낸 우편은 회수할 수 없습니다. 대상과 아이템을 다시 확인하세요."
+        description="플레이어가 받은 우편은 거둘 수 없습니다. 받기 전 우편은 우편 내역에서 거둘 수 있습니다."
       >
+        <BrokenItemsConfirm items={brokenItemsIn(items, catalog)} />
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
           <div className="text-neutral-800">{title || '제목 없음'}</div>
           <InfoList items={[

@@ -8,11 +8,12 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { TableCard } from '../components/ui/DataTable'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
-import { formatDateTime } from '../components/ui/format'
+import { formatCount, formatDateTime } from '../components/ui/format'
+import { Link } from 'react-router-dom'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { StatusText } from '../components/ui/StatusText'
-import { isBrokenGrant, type GrantMode } from '../lib/gameItems'
+import { GRANT_NAME, isBrokenGrant, type GrantMode } from '../lib/gameItems'
 
 type Item = { key: string; display_name: string; created_at: string; source?: 'save' | 'manual'; grant_mode?: GrantMode }
 // grantable: 서버가 수량을 더할 수 있는 숫자 데이터 필드. 예약 필드(id·account_id)와 숫자가 아닌 필드는 false.
@@ -20,11 +21,36 @@ type DataField = { column_name: string; grantable: boolean; registered: boolean 
 type FormItem = { key: string; display_name: string }
 const EMPTY: FormItem = { key: '', display_name: '' }
 
-const GRANT_LABEL: Record<GrantMode, ReactNode> = {
-  auto: <StatusText tone="ok">자동 지급</StatusText>,
-  game: <StatusText tone="plain">게임 처리</StatusText>,
-  missing: <StatusText tone="bad">필드 없음</StatusText>,
-  blocked: <StatusText tone="bad">형식 다름</StatusText>,
+const GRANT_TONE: Record<GrantMode, 'ok' | 'plain' | 'bad'> = { auto: 'ok', game: 'plain', missing: 'bad', blocked: 'bad' }
+const GRANT_LABEL = Object.fromEntries(
+  (Object.keys(GRANT_TONE) as GrantMode[]).map((m) => [m, <StatusText tone={GRANT_TONE[m]}>{GRANT_NAME[m]}</StatusText>]),
+) as Record<GrantMode, ReactNode>
+
+// gameItems.usage 한 줄 — 받기가 실패할 수 있는 우편이 어디 남아 있는지.
+type Usage = { key: string; pending_mails: number; open_batches: number; active_schedules: number; active_coupons: number }
+const USAGE_PARTS: { field: keyof Omit<Usage, 'key'>; label: string; to: string }[] = [
+  { field: 'pending_mails', label: '안 받은 우편', to: '/mails/records' },
+  { field: 'open_batches', label: '배달 중인 발송', to: '/mails/records' },
+  { field: 'active_schedules', label: '켜진 예약', to: '/mails/schedules' },
+  { field: 'active_coupons', label: '쓸 수 있는 쿠폰', to: '/coupons' },
+]
+
+/** 막힌 아이템 줄의 둘째 줄 — 0인 것은 빼고, 각 수는 처리할 화면으로 간다. */
+function UsageLine({ usage }: { usage: Usage | null | undefined }) {
+  if (usage === undefined) return <div className="text-xs text-neutral-400">세는 중</div>
+  if (usage === null) return <div className="text-xs text-neutral-500">남은 우편 수를 세지 못했습니다.</div>
+  const parts = USAGE_PARTS.filter((p) => usage[p.field] > 0)
+  if (parts.length === 0) return <div className="text-xs text-neutral-500">남은 우편 없음</div>
+  return (
+    <div className="text-xs text-neutral-500">
+      {parts.map((p, i) => (
+        <span key={p.field}>
+          {i > 0 && ' · '}
+          <Link to={p.to} className="hover:underline">{p.label} {formatCount(usage[p.field])}</Link>
+        </span>
+      ))}
+    </div>
+  )
 }
 // 콘솔은 게임에 처리 코드가 등록됐는지 알 수 없다 — 그 한계를 물음표에 숨겨 둔다.
 const GRANT_HELP = [
@@ -76,12 +102,33 @@ export default function GameItems({
     [onUnauthenticated],
   )
 
+  // 막힌 아이템이 아직 붙어 있는 우편·발송·예약·쿠폰 수. undefined = 세는 중, null = 못 셈.
+  // 우편 표를 훑는 조회라 막힌 코드만 묻는다(서버 한도 50개).
+  const [usage, setUsage] = useState<Record<string, Usage> | null | undefined>(undefined)
+  const usageReq = useRef(0)
+  const loadUsage = useCallback(async (list: Item[]) => {
+    const req = ++usageReq.current
+    const keys = list.filter((r) => isBrokenGrant(r.grant_mode)).map((r) => r.key).slice(0, 50)
+    if (keys.length === 0) { setUsage({}); return }
+    setUsage(undefined)
+    try {
+      const res = await callAdmin<Usage[]>(target, 'gameItems.usage', { keys })
+      if (req === usageReq.current) setUsage(Object.fromEntries(res.map((u) => [u.key, u])))
+    } catch (e: unknown) {
+      if (req !== usageReq.current) return
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setUsage(null)
+    }
+  }, [target, onUnauthenticated])
+
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     setLoadFailed(false)
     try {
-      setRows(await callAdmin<Item[]>(target, 'gameItems.list'))
+      const list = await callAdmin<Item[]>(target, 'gameItems.list')
+      setRows(list)
+      void loadUsage(list)
     } catch (e: unknown) {
       report(e, '불러오지 못했습니다.')
       setRows([])
@@ -89,7 +136,7 @@ export default function GameItems({
     } finally {
       setLoading(false)
     }
-  }, [target, report])
+  }, [target, report, loadUsage])
 
   useEffect(() => {
     void load()
@@ -171,7 +218,7 @@ export default function GameItems({
     <span className="text-xs text-red-600">숫자가 아닌 데이터 필드 이름이라 쓸 수 없습니다.</span>
   ) : (
     <span className="text-xs text-neutral-500 inline-flex items-center gap-1.5">
-      지급 방식 {isSaveColumn ? <StatusText tone="ok">자동 지급</StatusText> : <StatusText tone="plain">게임 처리</StatusText>}
+      지급 방식 {isSaveColumn ? GRANT_LABEL.auto : GRANT_LABEL.game}
     </span>
   )
 
@@ -336,7 +383,12 @@ export default function GameItems({
                 </span>
               </span>
             ),
-            cell: (it) => it.grant_mode ? GRANT_LABEL[it.grant_mode] : null,
+            cell: (it) => !it.grant_mode ? null : isBrokenGrant(it.grant_mode) ? (
+              <div>
+                {GRANT_LABEL[it.grant_mode]}
+                <UsageLine usage={usage === null ? null : usage === undefined ? undefined : usage[it.key] ?? null} />
+              </div>
+            ) : GRANT_LABEL[it.grant_mode],
           },
           { key: 'created', header: '등록 시각', kind: 'datetime', cell: (it) => formatDateTime(it.created_at) },
           {

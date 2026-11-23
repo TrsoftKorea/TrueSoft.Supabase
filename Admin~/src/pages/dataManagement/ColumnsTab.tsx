@@ -15,6 +15,7 @@ import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
+import type { CatalogItem } from '../../lib/gameItems'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
 
@@ -65,6 +66,29 @@ const ALL_TYPES: CSharpType[] = [
 const isIntegerType = (t: CSharpType) => (['short', 'int', 'long'] as CSharpType[]).includes(t)
 const isDecimalType = (t: CSharpType) => (['float', 'double', 'decimal'] as CSharpType[]).includes(t)
 const isDateTimeType = (t: CSharpType) => (['DateTimeOffset', 'DateTime'] as CSharpType[]).includes(t)
+
+// 아이템 카탈로그 — 우편 보상 코드가 데이터 필드 이름과 같으면 받을 때 그 필드에 더해진다.
+// null = 못 불러옴. 그때는 "영향 없음"으로 보이지 않게 확인하지 못했다고 알린다.
+type Catalog = CatalogItem[] | null
+
+/** 필드를 지우거나 만들면 받기가 실패하게 되는 아이템을 알리는 상자. 막지는 않는다(게임에 처리 코드가 있을 수 있다). */
+function ItemImpactNote({ catalog, affected, effect }: { catalog: Catalog; affected: CatalogItem[]; effect: string }) {
+  if (catalog === null) {
+    return <p className="text-xs text-neutral-500">아이템 카탈로그를 불러오지 못해 우편 보상에 주는 영향을 확인하지 못했습니다.</p>
+  }
+  if (affected.length === 0) return null
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 space-y-1">
+      {affected.map((c) => (
+        <p key={c.key}>
+          아이템 카탈로그의 <span className="font-medium">{c.display_name || c.key}</span>
+          <span className="font-mono text-xs"> {c.key}</span> — {effect}
+        </p>
+      ))}
+      <p className="text-red-600">게임에 처리 코드가 없으면 그 아이템을 받을 수 없게 됩니다.</p>
+    </div>
+  )
+}
 
 // 스칼라(비 JSON)는 NOT NULL로 만들므로 기본값이 반드시 필요하다(빈 값이면 ALTER ADD COLUMN 실패).
 const scalarDefaultMissing = (type: CSharpType, value: string) => type !== 'JSON' && !value.trim()
@@ -169,14 +193,17 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
 }
 
 function DeleteColumnModal({
-  target, onUnauthenticated, col, onClose, onDeleted,
+  target, onUnauthenticated, col, catalog, onClose, onDeleted,
 }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   col: Col
+  catalog: Catalog
   onClose: () => void
   onDeleted: () => void
 }) {
+  // 지금 이 필드로 자동 지급되는 아이템만 — 이미 막혀 있던 것은 지워도 달라지지 않는다.
+  const affected = (catalog ?? []).filter((c) => c.key === col.column_name && c.grant_mode === 'auto')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -212,6 +239,7 @@ function DeleteColumnModal({
           <p className="font-medium">게시하면 되돌릴 수 없습니다.</p>
           <p className="mt-1 text-red-600"><span className="font-mono font-semibold">{col.column_name}</span> 필드와 모든 데이터가 영구 삭제됩니다.</p>
         </div>
+        <ItemImpactNote catalog={catalog} affected={affected} effect="이 필드로 자동 지급됩니다. 지우면 필드 없음이 됩니다." />
         <div>
           <label className="block text-xs text-neutral-500 mb-1">
             확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
@@ -300,10 +328,11 @@ function EditColumnModal({
 }
 
 function AddColumnModal({
-  target, onUnauthenticated, onClose, onAdded,
+  target, onUnauthenticated, catalog, onClose, onAdded,
 }: {
   target: ProjectTarget
   onUnauthenticated: () => void
+  catalog: Catalog
   onClose: () => void
   onAdded: () => void
 }) {
@@ -314,6 +343,9 @@ function AddColumnModal({
   const [error, setError] = useState('')
 
   const missingDefault = scalarDefaultMissing(type, defaultValue)
+  // 숫자가 아닌 필드를 아이템 코드와 같은 이름으로 만들면 그 아이템은 형식 다름이 된다(서버 판정은 이름 정확 일치).
+  const isNumeric = isIntegerType(type) || isDecimalType(type)
+  const affected = !isNumeric && name.trim() ? (catalog ?? []).filter((c) => c.key === name.trim()) : []
 
   const handleTypeChange = (t: CSharpType) => {
     setType(t)
@@ -379,6 +411,9 @@ function AddColumnModal({
             <DefaultValueInput type={type} value={defaultValue} onChange={setDefaultValue} />
             {missingDefault && <p className="mt-1 text-xs text-amber-600">기본값이 필요합니다.</p>}
           </div>
+          {!isNumeric && name.trim() && (
+            <ItemImpactNote catalog={catalog} affected={affected} effect="코드가 이 필드 이름과 같습니다. 숫자가 아닌 필드로 만들면 형식 다름이 됩니다." />
+          )}
     </EditDialog>
   )
 }
@@ -435,6 +470,20 @@ export default function ColumnsTab({
   useEffect(() => {
     void reloadCols()
   }, [reloadCols])
+
+  // 우편 보상 영향 확인용. 실패해도 화면을 막지 않고 창 안에서 "확인하지 못함"으로 알린다.
+  const [catalog, setCatalog] = useState<Catalog>([])
+  useEffect(() => {
+    let alive = true
+    callAdmin<CatalogItem[]>(target, 'gameItems.list')
+      .then((rows) => { if (alive) setCatalog(rows) })
+      .catch((e: unknown) => {
+        if (!alive) return
+        if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+        setCatalog(null)
+      })
+    return () => { alive = false }
+  }, [target, onUnauthenticated])
 
   const pendingItems: PendingItem[] = drafts.map((d) => ({ id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name }))
 
@@ -524,6 +573,7 @@ export default function ColumnsTab({
         <AddColumnModal
           target={target}
           onUnauthenticated={onUnauthenticated}
+          catalog={catalog}
           onClose={() => setShowAdd(false)}
           onAdded={() => { setShowAdd(false); void reloadDrafts() }}
         />
@@ -542,6 +592,7 @@ export default function ColumnsTab({
           target={target}
           onUnauthenticated={onUnauthenticated}
           col={deleteCol}
+          catalog={catalog}
           onClose={() => setDeleteCol(null)}
           onDeleted={() => { setDeleteCol(null); void reloadDrafts() }}
         />

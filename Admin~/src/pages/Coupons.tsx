@@ -15,9 +15,11 @@ import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { PlayerLink } from '../components/ui/PlayerLink'
+import { brokenItemsIn, itemOptionLabel, type CatalogItem } from '../lib/gameItems'
+import { BrokenItemNote, BrokenItemsConfirm } from '../components/ItemGrantNote'
 
 type ItemRow = { key: string; count: number }
-type GameItem = { key: string; display_name: string }
+type GameItem = CatalogItem
 type CategoryRow = { key: string; display_name: string }
 
 // 쿠폰 종류 이름 — 고르는 칸과 목록 표가 같은 이름을 쓴다.
@@ -175,7 +177,17 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
   const canSubmit = title.trim() !== '' && mailExpiresDays > 0 &&
     (kind === 'normal' || (kind === 'keyword' && code.trim() !== '' && !codeInvalid))
 
+  // 지급이 막힌 아이템을 담았으면 한 번 더 묻는다 — 막지는 않는다(게임에 처리 코드가 있을 수 있다).
+  const brokenPicked = brokenItemsIn(items, catalog)
+  const [askBroken, setAskBroken] = useState(false)
+  const requestSubmit = () => {
+    if (!canSubmit || loading || issuedMsg) return
+    if (brokenPicked.length > 0) { setAskBroken(true); return }
+    void submit()
+  }
+
   const submit = async () => {
+    setAskBroken(false)
     if (!canSubmit || loading || issuedMsg) return
     setError('')
     let maxUsesValue: number | null = null
@@ -230,7 +242,7 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
       onClose={onClose}
       footer={<>
         <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
-        <Button variant="primary" onClick={() => { void submit() }} disabled={loading || !canSubmit || !!issuedMsg}>
+        <Button variant="primary" onClick={requestSubmit} disabled={loading || !canSubmit || !!issuedMsg}>
           {loading ? '저장 중…' : isEdit ? '저장' : '발급'}
         </Button>
       </>}
@@ -268,12 +280,15 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
               <button onClick={addItem} className="inline-flex items-center gap-1 text-xs text-[#1677ff]"><Plus className="w-3 h-3" />추가</button>
             </div>
             {items.map((it, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
-                  {catalog.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
-                </select>
-                <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
-                <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+              <div key={i} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <select value={it.key} onChange={(e) => setItem(i, { key: e.target.value })} className={inputCls + ' flex-1'}>
+                    {catalog.map((c) => (<option key={c.key} value={c.key}>{itemOptionLabel(c)}</option>))}
+                  </select>
+                  <input type="number" min={1} value={it.count} onChange={(e) => setItem(i, { count: Number(e.target.value) })} className={inputCls + ' w-24'} />
+                  <button onClick={() => delItem(i)} title="이 보상 삭제" aria-label="이 보상 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>
+                </div>
+                <BrokenItemNote mode={catalog.find((c) => c.key === it.key)?.grant_mode} />
               </div>
             ))}
           </div>
@@ -330,6 +345,17 @@ function CouponModal({ target, onUnauthenticated, coupon, categories, catalog, o
           </label>
 
           {issuedMsg && <div className="text-sm text-emerald-600">{issuedMsg}</div>}
+
+          <ConfirmDialog
+            open={askBroken}
+            title={isEdit ? '쿠폰 저장' : '쿠폰 발급'}
+            confirmLabel={isEdit ? '저장' : '발급'}
+            danger
+            onConfirm={() => { void submit() }}
+            onCancel={() => setAskBroken(false)}
+          >
+            <BrokenItemsConfirm items={brokenPicked} />
+          </ConfirmDialog>
     </EditDialog>
   )
 }

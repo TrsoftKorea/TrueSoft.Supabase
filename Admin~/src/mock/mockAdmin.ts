@@ -1004,6 +1004,11 @@ const HANDLERS: Record<string, Handler> = {
     { key: 'ticket', display_name: '입장권', created_at: addDays(kstToday(), -12) + 'T09:30:00+09:00', source: 'manual', grant_mode: 'game' },
     { key: 'inventory', display_name: '가방', created_at: addDays(kstToday(), -8) + 'T15:00:00+09:00', source: 'manual', grant_mode: 'blocked' },
   ],
+  // 막힌 아이템(old_coin·inventory)에 아직 붙어 있는 것 — old_coin 은 여러 군데, inventory 는 남은 것 없음.
+  'gameItems.usage': () => [
+    { key: 'old_coin', pending_mails: 164, open_batches: 1, active_schedules: 1, active_coupons: 0 },
+    { key: 'inventory', pending_mails: 0, open_batches: 0, active_schedules: 0, active_coupons: 0 },
+  ],
   'gameItems.columns': () => [
     { column_name: 'account_id', grantable: false, registered: false },
     { column_name: 'gold', grantable: true, registered: true },
