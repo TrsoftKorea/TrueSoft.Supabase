@@ -720,7 +720,7 @@ const hubVerify = (token: string) =>
 // 조회 요청 이름. 여기 안 걸리는 action 은 전부 변경으로 보고 기록한다 — 새 조회를 추가하면서
 // 이름을 이 꼴로 안 지으면 기록이 늘 뿐 빠지지는 않는 쪽으로 틀리게 해 둔다.
 const READ_ACTION =
-  /^session\.me$|\.(list|get[A-Z]\w*|columns|profile|banInfo|logs|channels|messages|mutes|overview|settingsGet|codes|scores|searchPlayers|stats|player|coupons|get)$/;
+  /^session\.me$|\.(list|get[A-Z]\w*|columns|usage|profile|banInfo|logs|channels|messages|mutes|overview|settingsGet|codes|scores|searchPlayers|stats|player|coupons|get)$/;
 
 const SECRET_PARAM = /password|secret|token/i;
 
@@ -949,6 +949,15 @@ async function handleAction(
 
       case "gameItems.columns": {
         const { data, error } = await db.rpc("ts_admin_game_item_columns");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      // 키마다 아직 플레이어에게 갈 곳(안 받은 우편·배달 중 발송·켜진 예약·쿠폰) 수. 화면은 지급이 막힌 키만 넘긴다.
+      case "gameItems.usage": {
+        const keys = Array.isArray(params["keys"]) ? (params["keys"] as unknown[]).filter((k): k is string => typeof k === "string").slice(0, 50) : [];
+        if (keys.length === 0) return json({ ok: true, data: [] });
+        const { data, error } = await db.rpc("ts_admin_game_item_usage", { p_keys: keys });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: data ?? [] });
       }
