@@ -8,9 +8,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ADMIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ts = createRequire(path.join(ADMIN, 'package.json'))('typescript')
-const src = fs.readFileSync(path.join(ADMIN, 'src/mock/mockAdmin.ts'), 'utf8')
-const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
-const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mockcheck-')), 'mockAdmin.mjs')
+const transpile = (file) => ts.transpileModule(fs.readFileSync(path.join(ADMIN, file), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mockcheck-'))
+// 가짜 데이터가 값으로 불러오는 src/lib 파일(화면과 같은 판정)도 옮겨 놓는다. 그 파일이 다시 불러오는 것은 따라가지 않는다 —
+// 불러오면 여기서 "모듈 없음"으로 멈춘다.
+const js = transpile('src/mock/mockAdmin.ts').replace(/from '\.\.\/lib\/([\w-]+)'/g, (_, name) => {
+  fs.writeFileSync(path.join(dir, `${name}.mjs`), transpile(`src/lib/${name}.ts`))
+  return `from './${name}.mjs'`
+})
+const tmp = path.join(dir, 'mockAdmin.mjs')
 fs.writeFileSync(tmp, js)
 const { mockAdmin } = await import(pathToFileURL(tmp).href)
 

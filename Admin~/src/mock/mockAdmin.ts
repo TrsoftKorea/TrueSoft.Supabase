@@ -2,6 +2,7 @@
 // 일반 빌드에는 들어가지 않는다(lib/api 가 __MOCK__ 일 때만 이 파일을 불러온다).
 // 새 화면을 가짜 데이터로 보려면 HANDLERS 에 그 화면의 action 을 더한다. 없는 action 은 빈 목록으로 답한다.
 import type { ProjectTarget } from '../lib/projectTarget'
+import { elementField, elementFits, type CollectionKind } from '../lib/gameItems'
 
 const MOCK_EMAIL = 'mock@local'
 
@@ -613,6 +614,34 @@ function operatorsOf(target: ProjectTarget): MockOperator[] {
 // 우편 › 예약 목록에서 켜고 끈 값. 새로고침하면 처음 값으로 돌아간다.
 const scheduleActive = new Map<string, boolean>()
 
+// 아이템 카탈로그 — 데이터 필드 목록(userData.columns)과 맞춘다. 추가·이름 수정·삭제가 새로고침 전까지 남는다.
+// 지급 방식: 숫자 필드가 있으면 auto, 골랐는데 없으면 missing, 숫자가 아닌 필드와 이름이 같으면 blocked,
+// 리스트·딕셔너리 필드의 원소 꼴은 그 필드에 저장된 값의 모양에 맞으면 auto(potions.hp), 안 맞으면 blocked —
+// 판정은 화면과 같은 elementFits(서버 ts_mail_grantable_key 와 같은 규칙).
+type MockGameItem = { key: string; display_name: string; created_at: string; source: 'save' | 'manual'; grant_mode: 'auto' | 'game' | 'missing' | 'blocked' }
+const MOCK_NUMERIC_FIELDS = ['gold', 'level']
+const MOCK_COLLECTION_FIELDS: Record<string, CollectionKind> = { inventory: 'other', potions: 'dict', stage_clears: 'list' }
+const mockCollectionOf = (key: string) => {
+  const field = elementField(key)
+  return field !== null && field in MOCK_COLLECTION_FIELDS ? MOCK_COLLECTION_FIELDS[field] : undefined
+}
+const mockGrantable = (key: string) => {
+  if (MOCK_NUMERIC_FIELDS.includes(key)) return true
+  const kind = mockCollectionOf(key)
+  return kind !== undefined && elementFits(key, kind)
+}
+const mockGameItems: Record<string, MockGameItem[]> = {}
+function gameItemsOf(target: ProjectTarget): MockGameItem[] {
+  return (mockGameItems[target] ??= [
+    { key: 'gem', display_name: '보석', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00', source: 'manual', grant_mode: 'game' },
+    { key: 'gold', display_name: '골드', created_at: addDays(kstToday(), -30) + 'T10:01:00+09:00', source: 'manual', grant_mode: 'auto' },
+    { key: 'old_coin', display_name: '옛 코인', created_at: addDays(kstToday(), -20) + 'T11:00:00+09:00', source: 'save', grant_mode: 'missing' },
+    { key: 'ticket', display_name: '입장권', created_at: addDays(kstToday(), -12) + 'T09:30:00+09:00', source: 'manual', grant_mode: 'game' },
+    { key: 'inventory', display_name: '가방', created_at: addDays(kstToday(), -8) + 'T15:00:00+09:00', source: 'manual', grant_mode: 'blocked' },
+    { key: 'potions.hp', display_name: '체력 물약', created_at: addDays(kstToday(), -3) + 'T14:00:00+09:00', source: 'save', grant_mode: 'auto' },
+  ])
+}
+
 const HANDLERS: Record<string, Handler> = {
   'push.get': () => ({ triggers: pushTriggers, ad: pushAd, devices: { android: 1284, ios: 512, ad_consent: 936 } }),
   'push.updateTrigger': (_t, p) => {
@@ -993,28 +1022,45 @@ const HANDLERS: Record<string, Handler> = {
     { column_name: 'gold', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
     { column_name: 'level', data_type: 'integer', is_nullable: 'NO', column_default: '1' },
     { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
+    { column_name: 'potions', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
+    { column_name: 'stage_clears', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
   ],
-  // 쿠폰·매치 보상 — 이것도 목록(배열)을 받는 화면이다. 아이템 이름은 두 화면이 같이 쓴다.
-  // 지급 방식은 아래 데이터 필드 목록(= userData.columns)과 맞춘다 — 숫자 필드가 있으면 auto, 골랐는데 없으면 missing,
-  // 숫자가 아닌 필드와 이름이 같으면 blocked.
-  'gameItems.list': () => [
-    { key: 'gem', display_name: '보석', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00', source: 'manual', grant_mode: 'game' },
-    { key: 'gold', display_name: '골드', created_at: addDays(kstToday(), -30) + 'T10:01:00+09:00', source: 'manual', grant_mode: 'auto' },
-    { key: 'old_coin', display_name: '옛 코인', created_at: addDays(kstToday(), -20) + 'T11:00:00+09:00', source: 'save', grant_mode: 'missing' },
-    { key: 'ticket', display_name: '입장권', created_at: addDays(kstToday(), -12) + 'T09:30:00+09:00', source: 'manual', grant_mode: 'game' },
-    { key: 'inventory', display_name: '가방', created_at: addDays(kstToday(), -8) + 'T15:00:00+09:00', source: 'manual', grant_mode: 'blocked' },
-  ],
+  // 쿠폰·매치 보상 — 이것도 목록(배열)을 받는 화면이다. 아이템 이름은 두 화면이 같이 쓴다. 지급 방식은 gameItemsOf 위 설명.
+  'gameItems.list': (target) => gameItemsOf(target),
+  // 서버처럼 같은 코드면 이름만 고치고, 데이터 필드 꼴 판정은 서버 오류 글을 그대로 흉내 낸다.
+  'gameItems.upsert': (target, p) => {
+    const key = String(p['key'] ?? '').trim()
+    const name = typeof p['displayName'] === 'string' ? p['displayName'] : ''
+    const items = gameItemsOf(target)
+    const found = items.find((i) => i.key === key)
+    if (found) { found.display_name = name; return null }
+    // 서버와 같은 사유: 필드 이름 그대로 → item_field_not_numeric, 모양에 안 맞는 원소 꼴 → item_column_missing.
+    if (p['source'] === 'save' && !mockGrantable(key)) {
+      throw new Error(key in MOCK_COLLECTION_FIELDS ? '숫자가 아닌 데이터 필드 이름은 아이템 코드로 쓸 수 없습니다.' : '그 이름의 숫자 데이터 필드가 없습니다.')
+    }
+    const grant = mockGrantable(key) ? 'auto' : mockCollectionOf(key) !== undefined ? 'blocked' : 'game'
+    items.push({ key, display_name: name, created_at: new Date().toISOString(), source: p['source'] === 'save' ? 'save' : 'manual', grant_mode: grant })
+    return null
+  },
+  'gameItems.delete': (target, p) => {
+    const items = gameItemsOf(target)
+    const at = items.findIndex((i) => i.key === p['key'])
+    if (at >= 0) items.splice(at, 1)
+    return null
+  },
   // 막힌 아이템(old_coin·inventory)에 아직 붙어 있는 것 — old_coin 은 여러 군데, inventory 는 남은 것 없음.
   'gameItems.usage': () => [
     { key: 'old_coin', pending_mails: 164, open_batches: 1, active_schedules: 1, active_coupons: 0 },
     { key: 'inventory', pending_mails: 0, open_batches: 0, active_schedules: 0, active_coupons: 0 },
   ],
-  'gameItems.columns': () => [
-    { column_name: 'account_id', grantable: false, registered: false },
-    { column_name: 'gold', grantable: true, registered: true },
-    { column_name: 'level', grantable: true, registered: false },
-    { column_name: 'inventory', grantable: false, registered: true },
-  ],
+  'gameItems.columns': (target) => {
+    const registered = new Set(gameItemsOf(target).map((i) => i.key))
+    return [
+      { column_name: 'account_id', grantable: false, collection: false, collection_kind: null },
+      ...MOCK_NUMERIC_FIELDS.map((c) => ({ column_name: c, grantable: true, collection: false, collection_kind: null })),
+      ...Object.entries(MOCK_COLLECTION_FIELDS).map(([c, kind]) => ({ column_name: c, grantable: false, collection: true, collection_kind: kind })),
+    ].map((c) => ({ ...c, registered: registered.has(c.column_name) }))
+  },
   'coupons.list': () => [
     {
       id: 'c2', kind: 'keyword', title: '오픈 기념', content: '오픈을 축하합니다.', category: 'default',

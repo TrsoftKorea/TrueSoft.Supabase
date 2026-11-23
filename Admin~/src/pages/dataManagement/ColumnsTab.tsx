@@ -15,7 +15,7 @@ import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
-import type { CatalogItem } from '../../lib/gameItems'
+import { elementField, type CatalogItem } from '../../lib/gameItems'
 
 type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
 
@@ -203,7 +203,7 @@ function DeleteColumnModal({
   onDeleted: () => void
 }) {
   // 지금 이 필드로 자동 지급되는 아이템만 — 이미 막혀 있던 것은 지워도 달라지지 않는다.
-  const affected = (catalog ?? []).filter((c) => c.key === col.column_name && c.grant_mode === 'auto')
+  const affected = (catalog ?? []).filter((c) => (c.key === col.column_name || elementField(c.key) === col.column_name) && c.grant_mode === 'auto')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -346,6 +346,8 @@ function AddColumnModal({
   // 숫자가 아닌 필드를 아이템 코드와 같은 이름으로 만들면 그 아이템은 형식 다름이 된다(서버 판정은 이름 정확 일치).
   const isNumeric = isIntegerType(type) || isDecimalType(type)
   const affected = !isNumeric && name.trim() ? (catalog ?? []).filter((c) => c.key === name.trim()) : []
+  // JSON 필드를 그 이름으로 만들면 원소 꼴 아이템(이름.키·이름[번호])이 그 필드의 원소로 자동 지급된다.
+  const elementItems = type === 'JSON' && name.trim() ? (catalog ?? []).filter((c) => elementField(c.key) === name.trim()) : []
 
   const handleTypeChange = (t: CSharpType) => {
     setType(t)
@@ -413,6 +415,16 @@ function AddColumnModal({
           </div>
           {!isNumeric && name.trim() && (
             <ItemImpactNote catalog={catalog} affected={affected} effect="코드가 이 필드 이름과 같습니다. 숫자가 아닌 필드로 만들면 형식 다름이 됩니다." />
+          )}
+          {elementItems.length > 0 && (
+            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 space-y-1">
+              {elementItems.map((c) => (
+                <p key={c.key}>
+                  아이템 카탈로그의 <span className="font-medium">{c.display_name || c.key}</span>
+                  <span className="font-mono text-xs"> {c.key}</span> — 이 필드의 원소로 자동 지급됩니다.
+                </p>
+              ))}
+            </div>
           )}
     </EditDialog>
   )
