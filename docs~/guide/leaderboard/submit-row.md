@@ -20,7 +20,12 @@ await Supabase.SubmitScoreAsync(1250, row);
 
 **반환**
 
-`.Data`는 `LeaderboardSubmitResult`이며 최종 점수 `.Score`와 기록된 회차 `.RotationCount`를 담습니다.
+`.Data`는 `LeaderboardSubmitResult`입니다.
+
+| 프로퍼티 | 타입 | 설명 |
+|---------|------|------|
+| `Score` | `double` | 기록 방식(최고·최저·최신·누적)을 적용해 저장된 점수 |
+| `RotationCount` | `int` | 기록된 회차 |
 
 **에러 코드**
 

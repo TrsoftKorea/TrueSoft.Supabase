@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace SdkAudit
 {
@@ -40,6 +43,7 @@ namespace SdkAudit
 
             var sidebar = ReadSidebar(ctx);
             CheckUpdates(ctx, Path.Combine(guideDir, "updates.md"));
+            CheckReturnTables(ctx, guideDir);
             foreach (var md in Directory.EnumerateFiles(guideDir, "*.md", SearchOption.AllDirectories))
             {
                 CheckFile(ctx, md, sidebar);
@@ -175,7 +179,68 @@ namespace SdkAudit
             }
         }
 
-        private static readonly Regex UpdateItem = new Regex(@"^- \*\*[^*]+\*\* — \S");
+        private static readonly Regex ReturnsType = new Regex(@"`\.Data`는 `(?:IReadOnlyList<|List<)?(\w+)>?`|^`(\w+)`[을를] 돌려줍니다");
+        private static readonly Regex TableName = new Regex(@"^\|\s*`(\w+)");
+
+        /// <summary>
+        /// 반환 설명이 가리키는 SDK 클래스의 공개 프로퍼티가 바로 아래 표에 다 있는지 본다.
+        /// 우편 ID(<c>Mail.Id</c>)가 표에서 빠져 받기에 넘길 값을 문서로 알 수 없었다(2026-11-23 — 같은 빠짐이 13쪽).
+        /// 표 대신 다른 페이지 표를 가리키면("표와 같습니다") 그쪽이 검사된다.
+        /// </summary>
+        private static void CheckReturnTables(AuditContext ctx, string guideDir)
+        {
+            var props = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            var twice = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (_, c) in ctx.Classes)
+            {
+                if (!c.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)) || c.Parent is ClassDeclarationSyntax)
+                    continue;
+                var names = c.Members.OfType<PropertyDeclarationSyntax>()
+                    .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)) && !p.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                    .Select(p => p.Identifier.ValueText).ToList();
+                if (names.Count == 0) continue;
+                var name = c.Identifier.ValueText;
+                if (props.ContainsKey(name)) twice.Add(name); else props[name] = names;
+            }
+
+            var tables = 0;
+            foreach (var md in Directory.EnumerateFiles(guideDir, "*.md", SearchOption.AllDirectories))
+            {
+                var lines = File.ReadAllLines(md);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var m = ReturnsType.Match(lines[i]);
+                    if (!m.Success) continue;
+                    var type = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+                    if (!props.TryGetValue(type, out var want) || twice.Contains(type)) continue;
+                    var at = $"{ctx.Rel(md)}:{i + 1}";
+
+                    var j = i + 1;
+                    while (j < lines.Length && !lines[j].StartsWith("|", StringComparison.Ordinal) && !lines[j].StartsWith("#", StringComparison.Ordinal) && !lines[j].StartsWith("**", StringComparison.Ordinal))
+                        j++;
+                    if (j >= lines.Length || !lines[j].StartsWith("|", StringComparison.Ordinal))
+                    {
+                        if (!lines[i].Contains("표와 같습니다"))
+                            ctx.Report.Error($"[R22 반환빠짐] {at} `{type}` 의 값을 설명하는 표가 없습니다 — 프로퍼티 {want.Count}개를 `| 프로퍼티 | 타입 | 설명 |` 표로 적거나, 같은 값을 적은 페이지를 \"[…](/guide/…)의 표와 같습니다\"로 가리킵니다.");
+                        continue;
+                    }
+                    var have = new HashSet<string>(StringComparer.Ordinal);
+                    for (; j < lines.Length && lines[j].StartsWith("|", StringComparison.Ordinal); j++)
+                    {
+                        var n = TableName.Match(lines[j]);
+                        if (n.Success) have.Add(n.Groups[1].Value);
+                    }
+                    tables++;
+                    var missing = want.Where(p => !have.Contains(p)).ToList();
+                    if (missing.Count > 0)
+                        ctx.Report.Error($"[R22 반환빠짐] {at} `{type}` 표에 코드의 공개 값이 빠졌습니다: {string.Join(", ", missing)}");
+                }
+            }
+            if (tables == 0)
+                ctx.Report.Error("[R22 반환빠짐] 반환 값 표를 하나도 대조하지 못했습니다 — 반환 문구 꼴이나 클래스 읽기가 바뀌었는지 봅니다.");
+        }
+
+        private static readonly Regex UpdateItem =new Regex(@"^- \*\*[^*]+\*\* — \S");
 
         /// <summary>
         /// 업데이트 내역의 항목은 굵은 제목으로 시작한다 — "그래서 뭐가 바뀌었는데?"를 제목만 훑어 답하게(2026-11-23 사용자 요청).

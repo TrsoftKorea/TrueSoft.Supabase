@@ -60,6 +60,7 @@ else
 | `IsPermanentBan` | `bool` | 영구 차단 여부. 운영 콘솔의 영구 차단처럼 해제까지 50년 넘게 남은 차단도 영구로 봅니다 |
 | `BannedUntil` | `DateTimeOffset?` | 차단 해제 일시. 영구 차단이면 `null` |
 | `BanMessage` | `string` | 운영자가 설정한 차단 사유 메시지. 없으면 빈 문자열 |
+| `AccountId` | `string` | 차단된 계정 ID |
 
 **실사용 예시**
 

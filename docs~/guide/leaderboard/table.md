@@ -31,15 +31,20 @@ if (result.IsSuccess)
 |---------|------|------|
 | `Code` | `string` | 리더보드 코드 |
 | `DisplayName` | `string` | 표시명 |
+| `Scope` | `string` | 집계 범위. `global`은 전체 통합, `server`는 접속 서버별 |
 | `RecordType` | `LeaderboardRecordType` | 최고·최저·최신·누적 |
 | `SortType` | `LeaderboardSortType` | 정렬 방향 |
 | `Rotation` | `LeaderboardRotation` | 초기화 주기 |
 | `RotationCount` | `int` | 현재 회차 |
 | `RotationTimeLeft` | `int?` | 다음 회차까지 남은 초. 주기가 없으면 `null` |
+| `NextRotationAt` | `DateTimeOffset?` | 다음 회차가 시작되는 시각. 주기가 없으면 `null` |
 | `EndsAt` | `DateTimeOffset?` | 종료 예약 시각. 없으면 `null` |
 | `IsEnded` | `bool` | 종료·비활성 여부 |
 | `TotalIds` | `int` | 현재 회차 참여자 수 |
 | `Columns` | `IReadOnlyList<string>` | 등록된 플레이어 데이터 필드 이름 |
+| `RecordTypeRaw` | `string` | 서버가 보낸 기록 방식 원문 |
+| `SortTypeRaw` | `string` | 서버가 보낸 정렬 방향 원문 |
+| `RotationRaw` | `string` | 서버가 보낸 초기화 주기 원문 |
 
 **에러 코드**
 

@@ -30,6 +30,9 @@ if (result.IsSuccess)
 | `Name` | `string` | 닉네임 |
 | `ServerCode` | `string` | 서버 코드. 예: `"GLOBAL"`, `"KR1"` |
 | `IsWithdrawn` | `bool` | 탈퇴 예약 여부 |
+| `WithdrawnAtIso` | `string` | 예약된 탈퇴 시각(ISO 8601 문자열). 예약이 없으면 `null` |
+| `PlayerUserId` | `string` | 플레이어 고유 ID. 계정을 다시 연결해도 바뀌지 않습니다 |
+| `ProfileRowId` | `string` | 프로필 행 ID |
 
 **실사용 예시**
 

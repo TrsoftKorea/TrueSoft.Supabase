@@ -18,7 +18,7 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `mailId` | 삭제할 우편 UUID |
+| `mailId` | 삭제할 우편 ID. [우편함 목록](/guide/mailbox/list)의 `Mail.Id` |
 
 **에러 코드**
 

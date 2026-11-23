@@ -38,6 +38,7 @@ switch (r.Data.Relation)
 | `AccountId` | `string` | 찾은 플레이어의 계정 ID |
 | `Name` | `string` | 닉네임 |
 | `Relation` | `FriendRelation` | `None`·`Friends`·`RequestSent`·`RequestReceived` 중 하나. 서버가 SDK보다 새 관계를 돌려주면 `Unknown` |
+| `RelationRaw` | `string` | 서버가 보낸 관계 원문. `Relation`이 `Unknown`일 때 로그에 남길 값 |
 | `LastActivityAt` | `DateTimeOffset?` | 그 플레이어가 마지막으로 접속하거나 데이터를 저장한 시각. [갱신 시점](/guide/friend/#last-activity) |
 
 **에러 코드**

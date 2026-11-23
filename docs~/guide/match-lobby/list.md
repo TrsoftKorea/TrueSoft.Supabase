@@ -31,6 +31,7 @@ foreach (var lobby in r.Data)
 | `MaxMembers` | `int` | 정원 |
 | `HostAccountId` | `string` | 호스트 계정 ID |
 | `Status` | `MatchLobbyState` | `Open`·`Started`. 취소·만료된 로비는 목록에서 빠집니다. 서버가 SDK보다 새 상태를 돌려주면 `Unknown` |
+| `StatusRaw` | `string` | 서버가 보낸 상태 원문. `Status`이 `Unknown`일 때 로그에 남길 값 |
 | `CreatedAt` | `DateTimeOffset` | 생성 시각 |
 | `ExpiresAt` | `DateTimeOffset` | 아무도 시작하지 않으면 이 시각에 닫힙니다 |
 | `StartedAt` | `DateTimeOffset?` | 시작 알림 시각. 아직이면 null |

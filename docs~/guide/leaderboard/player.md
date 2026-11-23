@@ -35,6 +35,7 @@ if (result.IsSuccess)
 | `Registered` | `bool` | 이 회차에 기록이 있는지. `false`면 아래 값은 비어 있음 |
 | `Rank` | `int` | 순위 |
 | `AccountId` | `string` | 계정 ID |
+| `UserId` | `string` | 플레이어 고유 ID |
 | `DisplayName` | `string` | 현재 닉네임 |
 | `Score` | `double` | 점수 |
 | `RotationCount` | `int` | 회차 |

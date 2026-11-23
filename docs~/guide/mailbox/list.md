@@ -32,6 +32,7 @@ if (result.IsSuccess)
 
 | 프로퍼티 | 타입 | 설명 |
 |---------|------|------|
+| `Id` | `string` | 우편 ID. 받기·상세 조회·삭제에 넘기는 값 |
 | `Category` | `string` | 분류 |
 | `Title` | `string` | 제목(기본 언어) |
 | `Content` | `string` | 본문(기본 언어) |
@@ -40,6 +41,12 @@ if (result.IsSuccess)
 | `HasUnclaimedItems` | `bool` | 받을 수 있는 보상이 남았는지. 기한이 지났으면 `false` |
 | `IsExpired` | `bool` | 기한이 지났는지. 서버 시각을 받아 둔 뒤면 서버 시각으로 판정합니다 |
 | `ExpiresAt` | `DateTimeOffset` | 받을 수 있는 기한 |
+| `CreatedAt` | `DateTimeOffset` | 보낸 시각 |
+| `ItemsClaimedAt` | `DateTimeOffset?` | 수령한 시각. 받기 전이면 `null` |
+| `CanDeleteFromInbox` | `bool` | 지금 지울 수 있는지. 받을 보상이 남았으면 `false` |
+| `SenderType` | `string` | 보낸 쪽 종류. 지금은 늘 `system` |
+| `AccountId` | `string` | 받는 계정 ID. `Supabase.UserId`와 같습니다 |
+| `UserId` | `string` | 받는 플레이어의 고유 ID. 계정을 다시 연결해도 바뀌지 않습니다 |
 | `Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
 다국어 우편의 언어별 제목·본문은 [다국어 메시지](/guide/mailbox/localized)로 읽습니다.

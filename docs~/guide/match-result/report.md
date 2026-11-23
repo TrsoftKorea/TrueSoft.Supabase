@@ -47,6 +47,7 @@ ShowVerifiedBadge(); // Paid·AlreadyPaid — 상대 신고와 맞춰 본 판
 |---------|------|------|
 | `Status` | `MatchResultStatus` | `Pending`은 상대 신고 대기, `Paid`는 이번 호출로 상대 신고와 맞춰 보고 확인 완료, `AlreadyPaid`는 이전에 이미 확인된 세션을 재신고한 경우 |
 | `Rewarded` | `bool` | 보상 우편 지급 여부. 보상을 지급하지 않으므로 늘 false |
+| `StatusRaw` | `string` | 서버가 보낸 상태 원문 |
 
 **에러 코드**
 

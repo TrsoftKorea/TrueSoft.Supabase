@@ -41,10 +41,13 @@ async Task OpenDirectChatAsync(string friendAccountId)
 |---------|------|------|
 | `Id` | `long` | 조회 커서. 다음 호출의 `afterId`로 씁니다 |
 | `AccountId` | `string` | 보낸 사람 계정 ID |
+| `UserId` | `string` | 보낸 사람의 플레이어 ID |
 | `DisplayName` | `string` | 보낸 시점의 닉네임 |
 | `Content` | `string` | 본문. `Deleted`가 true면 null |
 | `Deleted` | `bool` | 운영자가 숨긴 메시지입니다 |
 | `CreatedAt` | `DateTimeOffset` | 보낸 시각 |
+| `ChannelCode` | `string` | 어느 채널의 메시지인지 |
+| `IsNotice` | `bool` | 운영 콘솔에서 보낸 공지인지. 이 대화에서는 늘 `false` |
 
 **에러 코드**
 

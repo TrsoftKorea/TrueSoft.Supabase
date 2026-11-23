@@ -20,11 +20,11 @@ if (result.IsSuccess)
 
 | 파라미터 | 설명 |
 |----------|------|
-| `mailId` | 조회할 우편 UUID |
+| `mailId` | 조회할 우편 ID. [우편함 목록](/guide/mailbox/list)의 `Mail.Id` |
 
 **반환**
 
-`.Data`는 `Mail` 한 건입니다.
+`.Data`는 `Mail` 한 건입니다. 각 값은 [우편함 목록 조회](/guide/mailbox/list)의 표와 같습니다.
 
 **에러 코드**
 

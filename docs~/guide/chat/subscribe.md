@@ -54,6 +54,7 @@ void OnDestroy() { _sub?.Dispose(); _sub = null; }
 | `Reload()` | 커서를 되감아 다음 조회에서 지난 대화를 다시 받습니다 |
 | `ChannelCodes` | 구독 중인 채널 코드 |
 | `CurrentIntervalSeconds` | 현재 조회 간격. 조용하면 늘어납니다 |
+| `IsDisposed` | 구독을 해제했는지 |
 
 **에러 코드**
 

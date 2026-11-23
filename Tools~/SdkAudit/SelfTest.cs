@@ -41,7 +41,7 @@ namespace SdkAudit
             "[R23 옛빌드호환]", "[R23 기준누락]", "[R23 이유없음]", "[R23 뽑기고장]",
             "[R22 제목]", "[R22 예제순서]", "[R22 예제없음]", "[R22 에러표]", "[R22 프로퍼티표]", "[R22 반환]",
             "[R22 표줄표]", "[R22 링크]", "[R22 용어]", "[R22 라벨쌍점]", "[R22 설명길이]", "[R22 실사용없음]", "[R22 실사용순서]",
-            "[R22 상자위치]", "[R22 반환없음]", "[R22 개요메서드]", "[R22 내역제목]",
+            "[R22 상자위치]", "[R22 반환없음]", "[R22 개요메서드]", "[R22 내역제목]", "[R22 반환빠짐]",
         };
 
         /// <summary>변경 게이트의 줄 파싱. 여기가 틀리면 훅이 조용히 아무것도 검사하지 않는다.</summary>
@@ -103,6 +103,9 @@ namespace SdkAudit
                 // 옵션을 넘긴 호출·값을 돌려주는 함수는 잡으면 오탐이다.
                 if (found.Any(f => f.StartsWith("[R20", StringComparison.Ordinal) && (f.Contains("ts_properly_scheduled") || f.Contains("ts_early_sql "))))
                     missing.Add("[R20 빈응답] 옵션 있는 호출·값 있는 함수 오탐");
+                // 빠진 값 B 만 잡고, 표에 있는 A 는 잡지 않아야 한다.
+                if (!found.Any(f => f.StartsWith("[R22 반환빠짐]", StringComparison.Ordinal) && f.Contains("return-table.md") && f.EndsWith(": B", StringComparison.Ordinal)))
+                    missing.Add("[R22 반환빠짐] 표에서 빠진 값(FixtureModel.B)");
                 if (found.Count(f => f.StartsWith("[R5 표뒤빈줄]", StringComparison.Ordinal) && f.Contains("table-glued.md")) != 1)
                     missing.Add("[R5 표뒤빈줄] 상자를 닫는 ::: 오탐 또는 미탐");
                 // R23 — 옛 빌드가 부를 수 없게 된 경우마다 잡고, 문제없는 줄은 잡지 않는다.
@@ -264,6 +267,9 @@ class Example { void M() { Supabase.NoSuchMemberAsync(); } }");
             Write(root, "docs~/guide/overview/index.md", "# 개요\n\n소개입니다.\n\n## 메서드\n\n| 메서드 | 설명 |\n|---|---|\n| [`A`](/guide/overview/a) | 가 |\n\n## 뒤에 붙은 절\n\n글.\n");
             Write(root, "docs~/guide/overview/a.md", "# 가\n");
             Write(root, "docs~/guide/updates.md", "# 업데이트 내역\n\n## 0.1.0 {#v0-1-0}\n\n- **제목 있음** — 설명입니다.\n- 제목 없는 항목입니다.\n");
+            // 반환 표에 코드의 공개 값(B)이 빠짐
+            Write(root, "Runtime/Core/Data/FixtureModel.cs", "namespace TrueBase.Core { public sealed class FixtureModel { public string A { get; set; } public int B { get; set; } } }");
+            Write(root, "docs~/guide/style/return-table.md", "# 반환 표\n\n**반환**\n\n`.Data`는 `FixtureModel`입니다.\n\n| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `A` | `string` | 가 |\n");
             Write(root, "docs~/guide/style/good.md", "# 잘 쓴 페이지\n\n```csharp\nTask<SupabaseResult<int>> Supabase.RealApiAsync()\n```\n\n"
                 + "개수를 읽습니다.\n\n```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**반환**\n\n`.Data`는 `int`입니다.\n\n"
                 + "| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `Count` | `int` | 개수 |\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n"
