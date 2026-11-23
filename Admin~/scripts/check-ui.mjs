@@ -285,8 +285,9 @@ function fail(lines) {
   process.exit(2)
 }
 
-// 검사기가 도중에 죽어도 실패(2)로 알린다 — Node 는 예외로 죽으면 1 을 내고, 작업 끝 훅은 1 을 그냥 넘긴다.
-// 문법·불러오기 오류는 이 처리기가 걸리기 전에 나므로 훅 명령 끝의 `|| exit 2`(.claude/settings.json)가 맡는다.
+// 검사기가 도중에 죽어도 실패(2)로 알린다. 작업 끝 훅은 .claude/hooks/stop-check.mjs 가 감싸 0 이 아닌 종료를
+// 전부 실패로 보므로 문법·불러오기 오류(1)도 막힌다 — 단 같은 응답을 다시 쓰는 중이거나 커밋 안 된 변경이 모두
+// 다른 세션 것이면 막지 않고 알리기만 한다.
 process.on('uncaughtException', (e) => fail([`[check-ui] 검사기가 도중에 멈췄다: ${e?.stack ?? e}`]))
 
 if (args.has('--if-changed') && !changedSinceCommit()) process.exit(0)

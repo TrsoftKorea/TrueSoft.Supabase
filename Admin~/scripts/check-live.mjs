@@ -17,9 +17,17 @@ const blocked = (p) => typeof p === 'string' && p.startsWith('실제 서버 대�
 // ── 어느 대조를 돌릴지 ──
 ok(liveArgs(f('Admin~/src/pages/Mails.tsx', 'Runtime/Unity/Supabase.cs', 'Samples~/DatabaseSetup/README.md')) === null, '서버 파일 없음 → 안 돌림')
 ok(JSON.stringify(liveArgs(f('Samples~/DatabaseSetup/SQL/player/install.sql'))) === '["--only","db"]', 'SQL 만 → --only db')
-ok(JSON.stringify(liveArgs(f('Samples~/DatabaseSetup/EdgeFunctions/push-send/index.ts'))) === '["--only","functions"]', '엣지 함수만 → --only functions')
-ok(JSON.stringify(liveArgs(f('Admin~/supabase/functions/admin-api/index.ts'))) === '["--only","functions"]', '콘솔 서버 함수만 → --only functions')
-ok(JSON.stringify(liveArgs(f('Samples~/DatabaseSetup/SQL/player/install.sql', 'Admin~/supabase/functions/admin-api/index.ts'))) === '[]', '둘 다 → 전부')
+const args = (...files) => JSON.stringify(liveArgs(f(...files)))
+ok(args('Samples~/DatabaseSetup/EdgeFunctions/push-send/index.ts') === '["--only","functions","--functions","push-send"]', '엣지 함수만 → 그 함수만')
+ok(args('Admin~/supabase/functions/admin-api/index.ts') === '["--only","functions","--functions","admin-api"]', '콘솔 서버 함수만 → admin-api 만')
+ok(args('Samples~/DatabaseSetup/SQL/player/install.sql', 'Admin~/supabase/functions/admin-api/index.ts', 'Admin~/supabase/functions/admin-api/lib.ts')
+  === '["--functions","admin-api"]', 'DB·함수 함께 → 둘 다 보되 함수는 묶음 것만(중복 없이)')
+ok(args('Samples~/DatabaseSetup/EdgeFunctions/support-api/index.ts', 'Samples~/DatabaseSetup/EdgeFunctions/apple-token/index.ts')
+  === '["--only","functions","--functions","apple-token,support-api"]', '함수 여럿 → 쉼표로')
+ok(JSON.stringify(liveArgs([{ file: 'Samples~/DatabaseSetup/EdgeFunctions/new-name/index.ts', orig: 'Samples~/DatabaseSetup/EdgeFunctions/old-name/index.ts' }]))
+  === '["--only","functions","--functions","new-name,old-name"]', '이름 바꾼 함수는 옛 이름도')
+ok(args('Samples~/DatabaseSetup/EdgeFunctions/_shared/util.ts', 'Samples~/DatabaseSetup/EdgeFunctions/push-send/index.ts') === '["--only","functions"]', '공용 폴더 → 함수 전부')
+ok(args('Samples~/DatabaseSetup/EdgeFunctions/README.md') === '["--only","functions"]', '함수 폴더 밖 파일 → 함수 전부')
 ok(JSON.stringify(liveArgs([{ file: 'Samples~/DatabaseSetup/old.sql', orig: 'Samples~/DatabaseSetup/SQL/x.sql' }])) === '["--only","db"]', '이름 바꾼 파일의 옛 경로도 봄')
 
 // 화면(PublishBar 의 진행 글자)과 서버가 같은 파일을 서버 파일로 보는지
@@ -45,12 +53,12 @@ ok(liveProblem({ status: 0, stdout: '✔ a\r\n\r\n9개 중 9개 통과\r\n' }) =
 
 // ── 가짜 도구를 실제로 띄워 본다 ──
 // 저장소 대신 임시 폴더에 같은 경로로 가짜 도구를 둔다. 실제 도구는 두 게임 서버에 묻는다 — 여기서는 부르지 않는다.
-async function runFake(body, timeoutMs = 20_000) {
+async function runFake(body, timeoutMs = 20_000, args = ['--only', 'db']) {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'livecheck-'))
   try {
     fs.mkdirSync(path.join(repo, path.dirname(LIVE_TOOL)), { recursive: true })
     fs.writeFileSync(path.join(repo, LIVE_TOOL), body)
-    return await runLiveCheck(repo, ['--only', 'db'], timeoutMs)
+    return await runLiveCheck(repo, args, timeoutMs)
   } finally {
     // 시간 초과로 끈 프로세스가 폴더를 잡고 있으면 지우지 못한다 — 임시 폴더라 남겨도 된다.
     try { fs.rmSync(repo, { recursive: true, force: true }) } catch {}
@@ -63,6 +71,9 @@ const zero = await runFake("console.log('0개 중 0개 통과')\n")
 ok(zero.status === 0 && blocked(liveProblem(zero)), '0개 중 0개 → 막힘(본 것이 없음)', zero)
 const passed = await runFake("console.log('✔ DB 구조\\n\\n' + process.argv.slice(2).join(' ') + '\\n9개 중 9개 통과')\n")
 ok(passed.status === 0 && liveProblem(passed) === null && passed.stdout.includes('--only db'), '모두 일치 → 통과(인자도 넘어감)', passed)
+const picked = await runFake("console.log(JSON.stringify(process.argv.slice(2)) + '\\n1개 중 1개 통과')\n", 20_000,
+  liveArgs(f('Samples~/DatabaseSetup/SQL/player/install.sql', 'Samples~/DatabaseSetup/EdgeFunctions/push-send/index.ts')))
+ok(picked.status === 0 && picked.stdout.startsWith('["--functions","push-send"]'), '도구에 묶음의 함수 이름이 그대로 넘어감', picked)
 const differ = await runFake("console.log('✘ 서버 함수 — A\\n   · push-send: 다름\\n\\n9개 중 8개 통과'); process.exit(1)\n")
 ok(differ.status === 1 && liveProblem(differ)?.startsWith('실제 서버가 저장소와 달라'), '어긋남(종료 1) → 막힘', differ)
 

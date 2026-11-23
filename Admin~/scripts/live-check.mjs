@@ -7,14 +7,29 @@ export const LIVE_TOOL = 'Tools~/LiveCheck/check.mjs'
 const DB_DIR = 'Samples~/DatabaseSetup/SQL/'
 const FUNCTION_DIRS = ['Samples~/DatabaseSetup/EdgeFunctions/', 'Admin~/supabase/functions/']
 
-/** 고른 파일로 정한 대조 인자 — 돌릴 것이 없으면 null. 이름 변경은 옛 경로도 본다. */
+/**
+ * 고른 파일로 정한 대조 인자 — 돌릴 것이 없으면 null. 이름 변경은 옛 경로도 본다.
+ * 서버 함수는 묶음에 든 함수만 본다 — 다른 세션이 고치던 함수가 이 게시를 막고, 안내대로 올리면 하다 만 코드가 배포된다.
+ * 함수 폴더 밖 파일·공용 폴더(`_` 로 시작)는 모든 함수에 걸리므로 그때는 전부 본다.
+ */
 export function liveArgs(files) {
   const paths = files.flatMap((f) => (f.orig ? [f.file, f.orig] : [f.file]))
   const db = paths.some((p) => p.startsWith(DB_DIR))
-  const functions = paths.some((p) => FUNCTION_DIRS.some((d) => p.startsWith(d)))
-  if (db && functions) return []
+  const names = new Set()
+  let functions = false
+  let everyFunction = false
+  for (const p of paths) {
+    const dir = FUNCTION_DIRS.find((d) => p.startsWith(d))
+    if (!dir) continue
+    functions = true
+    const name = p.slice(dir.length).match(/^([^/]+)\//)?.[1]
+    if (!name || name.startsWith('_')) everyFunction = true
+    else names.add(name)
+  }
+  const pick = everyFunction ? [] : ['--functions', [...names].sort().join(',')]
+  if (db && functions) return pick
   if (db) return ['--only', 'db']
-  if (functions) return ['--only', 'functions']
+  if (functions) return ['--only', 'functions', ...pick]
   return null
 }
 
