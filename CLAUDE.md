@@ -49,7 +49,7 @@ The SDK has three layers:
 - Facades (`UserSavesFacade`, `RemoteConfigFacade`, `MailboxFacade`, `LeaderboardFacade`, `CouponFacade`, `ChatFacade`, `ServerFunctionsFacade`, `FriendFacade`, `MatchLobbyFacade`, `MatchResultFacade`) — high-level wrappers. **전부 `internal`**이며 `SupabaseSDK`의 `internal` 프로퍼티로만 접근한다 — 게임은 `Supabase` 파사드만 본다. `ChatFacade`는 구독 폴링(`ChatSubscription`)까지 들고 있다
 - **게임이 직접 쓰지 않는 타입은 `internal`로 둔다.** HTTP·JSON 구현, 부트스트랩, 로그인 브리지, 로그인 결과 DTO가 여기 해당한다. 게임에 남는 공개 타입은 게임이 **직접 인스턴스를 들고 있는 것**(`ChatSubscription`·`RemoteConfigListener`·IAP 파사드·`StaticUserSave`·`SupabaseSettings` 등)뿐이다
 - `Auth/Anonymous/DeviceFingerprintProvider.cs` — fingerprint for anonymous recovery
-- `Auth/Google/` — `GoogleLoginBridge`, `NativeGoogleLoginProvider`. Android는 Play Services OAuth, iOS는 같은 브릿지가 `GoogleIosOAuth`(PKCE·토큰 교환) + `Plugins/iOS/TrueSoftGoogleLogin.mm`(기본 로그인 창)으로 처리
+- `Auth/Google/` — `GoogleLoginBridge`, `NativeGoogleLoginProvider`. Android는 `Plugins/Android/GoogleLoginPlugin.java`(Credential Manager, 게임 빌드 때 함께 컴파일), iOS는 같은 브릿지가 `GoogleIosOAuth`(PKCE·토큰 교환) + `Plugins/iOS/TrueSoftGoogleLogin.mm`(기본 로그인 창)으로 처리
 - `Auth/Apple/` — `AppleLoginBridge`, `AppleLoginResult` for Sign in with Apple
 - `Http/UnitySupabaseHttpClient.cs` — `UnityWebRequest` implementation of `ISupabaseHttpClient`
 - `Json/UnitySupabaseJsonSerializer.cs` — Newtonsoft.Json implementation of `ISupabaseJsonSerializer`

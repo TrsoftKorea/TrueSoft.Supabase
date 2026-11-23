@@ -1,8 +1,10 @@
 <dependencies>
   <androidPackages>
-    <!-- Required by googleloginplugin-release.aar (CredentialManager API).
+    <!-- Required by Runtime/Plugins/Android/GoogleLoginPlugin.java (CredentialManager API).
+         게임을 빌드할 때 그 게임이 받은 판으로 함께 컴파일된다.
          1.3.0 이상은 Unity 2022.3(JDK 11 고정)에서 R8 단계가 깨지는 사례가 보고돼
-         1.2.2(2024-04, 마지막 1.2.x 안정 버전)로 낮춰 둔다. -->
+         1.2.2(2024-04, 마지막 1.2.x 안정 버전)로 낮춰 둔다. 다만 googleid 1.1.1 이 credentials 1.3.0-beta01 을
+         요구해 그래들이 그 판으로 올린다. -->
     <androidPackage spec="androidx.credentials:credentials:1.2.2"/>
     <androidPackage spec="androidx.credentials:credentials-play-services-auth:1.2.2"/>
     <androidPackage spec="com.google.android.libraries.identity.googleid:googleid:1.1.1"/>
