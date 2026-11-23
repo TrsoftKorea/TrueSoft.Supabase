@@ -210,7 +210,6 @@ export default defineConfig({
               { text: '다국어 메시지', link: '/guide/mailbox/localized' },
               { text: '상세 조회', link: '/guide/mailbox/detail' },
               { text: '아이템 핸들러 등록', link: '/guide/mailbox/item-handler' },
-              { text: '아이템 핸들러 일괄 등록', link: '/guide/mailbox/item-handlers' },
               { text: '보상 수령', link: '/guide/mailbox/claim' },
               { text: '전체 수령', link: '/guide/mailbox/claim-all' },
               { text: '삭제', link: '/guide/mailbox/delete' },

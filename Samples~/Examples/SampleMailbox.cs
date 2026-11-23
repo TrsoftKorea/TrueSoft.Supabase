@@ -38,8 +38,11 @@ public sealed class SampleMailbox : MonoBehaviour
 
     private void Awake()
     {
-        // 보상 지급 핸들러 등록(로그만 남기고 성공 반환) — 실제 게임은 인벤토리·재화 지급.
-        Supabase.RegisterMailItemHandler(new LoggingMailItemHandler(demoItemKey));
+        // 보상 지급 함수 등록(로그만 남김) — 실제 게임은 인벤토리·재화 지급.
+        Supabase.RegisterMailItemHandlers(new MailItemHandlers
+        {
+            { demoItemKey, count => Debug.Log($"{Tag} 지급(데모): {demoItemKey} x{count}") },
+        });
     }
 
     private void Update()
@@ -136,22 +139,5 @@ public sealed class SampleMailbox : MonoBehaviour
         if (!r.IsSuccess) { Debug.LogWarning($"{Tag} 삭제 실패: {r.ErrorCode}"); return; }
 
         Debug.Log($"{Tag} 삭제 완료 — {target.Title}");
-    }
-
-    /// <summary>보상을 로그로만 지급하는 데모 핸들러.</summary>
-    private sealed class LoggingMailItemHandler : IMailItemHandler
-    {
-        public LoggingMailItemHandler(string itemKey) => ItemKey = itemKey;
-
-        public string ItemKey { get; }
-
-        public Task<SupabaseResult<ClaimResult>> HandleAsync(string mailId, int itemIndex, string itemKey, int count)
-        {
-            Debug.Log($"{Tag} 지급(데모): {itemKey} x{count}");
-            return Task.FromResult(SupabaseResult<ClaimResult>.Success(new ClaimResult
-            {
-                MailId = mailId, ItemIndex = itemIndex, ItemKey = itemKey, Count = count
-            }));
-        }
     }
 }

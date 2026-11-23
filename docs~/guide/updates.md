@@ -2,12 +2,22 @@
 
 SDK 판마다 게임에 달라지는 점입니다. 판을 올리는 방법은 [설치](/guide/start/install)를 참고하세요.
 
+## 0.4.1 {#v0-4-1}
+
+2026-11-23
+
+::: warning 게임 코드를 고쳐야 합니다
+클래스로 만들어 하나씩 등록하던 `RegisterMailItemHandler`와 `IMailItemHandler`를 지웠습니다. 보상 키마다 지급 함수를 `Supabase.RegisterMailItemHandlers(new MailItemHandlers { { "energy", async count => await Energy.AddAsync(count) } })`처럼 한 번에 등록하세요. 0.4.0의 `Dictionary<string, Action<int>>` 모양도 `MailItemHandlers`로 바뀌었습니다.
+:::
+
+- **아이템 핸들러 등록 하나로 통합** — 지급 함수를 한 목록에 등록합니다. 바로 끝나는 지급과 `async`로 기다리는 지급을 섞어 적을 수 있습니다. [아이템 핸들러 등록](/guide/mailbox/item-handler)을 참고하세요.
+
 ## 0.4.0 {#v0-4-0}
 
 2026-11-23
 
 - **리스트·딕셔너리 원소 서버 지급** — 우편 보상 키를 `gems.red`(딕셔너리의 키)나 `slots[2]`(리스트의 칸) 꼴로 쓰면, 받을 때 서버가 그 원소에 더하고 게임 안의 값에도 바로 반영합니다. 처리기를 등록하지 않아도 됩니다. 원소가 숫자인 리스트·딕셔너리 필드만 되고, 그 밖의 원소를 가리킨 우편은 받지 못한 채 남습니다. 0.3.4 이하 빌드도 이런 우편은 받지 못하고, 우편은 남아 새 빌드에서 받을 수 있습니다. [서버가 지급하는 보상](/guide/mailbox/#server-grant)을 참고하세요.
-- **아이템 핸들러 일괄 등록** — `Supabase.RegisterMailItemHandlers`로 보상 키마다 지급 함수를 한 번에 등록합니다. 클래스를 따로 만들지 않아도 됩니다. [아이템 핸들러 일괄 등록](/guide/mailbox/item-handlers)을 참고하세요.
+- **아이템 핸들러 일괄 등록** — `Supabase.RegisterMailItemHandlers`로 보상 키마다 지급 함수를 한 번에 등록합니다. 클래스를 따로 만들지 않아도 됩니다. [아이템 핸들러 등록](/guide/mailbox/item-handler)을 참고하세요.
 - **전체 수령이 원소 우편을 건너뜀** — 지급할 수 없는 리스트·딕셔너리 원소가 든 우편은 전체 수령에서 받지 않은 채 남기고 나머지 우편을 받습니다.
 - **핸들러 예외를 실패 결과로** — 우편 아이템 핸들러가 예외를 던지면 받기 호출이 예외로 끝나지 않고 `SupabaseReason.MailItemHandlerFailed` 실패를 돌려줍니다. 우편은 이미 수령된 상태입니다.
 

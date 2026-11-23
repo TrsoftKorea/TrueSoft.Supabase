@@ -166,7 +166,7 @@ bool Handle(SupabaseResult result)
 
 | Reason | 설명 |
 |--------|------|
-| `MailItemHandlerInvalid` | 우편 아이템 핸들러가 null이거나 키가 비어 있습니다. 일괄 등록이면 목록이 비었거나 키가 같은 줄이 있습니다 |
+| `MailItemHandlerInvalid` | 우편 아이템 핸들러 목록이 비었거나, 키가 빈 줄·함수가 null인 줄·키가 같은 줄이 있습니다 |
 | `MailItemHandlerMissing` | 우편 아이템 key에 핸들러도 없고 서버가 더할 데이터 필드·원소도 없어 우편이 수령되지 않았습니다. 리스트에 없는 칸이나 숫자가 아닌 원소를 가리켜도 같습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 | `MailItemHandlerFailed` | 우편 아이템 핸들러가 예외를 던졌습니다. 우편은 이미 수령됐고 그 뒤 순서의 보상은 핸들러에 넘어가지 않습니다. `ErrorCode`는 `mail_item_handler_failed:<key>:<예외>`입니다 |
 | `MailNotFound` | 해당 우편이 없습니다. 이미 삭제됐거나 기간이 지나 정리된 경우입니다 |

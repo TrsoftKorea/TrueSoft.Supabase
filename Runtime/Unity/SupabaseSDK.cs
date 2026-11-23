@@ -2567,7 +2567,7 @@ namespace TrueBase.Unity
             return await Mailbox.GetMailAsync(mailId);
         }
 
-        /// <summary><c>ts_claim_mail_items</c>(DB에서 수령과 동시에 읽음 처리) 후 등록된 <see cref="IMailItemHandler"/> 순서 실행.</summary>
+        /// <summary><c>ts_claim_mail_items</c>(DB에서 수령과 동시에 읽음 처리) 후 등록된 지급 함수(<see cref="MailItemHandlers"/>) 순서 실행.</summary>
         public static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimMailItemsAsync(string mailId)
         {
             var ready = await EnsureReadySessionAsync();

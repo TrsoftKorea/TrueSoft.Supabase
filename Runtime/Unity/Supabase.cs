@@ -611,33 +611,24 @@ namespace TrueBase.Unity
             SupabaseSDK.TryGetUnclaimedMailCountAsync(category);
 
         /// <summary>
-        /// 우편 보상 아이템(<c>items[].key</c>)을 게임에 지급하는 핸들러를 등록합니다. 앱 시작 시 키마다 1회 등록하세요.
-        /// 수령 RPC 성공 후 등록된 핸들러가 순서대로 호출됩니다.
+        /// 우편 보상 키마다 지급 함수를 등록합니다. 함수는 지급 수량을 받고, 받기 직후 우편에 담긴 순서대로 불립니다.
+        /// 목록이 비었거나, 키가 빈 줄·함수가 null인 줄·앞뒤 공백을 빼면 키가 같은 줄이 하나라도 있으면 아무것도 등록하지 않습니다.
         /// </summary>
-        public static SupabaseResult RegisterMailItemHandler(IMailItemHandler handler)
+        public static SupabaseResult RegisterMailItemHandlers(MailItemHandlers handlers)
         {
-            if (handler == null || string.IsNullOrWhiteSpace(handler.ItemKey))
+            if (handlers == null)
                 return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
-            MailItemHandlerRegistry.Register(handler);
-            return SupabaseResult.Ok;
-        }
-
-        /// <summary>
-        /// 우편 보상 키마다 지급 함수를 한 번에 등록합니다. 함수는 지급 수량을 받습니다.
-        /// 키가 비었거나 함수가 null인 줄, 앞뒤 공백을 빼면 키가 같은 줄이 하나라도 있으면 아무것도 등록하지 않습니다.
-        /// </summary>
-        public static SupabaseResult RegisterMailItemHandlers(IReadOnlyDictionary<string, Action<int>> handlers)
-        {
-            if (handlers == null || handlers.Count == 0)
+            var items = new List<KeyValuePair<string, Func<int, Task>>>(handlers);
+            if (items.Count == 0)
                 return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
             var keys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var pair in handlers)
+            foreach (var pair in items)
             {
                 if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value == null || !keys.Add(pair.Key.Trim()))
                     return SupabaseResult.Fail(SupabaseErrorCode.MailItemHandlerInvalid);
             }
-            foreach (var pair in handlers)
-                MailItemHandlerRegistry.Register(new DelegateMailItemHandler(pair.Key.Trim(), pair.Value));
+            foreach (var pair in items)
+                MailItemHandlerRegistry.Register(pair.Key, pair.Value);
             return SupabaseResult.Ok;
         }
 

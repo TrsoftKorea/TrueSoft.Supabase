@@ -1,73 +1,60 @@
 # 아이템 핸들러 등록
 
 ```csharp
-SupabaseResult Supabase.RegisterMailItemHandler(IMailItemHandler handler)
+SupabaseResult Supabase.RegisterMailItemHandlers(MailItemHandlers handlers)
 ```
 
-데이터 필드에 더하는 것만으로 끝나지 않는 보상을 게임 코드로 지급할 때 등록합니다. 숫자 데이터 필드나 리스트·딕셔너리 원소에 더하는 보상은 [서버가 지급](/guide/mailbox/#server-grant)하므로 등록하지 않아도 됩니다. 키가 여럿이면 [아이템 핸들러 일괄 등록](/guide/mailbox/item-handlers)이 간단합니다.
+데이터 필드에 더하는 것만으로 끝나지 않는 보상을 게임 코드로 지급할 때, 보상 키마다 지급 함수를 한 번에 등록합니다. 함수는 지급 수량을 받고, 기다려야 하는 지급은 `async` 함수로 씁니다. 숫자 데이터 필드나 리스트·딕셔너리 원소에 더하는 보상은 [서버가 지급](/guide/mailbox/#server-grant)하므로 등록하지 않아도 됩니다.
 
 ```csharp
-public sealed class EnergyMailItemHandler : IMailItemHandler
+Supabase.RegisterMailItemHandlers(new MailItemHandlers
 {
-    public string ItemKey => "energy";
-
-    public async Task<SupabaseResult<ClaimResult>> HandleAsync(
-        string mailId, int itemIndex, string itemKey, int count)
-    {
-        await Energy.AddAsync(count);   // 충전 시각 계산처럼 더하기만으로 안 되는 지급
-        return SupabaseResult<ClaimResult>.Success(new ClaimResult
-        {
-            MailId = mailId, ItemIndex = itemIndex, ItemKey = itemKey, Count = count
-        });
-    }
-}
-
-Supabase.RegisterMailItemHandler(new EnergyMailItemHandler());
+    { "energy",  async count => await Energy.AddAsync(count) },   // 충전 시각 계산처럼 기다리는 지급
+    { "skin_01", _ => Skins.Unlock("skin_01") },
+});
 ```
 
-[보상 수령](/guide/mailbox/claim) 직후 보상 키와 `ItemKey`가 같은 핸들러가 우편에 담긴 순서대로 호출됩니다. 등록한 키는 서버가 지급할 수 있는 키여도 핸들러가 지급합니다. 등록 해제는 `Supabase.UnregisterMailItemHandler("energy")`입니다.
+[보상 수령](/guide/mailbox/claim) 직후 보상 키가 같은 함수가 우편에 담긴 순서대로 불리고, 앞 함수가 끝난 뒤 다음 함수가 불립니다. 등록한 키는 서버가 지급할 수 있는 키여도 등록한 함수가 지급합니다. 같은 키를 다시 등록하면 새 함수로 바뀌고, 등록 해제는 `Supabase.UnregisterMailItemHandler("energy")`입니다.
 
 **파라미터**
 
 | 파라미터 | 설명 |
 |----------|------|
-| `handler` | 지급할 아이템 키와 지급 로직 |
-
-**핸들러가 받는 값**
-
-| 파라미터 | 설명 |
-|----------|------|
-| `mailId` | 받은 우편 ID |
-| `itemIndex` | 우편의 몇 번째 보상인지, 0부터 시작 |
-| `itemKey` | 보상 키 |
-| `count` | 지급 수량 |
+| `handlers` | 보상 키와 지급 함수 |
 
 **에러 코드**
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerInvalid` | 핸들러가 null이거나 `ItemKey`가 비어 있습니다 |
+| `SupabaseReason.MailItemHandlerInvalid` | 목록이 비었거나, 키가 빈 줄·함수가 null인 줄·앞뒤 공백을 빼면 키가 같은 줄이 있습니다. 이때는 아무것도 등록하지 않습니다 |
 
 **실사용 예시**
 
-앱 시작 때 등록하고, 받기 버튼에서 보상을 받아 팝업을 띄웁니다.
+앱 시작 때 한 번 등록하고, 받기 버튼에서 보상을 받아 팝업을 띄웁니다.
 
 ```csharp
 void Awake()
 {
-    Supabase.RegisterMailItemHandler(new EnergyMailItemHandler());   // 로그인 전이어도 됩니다
+    var result = Supabase.RegisterMailItemHandlers(new MailItemHandlers   // 로그인 전이어도 됩니다
+    {
+        { "energy",  async count => await Energy.AddAsync(count) },
+        { "revive",  count => Inventory.AddRevive(count) },
+        { "skin_01", _ => Skins.Unlock("skin_01") },
+    });
+    if (!result.IsSuccess)
+        Debug.LogError($"우편 보상 등록 실패: {result.Reason}");
 }
 
 public async void OnClickClaim(string mailId)
 {
-    var result = await Supabase.ClaimMailItemsAsync(mailId);
-    if (!result.IsSuccess) { ShowToast("보상을 받지 못했습니다"); return; }
+    var claim = await Supabase.ClaimMailItemsAsync(mailId);
+    if (!claim.IsSuccess) { ShowToast("보상을 받지 못했습니다"); return; }
 
-    foreach (var reward in result.Data)   // 지급은 끝났고 표시만 합니다
+    foreach (var reward in claim.Data)   // 지급은 끝났고 표시만 합니다
         ShowRewardPopup(reward.ItemKey, reward.Count);
 }
 ```
 
-::: info 서버가 지급하는 보상
-핸들러가 없는 키는 서버가 수령과 함께 숫자 데이터 필드나 리스트·딕셔너리 원소에 더하고, 게임 안의 값에도 바로 반영됩니다. 키 꼴은 [서버가 지급하는 보상](/guide/mailbox/#server-grant)을 참고하세요. 핸들러도 없고 서버가 더할 곳도 없는 키가 있으면 `SupabaseReason.MailItemHandlerMissing`으로 실패합니다. 운영 콘솔 **아이템 카탈로그**에서 지급 방식이 「자동 지급」으로 보이는 아이템이 서버가 지급하는 보상입니다.
+::: info 지급 함수에서 오류가 나면
+지급 함수가 예외를 던지면 수령 결과가 `SupabaseReason.MailItemHandlerFailed` 실패로 돌아옵니다. 우편은 이미 받은 것으로 처리되고, 그 뒤 순서의 보상은 지급 함수에 넘어가지 않습니다. 등록한 함수도 서버가 더할 곳도 없는 키가 있으면 `SupabaseReason.MailItemHandlerMissing`으로 실패하고 우편은 받지 않은 채 남습니다. 운영 콘솔 **아이템 카탈로그**에서 지급 방식이 「자동 지급」으로 보이는 아이템이 서버가 지급하는 보상입니다.
 :::

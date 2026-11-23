@@ -254,7 +254,7 @@ namespace TrueBase.Unity
 
         /// <summary>
         /// 받은 보상을 <c>Index</c> 오름차순으로 게임에 넘깁니다. 서버가 지급한 보상은 결과에만 담고(로컬 반영은
-        /// <see cref="ApplyServerGrants"/>), 나머지는 처리기에 넘깁니다. 처리기가 하나라도 실패하면 즉시 실패를 반환합니다.
+        /// <see cref="ApplyServerGrants"/>), 나머지는 등록한 지급 함수에 넘깁니다. 지급 함수가 하나라도 예외를 던지면 즉시 실패를 반환합니다.
         /// </summary>
         /// <param name="mailId">처리기에 넘길 우편 ID.</param>
         /// <param name="lines">받은 보상 목록. null 또는 빈 목록이면 빈 결과로 성공합니다.</param>
@@ -282,22 +282,20 @@ namespace TrueBase.Unity
                 if (!MailItemHandlerRegistry.TryGetHandler(line.Key, out var handler))
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(SupabaseErrorCode.MailItemHandlerMissing + ":" + line.Key);
 
-                SupabaseResult<ClaimResult> r;
                 try
                 {
-                    r = await handler.HandleAsync(mailId, line.Index, line.Key, line.Count);
+                    var pending = handler(line.Count);
+                    if (pending != null)
+                        await pending;
                 }
                 catch (Exception e)
                 {
-                    // 처리기 예외를 받기 결과의 실패로 돌려준다 — 받기 호출이 예외로 끝나면 게임이 결과를 못 본다. 우편은 이미 받음 처리됐다.
+                    // 지급 함수의 예외를 받기 결과의 실패로 돌려준다 — 받기 호출이 예외로 끝나면 게임이 결과를 못 본다. 우편은 이미 받음 처리됐다.
                     return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(
                         $"{SupabaseErrorCode.MailItemHandlerFailed}:{line.Key}:{e.GetType().Name}: {e.Message}");
                 }
-                if (r == null || !r.IsSuccess)
-                    return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(r?.ErrorCode ?? $"{SupabaseErrorCode.MailItemHandlerFailed}:{line.Key}");
 
-                if (r.Data != null)
-                    results.Add(r.Data);
+                results.Add(new ClaimResult { MailId = mailId, ItemIndex = line.Index, ItemKey = line.Key, Count = line.Count });
             }
 
             return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(results);

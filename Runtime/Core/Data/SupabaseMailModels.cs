@@ -114,7 +114,7 @@ namespace TrueBase.Core.Data
         public int ExpiredRetentionDays { get; set; }
     }
 
-    /// <summary>메일 보상 수령 핸들러가 반환하는 한 줄 결과(로그·UI용).</summary>
+    /// <summary>받은 보상 한 줄(로그·UI용).</summary>
     public sealed class ClaimResult
     {
         public string MailId { get; set; }
@@ -124,24 +124,28 @@ namespace TrueBase.Core.Data
     }
 
     /// <summary>
-    /// <c>items</c>의 <c>key</c>마다 게임 쪽 지급 로직을 등록합니다.
-    /// 수령 RPC 성공 후 클라이언트에서 순서대로 호출됩니다.
+    /// 우편 보상 키마다 지급 함수를 모아 <c>Supabase.RegisterMailItemHandlers</c>에 넘기는 목록입니다.
+    /// <c>{ "키", 함수 }</c>로 적고, 함수는 지급 수량을 받습니다. 기다려야 하는 지급은 <c>async</c> 함수로 씁니다.
     /// </summary>
-    public interface IMailItemHandler
+    public sealed class MailItemHandlers : IEnumerable<KeyValuePair<string, Func<int, Task>>>
     {
-        /// <summary>이 핸들러가 처리하는 아이템 키(<c>items[].key</c>와 일치).</summary>
-        string ItemKey { get; }
+        private readonly List<KeyValuePair<string, Func<int, Task>>> _items = new List<KeyValuePair<string, Func<int, Task>>>();
 
-        /// <summary>수령 확정된 아이템 1건을 게임에 지급합니다.</summary>
-        /// <param name="mailId">보상이 들어 있던 메일 UUID.</param>
-        /// <param name="itemIndex"><c>items</c> 배열 내 위치(0-based).</param>
-        /// <param name="itemKey">아이템 키.</param>
-        /// <param name="count">지급 수량.</param>
-        Task<Common.SupabaseResult<ClaimResult>> HandleAsync(
-            string mailId,
-            int itemIndex,
-            string itemKey,
-            int count);
+        /// <summary>바로 끝나는 지급 함수를 더합니다.</summary>
+        public void Add(string itemKey, Action<int> grant) =>
+            _items.Add(new KeyValuePair<string, Func<int, Task>>(itemKey, grant == null ? null : (Func<int, Task>)(count =>
+            {
+                grant(count);
+                return Task.CompletedTask;
+            })));
+
+        /// <summary>기다려야 하는 지급 함수를 더합니다.</summary>
+        public void Add(string itemKey, Func<int, Task> grant) =>
+            _items.Add(new KeyValuePair<string, Func<int, Task>>(itemKey, grant));
+
+        IEnumerator<KeyValuePair<string, Func<int, Task>>> IEnumerable<KeyValuePair<string, Func<int, Task>>>.GetEnumerator() => _items.GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
     }
 
     /// <summary>한 분류의 미수령 메일 개수. <see cref="MailInboxCounts.ByCategory"/> 값.</summary>
@@ -171,45 +175,22 @@ namespace TrueBase.Core.Data
         public IReadOnlyList<MailItemPayload> Items { get; set; }
     }
 
-    /// <summary><c>Supabase.RegisterMailItemHandlers</c>가 키마다 만드는 처리기. 수량만 넘겨 게임 함수를 부른다.</summary>
-    internal sealed class DelegateMailItemHandler : IMailItemHandler
-    {
-        private readonly Action<int> _grant;
-
-        public DelegateMailItemHandler(string itemKey, Action<int> grant)
-        {
-            ItemKey = itemKey;
-            _grant = grant;
-        }
-
-        public string ItemKey { get; }
-
-        public Task<Common.SupabaseResult<ClaimResult>> HandleAsync(string mailId, int itemIndex, string itemKey, int count)
-        {
-            _grant(count);
-            return Task.FromResult(Common.SupabaseResult<ClaimResult>.Success(new ClaimResult
-            {
-                MailId = mailId, ItemIndex = itemIndex, ItemKey = itemKey, Count = count
-            }));
-        }
-    }
-
-    /// <summary>전역 핸들러 레지스트리. 게임은 <c>Supabase.RegisterMailItemHandler</c>로 등록한다.</summary>
+    /// <summary>전역 지급 함수 레지스트리. 게임은 <c>Supabase.RegisterMailItemHandlers</c>로 등록한다.</summary>
     internal static class MailItemHandlerRegistry
     {
-        private static readonly Dictionary<string, IMailItemHandler> Map =
-            new Dictionary<string, IMailItemHandler>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, Func<int, Task>> Map =
+            new Dictionary<string, Func<int, Task>>(StringComparer.Ordinal);
 
         private static readonly object Gate = new object();
 
-        public static void Register(IMailItemHandler handler)
+        public static void Register(string itemKey, Func<int, Task> grant)
         {
-            if (handler == null || string.IsNullOrWhiteSpace(handler.ItemKey))
+            if (grant == null || string.IsNullOrWhiteSpace(itemKey))
                 return;
 
             lock (Gate)
             {
-                Map[handler.ItemKey.Trim()] = handler;
+                Map[itemKey.Trim()] = grant;
             }
         }
 
@@ -224,7 +205,7 @@ namespace TrueBase.Core.Data
             }
         }
 
-        public static bool TryGetHandler(string itemKey, out IMailItemHandler handler)
+        public static bool TryGetHandler(string itemKey, out Func<int, Task> handler)
         {
             handler = null;
             if (string.IsNullOrWhiteSpace(itemKey))
