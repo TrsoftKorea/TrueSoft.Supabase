@@ -995,10 +995,20 @@ const HANDLERS: Record<string, Handler> = {
     { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
   ],
   // 쿠폰·매치 보상 — 이것도 목록(배열)을 받는 화면이다. 아이템 이름은 두 화면이 같이 쓴다.
+  // 지급 방식은 아래 데이터 필드 목록(= userData.columns)과 맞춘다 — 숫자 필드가 있으면 auto, 골랐는데 없으면 missing,
+  // 숫자가 아닌 필드와 이름이 같으면 blocked.
   'gameItems.list': () => [
-    { key: 'gem', display_name: '보석' },
-    { key: 'gold', display_name: '골드' },
-    { key: 'ticket', display_name: '입장권' },
+    { key: 'gem', display_name: '보석', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00', source: 'manual', grant_mode: 'game' },
+    { key: 'gold', display_name: '골드', created_at: addDays(kstToday(), -30) + 'T10:01:00+09:00', source: 'manual', grant_mode: 'auto' },
+    { key: 'old_coin', display_name: '옛 코인', created_at: addDays(kstToday(), -20) + 'T11:00:00+09:00', source: 'save', grant_mode: 'missing' },
+    { key: 'ticket', display_name: '입장권', created_at: addDays(kstToday(), -12) + 'T09:30:00+09:00', source: 'manual', grant_mode: 'game' },
+    { key: 'inventory', display_name: '가방', created_at: addDays(kstToday(), -8) + 'T15:00:00+09:00', source: 'manual', grant_mode: 'blocked' },
+  ],
+  'gameItems.columns': () => [
+    { column_name: 'account_id', grantable: false, registered: false },
+    { column_name: 'gold', grantable: true, registered: true },
+    { column_name: 'level', grantable: true, registered: false },
+    { column_name: 'inventory', grantable: false, registered: true },
   ],
   'coupons.list': () => [
     {

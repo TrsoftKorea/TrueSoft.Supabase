@@ -177,6 +177,15 @@ const RULES = [
     bad: 'const s = `${k}: 이전값 ${v}`', good: 'const t = `${pad2(hh)}:${pad2(mm)}`; const u = `${p.label} ${p.value}`',
   },
   {
+    id: 'U20', name: '화면 글자에 옛 이름 "세이브 칸"·"숫자 칸"·"칸 없음"·"숫자 아님"·"필드 형식 다름"', fix: '메뉴 이름과 같은 "데이터 필드"·"숫자 데이터 필드"·"필드 없음"·"형식 다름"으로 쓴다',
+    alsoUi: true,
+    // 같은 것을 화면마다 다른 말로 부르면 운영자가 다른 것으로 읽는다(2026-11-23 사용자 지시 "명칭은 항상 통일"). 주석은 화면에 안 나와 뺀다.
+    // "형식 다름"은 지금 이름이라 걸리면 안 된다 — 앞에 "필드"가 붙은 옛 꼴만 잡는다.
+    find: (t) => matchAll(maskComments(t), /세이브\s*칸|숫자\s*칸|칸\s*없음|숫자\s*아님|필드\s*형식\s*다름/g),
+    bad: '<span>세이브 칸을 불러오지 못했습니다.</span><StatusText tone="bad">숫자 아님</StatusText><StatusText tone="bad">필드 형식 다름</StatusText>',
+    good: '// 세이브 칸 목록 — 숫자 칸만, 필드 형식 다름\n<span>데이터 필드를 불러오지 못했습니다.</span><StatusText tone="bad">형식 다름</StatusText><span>필드 없음·형식 다름 2개</span>',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',

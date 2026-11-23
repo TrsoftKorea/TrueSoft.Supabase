@@ -18,7 +18,8 @@ export const TONE_TEXT: Record<Tone, string> = {
 export function StatusText({ tone, children }: { tone: Tone; children: ReactNode }) {
   return tone === 'bad'
     // 위아래 여백 없이 줄 높이만 — 바탕을 깐 줄만 표 줄이 높아지지 않게.
-    ? <span className="inline-flex items-center rounded bg-red-50 px-1.5 leading-5 text-red-600 font-medium whitespace-nowrap">{children}</span>
+    // 바탕은 글자 바깥으로 넓히고(-mx) 글자 시작은 다른 상태 글자와 같은 자리에 둔다 — 한 열에서 왼쪽 끝이 어긋나지 않게.
+    ? <span className="-mx-1.5 inline-flex items-center rounded bg-red-50 px-1.5 leading-5 text-red-600 font-medium whitespace-nowrap">{children}</span>
     : <span className={`${TONE_TEXT[tone]} whitespace-nowrap`}>{children}</span>
 }
 

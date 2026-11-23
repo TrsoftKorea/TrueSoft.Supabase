@@ -13,6 +13,7 @@ import { ProjectIcon } from './ui/ProjectIcon'
 import { ThemeToggle } from './ThemeToggle'
 import { callAdmin } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
+import { isBrokenGrant, type GrantMode } from '../lib/gameItems'
 import { PublishBar } from '../mock/PublishBar'
 
 // 사이드바 색은 화면 모드를 따른다 — 값은 index.css 의 .sidebar 변수(--sb-*)에 있다.
@@ -45,17 +46,27 @@ function NavLinkRow({ to, label, icon: Icon, end = false, badge, alert = false, 
   )
 }
 
+/** 답변 대기 문의 수 — 고객센터 메뉴. */
+const readWaitingSupport = (target: ProjectTarget) =>
+  callAdmin<{ counts?: { open?: number } }>(target, 'support.list', { limit: 1, offset: 0 })
+    .then((d) => (typeof d.counts?.open === 'number' ? d.counts.open : null))
+
+/** 지급이 막힌 아이템 수(필드 없음·형식 다름) — 아이템 카탈로그 메뉴. */
+const readBrokenItems = (target: ProjectTarget) =>
+  callAdmin<{ grant_mode?: GrantMode }[]>(target, 'gameItems.list')
+    .then((rows) => (Array.isArray(rows) ? rows.filter((r) => isBrokenGrant(r.grant_mode)).length : null))
+
 /**
- * 답변 대기 문의 수 — 고객센터 메뉴의 빨간 표시. 1분마다, 그리고 화면을 옮길 때(답변하고 나오면 바로 줄게) 다시 센다.
+ * 메뉴의 빨간 표시 숫자. 1분마다, 그리고 화면을 옮길 때(처리하고 나오면 바로 줄게) 다시 센다.
  * 못 세면 표시를 숨긴다(null).
  */
-function useWaitingSupportCount(target: ProjectTarget, pathname: string): number | null {
+function usePolledCount(target: ProjectTarget, pathname: string, fetchCount: (t: ProjectTarget) => Promise<number | null>): number | null {
   const [count, setCount] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
     const read = () => {
-      callAdmin<{ counts?: { open?: number } }>(target, 'support.list', { limit: 1, offset: 0 })
-        .then((d) => { if (alive) setCount(typeof d.counts?.open === 'number' ? d.counts.open : null) })
+      fetchCount(target)
+        .then((n) => { if (alive) setCount(n) })
         .catch(() => { if (alive) setCount(null) })
     }
     // 화면을 열거나 옮길 때는 늘 센다. 주기 재조회만 가려진 탭에서 건너뛴다.
@@ -68,7 +79,7 @@ function useWaitingSupportCount(target: ProjectTarget, pathname: string): number
       window.clearInterval(id)
       document.removeEventListener('visibilitychange', tick)
     }
-  }, [target, pathname])
+  }, [target, pathname, fetchCount])
   return count
 }
 
@@ -188,8 +199,8 @@ const isUnder = (pathname: string, to: string) => pathname === to || pathname.st
 const sectionHasPath = (items: NavItem[], pathname: string) => items.some((it) => isUnder(pathname, it.to))
 const sectionOf = (pathname: string) => NAV_SECTIONS.find((s) => sectionHasPath(s.items, pathname))?.label ?? null
 
-function NavSection({ label, icon: Icon, open, active, onToggle, children }: {
-  label: string; icon: Icon; open: boolean; active: boolean; onToggle: () => void; children: ReactNode
+function NavSection({ label, icon: Icon, open, active, onToggle, badge = 0, children }: {
+  label: string; icon: Icon; open: boolean; active: boolean; onToggle: () => void; badge?: number; children: ReactNode
 }) {
   return (
     <div>
@@ -201,7 +212,12 @@ function NavSection({ label, icon: Icon, open, active, onToggle, children }: {
       >
         <Icon className="w-4 h-4" />
         <span>{label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
+        {!open && badge > 0 && (
+          <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none bg-red-500 text-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+        <ChevronDown className={`w-3.5 h-3.5 ${!open && badge > 0 ? '' : 'ml-auto'} transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="mt-0.5 space-y-0.5 pl-3">{children}</div>}
     </div>
@@ -232,7 +248,10 @@ export function Layout({
   const { drafts } = usePendingChanges()
   const pendingCount = drafts?.length ?? null
 
-  const waitingSupport = useWaitingSupportCount(target, location.pathname)
+  const waitingSupport = usePolledCount(target, location.pathname, readWaitingSupport)
+  const brokenItems = usePolledCount(target, location.pathname, readBrokenItems)
+  // 묶음 안 메뉴의 빨간 표시 — 묶음이 접혀 있으면 묶음 줄에 합계를 띄운다.
+  const alertBadges: Record<string, number | null> = { '/items': brokenItems }
 
   const showPendingBanner = !!pendingCount && pendingCount > 0 && location.pathname !== '/schema-changes'
   const accent = look.color(target)
@@ -321,8 +340,11 @@ export function Layout({
                 open={isOpen(s.label)}
                 active={sectionHasPath(s.items, location.pathname)}
                 onToggle={() => toggleSection(s.label)}
+                badge={s.items.reduce((n, it) => n + (alertBadges[it.to] ?? 0), 0)}
               >
-                {s.items.map((it) => <NavLinkRow key={it.to} {...it} accent={accent} />)}
+                {s.items.map((it) => (
+                  <NavLinkRow key={it.to} {...it} badge={alertBadges[it.to] ?? undefined} alert accent={accent} />
+                ))}
               </NavSection>
             ))}
           </div>

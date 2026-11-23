@@ -358,7 +358,8 @@ export default function RemoteConfig({
                   {eff.requires_auth && <Tag tone="brand">인증 필요</Tag>}
                   {eff.pendingId != null && !eff.deleted && <Tag>대기 중</Tag>}
                   {eff.deleted
-                    ? <StatusText tone="bad">삭제 대기</StatusText>
+                    // 빨간 바탕은 글자 바깥으로 넓어진다 — 앞의 작은 표시와 바탕이 맞닿지 않게 그만큼 띄운다.
+                    ? <span className="ml-1.5"><StatusText tone="bad">삭제 대기</StatusText></span>
                     : <StatusText tone={eff.enabled ? 'ok' : 'muted'}>{eff.enabled ? '활성' : '비활성'}</StatusText>}
                 </span>
               )
