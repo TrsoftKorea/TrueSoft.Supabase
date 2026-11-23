@@ -29,7 +29,7 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerMissing` | 대상 우편 중 하나라도 핸들러도 세이브 숫자 칸도 없는 key가 있어 어느 우편도 수령되지 않았습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 대상 우편 중 하나라도 핸들러도 숫자 데이터 필드도 없는 key가 있어 어느 우편도 수령되지 않았습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 
 **실사용 예시**
 

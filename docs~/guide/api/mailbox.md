@@ -16,5 +16,5 @@
 언어별 제목·본문은 [다국어 메시지](/guide/mailbox/localized)의 `Mail.TitleFor`·`ContentFor`로 읽습니다.
 
 ::: tip
-보상 키가 세이브의 같은 이름 숫자 칸이면 서버가 수령과 함께 지급합니다. 그 밖의 보상만 [아이템 핸들러](/guide/mailbox/item-handler)를 등록하세요.
+보상 키와 같은 이름의 숫자 데이터 필드가 있으면 서버가 수령과 함께 지급합니다. 그 밖의 보상만 [아이템 핸들러](/guide/mailbox/item-handler)를 등록하세요.
 :::

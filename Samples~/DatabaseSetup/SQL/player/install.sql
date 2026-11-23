@@ -3382,13 +3382,36 @@ revoke all on function public.ts_view_mail_for_user(uuid) from public;
 grant execute on function public.ts_view_mail_for_user(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 우편 보상 서버 지급 — 받기와 같은 처리 안에서 세이브(user_data)의 같은 이름 숫자 칸에 수량을 더한다
+-- 우편 보상 서버 지급 — 받기와 같은 처리 안에서 user_data 의 같은 이름 숫자 데이터 필드에 수량을 더한다
 -- ---------------------------------------------------------------------------
 -- 받음 표시와 지급이 한 번에 일어나 "받았는데 지급이 안 됨"(지급 전에 앱이 꺼짐)·두 번 지급이 없다.
 -- p_client_keys 는 게임이 처리기로 직접 지급하겠다는 키 — 그 키는 건드리지 않고 granted=false 로 돌려준다.
--- 처리기도 없고 숫자 칸도 아닌 키가 하나라도 있으면 mail_item_handler_missing 으로 받기 전체를 되돌린다(받음 표시도 안 남는다).
+-- 처리기도 없고 숫자 데이터 필드도 아닌 키가 하나라도 있으면 mail_item_handler_missing 으로 받기 전체를 되돌린다(받음 표시도 안 남는다).
 -- 예약 칸(id·user_id·account_id·server_id·created_at·updated_at·last_activity_at)에는 더하지 않는다.
 -- 받기 함수 안에서만 부른다 — 클라이언트에 열지 않는다.
+create or replace function public.ts_mail_grantable_columns()
+returns setof text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select a.attname::text
+    from pg_attribute a
+   where a.attrelid = 'public.user_data'::regclass
+     and a.attnum > 0 and not a.attisdropped
+     and a.atttypid in ('int2'::regtype, 'int4'::regtype, 'int8'::regtype,
+                        'numeric'::regtype, 'float4'::regtype, 'float8'::regtype)
+     and a.attname::text ~ '^[A-Za-z_][A-Za-z0-9_]*$'
+     and a.attname::text not in ('id', 'user_id', 'account_id', 'server_id', 'created_at', 'updated_at', 'last_activity_at')
+   order by a.attnum
+$$;
+
+comment on function public.ts_mail_grantable_columns() is
+  '우편 보상을 서버가 더할 수 있는 user_data 칸(숫자, 예약 칸 제외). 받기 지급과 운영 콘솔 아이템 카탈로그가 같은 판정을 쓴다.';
+
+revoke all on function public.ts_mail_grantable_columns() from public, anon, authenticated;
+
 create or replace function public.ts_mail_grant_items(p_items jsonb, p_client_keys text[])
 returns jsonb
 language plpgsql
@@ -3409,14 +3432,8 @@ begin
     v_granted := false;
 
     if not (v_key = any(coalesce(p_client_keys, '{}'::text[]))) then
-      if v_key !~ '^[A-Za-z_][A-Za-z0-9_]*$'
-         or v_key in ('id', 'user_id', 'account_id', 'server_id', 'created_at', 'updated_at', 'last_activity_at')
-         or not exists (
-           select 1 from pg_attribute a
-            where a.attrelid = 'public.user_data'::regclass
-              and a.attname = v_key and a.attnum > 0 and not a.attisdropped
-              and a.atttypid in ('int2'::regtype, 'int4'::regtype, 'int8'::regtype,
-                                 'numeric'::regtype, 'float4'::regtype, 'float8'::regtype)) then
+      if v_key is null
+         or not exists (select 1 from public.ts_mail_grantable_columns() c where c = v_key) then
         raise exception 'mail_item_handler_missing: %', v_key;
       end if;
 
@@ -3438,7 +3455,7 @@ end;
 $$;
 
 comment on function public.ts_mail_grant_items(jsonb, text[]) is
-  '우편 받기 함수 전용: 처리기 키가 아닌 보상을 user_data 의 같은 이름 숫자 칸에 더하고 granted 표시를 붙여 돌려준다.';
+  '우편 받기 함수 전용: 처리기 키가 아닌 보상을 user_data 의 같은 이름 숫자 데이터 필드에 더하고 granted 표시를 붙여 돌려준다.';
 
 revoke all on function public.ts_mail_grant_items(jsonb, text[]) from public, anon, authenticated;
 
@@ -3541,7 +3558,7 @@ end;
 $$;
 
 comment on function public.ts_claim_mail_items(uuid, text[]) is
-  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). p_client_keys 가 있으면 그 밖의 보상은 세이브 칸에 서버가 지급. items 비면 [] 반환(no-op). SECURITY DEFINER.';
+  '본인·프로필 서버 일치 메일 보상 전부 수령(items_claimed_at). p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드에 서버가 지급. items 비면 [] 반환(no-op). SECURITY DEFINER.';
 
 revoke all on function public.ts_claim_mail_items(uuid, text[]) from public, anon, authenticated;
 grant execute on function public.ts_claim_mail_items(uuid, text[]) to authenticated;
@@ -3641,7 +3658,7 @@ end;
 $$;
 
 comment on function public.ts_claim_all_mail_items(text, text[]) is
-  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. p_client_keys 가 있으면 그 밖의 보상은 세이브 칸에 서버가 지급. SECURITY DEFINER.';
+  '미수령 보상 메일 전부 일괄 수령(items_claimed_at). p_category=null이면 전체 분류. p_client_keys 가 있으면 그 밖의 보상은 숫자 데이터 필드에 서버가 지급. SECURITY DEFINER.';
 
 revoke all on function public.ts_claim_all_mail_items(text, text[]) from public, anon, authenticated;
 grant execute on function public.ts_claim_all_mail_items(text, text[]) to authenticated;
@@ -6596,6 +6613,11 @@ create table if not exists public.game_items (
 );
 alter table public.game_items add column if not exists display_name text not null default '';
 alter table public.game_items add column if not exists created_at   timestamptz not null default now();
+-- 등록 방식. save = 숫자 데이터 필드 이름으로 등록(받을 때 서버가 그 필드에 더한다), manual = 그 밖의 코드(게임 처리기가 지급).
+-- 지급 여부는 이 값이 아니라 그때의 필드로 정해진다 — 이 값은 필드가 사라졌을 때 "필드 없음"을 알리는 데만 쓴다.
+alter table public.game_items add column if not exists source       text not null default 'manual';
+alter table public.game_items drop constraint if exists game_items_source_chk;
+alter table public.game_items add constraint game_items_source_chk check (source in ('save', 'manual'));
 alter table public.game_items drop column if exists description;
 alter table public.game_items drop column if exists category;
 alter table public.game_items drop column if exists sort_order;
@@ -6610,7 +6632,7 @@ drop index if exists public.game_items_active_idx;
 create unique index if not exists game_items_display_name_uniq
   on public.game_items (lower(btrim(display_name))) where btrim(display_name) <> '';
 
-comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 실제 지급은 게임 IMailItemHandler.';
+comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 키가 숫자 데이터 필드 이름이면 받을 때 서버가 지급(ts_mail_grantable_columns), 아니면 게임 IMailItemHandler.';
 
 alter table public.game_items enable row level security;
 drop policy if exists "game_items_select_all" on public.game_items;
@@ -6933,10 +6955,13 @@ grant execute on function public.ts_admin_mail_batch_recall(uuid) to service_rol
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
 -- ---------------------------------------------------------------------------
 drop function if exists public.ts_admin_upsert_game_item(text,text,text,text,int);
+drop function if exists public.ts_admin_upsert_game_item(text,text);
 
+-- p_source 가 null 이면 새 줄은 manual, 있는 줄은 등록 방식을 그대로 둔다(이름만 고칠 때).
 create or replace function public.ts_admin_upsert_game_item(
   p_key          text,
-  p_display_name text
+  p_display_name text,
+  p_source       text default null
 )
 returns void
 language plpgsql
@@ -6947,20 +6972,37 @@ begin
   if p_key is null or btrim(p_key) = '' then
     raise exception 'key_empty';
   end if;
+  if p_source is not null and p_source not in ('save', 'manual') then
+    raise exception 'item_source_invalid';
+  end if;
+  if p_source = 'save'
+     and not exists (select 1 from public.ts_mail_grantable_columns() c where c = btrim(p_key)) then
+    raise exception 'item_column_missing';
+  end if;
+  -- 새 아이템 코드가 서버가 더할 수 없는 데이터 필드(숫자 아님·예약)와 같으면 거절한다 — 운영자가 자동 지급으로
+  -- 오해하고, 처리기가 없으면 받기가 실패한다. 이미 있는 아이템은 이름만 고칠 수 있게 막지 않는다.
+  if not exists (select 1 from public.game_items g where g.key = btrim(p_key))
+     and exists (select 1 from pg_attribute a
+                  where a.attrelid = 'public.user_data'::regclass and a.attname = btrim(p_key)
+                    and a.attnum > 0 and not a.attisdropped)
+     and not exists (select 1 from public.ts_mail_grantable_columns() c where c = btrim(p_key)) then
+    raise exception 'item_field_not_numeric';
+  end if;
   if btrim(coalesce(p_display_name, '')) <> '' and exists (
        select 1 from public.game_items g
         where lower(btrim(g.display_name)) = lower(btrim(p_display_name)) and g.key <> btrim(p_key)) then
     raise exception 'item_name_taken';
   end if;
-  insert into public.game_items (key, display_name)
-  values (btrim(p_key), coalesce(p_display_name, ''))
+  insert into public.game_items (key, display_name, source)
+  values (btrim(p_key), coalesce(p_display_name, ''), coalesce(p_source, 'manual'))
   on conflict (key) do update set
-    display_name = excluded.display_name;
+    display_name = excluded.display_name,
+    source       = coalesce(p_source, public.game_items.source);
 end;
 $$;
 
-comment on function public.ts_admin_upsert_game_item(text,text) is
-  '아이템 카탈로그 upsert(어드민). 발송된 mails.items 에는 영향 없음.';
+comment on function public.ts_admin_upsert_game_item(text,text,text) is
+  '아이템 카탈로그 upsert(어드민). p_source=save 는 숫자 데이터 필드 이름만, 새 코드는 숫자가 아닌 데이터 필드 이름을 거절한다. 발송된 mails.items 에는 영향 없음.';
 
 create or replace function public.ts_admin_delete_game_item(p_key text)
 returns void
@@ -6979,14 +7021,26 @@ comment on function public.ts_admin_delete_game_item(text) is
 -- ---------------------------------------------------------------------------
 -- game_items 는 쓰기·읽기 모두 RPC 경유다. 운영 도구가 owner 로 접속하면 직접 SELECT 가
 -- 되지만, secret key(service_role)로 붙는 도구는 이 테이블에 SELECT 가 없어 조회가 막힌다.
+-- grant_mode: auto = 받을 때 서버가 지급, blocked = 코드가 숫자가 아닌 데이터 필드와 같음(등록 뒤에 그 필드가 생김),
+-- missing = 숫자 데이터 필드로 등록했는데 그 필드가 사라짐, game = 게임 처리기가 지급. blocked·missing 은 처리기가 없으면
+-- 받기 실패. 숫자 데이터 필드가 지금 있으면 등록 방식과 상관없이 auto 다 — 서버 지급 판정이 그렇다.
+drop function if exists public.ts_admin_list_game_items(text);
+
 create or replace function public.ts_admin_list_game_items(p_search text default '')
-returns table (key text, display_name text, created_at timestamptz)
+returns table (key text, display_name text, source text, grant_mode text, created_at timestamptz)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select g.key, g.display_name, g.created_at
+  select g.key, g.display_name, g.source,
+         case when exists (select 1 from public.ts_mail_grantable_columns() c where c = g.key) then 'auto'
+              when exists (select 1 from pg_attribute a
+                            where a.attrelid = 'public.user_data'::regclass and a.attname = g.key
+                              and a.attnum > 0 and not a.attisdropped) then 'blocked'
+              when g.source = 'save' then 'missing'
+              else 'game' end,
+         g.created_at
     from public.game_items g
    where coalesce(p_search, '') = ''
       or g.key ilike '%' || p_search || '%'
@@ -6995,7 +7049,29 @@ as $$
 $$;
 
 comment on function public.ts_admin_list_game_items(text) is
-  '아이템 카탈로그 조회(어드민 전용). 검색어가 비면 전체.';
+  '아이템 카탈로그 조회(어드민 전용). 검색어가 비면 전체. grant_mode 는 받을 때 누가 지급하는지(auto·game·missing·blocked).';
+
+-- ts_admin_game_item_columns — 데이터 필드 전부와 서버가 더할 수 있는지(grantable)·카탈로그 등록 여부.
+-- 화면이 grantable 필드를 제안하고, 아닌 필드 이름은 입력 단계에서 막는다.
+drop function if exists public.ts_admin_game_item_columns();
+
+create or replace function public.ts_admin_game_item_columns()
+returns table (column_name text, grantable boolean, registered boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select a.attname::text,
+         exists (select 1 from public.ts_mail_grantable_columns() c where c = a.attname::text),
+         exists (select 1 from public.game_items g where g.key = a.attname::text)
+    from pg_attribute a
+   where a.attrelid = 'public.user_data'::regclass and a.attnum > 0 and not a.attisdropped
+   order by a.attnum
+$$;
+
+comment on function public.ts_admin_game_item_columns() is
+  '데이터 필드 전부와 우편 보상 자동 지급 가능 여부·카탈로그 등록 여부(어드민 전용).';
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_count_recipients — 발송 전 대상 수 프리뷰(all/server)
@@ -7176,8 +7252,10 @@ comment on function public.ts_admin_search_mails(text,text,text,date,date,uuid,i
 -- ---------------------------------------------------------------------------
 revoke all on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) from public, anon, authenticated;
 grant execute on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) to service_role;
-revoke all on function public.ts_admin_upsert_game_item(text,text) from public, anon, authenticated;
-grant execute on function public.ts_admin_upsert_game_item(text,text) to service_role;
+revoke all on function public.ts_admin_upsert_game_item(text,text,text) from public, anon, authenticated;
+grant execute on function public.ts_admin_upsert_game_item(text,text,text) to service_role;
+revoke all on function public.ts_admin_game_item_columns() from public, anon, authenticated;
+grant execute on function public.ts_admin_game_item_columns() to service_role;
 revoke all on function public.ts_admin_delete_game_item(text) from public, anon, authenticated;
 grant execute on function public.ts_admin_delete_game_item(text) to service_role;
 revoke all on function public.ts_admin_list_game_items(text) from public, anon, authenticated;

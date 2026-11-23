@@ -26,6 +26,9 @@ namespace SdkAudit
             (new Regex("어드민"), "운영 콘솔"),
             (new Regex(@"유저(?! 데이터| ID)"), "플레이어"),
             (new Regex(@"(?<!이)메일"), "우편"),
+            // user_data 의 칸은 운영 콘솔 메뉴 이름 그대로 "데이터 필드"(2026-11-23 사용자 결정)
+            (new Regex(@"세이브(의)? ?(같은 이름 ?)?(숫자 ?)?칸"), "데이터 필드"),
+            (new Regex(@"숫자 칸"), "숫자 데이터 필드"),
         };
 
         public static void Run(AuditContext ctx)

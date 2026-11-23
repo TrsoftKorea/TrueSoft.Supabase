@@ -4,7 +4,7 @@
 SupabaseResult Supabase.RegisterMailItemHandler(IMailItemHandler handler)
 ```
 
-세이브의 숫자 칸에 더하는 것만으로 끝나지 않는 보상을 게임 코드로 지급할 때 등록합니다. 보상 키가 [유저 데이터](/guide/user-data/)의 같은 이름 숫자 칸이면 핸들러 없이 서버가 수령과 함께 그 칸에 더하므로 등록하지 않아도 됩니다.
+숫자 데이터 필드에 더하는 것만으로 끝나지 않는 보상을 게임 코드로 지급할 때 등록합니다. 보상 키와 같은 이름의 숫자 데이터 필드가 [유저 데이터](/guide/user-data/)에 있으면 핸들러 없이 서버가 수령과 함께 그 필드에 더하므로 등록하지 않아도 됩니다.
 
 ```csharp
 public sealed class EnergyMailItemHandler : IMailItemHandler
@@ -25,7 +25,7 @@ public sealed class EnergyMailItemHandler : IMailItemHandler
 Supabase.RegisterMailItemHandler(new EnergyMailItemHandler());
 ```
 
-[보상 수령](/guide/mailbox/claim) 직후 보상 키와 `ItemKey`가 같은 핸들러가 우편에 담긴 순서대로 호출됩니다. 등록한 키는 세이브에 같은 이름 칸이 있어도 핸들러가 지급합니다. 등록 해제는 `Supabase.UnregisterMailItemHandler("energy")`입니다.
+[보상 수령](/guide/mailbox/claim) 직후 보상 키와 `ItemKey`가 같은 핸들러가 우편에 담긴 순서대로 호출됩니다. 등록한 키는 같은 이름의 숫자 데이터 필드가 있어도 핸들러가 지급합니다. 등록 해제는 `Supabase.UnregisterMailItemHandler("energy")`입니다.
 
 **파라미터**
 
@@ -69,5 +69,5 @@ public async void OnClickClaim(string mailId)
 ```
 
 ::: info 서버가 지급하는 보상
-핸들러가 없는 키는 서버가 수령과 함께 세이브의 같은 이름 숫자 칸에 더하고, 게임 안 세이브 값에도 바로 반영됩니다. 받음 표시와 지급이 한 처리라 도중에 앱이 꺼져도 보상이 사라지거나 두 번 지급되지 않습니다. 핸들러도 숫자 칸도 없는 키가 있으면 `SupabaseReason.MailItemHandlerMissing`으로 실패합니다.
+핸들러가 없는 키는 서버가 수령과 함께 같은 이름의 숫자 데이터 필드에 더하고, 게임 안의 값에도 바로 반영됩니다. 받음 표시와 지급이 한 처리라 도중에 앱이 꺼져도 보상이 사라지거나 두 번 지급되지 않습니다. 핸들러도 숫자 데이터 필드도 없는 키가 있으면 `SupabaseReason.MailItemHandlerMissing`으로 실패합니다. 운영 콘솔 **아이템 카탈로그**에서 지급 방식이 「자동 지급」으로 보이는 아이템이 서버가 지급하는 보상입니다.
 :::

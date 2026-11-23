@@ -4,7 +4,7 @@
 Task<SupabaseResult<IReadOnlyList<ClaimResult>>> Supabase.ClaimMailItemsAsync(string mailId)
 ```
 
-우편 1건의 첨부 보상을 수령합니다. 보상 키와 같은 이름의 세이브 숫자 칸에는 서버가 수령과 함께 더하고, 그 밖의 키는 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 지급합니다. 이 호출 안에서 지급까지 끝나므로 결과는 보상 표시에만 씁니다.
+우편 1건의 첨부 보상을 수령합니다. 보상 키와 같은 이름의 숫자 데이터 필드에는 서버가 수령과 함께 더하고, 그 밖의 키는 등록해 둔 [아이템 핸들러](/guide/mailbox/item-handler)가 지급합니다. 이 호출 안에서 지급까지 끝나므로 결과는 보상 표시에만 씁니다.
 
 ```csharp
 var result = await Supabase.ClaimMailItemsAsync(mailId);
@@ -35,7 +35,7 @@ if (result.IsSuccess)
 
 | Reason | 설명 |
 |--------|------|
-| `SupabaseReason.MailItemHandlerMissing` | 핸들러도 없고 같은 이름의 세이브 숫자 칸도 없는 key가 있습니다. 우편은 수령되지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
+| `SupabaseReason.MailItemHandlerMissing` | 핸들러도 없고 같은 이름의 숫자 데이터 필드도 없는 key가 있습니다. 우편은 수령되지 않습니다. `ErrorCode`는 `mail_item_handler_missing:<key>`입니다 |
 | `SupabaseReason.MailExpired` | 만료된 우편입니다 |
 | `SupabaseReason.MailNotFound` | 본인 소유가 아니거나 존재하지 않는 우편입니다 |
 | `SupabaseReason.AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
@@ -62,5 +62,5 @@ public async void OnClickClaim(Mail mail)
 ```
 
 ::: info 수령과 지급이 한 번에 일어납니다
-서버가 지급하는 보상은 수령 표시와 같은 처리 안에서 세이브에 더해지므로, 지급 도중 앱이 꺼져도 보상이 사라지거나 두 번 지급되지 않습니다. 게임 안의 세이브 값에도 SDK가 바로 반영합니다.
+서버가 지급하는 보상은 수령 표시와 같은 처리 안에서 데이터 필드에 더해지므로, 지급 도중 앱이 꺼져도 보상이 사라지거나 두 번 지급되지 않습니다. 게임 안의 값에도 SDK가 바로 반영합니다.
 :::
