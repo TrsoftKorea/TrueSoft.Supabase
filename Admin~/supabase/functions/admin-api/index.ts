@@ -927,17 +927,30 @@ async function handleAction(
       }
 
       case "gameItems.upsert": {
+        // source 를 안 보내면(이름만 고칠 때·옛 화면) 등록 방식은 그대로 둔다.
+        const source = optStr(params, "source");
         const { error } = await db.rpc("ts_admin_upsert_game_item", {
           p_key: str(params, "key"),
           p_display_name: optStr(params, "displayName"),
+          p_source: source === "" ? null : source,
         });
         // 동시에 두 창에서 같은 이름을 넣으면 함수 검사를 지나 색인(game_items_display_name_uniq)에서 걸린다.
         if (error) {
           throw new Error(error.message.includes("item_name_taken") || error.message.includes("game_items_display_name_uniq")
             ? "같은 이름의 아이템이 이미 있습니다."
+            : error.message.includes("item_column_missing")
+            ? "그 이름의 숫자 데이터 필드가 없습니다."
+            : error.message.includes("item_field_not_numeric")
+            ? "숫자가 아닌 데이터 필드 이름은 아이템 코드로 쓸 수 없습니다."
             : error.message);
         }
         return json({ ok: true, data: null });
+      }
+
+      case "gameItems.columns": {
+        const { data, error } = await db.rpc("ts_admin_game_item_columns");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
       }
 
       case "gameItems.delete": {
