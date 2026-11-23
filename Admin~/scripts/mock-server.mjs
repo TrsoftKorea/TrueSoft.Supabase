@@ -12,7 +12,7 @@ import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { homedir } from 'node:os'
-import { UPDATES_FILE, updatesProblem } from './updates-check.mjs'
+import { UPDATES_FILE, updatesProblem, sdkUpdatesProblem, stampDate, koreaDate } from './updates-check.mjs'
 
 const PORT = 4174
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -387,13 +387,14 @@ function publish(seen) {
     return { ok: false, error: `판 ${chosen} 은 이미 게시된 적이 있어(이름표 ${tagName(chosen)}) 다시 쓸 수 없습니다.` }
   }
   // 판을 올리면 그 판의 업데이트 내역 절이 있어야 한다. package.json 에 판을 적기 전에 본다 — 멈출 때 파일을 바꿔 두지 않게.
-  const updates = updatesProblem({
-    version: chosen,
-    raised,
-    readWorking: () => fs.readFileSync(path.join(REPO, UPDATES_FILE), 'utf8'),
-    readHead: () => gitRaw('show', `HEAD:${UPDATES_FILE}`),
-    inSelection: all.some((f) => f.file === UPDATES_FILE),
-  })
+  // SDK 코드가 들면 판을 올리지 않아도 그 판의 절이 이번에 고쳐져 있어야 한다.
+  const updatesPath = path.join(REPO, UPDATES_FILE)
+  const readUpdates = () => fs.readFileSync(updatesPath, 'utf8')
+  const readUpdatesHead = () => gitRaw('show', `HEAD:${UPDATES_FILE}`)
+  const updatesSelected = all.some((f) => f.file === UPDATES_FILE)
+  const hasSdk = hasSdkCode(all)
+  const updates = updatesProblem({ version: chosen, raised, readWorking: readUpdates, readHead: readUpdatesHead, inSelection: updatesSelected })
+    ?? sdkUpdatesProblem({ version: chosen, hasSdk, readWorking: readUpdates, readHead: readUpdatesHead, inSelection: updatesSelected })
   if (updates) return { ok: false, error: updates }
   writeVersion(chosen)
   // 판을 적으면 package.json 이 바뀐다 — 묶음을 다시 나눈다(판 번호만 바뀐 package.json 은 pkg 로 따라간다).
@@ -408,6 +409,19 @@ function publish(seen) {
   }
   if (stale) {
     return { ok: false, error: `SDK 코드가 바뀌었는데 판 번호(${stale.now})가 그대로라 게시하지 않았습니다. 판 번호를 올려 주세요: ${stale.files.slice(0, 5).join(', ')}${stale.files.length > 5 ? ' 외' : ''}` }
+  }
+
+  // 멈출 사유가 다 지나갔으니 그 판 절의 날짜를 게시하는 날로 적는다. 묶음에 없는 내역 파일은 커밋된 그대로일 때만
+  // 적어 판 커밋에 함께 담는다 — 다른 세션이 고치던 내용을 이 커밋에 섞지 않게.
+  let updatesExtra = null
+  if (raised || hasSdk) {
+    const text = readUpdates()
+    const stamped = stampDate(text, chosen, koreaDate())
+    const clean = updatesSelected || (() => { try { return readUpdatesHead() === text } catch { return false } })()
+    if (stamped !== text && clean) {
+      fs.writeFileSync(updatesPath, stamped)
+      if (!updatesSelected) updatesExtra = { status: 'M', file: UPDATES_FILE }
+    }
   }
 
   // 게임이 판 번호로 골라 받을 수 있게 이름표(태그)를 단다. 지난 판에 이름표가 없으면(이 기능 전에 낸 판) 그 판에도 단다 —
@@ -429,10 +443,11 @@ function publish(seen) {
   // SDK·DB 먼저 — 배포 작업은 푸시의 마지막 커밋을 빌드하므로 콘솔 커밋이 맨 위에 오게 한다.
   for (const b of sel) {
     const files = take(b.files.filter((f) => !f.file.startsWith(SCOPE)))
-    if (pkg && b === pkgHost) files.push(pkg)
+    if (b === pkgHost) files.push(...[pkg, updatesExtra].filter(Boolean))
     if (files.length) commits.push({ kind: 'sdk', hash: commitFiles(files, b.sdkMessage || 'SDK·DB 변경 게시') })
   }
-  if (pkg && !pkgHost) commits.push({ kind: 'sdk', hash: commitFiles([pkg], `SDK 판 ${chosen}`) })
+  const orphan = pkgHost ? [] : [pkg, updatesExtra].filter(Boolean)
+  if (orphan.length) commits.push({ kind: 'sdk', hash: commitFiles(orphan, `SDK 판 ${chosen}`) })
   // 이번 판의 이름표는 SDK·DB 커밋을 다 만든 지금 위치에 단다 — 판 번호를 바꾼 커밋에 달면 그 뒤 묶음의 SDK 코드가
   // 빠진다(묶음이 여럿일 때). 판을 올린 게시가 푸시에 실패해 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라
   // "이름표가 있는지"로 가른다.
