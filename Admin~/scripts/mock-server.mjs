@@ -12,6 +12,7 @@ import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { homedir } from 'node:os'
+import { UPDATES_FILE, updatesProblem } from './updates-check.mjs'
 
 const PORT = 4174
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -385,6 +386,15 @@ function publish(seen) {
   if (raised && tagExists(tagName(chosen))) {
     return { ok: false, error: `판 ${chosen} 은 이미 게시된 적이 있어(이름표 ${tagName(chosen)}) 다시 쓸 수 없습니다.` }
   }
+  // 판을 올리면 그 판의 업데이트 내역 절이 있어야 한다. package.json 에 판을 적기 전에 본다 — 멈출 때 파일을 바꿔 두지 않게.
+  const updates = updatesProblem({
+    version: chosen,
+    raised,
+    readWorking: () => fs.readFileSync(path.join(REPO, UPDATES_FILE), 'utf8'),
+    readHead: () => gitRaw('show', `HEAD:${UPDATES_FILE}`),
+    inSelection: all.some((f) => f.file === UPDATES_FILE),
+  })
+  if (updates) return { ok: false, error: updates }
   writeVersion(chosen)
   // 판을 적으면 package.json 이 바뀐다 — 묶음을 다시 나눈다(판 번호만 바뀐 package.json 은 pkg 로 따라간다).
   p = plan()

@@ -239,7 +239,7 @@ function DeleteColumnModal({
           <p className="font-medium">게시하면 되돌릴 수 없습니다.</p>
           <p className="mt-1 text-red-600"><span className="font-mono font-semibold">{col.column_name}</span> 필드와 모든 데이터가 영구 삭제됩니다.</p>
         </div>
-        <ItemImpactNote catalog={catalog} affected={affected} effect="이 필드로 자동 지급됩니다. 지우면 필드 없음이 됩니다." />
+        <ItemImpactNote catalog={catalog} affected={affected} effect="이 필드로 자동 지급됩니다. 지우면 자동 지급이 사라집니다." />
         <div>
           <label className="block text-xs text-neutral-500 mb-1">
             확인을 위해 필드명 <span className="font-mono font-semibold text-neutral-700">{col.column_name}</span> 을 입력하세요
