@@ -10,6 +10,7 @@
     "typecheck": "tsc -b --noEmit",
     "preview:mock": "vite build --mode mock --outDir dist-mock && node scripts/mock-server.mjs",
     "preview:service": "node scripts/preview-service.mjs",
+    "check:live": "node scripts/check-live.mjs",
     "check:mock": "node scripts/check-mock.mjs",
     "check:ui": "node scripts/check-ui.mjs",
     "build:support": "vite build --config vite.support.config.ts",

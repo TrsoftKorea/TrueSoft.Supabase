@@ -215,6 +215,9 @@ function Step({ label, state, last, children }: { label: string; state: StepStat
   )
 }
 
+// 게시 서버가 실제 서버 대조를 돌리는 파일(scripts/live-check.mjs 와 같은 범위).
+const SERVER_FILE = /^(Samples~\/DatabaseSetup\/(SQL|EdgeFunctions)\/|Admin~\/supabase\/functions\/)/
+
 export function PublishBar() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<PublishStatus | null>(null)
@@ -226,6 +229,8 @@ export function PublishBar() {
   const [deployError, setDeployError] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [version, setVersion] = useState('')
+  // 서버 쪽 파일이 든 게시는 실제 서버 대조로 1~2분 걸린다 — 그동안 무엇을 하는지 보인다.
+  const [serverCheck, setServerCheck] = useState(false)
   // 올릴 묶음. 창을 열면 내용이 있는 묶음을 모두 고른다 — 묶음은 세션이 일을 마쳤을 때만 적으므로 고른 채로 두는 게 보통이다.
   const [picked, setPicked] = useState<string[]>([])
 
@@ -324,6 +329,7 @@ export function PublishBar() {
       .map((f) => [f.file, { file: f.file, hash: f.hash }])).values()]
     // 콘솔 화면 코드가 없으면 실제 콘솔은 다시 배포되지 않는다 — 배포 단계를 기다리지 않는다.
     const deploys = chosen.some((b) => b.console.files.length > 0 && b.console.deploys)
+    setServerCheck(seen.some((f) => SERVER_FILE.test(f.file)))
     setOpen(false)
     setExpanded(true)
     setPublishError('')
@@ -403,12 +409,12 @@ export function PublishBar() {
       {expanded && (
         <div className="bg-white border-b border-neutral-200">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 space-y-3">
-            {publishError && <p className="text-xs text-red-600">{publishError}</p>}
+            {publishError && <p className="text-xs text-red-600 whitespace-pre-line">{publishError}</p>}
             {deployError && <p className="text-xs text-red-600">{deployError}</p>}
             {local ? (
               <ol className="flex gap-2">
                 <Step label="GitHub 에 올림" state={local.stage === 'pushing' ? 'busy' : 'done'}>
-                  {local.stage === 'pushing' ? '커밋하고 올리는 중' : `${local.hash} · 방금`}
+                  {local.stage === 'pushing' ? (serverCheck ? '실제 서버 대조 후 올리는 중' : '커밋하고 올리는 중') : `${local.hash} · 방금`}
                 </Step>
                 <Step label="배포" state={local.stage === 'pushing' ? 'todo' : 'busy'}>
                   {local.stage === 'pushing' ? '올린 뒤 시작' : '시작 기다리는 중'}

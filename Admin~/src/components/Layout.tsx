@@ -10,6 +10,7 @@ import {
 import { type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from './ui/ProjectIcon'
+import { CountBadge } from './ui/CountBadge'
 import { ThemeToggle } from './ThemeToggle'
 import { callAdmin } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -35,13 +36,7 @@ function NavLinkRow({ to, label, icon: Icon, end = false, badge, alert = false, 
     >
       <Icon className="w-4 h-4 shrink-0" />
       <span className="whitespace-nowrap">{label}</span>
-      {!!badge && (
-        <span className={`ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none ${
-          alert ? 'bg-red-500 text-white' : 'bg-amber-400 text-[#161a2b]'
-        }`}>
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
+      {!!badge && <CountBadge count={badge} tone={alert ? 'alert' : 'warn'} className="ml-auto" />}
     </NavLink>
   )
 }
@@ -212,11 +207,7 @@ function NavSection({ label, icon: Icon, open, active, onToggle, badge = 0, chil
       >
         <Icon className="w-4 h-4" />
         <span>{label}</span>
-        {!open && badge > 0 && (
-          <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none bg-red-500 text-white">
-            {badge > 99 ? '99+' : badge}
-          </span>
-        )}
+        {!open && badge > 0 && <CountBadge count={badge} className="ml-auto" />}
         <ChevronDown className={`w-3.5 h-3.5 ${!open && badge > 0 ? '' : 'ml-auto'} transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="mt-0.5 space-y-0.5 pl-3">{children}</div>}
@@ -397,7 +388,7 @@ export function Layout({
               <Menu className="w-4 h-4" />
             </button>
             <ProjectIcon target={target} size={32} className="ring-2 ring-white/70 shrink-0" />
-            <span className="text-lg font-bold tracking-tight truncate">{look.name(target)}</span>
+            <span className="text-base font-bold tracking-tight truncate">{look.name(target)}</span>
             <div className="ml-auto flex items-center gap-2 sm:gap-3 text-sm min-w-0">
               <span className="hidden md:inline truncate">
                 {email}

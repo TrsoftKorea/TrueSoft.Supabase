@@ -186,6 +186,16 @@ const RULES = [
     good: '// 세이브 칸 목록 — 숫자 칸만, 필드 형식 다름\n<span>데이터 필드를 불러오지 못했습니다.</span><StatusText tone="bad">형식 다름</StatusText><span>필드 없음·형식 다름 2개</span>',
   },
   {
+    id: 'U21', name: '글자 크기가 네 단계(24·16·14·12px) 밖', fix: 'text-2xl(페이지 제목·큰 숫자)·text-base(카드 제목)·text-sm(본문)·text-xs(칸 이름·보조)로 맞춘다',
+    alsoUi: true,
+    // 화면마다 11·13·18·20px 이 섞여 같은 역할의 글자 크기가 갈렸다(2026-11-23). 고정폭 글꼴은 같은 크기에서 커 보여
+    // 13px 이 본문 14px 과 맞는다 — 같은 글자열에 font-mono 가 있으면 13px 만 통과시킨다. 메뉴 숫자 표시는 CountBadge(EXEMPT).
+    find: (t) => matchAll(maskComments(t), /(?<![-\w])text-(\[\d+(?:\.\d+)?(?:px|rem)\]|lg|xl|[3-9]xl)(?![-\w])/g)
+      .filter((m) => !(m[1] === '[13px]' && /\bfont-mono\b/.test(stringAround(t, m.index)))),
+    bad: '<span className="text-[11px] text-neutral-400"><h1 className="text-xl font-semibold"><b className="text-[13px]">',
+    good: '<span className="text-xs text-neutral-400"><h2 className="text-2xl"><code className="font-mono text-[13px]"><i className="text-[color:var(--x)] text-[#1677ff]">',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',
@@ -202,6 +212,8 @@ const EXEMPT = {
   U4: ['components/ui/Switch.tsx'],
   // 공용 새로고침 버튼 자신.
   U15: ['components/ui/FilterBar.tsx'],
+  // 18px 원 안에 "99+"까지 들어가야 하는 메뉴 숫자 표시 — 11px 가 아니면 원을 넘친다.
+  U21: ['components/ui/CountBadge.tsx'],
 }
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.
@@ -236,6 +248,13 @@ function longTitles(t) {
     }
   }
   return out
+}
+
+/** index 를 감싼 따옴표 글자열(클래스 목록) — 앞뒤로 가장 가까운 따옴표·백틱까지. */
+function stringAround(t, index) {
+  const before = Math.max(t.lastIndexOf('"', index), t.lastIndexOf("'", index), t.lastIndexOf('`', index))
+  const ends = ['"', "'", '`'].map((q) => t.indexOf(q, index)).filter((i) => i >= 0)
+  return t.slice(before + 1, ends.length ? Math.min(...ends) : t.length)
 }
 
 function matchAll(text, re) {

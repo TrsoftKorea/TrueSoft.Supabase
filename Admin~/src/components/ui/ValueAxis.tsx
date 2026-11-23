@@ -53,7 +53,7 @@ export function ValueAxisFrame({ axis, heightCls, children, footer, tip }: {
     // items-start: 눈금 칸이 아래 가로축 글자 줄까지 늘어나면 눈금 높이가 그래프와 어긋난다.
     // mt-2: 맨 위 눈금 글자는 꼭대기 선에 걸쳐 반쯤 위로 나온다 — 위 글자와 붙어 보이지 않게 띄운다.
     <div className="flex items-start gap-2 mt-2">
-      <div className="relative shrink-0 text-[11px] text-neutral-400 tabular-nums text-right">
+      <div className="relative shrink-0 text-xs text-neutral-400 tabular-nums text-right">
         {/* 가장 긴 글자를 안 보이게 깔아 칸 폭을 잡는다 — 글자들은 아래에서 높이에 맞춰 띄운다. */}
         <div className={`invisible ${heightCls}`} aria-hidden>{widest}</div>
         {axis.ticks.map((v, i) => (

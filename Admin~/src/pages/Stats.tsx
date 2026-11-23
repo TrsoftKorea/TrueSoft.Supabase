@@ -246,7 +246,7 @@ function DayBars<R extends DayRow>({ days, series, unit = '명' }: { days: R[]; 
   return (
     <div>
       <ValueAxisFrame axis={axis} heightCls="h-36" tip={tip} footer={
-        <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+        <div className="flex justify-between text-xs text-neutral-400 mt-1">
           <span>{days[0] ? md(days[0].day) : ''}</span>
           <span>{days.length ? md(days[days.length - 1]!.day) : ''}</span>
         </div>

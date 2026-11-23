@@ -111,7 +111,7 @@ export default function ProjectSelect({
     <div className="min-h-screen flex items-center justify-center p-6 bg-[#161a2b]">
       <div className="w-full max-w-md space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[#c7cbe0]">
-          <h1 className="text-xl font-semibold text-white whitespace-nowrap shrink-0">프로젝트 선택</h1>
+          <h1 className="text-2xl font-semibold text-white whitespace-nowrap shrink-0">프로젝트 선택</h1>
           <div className="flex items-center gap-2">
             <ThemeToggle className="border-[#2c3250] text-[#c7cbe0] hover:bg-white/5 hover:text-white" />
             <button

@@ -88,7 +88,7 @@ function Chart({ series, hours }: { series: Point[]; hours: number }) {
   return (
     <div>
       <ValueAxisFrame axis={axis} heightCls="h-40" tip={tip} footer={
-        <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+        <div className="flex justify-between text-xs text-neutral-400 mt-1">
           <span>{formatAt(new Date(Date.now() - hours * 3600_000).toISOString(), withDate)}</span>
           <span>지금</span>
         </div>

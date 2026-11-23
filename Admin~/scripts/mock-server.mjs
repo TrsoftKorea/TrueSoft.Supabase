@@ -13,6 +13,9 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { homedir } from 'node:os'
 import { UPDATES_FILE, updatesProblem, sdkUpdatesProblem, stampDate, koreaDate } from './updates-check.mjs'
+import { liveArgs, liveProblem, runLiveCheck } from './live-check.mjs'
+
+let publishing = false
 
 const PORT = 4174
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -339,7 +342,7 @@ function selected(p, names) {
   return p.batches.filter((b) => names.includes(b.name) && b.files.length)
 }
 
-function publish(seen) {
+async function publish(seen) {
   const names = Array.isArray(seen?.batches) ? seen.batches.filter((n) => typeof n === 'string') : []
   let p = plan()
   let sel = selected(p, names)
@@ -370,11 +373,11 @@ function publish(seen) {
   }
   const seenUnpushed = Array.isArray(seen?.unpushed) ? seen.unpushed : []
   const seenMessages = Array.isArray(seen?.messages) ? seen.messages : []
-  if (!sameAsSeen(seen?.files, all)
+  const changedSinceSeen = () => !sameAsSeen(seen?.files, all)
       || seenUnpushed.length !== before.length || !before.every((c, i) => seenUnpushed[i] === c.full)
-      || seenMessages.length !== sel.length || !sel.every((b) => seenMessages.includes(batchMessages(b)))) {
-    return { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이나 요약이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 내용을 확인해 주세요.' }
-  }
+      || seenMessages.length !== sel.length || !sel.every((b) => seenMessages.includes(batchMessages(b)))
+  const STALE = { ok: false, stale: true, error: '확인 창을 연 뒤에 파일이나 요약이 바뀌었습니다. 창을 닫고 다시 열어 바뀐 내용을 확인해 주세요.' }
+  if (changedSinceSeen()) return STALE
 
   // 확인 창에서 고른 판 번호를 적는다. 고를 수 있는 판이 아니면 거절한다(창을 연 사이 마지막 게시가 바뀐 경우 등).
   const info = versionInfo(all)
@@ -396,6 +399,23 @@ function publish(seen) {
   const updates = updatesProblem({ version: chosen, raised, readWorking: readUpdates, readHead: readUpdatesHead, inSelection: updatesSelected })
     ?? sdkUpdatesProblem({ version: chosen, hasSdk, readWorking: readUpdates, readHead: readUpdatesHead, inSelection: updatesSelected })
   if (updates) return { ok: false, error: updates }
+
+  // 서버 쪽 파일이 들면 두 게임의 실제 서버가 저장소와 같은지 본다. 오래 걸리니 싼 확인을 다 지난 뒤에 돌리고,
+  // 그사이 파일이 바뀌었을 수 있어 끝나면 확인 창이 본 내용과 다시 맞춘다.
+  const live = liveArgs(all)
+  if (live) {
+    // 기다리는 사이 받아오기(pull) 등으로 커밋이 바뀌면 개수가 같아도 다른 커밋이다 — 해시로 맞춘다.
+    const headAtCheck = git('rev-parse', 'HEAD')
+    const problem = liveProblem(await runLiveCheck(REPO, live))
+    if (problem) return { ok: false, error: problem }
+    p = plan()
+    sel = selected(p, names)
+    if (!sel) return STALE
+    all = uniqueFiles(sel.flatMap((b) => b.files))
+    const after = unpushed()
+    if (changedSinceSeen() || git('rev-parse', 'HEAD') !== headAtCheck
+      || after.length !== before.length || !after.every((c, i) => c.full === before[i].full)) return STALE
+  }
   writeVersion(chosen)
   // 판을 적으면 package.json 이 바뀐다 — 묶음을 다시 나눈다(판 번호만 바뀐 package.json 은 pkg 로 따라간다).
   p = plan()
@@ -414,22 +434,38 @@ function publish(seen) {
   // 멈출 사유가 다 지나갔으니 그 판 절의 날짜를 게시하는 날로 적는다. 묶음에 없는 내역 파일은 커밋된 그대로일 때만
   // 적어 판 커밋에 함께 담는다 — 다른 세션이 고치던 내용을 이 커밋에 섞지 않게.
   let updatesExtra = null
+  let updatesBefore = null // 날짜를 적기 전 내용 — 커밋에 담기기 전에 실패하면 되돌린다
   if (raised || hasSdk) {
     const text = readUpdates()
     const stamped = stampDate(text, chosen, koreaDate())
-    const clean = updatesSelected || (() => { try { return readUpdatesHead() === text } catch { return false } })()
+    const lf = (s) => s.replace(/\r\n/g, '\n')
+    const clean = updatesSelected || (() => { try { return lf(readUpdatesHead()) === lf(text) } catch { return false } })()
     if (stamped !== text && clean) {
       fs.writeFileSync(updatesPath, stamped)
+      updatesBefore = text
       if (!updatesSelected) updatesExtra = { status: 'M', file: UPDATES_FILE }
     }
   }
+  // 날짜를 적은 내역 파일이 커밋에 담기기 전에 이름표·커밋이 실패하면 날짜를 되돌린다 — 묶음 밖이던 파일이 날짜만 바뀐 채 남지 않게.
+  let updatesCommitted = false
+  const guarded = (fn) => {
+    try { return fn() } catch (e) {
+      if (updatesBefore !== null && !updatesCommitted) fs.writeFileSync(updatesPath, updatesBefore)
+      throw e
+    }
+  }
+  const commit = (files, message) => guarded(() => {
+    const hash = commitFiles(files, message)
+    if (files.some((f) => f.file === UPDATES_FILE)) updatesCommitted = true
+    return hash
+  })
 
   // 게임이 판 번호로 골라 받을 수 있게 이름표(태그)를 단다. 지난 판에 이름표가 없으면(이 기능 전에 낸 판) 그 판에도 단다 —
   // 마지막 게시 커밋이 곧 그 판의 마지막 모습이다.
   const tags = []
   const headBefore = git('rev-parse', 'HEAD')
   if (raised && info.before && !tagExists(tagName(info.before))) {
-    git('tag', '-a', tagName(info.before), '-m', `SDK ${info.before}`, headBefore)
+    guarded(() => git('tag', '-a', tagName(info.before), '-m', `SDK ${info.before}`, headBefore))
     tags.push(tagName(info.before))
   }
 
@@ -444,21 +480,21 @@ function publish(seen) {
   for (const b of sel) {
     const files = take(b.files.filter((f) => !f.file.startsWith(SCOPE)))
     if (b === pkgHost) files.push(...[pkg, updatesExtra].filter(Boolean))
-    if (files.length) commits.push({ kind: 'sdk', hash: commitFiles(files, b.sdkMessage || 'SDK·DB 변경 게시') })
+    if (files.length) commits.push({ kind: 'sdk', hash: commit(files, b.sdkMessage || 'SDK·DB 변경 게시') })
   }
   const orphan = pkgHost ? [] : [pkg, updatesExtra].filter(Boolean)
-  if (orphan.length) commits.push({ kind: 'sdk', hash: commitFiles(orphan, `SDK 판 ${chosen}`) })
+  if (orphan.length) commits.push({ kind: 'sdk', hash: commit(orphan, `SDK 판 ${chosen}`) })
   // 이번 판의 이름표는 SDK·DB 커밋을 다 만든 지금 위치에 단다 — 판 번호를 바꾼 커밋에 달면 그 뒤 묶음의 SDK 코드가
   // 빠진다(묶음이 여럿일 때). 판을 올린 게시가 푸시에 실패해 다시 게시할 때도 여기서 붙는다 — "이번에 올렸는지"가 아니라
   // "이름표가 있는지"로 가른다.
   const current = versionOf(fs.readFileSync(PKG_PATH, 'utf8'))
   if (current && !tagExists(tagName(current))) {
-    git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('rev-parse', 'HEAD'))
+    guarded(() => git('tag', '-a', tagName(current), '-m', `SDK ${current}`, git('rev-parse', 'HEAD')))
     tags.push(tagName(current))
   }
   for (const b of sel) {
     const files = take(b.files.filter((f) => f.file.startsWith(SCOPE)))
-    if (files.length) commits.push({ kind: 'console', hash: commitFiles(files, b.message || '콘솔 화면 게시') })
+    if (files.length) commits.push({ kind: 'console', hash: commit(files, b.message || '콘솔 화면 게시') })
   }
   // 올린 묶음의 요약은 커밋에 쓰였으니 바로 지운다 — 푸시가 실패해 남으면 다음 게시에 엉뚱한 요약이 붙는다. 고르지 않은 묶음은 그대로 둔다.
   for (const b of sel) for (const f of b.remove) fs.rmSync(f, { recursive: true, force: true })
@@ -492,9 +528,14 @@ function publish(seen) {
 
 function readBody(req) {
   return new Promise((resolve) => {
+    // 끝까지 못 받으면(너무 큼·연결 끊김) null — 'end' 가 안 와도 반드시 끝나야 게시 잠금이 남지 않는다.
     let raw = ''
-    req.on('data', (c) => { raw += c; if (raw.length > 1 << 20) req.destroy() })
-    req.on('end', () => { try { resolve(JSON.parse(raw || '{}')) } catch { resolve({}) } })
+    let done = false
+    const finish = (v) => { if (!done) { done = true; resolve(v) } }
+    req.on('data', (c) => { raw += c; if (raw.length > 1 << 20) { finish(null); req.destroy() } })
+    req.on('end', () => { try { finish(JSON.parse(raw || '{}')) } catch { finish({}) } })
+    req.on('error', () => finish(null))
+    req.on('close', () => finish(null))
   })
 }
 
@@ -647,7 +688,13 @@ http.createServer(async (req, res) => {
     }
     if (req.url === '/__publish' && req.method === 'POST') {
       if (!checkCaller(req)) return json(res, 403, { ok: false, error: 'forbidden' })
-      return json(res, 200, publish(await readBody(req)))
+      // 대조를 기다리는 동안 두 번 눌러도 한 번만 올린다.
+      // 본문을 다 받은 뒤에 잠근다 — 받다가 끊긴 요청이 잠금을 쥔 채 남지 않게.
+      const body = await readBody(req)
+      if (body === null) return
+      if (publishing) return json(res, 200, { ok: false, error: '게시가 이미 진행 중입니다.' })
+      publishing = true
+      try { return json(res, 200, await publish(body)) } finally { publishing = false }
     }
     serveStatic(req, res)
   } catch (e) {

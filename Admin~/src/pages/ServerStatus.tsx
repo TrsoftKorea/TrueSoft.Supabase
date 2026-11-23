@@ -167,7 +167,7 @@ function gapOf(gaps: Gaps, at: string): string[] | null {
 
 function TimeFooter({ hours, withDate }: { hours: number; withDate: boolean }) {
   return (
-    <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+    <div className="flex justify-between text-xs text-neutral-400 mt-1">
       <span>{formatAt(new Date(Date.now() - hours * HOUR).toISOString(), withDate)}</span>
       <span>지금</span>
     </div>
@@ -441,8 +441,11 @@ function MauChart({ months }: { months: { month: string; users: number }[] }) {
   return (
     <ValueAxisFrame axis={axis} heightCls="h-44" tip={tip}
       footer={
-        <div className="flex text-[11px] text-neutral-400 mt-1">
-          {months.map((m) => <span key={m.month} className="flex-1 text-center">{monthLabel(m.month)}</span>)}
+        <div className="flex text-xs text-neutral-400 mt-1">
+          {/* 휴대폰 폭에서는 열두 달 이름이 붙어 버려 이번 달부터 한 달씩 건너 보인다(막대 자리는 그대로). */}
+          {months.map((m, i) => (
+            <span key={m.month} className={`flex-1 text-center ${(months.length - 1 - i) % 2 ? 'max-sm:invisible' : ''}`}>{monthLabel(m.month)}</span>
+          ))}
         </div>
       }>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full block cursor-crosshair"
@@ -503,7 +506,7 @@ function SizeChart({ series }: { series: { day: string; db: number; storage: num
       </div>
       <ValueAxisFrame axis={axis} heightCls="h-44" tip={tip}
         footer={first && last && (
-          <div className="flex justify-between text-[11px] text-neutral-400 mt-1">
+          <div className="flex justify-between text-xs text-neutral-400 mt-1">
             <span>{dayLabel(first.day)}</span><span>{dayLabel(last.day)}</span>
           </div>
         )}>
