@@ -336,7 +336,7 @@ namespace SdkAudit
         // 게임은 SDK 를 UPM 으로 참조한다. 공개 API 를 지우거나 시그니처를 바꾸면 게임이 깨지는데,
         // 이쪽 리포지토리만 봐서는 드러나지 않는다. consumers.txt 에 적힌 프로젝트를 함께 본다.
         /// <summary>
-        /// R14 구조 열거. CLAUDE.md 가 파일 목록을 나열하는 곳(어셈블리·Edge Function·Core 서비스)은
+        /// R14 구조 열거. CLAUDE.md 가 파일 목록을 나열하는 곳(어셈블리·Edge Function·Core 서비스·파사드·에디터 메뉴)은
         /// 실제와 갈라져도 드러나지 않는다 — 이름이 실존하는지만 보는 R3 는 "빠진 것"을 못 보기 때문이다.
         /// </summary>
         public static void StructureLists(AuditContext ctx)
@@ -362,6 +362,10 @@ namespace SdkAudit
             if (Directory.Exists(coreData))
                 ReportMissing(ctx, text, "Core 서비스",
                     Directory.GetFiles(coreData, "Supabase*Service.cs").Select(Path.GetFileNameWithoutExtension));
+
+            var unityDir = Path.Combine(ctx.Root, "Runtime", "Unity");
+            if (Directory.Exists(unityDir))
+                ReportMissing(ctx, text, "파사드", Directory.GetFiles(unityDir, "*Facade.cs").Select(Path.GetFileNameWithoutExtension));
 
             // 에디터 메뉴는 개발자가 실제로 눌러야 하는 진입점이라, 목록에서 빠지면 기능이 있는지도 모른다.
             var editorDir = Path.Combine(ctx.Root, "Editor");

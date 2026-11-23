@@ -186,6 +186,7 @@ bool Handle(SupabaseResult result)
 | `IapDisposed` | 이미 Dispose된 IAP 파사드입니다 |
 | `IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
 | `IapInitTimeout` | IAP 초기화가 제한 시간 내에 완료되지 않았습니다 |
+| `IapStoreConnectFailed` | 스토어(Google Play·App Store)에 연결하지 못했습니다. 기기에 스토어 계정이 없거나 네트워크가 끊긴 경우입니다 |
 | `IapOrderIdEmpty` | 지급 완료 기록에 전달된 주문 ID가 비어 있습니다. SDK 내부용이라 게임 코드에서 직접 만날 일은 없습니다 |
 
 ## 리더보드

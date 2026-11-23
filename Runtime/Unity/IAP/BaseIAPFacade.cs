@@ -23,6 +23,7 @@ namespace TrueBase.Unity
         private StoreController _storeController;
         private bool _isInitialized;
         private bool _disposed;
+        private StoreConnectionFailureDescription _connectFailure;
 
 
         /// <summary>
@@ -77,6 +78,7 @@ namespace TrueBase.Unity
             }
 
             _isInitialized   = false;
+            _connectFailure  = null;
 
             _storeController = UnityIAPServices.StoreController();
 
@@ -87,8 +89,18 @@ namespace TrueBase.Unity
             _storeController.OnPurchasePending      += OnPurchasePendingHandler;
             _storeController.OnPurchaseConfirmed    += OnPurchaseConfirmedHandler;
             _storeController.OnPurchaseFailed       += OnPurchaseFailedHandler;
+            _storeController.OnStoreDisconnected    += OnStoreDisconnectedHandler;
+#if UNITY_IAP_V5_2
+            _storeController.OnStoreConnected       += OnStoreConnectedHandler;
+#endif
 
+            // 연결이 끝내 실패해도 Connect()는 예외 없이 끝나고 실패는 OnStoreDisconnected 로만 온다.
             await _storeController.Connect();
+            if (_connectFailure != null)
+            {
+                Debug.LogWarning($"{LogTag} 스토어 연결 실패: {_connectFailure.message}");
+                return SupabaseResult.Fail(SupabaseErrorCode.IapStoreConnectFailed);
+            }
             // Dispose()가 await 도중 _storeController를 지웠을 수 있으니 지역 변수로 한 번만 읽는다.
             var connectedController = _storeController;
             if (connectedController != null)
@@ -102,8 +114,14 @@ namespace TrueBase.Unity
             _storeController.FetchProducts(defs);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (!_isInitialized && sw.ElapsedMilliseconds < timeoutMs)
+            while (!_isInitialized && _connectFailure == null && sw.ElapsedMilliseconds < timeoutMs)
                 await Task.Delay(50);
+
+            if (_connectFailure != null)
+            {
+                Debug.LogWarning($"{LogTag} 스토어 연결 실패: {_connectFailure.message}");
+                return SupabaseResult.Fail(SupabaseErrorCode.IapStoreConnectFailed);
+            }
 
             if (!_isInitialized)
             {
@@ -180,6 +198,10 @@ namespace TrueBase.Unity
                 _storeController.OnPurchasePending      -= OnPurchasePendingHandler;
                 _storeController.OnPurchaseConfirmed    -= OnPurchaseConfirmedHandler;
                 _storeController.OnPurchaseFailed       -= OnPurchaseFailedHandler;
+                _storeController.OnStoreDisconnected    -= OnStoreDisconnectedHandler;
+#if UNITY_IAP_V5_2
+                _storeController.OnStoreConnected       -= OnStoreConnectedHandler;
+#endif
                 _storeController = null;
             }
 
@@ -276,6 +298,18 @@ namespace TrueBase.Unity
             => _ = ProcessPendingOrderAsync(pendingOrder);
 
         private void OnPurchaseConfirmedHandler(Order _) { }
+
+        // 연결 완료는 InitializeAsync 가 Connect() 를 기다려 처리한다. 구독자가 없으면 Unity IAP 5.2+ 가 경고를 내서 둔다.
+        private void OnStoreConnectedHandler() { }
+
+        private void OnStoreDisconnectedHandler(StoreConnectionFailureDescription failure)
+        {
+            _connectFailure = failure ?? new StoreConnectionFailureDescription("unknown");
+            if (!_isInitialized) return; // 초기화 중이면 InitializeAsync 가 실패로 돌려준다
+
+            _isInitialized = false;
+            Debug.LogWarning($"{LogTag} 스토어 연결이 끊겼습니다: {_connectFailure.message} — 다시 결제하려면 IAP를 다시 초기화하세요.");
+        }
 
         private void OnPurchaseFailedHandler(FailedOrder order)
         {

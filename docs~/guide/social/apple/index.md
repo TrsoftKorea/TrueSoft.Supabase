@@ -36,3 +36,15 @@ Apple은 계정을 삭제할 때 Sign in with Apple 연결도 끊도록 요구�
 ::: warning Android 브라우저 로그인은 연결을 끊지 못합니다
 Android의 [신규 로그인](/guide/social/apple/signin)은 브라우저로 Supabase가 대신 로그인하므로 인증 코드가 앱에 오지 않습니다. 플레이나누 창으로 로그인해도 창이 토큰만 넘겨 주므로 같습니다. App Store 심사 대상은 iOS 앱이라 심사에는 영향이 없습니다.
 :::
+
+## 메서드
+
+| 메서드 | 설명 |
+|--------|------|
+| [`SignInWithAppleAsync`](/guide/social/apple/signin) | Apple 계정으로 신규 로그인 |
+| [`SignInWithAppleIdTokenAsync`](/guide/social/apple/signin-token) | 직접 받은 ID 토큰으로 신규 로그인 |
+| [`LinkAppleToGuestAsync`](/guide/social/apple/link) | 게스트 계정에 Apple 연동 |
+| [`LinkAppleToGuestWithIdTokenAsync`](/guide/social/apple/link-token) | 직접 받은 ID 토큰으로 게스트 연동 |
+| [`LinkAppleNativeAsync`](/guide/social/apple/add) | 로그인된 계정에 Apple 추가 연동 |
+| [`LinkAppleWithIdTokenAsync`](/guide/social/apple/add-token) | 직접 받은 ID 토큰으로 추가 연동 |
+| [`UnlinkAppleAsync`](/guide/social/apple/unlink) | 현재 계정에서 Apple 연동 해제 |

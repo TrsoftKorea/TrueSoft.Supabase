@@ -27,6 +27,11 @@
       "name": "com.unity.purchasing",
       "expression": "5.1.0",
       "define": "UNITY_IAP_V5_1"
+    },
+    {
+      "name": "com.unity.purchasing",
+      "expression": "5.2.0",
+      "define": "UNITY_IAP_V5_2"
     }
   ],
   "noEngineReferences": false

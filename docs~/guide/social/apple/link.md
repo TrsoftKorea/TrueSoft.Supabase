@@ -19,10 +19,6 @@ else
 }
 ```
 
-::: warning
-익명 세션에서만 호출하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
-:::
-
 **에러 코드**
 
 | Reason | 설명 |
@@ -62,4 +58,8 @@ public async void OnClickSaveWithApple()
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 게스트 연동 · 커스텀](/guide/social/apple/link-token)을 사용하세요.
+:::
+
+::: warning
+익명 세션에서만 호출하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
 :::

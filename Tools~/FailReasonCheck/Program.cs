@@ -6,7 +6,9 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using TrueBase.Core.Common;
 
-// 훅에서 매 턴 부르기 위한 모드 — 사유 카탈로그·SQL·문서가 바뀌지 않았으면 아무 일도 하지 않는다(SdkAudit --if-changed 와 같은 방식).
+Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+// 훅에서 매 턴 부르기 위한 모드 —사유 카탈로그·SQL·문서가 바뀌지 않았으면 아무 일도 하지 않는다(SdkAudit --if-changed 와 같은 방식).
 // 사람이 기억해 돌리던 때는 install.sql 에 raise 를 넣고 이 검사를 잊어 그대로 커밋됐다(2026-10-19 mail_settings_missing).
 if (args.Length > 0 && args[0] == "--if-changed" && !HasRelevantChange(FindRepoRoot()))
     return 0;

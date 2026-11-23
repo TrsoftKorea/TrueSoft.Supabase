@@ -18,10 +18,6 @@ else
 }
 ```
 
-::: warning
-익명 세션에서만 호출하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
-:::
-
 **파라미터**
 
 | 파라미터 | 설명 |
@@ -60,3 +56,7 @@ public async void OnGoogleCredential(string idToken)
         ShowToast("Google 계정을 연결하지 못했습니다");
 }
 ```
+
+::: warning
+익명 세션에서만 호출하세요. 연동은 Supabase 대시보드 **Authentication > Sign In / Providers**의 Manual Linking이 켜져 있을 때 동작합니다.
+:::

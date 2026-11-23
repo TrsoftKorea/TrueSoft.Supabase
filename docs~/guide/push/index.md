@@ -86,15 +86,6 @@ await Supabase.SetPushPreferencesAsync(lobbyInvite: inviteToggle.isOn);
 
 문구는 기기 언어로 고릅니다. 운영 콘솔에서 추가한 언어가 없으면 기본 문구가 갑니다. 광고성으로 보낸 우편 알림은 제목 앞에 `(광고)`가, 본문 끝에 수신 거부 안내가 붙습니다.
 
-## 메서드
-
-| 메서드 | 설명 |
-|--------|------|
-| [`RegisterPushAsync`](/guide/push/register) | 알림 권한을 묻고 기기 등록 |
-| [`GetPushPreferencesAsync`](/guide/push/get-preferences) | 내 수신 설정 읽기 |
-| [`SetPushPreferencesAsync`](/guide/push/set-preferences) | 알림 전체·상황별 켜기, 광고·야간 수신 동의 |
-| [`OnPushReceived`](/guide/push/received) | 게임이 화면에 떠 있는 동안 온 알림 이벤트 |
-
 ## Firebase 값 {#firebase-values}
 
 `google-services.json` 파일은 게임에 넣지 않습니다. 빌드할 때 SDK가 아래 네 값으로 같은 설정을 만듭니다. 값은 Firebase 콘솔의 **프로젝트 설정 › 일반**에서 보거나, 그 화면에서 내려받은 `google-services.json`에서 옮겨 적습니다.
@@ -107,3 +98,12 @@ await Supabase.SetPushPreferencesAsync(lobbyInvite: inviteToggle.isOn);
 | Firebase&nbsp;발신자&nbsp;ID | `project_info.project_number` |
 
 `client`가 여럿이면 `client_info.android_client_info.package_name`이 게임 패키지 이름과 같은 것을 고릅니다.
+
+## 메서드
+
+| 메서드 | 설명 |
+|--------|------|
+| [`RegisterPushAsync`](/guide/push/register) | 알림 권한을 묻고 기기 등록 |
+| [`GetPushPreferencesAsync`](/guide/push/get-preferences) | 내 수신 설정 읽기 |
+| [`SetPushPreferencesAsync`](/guide/push/set-preferences) | 알림 전체·상황별 켜기, 광고·야간 수신 동의 |
+| [`OnPushReceived`](/guide/push/received) | 게임이 화면에 떠 있는 동안 온 알림 이벤트 |

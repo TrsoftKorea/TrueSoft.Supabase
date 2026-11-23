@@ -7,27 +7,17 @@
 // 설정은 손으로 적어 두지 않고 기준 게임(--reference, 기본 데빌 슬레이어)에서 읽는다 — 서버 함수마다
 // 로그인 검사를 켤지, 콘솔 비밀값이 무엇인지. 비밀값은 값이 아니라 요약값(sha256)만 대조한다.
 // 모든 단계는 다시 돌려도 안전하다. 실패하면 그 자리에서 멈추고, 고친 뒤 처음부터 다시 돌리면 된다.
-import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { cpSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  ROOT, FUNCTIONS_DIR, ADMIN_API, INSTALL_SQL, VERIFY_SQL, CLAUDE_MD, EMPTY,
+  die, exitOnStop, cli, cliJson, failText, rowsOf, sqlFile as sql, sqlText, functionsOf,
+} from '../lib/supabase-cli.mjs'
 
-// fetch 직후 process.exit 를 부르면 윈도 Node 가 "Assertion failed … async.c" 로 죽는다 — 던져서 멈추고 종료 코드만 정한다.
-class Stop extends Error {}
-function die(msg) { console.error(`\n✘ ${msg}`); throw new Stop() }
-const onStop = (e) => { if (!(e instanceof Stop)) console.error(e); process.exitCode = 1 }
-process.on('uncaughtException', onStop)
-process.on('unhandledRejection', onStop)
+exitOnStop()
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const FUNCTIONS_DIR = join(ROOT, 'Samples~', 'DatabaseSetup', 'EdgeFunctions')
-const ADMIN_API = join(ROOT, 'Admin~', 'supabase', 'functions', 'admin-api', 'index.ts')
-const INSTALL_SQL = join(ROOT, 'Samples~', 'DatabaseSetup', 'SQL', 'player', 'install.sql')
-const VERIFY_SQL = join(ROOT, 'Samples~', 'DatabaseSetup', 'SQL', 'player', 'verify.sql')
 const DEPLOY_YML = join(ROOT, '.github', 'workflows', 'admin-deploy.yml')
-const CLAUDE_MD = join(ROOT, 'CLAUDE.md')
 const BASE_GAMES = ['wxivrmvtpufeczltward', 'owumqjyctqhuyailqutd'] // 배포 설정에 따로 이름 붙은 두 게임
 
 // ── 인자 ─────────────────────────────────────────────────────────────────────
@@ -43,26 +33,7 @@ if (!ref || !/^[a-z]{20}$/.test(ref)) die('프로젝트 ref(소문자 20자)를 
 if (!checkOnly && (!name || !adminEmails)) die('--name 과 --admin-emails 가 필요합니다.')
 if (ref === reference) die('기준 게임과 같은 프로젝트입니다. --reference 로 다른 게임을 고르세요.')
 
-// ── Supabase CLI ─────────────────────────────────────────────────────────────
-// 저장소 루트의 supabase/config.toml 을 읽으면 CLI 가 실패해 늘 빈 작업 폴더를 준다.
-const EMPTY = mkdtempSync(join(tmpdir(), 'standby-'))
-process.on('exit', () => rmSync(EMPTY, { recursive: true, force: true }))
-
-function cli(args, { workdir = EMPTY } = {}) {
-  // 윈도에서 npx 는 셸로만 뜬다. 인자는 따옴표가 필요한 것(경로·쉼표 값)을 부르는 쪽에서 감싼다.
-  // CLI 판을 못박는다 — 판마다 옵션·동의 방식이 바뀌었다(3.x 는 프로젝트를 바꾸는 명령에 --yes 가 없으면 거절한다).
-  const command = ['npx', 'supabase@3.1.0', ...args, '--workdir', `"${workdir}"`].join(' ')
-  const r = spawnSync(command, { encoding: 'utf8', shell: true, maxBuffer: 64 << 20 })
-  return { ok: r.status === 0, out: r.stdout ?? '', err: r.stderr ?? '' }
-}
-// --project-ref 는 stderr 에 늘 "deprecated" 경고를 내 진짜 오류(stdout 의 JSON)를 가린다 — 둘 다 보인다.
-const failText = (r) => `${r.out.trim().slice(-600)}\n${r.err.trim().slice(-400)}`.trim()
-function cliJson(args, opts) {
-  const r = cli([...args, '-o', 'json'], opts)
-  const i = r.out.search(/[[{]/)
-  if (!r.ok || i < 0) die(`CLI 실패: supabase ${args.join(' ')}\n${failText(r)}`)
-  return JSON.parse(r.out.slice(i))
-}
+// ── Supabase CLI(공통 부분은 Tools~/lib/supabase-cli.mjs) ───────────────────────
 async function consoleLook(target) {
   try {
     const res = await fetch(`https://${target}.supabase.co/functions/v1/admin-api`, {
@@ -73,15 +44,6 @@ async function consoleLook(target) {
     return null
   }
 }
-const sql = (target, file) => cliJson(['db', 'query', `--remote=${target}`, '-f', `"${file}"`, '--yes'])
-function sqlText(target, text) {
-  const f = join(EMPTY, `q${Date.now()}.sql`)
-  writeFileSync(f, text)
-  return sql(target, f)
-}
-const rowsOf = (j) => (Array.isArray(j) ? j : j.rows ?? [])
-// 갓 만든 프로젝트에서 --remote 로 비밀값을 넣으면 "Finished" 라 답하고 아무것도 안 넣은 적이 있다(2026-11-10) — --project-ref 를 쓴다.
-const functionsOf = (target) => cliJson(['functions', 'list', '--project-ref', target])
 const secretsOf = (target) => Object.fromEntries(cliJson(['secrets', 'list', '--project-ref', target]).map((s) => [s.name, String(s.value)]))
 const sha = (v) => createHash('sha256').update(v).digest('hex')
 

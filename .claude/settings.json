@@ -5,15 +5,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/SdkAudit\" -- --if-changed"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.mjs\" sdk-audit dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/SdkAudit\" -- --if-changed"
           },
           {
             "type": "command",
-            "command": "dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/FailReasonCheck\" -- --if-changed"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.mjs\" fail-reason dotnet run --project \"$CLAUDE_PROJECT_DIR/Tools~/FailReasonCheck\" -- --if-changed"
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/Admin~/scripts/check-ui.mjs\" --if-changed || exit 2"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-check.mjs\" check-ui node \"$CLAUDE_PROJECT_DIR/Admin~/scripts/check-ui.mjs\" --if-changed"
           }
         ]
       }

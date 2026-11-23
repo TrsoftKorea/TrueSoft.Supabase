@@ -15,3 +15,15 @@
 | 로그인된&nbsp;계정에&nbsp;추가&nbsp;연동 | [추가 연동](/guide/social/google/add) | [ID 토큰 추가 연동](/guide/social/google/add-token) |
 
 플랫폼 구분 없이 [Google 연동 해제](/guide/social/google/unlink)로 현재 계정에서 Google 연동을 제거할 수 있습니다.
+
+## 메서드
+
+| 메서드 | 설명 |
+|--------|------|
+| [`SignInWithGoogleAsync`](/guide/social/google/signin) | Google 계정으로 신규 로그인 |
+| [`SignInWithGoogleIdTokenAsync`](/guide/social/google/signin-token) | 직접 받은 ID 토큰으로 신규 로그인 |
+| [`LinkGoogleToGuestAsync`](/guide/social/google/link) | 게스트 계정에 Google 연동 |
+| [`LinkGoogleToGuestWithIdTokenAsync`](/guide/social/google/link-token) | 직접 받은 ID 토큰으로 게스트 연동 |
+| [`LinkGoogleNativeAsync`](/guide/social/google/add) | 로그인된 계정에 Google 추가 연동 |
+| [`LinkGoogleWithIdTokenAsync`](/guide/social/google/add-token) | 직접 받은 ID 토큰으로 추가 연동 |
+| [`UnlinkGoogleAsync`](/guide/social/google/unlink) | 현재 계정에서 Google 연동 해제 |

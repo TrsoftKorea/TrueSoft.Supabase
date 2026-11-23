@@ -291,6 +291,9 @@ namespace TrueBase.Core.Common
         /// <summary>IAP 초기화가 제한 시간 내에 완료되지 않았습니다.</summary>
         public const string IapInitTimeout = "iap_init_timeout";
 
+        /// <summary>스토어(Google Play·App Store)에 연결하지 못했습니다(IAP).</summary>
+        public const string IapStoreConnectFailed = "iap_store_connect_failed";
+
         /// <summary>지급 완료 기록에 전달된 주문 ID가 비어 있습니다.</summary>
         public const string IapOrderIdEmpty = "iap_order_id_empty";
 

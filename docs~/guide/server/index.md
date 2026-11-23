@@ -24,3 +24,10 @@ label.text = Supabase.ServerCode;   // "GLOBAL"
 ```
 
 바꾸려면 [서버 선택](/guide/server/select)을 호출합니다.
+
+## 메서드
+
+| 메서드 | 설명 |
+|--------|------|
+| [`SetServerCode`](/guide/server/select) | 이 기기가 접속할 서버 선택 |
+| [`GetServerInfoAsync`](/guide/server/info) | 계정에 배정된 서버 조회 |

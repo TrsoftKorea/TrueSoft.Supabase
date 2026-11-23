@@ -18,6 +18,7 @@ namespace SdkAudit
         private static readonly Regex InlineCode = new Regex(@"`[^`]*`");
         private static readonly Regex LabelColon = new Regex(@"^\*\*[^*]+:\*\*");
         private static readonly Regex Sentence = new Regex(@"(니다|세요)\.");
+        private static readonly Regex NoReturnSection = new Regex(@"^(event |void |(Task<)?SupabaseResult>? |Task )");
 
         // 쓰지 않는 말 → 대신 쓸 말. 정규식이 예외(기능 이름 「유저 데이터」, 고객센터의 「유저 ID」, 「이메일」)를 비켜 간다.
         private static readonly (Regex Pattern, string Use)[] Terms =
@@ -42,6 +43,7 @@ namespace SdkAudit
             {
                 CheckFile(ctx, md, sidebar);
                 CheckCardNames(ctx, md, sidebar);
+                CheckOverviewMethods(ctx, md);
                 // 사이드바 항목을 일부만 읽어도 그 밖의 페이지는 제목 대조를 조용히 건너뛴다 — 빠진 페이지를 오류로 낸다.
                 if (sidebar.Count > 0 && !sidebar.ContainsKey(ctx.Rel(md)))
                     ctx.Report.Error($"[R22 제목] {ctx.Rel(md)} 이 사이드바에 없습니다(또는 사이드바 항목을 읽지 못했습니다).");
@@ -172,6 +174,34 @@ namespace SdkAudit
             }
         }
 
+        /// <summary>
+        /// 기능 개요(하위 페이지가 있는 index.md, 모음 페이지 제외)는 맨 끝 절이 `## 메서드` 표다(docs.md 0절).
+        /// </summary>
+        private static void CheckOverviewMethods(AuditContext ctx, string path)
+        {
+            if (!string.Equals(Path.GetFileName(path), "index.md", StringComparison.Ordinal))
+                return;
+            var dir = Path.GetDirectoryName(path);
+            if (string.Equals(Path.GetFullPath(dir), Path.GetFullPath(Path.Combine(ctx.Root, "docs~", "guide")), StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!Directory.EnumerateFiles(dir, "*.md").Any(f => !string.Equals(Path.GetFileName(f), "index.md", StringComparison.Ordinal)))
+                return;
+            var lines = File.ReadAllLines(path);
+            if (lines.Any(l => l.Contains("tb-cards")))
+                return;
+
+            var rel = ctx.Rel(path);
+            var lastH2 = Array.FindLastIndex(lines, l => l.StartsWith("## ", StringComparison.Ordinal));
+            if (lastH2 < 0 || lines[lastH2].Trim() != "## 메서드")
+            {
+                ctx.Report.Error($"[R22 개요메서드] {rel} 기능 개요의 맨 끝 절은 `## 메서드` 표입니다{(lastH2 >= 0 ? $" — 지금 마지막 절은 '{lines[lastH2].Trim()}'" : "")}.");
+                return;
+            }
+            var header = lines.Skip(lastH2 + 1).FirstOrDefault(l => l.Trim().Length > 0) ?? "";
+            if (!Regex.IsMatch(header, @"^\|\s*메서드\s*\|\s*설명\s*\|"))
+                ctx.Report.Error($"[R22 개요메서드] {rel}:{lastH2 + 1} `## 메서드` 아래 첫 줄은 `| 메서드 | 설명 |` 표입니다.");
+        }
+
         private static void CheckFile(AuditContext ctx, string path, Dictionary<string, string> sidebar)
         {
             var rel = ctx.Rel(path);
@@ -280,8 +310,22 @@ namespace SdkAudit
             else if (!csharpFences.Any(f => f > practical && !lines.Skip(practical + 1).Take(f - practical - 1).Any(l => l.StartsWith("#") || l.StartsWith(":::"))))
                 ctx.Report.Error($"[R22 실사용없음] {rel}:{practical + 1} **실사용 예시** 아래에 csharp 코드 블록이 없습니다.");
 
+            // ::: 상자는 맨 끝 — 시그니처 뒤, 표·실사용 예시보다 앞에 오면 안 된다.
+            var bodyEnd = Math.Max(lastLabel, practical);
+            var earlyBox = Array.FindIndex(lines, sigFence, l => l.StartsWith(":::", StringComparison.Ordinal) && l.Trim() != ":::");
+            if (earlyBox >= 0 && earlyBox < bodyEnd)
+                ctx.Report.Error($"[R22 상자위치] {rel}:{earlyBox + 1} ::: 상자는 파라미터·반환·에러 코드 표와 실사용 예시 다음, 페이지 맨 끝에 둡니다.");
+
             // 시그니처 닫는 줄 다음 문단이 설명이다.
             var close = Array.FindIndex(lines, sigFence + 1, l => l.TrimStart().StartsWith("```", StringComparison.Ordinal));
+
+            // 값을 돌려주는 함수는 **반환** 을 적는다(성공·실패만 알리는 SupabaseResult·이벤트·void 는 뺀다).
+            if (close > sigFence)
+            {
+                var sig = string.Join(" ", lines.Skip(sigFence + 1).Take(close - sigFence - 1)).Trim();
+                if (!NoReturnSection.IsMatch(sig) && !lines.Any(l => l.Trim() == "**반환**"))
+                    ctx.Report.Error($"[R22 반환없음] {rel}:{sigFence + 2} 값을 돌려주는 함수인데 **반환** 이 없습니다 — `{Trunc(sig)}`");
+            }
             if (close > 0)
             {
                 var desc = string.Join(" ", lines.Skip(close + 1).SkipWhile(l => l.Trim().Length == 0).TakeWhile(l => l.Trim().Length > 0));

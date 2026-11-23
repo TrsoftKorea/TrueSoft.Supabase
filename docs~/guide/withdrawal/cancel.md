@@ -27,14 +27,6 @@ if (login.Reason == SupabaseReason.WithdrawalGateBlocked)
 var cancel = await Supabase.RedeemWithdrawalCancelAsync();   // 저장된 토큰 사용
 ```
 
-::: info 어느 쪽이든 같은 토큰
-같은 기기·같은 예약이면 두 방식 모두 게이트가 발급·저장한 동일한 토큰을 씁니다. 인자 없는 호출은 "결과 객체가 없을 때의 폴백"입니다.
-:::
-
-::: tip 교차 기기 취소
-다른 기기에서 받은 토큰으로 취소하려면 그 토큰 문자열을 직접 넘깁니다. 저장된 토큰은 발급된 기기에만 있습니다.
-:::
-
 **파라미터**
 
 | 파라미터 | 설명 |
@@ -69,3 +61,11 @@ public async void OnClickCancelWithdrawal()
     ShowLoginScreen();
 }
 ```
+
+::: info 어느 쪽이든 같은 토큰
+같은 기기·같은 예약이면 두 방식 모두 게이트가 발급·저장한 동일한 토큰을 씁니다. 인자 없는 호출은 "결과 객체가 없을 때의 폴백"입니다.
+:::
+
+::: tip 교차 기기 취소
+다른 기기에서 받은 토큰으로 취소하려면 그 토큰 문자열을 직접 넘깁니다. 저장된 토큰은 발급된 기기에만 있습니다.
+:::

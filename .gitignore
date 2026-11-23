@@ -171,3 +171,6 @@ Admin~/supabase/.temp/
 Assets/GoogleMobileAds/link.xml.meta
 Assets/StreamingAssets/google-services-desktop.json.meta
 node_modules.meta
+
+# 실제 서버 대조가 지난번 확인한 서버 함수 요약값
+Tools~/LiveCheck/.cache.json

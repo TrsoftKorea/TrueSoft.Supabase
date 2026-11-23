@@ -17,6 +17,10 @@ void Update()
 }
 ```
 
+**반환**
+
+`.Data`는 서버 기준 UTC 시각 `DateTimeOffset`입니다.
+
 **에러 코드**
 
 | Reason | 설명 |

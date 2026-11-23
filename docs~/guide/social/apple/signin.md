@@ -20,12 +20,6 @@ else
 }
 ```
 
-::: tip Android 사용 시
-Android도 같은 호출로 동작합니다. 다만 Services ID·키 발급 같은 추가 준비가 필요합니다. [Android 추가 설정](/guide/social/apple/setup#android)을 참고하세요.
-
-플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열립니다. [플레이나누 이관 중 로그인](/guide/migration/login#apple-android)을 참고하세요.
-:::
-
 **반환**
 
 `.Profile`은 로그인한 내 프로필입니다. 담기는 필드는 [공개 프로필](/guide/display-name/profile)을 참고하세요.
@@ -65,4 +59,10 @@ public async void OnClickAppleLogin()
 
 ::: info 커스텀 토큰
 직접 받은 Apple ID 토큰을 쓰려면 [Apple 신규 로그인 · 커스텀](/guide/social/apple/signin-token)을 사용하세요.
+:::
+
+::: tip Android 사용 시
+Android도 같은 호출로 동작합니다. 다만 Services ID·키 발급 같은 추가 준비가 필요합니다. [Android 추가 설정](/guide/social/apple/setup#android)을 참고하세요.
+
+플레이나누 런타임이 있으면 Android에서는 브라우저 대신 플레이나누 창이 열립니다. [플레이나누 이관 중 로그인](/guide/migration/login#apple-android)을 참고하세요.
 :::

@@ -34,7 +34,7 @@ var iap = result.Data;
 
 **반환**
 
-`.Data`는 `IAPFacade`입니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다.
+`.Data`는 `IAPFacade`입니다. 이후 `iap.Purchase(productId)`로 결제창을 엽니다. 스토어 연결이 끊기면 `Purchase`가 `false`를 돌려주고 `iap.IsInitialized`가 `false`가 됩니다 — `CreateIAPAsync`를 다시 부르면 다시 연결합니다.
 
 **에러 코드**
 
@@ -43,6 +43,7 @@ var iap = result.Data;
 | `SupabaseReason.IapProductIdsEmpty` | `productIds`가 비어 있습니다 |
 | `SupabaseReason.IapServicesInitFailed` | Unity Services 초기화에 실패했습니다 |
 | `SupabaseReason.IapInitTimeout` | 제한 시간 안에 초기화가 끝나지 않았습니다 |
+| `SupabaseReason.IapStoreConnectFailed` | 스토어에 연결하지 못했습니다. 기기에 스토어 계정이 없거나 네트워크가 끊긴 경우입니다 |
 
 **실사용 예시**
 
@@ -53,8 +54,7 @@ async Task OnSignedInAsync()
 {
     var result = await SupabaseIAP.CreateIAPAsync(ShopCatalog.ProductIds, GrantAsync,
         onFailed: info => ShowToast("결제가 완료되지 않았습니다"));
-    if (result.Reason == SupabaseReason.IapInitTimeout) { ShowToast("상점을 불러오지 못했습니다"); return; }
-    if (!result.IsSuccess) return;
+    if (!result.IsSuccess) { ShowToast("상점을 불러오지 못했습니다"); return; }
 
     iap = result.Data;
 }
