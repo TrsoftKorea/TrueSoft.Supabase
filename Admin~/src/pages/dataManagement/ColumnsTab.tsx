@@ -16,8 +16,12 @@ import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
 import { elementField, type CatalogItem } from '../../lib/gameItems'
+import { StatusText } from '../../components/ui/StatusText'
+import { buildFieldType, fieldTypeError, newSpec, normFieldType, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
+import { CollectionTypeFields } from './CollectionTypeFields'
 
-type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
+// field_type: 리스트·딕셔너리 타입(AutoDict<K, V> 등). 타입을 안 정한 묶음 데이터 필드·그 밖의 필드는 null, 옛 서버는 안 보낸다.
+type Col = { column_name: string; data_type: string; is_nullable: string; column_default: string | null; field_type?: string | null }
 
 const PAGE_SIZE = 10
 // schema.stage 의 feature 값 — 문자열을 곳곳에 흩어 적으면 오타 하나가 조용히 변경 목록에서
@@ -57,10 +61,15 @@ const PG_TO_CSHARP: Partial<Record<string, CSharpType>> = {
   jsonb: 'JSON', json: 'JSON',
 }
 
-const ALL_TYPES: CSharpType[] = [
+// 새 필드로 고를 수 있는 타입. 묶음 데이터(JSON)는 리스트·딕셔너리 구조와 안쪽 타입을 함께 정해서만 만든다.
+type ScalarType = Exclude<CSharpType, 'JSON'>
+const SCALAR_TYPES: ScalarType[] = [
   'string', 'short', 'int', 'long', 'float', 'double', 'decimal',
-  'bool', 'DateTimeOffset', 'DateTime', 'DateOnly', 'TimeOnly', 'JSON',
+  'bool', 'DateTimeOffset', 'DateTime', 'DateOnly', 'TimeOnly',
 ]
+const isShape = (v: string): v is Shape => SHAPES.some((s) => s.value === v)
+/** 구조를 바꿔도 이미 고른 값 타입은 남긴다. */
+const reshape = (prev: FieldTypeSpec | null, shape: Shape): FieldTypeSpec => ({ ...newSpec(shape), ...(prev ? { value: prev.value } : {}) })
 
 
 const isIntegerType = (t: CSharpType) => (['short', 'int', 'long'] as CSharpType[]).includes(t)
@@ -185,7 +194,7 @@ function DefaultValueInput({ type, value, onChange }: { type: CSharpType; value:
   if (type === 'JSON') {
     return (
       <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2">
-        <p className="text-xs text-neutral-500 leading-relaxed">JSON 필드는 기본값을 지정하지 않습니다. 시작값은 게임에서 관리됩니다.</p>
+        <p className="text-xs text-neutral-500 leading-relaxed">리스트·딕셔너리 필드는 기본값을 지정하지 않습니다. 시작값은 게임에서 관리됩니다.</p>
       </div>
     )
   }
@@ -272,11 +281,18 @@ function EditColumnModal({
   const [error, setError] = useState('')
 
   const missingDefault = csharpType ? scalarDefaultMissing(csharpType, defaultValue) : false
-  // 바꿀 수 있는 건 기본값뿐이라, 그대로면 담을 변경이 없다(JSON 필드는 기본값을 여기서 고치지 않는다).
-  const unchanged = defaultValue === initialDefault
+  // 묶음 데이터 필드는 리스트·딕셔너리 타입을 정하거나 바꾼다. 타입이 없던 필드만 "정하지 않음"으로 둘 수 있다.
+  const isJson = csharpType === 'JSON'
+  const initialType = normFieldType(col.field_type)
+  const [spec, setSpec] = useState<FieldTypeSpec | null>(() => parseFieldType(col.field_type))
+  const nextType = spec ? buildFieldType(spec) : null
+  const typeIncomplete = !!spec && nextType === null
+  const typeChanged = isJson && !typeIncomplete && nextType !== initialType
+  // 그대로면 담을 변경이 없다(JSON 필드는 기본값을 여기서 고치지 않는다).
+  const unchanged = defaultValue === initialDefault && !typeChanged
 
   const handleSubmit = async () => {
-    if (!csharpType || missingDefault || unchanged || loading) return
+    if (!csharpType || missingDefault || unchanged || typeIncomplete || loading) return
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'schema.stage', {
@@ -284,16 +300,18 @@ function EditColumnModal({
         params: {
           colname: col.column_name,
           // NULL 허용은 타입으로 고정 — JSON=허용, 스칼라=비허용.
-          nullable: csharpType === 'JSON',
+          nullable: isJson,
           // JSON 은 이 화면에서 기본값을 편집하지 않으니, 원래 있던 기본값을 그대로 둔다
           // (여기서 null 로 보내면 게시할 때 기존 기본값이 조용히 사라진다).
-          default_sql: csharpType === 'JSON' ? col.column_default : toPgDefault(defaultValue, csharpType),
+          default_sql: isJson ? col.column_default : toPgDefault(defaultValue, csharpType),
+          // 키가 없으면 서버가 타입을 그대로 둔다 — 바꿨을 때만 보낸다.
+          ...(typeChanged ? { field_type: nextType } : {}),
         },
       })
       onSaved()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
-      setError(e instanceof Error ? e.message : '실패했습니다.')
+      setError(e instanceof Error ? fieldTypeError(e.message) : '실패했습니다.')
     } finally { setLoading(false) }
   }
 
@@ -301,19 +319,35 @@ function EditColumnModal({
     <EditDialog
       error={error || undefined}
       title="필드 수정"
-      description={`${col.column_name} · ${pgTypeLabel(col.data_type)}`}
+      description={`${col.column_name} · ${col.field_type ?? pgTypeLabel(col.data_type)}`}
       busy={loading}
       onClose={onClose}
       footer={<>
         <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
         <Button variant="primary"
           onClick={() => { void handleSubmit() }}
-          disabled={!csharpType || loading || missingDefault || unchanged}
+          disabled={!csharpType || loading || missingDefault || unchanged || typeIncomplete}
         >
           {loading ? '담는 중…' : '변경 관리에 담기'}
         </Button>
       </>}
     >
+          {isJson && (
+            <>
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">구조</label>
+                <select
+                  value={spec?.shape ?? ''}
+                  onChange={(e) => setSpec(isShape(e.target.value) ? reshape(spec, e.target.value) : null)}
+                  className={inputCls + ' w-full'}
+                >
+                  {!initialType && <option value="">정하지 않음</option>}
+                  {SHAPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              {spec && <CollectionTypeFields spec={spec} onChange={setSpec} />}
+            </>
+          )}
           {csharpType ? (
             <div>
               <label className="block text-xs text-neutral-500 mb-1">기본값</label>
@@ -337,25 +371,38 @@ function AddColumnModal({
   onAdded: () => void
 }) {
   const [name, setName] = useState('')
-  const [type, setType] = useState<CSharpType>('int')
+  // 고른 것 — 일반 타입이거나 리스트·딕셔너리 구조. 구조면 키·값 타입은 spec 에 든다.
+  const [kind, setKind] = useState<ScalarType | Shape>('int')
+  const [spec, setSpec] = useState<FieldTypeSpec | null>(null)
   const [defaultValue, setDefaultValue] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const collection = isShape(kind)
+  const type: CSharpType = collection ? 'JSON' : kind
+  const fieldType = collection && spec ? buildFieldType(spec) : null
+  const typeIncomplete = collection && fieldType === null
   const missingDefault = scalarDefaultMissing(type, defaultValue)
   // 숫자가 아닌 필드를 아이템 코드와 같은 이름으로 만들면 그 아이템은 형식 다름이 된다(서버 판정은 이름 정확 일치).
   const isNumeric = isIntegerType(type) || isDecimalType(type)
   const affected = !isNumeric && name.trim() ? (catalog ?? []).filter((c) => c.key === name.trim()) : []
-  // JSON 필드를 그 이름으로 만들면 원소 꼴 아이템(이름.키·이름[번호])이 그 필드의 원소로 자동 지급된다.
-  const elementItems = type === 'JSON' && name.trim() ? (catalog ?? []).filter((c) => elementField(c.key) === name.trim()) : []
+  // 리스트·딕셔너리 필드를 그 이름으로 만들면 원소 꼴 아이템(이름.키·이름[번호])이 그 필드의 원소로 자동 지급된다.
+  const elementItems = collection && name.trim() ? (catalog ?? []).filter((c) => elementField(c.key) === name.trim()) : []
 
-  const handleTypeChange = (t: CSharpType) => {
-    setType(t)
+  const handleKindChange = (v: string) => {
+    if (isShape(v)) {
+      setKind(v)
+      setSpec(reshape(spec, v))
+      setDefaultValue('')
+      return
+    }
+    const t = v as ScalarType
+    setKind(t)
     setDefaultValue(t === 'bool' ? 'false' : '')
   }
 
   const handleSubmit = async () => {
-    if (!name.trim() || missingDefault || loading) return
+    if (!name.trim() || missingDefault || typeIncomplete || loading) return
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'schema.stage', {
@@ -363,14 +410,15 @@ function AddColumnModal({
         params: {
           colname: name.trim(),
           coltype: TYPE_TO_PG[type],
-          nullable: type === 'JSON',
-          default_sql: type === 'JSON' ? null : toPgDefault(defaultValue, type),
+          nullable: collection,
+          default_sql: collection ? null : toPgDefault(defaultValue, type),
+          ...(collection ? { field_type: fieldType } : {}),
         },
       })
       onAdded()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
-      setError(e instanceof Error ? e.message : '실패했습니다.')
+      setError(e instanceof Error ? fieldTypeError(e.message) : '실패했습니다.')
     } finally { setLoading(false) }
   }
 
@@ -384,7 +432,7 @@ function AddColumnModal({
         <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
         <Button variant="primary"
           onClick={() => { void handleSubmit() }}
-          disabled={loading || !name.trim() || missingDefault}
+          disabled={loading || !name.trim() || missingDefault || typeIncomplete}
         >
           {loading ? '담는 중…' : '변경 관리에 담기'}
         </Button>
@@ -401,13 +449,15 @@ function AddColumnModal({
           <div>
             <label className="block text-xs text-neutral-500 mb-1">타입</label>
             <select
-              value={type}
-              onChange={(e) => handleTypeChange(e.target.value as CSharpType)}
+              value={kind}
+              onChange={(e) => handleKindChange(e.target.value)}
               className={inputCls + ' w-full'}
             >
-              {ALL_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
+              {SCALAR_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
+              {SHAPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+          {collection && spec && <CollectionTypeFields spec={spec} onChange={setSpec} />}
           <div>
             <label className="block text-xs text-neutral-500 mb-1">기본값</label>
             <DefaultValueInput type={type} value={defaultValue} onChange={setDefaultValue} />
@@ -497,7 +547,12 @@ export default function ColumnsTab({
     return () => { alive = false }
   }, [target, onUnauthenticated])
 
-  const pendingItems: PendingItem[] = drafts.map((d) => ({ id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name }))
+  // 리스트·딕셔너리 타입을 정한 변경은 그 타입도 함께 — 같은 필드를 담아 두고 무엇을 정했는지 잊지 않게.
+  const pendingItems: PendingItem[] = drafts.map((d) => {
+    const ft = d.params?.['field_type']
+    const typeText = 'field_type' in (d.params ?? {}) ? (typeof ft === 'string' && ft ? ft : '타입 지움') : ''
+    return { id: d.id, label: opLabel(d.feature, d.action), detail: typeText ? `${d.object_name} · ${typeText}` : d.object_name }
+  })
 
   const discardOne = async (id: number) => {
     setBusy(true)
@@ -512,6 +567,7 @@ export default function ColumnsTab({
       ? cols.filter((c) =>
           c.column_name.toLowerCase().includes(q)
           || c.data_type.toLowerCase().includes(q)
+          || (c.field_type ?? '').toLowerCase().includes(q)
           || pgTypeLabel(c.data_type).toLowerCase().includes(q))
       : cols),
     [cols, q],
@@ -553,8 +609,14 @@ export default function ColumnsTab({
         columns={[
           { key: 'name', header: '필드', kind: 'mono', cardTitle: true, cell: (c) => c.column_name },
           {
-            key: 'type', header: '타입', kind: 'name', cell: (c) => (
-              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(c.data_type)}</span>
+            // 리스트·딕셔너리 타입은 게임 코드에 쓰는 이름 그대로. 타입을 안 정한 묶음 데이터 필드는 그 사실을 드러낸다.
+            key: 'type', header: '타입', kind: 'name', cell: (c) => c.field_type ? (
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 font-mono">{c.field_type}</span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(c.data_type)}</span>
+                {PG_TO_CSHARP[c.data_type] === 'JSON' && <StatusText tone="warn">타입 미정</StatusText>}
+              </span>
             ),
           },
           { key: 'default', header: '기본값', kind: 'text', cell: (c) => defaultLabel(c), full: (c) => c.column_default ?? '' },

@@ -3,6 +3,7 @@
 // 새 화면을 가짜 데이터로 보려면 HANDLERS 에 그 화면의 action 을 더한다. 없는 action 은 빈 목록으로 답한다.
 import type { ProjectTarget } from '../lib/projectTarget'
 import { elementField, elementFits, type CollectionKind } from '../lib/gameItems'
+import { normFieldType } from '../lib/fieldType'
 
 const MOCK_EMAIL = 'mock@local'
 
@@ -614,6 +615,10 @@ function operatorsOf(target: ProjectTarget): MockOperator[] {
 // 우편 › 예약 목록에서 켜고 끈 값. 새로고침하면 처음 값으로 돌아간다.
 const scheduleActive = new Map<string, boolean>()
 
+type MockDraft = { id: number; feature: string; action: string; object_name: string; params: Record<string, unknown>; created_at: string; operator: string }
+const mockDrafts: Record<string, MockDraft[]> = {}
+const draftsOf = (target: ProjectTarget) => (mockDrafts[target] ??= [])
+
 // 아이템 카탈로그 — 데이터 필드 목록(userData.columns)과 맞춘다. 추가·이름 수정·삭제가 새로고침 전까지 남는다.
 // 지급 방식: 숫자 필드가 있으면 auto, 골랐는데 없으면 missing, 숫자가 아닌 필드와 이름이 같으면 blocked,
 // 리스트·딕셔너리 필드의 원소 꼴은 그 필드에 저장된 값의 모양에 맞으면 auto(potions.hp), 안 맞으면 blocked —
@@ -829,7 +834,8 @@ const HANDLERS: Record<string, Handler> = {
     expiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(),
   }),
   'session.me': () => ({ email: MOCK_EMAIL, isMaster: true }),
-  'schema.getDraft': () => ({ rows: [] }),
+  // 복사해서 준다 — 같은 배열을 주면 화면 상태가 "그대로"로 보여 다시 그리지 않는다.
+  'schema.getDraft': (target) => ({ rows: [...draftsOf(target)] }),
   'dashboard.stats': () => {
     const today = kstToday()
     const week = Array.from({ length: 7 }, (_, i) => dayStats(addDays(today, -i)))
@@ -1021,12 +1027,38 @@ const HANDLERS: Record<string, Handler> = {
   'userData.columns': () => [
     { column_name: 'gold', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
     { column_name: 'level', data_type: 'integer', is_nullable: 'NO', column_default: '1' },
-    { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
-    { column_name: 'potions', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
-    { column_name: 'stage_clears', data_type: 'jsonb', is_nullable: 'YES', column_default: null },
+    // field_type: 운영 콘솔에서 정한 리스트·딕셔너리 타입. inventory 는 타입을 안 정한 옛 묶음 데이터 필드.
+    { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: null },
+    { column_name: 'potions', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoDict<string, int>' },
+    { column_name: 'stage_clears', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoList<int>' },
   ],
+  // 변경 관리 — 담은 변경이 새로고침 전까지 남는다. 데이터 필드의 리스트·딕셔너리 타입은 서버 ts_admin_schema_stage 처럼 검사한다.
+  'schema.stage': (target, p) => {
+    const params = (p['params'] ?? {}) as Record<string, unknown>
+    const fieldType = typeof params['field_type'] === 'string' ? params['field_type'].trim() : ''
+    if (p['feature'] === 'user_data_field' && (p['action'] === 'add' || p['action'] === 'update') && fieldType) {
+      const norm = normFieldType(fieldType)
+      if (!norm) throw new Error(`field_collection_type_invalid: ${fieldType}`)
+      if (p['action'] === 'add' && !['jsonb', 'json'].includes(String(params['coltype'] ?? '').toLowerCase())) {
+        throw new Error(`field_collection_type_needs_json: ${String(p['objectName'] ?? '')}`)
+      }
+      params['field_type'] = norm
+    }
+    const drafts = draftsOf(target)
+    const id = (drafts.at(-1)?.id ?? 0) + 1
+    drafts.push({ id, feature: String(p['feature']), action: String(p['action']), object_name: String(p['objectName'] ?? ''), params, created_at: new Date().toISOString(), operator: MOCK_EMAIL })
+    return { id }
+  },
+  'schema.discardDraft': (target, p) => {
+    const drafts = draftsOf(target)
+    if (typeof p['id'] === 'number') drafts.splice(0, drafts.length, ...drafts.filter((d) => d.id !== p['id']))
+    else drafts.length = 0
+    return null
+  },
+  // 가짜 데이터는 게시해도 필드·설정에 반영하지 않는다 — 대기 목록만 비운다.
+  'schema.publish': (target) => { draftsOf(target).length = 0; return null },
   // 쿠폰·매치 보상 — 이것도 목록(배열)을 받는 화면이다. 아이템 이름은 두 화면이 같이 쓴다. 지급 방식은 gameItemsOf 위 설명.
-  'gameItems.list': (target) => gameItemsOf(target),
+  'gameItems.list': (target) => [...gameItemsOf(target)],
   // 서버처럼 같은 코드면 이름만 고치고, 데이터 필드 꼴 판정은 서버 오류 글을 그대로 흉내 낸다.
   'gameItems.upsert': (target, p) => {
     const key = String(p['key'] ?? '').trim()

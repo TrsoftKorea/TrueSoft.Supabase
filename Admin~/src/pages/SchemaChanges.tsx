@@ -56,11 +56,19 @@ function defaultSqlText(def: string): string {
 }
 
 // 필드 추가·수정 — 타입과 기본값만 보여주면 충분하다.
+// 리스트·딕셔너리 타입(field_type)은 게임 코드 이름 그대로 — 묶음 데이터 필드는 기본값을 고치지 않아 기본값은 빼고 타입만 보인다.
 function fieldSummary(params: Record<string, unknown>, action: string): string {
   const def = params['default_sql']
   const defText = def === null || def === undefined || def === '' ? '기본값 없음' : `기본값 ${defaultSqlText(str(def))}`
-  if (action === 'update') return `${defText}으로 변경`
+  const hasType = 'field_type' in params
+  const fieldType = params['field_type']
+  if (action === 'update') {
+    if (!hasType) return `${defText}으로 변경`
+    const typePart = fieldType === null || fieldType === '' ? '타입 지움' : `타입 ${str(fieldType)} 지정`
+    return params['nullable'] === true ? typePart : `${defText}으로 변경 · ${typePart}`
+  }
 
+  if (hasType && fieldType) return str(fieldType)
   const parts: string[] = []
   if (params['coltype']) parts.push(typeText(str(params['coltype'])))
   parts.push(defText)
