@@ -169,6 +169,7 @@ from (
       ('ts_admin_upsert_game_item'),
       ('ts_admin_delete_game_item'),
       ('ts_admin_game_item_columns'),
+      ('ts_admin_game_item_usage'),
       ('ts_admin_count_recipients'),
       ('ts_mail_schedule_next_run'),
       ('ts_run_due_mail_schedules'),

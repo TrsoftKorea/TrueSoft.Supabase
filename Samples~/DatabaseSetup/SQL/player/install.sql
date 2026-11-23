@@ -11361,6 +11361,36 @@ comment on function public.ts_admin_player_coupons(uuid,int) is '플레이어 1�
 revoke all on function public.ts_admin_player_coupons(uuid,int) from public, anon, authenticated;
 grant execute on function public.ts_admin_player_coupons(uuid,int) to service_role;
 
+-- ts_admin_game_item_usage — 아이템 키마다 아직 플레이어에게 갈 곳이 몇 개인지(운영 콘솔 아이템 카탈로그).
+-- 지급이 막힌 아이템(필드 없음·형식 다름)을 회수할지 고칠지 정하라고 센다. 우편·예약·쿠폰을 모두 보므로
+-- 12·13절(우편)이 아니라 쿠폰 뒤에 둔다. 우편 표에 items 색인이 없어 키마다 남은 우편을 훑는다 — 화면은 막힌 키만 넘긴다.
+create or replace function public.ts_admin_game_item_usage(p_keys text[])
+returns table (key text, pending_mails bigint, open_batches bigint, active_schedules bigint, active_coupons bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select k,
+         (select count(*) from public.mails m
+           where m.items_claimed_at is null and m.deleted_at is null and m.expires_at > now()
+             and m.items @> jsonb_build_array(jsonb_build_object('key', k))),
+         (select count(*) from public.mail_batches b
+           where b.open_until > now() and b.recalled_at is null
+             and b.items @> jsonb_build_array(jsonb_build_object('key', k))),
+         (select count(*) from public.mail_schedules s
+           where s.is_active and s.items @> jsonb_build_array(jsonb_build_object('key', k))),
+         (select count(*) from public.coupons c
+           where c.is_active and (c.expires_at is null or c.expires_at > now())
+             and c.items @> jsonb_build_array(jsonb_build_object('key', k)))
+    from unnest(coalesce(p_keys, '{}'::text[])) k
+$$;
+
+comment on function public.ts_admin_game_item_usage(text[]) is
+  '아이템 키마다 안 받은 우편·배달 중인 발송·켜진 예약·쓸 수 있는 쿠폰 수(어드민 전용).';
+revoke all on function public.ts_admin_game_item_usage(text[]) from public, anon, authenticated;
+grant execute on function public.ts_admin_game_item_usage(text[]) to service_role;
+
 
 notify pgrst, 'reload schema';
 
