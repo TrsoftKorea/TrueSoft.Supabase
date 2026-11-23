@@ -19,7 +19,7 @@ SDK가 사용하는 Newtonsoft.Json 패키지는 함께 설치됩니다.
 
 ## 판 고르기 {#version}
 
-주소 끝에 `#v` 와 판 번호를 붙이면 그 판을 받습니다. 붙이지 않으면 가장 최신 판을 받습니다.
+주소 끝에 `#v` 와 판 번호를 붙이면 그 판을 받습니다. 붙이지 않으면 가장 최신 판을 받습니다. 판마다 달라지는 점은 [업데이트 내역](/guide/updates)을 참고하세요.
 
 ```
 https://github.com/trsoftkorea/TrueSoft.Supabase.git#v0.1.1

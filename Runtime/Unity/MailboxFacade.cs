@@ -133,7 +133,8 @@ namespace TrueBase.Unity
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_rpc_failed");
 
-            return await DeliverAsync(mailId, rpc.Data, save, mark, session.User?.Id);
+            ApplyServerGrants(rpc.Data, save, mark, session.User?.Id);
+            return await DeliverAsync(mailId, rpc.Data);
         }
 
         /// <summary>
@@ -158,13 +159,17 @@ namespace TrueBase.Unity
             if (!rpc.IsSuccess)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Fail(rpc.ErrorCode ?? "claim_all_rpc_failed");
 
+            var bundles = rpc.Data ?? Array.Empty<MailClaimBundle>();
+            foreach (var bundle in bundles)
+                ApplyServerGrants(bundle?.Items, save, mark, session.User?.Id);
+
             var aggregated = new List<ClaimResult>();
-            foreach (var bundle in rpc.Data ?? Array.Empty<MailClaimBundle>())
+            foreach (var bundle in bundles)
             {
-                if (string.IsNullOrWhiteSpace(bundle.MailId))
+                if (bundle == null || string.IsNullOrWhiteSpace(bundle.MailId))
                     continue;
 
-                var part = await DeliverAsync(bundle.MailId, bundle.Items, save, mark, session.User?.Id);
+                var part = await DeliverAsync(bundle.MailId, bundle.Items);
                 if (!part.IsSuccess)
                     return part;
 
@@ -212,20 +217,39 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 받은 보상을 <c>Index</c> 오름차순으로 게임에 넘깁니다. 서버가 이미 세이브 칸에 더한 보상은 로컬 세이브에 맞추고,
-        /// 나머지는 처리기에 넘깁니다. 처리기가 하나라도 실패하면 즉시 실패를 반환합니다(이후 아이템은 처리하지 않음).
+        /// 서버가 이미 데이터 필드에 더한 보상을 로컬 세이브에 맞춥니다. 처리기보다 먼저, 받은 우편 전부에 대해 부릅니다 —
+        /// 처리기가 실패해 중간에 돌아가도 서버 지급분은 이미 받음 처리돼 있어, 로컬에 빠지면 다음 저장이 덮어 사라집니다.
         /// </summary>
-        /// <param name="mailId">처리기에 넘길 우편 ID.</param>
-        /// <param name="lines">받은 보상 목록. null 또는 빈 목록이면 빈 결과로 성공합니다.</param>
+        /// <param name="lines">받은 보상 목록.</param>
         /// <param name="save">로컬 세이브. 없으면 서버 지급분은 다음 로드에서 들어옵니다.</param>
         /// <param name="mark">받기 요청을 보내기 직전의 저장 상태.</param>
         /// <param name="accountAtCall">받기를 요청한 계정.</param>
-        private static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> DeliverAsync(
-            string mailId,
+        private static void ApplyServerGrants(
             IReadOnlyList<MailItemPayload> lines,
             IUserSaveOperations save,
             ServerAddMark mark,
             string accountAtCall)
+        {
+            // 받는 사이 다른 계정으로 바뀌었으면 그 세이브에 더하지 않는다 — 다음 로드가 서버 값을 가져온다.
+            if (lines == null || save == null || accountAtCall == null || accountAtCall != SupabaseSDK.CurrentAccountId)
+                return;
+
+            foreach (var line in lines)
+            {
+                if (line != null && line.GrantedByServer && !string.IsNullOrWhiteSpace(line.Key))
+                    save.ApplyServerAdd(line.Key, line.Count, mark);
+            }
+        }
+
+        /// <summary>
+        /// 받은 보상을 <c>Index</c> 오름차순으로 게임에 넘깁니다. 서버가 지급한 보상은 결과에만 담고(로컬 반영은
+        /// <see cref="ApplyServerGrants"/>), 나머지는 처리기에 넘깁니다. 처리기가 하나라도 실패하면 즉시 실패를 반환합니다.
+        /// </summary>
+        /// <param name="mailId">처리기에 넘길 우편 ID.</param>
+        /// <param name="lines">받은 보상 목록. null 또는 빈 목록이면 빈 결과로 성공합니다.</param>
+        private static async Task<SupabaseResult<IReadOnlyList<ClaimResult>>> DeliverAsync(
+            string mailId,
+            IReadOnlyList<MailItemPayload> lines)
         {
             if (lines == null || lines.Count == 0)
                 return SupabaseResult<IReadOnlyList<ClaimResult>>.Success(Array.Empty<ClaimResult>());
@@ -240,10 +264,6 @@ namespace TrueBase.Unity
 
                 if (line.GrantedByServer)
                 {
-                    // 받는 사이 다른 계정으로 바뀌었으면 그 세이브에 더하지 않는다 — 다음 로드가 서버 값을 가져온다.
-                    if (save != null && accountAtCall != null && accountAtCall == SupabaseSDK.CurrentAccountId)
-                        save.ApplyServerAdd(line.Key, line.Count, mark);
-
                     results.Add(new ClaimResult { MailId = mailId, ItemIndex = line.Index, ItemKey = line.Key, Count = line.Count });
                     continue;
                 }

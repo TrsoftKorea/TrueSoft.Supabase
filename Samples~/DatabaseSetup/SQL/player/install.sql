@@ -3400,6 +3400,7 @@ as $$
     from pg_attribute a
    where a.attrelid = 'public.user_data'::regclass
      and a.attnum > 0 and not a.attisdropped
+     and a.attgenerated = '' and a.attidentity = ''
      and a.atttypid in ('int2'::regtype, 'int4'::regtype, 'int8'::regtype,
                         'numeric'::regtype, 'float4'::regtype, 'float8'::regtype)
      and a.attname::text ~ '^[A-Za-z_][A-Za-z0-9_]*$'

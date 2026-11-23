@@ -365,7 +365,8 @@ export default defineConfig({
           { text: '예제', link: '/guide/samples/examples' },
           { text: 'Apple 설정 상세', link: '/guide/social/apple/setup-details' }
         ]
-      }
+      },
+      { text: '업데이트 내역', link: '/guide/updates' }
     ],
 
     outline: { level: [2, 3], label: '이 페이지' },

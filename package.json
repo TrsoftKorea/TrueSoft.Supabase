@@ -1,12 +1,13 @@
 {
   "name": "com.truesoft.supabase",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "displayName": "TrueBase",
   "description": "Unity UPM package for Supabase Auth, REST API, and Edge Functions.",
   "unity": "2022.3",
   "author": {
     "name": "Truesoft"
   },
+  "changelogUrl": "https://trsoftkorea.github.io/TrueSoft.Supabase/guide/updates.html",
   "dependencies": {
     "com.unity.nuget.newtonsoft-json": "3.2.1"
   },
