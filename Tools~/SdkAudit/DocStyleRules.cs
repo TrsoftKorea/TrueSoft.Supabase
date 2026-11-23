@@ -39,6 +39,7 @@ namespace SdkAudit
                 return;
 
             var sidebar = ReadSidebar(ctx);
+            CheckUpdates(ctx, Path.Combine(guideDir, "updates.md"));
             foreach (var md in Directory.EnumerateFiles(guideDir, "*.md", SearchOption.AllDirectories))
             {
                 CheckFile(ctx, md, sidebar);
@@ -172,6 +173,33 @@ namespace SdkAudit
                     i = m.Index + m.Length - 1;
                 }
             }
+        }
+
+        private static readonly Regex UpdateItem = new Regex(@"^- \*\*[^*]+\*\* — \S");
+
+        /// <summary>
+        /// 업데이트 내역의 항목은 굵은 제목으로 시작한다 — "그래서 뭐가 바뀌었는데?"를 제목만 훑어 답하게(2026-11-23 사용자 요청).
+        /// </summary>
+        private static void CheckUpdates(AuditContext ctx, string path)
+        {
+            var rel = ctx.Rel(path);
+            if (!File.Exists(path))
+            {
+                ctx.Report.Error($"[R22 내역제목] {rel} 이 없습니다 — 업데이트 내역 꼴을 검사하지 못했습니다.");
+                return;
+            }
+            var lines = File.ReadAllLines(path);
+            var items = 0;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (!lines[i].StartsWith("- ", StringComparison.Ordinal))
+                    continue;
+                items++;
+                if (!UpdateItem.IsMatch(lines[i]))
+                    ctx.Report.Error($"[R22 내역제목] {rel}:{i + 1} 항목은 `- **짧은 제목** — 설명` 꼴로 씁니다 — `{lines[i].Trim()}`");
+            }
+            if (items == 0)
+                ctx.Report.Error($"[R22 내역제목] {rel} 에서 항목(`- `)을 하나도 못 찾았습니다.");
         }
 
         /// <summary>
