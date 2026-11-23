@@ -6,6 +6,7 @@ CLAUDE.md 「Supabase 프로젝트 규칙」 표의 게임들이 저장소와 �
 node "Tools~/LiveCheck/check.mjs"                  # DB·서버 함수 전부
 node "Tools~/LiveCheck/check.mjs" --only db        # DB 만
 node "Tools~/LiveCheck/check.mjs" --only functions # 서버 함수만
+node "Tools~/LiveCheck/check.mjs" --only functions --functions admin-api,push-send # 이 서버 함수만
 node "Tools~/LiveCheck/selftest.mjs"               # 판정 시험(서버 안 부름)
 ```
 

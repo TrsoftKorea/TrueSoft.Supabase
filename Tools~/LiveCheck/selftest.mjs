@@ -46,6 +46,11 @@ const edge = compareEdgeLists([
   { name: 'B', functions: [{ slug: 'f', ezbr_sha256: '2', verify_jwt: false }] },
 ], ['f', 'g'])
 expect('서버 함수 코드·로그인 검사·빠진 배포가 걸림', has(edge, '코드가') && has(edge, '로그인 검사') && has(edge, 'B 에 배포 안 됨'))
+const picked = compareEdgeLists([
+  { name: 'A', functions: [{ slug: 'f', ezbr_sha256: '1', verify_jwt: true }, { slug: 'g', ezbr_sha256: '1', verify_jwt: true }] },
+  { name: 'B', functions: [{ slug: 'f', ezbr_sha256: '2', verify_jwt: false }] },
+], ['f', 'g'], new Set(['g']))
+expect('고른 서버 함수만 봄(다른 함수의 차이는 안 걸림)', picked.length === 1 && has(picked, 'g — B 에 배포 안 됨'))
 expect('줄 끝만 다른 코드는 같음', firstDiffLine('a\r\nb  \n', 'a\nb\n\n') === null)
 expect('다른 줄 번호를 찾음', firstDiffLine('a\nb\nc', 'a\nx\nc') === 2)
 

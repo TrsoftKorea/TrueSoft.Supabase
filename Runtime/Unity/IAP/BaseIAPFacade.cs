@@ -304,11 +304,14 @@ namespace TrueBase.Unity
 
         private void OnStoreDisconnectedHandler(StoreConnectionFailureDescription failure)
         {
-            _connectFailure = failure ?? new StoreConnectionFailureDescription("unknown");
-            if (!_isInitialized) return; // 초기화 중이면 InitializeAsync 가 실패로 돌려준다
-
-            _isInitialized = false;
-            Debug.LogWarning($"{LogTag} 스토어 연결이 끊겼습니다: {_connectFailure.message} — 다시 결제하려면 IAP를 다시 초기화하세요.");
+            if (_isInitialized)
+            {
+                // 준비가 끝난 뒤의 끊김은 상태를 바꾸지 않는다 — 이때 결제하면 Unity IAP 가 StoreNotConnected 실패를
+                // OnPurchaseFailed 로 보내 게임의 실패 콜백이 불린다.
+                Debug.LogWarning($"{LogTag} 스토어 연결이 끊겼습니다: {failure?.message}");
+                return;
+            }
+            _connectFailure = failure ?? new StoreConnectionFailureDescription("unknown"); // InitializeAsync 가 실패로 돌려준다
         }
 
         private void OnPurchaseFailedHandler(FailedOrder order)

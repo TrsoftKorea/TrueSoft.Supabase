@@ -2,13 +2,18 @@
 
 SDK 판마다 게임에 달라지는 점입니다. 판을 올리는 방법은 [설치](/guide/start/install)를 참고하세요.
 
+## 0.3.3 {#v0-3-3}
+
+2026-11-23
+
+- 결제 준비가 끝난 뒤 스토어 연결이 끊겨도 `Purchase`가 결제를 시도하고, 실패는 `onFailed`로 알립니다. 0.3.2에서는 `false`만 돌려주고 `onFailed`가 불리지 않았습니다.
+
 ## 0.3.2 {#v0-3-2}
 
 2026-11-23
 
-- 스토어(Google Play·App Store)에 연결하지 못하면 `CreateIAPAsync`가 제한 시간을 기다리지 않고 바로 `SupabaseReason.IapStoreConnectFailed` 실패로 알립니다. 전에는 제한 시간이 지난 뒤 `IapInitTimeout`으로 알렸습니다.
-- 결제 준비가 끝난 뒤 스토어 연결이 끊기면 `Purchase`가 `false`를 돌려줍니다. `CreateIAPAsync`를 다시 부르면 다시 연결합니다. [사용법](/guide/iap/usage)을 참고하세요.
-- Unity IAP 5.2 이상에서 에디터 플레이 때마다 뜨던 스토어 연결 경고 두 줄이 더 뜨지 않습니다.
+- Google Play에 연결하지 못하면 `CreateIAPAsync`가 제한 시간을 기다리지 않고 바로 `SupabaseReason.IapStoreConnectFailed` 실패로 알립니다. 전에는 제한 시간이 지난 뒤 `IapInitTimeout`으로 알렸습니다.
+- 결제 준비가 끝난 뒤 스토어 연결이 끊기면 `Purchase`가 `false`를 돌려줍니다.- 에디터·개발 빌드에서 결제를 준비할 때마다 뜨던 스토어 연결 경고(Unity IAP 5.2 이상은 두 줄)가 더 뜨지 않습니다.
 
 ## 0.3.1 {#v0-3-1}
 

@@ -4,6 +4,7 @@
 //   node "Tools~/LiveCheck/check.mjs"                 DB·서버 함수 전부
 //   node "Tools~/LiveCheck/check.mjs" --only db       DB 만
 //   node "Tools~/LiveCheck/check.mjs" --only functions 서버 함수만
+//   ... --functions admin-api,push-send                 서버 함수는 이 이름만(게시 묶음에 든 것 — 다른 세션이 고치는 중인 함수로 막지 않게)
 //
 // 무엇을 보는지·무엇을 못 보는지는 README.md. 어긋남이 하나라도 있으면 종료 코드 1.
 import { createHash } from 'node:crypto'
@@ -31,6 +32,9 @@ const MIN_FILE_FUNCTIONS = 200
 const argv = process.argv.slice(2)
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null
 if (only && !['db', 'functions'].includes(only)) die('--only 는 db 또는 functions 입니다.')
+const pickArg = argv.includes('--functions') ? argv[argv.indexOf('--functions') + 1] : null
+if (argv.includes('--functions') && !pickArg) die('--functions 뒤에 서버 함수 이름을 쉼표로 적습니다.')
+const pick = pickArg ? new Set(pickArg.split(',').map((s) => s.trim()).filter(Boolean)) : null
 
 const projects = liveProjects()
 if (projects.length === 0) die('CLAUDE.md 「Supabase 프로젝트 규칙」 표에서 프로젝트를 못 찾았습니다.')
@@ -68,22 +72,25 @@ if (only !== 'functions') {
     const fn = compareFunctionsToFile(p.rows, fileDefs)
     report(`${p.name} DB 함수 ↔ install.sql`, fn.problems, `서버 ${fn.live}개 · 파일 ${fn.file}개`)
     const bad = p.verify.filter((r) => r.status !== 'applied')
-    report(`${p.name} 설치 검증(verify.sql)`, bad.map((r) => `${r.category ?? ''} ${r.object_name} — ${r.status}${r.detail ? ` ${String(r.detail).slice(0, 120)}` : ''}`),
-      `${p.verify.length}개 중 ${p.verify.length - bad.length}개 정상`)
-    if (p.verify.length === 0) results.push(false)
+    const verifyProblems = p.verify.length === 0
+      ? ['verify.sql 이 결과를 하나도 돌려주지 않았습니다 — 검증을 못 한 것이라 통과로 보지 않습니다']
+      : bad.map((r) => `${r.category ?? ''} ${r.object_name} — ${r.status}${r.detail ? ` ${String(r.detail).slice(0, 120)}` : ''}`)
+    report(`${p.name} 설치 검증(verify.sql)`, verifyProblems, `${p.verify.length}개 중 ${p.verify.length - bad.length}개 정상`)
     report(`${p.name} 자동 작업 ↔ install.sql`, compareCron(p.rows, cronNames), `파일 ${cronNames.length}개`)
   }
 }
 
 // ── 서버 함수 ─────────────────────────────────────────────────────────────────
 if (only !== 'db') {
-  const repo = new Map([
+  const all = new Map([
     ...readdirSync(FUNCTIONS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory())
       .map((d) => [d.name, join(FUNCTIONS_DIR, d.name, 'index.ts')]),
     ['admin-api', ADMIN_API],
   ])
+  const repo = pick ? new Map([...all].filter(([slug]) => pick.has(slug))) : all
   const lists = await Promise.all(projects.map(async (p) => ({ ...p, functions: await functionsOfAsync(p.ref) })))
-  report('서버 함수 목록·게임끼리 코드', compareEdgeLists(lists, [...repo.keys()]), `저장소 ${repo.size}개`)
+  report('서버 함수 목록·게임끼리 코드', compareEdgeLists(lists, [...all.keys()], pick),
+    pick ? `${[...pick].join(', ')}만` : `저장소 ${repo.size}개`)
 
   // 첫 게임의 배포 코드를 저장소와 본다. 다른 게임은 위에서 요약값으로 첫 게임과 맞췄다.
   const cache = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, 'utf8')) : {}

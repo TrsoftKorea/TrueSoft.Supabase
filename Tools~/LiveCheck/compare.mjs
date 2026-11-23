@@ -113,11 +113,12 @@ export function compareCron(rows, names) {
 /**
  * 서버 함수(엣지 함수) 목록 대조. lists = [{ name, functions: [{ slug, ezbr_sha256, verify_jwt }] }], repoSlugs = 저장소의 이름들.
  */
-export function compareEdgeLists(lists, repoSlugs) {
+export function compareEdgeLists(lists, repoSlugs, pick = null) {
   const problems = []
-  const repo = new Set(repoSlugs)
+  const seen = (s) => !pick || pick.has(s)
+  const repo = new Set(repoSlugs.filter(seen))
   for (const p of lists) {
-    const slugs = new Set(p.functions.map((f) => f.slug))
+    const slugs = new Set(p.functions.map((f) => f.slug).filter(seen))
     for (const s of repo) if (!slugs.has(s)) problems.push(`서버 함수 ${s} — ${p.name} 에 배포 안 됨`)
     for (const s of slugs) if (!repo.has(s)) problems.push(`서버 함수 ${s} — ${p.name} 에만 있음(저장소에 없음)`)
   }
@@ -125,7 +126,7 @@ export function compareEdgeLists(lists, repoSlugs) {
   for (const p of lists.slice(1)) {
     for (const f of p.functions) {
       const r = first.get(f.slug)
-      if (!r) continue
+      if (!r || !seen(f.slug)) continue
       if (r.ezbr_sha256 !== f.ezbr_sha256) problems.push(`서버 함수 ${f.slug} — ${p.name} 코드가 ${lists[0].name} 와 다름`)
       if (r.verify_jwt !== f.verify_jwt) problems.push(`서버 함수 ${f.slug} — ${p.name} 로그인 검사 설정이 ${lists[0].name} 와 다름`)
     }
