@@ -16,7 +16,7 @@ await Supabase.OpenTermsAsync(GameSettings.LanguageCode);
 |----------|------|
 | `language` | 창 언어. 비우면 기기 언어 (기본값: null) |
 
-본문은 운영 콘솔 **고객센터 › 약관·방침**에서 게시한 판입니다. 게시한 판이 없으면 "준비 중"이 보입니다. 언어는 [고객센터 창 열기](/guide/customer-center/open)와 같은 방식으로 고릅니다.
+본문은 운영 콘솔 **고객센터 › 약관·방침**에서 게시한 버전입니다. 게시한 버전이 없으면 "준비 중"이 보입니다. 언어는 [고객센터 창 열기](/guide/customer-center/open)와 같은 방식으로 고릅니다.
 
 **에러 코드**
 

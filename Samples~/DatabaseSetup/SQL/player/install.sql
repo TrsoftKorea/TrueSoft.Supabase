@@ -7972,7 +7972,7 @@ declare
 begin
   select jsonb_build_object(
     'id', b.id, 'target_mode', b.target_mode, 'server_code', gs.server_code,
-    'title', b.title, 'items', b.items, 'recipient_count', b.recipient_count,
+    'title', b.title, 'content', b.content, 'localized', b.localized, 'items', b.items, 'recipient_count', b.recipient_count,
     'category', b.category, 'expires_at', b.expires_at, 'created_by', b.created_by, 'created_at', b.created_at,
     'open_until', b.open_until, 'recalled_at', b.recalled_at, 'recalled_count', b.recalled_count
   )
@@ -8027,7 +8027,7 @@ begin
     into v_rows, v_total
   from (
     select
-      m.id, m.account_id, m.user_id, d.display_name, m.category, m.title, m.content,
+      m.id, m.account_id, m.user_id, d.display_name, m.category, m.title, m.content, m.localized,
       m.items, m.items_claimed_at, m.deleted_at, m.expires_at, m.created_at, gs.server_code,
       count(*) over() as total
     from public.mails m
