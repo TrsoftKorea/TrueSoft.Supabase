@@ -372,14 +372,15 @@ export default function RemoteConfig({
           {
             key: 'actions', header: '', kind: 'actions', cell: (key) => (
               <span className="inline-flex gap-1.5" onClick={(e) => e.stopPropagation()}>
-                <button
+                {/* 삭제 대기는 대기 변경 패널에서 취소한다 — 버튼 자리는 비워 줄마다 폭을 맞춘다. */}
+                {effectiveOf(key).deleted ? <span className="inline-block w-7 h-7" /> : <button
                   onClick={() => { setDialogError(''); setDeleteKey(key) }}
                   title="설정 삭제"
                   aria-label="설정 삭제"
                   className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                </button>}
               </span>
             ),
           },

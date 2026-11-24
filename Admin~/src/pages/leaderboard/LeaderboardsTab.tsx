@@ -374,8 +374,10 @@ export default function LeaderboardsTab({
           {
             key: 'actions', header: '', kind: 'actions', cell: (r) => {
               const noCycle = r.rotation === 'none'
+              // 삭제 대기는 대기 변경 패널에서 취소한다 — 버튼은 감추되 자리는 남겨 줄마다 폭을 맞춘다.
+              const hidden = draftStateOf(r.code) === 'delete'
               return (
-                <span className="inline-flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <span className={'inline-flex gap-1.5' + (hidden ? ' invisible' : '')} onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => openEdit(r)}
                     title="수정"

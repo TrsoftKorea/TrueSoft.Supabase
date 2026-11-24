@@ -14,6 +14,7 @@ import { EditDialog } from '../../components/ui/EditDialog'
 import { TableCard } from '../../components/ui/DataTable'
 import { formatCount, formatTotal } from '../../components/ui/format'
 import { RefreshButton } from '../../components/ui/FilterBar'
+import { StatusText } from '../../components/ui/StatusText'
 
 type LbRow = { code: string; display_name: string; columns: string }
 type Col = {
@@ -574,6 +575,7 @@ export default function ColumnsTab({
     }
   }
   const all: Col[] = [...liveCols, ...pendingAdds]
+  const pendingDropNames = new Set(drafts.filter((d) => d.feature === 'leaderboard_field' && d.action === 'drop').map((d) => d.object_name))
 
   const usedFields = new Set<string>()
   leaderboards.forEach((lb) => {
@@ -719,6 +721,8 @@ export default function ColumnsTab({
                   </span>
                 )
               }
+              // 지울 필드는 사용을 켜고 끌 일이 없다 — 켜기 단추 대신 삭제 대기를 보인다.
+              if (pendingDropNames.has(c.column_name)) return <StatusText tone="bad">삭제 대기</StatusText>
               const att = isAttached(c.column_name)
               const pend = pendingByCol[c.column_name]
               // 담아 둔 변경이 있으면 그 상태를 보여준다 — 라이브만 보이면 다시 눌러 취소한 줄 모른다.
@@ -761,8 +765,9 @@ export default function ColumnsTab({
             key: 'actions', header: '', kind: 'actions', cell: (c) => {
               if (pendingAddNames.has(c.column_name)) return <span className="inline-block w-[3.875rem]" />
               const inUse = usedFields.has(c.column_name)
+              // 삭제 대기는 대기 변경 패널에서 취소한다 — 버튼은 감추되 자리는 남겨 줄마다 폭을 맞춘다.
               return (
-                <span className="inline-flex gap-1.5">
+                <span className={'inline-flex gap-1.5' + (pendingDropNames.has(c.column_name) ? ' invisible' : '')}>
                   <button
                     onClick={() => setEditCol(c)}
                     title="기본값 수정"

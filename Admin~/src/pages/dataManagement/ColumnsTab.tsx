@@ -16,7 +16,7 @@ import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
 import { elementField, elementFits, type CatalogItem } from '../../lib/gameItems'
-import { StatusText } from '../../components/ui/StatusText'
+import { StatusText, Tag } from '../../components/ui/StatusText'
 import { buildFieldType, displayFieldType, fieldTypeError, grantKindOf, newSpec, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
 import { CollectionTypeFields } from './CollectionTypeFields'
 
@@ -570,6 +570,8 @@ export default function ColumnsTab({
     return { id: d.id, label: opLabel(d.feature, d.action), detail: typeText ? `${d.object_name} · ${typeText}` : d.object_name }
   })
 
+  const pendingDropNames = new Set(drafts.filter((d) => d.action === 'drop').map((d) => d.object_name))
+
   const discardOne = async (id: number) => {
     setBusy(true)
     try { await callAdmin(target, 'schema.discardDraft', { id }); await reloadDrafts() }
@@ -624,7 +626,11 @@ export default function ColumnsTab({
 
       <TableCard
         columns={[
-          { key: 'name', header: '필드', kind: 'mono', cardTitle: true, cell: (c) => c.column_name },
+          {
+            key: 'name', header: '필드', kind: 'mono', cardTitle: true, cell: (c) => pendingDropNames.has(c.column_name)
+              ? <span className="inline-flex items-center gap-1.5"><Tag tone="bad">삭제 대기</Tag>{c.column_name}</span>
+              : c.column_name,
+          },
           {
             // 리스트·딕셔너리 타입은 게임 코드에 쓰는 이름 그대로. 타입을 안 정한 묶음 데이터 필드는 그 사실을 드러낸다.
             key: 'type', header: '타입', kind: 'name', cell: (c) => c.field_type ? (
@@ -638,8 +644,9 @@ export default function ColumnsTab({
           },
           { key: 'default', header: '기본값', kind: 'text', cell: (c) => defaultLabel(c), full: (c) => c.column_default ?? '' },
           {
+            // 삭제 대기는 대기 변경 패널에서 취소한다 — 버튼은 감추되 자리는 남겨 줄마다 폭을 맞춘다.
             key: 'actions', header: '', kind: 'actions', cell: (c) => (
-              <span className="inline-flex gap-1.5">
+              <span className={'inline-flex gap-1.5' + (pendingDropNames.has(c.column_name) ? ' invisible' : '')}>
                 <button onClick={() => setEditCol(c)} title="필드 수정" aria-label="필드 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>

@@ -1095,6 +1095,14 @@ const HANDLERS: Record<string, Handler> = {
       ends_at: null, is_active: true, is_ended: false, current_entries: 2, columns: '',
     }],
   }),
+  // 리더보드 목록의 columns 가 비어 있어 어느 리더보드도 쓰지 않는 필드다.
+  'leaderboard.columns': () => ({
+    all: [
+      { column_name: 'stage', data_type: 'integer', is_nullable: 'NO', column_default: '0' },
+      { column_name: 'hero_power', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
+    ],
+    attached: [],
+  }),
   'leaderboard.scores': () => {
     const rows = [
       { rank: 1, account_id: 'a9', user_id: '1094471', display_name: '용사김', score: 3200, score_achieved_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', score_count: 12, server_code: 'GLOBAL' },
@@ -1226,6 +1234,12 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'game', value_json: { stamina: { max: 120, regen_seconds: 300 }, notice_url: 'https://example.com/notice' }, enabled: true, requires_auth: false, description: null, version: 3 },
     ],
   }),
+  'remoteConfig.stageDelete': (target, p) => {
+    const drafts = draftsOf(target)
+    const id = (drafts.at(-1)?.id ?? 0) + 1
+    drafts.push({ id, feature: 'remote_config', action: 'delete', object_name: String(p['key'] ?? ''), params: {}, created_at: new Date().toISOString(), operator: MOCK_EMAIL })
+    return { id }
+  },
   // 서버 코드는 동시접속자 서버별 나눔(GLOBAL·KR)과 같다.
   'servers.list': () => [
     { id: 's1', server_code: 'GLOBAL', display_name: '글로벌', allow_transfers: true, is_default: true, player_count: 8421, created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' },
