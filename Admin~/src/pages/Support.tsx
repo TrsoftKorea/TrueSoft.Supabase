@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Copy, GripVertical, Loader2, Pencil, Plus, RotateCcw, Send, Trash2, UserRound, XCircle } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
+import { defaultLangField, useDefaultLanguage } from '../lib/languages'
 import { supportPageUrl, type ProjectTarget } from '../lib/projectTarget'
 import { copyToClipboard } from '../lib/clipboard'
+import { LegalTab } from './LegalDocs'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Tabs } from '../components/ui/Tabs'
@@ -100,7 +102,7 @@ type Ticket = TicketRow & { meta: Record<string, string>; messages: Message[] }
 type Category = { id: number; name: string; localized: Record<string, string>; sort_order: number; is_active: boolean; tickets: number }
 
 export default function Support({ target, onUnauthenticated }: { target: ProjectTarget; onUnauthenticated: () => void }) {
-  const [tab, setTab] = useState<'tickets' | 'faqs' | 'categories'>('tickets')
+  const [tab, setTab] = useState<'tickets' | 'faqs' | 'categories' | 'legal'>('tickets')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const pageUrl = supportPageUrl(target)
@@ -133,8 +135,9 @@ export default function Support({ target, onUnauthenticated }: { target: Project
         )}
       />
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      <Tabs value={tab} onChange={setTab} tabs={[['tickets', '문의'], ['faqs', '자주 묻는 질문'], ['categories', '분류']] as const} />
+      <Tabs value={tab} onChange={setTab} tabs={[['tickets', '문의'], ['faqs', '자주 묻는 질문'], ['categories', '분류'], ['legal', '약관·방침']] as const} />
       {tab === 'tickets' && <TicketsTab target={target} report={report} />}
+      {tab === 'legal' && <LegalTab target={target} report={report} />}
       {tab === 'faqs' && <FaqsTab target={target} report={report} />}
       {tab === 'categories' && <CategoriesTab target={target} report={report} />}
     </div>
@@ -431,6 +434,7 @@ type Faq = {
 type FaqDraft = { id: number | null; categoryId: string; question: string; answer: string; enQuestion: string; enAnswer: string }
 
 function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const defaultLang = useDefaultLanguage(target)
   const [rows, setRows] = useState<Faq[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
@@ -546,6 +550,9 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
   const enPaired = !!draft && !!draft.enQuestion.trim() === !!draft.enAnswer.trim()
   const draftOk = !!draft && !!draft.question.trim() && draft.question.trim().length <= 200
     && !!draft.answer.trim() && draft.answer.trim().length <= 4000 && enPaired
+  // 기본 언어가 영어면 영어 칸은 위 칸과 겹친다 — 이미 저장된 영어 글이 있을 때만 보인다.
+  const savedEn = rows?.find((r) => r.id === draft?.id)?.localized?.['en']
+  const showEn = defaultLang !== 'en' || !!savedEn?.question || !!savedEn?.answer
 
   return (
     <>
@@ -634,16 +641,17 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
               <p className="text-xs text-neutral-500">문의할 때 이 분류를 고른 플레이어에게 먼저 보입니다. 전체면 첫 화면에만 보입니다.</p>
             </div>
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-800">질문</label>
+              <label className="block text-sm font-medium text-neutral-800">{defaultLangField(defaultLang, '질문')}</label>
               <input className={`${inputCls} w-full`} value={draft.question} maxLength={200}
                 onChange={(e) => setDraft({ ...draft, question: e.target.value })} />
             </div>
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-800">답</label>
+              <label className="block text-sm font-medium text-neutral-800">{defaultLangField(defaultLang, '답')}</label>
               <textarea className={`${areaCls} w-full`} rows={5} value={draft.answer} maxLength={4000}
                 onChange={(e) => setDraft({ ...draft, answer: e.target.value })} />
               <p className="text-xs text-neutral-500">줄을 바꾸면 창에서도 줄이 바뀝니다. 4,000자까지 넣습니다.</p>
             </div>
+            {showEn && (<>
             <div className="space-y-1">
               <label className="block text-sm font-medium text-neutral-800">영어 질문</label>
               <input className={`${inputCls} w-full`} value={draft.enQuestion} maxLength={200}
@@ -654,9 +662,10 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
               <textarea className={`${areaCls} w-full`} rows={4} value={draft.enAnswer} maxLength={4000}
                 onChange={(e) => setDraft({ ...draft, enAnswer: e.target.value })} />
               <p className={`text-xs ${enPaired ? 'text-neutral-500' : 'text-red-600'}`}>
-                한국어가 아닌 플레이어에게 보이는 문구를 영어 질문과 함께 넣습니다. 둘 다 비우면 위 한국어 문구가 보입니다.
+                다른 언어 플레이어에게 보이는 문구를 영어 질문과 함께 넣습니다. 둘 다 비우면 위 문구가 보입니다.
               </p>
             </div>
+            </>)}
           </div>
         </EditDialog>
       )}
@@ -678,6 +687,7 @@ function FaqsTab({ target, report }: { target: ProjectTarget; report: (e: unknow
 type CategoryDraft = { id: number | null; name: string; en: string; sortOrder: string }
 
 function CategoriesTab({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const defaultLang = useDefaultLanguage(target)
   const [rows, setRows] = useState<Category[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [draft, setDraft] = useState<CategoryDraft | null>(null)
@@ -789,17 +799,19 @@ function CategoriesTab({ target, report }: { target: ProjectTarget; report: (e: 
         >
           <div className="space-y-4">
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-neutral-800">이름</label>
+              <label className="block text-sm font-medium text-neutral-800">{defaultLangField(defaultLang, '이름')}</label>
               <input className={`${inputCls} w-full`} value={draft.name} maxLength={40}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              <p className="text-xs text-neutral-500">한국어로 보는 플레이어에게 보이는 이름을 40자까지 넣습니다.</p>
+              <p className="text-xs text-neutral-500">40자까지 넣습니다.</p>
             </div>
+            {(defaultLang !== 'en' || !!rows?.find((r) => r.id === draft.id)?.localized?.['en']) && (
             <div className="space-y-1">
               <label className="block text-sm font-medium text-neutral-800">영어 이름</label>
               <input className={`${inputCls} w-full`} value={draft.en} maxLength={40}
                 onChange={(e) => setDraft({ ...draft, en: e.target.value })} />
-              <p className="text-xs text-neutral-500">한국어가 아닌 플레이어에게 보이는 이름을 넣습니다. 비우면 위 이름이 보입니다.</p>
+              <p className="text-xs text-neutral-500">다른 언어 플레이어에게 보이는 이름을 넣습니다. 비우면 위 이름이 보입니다.</p>
             </div>
+            )}
             <div className="space-y-1">
               <label className="block text-sm font-medium text-neutral-800">순서</label>
               <input className={`${inputCls} w-28`} value={draft.sortOrder} inputMode="numeric"

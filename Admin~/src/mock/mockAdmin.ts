@@ -131,6 +131,33 @@ let mockAuthSync: { finishedAt: string | null; ok: boolean | null; message: stri
   finishedAt: addDays(kstToday(), -1) + 'T10:50:00+09:00', ok: true, message: '기본 설정 · Google · 돌아올 주소',
 }
 
+// ── 점검·최소 버전 ── 꺼 둔 상태로, 통과 계정 둘(하나는 닉네임 없음)을 보인다.
+type MockGate = {
+  android_min_version: string | null; ios_min_version: string | null
+  android_store_url: string | null; ios_store_url: string | null
+  maintenance_enabled: boolean; maintenance_starts_at: string | null; maintenance_ends_at: string | null
+  maintenance_message: string; maintenance_localized: Record<string, string>
+  updated_at: string | null; updated_by: string | null
+}
+let appGate: MockGate = {
+  android_min_version: '1.4.0', ios_min_version: null, android_store_url: null, ios_store_url: null,
+  maintenance_enabled: false, maintenance_starts_at: null, maintenance_ends_at: null,
+  maintenance_message: '', maintenance_localized: {}, updated_at: null, updated_by: null,
+}
+// 다른 운영자가 화면을 연 사이 바꾼 경우를 재현한다 — 브라우저 콘솔에서 __mockAppGateEdit({ maintenance_enabled: true }).
+;(globalThis as { __mockAppGateEdit?: (patch: Partial<MockGate>) => void }).__mockAppGateEdit = (patch) => {
+  appGate = { ...appGate, ...patch, updated_at: new Date().toISOString(), updated_by: 'other@local' }
+}
+const appGateView = () => ({
+  ...appGate,
+  maintenance_active: appGate.maintenance_enabled
+    && (!appGate.maintenance_starts_at || Date.parse(appGate.maintenance_starts_at) <= Date.now()),
+})
+let maintenanceAllow = [
+  { user_id: '1014471', note: 'QA 폰', display_name: '용사김', created_at: addDays(kstToday(), -3) + 'T14:00:00+09:00', created_by: MOCK_EMAIL },
+  { user_id: '109876543210987654321', note: '', display_name: null, created_at: addDays(kstToday(), -1) + 'T09:30:00+09:00', created_by: MOCK_EMAIL },
+] as { user_id: string; note: string; display_name: string | null; created_at: string; created_by: string | null }[]
+
 // ── 요청 제한 ── 켜 둔 상태로, 제한 중인 계정 하나(가짜 플레이어 Guest_7712)와 로그인 전 IP 하나를 보인다.
 let requestLimitSettings = {
   enabled: true, window_seconds: 10, max_requests: 100, block_minutes: 10,
@@ -146,7 +173,8 @@ let requestLimitBlocks = (() => {
 
 // ── 게임 시간대 ── 화면에서 바꿔 볼 수 있게 메모리에만 둔다(새로고침하면 처음 값).
 let gameSettings = {
-  time_zone: 'Asia/Seoul', updated_at: null as string | null, updated_by: null as string | null,
+  time_zone: 'Asia/Seoul', default_language: 'ko', withdrawal_delay_days: 7,
+  guest_inactive_days: 365, web_withdrawal: true, updated_at: null as string | null, updated_by: null as string | null,
   example_deadline: addDays(kstToday(), 8) + 'T00:00:00+09:00',
 }
 
@@ -438,6 +466,7 @@ const CRON_SCHEDULES: [string, string][] = [
   ['cleanup-user-data-logs', '0 3 * * *'], ['cleanup-cron-run-details', '40 3 * * *'], ['purchase-refund-sync-google', '0 4 * * *'],
   ['ts_friend_request_cleanup', '20 4 * * *'], ['purchase-price-sync', '30 4 * * *'], ['auth-config-sync', '15 5 * * 1'], ['auth-config-sync-check', '45 5 * * *'],
   ['push-send', '* * * * *'], ['push-outbox-cleanup', '50 3 * * *'],
+  ['guest-inactive-sweep', '20 * * * *'], ['support-retention', '35 4 * * *'], ['support-retention-check', '35 5 * * *'],
 ]
 
 /** 분·시 칸만 읽어 마지막 실행 시각과 하루 실행 횟수를 낸다(여기 쓰는 꼴만). */
@@ -547,6 +576,21 @@ let supportTickets: MockSupportTicket[] = (() => {
        ['player', 'Thanks!', [], 4100]]),
   ]
 })()
+
+// ── 개인정보처리방침·이용약관 ── 방침은 지난 판·시행 중·시행 예정·작성 중이 하나씩, 약관은 판이 없다(빈 화면 확인용).
+type MockLegal = {
+  id: number; kind: 'privacy' | 'terms'; version: number; effective_date: string; body: string
+  localized: Record<string, string>; published_at: string | null; updated_at: string | null; updated_by: string | null
+}
+const LEGAL_BODY = (v: number) => `# 개인정보처리방침\n\n마왕은 힘들어(이하 "게임")는 플레이어의 개인정보를 소중히 다룹니다. 이 문서는 ${v}판입니다.\n\n## 1. 수집하는 항목\n\n| 항목 | 목적 | 보관 기간 |\n|---|---|---|\n| 기기 식별자 | 게스트 계정 복구 | 탈퇴 시까지 |\n| 결제 기록 | 결제·환불 처리 | 관계 법령에 따른 기간 |\n\n## 2. 문의\n\n- 고객센터: [바로 가기](https://example.com/support)\n- 메일: privacy@example.com\n\n## 3. 이용 목적\n\n1. 계정 관리\n\n앞 항목의 설명 문단.\n\n2. 결제 처리\n3. 문의 응대\n\n2026. 11. 24 시행\n\n[https://a.example](https://b.example)\n\n**이 방침은 시행일부터 적용됩니다.**`
+let legalDocs: MockLegal[] = [
+  { id: 1, kind: 'privacy', version: 1, effective_date: addDays(kstToday(), -120), body: LEGAL_BODY(1), localized: {}, published_at: addDays(kstToday(), -125) + 'T03:00:00Z', updated_at: addDays(kstToday(), -125) + 'T03:00:00Z', updated_by: MOCK_EMAIL },
+  { id: 2, kind: 'privacy', version: 2, effective_date: addDays(kstToday(), -30), body: LEGAL_BODY(2), localized: { en: '# Privacy Policy\n\nThis is version 2.' }, published_at: addDays(kstToday(), -37) + 'T03:00:00Z', updated_at: addDays(kstToday(), -37) + 'T03:00:00Z', updated_by: MOCK_EMAIL },
+  { id: 3, kind: 'privacy', version: 3, effective_date: addDays(kstToday(), 7), body: LEGAL_BODY(3), localized: {}, published_at: addDays(kstToday(), -1) + 'T03:00:00Z', updated_at: addDays(kstToday(), -1) + 'T03:00:00Z', updated_by: MOCK_EMAIL },
+  { id: 4, kind: 'privacy', version: 4, effective_date: addDays(kstToday(), 30), body: LEGAL_BODY(4), localized: {}, published_at: null, updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL },
+]
+const legalRows = (kind: string) => legalDocs.filter((d) => d.kind === kind).sort((a, b) => b.version - a.version)
+  .map((d) => ({ ...d, localized: { ...d.localized }, in_force: !!d.published_at && d.effective_date <= kstToday() }))
 
 type MockFaq = {
   id: number; category_id: number | null; question: string; answer: string
@@ -717,6 +761,40 @@ const HANDLERS: Record<string, Handler> = {
   },
   'support.setStatus': (_t, p) => {
     supportTickets = supportTickets.map((t) => t.id !== p['ticketId'] ? t : { ...t, status: p['status'] as MockSupportTicket['status'] })
+    return null
+  },
+  'legal.list': (_t, p) => legalRows(String(p['kind'])),
+  'legal.save': (_t, p) => {
+    const kind = p['kind'] as 'privacy' | 'terms'
+    const date = String(p['effectiveDate'] ?? '')
+    const body = String(p['body'] ?? '')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('legal_effective_date_missing')
+    if (!body.trim()) throw new Error('legal_body_empty')
+    const lastPub = legalDocs.filter((d) => d.kind === kind && d.published_at).sort((a, b) => b.version - a.version)[0]
+    if (lastPub && date < lastPub.effective_date) throw new Error('legal_effective_date_before_published')
+    const localized = (p['localized'] ?? {}) as Record<string, string>
+    const now = new Date().toISOString()
+    if (p['id'] != null) {
+      const d = legalDocs.find((x) => x.id === p['id'])
+      if (!d || d.published_at) throw new Error('legal_not_editable')
+      Object.assign(d, { effective_date: date, body, localized, updated_at: now, updated_by: MOCK_EMAIL })
+      return { id: d.id }
+    }
+    const id = Math.max(0, ...legalDocs.map((d) => d.id)) + 1
+    const version = Math.max(0, ...legalDocs.filter((d) => d.kind === kind).map((d) => d.version)) + 1
+    legalDocs = [...legalDocs, { id, kind, version, effective_date: date, body, localized, published_at: null, updated_at: now, updated_by: MOCK_EMAIL }]
+    return { id }
+  },
+  'legal.publish': (_t, p) => {
+    const d = legalDocs.find((x) => x.id === p['id'])
+    if (!d || d.published_at) throw new Error('legal_not_editable')
+    d.published_at = new Date().toISOString()
+    return null
+  },
+  'legal.delete': (_t, p) => {
+    const d = legalDocs.find((x) => x.id === p['id'])
+    if (!d || d.published_at) throw new Error('legal_not_editable')
+    legalDocs = legalDocs.filter((x) => x.id !== d.id)
     return null
   },
   'supportFaqs.list': () => supportFaqs.map((f) => ({ ...f, category: supportCategories.find((c) => c.id === f.category_id)?.name ?? null })),
@@ -1042,7 +1120,7 @@ const HANDLERS: Record<string, Handler> = {
     if (p['feature'] === 'user_data_field' && (p['action'] === 'add' || p['action'] === 'update') && fieldType) {
       const norm = normFieldType(fieldType)
       if (!norm) throw new Error(`field_collection_type_invalid: ${fieldType}`)
-      if (p['action'] === 'add' && !['jsonb', 'json'].includes(String(params['coltype'] ?? '').toLowerCase())) {
+      if (p['action'] === 'add' && String(params['coltype'] ?? '').toLowerCase() !== 'jsonb') {
         throw new Error(`field_collection_type_needs_json: ${String(p['objectName'] ?? '')}`)
       }
       params['field_type'] = norm
@@ -1247,6 +1325,45 @@ const HANDLERS: Record<string, Handler> = {
     max_pending_invites_received: p['maxPendingInvitesReceived'], invite_cooldown_seconds: p['inviteCooldownSeconds'],
     lobby_expire_minutes: p['lobbyExpireMinutes'], updated_at: new Date().toISOString(), updated_by: 'mock@local',
   }),
+  'appGate.get': () => appGateView(),
+  'appGate.update': (_t, p) => {
+    // 서버처럼 꼴을 보고 거절한다 — 화면이 사유를 한국어로 바꾸는지 확인할 수 있게.
+    const s = (k: string) => (typeof p[k] === 'string' && p[k].trim() ? p[k].trim() : null)
+    const version = /^[0-9]+(\.[0-9]+){0,3}$/
+    const android = s('androidMinVersion')
+    const ios = s('iosMinVersion')
+    if ((android && !version.test(android)) || (ios && !version.test(ios))) throw new Error('app_version_invalid')
+    const start = s('maintenanceStartsAt')
+    const end = s('maintenanceEndsAt')
+    if (start && end && Date.parse(end) <= Date.parse(start)) throw new Error('maintenance_time_invalid')
+    const expected = s('expectedUpdatedAt')
+    if (expected && expected !== appGate.updated_at) throw new Error('app_gate_conflict')
+    const loc = p['maintenanceLocalized']
+    appGate = {
+      android_min_version: android, ios_min_version: ios,
+      android_store_url: s('androidStoreUrl'), ios_store_url: s('iosStoreUrl'),
+      maintenance_enabled: p['maintenanceEnabled'] === true, maintenance_starts_at: start, maintenance_ends_at: end,
+      maintenance_message: s('maintenanceMessage') ?? '',
+      maintenance_localized: loc && typeof loc === 'object' ? loc as Record<string, string> : {},
+      updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL,
+    }
+    return appGateView()
+  },
+  'maintenanceAllow.list': () => maintenanceAllow,
+  'maintenanceAllow.add': (_t, p) => {
+    const id = String(p['userId'] ?? '').trim()
+    // 가짜 플레이어는 유저 ID 가 10 으로 시작한다.
+    if (!/^10\d+$/.test(id)) throw new Error('maintenance_user_not_found')
+    const note = String(p['note'] ?? '').slice(0, 100)
+    const old = maintenanceAllow.find((a) => a.user_id === id)
+    if (old) old.note = note
+    else maintenanceAllow = [...maintenanceAllow, { user_id: id, note, display_name: null, created_at: new Date().toISOString(), created_by: MOCK_EMAIL }]
+    return null
+  },
+  'maintenanceAllow.remove': (_t, p) => {
+    maintenanceAllow = maintenanceAllow.filter((a) => a.user_id !== p['userId'])
+    return null
+  },
   'requestLimit.settingsGet': () => requestLimitSettings,
   'requestLimit.settingsUpdate': (_t, p) => {
     requestLimitSettings = {
@@ -1263,8 +1380,30 @@ const HANDLERS: Record<string, Handler> = {
   },
   'game.settingsGet': () => gameSettings,
   'game.settingsUpdate': (_t, p) => {
-    gameSettings = { ...gameSettings, time_zone: String(p['timeZone'] ?? gameSettings.time_zone), updated_at: new Date().toISOString(), updated_by: 'mock@local' }
-    return gameSettings
+    // 서버처럼 넘긴 값만 바꾸고, 언어는 꼴이 틀리면 거절한다.
+    const tz = typeof p['timeZone'] === 'string' && p['timeZone'].trim() ? p['timeZone'].trim() : null
+    const lang = typeof p['defaultLanguage'] === 'string' && p['defaultLanguage'].trim() ? p['defaultLanguage'].trim() : null
+    const delay = p['withdrawalDelayDays'] == null || p['withdrawalDelayDays'] === '' ? null : Number(p['withdrawalDelayDays'])
+    const guest = p['guestInactiveDays'] == null || p['guestInactiveDays'] === '' ? null : Number(p['guestInactiveDays'])
+    const web = typeof p['webWithdrawal'] === 'boolean' ? p['webWithdrawal'] : null
+    if (!tz && !lang && delay === null && guest === null && web === null) throw new Error('바꿀 설정 값이 필요합니다.')
+    if (guest !== null && (!Number.isInteger(guest) || (guest !== 0 && (guest < 30 || guest > 3650)))) {
+      throw new Error(`game_guest_inactive_days_invalid: ${guest}`)
+    }
+    if (lang && !/^[a-z]{2}(-[A-Z]{2})?$/.test(lang)) throw new Error(`game_default_language_invalid: ${lang}`)
+    if (delay !== null && (!Number.isInteger(delay) || delay < 1 || delay > 90)) throw new Error(`game_withdrawal_delay_invalid: ${delay}`)
+    const days = delay ?? gameSettings.withdrawal_delay_days
+    gameSettings = {
+      ...gameSettings,
+      time_zone: tz ?? gameSettings.time_zone,
+      default_language: lang ?? gameSettings.default_language,
+      withdrawal_delay_days: days,
+      guest_inactive_days: guest ?? gameSettings.guest_inactive_days,
+      web_withdrawal: web ?? gameSettings.web_withdrawal,
+      example_deadline: addDays(kstToday(), days + 1) + 'T00:00:00+09:00',
+      updated_at: new Date().toISOString(), updated_by: 'mock@local',
+    }
+    return { ...gameSettings }
   },
 }
 

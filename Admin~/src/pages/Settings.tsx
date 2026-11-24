@@ -14,11 +14,13 @@ import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
 import { contrastWithWhite } from '../lib/color'
-import { forgetGameTimeZone, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
+import { forgetGameSettings, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
+import { LANGS, langLabel } from '../lib/languages'
 import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, ExternalLink, KeyRound, Loader2, Pencil, Plus, Trash2, Unlock } from 'lucide-react'
 import { copyToClipboard } from '../lib/clipboard'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
+import AppGateCards from './AppGate'
 import { TableCard } from '../components/ui/DataTable'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { RefreshButton } from '../components/ui/FilterBar'
@@ -668,6 +670,25 @@ const MAIL_FIELDS: LimitField[] = [
   },
 ]
 
+const WITHDRAWAL_FIELDS: LimitField[] = [
+  {
+    param: 'withdrawalDelayDays', field: 'withdrawal_delay_days', min: 1, max: 90,
+    label: '유예 일수',
+    hint: '탈퇴를 요청한 뒤 계정을 지우기까지의 일수. 지난 다음 자정에 지웁니다. 바꿔도 이미 예약된 탈퇴는 그대로입니다. 1~90 사이.',
+  },
+  {
+    param: 'guestInactiveDays', field: 'guest_inactive_days', min: 30, max: 3650, zeroOff: true,
+    label: '게스트 자동 삭제',
+    hint: '이 일수 동안 접속하지 않은 게스트 계정을 지웁니다. 구글·애플을 연결했거나 결제한 계정은 지우지 않습니다. 0이면 끔, 켜려면 30~3650 사이.',
+  },
+]
+
+const WITHDRAWAL_TOGGLE: LimitToggle = {
+  param: 'webWithdrawal', field: 'web_withdrawal',
+  label: '웹에서 계정 삭제',
+  hint: '끄면 고객센터 웹에서는 삭제를 요청할 수 없고 게임 설정에서만 삭제합니다. 플레이나누를 함께 쓰는 프로젝트는 끕니다.',
+}
+
 const FRIEND_FIELDS: LimitField[] = [
   {
     param: 'maxFriends', field: 'max_friends', min: 1, max: 1000,
@@ -1242,7 +1263,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
     setBusy(true); setSaveError('')
     try {
       const s = await callAdmin<GameSettings>(target, 'game.settingsUpdate', { timeZone: tz })
-      forgetGameTimeZone(target)
+      forgetGameSettings(target)
       setCurrent(s); setTz(s.time_zone); setAsking(false)
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { report(e, ''); return }
@@ -1270,7 +1291,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
         </select>
         {current && (
           <p className="text-xs text-neutral-500">
-            지금 7일 유예로 탈퇴하면 {timeZoneName(current.time_zone)} <span className="font-medium text-neutral-700">{zonedText(current.example_deadline, current.time_zone)}</span>에 삭제됩니다.
+            지금 {current.withdrawal_delay_days ?? 7}일 유예로 탈퇴하면 {timeZoneName(current.time_zone)} <span className="font-medium text-neutral-700">{zonedText(current.example_deadline, current.time_zone)}</span>에 삭제됩니다.
           </p>
         )}
         <p className="text-xs text-neutral-400">
@@ -1305,16 +1326,92 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   )
 }
 
-type Tab = 'store' | 'time' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'console'
+function LanguageCard({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+  const [current, setCurrent] = useState<GameSettings | null>(null)
+  const [lang, setLang] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [asking, setAsking] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const s = await callAdmin<GameSettings>(target, 'game.settingsGet')
+        setCurrent(s)
+        setLang(s.default_language ?? '')
+      } catch (e: unknown) {
+        report(e, '기본 언어를 불러오지 못했습니다.')
+      }
+    })()
+  }, [target, report])
+
+  const save = async () => {
+    setBusy(true); setSaveError(''); setSaved(false)
+    try {
+      const s = await callAdmin<GameSettings>(target, 'game.settingsUpdate', { defaultLanguage: lang })
+      forgetGameSettings(target)
+      setCurrent(s); setLang(s.default_language ?? ''); setSaved(true); setAsking(false)
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { report(e, ''); return }
+      setSaveError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const stored = current?.default_language ?? ''
+  const options = stored && !LANGS.includes(stored) ? [stored, ...LANGS] : LANGS
+
+  return (
+    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+      <CardHeader title="기본 언어" description="언어를 따로 정하지 않은 제목·본문의 언어를 정합니다." />
+      <div className="space-y-1.5">
+        <label className="block text-sm font-medium text-neutral-700">기본 언어</label>
+        <select value={lang} onChange={(e) => { setLang(e.target.value); setSaved(false) }} className={inputCls + ' max-w-sm'} disabled={!current}>
+          {!stored && <option value="">정하지 않음</option>}
+          {options.map((l) => (<option key={l} value={l}>{langLabel(l)}</option>))}
+        </select>
+        <p className="text-xs text-neutral-400">
+          고객센터의 자주 묻는 질문·문의 분류는 이 언어가 아닌 플레이어에게 영어 글이 있으면 그것을 먼저 보입니다.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button variant="primary" onClick={() => { setSaveError(''); setAsking(true) }} disabled={!current || busy || !lang || lang === stored}>
+          저장
+        </Button>
+        {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
+      </div>
+      <ConfirmDialog
+        open={asking}
+        title="언어를 바꿀까요?"
+        confirmLabel="바꾸기"
+        busy={busy}
+        error={saveError || undefined}
+        onConfirm={() => { void save() }}
+        onCancel={() => setAsking(false)}
+        description="고객센터에서 영어 글을 먼저 볼 플레이어가 곧바로 바뀝니다. 이미 쓴 글의 내용은 그대로입니다."
+      >
+        <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+          {stored ? langLabel(stored) : '정하지 않음'} → <span className="font-medium">{langLabel(lang)}</span>
+        </div>
+      </ConfirmDialog>
+    </WhiteCard>
+  )
+}
+
+type Tab = 'store' | 'time' | 'withdrawal' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'gate' | 'console'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
-  ['time', '시간대'],
+  ['time', '시간대·언어'],
+  ['withdrawal', '탈퇴'],
   ['mail', '우편'],
   ['friend', '친구'],
   ['lobby', '매치 로비'],
   ['push', '푸시 알림'],
   ['limit', '요청 제한'],
+  ['gate', '점검·버전'],
   ['console', '프로젝트 정보'],
 ]
 
@@ -1343,8 +1440,28 @@ export default function Settings({
       <Tabs value={tab} onChange={setTab} tabs={TABS} />
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
+      {tab === 'gate' && <AppGateCards target={target} report={report} />}
       {tab === 'console' && <ConsoleCards target={target} report={report} />}
-      {tab === 'time' && <TimeZoneCard target={target} report={report} />}
+      {tab === 'time' && (
+        <div className="space-y-4">
+          <TimeZoneCard target={target} report={report} />
+          <LanguageCard target={target} report={report} />
+        </div>
+      )}
+      {tab === 'withdrawal' && (
+        <LimitsForm
+          target={target}
+          report={report}
+          title="탈퇴"
+          description="탈퇴를 요청한 계정과 오래 접속하지 않은 게스트 계정을 언제 지울지 정합니다."
+          getAction="game.settingsGet"
+          updateAction="game.settingsUpdate"
+          fields={WITHDRAWAL_FIELDS}
+          toggle={WITHDRAWAL_TOGGLE}
+          confirmTitle="탈퇴 유예 기간을 바꿀까요?"
+          onSaved={() => forgetGameSettings(target)}
+        />
+      )}
       {tab === 'mail' && (
         <LimitsForm
           target={target}

@@ -101,7 +101,7 @@ const intInRange = (p: Params, k: string, label: string, min: number, max: numbe
 // 리터럴로 취급되도록 백슬래시로 이스케이프한다 — 안 하면 "order_123" 검색에 "orderX123"까지 걸린다.
 const sanitizeSearchTerm = (s: string): string => s.replace(/[,()]/g, "").replace(/[\\%_]/g, (c) => `\\${c}`);
 
-// 화면의 날짜('YYYY-MM-DD')는 게임 시간대(설정 › 시간대)의 날짜다. 시간대 없이 비교하면 DB(UTC) 자정으로 읽혀
+// 화면의 날짜('YYYY-MM-DD')는 게임 시간대(설정 › 시간대·언어)의 날짜다. 시간대 없이 비교하면 DB(UTC) 자정으로 읽혀
 // 그 나라 새벽 기록이 전날로 빠진다 — 경계를 그 시간대의 자정 시각으로 만들어 비교한다.
 // deno-lint-ignore no-explicit-any
 const gameTimeZoneOf = async (db: any): Promise<string> => {
@@ -667,7 +667,7 @@ Deno.serve(async (req) => {
     const { error } = await db.rpc("ts_admin_audit_write", {
       p_email: email,
       p_action: action,
-      p_params: redactParams(params),
+      p_params: redactParams(params, action),
     });
     if (error) console.error(`[admin-api] 운영 기록 실패 (${action}, ${email}): ${error.message}`);
   }
@@ -724,10 +724,28 @@ const READ_ACTION =
 
 const SECRET_PARAM = /password|secret|token/i;
 
-function redactParams(params: Params): Params {
+// 행동별로 글 내용을 남기지 않을 값 — 운영 기록은 지우지 않으므로 여기 남으면 원본보다 오래 산다.
+// 문의 답변은 3년 뒤 문의째 지워지는데 기록에 사본이 남고, 약관 본문은 수만 자라 기록을 불린다. 길이만 남긴다.
+const CONTENT_PARAMS: Record<string, string[]> = {
+  "support.reply": ["body"],
+  "legal.save": ["body", "localized"],
+};
+
+function contentSummary(v: unknown): string {
+  if (typeof v === "string") return `(${v.length}자)`;
+  if (v && typeof v === "object" && !Array.isArray(v)) {
+    return Object.entries(v as Record<string, unknown>)
+      .map(([k, x]) => `${k} ${typeof x === "string" ? x.length : 0}자`).join(" · ") || "(없음)";
+  }
+  return "(생략)";
+}
+
+function redactParams(params: Params, action = ""): Params {
   const out: Params = {};
+  const content = CONTENT_PARAMS[action] ?? [];
   for (const [k, v] of Object.entries(params)) {
     if (SECRET_PARAM.test(k)) out[k] = "***";
+    else if (content.includes(k)) out[k] = contentSummary(v);
     // 그림(data URL)은 기록을 수십 KB씩 불린다 — 바꿨다는 사실만 남긴다.
     else if (typeof v === "string" && v.startsWith("data:image/")) out[k] = "(그림)";
     else out[k] = v;
@@ -1677,12 +1695,109 @@ async function handleAction(
       }
 
       case "game.settingsUpdate": {
+        // 넘긴 값만 바꾼다 — 시간대만·기본 언어만 바꾸는 화면이 서로의 값을 건드리지 않게.
+        const timeZone = optStr(params, "timeZone").trim();
+        const defaultLanguage = optStr(params, "defaultLanguage").trim();
+        const delay = params["withdrawalDelayDays"];
+        const delayDays = delay == null || delay === "" ? null : Number(delay);
+        if (delayDays !== null && (!Number.isInteger(delayDays) || delayDays < 1 || delayDays > 90)) {
+          throw new Error("탈퇴 유예 기간은 1~90일 사이의 정수로 넣습니다.");
+        }
+        const guest = params["guestInactiveDays"];
+        const guestDays = guest == null || guest === "" ? null : Number(guest);
+        if (guestDays !== null && (!Number.isInteger(guestDays) || (guestDays !== 0 && (guestDays < 30 || guestDays > 3650)))) {
+          throw new Error("게스트 자동 삭제는 0(끔) 또는 30~3650일 사이의 정수로 넣습니다.");
+        }
+        const web = params["webWithdrawal"];
+        const webWithdrawal = typeof web === "boolean" ? web : null;
+        if (!timeZone && !defaultLanguage && delayDays === null && guestDays === null && webWithdrawal === null) {
+          throw new Error("바꿀 설정 값이 필요합니다.");
+        }
         const { data, error } = await db.rpc("ts_admin_game_settings_update", {
-          p_time_zone: str(params, "timeZone"),
+          ...(timeZone ? { p_time_zone: timeZone } : {}),
+          ...(defaultLanguage ? { p_default_language: defaultLanguage } : {}),
+          ...(delayDays !== null ? { p_withdrawal_delay_days: delayDays } : {}),
+          ...(guestDays !== null ? { p_guest_inactive_days: guestDays } : {}),
+          ...(webWithdrawal !== null ? { p_web_withdrawal: webWithdrawal } : {}),
           p_by: email,
         });
         if (error) throw new Error(error.message);
         return json({ ok: true, data });
+      }
+
+      // 점검·최소 버전 — 게임이 로그인 전에 읽는다. 저장은 값 전부를 한 번에(빈 칸은 null = 제한 없음·즉시).
+      case "appGate.get": {
+        const { data, error } = await db.rpc("ts_admin_app_gate_get");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "appGate.update": {
+        const text = (k: string, max: number) => {
+          const v = optStr(params, k).trim();
+          if (v.length > max) throw new Error(`${k} 값이 너무 깁니다.`);
+          return v || null;
+        };
+        // 게임이 스토어 주소를 그대로 연다 — http(s) 주소만 받는다.
+        const url = (k: string) => {
+          const v = text(k, 500);
+          if (v && !/^https?:\/\/\S+$/.test(v)) throw new Error("스토어 주소는 https:// 로 시작하는 주소를 넣어 주세요.");
+          return v;
+        };
+        const time = (k: string) => {
+          const v = optStr(params, k).trim();
+          if (!v) return null;
+          if (Number.isNaN(Date.parse(v))) throw new Error("maintenance_time_invalid");
+          return v;
+        };
+        // 언어별 안내 {"en": "..."} — 빈 글은 뺀다.
+        const localized: Record<string, string> = {};
+        const raw = params.maintenanceLocalized;
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(k) || typeof v !== "string") throw new Error("maintenance_localized_invalid");
+            if (v.length > 2000) throw new Error("점검 안내는 2000자까지 넣어 주세요.");
+            if (v.trim()) localized[k] = v.trim();
+          }
+        }
+        const { data, error } = await db.rpc("ts_admin_app_gate_update", {
+          p_android_min_version: text("androidMinVersion", 40),
+          p_ios_min_version: text("iosMinVersion", 40),
+          p_android_store_url: url("androidStoreUrl"),
+          p_ios_store_url: url("iosStoreUrl"),
+          p_maintenance_enabled: bool(params, "maintenanceEnabled"),
+          p_maintenance_starts_at: time("maintenanceStartsAt"),
+          p_maintenance_ends_at: time("maintenanceEndsAt"),
+          p_maintenance_message: text("maintenanceMessage", 2000),
+          p_maintenance_localized: localized,
+          p_by: email,
+          // 화면이 읽어 둔 시각 — 그 사이 다른 운영자가 저장했으면 서버가 app_gate_conflict 로 거절한다.
+          p_expected_updated_at: optStr(params, "expectedUpdatedAt").trim() || null,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
+      case "maintenanceAllow.list": {
+        const { data, error } = await db.rpc("ts_admin_maintenance_allow_list");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "maintenanceAllow.add": {
+        const userId = str(params, "userId").trim();
+        if (userId.length > 100) throw new Error("유저 ID 가 너무 깁니다.");
+        const { error } = await db.rpc("ts_admin_maintenance_allow_add", {
+          p_user_id: userId, p_note: optStr(params, "note").trim().slice(0, 100), p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "maintenanceAllow.remove": {
+        const { error } = await db.rpc("ts_admin_maintenance_allow_remove", { p_user_id: str(params, "userId") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
       }
 
       case "requestLimit.settingsGet": {
@@ -1846,6 +1961,59 @@ async function handleAction(
 
       case "supportFaqs.delete": {
         const { error } = await db.rpc("ts_admin_support_faq_delete", { p_id: intInRange(params, "id", "질문", 1, 2147483647) });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      // 개인정보처리방침·이용약관 — 판마다 시행일·본문. 게시한 판은 고치지 못한다(서버가 legal_not_editable 로 막음).
+      case "legal.list": {
+        const kind = str(params, "kind");
+        if (kind !== "privacy" && kind !== "terms") throw new Error("legal_kind_invalid");
+        const { data, error } = await db.rpc("ts_admin_legal_documents", { p_kind: kind });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "legal.save": {
+        const kind = str(params, "kind");
+        if (kind !== "privacy" && kind !== "terms") throw new Error("legal_kind_invalid");
+        const effectiveDate = str(params, "effectiveDate");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) throw new Error("legal_effective_date_missing");
+        const body = optStr(params, "body");
+        if (body.length > 100000) throw new Error("본문은 100,000자까지 넣어 주세요.");
+        // 언어별 본문 {"en": "..."} — 빈 글은 뺀다.
+        const localized: Record<string, string> = {};
+        const raw = params.localized;
+        if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(k)) throw new Error("legal_localized_invalid");
+            if (typeof v !== "string") throw new Error("legal_localized_invalid");
+            if (v.length > 100000) throw new Error("본문은 100,000자까지 넣어 주세요.");
+            if (v.trim()) localized[k] = v;
+          }
+        }
+        const { data, error } = await db.rpc("ts_admin_legal_save", {
+          p_id: params.id == null ? null : intInRange(params, "id", "판", 1, Number.MAX_SAFE_INTEGER),
+          p_kind: kind,
+          p_effective_date: effectiveDate,
+          p_body: body,
+          p_localized: localized,
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { id: data } });
+      }
+
+      case "legal.publish": {
+        const { error } = await db.rpc("ts_admin_legal_publish", {
+          p_id: intInRange(params, "id", "판", 1, Number.MAX_SAFE_INTEGER), p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "legal.delete": {
+        const { error } = await db.rpc("ts_admin_legal_delete", { p_id: intInRange(params, "id", "판", 1, Number.MAX_SAFE_INTEGER) });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
       }

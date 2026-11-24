@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { callAdmin } from './api'
 import type { ProjectTarget } from './projectTarget'
 
-// 게임 시간대 — 통계의 "하루", 탈퇴 삭제 자정, 새 우편 예약·리더보드 회차의 기준. 게임마다 "설정 › 시간대"에서 정한다.
+// 게임 시간대 — 통계의 "하루", 탈퇴 삭제 자정, 새 우편 예약·리더보드 회차의 기준. 게임마다 "설정 › 시간대·언어"에서 정한다.
 // 운영자 PC 시간대와 무관하게 이 시간대로 읽고 써야 서버와 어긋나지 않는다.
 
 export const DEFAULT_TIME_ZONE = 'Asia/Seoul'
@@ -35,12 +35,31 @@ export function timeZoneName(tz: string): string {
   return label ? `${label.replace(/\s+UTC.*$/, '')} 시간` : tz
 }
 
-export type GameSettings = { time_zone: string; updated_at: string | null; updated_by: string | null; example_deadline: string | null }
+export type GameSettings = {
+  time_zone: string
+  // 옛 서버 함수는 이 값을 안 돌려준다 — 없으면 화면은 기본 언어를 모르는 채로 그린다.
+  default_language?: string | null
+  withdrawal_delay_days?: number | null
+  updated_at: string | null
+  updated_by: string | null
+  example_deadline: string | null
+}
 
-const cache = new Map<string, Promise<string>>()
+const cache = new Map<string, Promise<GameSettings>>()
 
-/** 설정을 바꾼 화면이 부른다 — 다른 화면이 옛 시간대를 계속 쓰지 않게. */
-export function forgetGameTimeZone(target: ProjectTarget) {
+/** 프로젝트 설정(시간대·기본 언어). 화면끼리 한 번 받은 것을 나눠 쓴다. */
+export function loadGameSettings(target: ProjectTarget): Promise<GameSettings> {
+  let p = cache.get(target)
+  if (!p) {
+    p = callAdmin<GameSettings>(target, 'game.settingsGet')
+    p.catch(() => cache.delete(target))
+    cache.set(target, p)
+  }
+  return p
+}
+
+/** 설정을 바꾼 화면이 부른다 — 다른 화면이 옛 값을 계속 쓰지 않게. */
+export function forgetGameSettings(target: ProjectTarget) {
   cache.delete(target)
 }
 
@@ -49,13 +68,7 @@ export function useGameTimeZone(target: ProjectTarget): string | null {
   const [tz, setTz] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
-    let p = cache.get(target)
-    if (!p) {
-      p = callAdmin<GameSettings>(target, 'game.settingsGet').then((s) => s.time_zone || DEFAULT_TIME_ZONE)
-      p.catch(() => cache.delete(target))
-      cache.set(target, p)
-    }
-    p.then((v) => { if (alive) setTz(v) }).catch(() => {})
+    loadGameSettings(target).then((s) => { if (alive) setTz(s.time_zone || DEFAULT_TIME_ZONE) }).catch(() => {})
     return () => { alive = false }
   }, [target])
   return tz

@@ -17,6 +17,7 @@ import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { playerLabel } from '../components/ui/PlayerLink'
 import { brokenItemsIn, itemOptionLabel, type CatalogItem } from '../lib/gameItems'
 import { BrokenItemNote, BrokenItemsConfirm } from '../components/ItemGrantNote'
+import { defaultLangField, langLabel, pickableLangs, useDefaultLanguage } from '../lib/languages'
 
 type Mode = 'all' | 'server' | 'players'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
@@ -29,12 +30,6 @@ type CategoryRow = { key: string; display_name: string }
 type PlayerRow = { account_id: string; display_name: string | null }
 
 const DOW_LABEL = ['일', '월', '화', '수', '목', '금', '토']
-const LANGS = ['en', 'ja', 'ko', 'zh-CN', 'zh-TW', 'de', 'fr', 'es', 'pt', 'ru', 'id', 'th', 'vi']
-const LANG_LABEL: Record<string, string> = {
-  en: '영어', ja: '일본어', ko: '한국어', 'zh-CN': '중국어(간체)', 'zh-TW': '중국어(번체)',
-  de: '독일어', fr: '프랑스어', es: '스페인어', pt: '포르투갈어', ru: '러시아어',
-  id: '인도네시아어', th: '태국어', vi: '베트남어',
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -171,7 +166,9 @@ export default function Mails({
   const delItem = (i: number) => setItems((x) => x.filter((_, j) => j !== i))
   const togglePlayer = (p: PlayerRow) => setSelected((s) => { const n = { ...s }; if (n[p.account_id]) delete n[p.account_id]; else n[p.account_id] = playerLabel(p.display_name, p.account_id); return n })
 
-  const addLang = () => setLangRows((x) => [...x, { lang: LANGS.find((l) => !x.some((r) => r.lang === l)) ?? '', title: '', content: '' }])
+  const defaultLang = useDefaultLanguage(target)
+  const addLang = () => setLangRows((x) => [...x, { lang: pickableLangs(defaultLang, x.map((r) => r.lang))[0] ?? '', title: '', content: '' }])
+  const canAddLang = pickableLangs(defaultLang, langRows.map((r) => r.lang)).length > 0
   const setLang = (i: number, patch: Partial<LangRow>) => setLangRows((x) => x.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   const delLang = (i: number) => setLangRows((x) => x.filter((_, j) => j !== i))
 
@@ -425,12 +422,12 @@ export default function Mails({
               {categories.map((c) => (<option key={c.key} value={c.key}>{c.display_name || c.key}</option>))}
             </select>
           </Field>
-          <Field label="제목"><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls + ' w-full'} /></Field>
-          <Field label="본문"><textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls + ' w-full'} /></Field>
+          <Field label={defaultLangField(defaultLang, '제목')}><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls + ' w-full'} /></Field>
+          <Field label={defaultLangField(defaultLang, '본문')}><textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls + ' w-full'} /></Field>
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-neutral-500">다국어 메시지</span>
-            <button onClick={addLang} disabled={langRows.length >= LANGS.length}
+            <button onClick={addLang} disabled={!canAddLang}
               className="inline-flex items-center gap-1 text-xs text-[#1677ff] disabled:opacity-40 disabled:cursor-not-allowed">
               <Plus className="w-3 h-3" />언어 추가
             </button>
@@ -440,8 +437,8 @@ export default function Mails({
             <div key={i} className="border border-neutral-200 rounded-md p-2.5 space-y-2 bg-neutral-50/50">
               <div className="flex items-center gap-2">
                 <div className="w-28"><select value={r.lang} onChange={(e) => setLang(i, { lang: e.target.value })} className={inputCls + ' w-full'}>
-                  {LANGS.filter((l) => l === r.lang || !langRows.some((x, j) => j !== i && x.lang === l))
-                    .map((l) => (<option key={l} value={l}>{LANG_LABEL[l] ?? l}</option>))}
+                  {pickableLangs(defaultLang, langRows.filter((_, j) => j !== i).map((x) => x.lang), r.lang)
+                    .map((l) => (<option key={l} value={l}>{langLabel(l)}</option>))}
                 </select></div>
                 <div className="flex-1" />
                 <button onClick={() => delLang(i)} title="이 언어 삭제" aria-label="이 언어 삭제" className="text-neutral-400 hover:text-red-500 shrink-0"><X className="w-4 h-4" /></button>

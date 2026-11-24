@@ -1,5 +1,7 @@
 // 화면 글. 운영 콘솔의 우편·푸시 문구와 같은 13개 언어. 기기 언어(또는 아래쪽 언어 고르기)를 따르고, 없는 언어는 영어.
 import { LOCALES } from './locales'
+import { DELETE_LOCALES, type DeleteKey } from './deleteLocales'
+import { LEGAL_LOCALES, type LegalKey } from './legalLocales'
 
 export const LANGS = ['en', 'ja', 'ko', 'zh-CN', 'zh-TW', 'de', 'fr', 'es', 'pt', 'ru', 'id', 'th', 'vi'] as const
 export type Lang = (typeof LANGS)[number]
@@ -66,7 +68,8 @@ export const KO = {
   genericError: '문제가 생겼습니다. 잠시 후 다시 시도해 주세요.',
 } as const
 
-export type Key = keyof typeof KO
+type BaseKey = keyof typeof KO
+export type Key = BaseKey | DeleteKey | LegalKey
 
 export const REASON_KEYS = [
   'support_body_empty', 'support_body_too_long', 'support_category_invalid', 'support_too_many_open', 'support_too_fast',
@@ -100,10 +103,15 @@ export const REASON_KO: Record<ReasonKey, string> = {
   coupon_exhausted: '모두 사용된 쿠폰입니다.',
 }
 
-export type Strings = Record<Key, string>
+export type Strings = Record<BaseKey, string>
 export type Reasons = Record<ReasonKey, string>
 
-const TABLE: Record<Lang, { ui: Strings; reasons: Reasons }> = { ko: { ui: KO, reasons: REASON_KO }, ...LOCALES }
+const BASE: Record<Lang, { ui: Strings; reasons: Reasons }> = { ko: { ui: KO, reasons: REASON_KO }, ...LOCALES }
+// 계정 삭제 화면의 글은 따로 둔 파일(deleteLocales.ts)에서 합친다.
+const TABLE = Object.fromEntries(Object.entries(BASE).map(([l, v]) => [l, {
+  ui: { ...v.ui, ...DELETE_LOCALES[l as Lang].ui, ...LEGAL_LOCALES[l as Lang] } as Record<Key, string>,
+  reasons: { ...v.reasons, ...DELETE_LOCALES[l as Lang].reasons } as Record<string, string>,
+}])) as Record<Lang, { ui: Record<Key, string>; reasons: Record<string, string> }>
 
 export function pickLang(raw: string | null | undefined): Lang {
   const v = (raw ?? '').trim().toLowerCase()
@@ -120,7 +128,12 @@ export function t(lang: Lang, key: Key, vars?: Record<string, string | number>):
 
 export function reasonText(lang: Lang, reason: string): string {
   if (reason === 'support_session_expired' || reason === 'support_session_invalid') return t(lang, 'sessionExpired')
-  return (TABLE[lang].reasons as Record<string, string>)[reason] ?? t(lang, 'genericError')
+  return TABLE[lang].reasons[reason] ?? t(lang, 'genericError')
+}
+
+/** 삭제 예정 시각처럼 연도·요일까지 보일 시각. 플레이어 기기의 시간대로 보인다. */
+export function formatFullTime(lang: Lang, iso: string): string {
+  return new Date(iso).toLocaleString(lang, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 
 export function formatTime(lang: Lang, iso: string): string {

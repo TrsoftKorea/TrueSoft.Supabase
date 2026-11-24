@@ -11,6 +11,7 @@ import { DataTable } from '../components/ui/DataTable'
 import { StatusText } from '../components/ui/StatusText'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
+import { defaultLangField, langLabel, pickableLangs, useDefaultLanguage } from '../lib/languages'
 
 type Tab = 'triggers' | 'ad' | 'results'
 type Text = { title: string; body: string }
@@ -42,16 +43,11 @@ const TRIGGER_VARS: Record<string, string> = {
 }
 const STATUS_LABEL: Record<string, string> = { sent: '보냄', skipped: '건너뜀', failed: '실패', pending: '대기', sending: '보내는 중' }
 
-const LANGS = ['en', 'ja', 'ko', 'zh-CN', 'zh-TW', 'de', 'fr', 'es', 'pt', 'ru', 'id', 'th', 'vi']
-const LANG_LABEL: Record<string, string> = {
-  en: '영어', ja: '일본어', ko: '한국어', 'zh-CN': '중국어(간체)', 'zh-TW': '중국어(번체)',
-  de: '독일어', fr: '프랑스어', es: '스페인어', pt: '포르투갈어', ru: '러시아어',
-  id: '인도네시아어', th: '태국어', vi: '베트남어',
-}
 
 /** 기본 문구 + 언어별 문구 입력. fields 는 [키, 이름, 여러 줄] — 우편 발송 화면의 다국어 입력과 같은 꼴. */
-function LocalizedFields<K extends string>({
-  fields, base, onBase, rows, onRows, hint,
+export function LocalizedFields<K extends string>({
+  fields, base, onBase, rows, onRows, hint, defaultLang,
+  emptyHint = '기기 언어가 추가한 언어인 플레이어에게는 그 문구가, 나머지에게는 위 문구가 갑니다.',
 }: {
   fields: readonly (readonly [K, string, boolean])[]
   base: Record<K, string>
@@ -59,6 +55,9 @@ function LocalizedFields<K extends string>({
   rows: ({ lang: string } & Record<K, string>)[]
   onRows: (v: ({ lang: string } & Record<K, string>)[]) => void
   hint?: string | undefined
+  defaultLang: string | null
+  /** 다른 언어가 없을 때 보이는 안내. */
+  emptyHint?: string
 }) {
   const empty = Object.fromEntries(fields.map(([k]) => [k, ''])) as Record<K, string>
   const input = (value: string, onChange: (v: string) => void, multiline: boolean) => multiline
@@ -68,27 +67,27 @@ function LocalizedFields<K extends string>({
     <div className="space-y-3">
       {fields.map(([k, label, multiline]) => (
         <div key={k}>
-          <label className="block text-xs font-medium text-neutral-500 mb-1">{label}</label>
+          <label className="block text-xs font-medium text-neutral-500 mb-1">{defaultLangField(defaultLang, label)}</label>
           {input(base[k], (v) => onBase({ ...base, [k]: v }), multiline)}
         </div>
       ))}
       {hint && <p className="text-xs text-neutral-500">{hint}</p>}
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs font-medium text-neutral-500">다른 언어</span>
-        <button type="button" disabled={rows.length >= LANGS.length}
-          onClick={() => onRows([...rows, { lang: LANGS.find((l) => !rows.some((r) => r.lang === l)) ?? '', ...empty }])}
+        <button type="button" disabled={pickableLangs(defaultLang, rows.map((r) => r.lang)).length === 0}
+          onClick={() => onRows([...rows, { lang: pickableLangs(defaultLang, rows.map((r) => r.lang))[0] ?? '', ...empty }])}
           className="inline-flex items-center gap-1 text-xs text-[#1677ff] disabled:opacity-40 disabled:cursor-not-allowed">
           <Plus className="w-3 h-3" />언어 추가
         </button>
       </div>
-      {rows.length === 0 && <p className="text-xs text-neutral-400">기기 언어가 추가한 언어인 플레이어에게는 그 문구가, 나머지에게는 위 문구가 갑니다.</p>}
+      {rows.length === 0 && <p className="text-xs text-neutral-400">{emptyHint}</p>}
       {rows.map((r, i) => (
         <div key={i} className="border border-neutral-200 rounded-md p-2.5 space-y-2 bg-neutral-50">
           <div className="flex items-center gap-2">
             <select value={r.lang} onChange={(e) => onRows(rows.map((x, j) => (j === i ? { ...x, lang: e.target.value } : x)))}
               className={`${inputCls} w-36`}>
-              {LANGS.filter((l) => l === r.lang || !rows.some((x, j) => j !== i && x.lang === l))
-                .map((l) => <option key={l} value={l}>{LANG_LABEL[l] ?? l}</option>)}
+              {pickableLangs(defaultLang, rows.filter((_, j) => j !== i).map((x) => x.lang), r.lang)
+                .map((l) => <option key={l} value={l}>{langLabel(l)}</option>)}
             </select>
             <span className="flex-1" />
             <button type="button" onClick={() => onRows(rows.filter((_, j) => j !== i))} title="이 언어 삭제" aria-label="이 언어 삭제"
@@ -106,13 +105,13 @@ function LocalizedFields<K extends string>({
   )
 }
 
-function toRows<K extends string>(localized: Record<string, Partial<Record<K, string>>> | null | undefined, keys: readonly K[]) {
+export function toRows<K extends string>(localized: Record<string, Partial<Record<K, string>>> | null | undefined, keys: readonly K[]) {
   return Object.entries(localized ?? {}).map(([lang, v]) => ({
     lang, ...(Object.fromEntries(keys.map((k) => [k, v?.[k] ?? ''])) as Record<K, string>),
   }))
 }
 
-function fromRows<K extends string>(rows: ({ lang: string } & Record<K, string>)[], keys: readonly K[]) {
+export function fromRows<K extends string>(rows: ({ lang: string } & Record<K, string>)[], keys: readonly K[]) {
   const o: Record<string, Partial<Record<K, string>>> = {}
   for (const r of rows) {
     if (!r.lang.trim()) continue
@@ -139,6 +138,7 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
   onUnauthenticated: () => void
 }) {
   const [tab, setTab] = useState<Tab>('triggers')
+  const defaultLang = useDefaultLanguage(target)
   const [settings, setSettings] = useState<Settings | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
@@ -217,7 +217,7 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
                 },
                 {
                   key: 'langs', header: '다른 언어', kind: 'name',
-                  cell: (t) => Object.keys(t.localized ?? {}).map((l) => LANG_LABEL[l] ?? l).join(' · ') || null,
+                  cell: (t) => Object.keys(t.localized ?? {}).map(langLabel).join(' · ') || null,
                 },
                 { key: 'off', header: '끈 플레이어', kind: 'number', cell: (t) => `${formatCount(t.off_count)}명` },
                 {
@@ -236,7 +236,7 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
         </div>
       )}
 
-      {tab === 'ad' && <AdForm target={target} settings={settings} onSaved={load} report={report} onUnauthenticated={onUnauthenticated} />}
+      {tab === 'ad' && <AdForm target={target} defaultLang={defaultLang} settings={settings} onSaved={load} report={report} onUnauthenticated={onUnauthenticated} />}
       {tab === 'results' && <Results target={target} report={report} />}
 
       {editing && (
@@ -257,15 +257,16 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
           )}
         >
           <LocalizedFields fields={[['title', '제목', false], ['body', '본문', true]]}
-            base={base} onBase={setBase} rows={rows} onRows={setRows} hint={TRIGGER_VARS[editing.code]} />
+            base={base} onBase={setBase} rows={rows} onRows={setRows} hint={TRIGGER_VARS[editing.code]} defaultLang={defaultLang} />
         </EditDialog>
       )}
     </WhiteCard>
   )
 }
 
-function AdForm({ target, settings, onSaved, report, onUnauthenticated }: {
+function AdForm({ target, defaultLang, settings, onSaved, report, onUnauthenticated }: {
   target: ProjectTarget
+  defaultLang: string | null
   settings: Settings | null
   onSaved: () => Promise<void>
   report: (e: unknown, fallback: string) => void
@@ -310,7 +311,7 @@ function AdForm({ target, settings, onSaved, report, onUnauthenticated }: {
         <>
           <LocalizedFields fields={[['title_prefix', '제목 앞 표시', false], ['footer', '수신 거부 안내', false]]}
             base={base} onBase={(v) => { setBase(v); setSaved(false) }} rows={rows} onRows={(v) => { setRows(v); setSaved(false) }}
-            hint="제목 앞 표시는 알림 제목 맨 앞에, 수신 거부 안내는 본문 맨 끝에 붙습니다." />
+            hint="제목 앞 표시는 알림 제목 맨 앞에, 수신 거부 안내는 본문 맨 끝에 붙습니다." defaultLang={defaultLang} />
           <div className="flex items-center gap-3">
             {saved && <span className="text-xs text-emerald-600">저장됨</span>}
             <Button variant="primary" className="ml-auto" onClick={() => void save()} disabled={!ok || saving}>

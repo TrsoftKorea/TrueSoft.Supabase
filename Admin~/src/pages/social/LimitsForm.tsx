@@ -19,6 +19,8 @@ export type LimitField = {
   hint: string
   min: number
   max: number
+  /** 0 을 "끔"으로 받는다 — 범위(min~max) 밖이어도 0 은 통과. */
+  zeroOff?: boolean
 }
 
 /** 제한 전체를 켜고 끄는 스위치(요청 제한처럼 기본으로 꺼 두는 제한). 저장할 때 다른 칸과 함께 보낸다. */
@@ -202,9 +204,10 @@ export function LimitsForm({
 }
 
 /** 빈 칸·범위 밖이면 null. 저장 버튼은 null 이 하나라도 있으면 눌리지 않는다. */
-function parseField(raw: string, limits: { min: number; max: number }): number | null {
+function parseField(raw: string, limits: { min: number; max: number; zeroOff?: boolean | undefined }): number | null {
   if (raw.trim() === '') return null
   const n = Number(raw)
+  if (limits.zeroOff && n === 0) return 0
   if (!Number.isInteger(n) || n < limits.min || n > limits.max) return null
   return n
 }
@@ -233,7 +236,7 @@ function Field({
   value: string
   onChange: (v: string) => void
   disabled: boolean
-  limits: { min: number; max: number }
+  limits: { min: number; max: number; zeroOff?: boolean | undefined }
 }) {
   const bad = !disabled && parseField(value, limits) === null
   return (
@@ -249,7 +252,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
       />
       <p className={`text-xs ${bad ? 'text-red-600' : 'text-neutral-500'}`}>
-        {bad ? `${limits.min}에서 ${limits.max} 사이의 정수를 넣어 주세요.` : hint}
+        {bad ? `${limits.zeroOff ? '0 또는 ' : ''}${limits.min}에서 ${limits.max} 사이의 정수를 넣어 주세요.` : hint}
       </p>
     </div>
   )

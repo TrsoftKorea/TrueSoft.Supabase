@@ -23,6 +23,20 @@ export type Faq = { id: number; category_id: number | null; question: string; an
 export type Look = {
   name: string | null; color: string | null; icon: string | null
   google_client_id?: string | null; apple_services_id?: string | null
+  // 이 일수 동안 접속이 없는 게스트 계정은 서버가 지운다. 0·null 이면 지우지 않는다(옛 서버는 안 보낸다).
+  guest_inactive_days?: number | null
+  // 계정 삭제를 요청한 뒤 실제로 지우기까지의 일수(운영 콘솔 설정). 옛 서버는 안 보낸다 — 화면은 7로 본다.
+  withdrawal_delay_days?: number | null
+  // false 면 이 프로젝트는 웹에서 계정 삭제를 받지 않는다(게임 설정에서만). 옛 서버는 안 보낸다 — 받는 것으로 본다.
+  web_withdrawal?: boolean | null
+}
+export type Withdrawal = { scheduled_at: string | null }
+export type LegalKind = 'privacy' | 'terms'
+// current 는 지금 시행 중인 판(version 을 주면 그 판), upcoming 은 게시했지만 시행 전인 판, versions 는 시행된 판(최신 먼저).
+export type Legal = {
+  current: { version: number; effective_date: string; body: string } | null
+  upcoming: { version: number; effective_date: string } | null
+  versions: { version: number; effective_date: string }[]
 }
 // email 은 브라우저로 연 창에서만 온다. 메일이 없는 계정이면 비어 있다.
 export type Me = { banned: boolean; lang: string; email?: string | null }
@@ -51,6 +65,10 @@ export interface SupportApi {
   reply(ticketId: string, body: string, attachments: string[]): Promise<void>
   upload(contentType: string, base64: string): Promise<Attachment>
   coupon(code: string): Promise<void>
+  withdrawalStatus(): Promise<Withdrawal>
+  withdrawalRequest(): Promise<Withdrawal>
+  withdrawalCancel(): Promise<void>
+  legal(kind: LegalKind, lang: string, version?: number): Promise<Legal>
 }
 
 const TOKEN_KEY = 'tb_support_token'
@@ -131,6 +149,10 @@ export function createApi(): SupportApi | null {
     reply: async (ticketId, body, attachments) => { await call('reply', { ticket_id: ticketId, body, attachments }) },
     upload: (contentType, data) => call<Attachment>('upload', { content_type: contentType, data }),
     coupon: async (code) => { await call('coupon', { code }) },
+    withdrawalStatus: () => call<Withdrawal>('withdrawal.status'),
+    withdrawalRequest: () => call<Withdrawal>('withdrawal.request'),
+    withdrawalCancel: async () => { await call('withdrawal.cancel') },
+    legal: (kind, lang, version) => call<Legal>('legal', { kind, lang, ...(version != null ? { version } : {}) }, false),
   }
 }
 
