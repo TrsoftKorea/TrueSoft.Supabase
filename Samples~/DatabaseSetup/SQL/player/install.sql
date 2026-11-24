@@ -6502,6 +6502,7 @@ as $$
                      'ends_at',   s.maintenance_ends_at,
                      'message',   s.maintenance_message,
                      'localized', s.maintenance_localized) end,
+    'default_language', public.ts_game_default_language(),
     'allowed',     public.ts_maintenance_allowed(auth.uid()),
     'server_now',  now())
     from public.app_gate_settings s where s.id = 1;
@@ -7496,6 +7497,9 @@ revoke select, insert, update, delete on table public.mail_batches from service_
 -- ---------------------------------------------------------------------------
 alter table public.mails add column if not exists batch_id uuid;
 alter table public.mails add column if not exists localized jsonb;
+-- 위 칸(title·content)을 쓴 언어 — 보낼 때의 기본 언어(1절 game_settings). 기기 언어가 이 언어가 아니고 그 언어 글도 없으면
+-- SDK 는 영어 글을 먼저 보인다. 기본 언어를 나중에 바꿔도 이미 보낸 우편의 위 칸 언어는 그대로라 우편마다 남긴다.
+alter table public.mails add column if not exists base_language text default public.ts_game_default_language();
 do $$
 begin
   if not exists (
@@ -17328,6 +17332,7 @@ begin
   select array_agg(id) into v_ids from upd;
 
   return jsonb_build_object(
+    'default_language', public.ts_game_default_language(),
     'triggers', (select coalesce(jsonb_object_agg(code, jsonb_build_object('title', title, 'body', body, 'localized', localized)), '{}'::jsonb)
                    from public.push_triggers),
     'ad', (select jsonb_build_object('title_prefix', title_prefix, 'footer', footer, 'localized', localized)

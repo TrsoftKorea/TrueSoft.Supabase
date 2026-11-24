@@ -46,6 +46,7 @@ type Item = {
   devices: Device[];
 };
 type Claim = {
+  default_language?: string;
   triggers: Record<string, Text & { localized: Record<string, Text> }>;
   ad: AdText & { localized: Record<string, AdText> };
   items: Item[];
@@ -71,26 +72,43 @@ const pemDer = (pem: string) =>
   Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, "").replace(/\\n/g, "").replace(/\s+/g, "")), (c) => c.charCodeAt(0));
 
 // ── 문구 ──────────────────────────────────────────────────────────────────────
-// 기기 언어에 맞는 값: 똑같은 언어 → 앞 마디(zh-CN → zh) → 없으면 null(기본 문구를 쓴다).
-function pick<T>(localized: Record<string, T> | null | undefined, lang: string | null): T | null {
-  if (!localized || !lang) return null;
+// 기기 언어에 맞는 값: 똑같은 언어 → 앞 마디(zh-CN → zh) → 같은 앞 마디. SDK 우편 글 고르기(MailLanguage.Pick)와 같은 순서.
+function find<T>(localized: Record<string, T>, lang: string): T | null {
   if (localized[lang]) return localized[lang];
-  const head = lang.split(/[-_]/)[0];
-  if (localized[head]) return localized[head];
-  const sameHead = Object.keys(localized).find((k) => k.split(/[-_]/)[0] === head);
+  const head = lang.split(/[-_]/)[0].toLowerCase();
+  const keys = Object.keys(localized);
+  const byCase = keys.find((k) => k.toLowerCase() === lang.toLowerCase());
+  if (byCase && localized[byCase]) return localized[byCase];
+  const byHead = keys.find((k) => k.toLowerCase() === head);
+  if (byHead && localized[byHead]) return localized[byHead];
+  const sameHead = keys.find((k) => k.split(/[-_]/)[0].toLowerCase() === head && localized[k]);
   return sameHead ? localized[sameHead] : null;
+}
+
+const headOf = (code: string) => code.split(/[-_]/)[0].toLowerCase();
+
+// 그 언어 글 → (기본 언어가 아니면) 영어 글 → null(기본 문구를 쓴다). 기기 언어를 모르면 기본 언어가 아닌 것으로 본다.
+function pick<T>(localized: Record<string, T> | null | undefined, lang: string | null, base: string | null): T | null {
+  if (!localized) return null;
+  if (lang) {
+    const found = find(localized, lang);
+    if (found) return found;
+    if (base && headOf(lang) === headOf(base)) return null;
+  }
+  return !base || headOf(base) === "en" ? null : find(localized, "en");
 }
 
 function render(claim: Claim, item: Item, lang: string | null): { title: string; body: string } | null {
   const t = claim.triggers[item.trigger];
   if (!t) return null;
-  const local = pick(t.localized, lang) ?? {};
-  const vars = { ...item.vars, ...(pick(item.vars_localized, lang) ?? {}) };
+  const base = claim.default_language ?? null;
+  const local = pick(t.localized, lang, base) ?? {};
+  const vars = { ...item.vars, ...(pick(item.vars_localized, lang, base) ?? {}) };
   const fill = (s: string) => s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k] ?? "") : m));
   let title = fill(local.title || t.title || "");
   let body = fill(local.body || t.body || "");
   if (item.is_ad) {
-    const ad = { ...claim.ad, ...(pick(claim.ad.localized, lang) ?? {}) };
+    const ad = { ...claim.ad, ...(pick(claim.ad.localized, lang, base) ?? {}) };
     if (ad.title_prefix) title = `${ad.title_prefix} ${title}`;
     if (ad.footer) body = `${body}\n${ad.footer}`;
   }

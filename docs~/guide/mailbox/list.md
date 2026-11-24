@@ -34,8 +34,8 @@ if (result.IsSuccess)
 |---------|------|------|
 | `Id` | `string` | 우편 ID. 받기·상세 조회·삭제에 넘기는 값 |
 | `Category` | `string` | 분류 |
-| `Title` | `string` | 기기 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목 |
-| `Content` | `string` | 기기 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문 |
+| `Title` | `string` | 기기 언어의 제목. 그 언어로 쓴 제목이 없으면 영어 제목, 영어도 없으면 기본 언어 제목 |
+| `Content` | `string` | 기기 언어의 본문. 그 언어로 쓴 본문이 없으면 영어 본문, 영어도 없으면 기본 언어 본문 |
 | `IsClaimed` | `bool` | 수령 여부. 텍스트 우편은 열람, 보상 우편은 수령 시 `true` |
 | `Items` | `IReadOnlyList<MailItemPayload>` | 첨부 보상 |
 | `HasUnclaimedItems` | `bool` | 받을 수 있는 보상이 남았는지. 기한이 지났으면 `false` |

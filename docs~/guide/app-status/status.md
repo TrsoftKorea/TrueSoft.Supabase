@@ -29,7 +29,7 @@ if (status.IsSuccess && status.Data.UpdateRequired && status.Data.StoreUrl != nu
 | `StoreUrl` | `string` | 업데이트 안내에서 열 스토어 주소. 모르면 null |
 | `InMaintenance` | `bool` | 지금 점검 중이고 이 계정이 점검 중에 들어갈 계정이 아니면 true |
 | `MaintenanceAllowed` | `bool` | 점검 중에 들어갈 계정으로 로그인해 있으면 true. 로그인 전에는 false |
-| `MaintenanceMessage` | `string` | 점검 안내 문구. 점검을 켜 두지 않았으면 null |
+| `MaintenanceMessage` | `string` | 점검 안내 문구. 그 언어 문구가 없으면 영어, 영어도 없으면 기본 문구. 점검을 켜 두지 않았으면 null |
 | `MaintenanceStartsAt` | `DateTimeOffset?` | 점검 시작 시각. 지금보다 뒤면 예정된 점검. 화면에 보일 때는 `ToLocalTime()` |
 | `MaintenanceEndsAt` | `DateTimeOffset?` | 점검 예상 종료 시각. 화면에 보일 때는 `ToLocalTime()` |
 

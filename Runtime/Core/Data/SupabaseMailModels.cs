@@ -25,23 +25,43 @@ namespace TrueBase.Core.Data
     }
 
     /// <summary>
-    /// 우편 다국어 글의 언어 고르기. 찾는 순서는 푸시(push-send 의 pick)와 같다 — 같은 코드 → 앞 두 글자 → 앞 두 글자가 같은 코드.
+    /// 우편 다국어 글의 언어 고르기. 찾는 순서는 푸시(push-send 의 pick)와 같다 — 같은 코드 → 앞 두 글자 → 앞 두 글자가 같은 코드, 없으면 영어 글.
     /// 기기 언어와 게임이 넘긴 코드 정리는 Unity 계층이 꽂는다(Core 는 기기 언어를 모른다).
     /// </summary>
     internal static class MailLanguage
     {
-        /// <summary>기기 언어 코드. 지원하지 않는 언어면 null → 기본 언어 글.</summary>
+        /// <summary>기기 언어 코드. 지원하지 않는 언어면 null → 영어 글, 없으면 기본 언어 글.</summary>
         internal static string Device;
 
         /// <summary>게임이 넘긴 값("Korean"·"zh_Hant" 등)을 코드로. 못 읽으면 null(넘긴 값 그대로 찾는다).</summary>
         internal static Func<string, string> Normalize = raw => null;
 
-        internal static T Pick<T>(IReadOnlyDictionary<string, T> localized, string lang) where T : class
+        /// <summary>
+        /// 찾는 언어의 글 → (그 언어가 기본 언어가 아니면) 영어 글 → null(기본 칸 글). 기기 언어를 모르면 기본 언어가 아닌 것으로 본다.
+        /// baseLang 을 모르면(옛 서버) 영어 단계를 건너뛴다.
+        /// </summary>
+        internal static T Pick<T>(IReadOnlyDictionary<string, T> localized, string lang, string baseLang) where T : class
         {
             if (localized == null || localized.Count == 0) return null;
             var code = string.IsNullOrWhiteSpace(lang) ? Device : (Normalize(lang) ?? lang.Trim().Replace('_', '-'));
-            if (string.IsNullOrEmpty(code)) return null;
+            if (!string.IsNullOrEmpty(code))
+            {
+                var found = Find(localized, code);
+                if (found != null) return found;
+                if (SameHead(code, baseLang)) return null;
+            }
+            return string.IsNullOrWhiteSpace(baseLang) || SameHead("en", baseLang) ? null : Find(localized, "en");
+        }
 
+        private static bool SameHead(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            var len = HeadLength(a);
+            return HeadLength(b) == len && string.Compare(a, 0, b, 0, len, StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        private static T Find<T>(IReadOnlyDictionary<string, T> localized, string code) where T : class
+        {
             if (localized.TryGetValue(code, out var exact) && exact != null) return exact;
 
             // Title·Content 는 목록 화면이 매 프레임 읽을 수 있어 문자열을 잘라 만들지 않고 앞부분 길이로 비교한다.
@@ -89,15 +109,18 @@ namespace TrueBase.Core.Data
         public string UserId { get; set; }
         public string SenderType { get; set; }
 
-        /// <summary>기기 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목.</summary>
+        /// <summary>기기 언어의 제목. 그 언어로 쓴 제목이 없으면 영어 제목, 그것도 없으면 기본 언어 제목.</summary>
         public string Title => TitleFor(null);
 
-        /// <summary>기기 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문.</summary>
+        /// <summary>기기 언어의 본문. 그 언어로 쓴 본문이 없으면 영어 본문, 그것도 없으면 기본 언어 본문.</summary>
         public string Content => ContentFor(null);
 
         /// <summary>기본 언어(운영 콘솔 "설정"에서 정한 언어)로 쓴 제목·본문 — 발송 화면의 위 칸.</summary>
         internal string BaseTitle { get; set; }
         internal string BaseContent { get; set; }
+
+        /// <summary>위 칸을 쓴 언어(보낼 때의 기본 언어). 기기 언어가 이 언어가 아니면 영어 글을 먼저 고른다.</summary>
+        internal string BaseLanguage { get; set; }
 
         public DateTimeOffset ExpiresAt { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
@@ -112,19 +135,19 @@ namespace TrueBase.Core.Data
         /// </summary>
         public IReadOnlyDictionary<string, MailLocalizedText> Localized { get; set; }
 
-        /// <summary>지정한 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목.</summary>
+        /// <summary>지정한 언어의 제목. 그 언어로 쓴 제목이 없으면 영어 제목, 그것도 없으면 기본 언어 제목.</summary>
         /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"zh-TW"</c>). 비우면 기기 언어.</param>
         public string TitleFor(string lang)
         {
-            var t = MailLanguage.Pick(Localized, lang)?.Title;
+            var t = MailLanguage.Pick(Localized, lang, BaseLanguage)?.Title;
             return string.IsNullOrEmpty(t) ? BaseTitle ?? string.Empty : t;
         }
 
-        /// <summary>지정한 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문.</summary>
+        /// <summary>지정한 언어의 본문. 그 언어로 쓴 본문이 없으면 영어 본문, 그것도 없으면 기본 언어 본문.</summary>
         /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"zh-TW"</c>). 비우면 기기 언어.</param>
         public string ContentFor(string lang)
         {
-            var c = MailLanguage.Pick(Localized, lang)?.Content;
+            var c = MailLanguage.Pick(Localized, lang, BaseLanguage)?.Content;
             return string.IsNullOrEmpty(c) ? BaseContent ?? string.Empty : c;
         }
 

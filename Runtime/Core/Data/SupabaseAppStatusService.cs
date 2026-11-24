@@ -76,7 +76,7 @@ namespace TrueBase.Core.Data
                     foreach (var p in l.Properties())
                         if (p.Value.Type == JTokenType.String) localized[p.Name] = (string)p.Value;
                 }
-                var picked = localized == null ? null : MailLanguage.Pick(localized, language);
+                var picked = localized == null ? null : MailLanguage.Pick(localized, language, NullIfBlank(o.Value<string>("default_language")));
                 status.MaintenanceMessage = string.IsNullOrEmpty(picked) ? m.Value<string>("message") ?? "" : picked;
                 status.MaintenanceStartsAt = ParseTime(m.Value<string>("starts_at"));
                 status.MaintenanceEndsAt = ParseTime(m.Value<string>("ends_at"));
