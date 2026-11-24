@@ -24,6 +24,53 @@ namespace TrueBase.Core.Data
         internal bool GrantedByServer { get; set; }
     }
 
+    /// <summary>
+    /// 우편 다국어 글의 언어 고르기. 찾는 순서는 푸시(push-send 의 pick)와 같다 — 같은 코드 → 앞 두 글자 → 앞 두 글자가 같은 코드.
+    /// 기기 언어와 게임이 넘긴 코드 정리는 Unity 계층이 꽂는다(Core 는 기기 언어를 모른다).
+    /// </summary>
+    internal static class MailLanguage
+    {
+        /// <summary>기기 언어 코드. 지원하지 않는 언어면 null → 기본 언어 글.</summary>
+        internal static string Device;
+
+        /// <summary>게임이 넘긴 값("Korean"·"zh_Hant" 등)을 코드로. 못 읽으면 null(넘긴 값 그대로 찾는다).</summary>
+        internal static Func<string, string> Normalize = raw => null;
+
+        internal static T Pick<T>(IReadOnlyDictionary<string, T> localized, string lang) where T : class
+        {
+            if (localized == null || localized.Count == 0) return null;
+            var code = string.IsNullOrWhiteSpace(lang) ? Device : (Normalize(lang) ?? lang.Trim().Replace('_', '-'));
+            if (string.IsNullOrEmpty(code)) return null;
+
+            if (localized.TryGetValue(code, out var exact) && exact != null) return exact;
+
+            // Title·Content 는 목록 화면이 매 프레임 읽을 수 있어 문자열을 잘라 만들지 않고 앞부분 길이로 비교한다.
+            var headLen = HeadLength(code);
+            T byCase = null, byHead = null, sameHead = null;
+            void Visit(string key, T value)
+            {
+                if (value == null || key == null) return;
+                if (byCase == null && string.Equals(key, code, StringComparison.OrdinalIgnoreCase)) byCase = value;
+                if (HeadLength(key) != headLen || string.Compare(key, 0, code, 0, headLen, StringComparison.OrdinalIgnoreCase) != 0) return;
+                if (key.Length == headLen) byHead ??= value;
+                else sameHead ??= value;
+            }
+            // 인터페이스로 돌면 열거자가 상자에 담겨 할당이 생긴다 — 서비스가 채우는 Dictionary 는 그대로 돈다.
+            if (localized is Dictionary<string, T> dict)
+                foreach (var kv in dict) Visit(kv.Key, kv.Value);
+            else
+                foreach (var kv in localized) Visit(kv.Key, kv.Value);
+            return byCase ?? byHead ?? sameHead;
+        }
+
+        private static int HeadLength(string code)
+        {
+            for (var i = 0; i < code.Length; i++)
+                if (code[i] == '-' || code[i] == '_') return i;
+            return code.Length;
+        }
+    }
+
     /// <summary>메일 <c>localized</c> jsonb의 언어별 제목·본문.</summary>
     public sealed class MailLocalizedText
     {
@@ -41,8 +88,17 @@ namespace TrueBase.Core.Data
         public string AccountId { get; set; }
         public string UserId { get; set; }
         public string SenderType { get; set; }
-        public string Title { get; set; }
-        public string Content { get; set; }
+
+        /// <summary>기기 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목.</summary>
+        public string Title => TitleFor(null);
+
+        /// <summary>기기 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문.</summary>
+        public string Content => ContentFor(null);
+
+        /// <summary>기본 언어(운영 콘솔 "설정"에서 정한 언어)로 쓴 제목·본문 — 발송 화면의 위 칸.</summary>
+        internal string BaseTitle { get; set; }
+        internal string BaseContent { get; set; }
+
         public DateTimeOffset ExpiresAt { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset? ItemsClaimedAt { get; set; }
@@ -52,31 +108,24 @@ namespace TrueBase.Core.Data
         public string Category { get; set; }
 
         /// <summary>
-        /// 언어별 제목·본문 오버라이드(언어코드 → 텍스트). 발송 시 지정된 언어만 채워지며,
-        /// 없는 언어는 <see cref="Title"/>·<see cref="Content"/>로 fallback. null일 수 있음.
+        /// 기본 언어 밖의 언어별 제목·본문(언어코드 → 텍스트). 발송 때 추가한 언어만 채워진다. null일 수 있음.
         /// </summary>
         public IReadOnlyDictionary<string, MailLocalizedText> Localized { get; set; }
 
-        /// <summary>지정한 언어의 제목을 반환합니다. 해당 언어가 없으면 기본 <see cref="Title"/>.</summary>
-        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"en"</c>). 게임이 명시적으로 지정합니다.</param>
+        /// <summary>지정한 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목.</summary>
+        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"zh-TW"</c>). 비우면 기기 언어.</param>
         public string TitleFor(string lang)
         {
-            if (!string.IsNullOrEmpty(lang) && Localized != null
-                && Localized.TryGetValue(lang, out var t)
-                && t != null && !string.IsNullOrEmpty(t.Title))
-                return t.Title;
-            return Title;
+            var t = MailLanguage.Pick(Localized, lang)?.Title;
+            return string.IsNullOrEmpty(t) ? BaseTitle ?? string.Empty : t;
         }
 
-        /// <summary>지정한 언어의 본문을 반환합니다. 해당 언어가 없으면 기본 <see cref="Content"/>.</summary>
-        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"en"</c>). 게임이 명시적으로 지정합니다.</param>
+        /// <summary>지정한 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문.</summary>
+        /// <param name="lang">언어코드(예: <c>"ja"</c>, <c>"zh-TW"</c>). 비우면 기기 언어.</param>
         public string ContentFor(string lang)
         {
-            if (!string.IsNullOrEmpty(lang) && Localized != null
-                && Localized.TryGetValue(lang, out var t)
-                && t != null && !string.IsNullOrEmpty(t.Content))
-                return t.Content;
-            return Content;
+            var c = MailLanguage.Pick(Localized, lang)?.Content;
+            return string.IsNullOrEmpty(c) ? BaseContent ?? string.Empty : c;
         }
 
         /// <summary>

@@ -216,7 +216,8 @@ export default defineConfig({
               { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' },
               { text: '미수령 우편 수', link: '/guide/mailbox/counts-unclaimed' },
               { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' },
-              { text: '우편 설정 조회', link: '/guide/mailbox/settings' }
+              { text: '우편 설정 조회', link: '/guide/mailbox/settings' },
+              { text: '본인에게 보내기', link: '/guide/mailbox/send-to-self' }
             ]
           },
           {
@@ -253,7 +254,9 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '창 열기', link: '/guide/customer-center/open' },
-              { text: '새 답변 수', link: '/guide/customer-center/unread' }
+              { text: '새 답변 수', link: '/guide/customer-center/unread' },
+              { text: '개인정보처리방침 열기', link: '/guide/customer-center/privacy' },
+              { text: '이용약관 열기', link: '/guide/customer-center/terms' }
             ]
           },
           {
@@ -318,6 +321,15 @@ export default defineConfig({
             items: [
               { text: '서버 시각 조회', link: '/guide/server-time/now' },
               { text: '기다리지 않고 읽기', link: '/guide/server-time/now-sync' }
+            ]
+          },
+          {
+            text: '점검·버전',
+            link: '/guide/app-status/',
+            collapsed: true,
+            items: [
+              { text: '상태 조회', link: '/guide/app-status/status' },
+              { text: '점검 시작', link: '/guide/app-status/started' }
             ]
           }
         ]

@@ -41,6 +41,10 @@ namespace TrueBase.Core.Http
         public bool IsDuplicateLogin =>
             !IsSuccess && (StatusCode == 409 || StatusCode == 400) && Body != null && Body.Contains(SupabaseErrorCode.DuplicateLogin);
 
+        /// <summary>서버 점검 중이라 요청 앞 검사(ts_request_limit_check)가 503 으로 거절한 응답이면 true. 다시 보내도 소용없다.</summary>
+        public bool IsMaintenance =>
+            !IsSuccess && StatusCode == 503 && Body != null && Body.Contains(SupabaseErrorCode.Maintenance);
+
         public static SupabaseHttpResponse Fail(long statusCode, string body, string errorMessage)
         {
             var response = new SupabaseHttpResponse(false, statusCode, body, errorMessage);
@@ -51,6 +55,8 @@ namespace TrueBase.Core.Http
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.RequestLimited);
             if (response.IsDuplicateLogin)
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.DuplicateLogin);
+            if (response.IsMaintenance)
+                return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.Maintenance);
             if (statusCode == 0)
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.NetworkError);
             if (statusCode == 401)

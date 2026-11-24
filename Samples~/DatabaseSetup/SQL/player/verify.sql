@@ -55,6 +55,7 @@ from (
       ('apple_auth_tokens'),
       ('mails'),
       ('mail_settings'),
+      ('mail_self_once'),
       ('purchases'),
       ('fx_rates'),
       ('purchase_refund_sync'),
@@ -74,11 +75,14 @@ from (
       ('request_limit_settings'),
       ('request_limit_counters'),
       ('request_limit_blocks'),
+      ('app_gate_settings'),
+      ('maintenance_allow_users'),
       ('support_categories'),
       ('support_tickets'),
       ('support_messages'),
       ('support_faqs'),
       ('support_web_hits'),
+      ('legal_documents'),
       ('push_devices'),
       ('push_preferences'),
       ('push_triggers'),
@@ -160,6 +164,7 @@ from (
       ('_ts_transfer_user_server_core'),
       ('ts_view_mail_for_user'),
       ('ts_claim_mail_items'),
+      ('ts_mail_send_to_self'),
       ('ts_claim_all_mail_items'),
       ('ts_mail_grant_items'),
       ('ts_mail_grantable_columns'),
@@ -181,6 +186,8 @@ from (
       ('ts_run_due_mail_schedules'),
       ('ts_server_now'),
       ('ts_request_withdrawal'),
+      ('ts_withdrawal_delay_days'),
+      ('ts_app_status'),
       ('ts_my_withdrawal_status'),
       ('ts_after_sign_in'),
       ('ts_withdrawal_cancel_redeem'),
@@ -385,6 +392,7 @@ from (
       ('auth_user_server_id',                    'anon+auth'),
       ('ts_default_server_id',                   'anon+auth'),
       ('ts_server_now',                          'anon+auth'),
+      ('ts_app_status',                          'anon+auth'),
       ('ts_is_display_name_available',           'anon+auth'),
       ('ts_anon_recovery_get_refresh_token',     'anon+auth'),
       ('ts_anon_recovery_upsert_refresh_token',  'anon+auth'),
@@ -401,10 +409,12 @@ from (
       ('ts_after_sign_in',                'auth'),
       ('ts_session_heartbeat',            'auth'),
       ('ts_request_withdrawal',           'auth'),
+      ('ts_withdrawal_delay_days',        'auth'),
       ('ts_transfer_my_server',           'auth'),
       ('ts_delete_my_anon_recovery_tokens', 'auth'),
       ('ts_view_mail_for_user',           'auth'),
       ('ts_claim_mail_items',             'auth'),
+      ('ts_mail_send_to_self',            'auth'),
       ('ts_claim_all_mail_items',         'auth'),
       ('ts_delete_mail_for_user',         'auth'),
       ('ts_delete_claimed_mails_for_user','auth'),
@@ -466,11 +476,11 @@ from (
       or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
     -- install.sql 이 authenticated·anon 에 grant 하는 함수 전부. 둘의 일치는 SdkAudit R17 이 본다.
     and p.proname not in (
-      'auth_user_server_id', 'ts_after_sign_in', 'ts_anon_recovery_delete_by_fingerprint',
+      'auth_user_server_id', 'ts_after_sign_in', 'ts_app_status', 'ts_anon_recovery_delete_by_fingerprint',
       'ts_anon_recovery_get_refresh_token', 'ts_anon_recovery_upsert_refresh_token',
       'ts_chat_channels', 'ts_chat_fetch_direct', 'ts_chat_fetch_lobby', 'ts_chat_fetch_many',
       'ts_chat_send', 'ts_chat_send_direct', 'ts_chat_send_lobby',
-      'ts_claim_all_mail_items', 'ts_claim_mail_items', 'ts_coupon_redeem', 'ts_default_server_id',
+      'ts_claim_all_mail_items', 'ts_claim_mail_items', 'ts_mail_send_to_self', 'ts_coupon_redeem', 'ts_default_server_id',
       'ts_delete_claimed_mails_for_user', 'ts_delete_mail_for_user', 'ts_delete_my_anon_recovery_tokens',
       'ts_display_name_check', 'ts_ensure_my_profile', 'ts_ensure_my_row',
       'ts_friend_limits', 'ts_friend_remove', 'ts_friend_request_cancel', 'ts_friend_request_respond',
@@ -486,7 +496,7 @@ from (
       'ts_push_preferences_get', 'ts_push_preferences_set', 'ts_push_register', 'ts_push_unregister',
       'ts_request_limit_check', 'ts_request_limit_ping',
       'ts_request_withdrawal', 'ts_server_now', 'ts_session_heartbeat', 'ts_support_unread_count',
-      'ts_transfer_my_server', 'ts_user_data_reset_pending', 'ts_view_mail_for_user'
+      'ts_transfer_my_server', 'ts_user_data_reset_pending', 'ts_view_mail_for_user', 'ts_withdrawal_delay_days'
     )
 
   union all

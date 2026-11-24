@@ -40,10 +40,30 @@ namespace TrueBase.Unity
         /// <summary>현재 계정에 Apple이 연동되어 있으면 true.</summary>
         public static bool IsLinkedWithApple => SupabaseSDK.IsLinkedWithApple;
 
-        /// <summary>로그인 결과(<see cref="SupabaseResult"/>)에 로그인 시 조회된 내 프로필을 실어 <see cref="SupabaseSignInResult"/>로 변환합니다.</summary>
-        private static async Task<SupabaseSignInResult> ToSignInResultAsync(Task<SupabaseResult> loginTask)
+        /// <summary>
+        /// 로그인·연동을 돌리는 동안 서버가 세션을 끊었으면(점검·다른 기기 로그인) 성공으로 끝나도 그 사유의 실패로 바꿉니다.
+        /// 끊긴 뒤의 단계는 세션이 없어 조용히 건너뛰므로, 경로마다 확인하게 두면 한 곳이 빠진다.
+        /// 이 사이의 점검 끊김은 결과로 알리므로 점검 시작 이벤트를 내지 않습니다.
+        /// </summary>
+        private static async Task<SupabaseResult> GuardSessionCutAsync(Func<Task<SupabaseResult>> call)
         {
-            var r = await loginTask;
+            var before = SupabaseSDK.BeginSignInCall();
+            try
+            {
+                var r = await call();
+                var cut = SupabaseSDK.SessionCutReasonSince(before);
+                return r.IsSuccess && cut != null && !SupabaseSDK.IsLoggedIn ? SupabaseResult.Fail(cut) : r;
+            }
+            finally
+            {
+                SupabaseSDK.EndSignInCall();
+            }
+        }
+
+        /// <summary>로그인 결과(<see cref="SupabaseResult"/>)에 로그인 시 조회된 내 프로필을 실어 <see cref="SupabaseSignInResult"/>로 변환합니다.</summary>
+        private static async Task<SupabaseSignInResult> ToSignInResultAsync(Func<Task<SupabaseResult>> login)
+        {
+            var r = await GuardSessionCutAsync(login);
             // "이미 진행 중"으로 돌려보낸 호출은 슬롯을 건드리지 않는다 — 진행 중인 로그인이 채울 프로필을 가로채게 된다.
             if (r.Reason == SupabaseReason.OAuthLoginInProgress)
                 return SupabaseSignInResult.Fail(r.ErrorCode);
@@ -72,61 +92,61 @@ namespace TrueBase.Unity
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleAsync"/>
         public static Task<SupabaseSignInResult> SignInWithGoogleAsync() =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleAsync());
+            ToSignInResultAsync(() => SupabaseSDK.TrySignInWithGoogleAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithGoogleIdTokenAsync(string)"/>
         public static Task<SupabaseSignInResult> SignInWithGoogleIdTokenAsync(string idToken) =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken));
+            ToSignInResultAsync(() => SupabaseSDK.TrySignInWithGoogleIdTokenAsync(idToken));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseSignInResult> SignInWithAppleIdTokenAsync(
             string idToken, string rawNonce = null, string authorizationCode = null) =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode));
+            ToSignInResultAsync(() => SupabaseSDK.TrySignInWithAppleIdTokenAsync(idToken, rawNonce, authorizationCode));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInWithAppleAsync"/>
         public static Task<SupabaseSignInResult> SignInWithAppleAsync() =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInWithAppleAsync());
+            ToSignInResultAsync(() => SupabaseSDK.TrySignInWithAppleAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestAsync"/>
         public static Task<SupabaseResult> LinkAppleToGuestAsync() =>
-            SupabaseSDK.TryLinkAppleToGuestAsync();
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkAppleToGuestAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleNativeAsync"/>
         public static Task<SupabaseResult> LinkAppleNativeAsync() =>
-            SupabaseSDK.TryLinkAppleNativeAsync();
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkAppleNativeAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseResult> LinkAppleToGuestWithIdTokenAsync(
             string idToken, string rawNonce = null, string authorizationCode = null) =>
-            SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode);
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkAppleToGuestWithIdTokenAsync(idToken, rawNonce, authorizationCode));
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseResult> LinkGoogleWithIdTokenAsync(
             string idToken, string googleAccessToken = null) =>
-            SupabaseSDK.TryLinkGoogleWithIdTokenAsync(idToken, googleAccessToken);
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkGoogleWithIdTokenAsync(idToken, googleAccessToken));
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkAppleWithIdTokenAsync(string, string, string)"/>
         public static Task<SupabaseResult> LinkAppleWithIdTokenAsync(
             string idToken, string rawNonce = null, string authorizationCode = null) =>
-            SupabaseSDK.TryLinkAppleWithIdTokenAsync(idToken, rawNonce, authorizationCode);
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkAppleWithIdTokenAsync(idToken, rawNonce, authorizationCode));
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleNativeAsync"/>
         public static Task<SupabaseResult> LinkGoogleNativeAsync() =>
-            SupabaseSDK.TryLinkGoogleNativeAsync();
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkGoogleNativeAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToGuestAsync"/>
         public static Task<SupabaseResult> LinkGoogleToGuestAsync() =>
-            SupabaseSDK.TryLinkGoogleToGuestAsync();
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkGoogleToGuestAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryLinkGoogleToGuestWithIdTokenAsync(string, string)"/>
         public static Task<SupabaseResult> LinkGoogleToGuestWithIdTokenAsync(
             string idToken,
             string googleAccessToken = null) =>
-            SupabaseSDK.TryLinkGoogleToGuestWithIdTokenAsync(idToken, googleAccessToken);
+            GuardSessionCutAsync(() => SupabaseSDK.TryLinkGoogleToGuestWithIdTokenAsync(idToken, googleAccessToken));
 
         /// <inheritdoc cref="SupabaseSDK.TrySignInAnonymouslyAsync"/>
         public static Task<SupabaseSignInResult> SignInAnonymouslyAsync() =>
-            ToSignInResultAsync(SupabaseSDK.TrySignInAnonymouslyAsync());
+            ToSignInResultAsync(() => SupabaseSDK.TrySignInAnonymouslyAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryRevokeGoogleAccessAsync"/>
         public static Task<SupabaseResult> RevokeGoogleAccessAsync() =>
@@ -157,6 +177,20 @@ namespace TrueBase.Unity
         /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 게임 안 언어 옵션이 있으면 넘깁니다. 비우면 기기 언어.</param>
         public static Task<SupabaseResult> OpenCustomerCenterAsync(string language = null) =>
             SupabaseSDK.TryOpenCustomerCenterAsync(language);
+
+        /// <summary>
+        /// 개인정보처리방침 창을 엽니다. 로그인하지 않아도 열립니다. Android·iOS 는 게임 위 창으로 열고 닫힐 때까지 기다리며, 그 밖은 브라우저로 엽니다.
+        /// </summary>
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어.</param>
+        public static Task<SupabaseResult> OpenPrivacyPolicyAsync(string language = null) =>
+            SupabaseSDK.TryOpenPrivacyPolicyAsync(language);
+
+        /// <summary>
+        /// 이용약관 창을 엽니다. 로그인하지 않아도 열립니다. Android·iOS 는 게임 위 창으로 열고 닫힐 때까지 기다리며, 그 밖은 브라우저로 엽니다.
+        /// </summary>
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어.</param>
+        public static Task<SupabaseResult> OpenTermsAsync(string language = null) =>
+            SupabaseSDK.TryOpenTermsAsync(language);
 
         /// <summary>운영자 답을 아직 읽지 않은 내 문의 수. 새 답변 표시에 씁니다. 로그인 상태에서만 됩니다.</summary>
         public static Task<SupabaseResult<int>> GetCustomerCenterUnreadCountAsync() =>
@@ -295,6 +329,17 @@ namespace TrueBase.Unity
             remove => SupabaseSDK.OnDuplicateLoginDetected -= value;
         }
 
+        /// <inheritdoc cref="SupabaseSDK.OnMaintenanceStarted"/>
+        public static event Action OnMaintenanceStarted
+        {
+            add => SupabaseSDK.OnMaintenanceStarted += value;
+            remove => SupabaseSDK.OnMaintenanceStarted -= value;
+        }
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetAppStatusAsync"/>
+        public static Task<SupabaseResult<SupabaseAppStatus>> GetAppStatusAsync(string language = null) =>
+            SupabaseSDK.TryGetAppStatusAsync(language);
+
         /// <inheritdoc cref="SupabaseSDK.TrySignOutFullyAsync"/>
         public static Task<SupabaseResult> SignOutFullyAsync() => SupabaseSDK.TrySignOutFullyAsync();
 
@@ -304,11 +349,11 @@ namespace TrueBase.Unity
         /// 자동 실행되지 않으므로 원하는 타이밍(인트로 완료 후, 로그인 화면 등)에 직접 호출합니다.
         /// </summary>
         public static Task<SupabaseSignInResult> TriggerAutoLoginAsync() =>
-            ToSignInResultAsync(SupabaseSDK.TryTriggerAutoLoginAsync());
+            ToSignInResultAsync(() => SupabaseSDK.TryTriggerAutoLoginAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryRestoreSessionAsync"/>
         public static Task<SupabaseSignInResult> RestoreSessionAsync() =>
-            ToSignInResultAsync(SupabaseSDK.TryRestoreSessionAsync());
+            ToSignInResultAsync(() => SupabaseSDK.TryRestoreSessionAsync());
 
         /// <inheritdoc cref="SupabaseSDK.TryGetMailsAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<Mail>>> GetMailsAsync(int limit = 50, int offset = 0, string category = null) =>
@@ -325,6 +370,12 @@ namespace TrueBase.Unity
         /// <inheritdoc cref="SupabaseSDK.TryClaimAllMailItemsAsync"/>
         public static Task<SupabaseResult<IReadOnlyList<ClaimResult>>> ClaimAllMailItemsAsync(string category = null) =>
             SupabaseSDK.TryClaimAllMailItemsAsync(category);
+
+        /// <inheritdoc cref="SupabaseSDK.TrySendMailToSelfAsync"/>
+        public static Task<SupabaseResult<string>> SendMailToSelfAsync(
+            string title, string content = "", IReadOnlyList<MailItemPayload> items = null,
+            int expiresDays = 30, string category = null, string onceKey = null) =>
+            SupabaseSDK.TrySendMailToSelfAsync(title, content, items, expiresDays, category, onceKey);
 
         /// <inheritdoc cref="SupabaseSDK.TryDeleteMailAsync"/>
         public static Task<SupabaseResult> DeleteMailAsync(string mailId) =>

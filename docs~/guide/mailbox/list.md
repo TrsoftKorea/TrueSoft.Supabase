@@ -34,8 +34,8 @@ if (result.IsSuccess)
 |---------|------|------|
 | `Id` | `string` | 우편 ID. 받기·상세 조회·삭제에 넘기는 값 |
 | `Category` | `string` | 분류 |
-| `Title` | `string` | 제목(기본 언어) |
-| `Content` | `string` | 본문(기본 언어) |
+| `Title` | `string` | 기기 언어의 제목. 그 언어로 쓴 제목이 없으면 기본 언어 제목 |
+| `Content` | `string` | 기기 언어의 본문. 그 언어로 쓴 본문이 없으면 기본 언어 본문 |
 | `IsClaimed` | `bool` | 수령 여부. 텍스트 우편은 열람, 보상 우편은 수령 시 `true` |
 | `Items` | `IReadOnlyList<MailItemPayload>` | 첨부 보상 |
 | `HasUnclaimedItems` | `bool` | 받을 수 있는 보상이 남았는지. 기한이 지났으면 `false` |
@@ -49,7 +49,7 @@ if (result.IsSuccess)
 | `UserId` | `string` | 받는 플레이어의 고유 ID. 계정을 다시 연결해도 바뀌지 않습니다 |
 | `Localized` | `IReadOnlyDictionary<string, MailLocalizedText>` | 언어별 제목·본문. 없으면 `null` |
 
-다국어 우편의 언어별 제목·본문은 [다국어 메시지](/guide/mailbox/localized)로 읽습니다.
+게임 안에서 고른 언어로 보이려면 [다국어 메시지](/guide/mailbox/localized)를 참고하세요.
 
 **실사용 예시**
 

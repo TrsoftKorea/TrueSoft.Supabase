@@ -25,6 +25,7 @@ namespace TrueBase.Unity.Config
         public SupabaseUserSessionService UserSessionService { get; private set; }
         public SupabaseAnonymousRecoveryService AnonymousRecoveryService { get; private set; }
         public SupabaseServerTimeService ServerTimeService { get; private set; }
+        public SupabaseAppStatusService AppStatusService { get; private set; }
         public SupabaseMailboxService MailboxService { get; private set; }
         public SupabaseLeaderboardService LeaderboardService { get; private set; }
         public SupabaseMatchResultService MatchResultService { get; private set; }
@@ -39,8 +40,6 @@ namespace TrueBase.Unity.Config
         public SupabasePushService PushService { get; private set; }
         /// <summary>푸시 사용 여부·Firebase 값. 기기 플러그인을 시작할 때 읽는다.</summary>
         public SupabaseSettings PushSettings { get; private set; }
-        /// <summary><see cref="SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
-        public float WithdrawalRequestDelayDays { get; private set; }
 
         public string DefaultServerCode { get; private set; } = "GLOBAL";
 
@@ -124,6 +123,8 @@ namespace TrueBase.Unity.Config
                 http,
                 json);
 
+            AppStatusService = new SupabaseAppStatusService(options.ProjectURL, options.PublishableKey, http);
+
             MailboxService = new SupabaseMailboxService(
                 options.ProjectURL,
                 options.PublishableKey,
@@ -178,7 +179,6 @@ namespace TrueBase.Unity.Config
                 options.PublishableKey,
                 http);
 
-            WithdrawalRequestDelayDays = options.WithdrawalRequestDelayDays;
             DefaultServerCode = string.IsNullOrWhiteSpace(options.DefaultServerCode) ? "GLOBAL" : options.DefaultServerCode.Trim();
             SupabaseSDK.Initialize(this);
         }

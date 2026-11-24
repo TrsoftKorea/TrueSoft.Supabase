@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -395,25 +396,46 @@ namespace TrueBase.Core.Data
         }
 
         /// <summary>
-        /// 서버에서 현재 시각 기준으로 유예 기간(일) 뒤의 <c>withdrawn_at</c>을 계산해 예약합니다.
+        /// 운영 콘솔에서 정한 탈퇴 유예 일수. RPC: <c>ts_withdrawal_delay_days</c>.
+        /// 예약 자체는 서버가 이 값으로 하므로, 예약 전에 같은 일수가 필요한 곳(플레이나누 탈퇴)만 읽는다.
+        /// </summary>
+        /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
+        public async Task<SupabaseResult<int>> GetWithdrawalDelayDaysAsync(string accessToken)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<int>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: $"{_supabaseUrl}/rest/v1/rpc/ts_withdrawal_delay_days",
+                jsonBody: "{}",
+                headers: CreateUserHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<int>.Fail(SupabaseErrorCode.NetworkError);
+            if (response.IsSuccess == false)
+                return SupabaseResult<int>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "withdrawal_delay_days"));
+
+            return int.TryParse((response.Body ?? string.Empty).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var days) && days >= 1
+                ? SupabaseResult<int>.Success(days)
+                : SupabaseResult<int>.Fail("withdrawal_delay_days_parse_failed");
+        }
+
+        /// <summary>
+        /// 탈퇴를 예약합니다. 유예 일수는 서버가 운영 콘솔 값으로 정한다.
         /// RPC: <c>ts_request_withdrawal</c>. 성공 시 예약된 시각(ISO 8601)을 반환합니다.
         /// </summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
-        /// <param name="delayDays">탈퇴까지 유예 일수. 서버가 최소 1일로 맞춥니다(바로 지우는 건 즉시 탈퇴).</param>
-        public async Task<SupabaseResult<string>> RequestWithdrawalByDelayDaysAsync(
-            string accessToken,
-            int delayDays)
+        public async Task<SupabaseResult<string>> RequestWithdrawalAsync(string accessToken)
         {
             if (string.IsNullOrWhiteSpace(accessToken))
                 return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
 
-            if (delayDays < 0)
-                delayDays = 0;
-
             var url = $"{_supabaseUrl}/rest/v1/rpc/ts_request_withdrawal";
+            // p_delay_days 는 서버가 쓰지 않는다(옛 빌드 호환으로 인자만 남음). 7 은 옛 기본값.
             var bodyJson = _jsonSerializer.ToJson(new WithdrawalRequestBody
             {
-                p_delay_days = delayDays
+                p_delay_days = 7
             });
 
             var response = await _httpClient.SendAsync(

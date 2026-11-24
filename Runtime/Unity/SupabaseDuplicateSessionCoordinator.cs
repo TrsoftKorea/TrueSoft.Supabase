@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TrueBase.Core.Auth;
+using TrueBase.Core.Common;
 using TrueBase.Core.Data;
 using TrueBase.Core.Http;
 using UnityEngine;
@@ -357,6 +358,9 @@ namespace TrueBase.Unity
 
                 // 실패가 이어지면 중복 감지와 접속자 집계가 함께 멈춘다 — 연속 실패의 첫 번만 알린다(주기마다 찍으면 콘솔이 덮인다).
                 var ok = t.Result != null && t.Result.IsSuccess;
+                // 점검으로 거절된 신호는 응답 자리에서 세션을 이미 끊었다(SessionTokenHttpClient) — 고장이 아니다.
+                if (!ok && t.Result?.ErrorCode == SupabaseErrorCode.Maintenance)
+                    yield break;
                 if (!ok && !heartbeatFailing)
                     Debug.LogWarning("[Supabase] 접속 신호 실패 — 중복 로그인 감지가 멈춥니다(DB 에 ts_session_heartbeat 가 있는지 확인): " + (t.Result?.ErrorCode ?? "unknown"));
                 heartbeatFailing = !ok;
@@ -492,6 +496,9 @@ namespace TrueBase.Unity
             // 이 요청을 보낸 로그인이 아직 지금 로그인일 때만 끊는다 — 그사이 로그아웃·계정 전환이 있었으면 앞 로그인의 몫이다.
             if (sent && response.IsDuplicateLogin && SupabaseSDK.IsLoggedIn && bearer != null && bearer == SupabaseSDK.Session?.AccessToken)
                 SupabaseSDK.RaiseDuplicateLoginDetected();
+            // 점검은 세션 토큰 머리글과 상관없이 로그인한 요청 전부에 걸린다. 접속 신호(60초)가 늦어도 그 안에 잡는다.
+            else if (response.IsMaintenance && SupabaseSDK.IsLoggedIn && bearer != null && bearer == SupabaseSDK.Session?.AccessToken)
+                SupabaseSDK.RaiseMaintenanceDetected();
 
             return response;
         }

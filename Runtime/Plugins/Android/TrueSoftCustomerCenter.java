@@ -69,8 +69,10 @@ public final class TrueSoftCustomerCenter {
                     close();
                     return true;
                 }
-                // 고객센터 페이지 밖의 주소는 창 안에서 열지 않고 기본 브라우저로 넘긴다.
-                if (pageHost != null && target.getHost() != null && !pageHost.equals(target.getHost())) {
+                // 고객센터 페이지 밖의 주소와 웹 주소가 아닌 링크(mailto: 등 — 창 안에서 열면 오류 화면)는 기기 앱으로 넘긴다.
+                String scheme = target.getScheme();
+                boolean isWebUrl = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+                if (!isWebUrl ||(pageHost != null && target.getHost() != null && !pageHost.equals(target.getHost()))) {
                     try {
                         activity.startActivity(new Intent(Intent.ACTION_VIEW, target));
                     } catch (Throwable ignored) {

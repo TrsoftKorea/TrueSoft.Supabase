@@ -74,12 +74,6 @@ namespace TrueBase.Unity
         [Tooltip("게임 서버 배정에 사용할 기본 server_code.")]
         public string defaultServerCode = "GLOBAL";
 
-        [Header("탈퇴")]
-        [Label("탈퇴 유예 기간")]
-        [Tooltip("탈퇴 신청 후 계정이 실제로 삭제되기까지의 유예 일수(최소 1일). 유예가 끝난 다음 자정(운영 콘솔에서 정한 시간대)에 삭제됩니다. 바로 지우려면 즉시 탈퇴를 쓰세요.")]
-        [Min(1f)]
-        public float withdrawalRequestDelayDays = 7f;
-
         [Header("고객센터")]
         [Label("고객센터 페이지 주소")]
         [Tooltip("Supabase.OpenCustomerCenterAsync() 가 게임 안 창으로 여는 페이지. 보통 바꾸지 않습니다.")]
@@ -124,9 +118,6 @@ namespace TrueBase.Unity
                 DefaultMailExpirationDays = defaultMailExpirationDays < 1 ? 1 : defaultMailExpirationDays,
                 MailPollingIntervalSeconds = mailPollingIntervalSeconds < 0 ? 0 : mailPollingIntervalSeconds,
                 DefaultServerCode = string.IsNullOrWhiteSpace(defaultServerCode) ? "GLOBAL" : defaultServerCode.Trim(),
-                WithdrawalRequestDelayDays = withdrawalRequestDelayDays < 1f
-                    ? 1f
-                    : withdrawalRequestDelayDays,
             };
         }
 

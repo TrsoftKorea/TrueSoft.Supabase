@@ -68,7 +68,6 @@ namespace TrueBase.Unity
 
         private static Task _remoteConfigKeyPollTickTask;
 
-        private static float _withdrawalRequestDelayDays = 7f;
         private const string _withdrawalGuardFunctionName = "withdrawal-guard";
         private const string _withdrawalNowFunctionName = "withdrawal-now";
         private static bool _isRecreatingAfterWithdrawalDelete;
@@ -248,14 +247,25 @@ namespace TrueBase.Unity
         /// </summary>
         public static event Action OnDuplicateLoginDetected;
 
-        /// <summary><see cref="Config.SupabaseSettings.withdrawalRequestDelayDays"/>.</summary>
-        public static float WithdrawalRequestDelayDays => _withdrawalRequestDelayDays;
+        /// <summary>
+        /// 점검이 시작돼 서버가 이 계정의 요청을 거절한 경우 호출됩니다(이미 세션을 끊은 뒤, 저장된 로그인은 남김).
+        /// 게임은 타이틀로 돌아가 <see cref="TryGetAppStatusAsync"/> 로 점검 안내를 띄우세요.
+        /// </summary>
+        public static event Action OnMaintenanceStarted;
 
         /// <summary>
-        /// 서버에 실제로 예약하는 유예 일수(최소 1, 반올림한 정수). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
+        /// 서버에 예약될 탈퇴 유예 일수(운영 콘솔 값). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
+        /// 실패하면 그 사유(네트워크·중복 로그인·요청 제한 등)를 그대로 돌려준다 — 탈퇴 결과의 Reason 으로 이어진다.
         /// </summary>
-        public static int WithdrawalRequestDelayWholeDays =>
-            Mathf.Max(1, Mathf.RoundToInt(_withdrawalRequestDelayDays));
+        internal static async Task<SupabaseResult<int>> GetWithdrawalDelayDaysAsync()
+        {
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return SupabaseResult<int>.Fail(ready.ErrorCode ?? "auth_not_signed_in");
+            if (_bootstrap?.PublicProfileService == null)
+                return SupabaseResult<int>.Fail(SupabaseErrorCode.NotInitialized);
+            return await _bootstrap.PublicProfileService.GetWithdrawalDelayDaysAsync(_currentSession.AccessToken);
+        }
 
         /// <summary>중복 로그인 감지용 <c>user_sessions</c> REST 서비스. 미초기화 시 null.</summary>
         public static SupabaseUserSessionService UserSessionService => _bootstrap?.UserSessionService;
@@ -299,6 +309,7 @@ namespace TrueBase.Unity
             public const string MailboxClaimAll = "Supabase.Mailbox.Claim.All";
             public const string MailboxDelete = "Supabase.Mailbox.Delete";
             public const string MailboxDeleteClaimedBulk = "Supabase.Mailbox.Delete.ClaimedBulk";
+            public const string MailboxSendToSelf = "Supabase.Mailbox.SendToSelf";
             public const string MailboxUnclaimedCount = "Supabase.Mailbox.UnclaimedCount";
             public const string MailboxCountsDetail = "Supabase.Mailbox.Counts.Detail";
             public const string MailboxSettings = "Supabase.Mailbox.Settings";
@@ -338,6 +349,9 @@ namespace TrueBase.Unity
             public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
             public const string CustomerCenterOpen = "Supabase.CustomerCenter.Open";
             public const string CustomerCenterUnreadCount = "Supabase.CustomerCenter.UnreadCount";
+            public const string CustomerCenterPrivacyPolicy = "Supabase.CustomerCenter.PrivacyPolicy";
+            public const string CustomerCenterTerms = "Supabase.CustomerCenter.Terms";
+            public const string AppStatus = "Supabase.AppStatus";
             public const string PushRegister = "Supabase.Push.Register";
             public const string PushGetPreferences = "Supabase.Push.GetPreferences";
             public const string PushSetPreferences = "Supabase.Push.SetPreferences";
@@ -467,6 +481,7 @@ namespace TrueBase.Unity
         private static async Task<SupabaseResult> RefreshForGateAsync(SupabaseSession session)
         {
             var generation = _gateGeneration;
+            var cutBefore = _sessionCutCount;
             SupabaseResult<SupabaseSession> r;
             try
             {
@@ -485,6 +500,19 @@ namespace TrueBase.Unity
             {
                 SetSession(r.Data, SupabaseSessionChangeKind.RestoredOrRefreshed);
                 SaveSessionToStorage();
+            }
+            // 점검으로 끊겼으면 세션은 되살리지 않되 새 토큰은 저장한다 — 점검 끊김은 저장된 로그인을 남기는데,
+            // 그 옛 토큰은 방금 갱신에 써서 서버가 폐기했다. 안 바꾸면 점검 뒤 자동 로그인이 거절되고 게스트는 계정을 잃는다.
+            else if (r.IsSuccess && r.Data != null && _currentSession == null
+                     && _sessionCutCount != cutBefore && _sessionCutReason == SupabaseErrorCode.Maintenance
+                     && !string.IsNullOrWhiteSpace(r.Data.RefreshToken))
+            {
+                PlayerPrefs.SetString(RefreshTokenKey, r.Data.RefreshToken);
+                if (!string.IsNullOrWhiteSpace(r.Data.AccessToken))
+                    PlayerPrefs.SetString(LastAccessTokenKey, r.Data.AccessToken);
+                PlayerPrefs.Save();
+                if (IsAnonymousSession(r.Data))
+                    _ = TryUpsertAnonymousRecoveryTokenAsync(r.Data, detached: true);
             }
 
             // 시작이 아니라 끝난 시각부터 센다 — 느린 네트워크에서 갱신 하나가 수십 초 걸린다.
@@ -1808,6 +1836,37 @@ namespace TrueBase.Unity
             return SupabaseResult<DateTimeOffset>.Success(_serverTimeAnchor);
         }
 
+        /// <summary>
+        /// 최소 판·점검 상태를 조회합니다. 로그인하지 않아도 됩니다. 로그인 중이면 점검 중 통과 계정인지도 반영합니다.
+        /// 게임은 로그인 전에 불러 <see cref="SupabaseAppStatus.UpdateRequired"/> 면 업데이트 안내,
+        /// <see cref="SupabaseAppStatus.InMaintenance"/> 면 점검 안내를 띄웁니다.
+        /// </summary>
+        /// <param name="language">점검 문구 언어. 비우면 기기 언어.</param>
+        public static async Task<SupabaseResult<SupabaseAppStatus>> TryGetAppStatusAsync(string language = null)
+        {
+            const string tag = ApiLogTags.AppStatus;
+            if (!await EnsureInitializedAsync() || _bootstrap?.AppStatusService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseAppStatus>.Fail(SupabaseErrorCode.NotInitialized));
+
+            // 로그인 중이면 그 계정으로 묻는다(점검 중 통과 계정 판정). 토큰을 못 갱신하면 로그인 전처럼 묻는다.
+            string token = null;
+            if (IsLoggedIn && await RefreshIfNearExpiryAsync() == null)
+                token = _currentSession?.AccessToken;
+
+#if UNITY_ANDROID
+            const string platform = "android";
+            var defaultStoreUrl = "https://play.google.com/store/apps/details?id=" + Uri.EscapeDataString(UnityEngine.Application.identifier);
+#elif UNITY_IOS
+            const string platform = "ios";
+            string defaultStoreUrl = null;
+#else
+            const string platform = null;
+            string defaultStoreUrl = null;
+#endif
+            var r = await _bootstrap.AppStatusService.GetAsync(token, platform, UnityEngine.Application.version, language, defaultStoreUrl);
+            return LogAndReturnResult(tag, r);
+        }
+
         /// <summary><see cref="GetServerNowAsync"/>를 값 기반으로 호출합니다.</summary>
         public static async Task<SupabaseResult<DateTimeOffset>> TryGetServerNowAsync()
         {
@@ -1937,6 +1996,7 @@ namespace TrueBase.Unity
                 // 유저 계정 상태 — 게임이 문구로 안내할 사유
                 case SupabaseErrorCode.UserBanned:
                 case SupabaseErrorCode.DuplicateLogin:
+                case SupabaseErrorCode.Maintenance:
                 case SupabaseErrorCode.CannotUnlinkLastIdentity:
                 case SupabaseErrorCode.IdentityAlreadyLinked:
 
@@ -1962,6 +2022,8 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.AlreadyClaimed:
                 case SupabaseErrorCode.CannotDeleteUnclaimed:
                 case SupabaseErrorCode.ForbiddenServer:
+                // 본인 우편 — 같은 키로 이미 보냄(한 번만 보내는 우편의 정상 분기)
+                case SupabaseErrorCode.MailAlreadySent:
 
                 // 탈퇴 라이프사이클 — 예약 게이트 차단·탈퇴 완료로 재로그인 필요
                 case SupabaseErrorCode.WithdrawalGateBlocked:
@@ -2123,6 +2185,7 @@ namespace TrueBase.Unity
             if (IsLoggedIn && !IsAnonymousSession(_currentSession))
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.SignedInNonAnonymous);
 
+            var cutAtEntry = _sessionCutCount;
             var forceFreshAnonymous = false;
             var lastMethod = ReadLastSignInMethod();
             if (!IsLoggedIn && lastMethod == SignInMethodKind.Google)
@@ -2141,10 +2204,11 @@ namespace TrueBase.Unity
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
             {
                 var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: true);
-                // 탈퇴 예약 확인을 못 끝내 멈췄거나 차단된 계정 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
+                // 탈퇴 예약 확인을 못 끝내 멈췄거나 차단된 계정, 점검 중 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
                 if (restored != null
                     && (restored.ErrorCode == SupabaseErrorCode.WithdrawalStatusUnconfirmed
-                        || restored.ErrorCode == SupabaseErrorCode.UserBanned))
+                        || restored.ErrorCode == SupabaseErrorCode.UserBanned
+                        || restored.ErrorCode == SupabaseErrorCode.Maintenance))
                     return restored;
                 postSignInDone = restored != null && restored.IsSuccess && IsLoggedIn;
             }
@@ -2217,6 +2281,19 @@ namespace TrueBase.Unity
 
             if (Auth == null)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
+
+            // 점검 중이면 새 게스트 계정을 만들지 않는다 — 만들어도 로그인 후처리가 점검으로 막혀 빈 계정만 남는다.
+            // 위 복원·복구가 점검으로 끊겼으면 묻지 않고 멈춘다(그 계정을 두고 새 계정이 생기면 안 된다).
+            // 상태를 못 읽으면(옛 DB·통신 실패) 지금처럼 진행한다.
+            if (_sessionCutCount != cutAtEntry && _sessionCutReason == SupabaseErrorCode.Maintenance)
+                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.Maintenance);
+            var appStatusService = _bootstrap?.AppStatusService;
+            if (appStatusService != null)
+            {
+                var gate = await appStatusService.GetAsync(null, null, null, null, null);
+                if (gate != null && gate.IsSuccess && gate.Data.InMaintenance)
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.Maintenance);
+            }
 
             var result = await Auth.SignInAnonymouslyAsync();
 
@@ -2661,6 +2738,25 @@ namespace TrueBase.Unity
             var r = await DeleteMailAsync(mailId);
             LogApiResult(ApiLogTags.MailboxDelete, r.IsSuccess, r.ErrorCode, errorOnFail: !IsExpectedFailureReason(r.ErrorCode));
             return r.IsSuccess ? SupabaseResult.Ok : SupabaseResult.Fail(r.ErrorCode);
+        }
+
+        /// <summary>
+        /// 플레이어 자신에게 우편을 보냅니다(접속 때 소급 보상 등). 성공하면 <c>.Data</c> 는 새 우편 ID 입니다.
+        /// 받는 것은 다른 우편과 같습니다. <paramref name="onceKey"/> 를 주면 계정마다 그 키로 한 번만 보냅니다.
+        /// </summary>
+        public static async Task<SupabaseResult<string>> TrySendMailToSelfAsync(
+            string title, string content = "", IReadOnlyList<MailItemPayload> items = null,
+            int expiresDays = 30, string category = null, string onceKey = null)
+        {
+            const string tag = ApiLogTags.MailboxSendToSelf;
+            var ready = await EnsureReadySessionAsync();
+            if (!ready.IsSuccess)
+                return LogAndReturnResult(tag, SupabaseResult<string>.Fail(ready.ErrorCode ?? SupabaseErrorCode.NotSignedIn));
+            var svc = _bootstrap?.MailboxService;
+            if (svc == null)
+                return LogAndReturnResult(tag, SupabaseResult<string>.Fail(SupabaseErrorCode.NotInitialized));
+            return LogAndReturnResult(tag, await svc.SendToSelfAsync(
+                _currentSession?.AccessToken, title, content, items, expiresDays, category, onceKey));
         }
 
         /// <inheritdoc cref="DeleteClaimedMailsAsync"/>
@@ -3624,7 +3720,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 설정(<see cref="WithdrawalRequestDelayDays"/>, 최소 1일)에 정의된 유예 기간으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
+        /// 운영 콘솔에서 정한 탈퇴 유예 기간으로 <c>withdrawn_at</c>을 서버에서 예약합니다.
         /// 삭제 시각은 유예가 끝난 다음 자정(운영 콘솔에서 정한 시간대)이고, 서버가 그 직후 지웁니다.
         /// 요청이 성공하면 앱에서도 즉시 로그아웃 상태로 전환합니다(자동 로그인 방지).
         /// 철회용 <c>cancel_token</c>은 여기서 발급하지 않습니다. <b>탈퇴 예약(유예) 중인 계정으로 로그인</b>하면 SDK가 Edge Function으로 토큰을 발급·로컬에 저장한 뒤 세션을 정리합니다(게이트).
@@ -3640,9 +3736,7 @@ namespace TrueBase.Unity
             if (_bootstrap?.PublicProfileService == null)
                 return SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized);
 
-            var request = await _bootstrap.PublicProfileService.RequestWithdrawalByDelayDaysAsync(
-                _currentSession.AccessToken,
-                WithdrawalRequestDelayWholeDays);
+            var request = await _bootstrap.PublicProfileService.RequestWithdrawalAsync(_currentSession.AccessToken);
 
             if (request == null || !request.IsSuccess)
                 return SupabaseResult<bool>.Fail(request?.ErrorCode ?? "withdrawal_request_failed");
@@ -4234,10 +4328,34 @@ namespace TrueBase.Unity
             }
         }
 
+        /// <summary>내부: 점검이 시작돼 서버가 요청을 거절한 경우 세션을 끊고 이벤트를 올립니다.</summary>
+        internal static void RaiseMaintenanceDetected()
+        {
+            _sessionCutCount++;
+            _sessionCutReason = SupabaseErrorCode.Maintenance;
+            // 저장된 로그인은 남긴다 — 점검이 끝나면 자동 로그인으로 그대로 들어온다(게스트는 지우면 계정을 잃는다).
+            ClearSession(clearStorage: false, deleteUserSessionRow: false, saveResetReason: SupabaseErrorCode.Maintenance);
+            SetAutoLoginBlocked(false);
+            PlayerPrefs.Save();
+
+            // 로그인·연동 도중이면 그 결과가 Maintenance 로 알린다 — 이벤트까지 내면 게임이 안내를 두 번 띄운다.
+            if (_signInCallDepth > 0)
+                return;
+            try
+            {
+                OnMaintenanceStarted?.Invoke();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
+
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>
         internal static void RaiseDuplicateLoginDetected()
         {
-            _duplicateLoginCount++;
+            _sessionCutCount++;
+            _sessionCutReason = SupabaseErrorCode.DuplicateLogin;
             ClearSession(clearStorage: true, deleteUserSessionRow: false, saveResetReason: SupabaseErrorCode.DuplicateLogin);
 
             // HTTP 응답을 받는 자리에서도 불린다 — 게임 처리기의 예외가 요청 결과 대신 밖으로 새지 않게 한다.
@@ -4251,8 +4369,24 @@ namespace TrueBase.Unity
             }
         }
 
-        // 다른 기기 로그인으로 세션을 끊은 횟수. 로그인 처리 도중 끊겼는지 가르는 데 쓴다(DuplicateLoginSince).
-        private static int _duplicateLoginCount;
+        // 서버가 세션을 끊은(다른 기기 로그인·점검) 횟수와 마지막 사유. 로그인 처리 도중 끊겼는지 가르는 데 쓴다(SessionCutSince).
+        private static int _sessionCutCount;
+        private static string _sessionCutReason;
+        // 파사드의 로그인·연동이 도는 중인 수. 그 사이 점검 끊김은 결과(Reason)로 알리고 이벤트를 내지 않는다.
+        private static int _signInCallDepth;
+
+        /// <summary>파사드 로그인·연동 시작. 지금까지의 끊김 횟수를 돌려준다(<see cref="SessionCutReasonSince"/> 에 넘긴다).</summary>
+        internal static int BeginSignInCall()
+        {
+            _signInCallDepth++;
+            return _sessionCutCount;
+        }
+
+        internal static void EndSignInCall() => _signInCallDepth = Math.Max(0, _signInCallDepth - 1);
+
+        /// <summary>그 뒤 세션이 끊겼으면 마지막 사유, 아니면 null.</summary>
+        internal static string SessionCutReasonSince(int countBefore) =>
+            _sessionCutCount != countBefore ? _sessionCutReason ?? SupabaseErrorCode.DuplicateLogin : null;
 
         /// <summary>내부: 현재 세션의 refresh_token을 PlayerPrefs에 저장. 로그인/연동/세션 갱신 성공 시 SDK가 자동 호출합니다.</summary>
         internal static void SaveSessionToStorage()
@@ -4355,10 +4489,13 @@ namespace TrueBase.Unity
             // 절전 중 단조 시계가 멈춘 낡은 기준점은 실제보다 뒤처져 만료 우편을 "받기 가능"으로 그리게 한다.
             MailClock.UtcNow = () => TryReadCachedServerNow(out var serverNow) ? serverNow : DateTimeOffset.UtcNow;
 
+            // 우편 Title·Content 의 언어. 기기 언어는 메인 스레드에서 한 번 읽어 둔다(우편은 어느 스레드에서든 읽힌다).
+            MailLanguage.Device = LanguageCodeOf(Application.systemLanguage);
+            MailLanguage.Normalize = NormalizeLanguageCode;
+
             _bootstrap = bootstrap;
             _initializedProjectUrl = newUrl;
             _enableApiResultLogs = bootstrap.EnableApiResultLogs;
-            _withdrawalRequestDelayDays = bootstrap.WithdrawalRequestDelayDays;
 
             if (!preserveSession)
             {
@@ -4983,7 +5120,8 @@ namespace TrueBase.Unity
 
         /// <summary>기기 지문 키로 <paramref name="session"/>의 refresh_token을 복구 테이블에 upsert합니다(best-effort, 실패는 경고 로그만).</summary>
         /// <param name="session">복구 대상 세션. null이거나 refresh_token이 없으면 아무 것도 하지 않습니다.</param>
-        private static async Task TryUpsertAnonymousRecoveryTokenAsync(SupabaseSession session)
+        /// <param name="detached">점검으로 세션을 끊은 뒤 받은 새 토큰을 적을 때 true — 지금 세션이 없어도 쓴다.</param>
+        private static async Task TryUpsertAnonymousRecoveryTokenAsync(SupabaseSession session, bool detached = false)
         {
             // SetSession 에서 await 없이 부르는 경로가 있어 전체를 감싼다 — 여기서 예외가 새면
             // 아무도 관측하지 않는 Task 예외가 되어 조용히 묻힌다.
@@ -5009,8 +5147,9 @@ namespace TrueBase.Unity
                 // 부르는 경로가 있어, 그사이 다른 계정으로 갈아탔으면(탈퇴 삭제 후 재생성 등) 늦게
                 // 도착한 이 쓰기가 새 계정의 쪽지를 옛 계정 것으로 덮어쓴다.
                 var live = _currentSession;
-                if (live == null || live.User == null
-                    || !string.Equals(live.User.Id, session.User.Id, StringComparison.Ordinal))
+                if (detached ? live != null
+                             : live == null || live.User == null
+                               || !string.Equals(live.User.Id, session.User.Id, StringComparison.Ordinal))
                     return;
 
                 _ = await svc.UpsertRefreshTokenByFingerprintAsync(
@@ -5123,19 +5262,7 @@ namespace TrueBase.Unity
                 proofs["nonce"] = _bannedIdNonce;
             }
 
-            // 게임 안 언어 옵션이 기기 언어와 다를 수 있어 게임이 넘긴 값을 먼저 쓴다.
-            // 못 읽는 값은 조용히 영어 창이 되지 않게 알리고 기기 언어로 연다.
-            if (string.IsNullOrWhiteSpace(language))
-            {
-                language = DeviceLanguageCode();
-            }
-            else
-            {
-                var normalized = NormalizeLanguageCode(language);
-                if (normalized == null)
-                    Debug.LogWarning($"[{tag}] 고객센터가 지원하지 않는 언어라 기기 언어로 엽니다: {language}");
-                language = normalized ?? DeviceLanguageCode();
-            }
+            language = ResolveWindowLanguage(language, tag);
             var meta = new Dictionary<string, string>
             {
                 ["platform"] = GetPlatformString(),
@@ -5158,6 +5285,46 @@ namespace TrueBase.Unity
             var query = $"?p={projectRef}&lang={Uri.EscapeDataString(language)}";
             var fragment = $"#t={Uri.EscapeDataString(started.Data.Token)}";
             var shown = await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1{fragment}", $"{baseUrl}/{query}{fragment}");
+            return LogAndReturn(tag, shown
+                ? SupabaseResult<bool>.Success(true)
+                : SupabaseResult<bool>.Fail(SupabaseErrorCode.CustomerCenterNotShown));
+        }
+
+        /// <summary>
+        /// 게임 안 언어 옵션이 기기 언어와 다를 수 있어 게임이 넘긴 값을 먼저 쓴다.
+        /// 못 읽는 값은 조용히 영어 창이 되지 않게 알리고 기기 언어로 연다.
+        /// </summary>
+        private static string ResolveWindowLanguage(string language, string tag)
+        {
+            if (string.IsNullOrWhiteSpace(language))
+                return DeviceLanguageCode();
+            var normalized = NormalizeLanguageCode(language);
+            if (normalized == null)
+                Debug.LogWarning($"[{tag}] 고객센터가 지원하지 않는 언어라 기기 언어로 엽니다: {language}");
+            return normalized ?? DeviceLanguageCode();
+        }
+
+        /// <summary>개인정보처리방침 창을 엽니다. 로그인하지 않아도 열립니다. 게임 안 창이면 닫힐 때까지 기다립니다.</summary>
+        public static Task<SupabaseResult> TryOpenPrivacyPolicyAsync(string language = null) =>
+            OpenLegalWindowAsync("privacy", language, ApiLogTags.CustomerCenterPrivacyPolicy);
+
+        /// <summary>이용약관 창을 엽니다. 로그인하지 않아도 열립니다. 게임 안 창이면 닫힐 때까지 기다립니다.</summary>
+        public static Task<SupabaseResult> TryOpenTermsAsync(string language = null) =>
+            OpenLegalWindowAsync("terms", language, ApiLogTags.CustomerCenterTerms);
+
+        // 본문은 고객센터 웹이 운영 콘솔 「고객센터 › 약관·방침」에서 게시한 판을 읽어 보인다 — 공개 문서라 접속 표가 없다.
+        private static async Task<SupabaseResult> OpenLegalWindowAsync(string view, string language, string tag)
+        {
+            if (!await EnsureInitializedAsync())
+                return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
+
+            var baseUrl = (_bootstrap?.CustomerCenterUrl ?? string.Empty).Trim().TrimEnd('/');
+            var projectRef = ProjectRefFromUrl(_initializedProjectUrl);
+            if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(projectRef))
+                return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
+
+            var query = $"?p={projectRef}&lang={Uri.EscapeDataString(ResolveWindowLanguage(language, tag))}&view={view}";
+            var shown = await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1", $"{baseUrl}/{query}");
             return LogAndReturn(tag, shown
                 ? SupabaseResult<bool>.Success(true)
                 : SupabaseResult<bool>.Fail(SupabaseErrorCode.CustomerCenterNotShown));
@@ -5324,7 +5491,7 @@ namespace TrueBase.Unity
         }
 
         /// <summary>
-        /// 기기 언어 → 언어 코드. 푸시 문구와 고객센터 창 언어에 쓴다. 우편·콘솔의 언어 코드와 같게
+        /// 기기 언어 → 언어 코드. 푸시 문구와 고객센터 창 언어에 쓴다(우편은 지원 밖 언어면 영어가 아니라 기본 언어 글이라 LanguageCodeOf 를 직접 쓴다). 우편·콘솔의 언어 코드와 같게
         /// 중국어만 간체(zh-CN)·번체(zh-TW)를 가르고 나머지는 두 글자다.
         /// </summary>
         private static string DeviceLanguageCode() => LanguageCodeOf(Application.systemLanguage) ?? "en";
@@ -5630,18 +5797,18 @@ namespace TrueBase.Unity
             SignInMethodKind method,
             bool allowRecreateOnDeletion = true)
         {
-            var before = _duplicateLoginCount;
+            var before = _sessionCutCount;
             var gated = await RunPostSignInStepsCoreAsync(method, allowRecreateOnDeletion);
-            return gated ?? DuplicateLoginSince(before);
+            return gated ?? SessionCutSince(before);
         }
 
         /// <summary>
-        /// 로그인 처리 중 다른 기기 로그인이 감지돼 세션이 끊겼으면 그 실패를, 아니면 null 을 돌려줍니다.
+        /// 로그인 처리 중 서버가 세션을 끊었으면(다른 기기 로그인·점검) 그 사유의 실패를, 아니면 null 을 돌려줍니다.
         /// 끊긴 뒤의 단계는 세션이 없어 조용히 건너뛰므로, 이걸 보지 않으면 로그인이 "성공"으로 끝난다.
         /// </summary>
-        private static SupabaseResult<SupabaseSession> DuplicateLoginSince(int countBefore) =>
-            _duplicateLoginCount != countBefore && !IsLoggedIn
-                ? SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.DuplicateLogin)
+        private static SupabaseResult<SupabaseSession> SessionCutSince(int countBefore) =>
+            _sessionCutCount != countBefore && !IsLoggedIn
+                ? SupabaseResult<SupabaseSession>.Fail(_sessionCutReason ?? SupabaseErrorCode.DuplicateLogin)
                 : null;
 
         private static async Task<SupabaseResult<SupabaseSession>> RunPostSignInStepsCoreAsync(
@@ -5669,14 +5836,14 @@ namespace TrueBase.Unity
         /// </summary>
         private static async Task<SupabaseResult<SupabaseSession>> EnsureProfileAfterSignInAsync()
         {
-            var before = _duplicateLoginCount;
+            var before = _sessionCutCount;
             var outcome = await TryCompleteSignInInOneCallAsync();
             if (outcome == OneCallSignInOutcome.WithdrawalScheduled)
                 return StopSignInWithdrawalUnconfirmed("게이트 통과 뒤 탈퇴 예약이 보임", configProblem: false);
 
             if (outcome != OneCallSignInOutcome.Completed)
                 await TryEnsureProfileRowAfterSignInAsync();
-            return DuplicateLoginSince(before);
+            return SessionCutSince(before);
         }
 
         /// <summary>

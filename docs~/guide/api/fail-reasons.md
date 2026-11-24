@@ -64,6 +64,7 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `UserBanned` | 계정이 차단되었습니다. 자세한 내용은 `BanInfo`에 있습니다 |
 | `DuplicateLogin` | 다른 기기에서 같은 계정으로 로그인해 현재 세션이 무효가 되었습니다 |
+| `Maintenance` | 서버 점검 중입니다. 운영 콘솔 **설정 › 점검·버전**에 등록한 계정만 들어갈 수 있습니다 |
 | `IdentityAlreadyLinked` | 연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다 |
 | `IdTokenInvalid` | 인증 서버가 구글·애플 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나, 다른 앱(클라이언트 ID)용이거나 nonce 가 맞지 않습니다 |
 | `SignedInNonAnonymous` | 비익명 계정으로 로그인 중입니다. 먼저 `SignOutFullyAsync`를 호출하세요 |
@@ -173,6 +174,10 @@ bool Handle(SupabaseResult result)
 | `MailDeleted` | 이미 삭제한 우편입니다 |
 | `MailExpired` | 수령 기간이 지난 우편입니다 |
 | `MailSettingsMissing` | 우편 설정이 DB에 없습니다. 설치가 깨진 상태로, 우편 목록 조회도 함께 실패합니다 |
+| `MailAlreadySent` | 같은 키로 이미 본인에게 보낸 우편이 있습니다 |
+| `MailItemProtected` | 본인 우편의 아이템이 보호한 데이터 필드에 더하는 것입니다 |
+| `MailSendLimited` | 24시간 동안 본인에게 보낸 우편이 50통을 넘었습니다 |
+| `MailInvalid` | 본인 우편의 제목·본문·아이템·기한 형식이 올바르지 않습니다 |
 | `AlreadyClaimed` | 이미 보상을 수령한 우편입니다 |
 | `CannotDeleteUnclaimed` | 기한 안의 보상을 수령하지 않은 우편은 삭제할 수 없습니다 |
 | `Forbidden` | 내 우편이 아닙니다 |

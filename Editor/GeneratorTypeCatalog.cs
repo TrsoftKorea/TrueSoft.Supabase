@@ -270,7 +270,10 @@ namespace TrueBase.Editor
                 if (IsNameSlot(c))
                 {
                     if (IsNameSlot(s)) { merged.Add(c); continue; }
-                    if (IsAutoValueLeaf(s) || Array.IndexOf(TypeOptions, s) >= 0) { conflict = true; merged.Add(c); continue; }
+                    // object 는 타입을 정하기 전에 내보낸 CSV 의 자리 표시라 이름으로 받지 않는다(받으면 슬롯이 조용히 채워진다).
+                    if (IsAutoValueLeaf(s) || Array.IndexOf(TypeOptions, s) >= 0
+                        || s == "object" || s == "System.Object" || s == "Object")
+                    { conflict = true; merged.Add(c); continue; }
                     merged.Add(TryQualify(s, out var qualified) ? qualified : s);
                 }
                 else

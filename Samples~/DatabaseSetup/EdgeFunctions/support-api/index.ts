@@ -68,7 +68,8 @@ async function serverConfigList(key: string): Promise<string[]> {
 // ═══ END server-config ═══
 
 type Params = Record<string, unknown>;
-type SupportToken = { sub: string; ban: boolean; lang: string; meta: Record<string, string>; exp: number };
+// web — 이 표를 브라우저 로그인(webLogin)으로 받았는지. 서버만 적는다 — meta.platform 은 게임이 보낸 값이라 믿지 않는다.
+type SupportToken = { sub: string; ban: boolean; lang: string; meta: Record<string, string>; exp: number; web?: boolean };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -409,7 +410,7 @@ async function webLogin(req: Request, p: Params): Promise<Response> {
 
   const lang = normLang(str(p, "lang"));
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS;
-  const token = await signToken({ sub: r.account, ban: r.banned, lang, meta: webMeta(req, p), exp });
+  const token = await signToken({ sub: r.account, ban: r.banned, lang, meta: webMeta(req, p), exp, web: true });
   return json({ ok: true, data: { token, expires_at: new Date(exp * 1000).toISOString(), banned: r.banned, lang } });
 }
 
@@ -425,6 +426,43 @@ async function redeemCoupon(account: string, banned: boolean, p: Params): Promis
 function webMeta(req: Request, p: Params): Record<string, string> {
   const ua = (req.headers.get("user-agent") ?? "").slice(0, 80);
   return pickMeta({ platform: "web", language: str(p, "lang"), device: ua });
+}
+
+// 그림을 먼저 지우고 문의를 지운다 — 문의를 먼저 지우면 그림 삭제가 실패했을 때 어느 문의 것인지 알 길이 없어 영영 남는다.
+// 그림 삭제가 실패한 묶음은 문의도 남겨 다음 날 다시 한다(ts_support_retention_check 가 사흘 넘게 남으면 실패로 드러낸다).
+async function retentionSweep(): Promise<Response> {
+  // 인증 없이 받으므로 10분 안의 재호출은 건너뛴다 — 동시에 불려 같은 묶음을 겹쳐 지우지 않게.
+  if (!await rpc<boolean>("ts_support_retention_try_start", { p_min_gap_seconds: 600 })) {
+    return json({ ok: true, data: null });
+  }
+  const startedAt = Date.now();
+  let deleted = 0;
+  let failed = 0;
+  while (Date.now() - startedAt < 40_000) {
+    const due = await rpc<{ id: string; paths: string[] }[]>("ts_support_retention_due", { p_limit: 100 }) ?? [];
+    if (due.length === 0) break;
+    const paths = due.flatMap((t) => t.paths ?? []);
+    let removed = true;
+    for (let i = 0; i < paths.length; i += 500) {
+      const { error } = await db.storage.from(BUCKET).remove(paths.slice(i, i + 500));
+      if (error) {
+        console.error(`[support-api] retention 그림 삭제 실패: ${error.message}`);
+        removed = false;
+        break;
+      }
+    }
+    if (!removed) {
+      failed += due.length;
+      break;
+    }
+    const n = await rpc<number>("ts_support_retention_delete", { p_ids: due.map((t) => t.id) });
+    deleted += n ?? 0;
+    // 그사이 답변 대기로 돌아가 하나도 못 지운 묶음이 되풀이되지 않게.
+    if (!n) break;
+  }
+  console.log(`[support-api] retention 삭제 ${deleted} · 실패 ${failed} · ${Date.now() - startedAt}ms`);
+  // 인증 없는 호출이라 응답에는 성공 여부만 싣는다.
+  return json({ ok: failed === 0, data: null }, failed > 0 ? 500 : 200);
 }
 
 async function rpc<T>(name: string, args: Params): Promise<T> {
@@ -480,11 +518,17 @@ Deno.serve(async (req) => {
       case "look": {
         // 콘솔 "서비스 연결"에서 Google 로그인·Sign in with Apple 묶음을 꺼 두면 값이 있어도 그 단추를 감춘다
         // (켜고 끈 적이 없으면 값이 기준).
-        const [s, services, google, apple] = await Promise.all([
+        const [s, services, google, apple, withdrawal] = await Promise.all([
           rpc<Record<string, string | null>>("ts_admin_console_settings_get", {}),
           rpc<Record<string, boolean>>("ts_admin_server_config_services", {}),
           serverConfig("GOOGLE_WEB_CLIENT_ID"),
           serverConfig("APPLE_SERVICES_ID"),
+          // 계정 삭제 화면용 값이 실패해도 고객센터 창 전체(로그인 단추 등)는 뜨게 한다.
+          rpc<{ guest_inactive_days: number | null; withdrawal_delay_days: number | null; web_withdrawal: boolean | null }>(
+            "ts_support_withdrawal_status", { p_account: null }).catch((e) => {
+            console.warn(`[support-api] look withdrawal: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+          }),
         ]);
         return json({
           ok: true,
@@ -492,6 +536,12 @@ Deno.serve(async (req) => {
             name: s?.display_name ?? null, color: s?.color ?? null, icon: s?.icon ?? null,
             google_client_id: (services?.google !== false && google) || null,
             apple_services_id: (services?.signin !== false && apple) || null,
+            // 계정 삭제 화면의 게스트 안내 — 이 일수 동안 접속이 없으면 서버가 지운다(0 이면 지우지 않음).
+            guest_inactive_days: withdrawal?.guest_inactive_days ?? null,
+            // 삭제 요청 뒤 실제로 지우기까지의 일수 — 게임 안 탈퇴와 같은 운영 콘솔 값.
+            withdrawal_delay_days: withdrawal?.withdrawal_delay_days ?? null,
+            // false 면 웹에서 예약·취소를 받지 않는다(플레이나누 병행 게임) — 화면은 게임 설정에서 지우라고만 안내한다.
+            web_withdrawal: withdrawal?.web_withdrawal ?? null,
           },
         });
       }
@@ -507,13 +557,25 @@ Deno.serve(async (req) => {
 
       case "web.login":
         return await webLogin(req, p);
+
+      // 문의 보관 기간(3년) 정리 — install.sql 22절 cron 이 매일 깨운다. 지울 대상은 서버가 정하므로 접속 표 없이 받는다.
+      case "retention.sweep":
+        return await retentionSweep();
+
+      // 개인정보처리방침·이용약관 — 스토어에 적는 공개 주소라 접속 표 없이 준다. version 을 주면 그 게시 판(지난 판·시행 예정 판).
+      case "legal": {
+        const kind = str(p, "kind");
+        if (kind !== "privacy" && kind !== "terms") throw new Reject("legal_kind_invalid");
+        const version = Number.isInteger(p.version) ? p.version as number : null;
+        return json({ ok: true, data: await rpc("ts_support_legal", { p_kind: kind, p_lang: normLang(str(p, "lang")), p_version: version }) });
+      }
     }
 
     const t = await readToken(req);
     const lang = normLang(str(p, "lang") || t.lang);
     switch (action) {
       case "me":
-        return json({ ok: true, data: { banned: t.ban, lang: t.lang, email: t.meta?.platform === "web" ? await accountEmail(t.sub) : null } });
+        return json({ ok: true, data: { banned: t.ban, lang: t.lang, email: t.web ? await accountEmail(t.sub) : null } });
 
       case "categories":
         return json({ ok: true, data: await rpc("ts_support_categories", { p_lang: lang }) });
@@ -557,6 +619,26 @@ Deno.serve(async (req) => {
       case "coupon":
         await webHit(`coupon:app:${t.sub}`, LIMITS.couponPerAccount);
         return await redeemCoupon(t.sub, await isBanned(t.sub), p);
+
+      // 계정 삭제 — 스토어에 적는 계정 삭제 요청 주소의 화면. 브라우저에서 구글·애플로 로그인한 창만 받는다
+      // (게임 안 창은 게임의 탈퇴 메뉴를 쓴다 — 게임이 켜진 채 계정이 예약되면 게임 쪽 상태와 어긋난다).
+      // 차단된 계정도 지울 수 있다. 지우는 것은 9절 withdrawal-cleanup, 취소는 게임 안 탈퇴 취소와 같은 함수.
+      case "withdrawal.status":
+        return json({ ok: true, data: await rpc("ts_support_withdrawal_status", { p_account: t.sub }) });
+
+      case "withdrawal.request":
+        if (!t.web) throw new Reject("withdrawal_web_only", 403);
+        return json({ ok: true, data: await rpc("ts_support_withdrawal_request", { p_account: t.sub }) });
+
+      case "withdrawal.cancel": {
+        if (!t.web) throw new Reject("withdrawal_web_only", 403);
+        // 플레이나누 병행 게임처럼 웹 삭제를 끈 프로젝트는 취소도 게임 안에서만 — 웹은 Supabase 쪽만 바꾼다.
+        const s = await rpc<{ web_withdrawal?: boolean }>("ts_support_withdrawal_status", { p_account: t.sub });
+        if (s?.web_withdrawal === false) throw new Reject("support_withdrawal_disabled");
+        const r = await rpc<{ ok: boolean; reason?: string }>("ts_withdrawal_cancel_redeem", { p_account_id: t.sub });
+        if (!r?.ok) throw new Reject(r?.reason === "withdrawal_not_scheduled" ? "withdrawal_not_scheduled" : "withdrawal_cancel_failed");
+        return json({ ok: true, data: null });
+      }
 
       default:
         return fail("unknown_action");

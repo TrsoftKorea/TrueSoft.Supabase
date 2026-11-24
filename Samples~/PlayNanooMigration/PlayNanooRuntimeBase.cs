@@ -485,10 +485,13 @@ public abstract class PlayNanooRuntimeBase : SupabaseRuntime
     {
         using var sessionChange = await BeginNanooSessionChangeAsync();
         var isGoogle = Supabase.IsLinkedWithGoogle; // sdkWithdrawal()이 세션을 정리하므로 미리 확인
-        // Supabase 에 예약하는 것과 같은 유예 일수(SupabaseSettings "탈퇴 유예 기간")를 쓴다 — 다르면 두 계정의 삭제일이 어긋난다.
-        var holdDays = SupabaseBridge.WithdrawalRequestDelayDays;
-        Trace($"탈퇴 신청 — 나누·Supabase 유예 {holdDays}일");
-        return await WithdrawNanooThenAsync(holdDays, sdkWithdrawal, isGoogle, "Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨 — 다시 시도하면 Supabase 탈퇴만 합니다.");
+        // Supabase 에 예약되는 것과 같은 유예 일수(운영 콘솔 "탈퇴 유예 기간")를 쓴다 — 다르면 두 계정의 삭제일이 어긋난다.
+        // 못 읽으면 나누를 먼저 지우지 않는다 — 짐작한 일수로 나누만 예약되면 되돌릴 길이 없다.
+        var holdDays = await SupabaseBridge.GetWithdrawalDelayDaysAsync();
+        if (!holdDays.IsSuccess)
+            return SupabaseResult.Fail(holdDays.ErrorCode);
+        Trace($"탈퇴 신청 — 나누·Supabase 유예 {holdDays.Data}일");
+        return await WithdrawNanooThenAsync(holdDays.Data, sdkWithdrawal, isGoogle, "Supabase 탈퇴 실패. PlayNANOO 탈퇴는 완료됨 — 다시 시도하면 Supabase 탈퇴만 합니다.");
     }
 
     /// <summary>

@@ -189,6 +189,49 @@ namespace TrueBase.Core.Data
             return ParseClaimAllResponse(response.Body);
         }
 
+        /// <summary>플레이어 자신에게 우편을 보냅니다. RPC <c>ts_mail_send_to_self</c>. 성공하면 새 우편 ID.</summary>
+        /// <param name="onceKey">주면 계정마다 이 키로 한 번만 보낸다. 두 번째부터 <c>mail_already_sent</c>.</param>
+        public async Task<SupabaseResult<string>> SendToSelfAsync(
+            string accessToken, string title, string content, IReadOnlyList<MailItemPayload> items,
+            int expiresDays, string category, string onceKey)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.AccessTokenEmpty);
+
+            var itemRows = new List<Dictionary<string, object>>();
+            if (items != null)
+                foreach (var it in items)
+                    if (it != null)
+                        itemRows.Add(new Dictionary<string, object> { ["key"] = it.Key, ["count"] = it.Count });
+
+            var bodyJson = JsonConvert.SerializeObject(new Dictionary<string, object>
+            {
+                ["p_title"] = title ?? "",
+                ["p_content"] = content ?? "",
+                ["p_items"] = itemRows.Count > 0 ? itemRows : null,
+                ["p_expires_days"] = expiresDays,
+                ["p_category"] = string.IsNullOrWhiteSpace(category) ? "default" : category.Trim(),
+                ["p_once_key"] = string.IsNullOrWhiteSpace(onceKey) ? null : onceKey.Trim()
+            });
+
+            var response = await _httpClient.SendAsync(
+                method: "POST",
+                url: $"{_supabaseUrl}/rest/v1/rpc/ts_mail_send_to_self",
+                jsonBody: bodyJson,
+                headers: CreateAuthHeaders(accessToken, prefer: null));
+
+            if (response == null)
+                return SupabaseResult<string>.Fail(SupabaseErrorCode.NetworkError);
+            if (response.IsSuccess == false)
+                return SupabaseResult<string>.Fail(SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "send_mail_to_self"));
+
+            // 응답은 "uuid" 꼴의 JSON 글자다.
+            var id = (response.Body ?? "").Trim().Trim('"');
+            return string.IsNullOrEmpty(id)
+                ? SupabaseResult<string>.Fail("send_mail_to_self_empty")
+                : SupabaseResult<string>.Success(id);
+        }
+
         /// <summary>메일 한 건을 소프트 삭제합니다. RPC <c>ts_delete_mail_for_user</c>.</summary>
         /// <param name="accessToken">현재 로그인 세션의 액세스 토큰. 필수.</param>
         /// <param name="mailId">삭제할 메일 UUID. 필수.</param>
@@ -460,8 +503,8 @@ namespace TrueBase.Core.Data
                 AccountId = r.AccountId,
                 UserId = r.UserId,
                 SenderType = r.SenderType ?? string.Empty,
-                Title = r.Title ?? string.Empty,
-                Content = r.Content ?? string.Empty,
+                BaseTitle = r.Title ?? string.Empty,
+                BaseContent = r.Content ?? string.Empty,
                 ExpiresAt = r.ExpiresAt,
                 CreatedAt = r.CreatedAt,
                 ItemsClaimedAt = r.ItemsClaimedAt,

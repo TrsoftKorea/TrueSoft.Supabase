@@ -144,10 +144,13 @@ comment on function public.ts_server_now() is
 grant execute on function public.ts_server_now() to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- game_settings — 게임 시간대(1행). 운영 콘솔 "설정 › 시간대"에서 바꾼다.
+-- game_settings — 게임 시간대(1행). 운영 콘솔 "설정 › 시간대·언어"에서 바꾼다.
 -- 통계의 "하루"(일별 접속·채팅 수·동시접속 일별 요약), 대시보드 "오늘", 탈퇴 삭제 자정, 콘솔 날짜 검색,
 -- 새로 만드는 우편 예약·리더보드 회차의 기본 시간대가 전부 이것을 따른다.
 -- 날짜별 기록은 쌓을 때 날짜가 정해지므로, 바꾸면 그 뒤 기록부터 새 기준이다(지난 기록·이미 만든 예약은 그대로).
+-- default_language — 기본 언어. 우편·푸시 문구·자주 묻는 질문의 언어 표시 없는 제목·본문이 이 언어이고,
+-- 다른 언어는 언어별 칸(localized)에 더한다. 서버·SDK 는 이 값을 보지 않는다(기기 언어 글이 없으면 기본 칸을 보인다) —
+-- 콘솔이 입력 화면의 이름표와 추가 언어 목록에 쓴다.
 -- ---------------------------------------------------------------------------
 create table if not exists public.game_settings (
   id         int primary key default 1 check (id = 1),
@@ -155,6 +158,15 @@ create table if not exists public.game_settings (
   updated_at timestamptz not null default now(),
   updated_by text
 );
+alter table public.game_settings add column if not exists default_language text not null default 'ko';
+-- withdrawal_delay_days — 탈퇴 유예 일수. 게임 안 탈퇴 예약(ts_request_withdrawal)과 고객센터 웹 계정 삭제가 같이 쓴다.
+alter table public.game_settings add column if not exists withdrawal_delay_days int not null default 7
+  check (withdrawal_delay_days between 1 and 90);
+-- guest_inactive_days — 게스트 계정을 지우기까지 접속이 없는 일수(9절 ts_guest_inactive_sweep). 0 이면 지우지 않는다.
+alter table public.game_settings add column if not exists guest_inactive_days int not null default 365;
+-- web_withdrawal — 고객센터 웹 「계정 삭제」에서 예약·취소를 받는지. 플레이나누 병행 게임은 끈다 — 웹은 Supabase 쪽만
+-- 바꿔 나누 계정과 삭제·취소가 갈린다. 끄면 그 화면은 게임 설정에서 지우라고만 안내한다.
+alter table public.game_settings add column if not exists web_withdrawal boolean not null default true;
 insert into public.game_settings (id) values (1) on conflict (id) do nothing;
 alter table public.game_settings enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
@@ -189,6 +201,19 @@ $$;
 comment on function public.ts_game_time_zone() is '게임 시간대(game_settings). 날짜를 자르는 모든 곳이 이것을 쓴다.';
 revoke all on function public.ts_game_time_zone() from public, anon, authenticated;
 
+-- 기본 언어(game_settings). 언어 표시 없는 칸이 이 언어다 — 다른 언어 플레이어에게 영어 글을 먼저 보이는 곳(고객센터)이 쓴다.
+create or replace function public.ts_game_default_language()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select default_language from public.game_settings where id = 1), 'ko');
+$$;
+
+revoke all on function public.ts_game_default_language() from public, anon, authenticated;
+
 -- 게임 시간대의 오늘 날짜.
 create or replace function public.ts_game_today()
 returns date
@@ -202,7 +227,7 @@ $$;
 
 revoke all on function public.ts_game_today() from public, anon, authenticated;
 
--- 콘솔 "설정 › 시간대". example_deadline 은 5절 탈퇴 함수를 부르므로 plpgsql(실행할 때 해석)로 둔다.
+-- 콘솔 "설정 › 시간대·언어". example_deadline 은 5절 탈퇴 함수를 부르므로 plpgsql(실행할 때 해석)로 둔다.
 create or replace function public.ts_admin_game_settings_get()
 returns jsonb
 language plpgsql
@@ -211,37 +236,63 @@ security definer
 set search_path = public
 as $$
 begin
-  return (select jsonb_build_object('time_zone', s.time_zone, 'updated_at', s.updated_at, 'updated_by', s.updated_by,
-                                    'example_deadline', public.ts_withdrawal_deadline(7))
+  return (select jsonb_build_object('time_zone', s.time_zone, 'default_language', s.default_language,
+                                    'withdrawal_delay_days', s.withdrawal_delay_days,
+                                    'guest_inactive_days', s.guest_inactive_days, 'web_withdrawal', s.web_withdrawal,
+                                    'updated_at', s.updated_at, 'updated_by', s.updated_by,
+                                    'example_deadline', public.ts_withdrawal_deadline(s.withdrawal_delay_days))
             from public.game_settings s where s.id = 1);
 end;
 $$;
 
-create or replace function public.ts_admin_game_settings_update(p_time_zone text, p_by text default null)
+-- 넘긴 값만 바꾼다(null 이면 그대로). 옛 콘솔은 p_time_zone·p_by 만 이름으로 넘긴다.
+drop function if exists public.ts_admin_game_settings_update(text, text);
+drop function if exists public.ts_admin_game_settings_update(text, text, text);
+drop function if exists public.ts_admin_game_settings_update(text, text, text, int);
+create or replace function public.ts_admin_game_settings_update(
+  p_time_zone text default null, p_by text default null, p_default_language text default null,
+  p_withdrawal_delay_days int default null, p_guest_inactive_days int default null, p_web_withdrawal boolean default null)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_tz text := btrim(coalesce(p_time_zone, ''));
+  v_tz   text := nullif(btrim(coalesce(p_time_zone, '')), '');
+  v_lang text := nullif(btrim(coalesce(p_default_language, '')), '');
 begin
-  if not exists (select 1 from pg_timezone_names where name = v_tz) then
+  if v_tz is not null and not exists (select 1 from pg_timezone_names where name = v_tz) then
     raise exception 'game_time_zone_invalid: %', v_tz;
   end if;
+  -- 콘솔·SDK 가 쓰는 언어 코드 꼴(두 글자, 중국어만 zh-CN·zh-TW).
+  if v_lang is not null and v_lang !~ '^[a-z]{2}(-[A-Z]{2})?$' then
+    raise exception 'game_default_language_invalid: %', v_lang;
+  end if;
+  if p_withdrawal_delay_days is not null and p_withdrawal_delay_days not between 1 and 90 then
+    raise exception 'game_withdrawal_delay_invalid: %', p_withdrawal_delay_days;
+  end if;
+  -- 0 = 끔. 켤 때는 30일 이상 — 너무 짧으면 잠깐 쉰 게스트까지 지운다.
+  if p_guest_inactive_days is not null and p_guest_inactive_days <> 0 and p_guest_inactive_days not between 30 and 3650 then
+    raise exception 'game_guest_inactive_days_invalid: %', p_guest_inactive_days;
+  end if;
   update public.game_settings
-     set time_zone = v_tz, updated_at = now(), updated_by = p_by
+     set time_zone = coalesce(v_tz, time_zone),
+         default_language = coalesce(v_lang, default_language),
+         withdrawal_delay_days = coalesce(p_withdrawal_delay_days, withdrawal_delay_days),
+         guest_inactive_days = coalesce(p_guest_inactive_days, guest_inactive_days),
+         web_withdrawal = coalesce(p_web_withdrawal, web_withdrawal),
+         updated_at = now(), updated_by = p_by
    where id = 1;
   return public.ts_admin_game_settings_get();
 end;
 $$;
 
-comment on function public.ts_admin_game_settings_get() is '게임 시간대 조회. service_role 전용.';
-comment on function public.ts_admin_game_settings_update(text, text) is '게임 시간대 변경. 지난 날짜별 기록·예약된 탈퇴·이미 만든 예약은 그대로다. service_role 전용.';
+comment on function public.ts_admin_game_settings_get() is '게임 시간대·기본 언어·탈퇴 설정 조회. service_role 전용.';
+comment on function public.ts_admin_game_settings_update(text, text, text, int, int, boolean) is '게임 시간대·기본 언어·탈퇴 설정 변경(넘긴 값만). 바꿔도 지난 날짜별 기록·이미 예약된 탈퇴·이미 만든 예약은 그대로다. service_role 전용.';
 revoke all on function public.ts_admin_game_settings_get() from public, anon, authenticated;
-revoke all on function public.ts_admin_game_settings_update(text, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_game_settings_update(text, text, text, int, int, boolean) from public, anon, authenticated;
 grant execute on function public.ts_admin_game_settings_get() to service_role;
-grant execute on function public.ts_admin_game_settings_update(text, text) to service_role;
+grant execute on function public.ts_admin_game_settings_update(text, text, text, int, int, boolean) to service_role;
 
 
 -- #############################################################################
@@ -3058,8 +3109,25 @@ revoke all on function public.ts_withdrawal_deadline(integer) from public, anon,
 -- ts_request_withdrawal — 탈퇴 예약
 -- ---------------------------------------------------------------------------
 -- 삭제 시각(user_profiles.withdrawn_at)은 ts_withdrawal_deadline — 유예 N일 뒤 기준 시간대 자정.
+-- N 은 운영 콘솔에서 정한 game_settings.withdrawal_delay_days 다. p_delay_days 는 옛 빌드가 SDK 설정값을 보내던
+-- 자리라 받기만 하고 쓰지 않는다 — 웹 계정 삭제·플레이나누 탈퇴와 삭제일이 갈리지 않게 서버 값 하나로 맞춘다.
 -- 탈퇴 예약 시 익명 복구 토큰도 함께 삭제합니다.
 -- ---------------------------------------------------------------------------
+-- 탈퇴 유예 일수 — SDK 가 예약 전에 읽는다(플레이나누 탈퇴에 같은 일수를 넘기려고).
+create or replace function public.ts_withdrawal_delay_days()
+returns int
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select withdrawal_delay_days from public.game_settings where id = 1), 7);
+$$;
+
+comment on function public.ts_withdrawal_delay_days() is '탈퇴 유예 일수(운영 콘솔 설정). 게임 안 탈퇴 예약·웹 계정 삭제가 같은 값을 쓴다.';
+revoke all on function public.ts_withdrawal_delay_days() from public, anon, authenticated;
+grant execute on function public.ts_withdrawal_delay_days() to authenticated;
+
 create or replace function public.ts_request_withdrawal(p_delay_days integer)
 returns table(scheduled_at timestamptz)
 language plpgsql
@@ -3077,7 +3145,7 @@ begin
     raise exception 'not_authenticated';
   end if;
 
-  v_delay_days  := greatest(1, coalesce(p_delay_days, 1));
+  v_delay_days  := public.ts_withdrawal_delay_days();
   v_account_id  := auth.uid();
   v_user_id     := auth.uid()::text;
 
@@ -3101,7 +3169,7 @@ end;
 $$;
 
 comment on function public.ts_request_withdrawal(integer) is
-  '탈퇴 예약. 유예 p_delay_days일(최소 1) 뒤 기준 시간대 자정에 삭제. 익명 복구 토큰도 함께 삭제.';
+  '탈퇴 예약. 운영 콘솔의 탈퇴 유예 일수 뒤 기준 시간대 자정에 삭제(p_delay_days 는 옛 빌드 호환용, 안 씀). 익명 복구 토큰도 함께 삭제.';
 
 grant execute on function public.ts_request_withdrawal(integer) to authenticated;
 
@@ -4225,6 +4293,110 @@ revoke all on table public.mails from anon;
 
 grant select on table public.mails to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 본인에게 우편 — 게임이 플레이어 자신에게 우편을 보낸다(접속 때 소급 보상 등, SDK SendMailToSelfAsync).
+-- 받을 때는 다른 우편과 같다(ts_claim_*). 플레이어가 직접 부르는 함수라 조작한 앱도 부를 수 있다 — 그래서:
+--  · 보호 필드(4절 ts_protected_fields)에 더하는 아이템은 거절한다. 받기 때 서버가 더하므로 막지 않으면 보호를 우회한다.
+--    보호하지 않은 필드는 플레이어가 원래 직접 쓸 수 있어 새로 열리는 길이 아니다.
+--  · 같은 계정은 24시간에 50통까지 — 우편함을 채우는 반복 호출을 막는다.
+--  · 게임이 키(p_once_key)를 주면 계정마다 그 키로 한 번만 보낸다 — 재설치·다른 기기에서도 두 번 받지 않게.
+-- ---------------------------------------------------------------------------
+create table if not exists public.mail_self_once (
+  account_id uuid        not null references auth.users (id) on delete cascade,
+  once_key   text        not null check (char_length(once_key) between 1 and 100),
+  mail_id    uuid,
+  created_at timestamptz not null default now(),
+  primary key (account_id, once_key)
+);
+alter table public.mail_self_once enable row level security;
+revoke all on table public.mail_self_once from anon, authenticated;
+
+create index if not exists mails_self_recent_idx on public.mails (account_id, created_at) where sender_type = 'self';
+
+create or replace function public.ts_mail_send_to_self(
+  p_title        text,
+  p_content      text  default '',
+  p_items        jsonb default null,
+  p_expires_days int   default 30,
+  p_category     text  default 'default',
+  p_once_key     text  default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_user  text;
+  v_item  jsonb;
+  v_key   text;
+  v_base  text;
+  v_mail  uuid;
+  v_once  text := nullif(btrim(coalesce(p_once_key, '')), '');
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+  select p.user_id into v_user from public.user_profiles p where p.account_id = v_uid;
+  if v_user is null then
+    raise exception 'mail_invalid: profile';
+  end if;
+  if char_length(btrim(coalesce(p_title, ''))) not between 1 and 100
+     or char_length(coalesce(p_content, '')) > 2000
+     or coalesce(p_expires_days, 0) not between 1 and 365
+     or char_length(coalesce(v_once, '')) > 100 then
+    raise exception 'mail_invalid: fields';
+  end if;
+
+  if p_items is not null then
+    if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 20 then
+      raise exception 'mail_invalid: items';
+    end if;
+    for v_item in select value from jsonb_array_elements(p_items) as t(value) loop
+      v_key := btrim(coalesce(v_item->>'key', ''));
+      if v_key = '' or (v_item->>'count') is null or (v_item->>'count') !~ '^[0-9]{1,9}$' or (v_item->>'count')::int <= 0 then
+        raise exception 'mail_invalid: items';
+      end if;
+      -- 원소 키(칸[번호]·칸.키)는 앞 칸 이름으로 본다.
+      v_base := split_part(split_part(v_key, '[', 1), '.', 1);
+      if exists (select 1 from public.ts_protected_fields f where f.table_name = 'user_data' and f.column_name = v_base) then
+        raise exception 'mail_item_protected: %', v_key;
+      end if;
+    end loop;
+  end if;
+
+  if (select count(*) from public.mails m
+       where m.account_id = v_uid and m.sender_type = 'self' and m.created_at > now() - interval '24 hours') >= 50 then
+    raise exception 'mail_send_limited';
+  end if;
+
+  if v_once is not null then
+    insert into public.mail_self_once (account_id, once_key) values (v_uid, v_once) on conflict do nothing;
+    if not found then
+      raise exception 'mail_already_sent';
+    end if;
+  end if;
+
+  insert into public.mails (account_id, user_id, sender_type, title, content, expires_at, created_at, items, category)
+  values (v_uid, v_user, 'self', btrim(p_title), coalesce(p_content, ''),
+          now() + make_interval(days => p_expires_days), now(),
+          case when p_items is null or jsonb_array_length(p_items) = 0 then null else p_items end,
+          coalesce(nullif(btrim(p_category), ''), 'default'))
+  returning id into v_mail;
+
+  if v_once is not null then
+    update public.mail_self_once set mail_id = v_mail where account_id = v_uid and once_key = v_once;
+  end if;
+  return v_mail;
+end;
+$$;
+
+comment on function public.ts_mail_send_to_self(text, text, jsonb, int, text, text) is
+  '게임이 플레이어 자신에게 우편을 보낸다. 보호 필드 아이템 거절·24시간 50통·키당 한 번.';
+revoke all on function public.ts_mail_send_to_self(text, text, jsonb, int, text, text) from public, anon, authenticated;
+grant execute on function public.ts_mail_send_to_self(text, text, jsonb, int, text, text) to authenticated;
+
 
 -- #############################################################################
 -- 07. 인앱 결제 영수증
@@ -4514,7 +4686,7 @@ create trigger tr_after_purchase_paid_change
 -- 'price_sync' 는 환율표 저장·빈 금액 채우기(purchase-price-sync)의 마지막 실행이다.
 -- 실패도 남긴다 — 조용히 멈춘 것과 환불이 없는 것을 운영 콘솔에서 구분하려는 것.
 create table if not exists public.purchase_refund_sync (
-  store            text primary key,      -- 'google_play' | 'apple_app_store' | 'price_sync' | 'auth_sync'
+  store            text primary key,      -- 'google_play' | 'apple_app_store' | 'price_sync' | 'auth_sync' | 'support_retention'(22절)
   last_started_at  timestamptz,
   last_finished_at timestamptz,
   last_ok          boolean,
@@ -5297,6 +5469,71 @@ select cron.schedule(
   'withdrawal-overdue-check',
   '15 * * * *',
   'select public.ts_withdrawal_overdue_check()'
+);
+
+-- 4-1. 오래 접속하지 않은 게스트 계정 정리 — 매시 20분. 게스트는 웹에서 본인을 확인할 수 없어(고객센터 웹 「계정 삭제」의
+--      안내 문구) 게임을 지운 게스트의 계정은 game_settings.guest_inactive_days 동안 접속이 없으면 서버가 지운다.
+--      지우는 길은 탈퇴와 같다 — 삭제 시각을 지금으로 적으면 10분 뒤 withdrawal-cleanup 이 지운다.
+--      한 번에 40개까지 — 한 시간에 표시하는 수를 정리 작업이 넉넉히 지울 수 있게.
+--      빼는 계정: 구글·애플 등이 연결된 계정(is_anonymous 갱신 시점을 믿지 않는다), 결제 기록이 있는 게스트
+--      (지우면 새 계정에서 구매 복원이 "다른 계정의 결제"로 거절돼 산 것을 잃는다).
+create or replace function public.ts_guest_inactive_sweep(p_limit int default 40)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_days int;
+  v_n    int;
+begin
+  select guest_inactive_days into v_days from public.game_settings where id = 1;
+  if coalesce(v_days, 0) <= 0 then
+    return 0;
+  end if;
+
+  -- 마지막 접속 = 로그인·토큰 갱신·접속 신호·세션 등록·저장·날짜별 접속 기록 중 가장 늦은 것.
+  -- 옛 빌드(접속 신호 없음)는 자동 로그인 복원만으로 들어와 일부 기록만 남기므로 남는 기록을 전부 본다.
+  with cand as (
+    select u.id
+      from auth.users u
+     where u.is_anonymous
+       and greatest(u.created_at,
+                    coalesce(u.last_sign_in_at, u.created_at),
+                    coalesce((select max(x.updated_at) from auth.sessions x where x.user_id = u.id), u.created_at),
+                    coalesce((select greatest(coalesce(s.last_seen_at, s.updated_at), s.updated_at)
+                                from public.user_sessions s where s.account_id = u.id), u.created_at),
+                    coalesce((select p.last_activity_at from public.user_profiles p where p.account_id = u.id), u.created_at),
+                    coalesce((select a.first_at from public.user_daily_activity a
+                               where a.account_id = u.id order by a.day desc limit 1), u.created_at))
+           < now() - make_interval(days => v_days)
+       and not exists (select 1 from auth.identities i where i.user_id = u.id and i.provider <> 'anonymous')
+       and not exists (select 1 from public.purchases b where b.account_id = u.id and b.is_test is not true)
+       and not exists (select 1 from public.user_profiles p where p.account_id = u.id and p.withdrawn_at is not null)
+     order by u.created_at
+     limit greatest(1, least(coalesce(p_limit, 40), 200))
+  )
+  insert into public.user_profiles (user_id, account_id, withdrawn_at)
+  select c.id::text, c.id, now() from cand c
+  on conflict (account_id) do update set withdrawn_at = excluded.withdrawn_at;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+comment on function public.ts_guest_inactive_sweep(int) is '오래 접속하지 않은 게스트 계정에 삭제 시각(지금)을 적는다. 지우는 건 withdrawal-cleanup. cron 이 매시 20분에 부른다.';
+revoke all on function public.ts_guest_inactive_sweep(int) from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'guest-inactive-sweep') then
+    perform cron.unschedule('guest-inactive-sweep');
+  end if;
+end $$;
+select cron.schedule(
+  'guest-inactive-sweep',
+  '20 * * * *',
+  'select public.ts_guest_inactive_sweep(40)'
 );
 
 -- 5. 자동 작업 실행 기록 정리 — 매일 03:40(UTC). cron.job_run_details 는 저절로 지워지지 않아 매분 작업만으로 하루
@@ -6183,6 +6420,228 @@ grant execute on function public.ts_admin_game_servers_list()                   
 grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,boolean) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 점검·최소 버전 — 운영 콘솔 "설정 › 점검·버전". 게임은 로그인 전에 SDK 로 ts_app_status 를 읽어 낮은 판이면
+-- 업데이트 안내, 점검 중이면 점검 안내를 띄운다(화면은 게임이 그린다). 점검이 시작되면 아래 요청 앞 검사가
+-- 로그인한 플레이어의 데이터 요청을 503 maintenance_in_progress 로 거절해, 이미 접속한 플레이어도 다음 요청(늦어도
+-- SDK 접속 신호 60초)에 끊긴다 — SDK 는 저장된 로그인을 남긴 채 세션만 끊고 게임에 알린다.
+-- 운영 콘솔에 등록한 유저 ID(maintenance_allow_users)는 점검 중에도 통과한다. 로그인 전 요청(anon)은 막지 않는다 —
+-- 상태 조회·게스트 복구가 돌아야 한다. 예상 종료 시각은 안내용이라 지나도 저절로 풀리지 않는다(운영자가 끈다).
+-- 시작 시각을 정해 두면 그때부터 막고, 그 전에는 상태 조회가 예정으로 알려 준다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.app_gate_settings (
+  id                    int         primary key default 1 check (id = 1),
+  -- 플랫폼별 최소 판(Application.version 꼴, 숫자와 점). null 이면 제한 없음. 비교는 SDK 가 한다.
+  android_min_version   text        check (android_min_version ~ '^[0-9]+(\.[0-9]+){0,3}$'),
+  ios_min_version       text        check (ios_min_version ~ '^[0-9]+(\.[0-9]+){0,3}$'),
+  -- 업데이트 안내의 스토어 주소. 안드로이드는 비우면 SDK 가 패키지 이름으로 Play 스토어 주소를 만든다.
+  android_store_url     text,
+  ios_store_url         text,
+  maintenance_enabled   boolean     not null default false,
+  maintenance_starts_at timestamptz,
+  maintenance_ends_at   timestamptz,
+  -- 점검 안내 문구. 기본 언어(1절)로 쓴 글과 언어별 글 {"en": "..."}.
+  maintenance_message   text        not null default '',
+  maintenance_localized jsonb       not null default '{}'::jsonb,
+  updated_at            timestamptz not null default now(),
+  updated_by            text
+);
+insert into public.app_gate_settings (id) values (1) on conflict (id) do nothing;
+alter table public.app_gate_settings enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.app_gate_settings from anon, authenticated;
+
+create table if not exists public.maintenance_allow_users (
+  user_id    text        primary key,
+  note       text        not null default '',
+  created_at timestamptz not null default now(),
+  created_by text
+);
+alter table public.maintenance_allow_users enable row level security;
+revoke all on table public.maintenance_allow_users from anon, authenticated;
+
+create or replace function public.ts_maintenance_active()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select s.maintenance_enabled and (s.maintenance_starts_at is null or s.maintenance_starts_at <= now())
+                     from public.app_gate_settings s where s.id = 1), false);
+$$;
+
+create or replace function public.ts_maintenance_allowed(p_account uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_account is not null and exists (
+    select 1 from public.maintenance_allow_users a
+      join public.user_profiles p on p.user_id = a.user_id
+     where p.account_id = p_account);
+$$;
+
+-- 게임이 로그인 전에도 부른다. 로그인 상태로 부르면 allowed 가 점검 중 통과 계정인지 알려 준다.
+create or replace function public.ts_app_status(p_platform text default null)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'min_version', case lower(coalesce(p_platform, '')) when 'android' then s.android_min_version
+                                                       when 'ios' then s.ios_min_version end,
+    'store_url',   case lower(coalesce(p_platform, '')) when 'android' then nullif(btrim(s.android_store_url), '')
+                                                       when 'ios' then nullif(btrim(s.ios_store_url), '') end,
+    'maintenance', case when s.maintenance_enabled then jsonb_build_object(
+                     'active',    public.ts_maintenance_active(),
+                     'starts_at', s.maintenance_starts_at,
+                     'ends_at',   s.maintenance_ends_at,
+                     'message',   s.maintenance_message,
+                     'localized', s.maintenance_localized) end,
+    'allowed',     public.ts_maintenance_allowed(auth.uid()),
+    'server_now',  now())
+    from public.app_gate_settings s where s.id = 1;
+$$;
+
+-- 콘솔 "설정 › 점검·버전"
+create or replace function public.ts_admin_app_gate_get()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'android_min_version', s.android_min_version, 'ios_min_version', s.ios_min_version,
+    'android_store_url', s.android_store_url, 'ios_store_url', s.ios_store_url,
+    'maintenance_enabled', s.maintenance_enabled, 'maintenance_active', public.ts_maintenance_active(),
+    'maintenance_starts_at', s.maintenance_starts_at, 'maintenance_ends_at', s.maintenance_ends_at,
+    'maintenance_message', s.maintenance_message, 'maintenance_localized', s.maintenance_localized,
+    'updated_at', s.updated_at, 'updated_by', s.updated_by)
+    from public.app_gate_settings s where s.id = 1;
+$$;
+
+-- 화면의 값 전부를 한 번에 저장한다. 빈 판·주소는 null(제한 없음·자동 주소).
+-- p_expected_updated_at: 화면이 읽어 둔 updated_at. 그 사이 다른 운영자가 바꿨으면 app_gate_conflict 로 거절한다 —
+-- 낡은 화면이 점검을 다시 켜거나 끄지 않게.
+drop function if exists public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text);
+create or replace function public.ts_admin_app_gate_update(
+  p_android_min_version text, p_ios_min_version text, p_android_store_url text, p_ios_store_url text,
+  p_maintenance_enabled boolean, p_maintenance_starts_at timestamptz, p_maintenance_ends_at timestamptz,
+  p_maintenance_message text, p_maintenance_localized jsonb, p_by text default null,
+  p_expected_updated_at timestamptz default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_android text := nullif(btrim(coalesce(p_android_min_version, '')), '');
+  v_ios     text := nullif(btrim(coalesce(p_ios_min_version, '')), '');
+begin
+  if p_expected_updated_at is not null
+     and (select s.updated_at from public.app_gate_settings s where s.id = 1 for update) <> p_expected_updated_at then
+    raise exception 'app_gate_conflict';
+  end if;
+  if (v_android is not null and v_android !~ '^[0-9]+(\.[0-9]+){0,3}$')
+     or (v_ios is not null and v_ios !~ '^[0-9]+(\.[0-9]+){0,3}$') then
+    raise exception 'app_version_invalid';
+  end if;
+  if p_maintenance_localized is not null and jsonb_typeof(p_maintenance_localized) <> 'object' then
+    raise exception 'maintenance_localized_invalid';
+  end if;
+  if p_maintenance_starts_at is not null and p_maintenance_ends_at is not null
+     and p_maintenance_ends_at <= p_maintenance_starts_at then
+    raise exception 'maintenance_time_invalid';
+  end if;
+  update public.app_gate_settings
+     set android_min_version = v_android, ios_min_version = v_ios,
+         android_store_url = nullif(btrim(coalesce(p_android_store_url, '')), ''),
+         ios_store_url = nullif(btrim(coalesce(p_ios_store_url, '')), ''),
+         maintenance_enabled = coalesce(p_maintenance_enabled, false),
+         maintenance_starts_at = p_maintenance_starts_at, maintenance_ends_at = p_maintenance_ends_at,
+         maintenance_message = coalesce(p_maintenance_message, ''),
+         maintenance_localized = coalesce(p_maintenance_localized, '{}'::jsonb),
+         updated_at = now(), updated_by = p_by
+   where id = 1;
+  return public.ts_admin_app_gate_get();
+end;
+$$;
+
+create or replace function public.ts_admin_maintenance_allow_list()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'user_id', a.user_id, 'note', a.note, 'created_at', a.created_at, 'created_by', a.created_by,
+           'display_name', (select d.display_name from public.user_profiles p
+                              join public.display_names d on d.account_id = p.account_id
+                             where p.user_id = a.user_id limit 1))
+           order by a.created_at), '[]'::jsonb)
+    from public.maintenance_allow_users a;
+$$;
+
+create or replace function public.ts_admin_maintenance_allow_add(p_user_id text, p_note text default '', p_by text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.user_profiles where user_id = btrim(coalesce(p_user_id, ''))) then
+    raise exception 'maintenance_user_not_found';
+  end if;
+  insert into public.maintenance_allow_users (user_id, note, created_by)
+  values (btrim(p_user_id), left(coalesce(p_note, ''), 100), p_by)
+  on conflict (user_id) do update set note = excluded.note;
+end;
+$$;
+
+create or replace function public.ts_admin_maintenance_allow_remove(p_user_id text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  delete from public.maintenance_allow_users where user_id = p_user_id;
+$$;
+
+comment on function public.ts_maintenance_active() is '지금 점검 중인지(켜져 있고 시작 시각이 지남). 요청 앞 검사·상태 조회가 쓴다.';
+comment on function public.ts_maintenance_allowed(uuid) is '점검 중에도 들어갈 수 있는 계정인지(운영 콘솔에 등록한 유저 ID).';
+comment on function public.ts_app_status(text) is '최소 판·스토어 주소·점검 상태. 게임이 로그인 전에도 부른다.';
+comment on function public.ts_admin_app_gate_get() is '점검·최소 판 설정 조회. service_role 전용.';
+comment on function public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text, timestamptz) is
+  '점검·최소 판 설정 저장. service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_list() is '점검 중 통과 유저 ID 목록. service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_add(text, text, text) is '점검 중 통과 유저 ID 등록. service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_remove(text) is '점검 중 통과 유저 ID 지우기. service_role 전용.';
+
+revoke all on function public.ts_maintenance_active()       from public, anon, authenticated;
+revoke all on function public.ts_maintenance_allowed(uuid)  from public, anon, authenticated;
+revoke all on function public.ts_app_status(text)           from public, anon, authenticated;
+revoke all on function public.ts_admin_app_gate_get()       from public, anon, authenticated;
+revoke all on function public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text, timestamptz)
+  from public, anon, authenticated;
+revoke all on function public.ts_admin_maintenance_allow_list()                 from public, anon, authenticated;
+revoke all on function public.ts_admin_maintenance_allow_add(text, text, text)  from public, anon, authenticated;
+revoke all on function public.ts_admin_maintenance_allow_remove(text)           from public, anon, authenticated;
+grant execute on function public.ts_app_status(text)           to anon, authenticated;
+grant execute on function public.ts_admin_app_gate_get()       to service_role;
+grant execute on function public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text, timestamptz)
+  to service_role;
+grant execute on function public.ts_admin_maintenance_allow_list()                to service_role;
+grant execute on function public.ts_admin_maintenance_allow_add(text, text, text) to service_role;
+grant execute on function public.ts_admin_maintenance_allow_remove(text)          to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 요청 제한 — 짧은 시간에 요청을 지나치게 많이 보내는 계정을 잠시 막는다. 운영 콘솔 "설정 › 요청 제한".
 --
 -- 게임 앱의 데이터 요청(PostgREST)마다 ts_request_limit_check 가 먼저 돈다(pgrst.db_pre_request, Supabase 문서
@@ -6270,6 +6729,7 @@ declare
   v_bucket   timestamptz;
   v_sent     text;
   v_server   text;
+  v_maint    boolean := false;
 begin
   -- 중복 로그인: SDK 는 데이터 요청마다 이 기기의 세션 토큰을 x-session-token 머리글로 싣는다. user_sessions 의 토큰과
   -- 다르면(다른 기기에서 로그인함) 읽기·쓰기를 가리지 않고 거절한다 — 앱이 따로 묻지 않아도 서버와 주고받는 순간 잡힌다.
@@ -6296,6 +6756,27 @@ begin
         'details', null,
         'hint', null)::text,
       detail = json_build_object('status', 409, 'headers', json_build_object())::text;
+  end if;
+
+  -- 점검: 로그인한 플레이어의 요청을 막는다(운영 콘솔에 등록한 유저 ID 는 통과). 상태 조회와 결제 지급 기록은 통과 —
+  -- 지급은 됐는데 기록이 막히면 같은 결제가 다시 지급될 수 있다. 이 확인이 고장 나면 통과시킨다.
+  begin
+    v_maint := coalesce(nullif(current_setting('role', true), 'none'), '') = 'authenticated'
+       and coalesce(current_setting('request.path', true), '') not in ('/rpc/ts_app_status', '/rpc/ts_mark_purchase_granted')
+       and public.ts_maintenance_active()
+       and not public.ts_maintenance_allowed(auth.uid());
+  exception when others then
+    v_maint := false;
+  end;
+
+  if v_maint then
+    raise sqlstate 'PGRST' using
+      message = json_build_object(
+        'code', 'maintenance_in_progress',
+        'message', 'maintenance_in_progress',
+        'details', null,
+        'hint', null)::text,
+      detail = json_build_object('status', 503, 'headers', json_build_object())::text;
   end if;
 
   begin
@@ -6377,7 +6858,7 @@ end;
 $$;
 
 comment on function public.ts_request_limit_check() is
-  '데이터 요청 앞 검사(pgrst.db_pre_request): 다른 기기 로그인 거절(x-session-token 머리글이 있을 때) + 요청 제한(꺼져 있으면 건너뜀). anon·authenticated·service_role 실행 권한 필수.';
+  '데이터 요청 앞 검사(pgrst.db_pre_request): 다른 기기 로그인 거절(x-session-token 머리글이 있을 때) + 점검 중 거절 + 요청 제한(꺼져 있으면 건너뜀). anon·authenticated·service_role 실행 권한 필수.';
 comment on function public.ts_request_limit_ping() is
   '엣지 함수가 요청 제한 검사를 태우려고 부르는 빈 함수.';
 
@@ -15086,7 +15567,7 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 플레이어 쪽 — support-api 가 확인한 계정으로 부른다(service_role).
 -- ---------------------------------------------------------------------------
--- 분류 이름은 언어 코드(ko·en …)의 localized 값, 없으면 한국어가 아닌 플레이어에게는 영어, 그것도 없으면 name.
+-- 분류 이름은 언어 코드(ko·en …)의 localized 값, 없으면 기본 언어(1절)가 아닌 플레이어에게는 영어, 그것도 없으면 name.
 create or replace function public.ts_support_categories(p_lang text)
 returns jsonb
 language sql
@@ -15094,7 +15575,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name))
+  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> public.ts_game_default_language() then nullif(c.localized ->> 'en', '') end, c.name))
                             order by c.sort_order, c.id), '[]'::jsonb)
     from public.support_categories c
    where c.is_active;
@@ -15109,7 +15590,7 @@ set search_path = public
 as $$
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', t.id, 'status', t.status, 'unread', t.player_unread,
-           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name),
+           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> public.ts_game_default_language() then nullif(c.localized ->> 'en', '') end, c.name),
            'preview', left(f.body, 80), 'created_at', t.created_at, 'last_message_at', t.last_message_at)
            order by t.last_message_at desc), '[]'::jsonb)
     from public.support_tickets t
@@ -15135,7 +15616,7 @@ begin
 
   select jsonb_build_object(
            'id', t.id, 'status', t.status, 'created_at', t.created_at,
-           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> 'ko' then nullif(c.localized ->> 'en', '') end, c.name),
+           'category', coalesce(nullif(c.localized ->> p_lang, ''), case when p_lang <> public.ts_game_default_language() then nullif(c.localized ->> 'en', '') end, c.name),
            'messages', coalesce((
              select jsonb_agg(jsonb_build_object('id', m.id, 'sender', m.sender, 'body', m.body,
                                                  'attachments', m.attachments, 'created_at', m.created_at) order by m.id)
@@ -15329,6 +15810,65 @@ revoke all on function public.ts_support_web_hit(text, int, int) from public, an
 grant execute on function public.ts_support_web_hit(text, int, int) to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 계정 삭제 — 고객센터 웹의 「계정 삭제」 화면(스토어에 적는 계정 삭제 요청 주소). 구글·애플로 로그인한 플레이어가
+-- 예약한다. 게임 안 탈퇴 예약과 같은 자리(user_profiles.withdrawn_at)라 지우는 것은 9절 withdrawal-cleanup,
+-- 예약 뒤 게임에 들어오면 게임의 탈퇴 취소 흐름이 그대로 돈다. 취소는 support-api 가 ts_withdrawal_cancel_redeem 을 부른다.
+-- 유예는 게임 안 탈퇴와 같은 운영 콘솔 값(ts_withdrawal_delay_days).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_support_withdrawal_status(p_account uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  -- 삭제 시각이 지났는데 아직 안 지워진 계정(정리 작업 사이 최대 30분)도 예약된 것으로 보인다.
+  select jsonb_build_object(
+    'scheduled_at', (select max(p.withdrawn_at) from public.user_profiles p
+                      where p.account_id = p_account and p.withdrawn_at is not null),
+    'guest_inactive_days', g.guest_inactive_days,
+    'withdrawal_delay_days', g.withdrawal_delay_days,
+    'web_withdrawal', g.web_withdrawal)
+    from public.game_settings g where g.id = 1;
+$$;
+
+create or replace function public.ts_support_withdrawal_request(p_account uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_at timestamptz;
+begin
+  if p_account is null or not exists (select 1 from auth.users where id = p_account) then
+    raise exception 'support_account_missing';
+  end if;
+  if not coalesce((select web_withdrawal from public.game_settings where id = 1), true) then
+    raise exception 'support_withdrawal_disabled';
+  end if;
+  -- 이미 예약했으면(시각이 지나 지워지기를 기다리는 것 포함) 그 시각을 그대로 돌려준다 — 두 번 눌러도 미뤄지지 않게.
+  select max(withdrawn_at) into v_at from public.user_profiles where account_id = p_account and withdrawn_at is not null;
+  if v_at is null then
+    v_at := public.ts_withdrawal_deadline(public.ts_withdrawal_delay_days());
+    insert into public.user_profiles (user_id, account_id, withdrawn_at)
+    values (p_account::text, p_account, v_at)
+    on conflict (account_id) do update set withdrawn_at = excluded.withdrawn_at;
+    -- 게임 안 탈퇴 예약과 같이 재설치 복구를 막는다.
+    delete from public.anonymous_recovery_tokens where account_id = p_account;
+  end if;
+  return jsonb_build_object('scheduled_at', v_at);
+end;
+$$;
+
+comment on function public.ts_support_withdrawal_status(uuid) is '고객센터 웹 계정 삭제 — 예약 시각(없으면 null)·게스트 정리 일수·탈퇴 유예 일수. support-api 전용.';
+comment on function public.ts_support_withdrawal_request(uuid) is '고객센터 웹 계정 삭제 예약(탈퇴 유예 일수 뒤 게임 시간대 자정). 이미 예약했으면 그 시각. support-api 전용.';
+revoke all on function public.ts_support_withdrawal_status(uuid) from public, anon, authenticated;
+revoke all on function public.ts_support_withdrawal_request(uuid) from public, anon, authenticated;
+grant execute on function public.ts_support_withdrawal_status(uuid) to service_role;
+grant execute on function public.ts_support_withdrawal_request(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 자주 묻는 질문 — 고객센터 창 첫 화면과 문의 쓰기(고른 분류의 것)에 보인다. 운영 콘솔 "고객센터 › 자주 묻는 질문".
 -- 공개 정보라 창은 접속 표 없이도 읽는다(support-api faqs). 분류를 지우지 않으므로 분류가 꺼져도 FAQ 는 남는다.
 -- ---------------------------------------------------------------------------
@@ -15337,7 +15877,7 @@ create table if not exists public.support_faqs (
   category_id int         references public.support_categories (id) on delete set null,
   question    text        not null check (char_length(btrim(question)) between 1 and 200),
   answer      text        not null check (char_length(btrim(answer)) between 1 and 4000),
-  -- 언어별 문구 {"en": {"question": "...", "answer": "..."}}. 없는 언어는 한국어가 아니면 en, 그것도 없으면 위 값.
+  -- 언어별 문구 {"en": {"question": "...", "answer": "..."}}. 없는 언어는 기본 언어(1절)가 아니면 en, 그것도 없으면 위 값.
   localized   jsonb       not null default '{}'::jsonb,
   sort_order  int         not null default 0,
   is_active   boolean     not null default true,
@@ -15358,7 +15898,7 @@ set search_path = public
 as $$
   with l as (
     select f.*,
-           coalesce(f.localized -> p_lang, case when p_lang <> 'ko' then f.localized -> 'en' end) as loc
+           coalesce(f.localized -> p_lang, case when p_lang <> public.ts_game_default_language() then f.localized -> 'en' end) as loc
       from public.support_faqs f
      where f.is_active
   )
@@ -15731,6 +16271,364 @@ grant execute on function public.ts_admin_support_reply(uuid, text, text)       
 grant execute on function public.ts_admin_support_set_status(uuid, text)                     to service_role;
 grant execute on function public.ts_admin_support_categories()                               to service_role;
 grant execute on function public.ts_admin_support_category_upsert(int, text, jsonb, int, boolean) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 개인정보처리방침·이용약관 — 스토어에 적는 주소가 가리키는 고객센터 웹 화면(view=privacy·terms)의 본문.
+-- 운영 콘솔 "고객센터 › 약관·방침"에서 판(version)을 만들어 쓰고 게시한다. 게시한 판은 고치지 않는다 — 시행일이 지난 판은
+-- 지난 판 목록으로 남고(방침을 바꿀 때 예전 내용을 볼 수 있게), 시행일이 오지 않은 판은 웹에 "바뀔 내용"으로 미리 보인다.
+-- 본문은 마크다운. 기본 언어(1절) 본문 + localized {"en": "..."}. 없는 언어는 기본 언어가 아니면 en, 그것도 없으면 기본 본문.
+-- ---------------------------------------------------------------------------
+create table if not exists public.legal_documents (
+  id             bigint generated always as identity primary key,
+  kind           text        not null check (kind in ('privacy', 'terms')),
+  version        int         not null,
+  effective_date date        not null,
+  body           text        not null default '' check (char_length(body) <= 100000),
+  localized      jsonb       not null default '{}'::jsonb,
+  published_at   timestamptz,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  updated_by     text,
+  unique (kind, version)
+);
+alter table public.legal_documents enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.legal_documents from anon, authenticated;
+
+-- 웹 화면 — 지금 시행 중인 판(시행일이 게임 시간대 오늘 이하인 마지막 게시 판), 시행 예정 판, 지난 판 목록.
+-- p_version 을 주면 그 게시 판(지난 판 보기). 아직 게시한 판이 없으면 current 가 null.
+create or replace function public.ts_support_legal(p_kind text, p_lang text, p_version int default null)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with pub as (
+    select d.*, (d.effective_date <= public.ts_game_today()) as in_force
+      from public.legal_documents d
+     where d.kind = p_kind and d.published_at is not null
+  ),
+  cur as (
+    select * from pub
+     where (p_version is not null and version = p_version)
+        or (p_version is null and in_force)
+     -- 시행일이 같으면 나중에 게시한 판 — 판 번호는 만든 순서라 게시 순서와 다를 수 있다.
+     order by effective_date desc, published_at desc limit 1
+  ),
+  nxt as (select * from pub where not in_force order by effective_date, published_at desc limit 1)
+  select jsonb_build_object(
+    'current', (select jsonb_build_object(
+                  'version', c.version, 'effective_date', c.effective_date,
+                  'body', coalesce(nullif(c.localized ->> p_lang, ''),
+                                   case when p_lang <> public.ts_game_default_language() then nullif(c.localized ->> 'en', '') end,
+                                   c.body))
+                  from cur c),
+    'upcoming', (select jsonb_build_object('version', n.version, 'effective_date', n.effective_date) from nxt n),
+    'versions', coalesce((select jsonb_agg(jsonb_build_object('version', p.version, 'effective_date', p.effective_date)
+                                           order by p.effective_date desc, p.version desc)
+                            from pub p where p.in_force), '[]'::jsonb));
+$$;
+
+-- 콘솔 — 판 전부(작성 중 포함).
+create or replace function public.ts_admin_legal_documents(p_kind text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', d.id, 'kind', d.kind, 'version', d.version, 'effective_date', d.effective_date,
+           'body', d.body, 'localized', d.localized, 'published_at', d.published_at,
+           'in_force', d.published_at is not null and d.effective_date <= public.ts_game_today(),
+           'updated_at', d.updated_at, 'updated_by', d.updated_by)
+           order by d.version desc), '[]'::jsonb)
+    from public.legal_documents d
+   where d.kind = p_kind;
+$$;
+
+-- 작성 중인 판 만들기(p_id null — 다음 판 번호, 내용은 넘긴 값)·고치기. 게시한 판은 고치지 못한다.
+create or replace function public.ts_admin_legal_save(
+  p_id bigint, p_kind text, p_effective_date date, p_body text, p_localized jsonb, p_by text
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id bigint;
+begin
+  if p_kind not in ('privacy', 'terms') then
+    raise exception 'legal_kind_invalid';
+  end if;
+  if p_effective_date is null then
+    raise exception 'legal_effective_date_missing';
+  end if;
+  if p_localized is not null and jsonb_typeof(p_localized) <> 'object' then
+    raise exception 'legal_localized_invalid';
+  end if;
+  if p_id is null then
+    -- 같은 종류의 판 번호를 동시에 둘이 잡지 않게.
+    perform pg_advisory_xact_lock(hashtextextended('legal_documents:' || p_kind, 0));
+    insert into public.legal_documents (kind, version, effective_date, body, localized, updated_by)
+    values (p_kind,
+            coalesce((select max(version) from public.legal_documents where kind = p_kind), 0) + 1,
+            p_effective_date, coalesce(p_body, ''), coalesce(p_localized, '{}'::jsonb), p_by)
+    returning id into v_id;
+  else
+    update public.legal_documents
+       set effective_date = p_effective_date, body = coalesce(p_body, ''), localized = coalesce(p_localized, '{}'::jsonb),
+           updated_at = now(), updated_by = p_by
+     where id = p_id and kind = p_kind and published_at is null
+    returning id into v_id;
+    if v_id is null then
+      raise exception 'legal_not_editable';
+    end if;
+  end if;
+  return v_id;
+end;
+$$;
+
+-- 게시 — 본문이 비었거나 시행일이 이미 게시한 판보다 앞이면 거절한다(판 순서와 시행 순서가 어긋나지 않게).
+create or replace function public.ts_admin_legal_publish(p_id bigint, p_by text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  d public.legal_documents;
+begin
+  select * into d from public.legal_documents where id = p_id;
+  -- 같은 종류의 게시를 한 줄로 세운다 — 둘이 동시에 게시하면 아래 시행일 비교가 서로를 못 본다.
+  perform pg_advisory_xact_lock(hashtextextended('legal_documents:' || coalesce(d.kind, ''), 0));
+  select * into d from public.legal_documents where id = p_id for update;
+  if d.id is null or d.published_at is not null then
+    raise exception 'legal_not_editable';
+  end if;
+  if char_length(btrim(d.body)) = 0 then
+    raise exception 'legal_body_empty';
+  end if;
+  if exists (select 1 from public.legal_documents
+              where kind = d.kind and published_at is not null and effective_date > d.effective_date) then
+    raise exception 'legal_effective_date_before_published';
+  end if;
+  update public.legal_documents set published_at = now(), updated_at = now(), updated_by = p_by where id = p_id;
+end;
+$$;
+
+-- 작성 중인 판만 지운다.
+create or replace function public.ts_admin_legal_delete(p_id bigint)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.legal_documents where id = p_id and published_at is null;
+  if not found then
+    raise exception 'legal_not_editable';
+  end if;
+end;
+$$;
+
+comment on function public.ts_support_legal(text, text, int) is '고객센터 웹 약관·방침 — 시행 중인 판·시행 예정·지난 판 목록. service_role 전용.';
+comment on function public.ts_admin_legal_documents(text) is '콘솔 약관·방침 판 전부. service_role 전용.';
+comment on function public.ts_admin_legal_save(bigint, text, date, text, jsonb, text) is '약관·방침 작성 중인 판 만들기·고치기. service_role 전용.';
+comment on function public.ts_admin_legal_publish(bigint, text) is '약관·방침 판 게시(이후 고치지 못함). service_role 전용.';
+comment on function public.ts_admin_legal_delete(bigint) is '약관·방침 작성 중인 판 지우기. service_role 전용.';
+revoke all on function public.ts_support_legal(text, text, int)                       from public, anon, authenticated;
+revoke all on function public.ts_admin_legal_documents(text)                          from public, anon, authenticated;
+revoke all on function public.ts_admin_legal_save(bigint, text, date, text, jsonb, text) from public, anon, authenticated;
+revoke all on function public.ts_admin_legal_publish(bigint, text)                    from public, anon, authenticated;
+revoke all on function public.ts_admin_legal_delete(bigint)                           from public, anon, authenticated;
+grant execute on function public.ts_support_legal(text, text, int)                       to service_role;
+grant execute on function public.ts_admin_legal_documents(text)                          to service_role;
+grant execute on function public.ts_admin_legal_save(bigint, text, date, text, jsonb, text) to service_role;
+grant execute on function public.ts_admin_legal_publish(bigint, text)                    to service_role;
+grant execute on function public.ts_admin_legal_delete(bigint)                           to service_role;
+
+-- ---------------------------------------------------------------------------
+-- 문의 보관 기간 — 처리가 끝난 문의는 3년 뒤 문의·답변·첨부 그림을 지운다. 개인정보처리방침에 적는 기간이라
+-- 구체적인 값이어야 하고, 전자상거래법 시행령 제6조 제1항 제4호(소비자 불만·분쟁처리 기록 3년)에 맞췄다.
+-- 결제 문의도 같다 — 결제 기록 자체(5년)는 7절 purchases 에 따로 남는다.
+-- "처리가 끝남" = 운영자 답변을 기다리지 않는 문의(답변 완료·종료)의 마지막 대화나 상태 변경. 답변 대기 문의는 지우지 않는다.
+-- 첨부 그림은 저장소 보호 장치 때문에 DB 에서 지울 수 없어, 매일 ts_support_retention_kick 이 support-api 의
+-- retention.sweep 을 깨우면 그 함수가 그림을 먼저 지우고 문의를 지운다(ts_support_retention_due → _delete).
+-- ---------------------------------------------------------------------------
+create or replace function public.ts_support_retention_cutoff()
+returns timestamptz
+language sql
+stable
+set search_path = public
+as $$
+  select now() - interval '3 years';
+$$;
+
+create index if not exists support_tickets_retention_idx
+  on public.support_tickets (greatest(last_message_at, updated_at)) where status <> 'open';
+
+create or replace function public.ts_support_retention_due(p_limit int default 100)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  -- 같은 그림이 아직 남길 문의에도 붙어 있으면(다시 보낸 문의 등) 그 그림은 빼고 준다.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', t.id,
+           'paths', (select coalesce(jsonb_agg(distinct a.path), '[]'::jsonb)
+                       from public.support_messages m
+                       cross join lateral jsonb_array_elements_text(m.attachments) as a(path)
+                      where m.ticket_id = t.id
+                        and not exists (
+                          select 1 from public.support_messages m2
+                            join public.support_tickets t2 on t2.id = m2.ticket_id
+                           where t2.user_id = t.user_id and t2.id <> t.id
+                             and m2.attachments ? a.path
+                             and (t2.status = 'open'
+                                  or greatest(t2.last_message_at, t2.updated_at) >= public.ts_support_retention_cutoff()))))),
+           '[]'::jsonb)
+    from (select id, user_id from public.support_tickets
+           where status <> 'open' and greatest(last_message_at, updated_at) < public.ts_support_retention_cutoff()
+           order by greatest(last_message_at, updated_at)
+           limit greatest(1, least(coalesce(p_limit, 100), 500))) t;
+$$;
+
+-- 그림을 지운 뒤 부른다. 그사이 플레이어가 덧붙여 답변 대기로 돌아간 문의는 남긴다.
+create or replace function public.ts_support_retention_delete(p_ids uuid[])
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  delete from public.support_tickets
+   where id = any(coalesce(p_ids, '{}'))
+     and status <> 'open' and greatest(last_message_at, updated_at) < public.ts_support_retention_cutoff();
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+-- 보관 기간이 지난 문의는 종료된 것처럼 다룬다 — 정리가 그림을 지운 뒤 행을 지우기 전에 덧붙이기·답변·다시 열기가
+-- 끼면 행만 남고 그림이 사라진다. 읽음 표시(player_unread)만 바꾸는 갱신은 통과시킨다.
+create or replace function public.ts_support_ticket_retention_guard()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if old.status <> 'open'
+     and greatest(old.last_message_at, old.updated_at) < public.ts_support_retention_cutoff()
+     and (new.status is distinct from old.status or new.last_message_at is distinct from old.last_message_at
+          or new.updated_at is distinct from old.updated_at) then
+    raise exception 'support_ticket_closed';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.ts_support_ticket_retention_guard() from public, anon, authenticated;
+drop trigger if exists trg_support_ticket_retention_guard on public.support_tickets;
+create trigger trg_support_ticket_retention_guard
+  before update on public.support_tickets
+  for each row execute function public.ts_support_ticket_retention_guard();
+
+-- 인증 없이 받는 정리라 간격 안의 재호출은 건너뛴다(withdrawal-sweep 과 같은 꼴). 기록은 7절 상태 표의 'support_retention' 줄.
+create or replace function public.ts_support_retention_try_start(p_min_gap_seconds int default 600)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ok boolean;
+begin
+  insert into public.purchase_refund_sync as s (store, last_started_at) values ('support_retention', now())
+  on conflict (store) do update set last_started_at = now()
+   where s.last_started_at is null
+      or s.last_started_at < now() - make_interval(secs => greatest(coalesce(p_min_gap_seconds, 600), 0))
+  returning true into v_ok;
+  return coalesce(v_ok, false);
+end;
+$$;
+
+-- 매일 부른다. 지울 문의가 없으면 support-api 를 부르지 않는다. project_url 이 없으면 실패로 끝내 "자동 작업" 화면에 보인다.
+create or replace function public.ts_support_retention_kick()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_url text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  if v_url is null or btrim(v_url) = '' then
+    raise exception 'project_url_missing';
+  end if;
+  if not exists (select 1 from public.support_tickets
+                  where status <> 'open' and greatest(last_message_at, updated_at) < public.ts_support_retention_cutoff()) then
+    return;
+  end if;
+  -- 함수 쪽이 기간 지난 문의만 지우므로 인증 없이 부른다(support-api 는 verify_jwt 끔).
+  perform net.http_post(
+    url                  := rtrim(btrim(v_url), '/') || '/functions/v1/support-api',
+    body                 := '{"action": "retention.sweep"}'::jsonb,
+    headers              := '{"Content-Type": "application/json"}'::jsonb,
+    timeout_milliseconds := 60000);
+end;
+$$;
+
+-- 위 호출은 요청을 넣기만 해서 support-api 가 실패해도 성공으로 남는다. 기간이 사흘 넘게 지난 문의가 남아 있으면 실패로 끝낸다.
+create or replace function public.ts_support_retention_check()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  select count(*) into v_n from public.support_tickets
+   where status <> 'open' and greatest(last_message_at, updated_at) < public.ts_support_retention_cutoff() - interval '3 days';
+  if v_n > 0 then
+    raise exception 'support_retention_overdue: 보관 기간이 사흘 넘게 지났는데 지워지지 않은 문의 %개 — support-api 배포·로그를 확인하세요', v_n;
+  end if;
+  return 0;
+end;
+$$;
+
+comment on function public.ts_support_retention_cutoff() is '이 시각보다 먼저 처리가 끝난 문의는 지울 대상(보관 3년).';
+comment on function public.ts_support_retention_due(int) is '보관 기간이 지난 문의와 첨부 그림 경로. support-api retention.sweep 전용. service_role 전용.';
+comment on function public.ts_support_retention_delete(uuid[]) is '보관 기간이 지난 문의 지우기(그림을 지운 뒤). service_role 전용.';
+comment on function public.ts_support_retention_kick() is '지울 문의가 있으면 support-api retention.sweep 을 부른다. cron 이 매일 부른다.';
+comment on function public.ts_support_retention_check() is '문의 보관 기간 정리가 실제로 됐는지 확인(사흘 넘게 남으면 실패). cron 이 매일 부른다.';
+revoke all on function public.ts_support_retention_cutoff()        from public, anon, authenticated;
+revoke all on function public.ts_support_retention_due(int)        from public, anon, authenticated;
+revoke all on function public.ts_support_retention_delete(uuid[])  from public, anon, authenticated;
+revoke all on function public.ts_support_retention_kick()          from public, anon, authenticated;
+revoke all on function public.ts_support_retention_check()         from public, anon, authenticated;
+revoke all on function public.ts_support_retention_try_start(int)  from public, anon, authenticated;
+comment on function public.ts_support_retention_try_start(int) is '문의 보관 기간 정리 시작 기록. 간격 안의 재호출이면 false. support-api 전용.';
+grant execute on function public.ts_support_retention_try_start(int) to service_role;
+grant execute on function public.ts_support_retention_due(int)       to service_role;
+grant execute on function public.ts_support_retention_delete(uuid[]) to service_role;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule('support-retention') where exists (select 1 from cron.job where jobname = 'support-retention');
+    perform cron.unschedule('support-retention-check') where exists (select 1 from cron.job where jobname = 'support-retention-check');
+    perform cron.schedule('support-retention', '35 4 * * *', $cron$ select public.ts_support_retention_kick(); $cron$);
+    perform cron.schedule('support-retention-check', '35 5 * * *', $cron$ select public.ts_support_retention_check(); $cron$);
+  end if;
+end $$;
 
 notify pgrst, 'reload schema';
 
@@ -16732,6 +17630,7 @@ end $$;
 grant execute on function public.auth_user_server_id()                                       to anon, authenticated;
 grant execute on function public.ts_default_server_id()                                      to anon, authenticated;
 grant execute on function public.ts_server_now()                                             to anon, authenticated;
+grant execute on function public.ts_app_status(text)                                         to anon, authenticated;
 grant execute on function public.ts_is_display_name_available(text, uuid)                    to anon, authenticated;
 grant execute on function public.ts_display_name_check(text, uuid)                           to authenticated;
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text)              to anon, authenticated;
@@ -16750,10 +17649,12 @@ grant execute on function public.ts_my_withdrawal_status()                 to au
 grant execute on function public.ts_after_sign_in(text, text)              to authenticated;
 grant execute on function public.ts_session_heartbeat(integer)             to authenticated;
 grant execute on function public.ts_request_withdrawal(integer)            to authenticated;
+grant execute on function public.ts_withdrawal_delay_days()                to authenticated;
 grant execute on function public.ts_transfer_my_server(text, text)         to authenticated;
 grant execute on function public.ts_delete_my_anon_recovery_tokens()       to authenticated;
 grant execute on function public.ts_view_mail_for_user(uuid)               to authenticated;
 grant execute on function public.ts_claim_mail_items(uuid, text[], jsonb)       to authenticated;
+grant execute on function public.ts_mail_send_to_self(text, text, jsonb, int, text, text) to authenticated;
 grant execute on function public.ts_claim_all_mail_items(text, text[], jsonb)   to authenticated;
 grant execute on function public.ts_delete_mail_for_user(uuid)             to authenticated;
 grant execute on function public.ts_delete_claimed_mails_for_user(text)    to authenticated;

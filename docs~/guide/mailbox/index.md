@@ -44,3 +44,4 @@ SDK 0.2.1~0.3.4로 만든 빌드는 원소 꼴 키가 든 우편을 받지 못�
 | [`GetMailInboxCountsAsync`](/guide/mailbox/counts-detail) | 미수령 수 + 분류별 세부 내역 |
 | [`GetMailSettingsAsync`](/guide/mailbox/settings) | 만료 우편 보관 일수 |
 | [`RegisterMailItemHandlers`](/guide/mailbox/item-handler) | 보상 지급 함수 등록 |
+| [`SendMailToSelfAsync`](/guide/mailbox/send-to-self) | 본인에게 우편 보내기 |

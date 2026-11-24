@@ -41,6 +41,9 @@ namespace TrueBase.Core.Common
         /// <summary>다른 기기에서 동일 계정으로 로그인해 현재 세션이 무효화되었습니다.</summary>
         public const string DuplicateLogin = "duplicate_login_detected";
 
+        /// <summary>서버 점검 중이라 요청을 받지 않습니다(운영 콘솔에 등록한 계정만 들어갈 수 있음).</summary>
+        public const string Maintenance = "maintenance_in_progress";
+
         /// <summary>연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다.</summary>
         public const string IdentityAlreadyLinked = "identity_already_linked";
 
@@ -272,6 +275,18 @@ namespace TrueBase.Core.Common
 
         /// <summary>우편 설정 행이 없습니다. DB 설치가 깨진 상태입니다.</summary>
         public const string MailSettingsMissing = "mail_settings_missing";
+
+        /// <summary>같은 키로 이미 본인에게 보낸 우편이 있습니다.</summary>
+        public const string MailAlreadySent = "mail_already_sent";
+
+        /// <summary>본인 우편에 보호 필드에 더하는 아이템이 있습니다.</summary>
+        public const string MailItemProtected = "mail_item_protected";
+
+        /// <summary>본인에게 보낸 우편이 24시간 동안 너무 많습니다.</summary>
+        public const string MailSendLimited = "mail_send_limited";
+
+        /// <summary>본인 우편의 제목·본문·아이템·기한 형식이 올바르지 않습니다.</summary>
+        public const string MailInvalid = "mail_invalid";
 
         /// <summary>이미 보상을 수령한 우편입니다.</summary>
         public const string AlreadyClaimed = "already_claimed";
