@@ -851,8 +851,8 @@ function DeleteView({ api, lang, look, signedIn, onLogin, onError, onNotice }: {
 }
 
 /**
- * 개인정보처리방침·이용약관 — 스토어에 적는 공개 주소의 화면이라 로그인 없이 본다. 본문은 운영 콘솔에서 판마다 쓴다.
- * 지금 시행 중인 판을 먼저 보이고, 시행 예정 판·지난 판은 눌러서 본다.
+ * 개인정보처리방침·이용약관 — 스토어에 적는 공개 주소의 화면이라 로그인 없이 본다. 본문은 운영 콘솔에서 버전마다 쓴다.
+ * 지금 시행 중인 버전을 먼저 보이고, 시행 예정 버전·지난 버전은 눌러서 본다.
  */
 function LegalView({ api, lang, look, doc }: { api: SupportApi; lang: Lang; look: Look | null | undefined; doc: LegalKind }) {
   const [version, setVersion] = useState<number | null>(null)

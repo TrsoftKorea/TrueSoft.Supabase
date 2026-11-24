@@ -577,12 +577,12 @@ let supportTickets: MockSupportTicket[] = (() => {
   ]
 })()
 
-// ── 개인정보처리방침·이용약관 ── 방침은 지난 판·시행 중·시행 예정·작성 중이 하나씩, 약관은 판이 없다(빈 화면 확인용).
+// ── 개인정보처리방침·이용약관 ── 방침은 지난 버전·시행 중·시행 예정·작성 중이 하나씩, 약관은 버전이 없다(빈 화면 확인용).
 type MockLegal = {
   id: number; kind: 'privacy' | 'terms'; version: number; effective_date: string; body: string
   localized: Record<string, string>; published_at: string | null; updated_at: string | null; updated_by: string | null
 }
-const LEGAL_BODY = (v: number) => `# 개인정보처리방침\n\n마왕은 힘들어(이하 "게임")는 플레이어의 개인정보를 소중히 다룹니다. 이 문서는 ${v}판입니다.\n\n## 1. 수집하는 항목\n\n| 항목 | 목적 | 보관 기간 |\n|---|---|---|\n| 기기 식별자 | 게스트 계정 복구 | 탈퇴 시까지 |\n| 결제 기록 | 결제·환불 처리 | 관계 법령에 따른 기간 |\n\n## 2. 문의\n\n- 고객센터: [바로 가기](https://example.com/support)\n- 메일: privacy@example.com\n\n## 3. 이용 목적\n\n1. 계정 관리\n\n앞 항목의 설명 문단.\n\n2. 결제 처리\n3. 문의 응대\n\n2026. 11. 24 시행\n\n[https://a.example](https://b.example)\n\n**이 방침은 시행일부터 적용됩니다.**`
+const LEGAL_BODY = (v: number) => `# 개인정보처리방침\n\n마왕은 힘들어(이하 "게임")는 플레이어의 개인정보를 소중히 다룹니다. 이 문서는 버전 ${v}입니다.\n\n## 1. 수집하는 항목\n\n| 항목 | 목적 | 보관 기간 |\n|---|---|---|\n| 기기 식별자 | 게스트 계정 복구 | 탈퇴 시까지 |\n| 결제 기록 | 결제·환불 처리 | 관계 법령에 따른 기간 |\n\n## 2. 문의\n\n- 고객센터: [바로 가기](https://example.com/support)\n- 메일: privacy@example.com\n\n## 3. 이용 목적\n\n1. 계정 관리\n\n앞 항목의 설명 문단.\n\n2. 결제 처리\n3. 문의 응대\n\n2026. 11. 24 시행\n\n[https://a.example](https://b.example)\n\n**이 방침은 시행일부터 적용됩니다.**`
 let legalDocs: MockLegal[] = [
   { id: 1, kind: 'privacy', version: 1, effective_date: addDays(kstToday(), -120), body: LEGAL_BODY(1), localized: {}, published_at: addDays(kstToday(), -125) + 'T03:00:00Z', updated_at: addDays(kstToday(), -125) + 'T03:00:00Z', updated_by: MOCK_EMAIL },
   { id: 2, kind: 'privacy', version: 2, effective_date: addDays(kstToday(), -30), body: LEGAL_BODY(2), localized: { en: '# Privacy Policy\n\nThis is version 2.' }, published_at: addDays(kstToday(), -37) + 'T03:00:00Z', updated_at: addDays(kstToday(), -37) + 'T03:00:00Z', updated_by: MOCK_EMAIL },
@@ -662,6 +662,16 @@ const scheduleActive = new Map<string, boolean>()
 type MockDraft = { id: number; feature: string; action: string; object_name: string; params: Record<string, unknown>; created_at: string; operator: string }
 const mockDrafts: Record<string, MockDraft[]> = {}
 const draftsOf = (target: ProjectTarget) => (mockDrafts[target] ??= [])
+
+// 우편 내역의 "점검 보상" — 긴 본문·언어 두 개로 전문 보기를 확인한다.
+const MAINT_MAIL = {
+  title: '점검 보상',
+  content: '안녕하세요, 운영팀입니다.\n\n오늘 진행한 정기 점검이 예정보다 길어져 불편을 드려 죄송합니다. 기다려 주신 모든 분께 감사의 뜻으로 보석을 보내 드립니다.\n\n받은 보석은 우편함에서 7일 안에 받아 주세요. 기간이 지나면 우편이 사라집니다.\n\n앞으로 더 안정적인 서비스로 찾아뵙겠습니다.',
+  localized: {
+    en: { title: 'Maintenance compensation', content: 'Hello, this is the operations team.\n\nToday\'s scheduled maintenance ran longer than planned. As a thank-you for your patience, we are sending gems to every player.\n\nPlease claim them from your mailbox within 7 days.' },
+    ja: { title: 'メンテナンス補償', content: '運営チームです。\n\n本日の定期メンテナンスが予定より長引き、ご不便をおかけしました。お詫びとしてジェムをお送りします。' },
+  },
+}
 
 // 아이템 카탈로그 — 데이터 필드 목록(userData.columns)과 맞춘다. 추가·이름 수정·삭제가 새로고침 전까지 남는다.
 // 지급 방식: 숫자 필드가 있으면 auto, 골랐는데 없으면 missing, 숫자가 아닌 필드와 이름이 같으면 blocked,
@@ -1053,11 +1063,14 @@ const HANDLERS: Record<string, Handler> = {
   },
   'mails.getRecords': () => {
     const rows = [
-      { id: 'r1', account_id: 'a9', user_id: '1094471', category: 'default', title: '점검 보상', content: '감사합니다', items: [{ key: 'gem', count: 10 }], items_claimed_at: addDays(kstToday(), 0) + 'T10:00:00+09:00', deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
-      { id: 'r2', account_id: null, user_id: '109876543210987654321', category: 'default', title: '점검 보상', content: '감사합니다', items: [{ key: 'gem', count: 10 }], items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
+      { id: 'r1', account_id: 'a9', user_id: '1094471', category: 'default', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], items_claimed_at: addDays(kstToday(), 0) + 'T10:00:00+09:00', deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
+      { id: 'r2', account_id: null, user_id: '109876543210987654321', category: 'default', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
+      { id: 'r3', account_id: 'a9', user_id: '1094471', category: 'event', title: '이벤트 안내', content: '이번 주말 접속 이벤트가 열립니다.', localized: null, items: null, items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 14) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -2) + 'T18:00:00+09:00', server_code: 'GLOBAL' },
     ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
     return { rows, total: rows.length, pageSize: 20 }
   },
+  // 기본 분류는 설치 때 들어가는 행이다.
+  'mails.getCategories': () => ({ rows: [{ key: 'default', display_name: '기본', created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' }, { key: 'event', display_name: '이벤트', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00' }] }),
   // 우편 내역 › 발송 단위. 'mails.getRecords' 의 "점검 보상"이 첫 묶음이다.
   'mails.getBatches': () => {
     const at = (d: number, t: string) => addDays(kstToday(), d) + `T${t}+09:00`
@@ -1069,7 +1082,7 @@ const HANDLERS: Record<string, Handler> = {
     return { rows, total: rows.length, pageSize: 20 }
   },
   'mails.getBatchDetail': (_t, p) => ({
-    batch: { id: String(p['batchId'] ?? 'b1'), target_mode: 'all', title: '점검 보상', items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL', open_until: null, recalled_at: null, recalled_count: 0 },
+    batch: { id: String(p['batchId'] ?? 'b1'), target_mode: 'all', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL', open_until: null, recalled_at: null, recalled_count: 0 },
     stats: { claimed_count: 1, deleted_count: 0, unclaimed_count: 1 },
   }),
   'audit.list': () => {

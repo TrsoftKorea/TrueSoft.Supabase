@@ -6,6 +6,8 @@ import { TableCard, type Column } from '../../components/ui/DataTable'
 import { StatusText, type Tone } from '../../components/ui/StatusText'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { formatDateTime, formatTotal, itemsText } from '../../components/ui/format'
+import { MailContent, type MailLocalized } from '../../components/MailContent'
+import { useDefaultLanguage } from '../../lib/languages'
 
 type GameItem = { key: string; display_name: string }
 
@@ -13,6 +15,8 @@ type MailRow = {
   id: string
   category: string
   title: string
+  content: string | null
+  localized?: MailLocalized
   items: { key: string; count: number }[] | null
   items_claimed_at: string | null
   deleted_at: string | null
@@ -44,6 +48,7 @@ export default function MailsTab({
   const [error, setError] = useState('')
   const [failed, setFailed] = useState(false)
   const [catalog, setCatalog] = useState<GameItem[]>([])
+  const defaultLang = useDefaultLanguage(target)
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -80,8 +85,9 @@ export default function MailsTab({
 
   const columns: Column<MailRow>[] = [
     { key: 'at', header: '받은 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
-    { key: 'title', header: '제목', kind: 'text', cell: (r) => r.title },
-    { key: 'items', header: '보상', kind: 'text', cell: (r) => itemsText(r.items, catalog) },
+    // 본문·언어별 글은 줄을 펼쳐서 본다. 보상은 짧아 내용 폭만 쓴다.
+    { key: 'title', header: '제목', kind: 'text', cardTitle: true, cell: (r) => r.title || null },
+    { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? itemsText(r.items, catalog) : null) },
     { key: 'status', header: '상태', kind: 'status', cell: (r) => { const st = statusOf(r); return <StatusText tone={st.tone}>{st.label}</StatusText> } },
     { key: 'expires', header: '수령 기한', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
   ]
@@ -100,6 +106,7 @@ export default function MailsTab({
         loading={loading}
         failed={failed}
         emptyText="받은 우편이 없습니다."
+        expand={(r) => <MailContent title={r.title} content={r.content} localized={r.localized} items={r.items} catalog={catalog} defaultLang={defaultLang} />}
         footer={<TableFooter summary={<>{formatTotal(total)} · 보관 기간이 지난 우편은 빠집니다</>} page={page} totalPages={totalPages} onPageChange={setPage} />}
       />
     </div>

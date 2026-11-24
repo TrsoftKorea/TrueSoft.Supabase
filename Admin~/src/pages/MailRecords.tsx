@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { X } from 'lucide-react'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
-import { WhiteCard } from '../components/ui/Card'
+import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
@@ -18,6 +18,8 @@ import { Tabs } from '../components/ui/Tabs'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { InfoList } from '../components/ui/InfoList'
+import { MailContent, type MailLocalized } from '../components/MailContent'
+import { useDefaultLanguage } from '../lib/languages'
 
 type MailRow = {
   id: string
@@ -27,6 +29,7 @@ type MailRow = {
   category: string | null
   title: string | null
   content: string | null
+  localized?: MailLocalized
   items: { key: string; count: number }[] | null
   items_claimed_at: string | null
   deleted_at: string | null
@@ -46,7 +49,7 @@ type BatchData = { rows: BatchRow[]; total: number; pageSize: number }
 type CategoryRow = { key: string; display_name: string }
 type GameItem = { key: string; display_name: string }
 type BatchDetail = {
-  batch: BatchRow & { recalled_at: string | null; recalled_count: number }
+  batch: BatchRow & { recalled_at: string | null; recalled_count: number; content?: string | null; localized?: MailLocalized }
   stats: { claimed_count: number; deleted_count: number; unclaimed_count: number }
 }
 
@@ -67,6 +70,7 @@ export default function MailRecords({
   onUnauthenticated: () => void
 }) {
   const serverName = useServerName(target)
+  const defaultLang = useDefaultLanguage(target)
   const [tab, setTab] = useState<'batches' | 'records'>('batches')
   const [error, setError] = useState('')
 
@@ -103,6 +107,7 @@ export default function MailRecords({
   const [undoBusy, setUndoBusy] = useState(false)
   const [undoError, setUndoError] = useState('')
   const [notice, setNotice] = useState('')
+  const [showContent, setShowContent] = useState(false)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -200,7 +205,7 @@ export default function MailRecords({
     try {
       if (undo === 'recall') {
         const res = await callAdmin<{ count: number }>(target, 'mails.recallBatch', { batchId: selectedBatch.id })
-        setNotice(`안 받은 우편 ${formatCount(res?.count ?? 0)}통을 거뒀습니다.`)
+        setNotice(`안 받은 우편 ${formatCount(res?.count ?? 0)}통을 취소했습니다.`)
       } else {
         await callAdmin(target, 'mails.closeBatch', { batchId: selectedBatch.id })
         setNotice('이 우편은 이제 새로 들어온 플레이어에게 가지 않습니다.')
@@ -232,11 +237,13 @@ export default function MailRecords({
   const catLabel = (key: string | null) => {
     if (!key) return '-'
     const c = categories.find((x) => x.key === key)
-    return c?.display_name || key
+    // 기본 분류 행이 없어도 고르는 목록처럼 "기본"으로 보인다.
+    return c?.display_name || (key === 'default' ? '기본' : key)
   }
 
   const openBatch = (b: BatchRow) => {
     setSelectedBatch({ id: b.id, title: b.title })
+    setShowContent(false)
     setSearch(''); setSearchInput(''); setStatus('전체'); setCategory(''); setDateFrom(''); setDateTo(''); setPage(1)
     setTab('records')
   }
@@ -292,7 +299,7 @@ export default function MailRecords({
                 key: 'target', header: '대상', kind: 'name', cell: (b) => (
                   <>
                     <span className="inline-flex items-center gap-1.5">
-                      {b.recalled_at && <Tag>거둠</Tag>}
+                      {b.recalled_at && <Tag>취소</Tag>}
                       {b.server_code ? serverTargetLabel(serverName(b.server_code)) : MODE_LABEL[b.target_mode] ?? b.target_mode}
                     </span>
                     {b.open_until && <div className="text-xs text-neutral-500">나중에 들어온 플레이어도</div>}
@@ -300,20 +307,18 @@ export default function MailRecords({
                 ),
               },
               { key: 'category', header: '분류', kind: 'name', cell: (b) => (b.category ? catLabel(b.category) : null) },
+              { key: 'title', header: '제목', kind: 'text', cardTitle: true, cell: (b) => b.title || null },
+              { key: 'items', header: '보상', kind: 'name', cell: (b) => (b.items?.length ? itemsText(b.items, catalog) : null) },
+              { key: 'recipients', header: '수신자', kind: 'number', cell: (b) => formatCount(b.recipient_count) },
               {
-                // 아이템은 제목 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 표가 옆으로 넘친다.
-                key: 'title', header: '제목', kind: 'text', cardTitle: true,
-                full: (b) => (b.items?.length ? `${b.title} · ${itemsText(b.items, catalog)}` : b.title),
-                cell: (b) => (
+                // 운영자는 보낸 시각 아래 둘째 줄로 — 따로 칸을 두면 제목·보상 칸과 함께 1280px 에서 표가 넘친다.
+                key: 'at', header: '보낸 시각', kind: 'datetime', cell: (b) => (
                   <>
-                    <div className="truncate">{b.title}</div>
-                    {!!b.items?.length && <div className="truncate text-xs text-neutral-500">{itemsText(b.items, catalog)}</div>}
+                    <div>{formatDateTime(b.created_at)}</div>
+                    {b.created_by && <div className="text-xs text-neutral-500">{b.created_by}</div>}
                   </>
                 ),
               },
-              { key: 'recipients', header: '수신자', kind: 'number', cell: (b) => formatCount(b.recipient_count) },
-              { key: 'by', header: '운영자', kind: 'name', cell: (b) => b.created_by },
-              { key: 'at', header: '보낸 시각', kind: 'datetime', cell: (b) => formatDateTime(b.created_at) },
             ]}
             rows={batches}
             rowKey={(b) => b.id}
@@ -335,7 +340,7 @@ export default function MailRecords({
                 { label: '대상', value: detail?.stats ? `${formatCount(detail.batch?.recipient_count ?? 0)}명` : detailPending },
                 { label: '수령', value: detail?.stats ? formatCount(detail.stats.claimed_count) : detailPending },
                 { label: '삭제', value: detail?.stats ? formatCount(detail.stats.deleted_count) : detailPending },
-                { label: '거둔 우편', value: !detail ? detailPending : detail.batch.recalled_at ? `${formatCount(detail.batch.recalled_count)}통` : null },
+                { label: '취소한 우편', value: !detail ? detailPending : detail.batch.recalled_at ? `${formatCount(detail.batch.recalled_count)}통` : null },
               ]} />
               <div className="ml-auto flex items-center gap-1.5 shrink-0">
                 {stillOpen && (
@@ -345,19 +350,32 @@ export default function MailRecords({
                 )}
                 {(detail?.stats.unclaimed_count ?? 0) > 0 && (
                   <Button variant="danger" size="compact" onClick={() => { setUndoError(''); setUndo('recall') }}>
-                    안 받은 우편 거두기
+                    안 받은 우편 취소
                   </Button>
                 )}
                 <button onClick={clearBatch} className="text-neutral-400 hover:text-neutral-700" title="이 발송 단위만 보기 해제" aria-label="이 발송 단위만 보기 해제"><X className="w-4 h-4" /></button>
               </div>
             </div>
           )}
+          {selectedBatch && (
+            // 본문이 길면 아래 우편 목록을 밀어내므로 접어 둔다.
+            <WhiteCard className="p-5 space-y-4">
+              <CardHeader title="우편 내용" actions={
+                <Button variant="outline" size="compact" onClick={() => setShowContent((v) => !v)}>
+                  {showContent ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}{showContent ? '접기' : '펼치기'}
+                </Button>
+              } />
+              {showContent && (detail
+                ? <MailContent title={detail.batch.title} content={detail.batch.content} localized={detail.batch.localized} items={detail.batch.items} catalog={catalog} defaultLang={defaultLang} />
+                : <div className="text-sm text-neutral-400">{detailPending}</div>)}
+            </WhiteCard>
+          )}
           {notice && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">{notice}</div>}
 
           <ConfirmDialog
             open={undo !== null}
-            title={undo === 'recall' ? '우편 거두기' : '그만 보내기'}
-            confirmLabel={undo === 'recall' ? '거두기' : '그만 보내기'}
+            title={undo === 'recall' ? '우편을 취소할까요?' : '그만 보내기'}
+            confirmLabel={undo === 'recall' ? '우편 취소' : '그만 보내기'}
             danger={undo === 'recall'}
             busy={undoBusy}
             error={undoError || undefined}
@@ -371,7 +389,7 @@ export default function MailRecords({
               <div className="text-neutral-800">{selectedBatch?.title}</div>
               {undo === 'recall' && detail && (
                 <InfoList items={[
-                  { label: '거둘 우편', value: `${formatCount(detail.stats.unclaimed_count)}통`, tone: 'danger' },
+                  { label: '취소할 우편', value: `${formatCount(detail.stats.unclaimed_count)}통`, tone: 'danger' },
                   { label: '이미 받음', value: `${formatCount(detail.stats.claimed_count)}통` },
                 ]} />
               )}
@@ -404,21 +422,32 @@ export default function MailRecords({
           <TableCard
             wide
             columns={[
-              { key: 'status', header: '상태', kind: 'status', cell: (r) => { const st = statusOf(r); return <StatusText tone={st.tone}>{st.label}</StatusText> } },
-              { key: 'category', header: '분류', kind: 'name', cell: (r) => (r.category ? catLabel(r.category) : null) },
-              { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} /> },
               {
-                // 아이템은 메시지 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 표가 옆으로 넘친다.
-                key: 'title', header: '메시지', kind: 'text',
-                full: (r) => [r.title, r.items?.length ? itemsText(r.items, catalog) : ''].filter(Boolean).join(' · '),
-                cell: (r) => (!r.title && !r.items?.length ? null : (
-                  <>
-                    <div className="truncate">{r.title || '-'}</div>
-                    {!!r.items?.length && <div className="truncate text-xs text-neutral-500">{itemsText(r.items, catalog)}</div>}
-                  </>
+                // 받은 시각은 "수령" 아래 둘째 줄로 — 따로 칸을 두면 제목·보상 칸과 함께 1280px 에서 표가 넘친다.
+                key: 'status', header: '상태', kind: 'status', cell: (r) => {
+                  const st = statusOf(r)
+                  return (
+                    <>
+                      <StatusText tone={st.tone}>{st.label}</StatusText>
+                      {r.items_claimed_at && <div className="text-xs text-neutral-500 tabular-nums">{formatDateTime(r.items_claimed_at)}</div>}
+                    </>
+                  )
+                },
+              },
+              { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} /> },
+              // 본문·언어별 글은 줄을 펼쳐서 본다. 보상은 짧아 내용 폭만 쓴다.
+              {
+                // 분류는 기본이 아닐 때만 제목 앞 표시로 — 따로 칸을 두면 1280px 에서 표가 넘친다. 분류로 거르기는 위 검색 줄이 한다.
+                key: 'title', header: '제목', kind: 'text', cardTitle: true,
+                full: (r) => r.title ?? '',
+                cell: (r) => (!r.title ? null : (
+                  <span className="inline-flex items-center gap-1.5 max-w-full">
+                    {r.category && r.category !== 'default' && <Tag>{catLabel(r.category)}</Tag>}
+                    <span className="truncate">{r.title}</span>
+                  </span>
                 )),
               },
-              { key: 'claimed', header: '받은 시각', kind: 'datetime', cell: (r) => (r.items_claimed_at ? formatDateTime(r.items_claimed_at) : null) },
+              { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? itemsText(r.items, catalog) : null) },
               { key: 'expires', header: '만료 시각', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
               { key: 'created', header: '등록 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
             ]}
@@ -427,6 +456,7 @@ export default function MailRecords({
             loading={recLoading}
             failed={recFailed}
             emptyText="우편 내역이 없습니다."
+            expand={(r) => <MailContent title={r.title} content={r.content} localized={r.localized} items={r.items} catalog={catalog} defaultLang={defaultLang} />}
             footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
           />
         </>

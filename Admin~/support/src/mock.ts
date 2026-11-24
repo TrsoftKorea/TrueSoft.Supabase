@@ -55,10 +55,10 @@ export function createMockApi(): SupportApi {
   // ?webdel=0 이면 웹 계정 삭제를 끈 프로젝트, ?statusfail=1 이면 상태 조회가 처음 한 번 실패(다시 시도로 풀림).
   const webOff = params.get('webdel') === '0'
   let statusFails = params.get('statusfail') === '1' ? 1 : 0
-  // 약관·방침(?view=privacy·terms): 방침은 지난 판·시행 중·시행 예정, 약관은 시행 중 하나. ?legal=none 이면 둘 다 게시 전.
+  // 약관·방침(?view=privacy·terms): 방침은 지난 버전·시행 중·시행 예정, 약관은 시행 중 하나. ?legal=none 이면 둘 다 게시 전.
   const noLegal = params.get('legal') === 'none'
   const day = (n: number) => new Date(now + n * 86_400_000).toISOString().slice(0, 10)
-  const legalBody = (title: string, v: number) => `# ${title}\n\n${en ? 'Devil Slayer' : '데빌 슬레이어'} — ${v}판.\n\n## 1. 수집하는 항목\n\n| 항목 | 목적 | 보관 기간 |\n|---|---|---|\n| 기기 식별자 | 게스트 계정 복구 | 탈퇴 시까지 |\n| 결제 기록 | 결제·환불 처리 | 관계 법령에 따른 기간 |\n\n## 2. 문의\n\n- 고객센터: [바로 가기](https://example.com/support)\n- 이 줄의 HTML 은 글자로 보여야 함: <img src=x onerror=alert(1)>\n\n## 3. 번호 목록(사이에 문단)\n\n1. 수집 항목\n\n앞 항목의 설명 문단.\n\n2. 이용 목적\n3. 보관 기간\n\n2026. 11. 24 시행 — 이 줄은 목록이 아니라 날짜 그대로.\n\n[https://a.example](https://b.example) — 링크 안의 주소는 한 번만 링크.\n\n**시행일부터 적용됩니다.**`
+  const legalBody = (title: string, v: number) => `# ${title}\n\n${en ? 'Devil Slayer' : '데빌 슬레이어'} — 버전 ${v}.\n\n## 1. 수집하는 항목\n\n| 항목 | 목적 | 보관 기간 |\n|---|---|---|\n| 기기 식별자 | 게스트 계정 복구 | 탈퇴 시까지 |\n| 결제 기록 | 결제·환불 처리 | 관계 법령에 따른 기간 |\n\n## 2. 문의\n\n- 고객센터: [바로 가기](https://example.com/support)\n- 이 줄의 HTML 은 글자로 보여야 함: <img src=x onerror=alert(1)>\n\n## 3. 번호 목록(사이에 문단)\n\n1. 수집 항목\n\n앞 항목의 설명 문단.\n\n2. 이용 목적\n3. 보관 기간\n\n2026. 11. 24 시행 — 이 줄은 목록이 아니라 날짜 그대로.\n\n[https://a.example](https://b.example) — 링크 안의 주소는 한 번만 링크.\n\n**시행일부터 적용됩니다.**`
   const legalDocs = {
     privacy: [
       { version: 1, effective_date: day(-120), in_force: true },

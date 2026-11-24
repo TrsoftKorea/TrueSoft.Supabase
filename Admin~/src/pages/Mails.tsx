@@ -207,7 +207,8 @@ export default function Mails({
 
   const catLabel = (key: string) => {
     const c = categories.find((x) => x.key === key)
-    return c ? (c.display_name ? `${c.display_name}` : c.key) : key
+    // 기본 분류 행이 없어도 고르는 목록처럼 "기본"으로 보인다.
+    return c?.display_name || (key === 'default' ? '기본' : key)
   }
   // 반복 발송에는 걸 수 없다 — 회차마다 열려 있어 나중에 가입한 사람이 지난 회차를 한꺼번에 받는다.
   const openApplies = mode !== 'players' && sched !== 'repeat' && openForNew
@@ -239,7 +240,7 @@ export default function Mails({
     setActive(0); setReached(0)
   }
 
-  // 받은 우편은 거둘 수 없어(우편 내역의 거두기는 안 받은 것만 지운다), 대상과 상관없이 매번 확인 창을 거친다.
+  // 받은 우편은 취소할 수 없어(우편 내역의 취소는 안 받은 것만 지운다), 대상과 상관없이 매번 확인 창을 거친다.
   const requestSubmit = () => {
     if (!canSend || sending) return
     setSendError('')
@@ -538,7 +539,7 @@ export default function Mails({
         error={sendError || undefined}
         onConfirm={() => { void submit() }}
         onCancel={() => setAskSend(false)}
-        description="플레이어가 받은 우편은 거둘 수 없습니다. 받기 전 우편은 우편 내역에서 거둘 수 있습니다."
+        description="플레이어가 받은 우편은 취소할 수 없습니다. 받기 전 우편은 우편 내역에서 취소할 수 있습니다."
       >
         <BrokenItemsConfirm items={brokenItemsIn(items, catalog)} />
         <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">

@@ -37,12 +37,12 @@ const STATE_TEXT: Record<State, [string, Tone]> = {
   draft: ['작성 중', 'warn'],
   upcoming: ['시행 예정', 'plain'],
   current: ['시행 중', 'ok'],
-  past: ['지난 판', 'muted'],
+  past: ['지난 버전', 'muted'],
 }
 const REASON_TEXT: Record<string, string> = {
-  legal_not_editable: '이미 게시한 판은 고칠 수 없습니다.',
+  legal_not_editable: '이미 게시한 버전은 고칠 수 없습니다.',
   legal_body_empty: '본문을 넣어 주세요.',
-  legal_effective_date_before_published: '이미 게시한 판보다 시행일이 앞설 수 없습니다.',
+  legal_effective_date_before_published: '이미 게시한 버전보다 시행일이 앞설 수 없습니다.',
   legal_kind_invalid: '문서 종류가 올바르지 않습니다.',
   legal_effective_date_missing: '시행일을 넣어 주세요.',
   legal_localized_invalid: '언어별 본문이 올바르지 않습니다.',
@@ -53,7 +53,7 @@ const reasonText = (e: unknown, fallback: string) => {
   return key ? REASON_TEXT[key]! : msg || fallback
 }
 
-/** 판의 상태 — 시행 중인 판은 시행일이 지난 게시 판 중 가장 새 판 하나다. */
+/** 버전의 상태 — 시행 중인 버전은 시행일이 지난 게시 버전 중 가장 새 버전 하나다. */
 function stateOf(d: LegalDoc, rows: LegalDoc[]): State {
   if (!d.published_at) return 'draft'
   if (!d.in_force) return 'upcoming'
@@ -61,7 +61,7 @@ function stateOf(d: LegalDoc, rows: LegalDoc[]): State {
   return d.version === top ? 'current' : 'past'
 }
 
-/** 고객센터 › 약관·방침 — 판을 써서 게시한다. 게시한 판은 고칠 수 없고, 시행일이 되면 고객센터 웹에 보인다. */
+/** 고객센터 › 약관·방침 — 버전을 써서 게시한다. 게시한 버전은 고칠 수 없고, 시행일이 되면 고객센터 웹에 보인다. */
 export function LegalTab({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
   const [kind, setKind] = useState<Kind>('privacy')
   const [rows, setRows] = useState<LegalDoc[] | null>(null)
@@ -81,7 +81,7 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
   const pageUrl = base ? `${base}&view=${kind}` : null
 
   // 종류를 빨리 바꾸면 앞 종류의 늦은 응답이 뒤에 올 수 있다 — 마지막 요청의 응답만 받는다.
-  // (안 그러면 방침 목록이 약관 탭에 뜨고, 그 상태로 「새 판」이 방침 본문을 약관으로 복사한다.)
+  // (안 그러면 방침 목록이 약관 탭에 뜨고, 그 상태로 「새 버전」이 방침 본문을 약관으로 복사한다.)
   const reqRef = useRef(0)
   const load = useCallback(async () => {
     const req = ++reqRef.current
@@ -101,7 +101,7 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
   useEffect(() => { void load() }, [load])
 
   const hasDraft = !!rows?.some((r) => !r.published_at)
-  // 새 판은 지금 시행 중인 판(없으면 가장 새 게시 판)을 복사해 시작한다 — 고친 곳만 바꾸면 된다.
+  // 새 버전은 지금 시행 중인 버전(없으면 가장 새 게시 버전)을 복사해 시작한다 — 고친 곳만 바꾸면 된다.
   const startNew = () => {
     const source = rows?.find((r) => rows && stateOf(r, rows) === 'current') ?? rows?.find((r) => r.published_at)
     setSaveError('')
@@ -165,8 +165,8 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
     <div className="space-y-4">
       <Segmented value={kind} onChange={setKind} options={KINDS} />
       <TableCard
-        title="판"
-        description="게시한 판은 고칠 수 없고, 시행일부터 고객센터 웹에 보입니다."
+        title="버전"
+        description="게시한 버전은 고칠 수 없고, 시행일부터 고객센터 웹에 보입니다."
         actions={
           <span className="inline-flex flex-wrap gap-1.5">
             {pageUrl && (
@@ -176,13 +176,13 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
               </Button>
             )}
             <Button variant="primary" size="compact" onClick={startNew} disabled={rows === null || hasDraft}
-              title={hasDraft ? '작성 중인 판이 있습니다' : undefined}>
-              <Plus className="w-3.5 h-3.5" />새 판
+              title={hasDraft ? '작성 중인 버전이 있습니다' : undefined}>
+              <Plus className="w-3.5 h-3.5" />새 버전
             </Button>
           </span>
         }
         columns={[
-          { key: 'version', header: '판', kind: 'number', cell: (d) => `${d.version}판` },
+          { key: 'version', header: '버전', kind: 'number', cell: (d) => d.version },
           { key: 'date', header: '시행일', kind: 'datetime', cell: (d) => d.effective_date },
           {
             key: 'state', header: '상태', kind: 'status', cell: (d) => {
@@ -208,13 +208,13 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
         rowKey={(d) => String(d.id)}
         loading={rows === null}
         failed={failed}
-        emptyText="아직 쓴 판이 없습니다."
+        emptyText="아직 쓴 버전이 없습니다."
       />
 
       {draft && (
         <EditDialog
           size="xl"
-          title={draft.id == null ? '새 판' : '판 수정'}
+          title={draft.id == null ? '새 버전' : '버전 수정'}
           description={KINDS.find((k) => k.v === kind)!.label}
           busy={saving}
           error={saveError || undefined}
@@ -283,7 +283,7 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
       )}
 
       {viewing && (
-        <EditDialog size="xl" title={`${viewing.version}판`} description={`시행일 ${viewing.effective_date}`} onClose={() => setViewing(null)}
+        <EditDialog size="xl" title={`버전 ${viewing.version}`} description={`시행일 ${viewing.effective_date}`} onClose={() => setViewing(null)}
           footer={<Button onClick={() => setViewing(null)}>닫기</Button>}>
           <div className="space-y-6">
             <Markdown source={viewing.body} />
@@ -309,8 +309,8 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
       />
       <ConfirmDialog
         open={deleting !== null}
-        title="판을 지울까요?"
-        description={deleting ? `작성 중인 ${deleting.version}판` : undefined}
+        title="버전을 지울까요?"
+        description={deleting ? `작성 중인 버전 ${deleting.version}` : undefined}
         confirmLabel="지우기"
         danger
         busy={actionBusy}

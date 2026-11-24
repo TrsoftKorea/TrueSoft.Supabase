@@ -164,7 +164,7 @@ const RULES = [
     id: 'U18', name: `제목이 ${TITLE_MAX}자를 넘음`, fix: '위에서 이미 보이는 말("이 플레이어의"·"프로젝트"·"새")을 빼고 줄인다. 뜻이 더 필요하면 설명으로',
     // 글자를 그대로 넣은 제목만 본다 — 값·식으로 넣은 제목은 길이를 모른다. 띄어쓰기도 센다(화면에서 차지하는 폭이라서).
     find: (t) => longTitles(maskComments(t)),
-    bad: '<TableCard rowKey={(r) => r.id} title="이 플레이어의 최근 변경 이력" /><ConfirmDialog open title={a ? \'거두기\' : \'새로 들어온 플레이어에게 그만 보내기\'} />',
+    bad: '<TableCard rowKey={(r) => r.id} title="이 플레이어의 최근 변경 이력" /><ConfirmDialog open title={a ? \'취소\' : \'새로 들어온 플레이어에게 그만 보내기\'} />',
     good: '<TableCard rowKey={(r) => r.id} title="변경 이력" actions={<Button title="이 줄을 처음부터 다시 불러오기">새로</Button>} /><PageHeader title={name} />',
   },
   {
@@ -177,13 +177,15 @@ const RULES = [
     bad: 'const s = `${k}: 이전값 ${v}`', good: 'const t = `${pad2(hh)}:${pad2(mm)}`; const u = `${p.label} ${p.value}`',
   },
   {
-    id: 'U20', name: '화면 글자에 옛 이름 "세이브 칸"·"숫자 칸"·"칸 없음"·"숫자 아님"·"필드 형식 다름"', fix: '메뉴 이름과 같은 "데이터 필드"·"숫자 데이터 필드"·"필드 없음"·"형식 다름"으로 쓴다',
+    id: 'U20', name: '화면 글자에 옛 이름 "세이브 칸"·"숫자 칸"·"칸 없음"·"숫자 아님"·"필드 형식 다름"·"거두기"·약관 "판"', fix: '메뉴 이름과 같은 "데이터 필드"·"숫자 데이터 필드"·"필드 없음"·"형식 다름", 우편은 "취소", 약관·방침은 "버전"으로 쓴다',
     alsoUi: true,
     // 같은 것을 화면마다 다른 말로 부르면 운영자가 다른 것으로 읽는다(2026-11-23 사용자 지시 "명칭은 항상 통일"). 주석은 화면에 안 나와 뺀다.
     // "형식 다름"은 지금 이름이라 걸리면 안 된다 — 앞에 "필드"가 붙은 옛 꼴만 잡는다.
-    find: (t) => matchAll(maskComments(t), /세이브\s*칸|숫자\s*칸|칸\s*없음|숫자\s*아님|필드\s*형식\s*다름/g),
-    bad: '<span>세이브 칸을 불러오지 못했습니다.</span><StatusText tone="bad">숫자 아님</StatusText><StatusText tone="bad">필드 형식 다름</StatusText>',
-    good: '// 세이브 칸 목록 — 숫자 칸만, 필드 형식 다름\n<span>데이터 필드를 불러오지 못했습니다.</span><StatusText tone="bad">형식 다름</StatusText><span>필드 없음·형식 다름 2개</span>',
+    // 우편 거두기는 "취소"로 바꿨다(2026-11-24 사용자 "거둠은 이상해"). 약관 "판"은 "버전"으로 — "판" 은 대전 한 판·SDK 판
+    // 뜻으로도 쓰여 통째로 막을 수 없어, 약관에만 쓰던 꼴("지난 판", 번호 뒤 "판")만 잡는다.
+    find: (t) => matchAll(maskComments(t), /세이브\s*칸|숫자\s*칸|칸\s*없음|숫자\s*아님|필드\s*형식\s*다름|거두|거둔|거둠|거둘|거둬|지난\s*판|(?:\d|\})판/g),
+    bad: '<span>세이브 칸을 불러오지 못했습니다.</span><StatusText tone="bad">숫자 아님</StatusText><StatusText tone="bad">필드 형식 다름</StatusText><Tag>거둠</Tag><b>지난 판</b>{`${v}판`}',
+    good: '// 세이브 칸 목록 — 숫자 칸만, 필드 형식 다름, 거둔 우편\n<span>데이터 필드를 불러오지 못했습니다.</span><StatusText tone="bad">형식 다름</StatusText><span>필드 없음·형식 다름 2개</span><Tag>취소</Tag><b>지난 버전</b><span>모든 판이 무효</span><span>SDK 판을 올려야</span>',
   },
   {
     id: 'U21', name: '글자 크기가 네 단계(24·16·14·12px) 밖', fix: 'text-2xl(페이지 제목·큰 숫자)·text-base(카드 제목)·text-sm(본문)·text-xs(칸 이름·보조)로 맞춘다',

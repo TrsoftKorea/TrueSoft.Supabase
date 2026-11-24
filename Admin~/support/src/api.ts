@@ -32,7 +32,7 @@ export type Look = {
 }
 export type Withdrawal = { scheduled_at: string | null }
 export type LegalKind = 'privacy' | 'terms'
-// current 는 지금 시행 중인 판(version 을 주면 그 판), upcoming 은 게시했지만 시행 전인 판, versions 는 시행된 판(최신 먼저).
+// current 는 지금 시행 중인 버전(version 을 주면 그 버전), upcoming 은 게시했지만 시행 전인 버전, versions 는 시행된 버전(최신 먼저).
 export type Legal = {
   current: { version: number; effective_date: string; body: string } | null
   upcoming: { version: number; effective_date: string } | null
