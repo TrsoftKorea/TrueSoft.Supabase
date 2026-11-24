@@ -625,7 +625,7 @@ const draftsOf = (target: ProjectTarget) => (mockDrafts[target] ??= [])
 // 판정은 화면과 같은 elementFits(서버 ts_mail_grantable_key 와 같은 규칙).
 type MockGameItem = { key: string; display_name: string; created_at: string; source: 'save' | 'manual'; grant_mode: 'auto' | 'game' | 'missing' | 'blocked' }
 const MOCK_NUMERIC_FIELDS = ['gold', 'level']
-const MOCK_COLLECTION_FIELDS: Record<string, CollectionKind> = { inventory: 'other', potions: 'dict', stage_clears: 'list' }
+const MOCK_COLLECTION_FIELDS: Record<string, CollectionKind> = { inventory: 'other', potions: 'dict', stage_clears: 'list', heroes: 'other', crops: 'dict' }
 const mockCollectionOf = (key: string) => {
   const field = elementField(key)
   return field !== null && field in MOCK_COLLECTION_FIELDS ? MOCK_COLLECTION_FIELDS[field] : undefined
@@ -1027,10 +1027,13 @@ const HANDLERS: Record<string, Handler> = {
   'userData.columns': () => [
     { column_name: 'gold', data_type: 'bigint', is_nullable: 'NO', column_default: '0' },
     { column_name: 'level', data_type: 'integer', is_nullable: 'NO', column_default: '1' },
-    // field_type: 운영 콘솔에서 정한 리스트·딕셔너리 타입. inventory 는 타입을 안 정한 옛 묶음 데이터 필드.
+    // field_type: 운영 콘솔에서 정한 리스트·딕셔너리 타입(열거형·클래스는 이름 없이 enum·class). inventory 는 타입을 안 정한
+    // 옛 묶음 데이터 필드, crops 는 열거형 이름을 적던 때의 옛 값(화면은 열거형으로 읽는다).
     { column_name: 'inventory', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: null },
-    { column_name: 'potions', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoDict<string, int>' },
+    { column_name: 'potions', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoDict<enum, int>' },
     { column_name: 'stage_clears', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoList<int>' },
+    { column_name: 'heroes', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoList<class>' },
+    { column_name: 'crops', data_type: 'jsonb', is_nullable: 'YES', column_default: null, field_type: 'AutoDict<Game.CropName, int>' },
   ],
   // 변경 관리 — 담은 변경이 새로고침 전까지 남는다. 데이터 필드의 리스트·딕셔너리 타입은 서버 ts_admin_schema_stage 처럼 검사한다.
   'schema.stage': (target, p) => {

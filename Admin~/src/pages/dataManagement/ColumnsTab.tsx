@@ -15,9 +15,9 @@ import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
-import { elementField, type CatalogItem } from '../../lib/gameItems'
+import { elementField, elementFits, type CatalogItem } from '../../lib/gameItems'
 import { StatusText } from '../../components/ui/StatusText'
-import { buildFieldType, displayFieldType, fieldTypeError, newSpec, normFieldType, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
+import { buildFieldType, displayFieldType, fieldTypeError, grantKindOf, newSpec, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
 import { CollectionTypeFields } from './CollectionTypeFields'
 
 // field_type: 리스트·딕셔너리 타입(AutoDict<K, V> 등). 타입을 안 정한 묶음 데이터 필드·그 밖의 필드는 null, 옛 서버는 안 보낸다.
@@ -266,11 +266,12 @@ function DeleteColumnModal({
 }
 
 function EditColumnModal({
-  target, onUnauthenticated, col, onClose, onSaved,
+  target, onUnauthenticated, col, catalog, onClose, onSaved,
 }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   col: Col
+  catalog: Catalog
   onClose: () => void
   onSaved: () => void
 }) {
@@ -283,16 +284,22 @@ function EditColumnModal({
   const missingDefault = csharpType ? scalarDefaultMissing(csharpType, defaultValue) : false
   // 묶음 데이터 필드는 리스트·딕셔너리 타입을 정하거나 바꾼다. 타입이 없던 필드만 "정하지 않음"으로 둘 수 있다.
   const isJson = csharpType === 'JSON'
-  const initialType = normFieldType(col.field_type)
-  const [spec, setSpec] = useState<FieldTypeSpec | null>(() => parseFieldType(col.field_type))
+  // 비교는 저장값을 되읽어 다시 조립한 값과 한다 — 이름이 든 옛 값(Game.CropName)은 열거형으로 읽혀,
+  // 그대로 비교하면 손대지 않아도 바뀐 것으로 보이고 저장값을 덮어쓴다.
+  const [initialSpec] = useState(() => parseFieldType(col.field_type))
+  const initialType = initialSpec ? buildFieldType(initialSpec) : null
+  const [spec, setSpec] = useState<FieldTypeSpec | null>(initialSpec)
   const nextType = spec ? buildFieldType(spec) : null
-  const typeIncomplete = !!spec && nextType === null
-  const typeChanged = isJson && !typeIncomplete && nextType !== initialType
+  const typeChanged = isJson && nextType !== initialType
+  // 타입을 바꾸면 지금 이 필드의 원소로 자동 지급되는 아이템 중 새 모양으로는 지급되지 않는 것.
+  const lostItems = typeChanged && spec
+    ? (catalog ?? []).filter((c) => c.grant_mode === 'auto' && elementField(c.key) === col.column_name && !elementFits(c.key, grantKindOf(spec)))
+    : []
   // 그대로면 담을 변경이 없다(JSON 필드는 기본값을 여기서 고치지 않는다).
   const unchanged = defaultValue === initialDefault && !typeChanged
 
   const handleSubmit = async () => {
-    if (!csharpType || missingDefault || unchanged || typeIncomplete || loading) return
+    if (!csharpType || missingDefault || unchanged || loading) return
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'schema.stage', {
@@ -326,7 +333,7 @@ function EditColumnModal({
         <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
         <Button variant="primary"
           onClick={() => { void handleSubmit() }}
-          disabled={!csharpType || loading || missingDefault || unchanged || typeIncomplete}
+          disabled={!csharpType || loading || missingDefault || unchanged}
         >
           {loading ? '담는 중…' : '변경 관리에 담기'}
         </Button>
@@ -346,6 +353,9 @@ function EditColumnModal({
                 </select>
               </div>
               {spec && <CollectionTypeFields spec={spec} onChange={setSpec} />}
+              {typeChanged && (
+                <ItemImpactNote catalog={catalog} affected={lostItems} effect="이 필드의 원소로 자동 지급됩니다. 바꾼 타입으로는 자동 지급되지 않습니다." />
+              )}
             </>
           )}
           {csharpType ? (
@@ -381,13 +391,16 @@ function AddColumnModal({
   const collection = isShape(kind)
   const type: CSharpType = collection ? 'JSON' : kind
   const fieldType = collection && spec ? buildFieldType(spec) : null
-  const typeIncomplete = collection && fieldType === null
   const missingDefault = scalarDefaultMissing(type, defaultValue)
   // 숫자가 아닌 필드를 아이템 코드와 같은 이름으로 만들면 그 아이템은 형식 다름이 된다(서버 판정은 이름 정확 일치).
   const isNumeric = isIntegerType(type) || isDecimalType(type)
   const affected = !isNumeric && name.trim() ? (catalog ?? []).filter((c) => c.key === name.trim()) : []
-  // 리스트·딕셔너리 필드를 그 이름으로 만들면 원소 꼴 아이템(이름.키·이름[번호])이 그 필드의 원소로 자동 지급된다.
-  const elementItems = collection && name.trim() ? (catalog ?? []).filter((c) => elementField(c.key) === name.trim()) : []
+  // 리스트·딕셔너리 필드를 그 이름으로 만들면 원소 꼴 아이템(이름.키·이름[번호])은 고른 모양에 맞을 때만 자동 지급되고,
+  // 안 맞으면 형식 다름이 된다(서버와 같은 판정 — 리스트↔[번호], 딕셔너리↔.키, 값이 숫자 종류일 때만).
+  const elementItems = collection && spec && name.trim() ? (catalog ?? []).filter((c) => elementField(c.key) === name.trim()) : []
+  const grantKind = spec ? grantKindOf(spec) : 'other'
+  const elementOk = elementItems.filter((c) => elementFits(c.key, grantKind))
+  const elementBad = elementItems.filter((c) => !elementFits(c.key, grantKind))
 
   const handleKindChange = (v: string) => {
     if (isShape(v)) {
@@ -402,7 +415,7 @@ function AddColumnModal({
   }
 
   const handleSubmit = async () => {
-    if (!name.trim() || missingDefault || typeIncomplete || loading) return
+    if (!name.trim() || missingDefault || loading) return
     setLoading(true); setError('')
     try {
       await callAdmin(target, 'schema.stage', {
@@ -432,7 +445,7 @@ function AddColumnModal({
         <Button variant="outline" onClick={onClose} disabled={loading}>취소</Button>
         <Button variant="primary"
           onClick={() => { void handleSubmit() }}
-          disabled={loading || !name.trim() || missingDefault || typeIncomplete}
+          disabled={loading || !name.trim() || missingDefault}
         >
           {loading ? '담는 중…' : '변경 관리에 담기'}
         </Button>
@@ -466,9 +479,12 @@ function AddColumnModal({
           {!isNumeric && name.trim() && (
             <ItemImpactNote catalog={catalog} affected={affected} effect="코드가 이 필드 이름과 같습니다. 숫자가 아닌 필드로 만들면 형식 다름이 됩니다." />
           )}
-          {elementItems.length > 0 && (
+          {collection && name.trim() && (
+            <ItemImpactNote catalog={catalog} affected={elementBad} effect="이 필드의 원소를 가리키지만 고른 타입으로는 자동 지급되지 않습니다." />
+          )}
+          {elementOk.length > 0 && (
             <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700 space-y-1">
-              {elementItems.map((c) => (
+              {elementOk.map((c) => (
                 <p key={c.key}>
                   아이템 카탈로그의 <span className="font-medium">{c.display_name || c.key}</span>
                   <span className="font-mono text-xs"> {c.key}</span> — 이 필드의 원소로 자동 지급됩니다.
@@ -658,6 +674,7 @@ export default function ColumnsTab({
           target={target}
           onUnauthenticated={onUnauthenticated}
           col={editCol}
+          catalog={catalog}
           onClose={() => setEditCol(null)}
           onSaved={() => { setEditCol(null); void reloadDrafts() }}
         />

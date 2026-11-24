@@ -1,48 +1,45 @@
+import { CircleHelp } from 'lucide-react'
 import { inputCls } from '../../components/ui/Input'
 import { fieldTypeLabel } from '../../lib/schemaLabels'
-import { buildFieldType, CUSTOM, displayFieldType, isTypeName, KEY_TYPES, VALUE_TYPES, type FieldTypeSpec, type TypePick } from '../../lib/fieldType'
+import { buildFieldType, displayFieldType, KEY_TYPES, VALUE_TYPES, type FieldTypeSpec } from '../../lib/fieldType'
+
+const NAME_NOTE = '열거형·클래스 이름은 유니티 클래스 생성기의 CSV 타입 열에 적습니다.'
 
 /** 리스트·딕셔너리 필드의 키·값 타입 고르기. 구조(리스트·딕셔너리 등)는 부르는 쪽이 고른다. */
 export function CollectionTypeFields({ spec, onChange }: { spec: FieldTypeSpec; onChange: (s: FieldTypeSpec) => void }) {
   const keyLabels = spec.shape === 'dict2d' ? ['첫째 키 타입', '둘째 키 타입'] : ['키 타입']
-  const built = buildFieldType(spec)
+  const named = [...spec.keys, spec.value].some((p) => p === 'enum' || p === 'class')
   return (
     <>
       {spec.keys.map((k, i) => (
-        <TypePickField key={i} label={keyLabels[i] ?? '키 타입'} options={KEY_TYPES} customLabel="열거형" value={k}
+        <TypeSelect key={i} label={keyLabels[i] ?? '키 타입'} options={KEY_TYPES} value={k}
           onChange={(v) => onChange({ ...spec, keys: spec.keys.map((x, j) => (j === i ? v : x)) })} />
       ))}
-      <TypePickField label="값 타입" options={VALUE_TYPES} customLabel="클래스·열거형" value={spec.value}
-        onChange={(v) => onChange({ ...spec, value: v })} />
-      {built && <p className="text-xs text-neutral-500">게임 코드 타입 <span className="font-mono text-neutral-700">{displayFieldType(built)}</span></p>}
+      <TypeSelect label="값 타입" options={VALUE_TYPES} value={spec.value} onChange={(v) => onChange({ ...spec, value: v })} />
+      <p className="text-xs text-neutral-500 inline-flex items-center gap-1.5">
+        게임 코드 타입 <span className="font-mono text-neutral-700">{displayFieldType(buildFieldType(spec))}</span>
+        {named && (
+          <span title={NAME_NOTE} aria-label={NAME_NOTE} className="cursor-help text-neutral-400">
+            <CircleHelp className="w-3.5 h-3.5" />
+          </span>
+        )}
+      </p>
     </>
   )
 }
 
-function TypePickField({ label, options, customLabel, value, onChange }: {
+function TypeSelect({ label, options, value, onChange }: {
   label: string
   options: string[]
-  customLabel: string
-  value: TypePick
-  onChange: (v: TypePick) => void
+  value: string
+  onChange: (v: string) => void
 }) {
-  const badName = value.pick === CUSTOM && value.custom.trim() !== '' && !isTypeName(value.custom)
   return (
     <div>
       <label className="block text-xs text-neutral-500 mb-1">{label}</label>
-      <select value={value.pick} onChange={(e) => onChange({ ...value, pick: e.target.value })} className={inputCls + ' w-full'}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls + ' w-full'}>
         {options.map((o) => <option key={o} value={o}>{fieldTypeLabel(o)}</option>)}
-        <option value={CUSTOM}>{customLabel}</option>
       </select>
-      {value.pick === CUSTOM && (
-        <>
-          <input value={value.custom} onChange={(e) => onChange({ ...value, custom: e.target.value })}
-            aria-label={`${label} 이름`} className={inputCls + ' w-full mt-1.5 font-mono'} />
-          {badName
-            ? <p className="mt-1 text-xs text-red-600">타입 이름 꼴이 맞지 않습니다.</p>
-            : <p className="mt-1 text-xs text-neutral-500">게임 코드의 타입 이름을 넣습니다. 예: Game.CropName</p>}
-        </>
-      )}
     </div>
   )
 }

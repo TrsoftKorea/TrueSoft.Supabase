@@ -17,6 +17,8 @@ const FIELD_TYPE_KO: Record<string, string> = {
   JSON: '묶음 데이터',
   // 리스트·딕셔너리 구조 — 게임 코드 이름은 AutoList 등이지만 화면에는 Auto 를 뗀 이름(lib/fieldType 의 displayFieldType)으로 보인다.
   List: '리스트', List2D: '이중 리스트', Dictionary: '딕셔너리', Dictionary2D: '이중 딕셔너리',
+  // 리스트·딕셔너리 안쪽의 열거형·클래스 — 이름은 받지 않고 종류만 정한다(이름은 유니티 클래스 생성기가 채움).
+  enum: '열거형', class: '클래스',
 }
 /** "정수 (int)" 꼴. 모르는 타입은 원래 이름 그대로. */
 export const fieldTypeLabel = (t: string) => (FIELD_TYPE_KO[t] ? `${FIELD_TYPE_KO[t]} (${t})` : t)
