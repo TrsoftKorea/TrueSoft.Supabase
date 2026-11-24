@@ -4,14 +4,20 @@
 
 export type Shape = 'list' | 'list2d' | 'dict' | 'dict2d'
 
-export const SHAPES: { value: Shape; label: string }[] = [
-  { value: 'list', label: '리스트' },
-  { value: 'list2d', label: '이중 리스트' },
-  { value: 'dict', label: '딕셔너리' },
-  { value: 'dict2d', label: '이중 딕셔너리' },
-]
-
 const GENERIC: Record<Shape, string> = { list: 'AutoList', list2d: 'AutoList2D', dict: 'AutoDict', dict2d: 'AutoDict2D' }
+
+// 화면에 보이는 이름 — 저장·전송 값(AutoList…)에서 Auto 를 뗀다. 서버·생성기는 Auto 이름을 쓰니 보일 때만 바꾼다.
+const DISPLAY: Record<string, string> = { AutoList: 'List', AutoList2D: 'List2D', AutoDict: 'Dictionary', AutoDict2D: 'Dictionary2D' }
+
+/** 화면에 보일 타입 글자 — AutoDict<Game.CropName, int> → Dictionary<Game.CropName, int>. 리스트·딕셔너리가 아니면 그대로. */
+export function displayFieldType(t: string): string {
+  return t.replace(/^(AutoList2D|AutoList|AutoDict2D|AutoDict)(?=<|$)/, (g) => DISPLAY[g] ?? g)
+}
+
+// 화면 이름표는 code 를 schemaLabels 의 fieldTypeLabel 에 넘겨 만든다(타입 이름표를 만드는 곳은 그 한 곳).
+// 이 파일은 가짜 데이터 검사가 따로 변환해 쓰므로 다른 파일을 불러오지 않는다.
+export const SHAPES: { value: Shape; code: string }[] = (['list', 'list2d', 'dict', 'dict2d'] as const)
+  .map((value) => ({ value, code: displayFieldType(GENERIC[value]) }))
 export const keyCount = (s: Shape) => (s === 'dict' ? 1 : s === 'dict2d' ? 2 : 0)
 
 /** 고르는 타입 — 목록에 있는 이름이거나, CUSTOM 이면 custom 에 적은 이름(열거형·클래스). */

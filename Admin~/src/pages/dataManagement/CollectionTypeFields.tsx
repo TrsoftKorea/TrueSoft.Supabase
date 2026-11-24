@@ -1,6 +1,6 @@
 import { inputCls } from '../../components/ui/Input'
 import { fieldTypeLabel } from '../../lib/schemaLabels'
-import { buildFieldType, CUSTOM, isTypeName, KEY_TYPES, VALUE_TYPES, type FieldTypeSpec, type TypePick } from '../../lib/fieldType'
+import { buildFieldType, CUSTOM, displayFieldType, isTypeName, KEY_TYPES, VALUE_TYPES, type FieldTypeSpec, type TypePick } from '../../lib/fieldType'
 
 /** 리스트·딕셔너리 필드의 키·값 타입 고르기. 구조(리스트·딕셔너리 등)는 부르는 쪽이 고른다. */
 export function CollectionTypeFields({ spec, onChange }: { spec: FieldTypeSpec; onChange: (s: FieldTypeSpec) => void }) {
@@ -14,7 +14,7 @@ export function CollectionTypeFields({ spec, onChange }: { spec: FieldTypeSpec; 
       ))}
       <TypePickField label="값 타입" options={VALUE_TYPES} customLabel="클래스·열거형" value={spec.value}
         onChange={(v) => onChange({ ...spec, value: v })} />
-      {built && <p className="text-xs text-neutral-500">게임 코드 타입 <span className="font-mono text-neutral-700">{built}</span></p>}
+      {built && <p className="text-xs text-neutral-500">게임 코드 타입 <span className="font-mono text-neutral-700">{displayFieldType(built)}</span></p>}
     </>
   )
 }

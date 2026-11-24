@@ -5,6 +5,7 @@ import type { ProjectTarget } from '../lib/projectTarget'
 import { usePendingChanges, type DraftRow } from '../lib/pendingChanges'
 import { opLabel } from '../lib/schemaLabels'
 import { pgTypeLabel as typeText } from '../lib/schemaLabels'
+import { displayFieldType } from '../lib/fieldType'
 import { PageHeader } from '../components/ui/PageHeader'
 import { inputCls } from '../components/ui/Input'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
@@ -56,7 +57,7 @@ function defaultSqlText(def: string): string {
 }
 
 // 필드 추가·수정 — 타입과 기본값만 보여주면 충분하다.
-// 리스트·딕셔너리 타입(field_type)은 게임 코드 이름 그대로 — 묶음 데이터 필드는 기본값을 고치지 않아 기본값은 빼고 타입만 보인다.
+// 리스트·딕셔너리 타입(field_type)은 화면 이름(Dictionary<K, V> 등)으로 — 묶음 데이터 필드는 기본값을 고치지 않아 기본값은 빼고 타입만 보인다.
 function fieldSummary(params: Record<string, unknown>, action: string): string {
   const def = params['default_sql']
   const defText = def === null || def === undefined || def === '' ? '기본값 없음' : `기본값 ${defaultSqlText(str(def))}`
@@ -64,11 +65,11 @@ function fieldSummary(params: Record<string, unknown>, action: string): string {
   const fieldType = params['field_type']
   if (action === 'update') {
     if (!hasType) return `${defText}으로 변경`
-    const typePart = fieldType === null || fieldType === '' ? '타입 지움' : `타입 ${str(fieldType)} 지정`
+    const typePart = fieldType === null || fieldType === '' ? '타입 지움' : `타입 ${displayFieldType(str(fieldType))} 지정`
     return params['nullable'] === true ? typePart : `${defText}으로 변경 · ${typePart}`
   }
 
-  if (hasType && fieldType) return str(fieldType)
+  if (hasType && fieldType) return displayFieldType(str(fieldType))
   const parts: string[] = []
   if (params['coltype']) parts.push(typeText(str(params['coltype'])))
   parts.push(defText)

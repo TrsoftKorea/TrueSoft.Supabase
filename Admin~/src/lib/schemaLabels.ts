@@ -15,6 +15,8 @@ const FIELD_TYPE_KO: Record<string, string> = {
   float: '소수', double: '소수(정밀)', decimal: '소수(금액)', bool: '예/아니오',
   DateTimeOffset: '날짜·시각', DateTime: '날짜·시각(시간대 없음)', DateOnly: '날짜', TimeOnly: '시각',
   JSON: '묶음 데이터',
+  // 리스트·딕셔너리 구조 — 게임 코드 이름은 AutoList 등이지만 화면에는 Auto 를 뗀 이름(lib/fieldType 의 displayFieldType)으로 보인다.
+  List: '리스트', List2D: '이중 리스트', Dictionary: '딕셔너리', Dictionary2D: '이중 딕셔너리',
 }
 /** "정수 (int)" 꼴. 모르는 타입은 원래 이름 그대로. */
 export const fieldTypeLabel = (t: string) => (FIELD_TYPE_KO[t] ? `${FIELD_TYPE_KO[t]} (${t})` : t)

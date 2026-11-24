@@ -17,7 +17,7 @@ import { dangerInputCls, inputCls } from '../../components/ui/Input'
 import { RefreshButton } from '../../components/ui/FilterBar'
 import { elementField, type CatalogItem } from '../../lib/gameItems'
 import { StatusText } from '../../components/ui/StatusText'
-import { buildFieldType, fieldTypeError, newSpec, normFieldType, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
+import { buildFieldType, displayFieldType, fieldTypeError, newSpec, normFieldType, parseFieldType, SHAPES, type FieldTypeSpec, type Shape } from '../../lib/fieldType'
 import { CollectionTypeFields } from './CollectionTypeFields'
 
 // field_type: 리스트·딕셔너리 타입(AutoDict<K, V> 등). 타입을 안 정한 묶음 데이터 필드·그 밖의 필드는 null, 옛 서버는 안 보낸다.
@@ -319,7 +319,7 @@ function EditColumnModal({
     <EditDialog
       error={error || undefined}
       title="필드 수정"
-      description={`${col.column_name} · ${col.field_type ?? pgTypeLabel(col.data_type)}`}
+      description={`${col.column_name} · ${col.field_type ? displayFieldType(col.field_type) : pgTypeLabel(col.data_type)}`}
       busy={loading}
       onClose={onClose}
       footer={<>
@@ -342,7 +342,7 @@ function EditColumnModal({
                   className={inputCls + ' w-full'}
                 >
                   {!initialType && <option value="">정하지 않음</option>}
-                  {SHAPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {SHAPES.map((s) => <option key={s.value} value={s.value}>{fieldTypeLabel(s.code)}</option>)}
                 </select>
               </div>
               {spec && <CollectionTypeFields spec={spec} onChange={setSpec} />}
@@ -454,7 +454,7 @@ function AddColumnModal({
               className={inputCls + ' w-full'}
             >
               {SCALAR_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
-              {SHAPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              {SHAPES.map((s) => <option key={s.value} value={s.value}>{fieldTypeLabel(s.code)}</option>)}
             </select>
           </div>
           {collection && spec && <CollectionTypeFields spec={spec} onChange={setSpec} />}
@@ -550,7 +550,7 @@ export default function ColumnsTab({
   // 리스트·딕셔너리 타입을 정한 변경은 그 타입도 함께 — 같은 필드를 담아 두고 무엇을 정했는지 잊지 않게.
   const pendingItems: PendingItem[] = drafts.map((d) => {
     const ft = d.params?.['field_type']
-    const typeText = 'field_type' in (d.params ?? {}) ? (typeof ft === 'string' && ft ? ft : '타입 지움') : ''
+    const typeText = 'field_type' in (d.params ?? {}) ? (typeof ft === 'string' && ft ? displayFieldType(ft) : '타입 지움') : ''
     return { id: d.id, label: opLabel(d.feature, d.action), detail: typeText ? `${d.object_name} · ${typeText}` : d.object_name }
   })
 
@@ -568,6 +568,7 @@ export default function ColumnsTab({
           c.column_name.toLowerCase().includes(q)
           || c.data_type.toLowerCase().includes(q)
           || (c.field_type ?? '').toLowerCase().includes(q)
+          || displayFieldType(c.field_type ?? '').toLowerCase().includes(q)
           || pgTypeLabel(c.data_type).toLowerCase().includes(q))
       : cols),
     [cols, q],
@@ -611,7 +612,7 @@ export default function ColumnsTab({
           {
             // 리스트·딕셔너리 타입은 게임 코드에 쓰는 이름 그대로. 타입을 안 정한 묶음 데이터 필드는 그 사실을 드러낸다.
             key: 'type', header: '타입', kind: 'name', cell: (c) => c.field_type ? (
-              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 font-mono">{c.field_type}</span>
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700 font-mono">{displayFieldType(c.field_type)}</span>
             ) : (
               <span className="inline-flex items-center gap-2">
                 <span className="inline-block px-2 py-0.5 text-xs rounded bg-neutral-100 text-neutral-700">{pgTypeLabel(c.data_type)}</span>
