@@ -2252,7 +2252,8 @@ begin
     if v_norm is null then
       raise exception 'field_collection_type_invalid: %', v_type;
     end if;
-    if v_typid not in ('jsonb'::regtype, 'json'::regtype) then
+    -- 지급·판정 함수가 jsonb 칸만 보므로 json 칸에는 적지 않는다(적으면 타입은 보이는데 지급은 늘 실패한다).
+    if v_typid <> 'jsonb'::regtype then
       raise exception 'field_collection_type_needs_json: %', p_colname;
     end if;
   end if;
@@ -3562,13 +3563,14 @@ begin
   end if;
 
   -- 정한 타입: 원소가 숫자인 1차원 리스트·딕셔너리만 지급한다. 딕셔너리 키는 SDK 원소 표가 받는 글자·정수·열거형.
+  -- 콘솔은 열거형·클래스 자리를 이름 없이 enum·class 로 적는다(이름은 클래스 생성기가 게임 코드 쪽에서 채운다).
   v_type := public.ts_user_data_field_type(p_col);
   if v_type is not null then
     if v_type ~ ('^AutoList<' || c_num || '>$') then
       return 'list';
     end if;
     m := regexp_match(v_type, '^AutoDict<([^,]+), ' || c_num || '>$');
-    if m is not null and m[1] !~ '^(bool|byte|sbyte|short|ushort|uint|ulong|float|double|decimal|char|object|DateTime|DateTimeOffset|DateOnly|TimeOnly)$' then
+    if m is not null and m[1] !~ '^(bool|byte|sbyte|short|ushort|uint|ulong|float|double|decimal|char|object|class|DateTime|DateTimeOffset|DateOnly|TimeOnly)$' then
       return 'dict';
     end if;
     return 'other';
@@ -3603,8 +3605,8 @@ comment on function public.ts_mail_collection_kind(text) is
 
 revoke all on function public.ts_mail_collection_kind(text) from public, anon, authenticated;
 
--- 서버가 지급하는 보상 키인가 — 숫자 데이터 필드 이름이거나, 저장된 값으로 본 모양과 맞는 리스트·딕셔너리 원소 꼴.
--- 저장된 값이 없어 모양을 모르면 원소 꼴은 받는다. 실제 지급은 받을 때 SDK 의 원소 표로 다시 가른다.
+-- 서버가 지급하는 보상 키인가 — 숫자 데이터 필드 이름이거나, 필드 모양(ts_mail_collection_kind — 콘솔에서 정한 타입,
+-- 없으면 저장된 값)과 맞는 리스트·딕셔너리 원소 꼴. 모양을 모르면 원소 꼴은 받는다. 실제 지급은 받을 때 SDK 의 원소 표로 다시 가른다.
 create or replace function public.ts_mail_grantable_key(p_key text)
 returns boolean
 language sql
@@ -3619,7 +3621,7 @@ as $$
 $$;
 
 comment on function public.ts_mail_grantable_key(text) is
-  '우편 보상 키를 서버가 지급하는가(숫자 데이터 필드 이름, 또는 저장된 값의 모양과 맞는 리스트·딕셔너리 원소 꼴). 아이템 카탈로그의 자동 지급 판정.';
+  '우편 보상 키를 서버가 지급하는가(숫자 데이터 필드 이름, 또는 필드 모양과 맞는 리스트·딕셔너리 원소 꼴). 아이템 카탈로그의 자동 지급 판정.';
 
 revoke all on function public.ts_mail_grantable_key(text) from public, anon, authenticated;
 
@@ -3660,7 +3662,8 @@ begin
     v_key := e->>'key';
     v_granted := false;
 
-    if not (v_key = any(coalesce(p_client_keys, '{}'::text[]))) then
+    -- 목록에 null 이 섞여도 "목록 밖"으로 본다 — 비교가 null 이면 지급도 처리기도 없이 받음 표시만 남는다.
+    if not coalesce(v_key = any(coalesce(p_client_keys, '{}'::text[])), false) then
       if v_key is null then
         raise exception 'mail_item_handler_missing: %', v_key;
       end if;
@@ -3688,10 +3691,16 @@ begin
         end if;
 
         if not v_is_list then
+          -- 정수 키는 -0·앞자리 0 없이, 게임의 키 타입 범위 안만 — 넘는 키를 적으면 그 세이브를 다시 읽지 못한다.
+          -- 0.4.3 전 SDK 는 long 키도 "int" 로 보내 그 빌드의 long 키는 int 범위까지만 받는다.
           v_keys := v_spec->'keys';
-          if not (   (jsonb_typeof(v_keys) = 'array' and v_keys ? v_elem)
-                  or (v_keys #>> '{}' = 'int' and v_elem ~ '^-?(0|[1-9][0-9]{0,17})$')
-                  or (v_keys #>> '{}' = 'any')) then
+          if not coalesce(
+                     (jsonb_typeof(v_keys) = 'array' and v_keys ? v_elem)
+                  or (v_keys #>> '{}' = 'int'  and v_elem ~ '^(0|-?[1-9][0-9]{0,9})$'
+                      and v_elem::numeric between -2147483648 and 2147483647)
+                  or (v_keys #>> '{}' = 'long' and v_elem ~ '^(0|-?[1-9][0-9]{0,18})$'
+                      and v_elem::numeric between -9223372036854775808 and 9223372036854775807)
+                  or (v_keys #>> '{}' = 'any'), false) then
             raise exception 'mail_item_handler_missing: %', v_key;
           end if;
         end if;
@@ -3862,8 +3871,10 @@ grant execute on function public.ts_claim_mail_items(uuid, text[], jsonb) to aut
 -- RPC: 우편함 전체 일괄 수령 — 반환 [{mail_id, items:[{index,key,count[,granted]},...]}, ...]
 -- ---------------------------------------------------------------------------
 -- p_client_keys·p_element_spec 은 ts_claim_mail_items 와 같다. 한 우편이라도 지급할 수 없는 키가 있으면 전체를 되돌린다.
--- 단 리스트·딕셔너리 원소 키 때문에 지급할 수 없는 우편은 건너뛰고(받지 않은 채 남김) 나머지를 받는다 — 옛 빌드나
--- 리스트에 없는 칸을 가리킨 우편 하나가 그 플레이어의 전체 받기를 만료 때까지 막지 않게.
+-- 단 리스트·딕셔너리 원소 키 때문에 지급할 수 없는 우편은 건너뛰고(받지 않은 채 남김) 나머지를 받는다 — 원소를 모르는
+-- 0.3.x 빌드나 리스트에 없는 칸을 가리킨 우편 하나가 그 플레이어의 전체 받기를 만료 때까지 막지 않게.
+-- 0.2.x 빌드는 처리기 없는 보상이 든 우편이 하나라도 있으면 게임 쪽에서 전체 받기를 멈춰 여기까지 오지 않는다.
+-- 한 우편에서 먼저 난 오류의 키로 가르므로, 처리기 없는 보통 키가 원소 키보다 앞에 있으면 전체 받기가 실패한다.
 drop function if exists public.ts_claim_all_mail_items();
 drop function if exists public.ts_claim_all_mail_items(text);
 drop function if exists public.ts_claim_all_mail_items(text, text[]);
@@ -6916,7 +6927,7 @@ grant execute on function public.ts_user_data_reset_pending() to authenticated;
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- game_items — 아이템 카탈로그(발송 선택 편의·표시명). 실제 지급은 게임 IMailItemHandler.
+-- game_items — 아이템 카탈로그(발송 선택 편의·표시명). 실제 지급은 서버(데이터 필드) 또는 게임의 우편 아이템 핸들러.
 -- ---------------------------------------------------------------------------
 create table if not exists public.game_items (
   key          text primary key,
@@ -6944,7 +6955,7 @@ drop index if exists public.game_items_active_idx;
 create unique index if not exists game_items_display_name_uniq
   on public.game_items (lower(btrim(display_name))) where btrim(display_name) <> '';
 
-comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 키가 숫자 데이터 필드 이름이나 리스트·딕셔너리 원소 꼴이면 받을 때 서버가 지급(ts_mail_grantable_key), 아니면 게임 IMailItemHandler.';
+comment on table public.game_items is '어드민 우편 발송용 아이템 카탈로그. mails.items[].key 선택 편의·표시명. 키가 숫자 데이터 필드 이름이나 리스트·딕셔너리 원소 꼴이면 받을 때 서버가 지급(ts_mail_grantable_key), 아니면 게임의 우편 아이템 핸들러.';
 
 alter table public.game_items enable row level security;
 drop policy if exists "game_items_select_all" on public.game_items;
@@ -9780,7 +9791,16 @@ begin
     if public.ts_schema_field_type_norm(p_params->>'field_type') is null then
       raise exception 'field_collection_type_invalid: %', p_params->>'field_type';
     end if;
-    if p_action = 'add' and lower(btrim(coalesce(p_params->>'coltype', ''))) not in ('jsonb', 'json') then
+    -- 게시 때 admin_set_user_data_field_type 이 jsonb 칸만 받는다. 담을 때 걸러야 함께 대기 중인 다른 변경의 게시를 막지 않는다.
+    if (p_action = 'add' and lower(btrim(coalesce(p_params->>'coltype', ''))) <> 'jsonb')
+       or (p_action = 'update' and not exists (
+             select 1 from pg_attribute a
+              where a.attrelid = 'public.user_data'::regclass and a.attname = p_object_name
+                and a.attnum > 0 and not a.attisdropped and a.atttypid = 'jsonb'::regtype)
+           and not exists (
+             select 1 from public.ts_schema_draft
+              where status = 'pending' and feature = 'user_data_field' and action = 'add'
+                and object_name = p_object_name and lower(btrim(coalesce(params->>'coltype', ''))) = 'jsonb')) then
       raise exception 'field_collection_type_needs_json: %', p_object_name;
     end if;
   end if;
@@ -11103,7 +11123,7 @@ notify pgrst, 'reload schema';
 
 -- 쿠폰 기능을 제공합니다.
 -- 쿠폰 정의·발급은 운영(service_role)이 하고, 게임은 코드를 보내 사용하는 것만 합니다.
--- 보상은 게임에 직접 주지 않고 우편(mails)으로 넣습니다 — 실제 지급은 기존 IMailItemHandler 경로를 그대로 씁니다.
+-- 보상은 게임에 직접 주지 않고 우편(mails)으로 넣습니다 — 실제 지급은 우편 받기 경로(서버 지급·게임의 우편 아이템 핸들러)를 그대로 씁니다.
 --
 -- 쿠폰은 두 종류입니다.
 --   normal  : 발급 수량만큼 랜덤 코드를 만들고, 코드 1개당 1회만 쓸 수 있습니다.

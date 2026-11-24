@@ -147,7 +147,7 @@ namespace TrueBase.Editor
             bool ok;
             if (t.IndexOf("/*", StringComparison.Ordinal) >= 0)
                 ok = false; // 미해결 플레이스홀더
-            else if (t == "object" || Array.IndexOf(TypeOptions, t) >= 0)
+            else if (t == "object" || IsNameSlot(t) || IsAutoValueLeaf(t) || Array.IndexOf(TypeOptions, t) >= 0)
                 ok = true;
             else if (t.EndsWith("[]", StringComparison.Ordinal))
                 ok = IsResolvableClrType(t.Substring(0, t.Length - 2), cache);
@@ -181,6 +181,115 @@ namespace TrueBase.Editor
                 return args.Count > 0 && args.TrueForAll(a => a.Length > 0);
             }
             return false;
+        }
+
+        // 운영 콘솔은 열거형·클래스 자리를 이름 없이 enum·class 로 적는다(둘 다 C# 예약어라 실제 타입 이름과 겹치지 않는다).
+        // 이름은 게임 코드의 일이라 생성기가 CSV·기존 클래스 파일의 같은 자리에서 채운다.
+        internal const string EnumSlot  = "enum";
+        internal const string ClassSlot = "class";
+
+        internal static bool IsNameSlot(string arg)
+        {
+            var a = arg?.Trim();
+            return a == EnumSlot || a == ClassSlot;
+        }
+
+        /// <summary>enum·class 자리가 남아 있는 컬렉션 타입인지 — 이름을 못 채운 상태라 생성하면 컴파일되지 않는다.</summary>
+        internal static bool HasNameSlot(string clrType)
+            => TrySplitCollection(clrType, out _, out var args) && args.Exists(IsNameSlot);
+
+        /// <summary>
+        /// 컬렉션 타입을 Auto 모양 이름(AutoList·AutoList2D·AutoDict·AutoDict2D)과 원소 인자로 나눈다.
+        /// CSV 꼴(List·배열·Dictionary, 이중 포함)도 같은 모양으로 읽는다.
+        /// </summary>
+        internal static bool TrySplitCollection(string clrType, out string shape, out List<string> args)
+        {
+            shape = null;
+            args  = null;
+            if (string.IsNullOrWhiteSpace(clrType)) return false;
+            var t = clrType.Trim();
+
+            if (TryUnwrapAuto(t, out var autoArgs))
+            {
+                shape = t.Substring(0, t.IndexOf('<'));
+                args  = autoArgs;
+                return true;
+            }
+            if (TryUnwrapList(t, out var elem) || TryUnwrapArray(t, out elem))
+            {
+                if (TryUnwrapList(elem, out var inner) || TryUnwrapArray(elem, out inner))
+                {
+                    shape = "AutoList2D";
+                    args  = new List<string> { inner };
+                }
+                else
+                {
+                    shape = "AutoList";
+                    args  = new List<string> { elem };
+                }
+                return true;
+            }
+            if (TryUnwrapDict(t, out var k, out var v))
+            {
+                if (TryUnwrapDict(v, out var k2, out var v2))
+                {
+                    shape = "AutoDict2D";
+                    args  = new List<string> { k, k2, v2 };
+                }
+                else
+                {
+                    shape = "AutoDict";
+                    args  = new List<string> { k, v };
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 운영 콘솔 타입의 enum·class 자리를 <paramref name="sourceType"/>(CSV·기존 클래스 파일)의 같은 자리 이름으로 채운다.
+        /// 나머지 자리는 콘솔 타입을 그대로 쓴다. 모양이 다르거나 enum·class 가 아닌 자리가 다르면 <paramref name="conflict"/>.
+        /// </summary>
+        internal static string FillNameSlots(string consoleType, string sourceType, out bool conflict)
+        {
+            conflict = false;
+            if (string.IsNullOrWhiteSpace(sourceType) || !TrySplitCollection(consoleType, out var shape, out var consoleArgs))
+                return consoleType;
+            if (!TrySplitCollection(sourceType, out var sourceShape, out var sourceArgs)
+                || sourceShape != shape || sourceArgs.Count != consoleArgs.Count)
+            {
+                conflict = true;
+                return consoleType;
+            }
+
+            var merged = new List<string>(consoleArgs.Count);
+            for (var i = 0; i < consoleArgs.Count; i++)
+            {
+                var c = consoleArgs[i];
+                var s = sourceArgs[i].Trim();
+                if (IsNameSlot(c))
+                {
+                    if (IsNameSlot(s)) { merged.Add(c); continue; }
+                    if (IsAutoValueLeaf(s) || Array.IndexOf(TypeOptions, s) >= 0) { conflict = true; merged.Add(c); continue; }
+                    merged.Add(TryQualify(s, out var qualified) ? qualified : s);
+                }
+                else
+                {
+                    if (!SameTypeName(c, s)) conflict = true;
+                    merged.Add(c);
+                }
+            }
+            return shape + "<" + string.Join(", ", merged) + ">";
+        }
+
+        private static bool SameTypeName(string a, string b)
+        {
+            a = a.Trim();
+            b = b.Trim();
+            if (string.Equals(a, b, StringComparison.Ordinal)) return true;
+            var la = a.Substring(a.LastIndexOf('.') + 1);
+            var lb = b.Substring(b.LastIndexOf('.') + 1);
+            return string.Equals(la, lb, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -317,8 +426,9 @@ namespace TrueBase.Editor
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             if (string.IsNullOrEmpty(source)) return result;
 
+            // 사이에 다른 어트리뷰트([AutoDefault(...)]·[JsonProperty(...)])·저장 주기 인자·초기화식(= new …)이 있어도 읽는다.
             var pattern = new Regex(
-                @"\[" + Regex.Escape(attributeName) + @"(?:\(""([^""]*)""\))?\]\s+(?:public|internal)\s+(.+?)\s+@?(\w+)\s*;",
+                @"\[" + Regex.Escape(attributeName) + @"(?:\(""([^""]*)""[^)]*\))?\]\s*(?:\[[^\]]*\]\s*)*(?:public|internal)\s+(.+?)\s+@?(\w+)\s*(?:=[^;]*)?;",
                 RegexOptions.Multiline);
 
             foreach (Match m in pattern.Matches(source))

@@ -304,7 +304,8 @@ namespace TrueBase.Core.Data
         {
             if (keyType == typeof(string)) return "any";
             if (keyType.IsEnum) return Enum.GetNames(keyType);
-            if (keyType == typeof(int) || keyType == typeof(long)) return "int";
+            if (keyType == typeof(int)) return "int";
+            if (keyType == typeof(long)) return "long";
             return null;
         }
 

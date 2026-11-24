@@ -181,6 +181,7 @@ namespace TrueBase.Editor
             if (string.IsNullOrWhiteSpace(clrType)) return true;
             var t = clrType.Trim();
             if (t.IndexOf("/*", StringComparison.Ordinal) >= 0) return true;
+            if (GeneratorTypeCatalog.HasNameSlot(t)) return true; // 콘솔의 열거형·클래스 자리를 이름으로 못 채움
             if (TryParseDictionaryTypes(t, out _, out var valueType)
                 && string.Equals(valueType?.Trim(), "object", StringComparison.Ordinal))
                 return true;

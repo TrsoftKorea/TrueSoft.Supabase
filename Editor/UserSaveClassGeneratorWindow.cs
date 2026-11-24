@@ -99,7 +99,8 @@ namespace TrueBase.Editor
                 if (unspecifiedNames.Count > 0)
                     EditorGUILayout.HelpBox(
                         "타입 미지정 필드: " + string.Join(", ", unspecifiedNames)
-                        + "\n운영 콘솔 데이터 필드에서 리스트·딕셔너리 타입을 정하거나 CSV에서 지정해야 소스를 생성할 수 있습니다.",
+                        + "\n운영 콘솔 데이터 필드에서 리스트·딕셔너리 타입을 정하거나 CSV에서 지정해야 소스를 생성할 수 있습니다."
+                        + "\n콘솔에서 열거형·클래스로 정한 자리는 CSV 타입 열에 이름을 적으세요(예: Dictionary<CropName, int>).",
                         MessageType.Warning);
 
                 var defaultMissing = CollectDefaultMissingColumnNames();
@@ -293,6 +294,7 @@ namespace TrueBase.Editor
                         CustomType      = fromConsole ? col.ClrType : isAmbiguous ? "Dictionary<string, object>" : "",
                         IsAmbiguous     = isAmbiguous,
                         TypeFromConsole = fromConsole,
+                        ConsoleType     = fromConsole ? col.ClrType : null,
                         TypeCategory    = isAmbiguous || fromConsole ? FieldTypeCategory.Json : GC.ResolveTypeCategory(col.ClrType)
                     });
                 }
@@ -308,8 +310,13 @@ namespace TrueBase.Editor
                 {
                     foreach (var col in _editableColumns)
                     {
-                        if (col.TypeFromConsole) continue;
                         if (!existing.TryGetValue(col.Name, out var existingType)) continue;
+                        if (col.TypeFromConsole)
+                        {
+                            // 콘솔 타입이 기준. 열거형·클래스 자리 이름만 기존 클래스 파일·지난 설정에서 가져온다.
+                            col.CustomType = GeneratorTypeCatalog.FillNameSlots(col.ConsoleType, existingType, out _);
+                            continue;
+                        }
                         var idx = Array.IndexOf(GeneratorTypeCatalog.TypeOptions, existingType);
                         if (idx >= 0)
                         {
@@ -445,6 +452,7 @@ namespace TrueBase.Editor
 
             int applied = 0;
             var unknown = new List<string>();
+            var consoleTypeKept = new List<string>(); // 콘솔에서 정한 타입과 다른 CSV 타입 — 쓰지 않고 알린다
             bool firstRow = true;
             bool legacyConverted = false; // 옛 형식(영문 헤더·문구 저장주기)을 만나 최신 형식으로 변환했는지
 
@@ -469,7 +477,19 @@ namespace TrueBase.Editor
                 if (!byName.TryGetValue(name, out var col)) { unknown.Add(name); continue; }
 
                 if (cells.Count > 1 && !string.IsNullOrWhiteSpace(cells[1])) col.FieldName = cells[1].Trim();
-                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2]) && !col.TypeFromConsole) ApplyClrTypeToColumn(col, cells[2].Trim());
+                if (cells.Count > 2 && !string.IsNullOrWhiteSpace(cells[2]))
+                {
+                    if (!col.TypeFromConsole)
+                        ApplyClrTypeToColumn(col, cells[2].Trim());
+                    else
+                    {
+                        var merged = GeneratorTypeCatalog.FillNameSlots(col.ConsoleType, cells[2].Trim(), out var conflict);
+                        // CSV 가 채우지 못한 열거형·클래스 자리는 가져올 때 기존 클래스 파일에서 채운 이름을 지킨다.
+                        col.CustomType = GeneratorTypeCatalog.FillNameSlots(merged, col.CustomType, out _);
+                        if (conflict)
+                            consoleTypeKept.Add(col.Name + ": CSV " + cells[2].Trim() + " → 콘솔 " + col.ConsoleType);
+                    }
+                }
                 if (cells.Count > 3 && !string.IsNullOrWhiteSpace(cells[3]))
                 {
                     col.Priority = GC.ParsePriority(cells[3].Trim(), out var legacyPri);
@@ -485,6 +505,15 @@ namespace TrueBase.Editor
 
             Debug.Log($"[Supabase] CSV 불러오기 완료: {applied}개 컬럼 적용 ← {path}");
             GC.ReportImportIssues(DialogTitle, applied, unknown, CollectUnresolvedColumnNames());
+
+            if (consoleTypeKept.Count > 0)
+            {
+                var message = "다음 필드는 CSV 타입이 운영 콘솔 데이터 필드에서 정한 타입과 다릅니다. "
+                    + "CSV에서는 열거형·클래스 이름만 가져오고 나머지는 콘솔 타입을 씁니다. "
+                    + "구조나 원소 타입을 바꾸려면 운영 콘솔에서 필드를 수정하세요.\n\n• " + string.Join("\n• ", consoleTypeKept);
+                Debug.LogWarning("[Supabase] " + message);
+                EditorUtility.DisplayDialog(DialogTitle, message, "확인");
+            }
 
             if (legacyConverted)
                 EditorUtility.DisplayDialog(DialogTitle,
@@ -816,6 +845,8 @@ namespace TrueBase.Editor
             public bool              IsAmbiguous;
             /// <summary>운영 콘솔이 정한 리스트·딕셔너리 타입 — 기존 클래스 파일·CSV 의 타입으로 덮지 않는다.</summary>
             public bool              TypeFromConsole;
+            /// <summary>운영 콘솔이 정한 타입 원문(열거형·클래스 자리는 enum·class). CustomType 은 여기에 이름을 채운 값.</summary>
+            public string            ConsoleType;
             public string            CustomType   = "";
             public bool              TypeUnresolved;
             public FieldTypeCategory TypeCategory = FieldTypeCategory.Unknown;
