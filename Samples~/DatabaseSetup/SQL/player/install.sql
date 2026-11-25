@@ -8125,6 +8125,47 @@ revoke all on function public.ts_admin_mail_batch_recall(uuid) from public, anon
 grant execute on function public.ts_admin_mail_batch_close(uuid)  to service_role;
 grant execute on function public.ts_admin_mail_batch_recall(uuid) to service_role;
 
+-- 운영 콘솔 우편 내역에서 고른 우편을 지운다. 발송 묶음이 없는 우편(게임이 플레이어 자신에게 보낸 우편 등)도 지운다.
+-- 회수처럼 안 받은 우편만 지운다 — 받은 우편은 지급 기록이라 남긴다. 묶음 우편이면 그 묶음의 회수 수에 더한다.
+create or replace function public.ts_admin_mail_delete(p_mail_ids uuid[])
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_n int;
+begin
+  if p_mail_ids is null or cardinality(p_mail_ids) = 0 then
+    return 0;
+  end if;
+  if cardinality(p_mail_ids) > 500 then
+    raise exception 'mail_delete_too_many';
+  end if;
+
+  with gone as (
+    delete from public.mails
+     where id = any(p_mail_ids)
+       and items_claimed_at is null
+    returning batch_id
+  ), per_batch as (
+    select batch_id, count(*)::int as n from gone where batch_id is not null group by batch_id
+  ), upd as (
+    update public.mail_batches b
+       set recalled_count = b.recalled_count + p.n
+      from per_batch p
+     where b.id = p.batch_id
+    returning 1
+  )
+  select count(*)::int into v_n from gone;
+  return v_n;
+end;
+$$;
+
+comment on function public.ts_admin_mail_delete(uuid[]) is '고른 우편 중 안 받은 것을 지운다(한 번에 500통까지). 지운 통수를 돌려준다. service_role 전용.';
+revoke all on function public.ts_admin_mail_delete(uuid[]) from public, anon, authenticated;
+grant execute on function public.ts_admin_mail_delete(uuid[]) to service_role;
+
 -- ---------------------------------------------------------------------------
 -- ts_admin_upsert_game_item / ts_admin_delete_game_item — 카탈로그 관리
 -- ---------------------------------------------------------------------------

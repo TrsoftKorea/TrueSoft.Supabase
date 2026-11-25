@@ -179,6 +179,13 @@ namespace TrueBase.Unity
             SupabaseSDK.TryOpenCustomerCenterAsync(language);
 
         /// <summary>
+        /// 고객센터 창을 쿠폰 등록 화면으로 엽니다. 본인 확인과 창 모양은 <see cref="OpenCustomerCenterAsync"/>와 같습니다.
+        /// </summary>
+        /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 게임 안 언어 옵션이 있으면 넘깁니다. 비우면 기기 언어.</param>
+        public static Task<SupabaseResult> OpenCouponAsync(string language = null) =>
+            SupabaseSDK.TryOpenCouponAsync(language);
+
+        /// <summary>
         /// 개인정보처리방침 창을 엽니다. 로그인하지 않아도 열립니다. Android·iOS 는 게임 위 창으로 열고 닫힐 때까지 기다리며, 그 밖은 브라우저로 엽니다.
         /// </summary>
         /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어.</param>

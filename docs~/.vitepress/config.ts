@@ -254,6 +254,7 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '창 열기', link: '/guide/customer-center/open' },
+              { text: '쿠폰 등록 창 열기', link: '/guide/customer-center/coupon' },
               { text: '새 답변 수', link: '/guide/customer-center/unread' },
               { text: '개인정보처리방침 열기', link: '/guide/customer-center/privacy' },
               { text: '이용약관 열기', link: '/guide/customer-center/terms' },

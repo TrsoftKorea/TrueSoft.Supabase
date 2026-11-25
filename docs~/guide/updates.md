@@ -2,6 +2,13 @@
 
 SDK 판마다 게임에 달라지는 점입니다. 판을 올리는 방법은 [설치](/guide/start/install)를 참고하세요.
 
+## 0.7.0 {#v0-7-0}
+
+2026-11-25
+
+- **쿠폰 등록 창 바로 열기** — `Supabase.OpenCouponAsync`가 고객센터 창을 쿠폰 등록 화면으로 바로 엽니다. 게임 설정의 쿠폰 버튼에 연결합니다. [쿠폰 등록 창 열기](/guide/customer-center/coupon)를 참고하세요.
+- **기기 빌드에서 우편함 등 서버 응답 읽기 실패 수정** — IL2CPP 빌드가 코드 덜어내기로 SDK가 서버 응답을 읽는 데 쓰는 코드를 빼서, 에디터에서는 되는데 기기에서만 `SupabaseReason.Unknown`(`mail_list_parse:Unable to find a constructor…`)으로 실패하던 문제를 고쳤습니다. 이제 빌드할 때 SDK 코드를 덜어내지 않습니다. 게임 코드는 바꿀 것이 없습니다.
+
 ## 0.6.0 {#v0-6-0}
 
 2026-11-25

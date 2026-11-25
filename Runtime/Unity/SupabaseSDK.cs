@@ -354,6 +354,7 @@ namespace TrueBase.Unity
             public const string MatchLobbyCancel = "Supabase.MatchLobby.Cancel";
             public const string MatchLobbyListMy = "Supabase.MatchLobby.ListMy";
             public const string CustomerCenterOpen = "Supabase.CustomerCenter.Open";
+            public const string CustomerCenterCoupon = "Supabase.CustomerCenter.Coupon";
             public const string CustomerCenterUnreadCount = "Supabase.CustomerCenter.UnreadCount";
             public const string CustomerCenterPrivacyPolicy = "Supabase.CustomerCenter.PrivacyPolicy";
             public const string CustomerCenterTerms = "Supabase.CustomerCenter.Terms";
@@ -5285,9 +5286,16 @@ namespace TrueBase.Unity
         /// 방금 차단으로 거절된 구글·애플 로그인으로 본인을 확인합니다. 게임 안 창이면 닫힐 때까지 기다립니다.
         /// </summary>
         /// <param name="language">창 언어(ko·en·ja·zh-CN·zh-TW 등). 비우면 기기 언어. 플레이어가 창에서 고른 언어는 이 값이 바뀌기 전까지만 유지된다.</param>
-        public static async Task<SupabaseResult> TryOpenCustomerCenterAsync(string language = null)
+        public static Task<SupabaseResult> TryOpenCustomerCenterAsync(string language = null) =>
+            OpenCustomerCenterWindowAsync(language, null, ApiLogTags.CustomerCenterOpen);
+
+        /// <summary>고객센터 창을 쿠폰 등록 화면으로 엽니다. 본인 확인은 <see cref="TryOpenCustomerCenterAsync"/>와 같습니다.</summary>
+        public static Task<SupabaseResult> TryOpenCouponAsync(string language = null) =>
+            OpenCustomerCenterWindowAsync(language, "coupon", ApiLogTags.CustomerCenterCoupon);
+
+        // view 는 고객센터 웹이 첫 화면 대신 띄울 화면(?view=). null 이면 첫 화면.
+        private static async Task<SupabaseResult> OpenCustomerCenterWindowAsync(string language, string view, string tag)
         {
-            const string tag = ApiLogTags.CustomerCenterOpen;
             if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
                 return LogAndReturn(tag, SupabaseResult<bool>.Fail(SupabaseErrorCode.NotInitialized));
 
@@ -5333,6 +5341,8 @@ namespace TrueBase.Unity
 
             // 접속 표는 # 뒤에 둔다 — 서버로 가는 주소·기록에 남지 않고 페이지가 읽자마자 지운다.
             var query = $"?p={projectRef}&lang={Uri.EscapeDataString(language)}";
+            if (view != null)
+                query += $"&view={view}";
             var fragment = $"#t={Uri.EscapeDataString(started.Data.Token)}";
             var shown = await CustomerCenterWebView.OpenAsync($"{baseUrl}/{query}&app=1{fragment}", $"{baseUrl}/{query}{fragment}");
             return LogAndReturn(tag, shown

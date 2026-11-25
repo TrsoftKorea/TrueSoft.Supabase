@@ -83,6 +83,7 @@ SDK는 아래 중 하나로 본인을 확인합니다.
 | 메서드 | 설명 |
 |--------|------|
 | [`OpenCustomerCenterAsync`](/guide/customer-center/open) | 고객센터 창 열기 |
+| [`OpenCouponAsync`](/guide/customer-center/coupon) | 고객센터 창을 쿠폰 등록 화면으로 열기 |
 | [`GetCustomerCenterUnreadCountAsync`](/guide/customer-center/unread) | 새 답변이 있는 문의 수 |
 | [`OpenPrivacyPolicyAsync`](/guide/customer-center/privacy) | 개인정보처리방침 창 열기 |
 | [`OpenTermsAsync`](/guide/customer-center/terms) | 이용약관 창 열기 |
