@@ -73,7 +73,7 @@ await Supabase.SaveNowAsync(timeoutMs: 5000);        // 즉시 저장
 
 **사전 준비**
 1. `com.unity.purchasing` 설치
-2. [데이터베이스 설정](/guide/start/database-setup) 완료
+2. [프로젝트 생성](/guide/start/project) 완료
 3. Inspector에서 `productId` 입력
 
 **구매 흐름**
@@ -109,7 +109,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 `SupabaseRuntime`이 있는 씬에 `SampleMailbox` 컴포넌트를 붙이면 우편함 조회·수령·삭제를 [분류](/guide/mailbox/#category)별로 테스트할 수 있습니다.
 
 **사전 준비**
-1. [데이터베이스 설정](/guide/start/database-setup) 완료
+1. [프로젝트 생성](/guide/start/project) 완료
 2. Inspector에서 `Demo Category`·`Demo Item Key` 확인(기본값 `event`·`gold`)
 3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 테스트 우편 발송 — 발송은 운영 콘솔 **우편 발송**이나 SQL Editor에서만 가능하며, 발송 시 `category`·`items[].key`를 위 Inspector 값과 맞춥니다
 
@@ -133,7 +133,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 `SupabaseRuntime`이 있는 씬에 `SampleFriend` 컴포넌트를 붙이면 [친구](/guide/friend/) 검색·요청·수락과 [귓속말](/guide/chat/#direct)을 테스트할 수 있습니다.
 
 **사전 준비**
-1. [데이터베이스 설정](/guide/start/database-setup) 완료
+1. [프로젝트 생성](/guide/start/project) 완료
 2. 상대가 될 계정을 따로 하나 만들고 [닉네임](/guide/display-name/nickname/set)을 정해 둡니다 — 혼자서는 요청을 주고받을 수 없습니다
 3. Inspector의 `Target Nickname`에 그 닉네임을 넣습니다
 

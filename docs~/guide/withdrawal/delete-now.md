@@ -50,7 +50,3 @@ public void OnClickDeleteAccount()
 ::: warning 되돌릴 수 없습니다
 호출 전에 플레이어에게 한 번 더 확인을 받으세요. 유예를 두고 취소할 수 있게 하려면 [탈퇴 신청](/guide/withdrawal/submit)을 쓰세요.
 :::
-
-::: info 서버 준비
-[Edge Function 배포](/guide/start/database-setup#edge-function-deploy)에서 `withdrawal-now`를 배포해야 합니다.
-:::

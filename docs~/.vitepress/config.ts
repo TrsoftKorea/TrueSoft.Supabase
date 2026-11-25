@@ -32,7 +32,7 @@ export default defineConfig({
           { text: '설치', link: '/guide/start/install' },
           { text: '프로젝트 생성', link: '/guide/start/project' },
           { text: '초기 설정', link: '/guide/start/init-setup' },
-          { text: '데이터베이스 설정', link: '/guide/start/database-setup' },
+          { text: '서비스 연결값', link: '/guide/start/database-setup' },
           { text: '다음 단계', link: '/guide/start/next' }
         ]
       },

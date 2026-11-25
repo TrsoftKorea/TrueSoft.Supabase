@@ -24,12 +24,40 @@ namespace TrueBase.Editor
 
             // StoreKitSelector는 5.1에서 들어왔다. iOS SK1 강제(PlayNANOO 영수증 검증)에 필요하다.
             ("UNITY_IAP_V5_1", "Purchasing.Utilities.StoreKitSelector, Unity.Purchasing.Utilities"),
+
+            // PlayNANOO 가 있으면 나누 병행 런타임(TrueBase.Unity.PlayNanoo)을 컴파일한다. 불러온 타입이 아니라 프로젝트의
+            // DLL 목록으로 본다 — PlayNANOO 를 지우면 그 컴파일이 실패해 새 도메인이 안 뜨고, 옛 도메인에는 지운 DLL 이
+            // 아직 불러와져 있어 타입으로는 "있다"가 된다. DLL 이름은 플랫폼마다 다르다(PlayNANOOEditor·Android·iOS).
+            ("TRUEBASE_PLAYNANOO", PrecompiledPrefix + "PlayNANOO"),
         };
+
+        private const string PrecompiledPrefix = "dll:";
+        private const string NanooAssembly = "TrueBase.Unity.PlayNanoo";
 
         static IAPDefineSync()
         {
             // 도메인 리로드 도중 PlayerSettings를 건드리지 않도록 다음 에디터 틱에 실행.
-            EditorApplication.delayCall += Sync;
+            // delayCall 은 에디터 창이 앞에 없으면 돌지 않아(SDK Host 에서 확인, 2026-11-25) update 에서 한 번만 돈다.
+            EditorApplication.update += SyncOnce;
+
+            // PlayNANOO 를 지우면 나누 런타임 컴파일이 실패하고 도메인이 다시 뜨지 않는다 — 그 실패에서 다시 판정해 심볼을 뗀다.
+            UnityEditor.Compilation.CompilationPipeline.assemblyCompilationFinished += (path, messages) =>
+            {
+                if (!path.EndsWith(NanooAssembly + ".dll", StringComparison.OrdinalIgnoreCase)) return;
+                foreach (var m in messages)
+                    if (m.type == UnityEditor.Compilation.CompilerMessageType.Error)
+                    {
+                        EditorApplication.update -= SyncOnce;
+                        EditorApplication.update += SyncOnce;
+                        return;
+                    }
+            };
+        }
+
+        private static void SyncOnce()
+        {
+            EditorApplication.update -= SyncOnce;
+            Sync();
         }
 
         private static void Sync()
@@ -60,7 +88,7 @@ namespace TrueBase.Editor
                 var changed = false;
                 foreach (var (symbol, probeType) in Mirrored)
                 {
-                    var shouldDefine = Type.GetType(probeType) != null;
+                    var shouldDefine = TypeExists(probeType);
                     var has          = defines.Contains(symbol);
 
                     if (shouldDefine == has) continue;
@@ -76,6 +104,19 @@ namespace TrueBase.Editor
                 try { PlayerSettings.SetScriptingDefineSymbols(target, string.Join(";", defines)); }
                 catch { /* 일부 그룹은 미설치 모듈로 실패할 수 있음 — 무시 */ }
             }
+        }
+
+        // "dll:이름" 이면 프로젝트의 DLL 중 그 이름으로 시작하는 것이 있는지, 아니면 "타입, 어셈블리" 가 불러와졌는지.
+        private static bool TypeExists(string probe)
+        {
+            if (!probe.StartsWith(PrecompiledPrefix))
+                return Type.GetType(probe) != null;
+            var prefix = probe.Substring(PrecompiledPrefix.Length);
+            foreach (var path in UnityEditor.Compilation.CompilationPipeline.GetPrecompiledAssemblyPaths(
+                         UnityEditor.Compilation.CompilationPipeline.PrecompiledAssemblySources.UserAssembly))
+                if (System.IO.Path.GetFileName(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
     }
 }

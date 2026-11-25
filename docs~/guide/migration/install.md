@@ -2,8 +2,7 @@
 
 ## 런타임 배치
 
-1. Package Manager **Samples** 탭에서 **PlayNANOO Migration**을 Import합니다.
-2. 씬에서 `SupabaseRuntime` 대신 SDK 버전에 맞는 컴포넌트를 하나 배치합니다.
+게임에 PlayNANOO가 있으면 SDK가 병행 런타임을 저절로 켭니다. 따로 가져올 것은 없습니다. 씬에서 `SupabaseRuntime` 대신 SDK 버전에 맞는 컴포넌트를 하나 배치합니다.
 
 | 구현체 | 사용 API |
 |--------|---------|
@@ -11,6 +10,10 @@
 | `PlayNanooLegacyRuntime` | 구버전 `AccountGuestSignIn` / `AccountManager.*` |
 
 씬에는 `PlayNanooRuntime` / `PlayNanooLegacyRuntime` 중 하나만 둡니다. `SupabaseRuntime`을 따로 배치하지 않습니다.
+
+::: warning 0.8.0 전에 샘플로 가져온 게임
+0.8.0부터 병행 런타임은 샘플이 아니라 SDK 안에 들어 있습니다. 판을 올리기 전에 `Assets/Samples/TrueBase/<판>/PlayNANOO Migration` 폴더를 먼저 지우세요. 남겨 두면 같은 이름의 클래스가 둘이 돼 컴파일되지 않습니다. 0.5.1 샘플을 쓰던 씬은 컴포넌트와 설정값이 그대로 이어집니다. 그보다 옛 판 샘플을 쓰던 씬은 컴포넌트가 `Missing`으로 보이니 한 번 다시 넣으세요.
+:::
 
 ## 게임의 플레이나누 계정 코드 정리 {#remove-game-token-code}
 

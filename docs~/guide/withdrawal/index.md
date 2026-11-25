@@ -16,7 +16,7 @@
 4. **유예 만료** — 서버가 자정 직후에 계정을 삭제합니다. 완료된 탈퇴는 되돌릴 수 없고, 같은 소셜 계정으로 다시 로그인하면 새 계정이 만들어집니다.
 
 ::: info
-취소 토큰은 게이트가 내부적으로 발급·저장하므로 게임이 직접 발급할 필요가 없습니다. 취소는 `RedeemWithdrawalCancelAsync()` 한 번으로 처리됩니다. [Edge Function 배포](/guide/start/database-setup#edge-function-deploy)와 [프로젝트 주소 등록](/guide/start/database-setup#project-url)이 선행되어야 합니다.
+취소 토큰은 게이트가 내부적으로 발급·저장하므로 게임이 직접 발급할 필요가 없습니다. 취소는 `RedeemWithdrawalCancelAsync()` 한 번으로 처리됩니다.
 :::
 
 ::: details 자정과 삭제 사이에 로그인하면

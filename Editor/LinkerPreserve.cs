@@ -17,8 +17,8 @@ namespace TrueBase.Editor
     /// </summary>
     internal sealed class LinkerPreserve : IUnityLinkerProcessor
     {
-        // 빌드에 들어가는 것만 적는다 — IAP 어셈블리는 Unity IAP 5 가 없으면 빠진다.
-        static readonly string[] Assemblies = { "TrueBase.Core", "TrueBase.Unity", "TrueBase.Unity.IAP" };
+        // 빌드에 들어가는 것만 적는다 — IAP·PlayNanoo 어셈블리는 Unity IAP 5·PlayNANOO 가 없으면 빠진다.
+        static readonly string[] Assemblies = { "TrueBase.Core", "TrueBase.Unity", "TrueBase.Unity.IAP", "TrueBase.Unity.PlayNanoo" };
 
         public int callbackOrder => 0;
 

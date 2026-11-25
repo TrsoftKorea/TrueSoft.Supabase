@@ -91,10 +91,6 @@ SDK는 아래 중 하나로 본인을 확인합니다.
 | [`GetLegalConsentAsync`](/guide/customer-center/legal-consent) | 내 약관 동의와 다시 물어야 하는지 |
 | [`SaveLegalConsentAsync`](/guide/customer-center/legal-consent-save) | 약관 동의 남기기 |
 
-::: info 설치
-DB는 `install.sql`의 고객센터 절이 만들고, 창은 엣지 함수 `support-api`를 부릅니다. [엣지 함수 배포](/guide/start/database-setup#edge-function-deploy)에서 이 함수의 **Verify JWT**를 꺼야 창이 열립니다.
-:::
-
 ::: warning iOS 카메라 사용 문구
 그림을 붙일 때 iOS가 "사진 찍기"도 보여 주므로, 빌드할 때 `Info.plist`에 카메라 사용 문구가 없으면 SDK가 기본 문구를 넣습니다. 게임이 이미 넣어 둔 문구는 그대로 둡니다.
 :::

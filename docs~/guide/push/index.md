@@ -8,10 +8,9 @@
 2. `SupabaseSettings`의 **푸시 알림 사용**을 켜고, 아래 [Firebase 값](#firebase-values) 네 칸을 넣습니다.
 3. **Android 알림 아이콘**에 흰색 그림에 배경이 투명한 96×96 PNG를 넣습니다. 비우면 상태 표시줄에 흰 네모로 보일 수 있습니다.
 4. Apple Developer에서 앱의 **Push Notifications** 기능을 켜고 APNs 키(.p8)를 만듭니다.
-5. 서버를 준비합니다. `install.sql`을 실행하고, 엣지 함수 `push-send`를 **Verify JWT**를 끈 채 [배포](/guide/start/database-setup#edge-function-deploy)하고, [프로젝트 주소](/guide/start/database-setup#project-url)를 등록합니다. 프로젝트 주소가 없으면 알림이 나가지 않습니다.
-6. 운영 콘솔 **설정 › 서비스 연결 › 푸시 알림**에 Firebase 서비스 계정 키와 APNs 키를 넣습니다. 키를 가져오는 방법은 그 화면의 각 칸에 있습니다. Team ID·번들 ID는 Sign in with Apple·App Store에 넣은 값과 같은 칸이라 한 곳에 넣으면 함께 채워집니다.
-7. 운영 콘솔 **설정 › 푸시 알림**에서 상황별 문구를 확인합니다. 기본 문구가 한국어·영어로 들어 있습니다.
-8. 게임 코드에서 로그인 뒤 [기기 등록](#register)을 부르고, 설정 화면에 [수신 동의](#consent)와 [알림 스위치](#toggles)를 둡니다.
+5. 운영 콘솔 **설정 › 서비스 연결 › 푸시 알림**에 Firebase 서비스 계정 키와 APNs 키를 넣습니다. 키를 가져오는 방법은 그 화면의 각 칸에 있습니다. Team ID·번들 ID는 Sign in with Apple·App Store에 넣은 값과 같은 칸이라 한 곳에 넣으면 함께 채워집니다.
+6. 운영 콘솔 **설정 › 푸시 알림**에서 상황별 문구를 확인합니다. 기본 문구가 한국어·영어로 들어 있습니다.
+7. 게임 코드에서 로그인 뒤 [기기 등록](#register)을 부르고, 설정 화면에 [수신 동의](#consent)와 [알림 스위치](#toggles)를 둡니다.
 
 ::: warning 유니티 판
 Android 푸시 부품은 유니티 2022.3.38f1 이상이 필요합니다. 그보다 오래된 2022.3은 빌드 도구가 Firebase의 최소 요구보다 낮습니다.

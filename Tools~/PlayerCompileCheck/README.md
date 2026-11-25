@@ -24,7 +24,7 @@ bash "Tools~/PlayerCompileCheck/run.sh"
 | Core | `TrueBase.Core` |
 | Unity Android·iOS | `TrueBase.Unity` |
 | IAP Android·iOS | `TrueBase.Unity.IAP` — SDK Host에 `com.unity.purchasing` 5.x가 있을 때만 |
-| 나누샘플 Android·에디터 | `Samples~/PlayNanooMigration` — PlayNANOO DLL이 있을 때만 |
+| 나누런타임 Android·에디터 | `TrueBase.Unity.PlayNanoo`(`Runtime/Unity/PlayNanoo`) — PlayNANOO DLL이 있을 때만. SDK Host에는 PlayNANOO가 없어 에디터 컴파일에서 빠지는 묶음이라 여기서만 본다 |
 
 ## 대조
 

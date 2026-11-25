@@ -73,19 +73,20 @@ done
 expect "$OUT/ios/TrueBase.Unity.dll" "StartIos" yes   # GoogleLoginBridge 의 iOS 전용 메서드
 expect "$OUT/and/TrueBase.Unity.dll" "StartIos" no
 
-# PlayNanoo 샘플: Samples~ 는 SDK Host 가 컴파일하지 않으므로 여기서 본다. 나누 DLL 이 있을 때만.
+# PlayNanoo 런타임(TrueBase.Unity.PlayNanoo): PlayNANOO 가 없는 SDK Host 에선 컴파일되지 않으므로 여기서 본다. 나누 DLL 이 있을 때만.
 if [ -f "$NANOO_DLL" ]; then
   for v in and editor; do
     label=$([ $v = and ] && echo Android || echo 에디터)
     { strip "$DAG/TrueBase.Unity.rsp" | grep -v '\.cs"$'
       [ $v = editor ] && echo "-define:UNITY_EDITOR"
+      echo "-define:TRUEBASE_PLAYNANOO"
       echo "-out:\"$OUT/sample/PlayNanoo-$v.dll\""; echo "-r:\"$OUT/TrueBase.Core.dll\""
       echo "-r:\"$OUT/and/TrueBase.Unity.dll\""; echo "-r:\"$NANOO_DLL\""
-      for f in "$REPO"/Samples~/PlayNanooMigration/*.cs; do echo "\"$f\""; done; } > "$OUT/sample-$v.rsp"
-    run "$OUT/sample-$v.rsp" "나누샘플 $label"
+      for f in "$REPO"/Runtime/Unity/PlayNanoo/*.cs; do echo "\"$f\""; done; } > "$OUT/sample-$v.rsp"
+    run "$OUT/sample-$v.rsp" "나누런타임 $label"
   done
 else
-  echo "나누샘플        건너뜀 — PlayNANOO DLL 없음($NANOO_DLL). NANOO_DLL 로 경로를 지정할 수 있음"
+  echo "나누런타임      건너뜀 — PlayNANOO DLL 없음($NANOO_DLL). NANOO_DLL 로 경로를 지정할 수 있음"
 fi
 
 echo
