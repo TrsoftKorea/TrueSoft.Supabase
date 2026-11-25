@@ -322,8 +322,8 @@ function CardList<T>({
 
 /**
  * 표 하나를 담는 카드. 제목·버튼(위)과 쪽 넘김(footer, 아래)을 함께 둔다.
- * text 칸이 없는 표는 카드째 내용 폭으로 줄어든다 — 표만 줄이면 카드 오른쪽이 텅 빈다.
- * 같은 화면에 위아래로 쌓인 표 카드는 CardStack 에 넣어 폭을 맞춘다.
+ * 카드는 늘 전체 폭이다 — 탭줄·머리줄과 좌우 끝이 같아야 한다(2026-11-25 사용자 지적: 내용 폭으로 줄어든
+ * 카드가 화면마다 끝이 달라 좁아 보였다). text 칸이 없는 표는 남는 폭을 버튼 앞 마지막 칸이 받는다(wide).
  */
 export function TableCard<T>({
   title,
@@ -332,22 +332,20 @@ export function TableCard<T>({
   footer,
   ...table
 }: DataTableProps<T> & { title?: ReactNode; description?: ReactNode; actions?: ReactNode; footer?: ReactNode }) {
-  const fill = table.wide || table.columns.some((c) => c.kind === 'text')
   return (
-    // 휴대폰에서는 줄이 카드로 바뀌므로 내용 폭으로 줄이지 않고 화면 폭을 다 쓴다.
-    <WhiteCard className={`overflow-hidden ${fill ? '' : 'w-full sm:w-fit max-w-full'}`}>
+    <WhiteCard className="overflow-hidden">
       {(title || actions) && (
         <div className="p-5 pb-3">
           <CardHeader title={title} description={description} actions={actions} />
         </div>
       )}
-      <DataTable {...table} />
+      <DataTable {...table} wide />
       {footer}
     </WhiteCard>
   )
 }
 
-/** 위아래로 쌓인 표 카드의 폭을 가장 넓은 것에 맞춘다. text 칸이 있는(전체 폭) 카드는 넣지 않는다. */
+/** 위아래로 쌓인 표 카드 묶음 — 카드마다 전체 폭이라 간격만 맞춘다. */
 export function CardStack({ children }: { children: ReactNode }) {
-  return <div className="flex w-full sm:w-fit max-w-full flex-col gap-4 [&>*]:w-full">{children}</div>
+  return <div className="flex w-full flex-col gap-4">{children}</div>
 }

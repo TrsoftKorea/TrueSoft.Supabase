@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { CardHeader, WhiteCard } from '../components/ui/Card'
@@ -19,6 +20,9 @@ type Stats = {
   revenue_today_krw: number
   revenue_7d_krw: number
   revenue_total_krw: number
+  refunds_7d: number
+  refunds_7d_krw: number
+  refund_players_7d: number
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -27,6 +31,22 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <div className="text-xs text-neutral-500">{label}</div>
       <div className="mt-1.5 text-2xl font-semibold text-neutral-900">{value}</div>
     </div>
+  )
+}
+
+/** 새 환불은 알림이 없어 놓치기 쉽다 — 있으면 빨갛게 보이고, 누르면 구매 내역을 「환불만」으로 연다. */
+function RefundTile({ stats }: { stats: Stats }) {
+  const navigate = useNavigate()
+  const has = stats.refunds_7d > 0
+  return (
+    <button type="button" onClick={() => navigate('/purchases?refunded=1')}
+      className="p-5 text-left hover:bg-neutral-50 transition-colors">
+      <div className="flex items-center gap-1 text-xs text-neutral-500">최근 7일 환불<ChevronRight className="w-3.5 h-3.5" /></div>
+      <div className={`mt-1.5 text-2xl font-semibold ${has ? 'text-red-600' : 'text-neutral-900'}`}>{n(stats.refunds_7d)}건</div>
+      {has && (
+        <div className="mt-1 text-xs text-neutral-500">{formatKRW(stats.refunds_7d_krw)} · 플레이어 {n(stats.refund_players_7d)}명</div>
+      )}
+    </button>
   )
 }
 
@@ -104,11 +124,12 @@ export default function Dashboard({
             <StatTile label="현재 차단 중" value={n(stats.banned_now)} />
           </StatSection>
 
-          <StatSection title="매출" description="결제 건수와 금액을 봅니다. 환불·테스트·무료 결제는 뺍니다.">
+          <StatSection title="매출" description="결제 건수·금액과 최근 환불을 봅니다. 결제에서는 환불·테스트·무료 결제를 뺍니다.">
             <StatTile label="오늘 결제 건수" value={n(stats.purchases_today)} />
             <StatTile label="오늘 결제 금액" value={formatKRW(stats.revenue_today_krw)} />
             <StatTile label="최근 7일 결제 금액" value={formatKRW(stats.revenue_7d_krw)} />
             <StatTile label="누적 결제 금액" value={formatKRW(stats.revenue_total_krw)} />
+            <RefundTile stats={stats} />
           </StatSection>
         </div>
       )}

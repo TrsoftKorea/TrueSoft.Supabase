@@ -5,7 +5,7 @@ import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLoo
 import { ProjectIcon } from '../components/ui/ProjectIcon'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
-import { CardHeader, GroupBox, GroupTable, WhiteCard } from '../components/ui/Card'
+import { CardHeader, FormCard, GroupBox, GroupTable, WhiteCard } from '../components/ui/Card'
 import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
@@ -21,6 +21,8 @@ import { copyToClipboard } from '../lib/clipboard'
 import { LimitsForm, type LimitField, type LimitToggle } from './social/LimitsForm'
 import PushSettings from './PushSettings'
 import AppGateCards from './AppGate'
+import OperatorAccountsCard from './OperatorAccounts'
+import ResetAllPlayersCard from './ResetAllPlayers'
 import { TableCard } from '../components/ui/DataTable'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { RefreshButton } from '../components/ui/FilterBar'
@@ -926,7 +928,7 @@ function ConsoleIdentityCard({
   }
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <CardHeader
         title="이름 · 아이콘"
         description="프로젝트 목록·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
@@ -980,7 +982,7 @@ function ConsoleIdentityCard({
         </Button>
         {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
       </div>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
@@ -1154,7 +1156,7 @@ function ConsoleColorCard({
   }
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <CardHeader
         title="프로젝트 색"
         description="메뉴·상단 띠·확인 창에 쓸 이 프로젝트의 색을 정합니다."
@@ -1225,7 +1227,7 @@ function ConsoleColorCard({
           </span>
         )}
       </div>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
@@ -1279,7 +1281,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
   const label = (v: string) => options.find(([k]) => k === v)?.[1] ?? v
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <CardHeader
         title="시간대"
         description="날짜를 나누는 기준 시간대를 정합니다."
@@ -1322,7 +1324,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
           {current ? label(current.time_zone) : ''} → <span className="font-medium">{label(tz)}</span>
         </div>
       </ConfirmDialog>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
@@ -1364,7 +1366,7 @@ function LanguageCard({ target, report }: { target: ProjectTarget; report: (e: u
   const options = stored && !LANGS.includes(stored) ? [stored, ...LANGS] : LANGS
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <CardHeader title="기본 언어" description="언어를 따로 정하지 않은 제목·본문의 언어를 정합니다." />
       <div className="space-y-1.5">
         <label className="block text-sm font-medium text-neutral-700">기본 언어</label>
@@ -1396,11 +1398,11 @@ function LanguageCard({ target, report }: { target: ProjectTarget; report: (e: u
           {stored ? langLabel(stored) : '정하지 않음'} → <span className="font-medium">{langLabel(lang)}</span>
         </div>
       </ConfirmDialog>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
-type Tab = 'store' | 'time' | 'withdrawal' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'gate' | 'console'
+type Tab = 'store' | 'time' | 'withdrawal' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'gate' | 'operators' | 'console' | 'reset'
 
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
@@ -1412,14 +1414,19 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['push', '푸시 알림'],
   ['limit', '요청 제한'],
   ['gate', '점검·버전'],
+  ['operators', '운영 계정'],
   ['console', '프로젝트 정보'],
 ]
+// 마스터만 보는 탭 — 서버도 마스터가 아니면 거절한다(admin-api MASTER_ONLY_ACTIONS).
+const MASTER_TABS: readonly (readonly [Tab, string])[] = [...TABS, ['reset', '초기화']]
 
 export default function Settings({
   target,
+  isMaster,
   onUnauthenticated,
 }: {
   target: ProjectTarget
+  isMaster: boolean
   onUnauthenticated: () => void
 }) {
   const [error, setError] = useState('')
@@ -1437,11 +1444,13 @@ export default function Settings({
       <PageHeader title="설정" description="프로젝트 운영에 필요한 설정을 정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <Tabs value={tab} onChange={setTab} tabs={TABS} />
+      <Tabs value={tab} onChange={setTab} tabs={isMaster ? MASTER_TABS : TABS} />
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
-      {tab === 'gate' && <AppGateCards target={target} report={report} />}
+      {tab === 'gate' && <AppGateCards target={target} report={report} onOpenOperators={() => setTab('operators')} />}
+      {tab === 'operators' && <OperatorAccountsCard target={target} report={report} />}
       {tab === 'console' && <ConsoleCards target={target} report={report} />}
+      {tab === 'reset' && isMaster && <ResetAllPlayersCard target={target} report={report} onOpenGate={() => setTab('gate')} />}
       {tab === 'time' && (
         <div className="space-y-4">
           <TimeZoneCard target={target} report={report} />

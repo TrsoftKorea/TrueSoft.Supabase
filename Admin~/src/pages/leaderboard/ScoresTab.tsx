@@ -14,12 +14,15 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
 import { PlayerLink, playerLabel } from '../../components/ui/PlayerLink'
+import { StatusText } from '../../components/ui/StatusText'
 
 type LbRow = { code: string; display_name: string; rotation: string; scope: string }
 type ServerRow = { id: string; server_code: string; display_name: string }
 type AttachedCol = { name: string; dataType: string }
 type ScoreRow = {
-  rank: number
+  // 순위·통계 제외 운영 계정의 기록은 hidden 이고 rank 가 null — 서버가 목록 맨 뒤에 둔다.
+  rank: number | null
+  hidden?: boolean
   account_id: string
   user_id: string | null
   display_name: string | null
@@ -381,7 +384,7 @@ export default function ScoresTab({
       <TableCard
         wide
         columns={[
-          { key: 'rank', header: '순위', kind: 'number', cell: (r) => formatCount(r.rank) },
+          { key: 'rank', header: '순위', kind: 'number', cell: (r) => (r.hidden || r.rank === null ? <StatusText tone="muted">순위 제외</StatusText> : formatCount(r.rank)) },
           { key: 'player', header: '플레이어', kind: 'name', cell: (r) => <PlayerLink accountId={r.account_id} name={r.display_name} /> },
           { key: 'server', header: '서버', kind: 'name', cell: (r) => r.server_code ? serverName(r.server_code) : null },
           {
@@ -531,7 +534,7 @@ export default function ScoresTab({
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="text-neutral-800">{playerLabel(delTarget.display_name, delTarget.account_id)}</div>
-            <div className="text-xs text-neutral-500 mt-1">{formatCount(delTarget.rank)}위 · {formatScore(delTarget.score)}점</div>
+            <div className="text-xs text-neutral-500 mt-1">{delTarget.rank === null ? '순위 제외' : `${formatCount(delTarget.rank)}위`} · {formatScore(delTarget.score)}점</div>
           </div>
         )}
       </ConfirmDialog>

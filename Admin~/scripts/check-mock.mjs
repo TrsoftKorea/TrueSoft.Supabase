@@ -71,7 +71,12 @@ for (const id of [...new Set(buys.map((b) => b.account_id).filter(Boolean))]) {
   ok(pr.total_paid_krw === paid, `[4] 플레이어 누적 결제액 != 구매 내역 합 ${id}`)
   ok(pr.refund_count === refunded.length && pr.refund_krw === refunded.reduce((s, b) => s + (b.price_amount_krw ?? 0), 0), `[4] 플레이어 환불 != 구매 내역 ${id}`)
 }
-ok(dash.banned_now === (await call('players.list', { bannedOnly: true })).rows.length, '[4] 대시보드 차단 수 != 차단 목록 수')
+{
+  const refunded = (await call('purchases.list', { all: true, refundedOnly: true })).rows
+  ok(dash.refunds_7d > 0 && dash.refunds_7d === refunded.length, '[4] 대시보드 최근 7일 환불 != 구매 내역 환불 건수')
+  ok(dash.refunds_7d_krw === refunded.reduce((s, b) => s + (b.price_amount_krw ?? 0), 0), '[4] 대시보드 환불 금액 != 구매 내역 환불 합')
+}
+ok(dash.banned_now ===(await call('players.list', { bannedOnly: true })).rows.length, '[4] 대시보드 차단 수 != 차단 목록 수')
 
 // 2 대전 기록 — 요약의 승+패 합 = 전체 판 수, 게임 코드로 거른 판 수 = 그 코드 요약의 합
 for (const pl of listed) {

@@ -851,6 +851,21 @@ function DeleteView({ api, lang, look, signedIn, onLogin, onError, onNotice }: {
 }
 
 /**
+ * 본문 끝(빈 줄 뺀 마지막 5줄)에 시행일이 이미 적혀 있는지 — 시행일 문장을 손으로 쓰던 옛 판에 두 번 붙이지 않는다.
+ * 숫자 꼴(2026-11-24 · 2026.11.24 · 2026/11/24 · 2026년 11월 24일, 월·일 앞 0 생략)과 화면 언어·영어의 날짜 글을 본다.
+ */
+function endsWithDate(body: string, iso: string, lang: Lang): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!m) return false
+  const [, y, mo, d] = m
+  const sep = '\\s*[-./년月]\\s*'
+  const numeric = new RegExp(`${y}${sep}0?${Number(mo)}${sep}0?${Number(d)}(?!\\d)`)
+  const words = [formatLegalDate(lang, iso), formatLegalDate('en', iso)]
+  const tail = body.split('\n').filter((l) => l.trim()).slice(-5).join('\n')
+  return numeric.test(tail) || words.some((w) => tail.includes(w))
+}
+
+/**
  * 개인정보처리방침·이용약관 — 스토어에 적는 공개 주소의 화면이라 로그인 없이 본다. 본문은 운영 콘솔에서 버전마다 쓴다.
  * 지금 시행 중인 버전을 먼저 보이고, 시행 예정 버전·지난 버전은 눌러서 본다.
  */
@@ -906,9 +921,9 @@ function LegalView({ api, lang, look, doc }: { api: SupportApi; lang: Lang; look
           </div>
         )}
         <article className="rounded-lg border border-neutral-200 bg-white px-4 py-5">
-          <Markdown source={cur.body} />
+          <Markdown source={endsWithDate(cur.body, cur.effective_date, lang) ? cur.body
+            : `${cur.body}\n\n## ${t(lang, 'legalAddendum')}\n\n${t(lang, doc === 'privacy' ? 'legalAddendumPrivacy' : 'legalAddendumTerms', { date: date(cur.effective_date) })}`} />
         </article>
-        <p className="text-sm text-neutral-600">{t(lang, 'legalEffective', { date: date(cur.effective_date) })}</p>
         {data.versions.length > 1 && (
           <Field label={t(lang, 'legalPastTitle')}>
             <ul className="space-y-1.5">

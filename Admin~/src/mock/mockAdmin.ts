@@ -153,10 +153,28 @@ const appGateView = () => ({
   maintenance_active: appGate.maintenance_enabled
     && (!appGate.maintenance_starts_at || Date.parse(appGate.maintenance_starts_at) <= Date.now()),
 })
-let maintenanceAllow = [
-  { user_id: '1014471', note: 'QA 폰', display_name: '용사김', created_at: addDays(kstToday(), -3) + 'T14:00:00+09:00', created_by: MOCK_EMAIL },
-  { user_id: '109876543210987654321', note: '', display_name: null, created_at: addDays(kstToday(), -1) + 'T09:30:00+09:00', created_by: MOCK_EMAIL },
-] as { user_id: string; note: string; display_name: string | null; created_at: string; created_by: string | null }[]
+// ── 운영 계정 ── QA 폰 하나(권한 대부분), 계정이 사라진 유저 ID 하나(점검 통과만). 점검 통과 2개 · 시험 우편 1명.
+type MockOperatorAccount = {
+  user_id: string; note: string; account_id: string | null; display_name: string | null
+  maintenance_bypass: boolean; version_bypass: boolean; hide_from_stats: boolean; config_preview: boolean; test_recipient: boolean
+  created_at: string; created_by: string | null; updated_at: string
+}
+let operatorAccounts: MockOperatorAccount[] = [
+  {
+    user_id: '1094471', note: 'QA 폰', account_id: 'a9', display_name: '용사김',
+    maintenance_bypass: true, version_bypass: true, hide_from_stats: true, config_preview: true, test_recipient: true,
+    created_at: addDays(kstToday(), -3) + 'T14:00:00+09:00', created_by: MOCK_EMAIL, updated_at: addDays(kstToday(), -3) + 'T14:00:00+09:00',
+  },
+  {
+    user_id: '109876543210987654321', note: '', account_id: null, display_name: null,
+    maintenance_bypass: true, version_bypass: false, hide_from_stats: false, config_preview: false, test_recipient: false,
+    created_at: addDays(kstToday(), -1) + 'T09:30:00+09:00', created_by: MOCK_EMAIL, updated_at: addDays(kstToday(), -1) + 'T09:30:00+09:00',
+  },
+]
+// 원격 설정의 운영 계정 값 — 'game' 키의 공지 주소만 QA 주소로 덮는다.
+let remoteConfigOperatorValues: Record<string, { value_json: Record<string, unknown>; updated_at: string; updated_by: string | null }> = {
+  game: { value_json: { notice_url: 'https://example.com/notice-qa' }, updated_at: addDays(kstToday(), -2) + 'T11:00:00+09:00', updated_by: MOCK_EMAIL },
+}
 
 // ── 요청 제한 ── 켜 둔 상태로, 제한 중인 계정 하나(가짜 플레이어 Guest_7712)와 로그인 전 IP 하나를 보인다.
 let requestLimitSettings = {
@@ -574,6 +592,11 @@ let supportTickets: MockSupportTicket[] = (() => {
       [['player', 'How can I change my nickname?', [], 4300],
        ['admin', 'You can change it in Settings > Profile.', [], 4200],
        ['player', 'Thanks!', [], 4100]]),
+    // 탈퇴·전체 초기화로 계정이 지워진 문의 — 계정 칸이 비고 유저 ID 로만 남는다.
+    { ...t('6f1c2a90-0000-4000-8000-000000000005', 'a0', '', 1, 'closed', false,
+      { platform: 'android', app_version: '1.3.9', os: 'Android 12', device: 'SM-G991N', language: 'ko' },
+      [['player', '환불 요청드립니다.', [], 9000], ['admin', '스토어에서 환불을 진행해 주세요.', [], 8900]]),
+      account_id: null, user_id: '109876543210987654321', display_name: null },
   ]
 })()
 
@@ -927,7 +950,13 @@ const HANDLERS: Record<string, Handler> = {
   'dashboard.stats': () => {
     const today = kstToday()
     const week = Array.from({ length: 7 }, (_, i) => dayStats(addDays(today, -i)))
+    // 최근 7일 환불은 구매 내역 표본에서 센다(규칙 4) — 시험 결제는 건수에서, 무료 결제는 금액에서도 뺀다(서버와 같은 기준).
+    const since = addDays(today, -6)
+    const refunds = purchaseRows().filter((r) => r.refunded_at && String(r.refunded_at).slice(0, 10) >= since && r.is_test !== true)
     return {
+      refunds_7d: refunds.length,
+      refunds_7d_krw: refunds.filter((r) => !r.is_free).reduce((s, r) => s + (Number(r.price_amount_krw) || 0), 0),
+      refund_players_7d: new Set(refunds.map((r) => r.user_id)).size,
       total_players: 12840, new_today: week[0]!.new, new_7d: week.reduce((s, d) => s + d.new, 0),
       active_today: week[0]!.total, banned_now: PLAYERS.filter(isBannedNow).length,
       purchases_today: 23, revenue_today_krw: 412000, revenue_7d_krw: 3289000, revenue_total_krw: 48120000,
@@ -988,6 +1017,15 @@ const HANDLERS: Record<string, Handler> = {
   'players.profile': (_t, p) => {
     const { banned_until: _b, ban_message: _m, ...profile } = playerOf(p)
     return profile
+  },
+  // 약관 동의 — 용사김은 이력 3건(초기화 전 지워진 계정의 동의 포함), 마법사이는 1건, 나머지는 없음.
+  'legalConsents.list': (_t, p) => {
+    const id = String(p['accountId'] ?? '')
+    const c = (terms: number, privacy: number, ageOk: boolean, day: number, account: string | null) =>
+      ({ terms_version: terms, privacy_version: privacy, age_confirmed: ageOk, agreed_at: addDays(kstToday(), day) + 'T10:00:00+09:00', account_id: account })
+    const rows = id === 'a9' ? [c(3, 2, true, -2, 'a9'), c(2, 2, true, -40, 'a9'), c(1, 1, false, -120, null)]
+      : id === 'a8' ? [c(3, 2, true, -5, 'a8')] : []
+    return { userId: `10${id.slice(1)}4471`, rows }
   },
   'players.banInfo': (_t, p) => {
     const pl = playerOf(p)
@@ -1070,7 +1108,9 @@ const HANDLERS: Record<string, Handler> = {
     return { rows, total: rows.length, pageSize: 20 }
   },
   // 기본 분류는 설치 때 들어가는 행이다.
-  'mails.getCategories': () => ({ rows: [{ key: 'default', display_name: '기본', created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' }, { key: 'event', display_name: '이벤트', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00' }] }),
+  // 시험 발송 대상 수 — 운영 계정 가짜 데이터에서 시험 우편 받기를 켠 수.
+  'mails.getRecipientCount': (_t, p) => (p['mode'] === 'operators' ? operatorAccounts.filter((o) => o.test_recipient && o.account_id).length : 0),
+  'mails.getCategories': () =>({ rows: [{ key: 'default', display_name: '기본', created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' }, { key: 'event', display_name: '이벤트', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00' }] }),
   // 우편 내역 › 발송 단위. 'mails.getRecords' 의 "점검 보상"이 첫 묶음이다.
   'mails.getBatches': () => {
     const at = (d: number, t: string) => addDays(kstToday(), d) + `T${t}+09:00`
@@ -1120,6 +1160,8 @@ const HANDLERS: Record<string, Handler> = {
     const rows = [
       { rank: 1, account_id: 'a9', user_id: '1094471', display_name: '용사김', score: 3200, score_achieved_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', score_count: 12, server_code: 'GLOBAL' },
       { rank: 2, account_id: 'a7', user_id: '1074471', display_name: null, score: 2100, score_achieved_at: addDays(kstToday(), -1) + 'T09:00:00+09:00', score_count: 4, server_code: 'GLOBAL' },
+      // 순위·통계 제외 운영 계정(QA 폰) — 점수가 높아도 순위 없이 맨 뒤.
+      { rank: null, hidden: true, account_id: 'a2', user_id: '1024471', display_name: 'QA폰', score: 9999, score_achieved_at: addDays(kstToday(), 0) + 'T08:00:00+09:00', score_count: 30, server_code: 'GLOBAL' },
     ]
     return { rows, total: rows.length, pageSize: 20, rotationCount: null, maxRotation: null, scope: 'global', dataColumns: [] }
   },
@@ -1247,6 +1289,20 @@ const HANDLERS: Record<string, Handler> = {
       { key: 'game', value_json: { stamina: { max: 120, regen_seconds: 300 }, notice_url: 'https://example.com/notice' }, enabled: true, requires_auth: false, description: null, version: 3 },
     ],
   }),
+  'remoteConfig.getOperatorValues': () => remoteConfigOperatorValues,
+  'remoteConfig.setOperatorValue': (_t, p) => {
+    const key = String(p['key'] ?? '')
+    if (key !== 'game') throw new Error(`remote_config_key_not_found: ${key}`)
+    const v = p['valueJson']
+    if (v === null || v === undefined || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0)) {
+      const { [key]: _gone, ...rest } = remoteConfigOperatorValues
+      remoteConfigOperatorValues = rest
+      return null
+    }
+    if (typeof v !== 'object' || Array.isArray(v)) throw new Error('remote_config_value_must_be_object')
+    remoteConfigOperatorValues = { ...remoteConfigOperatorValues, [key]: { value_json: v as Record<string, unknown>, updated_at: new Date().toISOString(), updated_by: MOCK_EMAIL } }
+    return null
+  },
   'remoteConfig.stageDelete': (target, p) => {
     const drafts = draftsOf(target)
     const id = (drafts.at(-1)?.id ?? 0) + 1
@@ -1376,19 +1432,36 @@ const HANDLERS: Record<string, Handler> = {
     }
     return appGateView()
   },
-  'maintenanceAllow.list': () => maintenanceAllow,
-  'maintenanceAllow.add': (_t, p) => {
+  // 지운 수만 돌려준다 — 다른 화면의 가짜 데이터까지 비우면 미리보기에서 나머지 화면을 볼 수 없다.
+  'players.resetAll': () => {
+    if (!appGateView().maintenance_active) throw new Error('reset_all_requires_maintenance')
+    // 두 번 나갔는지 보려고 센다 — 브라우저 콘솔에서 __mockResetCalls.
+    const g = globalThis as { __mockResetCalls?: number }
+    g.__mockResetCalls = (g.__mockResetCalls ?? 0) + 1
+    return {
+      deleted: { user_profiles: 1284, user_data: 1279, mails: 15320, display_names: 1102, leaderboard_scores: 3410, 'auth.users': 1290, 'mail_batches.open_until': 2 },
+      by: MOCK_EMAIL, at: new Date().toISOString(),
+    }
+  },
+  'operatorAccounts.list': () => operatorAccounts,
+  'operatorAccounts.set': (_t, p) => {
     const id = String(p['userId'] ?? '').trim()
     // 가짜 플레이어는 유저 ID 가 10 으로 시작한다.
-    if (!/^10\d+$/.test(id)) throw new Error('maintenance_user_not_found')
+    if (!/^10\d+$/.test(id)) throw new Error('operator_user_not_found')
+    const now = new Date().toISOString()
+    const flags = {
+      maintenance_bypass: p['maintenanceBypass'] === true, version_bypass: p['versionBypass'] === true,
+      hide_from_stats: p['hideFromStats'] === true, config_preview: p['configPreview'] === true, test_recipient: p['testRecipient'] === true,
+    }
     const note = String(p['note'] ?? '').slice(0, 100)
-    const old = maintenanceAllow.find((a) => a.user_id === id)
-    if (old) old.note = note
-    else maintenanceAllow = [...maintenanceAllow, { user_id: id, note, display_name: null, created_at: new Date().toISOString(), created_by: MOCK_EMAIL }]
+    const old = operatorAccounts.find((o) => o.user_id === id)
+    operatorAccounts = old
+      ? operatorAccounts.map((o) => (o === old ? { ...o, ...flags, note, updated_at: now } : o))
+      : [...operatorAccounts, { user_id: id, note, account_id: null, display_name: null, ...flags, created_at: now, created_by: MOCK_EMAIL, updated_at: now }]
     return null
   },
-  'maintenanceAllow.remove': (_t, p) => {
-    maintenanceAllow = maintenanceAllow.filter((a) => a.user_id !== p['userId'])
+  'operatorAccounts.remove': (_t, p) => {
+    operatorAccounts = operatorAccounts.filter((o) => o.user_id !== p['userId'])
     return null
   },
   'requestLimit.settingsGet': () => requestLimitSettings,
@@ -1434,9 +1507,14 @@ const HANDLERS: Record<string, Handler> = {
   },
 }
 
+const mockFail = new Set<string>()
+;(globalThis as { __mockFail?: Set<string> }).__mockFail = mockFail
+
 export async function mockAdmin<T>(target: ProjectTarget, action: string, params: Record<string, unknown>): Promise<T> {
   // 실제 요청처럼 아주 잠깐 기다린다 — 불러오는 중 표시가 깜빡이는지도 볼 수 있게.
   await new Promise((r) => setTimeout(r, 150))
+  // 불러오기 실패 화면을 볼 때 — 브라우저 콘솔에서 __mockFail.add('operatorAccounts.list').
+  if (mockFail.has(action)) throw new Error('가짜 실패')
   const handler = HANDLERS[action]
   if (handler) return handler(target, params) as T
   // 모르는 조회는 빈 목록, 변경 요청은 성공으로 답한다. 화면이 깨지지 않고 "비어 있음"으로 보이게 하려는 것.

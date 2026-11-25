@@ -23,6 +23,7 @@ import FriendsTab from './FriendsTab'
 import MatchRecordsTab from './MatchRecordsTab'
 import MailsTab from './MailsTab'
 import CouponsTab from './CouponsTab'
+import LegalConsentsCard from './LegalConsentsCard'
 
 type Tab = 'info' | 'userData' | 'mails' | 'coupons' | 'friends' | 'matches'
 
@@ -368,6 +369,8 @@ export default function PlayerDetail({
           { label: '마지막 활동', value: profile.last_activity_at ? formatDateTime(profile.last_activity_at) : null },
         ]} />
       </WhiteCard>
+
+      <LegalConsentsCard target={target} accountId={accountId} onUnauthenticated={onUnauthenticated} />
 
       <WhiteCard className="p-5 space-y-3">
         <CardHeader title="결제 정보" description="누적 결제와 환불" />

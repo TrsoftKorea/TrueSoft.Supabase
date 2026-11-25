@@ -19,7 +19,7 @@ import { brokenItemsIn, itemOptionLabel, type CatalogItem } from '../lib/gameIte
 import { BrokenItemNote, BrokenItemsConfirm } from '../components/ItemGrantNote'
 import { defaultLangField, langLabel, pickableLangs, useDefaultLanguage } from '../lib/languages'
 
-type Mode = 'all' | 'server' | 'players'
+type Mode = 'all' | 'server' | 'players' | 'operators'
 type Sched = 'immediate' | 'scheduled' | 'repeat'
 type RepeatUnit = 'day' | 'week' | 'month'
 type ItemRow = { key: string; count: number }
@@ -68,7 +68,8 @@ function Step({ n, title, state, summary, onEdit, children }: {
           </>
         )}
       </button>
-      {expanded && <div className="px-4 pb-4 pt-1 space-y-3 border-t border-neutral-100">{children}</div>}
+      {/* 단계 카드는 탭줄·머리줄과 끝을 맞춰 전체 폭, 안의 입력칸·글은 읽기 좋은 폭으로 묶는다. */}
+      {expanded && <div className="px-4 pb-4 pt-1 space-y-3 border-t border-neutral-100 [&>*]:max-w-3xl">{children}</div>}
     </WhiteCard>
   )
 }
@@ -174,6 +175,20 @@ export default function Mails({
 
   const playerIds = Object.keys(selected)
 
+  // 시험 발송은 즉시 발송만 된다 — 예약 발송은 운영 계정 대상을 모른다.
+  useEffect(() => { if (sched !== 'immediate' && mode === 'operators') setMode('players') }, [sched, mode])
+  const [operatorCount, setOperatorCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (mode !== 'operators') return
+    let alive = true
+    setOperatorCount(null)
+    callAdmin<number>(target, 'mails.getRecipientCount', { mode: 'operators' })
+      .then((n) => { if (alive) setOperatorCount(n) })
+      .catch((e: unknown) => report(e, '시험 발송 대상 수를 불러오지 못했습니다.'))
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, target])
+
   const localized = (() => {
     const o: Record<string, { title: string; content: string }> = {}
     for (const r of langRows) { const l = r.lang.trim(); if (l) o[l] = { title: r.title, content: r.content } }
@@ -182,6 +197,7 @@ export default function Mails({
 
   const schedOk = sched === 'immediate' || (sched === 'scheduled' && !!scheduledAt) || (sched === 'repeat' && !!repeatTime)
   const targetOk = mode === 'all' || (mode === 'server' && !!serverId) || (mode === 'players' && playerIds.length > 0)
+    || (mode === 'operators' && (operatorCount ?? 0) > 0)
   const langFilled = langRows.every((r) => r.lang.trim() !== '' && (r.title.trim() !== '' || r.content.trim() !== ''))
   const langDup = langRows.some((r, i) => r.lang.trim() !== '' && langRows.some((x, j) => j < i && x.lang.trim() === r.lang.trim()))
   const langOk = langFilled && !langDup
@@ -211,10 +227,11 @@ export default function Mails({
     return c?.display_name || (key === 'default' ? '기본' : key)
   }
   // 반복 발송에는 걸 수 없다 — 회차마다 열려 있어 나중에 가입한 사람이 지난 회차를 한꺼번에 받는다.
-  const openApplies = mode !== 'players' && sched !== 'repeat' && openForNew
+  const openApplies = (mode === 'all' || mode === 'server') && sched !== 'repeat' && openForNew
   const openPart = openApplies ? ' · 나중에 들어온 플레이어도' : ''
   const targetSummary = (mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
+    : mode === 'operators' ? `시험 발송 · 운영 계정 ${operatorCount === null ? '…' : `${formatCount(operatorCount)}명`}`
     : `플레이어 ${formatCount(playerIds.length)}명`) + openPart
   const repeatDesc = repeatUnit === 'day' ? `매일 ${repeatTime}`
     : repeatUnit === 'week' ? `매주 ${DOW_LABEL[repeatDow]}요일 ${repeatTime}`
@@ -290,7 +307,7 @@ export default function Mails({
   }
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-4">
       <PageHeader title="우편 발송" description="플레이어에게 우편을 발송합니다." />
 
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -347,7 +364,16 @@ export default function Mails({
       {reached >= 1 && (
         <Step n={2} title="발송 대상" state={stepState(1)} summary={targetSummary} onEdit={() => setActive(1)}>
           <Segmented value={mode} onChange={setMode}
-            options={[{ v: 'all', label: '전체' }, { v: 'server', label: '서버' }, { v: 'players', label: '플레이어' }]} />
+            options={[{ v: 'all', label: '전체' }, { v: 'server', label: '서버' }, { v: 'players', label: '플레이어' },
+              ...(sched === 'immediate' ? [{ v: 'operators' as const, label: '시험 발송' }] : [])]} />
+
+          {mode === 'operators' && (
+            <p className="text-sm text-neutral-700">
+              {operatorCount === null ? '…'
+                : operatorCount > 0 ? `시험 우편 받기 권한이 있는 운영 계정 ${formatCount(operatorCount)}명에게 보냅니다.`
+                : '시험 우편 받기 권한이 있는 운영 계정이 없습니다.'}
+            </p>
+          )}
 
           {mode === 'all' && (
             <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
@@ -364,7 +390,7 @@ export default function Mails({
             </Field>
           )}
 
-          {mode !== 'players' && sched !== 'repeat' && (
+          {(mode === 'all' || mode === 'server') && sched !== 'repeat' && (
             <div>
               <label className="inline-flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
                 <input type="checkbox" checked={openForNew} onChange={(e) => setOpenForNew(e.target.checked)} />

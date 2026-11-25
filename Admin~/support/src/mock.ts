@@ -168,7 +168,9 @@ export function createMockApi(): SupportApi {
       const pick = version != null ? docs.find((d) => d.version === version) : inForce[0]
       const up = docs.find((d) => !d.in_force)
       return {
-        current: pick ? { version: pick.version, effective_date: pick.effective_date, body: legalBody(kind === 'privacy' ? '개인정보처리방침' : '이용약관', pick.version) } : null,
+        current: pick ? { version: pick.version, effective_date: pick.effective_date, body: legalBody(kind === 'privacy' ? '개인정보처리방침' : '이용약관', pick.version)
+          // 방침 1판은 시행일 문장을 손으로 쓰던 옛 판 꼴 — 화면이 시행일 문장을 한 번만 보이는지 본다.
+          + (kind === 'privacy' && pick.version === 1 ? `\n\n- 시행 일자: ${pick.effective_date}` : '') } : null,
         upcoming: up ? { version: up.version, effective_date: up.effective_date } : null,
         versions: inForce.map((d) => ({ version: d.version, effective_date: d.effective_date })),
       }

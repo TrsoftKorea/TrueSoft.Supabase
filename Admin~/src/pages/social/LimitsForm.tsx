@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Save } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
-import { CardHeader, WhiteCard } from '../../components/ui/Card'
+import { CardHeader, FormCard } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { formatDateTime } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
@@ -131,7 +131,7 @@ export function LimitsForm({
   }
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <CardHeader title={title} description={description} />
 
       {toggle && (
@@ -199,7 +199,7 @@ export function LimitsForm({
           </ul>
         )}
       </ConfirmDialog>
-    </WhiteCard>
+    </FormCard>
   )
 }
 

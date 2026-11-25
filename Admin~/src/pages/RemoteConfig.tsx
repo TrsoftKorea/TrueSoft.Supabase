@@ -16,6 +16,7 @@ import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } fro
 import { opLabel } from '../lib/schemaLabels'
 import { Button } from '../components/ui/Button'
 import { RefreshButton } from '../components/ui/FilterBar'
+import { formatDateTime } from '../components/ui/format'
 
 type ConfigRow = {
   key: string
@@ -25,6 +26,7 @@ type ConfigRow = {
   description: string | null
   version: number
 }
+type OperatorValue = { value_json: Record<string, unknown>; updated_at: string; updated_by: string | null }
 type Effective = { value_json: Record<string, unknown>; enabled: boolean; requires_auth: boolean; deleted: boolean; pendingId: number | null }
 
 const formatItemValue = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v))
@@ -95,7 +97,7 @@ function NewConfigModal({ target, onUnauthenticated, existingKeys, keysReady, on
   )
 }
 
-function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue, existingKeys, onClose, onSaved }: {
+function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue, existingKeys, onClose, onSaved, save, titles }: {
   target: ProjectTarget
   onUnauthenticated: () => void
   configKey: string
@@ -104,6 +106,9 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   existingKeys: string[]
   onClose: () => void
   onSaved: () => void
+  /** 주면 게시 대기 대신 이것으로 저장한다(운영 계정 값). */
+  save?: (itemKey: string, value: unknown) => Promise<void>
+  titles?: { add: string; edit: string }
 }) {
   const isNew = itemKey === null
   const [key, setKey] = useState(itemKey ?? '')
@@ -132,7 +137,8 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
     }
     setLoading(true)
     try {
-      await callAdmin(target, 'remoteConfig.stageItem', { key: configKey, itemKey: key.trim(), itemValue: parsed.value })
+      if (save) await save(key.trim(), parsed.value)
+      else await callAdmin(target, 'remoteConfig.stageItem', { key: configKey, itemKey: key.trim(), itemValue: parsed.value })
       onSaved()
     } catch (e: unknown) {
       if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -143,7 +149,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   return (
     <EditDialog
       error={error || undefined}
-      title={isNew ? '필드 추가' : '필드 수정'}
+      title={isNew ? (titles?.add ?? '필드 추가') : (titles?.edit ?? '필드 수정')}
       description={isNew ? undefined : itemKey}
       busy={loading}
       onClose={onClose}
@@ -207,6 +213,10 @@ export default function RemoteConfig({
   const [dialogError, setDialogError] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
   const [deleteItemTarget, setDeleteItemTarget] = useState<{ itemKey: string; value: unknown } | null>(null)
+  // 운영 계정 값 — 게시 단계 없이 저장하는 즉시 운영 계정(원격 설정 미리 받기 권한)에게 간다. 못 불러왔으면 null.
+  const [opValues, setOpValues] = useState<Record<string, OperatorValue> | null>(null)
+  const [opModal, setOpModal] = useState<{ itemKey: string | null; value: unknown } | null>(null)
+  const [opDelete, setOpDelete] = useState<{ itemKey: string; value: unknown } | null>(null)
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -235,14 +245,29 @@ export default function RemoteConfig({
     }
   }, [target, report])
 
+  const reloadOpValues = useCallback(async () => {
+    try {
+      setOpValues(await callAdmin<Record<string, OperatorValue>>(target, 'remoteConfig.getOperatorValues'))
+    } catch (e: unknown) {
+      setOpValues(null)
+      report(e, '운영 계정 값을 불러오지 못했습니다.')
+    }
+  }, [target, report])
+
+  // 항목 하나를 고쳐도 서버에는 그 키의 운영 계정 값 전체를 보낸다(빈 객체면 지운다).
+  const saveOpValue = async (key: string, next: Record<string, unknown>) => {
+    await callAdmin(target, 'remoteConfig.setOperatorValue', { key, valueJson: Object.keys(next).length > 0 ? next : null })
+    await reloadOpValues()
+  }
+
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      await reloadRows()
+      await Promise.all([reloadRows(), reloadOpValues()])
     } finally {
       setLoading(false)
     }
-  }, [reloadRows])
+  }, [reloadRows, reloadOpValues])
 
   useEffect(() => { void reload() }, [reload])
 
@@ -327,6 +352,23 @@ export default function RemoteConfig({
 
   const selected = selectedKey ? effectiveOf(selectedKey) : null
   const selectedItems = selected ? Object.entries(selected.value_json).filter(([k]) => k !== '__meta') : []
+  const selectedOp = selectedKey ? opValues?.[selectedKey] ?? null : null
+  const selectedOpItems = Object.entries(selectedOp?.value_json ?? {})
+  // 운영 계정 값은 게시된 키에만 붙는다 — 추가 대기 중인 키는 서버에 아직 없다.
+  const opEditable = !!selectedKey && rows.some((r) => r.key === selectedKey) && opValues !== null
+
+  const confirmOpDelete = async () => {
+    if (!opDelete || !selectedKey) return
+    setBusy(true)
+    setDialogError('')
+    try {
+      const next = { ...(selectedOp?.value_json ?? {}) }
+      delete next[opDelete.itemKey]
+      await saveOpValue(selectedKey, next)
+      setOpDelete(null)
+    } catch (e: unknown) { reportInDialog(e, '실패했습니다.') }
+    finally { setBusy(false) }
+  }
 
   return (
     <div className="space-y-4">
@@ -356,6 +398,7 @@ export default function RemoteConfig({
               return (
                 <span className="inline-flex items-center gap-1.5">
                   {eff.requires_auth && <Tag tone="brand">인증 필요</Tag>}
+                  {opValues?.[key] && <Tag>운영 계정 값</Tag>}
                   {eff.pendingId != null && !eff.deleted && <Tag>대기 중</Tag>}
                   {eff.deleted
                     // 빨간 바탕은 글자 바깥으로 넓어진다 — 앞의 작은 표시와 바탕이 맞닿지 않게 그만큼 띄운다.
@@ -447,8 +490,89 @@ export default function RemoteConfig({
             rowKey={([k]) => k}
             emptyText="필드가 없습니다."
           />
+
+          <div className="border-t border-neutral-200 pt-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-neutral-800">운영 계정 값</div>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  원격 설정 미리 받기 권한이 있는 운영 계정만 같은 이름의 필드를 이 값으로 받습니다. 저장하면 게시 없이 곧바로 반영됩니다.
+                </p>
+              </div>
+              <Button variant="primary" size="compact" className="shrink-0" disabled={!opEditable || busy}
+                onClick={() => setOpModal({ itemKey: null, value: undefined })}>
+                <Plus className="w-3.5 h-3.5" />값 추가
+              </Button>
+            </div>
+            <DataTable
+              columns={[
+                { key: 'name', header: '필드명', kind: 'mono', cell: ([k]) => k },
+                {
+                  key: 'value', header: '값', kind: 'text',
+                  cell: ([, v]) => <span className="font-mono text-xs text-neutral-600">{formatItemValue(v)}</span>,
+                  full: ([, v]) => formatItemValue(v),
+                },
+                {
+                  key: 'actions', header: '', kind: 'actions', cell: ([k, v]) => (
+                    <span className="inline-flex gap-1.5">
+                      <button onClick={() => setOpModal({ itemKey: k, value: v })} disabled={!opEditable || busy} title="값 수정" aria-label="값 수정" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 disabled:opacity-40">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => { setDialogError(''); setOpDelete({ itemKey: k, value: v }) }} disabled={!opEditable || busy} title="값 삭제" aria-label="값 삭제" className="w-7 h-7 inline-flex items-center justify-center rounded hover:bg-red-50 text-neutral-400 hover:text-red-500 disabled:opacity-40">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ),
+                },
+              ] satisfies Column<[string, unknown]>[]}
+              rows={selectedOpItems}
+              rowKey={([k]) => k}
+              failed={opValues === null}
+              emptyText={rows.some((r) => r.key === selectedKey) ? '운영 계정 값이 없습니다.' : '게시한 뒤에 운영 계정 값을 넣을 수 있습니다.'}
+            />
+            {selectedOp && (
+              <p className="text-xs text-neutral-500">
+                마지막 수정 {formatDateTime(selectedOp.updated_at)}{selectedOp.updated_by ? ` · ${selectedOp.updated_by}` : ''}
+              </p>
+            )}
+          </div>
         </WhiteCard>
       )}
+
+      {opModal && selectedKey && (
+        <ItemModal
+          target={target}
+          onUnauthenticated={onUnauthenticated}
+          configKey={selectedKey}
+          itemKey={opModal.itemKey}
+          currentValue={opModal.value}
+          existingKeys={selectedOpItems.map(([k]) => k)}
+          titles={{ add: '운영 계정 값 추가', edit: '운영 계정 값 수정' }}
+          save={(k, v) => saveOpValue(selectedKey, { ...(selectedOp?.value_json ?? {}), [k]: v })}
+          onClose={() => setOpModal(null)}
+          onSaved={() => setOpModal(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!opDelete}
+        title="값을 지울까요?"
+        confirmLabel="삭제"
+        danger
+        busy={busy}
+        error={dialogError}
+        onConfirm={() => void confirmOpDelete()}
+        onCancel={() => setOpDelete(null)}
+        description="운영 계정도 곧바로 일반 플레이어와 같은 값을 받습니다."
+      >
+        {opDelete && (
+          <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
+            <div className="text-xs text-neutral-500 font-mono">{selectedKey}</div>
+            <div className="mt-1 font-mono text-neutral-800">{opDelete.itemKey}</div>
+            <div className="mt-1 font-mono text-xs text-neutral-600 break-all">{formatItemValue(opDelete.value)}</div>
+          </div>
+        )}
+      </ConfirmDialog>
 
       {showNew && (
         <NewConfigModal

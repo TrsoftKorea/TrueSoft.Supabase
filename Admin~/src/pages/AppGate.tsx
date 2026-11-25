@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronUp, CircleHelp, Plus, Save, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleHelp, Save } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { useDefaultLanguage } from '../lib/languages'
-import { CardHeader, WhiteCard } from '../components/ui/Card'
-import { TableCard } from '../components/ui/DataTable'
+import { CardHeader, FormCard } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
-import { EditDialog } from '../components/ui/EditDialog'
 import { Switch } from '../components/ui/Switch'
 import { StatusText } from '../components/ui/StatusText'
-import { PlayerLink } from '../components/ui/PlayerLink'
+import { InfoList } from '../components/ui/InfoList'
+import type { OperatorAccount } from './OperatorAccounts'
 import { inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { fromRows, LocalizedFields, toRows } from './PushSettings'
@@ -30,7 +29,6 @@ type Gate = {
   updated_at: string | null
   updated_by: string | null
 }
-type Allow = { user_id: string; note: string; display_name: string | null; created_at: string; created_by: string | null }
 type Report = (e: unknown, fallback: string) => void
 
 const VERSION = /^[0-9]+(\.[0-9]+){0,3}$/
@@ -43,7 +41,6 @@ const REASON_TEXT: Record<string, string> = {
   app_version_invalid: BAD_VERSION,
   maintenance_time_invalid: BAD_TIME,
   maintenance_localized_invalid: '언어별 안내 문구가 올바르지 않습니다.',
-  maintenance_user_not_found: '그 유저 ID 의 플레이어가 없습니다.',
   app_gate_conflict:'다른 운영자가 방금 이 설정을 바꿨습니다. 새로 읽은 값을 확인하고 다시 저장해 주세요.',
 }
 const reasonText = (e: unknown, fallback: string) => {
@@ -66,10 +63,21 @@ const toParams = (g: Gate) => ({
 })
 
 /** 설정 › 점검·버전 탭. */
-export default function AppGateCards({ target, report }: { target: ProjectTarget; report: Report }) {
+export default function AppGateCards({ target, report, onOpenOperators }: { target: ProjectTarget; report: Report; onOpenOperators: () => void }) {
   const [gate, setGate] = useState<Gate | null>(null)
   const [loading, setLoading] = useState(true)
-  const [allowCount, setAllowCount] = useState<number | null>(null)
+  const [operators, setOperators] = useState<OperatorAccount[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    setOperators(null)
+    callAdmin<OperatorAccount[]>(target, 'operatorAccounts.list')
+      .then((list) => { if (alive) setOperators(list) })
+      .catch((e: unknown) => report(e, '운영 계정을 불러오지 못했습니다.'))
+    return () => { alive = false }
+  }, [target, report])
+  const countOf = (f: 'maintenance_bypass' | 'version_bypass') => (operators ? operators.filter((o) => o[f]).length : null)
+  const allowCount = countOf('maintenance_bypass')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -106,7 +114,7 @@ export default function AppGateCards({ target, report }: { target: ProjectTarget
     <div className="space-y-4">
       <VersionCard gate={gate} loading={loading} save={save} report={report} />
       <MaintenanceCard target={target} gate={gate} loading={loading} save={save} report={report} allowCount={allowCount} />
-      <AllowCard target={target} report={report} onCount={setAllowCount} />
+      <OperatorsCard maintenanceCount={allowCount} versionCount={countOf('version_bypass')} onOpen={onOpenOperators} />
     </div>
   )
 }
@@ -211,7 +219,7 @@ function VersionCard({ gate, loading, save, report }: {
   const set = (k: keyof typeof v) => (s: string) => { setV((p) => ({ ...p, [k]: s })); flow.edited() }
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <div className="space-y-2">
         <CardHeader title="최소 버전" description="이보다 낮은 버전의 게임은 업데이트 안내를 띄우고 들어가지 않습니다." />
         <AppliesTo>
@@ -261,7 +269,7 @@ function VersionCard({ gate, loading, save, report }: {
           </ul>
         )}
       </ConfirmDialog>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
@@ -331,7 +339,7 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
   const at = (iso: string) => `${isoToLocalInput(iso, tz ?? 'UTC').replace('T', ' ')} ${tz ? timeZoneName(tz) : ''}`.trim()
   const startsLater = !!startIso && Date.parse(startIso) > Date.now()
   const active = !!gate?.maintenance_active
-  const blocked = `통과 계정${allowCount === null ? '' : ` ${formatCount(allowCount)}개`} 밖의 플레이어는 들어오지 못하고, 게임 중인 플레이어도 다음 요청부터 막힙니다.`
+  const blocked = `점검 통과 운영 계정${allowCount === null ? '' : ` ${formatCount(allowCount)}개`} 밖의 플레이어는 들어오지 못하고, 게임 중인 플레이어도 다음 요청부터 막힙니다.`
   const outcome = !enabled
     ? (active ? '점검이 끝나 모든 플레이어가 곧바로 들어올 수 있습니다.' : '점검을 끈 채로 저장합니다.')
     : active
@@ -343,11 +351,11 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
         : `저장하면 곧바로 점검이 시작됩니다. ${blocked}`
 
   return (
-    <WhiteCard className="p-5 space-y-5 max-w-2xl">
+    <FormCard>
       <div className="space-y-2">
         <CardHeader
           title="점검"
-          description="점검 중에는 통과 계정 밖의 플레이어가 게임에 들어오지 못하고 안내 문구를 봅니다."
+          description="점검 중에는 점검 통과 운영 계정 밖의 플레이어가 게임에 들어오지 못하고 안내 문구를 봅니다."
           actions={gate && (gate.maintenance_active
             ? <StatusText tone="bad">지금 점검 중</StatusText>
             : gate.maintenance_enabled ? <StatusText tone="warn">시작 예정</StatusText> : <StatusText tone="muted">꺼짐</StatusText>)}
@@ -410,149 +418,26 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
       >
         <p className="text-sm text-neutral-700">{outcome}</p>
       </ConfirmDialog>
-    </WhiteCard>
+    </FormCard>
   )
 }
 
-function AllowCard({ target, report, onCount }: { target: ProjectTarget; report: Report; onCount: (n: number | null) => void }) {
-  const [rows, setRows] = useState<Allow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [failed, setFailed] = useState(false)
-  const [adding, setAdding] = useState(false)
-  const [userId, setUserId] = useState('')
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [dialogError, setDialogError] = useState('')
-  const [removing, setRemoving] = useState<Allow | null>(null)
-  const req = useRef(0)
-
-  const load = useCallback(async () => {
-    const id = ++req.current
-    setLoading(true)
-    setFailed(false)
-    try {
-      const list = await callAdmin<Allow[]>(target, 'maintenanceAllow.list')
-      if (id !== req.current) return
-      setRows(list)
-      onCount(list.length)
-    } catch (e: unknown) {
-      if (id !== req.current) return
-      setRows([])
-      setFailed(true)
-      onCount(null)
-      report(e, '통과 계정을 불러오지 못했습니다.')
-    } finally {
-      if (id === req.current) setLoading(false)
-    }
-  }, [target, report, onCount])
-
-  useEffect(() => { void load() }, [load])
-
-  const add = async () => {
-    setBusy(true)
-    setDialogError('')
-    try {
-      await callAdmin(target, 'maintenanceAllow.add', { userId: userId.trim(), note: note.trim() })
-      setAdding(false)
-      void load()
-    } catch (e: unknown) {
-      if (e instanceof NotAuthenticatedError) report(e, '')
-      else setDialogError(reasonText(e, '추가하지 못했습니다.'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const remove = async () => {
-    if (!removing) return
-    setBusy(true)
-    setDialogError('')
-    try {
-      await callAdmin(target, 'maintenanceAllow.remove', { userId: removing.user_id })
-      setRemoving(null)
-      void load()
-    } catch (e: unknown) {
-      if (e instanceof NotAuthenticatedError) report(e, '')
-      else setDialogError(reasonText(e, '지우지 못했습니다.'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
+/** 점검·버전 통과는 운영 계정에서 정한다 — 여기서는 몇 개인지와 그 화면으로 가는 길만. */
+function OperatorsCard({ maintenanceCount, versionCount, onOpen }: {
+  maintenanceCount: number | null; versionCount: number | null; onOpen: () => void
+}) {
+  const n = (v: number | null) => (v === null ? '…' : `${formatCount(v)}개`)
   return (
-    <>
-      <TableCard
+    <FormCard>
+      <CardHeader
         title="통과 계정"
-        description="점검 중에도 들어올 수 있는 플레이어입니다."
-        actions={
-          <Button variant="primary" onClick={() => { setUserId(''); setNote(''); setDialogError(''); setAdding(true) }}>
-            <Plus className="w-3.5 h-3.5" />추가
-          </Button>
-        }
-        columns={[
-          { key: 'created_at', header: '추가 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
-          { key: 'player', header: '플레이어', kind: 'name', cell: (r) => r.display_name ? <PlayerLink accountId={null} name={r.display_name} userId={r.user_id} /> : null },
-          { key: 'user_id', header: '유저 ID', kind: 'mono', cell: (r) => r.user_id },
-          { key: 'note', header: '메모', kind: 'text', cell: (r) => r.note || null },
-          {
-            key: 'actions', header: '', kind: 'actions', cell: (r) => (
-              <Button variant="dangerOutline" size="compact" onClick={() => { setDialogError(''); setRemoving(r) }}>
-                <Trash2 className="w-3.5 h-3.5" />삭제
-              </Button>
-            ),
-          },
-        ]}
-        rows={rows}
-        rowKey={(r) => r.user_id}
-        loading={loading}
-        failed={failed}
-        emptyText="등록한 통과 계정이 없습니다."
+        description="점검 중이거나 앱이 최소 버전보다 낮아도 들어올 계정은 운영 계정에서 정합니다."
+        actions={<Button variant="outline" onClick={onOpen}>운영 계정 열기</Button>}
       />
-
-      {adding && (
-        <EditDialog
-          title="통과 계정 추가"
-          busy={busy}
-          error={dialogError}
-          onClose={() => setAdding(false)}
-          footer={<>
-            <Button onClick={() => setAdding(false)} disabled={busy}>취소</Button>
-            <Button variant="primary" onClick={() => void add()} disabled={busy || !userId.trim()}>
-              <Plus className="w-3.5 h-3.5" />추가
-            </Button>
-          </>}
-        >
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-neutral-500">유저 ID</label>
-              <input value={userId} onChange={(e) => setUserId(e.target.value)} className={`${inputCls} w-full font-mono`} />
-              <p className="text-xs text-neutral-500">플레이어 상세의 유저 ID 를 넣습니다.</p>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-neutral-500">메모</label>
-              <input value={note} maxLength={100} onChange={(e) => setNote(e.target.value)} className={`${inputCls} w-full`} />
-            </div>
-          </div>
-        </EditDialog>
-      )}
-
-      <ConfirmDialog
-        open={!!removing}
-        title="계정을 뺄까요?"
-        description="점검 중이면 이 플레이어도 곧바로 막힙니다."
-        confirmLabel="삭제"
-        danger
-        busy={busy}
-        error={dialogError}
-        onConfirm={() => void remove()}
-        onCancel={() => setRemoving(null)}
-      >
-        {removing && (
-          <p className="text-sm text-neutral-700">
-            {removing.display_name || '닉네임 없음'} · <span className="font-mono">{removing.user_id}</span>
-          </p>
-        )}
-      </ConfirmDialog>
-    </>
+      <InfoList items={[
+        { label: '점검 통과', value: n(maintenanceCount) },
+        { label: '버전 통과', value: n(versionCount) },
+      ]} />
+    </FormCard>
   )
 }

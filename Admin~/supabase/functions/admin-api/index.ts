@@ -674,7 +674,7 @@ Deno.serve(async (req) => {
   return res;
 });
 
-const MASTER_ONLY_ACTIONS = new Set(["operators.setDisabled", "operators.delete"]);
+const MASTER_ONLY_ACTIONS = new Set(["operators.setDisabled", "operators.delete", "players.resetAll"]);
 
 const ACTIVATE_ERRORS: Record<string, string> = {
   console_name_required: "프로젝트 이름을 입력해 주세요.",
@@ -1007,6 +1007,19 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      // 약관 동의 기록 — 유저 ID 로 묶여 탈퇴·전체 초기화에도 남는다. 화면은 계정 ID 만 알아서 여기서 유저 ID 로 바꾼다.
+      // 바꾸는 규칙은 동의를 남길 때(ts_legal_consent_user_id)와 같다: 프로필의 유저 ID, 없으면 계정 번호.
+      case "legalConsents.list": {
+        const accountId = str(params, "accountId");
+        if (!UUID_RE.test(accountId)) throw new Error("계정 ID 가 올바르지 않습니다.");
+        const { data: prof, error: profError } = await db.from("user_profiles").select("user_id").eq("account_id", accountId).maybeSingle();
+        if (profError) throw new Error(profError.message);
+        const userId = (prof?.user_id as string | null | undefined) || accountId;
+        const { data, error } = await db.rpc("ts_admin_legal_consents", { p_user_id: userId });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { userId, rows: data ?? [] } });
+      }
+
       case "players.banInfo": {
         const { data, error } = await db.rpc("ts_admin_player_ban_info", {
           p_account_id: str(params, "accountId"),
@@ -1256,6 +1269,25 @@ async function handleAction(
           .order("key");
         if (error) throw new Error(error.message);
         return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      // 운영 계정 값 — 게시 단계 없이 바로 반영된다. {키: {value_json, updated_at, updated_by}}
+      case "remoteConfig.getOperatorValues": {
+        const { data, error } = await db.rpc("ts_admin_remote_config_operator_values");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? {} });
+      }
+
+      case "remoteConfig.setOperatorValue": {
+        const value = params["valueJson"] ?? null;
+        if (value !== null && (typeof value !== "object" || Array.isArray(value))) {
+          throw new Error("remote_config_value_must_be_object");
+        }
+        const { error } = await db.rpc("ts_admin_remote_config_operator_set", {
+          p_key: str(params, "key"), p_value_json: value, p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
       }
 
       case "remoteConfig.stageNew": {
@@ -1725,6 +1757,17 @@ async function handleAction(
         return json({ ok: true, data });
       }
 
+      // 플레이어 전체 초기화 — 마스터 전용(MASTER_ONLY_ACTIONS). 프로젝트 이름 확인은 화면이 하고, DB 의 확인 글자는
+      // 여기서 고정으로 넘긴다 — 화면 값을 그대로 넘기면 확인 글자가 요청 한 줄로 우회된다. 점검 중이 아니면 DB 가 거절한다.
+      case "players.resetAll": {
+        const { data, error } = await db.rpc("ts_admin_reset_all_players", {
+          p_confirm: "DELETE ALL PLAYERS",
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data });
+      }
+
       // 점검·최소 버전 — 게임이 로그인 전에 읽는다. 저장은 값 전부를 한 번에(빈 칸은 null = 제한 없음·즉시).
       case "appGate.get": {
         const { data, error } = await db.rpc("ts_admin_app_gate_get");
@@ -1796,6 +1839,36 @@ async function handleAction(
 
       case "maintenanceAllow.remove": {
         const { error } = await db.rpc("ts_admin_maintenance_allow_remove", { p_user_id: str(params, "userId") });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      // 운영 계정 — 유저 ID 마다 권한 5개. 권한은 화면이 보낸 값으로 덮어쓴다.
+      case "operatorAccounts.list": {
+        const { data, error } = await db.rpc("ts_admin_operator_accounts_list");
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: data ?? [] });
+      }
+
+      case "operatorAccounts.set": {
+        const userId = str(params, "userId").trim();
+        if (userId.length > 100) throw new Error("유저 ID 가 너무 깁니다.");
+        const { error } = await db.rpc("ts_admin_operator_account_set", {
+          p_user_id: userId,
+          p_note: optStr(params, "note").trim().slice(0, 100),
+          p_maintenance_bypass: params["maintenanceBypass"] === true,
+          p_version_bypass: params["versionBypass"] === true,
+          p_hide_from_stats: params["hideFromStats"] === true,
+          p_config_preview: params["configPreview"] === true,
+          p_test_recipient: params["testRecipient"] === true,
+          p_by: email,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: null });
+      }
+
+      case "operatorAccounts.remove": {
+        const { error } = await db.rpc("ts_admin_operator_account_remove", { p_user_id: str(params, "userId") });
         if (error) throw new Error(error.message);
         return json({ ok: true, data: null });
       }
@@ -2227,6 +2300,17 @@ async function handleAction(
         const { data, error } = await db.from("game_servers").select("id, server_code, display_name").order("display_name");
         if (error) throw new Error(error.message);
         return json({ ok: true, data: { rows: data ?? [] } });
+      }
+
+      // 받을 사람 수 — 지금은 시험 발송(운영 계정) 대상 수만 화면이 묻는다.
+      case "mails.getRecipientCount": {
+        const mode = str(params, "mode");
+        if (!["all", "server", "operators"].includes(mode)) throw new Error("알 수 없는 대상입니다.");
+        const { data, error } = await db.rpc("ts_admin_count_recipients", {
+          p_target_mode: mode, p_server_id: params["serverId"] ?? null,
+        });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: typeof data === "number" ? data : 0 });
       }
 
       case "mails.getCategories": {

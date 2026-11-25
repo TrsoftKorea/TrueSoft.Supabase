@@ -34,6 +34,15 @@ export function CardHeader({ title, description, actions }: { title?: ReactNode;
 }
 
 /**
+ * 값을 넣고 저장하는 설정 카드. 카드는 탭줄·머리줄과 좌우 끝을 맞춰 전체 폭을 쓰고, 맨 위(제목 줄)를 뺀
+ * 내용만 읽기 좋은 폭(672px)으로 묶는다 — 카드째 좁히면 탭줄보다 짧아 화면이 좁아 보인다(2026-11-25 사용자 지적).
+ * 첫 자식이 제목 줄(CardHeader, 또는 제목을 담은 묶음)이어야 한다. 창(ConfirmDialog·EditDialog)은 화면 위로 떠서 폭 제한을 안 받는다.
+ */
+export function FormCard({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <WhiteCard className={`p-5 space-y-5 [&>*:not(:first-child)]:max-w-2xl ${className}`}>{children}</WhiteCard>
+}
+
+/**
  * 묶음 목록의 상자 하나 — 테두리 + 옅은 바탕 제목 띠(설정 › 서비스 연결 꼴). 상자끼리 칸 폭 맞추기는 안에 든 표가 한다.
  * 제목 띠 오른쪽 조작은 actions. 내용이 없으면(접힌 상자) 제목 띠만 남는다.
  */

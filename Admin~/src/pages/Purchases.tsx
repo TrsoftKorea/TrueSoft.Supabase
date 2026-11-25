@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Loader2, Download, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { type ProjectTarget } from '../lib/projectTarget'
@@ -191,7 +192,9 @@ export default function Purchases({
   const [dateTo, setDateTo] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
-  const [refundedOnly, setRefundedOnly] = useState(false)
+  // 대시보드의 「최근 7일 환불」에서 ?refunded=1 로 들어오면 환불만 켠 채로 연다.
+  const [params] = useSearchParams()
+  const [refundedOnly, setRefundedOnly] = useState(() => params.get('refunded') === '1')
   // 라이브 결제(exclude: 시험이 아닌 것 — 무료·시험 여부를 모르는 옛 결제 포함) 또는 테스트 결제(only)만 본다.
   // 둘을 섞어 보는 "전체"는 두지 않는다 — 테스트 결제는 따로 보는 것이 의도다(2026-10-29 사용자 결정).
   const [test, setTest] = useState<'exclude' | 'only'>('exclude')

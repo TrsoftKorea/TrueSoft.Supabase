@@ -74,6 +74,10 @@ const ACTION_LABELS: Record<string, string> = {
   'appGate.update': '점검·최소 버전 설정 변경',
   'maintenanceAllow.add': '점검 통과 계정 추가',
   'maintenanceAllow.remove': '점검 통과 계정 삭제',
+  'operatorAccounts.set': '운영 계정 저장',
+  'operatorAccounts.remove': '운영 계정 삭제',
+  'players.resetAll': '플레이어 전체 초기화',
+  'remoteConfig.setOperatorValue': '원격 설정 운영 계정 값 변경',
   'support.reply': '고객센터 답변',
   'support.setStatus': '문의 상태 변경',
   'supportCategories.upsert': '고객센터 분류 저장',
@@ -134,6 +138,8 @@ const PARAM_LABELS: Record<string, string> = {
   createOnly: '새로 추가만', label: '메모', versionId: '버전', feature: '대상', action: '작업',
   objectName: '이름', params: '세부', itemKey: '항목 키', itemValue: '항목 값', enabled: '켜짐',
   requiresAuth: '로그인 필요', color: '색', icon: '아이콘', secretValue: '값', newPassword: '새 비밀번호',
+  userId: '유저 ID', note: '메모', maintenanceBypass: '점검 통과', versionBypass: '버전 통과',
+  hideFromStats: '순위·통계 제외', configPreview: '원격 설정 미리 받기', testRecipient: '시험 우편 받기', valueJson: '값',
 }
 const paramLabel = (k: string) => PARAM_LABELS[k] ?? k
 

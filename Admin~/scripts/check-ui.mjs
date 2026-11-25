@@ -198,6 +198,15 @@ const RULES = [
     good: '<span className="text-xs text-neutral-400"><h2 className="text-2xl"><code className="font-mono text-[13px]"><i className="text-[color:var(--x)] text-[#1677ff]">',
   },
   {
+    id: 'U22', name: '카드에 max-w 를 달아 좁힘', fix: '카드는 탭줄과 같은 전체 폭으로 두고, 읽기 좋은 폭은 안쪽 내용에만(FormCard 처럼) 단다',
+    // 카드마다 폭이 달라 탭줄보다 짧은 카드가 화면을 좁아 보이게 했다(2026-11-25 사용자 지적). 안쪽 자식에 거는
+    // `[&>*]:max-w-*` 꼴은 카드 폭이 아니라 내용 폭이라 통과시킨다. 페이지 맨 바깥 div 의 max-w 는 카드 안쪽 div 와
+    // 글자로 안 갈려 여기서 못 본다 — console.md 「폭」이 맡는다.
+    find: (t) => matchAll(maskComments(t), /<(?:WhiteCard|TableCard|FormCard|GroupBox|CardStack)\b[^>]*?(?<![:\w-])max-w-(?!full\b|none\b)/g),
+    bad: '<WhiteCard className="p-5 space-y-5 max-w-2xl"><FormCard className="max-w-3xl">',
+    good: '<WhiteCard className="p-5 space-y-5 [&>*:not(:first-child)]:max-w-2xl"><WhiteCard className="max-w-full"><div className="max-w-2xl">',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',
@@ -216,6 +225,8 @@ const EXEMPT = {
   U15: ['components/ui/FilterBar.tsx'],
   // 18px 원 안에 "99+"까지 들어가야 하는 메뉴 숫자 표시 — 11px 가 아니면 원을 넘친다.
   U21: ['components/ui/CountBadge.tsx'],
+  // 로그인 전 화면의 가운데 상자 — 탭줄이 없는 전체 화면이라 맞출 폭이 없다.
+  U22: ['pages/Login.tsx'],
 }
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.

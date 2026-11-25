@@ -207,7 +207,7 @@ export default function App() {
         <Route path="/coupons" element={<Coupons target={target} onUnauthenticated={signOut} />} />
         <Route path="/support" element={<Support target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
-        <Route path="/settings" element={<Settings target={target} onUnauthenticated={signOut} />} />
+        <Route path="/settings" element={<Settings target={target} isMaster={me.isMaster} onUnauthenticated={signOut} />} />
         <Route path="/friends" element={<Navigate to="/settings" replace />} />
         <Route path="/lobbies" element={<Lobbies target={target} onUnauthenticated={signOut} />} />
         <Route path="/match-rewards" element={<MatchRewards target={target} onUnauthenticated={signOut} />} />

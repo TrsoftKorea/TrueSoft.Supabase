@@ -53,7 +53,7 @@ type BatchDetail = {
   stats: { claimed_count: number; deleted_count: number; unclaimed_count: number }
 }
 
-const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어' }
+const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어', operators: '시험 발송' }
 const STATUS_OPTIONS = ['전체', '미수령', '수령', '삭제']
 
 function statusOf(r: MailRow): { label: string; tone: Tone } {

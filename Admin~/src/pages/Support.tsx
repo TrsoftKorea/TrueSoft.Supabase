@@ -367,9 +367,10 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
           <InfoList className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2.5" items={[
             { label: '상태', value: <StatusBadge status={ticket.status} /> },
             { label: '문의 시각', value: formatDateTime(ticket.created_at) },
+            // 계정이 지워진(탈퇴·전체 초기화) 문의는 유저 ID 로만 남는다 — "정상"으로 보이면 아직 있는 계정으로 읽힌다.
             ticket.was_banned
               ? { label: '계정 상태', value: '차단', tone: 'danger' as const }
-              : { label: '계정 상태', value: '정상' },
+              : { label: '계정 상태', value: ticket.account_id ? '정상' : '삭제됨' },
             ...(ticket.via_web
               ? [{ label: '접수 경로', value: '게임 밖 주소 · 본인 확인 안 됨' }]
               : []),
