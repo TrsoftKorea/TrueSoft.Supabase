@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2, X } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { serverTargetLabel, useServerName } from '../lib/serverNames'
@@ -54,10 +54,11 @@ type BatchDetail = {
 }
 
 const MODE_LABEL: Record<string, string> = { all: '전체', server: '서버', players: '플레이어', operators: '시험 발송' }
-const STATUS_OPTIONS = ['전체', '미수령', '수령', '삭제']
+// 값은 서버가 그대로 비교하는 글자다. 「삭제」는 플레이어가 자기 우편함에서 지운 것 — 운영자 「우편 삭제」와 갈리게 이름만 다르게 보인다.
+const STATUS_OPTIONS: [string, string][] = [['전체', '전체'], ['미수령', '미수령'], ['수령', '수령'], ['삭제', '플레이어 삭제']]
 
 function statusOf(r: MailRow): { label: string; tone: Tone } {
-  if (r.deleted_at) return { label: '삭제', tone: 'muted' }
+  if (r.deleted_at) return { label: '플레이어 삭제', tone: 'muted' }
   if (r.items_claimed_at) return { label: '수령', tone: 'ok' }
   return { label: '미수령', tone: 'plain' }
 }
@@ -108,6 +109,12 @@ export default function MailRecords({
   const [undoError, setUndoError] = useState('')
   const [notice, setNotice] = useState('')
   const [showContent, setShowContent] = useState(false)
+
+  // 개별 우편 지우기 — 고른 것은 지금 보이는 쪽 안에서만 유지한다(쪽·거르기가 바뀌면 비운다).
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [delOpen, setDelOpen] = useState(false)
+  const [delBusy, setDelBusy] = useState(false)
+  const [delError, setDelError] = useState('')
 
   const report = useCallback(
     (e: unknown, fallback: string) => {
@@ -180,6 +187,28 @@ export default function MailRecords({
     }
   }, [target, search, status, category, dateFrom, dateTo, selectedBatch, page, report])
   useEffect(() => { if (tab === 'records') void loadRecords() }, [tab, loadRecords])
+  useEffect(() => { setPicked(new Set()) }, [recData])
+
+  const runDelete = async () => {
+    if (delBusy || picked.size === 0) return
+    setDelBusy(true); setDelError('')
+    try {
+      const asked = picked.size
+      const res = await callAdmin<{ count: number }>(target, 'mails.deleteMails', { mailIds: [...picked] })
+      const n = res?.count ?? 0
+      setNotice(n < asked
+        ? `${formatCount(n)}통 삭제했습니다. 받은 ${formatCount(asked - n)}통은 남았습니다.`
+        : `${formatCount(n)}통 삭제했습니다.`)
+      setDelOpen(false)
+      if (selectedBatch) setDetailTick((t) => t + 1)
+      void loadRecords()
+    } catch (e: unknown) {
+      if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
+      setDelError(e instanceof Error ? e.message : '삭제하지 못했습니다.')
+    } finally {
+      setDelBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -205,10 +234,10 @@ export default function MailRecords({
     try {
       if (undo === 'recall') {
         const res = await callAdmin<{ count: number }>(target, 'mails.recallBatch', { batchId: selectedBatch.id })
-        setNotice(`안 받은 우편 ${formatCount(res?.count ?? 0)}통을 취소했습니다.`)
+        setNotice(`${formatCount(res?.count ?? 0)}통 취소했습니다.`)
       } else {
         await callAdmin(target, 'mails.closeBatch', { batchId: selectedBatch.id })
-        setNotice('이 우편은 이제 새로 들어온 플레이어에게 가지 않습니다.')
+        setNotice('배달을 멈췄습니다.')
       }
       setUndo(null)
       setDetailTick((t) => t + 1)
@@ -339,18 +368,18 @@ export default function MailRecords({
                 { label: '발송', value: <span className="text-[#1677ff] font-medium">{selectedBatch.title}</span> },
                 { label: '대상', value: detail?.stats ? `${formatCount(detail.batch?.recipient_count ?? 0)}명` : detailPending },
                 { label: '수령', value: detail?.stats ? formatCount(detail.stats.claimed_count) : detailPending },
-                { label: '삭제', value: detail?.stats ? formatCount(detail.stats.deleted_count) : detailPending },
+                { label: '플레이어 삭제', value: detail?.stats ? formatCount(detail.stats.deleted_count) : detailPending },
                 { label: '취소한 우편', value: !detail ? detailPending : detail.batch.recalled_at ? `${formatCount(detail.batch.recalled_count)}통` : null },
               ]} />
               <div className="ml-auto flex items-center gap-1.5 shrink-0">
                 {stillOpen && (
                   <Button variant="outline" size="compact" onClick={() => { setUndoError(''); setUndo('close') }}>
-                    새로 들어온 플레이어에게 그만 보내기
+                    배달 멈춤
                   </Button>
                 )}
                 {(detail?.stats.unclaimed_count ?? 0) > 0 && (
                   <Button variant="danger" size="compact" onClick={() => { setUndoError(''); setUndo('recall') }}>
-                    안 받은 우편 취소
+                    우편 취소
                   </Button>
                 )}
                 <button onClick={clearBatch} className="text-neutral-400 hover:text-neutral-700" title="이 발송 단위만 보기 해제" aria-label="이 발송 단위만 보기 해제"><X className="w-4 h-4" /></button>
@@ -374,27 +403,39 @@ export default function MailRecords({
 
           <ConfirmDialog
             open={undo !== null}
-            title={undo === 'recall' ? '우편을 취소할까요?' : '그만 보내기'}
-            confirmLabel={undo === 'recall' ? '우편 취소' : '그만 보내기'}
+            title={undo === 'recall' ? '우편을 취소할까요?' : '배달을 멈출까요?'}
+            confirmLabel={undo === 'recall' ? '우편 취소' : '배달 멈춤'}
             danger={undo === 'recall'}
             busy={undoBusy}
             error={undoError || undefined}
             onConfirm={() => { void runUndo() }}
             onCancel={() => setUndo(null)}
             description={undo === 'recall'
-              ? '아직 받지 않은 플레이어의 우편함에서 이 우편이 사라집니다. 이미 받은 플레이어의 우편과 아이템은 그대로입니다. 새로 들어온 플레이어에게도 더 가지 않습니다.'
-              : '새로 들어온 플레이어에게 더 보내지 않습니다. 이미 받은 플레이어의 우편은 그대로 둡니다.'}
+              ? '안 받은 우편이 사라지고 더 배달되지 않습니다. 되돌릴 수 없습니다.'
+              : '새로 들어온 플레이어에게 더 보내지 않습니다.'}
           >
             <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
               <div className="text-neutral-800">{selectedBatch?.title}</div>
               {undo === 'recall' && detail && (
                 <InfoList items={[
                   { label: '취소할 우편', value: `${formatCount(detail.stats.unclaimed_count)}통`, tone: 'danger' },
-                  { label: '이미 받음', value: `${formatCount(detail.stats.claimed_count)}통` },
+                  { label: '받음', value: `${formatCount(detail.stats.claimed_count)}통` },
                 ]} />
               )}
             </div>
           </ConfirmDialog>
+
+          <ConfirmDialog
+            open={delOpen}
+            title={`우편 ${formatCount(picked.size)}통을 삭제할까요?`}
+            confirmLabel="삭제"
+            danger
+            busy={delBusy}
+            error={delError || undefined}
+            onConfirm={() => { void runDelete() }}
+            onCancel={() => setDelOpen(false)}
+            description="되돌릴 수 없습니다. 받은 우편은 남습니다."
+          />
 
           <WhiteCard className="p-4">
             <FilterBar>
@@ -403,7 +444,7 @@ export default function MailRecords({
               </FilterField>
               <FilterField label="상태">
                 <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className={inputCls}>
-                  {STATUS_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
+                  {STATUS_OPTIONS.map(([v, label]) => (<option key={v} value={v}>{label}</option>))}
                 </select>
               </FilterField>
               <FilterField label="분류">
@@ -448,14 +489,31 @@ export default function MailRecords({
                 )),
               },
               { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? itemsText(r.items, catalog) : null) },
-              { key: 'expires', header: '만료 시각', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
-              { key: 'created', header: '등록 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
+              {
+                // 만료 시각은 둘째 줄로 — 따로 칸을 두면 고르기 칸과 함께 1280px 에서 표가 넘친다.
+                key: 'created', header: '등록 시각', kind: 'datetime', cell: (r) => (
+                  <>
+                    <div>{formatDateTime(r.created_at)}</div>
+                    <div className="text-xs text-neutral-500">만료 {formatDateTime(r.expires_at)}</div>
+                  </>
+                ),
+              },
             ]}
             rows={rows}
             rowKey={(r) => r.id}
             loading={recLoading}
             failed={recFailed}
             emptyText="우편 내역이 없습니다."
+            // 받은 우편은 지급 기록이라 서버가 지우지 않는다 — 고를 수도 없게 막는다.
+            select={{ picked, onChange: setPicked, can: (r) => !r.items_claimed_at, blockedTitle: '받은 우편' }}
+            actions={
+              <>
+                {picked.size > 0 && <span className="text-sm text-neutral-500">{formatCount(picked.size)}통</span>}
+                <Button variant="dangerOutline" size="compact" disabled={picked.size === 0} onClick={() => { setDelError(''); setDelOpen(true) }}>
+                  <Trash2 className="w-4 h-4" />우편 삭제
+                </Button>
+              </>
+            }
             expand={(r) => <MailContent title={r.title} content={r.content} localized={r.localized} items={r.items} catalog={catalog} defaultLang={defaultLang} />}
             footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
           />

@@ -58,7 +58,7 @@ function JobStrip() {
           {open ? '접기' : '자세히'}
           {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
-        <Button size="compact" className="ml-auto"><RefreshCw className="h-4 w-4" /> 구글 환불 지금 확인</Button>
+        <Button size="compact" className="ml-auto"><RefreshCw className="h-4 w-4" /> 구글 환불 확인</Button>
       </div>
       {open && <div className="border-t border-neutral-100 pt-3"><StatusRows items={JOBS} /></div>}
     </div>

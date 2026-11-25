@@ -441,7 +441,6 @@ export default function RemoteConfig({
         <WhiteCard className="p-5 space-y-4">
           <CardHeader
             title={<span className="font-mono">{selectedKey}</span>}
-            description="선택한 설정의 활성 · 인증 필요 여부와 필드"
             actions={
               <RefreshButton onClick={() => void Promise.all([reload(), reloadDrafts()])} />
             }

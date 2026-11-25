@@ -151,7 +151,7 @@ export default function DataLogs({
           { key: 'account', header: '계정 ID', kind: 'name', cell: (r) => <AccountIdCell accountId={r.account_id} /> },
           { key: 'source', header: '출처', kind: 'name', cell: (r) => r.source },
           { key: 'diff', header: '바뀌기 전 값', kind: 'text', full: (r) => diffSummary(r.diff), cell: (r) => { const p = diffPairs(r.diff); return p.length ? <Pairs items={p} /> : null } },
-          { key: 'actions', header: '', kind: 'actions', cell: (r) => <Button variant="outline" size="sm" onClick={() => setRestoreRow(r)}>이 변경 전으로</Button> },
+          { key: 'actions', header: '', kind: 'actions', cell: (r) => <Button variant="outline" size="sm" onClick={() => setRestoreRow(r)}>되돌리기</Button> },
         ]}
         rows={rows}
         rowKey={(r) => String(r.id)}

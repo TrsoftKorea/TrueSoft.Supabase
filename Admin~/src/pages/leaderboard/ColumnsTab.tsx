@@ -795,7 +795,7 @@ export default function ColumnsTab({
         loading={colsLoading}
         failed={colsFailed}
         emptyText={!selectedCode
-          ? '리더보드를 선택하면 필드가 표시됩니다.'
+          ? '리더보드 미선택'
           : all.length === 0 ? '필드가 없습니다.' : '검색 결과가 없습니다.'}
         footer={<TableFooter summary={<>{formatCount(start)}–{formatCount(end)} / {formatTotal(total)}</>} page={page} totalPages={totalPages} onPageChange={setPage} />}
       />

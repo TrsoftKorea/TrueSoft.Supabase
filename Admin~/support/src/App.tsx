@@ -26,18 +26,27 @@ const STATUS_CLS: Record<Status, string> = {
 // 게임 안 창이면(?app=1) 닫기 단추를 보인다. 브라우저로 열었으면 브라우저 탭을 닫으면 된다.
 const IN_APP = new URLSearchParams(location.search).get('app') === '1'
 
-// 스토어에 적는 주소는 화면을 바로 연다 — ?view=delete(계정 삭제 요청), ?view=privacy·terms(개인정보처리방침·이용약관).
-// 화면을 오가면 주소도 맞춰 두어 새로 고침해도 같은 화면이 뜬다.
-function initialView(): View {
+// 주소로 화면을 바로 연다 — 스토어에 적는 ?view=delete(계정 삭제 요청)·privacy·terms(개인정보처리방침·이용약관),
+// 게임의 쿠폰 등록 단추가 여는 ?view=coupon. 화면을 오가면 주소도 맞춰 두어 새로 고침해도 같은 화면이 뜬다.
+// 뒤로 가기는 늘 첫 화면이다 — 게임 안 창은 닫기 단추가 따로 있다.
+function initialView(signedIn: boolean): View {
   const v = new URLSearchParams(location.search).get('view')
   if (v === 'delete') return { kind: 'delete' }
   if (v === 'privacy' || v === 'terms') return { kind: 'legal', doc: v }
+  // 로그인 전이면 첫 화면에서 쿠폰을 누른 것처럼 로그인부터.
+  if (v === 'coupon') return signedIn ? { kind: 'coupon' } : { kind: 'login', next: { kind: 'coupon' } }
   return { kind: 'home' }
+}
+function viewParam(v: View): string | null {
+  if (v.kind === 'delete' || v.kind === 'coupon') return v.kind
+  if (v.kind === 'legal') return v.doc
+  if (v.kind === 'login') return viewParam(v.next)
+  return null
 }
 function syncViewParam(next: View) {
   const params = new URLSearchParams(location.search)
-  if (next.kind === 'delete') params.set('view', 'delete')
-  else if (next.kind === 'legal') params.set('view', next.doc)
+  const v = viewParam(next)
+  if (v) params.set('view', v)
   else params.delete('view')
   const q = params.toString()
   history.replaceState(null, '', location.pathname + (q ? `?${q}` : ''))
@@ -75,7 +84,7 @@ export function App({ api }: { api: SupportApi | null }) {
   const [email, setEmail] = useState<string | null>(null)
   const [expired, setExpired] = useState(false)
   const [ready, setReady] = useState(!api?.signedIn)
-  const [view, setView] = useState<View>(initialView)
+  const [view, setView] = useState<View>(() => initialView(!!api?.signedIn))
   const [notice, setNotice] = useState<string | null>(null)
   const [faqs, setFaqs] = useState<Faq[] | null>(null)
   const [categories, setCategories] = useState<Category[]>([])

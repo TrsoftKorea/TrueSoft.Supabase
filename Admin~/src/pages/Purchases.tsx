@@ -404,8 +404,8 @@ export default function Purchases({
                 {jobsOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             )}
-            <Button size="sm" className="ml-auto" onClick={() => void syncRefunds()} disabled={syncing} title="구글에 환불된 결제가 있는지 지금 확인합니다. 하루 한 번 자동으로도 확인합니다">
-              {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}구글 환불 지금 확인
+            <Button size="sm" className="ml-auto" onClick={() => void syncRefunds()} disabled={syncing} title="하루 한 번 자동으로도 확인합니다">
+              {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}구글 환불 확인
             </Button>
           </div>
           {jobsOpen && <div className="mt-3"><StatusRows items={jobs} /></div>}

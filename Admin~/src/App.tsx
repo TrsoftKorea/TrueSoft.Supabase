@@ -165,7 +165,7 @@ export default function App() {
         <div className="w-full max-w-sm space-y-3 text-center">
           <p className="text-sm text-red-600">{meError}</p>
           <p className="text-xs text-neutral-500">{signedInEmail()}</p>
-          <Button onClick={signOut}>다른 계정으로 로그인</Button>
+          <Button onClick={signOut}>계정 바꾸기</Button>
         </div>
       </div>
     )

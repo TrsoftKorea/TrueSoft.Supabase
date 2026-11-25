@@ -367,7 +367,7 @@ export default function UserDataTab({
           },
           {
             key: 'actions', header: '', kind: 'actions', cell: (l) => (
-              <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>이 변경 전으로</Button>
+              <Button variant="outline" size="sm" onClick={() => setRestoreLog(l)}>되돌리기</Button>
             ),
           },
         ] satisfies Column<LogRow>[]}

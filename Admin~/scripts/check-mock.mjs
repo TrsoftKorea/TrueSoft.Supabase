@@ -125,6 +125,19 @@ for (const p of c24.series) {
   if (hour in hourMax) ok(p.total <= hourMax[hour], `[5] 5분 값이 그 시간 최고치보다 큼 ${p.at}`)
 }
 
+// 4 우편 지우기 — 받은 우편은 남고 지운 수만 돌려준다(서버 ts_admin_mail_delete 와 같게)
+{
+  const before = (await call('mails.getRecords')).rows
+  const claimed = before.find((r) => r.items_claimed_at)
+  const open = before.find((r) => !r.items_claimed_at)
+  ok(claimed && open, '[4] 우편 내역에 받은·안 받은 우편이 다 있어야 함')
+  if (claimed && open) {
+    const res = await call('mails.deleteMails', { mailIds: [claimed.id, open.id] })
+    const after = (await call('mails.getRecords')).rows.map((r) => r.id)
+    ok(res.count === 1 && after.includes(claimed.id) && !after.includes(open.id), '[4] 우편 지우기가 받은 우편까지 지우거나 수가 틀림')
+  }
+}
+
 fs.rmSync(path.dirname(tmp), { recursive: true, force: true })
 if (fail.length) {
   console.log(`가짜 데이터 규칙 위반 ${fail.length}건`)

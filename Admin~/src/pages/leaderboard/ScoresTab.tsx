@@ -465,7 +465,7 @@ export default function ScoresTab({
         rowKey={(r) => r.account_id}
         loading={scoresLoading}
         failed={scoresFailed}
-        emptyText={selectedCode ? '기록이 없습니다.' : '선택한 리더보드가 없습니다.'}
+        emptyText={selectedCode ? '기록이 없습니다.' : '리더보드 미선택'}
         footer={<TableFooter summary={formatTotal(total)} page={page} totalPages={totalPages} onPageChange={setPage} />}
       />
 

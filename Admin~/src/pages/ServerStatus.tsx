@@ -386,7 +386,7 @@ function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, on
           { label: '합계', value: metric.text(total) },
         ]} />
         {selectedAt && (
-          <Button variant="outline" size="compact" onClick={() => onSelect(null)}>기간 전체 보기</Button>
+          <Button variant="outline" size="compact" onClick={() => onSelect(null)}>전체 보기</Button>
         )}
       </div>
       {selectedGap

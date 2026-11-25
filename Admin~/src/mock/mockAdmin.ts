@@ -686,6 +686,9 @@ type MockDraft = { id: number; feature: string; action: string; object_name: str
 const mockDrafts: Record<string, MockDraft[]> = {}
 const draftsOf = (target: ProjectTarget) => (mockDrafts[target] ??= [])
 
+// 우편 내역에서 지운 개별 우편(새로고침하면 되살아난다).
+const deletedMailIds = new Set<string>()
+
 // 우편 내역의 "점검 보상" — 긴 본문·언어 두 개로 전문 보기를 확인한다.
 const MAINT_MAIL = {
   title: '점검 보상',
@@ -1104,8 +1107,15 @@ const HANDLERS: Record<string, Handler> = {
       { id: 'r1', account_id: 'a9', user_id: '1094471', category: 'default', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], items_claimed_at: addDays(kstToday(), 0) + 'T10:00:00+09:00', deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
       { id: 'r2', account_id: null, user_id: '109876543210987654321', category: 'default', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL' },
       { id: 'r3', account_id: 'a9', user_id: '1094471', category: 'event', title: '이벤트 안내', content: '이번 주말 접속 이벤트가 열립니다.', localized: null, items: null, items_claimed_at: null, deleted_at: null, expires_at: addDays(kstToday(), 14) + 'T00:00:00+09:00', created_at: addDays(kstToday(), -2) + 'T18:00:00+09:00', server_code: 'GLOBAL' },
-    ].map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
+    ].filter((r) => !deletedMailIds.has(r.id)).map((r) => ({ ...r, display_name: playerNameOf(r.account_id) }))
     return { rows, total: rows.length, pageSize: 20 }
+  },
+  // 서버처럼 안 받은 우편만 지운다 — 받은 우편(r1)을 넘겨도 건너뛴다.
+  'mails.deleteMails': (_t, p) => {
+    const claimed = new Set(['r1'])
+    const ids = (Array.isArray(p['mailIds']) ? p['mailIds'] : []).map(String).filter((id) => !claimed.has(id) && !deletedMailIds.has(id))
+    ids.forEach((id) => deletedMailIds.add(id))
+    return { count: ids.length }
   },
   // 기본 분류는 설치 때 들어가는 행이다.
   // 시험 발송 대상 수 — 운영 계정 가짜 데이터에서 시험 우편 받기를 켠 수.
@@ -1122,7 +1132,9 @@ const HANDLERS: Record<string, Handler> = {
     return { rows, total: rows.length, pageSize: 20 }
   },
   'mails.getBatchDetail': (_t, p) => ({
-    batch: { id: String(p['batchId'] ?? 'b1'), target_mode: 'all', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL', open_until: null, recalled_at: null, recalled_count: 0 },
+    batch: { id: String(p['batchId'] ?? 'b1'), target_mode: 'all', ...MAINT_MAIL, items: [{ key: 'gem', count: 10 }], recipient_count: 2, category: 'default', expires_at: addDays(kstToday(), 7) + 'T00:00:00+09:00', created_by: MOCK_EMAIL, created_at: addDays(kstToday(), -1) + 'T12:00:00+09:00', server_code: 'GLOBAL',
+      // 발송 단위 목록의 b1 과 같게 — 아직 새 플레이어에게 배달 중이다.
+      open_until: (p['batchId'] ?? 'b1') === 'b1' ? addDays(kstToday(), 2) + 'T00:00:00+09:00' : null, recalled_at: null, recalled_count: 0 },
     stats: { claimed_count: 1, deleted_count: 0, unclaimed_count: 1 },
   }),
   'audit.list': () => {

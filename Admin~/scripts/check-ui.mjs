@@ -207,6 +207,20 @@ const RULES = [
     good: '<WhiteCard className="p-5 space-y-5 [&>*:not(:first-child)]:max-w-2xl"><WhiteCard className="max-w-full"><div className="max-w-2xl">',
   },
   {
+    id: 'U23', name: '버튼 글에 "고른·선택한" 같은 수식어', fix: '버튼은 대상 + 동사로 짧게("우편 삭제") — 고른 것은 화면의 고르기 칸이 보여 준다',
+    // 2026-11-25 「N통 고름」「고른 우편 지우기」를 사용자가 "최대한 간결하게"로 고치게 했다. 버튼(글자·title)과 확인 단추 글만 본다 —
+    // 빈 목록·설명 글의 "선택한"은 문장이라 여기서 막지 않는다. 글자 길이는 정상 이름까지 걸려 검사하지 않는다(console.md 「버튼」).
+    find: (t) => {
+      const m = maskComments(t)
+      return [
+        ...matchAll(m, /<Button\b(?:(?!<\/Button>)[\s\S]){0,800}?<\/Button>/g).filter((x) => PICK_WORDS.test(x[0])),
+        ...matchAll(m, /confirmLabel=\{?[^\n]*/g).filter((x) => PICK_WORDS.test(x[0])),
+      ]
+    },
+    bad: '<Button onClick={() => del()}>고른 우편 지우기</Button><ConfirmDialog confirmLabel="선택한 항목 삭제" />',
+    good: '// 고른 우편 지우기\n<Button onClick={() => del()}><Trash2 />우편 삭제</Button><span>{n}통</span><DataTable emptyText="선택한 리더보드가 없습니다." /><ConfirmDialog confirmLabel="삭제" />',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',
@@ -228,6 +242,9 @@ const EXEMPT = {
   // 로그인 전 화면의 가운데 상자 — 탭줄이 없는 전체 화면이라 맞출 폭이 없다.
   U22: ['pages/Login.tsx'],
 }
+
+// U23 — 버튼 글에 붙는 고르기 수식어.
+const PICK_WORDS = /고른|선택한|선택된|선택됨|고름/
 
 // U11 — 한글 뒤(붙거나 한 칸) · 영문/숫자/마침표 뒤 한 칸 · 값({…}) 뒤 한 칸의 여는 괄호.
 const ASIDE_PAREN = /[가-힣]\s?\(|[A-Za-z0-9.%] \(|\} \(/

@@ -91,7 +91,7 @@ export function RestoreSaveModal({
       footer={<>
         <Button variant="outline" onClick={onClose} disabled={busy}>취소</Button>
         <Button variant="primary" onClick={() => { void submit() }} disabled={busy || picked.size === 0}>
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />}{picked.size > 0 ? `${picked.size}칸 되돌리기` : '되돌리기'}
+          {busy && <Loader2 className="w-4 h-4 animate-spin" />}되돌리기
         </Button>
       </>}
     >

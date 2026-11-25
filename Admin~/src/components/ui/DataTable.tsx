@@ -109,6 +109,62 @@ export type DataTableProps<T> = {
    * 칸을 나란히 봐야 뜻이 통하는 표(색 지도 cellStyle)와 줄을 끌어 옮기는 표(rowProps)는 저절로 표로 남는다.
    */
   cards?: boolean
+  /** 줄을 골라 한꺼번에 처리하는 표 — 맨 앞에 고르기 칸이 붙고 머리 칸은 이 쪽의 고를 수 있는 줄 전체를 고른다. 고른 줄은 rowKey 로 센다. */
+  select?: RowSelect<T>
+}
+
+export type RowSelect<T> = {
+  picked: ReadonlySet<string>
+  onChange: (next: Set<string>) => void
+  /** 고를 수 없는 줄은 칸이 흐리게 막힌다. */
+  can?: (row: T) => boolean
+  /** 막힌 칸에 마우스를 올리면 보일 글. */
+  blockedTitle?: string
+}
+
+function SelectBox({ checked, disabled, title, onToggle, indeterminate = false, label }: {
+  checked: boolean; disabled?: boolean; title?: string | undefined; onToggle: () => void; indeterminate?: boolean; label: string
+}) {
+  return (
+    <input
+      type="checkbox"
+      aria-label={label}
+      title={title}
+      checked={checked}
+      disabled={disabled}
+      ref={(el) => { if (el) el.indeterminate = indeterminate }}
+      onChange={onToggle}
+      onClick={(e) => e.stopPropagation()}
+      className="h-4 w-4 align-middle accent-[#1677ff] disabled:opacity-30"
+    />
+  )
+}
+
+function selectHelpers<T>(select: RowSelect<T> | undefined, rows: T[], rowKey: DataTableProps<T>['rowKey']) {
+  if (!select) return null
+  const can = (r: T) => select.can?.(r) ?? true
+  const keys = rows.map((r, i) => (can(r) ? rowKey(r, i) : null)).filter((k): k is string => k !== null)
+  const pickedHere = keys.filter((k) => select.picked.has(k)).length
+  const toggle = (k: string) => {
+    const next = new Set(select.picked)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    select.onChange(next)
+  }
+  const toggleAll = () => {
+    const next = new Set(select.picked)
+    if (pickedHere === keys.length) keys.forEach((k) => next.delete(k)); else keys.forEach((k) => next.add(k))
+    select.onChange(next)
+  }
+  const box = (r: T, i: number) => {
+    const k = rowKey(r, i)
+    const ok = can(r)
+    return <SelectBox label="고르기" checked={ok && select.picked.has(k)} disabled={!ok} title={ok ? undefined : select.blockedTitle} onToggle={() => toggle(k)} />
+  }
+  const allBox = (
+    <SelectBox label="이 쪽 전체 고르기" checked={keys.length > 0 && pickedHere === keys.length} indeterminate={pickedHere > 0 && pickedHere < keys.length}
+      disabled={keys.length === 0} onToggle={toggleAll} />
+  )
+  return { box, allBox, isPicked: (r: T, i: number) => select.picked.has(rowKey(r, i)) }
 }
 
 /** text 칸이 없는 wide 표에서 남는 폭을 받을 칸 — 버튼 칸을 뺀 마지막 칸. */
@@ -131,6 +187,7 @@ export function DataTable<T>({
   rowClassName,
   rowProps,
   cards = true,
+  select,
 }: DataTableProps<T>) {
   const fill = wide || columns.some((c) => c.kind === 'text')
   const stretch = stretchKey(columns, wide)
@@ -156,13 +213,14 @@ export function DataTable<T>({
     return () => ro.disconnect()
   }, [fill, asCards])
 
-  const span = columns.length + (expand ? 1 : 0)
+  const sel = selectHelpers(select, rows, rowKey)
+  const span = columns.length + (expand ? 1 : 0) + (sel ? 1 : 0)
   if (asCards) {
     return (
       <CardList
         columns={columns} rows={rows} rowKey={rowKey} loading={loading} failed={failed} emptyText={emptyText}
         onRowClick={onRowClick} expand={expand} maxHeight={maxHeight} rowClassName={rowClassName}
-        openKey={openKey} setOpenKey={setOpenKey}
+        openKey={openKey} setOpenKey={setOpenKey} sel={sel}
       />
     )
   }
@@ -171,6 +229,7 @@ export function DataTable<T>({
       <table ref={tableRef} className={`min-w-full text-sm ${stretch ? 'w-full' : ''}`}>
         <thead className={`bg-neutral-50 text-xs text-neutral-500 ${maxHeight ? 'sticky top-0 z-10' : ''}`}>
           <tr>
+            {sel && <th className="w-8 pl-4 pr-0">{sel.allBox}</th>}
             {expand && <th className="w-8 pl-3 pr-0" aria-label="펼치기" />}
             {columns.map((c) => (
               <th key={c.key} className={`px-4 py-2.5 font-medium whitespace-nowrap ${HEAD[c.kind]} ${c.key === stretch ? 'w-full' : ''}`}>{c.header}</th>
@@ -191,8 +250,9 @@ export function DataTable<T>({
                 <tr
                   {...rowProps?.(r, i)}
                   onClick={click}
-                  className={`border-t border-neutral-100 ${click ? 'cursor-pointer hover:bg-neutral-50' : ''} ${rowClassName?.(r) ?? ''}`}
+                  className={`border-t border-neutral-100 ${click ? 'cursor-pointer hover:bg-neutral-50' : ''} ${sel?.isPicked(r, i) ? 'bg-brand-soft' : ''} ${rowClassName?.(r) ?? ''}`}
                 >
+                  {sel && <td className="w-8 pl-4 pr-0" onClick={(e) => e.stopPropagation()}>{sel.box(r, i)}</td>}
                   {expand && (
                     <td className="w-8 pl-3 pr-0 text-neutral-400">
                       {canOpen && (open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
@@ -236,7 +296,7 @@ export function DataTable<T>({
  * 머리 줄이 빈 칸(고르기 단추 등)은 이름 없이 값만 오른쪽에.
  */
 function CardList<T>({
-  columns, rows, rowKey, loading, failed, emptyText, onRowClick, expand, maxHeight, rowClassName, openKey, setOpenKey,
+  columns, rows, rowKey, loading, failed, emptyText, onRowClick, expand, maxHeight, rowClassName, openKey, setOpenKey, sel,
 }: Pick<DataTableProps<T>, 'columns' | 'rows' | 'rowKey'> & {
   onRowClick: DataTableProps<T>['onRowClick'] | undefined
   expand: DataTableProps<T>['expand'] | undefined
@@ -247,6 +307,7 @@ function CardList<T>({
   failed: boolean
   openKey: string | null
   setOpenKey: (k: string | null) => void
+  sel: ReturnType<typeof selectHelpers<T>>
 }) {
   // 카드 첫 줄: 첫 이름 칸(무엇의 줄인지)을 제목처럼, 표의 맨 앞이 시각이면(정렬 기준) 그 오른쪽에 작게 — 둘 다 칸 이름 없이.
   const title = columns.find((c) => c.cardTitle)
@@ -268,8 +329,9 @@ function CardList<T>({
         const click = canOpen ? () => setOpenKey(open ? null : key) : onRowClick && !expand ? () => onRowClick(r) : undefined
         const buttons = actions.map((c) => c.cell(r)).filter((v) => !isEmpty(v))
         return (
-          <div key={key} className={`border-b border-neutral-100 last:border-b-0 ${rowClassName?.(r) ?? ''}`}>
+          <div key={key} className={`border-b border-neutral-100 last:border-b-0 ${sel?.isPicked(r, i) ? 'bg-brand-soft' : ''} ${rowClassName?.(r) ?? ''}`}>
             <div onClick={click} className={`flex gap-2 px-4 py-3 ${click ? 'cursor-pointer active:bg-neutral-50' : ''}`}>
+              {sel && <span className="mt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>{sel.box(r, i)}</span>}
               <dl className="min-w-0 flex-1 space-y-1">
                 {title && (() => {
                   const t = title.cell(r)
