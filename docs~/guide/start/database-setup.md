@@ -10,6 +10,7 @@
 
 | 콘솔&nbsp;위치 | 키&nbsp;이름 | 필수 | 용도 |
 |------|------|----|------|
+| Supabase&nbsp;›&nbsp;관리&nbsp;열쇠 | `SUPABASE_MANAGEMENT_TOKEN` | 로그인&nbsp;사용&nbsp;시 | 로그인 탭의 값을 Supabase 로그인 설정에 넣는 열쇠. 저장할 때 바로, 그 뒤 매주 한 번 반영합니다. 없으면 구글·애플 로그인과 게스트 연동이 켜지지 않습니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;번들&nbsp;ID | `APPLE_BUNDLE_ID` | iOS&nbsp;IAP·Apple&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 앱의 번들 ID. 여럿이면 쉼표로 구분. 없으면 iOS 결제 검증이 전부 거부됩니다. 다른 앱의 영수증을 걸러 내는 기준이라 비워 둘 수 없습니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;공유&nbsp;암호 | `APPLE_SHARED_SECRET` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시 | `purchase-verify-apple-legacy` 함수에서 사용. iOS 14 이하 지원이나 플레이나누 병행처럼 SK1을 쓰면 필수이며, 없으면 결제 후 검증이 `server_config_error`로 실패합니다 |
 | 스토어&nbsp;›&nbsp;App&nbsp;Store&nbsp;›&nbsp;앱&nbsp;내&nbsp;구입&nbsp;키&nbsp;›&nbsp;Issuer&nbsp;ID | `APPLE_IAP_ISSUER_ID` | iOS&nbsp;IAP·SK1&nbsp;사용&nbsp;시&nbsp;권장 | SK1 영수증에는 가격이 없어, 앱 내 구입 키 셋이 있어야 애플에 실제 결제 금액을 물어 매출에 넣습니다. 없으면 SK1 결제는 금액 없이 기록됩니다 |
@@ -20,8 +21,10 @@
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Team&nbsp;ID | `APPLE_TEAM_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Apple Developer 팀 ID. 10자 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Key&nbsp;ID | `APPLE_KEY_ID` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | Sign in with Apple 키의 Key ID. 10자 |
 | 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Private&nbsp;key | `APPLE_PRIVATE_KEY` | Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 그 키의 `.p8` 파일 내용 전체. `-----BEGIN PRIVATE KEY-----` 줄까지 포함 |
-| 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Services&nbsp;ID | `APPLE_SERVICES_ID` | 선택 | 게임 애플 로그인에 쓰는 Services ID. 넣으면 [게임 밖 고객센터](/guide/customer-center/#web)에 애플 로그인 단추가 보입니다 |
-| 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;클라이언트&nbsp;ID | `GOOGLE_WEB_CLIENT_ID` | 선택 | 게임 구글 로그인에 쓰는 웹 애플리케이션 클라이언트 ID. 넣으면 게임 밖 고객센터에 구글 로그인 단추가 보입니다 |
+| 로그인&nbsp;›&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple&nbsp;›&nbsp;Services&nbsp;ID | `APPLE_SERVICES_ID` | Android&nbsp;Apple&nbsp;로그인&nbsp;사용&nbsp;시 | 게임 애플 로그인에 쓰는 Services ID. 넣으면 [게임 밖 고객센터](/guide/customer-center/#web)에 애플 로그인 단추가 보입니다 |
+| 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;클라이언트&nbsp;ID | `GOOGLE_WEB_CLIENT_ID` | Google&nbsp;로그인&nbsp;사용&nbsp;시 | 게임 구글 로그인에 쓰는 웹 애플리케이션 클라이언트 ID. 넣으면 게임 밖 고객센터에도 구글 로그인 단추가 보입니다 |
+| 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;클라이언트&nbsp;보안&nbsp;비밀번호 | `GOOGLE_WEB_CLIENT_SECRET` | Google&nbsp;로그인&nbsp;사용&nbsp;시 | 위 웹 애플리케이션 클라이언트의 비밀번호 |
+| 로그인&nbsp;›&nbsp;Google&nbsp;로그인&nbsp;›&nbsp;iOS&nbsp;클라이언트&nbsp;ID | `GOOGLE_IOS_CLIENT_ID` | iOS&nbsp;Google&nbsp;로그인&nbsp;사용&nbsp;시 | iOS 유형 클라이언트 ID. 없으면 iOS 구글 로그인이 전부 거절됩니다 |
 
 Google 서비스 계정 키는 [Google 서비스 계정 JSON 발급](/guide/google-service-account/issue)도 참고하세요.
 

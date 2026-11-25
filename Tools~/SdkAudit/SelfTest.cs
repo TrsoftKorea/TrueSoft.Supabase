@@ -126,6 +126,7 @@ namespace SdkAudit
                     ("[R22 에러표]", "첫 칸"), ("[R22 에러표]", "문장으로"),
                     ("[R22 프로퍼티표]", "점을"), ("[R22 프로퍼티표]", "타입 칸"),
                     ("[R22 용어]", "'Retool'"), ("[R22 용어]", "'어드민'"), ("[R22 용어]", "'유저'"), ("[R22 용어]", "'메일'"),
+                    ("[R22 서버작업]", "'install.sql'"), ("[R22 서버작업]", "'SQL Editor'"),
                 })
                     if (!late.Any(f => f.StartsWith(tag, StringComparison.Ordinal) && f.Contains(part)))
                         missing.Add($"{tag} 세부 판정 '{part}'");
@@ -248,7 +249,7 @@ class Example { void M() { Supabase.NoSuchMemberAsync(); } }");
             Write(root, "docs~/guide/style/late-example.md", "# 다른 제목\n\n```csharp\nTask<SupabaseResult<int>> Supabase.RealApiAsync()\n```\n\n"
                 + "하나입니다. 둘입니다. 셋입니다. 넷입니다.\n\n**반환**\n\n`.Data`에 개수가 담깁니다.\n\n**에러 코드**\n\n| Reason | 설명 |\n|--------|------|\n"
                 + "| `mail_not_found` | 없는 우편 |\n\n| 프로퍼티 | 타입 | 설명 |\n|---|---|---|\n| `.Count` | int | 개수 — 설명 |\n\n"
-                + "```csharp\nvar r = await Supabase.RealApiAsync();\n```\n\n**사전 준비:** [다른 곳](./other)을 보세요. 유저가 메일을 Retool 에서 받고 어드민이 보냅니다.\n");
+                + "```csharp\nvar r = await Supabase.RealApiAsync();\nDebug.LogError(\"install.sql 설치를 확인하세요\");\n```\n\n**사전 준비:** [다른 곳](./other)을 보세요. SQL Editor 에서 보냅니다. 유저가 메일을 Retool 에서 받고 어드민이 보냅니다.\n");
             // 목록 안에 들여 쓴 표, 제목 뒤에 ::: 상자가 먼저 오는 함수 페이지(예제가 표 뒤).
             Write(root, "docs~/guide/style/indented.md", "# 들여 쓴 표\n\n1. 단계\n\n   | 열 | 내용 |\n   |----|------|\n   | a | 줄표 — 남음 |\n");
             Write(root, "docs~/guide/style/box-first.md", "# 상자 먼저\n\n::: info 먼저\n안내\n:::\n\n```csharp\nTask<SupabaseResult> Supabase.RealApiAsync()\n```\n\n설명입니다.\n\n"

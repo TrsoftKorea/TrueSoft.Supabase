@@ -38,7 +38,7 @@ var cancel = await Supabase.RedeemWithdrawalCancelAsync();   // 저장된 토큰
 | Reason | 설명 |
 |--------|------|
 | `SupabaseReason.WithdrawalCancelTokenEmpty` | 저장된 취소 토큰이 없습니다 |
-| `SupabaseReason.WithdrawalCancelJwtVerifyMustBeOff` | 취소 Edge Function의 `verify_jwt`를 꺼야 합니다 |
+| `SupabaseReason.WithdrawalCancelJwtVerifyMustBeOff` | 서버 설정 문제로 취소 요청이 거절됐습니다. 게임 코드로는 고칠 수 없습니다 |
 
 **실사용 예시**
 

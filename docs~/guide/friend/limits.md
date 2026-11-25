@@ -40,8 +40,6 @@ public async void OnOpenFriendPanel()
     if (!result.IsSuccess)
     {
         HideFriendCountLimit();   // 분모만 숨기고 창은 그대로 엽니다
-        if (result.Reason == SupabaseReason.FriendSettingsMissing)
-            Debug.LogError("친구 제한값 설정이 없습니다. install.sql 설치를 확인하세요");
         return;
     }
 

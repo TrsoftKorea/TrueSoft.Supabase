@@ -6,17 +6,9 @@ Apple 로그인([신규 로그인](/guide/social/apple/signin))을 쓰기 전 �
 
 - App ID에 **Sign in with Apple**을 활성화합니다.
 
-## Supabase
+## 운영 콘솔 {#console}
 
-**Authentication > Providers > Apple** 패널에서 설정합니다.
-
-| 필드 | 입력 |
-|------|------|
-| **Enable&nbsp;Sign&nbsp;in&nbsp;with&nbsp;Apple** | ON |
-| **Client&nbsp;IDs** | 앱 **Bundle ID** |
-| **Allow&nbsp;users&nbsp;without&nbsp;an&nbsp;email** | 선택 항목. Apple이 이메일 주소를 반환하지 않아도 로그인을 허용합니다 |
-
-게스트 연동을 쓰면 **Authentication > Sign In / Providers**에서 **Manual Linking**을 활성화합니다.
+운영 콘솔 **설정 › 서비스 연결 › 스토어 › App Store**의 **번들 ID**에 앱 Bundle ID를 넣습니다. 저장하면 Supabase 로그인 설정에 Apple 로그인이 켜지고 Bundle ID가 들어갑니다. **Supabase** 탭의 관리 열쇠가 들어 있어야 합니다.
 
 ## Android 추가 {#android}
 
@@ -31,14 +23,10 @@ Android에서 Apple 로그인을 쓰면 위 설정에 더해 아래를 추가합
   - **Return URLs**: `https://<프로젝트-ref>.supabase.co/auth/v1/callback`
 - 확장자가 `.p8`인 **Sign in with Apple Key**를 발급해 둡니다.
 
-**Supabase · Providers > Apple**
+**운영 콘솔**
 
-- **Client IDs**: 위 Bundle ID 앞에 **Services ID를 맨 앞에 오도록 추가**합니다. 예: `com.company.mygame.Services, com.company.mygame` ([순서 이유](/guide/social/apple/setup-details#client-ids))
-- OAuth에 쓰는 **Secret Key**는 [client_secret을 생성](https://supabase.com/docs/guides/auth/social-login/auth-apple#generate-a-client_secret)해 JWT 형태로 넣습니다. **6개월마다 만료**되어 교체하지 않으면 Android 로그인이 끊깁니다. [Secret Key 갱신](/guide/social/apple/setup-details#secret)을 참고하세요.
-
-**Supabase · URL Configuration**
-
-- **Redirect URLs**에 `{패키지이름}://login-callback`을 추가합니다. 패키지 이름은 Unity **Player Settings > Other Settings > Package Name** 값입니다.
+- **설정 › 서비스 연결 › 로그인 › Sign in with Apple**에 Services ID·Team ID·Key ID·Private key를 넣습니다. 서버가 이 값으로 Apple이 요구하는 Secret Key를 만들어 로그인 설정에 넣고, 매주 새로 만들어 만료되지 않게 합니다.
+- **설정 › 서비스 연결 › 스토어 › Google Play**의 **패키지 이름**에 Android 패키지 이름을 넣습니다. 로그인을 마친 브라우저가 게임으로 돌아오는 주소가 이 값으로 등록됩니다.
 
 ::: info 탈퇴 처리에 필요한 값
 계정을 삭제할 때 Apple 연결을 끊으려면 서비스 연결값도 필요합니다. [탈퇴 시 Apple 연결 해제](/guide/social/apple/#revoke)를 참고하세요.

@@ -21,6 +21,7 @@ namespace SdkAudit
         private static readonly Regex InlineCode = new Regex(@"`[^`]*`");
         private static readonly Regex LabelColon = new Regex(@"^\*\*[^*]+:\*\*");
         private static readonly Regex Sentence = new Regex(@"(니다|세요)\.");
+        private static readonly Regex ServerTask = new Regex(@"install\.sql|verify\.sql|SQL Editor|SQL 편집기|Edge Function 배포|functions deploy", RegexOptions.IgnoreCase);
         private static readonly Regex NoReturnSection = new Regex(@"^(event |void |(Task<)?SupabaseResult>? |Task )");
 
         // 쓰지 않는 말 → 대신 쓸 말. 정규식이 예외(기능 이름 「유저 데이터」, 고객센터의 「유저 ID」, 「이메일」)를 비켜 간다.
@@ -311,6 +312,12 @@ namespace SdkAudit
             {
                 var line = lines[i];
                 var at = $"{rel}:{i + 1}";
+
+                // DB 설치·서버 함수 배포는 SDK 쪽이 게임마다 대신 한다. 가이드 독자(게임 개발자)에게 시키면
+                // 할 수도 없는 일을 하라는 셈이라 코드 블록 안까지 막는다(2026-11-25 사용자 지적).
+                var serverTask = ServerTask.Match(line);
+                if (serverTask.Success)
+                    ctx.Report.Error($"[R22 서버작업] {at} '{serverTask.Value}' — DB 설치·서버 함수 배포는 게임 개발자가 하지 않습니다. 운영 콘솔에서 하는 일로 쓰거나 뺍니다.");
 
                 if (line.TrimStart().StartsWith("```", StringComparison.Ordinal))
                 {

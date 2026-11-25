@@ -28,7 +28,7 @@ Play Mode에서 키보드로 각 기능을 즉시 테스트할 수 있습니다.
 | `X` | 세이브 삭제 · 기본값 리셋 + 재로드 |
 | `T` | RemoteConfig 값 읽기 |
 | `E` | RemoteConfig Listener 시작/종료 토글 |
-| `N` | 닉네임 설정 후 내 프로필 조회 · displayname Edge Function 배포 필요 |
+| `N` | 닉네임 설정 후 내 프로필 조회 |
 | `A` | 현재 세션 상태 출력 · IsAnonymous, UserId, Name 등 |
 | `J` | 서버 시간 조회 |
 | `G` | 차단 정보 조회 |
@@ -111,7 +111,7 @@ private async Task<bool> OnGrantItemAsync(string productId, bool alreadyGranted)
 **사전 준비**
 1. [프로젝트 생성](/guide/start/project) 완료
 2. Inspector에서 `Demo Category`·`Demo Item Key` 확인(기본값 `event`·`gold`)
-3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 테스트 우편 발송 — 발송은 운영 콘솔 **우편 발송**이나 SQL Editor에서만 가능하며, 발송 시 `category`·`items[].key`를 위 Inspector 값과 맞춥니다
+3. 키 `1`로 로그인 후 출력된 `UserId` 계정에 운영 콘솔 **우편 발송**으로 테스트 우편 발송. 분류와 보상 키는 위 Inspector 값과 맞춥니다
 
 | 키 | 동작 |
 |----|------|
