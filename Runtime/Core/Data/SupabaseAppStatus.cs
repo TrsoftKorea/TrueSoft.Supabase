@@ -5,8 +5,11 @@ namespace TrueBase.Core.Data
     /// <summary>앱 판·점검 상태. <c>Supabase.GetAppStatusAsync</c> 가 돌려준다.</summary>
     public sealed class SupabaseAppStatus
     {
-        /// <summary>이 앱의 판이 운영 콘솔에서 정한 최소 판보다 낮으면 true.</summary>
+        /// <summary>이 앱의 판이 운영 콘솔에서 정한 최소 판보다 낮고, 버전 통과 운영 계정으로 로그인해 있지 않으면 true.</summary>
         public bool UpdateRequired { get; internal set; }
+
+        /// <summary>버전 통과 운영 계정으로 로그인해 있으면 true. 로그인 전에는 늘 false.</summary>
+        public bool VersionAllowed { get; internal set; }
 
         /// <summary>이 플랫폼의 최소 판. 정하지 않았으면 null.</summary>
         public string MinVersion { get; internal set; }
@@ -14,10 +17,10 @@ namespace TrueBase.Core.Data
         /// <summary>업데이트 안내에서 열 스토어 주소. 모르면 null.</summary>
         public string StoreUrl { get; internal set; }
 
-        /// <summary>지금 점검 중이고 이 계정이 점검 중 통과 계정이 아니면 true.</summary>
+        /// <summary>지금 점검 중이고 이 계정이 점검 통과 운영 계정이 아니면 true.</summary>
         public bool InMaintenance { get; internal set; }
 
-        /// <summary>점검 중 통과 계정으로 로그인해 있으면 true. 로그인 전에는 늘 false.</summary>
+        /// <summary>점검 통과 운영 계정으로 로그인해 있으면 true. 로그인 전에는 늘 false.</summary>
         public bool MaintenanceAllowed { get; internal set; }
 
         /// <summary>점검 안내 문구. 점검을 켜 두지 않았으면 null.</summary>

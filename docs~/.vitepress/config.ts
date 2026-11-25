@@ -256,7 +256,10 @@ export default defineConfig({
               { text: '창 열기', link: '/guide/customer-center/open' },
               { text: '새 답변 수', link: '/guide/customer-center/unread' },
               { text: '개인정보처리방침 열기', link: '/guide/customer-center/privacy' },
-              { text: '이용약관 열기', link: '/guide/customer-center/terms' }
+              { text: '이용약관 열기', link: '/guide/customer-center/terms' },
+              { text: '약관 버전 조회', link: '/guide/customer-center/legal-versions' },
+              { text: '약관 동의 조회', link: '/guide/customer-center/legal-consent' },
+              { text: '약관 동의 남기기', link: '/guide/customer-center/legal-consent-save' }
             ]
           },
           {
@@ -329,7 +332,8 @@ export default defineConfig({
             collapsed: true,
             items: [
               { text: '상태 조회', link: '/guide/app-status/status' },
-              { text: '점검 시작', link: '/guide/app-status/started' }
+              { text: '점검 시작', link: '/guide/app-status/started' },
+              { text: '업데이트 필요', link: '/guide/app-status/update-required' }
             ]
           }
         ]

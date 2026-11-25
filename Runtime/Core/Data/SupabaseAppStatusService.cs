@@ -11,7 +11,7 @@ using TrueBase.Core.Http;
 namespace TrueBase.Core.Data
 {
     /// <summary>
-    /// 최소 판·점검 상태 조회(RPC <c>ts_app_status</c>). 로그인 전에도 부른다 — 로그인 중이면 그 계정이 점검 중 통과 계정인지도 받는다.
+    /// 최소 판·점검 상태 조회(RPC <c>ts_app_status</c>). 로그인 전에도 부른다 — 로그인 중이면 그 계정이 점검·버전 통과 운영 계정인지도 받는다.
     /// </summary>
     public sealed class SupabaseAppStatusService
     {
@@ -63,8 +63,9 @@ namespace TrueBase.Core.Data
                 MinVersion = NullIfBlank(o.Value<string>("min_version")),
                 StoreUrl = NullIfBlank(o.Value<string>("store_url")) ?? NullIfBlank(defaultStoreUrl),
                 MaintenanceAllowed = o.Value<bool?>("allowed") ?? false,
+                VersionAllowed = o.Value<bool?>("version_allowed") ?? false,
             };
-            status.UpdateRequired = AppVersion.IsLower(currentVersion, status.MinVersion);
+            status.UpdateRequired = AppVersion.IsLower(currentVersion, status.MinVersion) && !status.VersionAllowed;
 
             if (o["maintenance"] is JObject m)
             {

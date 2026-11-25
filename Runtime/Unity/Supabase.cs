@@ -196,6 +196,19 @@ namespace TrueBase.Unity
         public static Task<SupabaseResult<int>> GetCustomerCenterUnreadCountAsync() =>
             SupabaseSDK.TryGetCustomerCenterUnreadCountAsync();
 
+        /// <inheritdoc cref="SupabaseSDK.TryGetLegalVersionsAsync"/>
+        public static Task<SupabaseResult<SupabaseLegalVersions>> GetLegalVersionsAsync() =>
+            SupabaseSDK.TryGetLegalVersionsAsync();
+
+        /// <inheritdoc cref="SupabaseSDK.TryGetLegalConsentAsync"/>
+        public static Task<SupabaseResult<SupabaseLegalConsent>> GetLegalConsentAsync() =>
+            SupabaseSDK.TryGetLegalConsentAsync();
+
+        /// <inheritdoc cref="SupabaseSDK.TrySaveLegalConsentAsync"/>
+        public static Task<SupabaseResult<SupabaseLegalConsent>> SaveLegalConsentAsync(
+            int termsVersion, int privacyVersion, bool ageConfirmed) =>
+            SupabaseSDK.TrySaveLegalConsentAsync(termsVersion, privacyVersion, ageConfirmed);
+
         /// <summary>
         /// 알림 권한을 (필요하면) 묻고 이 기기를 푸시 알림 대상으로 등록합니다. 로그인한 뒤 실행할 때마다 부릅니다.
         /// 로그아웃(<see cref="SignOutFullyAsync"/>)하면 등록이 풀립니다. SupabaseSettings 의 "푸시 알림 사용"이 켜져 있어야 합니다.
@@ -334,6 +347,13 @@ namespace TrueBase.Unity
         {
             add => SupabaseSDK.OnMaintenanceStarted += value;
             remove => SupabaseSDK.OnMaintenanceStarted -= value;
+        }
+
+        /// <inheritdoc cref="SupabaseSDK.OnUpdateRequired"/>
+        public static event Action OnUpdateRequired
+        {
+            add => SupabaseSDK.OnUpdateRequired += value;
+            remove => SupabaseSDK.OnUpdateRequired -= value;
         }
 
         /// <inheritdoc cref="SupabaseSDK.TryGetAppStatusAsync"/>

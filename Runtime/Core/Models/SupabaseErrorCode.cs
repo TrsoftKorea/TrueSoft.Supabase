@@ -44,6 +44,12 @@ namespace TrueBase.Core.Common
         /// <summary>서버 점검 중이라 요청을 받지 않습니다(운영 콘솔에 등록한 계정만 들어갈 수 있음).</summary>
         public const string Maintenance = "maintenance_in_progress";
 
+        /// <summary>앱 판이 운영 콘솔에서 정한 최소 판보다 낮아 서버가 요청을 받지 않습니다(버전 통과 운영 계정만 들어갈 수 있음).</summary>
+        public const string UpdateRequired = "update_required";
+
+        /// <summary>약관 동의에 넘긴 판이 운영 콘솔에서 게시한 판이 아닙니다.</summary>
+        public const string LegalVersionNotPublished = "legal_version_not_published";
+
         /// <summary>연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다.</summary>
         public const string IdentityAlreadyLinked = "identity_already_linked";
 

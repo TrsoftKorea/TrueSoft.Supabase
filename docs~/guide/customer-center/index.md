@@ -86,6 +86,9 @@ SDK는 아래 중 하나로 본인을 확인합니다.
 | [`GetCustomerCenterUnreadCountAsync`](/guide/customer-center/unread) | 새 답변이 있는 문의 수 |
 | [`OpenPrivacyPolicyAsync`](/guide/customer-center/privacy) | 개인정보처리방침 창 열기 |
 | [`OpenTermsAsync`](/guide/customer-center/terms) | 이용약관 창 열기 |
+| [`GetLegalVersionsAsync`](/guide/customer-center/legal-versions) | 지금 시행 중인 약관 버전 |
+| [`GetLegalConsentAsync`](/guide/customer-center/legal-consent) | 내 약관 동의와 다시 물어야 하는지 |
+| [`SaveLegalConsentAsync`](/guide/customer-center/legal-consent-save) | 약관 동의 남기기 |
 
 ::: info 설치
 DB는 `install.sql`의 고객센터 절이 만들고, 창은 엣지 함수 `support-api`를 부릅니다. [엣지 함수 배포](/guide/start/database-setup#edge-function-deploy)에서 이 함수의 **Verify JWT**를 꺼야 창이 열립니다.

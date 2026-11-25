@@ -45,6 +45,10 @@ namespace TrueBase.Core.Http
         public bool IsMaintenance =>
             !IsSuccess && StatusCode == 503 && Body != null && Body.Contains(SupabaseErrorCode.Maintenance);
 
+        /// <summary>앱 판이 최소 판보다 낮아 요청 앞 검사(ts_request_limit_check)가 426 으로 거절한 응답이면 true. 다시 보내도 소용없다.</summary>
+        public bool IsUpdateRequired =>
+            !IsSuccess && StatusCode == 426 && Body != null && Body.Contains(SupabaseErrorCode.UpdateRequired);
+
         public static SupabaseHttpResponse Fail(long statusCode, string body, string errorMessage)
         {
             var response = new SupabaseHttpResponse(false, statusCode, body, errorMessage);
@@ -57,6 +61,8 @@ namespace TrueBase.Core.Http
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.DuplicateLogin);
             if (response.IsMaintenance)
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.Maintenance);
+            if (response.IsUpdateRequired)
+                return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.UpdateRequired);
             if (statusCode == 0)
                 return new SupabaseHttpResponse(false, statusCode, body, SupabaseErrorCode.NetworkError);
             if (statusCode == 401)

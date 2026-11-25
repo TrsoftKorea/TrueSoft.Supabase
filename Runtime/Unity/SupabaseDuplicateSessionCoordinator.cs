@@ -358,8 +358,8 @@ namespace TrueBase.Unity
 
                 // 실패가 이어지면 중복 감지와 접속자 집계가 함께 멈춘다 — 연속 실패의 첫 번만 알린다(주기마다 찍으면 콘솔이 덮인다).
                 var ok = t.Result != null && t.Result.IsSuccess;
-                // 점검으로 거절된 신호는 응답 자리에서 세션을 이미 끊었다(SessionTokenHttpClient) — 고장이 아니다.
-                if (!ok && t.Result?.ErrorCode == SupabaseErrorCode.Maintenance)
+                // 점검·낮은 앱 판으로 거절된 신호는 응답 자리에서 세션을 이미 끊었다(SessionTokenHttpClient) — 고장이 아니다.
+                if (!ok && (t.Result?.ErrorCode == SupabaseErrorCode.Maintenance || t.Result?.ErrorCode == SupabaseErrorCode.UpdateRequired))
                     yield break;
                 if (!ok && !heartbeatFailing)
                     Debug.LogWarning("[Supabase] 접속 신호 실패 — 중복 로그인 감지가 멈춥니다(DB 에 ts_session_heartbeat 가 있는지 확인): " + (t.Result?.ErrorCode ?? "unknown"));
@@ -464,15 +464,23 @@ namespace TrueBase.Unity
     internal sealed class SessionTokenHttpClient : ISupabaseHttpClient
     {
         internal const string HeaderName = "x-session-token";
+        internal const string AppVersionHeader = "x-app-version";
+        internal const string AppPlatformHeader = "x-app-platform";
 
         private readonly ISupabaseHttpClient _inner;
         private readonly string _sessionsPath;
+        private readonly string _appVersion;
+        private readonly string _appPlatform;
 
         /// <param name="sessionsTable">세션 토큰 표 이름. 토큰을 등록·대조하는 요청이라 싣지 않습니다.</param>
-        public SessionTokenHttpClient(ISupabaseHttpClient inner, string sessionsTable)
+        /// <param name="appVersion">이 앱의 판(Application.version). 서버가 최소 판과 비교한다.</param>
+        /// <param name="appPlatform"><c>android</c>·<c>ios</c>. 그 밖이면 null — 판을 싣지 않는다.</param>
+        public SessionTokenHttpClient(ISupabaseHttpClient inner, string sessionsTable, string appVersion, string appPlatform)
         {
             _inner = inner;
             _sessionsPath = "/rest/v1/" + sessionsTable;
+            _appVersion = string.IsNullOrWhiteSpace(appVersion) || string.IsNullOrWhiteSpace(appPlatform) ? null : appVersion.Trim();
+            _appPlatform = _appVersion == null ? null : appPlatform;
         }
 
         public async Task<SupabaseHttpResponse> SendAsync(string method, string url, string jsonBody, Dictionary<string, string> headers)
@@ -491,6 +499,16 @@ namespace TrueBase.Unity
                 }
             }
 
+            // 앱 판은 로그인한 데이터 요청(PostgREST)마다 싣는다 — 서버의 요청 앞 검사가 최소 판보다 낮으면 거절한다.
+            // 로그인 직후 후처리 요청도 거쳐야 해서 세션 토큰과 달리 지금 로그인인지는 보지 않는다.
+            if (_appVersion != null && bearer != null && url != null && url.IndexOf("/rest/v1/", StringComparison.Ordinal) >= 0
+                && (headers == null || !headers.ContainsKey(AppVersionHeader)))
+            {
+                headers = headers == null ? new Dictionary<string, string>() : new Dictionary<string, string>(headers);
+                headers[AppVersionHeader] = _appVersion;
+                headers[AppPlatformHeader] = _appPlatform;
+            }
+
             var response = await _inner.SendAsync(method, url, jsonBody, headers);
 
             // 이 요청을 보낸 로그인이 아직 지금 로그인일 때만 끊는다 — 그사이 로그아웃·계정 전환이 있었으면 앞 로그인의 몫이다.
@@ -499,6 +517,8 @@ namespace TrueBase.Unity
             // 점검은 세션 토큰 머리글과 상관없이 로그인한 요청 전부에 걸린다. 접속 신호(60초)가 늦어도 그 안에 잡는다.
             else if (response.IsMaintenance && SupabaseSDK.IsLoggedIn && bearer != null && bearer == SupabaseSDK.Session?.AccessToken)
                 SupabaseSDK.RaiseMaintenanceDetected();
+            else if (response.IsUpdateRequired && SupabaseSDK.IsLoggedIn && bearer != null && bearer == SupabaseSDK.Session?.AccessToken)
+                SupabaseSDK.RaiseUpdateRequiredDetected();
 
             return response;
         }

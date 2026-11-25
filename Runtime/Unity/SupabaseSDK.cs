@@ -254,6 +254,12 @@ namespace TrueBase.Unity
         public static event Action OnMaintenanceStarted;
 
         /// <summary>
+        /// 이 앱의 판이 운영 콘솔에서 정한 최소 판보다 낮아 서버가 이 계정의 요청을 거절한 경우 호출됩니다(이미 세션을 끊은 뒤,
+        /// 저장된 로그인은 남김). 게임은 타이틀로 돌아가 업데이트 안내를 띄우세요.
+        /// </summary>
+        public static event Action OnUpdateRequired;
+
+        /// <summary>
         /// 서버에 예약될 탈퇴 유예 일수(운영 콘솔 값). PlayNANOO 탈퇴도 이 값을 써야 두 계정의 삭제일이 맞는다.
         /// 실패하면 그 사유(네트워크·중복 로그인·요청 제한 등)를 그대로 돌려준다 — 탈퇴 결과의 Reason 으로 이어진다.
         /// </summary>
@@ -351,6 +357,9 @@ namespace TrueBase.Unity
             public const string CustomerCenterUnreadCount = "Supabase.CustomerCenter.UnreadCount";
             public const string CustomerCenterPrivacyPolicy = "Supabase.CustomerCenter.PrivacyPolicy";
             public const string CustomerCenterTerms = "Supabase.CustomerCenter.Terms";
+            public const string LegalVersions = "Supabase.Legal.Versions";
+            public const string LegalConsentGet = "Supabase.Legal.ConsentGet";
+            public const string LegalConsentSave = "Supabase.Legal.ConsentSave";
             public const string AppStatus = "Supabase.AppStatus";
             public const string PushRegister = "Supabase.Push.Register";
             public const string PushGetPreferences = "Supabase.Push.GetPreferences";
@@ -504,7 +513,7 @@ namespace TrueBase.Unity
             // 점검으로 끊겼으면 세션은 되살리지 않되 새 토큰은 저장한다 — 점검 끊김은 저장된 로그인을 남기는데,
             // 그 옛 토큰은 방금 갱신에 써서 서버가 폐기했다. 안 바꾸면 점검 뒤 자동 로그인이 거절되고 게스트는 계정을 잃는다.
             else if (r.IsSuccess && r.Data != null && _currentSession == null
-                     && _sessionCutCount != cutBefore && _sessionCutReason == SupabaseErrorCode.Maintenance
+                     && _sessionCutCount != cutBefore && KeepsStoredLogin(_sessionCutReason)
                      && !string.IsNullOrWhiteSpace(r.Data.RefreshToken))
             {
                 PlayerPrefs.SetString(RefreshTokenKey, r.Data.RefreshToken);
@@ -1854,18 +1863,23 @@ namespace TrueBase.Unity
                 token = _currentSession?.AccessToken;
 
 #if UNITY_ANDROID
-            const string platform = "android";
             var defaultStoreUrl = "https://play.google.com/store/apps/details?id=" + Uri.EscapeDataString(UnityEngine.Application.identifier);
-#elif UNITY_IOS
-            const string platform = "ios";
-            string defaultStoreUrl = null;
 #else
-            const string platform = null;
             string defaultStoreUrl = null;
 #endif
-            var r = await _bootstrap.AppStatusService.GetAsync(token, platform, UnityEngine.Application.version, language, defaultStoreUrl);
+            var r = await _bootstrap.AppStatusService.GetAsync(token, AppPlatform, UnityEngine.Application.version, language, defaultStoreUrl);
             return LogAndReturnResult(tag, r);
         }
+
+        /// <summary>최소 판을 정하는 플랫폼 이름(<c>android</c>·<c>ios</c>). 그 밖이면 null — 최소 판을 보지 않는다.</summary>
+        internal static string AppPlatform =>
+#if UNITY_ANDROID
+            "android";
+#elif UNITY_IOS
+            "ios";
+#else
+            null;
+#endif
 
         /// <summary><see cref="GetServerNowAsync"/>를 값 기반으로 호출합니다.</summary>
         public static async Task<SupabaseResult<DateTimeOffset>> TryGetServerNowAsync()
@@ -1997,6 +2011,7 @@ namespace TrueBase.Unity
                 case SupabaseErrorCode.UserBanned:
                 case SupabaseErrorCode.DuplicateLogin:
                 case SupabaseErrorCode.Maintenance:
+                case SupabaseErrorCode.UpdateRequired:
                 case SupabaseErrorCode.CannotUnlinkLastIdentity:
                 case SupabaseErrorCode.IdentityAlreadyLinked:
 
@@ -2204,11 +2219,12 @@ namespace TrueBase.Unity
             if (!forceFreshAnonymous && !_isRecreatingAfterWithdrawalDelete && !IsLoggedIn)
             {
                 var restored = await RestoreSessionAsyncCore(allowRecreateOnDeletion: true);
-                // 탈퇴 예약 확인을 못 끝내 멈췄거나 차단된 계정, 점검 중 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
+                // 탈퇴 예약 확인을 못 끝내 멈췄거나 차단된 계정, 점검 중, 낮은 앱 판 — 아래 복구·신규 가입으로 넘어가면 그 계정을 두고 새 계정이 생긴다.
                 if (restored != null
                     && (restored.ErrorCode == SupabaseErrorCode.WithdrawalStatusUnconfirmed
                         || restored.ErrorCode == SupabaseErrorCode.UserBanned
-                        || restored.ErrorCode == SupabaseErrorCode.Maintenance))
+                        || restored.ErrorCode == SupabaseErrorCode.Maintenance
+                        || restored.ErrorCode == SupabaseErrorCode.UpdateRequired))
                     return restored;
                 postSignInDone = restored != null && restored.IsSuccess && IsLoggedIn;
             }
@@ -2282,15 +2298,17 @@ namespace TrueBase.Unity
             if (Auth == null)
                 return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.NotInitialized);
 
-            // 점검 중이면 새 게스트 계정을 만들지 않는다 — 만들어도 로그인 후처리가 점검으로 막혀 빈 계정만 남는다.
-            // 위 복원·복구가 점검으로 끊겼으면 묻지 않고 멈춘다(그 계정을 두고 새 계정이 생기면 안 된다).
-            // 상태를 못 읽으면(옛 DB·통신 실패) 지금처럼 진행한다.
-            if (_sessionCutCount != cutAtEntry && _sessionCutReason == SupabaseErrorCode.Maintenance)
-                return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.Maintenance);
+            // 점검 중이거나 앱 판이 최소 판보다 낮으면 새 게스트 계정을 만들지 않는다 — 만들어도 로그인 후처리가 막혀 빈 계정만 남는다
+            // (새 게스트는 운영 계정일 수 없다). 위 복원·복구가 그 사유로 끊겼으면 묻지 않고 멈춘다(그 계정을 두고 새 계정이 생기면 안 된다).
+            // 상태를 못 읽으면(옛 DB·통신 실패) 지금처럼 진행한다. 낮은 판을 점검보다 먼저 본다 — 서버의 요청 앞 검사와 같은 순서.
+            if (_sessionCutCount != cutAtEntry && KeepsStoredLogin(_sessionCutReason))
+                return SupabaseResult<SupabaseSession>.Fail(_sessionCutReason);
             var appStatusService = _bootstrap?.AppStatusService;
             if (appStatusService != null)
             {
-                var gate = await appStatusService.GetAsync(null, null, null, null, null);
+                var gate = await appStatusService.GetAsync(null, AppPlatform, UnityEngine.Application.version, null, null);
+                if (gate != null && gate.IsSuccess && gate.Data.UpdateRequired)
+                    return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.UpdateRequired);
                 if (gate != null && gate.IsSuccess && gate.Data.InMaintenance)
                     return SupabaseResult<SupabaseSession>.Fail(SupabaseErrorCode.Maintenance);
             }
@@ -4196,9 +4214,14 @@ namespace TrueBase.Unity
                     UserSaveStaticSyncRegistry.ResetAll();
             }
 
+            var accountBefore = _currentSession?.User?.Id;
             _currentSession = session;
 
-            if (kind == SupabaseSessionChangeKind.NewSignIn)
+            // 로그인 전에 받아 둔 원격 설정은 운영 계정 값·인증 필요 키가 빠진 값이다 — 저장된 로그인 복원(RestoredOrRefreshed)으로
+            // 세션이 생기거나 계정이 바뀌어도 다시 받는다. 같은 계정의 토큰 갱신은 값이 같아 건너뛴다.
+            var accountAfter = session?.User?.Id;
+            if (kind == SupabaseSessionChangeKind.NewSignIn
+                || (!string.IsNullOrEmpty(accountAfter) && accountAfter != accountBefore))
                 _remoteConfig?.ResetCache(refetchSubscribed: true);
 
             if (session == null || session.User == null || string.IsNullOrWhiteSpace(session.User.Id))
@@ -4350,6 +4373,33 @@ namespace TrueBase.Unity
                 Debug.LogException(e);
             }
         }
+
+        /// <summary>내부: 앱 판이 최소 판보다 낮아 서버가 요청을 거절한 경우 세션을 끊고 이벤트를 올립니다(점검과 같은 방식).</summary>
+        internal static void RaiseUpdateRequiredDetected()
+        {
+            _sessionCutCount++;
+            _sessionCutReason = SupabaseErrorCode.UpdateRequired;
+            // 저장된 로그인은 남긴다 — 업데이트한 앱이 자동 로그인으로 그대로 들어온다(게스트는 지우면 계정을 잃는다).
+            ClearSession(clearStorage: false, deleteUserSessionRow: false, saveResetReason: SupabaseErrorCode.UpdateRequired);
+            SetAutoLoginBlocked(false);
+            PlayerPrefs.Save();
+
+            // 로그인·연동 도중이면 그 결과가 UpdateRequired 로 알린다 — 이벤트까지 내면 게임이 안내를 두 번 띄운다.
+            if (_signInCallDepth > 0)
+                return;
+            try
+            {
+                OnUpdateRequired?.Invoke();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
+
+        /// <summary>점검·업데이트 필요처럼 저장된 로그인을 남기고 끊은 사유면 true.</summary>
+        private static bool KeepsStoredLogin(string cutReason) =>
+            cutReason == SupabaseErrorCode.Maintenance || cutReason == SupabaseErrorCode.UpdateRequired;
 
         /// <summary>내부: 다른 기기 로그인으로 서버 토큰이 바뀐 경우 세션을 끊고 이벤트를 올립니다.</summary>
         internal static void RaiseDuplicateLoginDetected()
@@ -5342,6 +5392,49 @@ namespace TrueBase.Unity
             if (gate != null)
                 return LogAndReturnResult(tag, SupabaseResult<int>.Fail(gate));
             return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetUnreadCountAsync(_currentSession.AccessToken));
+        }
+
+        /// <summary>지금 시행 중인 이용약관·개인정보처리방침 판. 로그인하지 않아도 됩니다.</summary>
+        public static async Task<SupabaseResult<SupabaseLegalVersions>> TryGetLegalVersionsAsync()
+        {
+            const string tag = ApiLogTags.LegalVersions;
+            if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalVersions>.Fail(SupabaseErrorCode.NotInitialized));
+            // 로그인 중이면 그 계정으로 묻는다. 토큰을 못 갱신하면 로그인 전처럼 묻는다 — 공개 정보라 결과는 같다.
+            string token = null;
+            if (IsLoggedIn && await RefreshIfNearExpiryAsync() == null)
+                token = _currentSession?.AccessToken;
+            return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetLegalVersionsAsync(token));
+        }
+
+        /// <summary>내 마지막 약관 동의와 동의 화면을 다시 띄워야 하는지. 로그인 상태에서만.</summary>
+        public static async Task<SupabaseResult<SupabaseLegalConsent>> TryGetLegalConsentAsync()
+        {
+            const string tag = ApiLogTags.LegalConsentGet;
+            if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(gate));
+            return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.GetLegalConsentAsync(_currentSession.AccessToken));
+        }
+
+        /// <summary>약관 동의를 남깁니다. 판은 <see cref="TryGetLegalVersionsAsync"/> 로 받은 값을 넘깁니다. 로그인 상태에서만.</summary>
+        public static async Task<SupabaseResult<SupabaseLegalConsent>> TrySaveLegalConsentAsync(
+            int termsVersion, int privacyVersion, bool ageConfirmed)
+        {
+            const string tag = ApiLogTags.LegalConsentSave;
+            if (!await EnsureInitializedAsync() || _bootstrap?.CustomerCenterService == null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotInitialized));
+            if (!IsLoggedIn || string.IsNullOrWhiteSpace(_currentSession?.AccessToken))
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotSignedIn));
+            var gate = await RefreshIfNearExpiryAsync();
+            if (gate != null)
+                return LogAndReturnResult(tag, SupabaseResult<SupabaseLegalConsent>.Fail(gate));
+            return LogAndReturnResult(tag, await _bootstrap.CustomerCenterService.SaveLegalConsentAsync(
+                _currentSession.AccessToken, termsVersion, privacyVersion, ageConfirmed));
         }
 
         // ── 푸시 알림 ────────────────────────────────────────────────────────────

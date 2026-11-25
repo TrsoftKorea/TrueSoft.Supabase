@@ -1501,6 +1501,109 @@ comment on function public.ts_session_heartbeat(integer) is
 revoke all on function public.ts_session_heartbeat(integer) from public, anon, authenticated;
 grant execute on function public.ts_session_heartbeat(integer) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 운영 계정 — 운영 콘솔 "설정 › 운영 계정". 운영자·테스터의 유저 ID 를 등록하고 계정마다 권한을 따로 켠다.
+--   maintenance_bypass 점검 중에도 들어간다(10절 요청 앞 검사·ts_app_status)
+--   version_bypass     최소 버전보다 낮은 앱으로도 들어간다(10절 요청 앞 검사·ts_app_status)
+--   hide_from_stats    리더보드 순위(15절)와 통계·대시보드·동시접속자(9절·16절)에서 뺀다. 매출·사용량은 그대로 센다
+--   config_preview     원격 설정의 운영 계정 값을 받는다(8절 ts_remote_config_get)
+--   test_recipient     우편 시험 발송(대상 'operators', 12절)을 받는다
+-- 유저 ID(user_profiles.user_id)로 잡아 계정 전환·재로그인에도 이어진다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.operator_accounts (
+  user_id            text        primary key,
+  note               text        not null default '',
+  maintenance_bypass boolean     not null default false,
+  version_bypass     boolean     not null default false,
+  hide_from_stats    boolean     not null default false,
+  config_preview     boolean     not null default false,
+  test_recipient     boolean     not null default false,
+  created_at         timestamptz not null default now(),
+  created_by         text,
+  updated_at         timestamptz not null default now()
+);
+alter table public.operator_accounts enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.operator_accounts from anon, authenticated;
+
+-- 이 계정이 그 권한을 가진 운영 계정인지. p_flag 는 위 칸 이름.
+-- 유저 ID 는 프로필이 없어도 맞춰 본다 — 계정 번호 자체거나 연동된 구글·애플 계정 번호(ts_owned_user_id 와 같은 규칙).
+-- 프로필은 로그인 후처리에서 생기는데, 점검·낮은 판이면 그 후처리가 막혀 새로 가입한 운영 계정이 영영 통과하지 못한다
+-- (플레이어 전체 초기화 뒤 운영자가 점검 중 확인할 때).
+create or replace function public.ts_operator_has(p_account uuid, p_flag text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p_account is not null and exists (
+    select 1 from public.operator_accounts o
+     where case p_flag
+             when 'maintenance_bypass' then o.maintenance_bypass
+             when 'version_bypass'     then o.version_bypass
+             when 'hide_from_stats'    then o.hide_from_stats
+             when 'config_preview'     then o.config_preview
+             when 'test_recipient'     then o.test_recipient
+             else false end
+       and (o.user_id = p_account::text
+            or exists (select 1 from public.user_profiles p where p.account_id = p_account and p.user_id = o.user_id)
+            or exists (select 1 from auth.identities i
+                        where i.user_id = p_account and i.identity_data ->> 'sub' = o.user_id)));
+$$;
+
+-- 통계·순위에서 뺄 계정(hide_from_stats). 지금 프로필에 걸린 계정만 — 계정을 바꾸기 전 기록은 그대로 센다.
+create or replace function public.ts_stats_hidden_accounts()
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.account_id from public.operator_accounts o
+    join public.user_profiles p on p.user_id = o.user_id
+   where o.hide_from_stats and p.account_id is not null;
+$$;
+
+-- 앱 판 비교 — SDK AppVersion.IsLower 와 같은 규칙. 점으로 나눈 마디마다 앞쪽 숫자(9자리까지)만 읽고, 없는 마디는 0.
+-- 어느 쪽이든 못 읽으면 false(막지 않는다).
+create or replace function public.ts_version_lower(p_current text, p_min text)
+returns boolean
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  a text[]; b text[];
+  x bigint; y bigint;
+  i int;
+  m text;
+begin
+  if nullif(btrim(coalesce(p_current, '')), '') is null or nullif(btrim(coalesce(p_min, '')), '') is null then
+    return false;
+  end if;
+  a := string_to_array(btrim(p_current), '.');
+  b := string_to_array(btrim(p_min), '.');
+  foreach m in array a || b loop
+    if substring(m from '^[0-9]{1,9}') is null then return false; end if;
+  end loop;
+  for i in 1 .. greatest(array_length(a, 1), array_length(b, 1)) loop
+    x := coalesce(substring(a[i] from '^[0-9]{1,9}')::bigint, 0);
+    y := coalesce(substring(b[i] from '^[0-9]{1,9}')::bigint, 0);
+    if x <> y then return x < y; end if;
+  end loop;
+  return false;
+end;
+$$;
+
+comment on table public.operator_accounts is '운영 계정과 계정별 권한. 운영 콘솔 "설정 › 운영 계정".';
+comment on function public.ts_operator_has(uuid, text) is '이 계정이 그 권한(operator_accounts 의 칸 이름)을 가진 운영 계정인지.';
+comment on function public.ts_stats_hidden_accounts() is '통계·순위에서 뺄 운영 계정(hide_from_stats)의 account_id.';
+comment on function public.ts_version_lower(text, text) is '앱 판이 최소 판보다 낮은지(SDK AppVersion.IsLower 와 같은 규칙). 못 읽으면 false.';
+revoke all on function public.ts_operator_has(uuid, text)    from public, anon, authenticated;
+revoke all on function public.ts_stats_hidden_accounts()     from public, anon, authenticated;
+revoke all on function public.ts_version_lower(text, text)   from public, anon, authenticated;
+
 notify pgrst, 'reload schema';
 
 
@@ -5103,6 +5206,90 @@ create policy remote_config_all_service_role
   using (true)
   with check (true);
 
+-- 운영 계정 값 — 키마다 원격 설정 권한(2절 operator_accounts.config_preview)이 있는 운영 계정에게만 덮어 줄 항목.
+-- 값(JSON 객체)의 맨 위 항목 단위로 value_json 에 덮는다. 게시 단계를 거치지 않고 바로 반영된다 — 운영 계정만 받는다.
+-- 키를 지우면 같이 지워진다.
+create table if not exists public.remote_config_operator_values (
+  key        text        primary key references public.remote_config(key) on delete cascade,
+  value_json jsonb       not null check (jsonb_typeof(value_json) = 'object'),
+  updated_at timestamptz not null default now(),
+  updated_by text
+);
+alter table public.remote_config_operator_values enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.remote_config_operator_values from anon, authenticated;
+
+-- 게임(SDK)의 원격 설정 조회. 표를 직접 읽을 때와 같은 칸·같은 범위(로그인 전에는 requires_auth 키를 빼고)를 돌려주고,
+-- 원격 설정 권한이 있는 운영 계정이면 운영 계정 값을 덮어 준다. 옛 빌드는 표를 직접 읽어 운영 계정 값을 받지 않는다.
+create or replace function public.ts_remote_config_get(p_keys text[])
+returns table (key text, value_json jsonb, updated_at timestamptz, version int, enabled boolean, description text, requires_auth boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with me as (
+    select auth.uid() as uid, public.ts_operator_has(auth.uid(), 'config_preview') as preview
+  )
+  select rc.key,
+         case when ov.key is null then rc.value_json else rc.value_json || ov.value_json end,
+         case when ov.key is null then rc.updated_at else greatest(rc.updated_at, ov.updated_at) end,
+         rc.version, rc.enabled, rc.description, rc.requires_auth
+    from public.remote_config rc
+    cross join me
+    left join public.remote_config_operator_values ov on ov.key = rc.key and me.preview
+   where rc.key = any (coalesce(p_keys, '{}'::text[]))
+     and (me.uid is not null or not rc.requires_auth);
+$$;
+
+-- 콘솔 "원격 설정"의 운영 계정 값. 목록은 {키: 값}.
+create or replace function public.ts_admin_remote_config_operator_values()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_object_agg(v.key, jsonb_build_object('value_json', v.value_json, 'updated_at', v.updated_at, 'updated_by', v.updated_by)),
+                  '{}'::jsonb)
+    from public.remote_config_operator_values v;
+$$;
+
+-- 빈 값(null·{})이면 지운다.
+create or replace function public.ts_admin_remote_config_operator_set(p_key text, p_value_json jsonb, p_by text default null)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from public.remote_config where key = p_key) then
+    raise exception 'remote_config_key_not_found: %', p_key;
+  end if;
+  if p_value_json is null or p_value_json = '{}'::jsonb then
+    delete from public.remote_config_operator_values where key = p_key;
+    return;
+  end if;
+  if jsonb_typeof(p_value_json) <> 'object' then
+    raise exception 'remote_config_value_must_be_object';
+  end if;
+  insert into public.remote_config_operator_values (key, value_json, updated_by)
+  values (p_key, p_value_json, p_by)
+  on conflict (key) do update set value_json = excluded.value_json, updated_at = now(), updated_by = excluded.updated_by;
+end;
+$$;
+
+comment on table public.remote_config_operator_values is '원격 설정 키마다 운영 계정(config_preview)에게만 덮어 줄 항목.';
+comment on function public.ts_remote_config_get(text[]) is '게임의 원격 설정 조회(표 직접 읽기와 같은 칸·범위 + 운영 계정 값 덮기).';
+comment on function public.ts_admin_remote_config_operator_values() is '원격 설정의 운영 계정 값 전체({키: 값}). service_role 전용.';
+comment on function public.ts_admin_remote_config_operator_set(text, jsonb, text) is '원격 설정의 운영 계정 값 저장(빈 값이면 지움). service_role 전용.';
+revoke all on function public.ts_remote_config_get(text[])                          from public, anon, authenticated;
+revoke all on function public.ts_admin_remote_config_operator_values()               from public, anon, authenticated;
+revoke all on function public.ts_admin_remote_config_operator_set(text, jsonb, text) from public, anon, authenticated;
+grant execute on function public.ts_remote_config_get(text[])                          to anon, authenticated;
+grant execute on function public.ts_admin_remote_config_operator_values()               to service_role;
+grant execute on function public.ts_admin_remote_config_operator_set(text, jsonb, text) to service_role;
+
 
 -- #############################################################################
 -- 09. 자동화 크론 잡
@@ -5577,6 +5764,8 @@ as $$
     -- 판정 창은 최대 22분 30초(신호 주기 상한 600초) — 색인으로 먼저 좁힌다.
     where (s.last_seen_at >= now() - interval '23 minutes' or s.updated_at >= now() - interval '23 minutes')
       and public.ts_session_is_online(s.last_seen_at, s.updated_at, s.heartbeat_seconds)
+      -- 통계에서 빼는 운영 계정(2절)
+      and s.account_id not in (select public.ts_stats_hidden_accounts())
   )
   select jsonb_build_object(
     'total', (select count(*) from online),
@@ -6424,7 +6613,9 @@ grant execute on function public.ts_admin_game_server_upsert(uuid,text,text,bool
 -- 업데이트 안내, 점검 중이면 점검 안내를 띄운다(화면은 게임이 그린다). 점검이 시작되면 아래 요청 앞 검사가
 -- 로그인한 플레이어의 데이터 요청을 503 maintenance_in_progress 로 거절해, 이미 접속한 플레이어도 다음 요청(늦어도
 -- SDK 접속 신호 60초)에 끊긴다 — SDK 는 저장된 로그인을 남긴 채 세션만 끊고 게임에 알린다.
--- 운영 콘솔에 등록한 유저 ID(maintenance_allow_users)는 점검 중에도 통과한다. 로그인 전 요청(anon)은 막지 않는다 —
+-- 최소 버전도 같은 검사가 막는다 — SDK 가 데이터 요청마다 싣는 앱 판(x-app-version·x-app-platform 머리글)이 최소 판보다
+-- 낮으면 426 update_required. 머리글이 없는 옛 빌드는 서버가 판을 모르므로 막지 않는다(그 빌드는 SDK 안내만 본다).
+-- 점검 통과·버전 통과 권한이 있는 운영 계정(2절 operator_accounts)은 통과한다. 로그인 전 요청(anon)은 막지 않는다 —
 -- 상태 조회·게스트 복구가 돌아야 한다. 예상 종료 시각은 안내용이라 지나도 저절로 풀리지 않는다(운영자가 끈다).
 -- 시작 시각을 정해 두면 그때부터 막고, 그 전에는 상태 조회가 예정으로 알려 준다.
 -- ---------------------------------------------------------------------------
@@ -6450,14 +6641,16 @@ alter table public.app_gate_settings enable row level security;
 -- [의도적] 정책 없음 — 아래 함수만 쓴다.
 revoke all on table public.app_gate_settings from anon, authenticated;
 
-create table if not exists public.maintenance_allow_users (
-  user_id    text        primary key,
-  note       text        not null default '',
-  created_at timestamptz not null default now(),
-  created_by text
-);
-alter table public.maintenance_allow_users enable row level security;
-revoke all on table public.maintenance_allow_users from anon, authenticated;
+-- 옛 "점검 중 통과 유저 ID" 목록은 운영 계정(2절 operator_accounts)의 점검 통과 권한으로 옮겼다.
+do $$
+begin
+  if to_regclass('public.maintenance_allow_users') is not null then
+    insert into public.operator_accounts (user_id, note, maintenance_bypass, created_at, created_by)
+    select a.user_id, a.note, true, a.created_at, a.created_by from public.maintenance_allow_users a
+    on conflict (user_id) do update set maintenance_bypass = true;
+    drop table public.maintenance_allow_users;
+  end if;
+end $$;
 
 create or replace function public.ts_maintenance_active()
 returns boolean
@@ -6477,13 +6670,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select p_account is not null and exists (
-    select 1 from public.maintenance_allow_users a
-      join public.user_profiles p on p.user_id = a.user_id
-     where p.account_id = p_account);
+  select public.ts_operator_has(p_account, 'maintenance_bypass');
 $$;
 
--- 게임이 로그인 전에도 부른다. 로그인 상태로 부르면 allowed 가 점검 중 통과 계정인지 알려 준다.
+-- 게임이 로그인 전에도 부른다. 로그인 상태로 부르면 allowed·version_allowed 가 점검·최소 버전을 통과하는
+-- 운영 계정인지 알려 준다.
 create or replace function public.ts_app_status(p_platform text default null)
 returns jsonb
 language sql
@@ -6504,6 +6695,7 @@ as $$
                      'localized', s.maintenance_localized) end,
     'default_language', public.ts_game_default_language(),
     'allowed',     public.ts_maintenance_allowed(auth.uid()),
+    'version_allowed', public.ts_operator_has(auth.uid(), 'version_bypass'),
     'server_now',  now())
     from public.app_gate_settings s where s.id = 1;
 $$;
@@ -6587,9 +6779,11 @@ as $$
                               join public.display_names d on d.account_id = p.account_id
                              where p.user_id = a.user_id limit 1))
            order by a.created_at), '[]'::jsonb)
-    from public.maintenance_allow_users a;
+    from public.operator_accounts a
+   where a.maintenance_bypass;
 $$;
 
+-- 아래 둘과 위 목록은 옛 콘솔 화면("점검 중 통과 유저 ID")용이다 — 운영 계정의 점검 통과 권한만 켜고 끈다.
 create or replace function public.ts_admin_maintenance_allow_add(p_user_id text, p_note text default '', p_by text default null)
 returns void
 language plpgsql
@@ -6600,19 +6794,84 @@ begin
   if not exists (select 1 from public.user_profiles where user_id = btrim(coalesce(p_user_id, ''))) then
     raise exception 'maintenance_user_not_found';
   end if;
-  insert into public.maintenance_allow_users (user_id, note, created_by)
-  values (btrim(p_user_id), left(coalesce(p_note, ''), 100), p_by)
-  on conflict (user_id) do update set note = excluded.note;
+  insert into public.operator_accounts (user_id, note, maintenance_bypass, created_by)
+  values (btrim(p_user_id), left(coalesce(p_note, ''), 100), true, p_by)
+  on conflict (user_id) do update set note = excluded.note, maintenance_bypass = true, updated_at = now();
 end;
 $$;
 
 create or replace function public.ts_admin_maintenance_allow_remove(p_user_id text)
 returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.operator_accounts set maintenance_bypass = false, updated_at = now() where user_id = p_user_id;
+  -- 남은 권한이 없으면 운영 계정에서도 뺀다.
+  delete from public.operator_accounts
+   where user_id = p_user_id
+     and not (maintenance_bypass or version_bypass or hide_from_stats or config_preview or test_recipient);
+end;
+$$;
+
+-- 콘솔 "설정 › 운영 계정"
+create or replace function public.ts_admin_operator_accounts_list()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'user_id', o.user_id, 'note', o.note,
+           'maintenance_bypass', o.maintenance_bypass, 'version_bypass', o.version_bypass,
+           'hide_from_stats', o.hide_from_stats, 'config_preview', o.config_preview, 'test_recipient', o.test_recipient,
+           'created_at', o.created_at, 'created_by', o.created_by, 'updated_at', o.updated_at,
+           'account_id', (select p.account_id from public.user_profiles p where p.user_id = o.user_id and p.account_id is not null limit 1),
+           'display_name', (select d.display_name from public.user_profiles p
+                              join public.display_names d on d.account_id = p.account_id
+                             where p.user_id = o.user_id limit 1))
+           order by o.created_at), '[]'::jsonb)
+    from public.operator_accounts o;
+$$;
+
+-- 등록·수정 한 번에. 권한은 화면의 값 그대로 덮어쓴다.
+create or replace function public.ts_admin_operator_account_set(
+  p_user_id text, p_note text,
+  p_maintenance_bypass boolean, p_version_bypass boolean, p_hide_from_stats boolean,
+  p_config_preview boolean, p_test_recipient boolean,
+  p_by text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id text := btrim(coalesce(p_user_id, ''));
+begin
+  if not exists (select 1 from public.user_profiles where user_id = v_id) then
+    raise exception 'operator_user_not_found';
+  end if;
+  insert into public.operator_accounts
+    (user_id, note, maintenance_bypass, version_bypass, hide_from_stats, config_preview, test_recipient, created_by)
+  values (v_id, left(coalesce(p_note, ''), 100), coalesce(p_maintenance_bypass, false), coalesce(p_version_bypass, false),
+          coalesce(p_hide_from_stats, false), coalesce(p_config_preview, false), coalesce(p_test_recipient, false), p_by)
+  on conflict (user_id) do update set
+    note = excluded.note, maintenance_bypass = excluded.maintenance_bypass, version_bypass = excluded.version_bypass,
+    hide_from_stats = excluded.hide_from_stats, config_preview = excluded.config_preview,
+    test_recipient = excluded.test_recipient, updated_at = now();
+end;
+$$;
+
+create or replace function public.ts_admin_operator_account_remove(p_user_id text)
+returns void
 language sql
 security definer
 set search_path = public
 as $$
-  delete from public.maintenance_allow_users where user_id = p_user_id;
+  delete from public.operator_accounts where user_id = p_user_id;
 $$;
 
 comment on function public.ts_maintenance_active() is '지금 점검 중인지(켜져 있고 시작 시각이 지남). 요청 앞 검사·상태 조회가 쓴다.';
@@ -6621,9 +6880,13 @@ comment on function public.ts_app_status(text) is '최소 판·스토어 주소�
 comment on function public.ts_admin_app_gate_get() is '점검·최소 판 설정 조회. service_role 전용.';
 comment on function public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text, timestamptz) is
   '점검·최소 판 설정 저장. service_role 전용.';
-comment on function public.ts_admin_maintenance_allow_list() is '점검 중 통과 유저 ID 목록. service_role 전용.';
-comment on function public.ts_admin_maintenance_allow_add(text, text, text) is '점검 중 통과 유저 ID 등록. service_role 전용.';
-comment on function public.ts_admin_maintenance_allow_remove(text) is '점검 중 통과 유저 ID 지우기. service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_list() is '점검 통과 권한이 있는 운영 계정 목록(옛 화면용). service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_add(text, text, text) is '운영 계정의 점검 통과 권한 켜기(옛 화면용). service_role 전용.';
+comment on function public.ts_admin_maintenance_allow_remove(text) is '운영 계정의 점검 통과 권한 끄기(옛 화면용). service_role 전용.';
+comment on function public.ts_admin_operator_accounts_list() is '운영 계정 목록과 계정별 권한. service_role 전용.';
+comment on function public.ts_admin_operator_account_set(text, text, boolean, boolean, boolean, boolean, boolean, text) is
+  '운영 계정 등록·수정(권한은 넘긴 값으로 덮어씀). service_role 전용.';
+comment on function public.ts_admin_operator_account_remove(text) is '운영 계정 빼기. service_role 전용.';
 
 revoke all on function public.ts_maintenance_active()       from public, anon, authenticated;
 revoke all on function public.ts_maintenance_allowed(uuid)  from public, anon, authenticated;
@@ -6634,6 +6897,10 @@ revoke all on function public.ts_admin_app_gate_update(text, text, text, text, b
 revoke all on function public.ts_admin_maintenance_allow_list()                 from public, anon, authenticated;
 revoke all on function public.ts_admin_maintenance_allow_add(text, text, text)  from public, anon, authenticated;
 revoke all on function public.ts_admin_maintenance_allow_remove(text)           from public, anon, authenticated;
+revoke all on function public.ts_admin_operator_accounts_list()                  from public, anon, authenticated;
+revoke all on function public.ts_admin_operator_account_set(text, text, boolean, boolean, boolean, boolean, boolean, text)
+  from public, anon, authenticated;
+revoke all on function public.ts_admin_operator_account_remove(text)             from public, anon, authenticated;
 grant execute on function public.ts_app_status(text)           to anon, authenticated;
 grant execute on function public.ts_admin_app_gate_get()       to service_role;
 grant execute on function public.ts_admin_app_gate_update(text, text, text, text, boolean, timestamptz, timestamptz, text, jsonb, text, timestamptz)
@@ -6641,6 +6908,10 @@ grant execute on function public.ts_admin_app_gate_update(text, text, text, text
 grant execute on function public.ts_admin_maintenance_allow_list()                to service_role;
 grant execute on function public.ts_admin_maintenance_allow_add(text, text, text) to service_role;
 grant execute on function public.ts_admin_maintenance_allow_remove(text)          to service_role;
+grant execute on function public.ts_admin_operator_accounts_list()                 to service_role;
+grant execute on function public.ts_admin_operator_account_set(text, text, boolean, boolean, boolean, boolean, boolean, text)
+  to service_role;
+grant execute on function public.ts_admin_operator_account_remove(text)            to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 요청 제한 — 짧은 시간에 요청을 지나치게 많이 보내는 계정을 잠시 막는다. 운영 콘솔 "설정 › 요청 제한".
@@ -6731,6 +7002,8 @@ declare
   v_sent     text;
   v_server   text;
   v_maint    boolean := false;
+  v_update   boolean := false;
+  v_headers  jsonb;
 begin
   -- 중복 로그인: SDK 는 데이터 요청마다 이 기기의 세션 토큰을 x-session-token 머리글로 싣는다. user_sessions 의 토큰과
   -- 다르면(다른 기기에서 로그인함) 읽기·쓰기를 가리지 않고 거절한다 — 앱이 따로 묻지 않아도 서버와 주고받는 순간 잡힌다.
@@ -6759,7 +7032,35 @@ begin
       detail = json_build_object('status', 409, 'headers', json_build_object())::text;
   end if;
 
-  -- 점검: 로그인한 플레이어의 요청을 막는다(운영 콘솔에 등록한 유저 ID 는 통과). 상태 조회와 결제 지급 기록은 통과 —
+  -- 최소 버전: 로그인한 플레이어의 앱 판이 그 플랫폼의 최소 판보다 낮으면 막는다(버전 통과 운영 계정은 통과). 점검보다 먼저 —
+  -- 낮은 판은 점검이 끝나도 못 들어오니 업데이트 안내가 먼저다. 상태 조회·결제 지급 기록은 점검과 같은 이유로 통과.
+  -- 이 확인이 고장 나면 통과시킨다.
+  begin
+    v_headers := nullif(current_setting('request.headers', true), '')::jsonb;
+    v_update := coalesce(nullif(current_setting('role', true), 'none'), '') = 'authenticated'
+       and coalesce(current_setting('request.path', true), '') not in ('/rpc/ts_app_status', '/rpc/ts_mark_purchase_granted')
+       and public.ts_version_lower(
+             v_headers ->> 'x-app-version',
+             (select case lower(coalesce(v_headers ->> 'x-app-platform', ''))
+                       when 'android' then s.android_min_version
+                       when 'ios'     then s.ios_min_version end
+                from public.app_gate_settings s where s.id = 1))
+       and not public.ts_operator_has(auth.uid(), 'version_bypass');
+  exception when others then
+    v_update := false;
+  end;
+
+  if v_update then
+    raise sqlstate 'PGRST' using
+      message = json_build_object(
+        'code', 'update_required',
+        'message', 'update_required',
+        'details', null,
+        'hint', null)::text,
+      detail = json_build_object('status', 426, 'headers', json_build_object())::text;
+  end if;
+
+  -- 점검: 로그인한 플레이어의 요청을 막는다(점검 통과 운영 계정은 통과). 상태 조회와 결제 지급 기록은 통과 —
   -- 지급은 됐는데 기록이 막히면 같은 결제가 다시 지급될 수 있다. 이 확인이 고장 나면 통과시킨다.
   begin
     v_maint := coalesce(nullif(current_setting('role', true), 'none'), '') = 'authenticated'
@@ -6859,7 +7160,7 @@ end;
 $$;
 
 comment on function public.ts_request_limit_check() is
-  '데이터 요청 앞 검사(pgrst.db_pre_request): 다른 기기 로그인 거절(x-session-token 머리글이 있을 때) + 점검 중 거절 + 요청 제한(꺼져 있으면 건너뜀). anon·authenticated·service_role 실행 권한 필수.';
+  '데이터 요청 앞 검사(pgrst.db_pre_request): 다른 기기 로그인 거절(x-session-token 머리글이 있을 때) + 최소 버전 미만 거절(x-app-version 머리글이 있을 때) + 점검 중 거절 + 요청 제한(꺼져 있으면 건너뜀). anon·authenticated·service_role 실행 권한 필수.';
 comment on function public.ts_request_limit_ping() is
   '엣지 함수가 요청 제한 검사를 태우려고 부르는 빈 함수.';
 
@@ -7375,6 +7676,65 @@ $$;
 revoke all on function public.ts_admin_user_data_reset(uuid, text) from public, anon, authenticated;
 grant execute on function public.ts_admin_user_data_reset(uuid, text) to service_role;
 
+-- 운영 콘솔 "설정 › 플레이어 전체 초기화" — 베타 종료처럼 플레이어를 처음부터 다시 받을 때 한 번 쓴다. 되돌릴 수 없다.
+-- 모든 계정(auth.users)과 계정에 딸린 플레이어 데이터를 지운다. 남기는 것: 콘솔 설정 전부, 결제(purchases·환불 기록)와
+-- 문의(support_*) — 법정 보관이라 계정 칸만 비고 유저 ID 로 남는다, 통계(일별 접속·동시접속자·채팅 수·사용량), 쿠폰 사용 기록
+-- (이미 쓴 코드가 다시 쓰이지 않게), 우편 발송 내역(mail_batches — 나중에 들어온 플레이어에게 보내던 배달은 멈춘다, 안 그러면
+-- 다시 가입한 베타 플레이어가 그 우편을 또 받는다), 운영 계정(구글·애플 계정은 다시 가입해도 유저 ID 가 같아 그대로 통한다).
+-- 플레이나누 병행 게임은 나누 쪽 데이터가 남아 다음 로그인에 되돌아온다 — 그쪽은 따로 지운다.
+-- 안전장치: 점검 중에만 돈다(접속한 플레이어가 지우는 사이에 다시 쓰지 않게), 확인 글자가 정확히 맞아야 한다.
+-- 콘솔은 마스터만 부르고 프로젝트 이름을 한 번 더 입력받는다.
+-- [주의] 콘솔(PostgREST)을 거치면 조건 없는 delete 를 막는 장치(safeupdate)가 켜져 있어 모든 delete 에 where 를 단다.
+--        요청 제한 시간(authenticator 8초)도 그대로라 넘으면 통째로 되돌려진다 — 플레이어가 아주 많으면 SQL 편집기에서 부른다.
+create or replace function public.ts_admin_reset_all_players(p_confirm text, p_by text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  -- 지우는 순서: 서로 가리키는 표는 가리키는 쪽 먼저, 프로필은 마지막(다른 표가 프로필로 잇는다).
+  v_tables text[] := array[
+    'mail_self_once', 'mails', 'user_data_resets', 'user_data', 'user_data_logs', 'display_names',
+    'leaderboard_scores', 'match_results', 'match_lobby_members', 'match_lobbies', 'friend_requests',
+    'chat_messages', 'chat_mutes', 'push_outbox', 'push_devices', 'push_preferences',
+    'request_limit_blocks', 'request_limit_counters', 'user_ban_messages', 'apple_auth_tokens',
+    'anonymous_recovery_tokens', 'user_sessions', 'account_closures', 'user_profiles'];
+  v_t      text;
+  v_n      bigint;
+  v_counts jsonb := '{}'::jsonb;
+begin
+  if p_confirm is distinct from 'DELETE ALL PLAYERS' then
+    raise exception 'reset_all_confirm_mismatch';
+  end if;
+  if not public.ts_maintenance_active() then
+    raise exception 'reset_all_requires_maintenance';
+  end if;
+
+  foreach v_t in array v_tables loop
+    execute format('delete from public.%I where true', v_t);
+    get diagnostics v_n = row_count;
+    v_counts := v_counts || jsonb_build_object(v_t, v_n);
+  end loop;
+
+  -- 로그인 기록(세션·연결된 소셜 계정 등)은 auth 쪽 외래 키가 함께 지운다.
+  delete from auth.users where true;
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('auth.users', v_n);
+
+  update public.mail_batches set open_until = null where open_until > now();
+  get diagnostics v_n = row_count;
+  v_counts := v_counts || jsonb_build_object('mail_batches.open_until', v_n);
+
+  return jsonb_build_object('deleted', v_counts, 'by', p_by, 'at', now());
+end;
+$$;
+
+comment on function public.ts_admin_reset_all_players(text, text) is
+  '플레이어 전체 초기화 — 모든 계정과 플레이어 데이터 삭제(결제·문의·통계·쿠폰 사용 기록·운영 계정·콘솔 설정은 남김, 늦은 우편 배달은 멈춤). 점검 중에만, p_confirm = ''DELETE ALL PLAYERS''. 되돌릴 수 없음. service_role 전용.';
+revoke all on function public.ts_admin_reset_all_players(text, text) from public, anon, authenticated;
+grant execute on function public.ts_admin_reset_all_players(text, text) to service_role;
+
 -- 내 저장 데이터가 콘솔 초기화 뒤 그대로면 그 초기화 시각, 아니면 null. SDK 가 로드할 때 부른다.
 create or replace function public.ts_user_data_reset_pending()
 returns timestamptz
@@ -7453,7 +7813,7 @@ revoke select, insert, update, delete on table public.game_items from service_ro
 -- ---------------------------------------------------------------------------
 create table if not exists public.mail_batches (
   id              uuid primary key default gen_random_uuid(),
-  target_mode     text not null check (target_mode in ('all','server','players')),
+  target_mode     text not null check (target_mode in ('all','server','players','operators')),
   server_id       uuid null references public.game_servers (id) on delete set null,
   title           text not null default '',
   content         text not null default '',
@@ -7482,6 +7842,10 @@ alter table public.mail_batches add column if not exists open_until      timesta
 -- 운영자가 안 받은 우편을 거둔 시각·거둔 통수(ts_admin_mail_batch_recall).
 alter table public.mail_batches add column if not exists recalled_at     timestamptz;
 alter table public.mail_batches add column if not exists recalled_count  int not null default 0;
+-- 'operators' = 우편 시험 발송 권한이 있는 운영 계정(2절 operator_accounts.test_recipient)에게만 보낸 시험 발송.
+alter table public.mail_batches drop constraint if exists mail_batches_target_mode_check;
+alter table public.mail_batches add constraint mail_batches_target_mode_check
+  check (target_mode in ('all','server','players','operators'));
 
 create index if not exists mail_batches_created_idx on public.mail_batches (created_at desc);
 
@@ -7522,7 +7886,7 @@ revoke select, insert, update, delete on table public.mails from service_role;
 
 -- ---------------------------------------------------------------------------
 -- ts_admin_send_mail — 대상(all/server/players) 해석 + 수신자별 mails INSERT
---   p_target_mode : 'all' | 'server' | 'players'
+--   p_target_mode : 'all' | 'server' | 'players' | 'operators'(시험 발송)
 --   p_account_ids : players 모드에서 user_profiles.account_id 의 jsonb 배열 (["uuid", ...])
 --   p_server_id   : server 모드 대상 서버
 --   p_items       : 보상 배열 [{key,count}]. game_items 검증(우회 = p_skip_item_validation)
@@ -7561,7 +7925,7 @@ declare
   v_account_ids uuid[];
   v_category    text;
 begin
-  if p_target_mode not in ('all','server','players') then
+  if p_target_mode not in ('all','server','players','operators') then
     raise exception 'invalid_target_mode: %', p_target_mode;
   end if;
   if p_title is null or btrim(p_title) = '' then
@@ -7614,8 +7978,8 @@ begin
      case when p_target_mode = 'server' then p_server_id else null end,
      p_title, coalesce(p_content, ''),
      p_items, p_expires_at, p_created_by, v_category, p_localized,
-     -- 고른 플레이어에게 보내는 우편은 나중에 들어올 사람이 없다.
-     case when p_open_for_new and p_target_mode <> 'players' then p_expires_at end)
+     -- 고른 플레이어·시험 발송은 나중에 들어올 사람이 없다.
+     case when p_open_for_new and p_target_mode not in ('players','operators') then p_expires_at end)
   returning id into v_batch_id;
 
   insert into public.mails
@@ -7630,6 +7994,8 @@ begin
       p_target_mode = 'all'
       or (p_target_mode = 'server'  and p.server_id = p_server_id)
       or (p_target_mode = 'players' and p.account_id = any (v_account_ids))
+      or (p_target_mode = 'operators' and exists (
+            select 1 from public.operator_accounts o where o.user_id = p.user_id and o.test_recipient))
     );
 
   get diagnostics v_count = row_count;
@@ -7640,7 +8006,7 @@ end;
 $$;
 
 comment on function public.ts_admin_send_mail(text,text,timestamptz,jsonb,uuid,text,jsonb,text,boolean,text,jsonb,boolean) is
-  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback). p_open_for_new 면 수령 기한까지 나중에 대상이 된 플레이어에게도 ts_deliver_open_mail_batches 가 보낸다(players 대상에는 무시).';
+  '어드민 우편 발송. 대상 all/server/players(account_id jsonb 배열)/operators(시험 발송 운영 계정) 해석(탈퇴 제외) → 수신자별 mails INSERT + mail_batches 스냅샷. items는 game_items 검증(우회 플래그). p_category 비었거나 null이면 default. p_localized는 언어별 제목·본문 오버라이드(없으면 base fallback). p_open_for_new 면 수령 기한까지 나중에 대상이 된 플레이어에게도 ts_deliver_open_mail_batches 가 보낸다(players·operators 대상에는 무시).';
 
 -- ---------------------------------------------------------------------------
 -- ts_deliver_open_mail_batches — "나중에 들어온 플레이어도 받기"로 보낸 우편을 아직 없는 대상에게 넣는다(크론 매분).
@@ -7904,11 +8270,13 @@ as $$
   from public.user_profiles p
   where p.account_id is not null
     and p.withdrawn_at is null
-    and (p_target_mode = 'all' or (p_target_mode = 'server' and p.server_id = p_server_id));
+    and (p_target_mode = 'all' or (p_target_mode = 'server' and p.server_id = p_server_id)
+         or (p_target_mode = 'operators' and exists (
+               select 1 from public.operator_accounts o where o.user_id = p.user_id and o.test_recipient)));
 $$;
 
 comment on function public.ts_admin_count_recipients(text,uuid) is
-  '발송 전 대상 수 프리뷰(all/server). 탈퇴 제외.';
+  '발송 전 대상 수 프리뷰(all/server/operators). 탈퇴 제외.';
 
 -- ---------------------------------------------------------------------------
 -- 어드민 우편 조회 — TrueBase.Admin(Retool 대체 도구) 전용. mails·mail_batches는
@@ -8989,7 +9357,9 @@ begin
   from public.leaderboard_scores s
   where s.table_code = t.code
     and s.rotation_count = t.rotation_count
-    and (t.scope <> 'server' or s.server_id = v_srv);
+    and (t.scope <> 'server' or s.server_id = v_srv)
+    -- 순위에서 빼는 운영 계정(2절)은 참여자 수에서도 뺀다 — 순위 목록과 숫자가 맞게.
+    and s.account_id not in (select public.ts_stats_hidden_accounts());
 
   return jsonb_build_object(
     'code',                t.code,
@@ -9204,6 +9574,8 @@ begin
       where s.table_code = $1
         and s.rotation_count = $2
         and ($5 is null or s.server_id = $5)
+        -- 순위·통계에서 빼는 운영 계정(2절)
+        and s.account_id not in (select public.ts_stats_hidden_accounts())
     ) r
     where r.rnk between $3 and $6
   $f$, v_data, v_sel)
@@ -9285,6 +9657,7 @@ begin
   where x.table_code = t.code
     and x.rotation_count = v_rot
     and (v_srv is null or x.server_id = v_srv)
+    and x.account_id not in (select public.ts_stats_hidden_accounts())
     and (
       (v_desc     and (x.score > s.score or (x.score = s.score and x.score_achieved_at < s.score_achieved_at)))
       or
@@ -10063,7 +10436,10 @@ begin
     with ranked as (
       select s.account_id, s.user_id, s.score, s.score_achieved_at, s.score_count, gs.server_code,
              dn.display_name, %s as data,
-             rank() over (order by (case when $6 then -s.score else s.score end) asc, s.score_achieved_at asc) as rnk
+             -- 순위에서 빼는 운영 계정(2절)은 보이되 순위 없이(hidden) — 나머지 순위는 게임 화면과 같다.
+             (s.account_id in (select public.ts_stats_hidden_accounts())) as hidden,
+             rank() over (partition by (s.account_id in (select public.ts_stats_hidden_accounts()))
+                          order by (case when $6 then -s.score else s.score end) asc, s.score_achieved_at asc) as rnk
       from public.leaderboard_scores s
       left join public.display_names dn on dn.account_id = s.account_id
       left join public.game_servers gs on gs.id = s.server_id
@@ -10077,13 +10453,14 @@ begin
       'rows', coalesce((
         select jsonb_agg(
           (jsonb_build_object(
-            'rank', r.rnk, 'account_id', r.account_id, 'user_id', r.user_id,
+            'rank', case when r.hidden then null else r.rnk end, 'hidden', r.hidden,
+            'account_id', r.account_id, 'user_id', r.user_id,
             'display_name', r.display_name, 'score', r.score,
             'score_achieved_at', r.score_achieved_at, 'score_count', r.score_count,
             'server_code', r.server_code
           ) || r.data)
-          order by r.rnk)
-        from (select * from ranked order by rnk limit $5 offset (($7 - 1) * $5)) r
+          order by r.hidden, r.rnk)
+        from (select * from ranked order by hidden, rnk limit $5 offset (($7 - 1) * $5)) r
       ), '[]'::jsonb)
     )
   $f$, v_data)
@@ -10955,20 +11332,28 @@ as $$
       now() - interval '7 days' as seven_days_ago
   )
   select jsonb_build_object(
-    'total_players', (select count(*) from auth.users),
+    -- 통계에서 빼는 운영 계정(2절)은 플레이어 수·신규·활동에서 뺀다. 매출은 그대로 센다.
+    'total_players', (select count(*) from auth.users where id not in (select public.ts_stats_hidden_accounts())),
     -- 오늘 신규·활동은 통계 화면과 같은 기록(일별 접속)에서 센다 — 두 화면의 "오늘" 숫자가 어긋나지 않게.
-    'new_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date and is_new),
-    'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago),
-    'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date),
+    'new_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date and is_new
+                    and account_id not in (select public.ts_stats_hidden_accounts())),
+    'new_7d', (select count(*) from auth.users, bounds where created_at >= bounds.seven_days_ago
+                 and id not in (select public.ts_stats_hidden_accounts())),
+    'active_today', (select count(*) from public.user_daily_activity where day = (now() at time zone public.ts_game_time_zone())::date
+                       and account_id not in (select public.ts_stats_hidden_accounts())),
     'banned_now', (select count(*) from auth.users where banned_until is not null and banned_until > now()),
     'purchases_today', (select count(*) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true and is_free is not true),
     'revenue_today_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.today_start and refunded_at is null and is_test is not true and is_free is not true),
     'revenue_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where verified_at >= bounds.seven_days_ago and refunded_at is null and is_test is not true and is_free is not true),
-    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null and is_test is not true and is_free is not true)
+    'revenue_total_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases where refunded_at is null and is_test is not true and is_free is not true),
+    -- 최근 7일 안에 환불된 결제(결제 날짜가 아니라 환불 날짜 기준). 정지는 운영자가 플레이어 상세에서 직접 한다.
+    'refunds_7d', (select count(*) from public.purchases, bounds where refunded_at >= bounds.seven_days_ago and is_test is not true),
+    'refunds_7d_krw', (select coalesce(sum(price_amount_krw), 0) from public.purchases, bounds where refunded_at >= bounds.seven_days_ago and is_test is not true and is_free is not true),
+    'refund_players_7d', (select count(distinct coalesce(user_id, account_id::text)) from public.purchases, bounds where refunded_at >= bounds.seven_days_ago and is_test is not true)
   );
 $$;
 
-comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫자(가입·활동·차단·매출). 날짜는 게임 시간대 기준. service_role 전용.';
+comment on function public.ts_admin_dashboard_stats() is '콘솔 첫 화면 숫자(가입·활동·차단·매출·최근 환불). 날짜는 게임 시간대 기준. service_role 전용.';
 
 revoke all on function public.ts_admin_dashboard_stats() from public, anon, authenticated;
 grant execute on function public.ts_admin_dashboard_stats() to service_role;
@@ -11132,9 +11517,11 @@ as $$
   ),
   act as (
     select a.* from public.user_daily_activity a
-     where p_signup_platform is null
-        or (p_signup_platform = 'unknown' and a.signup_platform is null)
-        or a.signup_platform = p_signup_platform
+     where (p_signup_platform is null
+            or (p_signup_platform = 'unknown' and a.signup_platform is null)
+            or a.signup_platform = p_signup_platform)
+       -- 통계에서 빼는 운영 계정(2절)
+       and a.account_id not in (select public.ts_stats_hidden_accounts())
   ),
   days as (
     select generate_series(p.today - p.days + 1, p.today, interval '1 day')::date as day from params p
@@ -16455,6 +16842,163 @@ grant execute on function public.ts_admin_legal_publish(bigint, text)           
 grant execute on function public.ts_admin_legal_delete(bigint)                           to service_role;
 
 -- ---------------------------------------------------------------------------
+-- 약관 동의 기록 — 게임 첫 실행 동의 화면에서 플레이어가 동의한 이용약관·개인정보처리방침 판과 만 14세 이상 확인.
+-- 동의 증거라 지우지 않는다: 탈퇴·플레이어 전체 초기화에도 남고(외래 키 없음), 유저 ID 로 찾는다.
+-- 바뀔 때만 한 줄 더 쌓는다(같은 판을 다시 보내면 쌓지 않음). 게시한 판이 바뀌면(시행일이 지나면) 다시 묻는다 —
+-- 판단은 ts_legal_consent_get 의 needs_consent.
+-- 광고성·야간 알림 동의는 23절 push_preferences 가 맡는다.
+-- ---------------------------------------------------------------------------
+create table if not exists public.legal_consents (
+  id              bigint      generated always as identity primary key,
+  user_id         text        not null,
+  account_id      uuid,
+  terms_version   int         not null,
+  privacy_version int         not null,
+  age_confirmed   boolean     not null default false,
+  agreed_at       timestamptz not null default now()
+);
+create index if not exists legal_consents_user_idx on public.legal_consents (user_id, agreed_at desc);
+alter table public.legal_consents enable row level security;
+-- [의도적] 정책 없음 — 아래 함수만 쓴다.
+revoke all on table public.legal_consents from anon, authenticated;
+
+-- 지금 시행 중인 판(ts_support_legal 의 current 와 같은 기준). 게시한 판이 없으면 null.
+create or replace function public.ts_legal_current(p_kind text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('version', d.version, 'effective_date', d.effective_date)
+    from public.legal_documents d
+   where d.kind = p_kind and d.published_at is not null and d.effective_date <= public.ts_game_today()
+   order by d.effective_date desc, d.published_at desc
+   limit 1;
+$$;
+
+-- 게임이 로그인 전에도 부른다 — 동의 화면을 띄울지 기기에서 먼저 판단한다.
+create or replace function public.ts_legal_versions()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object('terms', public.ts_legal_current('terms'), 'privacy', public.ts_legal_current('privacy'));
+$$;
+
+-- 동의 기록이 묶이는 유저 ID — 프로필의 유저 ID(재가입에도 같음), 프로필이 아직 없으면 계정 번호.
+create or replace function public.ts_legal_consent_user_id()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select p.user_id from public.user_profiles p where p.account_id = auth.uid()), auth.uid()::text);
+$$;
+
+-- 내 마지막 동의와 지금 판. needs_consent: 동의가 없거나, 동의한 판이 지금 판과 다르거나(게시한 판이 있는 것만 본다),
+-- 만 14세 이상 확인이 없으면 true.
+create or replace function public.ts_legal_consent_get()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_c       public.legal_consents%rowtype;
+  v_terms   jsonb := public.ts_legal_current('terms');
+  v_privacy jsonb := public.ts_legal_current('privacy');
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select * into v_c from public.legal_consents
+   where user_id = public.ts_legal_consent_user_id()
+   order by agreed_at desc, id desc limit 1;
+  return jsonb_build_object(
+    'consent', case when v_c.id is null then null else jsonb_build_object(
+                 'terms_version', v_c.terms_version, 'privacy_version', v_c.privacy_version,
+                 'age_confirmed', v_c.age_confirmed, 'agreed_at', v_c.agreed_at) end,
+    'terms', v_terms, 'privacy', v_privacy,
+    'needs_consent', v_c.id is null
+                     or not v_c.age_confirmed
+                     or (v_terms is not null and v_c.terms_version <> (v_terms ->> 'version')::int)
+                     or (v_privacy is not null and v_c.privacy_version <> (v_privacy ->> 'version')::int));
+end;
+$$;
+
+-- 동의 남기기. 판은 게시한 판이어야 한다(legal_version_not_published) — 게시한 판이 하나도 없는 종류는 0 을 받는다.
+create or replace function public.ts_legal_consent_save(p_terms_version int, p_privacy_version int, p_age_confirmed boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user text;
+  v_last public.legal_consents%rowtype;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not ((coalesce(p_terms_version, 0) = 0
+             and not exists (select 1 from public.legal_documents where kind = 'terms' and published_at is not null))
+          or exists (select 1 from public.legal_documents
+                      where kind = 'terms' and version = p_terms_version and published_at is not null))
+     or not ((coalesce(p_privacy_version, 0) = 0
+             and not exists (select 1 from public.legal_documents where kind = 'privacy' and published_at is not null))
+          or exists (select 1 from public.legal_documents
+                      where kind = 'privacy' and version = p_privacy_version and published_at is not null)) then
+    raise exception 'legal_version_not_published';
+  end if;
+
+  v_user := public.ts_legal_consent_user_id();
+  select * into v_last from public.legal_consents where user_id = v_user order by agreed_at desc, id desc limit 1;
+  if v_last.id is null
+     or v_last.terms_version <> coalesce(p_terms_version, 0)
+     or v_last.privacy_version <> coalesce(p_privacy_version, 0)
+     or v_last.age_confirmed <> coalesce(p_age_confirmed, false) then
+    insert into public.legal_consents (user_id, account_id, terms_version, privacy_version, age_confirmed)
+    values (v_user, auth.uid(), coalesce(p_terms_version, 0), coalesce(p_privacy_version, 0), coalesce(p_age_confirmed, false));
+  end if;
+  return public.ts_legal_consent_get();
+end;
+$$;
+
+-- 콘솔 플레이어 상세 — 그 유저 ID 의 동의 기록 전부(최근 순).
+create or replace function public.ts_admin_legal_consents(p_user_id text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'terms_version', c.terms_version, 'privacy_version', c.privacy_version,
+           'age_confirmed', c.age_confirmed, 'agreed_at', c.agreed_at, 'account_id', c.account_id)
+           order by c.agreed_at desc, c.id desc), '[]'::jsonb)
+    from public.legal_consents c where c.user_id = p_user_id;
+$$;
+
+comment on table public.legal_consents is '약관 동의 기록(동의 증거, 지우지 않음). 유저 ID 로 묶는다.';
+comment on function public.ts_legal_current(text) is '지금 시행 중인 약관·방침 판(번호·시행일). 없으면 null.';
+comment on function public.ts_legal_versions() is '지금 시행 중인 이용약관·개인정보처리방침 판. 게임이 로그인 전에도 부른다.';
+comment on function public.ts_legal_consent_user_id() is '동의 기록을 묶는 유저 ID(프로필 유저 ID, 없으면 계정 번호).';
+comment on function public.ts_legal_consent_get() is '내 마지막 약관 동의와 지금 판, 다시 물어야 하는지(needs_consent).';
+comment on function public.ts_legal_consent_save(int, int, boolean) is '약관 동의 남기기(게시한 판만, 바뀔 때만 쌓음). 결과는 ts_legal_consent_get 과 같다.';
+comment on function public.ts_admin_legal_consents(text) is '그 유저 ID 의 약관 동의 기록 전부. service_role 전용.';
+revoke all on function public.ts_legal_current(text)                      from public, anon, authenticated;
+revoke all on function public.ts_legal_versions()                         from public, anon, authenticated;
+revoke all on function public.ts_legal_consent_user_id()                  from public, anon, authenticated;
+revoke all on function public.ts_legal_consent_get()                      from public, anon, authenticated;
+revoke all on function public.ts_legal_consent_save(int, int, boolean)    from public, anon, authenticated;
+revoke all on function public.ts_admin_legal_consents(text)               from public, anon, authenticated;
+grant execute on function public.ts_legal_versions()                      to anon, authenticated;
+grant execute on function public.ts_legal_consent_get()                   to authenticated;
+grant execute on function public.ts_legal_consent_save(int, int, boolean) to authenticated;
+grant execute on function public.ts_admin_legal_consents(text)            to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 문의 보관 기간 — 처리가 끝난 문의는 3년 뒤 문의·답변·첨부 그림을 지운다. 개인정보처리방침에 적는 기간이라
 -- 구체적인 값이어야 하고, 전자상거래법 시행령 제6조 제1항 제4호(소비자 불만·분쟁처리 기록 3년)에 맞췄다.
 -- 결제 문의도 같다 — 결제 기록 자체(5년)는 7절 purchases 에 따로 남는다.
@@ -17636,6 +18180,8 @@ grant execute on function public.auth_user_server_id()                          
 grant execute on function public.ts_default_server_id()                                      to anon, authenticated;
 grant execute on function public.ts_server_now()                                             to anon, authenticated;
 grant execute on function public.ts_app_status(text)                                         to anon, authenticated;
+grant execute on function public.ts_remote_config_get(text[])                                to anon, authenticated;
+grant execute on function public.ts_legal_versions()                                         to anon, authenticated;
 grant execute on function public.ts_is_display_name_available(text, uuid)                    to anon, authenticated;
 grant execute on function public.ts_display_name_check(text, uuid)                           to authenticated;
 grant execute on function public.ts_anon_recovery_get_refresh_token(text, text)              to anon, authenticated;
@@ -17728,6 +18274,10 @@ grant execute on function public.ts_match_lobby_list_my()                       
 
 -- 고객센터 — 게임의 새 답변 표시
 grant execute on function public.ts_support_unread_count()                           to authenticated;
+
+-- 약관 동의 기록(지금 판 조회는 로그인 전 함수 묶음에)
+grant execute on function public.ts_legal_consent_get()                              to authenticated;
+grant execute on function public.ts_legal_consent_save(int, int, boolean)            to authenticated;
 
 -- 푸시 알림 — 기기 등록·해제, 수신 설정
 grant execute on function public.ts_push_register(text, text, text, text)           to authenticated;

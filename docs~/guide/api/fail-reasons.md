@@ -64,7 +64,8 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `UserBanned` | 계정이 차단되었습니다. 자세한 내용은 `BanInfo`에 있습니다 |
 | `DuplicateLogin` | 다른 기기에서 같은 계정으로 로그인해 현재 세션이 무효가 되었습니다 |
-| `Maintenance` | 서버 점검 중입니다. 운영 콘솔 **설정 › 점검·버전**에 등록한 계정만 들어갈 수 있습니다 |
+| `Maintenance` | 서버 점검 중입니다. 운영 콘솔 **설정 › 운영 계정**에서 점검 통과를 켠 계정만 들어갈 수 있습니다 |
+| `UpdateRequired` | 앱 버전이 운영 콘솔 **설정 › 점검·버전**의 최소 버전보다 낮습니다. **설정 › 운영 계정**에서 버전 통과를 켠 계정만 들어갈 수 있습니다 |
 | `IdentityAlreadyLinked` | 연동하려는 소셜 계정이 이미 다른 게임 계정에 연결되어 있습니다 |
 | `IdTokenInvalid` | 인증 서버가 구글·애플 ID 토큰을 받지 않았습니다. 토큰이 깨졌거나 만료됐거나, 다른 앱(클라이언트 ID)용이거나 nonce 가 맞지 않습니다 |
 | `SignedInNonAnonymous` | 비익명 계정으로 로그인 중입니다. 먼저 `SignOutFullyAsync`를 호출하세요 |
@@ -289,6 +290,7 @@ bool Handle(SupabaseResult result)
 |--------|------|
 | `CustomerCenterLoginRequired` | 고객센터를 열 수 없습니다. 로그인 상태가 아니고, 차단된 계정이 이 기기에 남긴 로그인 기록도 없습니다. 로그인한 뒤 다시 엽니다 |
 | `CustomerCenterNotShown` | 기기가 6초 안에 고객센터 창을 띄우지 못했습니다. 다른 화면이 이미 떠 있을 때 주로 생깁니다. 잠시 뒤 다시 엽니다 |
+| `LegalVersionNotPublished` | 약관 동의에 넘긴 버전이 운영 콘솔에서 게시한 버전이 아닙니다. 약관 버전 조회로 받은 값을 넘깁니다 |
 
 ## 푸시 알림
 

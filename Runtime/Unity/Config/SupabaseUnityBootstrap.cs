@@ -69,7 +69,8 @@ namespace TrueBase.Unity.Config
             EnableApiResultLogs = settings.enableApiResultLogs;
 
             const string sessionsTable = "user_sessions";
-            var http = new SessionTokenHttpClient(new UnitySupabaseHttpClient(options.TimeoutSeconds), sessionsTable);
+            var http = new SessionTokenHttpClient(new UnitySupabaseHttpClient(options.TimeoutSeconds), sessionsTable,
+                Application.version, SupabaseSDK.AppPlatform);
             var json = new UnitySupabaseJsonSerializer();
 
             AuthService = new SupabaseAuthService(

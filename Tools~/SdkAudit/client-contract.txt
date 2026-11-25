@@ -113,3 +113,7 @@ rpc ts_withdrawal_delay_days
 rpc ts_app_status p_platform
 rpc ts_mail_send_to_self p_category,p_content,p_expires_days,p_items,p_once_key,p_title
 table mails account_id,base_language,category,content,created_at,expires_at,id,items,items_claimed_at,localized,sender_type,title,user_id
+rpc ts_remote_config_get p_keys
+rpc ts_legal_consent_get
+rpc ts_legal_consent_save p_age_confirmed,p_privacy_version,p_terms_version
+rpc ts_legal_versions

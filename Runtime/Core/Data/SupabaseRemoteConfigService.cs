@@ -47,10 +47,27 @@ namespace TrueBase.Core.Data
             if (keys == null || keys.Count == 0)
                 return SupabaseResult<RemoteConfigRow[]>.Success(Array.Empty<RemoteConfigRow>());
 
+            // 기본 표는 ts_remote_config_get 으로 읽는다 — 표를 읽을 때와 같은 칸·범위에 운영 계정 값을 덮어 준다.
+            // 표 이름을 바꾼 게임은 그 표를 직접 읽는다(함수는 기본 표만 본다).
+            if (_remoteConfigTable == DefaultTable)
+            {
+                var keyArray = new JArray();
+                foreach (var k in keys)
+                    if (!string.IsNullOrWhiteSpace(k))
+                        keyArray.Add(k.Trim());
+                if (keyArray.Count == 0)
+                    return SupabaseResult<RemoteConfigRow[]>.Success(Array.Empty<RemoteConfigRow>());
+                var body = new JObject { ["p_keys"] = keyArray }.ToString(Formatting.None);
+                var rpc = await _httpClient.SendAsync("POST", $"{_supabaseUrl}/rest/v1/rpc/ts_remote_config_get", body, CreateHeaders(accessToken));
+                return ParseRows(rpc);
+            }
+
             var url = BuildBaseUrl() + AppendInFilter("key", keys);
             var response = await _httpClient.SendAsync("GET", url, null, CreateHeaders(accessToken));
             return ParseRows(response);
         }
+
+        private const string DefaultTable = "remote_config";
 
         private string BuildBaseUrl()
         {

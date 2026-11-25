@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -125,6 +127,115 @@ namespace TrueBase.Core.Data
             return int.TryParse(r.Data?.Trim(), out var count)
                 ? SupabaseResult<int>.Success(count)
                 : SupabaseResult<int>.Fail(InvalidResponse);
+        }
+
+        /// <summary>지금 시행 중인 이용약관·개인정보처리방침 판(RPC <c>ts_legal_versions</c>). 로그인 전에도 부른다.</summary>
+        /// <param name="accessToken">로그인 중이면 그 토큰, 아니면 null.</param>
+        public async Task<SupabaseResult<SupabaseLegalVersions>> GetLegalVersionsAsync(string accessToken)
+        {
+            var headers = string.IsNullOrWhiteSpace(accessToken)
+                ? SupabaseCoreHelper.BuildApiHeaders(_publishableKey)
+                : SupabaseRestHelpers.AuthHeaders(_publishableKey, accessToken);
+            var response = await _httpClient.SendAsync("POST", $"{_supabaseUrl}/rest/v1/rpc/ts_legal_versions", "{}", headers);
+            if (response == null)
+                return SupabaseResult<SupabaseLegalVersions>.Fail(SupabaseErrorCode.NetworkError);
+            if (!response.IsSuccess)
+                return SupabaseResult<SupabaseLegalVersions>.Fail(
+                    SupabaseRestHelpers.ExtractRpcErrorCode(response.Body, response.ErrorMessage, "ts_legal_versions"));
+            var o = ParseObject(response.Body);
+            return o == null
+                ? SupabaseResult<SupabaseLegalVersions>.Fail(InvalidResponse)
+                : SupabaseResult<SupabaseLegalVersions>.Success(ReadVersions(o));
+        }
+
+        /// <summary>내 마지막 약관 동의와 다시 물어야 하는지(RPC <c>ts_legal_consent_get</c>). 로그인 상태에서만.</summary>
+        public async Task<SupabaseResult<SupabaseLegalConsent>> GetLegalConsentAsync(string accessToken)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotSignedIn);
+            var r = await SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_legal_consent_get", "{}");
+            return ToConsent(r);
+        }
+
+        /// <summary>
+        /// 약관 동의를 남깁니다(RPC <c>ts_legal_consent_save</c>). 판은 게시한 판이어야 하고, 같은 동의를 다시 보내면 쌓지 않습니다.
+        /// 결과는 남긴 뒤의 <see cref="GetLegalConsentAsync"/> 와 같습니다.
+        /// </summary>
+        public async Task<SupabaseResult<SupabaseLegalConsent>> SaveLegalConsentAsync(
+            string accessToken, int termsVersion, int privacyVersion, bool ageConfirmed)
+        {
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return SupabaseResult<SupabaseLegalConsent>.Fail(SupabaseErrorCode.NotSignedIn);
+            var body = new JObject
+            {
+                ["p_terms_version"] = termsVersion,
+                ["p_privacy_version"] = privacyVersion,
+                ["p_age_confirmed"] = ageConfirmed,
+            }.ToString(Formatting.None);
+            var r = await SupabaseRestHelpers.CallRpcAsync(
+                _httpClient, _supabaseUrl, _publishableKey, accessToken, "ts_legal_consent_save", body);
+            return ToConsent(r);
+        }
+
+        private static SupabaseResult<SupabaseLegalConsent> ToConsent(SupabaseResult<string> r)
+        {
+            if (!r.IsSuccess)
+                return SupabaseResult<SupabaseLegalConsent>.Fail(r.ErrorCode);
+            var o = ParseObject(r.Data);
+            if (o == null)
+                return SupabaseResult<SupabaseLegalConsent>.Fail(InvalidResponse);
+
+            var consent = new SupabaseLegalConsent
+            {
+                NeedsConsent = o.Value<bool?>("needs_consent") ?? true,
+                Current = ReadVersions(o),
+            };
+            if (o["consent"] is JObject c)
+            {
+                consent.HasConsent = true;
+                consent.TermsVersion = c.Value<int?>("terms_version") ?? 0;
+                consent.PrivacyVersion = c.Value<int?>("privacy_version") ?? 0;
+                consent.AgeConfirmed = c.Value<bool?>("age_confirmed") ?? false;
+                consent.AgreedAt = DateTimeOffset.TryParse(c.Value<string>("agreed_at"), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal, out var at) ? at : (DateTimeOffset?)null;
+            }
+            return SupabaseResult<SupabaseLegalConsent>.Success(consent);
+        }
+
+        private static SupabaseLegalVersions ReadVersions(JObject o)
+        {
+            var v = new SupabaseLegalVersions();
+            if (o["terms"] is JObject t)
+            {
+                v.TermsVersion = t.Value<int?>("version") ?? 0;
+                v.TermsEffectiveDate = ParseDate(t.Value<string>("effective_date"));
+            }
+            if (o["privacy"] is JObject p)
+            {
+                v.PrivacyVersion = p.Value<int?>("version") ?? 0;
+                v.PrivacyEffectiveDate = ParseDate(p.Value<string>("effective_date"));
+            }
+            return v;
+        }
+
+        private static DateTime? ParseDate(string s) =>
+            DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : (DateTime?)null;
+
+        // 날짜는 글자로 받아 직접 읽는다 — 자동 변환은 시간대를 붙여 바꿔 버린다.
+        private static JObject ParseObject(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+                return null;
+            try
+            {
+                using (var reader = new JsonTextReader(new StringReader(body)) { DateParseHandling = DateParseHandling.None })
+                    return JToken.ReadFrom(reader) as JObject;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
     }
 }
