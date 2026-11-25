@@ -2469,6 +2469,18 @@ async function handleAction(
         return json({ ok: true, data: { count: data ?? 0 } });
       }
 
+      // 우편 내역에서 고른 우편 중 안 받은 것을 지운다 — 발송 묶음이 없는 우편(플레이어 자신에게 보낸 우편)도.
+      case "mails.deleteMails": {
+        const ids = Array.isArray(params["mailIds"])
+          ? (params["mailIds"] as unknown[]).filter((v): v is string => typeof v === "string" && UUID_RE.test(v))
+          : [];
+        if (ids.length === 0) return fail("지울 우편을 고르세요.", 400);
+        if (ids.length > 500) return fail("한 번에 500통까지 지울 수 있습니다.", 400);
+        const { data, error } = await db.rpc("ts_admin_mail_delete", { p_mail_ids: ids });
+        if (error) throw new Error(error.message);
+        return json({ ok: true, data: { count: data ?? 0 } });
+      }
+
       case "mails.closeBatch": {
         const { error } = await db.rpc("ts_admin_mail_batch_close", { p_batch_id: str(params, "batchId") });
         if (error) throw new Error(error.message);
