@@ -133,7 +133,7 @@ function memoFacts(message: string | null | undefined): { facts: StatusFact[]; n
     if (m) facts.push({ label: m[1]!, value: m[2]! })
     else rest.push(part.trim())
   }
-  return { facts, note: rest.join(' · ') }
+  return { facts, note: rest.join('\n') }
 }
 
 // 실패 사유는 엣지 함수가 남긴 원문이다(purchase-refund-sync-google). 운영자가 손쓸 수 있는 것만 풀어 쓴다.

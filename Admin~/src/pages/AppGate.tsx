@@ -12,7 +12,8 @@ import { StatusText } from '../components/ui/StatusText'
 import { InfoList } from '../components/ui/InfoList'
 import type { OperatorAccount } from './OperatorAccounts'
 import { inputCls } from '../components/ui/Input'
-import { formatCount, formatDateTime } from '../components/ui/format'
+import { formatCount } from '../components/ui/format'
+import { LastEdited } from '../components/ui/LastEdited'
 import { fromRows, LocalizedFields, toRows } from './PushSettings'
 
 type Gate = {
@@ -62,7 +63,7 @@ const toParams = (g: Gate) => ({
   maintenanceLocalized: g.maintenance_localized ?? {},
 })
 
-/** 설정 › 점검·버전 탭. */
+/** 설정 › 접속 탭의 점검·버전 카드. */
 export default function AppGateCards({ target, report, onOpenOperators }: { target: ProjectTarget; report: Report; onOpenOperators: () => void }) {
   const [gate, setGate] = useState<Gate | null>(null)
   const [loading, setLoading] = useState(true)
@@ -149,12 +150,7 @@ function useSaveFlow(save: SaveFn, report: Report) {
 }
 
 function LastEdit({ gate }: { gate: Gate | null }) {
-  if (!gate?.updated_at) return null
-  return (
-    <span className="text-xs text-neutral-400">
-      마지막 수정 {formatDateTime(gate.updated_at)}{gate.updated_by ? ` · ${gate.updated_by}` : ''}
-    </span>
-  )
+  return <LastEdited at={gate?.updated_at} by={gate?.updated_by} />
 }
 
 function Before({ label, before, after }: { label: string; before: string; after: string }) {

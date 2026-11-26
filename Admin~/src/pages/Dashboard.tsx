@@ -44,7 +44,10 @@ function RefundTile({ stats }: { stats: Stats }) {
       <div className="flex items-center gap-1 text-xs text-neutral-500">최근 7일 환불<ChevronRight className="w-3.5 h-3.5" /></div>
       <div className={`mt-1.5 text-2xl font-semibold ${has ? 'text-red-600' : 'text-neutral-900'}`}>{n(stats.refunds_7d)}건</div>
       {has && (
-        <div className="mt-1 text-xs text-neutral-500">{formatKRW(stats.refunds_7d_krw)} · 플레이어 {n(stats.refund_players_7d)}명</div>
+        <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-neutral-500">
+          <span>{formatKRW(stats.refunds_7d_krw)}</span>
+          <span>플레이어 {n(stats.refund_players_7d)}명</span>
+        </div>
       )}
     </button>
   )

@@ -12,7 +12,8 @@ import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { InfoList } from '../components/ui/InfoList'
 import { DataTable, TableCard } from '../components/ui/DataTable'
 import { Pairs } from '../components/ui/Pairs'
-import { StatusText } from '../components/ui/StatusText'
+import { StatusText, Tag, Tags } from '../components/ui/StatusText'
+import { Spaced } from '../components/ui/Spaced'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
@@ -58,42 +59,43 @@ function defaultSqlText(def: string): string {
 
 // 필드 추가·수정 — 타입과 기본값만 보여주면 충분하다.
 // 리스트·딕셔너리 타입(field_type)은 화면 이름(Dictionary<K, V> 등)으로 — 묶음 데이터 필드는 기본값을 고치지 않아 기본값은 빼고 타입만 보인다.
-function fieldSummary(params: Record<string, unknown>, action: string): string {
+function fieldSummary(params: Record<string, unknown>, action: string): string[] {
   const def = params['default_sql']
   const defText = def === null || def === undefined || def === '' ? '기본값 없음' : `기본값 ${defaultSqlText(str(def))}`
   const hasType = 'field_type' in params
   const fieldType = params['field_type']
   if (action === 'update') {
-    if (!hasType) return `${defText}으로 변경`
+    if (!hasType) return [`${defText}으로 변경`]
     const typePart = fieldType === null || fieldType === '' ? '타입 지움' : `타입 ${displayFieldType(str(fieldType))} 지정`
-    return params['nullable'] === true ? typePart : `${defText}으로 변경 · ${typePart}`
+    return params['nullable'] === true ? [typePart] : [`${defText}으로 변경`, typePart]
   }
 
-  if (hasType && fieldType) return displayFieldType(str(fieldType))
+  if (hasType && fieldType) return [displayFieldType(str(fieldType))]
   const parts: string[] = []
   if (params['coltype']) parts.push(typeText(str(params['coltype'])))
   parts.push(defText)
-  return parts.join(' · ')
+  return parts
 }
 
 // 리더보드 생성·수정 — 이름과 핵심 설정만.
-function tableSummary(params: Record<string, unknown>): string {
+function tableSummary(params: Record<string, unknown>): string[] {
   const parts: string[] = []
   if (params['display_name']) parts.push(str(params['display_name']))
   if (params['scope']) parts.push(SCOPE_TEXT[str(params['scope'])] ?? str(params['scope']))
   if (params['record_type']) parts.push(RECORD_TEXT[str(params['record_type'])] ?? str(params['record_type']))
   if (params['rotation']) parts.push(ROTATION_TEXT[str(params['rotation'])] ?? str(params['rotation']))
   if (params['is_active'] === false) parts.push('사용 중지')
-  return parts.join(' · ')
+  return parts
 }
 
 // 요약 한 조각. 이름이 있으면 "이름 값" 쌍(Pairs), 없으면 그 글 하나.
 type SumItem = { label?: string; value: string }
 
-const summaryText = (items: SumItem[]) => items.map((i) => (i.label ? `${i.label} ${i.value}` : i.value)).join(' · ')
+// 마우스를 올리면 보이는 글 — 한 줄에 한 조각.
+const summaryText = (items: SumItem[]) => items.map((i) => (i.label ? `${i.label} ${i.value}` : i.value)).join('\n')
 
 function SummaryView({ items, wrap = false }: { items: SumItem[]; wrap?: boolean }) {
-  if (!items.some((i) => i.label)) return <>{summaryText(items)}</>
+  if (!items.some((i) => i.label)) return <Spaced items={items.map((i) => i.value)} />
   return <Pairs wrap={wrap} items={items.map((i) => ({ label: i.label ?? '', value: i.value }))} />
 }
 
@@ -151,6 +153,7 @@ function formatSummary(
 ): SumItem[] {
   const p = params ?? {}
   const one = (value: string): SumItem[] => (value ? [{ value }] : [])
+  const many = (values: string[]): SumItem[] => values.filter(Boolean).map((value) => ({ value }))
   if (feature === 'remote_config') {
     if (action === 'delete') return one('설정과 모든 필드 삭제')
     return configSummary(p, liveConfig)
@@ -159,15 +162,15 @@ function formatSummary(
     if (action === 'attach') return one(`${str(p['code'])} 리더보드에서 사용으로 변경`)
     if (action === 'detach') return one(`${str(p['code'])} 리더보드에서 사용 안 함으로 변경`)
     if (action === 'drop') return one('필드 목록에서 삭제')
-    return one(fieldSummary(p, action))
+    return many(fieldSummary(p, action))
   }
   if (feature === 'user_data_field') {
     if (action === 'drop') return one('필드 목록에서 삭제')
-    return one(fieldSummary(p, action))
+    return many(fieldSummary(p, action))
   }
   if (feature === 'leaderboard_table') {
     if (action === 'delete') return one('리더보드와 기록 전체 삭제')
-    return one(tableSummary(p))
+    return many(tableSummary(p))
   }
   return genericSummary(p)
 }
@@ -251,7 +254,10 @@ export default function SchemaChanges({
   const liveConfigOf = (key: string): LiveConfig | null | undefined =>
     liveConfigs ? liveConfigs.get(key) ?? null : undefined
   const draftSummaryItems = (d: DraftRow) => formatSummary(d.feature, d.action, d.params, liveConfigOf(d.object_name))
-  const opsSummaryOf = (v: VersionRow) => (v.ops ?? []).map((o) => opLabel(o.feature, o.action)).join(' · ')
+  const opsSummaryOf = (v: VersionRow) => {
+    const ops = (v.ops ?? []).map((o) => opLabel(o.feature, o.action))
+    return ops.length ? <Tags items={ops} /> : null
+  }
 
   const hasDestructiveDraft = drafts.some((d) => isDestructive(d.feature, d.action))
   const summaryOf = (rows: DraftRow[]) => Array.from(new Set(rows.map((d) => opLabel(d.feature, d.action)))).join(', ')
@@ -414,13 +420,13 @@ export default function SchemaChanges({
           {
             key: 'status', header: '상태', kind: 'status', cell: (v) =>
               v.status === 'reverted' ? (
-                <span title={v.reverted_at ? `${formatDateTime(v.reverted_at)}${v.reverted_by ? ` · ${v.reverted_by}` : ''}` : undefined}>
+                <span title={v.reverted_at ? `${formatDateTime(v.reverted_at)}${v.reverted_by ? `\n${v.reverted_by}` : ''}` : undefined}>
                   <StatusText tone="muted">되돌림</StatusText>
                 </span>
               ) : v.reversible ? (
                 <StatusText tone="ok">게시됨</StatusText>
               ) : (
-                <StatusText tone="warn">게시됨 · 되돌리기 불가</StatusText>
+                <span className="inline-flex items-center gap-1.5"><StatusText tone="warn">게시됨</StatusText><Tag>되돌리기 불가</Tag></span>
               ),
           },
           {
@@ -513,9 +519,7 @@ export default function SchemaChanges({
       >
         {revertTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
-            <div className="text-neutral-800">
-              버전 #{revertTarget.id}{revertTarget.label ? ` · ${revertTarget.label}` : ''}
-            </div>
+            <Spaced className="text-neutral-800" items={[`버전 #${revertTarget.id}`, revertTarget.label]} />
             <InfoList className="mt-2" items={[
               { label: '게시 시각', value: formatDateTime(revertTarget.published_at) },
               { label: '게시한 사람', value: revertTarget.operator || null },

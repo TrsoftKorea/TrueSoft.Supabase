@@ -221,6 +221,15 @@ const RULES = [
     good: '// 고른 우편 지우기\n<Button onClick={() => del()}><Trash2 />우편 삭제</Button><span>{n}통</span><DataTable emptyText="선택한 리더보드가 없습니다." /><ConfirmDialog confirmLabel="삭제" />',
   },
   {
+    id: 'U24', name: '값·항목을 가운뎃점으로 이음', fix: '같은 종류 나열은 Tag 를 간격 두고 나란히, 주 내용 + 덧붙임은 둘째 줄 작은 회색 글씨, 이름과 값은 Pairs 로 가른다(console.md 「값이 여럿 든 칸」)',
+    alsoUi: true,
+    // 2026-11-26 사용자 지시 "점으로 나누지 말 것". 띄어 쓴 " · " 만 본다 — 붙여 쓴 "점검·버전" 은 두 낱말을 묶은 이름이라
+    // 앞뒤가 글자여서 안 걸린다. 같은 날 저장소 전체에서 띄어 쓴 80곳이 전부 값·항목을 가르는 데 쓰였고 붙여 쓴 111곳은 하나도 안 걸렸다.
+    find: (t) => matchAll(maskComments(t), /(?<=^|[\s'"`>{])·(?=\s)/gm),
+    bad: "<span>{a} · {b}</span>{i > 0 && ' · '}{items.join(' · ')}<span>· 마스터</span>",
+    good: '// 금액 · 인원\n<Button>점검·버전 열기</Button><p>영문·숫자·밑줄만</p>',
+  },
+  {
     id: 'U8', name: '브라우저 기본 알림·확인 창', fix: 'ConfirmDialog·ErrorBanner 를 쓴다',
     find: (t) => matchAll(t, /\bwindow\.(alert|confirm|prompt)\s*\(|(?<![.\w])alert\s*\(/g),
     bad: "if (window.confirm('지울까요?')) remove()", good: '<ConfirmDialog open={asking} title="지울까요?" />',

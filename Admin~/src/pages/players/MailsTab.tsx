@@ -3,9 +3,9 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { TableFooter } from '../../components/ui/TableFooter'
 import { TableCard, type Column } from '../../components/ui/DataTable'
-import { StatusText, type Tone } from '../../components/ui/StatusText'
+import { StatusText, Tags, type Tone } from '../../components/ui/StatusText'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
-import { formatDateTime, formatTotal, itemsText } from '../../components/ui/format'
+import { formatDateTime, formatTotal, itemLabels } from '../../components/ui/format'
 import { MailContent, type MailLocalized } from '../../components/MailContent'
 import { useDefaultLanguage } from '../../lib/languages'
 
@@ -87,7 +87,7 @@ export default function MailsTab({
     { key: 'at', header: '받은 시각', kind: 'datetime', cell: (r) => formatDateTime(r.created_at) },
     // 본문·언어별 글은 줄을 펼쳐서 본다. 보상은 짧아 내용 폭만 쓴다.
     { key: 'title', header: '제목', kind: 'text', cardTitle: true, cell: (r) => r.title || null },
-    { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? itemsText(r.items, catalog) : null) },
+    { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? <Tags items={itemLabels(r.items, catalog)} /> : null) },
     { key: 'status', header: '상태', kind: 'status', cell: (r) => { const st = statusOf(r); return <StatusText tone={st.tone}>{st.label}</StatusText> } },
     { key: 'expires', header: '수령 기한', kind: 'datetime', cell: (r) => formatDateTime(r.expires_at) },
   ]
@@ -107,7 +107,7 @@ export default function MailsTab({
         failed={failed}
         emptyText="받은 우편이 없습니다."
         expand={(r) => <MailContent title={r.title} content={r.content} localized={r.localized} items={r.items} catalog={catalog} defaultLang={defaultLang} />}
-        footer={<TableFooter summary={<>{formatTotal(total)} · 보관 기간이 지난 우편은 빠집니다</>} page={page} totalPages={totalPages} onPageChange={setPage} />}
+        footer={<TableFooter summary={<><span className="block">{formatTotal(total)}</span><span className="block">보관 기간이 지난 우편은 빠집니다</span></>} page={page} totalPages={totalPages} onPageChange={setPage} />}
       />
     </div>
   )

@@ -127,8 +127,9 @@ function NoticeModal({
                 <label className="block text-xs text-neutral-500 mb-1">내용</label>
                 <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className={areaCls + ' w-full'} />
                 <p className={`mt-1 text-xs ${length > NOTICE_MAX ? 'text-red-600' : 'text-neutral-400'}`}>
-                  {formatCount(length)} / {formatCount(NOTICE_MAX)}자 · 보내면 채팅을 보고 있는 모든 플레이어에게 바로 보입니다.
+                  {formatCount(length)} / {formatCount(NOTICE_MAX)}자
                 </p>
+                <p className="text-xs text-neutral-400">보내면 채팅을 보고 있는 모든 플레이어에게 바로 보입니다.</p>
               </div>
             </>
           )}
@@ -629,9 +630,8 @@ export default function ChatModeration({
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             {unmuteTarget.display_name && <div className="text-neutral-800">{unmuteTarget.display_name}</div>}
             <div className="text-xs text-neutral-500 font-mono">{unmuteTarget.account_id.slice(0, 8)}</div>
-            <div className="text-xs text-neutral-500 mt-1">
-              {unmuteTarget.channel_id ? channelLabel(unmuteTarget.channel_id) : '전체'} 채널 · {formatDateTime(unmuteTarget.until)}까지
-            </div>
+            <div className="text-xs text-neutral-500 mt-1">{unmuteTarget.channel_id ? channelLabel(unmuteTarget.channel_id) : '전체'} 채널</div>
+            <div className="text-xs text-neutral-500">{formatDateTime(unmuteTarget.until)}까지</div>
           </div>
         )}
       </ConfirmDialog>

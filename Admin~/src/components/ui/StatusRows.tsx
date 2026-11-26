@@ -33,7 +33,7 @@ export function StatusRows({ items }: { items: StatusRowItem[] }) {
           <span className="tabular-nums text-neutral-600 whitespace-nowrap">{i.at ?? <span className="text-neutral-400">-</span>}</span>
           <span className="flex flex-wrap gap-x-5 gap-y-1">
             {!!i.facts?.length && <Pairs items={i.facts} wrap />}
-            {i.note && <span className={i.tone === 'bad' ? 'text-red-600' : 'text-neutral-600'}>{i.note}</span>}
+            {i.note && <span className={`whitespace-pre-line ${i.tone === 'bad' ? 'text-red-600' : 'text-neutral-600'}`}>{i.note}</span>}
           </span>
         </div>
       ))}

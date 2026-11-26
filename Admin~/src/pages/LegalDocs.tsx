@@ -6,7 +6,7 @@ import { supportPageUrl, type ProjectTarget } from '../lib/projectTarget'
 import { defaultLangField, langLabel, pickableLangs, useDefaultLanguage } from '../lib/languages'
 import { Segmented } from '../components/ui/Segmented'
 import { TableCard } from '../components/ui/DataTable'
-import { StatusText, type Tone } from '../components/ui/StatusText'
+import { StatusText, Tags, type Tone } from '../components/ui/StatusText'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Button } from '../components/ui/Button'
@@ -190,7 +190,7 @@ export function LegalTab({ target, report }: { target: ProjectTarget; report: (e
               return <StatusText tone={tone}>{text}</StatusText>
             },
           },
-          { key: 'langs', header: '다른 언어', kind: 'name', cell: (d) => Object.keys(d.localized ?? {}).map(langLabel).join(' · ') || null },
+          { key: 'langs', header: '다른 언어', kind: 'name', cell: (d) => { const l = Object.keys(d.localized ?? {}).map(langLabel); return l.length ? <Tags items={l} /> : null } },
           { key: 'updated', header: '마지막 수정', kind: 'datetime', cell: (d) => (d.updated_at ? formatDateTime(d.updated_at) : null) },
           {
             key: 'actions', header: '', kind: 'actions', cell: (d) => d.published_at

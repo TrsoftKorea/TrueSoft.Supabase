@@ -9,7 +9,8 @@ import { CardHeader, WhiteCard } from '../components/ui/Card'
 import { PageHeader } from '../components/ui/PageHeader'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { DataTable } from '../components/ui/DataTable'
-import { StatusText } from '../components/ui/StatusText'
+import { StatusText, Tag } from '../components/ui/StatusText'
+import { Spaced } from '../components/ui/Spaced'
 import { RefreshButton } from '../components/ui/FilterBar'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
@@ -151,7 +152,7 @@ function InvitesCard({ report }: { report: (e: unknown, fallback: string) => voi
       // 프로젝트에서 먼저 빼고, 전부 빠졌을 때만 초대를 지운다 — 초대가 남아 있어야 실패한 곳을 다시 눌러 마저 뺄 수 있다.
       const failed = await removeFromAllProjects(inv.email)
       if (failed.length > 0) {
-        setDialogError(`${failed.join(' · ')} — 이 프로젝트에서 빼지 못해 초대를 남겨 두었습니다. 다시 삭제하면 남은 곳만 다시 뺍니다.`)
+        setDialogError(`${failed.join(', ')} — 이 프로젝트에서 빼지 못해 초대를 남겨 두었습니다. 다시 삭제하면 남은 곳만 다시 뺍니다.`)
         return
       }
       await callHub('invites.remove', { email: inv.email })
@@ -303,7 +304,7 @@ function ResetPasswordDialog({
   return (
     <EditDialog
       title={title}
-      description={invite.display_name ? `${invite.display_name} · ${invite.email}` : invite.email}
+      description={<Spaced items={[invite.display_name, invite.email]} />}
       busy={busy}
       onClose={onClose}
       error={error || undefined}
@@ -479,7 +480,7 @@ function KeysCard({ report }: { report: (e: unknown, fallback: string) => void }
       {editing && (
         <EditDialog
           title={`관리 열쇠 ${rows.find((r) => r.target === editing)?.key?.status === 'ok' ? '바꾸기' : '입력'}`}
-          description={look.hidden(editing) ? `대기 중 · ${refOf(editing)}` : look.name(editing)}
+          description={look.hidden(editing) ? <><Tag>대기 중</Tag> {refOf(editing)}</> : look.name(editing)}
           busy={saving}
           onClose={() => setEditing(null)}
           error={saveError || undefined}

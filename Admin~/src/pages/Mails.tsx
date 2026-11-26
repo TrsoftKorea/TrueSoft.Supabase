@@ -11,7 +11,8 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Segmented } from '../components/ui/Segmented'
 import { Switch } from '../components/ui/Switch'
-import { formatCount, itemsText } from '../components/ui/format'
+import { formatCount, itemLabels } from '../components/ui/format'
+import { Tag, Tags } from '../components/ui/StatusText'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
 import { playerLabel } from '../components/ui/PlayerLink'
@@ -49,7 +50,7 @@ function StepNextButton({ label, disabled, onClick }: { label: string; disabled:
 }
 
 function Step({ n, title, state, summary, onEdit, children }: {
-  n: number; title: string; state: 'active' | 'done' | 'locked'; summary?: string; onEdit?: () => void; children: ReactNode
+  n: number; title: string; state: 'active' | 'done' | 'locked'; summary?: ReactNode; onEdit?: () => void; children: ReactNode
 }) {
   const expanded = state === 'active'
   const badge = state === 'done' ? 'bg-emerald-100 text-emerald-600' : 'bg-[#1677ff] text-white'
@@ -228,23 +229,26 @@ export default function Mails({
   }
   // 반복 발송에는 걸 수 없다 — 회차마다 열려 있어 나중에 가입한 사람이 지난 회차를 한꺼번에 받는다.
   const openApplies = (mode === 'all' || mode === 'server') && sched !== 'repeat' && openForNew
-  const openPart = openApplies ? ' · 나중에 들어온 플레이어도' : ''
-  const targetSummary = (mode === 'all' ? '전체 플레이어'
+  const targetSummary: ReactNode = mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
-    : mode === 'operators' ? `시험 발송 · 운영 계정 ${operatorCount === null ? '…' : `${formatCount(operatorCount)}명`}`
-    : `플레이어 ${formatCount(playerIds.length)}명`) + openPart
+    : mode === 'operators' ? <><Tag>시험 발송</Tag> 운영 계정 {operatorCount === null ? '…' : `${formatCount(operatorCount)}명`}</>
+    : `플레이어 ${formatCount(playerIds.length)}명`
+  // 확인 창에서는 "나중에 들어온 플레이어도"를 둘째 줄에 덧붙인다. 단계 머리 요약은 한 줄이라 대상만.
+  const targetDetail: ReactNode = openApplies
+    ? <>{targetSummary}<span className="block text-xs text-neutral-500">나중에 들어온 플레이어도</span></>
+    : targetSummary
   const repeatDesc = repeatUnit === 'day' ? `매일 ${repeatTime}`
     : repeatUnit === 'week' ? `매주 ${DOW_LABEL[repeatDow]}요일 ${repeatTime}`
     : `매월 ${repeatDom}일 ${repeatTime}`
-  const schedSummary = sched === 'immediate' ? '즉시 발송'
-    : sched === 'scheduled' ? `예약 · ${scheduledAt ? scheduledAt.replace('T', ' ') : ''}`
-    : `반복 · ${repeatDesc}`
+  const schedSummary: ReactNode = sched === 'immediate' ? '즉시 발송'
+    : sched === 'scheduled' ? <><Tag>예약</Tag> {scheduledAt ? scheduledAt.replace('T', ' ') : ''}</>
+    : <><Tag>반복</Tag> {repeatDesc}</>
 
   // 예약 시각은 게임 시간대로 읽는다 — 시간대를 받기 전에는 예약을 보내지 않는다.
   const tz = useGameTimeZone(target)
   const tzText = tz ? `${timeZoneName(tz)} 기준` : ''
   const pushApplies = push
-  const pushSummary = pushApplies ? (pushIsAd ? '보냄 · 광고' : '보냄') : null
+  const pushSummary: ReactNode = pushApplies ? (pushIsAd ? <><Tag>광고</Tag> 보냄</> : '보냄') : null
   const canSend = msgOk && expiresDays > 0 && targetOk && schedOk && (sched === 'immediate' || !!tz)
     && items.every((it) => it.key && Number(it.count) > 0)
 
@@ -489,7 +493,7 @@ export default function Mails({
         <WhiteCard className="p-4 space-y-4">
           <div className="flex items-center gap-3">
             <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-semibold bg-[#1677ff] text-white">4</span>
-            <span className="text-sm font-semibold text-neutral-800">보상 · 발송</span>
+            <span className="text-sm font-semibold text-neutral-800">보상·발송</span>
           </div>
 
           <div className="space-y-2">
@@ -541,7 +545,7 @@ export default function Mails({
 
           <InfoList className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2.5" items={[
             { label: '발송', value: schedSummary },
-            { label: '대상', value: targetSummary },
+            { label: '대상', value: targetDetail },
             { label: '분류', value: catLabel(category) },
             { label: '보상', value: items.length > 0 ? `${items.length}종` : null },
             { label: '다국어', value: localized ? `${Object.keys(localized).length}개` : null },
@@ -572,8 +576,8 @@ export default function Mails({
           <div className="text-neutral-800">{title || '제목 없음'}</div>
           <InfoList items={[
             { label: '발송', value: schedSummary },
-            { label: '대상', value: targetSummary, ...(mode === 'all' ? { tone: 'danger' as const } : {}) },
-            { label: '아이템', value: items.length > 0 ? itemsText(items, catalog) : '없음' },
+            { label: '대상', value: targetDetail, ...(mode === 'all' ? { tone: 'danger' as const } : {}) },
+            { label: '아이템', value: items.length > 0 ? <Tags wrap items={itemLabels(items, catalog)} /> : '없음' },
             { label: '수령 기한', value: `${formatCount(expiresDays)}일` },
             { label: '푸시', value: pushSummary },
           ]} />

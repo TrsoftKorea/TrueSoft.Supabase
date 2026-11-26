@@ -1,4 +1,5 @@
 import { GRANT_NAME, isBrokenGrant, type CatalogItem, type GrantMode } from '../lib/gameItems'
+import { Tag } from './ui/StatusText'
 
 const CANNOT_RECEIVE = '게임에 처리 코드가 없으면 받을 수 없습니다.'
 
@@ -17,7 +18,7 @@ export function BrokenItemsConfirm({ items }: { items: CatalogItem[] }) {
         <p key={c.key}>
           <span className="font-medium">{c.display_name || c.key}</span>
           <span className="font-mono text-xs"> {c.key}</span>
-          {c.grant_mode && <> · {GRANT_NAME[c.grant_mode]}</>}
+          {c.grant_mode && <span className="ml-2"><Tag tone="bad">{GRANT_NAME[c.grant_mode]}</Tag></span>}
         </p>
       ))}
       <p className="text-red-600">{CANNOT_RECEIVE}</p>

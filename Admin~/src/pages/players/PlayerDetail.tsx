@@ -517,6 +517,6 @@ export default function PlayerDetail({
 function withdrawalText(withdrawnAt: string | null): ReactNode {
   if (!withdrawnAt) return null
   return new Date(withdrawnAt).getTime() > Date.now()
-    ? <span className="text-red-600 font-medium">탈퇴 예약 · {formatDateTime(withdrawnAt)}에 삭제</span>
-    : <span className="text-red-600 font-medium">탈퇴 처리 대기 · 곧 삭제</span>
+    ? <span className="text-red-600 font-medium">탈퇴 예약<span className="block text-xs font-normal">{formatDateTime(withdrawnAt)}에 삭제</span></span>
+    : <span className="text-red-600 font-medium">탈퇴 처리 대기<span className="block text-xs font-normal">곧 삭제</span></span>
 }

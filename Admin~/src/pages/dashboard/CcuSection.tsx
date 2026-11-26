@@ -201,10 +201,8 @@ export default function CcuSection({
             {data.peak && (
               <div>
                 <div className="text-xs text-neutral-500">기간 최고</div>
-                <div className="mt-1 text-sm text-neutral-900">
-                  <b>{n(data.peak.total)}명</b>
-                  <span className="text-neutral-500"> · {formatAt(data.peak.at, true)}</span>
-                </div>
+                <div className="mt-1 text-sm text-neutral-900"><b>{n(data.peak.total)}명</b></div>
+                <div className="text-xs text-neutral-500">{formatAt(data.peak.at, true)}</div>
               </div>
             )}
             <BreakdownList title="서버별" entries={sortedEntries(data.now.by_server)} label={unknownLabel} />

@@ -54,7 +54,7 @@ export default function CouponsTab({
         loading={loading}
         failed={failed}
         emptyText="사용한 쿠폰이 없습니다."
-        footer={<div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500">최근 100건 · 지운 쿠폰의 사용 기록은 빠집니다</div>}
+        footer={<div className="border-t border-neutral-100 px-5 py-2.5 text-xs text-neutral-500"><div>최근 100건</div><div>지운 쿠폰의 사용 기록은 빠집니다</div></div>}
       />
     </div>
   )

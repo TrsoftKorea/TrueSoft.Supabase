@@ -15,6 +15,7 @@ import { TypedValueInput, parseTypedValue } from '../../components/ui/TypedValue
 import { Button } from '../../components/ui/Button'
 import { withPlayer } from '../../components/ui/PlayerLink'
 import { EditDialog } from '../../components/ui/EditDialog'
+import { Spaced } from '../../components/ui/Spaced'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { RestoreSaveModal } from './RestoreSaveModal'
 import { RefreshButton } from '../../components/ui/FilterBar'
@@ -85,7 +86,7 @@ function EditValueModal({
     <EditDialog
       error={error || undefined}
       title="값 수정"
-      description={`${field.column_name} · ${pgTypeLabel(field.data_type)}`}
+      description={<Spaced items={[field.column_name, pgTypeLabel(field.data_type)]} />}
       busy={loading}
       onClose={onClose}
       footer={<>

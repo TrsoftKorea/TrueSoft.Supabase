@@ -11,10 +11,24 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { formatDateTime } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { Tabs } from '../components/ui/Tabs'
+import { useSearchParams } from 'react-router-dom'
+import { LimitsForm, type LimitField } from './social/LimitsForm'
 
 type Category = { key: string; display_name: string; created_at: string }
 type FormCategory = { key: string; display_name: string }
 const EMPTY: FormCategory = { key: '', display_name: '' }
+
+type MailTab = 'categories' | 'keep'
+const MAIL_TABS: readonly (readonly [MailTab, string])[] = [['categories', '분류'], ['keep', '보관']]
+
+const MAIL_FIELDS: LimitField[] = [
+  {
+    param: 'expiredRetentionDays', field: 'expired_retention_days', min: 0, max: 30,
+    label: '만료 우편 보관 일수',
+    hint: '기간이 지난 우편을 "기한 만료"로 남겨 두는 일수. 지나면 우편함에서 사라집니다. 0이면 기간이 지나는 즉시 사라집니다. 0~30 사이.',
+  },
+]
 
 export default function MailCategories({
   target,
@@ -27,6 +41,9 @@ export default function MailCategories({
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [error, setError] = useState('')
+  const [params, setParams] = useSearchParams()
+  const tab: MailTab = params.get('tab') === 'keep' ? 'keep' : 'categories'
+  const setTab = (t: MailTab) => setParams(t === 'categories' ? {} : { tab: t }, { replace: true })
 
   const [form, setForm] = useState<FormCategory>(EMPTY)
   const [adding, setAdding] = useState(false)
@@ -133,9 +150,9 @@ export default function MailCategories({
   return (
     <div className="space-y-4">
       <PageHeader
-        title="우편 분류"
-        description="우편을 보낼 때 고르는 분류를 관리합니다."
-        actions={<>
+        title="우편 설정"
+        description="우편 분류와 플레이어 우편함의 보관 기간을 정합니다."
+        actions={tab === 'categories' && <>
           <RefreshButton onClick={() => void load()} loading={loading} />
           <Button variant="primary" onClick={() => { setForm(EMPTY); setAddError(''); setAddOpen(true) }}>
             <Plus className="w-4 h-4" />분류 추가
@@ -183,7 +200,9 @@ export default function MailCategories({
         </EditDialog>
       )}
 
-      <TableCard
+      <Tabs value={tab} onChange={setTab} tabs={MAIL_TABS} />
+
+      {tab === 'categories' && <TableCard
         columns={[
           { key: 'key', header: '코드', kind: 'mono', cell: (c) => c.key },
           {
@@ -237,7 +256,20 @@ export default function MailCategories({
         loading={loading}
         failed={failed}
         emptyText="등록된 분류가 없습니다."
-      />
+      />}
+
+      {tab === 'keep' && (
+        <LimitsForm
+          target={target}
+          report={report}
+          title="만료 우편"
+          description="플레이어 우편함에서 기간이 지난 우편을 얼마 동안 보여 줄지 정합니다."
+          getAction="mails.settingsGet"
+          updateAction="mails.settingsUpdate"
+          fields={MAIL_FIELDS}
+          confirmTitle="우편 설정을 바꿀까요?"
+        />
+      )}
 
       <ConfirmDialog
         open={!!delTarget}

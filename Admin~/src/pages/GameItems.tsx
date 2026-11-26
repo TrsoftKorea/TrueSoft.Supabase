@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
 import { StatusText } from '../components/ui/StatusText'
+import { Spaced } from '../components/ui/Spaced'
 import { elementField, elementFits, GRANT_NAME, isBrokenGrant, type CollectionKind, type GrantMode } from '../lib/gameItems'
 
 type Item = { key: string; display_name: string; created_at: string; source?: 'save' | 'manual'; grant_mode?: GrantMode }
@@ -29,9 +30,7 @@ function elementGuide(c: DataField): ReactNode {
   const n = c.column_name
   const forms = c.collection_kind === 'list' ? [`${n}[0]`] : c.collection_kind === 'dict' ? [`${n}.키`] : [`${n}[0]`, `${n}.키`]
   const what = c.collection_kind === 'list' ? '리스트' : c.collection_kind === 'dict' ? '딕셔너리' : '리스트·딕셔너리'
-  return <>{what} 데이터 필드는 원소로 적습니다 — {forms.map((f, i) => (
-    <span key={f}>{i > 0 && ' · '}<span className="font-mono">{f}</span></span>
-  ))}</>
+  return <>{what} 데이터 필드는 원소로 적습니다 — <Spaced items={forms.map((f) => <span className="font-mono">{f}</span>)} /></>
 }
 // 제안 한 줄 — value 를 고르면 입력칸에 들어간다. 원소 꼴은 칸 이름 뒤 `[`·`.` 까지만 넣고 나머지는 운영자가 적는다.
 type Suggestion = { value: string; name: string; hint?: string }
@@ -60,12 +59,7 @@ function UsageLine({ usage }: { usage: Usage | null | undefined }) {
   if (parts.length === 0) return <div className="text-xs text-neutral-500">남은 우편 없음</div>
   return (
     <div className="text-xs text-neutral-500">
-      {parts.map((p, i) => (
-        <span key={p.field}>
-          {i > 0 && ' · '}
-          <Link to={p.to} className="hover:underline">{p.label} {formatCount(usage[p.field])}</Link>
-        </span>
-      ))}
+      <Spaced items={parts.map((p) => <Link to={p.to} className="hover:underline">{p.label} {formatCount(usage[p.field])}</Link>)} />
     </div>
   )
 }

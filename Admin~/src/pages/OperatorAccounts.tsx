@@ -10,6 +10,7 @@ import { Switch } from '../components/ui/Switch'
 import { PlayerLink } from '../components/ui/PlayerLink'
 import { dangerInputCls, inputCls } from '../components/ui/Input'
 import { formatDateTime } from '../components/ui/format'
+import { Tags } from '../components/ui/StatusText'
 
 export type OperatorAccount = {
   user_id: string
@@ -52,7 +53,7 @@ const EMPTY: Draft = {
   maintenance_bypass: false, version_bypass: false, hide_from_stats: false, config_preview: false, test_recipient: false,
 }
 
-/** 설정 › 운영 계정 탭. */
+/** 설정 › 접속 탭의 운영 계정 카드. */
 export default function OperatorAccountsCard({ target, report }: { target: ProjectTarget; report: Report }) {
   const [rows, setRows] = useState<OperatorAccount[]>([])
   const [loading, setLoading] = useState(true)
@@ -131,7 +132,7 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
     }
   }
 
-  const flagsText = (r: OperatorAccount) => OPERATOR_FLAGS.filter(([f]) => r[f]).map(([, label]) => label).join(' · ') || null
+  const flagLabels = (r: OperatorAccount) => OPERATOR_FLAGS.filter(([f]) => r[f]).map(([, label]) => label)
 
   return (
     <>
@@ -149,7 +150,7 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
           { key: 'player', header: '플레이어', kind: 'name', cell: (r) => (r.account_id ? <PlayerLink accountId={r.account_id} name={r.display_name} userId={r.user_id} /> : null) },
           { key: 'user_id', header: '유저 ID', kind: 'mono', cell: (r) => r.user_id },
           // 권한은 켠 것만 나열한다 — 칸 다섯 개로 펼치면 표가 옆으로 넘친다.
-          { key: 'flags', header: '권한', kind: 'text', full: (r) => flagsText(r) ?? '', cell: flagsText },
+          { key: 'flags', header: '권한', kind: 'text', full: (r) => flagLabels(r).join('\n'), cell: (r) => { const l = flagLabels(r); return l.length ? <Tags items={l} /> : null } },
           { key: 'note', header: '메모', kind: 'name', cell: (r) => r.note || null },
           {
             key: 'actions', header: '', kind: 'actions', cell: (r) => (
@@ -227,9 +228,10 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
         onCancel={() => setRemoving(null)}
       >
         {removing && (
-          <p className="text-sm text-neutral-700">
-            {removing.display_name || '닉네임 없음'} · <span className="font-mono">{removing.user_id}</span>
-          </p>
+          <div className="text-sm text-neutral-700">
+            <div>{removing.display_name || '닉네임 없음'}</div>
+            <div className="font-mono text-xs text-neutral-500">{removing.user_id}</div>
+          </div>
         )}
       </ConfirmDialog>
     </>

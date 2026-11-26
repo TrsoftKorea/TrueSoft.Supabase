@@ -11,6 +11,7 @@ import { type ProjectTarget } from '../lib/projectTarget'
 import { useProjectLook } from '../lib/projectLook'
 import { ProjectIcon } from './ui/ProjectIcon'
 import { CountBadge } from './ui/CountBadge'
+import { Tag } from './ui/StatusText'
 import { ThemeToggle } from './ThemeToggle'
 import { callAdmin } from '../lib/api'
 import { usePendingChanges } from '../lib/pendingChanges'
@@ -105,7 +106,7 @@ const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
       { to: '/mails/send', label: '우편 발송', icon: Send },
       { to: '/mails/records', label: '우편 내역', icon: Inbox },
       { to: '/mails/schedules', label: '예약 목록', icon: CalendarClock },
-      { to: '/mails/categories', label: '우편 분류', icon: Tags },
+      { to: '/mails/categories', label: '우편 설정', icon: Tags },
     ],
   },
   {
@@ -392,7 +393,7 @@ export function Layout({
             <div className="ml-auto flex items-center gap-2 sm:gap-3 text-sm min-w-0">
               <span className="hidden md:inline truncate">
                 {email}
-                {isMaster && <span className="ml-1.5 font-semibold">· 마스터</span>}
+                {isMaster && <span className="ml-2"><Tag>마스터</Tag></span>}
               </span>
               <ThemeToggle compact className="shrink-0 border-white/60 text-white hover:bg-white/10" />
               <button

@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { formatDateTime } from '../components/ui/format'
+import { LastEdited } from '../components/ui/LastEdited'
 import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
 
@@ -144,9 +145,7 @@ function RewardModal({ target, onUnauthenticated, row, existingCodes, pendingByC
             )}
           </div>
 
-          {cfg?.updated_by && (
-            <p className="text-xs text-neutral-400">마지막 변경: {cfg.updated_by} · {formatDateTime(cfg.updated_at)}</p>
-          )}
+          {cfg?.updated_by && <div><LastEdited at={cfg.updated_at} by={cfg.updated_by} /></div>}
 
     </EditDialog>
 

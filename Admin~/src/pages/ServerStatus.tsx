@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
 import { InfoList } from '../components/ui/InfoList'
+import { Spaced } from '../components/ui/Spaced'
 import { niceAxis, ValueAxisFrame } from '../components/ui/ValueAxis'
 import { formatDateTime } from '../components/ui/format'
 import { RefreshButton } from '../components/ui/FilterBar'
@@ -240,7 +241,7 @@ function StackedChart({ rows, metric, data, hours, gaps, selectedAt, onSelect }:
   const hb = hover !== null ? bars[hover] : undefined
   const tip = hb ? (
     <div className="space-y-0.5">
-      <div className="text-neutral-500">{bucketAt(hb.at, data.bucket_minutes, withDate)} · {bucketLabel(data.bucket_minutes)} · 시간당</div>
+      <div><Spaced className="text-neutral-500" items={[bucketAt(hb.at, data.bucket_minutes, withDate), bucketLabel(data.bucket_minutes), '시간당']} /></div>
       {hb.parts.filter((p) => p.sum > 0).map((p) => (
         <div key={p.name} className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: p.color }} />
@@ -248,7 +249,7 @@ function StackedChart({ rows, metric, data, hours, gaps, selectedAt, onSelect }:
           <span className="ml-auto pl-3 tabular-nums">{metric.text(p.perHour)}</span>
         </div>
       ))}
-      {hb.gap && <div className="text-neutral-500">일부 빠졌을 수 있음 · {hb.gap.join(', ')}</div>}
+      {hb.gap && <div className="text-neutral-500"><div>일부 빠졌을 수 있음</div><div>{hb.gap.join(', ')}</div></div>}
     </div>
   ) : null
 
@@ -381,8 +382,8 @@ function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, on
       <div className="flex flex-wrap items-end justify-between gap-3">
         <InfoList className="flex-1" items={[
           { label: '보는 범위', value: selectedAt
-            ? `${bucketAt(selectedAt, data.bucket_minutes, true)} · ${bucketLabel(data.bucket_minutes)}`
-            : `기간 전체 · ${RANGES.find((r) => r.hours === hours)?.label ?? ''}` },
+            ? <Spaced items={[bucketAt(selectedAt, data.bucket_minutes, true), bucketLabel(data.bucket_minutes)]} />
+            : <Spaced items={['기간 전체', RANGES.find((r) => r.hours === hours)?.label]} /> },
           { label: '합계', value: metric.text(total) },
         ]} />
         {selectedAt && (
@@ -390,11 +391,10 @@ function FeatureBreakdown({ rows, metric, data, hours, gaps = [], selectedAt, on
         )}
       </div>
       {selectedGap
-        ? <div className="text-xs text-neutral-500">이 시간은 일부 빠졌을 수 있습니다 · {selectedGap.join(', ')}</div>
+        ? <div className="text-xs text-neutral-500"><div>이 시간은 일부 빠졌을 수 있습니다</div><div>{selectedGap.join(', ')}</div></div>
         : !selectedAt && (gapBars > 0 || emptyGaps > 0) && (
           <div className="text-xs text-neutral-500">
-            {[gapBars > 0 && `일부 빠졌을 수 있는 막대 ${n(gapBars)}개`, emptyGaps > 0 && `기록 없이 비어 있는 자리 ${n(emptyGaps)}곳`]
-              .filter(Boolean).join(' · ')}
+            <Spaced items={[gapBars > 0 && `일부 빠졌을 수 있는 막대 ${n(gapBars)}개`, emptyGaps > 0 && `기록 없이 비어 있는 자리 ${n(emptyGaps)}곳`]} />
           </div>
         )}
       <ShareTable rows={tableRows} metric={metric} colorOf={colorOf} />
@@ -497,11 +497,11 @@ function SizeChart({ series }: { series: { day: string; db: number; storage: num
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: DB_COLOR }} />
-          DB · {unit.label}
+          DB<span className="text-neutral-400">{unit.label}</span>
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: STORAGE_COLOR }} />
-          파일 저장 공간 · {unit.label}
+          파일 저장 공간<span className="text-neutral-400">{unit.label}</span>
         </span>
       </div>
       <ValueAxisFrame axis={axis} heightCls="h-44" tip={tip}
@@ -670,8 +670,8 @@ export default function ServerStatus({ target, onUnauthenticated }: { target: Pr
               { label: '이번 달', value: `${n(thisMonth?.users ?? 0)}명` },
               { label: '지난달', value: `${n(lastMonth?.users ?? 0)}명` },
               { label: '가장 많았던 달', value: peakMonth && peakMonth.users > 0
-                ? `${ymd(peakMonth.month)[0]}년 ${monthLabel(peakMonth.month)} · ${n(peakMonth.users)}명` : null },
-              { label: '가장 많이 늘어난 날', value: busiestDay ? `${dayLabel(busiestDay.day)} · ${n(busiestDay.users)}명` : null },
+                ? <Spaced items={[`${ymd(peakMonth.month)[0]}년 ${monthLabel(peakMonth.month)}`, `${n(peakMonth.users)}명`]} /> : null },
+              { label: '가장 많이 늘어난 날', value: busiestDay ? <Spaced items={[dayLabel(busiestDay.day), `${n(busiestDay.users)}명`]} /> : null },
             ]} />
             <MauChart months={months12} />
           </WhiteCard>}

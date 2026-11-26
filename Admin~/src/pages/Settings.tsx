@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import { getProject, type ProjectTarget } from '../lib/projectTarget'
 import { setProjectLook, toProjectLook, useProjectLook } from '../lib/projectLook'
@@ -13,6 +14,7 @@ import { EditDialog } from '../components/ui/EditDialog'
 import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { formatDateTime } from '../components/ui/format'
+import { LastEdited } from '../components/ui/LastEdited'
 import { contrastWithWhite } from '../lib/color'
 import { forgetGameSettings, TIME_ZONES, timeZoneName, type GameSettings } from '../lib/gameTime'
 import { LANGS, langLabel } from '../lib/languages'
@@ -664,14 +666,6 @@ function StoreStatusCard({
   )
 }
 
-const MAIL_FIELDS: LimitField[] = [
-  {
-    param: 'expiredRetentionDays', field: 'expired_retention_days', min: 0, max: 30,
-    label: '만료 우편 보관 일수',
-    hint: '기간이 지난 우편을 "기한 만료"로 남겨 두는 일수. 지나면 우편함에서 사라집니다. 0이면 기간이 지나는 즉시 사라집니다. 0~30 사이.',
-  },
-]
-
 const WITHDRAWAL_FIELDS: LimitField[] = [
   {
     param: 'withdrawalDelayDays', field: 'withdrawal_delay_days', min: 1, max: 90,
@@ -706,24 +700,6 @@ const FRIEND_FIELDS: LimitField[] = [
     param: 'requestCooldownSeconds', field: 'request_cooldown_seconds', min: 0, max: 300,
     label: '연속 요청 최소 간격',
     hint: '같은 사람이 요청을 연달아 보낼 때 기다려야 하는 시간. 초 단위로 최대 300까지, 0이면 제한 없음.',
-  },
-]
-
-const LOBBY_FIELDS: LimitField[] = [
-  {
-    param: 'maxPendingInvitesReceived', field: 'max_pending_invites_received', min: 1, max: 200,
-    label: '받는 쪽 대기 초대 상한',
-    hint: '한 사람이 동시에 받아 둘 수 있는 초대의 최대 개수. 넘으면 그 사람에게는 초대가 들어가지 않습니다. 1~200 사이.',
-  },
-  {
-    param: 'inviteCooldownSeconds', field: 'invite_cooldown_seconds', min: 0, max: 300,
-    label: '연속 초대 최소 간격',
-    hint: '같은 사람이 초대를 연달아 보낼 때 기다려야 하는 시간. 초 단위로 최대 300까지, 0이면 제한 없음.',
-  },
-  {
-    param: 'lobbyExpireMinutes', field: 'lobby_expire_minutes', min: 1, max: 1440,
-    label: '방이 닫히기까지의 시간',
-    hint: '아무도 시작하지 않은 방이 저절로 닫히기까지의 시간. 분 단위로 최대 1440까지.',
   },
 ]
 
@@ -930,7 +906,7 @@ function ConsoleIdentityCard({
   return (
     <FormCard>
       <CardHeader
-        title="이름 · 아이콘"
+        title="이름·아이콘"
         description="프로젝트 목록·상단 띠·확인 창에 보일 이 프로젝트의 이름과 아이콘을 정합니다."
       />
 
@@ -1221,11 +1197,7 @@ function ConsoleColorCard({
           </Button>
         )}
         {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
-        {current?.updated_at && current.color && (
-          <span className="text-xs text-neutral-400">
-            마지막 수정 {formatDateTime(current.updated_at)}{current.updated_by ? ` · ${current.updated_by}` : ''}
-          </span>
-        )}
+        {current?.color && <LastEdited at={current.updated_at} by={current.updated_by} />}
       </div>
     </FormCard>
   )
@@ -1304,11 +1276,7 @@ function TimeZoneCard({ target, report }: { target: ProjectTarget; report: (e: u
         <Button variant="primary" onClick={() => { setSaveError(''); setAsking(true) }} disabled={!current || tz === current.time_zone}>
           저장
         </Button>
-        {current?.updated_at && (
-          <span className="text-xs text-neutral-400">
-            마지막 수정 {formatDateTime(current.updated_at)}{current.updated_by ? ` · ${current.updated_by}` : ''}
-          </span>
-        )}
+        <LastEdited at={current?.updated_at} by={current?.updated_by} />
       </div>
       <ConfirmDialog
         open={asking}
@@ -1402,23 +1370,21 @@ function LanguageCard({ target, report }: { target: ProjectTarget; report: (e: u
   )
 }
 
-type Tab = 'store' | 'time' | 'withdrawal' | 'mail' | 'friend' | 'lobby' | 'push' | 'limit' | 'gate' | 'operators' | 'console' | 'reset'
-
+// 탭 주소(?tab=)는 묶음 이름 말고 안쪽 카드 이름(gate·operators 등)도 받는다 — 다른 화면이 그 카드로 바로 보낼 수 있게.
+type Tab = 'store' | 'general' | 'access' | 'player' | 'push'
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
-  ['time', '시간대·언어'],
-  ['withdrawal', '탈퇴'],
-  ['mail', '우편'],
-  ['friend', '친구'],
-  ['lobby', '매치 로비'],
+  ['general', '일반'],
+  ['access', '접속'],
+  ['player', '플레이어'],
   ['push', '푸시 알림'],
-  ['limit', '요청 제한'],
-  ['gate', '점검·버전'],
-  ['operators', '운영 계정'],
-  ['console', '프로젝트 정보'],
 ]
-// 마스터만 보는 탭 — 서버도 마스터가 아니면 거절한다(admin-api MASTER_ONLY_ACTIONS).
-const MASTER_TABS: readonly (readonly [Tab, string])[] = [...TABS, ['reset', '초기화']]
+const TAB_ALIASES: Record<string, Tab> = {
+  console: 'general', time: 'general', reset: 'general',
+  gate: 'access', limit: 'access', operators: 'access',
+  withdrawal: 'player', friend: 'player',
+}
+const toTab = (v: string | null): Tab => TABS.find(([t]) => t === v)?.[0] ?? (v ? TAB_ALIASES[v] : undefined) ?? 'store'
 
 export default function Settings({
   target,
@@ -1430,7 +1396,9 @@ export default function Settings({
   onUnauthenticated: () => void
 }) {
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<Tab>('store')
+  const [params, setParams] = useSearchParams()
+  const tab = toTab(params.get('tab'))
+  const setTab = (t: Tab) => setParams(t === 'store' ? {} : { tab: t }, { replace: true })
   // 요청 제한 설정을 저장하면 제한 목록을 다시 읽는다(끄면 목록이 빈다).
   const [limitReload, setLimitReload] = useState(0)
 
@@ -1444,72 +1412,21 @@ export default function Settings({
       <PageHeader title="설정" description="프로젝트 운영에 필요한 설정을 정합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
 
-      <Tabs value={tab} onChange={setTab} tabs={isMaster ? MASTER_TABS : TABS} />
+      <Tabs value={tab} onChange={setTab} tabs={TABS} />
 
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
-      {tab === 'gate' && <AppGateCards target={target} report={report} onOpenOperators={() => setTab('operators')} />}
-      {tab === 'operators' && <OperatorAccountsCard target={target} report={report} />}
-      {tab === 'console' && <ConsoleCards target={target} report={report} />}
-      {tab === 'reset' && isMaster && <ResetAllPlayersCard target={target} report={report} onOpenGate={() => setTab('gate')} />}
-      {tab === 'time' && (
+      {tab === 'general' && (
         <div className="space-y-4">
+          <ConsoleCards target={target} report={report} />
           <TimeZoneCard target={target} report={report} />
           <LanguageCard target={target} report={report} />
+          {/* 마스터만 본다 — 서버도 마스터가 아니면 거절한다(admin-api MASTER_ONLY_ACTIONS). */}
+          {isMaster && <ResetAllPlayersCard target={target} report={report} onOpenGate={() => setTab('access')} />}
         </div>
       )}
-      {tab === 'withdrawal' && (
-        <LimitsForm
-          target={target}
-          report={report}
-          title="탈퇴"
-          description="탈퇴를 요청한 계정과 오래 접속하지 않은 게스트 계정을 언제 지울지 정합니다."
-          getAction="game.settingsGet"
-          updateAction="game.settingsUpdate"
-          fields={WITHDRAWAL_FIELDS}
-          toggle={WITHDRAWAL_TOGGLE}
-          confirmTitle="탈퇴 유예 기간을 바꿀까요?"
-          onSaved={() => forgetGameSettings(target)}
-        />
-      )}
-      {tab === 'mail' && (
-        <LimitsForm
-          target={target}
-          report={report}
-          title="우편"
-          description="플레이어 우편함에서 기간이 지난 우편을 얼마 동안 보여 줄지 정합니다."
-          getAction="mails.settingsGet"
-          updateAction="mails.settingsUpdate"
-          fields={MAIL_FIELDS}
-          confirmTitle="우편 설정을 바꿀까요?"
-        />
-      )}
-      {tab === 'friend' && (
-        <LimitsForm
-          target={target}
-          report={report}
-          title="친구"
-          description="한 사람이 가질 수 있는 친구 수와 친구 요청을 보내는 빈도를 정합니다."
-          getAction="friends.settingsGet"
-          updateAction="friends.settingsUpdate"
-          fields={FRIEND_FIELDS}
-          confirmTitle="친구 설정을 바꿀까요?"
-        />
-      )}
-      {tab === 'lobby' && (
-        <LimitsForm
-          target={target}
-          report={report}
-          title="매치 로비"
-          description="함께 할 사람을 초대하는 빈도와, 시작하지 않은 방이 닫히는 시간을 정합니다."
-          getAction="matchLobby.settingsGet"
-          updateAction="matchLobby.settingsUpdate"
-          fields={LOBBY_FIELDS}
-          confirmTitle="매치 로비 설정을 바꿀까요?"
-        />
-      )}
-      {tab === 'push' && <PushSettings target={target} report={report} onUnauthenticated={onUnauthenticated} />}
-      {tab === 'limit' && (
+      {tab === 'access' && (
         <div className="space-y-4">
+          <AppGateCards target={target} report={report} onOpenOperators={() => document.getElementById('operator-accounts')?.scrollIntoView({ behavior: 'smooth' })} />
           <LimitsForm
             target={target}
             report={report}
@@ -1523,8 +1440,38 @@ export default function Settings({
             onSaved={() => setLimitReload((n) => n + 1)}
           />
           <RequestLimitBlocksCard key={limitReload} target={target} report={report} />
+          <div id="operator-accounts" className="scroll-mt-4">
+            <OperatorAccountsCard target={target} report={report} />
+          </div>
         </div>
       )}
+      {tab === 'player' && (
+        <div className="space-y-4">
+          <LimitsForm
+            target={target}
+            report={report}
+            title="탈퇴"
+            description="탈퇴를 요청한 계정과 오래 접속하지 않은 게스트 계정을 언제 지울지 정합니다."
+            getAction="game.settingsGet"
+            updateAction="game.settingsUpdate"
+            fields={WITHDRAWAL_FIELDS}
+            toggle={WITHDRAWAL_TOGGLE}
+            confirmTitle="탈퇴 유예 기간을 바꿀까요?"
+            onSaved={() => forgetGameSettings(target)}
+          />
+          <LimitsForm
+            target={target}
+            report={report}
+            title="친구"
+            description="한 사람이 가질 수 있는 친구 수와 친구 요청을 보내는 빈도를 정합니다."
+            getAction="friends.settingsGet"
+            updateAction="friends.settingsUpdate"
+            fields={FRIEND_FIELDS}
+            confirmTitle="친구 설정을 바꿀까요?"
+          />
+        </div>
+      )}
+      {tab === 'push' && <PushSettings target={target} report={report} onUnauthenticated={onUnauthenticated} />}
     </div>
   )
 }

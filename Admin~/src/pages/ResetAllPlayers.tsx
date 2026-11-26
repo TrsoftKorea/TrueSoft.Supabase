@@ -7,7 +7,7 @@ import { CardHeader, FormCard } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { InfoList } from '../components/ui/InfoList'
-import { StatusText } from '../components/ui/StatusText'
+import { StatusText, Tags } from '../components/ui/StatusText'
 import { dangerInputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 
@@ -15,7 +15,7 @@ type Report = (e: unknown, fallback: string) => void
 type ResetResult = { deleted: Record<string, number>; by: string | null; at: string }
 
 const REASON_TEXT: Record<string, string> = {
-  reset_all_requires_maintenance: '점검 중일 때만 초기화할 수 있습니다. 점검·버전 탭에서 점검을 켠 뒤 다시 시도해 주세요.',
+  reset_all_requires_maintenance: '점검 중일 때만 초기화할 수 있습니다. 접속 탭에서 점검을 켠 뒤 다시 시도해 주세요.',
   reset_all_confirm_mismatch: '확인 글자가 맞지 않아 초기화하지 않았습니다.',
 }
 const reasonText = (e: unknown) => {
@@ -25,7 +25,7 @@ const reasonText = (e: unknown) => {
 }
 
 /**
- * 설정 › 초기화 탭(마스터 전용). 베타를 끝내고 플레이어를 처음부터 다시 받을 때 한 번 쓴다 — 되돌릴 수 없다.
+ * 설정 › 일반 탭 맨 아래(마스터 전용). 베타를 끝내고 플레이어를 처음부터 다시 받을 때 한 번 쓴다 — 되돌릴 수 없다.
  * 서버(ts_admin_reset_all_players)가 점검 중인지 다시 본다. 화면의 점검 확인은 버튼을 막는 안내일 뿐이다.
  */
 export default function ResetAllPlayersCard({ target, report, onOpenGate }: { target: ProjectTarget; report: Report; onOpenGate: () => void }) {
@@ -77,23 +77,24 @@ export default function ResetAllPlayersCard({ target, report, onOpenGate }: { ta
       <CardHeader title="전체 초기화" description="모든 플레이어 계정과 게임 데이터를 지웁니다. 되돌릴 수 없습니다." />
 
       <InfoList items={[
-        { label: '지워지는 것', value: '계정 · 플레이어 데이터 · 우편함 · 순위 · 친구 · 채팅 · 푸시 기기', wide: true },
-        { label: '남는 것', value: '콘솔 설정 · 운영 계정 · 결제 기록 · 문의 · 통계 · 쿠폰 사용 기록 · 우편 발송 내역', wide: true },
+        { label: '지워지는 것', value: <Tags wrap items={['계정', '플레이어 데이터', '우편함', '순위', '친구', '채팅', '푸시 기기']} />, wide: true },
+        { label: '남는 것', value: <Tags wrap items={['콘솔 설정', '운영 계정', '결제 기록', '문의', '통계', '쿠폰 사용 기록', '우편 발송 내역']} />, wide: true },
         { label: '멈추는 것', value: '나중에 들어온 플레이어에게 가던 우편 배달', wide: true },
       ]} />
 
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-neutral-500">점검</span>
-          {maintenance === null ? <StatusText tone="muted">확인 중</StatusText>
-            : maintenance ? <StatusText tone="ok">진행 중</StatusText>
-              : <StatusText tone="bad">꺼짐</StatusText>}
-          {maintenance === false && <Button onClick={onOpenGate}>점검·버전 열기</Button>}
+      {/* 지워지는 범위(위)와 실행 조건·버튼(아래)을 선으로 가른다 — 붙어 있으면 어디서 끊기는지 안 보였다. */}
+      <div className="border-t border-neutral-100 pt-5 space-y-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-neutral-500">점검</span>
+            {maintenance === null ? <StatusText tone="muted">확인 중</StatusText>
+              : maintenance ? <StatusText tone="ok">진행 중</StatusText>
+                : <StatusText tone="bad">꺼짐</StatusText>}
+            {maintenance === false && <Button onClick={onOpenGate}>점검·버전 열기</Button>}
+          </div>
+          <p className="text-xs text-neutral-500">점검 중일 때만 초기화할 수 있습니다.</p>
         </div>
-        <p className="text-xs text-neutral-500">점검 중일 때만 초기화할 수 있습니다.</p>
-      </div>
 
-      <div className="flex items-center gap-3">
         <Button variant="dangerOutline" disabled={!maintenance} onClick={() => { setTyped(''); setError(''); setOpen(true) }}>
           <Trash2 className="w-3.5 h-3.5" />
           전체 초기화

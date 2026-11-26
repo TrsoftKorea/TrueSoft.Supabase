@@ -8,9 +8,9 @@ import { inputCls } from '../components/ui/Input'
 import { TableFooter } from '../components/ui/TableFooter'
 import { PageHeader } from '../components/ui/PageHeader'
 import { TableCard } from '../components/ui/DataTable'
-import { StatusText, Tag, type Tone } from '../components/ui/StatusText'
+import { StatusText, Tag, Tags, type Tone } from '../components/ui/StatusText'
 import { DateRangePicker } from '../components/ui/DateRangePicker'
-import { formatDateTime, formatCount, formatTotal, itemsText } from '../components/ui/format'
+import { formatDateTime, formatCount, formatTotal, itemLabels } from '../components/ui/format'
 import { Button } from '../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../components/ui/FilterBar'
 import { PlayerLink } from '../components/ui/PlayerLink'
@@ -337,7 +337,7 @@ export default function MailRecords({
               },
               { key: 'category', header: '분류', kind: 'name', cell: (b) => (b.category ? catLabel(b.category) : null) },
               { key: 'title', header: '제목', kind: 'text', cardTitle: true, cell: (b) => b.title || null },
-              { key: 'items', header: '보상', kind: 'name', cell: (b) => (b.items?.length ? itemsText(b.items, catalog) : null) },
+              { key: 'items', header: '보상', kind: 'name', cell: (b) => (b.items?.length ? <Tags items={itemLabels(b.items, catalog)} /> : null) },
               { key: 'recipients', header: '수신자', kind: 'number', cell: (b) => formatCount(b.recipient_count) },
               {
                 // 운영자는 보낸 시각 아래 둘째 줄로 — 따로 칸을 두면 제목·보상 칸과 함께 1280px 에서 표가 넘친다.
@@ -488,7 +488,7 @@ export default function MailRecords({
                   </span>
                 )),
               },
-              { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? itemsText(r.items, catalog) : null) },
+              { key: 'items', header: '보상', kind: 'name', cell: (r) => (r.items?.length ? <Tags items={itemLabels(r.items, catalog)} /> : null) },
               {
                 // 만료 시각은 둘째 줄로 — 따로 칸을 두면 고르기 칸과 함께 1280px 에서 표가 넘친다.
                 key: 'created', header: '등록 시각', kind: 'datetime', cell: (r) => (

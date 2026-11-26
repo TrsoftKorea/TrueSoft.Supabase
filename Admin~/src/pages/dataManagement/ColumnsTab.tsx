@@ -11,6 +11,7 @@ import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { opLabel, fieldTypeLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
+import { Spaced } from '../../components/ui/Spaced'
 import { formatTotal } from '../../components/ui/format'
 import { Button } from '../../components/ui/Button'
 import { dangerInputCls, inputCls } from '../../components/ui/Input'
@@ -326,7 +327,7 @@ function EditColumnModal({
     <EditDialog
       error={error || undefined}
       title="필드 수정"
-      description={`${col.column_name} · ${col.field_type ? displayFieldType(col.field_type) : pgTypeLabel(col.data_type)}`}
+      description={<Spaced items={[col.column_name, col.field_type ? displayFieldType(col.field_type) : pgTypeLabel(col.data_type)]} />}
       busy={loading}
       onClose={onClose}
       footer={<>
@@ -567,7 +568,7 @@ export default function ColumnsTab({
   const pendingItems: PendingItem[] = drafts.map((d) => {
     const ft = d.params?.['field_type']
     const typeText = 'field_type' in (d.params ?? {}) ? (typeof ft === 'string' && ft ? displayFieldType(ft) : '타입 지움') : ''
-    return { id: d.id, label: opLabel(d.feature, d.action), detail: typeText ? `${d.object_name} · ${typeText}` : d.object_name }
+    return { id: d.id, label: opLabel(d.feature, d.action), detail: d.object_name, ...(typeText ? { note: typeText } : {}) }
   })
 
   const pendingDropNames = new Set(drafts.filter((d) => d.action === 'drop').map((d) => d.object_name))

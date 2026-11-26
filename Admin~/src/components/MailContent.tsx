@@ -1,5 +1,6 @@
 import { InfoList, type InfoItem } from './ui/InfoList'
-import { itemsText } from './ui/format'
+import { itemLabels } from './ui/format'
+import { Tags } from './ui/StatusText'
 import { defaultLangField, langLabel } from '../lib/languages'
 
 export type MailLocalized = Record<string, { title?: string | null; content?: string | null }> | null | undefined
@@ -24,7 +25,7 @@ export function MailContent({ title, content, localized, items, catalog, default
       { label: `${langLabel(lang)} 본문`, value: text(v?.content), wide: true },
     ])
   }
-  groups.push([{ label: '아이템', value: items?.length ? itemsText(items, catalog) : null, wide: true }])
+  groups.push([{ label: '아이템', value: items?.length ? <Tags wrap items={itemLabels(items, catalog)} /> : null, wide: true }])
   // 언어마다 줄로 갈라 둔다 — 이어 붙이면 어느 본문이 어느 언어인지 칸 이름을 하나하나 읽어야 갈린다.
   return (
     // 폭을 묶는다 — 표 안에서 펼치면 표 전체 폭까지 늘어나 긴 본문 한 줄이 화면 밖으로 나간다.

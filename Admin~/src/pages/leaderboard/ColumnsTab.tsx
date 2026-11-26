@@ -11,6 +11,7 @@ import { fieldTypeLabel, opLabel, pgTypeLabel } from '../../lib/schemaLabels'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
+import { Spaced } from '../../components/ui/Spaced'
 import { TableCard } from '../../components/ui/DataTable'
 import { formatCount, formatTotal } from '../../components/ui/format'
 import { RefreshButton } from '../../components/ui/FilterBar'
@@ -376,7 +377,7 @@ function EditFieldModal({ target, col, onClose, onSaved }: {
     <EditDialog
       error={error || undefined}
       title="필드 수정"
-      description={`${col.column_name} · ${typeText(col.data_type)}`}
+      description={<Spaced items={[col.column_name, typeText(col.data_type)]} />}
       busy={loading}
       onClose={onClose}
       footer={<>

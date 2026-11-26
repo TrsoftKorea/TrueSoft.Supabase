@@ -10,6 +10,7 @@ import { formatCount, formatDateTime, formatScore, formatTotal } from '../../com
 import { pgTypeLabel as typeText } from '../../lib/schemaLabels'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EditDialog } from '../../components/ui/EditDialog'
+import { Spaced } from '../../components/ui/Spaced'
 import { ErrorBanner } from '../../components/ui/ErrorBanner'
 import { Button } from '../../components/ui/Button'
 import { FilterBar, FilterField, RefreshButton, SearchActions } from '../../components/ui/FilterBar'
@@ -473,7 +474,7 @@ export default function ScoresTab({
       {dataEditRow && (
         <EditDialog
           title="데이터 수정"
-          description={`${playerLabel(dataEditRow.display_name, dataEditRow.account_id)}${hasRotation && displayedRotation !== null ? ` · ${displayedRotation}회차` : ''}`}
+          description={<Spaced items={[playerLabel(dataEditRow.display_name, dataEditRow.account_id), hasRotation && displayedRotation !== null ? `${displayedRotation}회차` : null]} />}
           busy={saving}
           onClose={() => setDataEditRow(null)}
           error={dialogError || undefined}
@@ -534,7 +535,7 @@ export default function ScoresTab({
         {delTarget && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">
             <div className="text-neutral-800">{playerLabel(delTarget.display_name, delTarget.account_id)}</div>
-            <div className="text-xs text-neutral-500 mt-1">{delTarget.rank === null ? '순위 제외' : `${formatCount(delTarget.rank)}위`} · {formatScore(delTarget.score)}점</div>
+            <Spaced className="text-xs text-neutral-500 mt-1" items={[delTarget.rank === null ? '순위 제외' : `${formatCount(delTarget.rank)}위`, `${formatScore(delTarget.score)}점`]} />
           </div>
         )}
       </ConfirmDialog>

@@ -16,7 +16,7 @@ import { TypedValueInput, parseTypedValue, detectValueType, type ValueType } fro
 import { opLabel } from '../lib/schemaLabels'
 import { Button } from '../components/ui/Button'
 import { RefreshButton } from '../components/ui/FilterBar'
-import { formatDateTime } from '../components/ui/format'
+import { LastEdited } from '../components/ui/LastEdited'
 
 type ConfigRow = {
   key: string
@@ -530,9 +530,7 @@ export default function RemoteConfig({
               emptyText={rows.some((r) => r.key === selectedKey) ? '운영 계정 값이 없습니다.' : '게시한 뒤에 운영 계정 값을 넣을 수 있습니다.'}
             />
             {selectedOp && (
-              <p className="text-xs text-neutral-500">
-                마지막 수정 {formatDateTime(selectedOp.updated_at)}{selectedOp.updated_by ? ` · ${selectedOp.updated_by}` : ''}
-              </p>
+              <LastEdited at={selectedOp.updated_at} by={selectedOp.updated_by} />
             )}
           </div>
         </WhiteCard>

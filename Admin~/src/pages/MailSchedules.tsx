@@ -11,7 +11,8 @@ import { Switch } from '../components/ui/Switch'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { Button } from '../components/ui/Button'
-import { formatDateTime, itemsText } from '../components/ui/format'
+import { formatDateTime, itemLabels, itemsText } from '../components/ui/format'
+import { Tag, Tags } from '../components/ui/StatusText'
 import { timeZoneName } from '../lib/gameTime'
 
 type ScheduleRow = {
@@ -162,11 +163,11 @@ export default function MailSchedules({
           {
             // 아이템은 제목 아래 작은 글씨로 — 긴 글 칸 둘을 나란히 두면 넓은 화면에서도 표가 옆으로 넘친다.
             key: 'title', header: '제목', kind: 'text', cardTitle: true,
-            full: (r) => (r.items?.length ? `${r.title} · ${itemsText(r.items, catalog)}` : r.title),
+            full: (r) => (r.items?.length ? `${r.title}\n${itemsText(r.items, catalog)}` : r.title),
             cell: (r) => (
               <>
                 <div className="truncate">{r.title}</div>
-                {!!r.items?.length && <div className="truncate text-xs text-neutral-500">{itemsText(r.items, catalog)}</div>}
+                {!!r.items?.length && <div className="mt-1 truncate"><Tags items={itemLabels(r.items, catalog)} /></div>}
               </>
             ),
           },
@@ -201,7 +202,7 @@ export default function MailSchedules({
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm space-y-2">
             <div className="text-neutral-800">{delTarget.title}</div>
             <InfoList items={[
-              { label: '발송 방식', value: delTarget.schedule_type === 'repeat' ? `반복 · ${repeatText(delTarget)}` : SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type },
+              { label: '발송 방식', value: delTarget.schedule_type === 'repeat' ? <><Tag>반복</Tag> {repeatText(delTarget)}</> :SCHED_LABEL[delTarget.schedule_type] ?? delTarget.schedule_type },
               { label: '다음 실행', value: formatDateTime(delTarget.next_run_at) },
             ]} />
           </div>

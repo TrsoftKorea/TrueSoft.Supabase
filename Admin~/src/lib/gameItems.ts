@@ -44,9 +44,9 @@ export function elementFits(key: string, kind: CollectionKind | undefined): bool
 /** 운영자가 고쳐야 하는 아이템(처리 코드가 없으면 받기 실패) — 카탈로그·사이드바·아이템을 고르는 화면이 같이 쓴다. */
 export const isBrokenGrant = (m: GrantMode | undefined) => m === 'missing' || m === 'blocked'
 
-/** 고르기 목록의 한 줄 — 이름 뒤에 지급 방식. */
+/** 고르기 목록의 한 줄 — 이름 뒤에 지급 방식. 선택지는 글자만 들어가 태그를 못 쓰니 쉼표로 가른다. */
 export const itemOptionLabel = (c: CatalogItem) =>
-  c.grant_mode ? `${c.display_name || c.key} · ${GRANT_NAME[c.grant_mode]}` : (c.display_name || c.key)
+  c.grant_mode ? `${c.display_name || c.key}, ${GRANT_NAME[c.grant_mode]}` : (c.display_name || c.key)
 
 /** 고른 아이템 중 지급이 막힌 것(같은 코드는 한 번만). */
 export function brokenItemsIn(picked: { key: string }[], catalog: CatalogItem[]): CatalogItem[] {

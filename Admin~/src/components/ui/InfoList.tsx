@@ -16,17 +16,18 @@ export type InfoItem = {
  * 값이 비어 있어도 항목을 빼지 않고 회색 "없음"으로 둔다 — 빼면 대상마다 같은 항목의 자리가 달라진다(2026-10-29 사용자 지적).
  * 그 상태에서 아예 해당이 없는 항목(차단 안 된 플레이어의 종료 기한 등)은 부르는 화면이 목록에서 뺀다.
  * 불러오는 중인 값은 비우지 말고 '…'를 넘긴다("없음"으로 보이지 않게).
+ * 항목 사이(16px)는 이름·값 사이(2px)보다 확실히 벌린다 — 8px 이면 세로로 쌓인 항목끼리 붙어 어디서 끊기는지 안 보였다(2026-11-26 사용자 지적, 전체 초기화).
  */
 export function InfoList({ items, className = '' }: { items: InfoItem[]; className?: string }) {
   return (
     // 휴대폰에서는 한 칸씩 세로로 쌓여 화면을 다 차지한다 — 표 카드처럼 "이름 왼쪽 · 값 오른쪽" 한 줄로 둔다.
-    <dl className={`grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-2 max-sm:grid-cols-1 max-sm:gap-y-1.5 ${className}`}>
+    <dl className={`grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-x-6 gap-y-4 max-sm:grid-cols-1 max-sm:gap-y-1.5 ${className}`}>
       {items.map((i, n) => {
         const empty = i.value === null || i.value === undefined || i.value === false || i.value === ''
         return (
           <div key={n} className={`min-w-0 ${i.wide ? 'col-span-full' : 'max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-3'}`}>
             <dt className="text-xs text-neutral-500 max-sm:shrink-0">{i.label}</dt>
-            <dd className={`text-sm break-words ${i.wide ? '' : 'max-sm:min-w-0 max-sm:text-right'} ${empty ? 'text-neutral-400' : i.tone === 'danger' ? 'text-red-600 font-semibold' : 'text-neutral-900'}`}>
+            <dd className={`mt-0.5 max-sm:mt-0 text-sm break-words ${i.wide ? '' : 'max-sm:min-w-0 max-sm:text-right'} ${empty ? 'text-neutral-400' : i.tone === 'danger' ? 'text-red-600 font-semibold' : 'text-neutral-900'}`}>
               {empty ? '없음' : i.value}
             </dd>
           </div>

@@ -4,7 +4,7 @@ import { callAdmin, NotAuthenticatedError } from '../../lib/api'
 import type { ProjectTarget } from '../../lib/projectTarget'
 import { CardHeader, FormCard } from '../../components/ui/Card'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
-import { formatDateTime } from '../../components/ui/format'
+import { LastEdited } from '../../components/ui/LastEdited'
 import { Button } from '../../components/ui/Button'
 import { inputCls } from '../../components/ui/Input'
 import { Switch } from '../../components/ui/Switch'
@@ -167,10 +167,7 @@ export function LimitsForm({
         </Button>
         {saved && <span className="text-sm text-green-600 whitespace-nowrap">저장했습니다.</span>}
         {typeof current?.updated_at === 'string' && (
-          <span className="text-xs text-neutral-400">
-            마지막 수정 {formatDateTime(current.updated_at)}
-            {typeof current.updated_by === 'string' ? ` · ${current.updated_by}` : ''}
-          </span>
+          <LastEdited at={current.updated_at} by={typeof current.updated_by === 'string' ? current.updated_by : null} />
         )}
       </div>
 

@@ -14,6 +14,7 @@ import { DataTable, TableCard, type Column } from '../components/ui/DataTable'
 import { Tag } from '../components/ui/StatusText'
 import { TableFooter } from '../components/ui/TableFooter'
 import { EditDialog } from '../components/ui/EditDialog'
+import { Spaced } from '../components/ui/Spaced'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { InfoList } from '../components/ui/InfoList'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
@@ -332,7 +333,7 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
     <EditDialog
       size="xl"
       title="문의"
-      description={ticket ? `${playerLabel(ticket.display_name, ticket.account_id, ticket.user_id)} · ${ticket.category ?? '분류 없음'}` : undefined}
+      description={ticket ? <Spaced items={[playerLabel(ticket.display_name, ticket.account_id, ticket.user_id), ticket.category ?? '분류 없음']} /> : undefined}
       busy={busy}
       error={saveError || undefined}
       onClose={onClose}
@@ -372,7 +373,7 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
               ? { label: '계정 상태', value: '차단', tone: 'danger' as const }
               : { label: '계정 상태', value: ticket.account_id ? '정상' : '삭제됨' },
             ...(ticket.via_web
-              ? [{ label: '접수 경로', value: '게임 밖 주소 · 본인 확인 안 됨' }]
+              ? [{ label: '접수 경로', value: <>게임 밖 주소<span className="block text-xs text-neutral-500">본인 확인 안 됨</span></> }]
               : []),
             ...Object.keys(META_LABEL).filter((k) => k !== 'language').map((k) => ({ label: META_LABEL[k], value: ticket.meta[k] })),
             ...meta.filter(([k]) => !(k in META_LABEL)).map(([k, v]) => ({ label: k, value: v })),
@@ -396,9 +397,7 @@ function TicketDialog({ target, ticketId, report, onClose, onChanged }: {
                       ))}
                     </div>
                   )}
-                  <div className="mt-1 text-xs text-neutral-400">
-                    {m.sender === 'admin' ? (m.admin_email ?? '운영자') : '플레이어'} · {formatDateTime(m.created_at)}
-                  </div>
+                  <Spaced className="mt-1 text-xs text-neutral-400" items={[m.sender === 'admin' ? (m.admin_email ?? '운영자') : '플레이어', formatDateTime(m.created_at)]} />
                 </div>
               </div>
             ))}

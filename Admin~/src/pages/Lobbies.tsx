@@ -11,6 +11,9 @@ import { inputCls } from '../components/ui/Input'
 import { FilterBar, FilterField, RefreshButton } from '../components/ui/FilterBar'
 import { PlayerLink } from '../components/ui/PlayerLink'
 import { Pairs } from '../components/ui/Pairs'
+import { Tabs } from '../components/ui/Tabs'
+import { useSearchParams } from 'react-router-dom'
+import { LimitsForm, type LimitField } from './social/LimitsForm'
 
 type Meta = Record<string, unknown>
 type LobbyMember = {
@@ -61,14 +64,52 @@ export default function Lobbies({
     setError(e instanceof Error ? e.message : fallback)
   }, [onUnauthenticated])
 
+  const [params, setParams] = useSearchParams()
+  const tab: LobbyTab = params.get('tab') === 'settings' ? 'settings' : 'list'
+  const setTab = (t: LobbyTab) => setParams(t === 'list' ? {} : { tab: t }, { replace: true })
+
   return (
     <div className="space-y-4">
-      <PageHeader title="매치 로비" description="플레이어가 모인 대기방의 현황을 확인합니다." />
+      <PageHeader title="매치 로비" description="플레이어가 모인 대기방의 현황과 초대 제한을 관리합니다." />
       <ErrorBanner message={error} onDismiss={() => setError('')} />
-      <LobbyList target={target} report={report} />
+      <Tabs value={tab} onChange={setTab} tabs={LOBBY_TABS} />
+      {tab === 'list' && <LobbyList target={target} report={report} />}
+      {tab === 'settings' && (
+        <LimitsForm
+          target={target}
+          report={report}
+          title="초대·방 제한"
+          description="함께 할 사람을 초대하는 빈도와, 시작하지 않은 방이 닫히는 시간을 정합니다."
+          getAction="matchLobby.settingsGet"
+          updateAction="matchLobby.settingsUpdate"
+          fields={LOBBY_FIELDS}
+          confirmTitle="매치 로비 설정을 바꿀까요?"
+        />
+      )}
     </div>
   )
 }
+
+type LobbyTab = 'list' | 'settings'
+const LOBBY_TABS: readonly (readonly [LobbyTab, string])[] = [['list', '대기방'], ['settings', '설정']]
+
+const LOBBY_FIELDS: LimitField[] = [
+  {
+    param: 'maxPendingInvitesReceived', field: 'max_pending_invites_received', min: 1, max: 200,
+    label: '받는 쪽 대기 초대 상한',
+    hint: '한 사람이 동시에 받아 둘 수 있는 초대의 최대 개수. 넘으면 그 사람에게는 초대가 들어가지 않습니다. 1~200 사이.',
+  },
+  {
+    param: 'inviteCooldownSeconds', field: 'invite_cooldown_seconds', min: 0, max: 300,
+    label: '연속 초대 최소 간격',
+    hint: '같은 사람이 초대를 연달아 보낼 때 기다려야 하는 시간. 초 단위로 최대 300까지, 0이면 제한 없음.',
+  },
+  {
+    param: 'lobbyExpireMinutes', field: 'lobby_expire_minutes', min: 1, max: 1440,
+    label: '방이 닫히기까지의 시간',
+    hint: '아무도 시작하지 않은 방이 저절로 닫히기까지의 시간. 분 단위로 최대 1440까지.',
+  },
+]
 
 function LobbyList({
   target,

@@ -243,7 +243,7 @@ export default function Operators({
             >
               <option value="" />
               {candidates.map((m) => (
-                <option key={m.email} value={m.email}>{m.display_name ? `${m.display_name} · ${m.email}` : m.email}</option>
+                <option key={m.email} value={m.email}>{m.display_name ? `${m.display_name}, ${m.email}` : m.email}</option>
               ))}
             </select>
           </label>

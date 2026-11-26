@@ -200,7 +200,7 @@ export default function App() {
         <Route path="/mails/records" element={<MailRecords target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/categories" element={<MailCategories target={target} onUnauthenticated={signOut} />} />
         <Route path="/mails/schedules" element={<MailSchedules target={target} onUnauthenticated={signOut} />} />
-        <Route path="/mails/settings" element={<Navigate to="/settings" replace />} />
+        <Route path="/mails/settings" element={<Navigate to="/mails/categories?tab=keep" replace />} />
         <Route path="/leaderboard" element={<Leaderboard target={target} onUnauthenticated={signOut} />} />
         <Route path="/purchases" element={<Purchases target={target} onUnauthenticated={signOut} />} />
         <Route path="/remote-config" element={<RemoteConfig target={target} onUnauthenticated={signOut} />} />
@@ -208,11 +208,11 @@ export default function App() {
         <Route path="/support" element={<Support target={target} onUnauthenticated={signOut} />} />
         <Route path="/chat" element={<ChatModeration target={target} onUnauthenticated={signOut} />} />
         <Route path="/settings" element={<Settings target={target} isMaster={me.isMaster} onUnauthenticated={signOut} />} />
-        <Route path="/friends" element={<Navigate to="/settings" replace />} />
+        <Route path="/friends" element={<Navigate to="/settings?tab=player" replace />} />
         <Route path="/lobbies" element={<Lobbies target={target} onUnauthenticated={signOut} />} />
         <Route path="/match-rewards" element={<MatchRewards target={target} onUnauthenticated={signOut} />} />
         {/* 예전 주소를 북마크해 둔 운영자가 빈 화면을 보지 않도록 남겨 둔다. */}
-        <Route path="/social" element={<Navigate to="/settings" replace />} />
+        <Route path="/social" element={<Navigate to="/settings?tab=player" replace />} />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         <Route path="/data-logs" element={<DataLogs target={target} onUnauthenticated={signOut} />} />
         <Route path="/jobs" element={<CronJobs target={target} onUnauthenticated={signOut} />} />

@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button'
 import { EditDialog } from '../components/ui/EditDialog'
 import { InfoList } from '../components/ui/InfoList'
 import { DataTable } from '../components/ui/DataTable'
-import { StatusText } from '../components/ui/StatusText'
+import { StatusText, Tags } from '../components/ui/StatusText'
 import { areaCls, inputCls } from '../components/ui/Input'
 import { formatCount, formatDateTime } from '../components/ui/format'
 import { defaultLangField, langLabel, pickableLangs, useDefaultLanguage } from '../lib/languages'
@@ -207,7 +207,7 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
                 { key: 'code', header: '상황', kind: 'name', cell: (t) => TRIGGER_LABEL[t.code] ?? t.code },
                 {
                   key: 'text', header: '문구', kind: 'text',
-                  full: (t) => `${t.title} · ${t.body}`,
+                  full: (t) => `${t.title}\n${t.body}`,
                   cell: (t) => (
                     <>
                       <div className="truncate font-medium">{t.title}</div>
@@ -217,7 +217,7 @@ export default function PushSettings({ target, report, onUnauthenticated }: {
                 },
                 {
                   key: 'langs', header: '다른 언어', kind: 'name',
-                  cell: (t) => Object.keys(t.localized ?? {}).map(langLabel).join(' · ') || null,
+                  cell: (t) => { const l = Object.keys(t.localized ?? {}).map(langLabel); return l.length ? <Tags items={l} /> : null },
                 },
                 { key: 'off', header: '끈 플레이어', kind: 'number', cell: (t) => `${formatCount(t.off_count)}명` },
                 {
