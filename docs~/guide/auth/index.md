@@ -1,10 +1,11 @@
 # 인증
 
-로그인·세션·소셜 로그인 관련 기능입니다.
+플레이어가 게임에 들어오고 나가는 기능입니다.
 
 <div class="tb-cards">
 
-- [**로그인**<br><small>게스트 시작·세션·로그아웃</small>](/guide/auth/login)
-- [**소셜 로그인**<br><small>Google·Apple 로그인과 연동</small>](/guide/social/)
+- [**로그인**<br><small>게임에 들어오고 나가기</small>](/guide/auth/login)
+- [**로그인 문제 처리**<br><small>로그인이 막히거나 끊겼을 때</small>](/guide/auth/trouble)
+- [**소셜 로그인**<br><small>구글·애플 계정으로 로그인</small>](/guide/social/)
 
 </div>

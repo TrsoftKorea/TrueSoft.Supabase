@@ -6,10 +6,10 @@
 
 <div class="tb-cards">
 
-- [**설치**<br><small>Git URL로 SDK 추가</small>](/guide/start/install)
-- [**프로젝트 생성**<br><small>운영 콘솔에서 프로젝트 만들기</small>](/guide/start/project)
-- [**초기 설정**<br><small>SupabaseSettings 에셋 구성</small>](/guide/start/init-setup)
-- [**서비스 연결값**<br><small>스토어·로그인 키 입력</small>](/guide/start/database-setup)
-- [**다음 단계**<br><small>기능별 가이드 안내</small>](/guide/start/next)
+- [**설치**<br><small>유니티 프로젝트에 SDK 넣기</small>](/guide/start/install)
+- [**프로젝트 생성**<br><small>게임마다 서버 하나 받기</small>](/guide/start/project)
+- [**초기 설정**<br><small>게임에 서버 주소 넣기</small>](/guide/start/init-setup)
+- [**결제·로그인 키**<br><small>결제·로그인에 쓸 키 넣기</small>](/guide/start/database-setup)
+- [**다음 단계**<br><small>만들려는 기능 찾아가기</small>](/guide/start/next)
 
 </div>

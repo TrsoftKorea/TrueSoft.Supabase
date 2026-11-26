@@ -41,17 +41,14 @@ if (result.Reason == SupabaseReason.UserBanned)
 
 <div class="tb-cards">
 
-- [**인증**<br><small>로그인 · 연동 · 세션</small>](/guide/api/auth)
-- [**계정**<br><small>닉네임 · 프로필 · 탈퇴 · 서버 정보</small>](/guide/api/account)
-- [**게임 데이터**<br><small>유저 데이터 · 원격 설정</small>](/guide/api/game-data)
-- [**인앱 결제**<br><small>IAP 생성 · 검증</small>](/guide/api/iap)
-- [**우편함**<br><small>목록 · 수령 · 삭제 · 분류</small>](/guide/api/mailbox)
-- [**리더보드**<br><small>순위 조회 · 점수 기록 · 회차</small>](/guide/api/leaderboard)
-- [**쿠폰**<br><small>코드 사용 · 우편 보상</small>](/guide/api/coupon)
-- [**채팅**<br><small>채널 구독 · 발송 · 귓속말</small>](/guide/api/chat)
-- [**친구**<br><small>검색 · 요청 · 목록</small>](/guide/api/friend)
-- [**매치 로비**<br><small>친구 초대 · 시작 · 취소</small>](/guide/api/match-lobby)
-- [**기타**<br><small>서버 시간</small>](/guide/api/etc)
-- [**에러 코드**<br><small>SupabaseReason 카탈로그</small>](/guide/api/fail-reasons)
+- [**인증**<br><small>게임에 들어오고 나가기</small>](/guide/api/auth)
+- [**계정**<br><small>플레이어 이름·탈퇴·서버</small>](/guide/api/account)
+- [**게임 데이터**<br><small>저장과 서버가 정하는 값</small>](/guide/api/game-data)
+- [**커뮤니티**<br><small>플레이어끼리 대화하고 친구 맺기</small>](/guide/api/community)
+- [**우편함**<br><small>아이템 받기</small>](/guide/api/mailbox)
+- [**결제·보상**<br><small>상품을 팔고 보상 주기</small>](/guide/api/reward)
+- [**매치·랭킹**<br><small>같이 할 사람 모으고 순위 남기기</small>](/guide/api/match-rank)
+- [**운영**<br><small>플레이어를 돌보는 기능</small>](/guide/api/operation)
+- [**에러 코드**<br><small>실패 사유 전체</small>](/guide/api/fail-reasons)
 
 </div>

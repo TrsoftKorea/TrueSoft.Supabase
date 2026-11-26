@@ -211,7 +211,7 @@ bool Handle(SupabaseResult result)
 | `LeaderboardRowRequired` | 리더보드 행 객체가 null입니다. 생성한 행 타입 인스턴스를 넘겨야 합니다 |
 | `LeaderboardRowNotLoaded` | 조회에서 만들지 않은 행입니다. `Supabase.ToRow`로 현재 값을 받아 고쳐서 넘기세요 |
 
-## 매치 결과
+## 매치 기록
 
 | Reason | 설명 |
 |--------|------|

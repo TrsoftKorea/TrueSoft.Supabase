@@ -4,11 +4,11 @@ Google Play · Apple App Store 결제를 서버 영수증 검증으로 처리하
 
 <div class="tb-cards">
 
-- [**사전 준비**<br><small>패키지·서비스 연결·환불 기록</small>](/guide/iap/prepare)
-- [**서비스 계정 JSON 발급**<br><small>Android 영수증 검증용 키</small>](/guide/google-service-account/)
-- [**사용법**<br><small>파사드 생성·구매·지급 콜백</small>](/guide/iap/usage)
-- [**상품 정보 조회**<br><small>가격·통화·상품명</small>](/guide/iap/product-info)
-- [**더 알아보기**<br><small>가격 기록·플랫폼별 검증</small>](/guide/iap/advanced)
-- [**버전별 차이**<br><small>필요 버전 · SK1 / SK2</small>](/guide/iap/versions)
+- [**사전 준비**<br><small>결제 받기 전에 할 일</small>](/guide/iap/prepare)
+- [**서비스 계정 JSON 발급**<br><small>구글 결제 확인에 쓸 키 받기</small>](/guide/google-service-account/)
+- [**사용법**<br><small>구매 버튼부터 아이템 지급까지</small>](/guide/iap/usage)
+- [**상품 정보 조회**<br><small>상점에 가격 보이기</small>](/guide/iap/product-info)
+- [**더 알아보기**<br><small>결제가 확인되는 방식</small>](/guide/iap/advanced)
+- [**버전별 차이**<br><small>유니티 결제 패키지 판별 차이</small>](/guide/iap/versions)
 
 </div>

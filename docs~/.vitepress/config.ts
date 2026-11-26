@@ -32,7 +32,7 @@ export default defineConfig({
           { text: '설치', link: '/guide/start/install' },
           { text: '프로젝트 생성', link: '/guide/start/project' },
           { text: '초기 설정', link: '/guide/start/init-setup' },
-          { text: '서비스 연결값', link: '/guide/start/database-setup' },
+          { text: '결제·로그인 키', link: '/guide/start/database-setup' },
           { text: '다음 단계', link: '/guide/start/next' }
         ]
       },
@@ -50,7 +50,14 @@ export default defineConfig({
               { text: '자동 로그인', link: '/guide/auth/auto-login' },
               { text: '세션 복원', link: '/guide/auth/restore-session' },
               { text: '로그인 후 상태', link: '/guide/auth/session-state' },
-              { text: '로그아웃', link: '/guide/auth/logout' },
+              { text: '로그아웃', link: '/guide/auth/logout' }
+            ]
+          },
+          {
+            text: '로그인 문제 처리',
+            link: '/guide/auth/trouble',
+            collapsed: true,
+            items: [
               { text: '익명 계정 복구', link: '/guide/auth/recovery' },
               { text: '중복 로그인 감지', link: '/guide/auth/duplicate-login' },
               { text: '차단된 계정 처리', link: '/guide/auth/ban' }
@@ -82,6 +89,7 @@ export default defineConfig({
                 collapsed: true,
                 items: [
                   { text: '대시보드 설정', link: '/guide/social/apple/setup' },
+                  { text: 'Apple 설정 상세', link: '/guide/social/apple/setup-details' },
                   { text: '신규 로그인', link: '/guide/social/apple/signin' },
                   { text: '신규 로그인 · 커스텀', link: '/guide/social/apple/signin-token' },
                   { text: '게스트 연동', link: '/guide/social/apple/link' },
@@ -96,7 +104,7 @@ export default defineConfig({
         ]
       },
       {
-        text: '계정',
+        text: '플레이어',
         link: '/guide/account/',
         collapsed: true,
         items: [
@@ -123,22 +131,6 @@ export default defineConfig({
             ]
           },
           {
-            text: '서버',
-            link: '/guide/server/',
-            collapsed: true,
-            items: [
-              { text: '서버 선택', link: '/guide/server/select' },
-              { text: '서버 정보 조회', link: '/guide/server/info' }
-            ]
-          }
-        ]
-      },
-      {
-        text: '게임 데이터',
-        link: '/guide/game-data/',
-        collapsed: true,
-        items: [
-          {
             text: '유저 데이터',
             link: '/guide/user-data/',
             collapsed: true,
@@ -151,129 +143,14 @@ export default defineConfig({
               { text: '저장 실패 알림', link: '/guide/user-data/save-status' },
               { text: '세이브 삭제', link: '/guide/user-data/delete' }
             ]
-          },
-          {
-            text: '데이터 타입',
-            link: '/guide/data-types/',
-            collapsed: true,
-            items: [
-              { text: '지원 타입', link: '/guide/data-types/supported' },
-              { text: '자동 확장 컬렉션', link: '/guide/data-types/auto-collections' },
-              { text: '커스텀 클래스 요소', link: '/guide/data-types/custom-class' }
-            ]
-          },
-          {
-            text: '원격 설정',
-            link: '/guide/remote-config/',
-            collapsed: true,
-            items: [
-              { text: '빠른 시작', link: '/guide/remote-config/quickstart' },
-              { text: '값 읽기', link: '/guide/remote-config/get' },
-              { text: '변경 구독', link: '/guide/remote-config/listener' },
-              { text: '더 알아보기', link: '/guide/remote-config/advanced' }
-            ]
           }
         ]
       },
       {
-        text: '서비스',
-        link: '/guide/service/',
+        text: '커뮤니티',
+        link: '/guide/community/',
         collapsed: true,
         items: [
-          {
-            text: '인앱 결제',
-            link: '/guide/iap/',
-            collapsed: true,
-            items: [
-              { text: '사전 준비', link: '/guide/iap/prepare' },
-              {
-                text: '서비스 계정 JSON 발급',
-                link: '/guide/google-service-account/',
-                collapsed: true,
-                items: [
-                  { text: '발급 절차', link: '/guide/google-service-account/issue' },
-                  { text: '콘솔 등록', link: '/guide/google-service-account/console' }
-                ]
-              },
-              { text: '사용법', link: '/guide/iap/usage' },
-              { text: '상품 정보 조회', link: '/guide/iap/product-info' },
-              { text: '더 알아보기', link: '/guide/iap/advanced' },
-              { text: '버전별 차이', link: '/guide/iap/versions' }
-            ]
-          },
-          {
-            text: '우편함',
-            link: '/guide/mailbox/',
-            collapsed: true,
-            items: [
-              { text: '목록 조회', link: '/guide/mailbox/list' },
-              { text: '다국어 메시지', link: '/guide/mailbox/localized' },
-              { text: '상세 조회', link: '/guide/mailbox/detail' },
-              { text: '아이템 핸들러 등록', link: '/guide/mailbox/item-handler' },
-              { text: '보상 수령', link: '/guide/mailbox/claim' },
-              { text: '전체 수령', link: '/guide/mailbox/claim-all' },
-              { text: '삭제', link: '/guide/mailbox/delete' },
-              { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' },
-              { text: '미수령 우편 수', link: '/guide/mailbox/counts-unclaimed' },
-              { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' },
-              { text: '우편 설정 조회', link: '/guide/mailbox/settings' },
-              { text: '본인에게 보내기', link: '/guide/mailbox/send-to-self' }
-            ]
-          },
-          {
-            text: '리더보드',
-            link: '/guide/leaderboard/',
-            collapsed: true,
-            items: [
-              { text: '목록 조회', link: '/guide/leaderboard/tables' },
-              { text: '리더보드 조회', link: '/guide/leaderboard/table' },
-              { text: '점수 기록', link: '/guide/leaderboard/submit' },
-              { text: '점수 기록 · 생성 클래스', link: '/guide/leaderboard/submit-row' },
-              { text: '순위 조회', link: '/guide/leaderboard/range' },
-              { text: '플레이어 순위 조회', link: '/guide/leaderboard/player' },
-              { text: '추가 데이터 수정', link: '/guide/leaderboard/set-player-data' },
-              { text: '본인 기록 삭제', link: '/guide/leaderboard/delete-my-score' },
-              { text: '리더보드 클래스와 필드', link: '/guide/leaderboard/columns' }
-            ]
-          },
-          {
-            text: '매치 결과',
-            link: '/guide/match-result/',
-            collapsed: true,
-            items: [
-              { text: '결과 신고', link: '/guide/match-result/report' },
-              { text: '상대 없는 판 기록', link: '/guide/match-result/report-solo' },
-              { text: '전적 요약', link: '/guide/match-result/stats' },
-              { text: '최근 전적', link: '/guide/match-result/history' }
-            ]
-          },
-          { text: '쿠폰', link: '/guide/coupon/' },
-          {
-            text: '고객센터',
-            link: '/guide/customer-center/',
-            collapsed: true,
-            items: [
-              { text: '창 열기', link: '/guide/customer-center/open' },
-              { text: '쿠폰 등록 창 열기', link: '/guide/customer-center/coupon' },
-              { text: '새 답변 수', link: '/guide/customer-center/unread' },
-              { text: '개인정보처리방침 열기', link: '/guide/customer-center/privacy' },
-              { text: '이용약관 열기', link: '/guide/customer-center/terms' },
-              { text: '약관 버전 조회', link: '/guide/customer-center/legal-versions' },
-              { text: '약관 동의 조회', link: '/guide/customer-center/legal-consent' },
-              { text: '약관 동의 남기기', link: '/guide/customer-center/legal-consent-save' }
-            ]
-          },
-          {
-            text: '푸시 알림',
-            link: '/guide/push/',
-            collapsed: true,
-            items: [
-              { text: '기기 등록', link: '/guide/push/register' },
-              { text: '수신 설정 읽기', link: '/guide/push/get-preferences' },
-              { text: '수신 설정 바꾸기', link: '/guide/push/set-preferences' },
-              { text: '게임 중에 온 알림', link: '/guide/push/received' }
-            ]
-          },
           {
             text: '채팅',
             link: '/guide/chat/',
@@ -302,6 +179,98 @@ export default defineConfig({
               { text: '친구 삭제', link: '/guide/friend/remove' },
               { text: '제한값 읽기', link: '/guide/friend/limits' }
             ]
+          }
+        ]
+      },
+      {
+        text: '우편함',
+        link: '/guide/mailbox/',
+        collapsed: true,
+        items: [
+          {
+            text: '받기',
+            link: '/guide/mailbox/receive',
+            collapsed: true,
+            items: [
+              { text: '목록 조회', link: '/guide/mailbox/list' },
+              { text: '상세 조회', link: '/guide/mailbox/detail' },
+              { text: '다국어 메시지', link: '/guide/mailbox/localized' },
+              { text: '아이템 핸들러 등록', link: '/guide/mailbox/item-handler' },
+              { text: '보상 수령', link: '/guide/mailbox/claim' },
+              { text: '전체 수령', link: '/guide/mailbox/claim-all' }
+            ]
+          },
+          {
+            text: '지우기',
+            link: '/guide/mailbox/remove',
+            collapsed: true,
+            items: [
+              { text: '삭제', link: '/guide/mailbox/delete' },
+              { text: '수령한 우편 일괄 삭제', link: '/guide/mailbox/delete-claimed' }
+            ]
+          },
+          {
+            text: '개수 세기',
+            link: '/guide/mailbox/counts',
+            collapsed: true,
+            items: [
+              { text: '미수령 우편 수', link: '/guide/mailbox/counts-unclaimed' },
+              { text: '분류별 전체 현황', link: '/guide/mailbox/counts-detail' }
+            ]
+          },
+          { text: '우편 설정 조회', link: '/guide/mailbox/settings' },
+          { text: '본인에게 보내기', link: '/guide/mailbox/send-to-self' }
+        ]
+      },
+      {
+        text: '결제·보상',
+        link: '/guide/reward/',
+        collapsed: true,
+        items: [
+          {
+            text: '인앱 결제',
+            link: '/guide/iap/',
+            collapsed: true,
+            items: [
+              { text: '사전 준비', link: '/guide/iap/prepare' },
+              {
+                text: '서비스 계정 JSON 발급',
+                link: '/guide/google-service-account/',
+                collapsed: true,
+                items: [
+                  { text: '발급 절차', link: '/guide/google-service-account/issue' },
+                  { text: '콘솔 등록', link: '/guide/google-service-account/console' }
+                ]
+              },
+              { text: '사용법', link: '/guide/iap/usage' },
+              { text: '상품 정보 조회', link: '/guide/iap/product-info' },
+              { text: '더 알아보기', link: '/guide/iap/advanced' },
+              { text: '버전별 차이', link: '/guide/iap/versions' }
+            ]
+          },
+          { text: '쿠폰', link: '/guide/coupon/' }
+        ]
+      },
+      {
+        text: '매치·랭킹',
+        link: '/guide/match-rank/',
+        collapsed: true,
+        items: [
+          {
+            text: '리더보드',
+            link: '/guide/leaderboard/',
+            collapsed: true,
+            items: [
+              { text: '목록 조회', link: '/guide/leaderboard/tables' },
+              { text: '리더보드 조회', link: '/guide/leaderboard/table' },
+              { text: '점수 기록', link: '/guide/leaderboard/submit' },
+              { text: '점수 기록 · 생성 클래스', link: '/guide/leaderboard/submit-row' },
+              { text: '순위 조회', link: '/guide/leaderboard/range' },
+              { text: '플레이어 순위 조회', link: '/guide/leaderboard/player' },
+              { text: '추가 데이터 수정', link: '/guide/leaderboard/set-player-data' },
+              { text: '본인 기록 삭제', link: '/guide/leaderboard/delete-my-score' },
+              { text: '리더보드 클래스와 필드', link: '/guide/leaderboard/columns' }
+            ]
           },
           {
             text: '매치 로비',
@@ -319,12 +288,93 @@ export default defineConfig({
             ]
           },
           {
+            text: '매치 기록',
+            link: '/guide/match-result/',
+            collapsed: true,
+            items: [
+              { text: '결과 신고', link: '/guide/match-result/report' },
+              { text: '상대 없는 판 기록', link: '/guide/match-result/report-solo' },
+              { text: '전적 요약', link: '/guide/match-result/stats' },
+              { text: '최근 전적', link: '/guide/match-result/history' }
+            ]
+          }
+        ]
+      },
+      {
+        text: '게임 설정',
+        link: '/guide/game-data/',
+        collapsed: true,
+        items: [
+          {
+            text: '원격 설정',
+            link: '/guide/remote-config/',
+            collapsed: true,
+            items: [
+              { text: '빠른 시작', link: '/guide/remote-config/quickstart' },
+              { text: '값 읽기', link: '/guide/remote-config/get' },
+              { text: '변경 구독', link: '/guide/remote-config/listener' },
+              { text: '더 알아보기', link: '/guide/remote-config/advanced' }
+            ]
+          },
+          {
+            text: '데이터 타입',
+            link: '/guide/data-types/',
+            collapsed: true,
+            items: [
+              { text: '지원 타입', link: '/guide/data-types/supported' },
+              { text: '자동 확장 컬렉션', link: '/guide/data-types/auto-collections' },
+              { text: '커스텀 클래스 요소', link: '/guide/data-types/custom-class' }
+            ]
+          },
+          {
+            text: '게임 서버',
+            link: '/guide/server/',
+            collapsed: true,
+            items: [
+              { text: '서버 선택', link: '/guide/server/select' },
+              { text: '서버 정보 조회', link: '/guide/server/info' }
+            ]
+          },
+          {
             text: '서버 시간',
             link: '/guide/server-time/',
             collapsed: true,
             items: [
               { text: '서버 시각 조회', link: '/guide/server-time/now' },
               { text: '기다리지 않고 읽기', link: '/guide/server-time/now-sync' }
+            ]
+          }
+        ]
+      },
+      {
+        text: '운영',
+        link: '/guide/operation/',
+        collapsed: true,
+        items: [
+          {
+            text: '고객센터',
+            link: '/guide/customer-center/',
+            collapsed: true,
+            items: [
+              { text: '창 열기', link: '/guide/customer-center/open' },
+              { text: '쿠폰 등록 창 열기', link: '/guide/customer-center/coupon' },
+              { text: '새 답변 수', link: '/guide/customer-center/unread' },
+              { text: '개인정보처리방침 열기', link: '/guide/customer-center/privacy' },
+              { text: '이용약관 열기', link: '/guide/customer-center/terms' },
+              { text: '약관 버전 조회', link: '/guide/customer-center/legal-versions' },
+              { text: '약관 동의 조회', link: '/guide/customer-center/legal-consent' },
+              { text: '약관 동의 남기기', link: '/guide/customer-center/legal-consent-save' }
+            ]
+          },
+          {
+            text: '푸시 알림',
+            link: '/guide/push/',
+            collapsed: true,
+            items: [
+              { text: '기기 등록', link: '/guide/push/register' },
+              { text: '수신 설정 읽기', link: '/guide/push/get-preferences' },
+              { text: '수신 설정 바꾸기', link: '/guide/push/set-preferences' },
+              { text: '게임 중에 온 알림', link: '/guide/push/received' }
             ]
           },
           {
@@ -360,29 +410,49 @@ export default defineConfig({
           { text: '인증', link: '/guide/api/auth' },
           { text: '계정', link: '/guide/api/account' },
           { text: '게임 데이터', link: '/guide/api/game-data' },
-          { text: '인앱 결제', link: '/guide/api/iap' },
+          {
+            text: '커뮤니티',
+            link: '/guide/api/community',
+            collapsed: true,
+            items: [
+              { text: '채팅', link: '/guide/api/chat' },
+              { text: '친구', link: '/guide/api/friend' }
+            ]
+          },
           { text: '우편함', link: '/guide/api/mailbox' },
-          { text: '리더보드', link: '/guide/api/leaderboard' },
-          { text: '매치 결과', link: '/guide/api/match-result' },
-          { text: '쿠폰', link: '/guide/api/coupon' },
-          { text: '고객센터', link: '/guide/api/customer-center' },
-          { text: '푸시 알림', link: '/guide/api/push' },
-          { text: '채팅', link: '/guide/api/chat' },
-          { text: '친구', link: '/guide/api/friend' },
-          { text: '매치 로비', link: '/guide/api/match-lobby' },
-          { text: '기타', link: '/guide/api/etc' },
+          {
+            text: '결제·보상',
+            link: '/guide/api/reward',
+            collapsed: true,
+            items: [
+              { text: '인앱 결제', link: '/guide/api/iap' },
+              { text: '쿠폰', link: '/guide/api/coupon' }
+            ]
+          },
+          {
+            text: '매치·랭킹',
+            link: '/guide/api/match-rank',
+            collapsed: true,
+            items: [
+              { text: '리더보드', link: '/guide/api/leaderboard' },
+              { text: '매치 로비', link: '/guide/api/match-lobby' },
+              { text: '매치 기록', link: '/guide/api/match-result' }
+            ]
+          },
+          {
+            text: '운영',
+            link: '/guide/api/operation',
+            collapsed: true,
+            items: [
+              { text: '고객센터', link: '/guide/api/customer-center' },
+              { text: '푸시 알림', link: '/guide/api/push' },
+              { text: '점검·버전', link: '/guide/api/app-status' }
+            ]
+          },
           { text: '에러 코드', link: '/guide/api/fail-reasons' }
         ]
       },
-      {
-        text: '부록',
-        link: '/guide/appendix/',
-        collapsed: true,
-        items: [
-          { text: '예제', link: '/guide/samples/examples' },
-          { text: 'Apple 설정 상세', link: '/guide/social/apple/setup-details' }
-        ]
-      },
+      { text: '예제', link: '/guide/samples/examples' },
       { text: '업데이트 내역', link: '/guide/updates' }
     ],
 

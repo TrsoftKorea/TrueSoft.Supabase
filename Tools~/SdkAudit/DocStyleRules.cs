@@ -96,6 +96,29 @@ namespace SdkAudit
             public string Text;
             public bool HasLink, HasItems, Collapsed;
             public int Children;
+            public string Link;
+            public readonly List<string> ChildLinks = new List<string>();
+        }
+
+        /// <summary>
+        /// 모음 페이지에 카드 목록이 있으면 사이드바 하위 항목이 전부 카드로 있어야 한다.
+        /// 새 기능을 사이드바에만 더하고 카드를 빠뜨린 일이 두 번 있었다(2026-11-26 — API 색인 3개, 서비스 모음의 점검·버전).
+        /// </summary>
+        private static void CheckCardsComplete(AuditContext ctx, SidebarNode node)
+        {
+            if (string.IsNullOrEmpty(node.Link) || !node.Link.StartsWith("/guide/", StringComparison.Ordinal))
+                return;
+            var rel = node.Link.Substring("/guide/".Length);
+            var page = Path.Combine(ctx.Root, "docs~", "guide", rel.EndsWith("/") || rel.Length == 0 ? rel + "index.md" : rel + ".md");
+            if (!File.Exists(page))
+                return; // 없는 페이지는 R22 제목이 잡는다
+            var text = File.ReadAllText(page);
+            if (!text.Contains("tb-cards", StringComparison.Ordinal))
+                return;
+            var cards = new HashSet<string>(CardLine.Matches(text).Select(m => "/guide/" + m.Groups["link"].Value), StringComparer.Ordinal);
+            foreach (var child in node.ChildLinks)
+                if (!cards.Contains(child))
+                    ctx.Report.Error($"[R22 카드빠짐] {ctx.Rel(page)} 카드 목록에 사이드바 하위 항목 '{child}' 이 없습니다.");
         }
 
         private static readonly Regex CardLine = new Regex(@"^- \[\*\*(?<name>[^*]+)\*\*.*?\]\(/guide/(?<link>[^)#]*)(?:#[^)]*)?\)", RegexOptions.Multiline | RegexOptions.Compiled);
@@ -146,7 +169,13 @@ namespace SdkAudit
 
                     var node = stack.Pop();
                     if (stack.Count > 0)
+                    {
                         stack.Peek().Children++;
+                        if (node.Link != null)
+                            stack.Peek().ChildLinks.Add(node.Link);
+                    }
+                    if (node.HasItems)
+                        CheckCardsComplete(ctx, node);
                     if (!node.HasItems)
                     {
                         if (node.Text == "개요")
@@ -171,7 +200,7 @@ namespace SdkAudit
                     switch (m.Groups["key"].Value)
                     {
                         case "text": top.Text = value; break;
-                        case "link": top.HasLink = true; break;
+                        case "link": top.HasLink = true; top.Link = value; break;
                         case "items": top.HasItems = true; break;
                         case "collapsed": top.Collapsed = value == "true"; break;
                     }

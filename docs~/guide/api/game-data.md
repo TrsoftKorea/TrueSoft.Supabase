@@ -22,3 +22,10 @@
 |------|------|
 | [`RemoteConfig<T>.GetAsync`](/guide/remote-config/get) | 설정 값 한 번 읽기 |
 | [`RemoteConfig<T>.CreateListener`](/guide/remote-config/listener) | 값 변경 콜백 Listener 생성 |
+
+## 서버 시간
+
+| 메서드 | 설명 |
+|--------|------|
+| [`GetServerNowAsync`](/guide/server-time/now) | 서버 기준 UTC 시각 조회 |
+| [`GetServerNow`](/guide/server-time/now-sync) | 캐시된 기준점으로 즉시 반환 |

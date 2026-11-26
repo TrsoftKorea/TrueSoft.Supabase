@@ -11,7 +11,7 @@ SDK 판마다 게임에 달라지는 점입니다. 판을 올리는 방법은 [�
 :::
 
 - **플레이나누 병행 런타임을 SDK 안으로** — 게임에 PlayNANOO가 있으면 SDK가 런타임을 저절로 켜고, 없으면 앱에 들어가지 않습니다. 이제 판을 올려도 씬의 `PlayNanooRuntime`이 `Missing`이 되지 않습니다. [설치](/guide/migration/install)를 참고하세요.
-- **Database Setup 샘플 제거** — DB와 서버 함수는 운영 콘솔에서 만든 프로젝트에 미리 설치돼 있어 패키지 관리자의 샘플 목록에서 뺐습니다. 이미 가져온 `Assets/Samples/TrueBase/<판>/Database Setup` 폴더는 지워도 됩니다. [서비스 연결값](/guide/start/database-setup)을 참고하세요.
+- **Database Setup 샘플 제거** — DB와 서버 함수는 운영 콘솔에서 만든 프로젝트에 미리 설치돼 있어 패키지 관리자의 샘플 목록에서 뺐습니다. 이미 가져온 `Assets/Samples/TrueBase/<판>/Database Setup` 폴더는 지워도 됩니다. [결제·로그인 키](/guide/start/database-setup)을 참고하세요.
 
 ## 0.7.0 {#v0-7-0}
 

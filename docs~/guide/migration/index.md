@@ -21,11 +21,11 @@
 
 <div class="tb-cards">
 
-- [**설치**<br><small>런타임 배치</small>](/guide/migration/install)
-- [**로그인**<br><small>게스트·소셜·자동 로그인</small>](/guide/migration/login)
-- [**탈퇴 취소**<br><small>표준 취소 API·자동 나누 복구</small>](/guide/migration/withdrawal)
-- [**인앱 결제**<br><small>플레이나누 → SDK 검증</small>](/guide/migration/iap)
-- [**데이터 동기화**<br><small>updated_at 기반 동기화</small>](/guide/migration/sync)
-- [**플레이나누 제거 후**<br><small>파일 삭제·정리</small>](/guide/migration/after)
+- [**설치**<br><small>병행 부품을 씬에 놓기</small>](/guide/migration/install)
+- [**로그인**<br><small>두 서버에 함께 로그인</small>](/guide/migration/login)
+- [**탈퇴 취소**<br><small>탈퇴 취소를 두 서버에 함께</small>](/guide/migration/withdrawal)
+- [**인앱 결제**<br><small>결제 확인을 SDK로 옮기기</small>](/guide/migration/iap)
+- [**데이터 동기화**<br><small>두 서버의 세이브 맞추기</small>](/guide/migration/sync)
+- [**플레이나누 제거 후**<br><small>플레이나누를 걷어 낸 뒤</small>](/guide/migration/after)
 
 </div>

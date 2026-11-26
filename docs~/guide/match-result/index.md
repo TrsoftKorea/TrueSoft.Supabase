@@ -1,4 +1,4 @@
-# 매치 결과
+# 매치 기록
 
 대전·협동 판의 결과를 기록하고 읽는 기능입니다. 보상은 지급하지 않습니다. 2인 판은 참가자 양쪽이 신고한 결과를 서로 맞춰 보고 확인 단계를 매깁니다. 봇을 상대했거나 혼자 한 판은 [상대 없는 판 기록](/guide/match-result/report-solo)으로 남깁니다. 쌓인 기록은 [전적 요약](/guide/match-result/stats)과 [최근 전적](/guide/match-result/history)으로 읽습니다.
 

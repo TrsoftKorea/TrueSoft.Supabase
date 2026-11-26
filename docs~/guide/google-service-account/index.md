@@ -4,7 +4,7 @@ Google 서비스 계정 JSON을 발급하고 콘솔에 등록합니다. Android 
 
 <div class="tb-cards">
 
-- [**발급 절차**<br><small>서비스 계정 JSON 생성</small>](/guide/google-service-account/issue)
-- [**콘솔 등록**<br><small>Play Console 권한 연결</small>](/guide/google-service-account/console)
+- [**발급 절차**<br><small>구글 클라우드에서 키 받기</small>](/guide/google-service-account/issue)
+- [**콘솔 등록**<br><small>그 키에 결제 확인 권한 주기</small>](/guide/google-service-account/console)
 
 </div>
