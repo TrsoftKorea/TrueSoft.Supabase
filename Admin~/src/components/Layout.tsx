@@ -87,7 +87,6 @@ const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
     items: [
       { to: '/players', label: '플레이어 목록', icon: Users },
       { to: '/player-data', label: '플레이어 데이터', icon: FilePen },
-      { to: '/purchases', label: '구매 내역', icon: ReceiptText },
       { to: '/data-logs', label: '데이터 로그', icon: ScrollText },
     ],
   },
@@ -110,9 +109,10 @@ const NAV_SECTIONS: { label: string; icon: Icon; items: NavItem[] }[] = [
     ],
   },
   {
-    label: '보상',
+    label: '결제·보상',
     icon: Gift,
     items: [
+      { to: '/purchases', label: '구매 내역', icon: ReceiptText },
       { to: '/coupons', label: '쿠폰', icon: Ticket },
       { to: '/items', label: '아이템 카탈로그', icon: Package },
     ],
