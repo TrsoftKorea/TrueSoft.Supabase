@@ -106,7 +106,7 @@ function ItemModal({ target, onUnauthenticated, configKey, itemKey, currentValue
   existingKeys: string[]
   onClose: () => void
   onSaved: () => void
-  /** 주면 게시 대기 대신 이것으로 저장한다(운영 계정 값). */
+  /** 주면 게시 대기 대신 이것으로 저장한다(테스트 플레이어 값). */
   save?: (itemKey: string, value: unknown) => Promise<void>
   titles?: { add: string; edit: string }
 }) {
@@ -213,7 +213,7 @@ export default function RemoteConfig({
   const [dialogError, setDialogError] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
   const [deleteItemTarget, setDeleteItemTarget] = useState<{ itemKey: string; value: unknown } | null>(null)
-  // 운영 계정 값 — 게시 단계 없이 저장하는 즉시 운영 계정(원격 설정 미리 받기 권한)에게 간다. 못 불러왔으면 null.
+  // 테스트 플레이어 값 — 게시 단계 없이 저장하는 즉시 테스트 플레이어(원격 설정 미리 받기 권한)에게 간다. 못 불러왔으면 null.
   const [opValues, setOpValues] = useState<Record<string, OperatorValue> | null>(null)
   const [opModal, setOpModal] = useState<{ itemKey: string | null; value: unknown } | null>(null)
   const [opDelete, setOpDelete] = useState<{ itemKey: string; value: unknown } | null>(null)
@@ -250,11 +250,11 @@ export default function RemoteConfig({
       setOpValues(await callAdmin<Record<string, OperatorValue>>(target, 'remoteConfig.getOperatorValues'))
     } catch (e: unknown) {
       setOpValues(null)
-      report(e, '운영 계정 값을 불러오지 못했습니다.')
+      report(e, '테스트 플레이어 값을 불러오지 못했습니다.')
     }
   }, [target, report])
 
-  // 항목 하나를 고쳐도 서버에는 그 키의 운영 계정 값 전체를 보낸다(빈 객체면 지운다).
+  // 항목 하나를 고쳐도 서버에는 그 키의 테스트 플레이어 값 전체를 보낸다(빈 객체면 지운다).
   const saveOpValue = async (key: string, next: Record<string, unknown>) => {
     await callAdmin(target, 'remoteConfig.setOperatorValue', { key, valueJson: Object.keys(next).length > 0 ? next : null })
     await reloadOpValues()
@@ -354,7 +354,7 @@ export default function RemoteConfig({
   const selectedItems = selected ? Object.entries(selected.value_json).filter(([k]) => k !== '__meta') : []
   const selectedOp = selectedKey ? opValues?.[selectedKey] ?? null : null
   const selectedOpItems = Object.entries(selectedOp?.value_json ?? {})
-  // 운영 계정 값은 게시된 키에만 붙는다 — 추가 대기 중인 키는 서버에 아직 없다.
+  // 테스트 플레이어 값은 게시된 키에만 붙는다 — 추가 대기 중인 키는 서버에 아직 없다.
   const opEditable = !!selectedKey && rows.some((r) => r.key === selectedKey) && opValues !== null
 
   const confirmOpDelete = async () => {
@@ -398,7 +398,7 @@ export default function RemoteConfig({
               return (
                 <span className="inline-flex items-center gap-1.5">
                   {eff.requires_auth && <Tag tone="brand">인증 필요</Tag>}
-                  {opValues?.[key] && <Tag>운영 계정 값</Tag>}
+                  {opValues?.[key] && <Tag>테스트 플레이어 값</Tag>}
                   {eff.pendingId != null && !eff.deleted && <Tag>대기 중</Tag>}
                   {eff.deleted
                     // 빨간 바탕은 글자 바깥으로 넓어진다 — 앞의 작은 표시와 바탕이 맞닿지 않게 그만큼 띄운다.
@@ -493,9 +493,9 @@ export default function RemoteConfig({
           <div className="border-t border-neutral-200 pt-4 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-neutral-800">운영 계정 값</div>
+                <div className="text-sm font-medium text-neutral-800">테스트 플레이어 값</div>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  원격 설정 미리 받기 권한이 있는 운영 계정만 같은 이름의 필드를 이 값으로 받습니다. 저장하면 게시 없이 곧바로 반영됩니다.
+                  원격 설정 미리 받기 권한이 있는 테스트 플레이어만 같은 이름의 필드를 이 값으로 받습니다. 저장하면 게시 없이 곧바로 반영됩니다.
                 </p>
               </div>
               <Button variant="primary" size="compact" className="shrink-0" disabled={!opEditable || busy}
@@ -527,7 +527,7 @@ export default function RemoteConfig({
               rows={selectedOpItems}
               rowKey={([k]) => k}
               failed={opValues === null}
-              emptyText={rows.some((r) => r.key === selectedKey) ? '운영 계정 값이 없습니다.' : '게시한 뒤에 운영 계정 값을 넣을 수 있습니다.'}
+              emptyText={rows.some((r) => r.key === selectedKey) ? '테스트 플레이어 값이 없습니다.' : '게시한 뒤에 테스트 플레이어 값을 넣을 수 있습니다.'}
             />
             {selectedOp && (
               <LastEdited at={selectedOp.updated_at} by={selectedOp.updated_by} />
@@ -544,7 +544,7 @@ export default function RemoteConfig({
           itemKey={opModal.itemKey}
           currentValue={opModal.value}
           existingKeys={selectedOpItems.map(([k]) => k)}
-          titles={{ add: '운영 계정 값 추가', edit: '운영 계정 값 수정' }}
+          titles={{ add: '테스트 플레이어 값 추가', edit: '테스트 플레이어 값 수정' }}
           save={(k, v) => saveOpValue(selectedKey, { ...(selectedOp?.value_json ?? {}), [k]: v })}
           onClose={() => setOpModal(null)}
           onSaved={() => setOpModal(null)}
@@ -560,7 +560,7 @@ export default function RemoteConfig({
         error={dialogError}
         onConfirm={() => void confirmOpDelete()}
         onCancel={() => setOpDelete(null)}
-        description="운영 계정도 곧바로 일반 플레이어와 같은 값을 받습니다."
+        description="테스트 플레이어도 곧바로 일반 플레이어와 같은 값을 받습니다."
       >
         {opDelete && (
           <div className="rounded-md bg-neutral-50 border border-neutral-200 px-3 py-2 text-sm">

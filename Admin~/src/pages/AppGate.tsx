@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronUp, CircleHelp, Save } from 'lucide-react'
+import { ChevronDown, ChevronUp, CircleHelp, Save, Users } from 'lucide-react'
 import { callAdmin, NotAuthenticatedError } from '../lib/api'
 import type { ProjectTarget } from '../lib/projectTarget'
 import { isoToLocalInput, localInputToIso, timeZoneName, useGameTimeZone } from '../lib/gameTime'
@@ -9,7 +9,6 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Switch } from '../components/ui/Switch'
 import { StatusText } from '../components/ui/StatusText'
-import { InfoList } from '../components/ui/InfoList'
 import type { OperatorAccount } from './OperatorAccounts'
 import { inputCls } from '../components/ui/Input'
 import { formatCount } from '../components/ui/format'
@@ -63,8 +62,10 @@ const toParams = (g: Gate) => ({
   maintenanceLocalized: g.maintenance_localized ?? {},
 })
 
-/** 설정 › 접속 탭의 점검·버전 카드. */
-export default function AppGateCards({ target, report, onOpenOperators }: { target: ProjectTarget; report: Report; onOpenOperators: () => void }) {
+/** 설정 › 접속 탭의 버전·점검 카드 — 작은 탭마다 하나씩, 테스트 플레이어로 가는 링크를 함께 둔다. */
+export default function AppGateCards({ target, report, part, onOpenOperators }: {
+  target: ProjectTarget; report: Report; part: 'version' | 'maintenance'; onOpenOperators: () => void
+}) {
   const [gate, setGate] = useState<Gate | null>(null)
   const [loading, setLoading] = useState(true)
   const [operators, setOperators] = useState<OperatorAccount[] | null>(null)
@@ -74,7 +75,7 @@ export default function AppGateCards({ target, report, onOpenOperators }: { targ
     setOperators(null)
     callAdmin<OperatorAccount[]>(target, 'operatorAccounts.list')
       .then((list) => { if (alive) setOperators(list) })
-      .catch((e: unknown) => report(e, '운영 계정을 불러오지 못했습니다.'))
+      .catch((e: unknown) => report(e, '테스트 플레이어를 불러오지 못했습니다.'))
     return () => { alive = false }
   }, [target, report])
   const countOf = (f: 'maintenance_bypass' | 'version_bypass') => (operators ? operators.filter((o) => o[f]).length : null)
@@ -113,9 +114,10 @@ export default function AppGateCards({ target, report, onOpenOperators }: { targ
 
   return (
     <div className="space-y-4">
-      <VersionCard gate={gate} loading={loading} save={save} report={report} />
-      <MaintenanceCard target={target} gate={gate} loading={loading} save={save} report={report} allowCount={allowCount} />
-      <OperatorsCard maintenanceCount={allowCount} versionCount={countOf('version_bypass')} onOpen={onOpenOperators} />
+      {part === 'version' && <VersionCard gate={gate} loading={loading} save={save} report={report}
+        bypass={<BypassLink count={countOf('version_bypass')} onOpen={onOpenOperators} />} />}
+      {part === 'maintenance' && <MaintenanceCard target={target} gate={gate} loading={loading} save={save} report={report} allowCount={allowCount}
+        bypass={<BypassLink count={allowCount} onOpen={onOpenOperators} />} />}
     </div>
   )
 }
@@ -164,17 +166,20 @@ function Before({ label, before, after }: { label: string; before: string; after
   )
 }
 
-/** 접어 둔 「적용 대상」 안내 — 어느 빌드에 효과가 있는지. */
-function AppliesTo({ children }: { children: ReactNode }) {
+/** 접어 둔 「적용 대상」 안내 — 어느 빌드에 효과가 있는지. 같은 줄 오른쪽에 테스트 플레이어 링크(bypass)를 둔다. */
+function AppliesTo({ children, bypass }: { children: ReactNode; bypass: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
     <div>
-      <button type="button" onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 text-xs text-[#1677ff] hover:underline">
-        <CircleHelp className="w-3.5 h-3.5" />
-        적용 대상
-        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-      </button>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <button type="button" onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-1 text-xs text-[#1677ff] hover:underline">
+          <CircleHelp className="w-3.5 h-3.5" />
+          적용 대상
+          {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+        {bypass}
+      </div>
       {open && (
         <div className="mt-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-xs text-neutral-700 leading-relaxed space-y-1">
           {children}
@@ -189,8 +194,8 @@ const MAINT_KEYS = ['maintenance_enabled', 'maintenance_starts_at', 'maintenance
 /** 카드가 맡은 값만 묶은 표시 — 다른 카드를 저장해도 이 값이 같으면 입력 중인 칸을 되돌리지 않는다. */
 const sectionKey = (gate: Gate | null, keys: readonly (keyof Gate)[]) => (gate ? JSON.stringify(keys.map((k) => gate[k])) : '')
 
-function VersionCard({ gate, loading, save, report }: {
-  gate: Gate | null; loading: boolean; save: SaveFn; report: Report
+function VersionCard({ gate, loading, save, report, bypass }: {
+  gate: Gate | null; loading: boolean; save: SaveFn; report: Report; bypass: ReactNode
 }) {
   const [v, setV] = useState({ android: '', ios: '', androidUrl: '', iosUrl: '' })
   const flow = useSaveFlow(save, report)
@@ -218,7 +223,7 @@ function VersionCard({ gate, loading, save, report }: {
     <FormCard>
       <div className="space-y-2">
         <CardHeader title="최소 버전" description="이보다 낮은 버전의 게임은 업데이트 안내를 띄우고 들어가지 않습니다." />
-        <AppliesTo>
+        <AppliesTo bypass={bypass}>
           <p>SDK 0.5.0 이상으로 만들고 게임이 앱 상태 확인을 부르는 빌드에만 안내가 뜹니다.</p>
           <p>그보다 옛 빌드는 버전이 낮아도 그대로 들어옵니다 — 서버는 버전으로 요청을 막지 않습니다.</p>
         </AppliesTo>
@@ -286,9 +291,9 @@ function TextField({ label, value, onChange, disabled, bad, hint, badHint, type 
 type MsgRow = { lang: string; message: string }
 const MSG_KEYS = ['message'] as const
 
-function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
+function MaintenanceCard({ target, gate, loading, save, report, allowCount, bypass }: {
   target: ProjectTarget; gate: Gate | null; loading: boolean; save: SaveFn; report: Report
-  allowCount: number | null
+  allowCount: number | null; bypass: ReactNode
 }) {
   // 시각은 게임 시간대로 읽고 쓴다 — 시간대를 받기 전에는 시각 칸과 저장을 막는다.
   const tz = useGameTimeZone(target)
@@ -335,7 +340,7 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
   const at = (iso: string) => `${isoToLocalInput(iso, tz ?? 'UTC').replace('T', ' ')} ${tz ? timeZoneName(tz) : ''}`.trim()
   const startsLater = !!startIso && Date.parse(startIso) > Date.now()
   const active = !!gate?.maintenance_active
-  const blocked = `점검 통과 운영 계정${allowCount === null ? '' : ` ${formatCount(allowCount)}개`} 밖의 플레이어는 들어오지 못하고, 게임 중인 플레이어도 다음 요청부터 막힙니다.`
+  const blocked = `점검 통과 테스트 플레이어${allowCount === null ? '' : ` ${formatCount(allowCount)}명`} 말고는 들어오지 못하고, 게임 중인 플레이어도 다음 요청부터 막힙니다.`
   const outcome = !enabled
     ? (active ? '점검이 끝나 모든 플레이어가 곧바로 들어올 수 있습니다.' : '점검을 끈 채로 저장합니다.')
     : active
@@ -351,12 +356,12 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
       <div className="space-y-2">
         <CardHeader
           title="점검"
-          description="점검 중에는 점검 통과 운영 계정 밖의 플레이어가 게임에 들어오지 못하고 안내 문구를 봅니다."
+          description="점검 중에는 점검 통과 테스트 플레이어 말고는 게임에 들어오지 못하고 안내 문구를 봅니다."
           actions={gate && (gate.maintenance_active
             ? <StatusText tone="bad">지금 점검 중</StatusText>
             : gate.maintenance_enabled ? <StatusText tone="warn">시작 예정</StatusText> : <StatusText tone="muted">꺼짐</StatusText>)}
         />
-        <AppliesTo>
+        <AppliesTo bypass={bypass}>
           <p>서버는 모든 빌드의 로그인한 요청을 막습니다.</p>
           <p>안내 문구는 SDK 0.5.0 이상으로 만들고 게임이 앱 상태 확인을 부르는 빌드에만 뜹니다. 그보다 옛 빌드는 안내 없이 요청 실패만 겪습니다.</p>
         </AppliesTo>
@@ -418,22 +423,12 @@ function MaintenanceCard({ target, gate, loading, save, report, allowCount }: {
   )
 }
 
-/** 점검·버전 통과는 운영 계정에서 정한다 — 여기서는 몇 개인지와 그 화면으로 가는 길만. */
-function OperatorsCard({ maintenanceCount, versionCount, onOpen }: {
-  maintenanceCount: number | null; versionCount: number | null; onOpen: () => void
-}) {
-  const n = (v: number | null) => (v === null ? '…' : `${formatCount(v)}개`)
+/** 점검·버전 통과는 테스트 플레이어에서 정한다 — 여기서는 몇 명인지와 그 작은 탭으로 가는 길만. */
+function BypassLink({ count, onOpen }: { count: number | null; onOpen: () => void }) {
   return (
-    <FormCard>
-      <CardHeader
-        title="통과 계정"
-        description="점검 중이거나 앱이 최소 버전보다 낮아도 들어올 계정은 운영 계정에서 정합니다."
-        actions={<Button variant="outline" onClick={onOpen}>운영 계정 열기</Button>}
-      />
-      <InfoList items={[
-        { label: '점검 통과', value: n(maintenanceCount) },
-        { label: '버전 통과', value: n(versionCount) },
-      ]} />
-    </FormCard>
+    <button type="button" onClick={onOpen} className="inline-flex items-center gap-1 text-xs text-[#1677ff] hover:underline whitespace-nowrap">
+      <Users className="w-3.5 h-3.5" />
+      테스트 플레이어 {count === null ? '…' : `${formatCount(count)}명`}
+    </button>
   )
 }

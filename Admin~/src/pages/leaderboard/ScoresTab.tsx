@@ -21,7 +21,7 @@ type LbRow = { code: string; display_name: string; rotation: string; scope: stri
 type ServerRow = { id: string; server_code: string; display_name: string }
 type AttachedCol = { name: string; dataType: string }
 type ScoreRow = {
-  // 순위·통계 제외 운영 계정의 기록은 hidden 이고 rank 가 null — 서버가 목록 맨 뒤에 둔다.
+  // 순위·통계 제외 테스트 플레이어의 기록은 hidden 이고 rank 가 null — 서버가 목록 맨 뒤에 둔다.
   rank: number | null
   hidden?: boolean
   account_id: string

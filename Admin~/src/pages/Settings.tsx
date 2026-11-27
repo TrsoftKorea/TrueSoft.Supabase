@@ -9,6 +9,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { CardHeader, FormCard, GroupBox, GroupTable, WhiteCard } from '../components/ui/Card'
 import { Segmented } from '../components/ui/Segmented'
 import { Tabs } from '../components/ui/Tabs'
+import { SubTabs, useSubTab } from '../components/ui/SubTabs'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EditDialog } from '../components/ui/EditDialog'
 import { Button } from '../components/ui/Button'
@@ -962,7 +963,7 @@ function ConsoleIdentityCard({
   )
 }
 
-function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void }) {
+function ConsoleCards({ target, report, part }: { target: ProjectTarget; report: (e: unknown, fallback: string) => void; part: 'identity' | 'color' }) {
   const [current, setCurrent] = useState<ConsoleSettings | null>(null)
 
   useEffect(() => {
@@ -978,10 +979,9 @@ function ConsoleCards({ target, report }: { target: ProjectTarget; report: (e: u
   }
 
   return (
-    <div className="space-y-4">
-      <ConsoleIdentityCard target={target} current={current} onSaved={onSaved} report={report} />
-      <ConsoleColorCard target={target} current={current} onSaved={onSaved} report={report} />
-    </div>
+    part === 'identity'
+      ? <ConsoleIdentityCard target={target} current={current} onSaved={onSaved} report={report} />
+      : <ConsoleColorCard target={target} current={current} onSaved={onSaved} report={report} />
   )
 }
 
@@ -1370,7 +1370,6 @@ function LanguageCard({ target, report }: { target: ProjectTarget; report: (e: u
   )
 }
 
-// 탭 주소(?tab=)는 묶음 이름 말고 안쪽 카드 이름(gate·operators 등)도 받는다 — 다른 화면이 그 카드로 바로 보낼 수 있게.
 type Tab = 'store' | 'general' | 'access' | 'player' | 'push'
 const TABS: readonly (readonly [Tab, string])[] = [
   ['store', '서비스 연결'],
@@ -1379,12 +1378,25 @@ const TABS: readonly (readonly [Tab, string])[] = [
   ['player', '플레이어'],
   ['push', '푸시 알림'],
 ]
-const TAB_ALIASES: Record<string, Tab> = {
-  console: 'general', time: 'general', reset: 'general',
-  gate: 'access', limit: 'access', operators: 'access',
-  withdrawal: 'player', friend: 'player',
+// 한 화면에 안 들어가는 큰 탭만 작은 탭으로 가른다(서비스 연결·푸시 알림은 한 화면에 들어간다).
+type GeneralSub = 'identity' | 'color' | 'locale' | 'reset'
+type AccessSub = 'version' | 'maintenance' | 'limit' | 'blocked' | 'operators'
+type PlayerSub = 'withdrawal' | 'friend'
+const GENERAL_SUBS: readonly (readonly [GeneralSub, string])[] = [
+  ['identity', '이름·아이콘'], ['color', '색'], ['locale', '시간대·언어'], ['reset', '전체 초기화'],
+]
+const ACCESS_SUBS: readonly (readonly [AccessSub, string])[] = [
+  ['version', '버전'], ['maintenance', '점검'], ['limit', '요청 제한'], ['blocked', '제한 중인 계정'], ['operators', '테스트 플레이어'],
+]
+const PLAYER_SUBS: readonly (readonly [PlayerSub, string])[] = [['withdrawal', '탈퇴'], ['friend', '친구']]
+
+// 옛 주소(?tab=gate 등 카드 이름)는 큰 탭 + 작은 탭으로 바꿔 연다.
+const TAB_ALIASES: Record<string, { tab: Tab; sub?: string }> = {
+  console: { tab: 'general' }, time: { tab: 'general', sub: 'locale' }, reset: { tab: 'general', sub: 'reset' },
+  gate: { tab: 'access' }, limit: { tab: 'access', sub: 'limit' }, operators: { tab: 'access', sub: 'operators' },
+  withdrawal: { tab: 'player' }, friend: { tab: 'player', sub: 'friend' },
 }
-const toTab = (v: string | null): Tab => TABS.find(([t]) => t === v)?.[0] ?? (v ? TAB_ALIASES[v] : undefined) ?? 'store'
+const toTab = (v: string | null): Tab => TABS.find(([t]) => t === v)?.[0] ?? 'store'
 
 export default function Settings({
   target,
@@ -1398,9 +1410,15 @@ export default function Settings({
   const [error, setError] = useState('')
   const [params, setParams] = useSearchParams()
   const tab = toTab(params.get('tab'))
-  const setTab = (t: Tab) => setParams(t === 'store' ? {} : { tab: t }, { replace: true })
-  // 요청 제한 설정을 저장하면 제한 목록을 다시 읽는다(끄면 목록이 빈다).
-  const [limitReload, setLimitReload] = useState(0)
+  const setTab = (t: Tab, sub?: string) => setParams(t === 'store' ? {} : sub ? { tab: t, sub } : { tab: t }, { replace: true })
+  const [generalSub, setGeneralSub] = useSubTab(isMaster ? GENERAL_SUBS : GENERAL_SUBS.filter(([s]) => s !== 'reset'))
+  const [accessSub, setAccessSub] = useSubTab(ACCESS_SUBS)
+  const [playerSub, setPlayerSub] = useSubTab(PLAYER_SUBS)
+  const alias = TAB_ALIASES[params.get('tab') ?? '']
+  useEffect(() => {
+    if (alias) setTab(alias.tab, alias.sub)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 옛 주소로 들어왔을 때 한 번만 바꾼다
+  }, [alias])
 
   const report = useCallback((e: unknown, fallback: string) => {
     if (e instanceof NotAuthenticatedError) { onUnauthenticated(); return }
@@ -1417,17 +1435,23 @@ export default function Settings({
       {tab === 'store' && <StoreStatusCard target={target} report={report} />}
       {tab === 'general' && (
         <div className="space-y-4">
-          <ConsoleCards target={target} report={report} />
-          <TimeZoneCard target={target} report={report} />
-          <LanguageCard target={target} report={report} />
+          <SubTabs value={generalSub} onChange={setGeneralSub} tabs={isMaster ? GENERAL_SUBS : GENERAL_SUBS.filter(([s]) => s !== 'reset')} />
+          {(generalSub === 'identity' || generalSub === 'color') && <ConsoleCards target={target} report={report} part={generalSub} />}
+          {generalSub === 'locale' && <>
+            <TimeZoneCard target={target} report={report} />
+            <LanguageCard target={target} report={report} />
+          </>}
           {/* 마스터만 본다 — 서버도 마스터가 아니면 거절한다(admin-api MASTER_ONLY_ACTIONS). */}
-          {isMaster && <ResetAllPlayersCard target={target} report={report} onOpenGate={() => setTab('access')} />}
+          {generalSub === 'reset' && isMaster && <ResetAllPlayersCard target={target} report={report} onOpenGate={() => setTab('access', 'maintenance')} />}
         </div>
       )}
       {tab === 'access' && (
         <div className="space-y-4">
-          <AppGateCards target={target} report={report} onOpenOperators={() => document.getElementById('operator-accounts')?.scrollIntoView({ behavior: 'smooth' })} />
-          <LimitsForm
+          <SubTabs value={accessSub} onChange={setAccessSub} tabs={ACCESS_SUBS} />
+          {(accessSub === 'version' || accessSub === 'maintenance') && (
+            <AppGateCards target={target} report={report} part={accessSub} onOpenOperators={() => setAccessSub('operators')} />
+          )}
+          {accessSub === 'limit' && <LimitsForm
             target={target}
             report={report}
             title="요청 제한"
@@ -1437,17 +1461,15 @@ export default function Settings({
             fields={REQUEST_LIMIT_FIELDS}
             toggle={REQUEST_LIMIT_TOGGLE}
             confirmTitle="요청 제한 설정을 바꿀까요?"
-            onSaved={() => setLimitReload((n) => n + 1)}
-          />
-          <RequestLimitBlocksCard key={limitReload} target={target} report={report} />
-          <div id="operator-accounts" className="scroll-mt-4">
-            <OperatorAccountsCard target={target} report={report} />
-          </div>
+          />}
+          {accessSub === 'blocked' && <RequestLimitBlocksCard target={target} report={report} />}
+          {accessSub === 'operators' && <OperatorAccountsCard target={target} report={report} />}
         </div>
       )}
       {tab === 'player' && (
         <div className="space-y-4">
-          <LimitsForm
+          <SubTabs value={playerSub} onChange={setPlayerSub} tabs={PLAYER_SUBS} />
+          {playerSub === 'withdrawal' && <LimitsForm
             target={target}
             report={report}
             title="탈퇴"
@@ -1458,8 +1480,8 @@ export default function Settings({
             toggle={WITHDRAWAL_TOGGLE}
             confirmTitle="탈퇴 유예 기간을 바꿀까요?"
             onSaved={() => forgetGameSettings(target)}
-          />
-          <LimitsForm
+          />}
+          {playerSub === 'friend' && <LimitsForm
             target={target}
             report={report}
             title="친구"
@@ -1468,7 +1490,7 @@ export default function Settings({
             updateAction="friends.settingsUpdate"
             fields={FRIEND_FIELDS}
             confirmTitle="친구 설정을 바꿀까요?"
-          />
+          />}
         </div>
       )}
       {tab === 'push' && <PushSettings target={target} report={report} onUnauthenticated={onUnauthenticated} />}

@@ -46,10 +46,11 @@ export function Tag({ tone = 'neutral', title, children }: { tone?: TagTone; tit
 /**
  * 같은 종류 여럿(아이템·언어·권한) — Tag 를 간격 두고 나란히. 가운뎃점·쉼표로 잇지 않는다(쉼표는 "×1,000"과 섞인다).
  * 기본은 한 줄(표 칸), wrap 이면 넘칠 때 다음 줄로 감긴다(이름·값 목록·창 안).
+ * 휴대폰 폭에서는 표가 줄마다 카드로 바뀌어 칸 폭이 좁으므로 기본도 감긴다 — 한 줄로 두면 오른쪽이 잘렸다.
  */
 export function Tags({ items, wrap = false }: { items: ReactNode[]; wrap?: boolean }) {
   return (
-    <span className={`${wrap ? 'flex flex-wrap gap-y-1' : 'inline-flex align-middle'} gap-x-1.5`}>
+    <span className={`${wrap ? 'flex flex-wrap' : 'inline-flex flex-wrap sm:flex-nowrap align-middle'} gap-x-1.5 gap-y-1`}>
       {items.map((x, i) => <Tag key={i}>{x}</Tag>)}
     </span>
   )

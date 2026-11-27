@@ -176,7 +176,7 @@ export default function Mails({
 
   const playerIds = Object.keys(selected)
 
-  // 시험 발송은 즉시 발송만 된다 — 예약 발송은 운영 계정 대상을 모른다.
+  // 시험 발송은 즉시 발송만 된다 — 예약 발송은 테스트 플레이어 대상을 모른다.
   useEffect(() => { if (sched !== 'immediate' && mode === 'operators') setMode('players') }, [sched, mode])
   const [operatorCount, setOperatorCount] = useState<number | null>(null)
   useEffect(() => {
@@ -231,7 +231,7 @@ export default function Mails({
   const openApplies = (mode === 'all' || mode === 'server') && sched !== 'repeat' && openForNew
   const targetSummary: ReactNode = mode === 'all' ? '전체 플레이어'
     : mode === 'server' ? (servers.find((s) => s.id === serverId)?.display_name ?? '서버 미선택')
-    : mode === 'operators' ? <><Tag>시험 발송</Tag> 운영 계정 {operatorCount === null ? '…' : `${formatCount(operatorCount)}명`}</>
+    : mode === 'operators' ? <><Tag>시험 발송</Tag> 테스트 플레이어 {operatorCount === null ? '…' : `${formatCount(operatorCount)}명`}</>
     : `플레이어 ${formatCount(playerIds.length)}명`
   // 확인 창에서는 "나중에 들어온 플레이어도"를 둘째 줄에 덧붙인다. 단계 머리 요약은 한 줄이라 대상만.
   const targetDetail: ReactNode = openApplies
@@ -374,8 +374,8 @@ export default function Mails({
           {mode === 'operators' && (
             <p className="text-sm text-neutral-700">
               {operatorCount === null ? '…'
-                : operatorCount > 0 ? `시험 우편 받기 권한이 있는 운영 계정 ${formatCount(operatorCount)}명에게 보냅니다.`
-                : '시험 우편 받기 권한이 있는 운영 계정이 없습니다.'}
+                : operatorCount > 0 ? `시험 우편 받기 권한이 있는 테스트 플레이어 ${formatCount(operatorCount)}명에게 보냅니다.`
+                : '시험 우편 받기 권한이 있는 테스트 플레이어가 없습니다.'}
             </p>
           )}
 

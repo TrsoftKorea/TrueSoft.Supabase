@@ -131,7 +131,7 @@ let mockAuthSync: { finishedAt: string | null; ok: boolean | null; message: stri
   finishedAt: addDays(kstToday(), -1) + 'T10:50:00+09:00', ok: true, message: '기본 설정 · Google · 돌아올 주소',
 }
 
-// ── 점검·최소 버전 ── 꺼 둔 상태로, 통과 계정 둘(하나는 닉네임 없음)을 보인다.
+// ── 점검·최소 버전 ── 꺼 둔 상태로, 점검 통과 테스트 플레이어 둘(하나는 닉네임 없음)을 보인다.
 type MockGate = {
   android_min_version: string | null; ios_min_version: string | null
   android_store_url: string | null; ios_store_url: string | null
@@ -153,7 +153,7 @@ const appGateView = () => ({
   maintenance_active: appGate.maintenance_enabled
     && (!appGate.maintenance_starts_at || Date.parse(appGate.maintenance_starts_at) <= Date.now()),
 })
-// ── 운영 계정 ── QA 폰 하나(권한 대부분), 계정이 사라진 유저 ID 하나(점검 통과만). 점검 통과 2개 · 시험 우편 1명.
+// ── 테스트 플레이어 ── QA 폰 하나(권한 대부분), 계정이 사라진 유저 ID 하나(점검 통과만). 점검 통과 2명, 시험 우편 1명.
 type MockOperatorAccount = {
   user_id: string; note: string; account_id: string | null; display_name: string | null
   maintenance_bypass: boolean; version_bypass: boolean; hide_from_stats: boolean; config_preview: boolean; test_recipient: boolean
@@ -171,7 +171,7 @@ let operatorAccounts: MockOperatorAccount[] = [
     created_at: addDays(kstToday(), -1) + 'T09:30:00+09:00', created_by: MOCK_EMAIL, updated_at: addDays(kstToday(), -1) + 'T09:30:00+09:00',
   },
 ]
-// 원격 설정의 운영 계정 값 — 'game' 키의 공지 주소만 QA 주소로 덮는다.
+// 원격 설정의 테스트 플레이어 값 — 'game' 키의 공지 주소만 QA 주소로 덮는다.
 let remoteConfigOperatorValues: Record<string, { value_json: Record<string, unknown>; updated_at: string; updated_by: string | null }> = {
   game: { value_json: { notice_url: 'https://example.com/notice-qa' }, updated_at: addDays(kstToday(), -2) + 'T11:00:00+09:00', updated_by: MOCK_EMAIL },
 }
@@ -1118,7 +1118,7 @@ const HANDLERS: Record<string, Handler> = {
     return { count: ids.length }
   },
   // 기본 분류는 설치 때 들어가는 행이다.
-  // 시험 발송 대상 수 — 운영 계정 가짜 데이터에서 시험 우편 받기를 켠 수.
+  // 시험 발송 대상 수 — 테스트 플레이어 가짜 데이터에서 시험 우편 받기를 켠 수.
   'mails.getRecipientCount': (_t, p) => (p['mode'] === 'operators' ? operatorAccounts.filter((o) => o.test_recipient && o.account_id).length : 0),
   'mails.getCategories': () =>({ rows: [{ key: 'default', display_name: '기본', created_at: addDays(kstToday(), -90) + 'T10:00:00+09:00' }, { key: 'event', display_name: '이벤트', created_at: addDays(kstToday(), -30) + 'T10:00:00+09:00' }] }),
   // 우편 내역 › 발송 단위. 'mails.getRecords' 의 "점검 보상"이 첫 묶음이다.
@@ -1172,7 +1172,7 @@ const HANDLERS: Record<string, Handler> = {
     const rows = [
       { rank: 1, account_id: 'a9', user_id: '1094471', display_name: '용사김', score: 3200, score_achieved_at: addDays(kstToday(), 0) + 'T09:00:00+09:00', score_count: 12, server_code: 'GLOBAL' },
       { rank: 2, account_id: 'a7', user_id: '1074471', display_name: null, score: 2100, score_achieved_at: addDays(kstToday(), -1) + 'T09:00:00+09:00', score_count: 4, server_code: 'GLOBAL' },
-      // 순위·통계 제외 운영 계정(QA 폰) — 점수가 높아도 순위 없이 맨 뒤.
+      // 순위·통계 제외 테스트 플레이어(QA 폰) — 점수가 높아도 순위 없이 맨 뒤.
       { rank: null, hidden: true, account_id: 'a2', user_id: '1024471', display_name: 'QA폰', score: 9999, score_achieved_at: addDays(kstToday(), 0) + 'T08:00:00+09:00', score_count: 30, server_code: 'GLOBAL' },
     ]
     return { rows, total: rows.length, pageSize: 20, rotationCount: null, maxRotation: null, scope: 'global', dataColumns: [] }

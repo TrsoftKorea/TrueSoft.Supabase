@@ -33,8 +33,8 @@ type Report = (e: unknown, fallback: string) => void
 export const OPERATOR_FLAGS: readonly (readonly [Flag, string, string])[] = [
   ['maintenance_bypass', '점검 통과', '점검 중에도 게임에 들어옵니다.'],
   ['version_bypass', '버전 통과', '최소 버전보다 낮은 앱으로도 들어옵니다.'],
-  ['hide_from_stats', '순위·통계 제외', '리더보드·대시보드·통계·동시접속자에서 빠집니다. 매출은 그대로 셉니다.'],
-  ['config_preview', '원격 설정 미리 받기', '원격 설정의 운영 계정 값을 받습니다.'],
+  ['hide_from_stats', '순위·통계 제외', '리더보드 순위와 플레이어 수·접속자 통계에서 빠집니다.'],
+  ['config_preview', '원격 설정 미리 받기', '원격 설정의 테스트 플레이어 값을 받습니다.'],
   ['test_recipient', '시험 우편 받기', '우편 발송의 시험 발송 대상이 됩니다.'],
 ]
 
@@ -53,7 +53,7 @@ const EMPTY: Draft = {
   maintenance_bypass: false, version_bypass: false, hide_from_stats: false, config_preview: false, test_recipient: false,
 }
 
-/** 설정 › 접속 탭의 운영 계정 카드. */
+/** 설정 › 접속 탭의 테스트 플레이어 카드. */
 export default function OperatorAccountsCard({ target, report }: { target: ProjectTarget; report: Report }) {
   const [rows, setRows] = useState<OperatorAccount[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,7 +75,7 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
       if (id !== req.current) return
       setRows([])
       setFailed(true)
-      report(e, '운영 계정을 불러오지 못했습니다.')
+      report(e, '테스트 플레이어를 불러오지 못했습니다.')
     } finally {
       if (id === req.current) setLoading(false)
     }
@@ -137,8 +137,8 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
   return (
     <>
       <TableCard
-        title="운영 계정"
-        description="게임 안에서 운영자가 쓰는 계정과 그 계정에만 주는 권한입니다."
+        title="테스트 플레이어"
+        description="게임을 시험하는 플레이어와 그 플레이어에게만 주는 권한입니다."
         actions={
           <Button variant="primary" onClick={() => open(null)} disabled={loading || failed}>
             <Plus className="w-3.5 h-3.5" />추가
@@ -169,12 +169,12 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
         rowKey={(r) => r.user_id}
         loading={loading}
         failed={failed}
-        emptyText="등록한 운영 계정이 없습니다."
+        emptyText="등록한 테스트 플레이어가 없습니다."
       />
 
       {draft && (
         <EditDialog
-          title={draft.editing ? '운영 계정 수정' : '운영 계정 추가'}
+          title={draft.editing ? '플레이어 수정' : '플레이어 추가'}
           {...(draft.editing ? { description: draft.user_id } : {})}
           busy={busy}
           error={dialogError}
@@ -192,7 +192,7 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
                 <label className="block text-xs font-medium text-neutral-500">유저 ID</label>
                 <input value={draft.user_id} onChange={(e) => setDraft({ ...draft, user_id: e.target.value })} className={`${taken ? dangerInputCls : inputCls} w-full font-mono`} />
                 {taken
-                  ? <p className="text-xs text-red-600">이미 등록된 계정입니다. 목록의 수정에서 바꿔 주세요.</p>
+                  ? <p className="text-xs text-red-600">이미 등록된 플레이어입니다. 목록의 수정에서 바꿔 주세요.</p>
                   : <p className="text-xs text-neutral-500">플레이어 상세의 유저 ID 를 넣습니다.</p>}
               </div>
             )}
@@ -218,8 +218,8 @@ export default function OperatorAccountsCard({ target, report }: { target: Proje
 
       <ConfirmDialog
         open={!!removing}
-        title="계정을 뺄까요?"
-        description="이 플레이어는 곧바로 운영 계정 권한을 모두 잃습니다."
+        title="플레이어를 뺄까요?"
+        description="이 플레이어는 곧바로 테스트 플레이어 권한을 모두 잃습니다."
         confirmLabel="삭제"
         danger
         busy={busy}

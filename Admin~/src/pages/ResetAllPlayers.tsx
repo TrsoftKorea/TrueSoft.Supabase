@@ -78,7 +78,7 @@ export default function ResetAllPlayersCard({ target, report, onOpenGate }: { ta
 
       <InfoList items={[
         { label: '지워지는 것', value: <Tags wrap items={['계정', '플레이어 데이터', '우편함', '순위', '친구', '채팅', '푸시 기기']} />, wide: true },
-        { label: '남는 것', value: <Tags wrap items={['콘솔 설정', '운영 계정', '결제 기록', '문의', '통계', '쿠폰 사용 기록', '우편 발송 내역']} />, wide: true },
+        { label: '남는 것', value: <Tags wrap items={['콘솔 설정', '테스트 플레이어', '결제 기록', '문의', '통계', '쿠폰 사용 기록', '우편 발송 내역']} />, wide: true },
         { label: '멈추는 것', value: '나중에 들어온 플레이어에게 가던 우편 배달', wide: true },
       ]} />
 
@@ -90,7 +90,7 @@ export default function ResetAllPlayersCard({ target, report, onOpenGate }: { ta
             {maintenance === null ? <StatusText tone="muted">확인 중</StatusText>
               : maintenance ? <StatusText tone="ok">진행 중</StatusText>
                 : <StatusText tone="bad">꺼짐</StatusText>}
-            {maintenance === false && <Button onClick={onOpenGate}>점검·버전 열기</Button>}
+            {maintenance === false && <Button onClick={onOpenGate}>점검 열기</Button>}
           </div>
           <p className="text-xs text-neutral-500">점검 중일 때만 초기화할 수 있습니다.</p>
         </div>
