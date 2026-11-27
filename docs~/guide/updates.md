@@ -24,11 +24,11 @@ SDK 판마다 게임에 달라지는 점입니다. 판을 올리는 방법은 [�
 
 2026-11-25
 
-- **운영 계정** — 운영 콘솔 **설정 › 접속**에 등록한 계정마다 점검 통과·버전 통과·순위와 통계에서 빼기·원격 설정의 운영 계정 값 받기·우편 시험 발송 받기를 따로 켭니다. 점검 중 통과 목록은 운영 계정의 점검 통과로 옮겨졌습니다. [운영 계정](/guide/app-status/#operators)을 참고하세요.
-- **서버가 낮은 버전을 막음** — 최소 버전보다 낮은 앱의 요청을 서버가 거절하고 `SupabaseReason.UpdateRequired`로 실패합니다. 접속 중에 최소 버전을 올리면 1분 안에 세션이 끊기고 `Supabase.OnUpdateRequired`가 발행됩니다. 버전 통과를 켠 운영 계정은 들어갑니다. 업데이트 안내에 숨은 로그인 입구를 두면 운영자가 새 판 출시 전에 확인할 수 있습니다. [업데이트 필요](/guide/app-status/update-required)를 참고하세요.
-- **상태 조회의 버전 통과 표시** — `SupabaseAppStatus.VersionAllowed`가 버전 통과 운영 계정으로 로그인해 있는지 알려 주고, 그때는 `UpdateRequired`가 false입니다.
+- **테스트 플레이어** — 운영 콘솔 **설정 › 접속**에 등록한 계정마다 점검 통과·버전 통과·순위와 통계에서 빼기·원격 설정의 테스트 플레이어 값 받기·우편 시험 발송 받기를 따로 켭니다. 점검 중 통과 목록은 테스트 플레이어의 점검 통과로 옮겨졌습니다. [테스트 플레이어](/guide/app-status/#operators)을 참고하세요.
+- **서버가 낮은 버전을 막음** — 최소 버전보다 낮은 앱의 요청을 서버가 거절하고 `SupabaseReason.UpdateRequired`로 실패합니다. 접속 중에 최소 버전을 올리면 1분 안에 세션이 끊기고 `Supabase.OnUpdateRequired`가 발행됩니다. 버전 통과를 켠 테스트 플레이어는 들어갑니다. 업데이트 안내에 숨은 로그인 입구를 두면 운영자가 새 판 출시 전에 확인할 수 있습니다. [업데이트 필요](/guide/app-status/update-required)를 참고하세요.
+- **상태 조회의 버전 통과 표시** — `SupabaseAppStatus.VersionAllowed`가 버전 통과 테스트 플레이어로 로그인해 있는지 알려 주고, 그때는 `UpdateRequired`가 false입니다.
 - **약관 동의 기록** — `Supabase.GetLegalVersionsAsync`로 로그인 전에 지금 약관 버전을 읽고, 로그인한 뒤 `SaveLegalConsentAsync`로 동의한 버전과 만 14세 이상 확인을 남깁니다. `GetLegalConsentAsync`의 `NeedsConsent`가 약관이 개정돼 다시 물어야 하는지 알려 줍니다. 동의 기록은 탈퇴해도 남습니다. [약관 버전 조회](/guide/customer-center/legal-versions)를 참고하세요.
-- **원격 설정의 운영 계정 값** — 원격 설정 권한을 켠 운영 계정은 운영 콘솔에서 넣은 운영 계정 값이 덮인 설정을 받습니다. [원격 설정](/guide/remote-config/)을 참고하세요.
+- **원격 설정의 테스트 플레이어 값** — 원격 설정 권한을 켠 테스트 플레이어는 운영 콘솔에서 넣은 테스트 플레이어 값이 덮인 설정을 받습니다. [원격 설정](/guide/remote-config/)을 참고하세요.
 
 ## 0.5.1 {#v0-5-1}
 
